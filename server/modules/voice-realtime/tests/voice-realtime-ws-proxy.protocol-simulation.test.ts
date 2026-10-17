@@ -866,3 +866,79 @@ test('AC2 replay 3d2d3b2c: a model repair of an ASR mishearing is the whole deli
     'a response that covers the span is delivered WHOLE; no text-side measure may prepend the transcript',
   );
 });
+
+// ── AC-361: the settle boundary may not close while the person is still speaking ─────────────────
+//
+// THE DEFECT THESE CASES REPRODUCE (gap-continuous-experience-settle-window-mid-utterance). The
+// settle producer's deadline counted only silence: 2.5 s after the last FINAL. In the failing run's
+// journal (2026-10-17T18:54Z, `67374906-*`) the endpoint's `speech_started` for U4 had already
+// arrived — the proxy's `upstreamTalking` was true — when U3's window expired at 12.745 and the
+// producer delivered U2+U3 verbatim. The model's combined response for U4 arrived 1 ms after U4's
+// own final at 12.944 and carried U3 again, so the coalescer emitted one sentence with U3 twice.
+// The rule the producer was missing is the same one the busy quiet window already applies: a span
+// may only settle once the upstream has CLOSED its turn (`onUpstreamTurn(false)`).
+
+test('settle boundary waits for the upstream turn: a window expiring mid-utterance delivers nothing', async () => {
+  const { transport, base } = wireConnection({ settleMs: 40 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  // One heard span, its window armed while the turn is still closed...
+  deliverFinalTranscript(transport, 'item-settle-mid-1', '嗯…那个… 我想想');
+  // ...and the person starts the NEXT utterance before the deadline. The spans heard so far are
+  // exactly what the model's response for the ongoing turn will cover; settling them now would
+  // deliver them a second time inside that response.
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
+
+  // Several windows pass with the turn open. The false form (no `upstreamTalking` guard) delivers
+  // the span here — this assertion is the one that reads red without the guard.
+  await settleWait(140);
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    [],
+    'a settle deadline that fires while the upstream turn is open must re-arm, not deliver a span the ongoing response will cover',
+  );
+});
+
+test('settle boundary closes after the upstream turn ends: the heard span is delivered verbatim once', async () => {
+  const { transport, base } = wireConnection({ settleMs: 40 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverFinalTranscript(transport, 'item-settle-close-1', '我想想');
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
+  // Mid-utterance deadlines pass without a delivery; the span is still owed.
+  await settleWait(100);
+  assert.deepEqual(base.calls.map((call) => call.args.message), []);
+
+  // The endpoint closes the turn. The window restarts from the CLOSE, and with no model response
+  // behind it the heard span goes out verbatim — the deterministic arm R2 must keep.
+  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+  await waitFor(() => base.calls.length === 1);
+  // A stale window must not deliver the same span a second time.
+  await settleWait(100);
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    ['我想想'],
+    'after the turn closes the heard span is delivered verbatim exactly once',
+  );
+});
+
+test('a model response inside the window is the delivery: the span is never re-sent verbatim', async () => {
+  const { transport, base } = wireConnection({ settleMs: 40 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverFinalTranscript(transport, 'item-settle-resp-1', '我想想');
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
+  await settleWait(80);
+  // The model answers the ongoing turn. This response is the QUALITY arm: it covers the span and
+  // the verbatim arm must stay silent even though the turn closes afterwards.
+  deliverSessionSendCall(transport, 'call-settle-resp-1', '我想想然后跑一下测试');
+  await waitFor(() => base.calls.length >= 1);
+  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' });
+  await settleWait(120);
+
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    ['我想想然后跑一下测试'],
+    'a span a model response covered is answered for; closing the turn must not arm a second delivery',
+  );
+});

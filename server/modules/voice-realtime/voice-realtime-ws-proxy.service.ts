@@ -4138,6 +4138,20 @@ export function handleVoiceRealtimeConnection(
       transcribedSinceWatermark.length = 0;
       return;
     }
+    // THE PERSON IS STILL TALKING: this boundary may not close. The window counts SILENCE, and
+    // silence between two utterances is exactly where the model's combined response for the
+    // ongoing turn will land (AC-361, 2026-10-18). The failing journal (`67374906-*`, 12.745):
+    // U4's `speech_started` had already arrived, the window armed by U3's final expired anyway,
+    // and the relay delivered U2+U3 verbatim; the model's response then carried U3 again, and the
+    // coalescer emitted one sentence with U3 twice. `upstreamTalking` is the product's existing
+    // reading of "the endpoint's turn is open" (`onUpstreamTurn`), and the busy quiet window
+    // already releases only while it is false. Re-arming (not dropping) keeps the span owed: the
+    // turn close re-arms the window so the 2.5 s is counted from the CLOSE, not from a deadline
+    // that lands mid-sentence.
+    if (upstreamTalking) {
+      armSettleWindow();
+      return;
+    }
     // A delivery already in flight is not a reason to lose the span: the window reopens and the
     // next close delivers it. Re-arming rather than queueing keeps ONE producer (this timer) and
     // leaves the in-flight path's own single-slot guard untouched.
@@ -4561,6 +4575,21 @@ export function handleVoiceRealtimeConnection(
     // the abort found a run to stop — "the same triggerSeq runs once" is the guarantee, and it holds
     // for a session with no lifecycle channel too.
     abortedTriggerSeq = fenceTriggerSeq;
+    // THE STOP IS A MODEL RESPONSE FOR THE SPAN (AC-361; X-5's "no delivery may follow the stop").
+    // A `session_interrupt` call is a response that arrives inside the same settle window a
+    // `session_send` would, and the endpoint's final for the interrupted sentence arms that window.
+    // The correction path above advances the watermark only when the stop carried a `message`; a
+    // stop whose correction is only an `intent` (the e2e's U5, journal `19:02:05.781`) left the
+    // window armed, and the deterministic arm delivered the sentence the stop had already disposed
+    // of 2.5 s later — a second disposition, and a delivery AFTER the stop, which the stop contract
+    // forbids. R2's quality arm is "the model response inside the window is the delivery"; the stop
+    // is that response, so it consumes the span the same way a `session_send` does. A `covered`
+    // repeat (fenced above) and a stop that never ran (refused, returned above) do not reach here:
+    // they answered nothing, so the span stays owed to the deterministic arm.
+    clearSettleWindow();
+    if (!segmentedRelay) {
+      transcribedSinceWatermark.length = 0;
+    }
     // The frame names the run the stop ENDED (`audit.runId`, read from the aggregator before the
     // patch below) and the depth it kept — the two readings §18.5 asks the aftermath to carry, taken
     // from the same post-stop host sample as the audit and the status line.
@@ -4730,6 +4759,13 @@ export function handleVoiceRealtimeConnection(
         if (!open) {
           upstreamTurnCloseCount += 1;
           lastUpstreamSilenceAt = Date.now();
+          // THE SETTLE WINDOW'S CLOCK RESTARTS FROM THE CLOSE (AC-361). A deadline that landed
+          // while the turn was open re-armed itself in `settleHeardSpan`; restarting here means
+          // the full window is counted from the moment the person stopped, not from the deadline
+          // that was interrupted. A connection with nothing heard gets no timer.
+          if (settleTimer !== null || transcribedSinceWatermark.length > 0) {
+            armSettleWindow();
+          }
         } else {
           // A NEW turn starting retires any pending forced-commit snapshot: whatever the next
           // `committed` answers, it no longer answers the turn this relay closed itself.
