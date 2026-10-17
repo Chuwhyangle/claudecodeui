@@ -131,7 +131,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, describeVoiceRealtimeSpanGuard, resolveVoiceRealtimeSpanGuard, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -670,6 +670,18 @@ const buildVoiceRealtimeSeams = (input: {
             input.log?.(note);
         }
     }
+    // THE DELETED SPAN GUARD, BEHIND A DEFAULT-OFF A/B SWITCH (task gap-live-voice-span-guard-flag).
+    // Resolved at the SAME assembly point and handed to the proxy, so the arm a deployment runs is
+    // this resolution and nothing else. Unset/`off` is the shipped one-text-per-segment behaviour;
+    // `on` restores the pair-overlap prepend for the A/B and deliberately re-opens the `3d2d3b2c`
+    // duplicate-delivery risk (see `voice-realtime-span-guard.ts`). Read once per process — a change
+    // needs a server restart — and an unknown spelling falls back to OFF and is logged, so a typo
+    // cannot pass for a working arm.
+    const spanGuard = resolveVoiceRealtimeSpanGuard(process.env);
+    const spanGuardNote = describeVoiceRealtimeSpanGuard(spanGuard);
+    if (spanGuardNote !== null) {
+        input.log?.(spanGuardNote);
+    }
 
     // The provenance cell behind `session_status` (SPEC §6.3/§8.2): the LAST aggregator reading the
     // S-A status line was rendered from, captured as the proxy publishes it. A `session_status` call
@@ -682,6 +694,10 @@ const buildVoiceRealtimeSeams = (input: {
         // Whether this connection answers the browser's `hello` with `ready{protocol:'segmented-v1'}`.
         // Declared by default; `continuous` restores the pre-P4 wire without a browser release.
         segmentedRelay: relayMode.mode === 'segmented',
+        // The span guard's A/B arm (`VOICE_REALTIME_SPAN_GUARD`, resolved above). Explicit rather
+        // than spread-in: the proxy's seam is optional and absent means off, but the composition root
+        // is where the resolution lives, so it states the answer it resolved.
+        spanGuard: spanGuard.spanGuard,
         // Carried through so the handshake branch can tell the two silences apart in the log: this
         // connection asked for continuous, vs. the deployment turned the relay off. Absent for a
         // connection that asked for nothing, which is byte-identical to before this seam existed.
