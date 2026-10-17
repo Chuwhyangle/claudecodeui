@@ -43,13 +43,13 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
 
 ## AC
 
-- [ ] AC1 e2e（faked provider + scripted upstream，真实接线）：新判据 `e2e/live-voice-stream-representation.spec.ts` 退出 0——用 `e2e/voiceRealtimeScriptedUpstream.ts` 的脚本化上游驱动 live voice，落到 `server/modules/debug-agent/` 的 faked 常驻 provider（如需则先改进该 provider 使其能发出并记录 `source:'voice'` 的 delivery）；断言：脚本化"模型从不 response"臂仍产生一条携带 ASR 逐字文本的投递；transcript 里语音投递的 `data-resident-withdraw` 计数为 0、`voice-pending-message`（只读卡）计数为 1；回合结束后真实 user 消息出现且不带撤回按钮。命令逐字含文件路径，不用 glob。
-- [ ] AC2 回放（R2 正确性）：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 新增/扩展用例重放 57279cc1 / 764f0c7a / 3d2d3b2c 三条序列，断言每个 settle span 恰好投递一次（无丢段、无重复）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0。未修复树上必红（登记一次红读数）。
-- [ ] AC3 表示层单测：`src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx` 新增用例——`source:'voice'` 的 delivery 不画 `PendingResidentMessage`（`data-resident-withdraw` 为 0），`source:'user'`/`'mcp'` 仍画（负控）；`npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx` 退出 0。
-- [ ] AC4 来源打标（实际接线）：两侧 `shared/types.ts` 的 `ActivityDeliverySource` 各新增 `'voice'`；语音 `session_send` 路径（经 `buildSessionSend`→`control.send`）给其 delivery 标 `source:'voice'` 而非 `'mcp'`；机械判定：`grep -n "source" server/modules/mcp-gateway/mcp-session-send.ts` 读到 voice 分支标注，且 `grep -n "'voice'" server/shared/types.ts src/shared/types.ts` 各命中新增成员。
-- [ ] AC5 R1 档位契约：`grep -n "VOICE_BUSY_RELEASE_PRIORITY" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 读到 `= 'next'`；`grep -rn "priority: 'now'" server/ --include=*.ts` 只命中类型定义/校验函数、无任何 shipped 投递路径发送 `now`；语音 busy 写入（静窗释放与打断更正）都带 `next`、idle 不写 tier。
-- [ ] AC6 R2 生产者转正：`voice-realtime-span-guard.ts` 的 `DEFAULT_VOICE_REALTIME_SPAN_GUARD` 翻为 `true`（或 settle 生产者成为无条件默认）；`selectUncoveredFragments` 的 0.5 覆盖阈值 / `MIN_JUDGED_CHARACTERS=5` / fragment 概念从投递路径移除——`grep -rnE "0\.5|MIN_JUDGED_CHARACTERS|selectUncoveredFragments" server/modules/voice-realtime/` 在投递路径读数为 0（或只剩注释）。
-- [ ] AC7 契约面：`npm run typecheck`、`npm run lint` 退出 0。
+- [x] AC1 e2e（faked provider + scripted upstream，真实接线）：新判据 `e2e/live-voice-stream-representation.spec.ts` 退出 0——用 `e2e/voiceRealtimeScriptedUpstream.ts` 的脚本化上游驱动 live voice，落到 `server/modules/debug-agent/` 的 faked 常驻 provider（如需则先改进该 provider 使其能发出并记录 `source:'voice'` 的 delivery）；断言：脚本化"模型从不 response"臂仍产生一条携带 ASR 逐字文本的投递；transcript 里语音投递的 `data-resident-withdraw` 计数为 0、`voice-pending-message`（只读卡）计数为 1；回合结束后真实 user 消息出现且不带撤回按钮。命令逐字含文件路径，不用 glob。
+- [x] AC2 回放（R2 正确性）：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 新增/扩展用例重放 57279cc1 / 764f0c7a / 3d2d3b2c 三条序列，断言每个 settle span 恰好投递一次（无丢段、无重复）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0。未修复树上必红（登记一次红读数）。
+- [x] AC3 表示层单测：`src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx` 新增用例——`source:'voice'` 的 delivery 不画 `PendingResidentMessage`（`data-resident-withdraw` 为 0），`source:'user'`/`'mcp'` 仍画（负控）；`npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx` 退出 0。
+- [x] AC4 来源打标（实际接线）：两侧 `shared/types.ts` 的 `ActivityDeliverySource` 各新增 `'voice'`；语音 `session_send` 路径（经 `buildSessionSend`→`control.send`）给其 delivery 标 `source:'voice'` 而非 `'mcp'`；机械判定：`grep -n "source" server/modules/mcp-gateway/mcp-session-send.ts` 读到 voice 分支标注，且 `grep -n "'voice'" server/shared/types.ts src/shared/types.ts` 各命中新增成员。
+- [x] AC5 R1 档位契约：`grep -n "VOICE_BUSY_RELEASE_PRIORITY" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 读到 `= 'next'`；`grep -rn "priority: 'now'" server/ --include=*.ts` 只命中类型定义/校验函数、无任何 shipped 投递路径发送 `now`；语音 busy 写入（静窗释放与打断更正）都带 `next`、idle 不写 tier。
+- [x] AC6 R2 生产者转正：`voice-realtime-span-guard.ts` 的 `DEFAULT_VOICE_REALTIME_SPAN_GUARD` 翻为 `true`（或 settle 生产者成为无条件默认）；`selectUncoveredFragments` 的 0.5 覆盖阈值 / `MIN_JUDGED_CHARACTERS=5` / fragment 概念从投递路径移除——`grep -rnE "0\.5|MIN_JUDGED_CHARACTERS|selectUncoveredFragments" server/modules/voice-realtime/` 在投递路径读数为 0（或只剩注释）。
+- [x] AC7 契约面：`npm run typecheck`、`npm run lint` 退出 0。
 - [ ] AC8 重启后的真实语音页面读数由人 yale 确认：对话区不出现带 [撤回] 的语音命令行、只读卡与底部转写仍显示（待外部）
 
 ## DoD
@@ -77,4 +77,52 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
 - server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts
 - src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx
+- playwright.config.ts
+- docs/proposals/voice-realtime-persistent-control-SPEC.md
+- server/modules/debug-agent/debug-agent.host-driver.ts
+- server/modules/debug-agent/tests/debug-agent-host-driver.test.ts
+- server/modules/providers/provider.registry.ts
+- server/modules/websocket/tests/chat-control-source.test.ts
+- server/modules/websocket/tests/chat-run-registry.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
 - tasks/gap-live-voice-stream-delivery-not-command.md (self)
+
+## Notes
+
+落地读数（2026-10-17，worktree `task/gap-live-voice-stream-delivery-not-command`）：
+
+- **AC1**（e2e，真实浏览器 + 真实 app server + scripted upstream + debug-agent faked 常驻 provider）：
+  `bash scripts/with-memory-cap.sh npx playwright test e2e/live-voice-stream-representation.spec.ts`
+  → `1 passed (26.5s)`。读数（spec 的 `console.log`）：
+  `reading.cardCount=1`（只读卡在 hold 期间为 1）；
+  `reading.deliveredText="让我们讨论 Live Voice 的进一步改进及语音输出。"`（模型从未 response，ASR final 逐字整 span）；
+  `reading.deliveryId=<uuid> queuedUuid=<同一 uuid>`（确为宿主队列里的投递）；
+  `reading.voiceDeliveries=1`（activity 帧确实携带 `source:'voice'`，零撤回行不是空快照的真空绿）；
+  `reading.withdrawControls=0 deliveryRows=0 thisDeliveryRows=0`；
+  `reading.finalCards=[]`（dequeue 后卡片落下）。真实 user 消息由 scenario 时钟在回合结束后写入并以
+  `data-message-style="user"` 渲染，本行无撤回控件。
+- **AC2**（回放）：命令
+  `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`
+  → `22 passed`。**未修复树红读数**：把同一测试文件放到 develop 净检出（`/tmp/unfixed-ac2-probe`）跑
+  `--test-name-pattern="AC2 replay"` → `2 pass / 1 fail`，`764f0c7a` 用例在第一个未应答 span 的
+  `await waitFor(() => base.calls.length === 1)` 处 2000 ms 超时（即 5 句丢 3 的真实形状）。
+  修复后三条回放全绿：`57279cc1` 同句三投 → 恰 1 次；`764f0c7a` 5 句 2 答 → 5 次、无丢无重；
+  `3d2d3b2c` 模型改写 → 只投模型整段、无逐字前置。
+- **AC3**：`bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx`
+  → `12 passed`。`source:'voice'` 不画 `PendingResidentMessage`（带 `onWithdraw` 渲染时
+  `[data-resident-withdraw]`=0），`user`/`mcp` 负控各画一行（计数 2）；voice 投递也不能顶掉同字面的
+  已发 user turn。
+- **AC4**：`grep -n "via" server/modules/mcp-gateway/mcp-session-send.ts` → `via: 'mcp' | 'voice'`、
+  `ctx: { principal: McpPrincipal; via?: 'mcp' | 'voice' }`、`via: ctx.via ?? 'mcp'`；
+  语音执行器传 `via: 'voice'`（`voice-realtime-live-executor.ts`）。`grep -n "'voice'" server/shared/types.ts
+  src/shared/types.ts` → `ChatRunSource` 与 `ActivityDeliverySource` 各命中新增成员。
+- **AC5**：`grep -n "VOICE_BUSY_RELEASE_PRIORITY" ...` → `= 'next'`（用到静窗释放与打断更正）；
+  `grep -rn "priority: 'now'" server/ --include=*.ts` → 0 命中（只有 `HOST_INPUT_PRIORITIES` 校验表与
+  snapshot 归一化函数接受 `'now'`，无 shipped 投递路径发送）；idle 不写 tier 未改动。
+- **AC6**：`grep -rnE "0\.5|MIN_JUDGED_CHARACTERS|selectUncoveredFragments" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts server/modules/voice-realtime/index.ts`
+  → 0 命中（exit 1）；`voice-realtime-fragment-coverage.ts`、`voice-realtime-span-guard.ts` 及其测试已删除。
+  settle 生产者无条件默认（`VOICE_SPAN_SETTLE_MS = 2500`，`seams.settleMs` 只供测试缩短窗口）。
+- **AC7**：`npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning）。
+- **AC8**：待人 yale 在重启后的真实语音页面确认。本任务全程未重启 `:3001` / `claudecodeui-server.service`，
+  也未改其运行环境。生产 env 里的 `VOICE_REALTIME_SPAN_GUARD=on` 现在是无消费者的遗留变量（开关与模块已删除）。
+- **文档锚点**：R1/R2/R3 写入 `docs/proposals/voice-realtime-persistent-control-SPEC.md` §19。
