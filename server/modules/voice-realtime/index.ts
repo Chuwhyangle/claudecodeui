@@ -216,6 +216,19 @@ export {
   type VoiceRealtimeClosingTurnResolution,
   type VoiceRealtimeSlimSendToolResolution,
 } from './voice-realtime-closing-turn.js';
+// The live relay's SPAN GUARD — the "prepend every heard sentence the model's call left out" arm that
+// the 2026-10-16 ruling deleted — behind a default-off A/B switch. `server/index.ts` resolves
+// `VOICE_REALTIME_SPAN_GUARD` at the assembly point and hands the proxy the `spanGuard` seam; the
+// criteria read the resolver and the pair-overlap measure through this barrel rather than reaching
+// into the module's files.
+export {
+  DEFAULT_VOICE_REALTIME_SPAN_GUARD,
+  VOICE_REALTIME_SPAN_GUARD_ENV,
+  describeVoiceRealtimeSpanGuard,
+  resolveVoiceRealtimeSpanGuard,
+  type VoiceRealtimeSpanGuardResolution,
+} from './voice-realtime-span-guard.js';
+export { selectUncoveredFragments } from './voice-realtime-fragment-coverage.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
 // and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
 // and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's

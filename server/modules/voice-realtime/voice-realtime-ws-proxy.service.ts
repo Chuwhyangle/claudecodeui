@@ -78,6 +78,7 @@ import {
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
+import { selectUncoveredFragments } from './voice-realtime-fragment-coverage.js';
 import {
   describeUplinkVadBackend,
   readUplinkVadBackend,
@@ -1494,6 +1495,18 @@ export type VoiceRealtimeProxySeams = {
    */
   segmentedRelay?: boolean;
   /**
+   * Whether the continuous relay replays the DELETED span guard: uncovered heard sentences go in
+   * front of the model's `session_send` message (see `selectUncoveredFragments`).
+   *
+   * DEFAULT OFF, AND ABSENT IS OFF. The 2026-10-16 ruling removed that guard because it cannot tell
+   * a model's rewrite from a model's omission; this seam exists only for the A/B that measures the
+   * deleted arm again (task `gap-live-voice-span-guard-flag`). `server/index.ts` resolves
+   * `VOICE_REALTIME_SPAN_GUARD` at the assembly point and passes the answer here; a criterion that
+   * passes nothing gets the shipped behaviour, byte for byte — the model's words are the whole of
+   * what the segment sends.
+   */
+  spanGuard?: boolean;
+  /**
    * THIS connection's transport choice, or absent (the per-connection opt-in).
    *
    * The other axis of {@link VoiceRealtimeProxySeams.segmentedRelay}: that one is the DEPLOYMENT's
@@ -2156,6 +2169,13 @@ export function handleVoiceRealtimeConnection(
     }
   }
   const segmentedRelay = seams.segmentedRelay ?? (modeResolution.mode === 'segmented');
+  // ---- the deleted span guard, behind its default-off A/B switch -------------------------------
+  //
+  // Read ONCE per connection from the assembly point's resolution (`VOICE_REALTIME_SPAN_GUARD`), the
+  // same "answer it once, keep it for the connection's life" shape the relay mode above uses. ABSENT
+  // IS OFF: the proxy never reads the environment here — `server/index.ts` owns that resolution — so
+  // a connection handed no seam behaves exactly as the 2026-10-16 ruling left it.
+  const spanGuardEnabled = seams.spanGuard === true;
   // ---- Silence Tail Suppression (decision doc §10): the continuous wire's upload state machine ----
   //
   // Built ONCE per connection and only when the deployment asked for it, so an STS-off connection
@@ -3921,6 +3941,9 @@ export function handleVoiceRealtimeConnection(
       noteNotDelivered('empty-message');
       return handledWithoutDelivery();
     }
+    // What this call is delivered as. Its own arguments, unless the continuous span guard below
+    // (switch on) finds a heard sentence the model's words left out.
+    let relayArgs = args;
     if (activeSegmentSeq !== null) {
       const empty = segmentTranscriptEmpty.get(activeSegmentSeq);
       if (empty === true) {
@@ -3957,45 +3980,53 @@ export function handleVoiceRealtimeConnection(
         transcribedSinceWatermark.length = 0;
         return handledWithoutDelivery();
       }
-      // ── WHAT THE MODEL WROTE IS THE WHOLE OF WHAT THIS SEGMENT SENDS (ruling 2026-10-16, this
-      // task) ──
-      // A span guard used to sit here: it compared every sentence heard since the watermark against
-      // the call's own words by adjacent-character-pair overlap and put the ones it judged uncovered
-      // VERBATIM in front of the model's message (journal `8fe60310`, live 2026-10-15 23:02). That
-      // guard is GONE, and the module that held it — its pair-overlap measure and the
-      // `selectUncoveredFragments` entry point — with it.
+      // ── THE SPAN GUARD, RESTORED BEHIND A DEFAULT-OFF SWITCH (task
+      // gap-live-voice-span-guard-flag) ──
+      // The 2026-10-16 ruling (`gap-live-voice-one-text-per-segment-prefer-response`) removed the
+      // guard that used to sit here: it compared every sentence heard since the watermark against the
+      // call's own words by adjacent-character-pair overlap and put the ones it judged uncovered
+      // VERBATIM in front of the model's message (journal `8fe60310`, live 2026-10-15 23:02). The
+      // shipped behaviour — the default, and what every connection gets unless
+      // `VOICE_REALTIME_SPAN_GUARD=on` — remains ONE text per segment: the model's response when
+      // there is one, the transcript only when no response answered for the segment.
       //
-      // WHY THE CHARACTER-PAIR MEASURE COULD NOT DECIDE WHAT IT WAS ASKED TO DECIDE. The live round of
-      // 2026-10-16 13:20 (journal `3d2d3b2c`, first Live Voice test of the day) reads the two cases out
-      // in full:
-      //   `transcription.completed "十月十五日，来望也，嗯，第一次考试。"`  ← the endpoint misheard
-      //                                                                   "LiveWire" as "来望也"
-      //   `session_send {"message": "十月十五日，LiveWire 第一次测试。"}`  ← the SAME response
-      //                                                                   (`resp_AOlHP2QiGJ4cf1dQPHcUh`),
-      //                                                                   repaired from the AUDIO
-      // The guard measured 6 of 13 adjacent pairs in common (share 0.462 < the 0.5 threshold) and
-      // judged the sentence UNCOVERED, delivering both halves — so one segment of audio put TWO texts
-      // into the CLI, the second of them the ASR mishearing whose repair had just been thrown away in
-      // front of it. The measure cannot tell "the model rewrote this" from "the model dropped this":
-      // both read as a low pair share, and the text is precisely the thing under judgement, so no
-      // text-side test can arbitrate. The ruling fixes the shape accordingly — ONE text per segment,
-      // the RESPONSE when there is one, the transcript ONLY when the segment drew no response at all.
+      // WHY THE DEFAULT STAYS OFF. The live round of 2026-10-16 13:20 (journal `3d2d3b2c`) reads the
+      // failure out: the endpoint misheard "LiveWire" as "来望也", the model repaired it from the
+      // AUDIO (`session_send "十月十五日，LiveWire 第一次测试。"`), and the pair share measured
+      // 6/13 = 0.462 < 0.5 — a rewrite read as an omission, with the low-fidelity mishearing delivered
+      // in front of the words that corrected it. The measure cannot tell a rewrite from a drop, so no
+      // text-side test can arbitrate.
       //
-      // WHICH IS ALSO WHY "PAIRS, NOT EQUALITY" BUYS NOTHING HERE. That module's stated reason for
-      // fuzzing the comparison was the model's rewrites — added spaces, dropped fillers, a mishearing
-      // repaired from the audio. Every one of those is exactly a case where the person's own words and
-      // the delivered text SHOULD differ, so the tolerance that let a rewrite through is the same
-      // tolerance that read a rewrite as an omission: the two shapes are indistinguishable at this
-      // seam, and loosening or tightening the share only moves which of them is misread.
+      // ⚠️ KNOWN RISK, DELIBERATELY ACCEPTED WHEN THE SWITCH IS `on`: this re-creates the `3d2d3b2c`
+      // duplicate delivery. A model that repaired an ASR mishearing scores below the pair threshold,
+      // its corrected text is judged "uncovered", and TWO texts from one piece of audio reach the
+      // CLI — the second one the low-fidelity mishearing, placed BEFORE the correction. That is
+      // exactly the arm the A/B exists to measure (the 2026-10-17 continuous run `764f0c7a` dropped
+      // 3 of 5 sentences under the shipped rule), and the reason the switch is off by default.
       //
-      // THAT LAST ARM IS STILL ARMED, one branch away: when the model ends the turn in TEXT and made
-      // no call, nothing above this line ever fired and the person's own sentences would otherwise
-      // reach nothing. `onError`'s `MODEL_TEXT_REPLY` branch delivers them verbatim through this same
-      // path (the `8fe60310` shape — a sentence with no delivery to claim it). Deleting THAT is the
-      // failure this change must not become: it is the only arm that answers for a segment with no
-      // response, and the ruling keeps it.
+      // THE OTHER ARM IS UNTOUCHED: when the model ends the turn in TEXT and made no call,
+      // `onError`'s `MODEL_TEXT_REPLY` branch still delivers the unanswered sentences verbatim. The
+      // empty-span refusal above also still runs FIRST and still injects nothing — an empty span is
+      // never "recovered" by this guard.
+      if (spanGuardEnabled) {
+        const heard = transcribedSinceWatermark
+          .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
+          .map((itemId) => itemTranscriptText.get(itemId) ?? '')
+          .filter((text) => text.trim() !== '');
+        const modelMessage = typeof args.message === 'string' ? args.message : '';
+        const left = selectUncoveredFragments(heard, modelMessage);
+        if (left.length > 0) {
+          seams.log?.(
+            `session_send left ${left.length} heard sentence(s) out; delivered verbatim in front of it: ${left
+              .join(' | ')
+              .replace(/[\r\n()]/g, ' ')
+              .slice(0, 120)}`,
+          );
+          relayArgs = { ...args, message: joinParts([...left, modelMessage]) };
+        }
+      }
     }
-    return proceedRelay(args, activeSegmentSeq, activeSegmentIsReplay);
+    return proceedRelay(relayArgs, activeSegmentSeq, activeSegmentIsReplay);
   };
 
   /**
