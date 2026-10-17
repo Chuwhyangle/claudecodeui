@@ -40,3 +40,11 @@ extra:
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts` （recordFrameWithoutTurn 加 parent_tool_use_id 排除）
 - `server/modules/providers/tests/claude-resident-reconcile.test.ts` （就地加「子代理帧不记、无 turn 帧仍记」两臂；若 grep 契约不允许加缝则另起同级文件）
 - `tasks/gap-frame-without-turn-subagent-false-positive.md` （自触）
+
+## Blocker
+
+**2026-10-17T05:58:54.642Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：3668e74e-f437-48b2-a411-d04bfc614872
