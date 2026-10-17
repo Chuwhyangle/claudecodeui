@@ -136,11 +136,3 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
   `voice-realtime-partial-relay-fragments.test.ts`，server 测试文件数 364→363；按该 pin 自己
   「重测不推导」的规则把 AC2/AC3 的 unknown 读数改为 360/362，并在注释里写明是谁移除的）。
   两个测试文件已补入 `## Touches`。`npm run typecheck` exit 0；`npx oxlint` 两文件 exit 0。
-
-## Blocker
-
-**2026-10-17T14:23:02.197Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts:   AssertionError [ERR_ASSERTION]: session_send: the route must touch the same services in the same order as the build function
-- run_id：wk-prod-anchor
-- session_id：59c87008-bf77-4188-b2bb-3300ec468464
