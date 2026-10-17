@@ -61,6 +61,7 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-fragment-coverage.ts
 - server/modules/voice-realtime/voice-realtime-span-guard.ts
+- server/modules/voice-realtime/voice-realtime-live-executor.ts
 - server/modules/voice-realtime/index.ts
 - server/index.ts
 - server/modules/mcp-gateway/mcp-session-send.ts
