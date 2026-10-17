@@ -6245,6 +6245,18 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * produces is §10.2's shape by construction rather than by a second push here.
    */
   private recordFrameWithoutTurn(state: ResidentHostState, message: AnyRecord): void {
+    if (message?.parent_tool_use_id) {
+      // Subagent (Task) traffic is relayed into the parent's stream-json with
+      // `parent_tool_use_id`, and it arrives between the parent's turns by
+      // construction: it belongs to the subagent, not to a turn this ledger
+      // opened. "No turn open" therefore says nothing about the ledger and the
+      // stream having parted company — recording it would drown the real
+      // divergence in normal traffic. The forwarding path already excludes
+      // these frames from the prompt echo (`isSubagentPromptEcho`); this is the
+      // anomaly record's half of the same rule. Snake_case because this call
+      // reads the raw stream frame, before `transformResidentMessage` maps it.
+      return;
+    }
     const type = typeof message?.type === 'string' ? message.type : '';
     if (type !== 'assistant' && type !== 'user') {
       return;
