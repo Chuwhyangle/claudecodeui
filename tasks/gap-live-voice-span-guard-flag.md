@@ -29,12 +29,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 测度 + resolver + flag 两臂的单测退出 0：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts`；该文件新增 `selectUncoveredFragments` 测度用例（夹具逐字含本轮丢失句「让我们讨论Live Voice的进一步改进及语音输出。」与「它应当具有更好的实时性」）+ `resolveVoiceRealtimeSpanGuard` 四读法（`on`/`off`/未设/拼错）。`grep -c "selectUncoveredFragments" server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts` ≥ 1。
-- [ ] AC2 flag 默认 off = 现行行为：flag-off 的 proxy 用例断言 `session_send` 只送模型自己的话、不产生 `delivered verbatim in front` 日志行（即该文件已 repurposed 的「no prepend」读数保持为 off 臂）。
-- [ ] AC3 flag on 补录：flag-on 的 proxy 用例断言同一条 `session_send` 投递的 `message` = 未覆盖 heard 句逐字 + 模型话（`joinParts([...left, modelMessage])`），且是**一条** send 不是两条；日志行 `session_send left N heard sentence(s) out` 恰好出现一次。
-- [ ] AC4 空 span 拒绝在 flag on 下仍成立：flag-on 且 span 内全空 ⇒ `empty-transcript` 拒绝、不注入任何文本（不因 flag 而把空 span 当补录）。
-- [ ] AC5 判别性（false form）：把守卫短路（如 `if (false && spanGuardEnabled)`）后 AC3 的补录断言**红**；假形态已还原、`git status --porcelain` 干净。
-- [ ] AC6 编译 + scoped 门 + 无悬空：`npm run typecheck` 退出 0；`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test "server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts" "server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts"` 退出 0；`grep -rn "fragment-coverage" server/ e2e/` 只命中新模块与其 import（无悬空 import）。
+- [x] AC1 测度 + resolver + flag 两臂的单测退出 0：`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts`；该文件新增 `selectUncoveredFragments` 测度用例（夹具逐字含本轮丢失句「让我们讨论Live Voice的进一步改进及语音输出。」与「它应当具有更好的实时性」）+ `resolveVoiceRealtimeSpanGuard` 四读法（`on`/`off`/未设/拼错）。`grep -c "selectUncoveredFragments" server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts` ≥ 1。
+- [x] AC2 flag 默认 off = 现行行为：flag-off 的 proxy 用例断言 `session_send` 只送模型自己的话、不产生 `delivered verbatim in front` 日志行（即该文件已 repurposed 的「no prepend」读数保持为 off 臂）。
+- [x] AC3 flag on 补录：flag-on 的 proxy 用例断言同一条 `session_send` 投递的 `message` = 未覆盖 heard 句逐字 + 模型话（`joinParts([...left, modelMessage])`），且是**一条** send 不是两条；日志行 `session_send left N heard sentence(s) out` 恰好出现一次。
+- [x] AC4 空 span 拒绝在 flag on 下仍成立：flag-on 且 span 内全空 ⇒ `empty-transcript` 拒绝、不注入任何文本（不因 flag 而把空 span 当补录）。
+- [x] AC5 判别性（false form）：把守卫短路（如 `if (false && spanGuardEnabled)`）后 AC3 的补录断言**红**；假形态已还原、`git status --porcelain` 干净。
+- [x] AC6 编译 + scoped 门 + 无悬空：`npm run typecheck` 退出 0；`bash scripts/with-memory-cap.sh npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test "server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts" "server/modules/voice-realtime/tests/voice-realtime-continuous-empty-guard-span.test.ts"` 退出 0；`grep -rn "fragment-coverage" server/ e2e/` 只命中新模块与其 import（无悬空 import）。
 
 ## DoD
 
@@ -49,3 +49,11 @@ extra:
 - server/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts
 - tasks/gap-live-voice-span-guard-flag.md
+
+## Blocker
+
+**2026-10-17T07:01:06.757Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/6，剩余未勾 6）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：d5b8b0ce-d5c4-4320-a4f7-415ca591f1a2
