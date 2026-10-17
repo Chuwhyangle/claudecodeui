@@ -69,14 +69,14 @@ L1 半边是绿的：`npx tsx --tsconfig server/tsconfig.json --test server/modu
 
 ## AC
 
-- [ ] AC1（假形态排最前）：新增的「上游回合开着的 settle 窗到期不投递」用例在**去掉 guard 行**的树上红（逐字失败行记入 `## Notes`），恢复 guard 后绿；同一次假形态下 e2e 的 X-1 读出 U2 行与 U3 重复（登记一次读数）。
-- [ ] AC2：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0，且包含新用例。
-- [ ] AC3：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts` 退出 0（L1 半边）。
-- [ ] AC4：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run / skipped）。
-- [ ] AC5：X-1/X-2 读数成立且为直接断言：`grep -n "a silent utterance must be carried by no row" e2e/voice-realtime-continuous-experience.spec.ts` 命中，其后仍是 `toEqual([])`（无包装）；`grep -n "the merged delivery must be visible as delivered" e2e/voice-realtime-continuous-experience.spec.ts` 命中且为直接断言；e2e 绿即两者成立。journal 里没有一条 delivered message 的 `message` 字段把同一句文本包含两次（机械核对并记 `## Notes`）。
-- [ ] AC6：同一种子连续 3 次运行，`QUAY_CONTINUOUS_EXPERIENCE_DUMP` 归一化读数一致（沿用上一任务的归一集；sha256 记 `## Notes`），零外联读数 `dials:1, blocked:false`。
-- [ ] AC7：`npm run typecheck`、`npm run lint` 退出 0；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0。
-- [ ] AC8：spec 未被削弱：`grep -c "expectKnownDefect\|test\.fail\|test\.skip\|fixme" e2e/voice-realtime-continuous-experience.spec.ts` = 0，用例数仍为 11。
+- [x] AC1（假形态排最前）：新增的「上游回合开着的 settle 窗到期不投递」用例在**去掉 guard 行**的树上红（逐字失败行记入 `## Notes`），恢复 guard 后绿；同一次假形态下 e2e 的 X-1 读出 U2 行与 U3 重复（登记一次读数）。
+- [x] AC2：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts` 退出 0，且包含新用例。
+- [x] AC3：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-fake-vad-upstream.test.ts` 退出 0（L1 半边）。
+- [x] AC4：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` 退出 0，11 个用例全部运行（无 did not run / skipped）。
+- [x] AC5：X-1/X-2 读数成立且为直接断言：`grep -n "a silent utterance must be carried by no row" e2e/voice-realtime-continuous-experience.spec.ts` 命中，其后仍是 `toEqual([])`（无包装）；`grep -n "the merged delivery must be visible as delivered" e2e/voice-realtime-continuous-experience.spec.ts` 命中且为直接断言；e2e 绿即两者成立。journal 里没有一条 delivered message 的 `message` 字段把同一句文本包含两次（机械核对并记 `## Notes`）。
+- [x] AC6：同一种子连续 3 次运行，`QUAY_CONTINUOUS_EXPERIENCE_DUMP` 归一化读数一致（沿用上一任务的归一集；sha256 记 `## Notes`），零外联读数 `dials:1, blocked:false`。
+- [x] AC7：`npm run typecheck`、`npm run lint` 退出 0；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` 退出 0。
+- [x] AC8：spec 未被削弱：`grep -c "expectKnownDefect\|test\.fail\|test\.skip\|fixme" e2e/voice-realtime-continuous-experience.spec.ts` = 0，用例数仍为 11。
 
 ## DoD
 
@@ -94,3 +94,17 @@ L1 半边是绿的：`npx tsx --tsconfig server/tsconfig.json --test server/modu
 立案：gap 轮 2026-10-18。GOAL-044 / AC-361 在 GOAL achieved 后离开 reverify scope，判据重跑为 fail（evidence `2026-10-17T18:54:21.499Z`，exit 1）。复现命令与 journal 行见 Proposal；L1 单测 15/15 绿。worker 须先读 `.agents/skills/backend-module-standards/SKILL.md`（AGENTS.md 对 `server/` 改动的硬要求）。
 
 <!-- dedup-ref --> 机制去重：`gap-live-voice-stream-delivery-not-command`（done，settle 生产者落地，本次红的前置变更）；`gap-live-voice-continuous-experience-spec-realign-after-watermark` / `...-after-caption-row-drop` / `...-after-ac355`（均 done，历史 spec 重锚；本次不是投影重锚，而是 settle 生产者与「回合开着」的边界缺失，故立新任务）。merge-candidate：`task-granularity-advice.js --touches server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts --touches server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts --touches e2e/voice-realtime-continuous-experience.spec.ts --json` → `peers: []`、`mentions: []`，无同文件在飞任务，**separate**。
+
+### 落地读数（2026-10-18，worktree `task/gap-continuous-experience-settle-window-mid-utterance`，提交 `e602e1760`）
+
+- **修复**：`settleHeardSpan` 在 `upstreamTalking` 为真时重新 arm、不投递；`onUpstreamTurn(false)` 在回合关闭时把窗口从关闭那一刻重新计时。另加一条同源修复：模型 `session_interrupt` 是同一窗口里的 response（R2 质量臂）——成功执行后 `clearSettleWindow()` 并推进 watermark。没有这一条时，U5（final `19:02:05.781`，2 ms 后的 stop 只带 `intent`、不带 `message`）的窗口一直开着，settle 在 stop 之后 2.5 s 才投递 U5，X-2 / X-5 红——这是被 X-1 首个红遮住的、同一生产者的第二处红（serial spec：首个红中止后续用例）。
+- **AC1 假形态（先红，已恢复）**：删掉 `settleHeardSpan` 的 `if (upstreamTalking) { armSettleWindow(); return; }` 后，`--test-name-pattern="settle boundary"` 红在 `voice-realtime-ws-proxy.protocol-simulation.test.ts:895`：`actual ['嗯…那个… 我想想'] / expected []`。同一次假形态下 e2e X-1 红在 `e2e/voice-realtime-continuous-experience.spec.ts:1235`，实际 rows 含 `{"style":"user","testid":null,"text":"嗯…那个… 我想想我想想然后跑一下测试"}`（U2 行 + U3 重复），dump `QUAY_CONTINUOUS_EXPERIENCE_DUMP=/tmp/quay-ce-dumps/falseform.json`。恢复 guard 后两处均绿。
+- **AC2**：protocol-simulation → **25 pass / 0 fail / exit 0**，含新增 3 例（mid-utterance expiry 不投递 / 回合关闭后逐字投递一次 / 窗口内 response 消费 span）。
+- **AC3**：`voice-realtime-fake-vad-upstream.test.ts` → **15 pass / 0 fail / exit 0**。
+- **AC4**：`npx playwright test e2e/voice-realtime-continuous-experience.spec.ts` → **11 passed（11 run，无 did not run / skip）/ exit 0**，连续 3 次（run2/3/4）均同。
+- **AC5**：`grep -n "a silent utterance must be carried by no row"` 命中 `:1234` / `:1361` / `:1536`，均紧接 `.toEqual([])`；`grep -n "the merged delivery must be visible as delivered"` 命中 `:1266`，为 `.toHaveLength(1)` 的直接断言。三份 dump 的全体 `routing.sends[].message` 机械扫描无相邻重复子串；投递集合三次均为 `["把 server 的日志贴出来","我想想然后跑一下测试"]`。
+- **AC6**：同一种子连续 3 次 `QUAY_CONTINUOUS_EXPERIENCE_DUMP` 归一化读数（沿用上一任务归一集：detector 处置表/items/forwarded/三次计数、`transcript.rows`、routing 的消息/文本/计数、`commits`、`declaredSegmented`、`phase`、journal `mode`、status、`caption`、`fold{resolved,lastInFlight}`、`pageErrors`、`egress{logExists,blocked,dials,authorizationSeen}`、dock 状态**集合**）sha256 三次逐字相同 = `308909d01ae04145cfc1822b455ca084336e109a39255ca7bc96e5999a0341d9`。零外联：`{logExists:true, blocked:false, dials:1, authorizationSeen:false}`，被拒 URL 全为非 loopback（`fonts.googleapis.com`、`api.github.com`）。
+- **AC7**：`npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning）；`npx oxlint e2e/voice-realtime-continuous-experience.spec.ts` exit 0。
+- **AC8**：`grep -c "expectKnownDefect\|test\.fail\|test\.skip\|fixme"` = **0**；`grep -c "^  test("` = **11**。spec 未被改动；本任务只改产品 + protocol-simulation 单测。
+- **DoD journal（run2）**：`20.648` U3 final 起表（到期 `23.148`）；`21.848` U4 `speech_started`；`23.148` 到期时 `upstreamTalking=true` ⇒ 重新 arm，**整份 journal 无任何 `settle:` 行**；`23.348` U4 `speech_stopped`；`23.349` 模型合并 response，`24.353` 只投递一条 `我想想然后跑一下测试`；`26.548` U5 final、`26.549` `session_interrupt {"intent":"方向改成跑 lint"}`，stop 之后无任何投递。
+- **anti-drift**：`anti-drift-touches-check.js --task … --worktree … --merge-target develop` → `ANTI-DRIFT OK — 2 actual file(s), all within declared Touches`。
