@@ -27,11 +27,11 @@ extra:
 `recordFrameWithoutTurn` 在判定「无 turn」之前，先跳过 `message.parent_tool_use_id` 为真的帧（snake_case——`recordFrameWithoutTurn` 收的是原始 stream 帧，`transformResidentMessage` 读的也是 `message.parent_tool_use_id`）。与转发路径的 `isSubagentPromptEcho` 排除对齐。不碰 `isSubagentPromptEcho` 本身（它滤的是 user 提示回声，本任务滤的是「无 turn 子代理帧记异常」）。
 
 ## AC
-- [ ] AC1 红态基线（先写判据、改动前运行）：经 scripted fake 进程向真实 ClaudeResidentHostDriver 注入「带 parent_tool_use_id 的 user/assistant 帧 + 无 turn」⇒ 现状产出一条 frame-without-turn（红；本任务要把它翻绿）。
-- [ ] AC2 排除生效：同一注入在改动后不产出 frame-without-turn；反向对照——「无 turn + 不带 parent_tool_use_id」的帧仍恰好产出一条（真分歧仍被抓）。
-- [ ] AC3 转发行为零变化：改动前后，两类注入帧仍照旧走 forwardNormalizedFrames（isSubagentPromptEcho 那条路不变），读数证明「只少记一条异常，不多转/少转任何帧」。
-- [ ] AC4 取假形态：删掉「跳过 parent_tool_use_id」这一判据 ⇒ AC2 的排除腿红（子代理帧又被记）；还原恢复绿。红落在排除腿本身。
-- [ ] AC5 兄弟判据不被打红：单文件跑 server/modules/providers/tests/claude-resident-reconcile.test.ts（其 (d) 腿注入不带 parent_tool_use_id 的 frame-without-turn）仍绿；`npm run typecheck` 退出 0；`npm run lint` 无 `: error `。
+- [x] AC1 红态基线（先写判据、改动前运行）：经 scripted fake 进程向真实 ClaudeResidentHostDriver 注入「带 parent_tool_use_id 的 user/assistant 帧 + 无 turn」⇒ 现状产出一条 frame-without-turn（红；本任务要把它翻绿）。
+- [x] AC2 排除生效：同一注入在改动后不产出 frame-without-turn；反向对照——「无 turn + 不带 parent_tool_use_id」的帧仍恰好产出一条（真分歧仍被抓）。
+- [x] AC3 转发行为零变化：改动前后，两类注入帧仍照旧走 forwardNormalizedFrames（isSubagentPromptEcho 那条路不变），读数证明「只少记一条异常，不多转/少转任何帧」。
+- [x] AC4 取假形态：删掉「跳过 parent_tool_use_id」这一判据 ⇒ AC2 的排除腿红（子代理帧又被记）；还原恢复绿。红落在排除腿本身。
+- [x] AC5 兄弟判据不被打红：单文件跑 server/modules/providers/tests/claude-resident-reconcile.test.ts（其 (d) 腿注入不带 parent_tool_use_id 的 frame-without-turn）仍绿；`npm run typecheck` 退出 0；`npm run lint` 无 `: error `。
 
 ## DoD
 真实落地判据（不是「测试存在」）：在交付树上把「带 parent_tool_use_id 的无 turn 帧」与「不带 parent_tool_use_id 的无 turn 帧」各注入一次，前者 0 条 frame-without-turn、后者恰好 1 条；删掉排除 ⇒ 前者变红。`git diff` 只含 `claude-host-driver.provider.ts` 的 `recordFrameWithoutTurn` 一处、判据文件、本任务 task 文件。
@@ -40,3 +40,11 @@ extra:
 - `server/modules/providers/list/claude/claude-host-driver.provider.ts` （recordFrameWithoutTurn 加 parent_tool_use_id 排除）
 - `server/modules/providers/tests/claude-resident-reconcile.test.ts` （就地加「子代理帧不记、无 turn 帧仍记」两臂；若 grep 契约不允许加缝则另起同级文件）
 - `tasks/gap-frame-without-turn-subagent-false-positive.md` （自触）
+
+## Blocker
+
+**2026-10-17T05:58:54.642Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：3668e74e-f437-48b2-a411-d04bfc614872
