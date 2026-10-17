@@ -878,6 +878,20 @@ export type ClaudeResidentHostDriverOptions = {
    */
   quiesceMs?: number;
   /**
+   * How often this driver's own per-host reconcile beat runs; defaults to
+   * {@link CLAUDE_RESIDENT_RECONCILE_BEAT_MS} (5 s).
+   *
+   * A seam for the same reason the other waits here are: a criterion has to
+   * watch several beats inside a test budget, and what it reads across them is
+   * the `[reconcile]` line or the close rather than the wait.
+   *
+   * `0` (or any non-positive value) arms no beat, which is the disabled arm a
+   * criterion uses as the false form for "the beat exists". Production never
+   * passes it — a host that cannot beat is exactly the defect this option's
+   * default closes.
+   */
+  reconcileBeatMs?: number;
+  /**
    * The run registry, as read and acted on; see
    * {@link ClaudeResidentRunRegistryPort}.
    *
@@ -2076,6 +2090,72 @@ export const NO_RESIDENT_RUN_REGISTRY: ClaudeResidentRunRegistryPort = {
 export const CLAUDE_RESIDENT_QUIESCE_MS = 10_000;
 
 /**
+ * The interval a host's own reconcile beat runs at, in milliseconds.
+ *
+ * §10.1's second check point is "the heartbeat", and it has to exist WITHOUT a
+ * browser subscription: the websocket module's activity heartbeat is per-socket
+ * and only armed while a client is attached (`activity-heartbeat.service.ts`),
+ * so a reconcile wired to it would never see the phantom run the host closes
+ * into no client. This beat is therefore armed per HOST — see
+ * {@link ClaudeResidentHostDriver.startHost} — and runs for the host's whole
+ * lifetime, whether or not anybody is watching.
+ *
+ * Five seconds mirrors the cadence §10.1 names, but it is the server-side beat
+ * rather than a second binding to the client-driven one. It is unref'd for the
+ * same reason the activity heartbeat is: a liveness check is never a reason for
+ * the process to stay alive.
+ */
+export const CLAUDE_RESIDENT_RECONCILE_BEAT_MS = 5_000;
+
+/**
+ * The handle one host's reconcile beat hands back.
+ *
+ * A handle rather than just a stop function because AC5's "unref, and does not
+ * hold the process" is a reading of the Node timer itself: {@link hasRef}
+ * answers whether this beat is still keeping the event loop alive.
+ */
+export type ClaudeResidentReconcileBeat = {
+  /** Stops the beat. Safe to call more than once. */
+  stop(): void;
+  /**
+   * Whether the timer still keeps the event loop alive.
+   *
+   * An unref'd beat — the shipped one — answers `false`.
+   */
+  hasRef(): boolean;
+};
+
+/**
+ * Arms one reconcile beat and answers the handle that owns it.
+ *
+ * The tick is the caller's callback: the driver binds it to `reconcileTick` for
+ * one host, and a criterion can bind it to a spy to read that the beat really
+ * fires with no client anywhere in the process — the property the per-socket
+ * activity heartbeat cannot offer. The timer is unref'd here rather than at the
+ * call site, so every beat this module arms has the same lifetime rule.
+ *
+ * `intervalMs <= 0` arms nothing and answers a stopped handle. That is the
+ * disabled arm the criterion uses as the false form for "the beat exists"; the
+ * driver's shipped default is {@link CLAUDE_RESIDENT_RECONCILE_BEAT_MS}.
+ */
+export function startResidentReconcileBeat(
+  intervalMs: number,
+  tick: () => void,
+): ClaudeResidentReconcileBeat {
+  if (!(intervalMs > 0)) {
+    return { stop: () => undefined, hasRef: () => false };
+  }
+  const timer = setInterval(tick, intervalMs);
+  // A beat is a liveness CHECK, never a reason for the process to stay alive —
+  // the same rule the activity heartbeat states for its own timer.
+  timer.unref?.();
+  return {
+    stop: () => clearInterval(timer),
+    hasRef: () => timer.hasRef(),
+  };
+}
+
+/**
  * What one reconcile check read (SPEC §10.1).
  *
  * Returned rather than only logged, because the criterion's readings have to
@@ -2724,6 +2804,15 @@ type ResidentHostState = {
    * every beat.
    */
   reportedPhantomRuns: Set<string>;
+  /**
+   * The host's own reconcile beat, armed at `startHost` and stopped at close.
+   *
+   * Per host because that is the lifetime the ledger and the run registry have:
+   * the beat asks "does this host's ledger still agree with the registry", so it
+   * must start when the host does and stop when the host goes. `null` means no
+   * beat is armed (a non-positive `reconcileBeatMs`, or a host already closed).
+   */
+  reconcileBeat: ClaudeResidentReconcileBeat | null;
   /** Set once the manager closed this host or the stream ended under it. */
   closed: boolean;
   /** The failure the stream ended with, when it ended on its own. */
@@ -2927,6 +3016,8 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   private readonly reconcileMode: ClaudeResidentReconcileMode;
   /** `T_q` — the standing-still grace; see {@link ClaudeResidentHostDriverOptions.quiesceMs}. */
   private readonly quiesceMs: number;
+  /** How often each host's own reconcile beat runs; see {@link ClaudeResidentHostDriverOptions.reconcileBeatMs}. */
+  private readonly reconcileBeatMs: number;
   /** The run registry as read and acted on; see {@link ClaudeResidentHostDriverOptions.runRegistry}. */
   private readonly runRegistry: ClaudeResidentRunRegistryPort;
   /** Where §10.2's `[ledger]` / `[turn]` lines go; see {@link ClaudeResidentHostDriverOptions.logSink}. */
@@ -2983,6 +3074,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       options.interruptResultTimeoutMs ?? CLAUDE_RESIDENT_INTERRUPT_RESULT_TIMEOUT_MS;
     this.reconcileMode = options.reconcileMode ?? CLAUDE_RESIDENT_RECONCILE_MODE;
     this.quiesceMs = options.quiesceMs ?? CLAUDE_RESIDENT_QUIESCE_MS;
+    this.reconcileBeatMs = options.reconcileBeatMs ?? CLAUDE_RESIDENT_RECONCILE_BEAT_MS;
     this.runRegistry = options.runRegistry ?? NO_RESIDENT_RUN_REGISTRY;
     this.logSink = options.logSink ?? (() => undefined);
     this.connectedClientCount = options.connectedClientCount ?? (() => 0);
@@ -3175,15 +3267,23 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       loggedDeliveryStates: new Map<string, string>(),
       loggedOpenTurnId: null,
       reportedPhantomRuns: new Set<string>(),
+      reconcileBeat: null,
       closed: false,
       loopError: null,
     });
 
+    // The host is live from here: arm §10.1's heartbeat check point on its own
+    // server-side beat. It belongs to the host's lifetime rather than to any
+    // client's subscription — the per-socket activity heartbeat is not a
+    // reconcile trigger (it only exists while somebody is watching).
+    const state = this.hosts.get(host.hostId);
+    if (state) {
+      this.armReconcileBeat(state);
+    }
     // The hook could have fired while the record was being opened — the process
     // is already reading stdin by then. Adoption is what makes those firings
     // reconcilable, so they are replayed here in the order they arrived rather
     // than left in the buffer forever.
-    const state = this.hosts.get(host.hostId);
     pending.stopHook.state = state ?? null;
     // The permission scope is the third thing this adoption is for: the entries
     // installed before the spawn have been able to refuse into their own log
@@ -3395,6 +3495,36 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   }
 
   /**
+   * Arms this host's reconcile beat (§10.1's second check point).
+   *
+   * The beat is the host's own, not a client's: it is armed when the host starts
+   * and runs for as long as the host is live, so a phantom run is read even when
+   * nobody has a browser subscribed. That independence is the whole fix — the
+   * defect this exists to close was a check point that only existed on a
+   * per-socket heartbeat, i.e. only while somebody was watching.
+   *
+   * Each tick asks {@link reconcileTick} for THIS host's session. The callback
+   * re-reads `state.closed` because a beat can be in flight while the host is
+   * being torn down; the stop below is the ordering that makes that rare, and
+   * the guard keeps a beat that already fired from reading a dead host.
+   */
+  private armReconcileBeat(state: ResidentHostState): void {
+    state.reconcileBeat?.stop();
+    state.reconcileBeat = startResidentReconcileBeat(this.reconcileBeatMs, () => {
+      if (state.closed) {
+        return;
+      }
+      this.reconcileTick(state.appSessionId);
+    });
+  }
+
+  /** Stops this host's reconcile beat. Idempotent; called on every close path. */
+  private stopReconcileBeat(state: ResidentHostState): void {
+    state.reconcileBeat?.stop();
+    state.reconcileBeat = null;
+  }
+
+  /**
    * Runs §10.1's reconcile check for one session and answers what it read.
    *
    * THE READING IS TWO COUNTS THAT MUST AGREE: the run registry's "is a run
@@ -3404,12 +3534,15 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * exactly the shape the `Working…` defect left behind: a run the registry
    * holds as `running` for a session whose ledger has stopped moving.
    *
-   * The check runs at a `RESULT` (see {@link observe}) and on the heartbeat,
-   * which is §10.1's "在 `RESULT` 之后与 heartbeat（既有 5 s 一拍）上检查 I1 / I4".
-   * It is driven through this entry rather than by an interval armed inside the
-   * driver because the beat belongs to the layer that owns it: the driver reports
-   * what it reads, and the caller that already beats once per session is the one
-   * that asks.
+   * The check runs at a `RESULT` (see {@link observe}) and on the host's own
+   * beat (§10.1's "在 `RESULT` 之后与 heartbeat（既有 5 s 一拍）上检查 I1 / I4"):
+   * {@link armReconcileBeat} arms it at `startHost` and every tick calls this
+   * entry with the host's session. The beat is server-side and per-host rather
+   * than the websocket module's per-socket activity heartbeat — the latter is
+   * armed only for a subscribed browser, which is exactly the "somebody is
+   * watching" condition §10.1 cannot depend on (a phantom run outlives its
+   * client). A host without the beat armed (a non-positive
+   * `reconcileBeatMs`, used only by a criterion) still gets the `RESULT` check.
    *
    * `T_q` ({@link ClaudeResidentHostDriverOptions.quiesceMs}) is the grace, and
    * an OPEN TURN is the guard — the two are not the same rule and the difference
@@ -3568,7 +3701,14 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
 
     const state = this.hosts.get(host.hostId);
     this.hosts.delete(host.hostId);
-    if (!state || state.closed) {
+    if (!state) {
+      return;
+    }
+    // The beat's lifetime is the host's: stop it even when `reportExit` already
+    // marked the state closed, so a timer cannot outlive the map entry that owns
+    // it either way.
+    this.stopReconcileBeat(state);
+    if (state.closed) {
       return;
     }
     state.closed = true;
@@ -6176,6 +6316,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
     state.closed = true;
+    this.stopReconcileBeat(state);
     this.stopTitleMirror(state);
 
     const error = state.loopError ?? new Error('The resident Claude process ended before the turn did.');

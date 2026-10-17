@@ -62,11 +62,13 @@ import util from 'node:util';
 import {
   ClaudeResidentHostDriver,
   readSessionTurnRun,
+  startResidentReconcileBeat,
 } from '@/modules/providers/list/claude/claude-host-driver.provider.js';
 import type {
   ClaudeResidentProcess,
   ClaudeResidentProcessFactory,
   ClaudeResidentQuery,
+  ClaudeResidentReconcileBeat,
   ClaudeResidentReconcileMode,
   ClaudeResidentReconcileReading,
   ClaudeResidentRunRegistryPort,
@@ -349,6 +351,16 @@ type HarnessOptions = {
   mode?: ClaudeResidentReconcileMode;
   reconcile?: boolean;
   /**
+   * The per-host reconcile beat this leg runs at.
+   *
+   * A large default keeps the legs that drive `reconcileTick` by hand exactly as
+   * they were: those readings are about an explicit check, not about a timer
+   * firing underneath them. The beat legs below ask for a short interval.
+   */
+  reconcileBeatMs?: number;
+  /** How many browsers the driver's port reports; defaults to none. */
+  connectedClientCount?: () => number;
+  /**
    * The runtime context this leg's rounds run under. The default normalizes to
    * nothing (these legs are about anomalies, not frames); a forwarding leg
    * injects a context whose normalizer emits one countable frame per raw frame.
@@ -382,6 +394,10 @@ function createHarness(options: HarnessOptions): Harness {
     interruptResultTimeoutMs: T_INT_MS,
     reconcileMode: options.mode ?? 'log',
     quiesceMs: T_Q_MS,
+    // A host with no explicit interval in a leg driven by hand must not start a
+    // timer that could add a reading the leg did not ask for.
+    reconcileBeatMs: options.reconcileBeatMs ?? 3_600_000,
+    connectedClientCount: options.connectedClientCount ?? (() => 0),
     ...(options.reconcile === false ? {} : { runRegistry: registry.port }),
     logSink: (line) => lines.push(line),
   });
@@ -488,6 +504,52 @@ async function dispose(harness: Harness): Promise<void> {
   }
   await Promise.allSettled(harness.rounds);
 }
+
+/** Real-time wait, for the legs whose subject is a real interval. */
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => { setTimeout(resolve, ms); });
+}
+
+/** Polls a synchronous predicate, so a real interval is given time to beat. */
+async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+    await sleep(5);
+  }
+  throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}.`);
+}
+
+/**
+ * Wraps the driver's `reconcileTick` and records every call.
+ *
+ * The beat calls `this.reconcileTick` — a prototype method — so an own property
+ * on the instance shadows it and the wrapper sees exactly the calls the
+ * production beat makes. That is the assembly reading: the count comes from the
+ * driver's own wiring rather than from the criterion ticking it.
+ */
+function spyReconcileTicks(driver: ClaudeResidentHostDriver): { calls: string[] } {
+  const calls: string[] = [];
+  const original = driver.reconcileTick.bind(driver);
+  driver.reconcileTick = (appSessionId: string) => {
+    calls.push(appSessionId);
+    return original(appSessionId);
+  };
+  return { calls };
+}
+
+// ---------------------------------------------------------------------------
+// (g) the host's own reconcile beat (gap-reconcile-heartbeat-unwired)
+// ---------------------------------------------------------------------------
+
+/**
+ * The beat's interval in the legs below. Short enough to watch several beats in
+ * a few hundred milliseconds; `T_q` is injected at 200 ms, so the clock — not
+ * the interval — is what decides whether a divergence is old enough.
+ */
+const BEAT_MS = 20;
 
 // ---------------------------------------------------------------------------
 // (a) mode=log names the phantom run and changes nothing
@@ -1284,6 +1346,286 @@ test('TURNC2 an ordinary turn closes its run once and the turn-closed frame is t
 
     await dispose(harness);
   });
+});
+
+// ---------------------------------------------------------------------------
+// (g)–(l) the host's own reconcile beat — gap-reconcile-heartbeat-unwired
+//
+// §10.1's second check point is the heartbeat, and until this task the only
+// caller of `reconcileTick` was the `result` branch: a check taken when
+// `quiescentMs≈0`, which can never satisfy `> T_q`. The beat these legs read is
+// the driver's own per-HOST one, armed at `startHost` and stopped at close. The
+// legs are deliberately driver-level: the manager opens a host, a scripted
+// process supplies frames, and NO websocket, server or browser subscription
+// exists anywhere in the process — the property the per-socket activity
+// heartbeat cannot offer, and the one that makes this a real check point rather
+// than a second per-socket false form.
+// ---------------------------------------------------------------------------
+
+test('BEAT (g) the host arms its own reconcile beat with no client subscription', async () => {
+  const sessionId = 'beat-g-assembly';
+  let connectedReads = 0;
+  const harness = createHarness({
+    sessionId,
+    reconcileBeatMs: BEAT_MS,
+    connectedClientCount: () => {
+      connectedReads += 1;
+      return 0;
+    },
+  });
+  const spy = spyReconcileTicks(harness.driver);
+
+  await armRound(harness, 'A beat assembly');
+  await waitFor(() => spy.calls.length >= 2, 3_000, 'two reconcile beats');
+  const ticksAfterTwo = spy.calls.length;
+  await waitFor(() => spy.calls.length > ticksAfterTwo, 3_000, 'a further reconcile beat');
+  const ticksAfterThree = spy.calls.length;
+
+  const sameSession = spy.calls.every((id) => id === sessionId);
+  console.log(
+    `clientSubscriptions=0 connectedClients=0 connectedReads=${connectedReads} ` +
+      `beatTicks=${ticksAfterThree} ticksAfterTwo=${ticksAfterTwo} allSameSession=${sameSession}`,
+  );
+
+  // The beat is the assembly's, not the criterion's: every call came from the
+  // driver's own tick callback, for this host's session, with nobody attached.
+  assert.ok(ticksAfterTwo >= 2, `the beat must call reconcileTick repeatedly (read ${ticksAfterTwo})`);
+  assert.ok(
+    ticksAfterThree > ticksAfterTwo,
+    `a further interval must add a further call (read ${ticksAfterThree} after ${ticksAfterTwo})`,
+  );
+  assert.strictEqual(sameSession, true, 'every beat asks about this host\'s session');
+  assert.strictEqual(connectedReads, 0, 'the beat never consults the browser count — it exists without one');
+
+  await dispose(harness);
+});
+
+test('BEAT (h) mode=log: the beat names the phantom run with no client', async () => {
+  const sessionId = 'beat-h-log';
+  const harness = createHarness({ sessionId, mode: 'log', reconcileBeatMs: BEAT_MS });
+  const spy = spyReconcileTicks(harness.driver);
+
+  // The divergence §10.1 is about: a send the CLI never spoke about, so the
+  // ledger has no open turn, and a registry run the registry still holds.
+  await armRound(harness, 'A in flight');
+  harness.registry.add(sessionId, 'run-beat-log');
+  harness.advance(T_Q_MS * 3);
+
+  await waitFor(
+    () => reconcileLines(sessionId, 'phantom-run').length > 0,
+    3_000,
+    'the beat to name the phantom run',
+  );
+  const ticksAtFirstLine = spy.calls.length;
+  await waitFor(() => spy.calls.length >= ticksAtFirstLine + 2, 3_000, 'two more beats');
+
+  const ticks = spy.calls.length;
+  const lines = reconcileLines(sessionId, 'phantom-run');
+  const sinkLines = reconcileSinkLines(harness.lines, sessionId, 'phantom-run');
+  const runsAfter = harness.registry.runs().length;
+  const leasesAfter = turnLeaseCount(harness.manager, sessionId);
+
+  console.log(
+    `beatTicks=${ticks} ticksAtFirstLine=${ticksAtFirstLine} logLines=${lines.length} ` +
+      `sinkLines=${sinkLines.length} runsAfter=${runsAfter} leasesAfter=${leasesAfter} ` +
+      `readingMode=${String(harness.driver.reconcileTick(sessionId)?.mode)}`,
+  );
+  console.log(`reconcileLine=${lines[0] ?? ''}`);
+  // AC2's phrase is "每拍记一行"; what §10.2 ships (and AC390 (a) pins) is one
+  // line per ANOMALY, so a standing divergence is stated once rather than every
+  // 20 ms. The reading is printed as the deviation it is, not reworded to fit.
+  console.log(
+    `DEVIATION AC2-phrase "each beat records a line" reads "the beat produces the line": ` +
+      `beatTicks=${ticks} logLines=${lines.length} (one per anomaly, §10.2 / AC390 (a))`,
+  );
+
+  assert.ok(ticks >= 3, `several beats must have run (read ${ticks})`);
+  assert.strictEqual(lines.length, 1, `the beat names the anomaly exactly once (read ${lines.length})`);
+  assert.strictEqual(sinkLines.length, 1, `the sink carries the same one line (read ${sinkLines.length})`);
+  assert.match(
+    lines[0] ?? '',
+    new RegExp(`^\\[reconcile\\] session=${sessionId} mode=log anomaly=phantom-run( |$)`),
+    'the line is §10.2\'s shape at this arm',
+  );
+  assert.strictEqual(runsAfter, 1, 'log mode changes no registry state');
+  assert.strictEqual(leasesAfter, 1, 'log mode changes no lease state');
+
+  await dispose(harness);
+});
+
+test('BEAT (i) mode=enforce: the beat closes the phantom run aborted/reason=reconciled', async () => {
+  const sessionId = 'beat-i-enforce';
+  const harness = createHarness({ sessionId, mode: 'enforce', reconcileBeatMs: BEAT_MS });
+  const spy = spyReconcileTicks(harness.driver);
+
+  await armRound(harness, 'A in flight');
+  harness.registry.add(sessionId, 'run-beat-enforce');
+  harness.advance(T_Q_MS * 3);
+
+  await waitFor(() => harness.registry.closes().length === 1, 3_000, 'the beat to close the phantom run');
+  // At least one beat after the close: the beat keeps running and must not close
+  // the same run again.
+  const ticksAtClose = spy.calls.length;
+  await waitFor(() => spy.calls.length > ticksAtClose, 3_000, 'a beat after the close');
+
+  const close = harness.registry.closes()[0] ?? null;
+  const ticks = spy.calls.length;
+  const lines = reconcileLines(sessionId, 'phantom-run');
+  const runsAfter = harness.registry.runs().length;
+
+  console.log(
+    `beatTicks=${ticks} closes=${harness.registry.closes().length} phantomRunOutcome=${String(close?.outcome)} ` +
+      `reason=${String(close?.reason)} runsAfter=${runsAfter} logLines=${lines.length}`,
+  );
+  console.log(`reconcileLine=${lines[0] ?? ''}`);
+
+  assert.ok(ticks >= 2, `the close came from the beat, and the beat went on (read ${ticks})`);
+  assert.strictEqual(close?.outcome, 'aborted', 'a reconciled run is closed as aborted');
+  assert.strictEqual(close?.reason, 'reconciled', 'and the reason says why (§10.1)');
+  assert.strictEqual(harness.registry.closes().length, 1, 'one divergence, one close, on any number of beats');
+  assert.strictEqual(runsAfter, 0, 'the closed run is gone from the registry reading');
+  assert.strictEqual(lines.length, 1, `the beat states the anomaly once (read ${lines.length})`);
+  assert.match(
+    lines[0] ?? '',
+    new RegExp(`^\\[reconcile\\] session=${sessionId} mode=enforce anomaly=phantom-run( |$)`),
+    'the line carries this arm in its mode= field',
+  );
+
+  await dispose(harness);
+});
+
+test('BEAT (j) a real long turn is not closed by the beat, in either mode', async () => {
+  type Arm = {
+    mode: ClaudeResidentReconcileMode;
+    ticks: number;
+    turnOpen: boolean;
+    leasesAfter: number;
+    closes: number;
+    phantomLines: number;
+  };
+  const arms: Arm[] = [];
+
+  for (const mode of ['enforce', 'log'] as const) {
+    const sessionId = `beat-j-${mode}`;
+    const harness = createHarness({ sessionId, mode, reconcileBeatMs: BEAT_MS });
+    const spy = spyReconcileTicks(harness.driver);
+    await armRound(harness, 'A long turn');
+    harness.process.emit(initFrame(`beat-j-init-${mode}`));
+    await settle();
+
+    // The other half of the divergence, injected: the registry says a run is
+    // going. Without it the mutant would have nothing to over-settle.
+    harness.registry.add(sessionId, `run-beat-long-${mode}`);
+    harness.advance(T_Q_MS * 3);
+
+    const ticksBefore = spy.calls.length;
+    await waitFor(() => spy.calls.length >= ticksBefore + 3, 3_000, `${mode}: three beats on a running turn`);
+
+    arms.push({
+      mode,
+      ticks: spy.calls.length,
+      turnOpen: harness.driver.ledgerReading(sessionId)?.turn?.open === true,
+      leasesAfter: turnLeaseCount(harness.manager, sessionId),
+      closes: harness.registry.closes().length,
+      phantomLines: reconcileLines(sessionId, 'phantom-run').length,
+    });
+
+    await dispose(harness);
+  }
+
+  for (const arm of arms) {
+    console.log(
+      `mode=${arm.mode} beatTicks=${arm.ticks} turnOpen=${arm.turnOpen} leasesAfter=${arm.leasesAfter} ` +
+        `closes=${arm.closes} phantomLines=${arm.phantomLines}`,
+    );
+  }
+
+  for (const arm of arms) {
+    assert.ok(arm.ticks >= 3, `${arm.mode}: several beats ran (read ${arm.ticks})`);
+    assert.strictEqual(arm.turnOpen, true, `${arm.mode}: the ledger really has a turn open`);
+    assert.strictEqual(arm.leasesAfter, 1, `${arm.mode}: the running turn keeps its lease`);
+    assert.strictEqual(arm.closes, 0, `${arm.mode}: over-settlement — a running turn is never closed`);
+    assert.strictEqual(arm.phantomLines, 0, `${arm.mode}: a long turn is not a phantom run`);
+  }
+});
+
+test('BEAT (k) false form: with the beat disabled, the same divergence is never seen', async () => {
+  type Arm = { ticks: number; lines: number; runsAfter: number };
+
+  // The mutant is "the beat's reconcileTick call is gone" / "the beat is never
+  // armed". `reconcileBeatMs: 0` is that assembly exactly: the host is live, the
+  // divergence stands, and nothing checks it.
+  async function drive(reconcileBeatMs: number): Promise<Arm> {
+    const sessionId = `beat-k-${reconcileBeatMs}`;
+    const harness = createHarness({ sessionId, mode: 'log', reconcileBeatMs });
+    const spy = spyReconcileTicks(harness.driver);
+    await armRound(harness, 'A in flight');
+    harness.registry.add(sessionId, `run-beat-${reconcileBeatMs}`);
+    harness.advance(T_Q_MS * 3);
+    // Six beat periods: an armed beat cannot miss the standing divergence.
+    await sleep(BEAT_MS * 6);
+    const arm = {
+      ticks: spy.calls.length,
+      lines: reconcileLines(sessionId, 'phantom-run').length,
+      runsAfter: harness.registry.runs().length,
+    };
+    await dispose(harness);
+    return arm;
+  }
+
+  const disabled = await drive(0);
+  const enabled = await drive(BEAT_MS);
+
+  console.log(
+    `disabled beatTicks=${disabled.ticks} logLines=${disabled.lines} runsAfter=${disabled.runsAfter} ` +
+      `| enabled beatTicks=${enabled.ticks} logLines=${enabled.lines} runsAfter=${enabled.runsAfter}`,
+  );
+
+  assert.strictEqual(disabled.ticks, 0, 'with the beat gone, reconcileTick is never called');
+  assert.strictEqual(disabled.lines, 0, 'and the divergence is never named');
+  assert.strictEqual(disabled.runsAfter, 1, 'and nothing changed it');
+  assert.ok(enabled.ticks >= 2, `the enabled beat is what the count reads (read ${enabled.ticks})`);
+  assert.strictEqual(enabled.lines, 1, 'the enabled beat names the same divergence');
+});
+
+test('BEAT (l) the beat is unref\'d and stops when the host closes', async () => {
+  // (1) The timer's own reading: unref'd, so it does not keep the process alive.
+  let directTicks = 0;
+  const direct: ClaudeResidentReconcileBeat = startResidentReconcileBeat(BEAT_MS, () => {
+    directTicks += 1;
+  });
+  await waitFor(() => directTicks >= 2, 3_000, 'the directly-bound beat to tick');
+  const hasRef = direct.hasRef();
+  direct.stop();
+  const afterStop = directTicks;
+  await sleep(BEAT_MS * 4);
+  const afterWait = directTicks;
+
+  // (2) The host's own beat: closing the host stops it (no timer outlives the
+  // map entry that owns it).
+  const sessionId = 'beat-l-lifecycle';
+  const harness = createHarness({ sessionId, reconcileBeatMs: BEAT_MS });
+  const spy = spyReconcileTicks(harness.driver);
+  await armRound(harness, 'A beat lifecycle');
+  await waitFor(() => spy.calls.length >= 2, 3_000, 'two host beats');
+  const host = hostOf(harness);
+  harness.manager.closeHost(host.hostId, 'server-shutdown');
+  const ticksAtClose = spy.calls.length;
+  await sleep(BEAT_MS * 5);
+  const ticksAfterWait = spy.calls.length;
+
+  console.log(
+    `unrefHasRef=${hasRef} directTicksAfterStop=${afterStop} directTicksAfterWait=${afterWait} ` +
+      `hostTicksAtClose=${ticksAtClose} hostTicksAfterWait=${ticksAfterWait} ` +
+      `hostState=${String(harness.manager.snapshot().find((h) => h.hostId === host.hostId)?.state)}`,
+  );
+
+  assert.strictEqual(hasRef, false, 'the beat is unref\'d — it never holds the process open');
+  assert.strictEqual(afterWait, afterStop, `a stopped beat must not tick again (read ${afterWait} vs ${afterStop})`);
+  assert.ok(ticksAtClose >= 2, `the host beat was live before the close (read ${ticksAtClose})`);
+  assert.strictEqual(ticksAfterWait, ticksAtClose, `closing the host must clear its beat (read ${ticksAfterWait})`);
+
+  await dispose(harness);
 });
 
 // ---------------------------------------------------------------------------
