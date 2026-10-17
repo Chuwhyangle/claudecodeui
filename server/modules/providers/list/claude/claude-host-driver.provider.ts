@@ -2532,7 +2532,7 @@ function deliveryChannelSignature(state: ResidentHostState): string {
 /** The origin a dispatch stated for its send, as the runtime option carries it. */
 function readDeliverySource(options: AnyRecord | undefined): ChatRunSource {
   const stated = options?.[DELIVERY_SOURCE_OPTION];
-  return stated === 'user' || stated === 'scheduled' || stated === 'unattended' || stated === 'mcp'
+  return stated === 'user' || stated === 'scheduled' || stated === 'unattended' || stated === 'mcp' || stated === 'voice'
     ? stated
     : 'user';
 }

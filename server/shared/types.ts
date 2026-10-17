@@ -3095,10 +3095,18 @@ export type HostReconfigurePatch = {
  * `unattended`: which of the three a run is has to come from this recorded
  * value, never from whether a connection happens to be attached.
  *
+ * `voice` is one the Live Voice relay opened when a spoken sentence settled. It
+ * reaches the control service through the MCP gateway's own `session_send`
+ * builder, but it is deliberately NOT `mcp`: a spoken delivery is not a command
+ * a person can withdraw, and the activity channel's clients read this value to
+ * decide whether a delivery row is theirs to draw (see `src/shared/types.ts`'s
+ * `ActivityDeliverySource`). Keeping it a distinct member is what lets a voice
+ * delivery reach the transcript without becoming a pending command row.
+ *
  * Read by `chatRunRegistry` (which stamps it at `startRun` and exposes it on
  * the run record) and by the debug agent's host-driver criterion.
  */
-export type ChatRunSource = 'user' | 'scheduled' | 'unattended' | 'mcp';
+export type ChatRunSource = 'user' | 'scheduled' | 'unattended' | 'mcp' | 'voice';
 
 /**
  * What made a provider CLI open a turn nobody pushed.

@@ -651,8 +651,15 @@ export type ActivityScheduleView = {
  *
  * The same vocabulary the run records use, carried verbatim: a client draws a
  * row from this, it does not classify one.
+ *
+ * `voice` is the Live Voice relay's own origin, and it is the one member a
+ * client treats differently: a spoken sentence is not a command the person can
+ * edit or withdraw, so its delivery must not be drawn as a pending command row
+ * (see `deliveryRowsFromSnapshot` in `useSessionStore`). It is kept in the same
+ * union — rather than a boolean beside it — because the snapshot documents ONE
+ * origin vocabulary, and a second field would let the two disagree.
  */
-export type ActivityDeliverySource = 'user' | 'scheduled' | 'unattended' | 'mcp';
+export type ActivityDeliverySource = 'user' | 'scheduled' | 'unattended' | 'mcp' | 'voice';
 
 /** The CLI queue tier a delivery's write was made under, or `null` for a write with no queue to be behind. */
 export type ActivityDeliveryPriority = 'now' | 'next' | 'later';

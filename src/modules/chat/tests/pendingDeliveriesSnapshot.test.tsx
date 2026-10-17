@@ -522,3 +522,90 @@ describe('(e) a delivery already represented by the client’s own optimistic tu
     assert.equal(drawn[0]?.id, 'srv-persisted');
   });
 });
+
+/* ─── (f) a voice delivery draws no pending command row ───────────────────── */
+
+/**
+ * THE VOICE ROW IS NOT A COMMAND. Live Voice reaches the session through the
+ * same control plane a typed message does, but the sentence was only ever
+ * spoken: there is no composer it could be edited back into and no withdrawal
+ * the person could have asked for. The activity snapshot still carries the
+ * delivery (the host accepted it) and states its origin as `voice`; this client
+ * must draw the read-only voice card / the transcript user row instead of a
+ * `PendingResidentMessage` with a [withdraw] control.
+ *
+ * The negative control is half the criterion: `user` and `mcp` deliveries must
+ * still draw their rows, so deleting the row for every delivery could not pass
+ * this block.
+ */
+describe('(f) a delivery whose source is voice draws no pending command row', () => {
+  it('skips the voice delivery row while user and mcp deliveries keep theirs', () => {
+    const { store, dispatch } = mountChat();
+
+    dispatch(activityFrame([
+      delivery({ deliveryId: 'd-voice', source: 'voice', text: 'spoken into the relay' }),
+      delivery({ deliveryId: 'd-user', source: 'user', text: 'typed by the person' }),
+      delivery({ deliveryId: 'd-mcp', source: 'mcp', text: 'sent by a tool' }),
+    ], 'activity.snapshot'));
+
+    const container = renderPendingRows(store);
+
+    // The negative control renders the rows the way the pane does — WITH a withdraw
+    // handler — because `data-resident-withdraw` is the control the person would
+    // press, and a row rendered without one would make the count vacuous.
+    const interactive = render(
+      <>
+        {pendingRows(store).map((message, index) => (
+          <PendingResidentMessage
+            key={`${message.residentDeliveryId ?? 'none'}-${index}`}
+            message={message}
+            onWithdraw={() => undefined}
+          />
+        ))}
+      </>,
+    ).container;
+
+    assert.deepEqual(
+      drawnDeliveryIds(container).sort(),
+      ['d-mcp', 'd-user'],
+      'only the two command-shaped deliveries may draw a pending row',
+    );
+    assert.equal(
+      interactive.querySelector('[data-delivery-id="d-voice"]'),
+      null,
+      'a voice delivery must not be drawn as a command row at all',
+    );
+    assert.equal(
+      interactive.querySelectorAll('[data-resident-withdraw]').length,
+      2,
+      'the negative control: the user and mcp rows still carry their withdraw control',
+    );
+    assert.equal(
+      pendingRows(store).some((row) => row.residentDeliveryId === 'd-voice'),
+      false,
+      'the store must not hand the transcript a pending row for the voice delivery',
+    );
+  });
+
+  it('does not let a voice delivery claim a typed optimistic turn with the same words', () => {
+    const { store, dispatch } = mountChat();
+    const text = 'the same words, spoken and typed';
+
+    store.appendRealtime(SESSION_ID, {
+      id: 'local_typed',
+      sessionId: SESSION_ID,
+      timestamp: new Date(ENQUEUED_AT - 55).toISOString(),
+      provider: 'claude',
+      kind: 'text',
+      role: 'user',
+      content: text,
+    } as NormalizedMessage);
+    dispatch(activityFrame([
+      delivery({ deliveryId: 'd-voice-same', source: 'voice', text }),
+    ], 'activity.snapshot'));
+
+    const typed = store.getMessages(SESSION_ID).filter((message) => (message.content ?? '').trim() === text);
+    assert.equal(typed.length, 1, 'the typed message must survive a voice delivery carrying the same words');
+    assert.equal(typed[0]?.id, 'local_typed', 'the survivor is the person’s own turn, not a delivery row');
+  });
+});

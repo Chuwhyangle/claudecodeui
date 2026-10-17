@@ -33,15 +33,16 @@ import { residentRunIsTurn } from '@/shared/utils.js';
  * second check.
  *
  * `via` names the adapter that made the call — the WebSocket gateway, the
- * scheduled-message dispatcher, or the MCP gateway. It is carried so the run
- * this service registers can state its origin (`websocket` → `user`,
- * `scheduled` → `scheduled`, `mcp` → `mcp`); the adapter does not get to omit
+ * scheduled-message dispatcher, the MCP gateway, or the Live Voice relay. It is
+ * carried so the run this service registers can state its origin
+ * (`websocket` → `user`, `scheduled` → `scheduled`, `mcp` → `mcp`,
+ * `voice` → `voice`); the adapter does not get to omit
  * it, because a caller that forgot would otherwise be indistinguishable from
  * one that knowingly came in over a socket.
  */
 type ControlCaller = {
   userId: string | number | null;
-  via: 'websocket' | 'mcp' | 'scheduled';
+  via: 'websocket' | 'mcp' | 'scheduled' | 'voice';
 };
 
 /**
@@ -59,6 +60,11 @@ const SOURCE_BY_VIA: Record<ControlCaller['via'], ChatRunSource> = {
   websocket: 'user',
   scheduled: 'scheduled',
   mcp: 'mcp',
+  // The Live Voice relay. It reaches this service through the MCP gateway's
+  // `session_send` builder, so without this member a spoken delivery would be
+  // recorded as an `mcp` command — the origin a client draws a withdrawable
+  // pending row from. See `ActivityDeliverySource`'s `voice` member.
+  voice: 'voice',
 };
 
 /**

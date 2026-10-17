@@ -153,6 +153,8 @@ function wireConnection(
     manual?: boolean;
     coalesceMs?: number;
     segmentCommit?: RealtimeSegmentCommitMode;
+    /** The settle producer's window; a small value makes the boundary observable in-test. */
+    settleMs?: number;
     /** Receives the proxy's own log lines, so a criterion can read the journal the operator reads. */
     log?: (line: string) => void;
   } = {},
@@ -172,6 +174,7 @@ function wireConnection(
     instructions: 'test instructions',
     ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
     ...(options.segmentCommit === undefined ? {} : { segmentCommit: options.segmentCommit }),
+    ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
     ...(options.log === undefined ? {} : { log: options.log }),
   };
   handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], boundSessionId, seams);
@@ -670,7 +673,7 @@ test('AC2 (negative control): the f6166468 late forward — commits present, a d
   assert.equal(base.calls[1]?.args.message, '啊，稍好一点。');
 });
 
-test('AC2 (negative control): counter 0 but a literal the last delivery does not contain is still delivered', async () => {
+test('AC2 (negative control): no new speech but a literal no recent delivery restates is still delivered', async () => {
   const { transport, base } = wireConnection();
   await waitFor(() => transport.openCalls >= 1);
 
@@ -678,12 +681,16 @@ test('AC2 (negative control): counter 0 but a literal the last delivery does not
   deliverSessionSendCall(transport, 'call-1', '把超时改成五十秒。');
   await waitFor(() => base.calls.length === 1);
 
-  // No new commit — the counter is 0 — but this is words the session never received.
+  // No new commit, no new transcription — but these are words the session has never held, and they
+  // are not a restatement of anything recently delivered (the interrupt's next message and the
+  // `b33412ea` late forward have this shape). The watermark decides there is no NEW SPAN; the
+  // restatement window decides this call is not an echo of an old one; so it is a delivery.
   deliverSessionSendCall(transport, 'call-2', '再检查一下日志。');
   await waitFor(() => base.calls.length === 2);
   assert.deepEqual(
     base.calls.map((call) => call.args.message),
     ['把超时改成五十秒。', '再检查一下日志。'],
+    'a response that adds words the session never had must not be dropped on the watermark alone',
   );
 });
 
@@ -732,5 +739,130 @@ test('AC3 (negative control): a repeat announced by a TRANSCRIPTION alone — no
     base.calls.map((call) => call.args.message),
     ['再说一遍。', '再说一遍。'],
     'a repeat upstream announced by transcript alone must reach the session',
+  );
+});
+
+// ── AC2 (R2): the three live journals, replayed against the settle producer ─────────────────────
+//
+// THE DEFECT THIS FILE'S NEW ARM REPRODUCES. On 2026-10-17 the dropped-input audit aligned every
+// final transcription in six journals against the `session_send` calls on the same connection. Four
+// rounds lost input; `764f0c7a` lost 3 of 5 sentences. The losses were not "the model heard and
+// refused": they were utterances for which the endpoint opened NO response (A), calls the next
+// utterance truncated (B), and calls that answered only the newest span. The model was the delivery
+// judge, and the judge was absent.
+//
+// THE THREE SEQUENCES BELOW ARE THOSE JOURNALS, reduced to the events that decide delivery. They are
+// replayed against the SHIPPED producer, so what is measured is the rule and not a fixture:
+//   · `57279cc1` — one sentence relayed three times, 15:39:57 / 15:40:13 / 15:40:30 (CST). The
+//     settlement must deliver it ONCE; the watermark, not a text comparison, is what refuses the
+//     repeats.
+//   · `764f0c7a` — five finals, two answers (`05:40:38` and `05:42:12Z`). The three unanswered
+//     sentences must each reach the session verbatim: no lost span, and no span delivered twice.
+//   · `3d2d3b2c` — the endpoint misheard "LiveWire" as "来望也" and the model repaired it from the
+//     audio. The response is the delivery, WHOLE: the mishearing is not prepended (that was the
+//     deleted fragment heuristic), and the sentence is delivered once.
+
+/** The endpoint's final transcription of one input item — what arms the settle window. */
+function deliverFinalTranscript(transport: FakeTransport, itemId: string, text: string): void {
+  transport.peerSend({
+    type: 'conversation.item.input_audio_transcription.completed',
+    item_id: itemId,
+    transcript: text,
+  });
+}
+
+/** A macrotask boundary wide enough for one settle window (the callers set it well below `wait`). */
+const settleWait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('AC2 replay 57279cc1: one heard sentence relayed three times is delivered exactly once', async () => {
+  const SENTENCE = '我们原来的这些风格还是有蛮大的差异，这个应该要检查和讨论一下。';
+  // Long enough that only the model's own response can settle the span in this case: the triple
+  // re-send is about the WATERMARK, not about the deadline.
+  const { transport, base } = wireConnection({ settleMs: 60_000 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverFinalTranscript(transport, 'item-57279-1', SENTENCE);
+  deliverSessionSendCall(transport, 'call-57279-1', SENTENCE);
+  await waitFor(() => base.calls.length === 1);
+
+  // The same response twice more with NO new audio behind it — the live shape (three calls, 33 s
+  // apart, identical words). The first settled the span; the watermark says there is nothing new
+  // for the others to deliver.
+  deliverSessionSendCall(transport, 'call-57279-2', SENTENCE);
+  deliverSessionSendCall(transport, 'call-57279-3', SENTENCE);
+  await waitFor(() => (transport.sent.filter((message) => message.type === 'function_call_output').length) >= 3);
+  await settleWait(20);
+
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    [SENTENCE],
+    'one heard span is one delivery however many times the model restates it',
+  );
+});
+
+test('AC2 replay 764f0c7a: five heard sentences, two model answers — every span delivered once, none lost', async () => {
+  const SPOKEN = [
+    '让我们讨论Live Voice的进一步改进及语音输出。',
+    '当然，我并不希望这个语音输出只是简单把 Claude Code 的输出念一遍。',
+    '它应当具有更好的实时性，然后呢，也能够更适合原来用户在持续的语音对话中所需要的一些特征。',
+    '另一方面呢，我也认为我们并不需要使用特别大的模型。',
+    '我们来进一步讨论一下这个问题。',
+  ];
+  const ANSWERED = [
+    '当然，我并不希望这个语音输出只是简单把 Claude Code 的输出念一遍。',
+    '我们来进一步讨论一下这个问题。',
+  ];
+  // A short window: the two unanswered spans must be delivered by the deadline, which is the arm
+  // this journal's 3-of-5 loss lived on. A missed deadline shows up as a missing text below.
+  const { transport, base } = wireConnection({ settleMs: 40 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  // 1 — heard, never answered (the journal's first call was truncated by the next turn).
+  deliverFinalTranscript(transport, 'item-764-1', SPOKEN[0]!);
+  await waitFor(() => base.calls.length === 1);
+
+  // 2 — heard, answered inside the window.
+  deliverFinalTranscript(transport, 'item-764-2', SPOKEN[1]!);
+  deliverSessionSendCall(transport, 'call-764-2', ANSWERED[0]!);
+  await waitFor(() => base.calls.length === 2);
+
+  // 3 and 4 — heard, never answered.
+  deliverFinalTranscript(transport, 'item-764-3', SPOKEN[2]!);
+  await waitFor(() => base.calls.length === 3);
+  deliverFinalTranscript(transport, 'item-764-4', SPOKEN[3]!);
+  await waitFor(() => base.calls.length === 4);
+
+  // 5 — heard, answered inside the window.
+  deliverFinalTranscript(transport, 'item-764-5', SPOKEN[4]!);
+  deliverSessionSendCall(transport, 'call-764-5', ANSWERED[1]!);
+  await waitFor(() => base.calls.length === 5);
+
+  // Let a late deadline fire if one was left armed: a span already settled must produce NOTHING.
+  await settleWait(80);
+
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    [SPOKEN[0], ANSWERED[0], SPOKEN[2], SPOKEN[3], ANSWERED[1]],
+    'each heard span is delivered once: the response where there is one, the endpoint\'s words otherwise',
+  );
+});
+
+test('AC2 replay 3d2d3b2c: a model repair of an ASR mishearing is the whole delivery, never prefixed', async () => {
+  const HEARD = '十月十五日，来望也，嗯，第一次考试。';
+  const REPAIRED = '十月十五日，LiveWire 第一次测试。';
+  const { transport, base } = wireConnection({ settleMs: 40 });
+  await waitFor(() => transport.openCalls >= 1);
+
+  deliverFinalTranscript(transport, 'item-3d2d-1', HEARD);
+  // The model answers from the AUDIO, correcting the name. Under the deleted fragment guard the
+  // pair overlap scored this repair as an omission and delivered the mishearing in front of it.
+  deliverSessionSendCall(transport, 'call-3d2d-1', REPAIRED);
+  await waitFor(() => base.calls.length === 1);
+  await settleWait(80);
+
+  assert.deepEqual(
+    base.calls.map((call) => call.args.message),
+    [REPAIRED],
+    'a response that covers the span is delivered WHOLE; no text-side measure may prepend the transcript',
   );
 });

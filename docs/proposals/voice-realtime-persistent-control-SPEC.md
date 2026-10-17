@@ -602,6 +602,49 @@ SLO：说完 → 模型调用中断 ≤ 1.0 s p95；中断 → 下一轮开始 �
 
 ---
 
+## §19 Live Voice 的生产者与投递档位（R1/R2/R3，2026-10-17 裁定）
+
+本节是 `gap-live-voice-stream-delivery-not-command` 落地的三条规则锚点。它们取代此前「模型是否/何时调用
+`session_send`」作为投递触发的隐含契约——2026-10-17 丢输入审计（
+`experiments/livevoice-discussion-transcripts-20261017/DROPPED-INPUT-AUDIT-2026-10-17.md`）证明那个契约会把
+真实输入丢掉：六轮里四轮有丢，`764f0c7a` 一轮 5 句丢 3。
+
+### R1 投递档位
+
+- live voice 一律用 `HostInputPriority = 'next'`（并入在飞回合，在下一个工具边界合流）；
+  `VOICE_BUSY_RELEASE_PRIORITY = 'next'`（`voice-realtime-ws-proxy.service.ts`），busy 的静窗释放与打断
+  更正都带它。
+- idle 投递**不写 tier**（立即开回合）。
+- 绝不发送 `now`：`grep -rn "priority: 'now'" server/ --include=*.ts` 只命中类型定义/校验函数/快照归一化，
+  没有 shipped 投递路径发送它。
+- 残留边界：`next` 仍受「当前回合没有工具边界」约束；需要「尽快消费」的人工强干预仍然只有
+  `session_interrupt`。
+
+### R2 发送触发：确定性 settle 边界，不是模型
+
+- 生产端是**中继**，不是模型。每一条 FINAL transcription 进入 per-session span 并启动 settle 窗口
+  （`VOICE_SPAN_SETTLE_MS`，生产 2.5 s）。
+- 窗口内到达的模型 response 是**质量臂**：其文本整体作为该 span 的投递（`session_send` 仍走同一条
+  `control.send` 控制面）。
+- 窗口内没有 response，则为**确定性臂**：endpoint 自己的 final 逐字、按说话顺序、整 span 作为**一条**消息投递。
+- 无论哪一臂，投递被接受时 watermark 前移（`transcribedSinceWatermark` 清空、`speechEpoch` 记账），
+  因此同一个 span 不会被投递第二次。没有新的语音时，模型再发调用只有在**复述近期已投递文本**时才被拒——
+  这是「不为一次猜测丢掉用户真说的话」与「同一 span 不二次投递」两条要求的共同解。
+- 空转写（endpoint 明确报告零字）不投递；它只推进 watermark。
+
+### R3 切分不变性
+
+- 同样的文本分/不分更细的小节被 Claude Code 收到并处理，行为语义无显著差异。允许粗合并、允许按 settle
+  边界成条。
+- 因此删除了按切分补偿的启发式：`voice-realtime-fragment-coverage.ts`（0.5 相邻字对覆盖阈值、
+  `MIN_JUDGED_CHARACTERS = 5`、fragment 概念）与 `voice-realtime-span-guard.ts`（含
+  `VOICE_REALTIME_SPAN_GUARD` 开关）**不再存在**，投递路径不比较 response 与 transcript 的字面重合。
+- 表示层的同一条规则：语音投递的 `source` 是 `'voice'`（`ChatRunSource` / `ActivityDeliverySource`），
+  客户端不为它画可撤回的 `PendingResidentMessage`；等待由只读的 `VoicePendingMessageCard` 表示，消息本身
+  是 transcript 里的真实 user 行。
+
+---
+
 ## 附录 A：术语
 
 | 词 | 含义 |

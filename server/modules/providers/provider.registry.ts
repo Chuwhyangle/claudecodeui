@@ -1,5 +1,6 @@
 import { createDebugAgentProvider, DEBUG_AGENT_PROVIDER_ID, isDebugAgentEnabled } from '@/modules/debug-agent/index.js';
 import { ClaudeProvider } from '@/modules/providers/list/claude/claude.provider.js';
+import { publishSessionDeliveries } from '@/modules/providers/list/claude/claude-host-driver.provider.js';
 import {
   announceNormalizedPermission,
   announceNormalizedPermissionResolved,
@@ -123,6 +124,12 @@ const debugAgentProvider = createDebugAgentProvider({
       announceNormalizedPermissionResolved({ sessionId, requestId, ws: writer }),
   },
   createSessionSynchronizer: (options) => new ClaudeSessionSynchronizer(options),
+  // The delivery ledger publication. The debug substitute's push is a delivery
+  // like any other, and the activity channel's reader is keyed per session in the
+  // claude driver's own registry — so the substitute publishes through that ONE
+  // seam rather than growing a second ledger no reader looks at. Injected here
+  // because this is the one site that sees both modules (ADR-003 decision 7).
+  publishDeliveries: publishSessionDeliveries,
   declareRuntimeCapabilities: (capabilities) =>
     providerCapabilitiesService.declareRuntimeProviderCapabilities(capabilities),
 });

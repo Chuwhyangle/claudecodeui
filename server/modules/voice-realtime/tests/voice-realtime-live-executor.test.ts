@@ -14,7 +14,9 @@
  *    reproduce the gateway's exact call pattern to pass, and the non-empty log
  *    rules out a route that answers without reaching any service at all.
  *  - AC2 — a `session_send` reaches the control seam with a caller recorded as
- *    `via: 'mcp'`, and the returned payload reports the `mcp` source.
+ *    `via: 'voice'` — the Live Voice plane's own origin, so the delivery is not
+ *    filed as a withdrawable `mcp` command — while the returned payload's
+ *    `source` still reports what the RUN carries (the fixture's run is `mcp`).
  *  - AC3 — a function call naming a session OTHER than the bound one is refused
  *    AND recorded, and never reaches the other session's send.
  *
@@ -255,6 +257,12 @@ const EXPECTED_PRINCIPAL: McpPrincipal = {
   scopes: [SCOPE],
 };
 const CTX = { principal: EXPECTED_PRINCIPAL };
+/**
+ * The Live Voice executor's own origin. `session_send` reads it (a spoken
+ * delivery is filed as `voice`, not as a withdrawable `mcp` command); the
+ * read-only builders ignore it, so only the send case compares against it.
+ */
+const CTX_VOICE = { principal: EXPECTED_PRINCIPAL, via: 'voice' as const };
 
 /** Reads one handler off the routing table, failing loudly if the route is missing. */
 function route(executor: RealtimeToolExecutor, name: string) {
@@ -336,7 +344,7 @@ test('AC1: every route lands on the gateway`s own build function, arguments unch
     {
       name: 'session_send',
       args: sendArgs,
-      build: (g) => buildSessionSend({ session: BOUND_SESSION, message: sendArgs.message }, CTX, g.sessionSend),
+      build: (g) => buildSessionSend({ session: BOUND_SESSION, message: sendArgs.message }, CTX_VOICE, g.sessionSend),
     },
     {
       name: 'session_interrupt',
@@ -378,7 +386,7 @@ test('AC1: every route lands on the gateway`s own build function, arguments unch
 
 // ── AC2: session_send reaches the control seam as a `mcp` caller ──────────────────────────────
 
-test('AC2: session_send calls the control seam with a `mcp` caller and reports the `mcp` source', async () => {
+test('AC2: session_send calls the control seam with a `voice` caller and reports the run source', async () => {
   const gateway = createFakeGateway();
   const executor = createVoiceRealtimeLiveExecutor({
     boundSessionId: BOUND_SESSION,
@@ -398,12 +406,12 @@ test('AC2: session_send calls the control seam with a `mcp` caller and reports t
     message: 'open the failing test',
   })) as { runId: string; source: string };
 
-  // The control seam was reached exactly once, with a caller whose `via` is `mcp`
-  // and whose `userId` is the first-party user — that is what makes the run the
-  // control service opens record its origin as `mcp`.
+  // The control seam was reached exactly once, with a caller whose `via` is `voice`
+  // and whose `userId` is the first-party user — that is what keeps the delivery
+  // this send opens out of the withdrawable `mcp` command rows.
   const sendCall = gateway.calls.find((call) => call.seam === 'sessionSend.control.send');
   assert.ok(sendCall, 'session_send must reach the control seam');
-  assert.deepEqual(sendCall.args[0], { userId: USER_ID, via: 'mcp' });
+  assert.deepEqual(sendCall.args[0], { userId: USER_ID, via: 'voice' });
   assert.deepEqual(sendCall.args[1], { sessionId: BOUND_SESSION, content: 'open the failing test' });
 
   // The payload the model sees reports the `mcp` source the run carries.

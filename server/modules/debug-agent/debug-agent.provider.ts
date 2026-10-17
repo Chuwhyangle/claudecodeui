@@ -1,7 +1,10 @@
 import type { IProvider, IProviderRuntime, IProviderSessions, IProviderSessionSynchronizer } from '@/shared/interfaces.js';
-import { CHAT_TURN_OPTION } from '@/shared/types.js';
+import { CHAT_TURN_OPTION, DELIVERY_SOURCE_OPTION } from '@/shared/types.js';
 import type {
   ApprovalDecisionRecord,
+  ChatRunSource,
+  DeliveryEntry,
+  DeliveryEntryReason,
   LLMProvider,
   MessageOrigin,
   MissingApprovalReason,
@@ -135,7 +138,38 @@ export type DebugAgentProviderDependencies = {
    * request.
    */
   declareRuntimeCapabilities?: (capabilities: RuntimeProviderCapabilities) => void;
+  /**
+   * Publishes this provider's delivery ledger to the activity channel — the same
+   * seam the claude resident driver installs (`publishSessionDeliveries`).
+   *
+   * The real CLI's resident host writes a delivery entry for every command it
+   * queues; this substitute held commands with no such record, so a client
+   * reading the activity snapshot saw an empty `deliveries[]` for a debug session
+   * and could not tell a withdrawn command from a voice one. Injected rather
+   * than imported because the publishing store lives in the providers module
+   * (the claude driver's own ledger registry) and this module may not reach back
+   * into it — see ADR-003 decision 7. Absent, the provider behaves exactly as it
+   * did: no ledger is published and nothing reads one.
+   */
+  publishDeliveries?: (sessionId: string, reading: () => DeliveryEntry[], signature: string) => void;
 };
+
+/**
+ * The origin a dispatch stated for a pushed command, as the runtime option
+ * carries it — the same reading the claude resident driver makes
+ * (`readDeliverySource`). An unstated or unknown origin is `user`, because a
+ * delivery nobody claimed is a person's message, not a tool's.
+ */
+function readDebugDeliverySource(options: Record<string, unknown> | undefined): ChatRunSource {
+  const stated = options?.[DELIVERY_SOURCE_OPTION];
+  return stated === 'user'
+    || stated === 'scheduled'
+    || stated === 'unattended'
+    || stated === 'mcp'
+    || stated === 'voice'
+    ? stated
+    : 'user';
+}
 
 /**
  * The run seam of a build that wired none.
@@ -316,7 +350,82 @@ function createDebugAgentRuntime(
   forwardFrames: DebugAgentFrameForwarder,
   hostDriver: DebugAgentHostDriver,
   announcePermission: DebugAgentPermissionAnnouncer | undefined,
+  publishDeliveries: DebugAgentProviderDependencies['publishDeliveries'],
 ): DebugAgentRuntime {
+  /**
+   * This substitute process's delivery ledger, per app session.
+   *
+   * A push is a DELIVERY — the command the host took while it was mid-turn —
+   * and the activity channel exists so a client can draw that wait. The real
+   * CLI's resident driver maintains this ledger for its own process; this
+   * substitute had nothing, which made a debug session's `deliveries[]` empty and
+   * every reading over it vacuous. The entries are the same ten facts
+   * `DeliveryEntry` states (SPEC §7.1), kept here because the debug agent's
+   * process is this object.
+   */
+  const deliveriesBySession = new Map<string, DeliveryEntry[]>();
+
+  /** Publishes one session's ledger through the injected seam (absent ⇒ no publication). */
+  function publishSessionLedger(sessionId: string): void {
+    if (publishDeliveries === undefined) {
+      return;
+    }
+    const entries = deliveriesBySession.get(sessionId) ?? [];
+    publishDeliveries(sessionId, () => entries.map((entry) => ({ ...entry })), JSON.stringify(entries));
+  }
+
+  /** Records one accepted push as a live (`queued`) delivery. */
+  function recordQueuedDelivery(input: {
+    sessionId: string;
+    commandUuid: string;
+    text: string;
+    source: ChatRunSource;
+  }): void {
+    const entries = deliveriesBySession.get(input.sessionId) ?? [];
+    entries.push({
+      deliveryId: input.commandUuid,
+      state: 'queued',
+      source: input.source,
+      priority: null,
+      enqueuedAt: Date.now(),
+      startedAt: null,
+      endedAt: null,
+      turnId: null,
+      reason: null,
+      text: input.text,
+    });
+    deliveriesBySession.set(input.sessionId, entries);
+    publishSessionLedger(input.sessionId);
+  }
+
+  /** Moves one delivery to `started` (the walk dequeued it) and republishes. */
+  function markDeliveryStarted(sessionId: string, deliveryId: string): void {
+    const entry = deliveriesBySession.get(sessionId)?.find((candidate) => candidate.deliveryId === deliveryId);
+    if (entry === undefined || entry.state !== 'queued') {
+      return;
+    }
+    entry.state = 'started';
+    entry.startedAt = Date.now();
+    publishSessionLedger(sessionId);
+  }
+
+  /** Moves one delivery to its terminal state and republishes. */
+  function markDeliveryEnded(
+    sessionId: string,
+    deliveryId: string,
+    state: 'completed' | 'cancelled',
+    reason: DeliveryEntryReason | null = null,
+  ): void {
+    const entry = deliveriesBySession.get(sessionId)?.find((candidate) => candidate.deliveryId === deliveryId);
+    if (entry === undefined || entry.state === 'completed' || entry.state === 'cancelled') {
+      return;
+    }
+    entry.state = state;
+    entry.endedAt = Date.now();
+    entry.reason = state === 'cancelled' ? reason : null;
+    entry.text = null;
+    publishSessionLedger(sessionId);
+  }
   /**
    * The text of each command this process queued, keyed by the uuid it minted.
    *
@@ -358,6 +467,10 @@ function createDebugAgentRuntime(
     );
 
     await hostDriver.endUnattendedTurn({ appSessionId: input.armed.sessionId });
+    // The command ran: the turn's own rows are its record now, so the delivery
+    // leaves the live ledger with `text: null` (the same terminal rule the real
+    // ledger applies — a finished message's words belong to the transcript).
+    markDeliveryEnded(input.armed.sessionId, input.commandUuid, 'completed');
   }
 
   /**
@@ -578,6 +691,18 @@ function createDebugAgentRuntime(
         // The push does not run, so the dispatch that carried this text is gone
         // before its round is opened. Remembered here for that later round.
         queuedTextByCommand.set(accepted.commandUuid, command);
+        // THE DELIVERY LEDGER (the activity channel's `deliveries[]`). The push
+        // IS the delivery, and its origin is the dispatch's own — `voice` for a
+        // spoken sentence the relay settled, `user`/`mcp` for a typed or tool
+        // send. Publishing here is what gives a browser a row to decide about;
+        // without it a voice delivery could not be told from any other, and the
+        // "no pending command row for voice" reading would hold vacuously.
+        recordQueuedDelivery({
+          sessionId: armed.sessionId,
+          commandUuid: accepted.commandUuid,
+          text: command,
+          source: readDebugDeliverySource(options),
+        });
         return accepted;
       }
 
@@ -659,7 +784,12 @@ function createDebugAgentRuntime(
         onDelivery: (next) => {
           delivery = next;
         },
-        onQueuedCommandStarted: (commandUuid) => startedCommands.push(commandUuid),
+        onQueuedCommandStarted: (commandUuid) => {
+          startedCommands.push(commandUuid);
+          // The walk's `dequeue` is the process taking the command: the ledger
+          // follows it from `queued` to `started` here, before the round opens.
+          markDeliveryStarted(armed.sessionId, commandUuid);
+        },
       });
 
       const evaluation = evaluateScenarioExpectations({
@@ -764,6 +894,7 @@ export function createDebugAgentProvider(
     dependencies.forwardFrames,
     hostDriver,
     dependencies.announcePermission,
+    dependencies.publishDeliveries,
   );
 
   // The resident turn entry, bound after both halves exist: the driver is what
