@@ -1,7 +1,7 @@
 ---
 id: gap-frame-without-turn-subagent-false-positive
 title: frame-without-turn 对子代理帧是假阳性：recordFrameWithoutTurn 应排除 parent_tool_use_id 帧
-status: todo
+status: ready
 labels:
   - gap
   - defect
