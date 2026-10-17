@@ -12,6 +12,8 @@ extra:
 ---
 <!-- dedup-ref --> 机制去重（立案时实测 2026-10-17）：`grep -rln 'reconcileTick' tasks/*.md` → 0 命中。gap-ac390-resident-reconcile-observability（done）是**最邻近的任务**，但它交付的是「对账循环本身 + 判据」：其判据 (c) 写「含 heartbeat 多拍」，实际是**测试自己调 `harness.driver.reconcileTick()`**（claude-resident-reconcile.test.ts:602-604），没有判据断言生产里那个拍真的调用它。本任务是「把 AC-390 声称过、但没接的那半截接上」——AC-390 的 Touches 明列了 `activity-heartbeat.service.ts` 作为「heartbeat 触发点」，落地代码却没接。是补 AC-390 的漏，不是重复。separate。
 
+## Finding
+
 ### 缺陷面
 
 `reconcileTick`（claude-host-driver.provider.ts:3428）的文档写「在 RESULT 之后**与 heartbeat（既有 5 s 一拍）**上检查」，并明说「driver 不自己 arm interval，由那个每 session 一拍的上层来问」。但全仓库唯一调用点是 `observe()` 里的 `result` 分支（:6202）。所谓「既有 5 s 一拍」是 `startActivityHeartbeat`（activity-heartbeat.service.ts:215 的 `setInterval`）——**per-socket、客户端驱动、`timer.unref()`、只在有浏览器订阅时才跑**；另一个 30 s 的是 websocket-server 协议 ping。两者都不是 session 级的服务端拍。
