@@ -2,7 +2,7 @@
 id: gap-live-voice-stream-delivery-not-command
 title: Live Voice 生产者去模型化 + 语音交付不再画 PendingResidentMessage：settle 边界确定性投递（模型
   response 覆盖则用之、否则 ASR 逐字整 span）、voice 来源打标并从命令渲染剔除、R1 next 契约固化
-status: todo
+status: ready
 labels:
   - gap
   - defect
