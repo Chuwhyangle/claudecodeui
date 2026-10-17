@@ -77,6 +77,7 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
 - server/modules/debug-agent/debug-agent.scenario.ts
 - server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-partial-relay-fragments.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
 - src/modules/chat/tests/pendingDeliveriesSnapshot.test.tsx
 - playwright.config.ts
 - docs/proposals/voice-realtime-persistent-control-SPEC.md
@@ -86,6 +87,7 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
 - server/modules/websocket/tests/chat-control-source.test.ts
 - server/modules/websocket/tests/chat-run-registry.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-live-voice-stream-delivery-not-command.md (self)
 
 ## Notes
@@ -127,3 +129,18 @@ ASR final 逐 item 进 per-session 缓冲 → settle 边界关闭 → 质量覆�
 - **AC8**：待人 yale 在重启后的真实语音页面确认。本任务全程未重启 `:3001` / `claudecodeui-server.service`，
   也未改其运行环境。生产 env 里的 `VOICE_REALTIME_SPAN_GUARD=on` 现在是无消费者的遗留变量（开关与模块已删除）。
 - **文档锚点**：R1/R2/R3 写入 `docs/proposals/voice-realtime-persistent-control-SPEC.md` §19。
+- **续做轮（2026-10-17，exited-not-landed 之后）**：suite 的两条红均单文件复跑并转绿——
+  `server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts` → `5 passed`
+  （该判据仍钉 `via:'mcp'`，与 AC4 的 voice 来源冲突；改钉 `via:'voice'`，直调 build 的比较也改用同一 ctx）；
+  `server/shared/tests/quay-test-script.test.ts` → `14 passed`（本任务删除
+  `voice-realtime-partial-relay-fragments.test.ts`，server 测试文件数 364→363；按该 pin 自己
+  「重测不推导」的规则把 AC2/AC3 的 unknown 读数改为 360/362，并在注释里写明是谁移除的）。
+  两个测试文件已补入 `## Touches`。`npm run typecheck` exit 0；`npx oxlint` 两文件 exit 0。
+
+## Blocker
+
+**2026-10-17T14:23:02.197Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts:   AssertionError [ERR_ASSERTION]: session_send: the route must touch the same services in the same order as the build function
+- run_id：wk-prod-anchor
+- session_id：59c87008-bf77-4188-b2bb-3300ec468464
