@@ -12,6 +12,8 @@ extra:
 ---
 <!-- dedup-ref --> 机制去重（立案时实测 2026-10-17）：`grep -rln 'turn-closed\|turnRun = null\|minted run' tasks/*.md` 只命中 gap-ac188-case-budget-red-is-postturn-renavigation-tail 与 gap-ac188-case-bootstrap-collision-and-gate-kill（都是 AC-188 的 case budget 话题，顺带提到「turn 后」），没有一条认领「turn-closed 必须关闭它铸造的 run」。gap-ac390-resident-reconcile-observability（done）是**对账兜底**（enforce 关幽灵 run），本任务是**根因**（turn 关账时就不该丢 run）——两条腿互为纵深、不同机制不同文件，separate。
 
+## Finding
+
 ### 缺陷面
 
 一座 turn 铸造的 run，只有 `run-closed`/`turn-result` 效果 → `closeRun` 一条路能关它（claude-host-driver.provider.ts:4744-4752）。而 `closeRun` 第一步 `state.runtimes.get(deliveryId)` 取不到就**静默 return**（:4969-4972）。`turn-closed` 效果只把 `state.turnRun` 置 null（:4759-4765）——它只保证「下一轮帧不写进上一轮 run」，**不保证这座 run 被关闭**。所以只要 per-delivery 那条腿失效（runtime 缺失或 turnWriter 没指对），turn 关了、writer 清了，registry 里的 run 却永远 running。
