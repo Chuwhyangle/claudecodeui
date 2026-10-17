@@ -24,6 +24,7 @@ const ALL_CHAT_RUN_SOURCES: Record<ChatRunSource, true> = {
   scheduled: true,
   unattended: true,
   mcp: true,
+  voice: true,
 };
 
 /**
@@ -105,7 +106,7 @@ test('every ChatRunSource value round-trips through startRun', async () => {
     const values = Object.keys(ALL_CHAT_RUN_SOURCES) as ChatRunSource[];
     // Guard the loop against silently covering nothing: the fixture is the
     // compiler-checked set, and this asserts its shape at runtime too.
-    assert.deepEqual([...values].sort(), ['mcp', 'scheduled', 'unattended', 'user']);
+    assert.deepEqual([...values].sort(), ['mcp', 'scheduled', 'unattended', 'user', 'voice']);
 
     for (const value of values) {
       const appSessionId = `app-source-${value}`;

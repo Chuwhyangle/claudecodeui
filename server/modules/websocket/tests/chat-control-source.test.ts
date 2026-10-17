@@ -64,6 +64,7 @@ const _exhaustive: Record<ChatRunSource, true> = {
   scheduled: true,
   unattended: true,
   mcp: true,
+  voice: true,
 };
 
 /**
@@ -255,7 +256,7 @@ test('(e) ChatRunSource contains mcp, proven by the exhaustive fixture', () => {
   say(`(e) exhaustiveMembers=${JSON.stringify(members)}`);
   assert.deepEqual(
     members,
-    ['mcp', 'scheduled', 'unattended', 'user'],
-    'ChatRunSource must carry mcp alongside the three pre-existing values',
+    ['mcp', 'scheduled', 'unattended', 'user', 'voice'],
+    'ChatRunSource must carry mcp and the Live Voice origin alongside the three pre-existing values',
   );
 });

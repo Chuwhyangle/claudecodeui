@@ -79,14 +79,18 @@ import type { McpRunGetDeps, RunGetPayload } from './mcp-run-get.js';
 /**
  * The caller `session_send` presents to the control service.
  *
- * `via: 'mcp'` is what makes the run this adapter opens record its origin as
- * `mcp` (the control service's `SOURCE_BY_VIA`), and `userId` is the token's
- * owner — never null, because the request reached the tool through the auth
- * middleware that attached the principal.
+ * `via` is what makes the run this adapter opens record its origin (the control
+ * service's `SOURCE_BY_VIA`): `mcp` for a tool call from an MCP client, `voice`
+ * for the Live Voice relay's own `session_send` (which reaches this same builder
+ * from `voice-realtime-live-executor.ts`). A spoken sentence must NOT be filed as
+ * `mcp`: the origin is what the activity channel reads to decide that a delivery
+ * is not a withdrawable pending command (see `ChatRunSource`'s `voice` member).
+ * `userId` is the token's owner — never null, because the request reached the
+ * tool through the auth middleware that attached the principal.
  */
 export type McpControlCaller = {
   userId: string | number | null;
-  via: 'mcp';
+  via: 'mcp' | 'voice';
 };
 
 /** The refusals `session_send` translates. The vocabulary is the control service's own. */
@@ -506,10 +510,15 @@ async function resolveSendOptions(
  */
 export async function buildSessionSend(
   input: McpSessionSendInput,
-  ctx: { principal: McpPrincipal },
+  ctx: { principal: McpPrincipal; via?: 'mcp' | 'voice' },
   deps: McpSessionSendDeps,
 ): Promise<SessionSendPayload> {
-  const caller: McpControlCaller = { userId: ctx.principal.userId, via: 'mcp' };
+  // The origin this send is recorded under. The MCP gateway's own registered
+  // handler passes no `via`, so its sends stay byte-identical to AC-249's `mcp`;
+  // the Live Voice executor passes `'voice'` so a spoken delivery is not filed as
+  // a withdrawable command. The distinction is the DELIVERY's, and it is stated
+  // here because this is the one place both callers reach the control service.
+  const caller: McpControlCaller = { userId: ctx.principal.userId, via: ctx.via ?? 'mcp' };
   const stored = await resolveSendOptions(input.session, deps.selection);
   // The caller's tier rides INSIDE the run's options, which is the one channel a run carries to the
   // host that writes its frames (`HostTurnInput.options`). Merged rather than replacing the stored

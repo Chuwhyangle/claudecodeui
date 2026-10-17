@@ -280,6 +280,16 @@ export type DebugAgentHostDriver = IProviderHostDriver & {
   /** What this process has been told about its own queue, for a criterion to read back. */
   readCommandQueue(appSessionId: string): DebugAgentCommandQueueReading;
   /**
+   * The commands this process has DEQUEUED, for the voice relay's reconcile seam.
+   *
+   * The sibling of `readCommandQueue(...).started`, narrowed to the one reading
+   * the relay's control plane asks for (`startedQueuedCommands` on the runtime
+   * gateway). `null` when no host is bound to the session — "cannot say", the
+   * same distinction the claude driver draws — and an EMPTY list when a live
+   * process has started nothing, which is a real reading.
+   */
+  startedQueuedCommands(appSessionId: string): readonly string[] | null;
+  /**
    * Accepts a stop request for one named background task, leaving the turn and
    * the process alone.
    *
@@ -740,6 +750,14 @@ export function createDebugAgentHostDriver(
     };
   }
 
+  /** The dequeued set, or `null` when this session has no bound process (see the interface doc). */
+  function startedQueuedCommands(appSessionId: string): readonly string[] | null {
+    if (hostFor(appSessionId) === null) {
+      return null;
+    }
+    return [...listFor(startedByAppSession, appSessionId)];
+  }
+
   async function openUnattendedTurn(input: {
     appSessionId: string;
     text: string;
@@ -898,6 +916,7 @@ export function createDebugAgentHostDriver(
     readOldestQueuedCommand,
     acknowledgeCancel,
     readCommandQueue,
+    startedQueuedCommands,
 
     // The control-plane half: the two requests a person can place against the
     // work a session is holding. Both accept — the events they are confirmed by

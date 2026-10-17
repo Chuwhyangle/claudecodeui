@@ -1112,6 +1112,16 @@ function residentDeliveryRow(sessionId: string, delivery: DeliveryView): Normali
  * user sent one at a time, and keying rows by the turn (or by the run behind it)
  * would draw one row for all of them and let a withdrawal take back the wrong
  * one. A snapshot that repeated a delivery would still draw one row for it.
+ *
+ * VOICE DELIVERIES DRAW NO ROW. A spoken sentence reaches the session through
+ * the same control plane a typed one does, but it is not a command: there is no
+ * composer to take it back to, no edit, and no withdrawal the person could have
+ * asked for — the relay's own read-only card (`VoicePendingMessageCard`) is the
+ * one thing that shows it waiting, and the transcript's user row is the message
+ * once a turn carries it. Drawing a `PendingResidentMessage` here would put a
+ * [withdraw] button on words that were only ever spoken. The snapshot still
+ * carries the entry (the host accepted it, and `source` is how this client can
+ * tell), so filtering happens HERE, at the one place rows are derived from it.
  */
 function deliveryRowsFromSnapshot(
   sessionId: string,
@@ -1120,6 +1130,11 @@ function deliveryRowsFromSnapshot(
   const rows: NormalizedMessage[] = [];
   const seen = new Set<string>();
   for (const delivery of deliveries) {
+    // The relay's origin, stated by the host. Skipped BEFORE the identity dedup:
+    // a voice delivery is not this client's row under any key.
+    if (delivery?.source === 'voice') {
+      continue;
+    }
     const deliveryId = typeof delivery?.deliveryId === 'string' ? delivery.deliveryId : '';
     if (!deliveryId || seen.has(deliveryId)) {
       continue;
@@ -1169,11 +1184,17 @@ function withoutRowsSupersededBySnapshot(
   rows: NormalizedMessage[],
   deliveries: readonly DeliveryView[],
 ): NormalizedMessage[] {
-  if (deliveries.length === 0) {
+  // Voice deliveries are not this client's rows to retire anything with: a
+  // spoken sentence never minted an optimistic composer row, so letting one
+  // claim a typed turn that happens to carry the same words would delete a
+  // message the person really sent (and could still edit). Filtered at the
+  // source of the claim rather than in each of the two matching branches below.
+  const claimingDeliveries = deliveries.filter((delivery) => delivery?.source !== 'voice');
+  if (claimingDeliveries.length === 0) {
     return rows;
   }
-  const named = new Set(deliveries.map((delivery) => delivery.deliveryId));
-  const speakers = deliveries.filter((delivery) => delivery.state !== 'completed');
+  const named = new Set(claimingDeliveries.map((delivery) => delivery.deliveryId));
+  const speakers = claimingDeliveries.filter((delivery) => delivery.state !== 'completed');
 
   let dropped = false;
   const kept = rows.filter((row) => {

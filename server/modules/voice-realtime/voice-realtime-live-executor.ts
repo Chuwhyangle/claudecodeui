@@ -287,7 +287,13 @@ export function createVoiceRealtimeLiveExecutor(
   deps: VoiceRealtimeLiveExecutorDeps,
 ): RealtimeToolExecutor {
   const principal = toPrincipal(deps.caller);
-  const ctx = { principal };
+  // THE VOICE PLANE'S OWN ORIGIN. Every bounded tool this executor answers goes
+  // through the MCP gateway's builders — the same code a tool call from an MCP
+  // client reaches — so the builders have to be told which caller this is.
+  // `session_send` is the one that reads it: without `via: 'voice'` the delivery
+  // it opens is recorded as an `mcp` command, which the activity channel draws
+  // as a withdrawable pending row. Read-only tools ignore the field.
+  const ctx = { principal, via: 'voice' as const };
   const readNow = deps.now ?? Date.now;
 
   /**

@@ -78,7 +78,6 @@ import {
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
-import { selectUncoveredFragments } from './voice-realtime-fragment-coverage.js';
 import {
   describeUplinkVadBackend,
   readUplinkVadBackend,
@@ -405,6 +404,21 @@ export function voiceMessageBytes(message: unknown): number {
 
 /** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
 export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
+
+/**
+ * The settle boundary's production window, in milliseconds (R2, 2026-10-17).
+ *
+ * Every FINAL transcription starts this window. If a model response covers the span inside it, the
+ * response is the delivery; if not, the endpoint's own words go verbatim when it closes. The value
+ * is the model's own measured response latency on the live journals (the same order as the 1–2.5 s
+ * coalescing windows the relay already used), so a healthy response wins the race and a response the
+ * endpoint never opened loses it.
+ *
+ * Deliberately short relative to the busy hold: this is the "nobody is going to answer for it"
+ * boundary, not the "the person has stopped speaking" one — the hold and its quiet window still
+ * decide WHERE a settled message goes (the CLI's queue, under `next`).
+ */
+export const VOICE_SPAN_SETTLE_MS = 2_500;
 
 /**
  * The most pack text one `context` frame may carry, in UTF-16 code units.
@@ -1495,17 +1509,22 @@ export type VoiceRealtimeProxySeams = {
    */
   segmentedRelay?: boolean;
   /**
-   * Whether the continuous relay replays the DELETED span guard: uncovered heard sentences go in
-   * front of the model's `session_send` message (see `selectUncoveredFragments`).
+   * How long the continuous relay waits, after a final transcription, before delivering the heard
+   * span verbatim — the ACOUSTIC settle boundary (R2).
    *
-   * DEFAULT OFF, AND ABSENT IS OFF. The 2026-10-16 ruling removed that guard because it cannot tell
-   * a model's rewrite from a model's omission; this seam exists only for the A/B that measures the
-   * deleted arm again (task `gap-live-voice-span-guard-flag`). `server/index.ts` resolves
-   * `VOICE_REALTIME_SPAN_GUARD` at the assembly point and passes the answer here; a criterion that
-   * passes nothing gets the shipped behaviour, byte for byte — the model's words are the whole of
-   * what the segment sends.
+   * THE PRODUCER IS NOT THE MODEL ANY MORE. A spoken sentence used to reach the session only when
+   * the realtime model chose to call `session_send`, so a model that answered in text, or whose
+   * response was truncated by the next turn, left the sentence undelivered (the 2026-10-17
+   * dropped-input audit: 3 of 5 sentences lost on `764f0c7a`). Now every final transcription arms
+   * this window; if a model response covers the span inside it, the response is the delivery text,
+   * and if none does, the endpoint's own words go as one message. There is no text-side heuristic
+   * and no uncovered-fragment detection: the span is delivered WHOLE or the model's response is
+   * delivered WHOLE, and a span that was already settled is never delivered again (the watermark).
+   *
+   * ABSENT USES THE PRODUCTION WINDOW. Tests set it small (0 included) to make the boundary
+   * observable without waiting; a deployment never has to name it.
    */
-  spanGuard?: boolean;
+  settleMs?: number;
   /**
    * THIS connection's transport choice, or absent (the per-connection opt-in).
    *
@@ -2169,13 +2188,6 @@ export function handleVoiceRealtimeConnection(
     }
   }
   const segmentedRelay = seams.segmentedRelay ?? (modeResolution.mode === 'segmented');
-  // ---- the deleted span guard, behind its default-off A/B switch -------------------------------
-  //
-  // Read ONCE per connection from the assembly point's resolution (`VOICE_REALTIME_SPAN_GUARD`), the
-  // same "answer it once, keep it for the connection's life" shape the relay mode above uses. ABSENT
-  // IS OFF: the proxy never reads the environment here — `server/index.ts` owns that resolution — so
-  // a connection handed no seam behaves exactly as the 2026-10-16 ruling left it.
-  const spanGuardEnabled = seams.spanGuard === true;
   // ---- Silence Tail Suppression (decision doc §10): the continuous wire's upload state machine ----
   //
   // Built ONCE per connection and only when the deployment asked for it, so an STS-off connection
@@ -2506,6 +2518,70 @@ export function handleVoiceRealtimeConnection(
    * several sentences it answered in one call leaves the other on screen as never-delivered.
    */
   let lastCommittedUserItemId: string | null = null;
+  /**
+   * The items the endpoint has COMMITTED but not yet transcribed, in commit order.
+   *
+   * The two upstream events are independent: a `committed` creates the input item, and its
+   * transcription lands later (sometimes seconds later, and out of order across items). A model
+   * response can therefore be produced BEFORE the transcription of the sentence it answers arrives.
+   * Without this set, the late transcript would look unanswered and the settle producer would
+   * deliver it verbatim — a duplicate of a sentence the model already carried. See
+   * {@link claimOutstandingCommits}.
+   */
+  const committedPendingTranscription = new Set<string>();
+  /**
+   * The committed items a model response has already answered for, waiting for their transcription.
+   * A final transcription for one of these is CONSUMED by the response: it is recorded (the digest
+   * and the transcript view still read it) but it neither joins {@link transcribedSinceWatermark}
+   * nor arms the settle window.
+   */
+  const committedCoveredByResponse = new Set<string>();
+  /**
+   * Whether any FINAL transcription has landed on this connection. Once it has, the settle producer
+   * owns delivery: a model response arriving with no new speech since the last accepted delivery is
+   * a restatement of a span that is already delivered, and is refused by the watermark rather than by
+   * comparing its words. A connection that has never heard a final keeps the pre-settle behaviour
+   * (every call is its own delivery), which is what keeps fixture connections that drive
+   * `session_send` directly working unchanged.
+   */
+  let finalTranscriptHeard = false;
+  /**
+   * A monotonic count of "the person said something" events — every `input_audio_buffer.committed`
+   * and every final transcription. It is the watermark's clock: a delivery records the epoch it was
+   * accepted at, and a model response arriving at the SAME epoch carried no new speech, so the span
+   * it would deliver is already in the session.
+   *
+   * A COMMIT COUNTS, NOT ONLY A TRANSCRIPTION. The endpoint creates the input item at the commit and
+   * transcribes it later, sometimes seconds later; a person who speaks and whose transcription is
+   * still in flight has really said something, and the model's late forward of those words is a
+   * delivery, not an echo (journal `f6166468`). Counting only finals would drop it — the dropped-input
+   * class this task exists to close, reached from the other side.
+   */
+  let speechEpoch = 0;
+  /** The `speechEpoch` the last accepted delivery consumed. See {@link speechEpoch}. */
+  let deliveredEpoch = 0;
+  /**
+   * The normalized text of the last few accepted deliveries, newest last — the window a no-new-speech
+   * call is checked against for RESTATEMENT.
+   *
+   * WHY A WINDOW AND NOT JUST THE LAST DELIVERY. Under the settle producer a span can be delivered
+   * verbatim BEFORE the model's response for it arrives (the response lost the race and is a
+   * restatement of the endpoint's own words). The last delivery may already be the NEXT span, so
+   * comparing only against it would let the earlier sentence through a second time — the active
+   * duplicate this task closes. A bounded window keeps that comparison local without keeping the
+   * whole conversation.
+   *
+   * WHY THE RESTATEMENT TEST IS STILL NEEDED AT ALL, given the watermark. The watermark answers "is
+   * there a new span?"; it does NOT answer "are these words already in the session?". A call with no
+   * new speech can still be the FIRST delivery of words nobody has (the interrupt's next message —
+   * the person spoke, the model answered, and the transcription has not landed yet; journal
+   * `b33412ea`'s late forward). Refusing those on the watermark alone loses real input, which is the
+   * class this task exists to stop. So the rule is: no new span AND a restatement of something
+   * recently delivered ⇒ echo; anything that adds words is a delivery.
+   */
+  const recentDeliveredTexts: string[] = [];
+  /** The open settle timer for the heard span, or `null`. See {@link armSettleWindow}. */
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * The `triggerSeq` this connection has already interrupted for — the idempotent half of the fence.
    * Set when a model stop RUNS, read by {@link decideModelInterrupt}, and never reset: a repeat of
@@ -3702,15 +3778,39 @@ export function handleVoiceRealtimeConnection(
     // forms (the AC8 mutation suite reddens the missing `seq` gate by expecting the replay to land
     // twice). The defect this guard closes is precisely that continuous mode carries no `seq`.
     const normalizedRelay = normalizeRelayText(typeof args.message === 'string' ? args.message : '');
+    // ── THE SETTLE WATERMARK (R2, 2026-10-17) ──
+    // On the continuous wire, once a final transcription has been heard, delivery is driven by the
+    // settle boundary: a span is consumed by whichever comes first, the model's response or the
+    // deadline, and the watermark (`speechEpoch`/`deliveredEpoch`) is what stops the same span from
+    // being delivered again — the 2026-10-11 `57279cc1` shape, where one sentence was sent three
+    // times, and the `cae49fed` phantom rewrite the old identity/containment comparison missed.
+    //
+    // The watermark answers "is there a NEW span?", not "are these words already in the session?".
+    // A call with no new speech can still be the FIRST delivery of words nobody holds: the
+    // interrupt's next message (the person spoke, the model answered, the transcription has not
+    // landed — journal `b33412ea`'s late forward), or the first call of a connection whose commits
+    // the proxy does not observe. So the refusal needs BOTH halves: no new speech AND a restatement
+    // of something recently delivered. Anything that ADDS words is a delivery, which is also what
+    // the relay's coalescing window and busy hold depend on (a tail joining an open window must be
+    // let through).
+    //
+    // `unforwardedUserUtterances === 0` is the fallback for a connection that has never heard a final
+    // (a direct `session_send` fixture): there is no epoch to compare, and the counter is the same
+    // "nothing new happened" reading. SCOPED TO `segmentSeq === null`: a segmented delivery is the
+    // `seq` gate's job, and applying both here would mask that gate's own false forms.
+    const noNewSpeech = finalTranscriptHeard
+      ? speechEpoch === deliveredEpoch
+      : unforwardedUserUtterances === 0;
     if (
       segmentSeq === null &&
-      unforwardedUserUtterances === 0 &&
-      relayRestatesDelivery(normalizedRelay, lastAcceptedRelayText)
+      !segmentedRelay &&
+      noNewSpeech &&
+      recentDeliveredTexts.some((previous) => relayRestatesDelivery(normalizedRelay, previous))
     ) {
       // Parens are stripped from the preview: `voice-realtime-log.ts`'s `SEND_NOT_DELIVERED_LINE`
       // reads the reason up to the first `)`, so one in the message would truncate the journal line.
       const preview = String(args.message ?? '').replace(/[\r\n()]/g, ' ').slice(0, 80);
-      noteNotDelivered(`duplicate: no new user audio since the last delivery — ${preview}`);
+      noteNotDelivered(`duplicate: no new speech since the last settled delivery — ${preview}`);
       // No tool-resume: a resume after this answer is what the model re-called the tool on, 7 times
       // live (2026-10-15, connection 71e53da5). The delivered call already had its closing turn.
       return withoutToolResume({
@@ -3771,6 +3871,19 @@ export function handleVoiceRealtimeConnection(
     // becomes the baseline the NEXT no-audio repeat is judged against. Reset HERE, at acceptance —
     // not at the flush — so an utterance arriving inside the window is charged to the next delivery.
     unforwardedUserUtterances = 0;
+    // The watermark's clock stops here too: everything the person has said up to this acceptance is
+    // answered for by this delivery, so a later model response with no NEW speech behind it is a
+    // restatement and is refused (`speechEpoch` / `deliveredEpoch`).
+    deliveredEpoch = speechEpoch;
+    // The restatement window (see `recentDeliveredTexts`): bounded, newest last. The text is the
+    // message this acceptance is for — the composed one, which is what actually reaches the session.
+    const acceptedText = normalizeRelayText(typeof args.message === 'string' ? args.message : '');
+    if (acceptedText !== '') {
+      recentDeliveredTexts.push(acceptedText);
+      if (recentDeliveredTexts.length > 8) {
+        recentDeliveredTexts.shift();
+      }
+    }
     // THE CONTINUOUS WIRE'S FORWARDING WATERMARK ADVANCES HERE — the first of its two advance points
     // (the span guard's refusal is the other, and it advances on the same reading: this call has been
     // ANSWERED FOR). Everything transcribed so far belongs to the interval this call just consumed, so
@@ -3944,6 +4057,121 @@ export function handleVoiceRealtimeConnection(
       heldTimer.unref?.();
     });
 
+  // ---- the settle producer (R2, 2026-10-17) ---------------------------------------------------
+  //
+  // THE MODEL IS NO LONGER THE DELIVERY JUDGE. Before this, a spoken sentence reached the session
+  // only if the realtime model happened to call `session_send` for it. The 2026-10-17 audit read the
+  // consequence out of six live journals: four rounds lost input, `764f0c7a` lost 3 of 5 sentences,
+  // and the loss was invisible because the model had done something ELSE (a text reply, a call
+  // covering only the newest span, a call the next utterance truncated). The producer is now the
+  // RELAY, triggered by the endpoint's own final transcription:
+  //
+  //   · every final arrives into `transcribedSinceWatermark` (as before) and arms {@link
+  //     armSettleWindow};
+  //   · a model response inside the window is the QUALITY arm — its words are delivered, the window
+  //     is cancelled, and the span is consumed by the response;
+  //   · no response by the deadline is the DETERMINISTIC arm — the endpoint's words for that span go
+  //     verbatim, as ONE message;
+  //   · either way the watermark advances (`proceedRelay`'s acceptance), so the same span can never
+  //     be delivered twice (the 2026-10-11 `57279cc1` triple-send, and the `3d2d3b2c` span-guard
+  //     duplicate, are the two shapes this replaces).
+  //
+  // WHAT THIS DELIBERATELY DOES NOT DO. It does not compare the response's words to the transcript
+  // (R3): no overlap test, no uncovered-fragment concept, no minimum character count. A response that
+  // covers the span is used whole even when it rewords it (the `3d2d3b2c` mishearing repair is the
+  // case that measure got wrong), and a span the response does not cover is delivered whole.
+  /** How long a heard span waits for the model before the relay delivers it verbatim. */
+  const settleWindowMs = seams.settleMs ?? VOICE_SPAN_SETTLE_MS;
+
+  /** The heard span since the last settled delivery: item order, non-empty words, joined. */
+  const heardSpanText = (): string => {
+    const words: string[] = [];
+    for (const itemId of transcribedSinceWatermark) {
+      if (itemTranscriptEmpty.get(itemId) === true) {
+        continue;
+      }
+      const text = (itemTranscriptText.get(itemId) ?? '').trim();
+      if (text !== '') {
+        words.push(text);
+      }
+    }
+    return joinParts(words);
+  };
+
+  /** Drops the open settle timer. Idempotent, and safe when none is armed. */
+  const clearSettleWindow = (): void => {
+    if (settleTimer !== null) {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+  };
+
+  /**
+   * Marks every committed-but-untranscribed item as answered by the model response that just went
+   * out, so its late transcription is CONSUMED instead of settled a second time.
+   *
+   * Called on BOTH arms: a response with a heard span behind it answers those items too (the model
+   * saw them in its conversation), and a response with NO span behind it is the model answering an
+   * utterance whose transcription had not arrived yet.
+   */
+  const claimOutstandingCommits = (): void => {
+    for (const itemId of committedPendingTranscription) {
+      committedCoveredByResponse.add(itemId);
+    }
+    committedPendingTranscription.clear();
+  };
+
+  /**
+   * Closes one settle boundary: delivers the heard span verbatim when no model response covered it.
+   *
+   * A no-op when the span is already empty (the response consumed it, or every item was silence).
+   * The empty case still advances the watermark, for the same reason the empty-span refusal does:
+   * items left behind it could only make a later, genuinely-empty span look non-empty.
+   */
+  const settleHeardSpan = (): void => {
+    settleTimer = null;
+    if (closed || segmentedRelay) {
+      return;
+    }
+    const heard = heardSpanText();
+    if (heard === '') {
+      transcribedSinceWatermark.length = 0;
+      return;
+    }
+    // A delivery already in flight is not a reason to lose the span: the window reopens and the
+    // next close delivers it. Re-arming rather than queueing keeps ONE producer (this timer) and
+    // leaves the in-flight path's own single-slot guard untouched.
+    if (sending) {
+      armSettleWindow();
+      return;
+    }
+    seams.log?.(
+      `settle: no model response covered ${transcribedSinceWatermark.length} heard item(s); delivering them verbatim`,
+    );
+    void proceedRelay({ message: heard }, null, false).catch((error: unknown) => {
+      send(
+        errorFrame(
+          'TOOL_EXECUTION_FAILED',
+          `The spoken span could not be delivered: ${error instanceof Error ? error.message : String(error)}`,
+          true,
+        ),
+      );
+    });
+  };
+
+  /**
+   * (Re)arms the settle window. Called on every final transcription and by the in-flight retry
+   * above; the LAST boundary wins, so finals arriving inside one window are delivered together.
+   */
+  function armSettleWindow(): void {
+    if (closed || segmentedRelay) {
+      return;
+    }
+    clearSettleWindow();
+    settleTimer = setTimeout(settleHeardSpan, settleWindowMs);
+    settleTimer.unref?.();
+  }
+
   /**
    * `session_send`, executed immediately (AC-316) — behind the empty-transcript guard.
    *
@@ -3966,9 +4194,9 @@ export function handleVoiceRealtimeConnection(
       noteNotDelivered('empty-message');
       return handledWithoutDelivery();
     }
-    // What this call is delivered as. Its own arguments, unless the continuous span guard below
-    // (switch on) finds a heard sentence the model's words left out.
-    let relayArgs = args;
+    // What this call is delivered as: its own arguments, unchanged. The voice plane no longer
+    // rewrites the model's words (the deleted span guard was the only thing that did).
+    const relayArgs = args;
     if (activeSegmentSeq !== null) {
       const empty = segmentTranscriptEmpty.get(activeSegmentSeq);
       if (empty === true) {
@@ -4005,51 +4233,25 @@ export function handleVoiceRealtimeConnection(
         transcribedSinceWatermark.length = 0;
         return handledWithoutDelivery();
       }
-      // ── THE SPAN GUARD, RESTORED BEHIND A DEFAULT-OFF SWITCH (task
-      // gap-live-voice-span-guard-flag) ──
-      // The 2026-10-16 ruling (`gap-live-voice-one-text-per-segment-prefer-response`) removed the
-      // guard that used to sit here: it compared every sentence heard since the watermark against the
-      // call's own words by adjacent-character-pair overlap and put the ones it judged uncovered
-      // VERBATIM in front of the model's message (journal `8fe60310`, live 2026-10-15 23:02). The
-      // shipped behaviour — the default, and what every connection gets unless
-      // `VOICE_REALTIME_SPAN_GUARD=on` — remains ONE text per segment: the model's response when
-      // there is one, the transcript only when no response answered for the segment.
-      //
-      // WHY THE DEFAULT STAYS OFF. The live round of 2026-10-16 13:20 (journal `3d2d3b2c`) reads the
-      // failure out: the endpoint misheard "LiveWire" as "来望也", the model repaired it from the
-      // AUDIO (`session_send "十月十五日，LiveWire 第一次测试。"`), and the pair share measured
-      // 6/13 = 0.462 < 0.5 — a rewrite read as an omission, with the low-fidelity mishearing delivered
-      // in front of the words that corrected it. The measure cannot tell a rewrite from a drop, so no
-      // text-side test can arbitrate.
-      //
-      // ⚠️ KNOWN RISK, DELIBERATELY ACCEPTED WHEN THE SWITCH IS `on`: this re-creates the `3d2d3b2c`
-      // duplicate delivery. A model that repaired an ASR mishearing scores below the pair threshold,
-      // its corrected text is judged "uncovered", and TWO texts from one piece of audio reach the
-      // CLI — the second one the low-fidelity mishearing, placed BEFORE the correction. That is
-      // exactly the arm the A/B exists to measure (the 2026-10-17 continuous run `764f0c7a` dropped
-      // 3 of 5 sentences under the shipped rule), and the reason the switch is off by default.
-      //
-      // THE OTHER ARM IS UNTOUCHED: when the model ends the turn in TEXT and made no call,
-      // `onError`'s `MODEL_TEXT_REPLY` branch still delivers the unanswered sentences verbatim. The
-      // empty-span refusal above also still runs FIRST and still injects nothing — an empty span is
-      // never "recovered" by this guard.
-      if (spanGuardEnabled) {
-        const heard = transcribedSinceWatermark
-          .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
-          .map((itemId) => itemTranscriptText.get(itemId) ?? '')
-          .filter((text) => text.trim() !== '');
-        const modelMessage = typeof args.message === 'string' ? args.message : '';
-        const left = selectUncoveredFragments(heard, modelMessage);
-        if (left.length > 0) {
-          seams.log?.(
-            `session_send left ${left.length} heard sentence(s) out; delivered verbatim in front of it: ${left
-              .join(' | ')
-              .replace(/[\r\n()]/g, ' ')
-              .slice(0, 120)}`,
-          );
-          relayArgs = { ...args, message: joinParts([...left, modelMessage]) };
-        }
-      }
+      // ── THE MODEL'S RESPONSE COVERS THIS SPAN (R2/R3, 2026-10-17) ──
+      // The model is no longer the producer: the settle window below is. A response that arrives
+      // while a heard span is open is the QUALITY arm of the settle — its words are the delivery,
+      // whole, and the span is answered for rather than measured against the response. There is
+      // deliberately no uncovered-fragment comparison here: the deleted guard's pair-overlap
+      // measure could not tell a rewrite from an omission, and under R3 a coarse "response when
+      // there is one, verbatim otherwise" is the rule. So this call only CANCELS the pending
+      // verbatim settle and claims the committed-but-not-yet-transcribed items on its way out;
+      // `proceedRelay` advances the watermark, which is what keeps the same span from being
+      // delivered a second time.
+      clearSettleWindow();
+      claimOutstandingCommits();
+    } else if (!segmentedRelay) {
+      // The response arrived BEFORE the span's transcription. There is nothing to judge here — the
+      // endpoint has not said what was heard yet — but the items it has COMMITTED are exactly the
+      // ones this response answers for, so they are claimed now: their late final transcriptions
+      // must not arm a second, verbatim delivery of words the model already carried.
+      clearSettleWindow();
+      claimOutstandingCommits();
     }
     return proceedRelay(relayArgs, activeSegmentSeq, activeSegmentIsReplay);
   };
@@ -4544,11 +4746,19 @@ export function handleVoiceRealtimeConnection(
         // endpoint has not yet been asked to close". See `uplinkVadFramesSinceCommit`.
         uplinkVadFramesSinceCommit = 0;
         unforwardedUserUtterances += 1;
+        // The watermark's clock: a commit is the person having said something, whether or not its
+        // transcription has landed yet (see `speechEpoch`).
+        speechEpoch += 1;
         if (itemId !== '') {
           // The conversation boundary moves HERE, on the commit, whether or not this relay asked for
           // it (`seq === null` is the endpoint's own detector committing a piece of speech): the item
           // exists and is the user's either way, and it is in front of the model from this moment.
           lastCommittedUserItemId = itemId;
+          // The settle producer's pending set: this item exists but has not been transcribed yet, so
+          // a model response from now on answers for it even if its final lands afterwards.
+          if (!segmentedRelay) {
+            committedPendingTranscription.add(itemId);
+          }
         }
         if (seq !== null && itemId !== '') {
           segmentSeqByItemId.set(itemId, seq);
@@ -4733,6 +4943,10 @@ export function handleVoiceRealtimeConnection(
             // repeat as an echo when the utterance reached us by transcript rather than by a
             // `committed` the proxy saw. See `unforwardedUserUtterances`.
             unforwardedUserUtterances += 1;
+            // The watermark's clock (see `speechEpoch`): a final transcription is also "the person
+            // said something" — the endpoint's own statement, for a connection whose commit the proxy
+            // may not have observed.
+            speechEpoch += 1;
             // The segment's transcript, finally known. `true` means the endpoint reported ZERO
             // words for it — the one mechanical fact the guard acts on — and the segment is
             // answered as refused here, where the fact arrives, whether or not the model relays it.
@@ -4757,8 +4971,25 @@ export function handleVoiceRealtimeConnection(
             if (caption.itemId !== '') {
               itemTranscriptEmpty.set(caption.itemId, empty);
               if (!segmentedRelay) {
-                transcribedSinceWatermark.push(caption.itemId);
-                itemTranscriptText.set(caption.itemId, caption.text);
+                // The item's final has arrived, so it is no longer "committed but untranscribed".
+                committedPendingTranscription.delete(caption.itemId);
+                // A response already answered for this item (it was produced before the
+                // transcription landed): consume the transcription rather than settling it again.
+                const coveredByResponse = committedCoveredByResponse.delete(caption.itemId);
+                if (coveredByResponse) {
+                  itemTranscriptText.set(caption.itemId, caption.text);
+                } else {
+                  transcribedSinceWatermark.push(caption.itemId);
+                  itemTranscriptText.set(caption.itemId, caption.text);
+                  // THE SETTLE BOUNDARY (R2): a final with words is a span the endpoint will not
+                  // change any more. The window below either loses the race to a model response (the
+                  // response is then the delivery) or closes on its own and delivers these words
+                  // verbatim. Silence (`empty`) arms nothing: there is nothing to deliver.
+                  if (!empty) {
+                    finalTranscriptHeard = true;
+                    armSettleWindow();
+                  }
+                }
               }
             }
             // THE SEGMENT THIS TRANSCRIPT IS ABOUT — its OWN, never the one that happens to be active.

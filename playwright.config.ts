@@ -461,6 +461,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // the segmented-replay entry's 360_000: the criterion reads a single run under 100 s and this file
   // has been measured inside it.
   'voice-realtime-double-drop.spec.ts': 240_000,
+  // The stream-representation criterion (gap-live-voice-stream-delivery-not-command): one continuous-wire
+  // timeline — a scripted final transcription, the settle window, the busy hold's card, the quiet-window
+  // release and a scenario turn that writes the consumed message — against one shared server boot. The
+  // settle window is 2.5 s of the timeline and the hold's quiet window is another 2 s, so the file does
+  // not fit the default 55 s single-file ceiling; 240_000 is the sibling voice entries' value.
+  'live-voice-stream-representation.spec.ts': 240_000,
 };
 
 /**
@@ -2592,6 +2598,12 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // so `session_send` calls relayed by the scripted endpoint must reach a real control plane behind a
   // real session. Both branches arm their own scenario through the fixture home every entry uses.
   'voice-realtime-double-drop.spec.ts',
+  // The stream-representation criterion (gap-live-voice-stream-delivery-not-command): it needs the
+  // debug agent for the same reason the two entries above do — the settled sentence must reach a REAL
+  // resident session's queue, and the scenario's own `dequeue`/turn steps are how the substitute
+  // process says it consumed it. Its voice delivery's `source` is read back off the activity snapshot,
+  // which is published through the claude driver's ledger seam the debug provider is wired into.
+  'live-voice-stream-representation.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2699,6 +2711,7 @@ if (voiceRawCaptureSelection) {
  * nobody is listening on.
  */
 const voiceRealtimeSelection =
+  selectedSpecFiles().includes('live-voice-stream-representation.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-live-session-send.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-upload-fixture.spec.ts') ||
   selectedSpecFiles().includes('voice-realtime-composer-embedded.spec.ts') ||
@@ -2772,7 +2785,12 @@ const voiceContinuousOnlySelection = (() => {
       // the same arming. It is added to the SAME strict single-file list rather than getting an escape
       // hatch of its own: the property that keeps this safe is "the mode is armed only when the whole
       // run is a continuous criterion", and that is preserved word for word.
-      selected[0] === 'voice-realtime-silence-tail-suppression.spec.ts')
+      selected[0] === 'voice-realtime-silence-tail-suppression.spec.ts' ||
+      // The settle producer lives on the CONTINUOUS wire: it is armed by the endpoint's final
+      // transcriptions, and the segmented relay has no such span (its deliveries are keyed by `seq`).
+      // The criterion therefore has to run this deployment in continuous mode, and — like the two
+      // entries above — only when it is the whole selection, for the same one-server reason.
+      selected[0] === 'live-voice-stream-representation.spec.ts')
   );
 })();
 if (voiceContinuousOnlySelection) {
@@ -2924,6 +2942,14 @@ export default defineConfig({
         // closed exactly as it does today. See `debugAgentFixtureHome` above.
         ...(debugAgentFixtureHome
           ? { DEBUG_AGENT: '1', DEBUG_AGENT_HOME: debugAgentFixtureHome }
+          : {}),
+        // The turn-run path (SPEC §6) is what stamps a delivery's ORIGIN onto the run's options
+        // (`DELIVERY_SOURCE_OPTION`) — and the stream-representation criterion reads exactly that
+        // origin back off the activity snapshot. It is the shipped deployment setting (the live
+        // server runs with `RESIDENT_RUN_IS_TURN=1`); armed for this file's selection only, because
+        // enabling it for every voice spec would change readings those specs were written against.
+        ...(selectedSpecFiles().includes('live-voice-stream-representation.spec.ts')
+          ? { RESIDENT_RUN_IS_TURN: '1' }
           : {}),
         // Sub-second beat and threshold, for the activity-dock criterion's selection only. The
         // shipped defaults (5000/15000) are the product's and are untouched everywhere else.
