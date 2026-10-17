@@ -2,7 +2,7 @@
 id: gap-continuous-experience-settle-window-mid-utterance
 title: AC-361 再红：settle 生产者在人说话中途用 2.5s 窗投递 U2+U3 并重复 U3——settle
   边界须等上游回合关闭，恢复连续体验 e2e 全绿
-status: todo
+status: ready
 labels:
   - gap
   - defect
