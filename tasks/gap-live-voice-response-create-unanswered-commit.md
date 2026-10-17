@@ -2,7 +2,7 @@
 id: gap-live-voice-response-create-unanswered-commit
 title: live-voice forced commit 后 committed 无 speech_stopped 时补发一次
   response.create 恢复丢句
-status: todo
+status: ready
 labels:
   - gap
   - defect
