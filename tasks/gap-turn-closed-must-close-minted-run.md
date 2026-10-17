@@ -1,7 +1,7 @@
 ---
 id: gap-turn-closed-must-close-minted-run
 title: turn-closed 只清 writer 不关 run：turn 关闭时必须关闭它铸造的 run，否则幽灵 run 永续
-status: ready
+status: done
 labels:
   - gap
   - defect
