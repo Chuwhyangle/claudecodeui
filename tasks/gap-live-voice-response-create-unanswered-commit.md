@@ -24,12 +24,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 不闭段发一次：脚本化上游 fixture「forced commit → committed 且无 speech_stopped」断言恰好发出一次 `response.create`（计数 == 1），随后产出 `session_send` 且携带该句文本；`grep -c "response.create" server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` ≥ 1。
-- [ ] AC2 快速闭段不发：fixture「speech_stopped 先于 committed」断言 `response.create` 计数 == 0。
-- [ ] AC3 慢速闭段不发：fixture「speech_stopped 与 committed 同批（stop 先 1ms）」断言 `response.create` 计数 == 0。
-- [ ] AC4 segmented 不发：判据只在 `!segmentedRelay` 生效，segmented 连接下同场景 `response.create` 计数 == 0。
-- [ ] AC5 判别性（false form）：把判据短路（如 `if (false && upstreamTalking)`）后 AC1 的「发一次」断言**红**；假形态还原、`git status --porcelain` 干净。
-- [ ] AC6 编译+单测退出 0：`npm run typecheck` 退出 0；`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 退出 0。
+- [x] AC1 不闭段发一次：脚本化上游 fixture「forced commit → committed 且无 speech_stopped」断言恰好发出一次 `response.create`（计数 == 1），随后产出 `session_send` 且携带该句文本；`grep -c "response.create" server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` ≥ 1。
+- [x] AC2 快速闭段不发：fixture「speech_stopped 先于 committed」断言 `response.create` 计数 == 0。
+- [x] AC3 慢速闭段不发：fixture「speech_stopped 与 committed 同批（stop 先 1ms）」断言 `response.create` 计数 == 0。
+- [x] AC4 segmented 不发：判据只在 `!segmentedRelay` 生效，segmented 连接下同场景 `response.create` 计数 == 0。
+- [x] AC5 判别性（false form）：把判据短路（如 `if (false && upstreamTalking)`）后 AC1 的「发一次」断言**红**；假形态还原、`git status --porcelain` 干净。
+- [x] AC6 编译+单测退出 0：`npm run typecheck` 退出 0；`npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-uplink-vad-seam.test.ts` 退出 0。
 
 ## DoD
 
