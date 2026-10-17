@@ -2,7 +2,7 @@
 id: gap-live-voice-span-guard-flag
 title: live-voice 用 flag（默认 off）接回被删的补录跨度守卫：VOICE_REALTIME_SPAN_GUARD=on 时把模型漏掉的
   heard 句逐字补在 session_send 前面，供 A/B 实测
-status: ready
+status: done
 labels:
   - gap
 parent: null
