@@ -74,6 +74,7 @@ import type {
 } from '@/modules/providers/list/claude/claude-host-driver.provider.js';
 import { createSessionHostManager } from '@/modules/session-hosts/index.js';
 import type { HostScheduler, SessionHostManager } from '@/modules/session-hosts/index.js';
+import { createNormalizedMessage } from '@/shared/utils.js';
 import type {
   AnyRecord,
   ProcessHost,
@@ -333,6 +334,10 @@ type Harness = {
   registry: FakeRegistry;
   /** Every line the driver handed the injected sink, in order. */
   lines: string[];
+  /** The runtime context each armed round runs under (its normalizer included). */
+  context: ProviderRuntimeContext;
+  /** The writer each armed round handed the driver, with every frame it sent. */
+  roundWriters: Array<{ writer: ProviderRuntimeWriter; frames: AnyRecord[] }>;
   /** Moves the injected clock every reader in this leg shares. */
   advance(ms: number): void;
   /** The `run` promises armed so far, for the settle at the end of a leg. */
@@ -343,6 +348,12 @@ type HarnessOptions = {
   sessionId: string;
   mode?: ClaudeResidentReconcileMode;
   reconcile?: boolean;
+  /**
+   * The runtime context this leg's rounds run under. The default normalizes to
+   * nothing (these legs are about anomalies, not frames); a forwarding leg
+   * injects a context whose normalizer emits one countable frame per raw frame.
+   */
+  context?: ProviderRuntimeContext;
 };
 
 /**
@@ -382,6 +393,8 @@ function createHarness(options: HarnessOptions): Harness {
     process,
     registry,
     lines,
+    context: options.context ?? CONTEXT,
+    roundWriters: [],
     advance: (ms: number) => {
       nowMs += ms;
     },
@@ -435,7 +448,8 @@ async function waitForTurnLeases(
  */
 async function armRound(harness: Harness, command: string, expectedLeases = 1): Promise<void> {
   const writer = createRecordingWriter();
-  harness.rounds.push(harness.driver.run(harness.sessionId, { command, options: {} }, writer.writer, CONTEXT));
+  harness.roundWriters.push({ writer: writer.writer, frames: writer.frames });
+  harness.rounds.push(harness.driver.run(harness.sessionId, { command, options: {} }, writer.writer, harness.context));
   assert.ok(
     await waitForTurnLeases(harness.manager, harness.sessionId, expectedLeases, 5_000),
     `the round "${command}" must arm its turn lease (expected ${expectedLeases})`,
@@ -801,6 +815,197 @@ test('AC390 (d) frame-without-turn: a turn-bearing frame that belongs to no turn
     new RegExp(`^\\[reconcile\\] session=${sessionId} .* anomaly=frame-without-turn( |$)`),
     'the code is §5.2\'s, verbatim',
   );
+
+  await dispose(harness);
+});
+
+// ---------------------------------------------------------------------------
+// frame-without-turn: subagent frames are normal traffic, not a divergence
+// ---------------------------------------------------------------------------
+
+/**
+ * A subagent frame: exactly the shape the parent CLI relays into its own stream.
+ *
+ * A Task subagent's traffic is forwarded by the parent process's stream-json, so
+ * its frames carry `parent_tool_use_id` (snake_case, as the raw SDK frame does)
+ * and arrive between the parent's turns. They are supposed to have no parent
+ * turn open — recording one as `frame-without-turn` is the false positive.
+ */
+function subagentAssistantFrame(uuid: string): AnyRecord {
+  return { ...assistantFrame(uuid), parent_tool_use_id: 'toolu-subagent-parent' };
+}
+
+/** A subagent's `user` frame (its tool result coming back through the relay). */
+function subagentUserFrame(uuid: string): AnyRecord {
+  return {
+    type: 'user',
+    uuid,
+    parent_tool_use_id: 'toolu-subagent-parent',
+    message: { role: 'user', content: [{ type: 'tool_result', content: 'ok' }] },
+  };
+}
+
+/** A parent-thread `user` frame: a tool result with no subagent attached. */
+function plainUserFrame(uuid: string): AnyRecord {
+  return {
+    type: 'user',
+    uuid,
+    message: { role: 'user', content: [{ type: 'tool_result', content: 'ok' }] },
+  };
+}
+
+/**
+ * A context whose normalizer makes forwarding countable.
+ *
+ * The harness's shared `CONTEXT` normalizes every frame to nothing, which is the
+ * right reading for anomaly-only legs but makes "did this frame reach the
+ * forwarding seam" unobservable. Here each raw frame yields one text frame tagged
+ * with its uuid, and `normalizedCalls` counts the frames that entered
+ * `forwardNormalizedFrames` (the normalizer is called nowhere else on this path).
+ */
+function countingContext(): { context: ProviderRuntimeContext; normalizedCalls: () => number } {
+  let calls = 0;
+  return {
+    context: {
+      ...CONTEXT,
+      normalizeMessage: (raw) => {
+        calls += 1;
+        const frame = raw as AnyRecord;
+        return [
+          createNormalizedMessage({
+            kind: 'text',
+            role: frame?.type === 'user' ? 'user' : 'assistant',
+            // The uuid travels in `text` only so this leg can name which injected
+            // frame a writer received; it is not a production-shaped payload.
+            text: String(frame?.uuid ?? ''),
+            sessionId: null,
+            provider: 'claude',
+          }),
+        ];
+      },
+    },
+    normalizedCalls: () => calls,
+  };
+}
+
+test('frame-without-turn: a subagent frame with no turn open records no anomaly', async () => {
+  const sessionId = 'frame-without-turn-subagent';
+  const harness = createHarness({ sessionId });
+  await armRound(harness, 'A subagent frame');
+  harness.process.emit(initFrame('subagent-frame-init'));
+  await settle();
+  harness.process.emit(resultFrame());
+  await settle();
+  // The false-positive shape: the parent turn is over, and subagent traffic is
+  // relayed in with `parent_tool_use_id` and no parent turn of its own.
+  harness.process.emit(subagentAssistantFrame('subagent-frame-assistant'));
+  await settle();
+  harness.process.emit(subagentUserFrame('subagent-frame-user'));
+  await settle();
+
+  const reading = readCode(sessionId, harness.lines, 'frame-without-turn');
+  const turnOpenAfter = harness.driver.ledgerReading(sessionId)?.turn?.open ?? true;
+  console.log(
+    `session=${sessionId} lineCount=${reading.lineCount} sinkLineCount=${reading.sinkLineCount} ` +
+      `turnOpenWhenRead=${String(turnOpenAfter)}`,
+  );
+  console.log(`codeLine=${reading.firstLine}`);
+
+  assert.strictEqual(turnOpenAfter, false, 'the subagent frames really arrived with no parent turn open');
+  assert.strictEqual(
+    reading.lineCount,
+    0,
+    `subagent frames are normal between-turn traffic, not a divergence (read ${reading.lineCount})`,
+  );
+  assert.strictEqual(reading.sinkLineCount, 0, 'and the sink saw none either');
+
+  await dispose(harness);
+});
+
+test('frame-without-turn: a frame without parent_tool_use_id still records exactly one', async () => {
+  const sessionId = 'frame-without-turn-control';
+  const harness = createHarness({ sessionId });
+  await armRound(harness, 'A plain frame');
+  harness.process.emit(initFrame('control-frame-init'));
+  await settle();
+  harness.process.emit(resultFrame());
+  await settle();
+  // The reverse control: this frame belongs to the parent thread, so with no turn
+  // open it is the real divergence §5.2 names and must still be recorded.
+  harness.process.emit(assistantFrame('control-frame-assistant'));
+  await settle();
+
+  const reading = readCode(sessionId, harness.lines, 'frame-without-turn');
+  const turnOpenAfter = harness.driver.ledgerReading(sessionId)?.turn?.open ?? true;
+  console.log(
+    `session=${sessionId} lineCount=${reading.lineCount} sinkLineCount=${reading.sinkLineCount} ` +
+      `turnOpenWhenRead=${String(turnOpenAfter)}`,
+  );
+  console.log(`codeLine=${reading.firstLine}`);
+
+  assert.strictEqual(turnOpenAfter, false, 'the frame really arrived with no turn open');
+  assert.strictEqual(reading.lineCount, 1, `exactly one line for the plain frame (read ${reading.lineCount})`);
+  assert.match(
+    reading.firstLine,
+    new RegExp(`^\\[reconcile\\] session=${sessionId} .* anomaly=frame-without-turn( |$)`),
+    'the code is §5.2\'s, verbatim',
+  );
+
+  await dispose(harness);
+});
+
+test('frame-without-turn: excluding subagent frames forwards exactly the same frames', async () => {
+  const sessionId = 'frame-without-turn-forwarding';
+  const counting = countingContext();
+  const harness = createHarness({ sessionId, context: counting.context });
+  await armRound(harness, 'A forwarding');
+  harness.process.emit(initFrame('forwarding-init'));
+  await settle();
+  harness.process.emit(resultFrame());
+  await settle();
+
+  const sent = () => harness.roundWriters.flatMap((entry) => entry.frames);
+  const framesBefore = sent().length;
+  const callsBefore = counting.normalizedCalls();
+
+  harness.process.emit(subagentAssistantFrame('forwarding-subagent-assistant'));
+  await settle();
+  harness.process.emit(subagentUserFrame('forwarding-subagent-user'));
+  await settle();
+  harness.process.emit(assistantFrame('forwarding-plain-assistant'));
+  await settle();
+  harness.process.emit(plainUserFrame('forwarding-plain-user'));
+  await settle();
+
+  const textOf = (frame: AnyRecord): string => String(frame?.text ?? '');
+  const forwarded = (uuid: string): number => sent().filter((frame) => textOf(frame) === uuid).length;
+  const framesAfter = sent().length;
+  const callsAfter = counting.normalizedCalls();
+  const reading = readCode(sessionId, harness.lines, 'frame-without-turn');
+
+  console.log(
+    `normalizedCalls=${callsBefore}->${callsAfter} sentFrames=${framesBefore}->${framesAfter} ` +
+      `subagentAssistant=${forwarded('forwarding-subagent-assistant')} ` +
+      `subagentUser=${forwarded('forwarding-subagent-user')} ` +
+      `plainAssistant=${forwarded('forwarding-plain-assistant')} ` +
+      `plainUser=${forwarded('forwarding-plain-user')} ` +
+      `frameWithoutTurnLines=${reading.lineCount}`,
+  );
+
+  // Both injected classes still reach the one forwarding seam: four frames in,
+  // four normalizer calls. The exclusion is an anomaly-record decision, not a
+  // routing one.
+  assert.strictEqual(callsAfter - callsBefore, 4, 'all four injected frames reached forwardNormalizedFrames');
+  // The shipped isSubagentPromptEcho rule is untouched: the subagent's own prompt
+  // echo is dropped there (and still is), every other frame reaches the writer.
+  assert.strictEqual(forwarded('forwarding-subagent-assistant'), 1, 'subagent assistant frame is forwarded');
+  assert.strictEqual(forwarded('forwarding-subagent-user'), 0, 'the subagent prompt echo is still dropped by isSubagentPromptEcho');
+  assert.strictEqual(forwarded('forwarding-plain-assistant'), 1, 'plain assistant frame is forwarded');
+  assert.strictEqual(forwarded('forwarding-plain-user'), 1, 'plain user frame is forwarded');
+  assert.strictEqual(framesAfter - framesBefore, 3, 'three frames on the wire: no frame added or removed');
+  // The anomaly reading is the only thing the change moves: the subagent frames
+  // record nothing, the plain turn-bearing frames still do.
+  assert.strictEqual(reading.lineCount, 2, `plain frames still record the anomaly (read ${reading.lineCount})`);
 
   await dispose(harness);
 });
