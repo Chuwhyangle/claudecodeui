@@ -12,6 +12,8 @@ extra:
 ---
 <!-- dedup-ref --> 机制去重（立案时实测 2026-10-17）：`grep -rln 'isSubagentPromptEcho\|parent_tool_use_id' tasks/*.md` 命中的六个任务（gap-activity-task-reducer / gap-activity-lease-parity / gap-claude-runtime-per-run-occupied-session-gate / gap-claude-runtime-frame-forwarding-coverage / gap-claude-stream-frames-carry-block-key / gap-claude-turn-phase-real-signals）都在正文顺带提到子代理帧，没有一条认领「frame-without-turn 对子代理帧是假阳性」。`grep -rln 'frame-without-turn' tasks/*.md` 只命中 gap-ac390-resident-reconcile-observability，它把 frame-without-turn 当**异常码注入用例**（(d) 腿）测「无 turn 帧得到一行 [reconcile]」，不是「子代理帧不该被记」。机制词「排除子代理」全库 0 命中。separate。
 
+## Finding
+
 ### 缺陷面
 
 `recordFrameWithoutTurn`（server/modules/providers/list/claude/claude-host-driver.provider.ts:6225-6235）只判两件事就记异常：`message.type` 是 `assistant`/`user`，且账本没有开着的 turn。它**不排除子代理帧**（带 `parent_tool_use_id` 的帧）。而子代理（Task 工具）的帧正是经父 CLI 的 stream-json 中继进主线程、在父 turn 之间到达——它们**本就该**无父 turn。把这种正常流量记成 `frame-without-turn`（语义是「账本与流分道扬镳」）是假阳性。
