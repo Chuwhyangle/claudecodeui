@@ -721,6 +721,107 @@ function isResidentPendingRow(message: NormalizedMessage): boolean {
 }
 
 /**
+ * Whether a realtime row is this client's optimistic echo of a turn it just sent
+ * (the `local_…` id `chatMessageToNormalized` mints).
+ *
+ * A send the process was NOT busy for mints one of these before the host says
+ * anything about it. A busy send does not: it draws the host's delivery row
+ * instead (see `addResidentPending`). That is what makes this row the mark of
+ * "the page already shows this message", which the delivery suppression below
+ * keys on.
+ */
+function isOptimisticUserTurnRow(message: NormalizedMessage): boolean {
+  return message.kind === 'text'
+    && message.role === 'user'
+    && typeof message.id === 'string'
+    && message.id.startsWith('local_');
+}
+
+/**
+ * Whether a realtime row is one the activity snapshot drew for a delivery.
+ *
+ * The `deliveryId` half separates it from the legacy pending row the composer
+ * minted itself (`addResidentPending`), which carries no delivery id — that row
+ * is a busy send's only representative and must never be dropped by the rule
+ * below.
+ */
+function isDeliverySnapshotRow(message: NormalizedMessage): boolean {
+  return message.kind === 'command_lifecycle'
+    && isLiveRowId(message.id)
+    && typeof message.deliveryId === 'string';
+}
+
+/**
+ * Drops the snapshot's delivery row when this client already draws the same
+ * message as its own optimistic turn.
+ *
+ * ONE MESSAGE, ONE REPRESENTATIVE. An idle resident send produces two rows — the
+ * client's `local_…` turn and the host's delivery for the same send — and
+ * drawing both puts two identical bubbles on screen, the second without the `U`
+ * avatar (live reading, 2026-10-17). The delivery row's state is a fact about a
+ * message the page already shows, so where a client turn represents it the
+ * delivery row draws NOTHING: no bubble, no annotation, no withdrawal.
+ *
+ * THE CLIENT TURN WINS because it is the row that becomes the persisted turn,
+ * and because it carries the full text: a live delivery's words are capped
+ * (`DELIVERY_TEXT_MAX_CHARS`), so a long send arrives as a PREFIX of what the
+ * client wrote. Matching on the prefix is what keeps the capped case from
+ * leaving the duplicate behind.
+ *
+ * CLAIMED ONE-TO-ONE, with a one-sided clock floor: each delivery retires one
+ * client turn, and a delivery older than the client's row by more than the
+ * pending-echo skew is a different send that merely shares its words (`yes`,
+ * `continue`) — it must not take the new row's place. The busy-send path is
+ * untouched: it has no optimistic turn, so its delivery row still draws.
+ */
+function withoutDeliveryRowsRepresentedByOptimisticTurn(
+  realtimeMessages: NormalizedMessage[],
+): NormalizedMessage[] {
+  const clientTurns = realtimeMessages.filter(isOptimisticUserTurnRow);
+  if (clientTurns.length === 0) {
+    return realtimeMessages;
+  }
+
+  const claimed = new Set<NormalizedMessage>();
+  let dropped = false;
+  const kept = realtimeMessages.filter((message) => {
+    if (!isDeliverySnapshotRow(message)) {
+      return true;
+    }
+
+    const words = (message.content || '').trim();
+    const deliveredAt = readMessageTime(message);
+    if (!words || deliveredAt === null) {
+      return true;
+    }
+
+    const representative = clientTurns.find((candidate) => {
+      if (claimed.has(candidate)) {
+        return false;
+      }
+      const candidateWords = (candidate.content || '').trim();
+      const sentAt = readMessageTime(candidate);
+      if (!candidateWords || sentAt === null) {
+        return false;
+      }
+      if (!candidateWords.startsWith(words)) {
+        return false;
+      }
+      return deliveredAt >= sentAt - RESIDENT_PENDING_ECHO_FLOOR_SKEW_MS;
+    });
+    if (!representative) {
+      return true;
+    }
+
+    claimed.add(representative);
+    dropped = true;
+    return false;
+  });
+
+  return dropped ? kept : realtimeMessages;
+}
+
+/**
  * Whether a row is the persisted copy of a user's turn — the shape a resident
  * pending row is waiting to be replaced by.
  *
@@ -813,9 +914,14 @@ function computeMerged(serverSource: NormalizedMessage[], realtimeSource: Normal
   // Retire a pending row before the branches below, so a realtime list that is
   // nothing but a now-delivered pending row falls through to the server rows
   // instead of short-circuiting on a row that no longer renders.
+  //
+  // The suppression runs first and applies even while the history is empty: an
+  // idle resident send's optimistic row and its delivery row can both arrive
+  // before any server page does, and that is exactly the window the duplicate
+  // was seen in.
   const realtime = retireDeliveredResidentPending(
     server,
-    withoutServedLifecycleRows(realtimeSource),
+    withoutDeliveryRowsRepresentedByOptimisticTurn(withoutServedLifecycleRows(realtimeSource)),
   );
   if (realtime.length === 0) {
     return dedupeAdjacentAssistantEchoes(server);

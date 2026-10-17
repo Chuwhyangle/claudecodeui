@@ -44,13 +44,14 @@ import { describe, it } from 'vitest';
 
 import { useChatRealtimeHandlers } from '@/modules/chat/hooks/useChatRealtimeHandlers';
 import { normalizedToChatMessages, RESIDENT_PENDING_MESSAGE_TYPE } from '@/modules/chat/hooks/useChatMessages';
-import { useSessionStore } from '@/modules/chat/hooks/useSessionStore';
+import { mergeSessionRows, useSessionStore } from '@/modules/chat/hooks/useSessionStore';
 import type { SessionStore } from '@/modules/chat/hooks/useSessionStore';
 import PendingResidentMessage from '@/modules/chat/transcript/PendingResidentMessage';
 import type {
   ChatMessage,
   ChatReplayCursorMap,
   DeliveryView,
+  NormalizedMessage,
   ProjectSession,
   ServerEvent,
 } from '@/shared/types';
@@ -385,5 +386,139 @@ describe('(d) a session-level frame with no seq does not enter the replay cursor
     // And a later seq-less snapshot frame does not disturb it.
     dispatch(activityFrame([delivery({ deliveryId: 'd-1', state: 'started', text: 'queued while nothing is running' })]));
     assert.deepEqual(cursorFor(), { runId: 'run-1', seq: 3 });
+  });
+});
+
+/* ─── (e) one message, one representative ────────────────────────────────── */
+
+/**
+ * A send the process was NOT busy for: the composer mints its own optimistic
+ * `local_…` turn, and the host's ledger still reports the accepted send as a
+ * delivery. The transcript must draw the message once — the client's turn —
+ * and the delivery row must draw nothing at all (no bubble, no annotation,
+ * no withdraw): its state is a fact about a message the page already shows.
+ *
+ * The counterpart is the busy send, which has no optimistic turn and whose
+ * delivery row IS the message's only representative; the control below keeps
+ * that reading alive so suppressing the duplicate cannot silently kill it.
+ */
+describe('(e) a delivery already represented by the client’s own optimistic turn draws nothing', () => {
+  const clientTurn = (id: string, text: string, at: number): NormalizedMessage => ({
+    id,
+    sessionId: SESSION_ID,
+    timestamp: new Date(at).toISOString(),
+    provider: 'claude',
+    kind: 'text',
+    role: 'user',
+    content: text,
+  } as NormalizedMessage);
+
+  const deliveryTurn = (deliveryId: string, text: string, at: number): NormalizedMessage => ({
+    id: `live:delivery:${deliveryId}`,
+    sessionId: SESSION_ID,
+    timestamp: new Date(at).toISOString(),
+    provider: 'claude',
+    kind: 'command_lifecycle',
+    role: 'user',
+    content: text,
+    commandUuid: deliveryId,
+    commandState: 'queued',
+    deliveryId,
+  } as NormalizedMessage);
+
+  it('draws the client’s row once and no pending row for its delivery', () => {
+    const { store, dispatch } = mountChat();
+    const text = 'sent while the process was idle';
+    const sentAt = ENQUEUED_AT - 55;
+
+    store.appendRealtime(SESSION_ID, clientTurn('local_idle', text, sentAt));
+    dispatch(activityFrame([delivery({ deliveryId: 'd-idle', text })], 'activity.snapshot'));
+
+    const drawn = store.getMessages(SESSION_ID).filter((message) => (message.content ?? '').trim() === text);
+    assert.equal(drawn.length, 1, 'one message must not draw two rows');
+    assert.equal(drawn[0]?.id, 'local_idle', 'the client’s own turn is the surviving representative');
+    assert.deepEqual(pendingRows(store), [], 'the represented delivery draws no pending row at all');
+  });
+
+  it('keeps the delivery row when no client turn represents it (a busy send)', () => {
+    const { store, dispatch } = mountChat();
+
+    dispatch(activityFrame([
+      delivery({ deliveryId: 'd-busy', text: 'sent during a running turn' }),
+    ], 'activity.snapshot'));
+
+    const container = renderPendingRows(store);
+    assert.equal(bubbleText(rowFor(container, 'd-busy')), 'sent during a running turn');
+    assert.equal(annotation(rowFor(container, 'd-busy')).key, 'resident.pending.annotation');
+  });
+
+  it('claims one client turn per delivery, and one delivery per client turn', () => {
+    const text = 'same words, two sends';
+
+    const bothRepresented = mountChat();
+    bothRepresented.store.appendRealtime(SESSION_ID, clientTurn('local_a', text, ENQUEUED_AT - 20));
+    bothRepresented.store.appendRealtime(SESSION_ID, clientTurn('local_b', text, ENQUEUED_AT - 10));
+    bothRepresented.dispatch(activityFrame([
+      delivery({ deliveryId: 'd-a', text, enqueuedAt: ENQUEUED_AT - 19 }),
+      delivery({ deliveryId: 'd-b', text, enqueuedAt: ENQUEUED_AT - 9 }),
+    ]));
+    assert.deepEqual(pendingRows(bothRepresented.store), [], 'two sends, two client rows, zero pending rows');
+
+    const oneRepresented = mountChat();
+    oneRepresented.store.appendRealtime(SESSION_ID, clientTurn('local_c', text, ENQUEUED_AT - 20));
+    oneRepresented.dispatch(activityFrame([
+      delivery({ deliveryId: 'd-c', text, enqueuedAt: ENQUEUED_AT - 19 }),
+      delivery({ deliveryId: 'd-unclaimed', text, enqueuedAt: ENQUEUED_AT - 9 }),
+    ]));
+    assert.equal(
+      pendingRows(oneRepresented.store).length,
+      1,
+      'a delivery no client turn claims must still draw its own row',
+    );
+  });
+
+  it('recognizes a capped delivery text as the prefix of the client’s full message', () => {
+    const { store, dispatch } = mountChat();
+    const fullText = '长'.repeat(500);
+
+    store.appendRealtime(SESSION_ID, clientTurn('local_long', fullText, ENQUEUED_AT - 30));
+    dispatch(activityFrame([
+      delivery({ deliveryId: 'd-long', text: fullText.slice(0, 400) }),
+    ], 'activity.snapshot'));
+
+    const drawn = store.getMessages(SESSION_ID).filter((message) => message.kind === 'text' && message.role === 'user');
+    assert.equal(drawn.length, 1);
+    assert.equal(drawn[0]?.content, fullText, 'the client row keeps the words the capped delivery lost');
+    assert.deepEqual(pendingRows(store), []);
+  });
+
+  it('does not let an older identical delivery claim a freshly sent turn', () => {
+    const { store, dispatch } = mountChat();
+    const text = 'yes';
+
+    dispatch(activityFrame([
+      delivery({ deliveryId: 'd-old', text, enqueuedAt: ENQUEUED_AT - 5 * 60_000 }),
+    ], 'activity.snapshot'));
+    store.appendRealtime(SESSION_ID, clientTurn('local_new', text, ENQUEUED_AT));
+
+    assert.equal(
+      pendingRows(store).length,
+      1,
+      'the old send and the new one are two messages; only a delivery at the new send’s clock may be claimed',
+    );
+  });
+
+  it('hands over to the persisted turn without a gap or a second bubble', () => {
+    const text = 'delivered once';
+    const merged = mergeSessionRows(
+      [clientTurn('srv-persisted', text, ENQUEUED_AT + 120)],
+      [
+        clientTurn('local_handover', text, ENQUEUED_AT - 40),
+        deliveryTurn('d-handover', text, ENQUEUED_AT),
+      ],
+    );
+    const drawn = merged.filter((message) => (message.content ?? '').trim() === text);
+    assert.equal(drawn.length, 1, 'the persisted copy replaces the pair, it does not add to it');
+    assert.equal(drawn[0]?.id, 'srv-persisted');
   });
 });
