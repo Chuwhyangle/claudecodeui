@@ -29,8 +29,8 @@ planOmissionFills(finals, executed, params) → { fills: [{ index, dueAt, covera
 
 ## AC
 
-- [ ] `bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts` 退出码 0（即 AC-400）。
-- [ ] `npx tsc --noEmit -p server/tsconfig.json` 退出码 0。
+- [x] `bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts` 退出码 0（即 AC-400）。
+- [x] `npx tsc --noEmit -p server/tsconfig.json` 退出码 0。
 
 ## DoD
 
@@ -48,3 +48,12 @@ planOmissionFills(finals, executed, params) → { fills: [{ index, dueAt, covera
 ## Notes
 
 Python 实现是参考；数字处理、文字不符、跨文字不可比这几处最容易两边不一致，夹具里要各有专门用例。
+
+实现读数（2026-10-18）：
+
+- 夹具 63 例 = 47 个冻结真实连接 + 16 个合成用例（纯英文、西里尔、希腊、跨文字翻译、沉默分支、w=6/7、coverage=0.24/0.25、t+H、空窗口、取消 response 输入契约）。逐例比较补发下标、`dueAt`、`coverage` 与全部跳过原因，全部一致。测试共 82 个用例：`ℹ tests 82 / ℹ pass 82 / ℹ fail 0`，退出码 0。参数在测试里直接读 `omission-fill-params.json` 的 `chosen`，并逐例断言夹具携带的就是锁定参数（参数文件变了而夹具没重新生成也红）。
+- Python 参考侧重构后原门未回归：`python3 -I experiments/voice-relay-qb/replay_rule.py --check` PASS（82 补 / raw 14.07% / dup 2.23% / LOST≥7 1.89% / p50 5.20s）；`--check-labels` PASS（命中 33，O=20/D=2，90.9%）。
+- 取假形态读数 A（覆盖度比较 `>=` 改成 `>`）：`ℹ tests 82 / ℹ pass 80 / ℹ fail 2`，红在 `table: coverage boundary: exactly SCORE_T=0.25 is covered (`>=`, not `>`)` 与 `parity: synthetic-coverage-boundary-025`，两者均为 `AssertionError [ERR_ASSERTION]: ... fill indices`。已恢复。
+- 取假形态读数 B（让取消的 response 里的调用也算已执行——把该调用放进用例的 `executed`）：`ℹ tests 82 / ℹ pass 81 / ℹ fail 1`，红在 `table: a call from a CANCELLED response is not executed → the item still fills`，`AssertionError [ERR_ASSERTION]: ... fill indices`。已恢复；恢复后重跑 82/82 绿。
+- 模块只经 `server/modules/voice-realtime/index.ts` 导出；测试也经该 barrel 导入（`from '../index.js'`），无深导入。
+- 本会话 shell 的 PATH 不含 `node_modules/.bin`（`npm run test:server` 由 npm 注入），AC1 以 `PATH="$PWD/node_modules/.bin:$PATH"` 运行同一命令；`tsx` 解析后退出码 0。
