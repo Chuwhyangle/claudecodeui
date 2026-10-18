@@ -32,10 +32,10 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx` 退出码 0；该文件含两条用例：(a) 收到 `state: open` 且尚未收到任何音频帧时，`voice-realtime-status` 的文案不是 `Listening…` 而是未就绪文案，且 `data-capture="starting"`；(b) 第一帧到达后变为 `Listening…` 且 `data-capture="live"`。
-- [ ] `npx vitest run src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出码 0（既有相位行为不回退）。
-- [ ] `npx tsc --noEmit -p tsconfig.json` 退出码 0。
-- [ ] `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts` 退出码 0；该 spec 用 init script 让 `getUserMedia` 延迟至少 800ms、上游立刻发 `state: open`，在第一个采集帧之前读到未就绪状态，首帧后读到 `Listening…`。
+- [x] `npx vitest run src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx` 退出码 0；该文件含两条用例：(a) 收到 `state: open` 且尚未收到任何音频帧时，`voice-realtime-status` 的文案不是 `Listening…` 而是未就绪文案，且 `data-capture="starting"`；(b) 第一帧到达后变为 `Listening…` 且 `data-capture="live"`。
+- [x] `npx vitest run src/modules/chat/voice-realtime/tests/voiceMicSuspendedWaveform.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出码 0（既有相位行为不回退）。
+- [x] `npx tsc --noEmit -p tsconfig.json` 退出码 0。
+- [x] `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts` 退出码 0；该 spec 用 init script 让 `getUserMedia` 延迟至少 800ms、上游立刻发 `state: open`，在第一个采集帧之前读到未就绪状态，首帧后读到 `Listening…`。
 
 ## DoD
 
@@ -48,3 +48,11 @@ extra:
 - src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx
 - e2e/voice-realtime-capture-ready-status.spec.ts
 - tasks/gap-live-voice-listening-before-capture-ready.md
+- src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx
+- playwright.config.ts
+
+## Notes
+
+两条 Touches 是在执行中按实际改动补登的：
+- `tests/useVoiceRealtimeSession.test.tsx`：相位契约本身变了，9 条断言「open 后立即 listening」的既有用例改为「open 后 arming，首帧后 listening」（另在需要 listening 的用例里先推首帧）。这是 AC2「既有相位行为不回退」的落地改法，不是无关改写。
+- `playwright.config.ts`：新 e2e spec 必须在 `voiceRealtimeSelection` 里（否则 server 不会指向脚本化上游）并在 `DEBUG_AGENT_SPEC_FILES` 里（否则没有可绑定的 session/fixture home）。
