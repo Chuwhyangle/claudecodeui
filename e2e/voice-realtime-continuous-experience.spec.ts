@@ -980,12 +980,17 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       // ── enter Live Voice ──────────────────────────────────────────────────────────────────────
       await page.getByTestId('live-voice-button').click();
       await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
-      await expect.poll(() => phase(page), { timeout: 25_000 }).toBe('listening');
-      // The server has to have opened the upstream session before any audio is meaningful: the
-      // capture's frames are held until `state: open`, and a detector armed on a socket nobody
-      // dialled hears nothing at all.
+      // The server has to have opened the upstream session before any audio is meaningful: a detector
+      // armed on a socket nobody dialled hears nothing at all.
       await expect.poll(() => upstream.liveConnectionCount(), { timeout: 25_000 }).toBe(1);
       await expect.poll(() => upstream.vad()?.turnDetection ?? null, { timeout: 15_000 }).toBe('server_vad');
+      // `state: open` is the CONNECTION, not the microphone. The bar reads `arming` from the moment the
+      // upstream reports itself open until a captured frame actually arrives (see
+      // `useVoiceRealtimeSession.ts`); this spec's fake capture pushes nothing before `playFakeMic`
+      // below, so `arming` is the honest reading of a session whose microphone is still starting — and
+      // it is deterministic here, because no frame can have been pushed yet. Waiting for `listening` at
+      // this point is exactly the deadlock this gate replaces.
+      await expect.poll(() => phase(page), { timeout: 25_000 }).toBe('arming');
 
       // ── play the timeline ─────────────────────────────────────────────────────────────────────
       // The gate's subject is read ONE more time at the instant the timeline starts: the release was
@@ -996,6 +1001,10 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       const playBeganAtMs = Date.now();
       await playFakeMic(page);
       const playEndedAtMs = Date.now();
+      // The FIRST captured frame is what moves the bar from `arming` to `listening`; the timeline
+      // player has pushed its whole timeline by the time it resolves, so the product's own transition
+      // is read here and demanded directly AFTER the first frame — never before it, and never relaxed.
+      await expect.poll(() => phase(page), { timeout: 25_000 }).toBe('listening');
 
       // The detector closes utterances on its own schedule, so the reading waits for the count
       // instead of guessing how long the timeline takes.
