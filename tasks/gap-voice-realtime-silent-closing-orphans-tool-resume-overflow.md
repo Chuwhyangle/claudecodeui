@@ -32,8 +32,8 @@ extra:
 
 ## AC
 
-- [ ] AC1 判据入口：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tool-resume-always-sent.test.ts` 退出码 0。断言：`respondToToolOutputs === false`（silent）下，transport 对每个 `function_call_output` 仍外发一次合成的 `response.create`（`sendClientFrames` 不再跳过 resume）。
-- [ ] AC2 默认与措辞不倒退：同一命令（或 `--test-name-pattern` 子集）内断言 `resolveVoiceRealtimeClosingTurn({})`（未设 env）仍返回 `silent`，且 `acceptedResultTail('silent')`/`afterStopSentence('silent')` 仍产出「say nothing」、不含「Reply with the single word OK」——修复不得把 silent 回退成 46% 开销的 respond。
+- [x] AC1 判据入口：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tool-resume-always-sent.test.ts` 退出码 0。断言：`respondToToolOutputs === false`（silent）下，transport 对每个 `function_call_output` 仍外发一次合成的 `response.create`（`sendClientFrames` 不再跳过 resume）。
+- [x] AC2 默认与措辞不倒退：同一命令（或 `--test-name-pattern` 子集）内断言 `resolveVoiceRealtimeClosingTurn({})`（未设 env）仍返回 `silent`，且 `acceptedResultTail('silent')`/`afterStopSentence('silent')` 仍产出「say nothing」、不含「Reply with the single word OK」——修复不得把 silent 回退成 46% 开销的 respond。
 - [ ] AC3 真实会话复测（只能由人 yale 语音执行）：出货默认（silent）下连续 ≥12 段全部 delivered，journal 0 条 `Turn queue overflow`（修复前第 9 段必溢出）（待外部）
 
 ## DoD
