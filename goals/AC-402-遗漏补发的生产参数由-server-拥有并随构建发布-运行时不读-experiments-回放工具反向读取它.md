@@ -1,7 +1,7 @@
 ---
 id: AC-402
 title: 遗漏补发的生产参数由 server/ 拥有并随构建发布，运行时不读 experiments/；回放工具反向读取它
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-046
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -26,4 +26,10 @@ origin: 人 yale 2026-10-18 同意：生产在运行时依赖 experiments/ 目�
   dist-server 部署，该文件不随构建发布。方案：参数所有权移到 server/（随 tsc 发出），回放工具反向读取；热改沿用既有
   voice-realtime-settings 的按连接读取机制。
 activatedAt: 2026-10-18T10:13:46.585Z
+statusLog:
+  - at: 2026-10-18T10:40:06.273Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
