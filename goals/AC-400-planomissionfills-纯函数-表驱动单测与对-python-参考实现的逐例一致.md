@@ -1,7 +1,7 @@
 ---
 id: AC-400
 title: planOmissionFills 纯函数：表驱动单测与对 Python 参考实现的逐例一致
-status: draft
+status: active
 kind: criterion
 goal: GOAL-046
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -15,4 +15,15 @@ expect: 退出码 0，测试文件存在且至少含两组用例。其一，表�
 origin: SPEC
   docs/proposals/voice-realtime-omission-fill-SPEC.md「测试」一节。规则有两份实现（回放用
   Python，服务端用 TS），一致性夹具是防止它们漂移的唯一手段；2026-10-18 的回放读数全部来自 Python 实现。
+activatedAt: 2026-10-18T08:36:44.015Z
+statusLog:
+  - at: 2026-10-18T08:36:44.015Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-18T08:36:44.015Z
 ---
