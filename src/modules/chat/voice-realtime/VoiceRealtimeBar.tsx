@@ -80,6 +80,11 @@ function phaseLabel(
       return t('voice.realtime.connecting', { defaultValue: 'Connecting voice…' });
     case 'listening':
       return t('voice.realtime.listening', { defaultValue: 'Listening…' });
+    case 'arming':
+      // The upstream session is open but the microphone has not delivered a frame yet. Saying
+      // "Listening…" here claimed a capture that does not exist yet; this is the honest word for
+      // the same window (see `VoiceRealtimePhase`).
+      return t('voice.realtime.startingMic', { defaultValue: 'Starting microphone…' });
     case 'muted':
       return t('voice.realtime.muted', { defaultValue: 'Muted' });
     case 'failed':
@@ -235,7 +240,7 @@ function Waveform({
  */
 export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pendingMessage, busy = false }: Props) {
   const { t } = useTranslation('chat');
-  const { phase, error, errorCode, captions, levelRef, connectedAt, disconnected, reconnecting, micSuspended, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
+  const { phase, captureReady, error, errorCode, captions, levelRef, connectedAt, disconnected, reconnecting, micSuspended, startWithFile, mute, unmute, end, refusal, queuedDepth, queuedBytes } = voice;
   // The hidden file input is the AC-315/AC-316 test-injection seam: no visible
   // button opens it. A real user never sees or reaches it; a Playwright spec
   // drives it directly via `setInputFiles` on its testid.
@@ -250,7 +255,13 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
 
   const muted = phase === 'muted';
   const connecting = (phase === 'connecting' || phase === 'idle') && !disconnected;
-  const canToggleMute = phase === 'listening' || phase === 'muted';
+  // The microphone is still starting: same spinner as connecting, but the phase's own word. The
+  // waveform stays inactive in this phase — there is no capture to draw yet.
+  const arming = phase === 'arming' && !disconnected;
+  // Mute is offered while arming too: the person may want the microphone off before it ever comes
+  // up, and pressing it then is the same choice it is while listening (the phase stays muted and
+  // the first frame does not move it).
+  const canToggleMute = phase === 'listening' || phase === 'muted' || phase === 'arming';
 
   const lastCaption = captions.length > 0 ? captions[captions.length - 1].text : '';
   /**
@@ -325,7 +336,7 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
               muted ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground'
             }`}
           >
-            {connecting ? (
+            {connecting || arming ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             ) : (
               <AudioLines className="h-4 w-4" aria-hidden />
@@ -352,6 +363,10 @@ export default function VoiceRealtimeBar({ voice, onExit, modelMenu, banner, pen
                 data-refusal={refusal ? refusal.reason : undefined}
                 data-queued-depth={depth}
                 data-queued-bytes={String(queuedBytes)}
+                // The capture reading, independent of the copy: `starting` until the first captured
+                // frame arrives, `live` from then on. Same fact as the `arming` phase, exposed as a
+                // stable attribute so e2e need not read the status sentence.
+                data-capture={captureReady ? 'live' : 'starting'}
                 data-busy={busy ? 'true' : undefined}
                 className="min-w-0 truncate"
               >

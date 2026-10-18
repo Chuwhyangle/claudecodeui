@@ -37,8 +37,16 @@ import { StreamingVad } from '@/shared/voiceEndpoint';
  * `muted` is its own phase (not a separate boolean layered on `listening`)
  * because the bar renders one of a small fixed set of states, never a
  * combination.
+ *
+ * `arming` is the window between the upstream reporting `state: open` and the
+ * audio source delivering its FIRST frame. Capture is asynchronous
+ * (`getUserMedia` → `AudioContext` → the worklet), so the connection can be
+ * open while nothing can yet be sent; saying `listening` there claimed a
+ * microphone the page did not have. The phase moves to `listening` on that
+ * first frame (see {@link VoiceRealtimeSession.captureReady}), and re-enters
+ * `arming` on a reconnect, whose capture starts over.
  */
-export type VoiceRealtimePhase = 'idle' | 'connecting' | 'listening' | 'muted' | 'failed';
+export type VoiceRealtimePhase = 'idle' | 'connecting' | 'arming' | 'listening' | 'muted' | 'failed';
 
 /**
  * One outbound server frame (the protocol `/voice-realtime` answers with).
@@ -254,6 +262,18 @@ export type VoiceRealtimeStopped = {
 export type VoiceRealtimeSession = {
   /** The current phase; the bar renders its indicator from this. */
   phase: VoiceRealtimePhase;
+  /**
+   * Whether the audio source has actually produced its first frame.
+   *
+   * This is the reading `phase === 'listening'` rests on. `state: open` only says the upstream
+   * session is up; capture is asynchronous (`getUserMedia` → `AudioContext` → the worklet), so
+   * there is a window — hundreds of ms even when permission was already granted, longer on the
+   * first grant — in which the connection is open and no audio can possibly be sent. The phase
+   * says `arming` across that window and this stays false; the first captured frame flips it and
+   * `unmute`/`state: open` read it. The status cell carries the same reading as
+   * `data-capture` (`starting` / `live`) so a test need not depend on the copy.
+   */
+  captureReady: boolean;
   /**
    * The last failure message, or `null`.
    *
@@ -740,6 +760,14 @@ export function useVoiceRealtimeSession({
   const { token } = useAuth();
   // The phase the bar renders; driven by the wire above all.
   const [phase, setPhase] = useState<VoiceRealtimePhase>('idle');
+  /**
+   * `true` once the audio source has delivered its first frame — see
+   * {@link VoiceRealtimeSession.captureReady}. State because the bar renders `data-capture` from it
+   * and the `arming`/`listening` distinction is a render; the ref beside it is the same reading for
+   * the socket/capture handlers, which close over a value once.
+   */
+  const [captureReady, setCaptureReady] = useState(false);
+  const captureReadyRef = useRef(false);
   // The last failure, kept so a closed session can explain itself after the
   // socket that carried the reason is gone.
   const [error, setError] = useState<string | null>(null);
@@ -1211,6 +1239,10 @@ export function useVoiceRealtimeSession({
       resetSegmentVerdicts();
     }
     mutedRef.current = false;
+    // The capture this reading described is being released with the connection; the next one starts
+    // over and reports its own first frame.
+    captureReadyRef.current = false;
+    setCaptureReady(false);
     levelRef.current = 0;
     setConnectedAt(null);
     setDisconnected(false);
@@ -1270,6 +1302,21 @@ export function useVoiceRealtimeSession({
       void source
         .start(
           (frame) => {
+            // THE FIRST FRAME IS WHAT MAKES "LISTENING" TRUE. `state: open` is the upstream
+            // session, not the microphone: capture is async, so the two are hundreds of ms apart
+            // (longer on the first permission grant) and the page used to say `listening` across
+            // that whole window. Recorded BEFORE the muted early-return below: frames keep arriving
+            // while muted, and readiness is a fact about capture, not about sending.
+            if (!captureReadyRef.current) {
+              captureReadyRef.current = true;
+              setCaptureReady(true);
+              // Promote only when the upstream is open and the person is not muted. If `open` has
+              // not arrived yet, the open handler reads this ref and goes straight to `listening`;
+              // if muted, `unmute` decides (it reads the same ref).
+              if (socketOpenRef.current && !mutedRef.current) {
+                setPhase((current) => (current === 'arming' ? 'listening' : current));
+              }
+            }
             // Mute drops the frame outright — it is never queued, or a burst captured
             // just before Mute would still reach the upstream after it (the criterion
             // reads Mute as "the upstream frame count stops growing").
@@ -1387,6 +1434,11 @@ export function useVoiceRealtimeSession({
       // A fresh capture has reported nothing yet: the previous connection's suspension reading is
       // not this one's, so the waveform starts un-greyed.
       setMicSuspended(false);
+      // A new connection starts a NEW capture (a reconnect replaces the source too), so readiness
+      // starts over: the previous source's frames say nothing about this one. The bar re-enters
+      // `arming` after `state: open` until this capture's first frame arrives.
+      captureReadyRef.current = false;
+      setCaptureReady(false);
       setConnectedAt(Date.now());
       setPhase('connecting');
       // Each connection starts with an empty queue and an unopened upstream:
@@ -1482,7 +1534,11 @@ export function useVoiceRealtimeSession({
             // A reconnect that reached `open` is over, and the next drop starts its backoff afresh.
             reconnectAttemptRef.current = 0;
             setReconnecting(null);
-            setPhase(mutedRef.current ? 'muted' : 'listening');
+            // The upstream being open is not the microphone being live: if the first captured frame
+            // has not arrived yet, the bar says it is still starting the microphone (`arming`) until
+            // it does. Mute still outranks the capture reading — a muted session stays `muted`
+            // whether or not frames are flowing, and `unmute` promotes once they are.
+            setPhase(mutedRef.current ? 'muted' : captureReadyRef.current ? 'listening' : 'arming');
           } else if (frame.state === 'closed') {
             serverEndedRef.current = true;
             // The VOICE connection closed under a live mode. The page socket may still be open, so this
@@ -1906,6 +1962,10 @@ export function useVoiceRealtimeSession({
         // answer them now, and a timer left running would write state for a session that is over.
         resetSegmentVerdicts();
         releaseCapture();
+        // The source this reading came from is released with the socket; a reconnect begins a new
+        // capture and reports its own first frame (see `connect`).
+        captureReadyRef.current = false;
+        setCaptureReady(false);
         levelRef.current = 0;
         setDisconnected(true);
         // The capture that reported a suspension is being released with the socket, so the greyed
@@ -1976,12 +2036,15 @@ export function useVoiceRealtimeSession({
     // when `open` later arrives — the criterion reads Mute as "the upstream
     // frame count stops growing", and a replayed pre-Mute burst would move it.
     pendingFramesRef.current = [];
-    setPhase((current) => (current === 'listening' ? 'muted' : current));
+    setPhase((current) => (current === 'listening' || current === 'arming' ? 'muted' : current));
   }, [flushSegments]);
 
   const unmute = useCallback(() => {
     mutedRef.current = false;
-    setPhase((current) => (current === 'muted' ? 'listening' : current));
+    // Capture readiness decides what unmuting means: Mute can be pressed while the microphone is
+    // still arming, and unmuting then must NOT claim `listening` — the first frame may be the one
+    // that arrives next. When frames are already flowing, this is the old `listening` behaviour.
+    setPhase((current) => (current === 'muted' ? (captureReadyRef.current ? 'listening' : 'arming') : current));
   }, []);
 
   // THE ONE DELIVERED-AWAITING-DEQUEUE CARD (AC5). A delivery the host has not dequeued yet has no row
@@ -1997,5 +2060,5 @@ export function useVoiceRealtimeSession({
     }
   }
 
-  return { phase, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, queuedDeliveryText, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, reconnecting, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
+  return { phase, captureReady, error, errorCode, unansweredSeconds, heardNotForwarded, captions, deliveries, delivering, queuedDepth, queuedBytes, pendingMessage, queuedDeliveryText, refusal, undelivered, stopped, levelRef, connectedAt, disconnected, reconnecting, closedUnshown, unrecognizedSeqs, segmentOutcomes, micSuspended, start, startWithFile, mute, unmute, end };
 }

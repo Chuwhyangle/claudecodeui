@@ -162,12 +162,16 @@ const mountBar = (busy = false) => {
 };
 
 describe('connection and the handshake gap', () => {
-  test('connects bound to the session, listens only once the proxy reports open', () => {
+  test('connects bound to the session, and listens only once the proxy is open AND the first frame is captured', () => {
     const { result } = mount();
     act(() => result.current.start());
     expect(result.current.phase).toBe('connecting');
     expect(socket().url).toContain('session=sess-1');
     act(() => socket().receive({ type: 'state', state: 'open' }));
+    // The upstream is open, but capture is asynchronous: the page must not claim to be listening
+    // before the microphone has produced anything (this task's phase).
+    expect(result.current.phase).toBe('arming');
+    act(() => sources[0]!.push(frame([0.1])));
     expect(result.current.phase).toBe('listening');
   });
 
@@ -321,6 +325,9 @@ describe('errors, delivery and teardown', () => {
       const { container, session } = mountBar();
       act(() => session().start());
       act(() => socket().receive({ type: 'state', state: 'open' }));
+      // Capture is running before the error arrives, so the surviving reading is unambiguously
+      // `listening` (an open upstream with no frame would be the `arming` phase, not this claim).
+      act(() => sources[0]!.push(frame([0.1])));
       act(() =>
         socket().receive({ type: 'error', code: 'MALFORMED_FUNCTION_CALL', message: 'bad args', recoverable: true }),
       );
@@ -372,8 +379,10 @@ describe('errors, delivery and teardown', () => {
       const { result } = open();
       act(() => socket().receive({ type: 'error', code: 'SESSION_BUSY', message: 'Claude is still working', recoverable: true }));
       expect(result.current.error).toBeNull();
-      expect(result.current.phase).toBe('listening');
+      // Still capturing: the first frame after the error promotes to `listening` and reaches the
+      // upstream — a recoverable error did not end the session.
       act(() => sources[0]!.push(frame([0.1])));
+      expect(result.current.phase).toBe('listening');
       expect(socket().audio()).toHaveLength(1);
     } finally {
       warn.mockRestore();
@@ -396,9 +405,10 @@ describe('errors, delivery and teardown', () => {
     act(() => socket().receive({ type: 'turn_unanswered', seconds: 8 }));
     expect(result.current.unansweredSeconds).toBe(8);
     expect(result.current.error).toBeNull();
-    expect(result.current.phase).toBe('listening');
-    // Still capturing: an unanswered turn does not stop the microphone.
+    // Still capturing: an unanswered turn does not stop the microphone — the next frame both
+    // reaches the upstream and completes the `listening` reading.
     act(() => sources[0]!.push(frame([0.1])));
+    expect(result.current.phase).toBe('listening');
     expect(socket().audio()).toHaveLength(1);
   });
 
@@ -768,6 +778,9 @@ describe('a microphone suspension reaches the page as console-only state', () =>
     const { result } = mount();
     act(() => result.current.start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
+    // Capture running, so `listening` is the phase this test's claim is about (a suspension is not
+    // what makes the phase move).
+    act(() => sources[0]!.push(frame([0.1])));
     expect(result.current.phase).toBe('listening');
     expect(result.current.micSuspended).toBe(false);
 
@@ -795,6 +808,7 @@ describe('a microphone suspension reaches the page as console-only state', () =>
     const { result } = mount();
     act(() => result.current.start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => sources[0]!.push(frame([0.1])));
     expect(result.current.micSuspended).toBe(false);
     expect(result.current.error).toBeNull();
     expect(result.current.phase).toBe('listening');
@@ -867,6 +881,9 @@ describe('an error is one understandable sentence, with the server words kept on
     const { container, session } = mountBar(true);
     act(() => session().start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
+    // Capture running, so the cell really is reading the connection's `Listening…` while the
+    // backlog changes — the claim below is about the queue, not about the arming phase.
+    act(() => sources[0]!.push(frame([0.1])));
     act(() => socket().receive({ type: 'queued', depth: 3, bytes: 480 }));
 
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
@@ -926,6 +943,10 @@ describe('a network drop reconnects with backoff, and says so', () => {
     expect(result.current.reconnecting).toEqual({ attempt: 1, of: 5 });
 
     act(() => socket().receive({ type: 'state', state: 'open' }));
+    // The reconnect starts a NEW capture, so the phase re-enters `arming` until that source's first
+    // frame arrives — the same contract as a fresh connection.
+    expect(result.current.phase).toBe('arming');
+    act(() => sources[1]!.push(frame([0.1])));
     expect(result.current.phase).toBe('listening');
     expect(result.current.disconnected).toBe(false);
     expect(result.current.reconnecting).toBeNull();
@@ -970,6 +991,7 @@ describe('a network drop reconnects with backoff, and says so', () => {
     act(() => result.current.end());
     act(() => result.current.start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
+    act(() => sources[1]!.push(frame([0.1])));
     expect(result.current.phase).toBe('listening');
   });
 

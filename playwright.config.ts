@@ -2604,6 +2604,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // process says it consumed it. Its voice delivery's `source` is read back off the activity snapshot,
   // which is published through the claude driver's ledger seam the debug provider is wired into.
   'live-voice-stream-representation.spec.ts',
+  // The capture-ready criterion (gap-live-voice-listening-before-capture-ready): the voice socket has
+  // to bind to a session the control plane knows, and the page has to reach that session through the
+  // sidebar. The same fixture home and the same minimal armed scenario every voice entry above uses;
+  // nothing is ever sent into the session, so the command queue plays no part in its readings.
+  'voice-realtime-capture-ready-status.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2742,6 +2747,11 @@ const voiceRealtimeSelection =
   // driving its own server), so the app has to dial that listener rather than the network — the same
   // `VOICE_REALTIME_ENDPOINT` + blanked-credential selection as every entry above.
   selectedSpecFiles().includes('voice-realtime-double-drop.spec.ts') ||
+  // The capture-ready criterion (gap-live-voice-listening-before-capture-ready) binds the scripted
+  // upstream too: its reading is the window between the proxy reporting `state: open` and the first
+  // captured frame, so the app must dial the spec's listener (which answers `session.update`) rather
+  // than the network — and its microphone is the spec's own delayed `getUserMedia` stand-in.
+  selectedSpecFiles().includes('voice-realtime-capture-ready-status.spec.ts') ||
   // The scenario-runner browser surface (`gap-scenario-runner-playwright-executor-same-timeline`)
   // does NOT drive the voice wire — but it is selected here for the OTHER half of what this flag
   // arms: the server-side EGRESS GUARD. Its zero-egress criterion is "the guard's own log exists
