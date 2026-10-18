@@ -54,16 +54,16 @@ AC-316 的 criterion 是三条命令的 `&&` 链。本轮重跑（gate event `20
 
 ## AC
 
-- [ ] AC-1 判据整体 exit 0：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts && npx playwright test e2e/voice-trim.spec.ts -g "AC-120"`；把完整 list reporter 摘要和退出码留在交付说明里。
-- [ ] AC-2 第一条命令单独 exit 0：4 + 7 = 11 passed、0 failed、0 skipped；两个 serial 文件没有新增 `.skip`/`.only`，`waitForPhase` 的 25s 与文件原有 timeout 未被放大。
-- [ ] AC-3 arming 修复可机读：`grep -c "pushFirstCaptureFrame" e2e/voice-realtime-live-session-send.spec.ts` ≥ 5（1 处定义 + 4 处初始 listening wait 前调用）；helper 只在 `port.onmessage` 已被 `start()` 接线后推帧，且有 `constructed`/`pushed` 防重复。
-- [ ] AC-4 预热 seam：新增单测在 `__voiceRealtimeSkipAutoStart = true` 时断言 `warmCalls === 0`；原有 unflagged 用例仍断言 `warmCalls === 1` 且 `'warm'` 在 `'createSession'` 之前。
-- [ ] AC-5 上传判据重跑：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "injecting a fixed-corpus fixture"` 通过，`mediaCallCount === 0` 断言原样保留（修前读数见 trace 的 `:1205` 红）。
-- [ ] AC-6 取假形态 (a)（预热回归）：临时让 `enterVoiceMode` 恢复无条件预热，`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "injecting a fixed-corpus fixture"` 必须在 `voice-realtime-upload-fixture.spec.ts:1205` 红（Expected 0 / Received 1）；记录原始输出后恢复。
-- [ ] AC-7 取假形态 (b)（首帧回归）：临时删掉初始 `pushFirstCaptureFrame` 调用，`npx playwright test e2e/voice-realtime-live-session-send.spec.ts -g "PC: entering Live Voice"` 必须在 `waitForPhase('listening')` 红（Expected "listening" / Received "arming"）；记录后恢复。
-- [ ] AC-8 第二/三条命令：protocol simulation exit 0（当前文件 24 tests；原 5 个场景 chunk 时序、Mute 即打断、断线清理、并发竞态、工具回填都在且绿）；`voice-trim -g "AC-120"` exit 0（1 passed）。
-- [ ] AC-9 `npm run typecheck` 与 `npm run lint` 均 exit 0，无新增 voice-realtime 告警。
-- [ ] AC-10 375px 两条腿在第一条命令里通过（live 的 375px 用例与 upload 的 375px 用例），bar 仍在视口内、composer 仍不可见。
+- [x] AC-1 判据整体 exit 0：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts && npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts && npx playwright test e2e/voice-trim.spec.ts -g "AC-120"`；把完整 list reporter 摘要和退出码留在交付说明里。
+- [x] AC-2 第一条命令单独 exit 0：4 + 7 = 11 passed、0 failed、0 skipped；两个 serial 文件没有新增 `.skip`/`.only`，`waitForPhase` 的 25s 与文件原有 timeout 未被放大。
+- [x] AC-3 arming 修复可机读：`grep -c "pushFirstCaptureFrame" e2e/voice-realtime-live-session-send.spec.ts` ≥ 5（1 处定义 + 4 处初始 listening wait 前调用）；helper 只在 `port.onmessage` 已被 `start()` 接线后推帧，且有 `constructed`/`pushed` 防重复。
+- [x] AC-4 预热 seam：新增单测在 `__voiceRealtimeSkipAutoStart = true` 时断言 `warmCalls === 0`；原有 unflagged 用例仍断言 `warmCalls === 1` 且 `'warm'` 在 `'createSession'` 之前。
+- [x] AC-5 上传判据重跑：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "injecting a fixed-corpus fixture"` 通过，`mediaCallCount === 0` 断言原样保留（修前读数见 trace 的 `:1205` 红）。
+- [x] AC-6 取假形态 (a)（预热回归）：临时让 `enterVoiceMode` 恢复无条件预热，`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts -g "injecting a fixed-corpus fixture"` 必须在 `voice-realtime-upload-fixture.spec.ts:1205` 红（Expected 0 / Received 1）；记录原始输出后恢复。
+- [x] AC-7 取假形态 (b)（首帧回归）：临时删掉初始 `pushFirstCaptureFrame` 调用，`npx playwright test e2e/voice-realtime-live-session-send.spec.ts -g "PC: entering Live Voice"` 必须在 `waitForPhase('listening')` 红（Expected "listening" / Received "arming"）；记录后恢复。
+- [x] AC-8 第二/三条命令：protocol simulation exit 0（当前文件 24 tests；原 5 个场景 chunk 时序、Mute 即打断、断线清理、并发竞态、工具回填都在且绿）；`voice-trim -g "AC-120"` exit 0（1 passed）。
+- [x] AC-9 `npm run typecheck` 与 `npm run lint` 均 exit 0，无新增 voice-realtime 告警。
+- [x] AC-10 375px 两条腿在第一条命令里通过（live 的 375px 用例与 upload 的 375px 用例），bar 仍在视口内、composer 仍不可见。
 
 ## DoD
 
