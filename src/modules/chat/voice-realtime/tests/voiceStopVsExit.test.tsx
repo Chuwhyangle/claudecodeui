@@ -97,7 +97,16 @@ vi.mock('@/modules/chat/voice-realtime/audioSource', () => {
     sources.push(source);
     return source;
   };
-  return { microphoneAudioSource: make, fileAudioSource: make };
+  // `ChatInterface` prewarms the microphone on the Live Voice tap (the connecting-window fix).
+  // This harness drives capture through the hook's own `microphoneAudioSource()` above and reads
+  // the bar, so the warm-up has nothing to acquire here — it must only not throw. Prewarm itself
+  // is asserted in `liveVoiceMicPrewarmEntry.test.tsx` and `audioSource.warm.test.ts`.
+  return {
+    microphoneAudioSource: make,
+    fileAudioSource: make,
+    warmMicrophoneSource: async () => undefined,
+    releaseWarmMicrophoneSource: () => undefined,
+  };
 });
 
 /** The slice of WebSocket the hook uses, with a hand to deliver server frames. */
