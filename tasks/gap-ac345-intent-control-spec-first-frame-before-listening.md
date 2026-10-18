@@ -2,7 +2,7 @@
 id: gap-ac345-intent-control-spec-first-frame-before-listening
 title: AC-345 判据红：arming 相位落地后本 spec 仍在首帧前等 listening——fake worklet 从不推帧，25 s 停在
   arming；适配首帧探针（只改测试）
-status: ready
+status: done
 labels:
   - gap
   - defect
