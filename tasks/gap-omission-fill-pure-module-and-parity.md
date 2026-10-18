@@ -44,6 +44,7 @@ planOmissionFills(finals, executed, params) → { fills: [{ index, dueAt, covera
 - experiments/voice-relay-qb/replay_rule.py
 - experiments/voice-relay-qb/fixtures/omission-fill-cases.json
 - tasks/gap-omission-fill-pure-module-and-parity.md
+- server/shared/tests/quay-test-script.test.ts
 
 ## Notes
 
@@ -57,3 +58,12 @@ Python 实现是参考；数字处理、文字不符、跨文字不可比这几�
 - 取假形态读数 B（让取消的 response 里的调用也算已执行——把该调用放进用例的 `executed`）：`ℹ tests 82 / ℹ pass 81 / ℹ fail 1`，红在 `table: a call from a CANCELLED response is not executed → the item still fills`，`AssertionError [ERR_ASSERTION]: ... fill indices`。已恢复；恢复后重跑 82/82 绿。
 - 模块只经 `server/modules/voice-realtime/index.ts` 导出；测试也经该 barrel 导入（`from '../index.js'`），无深导入。
 - 本会话 shell 的 PATH 不含 `node_modules/.bin`（`npm run test:server` 由 npm 注入），AC1 以 `PATH="$PWD/node_modules/.bin:$PATH"` 运行同一命令；`tsx` 解析后退出码 0。
+- 本轮 exited-not-landed 的真因是新增的测试文件把 `server/shared/tests/quay-test-script.test.ts` 的全树收集数从 363 顶到 364，而该文件的两处 `unknown=` pin 是「不可推导、只能重测」的移动目标。按该文件注释里的既有做法把 360→361、362→363 并在注释中记下本任务的文件；单文件复跑 14/14 绿。机械 relatedness 判 UNRELATED 只查直接 import，看不到这个「按全树计文件数」的间接依赖。
+
+## Blocker
+
+**2026-10-18T09:04:56.746Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=74811 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792313961377
+- run_id：wk-prod-anchor
+- session_id：89c22e1e-0a3d-4de7-966b-d85d22e27ac4
