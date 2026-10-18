@@ -27,9 +27,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import nodeFs from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
+import nodeFs, { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
