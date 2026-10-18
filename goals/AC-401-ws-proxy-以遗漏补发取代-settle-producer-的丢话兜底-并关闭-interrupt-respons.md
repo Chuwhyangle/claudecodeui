@@ -1,7 +1,7 @@
 ---
 id: AC-401
 title: ws-proxy 以遗漏补发取代 settle producer 的丢话兜底，并关闭 interrupt_response
-status: draft
+status: active
 kind: criterion
 goal: GOAL-046
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -18,4 +18,15 @@ expect: 退出码 0，测试文件存在。用脚本化 bridge 与假时钟驱�
 origin: 人 yale 2026-10-18 裁定：取代 settle producer
   的兜底触发，不叠加；interrupt_response:false 在探针里把取消从 8/24 降到 0/30（BN
   臂接线缺陷，仅取消计数可用），一行改动。
+activatedAt: 2026-10-18T08:36:44.456Z
+statusLog:
+  - at: 2026-10-18T08:36:44.456Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-18T08:36:44.456Z
 ---
