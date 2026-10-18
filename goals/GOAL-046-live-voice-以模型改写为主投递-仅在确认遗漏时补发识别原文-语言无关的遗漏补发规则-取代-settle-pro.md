@@ -1,7 +1,7 @@
 ---
 id: GOAL-046
 title: Live Voice 以模型改写为主投递、仅在确认遗漏时补发识别原文：语言无关的遗漏补发规则（取代 settle producer 的兜底触发）
-status: achieved
+status: active
 kind: goal
 origin: 人 yale 2026-10-18 授权：接受 80–87% 精确率的自动补识别原文；≤6 字短句漏掉可忍受；不引入任何新 UI
   操作；规则须语言无关（中/英及少数大语种）；取代而非叠加 settle producer；AC-1 数值待 task 1 扫 H/G
@@ -13,6 +13,11 @@ statusLog:
     to: achieved
     actor: goal-driver
     reason: "I2: all ACs achieved + sufficiency covered"
+  - at: 2026-10-18T10:13:36.187Z
+    from: achieved
+    to: active
+    actor: goal-cli
+    reason: ""
 ---
 ## 背景
 
