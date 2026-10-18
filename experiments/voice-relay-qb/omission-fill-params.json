@@ -1,0 +1,50 @@
+{
+  "_comment": "Omission-fill rule v2 parameter lock (task gap-omission-fill-sweep-and-lock-params). `python3 -I replay_rule.py --check` reads this file, replays ONLY the frozen connections below and asserts the thresholds. The connection list is frozen: it does not grow when new journals appear, otherwise the AC readings would drift.",
+  "version": 2,
+  "rule": "voice-realtime-omission-fill-SPEC.md v2 (+ silence confirmation, see chosen.silence_ms)",
+  "chosen": {
+    "h_ms": 12000,
+    "g_ms": 1000,
+    "score_t": 0.25,
+    "w_min": 7,
+    "w_hallu": 12,
+    "dom_n": 10,
+    "lookback_ms": 1000,
+    "len_min": 7,
+    "numeral_mode": "runs2",
+    "silence_ms": 3000
+  },
+  "thresholds": {
+    "lost_long_ratio_max": 0.03,
+    "raw_ratio_max": 0.15,
+    "dup_ratio_max": 0.036,
+    "delay_p50_max_ms": 12000,
+    "labels_fills_min": 15,
+    "labels_o_share_min": 0.8
+  },
+  "reasons": {
+    "h_ms": "12 s unchanged: every H < 12 either pushes raw recogniser text past 15% or fills-latency past the cap. The sweep shows H=4/6/8 have no feasible row at all.",
+    "g_ms": "1 s (was 3 s). The sweep in {1,2,3,5} produced IDENTICAL fill/duplicate/loss counts on every connection (checked per connection), so the smaller grace lowers p50 from 7.20 s (G=3) to 5.20 s with no measured cost.",
+    "score_t": "0.25: the baseline. 0.15 fills more (raw 14.4%+); 0.35 is not better on duplicates/losses.",
+    "w_min": "7 (≈7 CJK chars / 4 latin words). 6 fills short fragments that are mostly not real omissions; 8 raises LOST>=7 toward 3%.",
+    "numeral_mode": "runs2 — strip only runs of >=2 numeral characters, so a lone 一/二/3 survives (一些/一下 stay words). Measured against 'all' (delete every CJK numeral) and 'quantifier' (only before measure words): runs2 gives 82 fills / 13 duplicates (2.2%) / LOST>=7 1.9%; 'all' gives 80 / 14 (2.4%) / 2.4%; 'quantifier' gives 81 / 14 (2.4%) / 2.2%. runs2 wins on both duplicate and loss counts at +2 fills (still 14.1% <= 15%).",
+    "silence_ms": "3 s: the latency fix required by the goal. Originally p50 = p90 = H = 12 s because a majority of fills wait the full hard cap. Waiting H is only needed when the model MIGHT still overwrite the utterance; if the model has been completely silent and the user has not started speaking again, no later model message about newer speech is coming, so the omission is confirmed at t+S. Sweep: p50 drops 12.0 s -> 7.2 s with the fill/duplicate/loss counts IDENTICAL (same items filled, same carried set) — the branch changes only T_i, never the fill set.",
+    "delay_p50_max_ms": "12000 = H, i.e. exactly the AC-398 outer bound (p50 < H). The check also asserts the strict inequality; the measured p50 is 7.2 s.",
+    "connections": "The 47 continuous-mode connections present on 2026-10-18 when the lock was written (>=2 finals and >=1 executed message). Frozen so later Live Voice sessions cannot move the AC readings."
+  },
+  "baseline_2026_10_18": {
+    "connections": 47,
+    "items": 583,
+    "note": "same corpus that produced the SPEC table (v2 without the silence branch: raw 13.7%, duplicate 2.4%, LOST>=7 2.4%, fill delay p50 = p90 = 12 s)"
+  },
+  "connections": [
+    "0256124a", "08138645", "164c3087", "185aa0ed", "1875ca4b", "19906b68",
+    "259b51e0", "2c1c9412", "31ad4076", "3d2d3b2c", "402fad85", "45c8ee08",
+    "568661dd", "57279cc1", "66ba5be5", "707ab8ab", "71c6340d", "71e53da5",
+    "73f2622b", "74277410", "764f0c7a", "776464b1", "7aee9bd9", "7c01be7e",
+    "7cddaa59", "86559798", "8fe60310", "95a9d738", "99df08d8", "a0284015",
+    "a175e6cd", "a5b80226", "a61de04b", "aa8388a1", "af12cbaf", "af5559c0",
+    "b33412ea", "b5d01c21", "c8b0ee15", "c8d74262", "cae49fed", "d1c5f0c2",
+    "d4c9bfc4", "e2b96f7b", "e650117b", "f6166468", "faeb9c61"
+  ]
+}
