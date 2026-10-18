@@ -357,6 +357,59 @@ const phase = async (page: Page): Promise<string> =>
 const waitForPhase = (page: Page, wanted: string) =>
   expect.poll(() => phase(page), { timeout: 25_000 }).toBe(wanted);
 
+/** The page-side capture probe `pushFirstCaptureFrame` drives (installed in the init script). */
+type CaptureProbe = {
+  /** The most recently constructed worklet — the one the next `start()` adopts and wires. */
+  node: { port: { onmessage: ((message: unknown) => void) | null } } | null;
+  /** The segmenter's ledger: the first sample index of the next chunk. */
+  atSample: number;
+  /** Worklets constructed so far: one per Live Voice capture session on this page. */
+  constructed: number;
+  /** `constructed` as of the last frame this file pushed. */
+  pushed: number;
+};
+
+/**
+ * Pushes the one captured frame that makes `listening` reachable.
+ *
+ * WHY IT IS NEEDED. Upstream `state: open` only takes the bar to `arming`; `listening` is set when
+ * capture delivers its FIRST frame (`c99a0eaba`). The fake graph is inert — frames only leave it via
+ * `__voiceFake.speak()` — so every initial `waitForPhase(page, 'listening')` below would poll
+ * `arming` until it timed out. This is the same contract `e2e/voice-realtime-intent-control.spec.ts`
+ * satisfies with its own helper; the frame here also advances the shared `atSample` ledger, because
+ * the segmented relay throws on a chunk whose offset does not match what it has written.
+ *
+ * WHEN IT LANDS. Only after `start()` has WIRED the most recently constructed worklet —
+ * `port.onmessage` is assigned after the asynchronous acquisition, and a frame pushed before that
+ * is dropped — and only once per worklet, so a later capture session's first frame cannot be
+ * satisfied by an earlier one.
+ */
+async function pushFirstCaptureFrame(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const capture = (window as unknown as { __voiceCaptureProbe?: CaptureProbe }).__voiceCaptureProbe;
+          const node = capture?.node;
+          if (!capture || !node || node.port.onmessage === null) return false;
+          if (capture.pushed >= capture.constructed) return false;
+          const samples = new Float32Array(3_200); // 200 ms at 16 kHz
+          for (let index = 0; index < samples.length; index += 1) {
+            samples[index] = 0.2 * Math.sin((2 * Math.PI * 180 * index) / 16_000);
+          }
+          node.port.onmessage({ data: { type: 'pcm', samples, atSample: capture.atSample } });
+          capture.atSample += samples.length;
+          capture.pushed = capture.constructed;
+          return true;
+        }),
+      {
+        timeout: 20_000,
+        message: 'the capture graph never wired a worklet to receive the first captured frame',
+      },
+    )
+    .toBe(true);
+}
+
 /** The transcript's own text, read straight off the pane. */
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
@@ -502,9 +555,19 @@ test.describe('voice realtime live session send', () => {
           return samples;
         };
         type Port = { port: { onmessage: ((m: unknown) => void) | null } };
-        const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
+        // `constructed`/`pushed` make "exactly one first frame per capture session" a page-side
+        // fact rather than a caller's promise; they are shared with `__voiceCaptureProbe` below.
+        const state: {
+          node: Port | null;
+          atSample: number;
+          constructed: number;
+          pushed: number;
+          speak: (seconds: number) => void;
+        } = {
           node: null,
           atSample: 0,
+          constructed: 0,
+          pushed: 0,
           speak(seconds: number) {
             const node = state.node;
             if (!node) throw new Error('the fake capture was not connected yet');
@@ -514,12 +577,16 @@ test.describe('voice realtime live session send', () => {
           },
         };
         (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;
+        // The probe `pushFirstCaptureFrame` drives. Same object, so the first-frame push keeps the
+        // segmenter's `atSample` ledger contiguous with `speak`'s bursts.
+        (window as unknown as { __voiceCaptureProbe: typeof state }).__voiceCaptureProbe = state;
 
         class FakeWorkletNode {
           port: { onmessage: ((m: unknown) => void) | null; postMessage: () => void };
           constructor() {
             this.port = { onmessage: null, postMessage: () => undefined };
             state.node = this as unknown as typeof state.node;
+            state.constructed += 1;
           }
 
           connect() {
@@ -614,7 +681,9 @@ test.describe('voice realtime live session send', () => {
     const seamBox = await uploadInput.boundingBox();
     expect(seamBox ? Math.max(seamBox.width, seamBox.height) : 0).toBeLessThanOrEqual(2);
 
-    // AC3: entering Live Voice starts capture automatically.
+    // AC3: entering Live Voice starts capture automatically. `listening` needs a captured frame
+    // (`arming` is the window before it), and the fake graph only emits when the spec drives it.
+    await pushFirstCaptureFrame(page);
     await waitForPhase(page, 'listening');
 
     // AC2: one fixed, compact bar — the same height in every reachable phase.
@@ -712,6 +781,7 @@ test.describe('voice realtime live session send', () => {
     const connectionsBefore = upstream.connectionCount();
 
     await enterLiveVoice(page);
+    await pushFirstCaptureFrame(page);
     await waitForPhase(page, 'listening');
 
     // AC1/AC2 at 375px: the bar is on screen, within the viewport, and the
@@ -758,6 +828,7 @@ test.describe('voice realtime live session send', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
+    await pushFirstCaptureFrame(page);
     await waitForPhase(page, 'listening');
 
     // The ruling this case pins: a recoverable error is reported to the BROWSER CONSOLE — carrying
@@ -796,6 +867,7 @@ test.describe('voice realtime live session send', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page);
+    await pushFirstCaptureFrame(page);
     await waitForPhase(page, 'listening');
     await expect.poll(() => upstream.liveConnectionCount(), { timeout: 15_000 }).toBe(1);
 

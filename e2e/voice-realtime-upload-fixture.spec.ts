@@ -88,7 +88,7 @@ const COMPOSER_TEXTAREA = '[data-slot="prompt-input-textarea"]';
  * in this file (its "gone, not moved" reading belongs to the sibling spec): the
  * repointed criterion must not depend on literals of a deleted UI.
  */
-const PHASE_STATES: readonly string[] = ['idle', 'connecting', 'listening', 'muted', 'failed'];
+const PHASE_STATES: readonly string[] = ['idle', 'connecting', 'arming', 'listening', 'muted', 'failed'];
 
 // Deliberately the SAME account the sibling spec (`voice-realtime-live-session-send.spec.ts`)
 // registers: the criterion chains both files into one Playwright invocation, and

@@ -68,6 +68,19 @@ function newControlRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * True when a spec has declared that this page drives capture itself (the file-injection
+ * seam). It means "this page never touches the microphone", so it has to hold for EVERY
+ * microphone call site — the capture-start effect below AND the tap's warm-up — or entering
+ * the mode still opens `getUserMedia` once.
+ */
+function skipsVoiceAutoStart(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    Boolean((window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart)
+  );
+}
+
 type ChatInterfaceProps = {
   isActive: boolean;
   selectedProject: Project | null;
@@ -423,7 +436,10 @@ function ChatInterface({
     // be captured. Begin that on the TAP itself — in parallel with the allocation below — instead
     // of after it; `useVoiceRealtimeSession`'s `start()` adopts this warmed acquisition, so what
     // is said while the socket is still dialing reaches the hook's pending-frame buffer.
-    void warmMicrophoneSource();
+    // ...but a spec that injects a file instead (the seam below) has declared that this page never
+    // touches the microphone, and its criterion reads the `getUserMedia` count as 0 — so the
+    // warm-up obeys the same seam as the capture start rather than opening the microphone anyway.
+    if (!skipsVoiceAutoStart()) void warmMicrophoneSource();
     if (voiceSessionId) {
       setVoiceEntryNotice(null);
       setVoiceModeSession(voiceSessionId);
@@ -571,7 +587,7 @@ function ChatInterface({
     if (composerMode !== 'voice') {
       return;
     }
-    if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart) {
+    if (skipsVoiceAutoStart()) {
       // This spec drives `startWithFile` itself, so nothing will adopt the tap's warm-up.
       releaseWarmMicrophoneSource();
       return;

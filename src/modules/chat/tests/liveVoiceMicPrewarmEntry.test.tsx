@@ -350,6 +350,8 @@ beforeEach(() => {
   installMatchMedia();
   Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: DESKTOP_WIDTH });
   Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });
+  // The file-injection seam is opt-in per case; a leaked flag would make the warm-up cases vacuous.
+  delete (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart;
   state.openSessionId = null;
   state.requestLog = [];
   state.createSessionCalls = 0;
@@ -403,6 +405,37 @@ test('AC2a 全新会话：预热在 createChatSession resolve 之前发起', asy
       `the successful allocation must still enter voice mode; DOM: ${view.container.innerHTML.slice(0, 400)}`,
     );
   });
+
+  view.unmount();
+});
+
+/**
+ * AC4 — the file-injection seam means "this page never touches the microphone", and the tap's
+ * warm-up has to obey it. The upload fixture's criterion reads `getUserMedia` as exactly 0, so a
+ * tap that warms unconditionally opens the microphone once and fails it (`b455586c5`'s regression).
+ *
+ * The same seam also suppresses the pane's capture start, so the whole log must be empty: no warm,
+ * and no `startVoiceCapture` either.
+ */
+test('AC4 注入 seam：__voiceRealtimeSkipAutoStart 置位时 tap 不预热麦克风', async () => {
+  (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart = true;
+  const view = renderInterface(EXISTING_SESSION);
+
+  await tapLiveVoice(view);
+
+  await waitFor(() => {
+    assert.ok(
+      view.queryByTestId('voice-realtime-bar'),
+      `the seam suppresses capture, not the mode; DOM: ${view.container.innerHTML.slice(0, 400)}`,
+    );
+  });
+
+  assert.equal(state.warmCalls, 0, `the injection seam must suppress the warm-up; made ${state.warmCalls}`);
+  assert.deepEqual(
+    state.requestLog,
+    [],
+    `nothing may touch the microphone under the seam; the page made: ${JSON.stringify(state.requestLog)}`,
+  );
 
   view.unmount();
 });
