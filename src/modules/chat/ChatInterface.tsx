@@ -44,8 +44,10 @@ import {
   VoicePendingMessageCard,
   VoiceRealtimeBar,
   collectUndeliveredUtterances,
+  releaseWarmMicrophoneSource,
   useFollowSentRun,
   useVoiceRealtimeSession,
+  warmMicrophoneSource,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
 import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
@@ -416,6 +418,12 @@ function ChatInterface({
   // the two, so the stale null would leave the composer in 'text' after the
   // re-render and the bar would never appear.
   const enterVoiceMode = useCallback(async () => {
+    // The microphone is the slow leg of the first "Connecting voice…" window: permission, the
+    // capture `AudioContext`, and the worklet bundle load all happen before the first frame can
+    // be captured. Begin that on the TAP itself — in parallel with the allocation below — instead
+    // of after it; `useVoiceRealtimeSession`'s `start()` adopts this warmed acquisition, so what
+    // is said while the socket is still dialing reaches the hook's pending-frame buffer.
+    void warmMicrophoneSource();
     if (voiceSessionId) {
       setVoiceEntryNotice(null);
       setVoiceModeSession(voiceSessionId);
@@ -476,6 +484,9 @@ function ChatInterface({
       }
       setVoiceModeSession(created.sessionId);
     } catch (error) {
+      // The tap ended without voice mode ever starting, so nothing will adopt the microphone
+      // opened above: release it rather than leave the capture running behind a notice.
+      releaseWarmMicrophoneSource();
       console.error('Live Voice session allocation failed:', error);
       // The same notice the entry shows when it cannot start a connection for
       // this conversation — now answering a failed ALLOCATION rather than the
@@ -504,6 +515,11 @@ function ChatInterface({
     permissionMode,
   ]);
   const exitVoiceMode = useCallback(() => setVoiceModeSession(null), []);
+
+  // A tap whose allocation is still in flight when the pane goes away would otherwise leave the
+  // prewarmed microphone running with no owner. Once capture has started the hook owns the source
+  // and its own unmount cleanup ends it, so this only ever releases an unstarted warm-up.
+  useEffect(() => () => releaseWarmMicrophoneSource(), []);
 
   /**
    * The Live Voice connection is owned HERE, not by the bar that renders its
@@ -556,6 +572,8 @@ function ChatInterface({
       return;
     }
     if (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__voiceRealtimeSkipAutoStart) {
+      // This spec drives `startWithFile` itself, so nothing will adopt the tap's warm-up.
+      releaseWarmMicrophoneSource();
       return;
     }
     startVoiceCapture();
