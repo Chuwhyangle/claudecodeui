@@ -34,6 +34,7 @@ Running sessions 视图与 Projects 视图的会话行，running 会话显示阶
 
 ## Touches
 
+- tasks/fleet-overview-p1-running-phase-tool-elapsed.md（自触）
 - src/modules/sidebar/RunningView.tsx
 - src/modules/sidebar/SidebarSessionItem.tsx
 - src/modules/sidebar/tests/RunningViewPhase.test.tsx
