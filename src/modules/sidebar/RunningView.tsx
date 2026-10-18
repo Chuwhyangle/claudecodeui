@@ -1,10 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Activity, Moon, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { classifyRunningSessions, useSessionHosts } from '@/shared/hooks/useSessionHosts';
-import { useBusySessionIdSet } from '@/shared/context/SessionProtectionContext';
-import type { Project } from '@/shared/types';
+import { useBusySessionIdSet, useProcessingSessions } from '@/shared/context/SessionProtectionContext';
+import { useTickingNow } from '@/modules/sidebar/hooks/useTickingNow';
+import { presentSessionActivity } from '@/modules/sidebar/utils/sessionActivityPresentation';
+import type { Project, SessionActivity } from '@/shared/types';
 
 /**
  * The Running view: the sessions with a turn in flight, above the resident
@@ -57,6 +60,10 @@ const RESIDENT_IDLE_GROUP = 'resident-idle';
 
 export default function RunningView({ projects, searchQuery, t }: RunningViewProps) {
   const { snapshot, close } = useSessionHosts();
+  // The phase words and the elapsed wording are the chat dock's own keys, so
+  // this surface reads them from the chat namespace rather than growing a
+  // second vocabulary the dock would not recognise.
+  const { t: tChat } = useTranslation('chat');
   const [closeError, setCloseError] = useState<string | null>(null);
 
   // The busy side is the page's one activity reading — the same `SessionActivity`
@@ -65,10 +72,16 @@ export default function RunningView({ projects, searchQuery, t }: RunningViewPro
   // Reading busy/idle off the one-second host poll here is what let the view and
   // the dock disagree for a beat after a turn ended; see `classifyRunningSessions`.
   const busySessionIds = useBusySessionIdSet();
+  // The view draws every running session, so the whole map is the right
+  // reading here: each row takes its own entry from it below.
+  const activities = useProcessingSessions();
   const { running: runningIds, residentIdle: residentIdleIds } = useMemo(
     () => classifyRunningSessions(busySessionIds, snapshot),
     [busySessionIds, snapshot],
   );
+  // Only a running group draws elapsed time, so the one-second tick exists
+  // only while there is one.
+  const now = useTickingNow(runningIds.length > 0);
 
   // `sessionId -> display name`, built once per project list. The host listing
   // names sessions by id only — it is the host layer's view, not the sessions' —
@@ -133,7 +146,10 @@ export default function RunningView({ projects, searchQuery, t }: RunningViewPro
         idleHint={t('running.noMatchingSessions', 'No sessions match this search.')}
         sessionIds={running}
         titles={titles}
+        activities={activities}
+        now={now}
         t={t}
+        tChat={tChat}
       />
       <RunningGroup
         group={RESIDENT_IDLE_GROUP}
@@ -142,7 +158,10 @@ export default function RunningView({ projects, searchQuery, t }: RunningViewPro
         idleHint={t('running.noMatchingSessions', 'No sessions match this search.')}
         sessionIds={residentIdle}
         titles={titles}
+        activities={activities}
+        now={now}
         t={t}
+        tChat={tChat}
         onClose={closeHost}
       />
       {closeError ? (
@@ -169,7 +188,10 @@ function RunningGroup({
   idleHint,
   sessionIds,
   titles,
+  activities,
+  now,
   t,
+  tChat,
   onClose,
 }: {
   group: string;
@@ -178,9 +200,17 @@ function RunningGroup({
   idleHint: string;
   sessionIds: string[];
   titles: Map<string, string>;
+  activities: ReadonlyMap<string, SessionActivity>;
+  now: number;
   t: TFunction;
+  tChat: TFunction;
   onClose?: (sessionId: string) => void;
 }) {
+  // The resident group is the group with no turn: its rows say `idle` and
+  // publish no phase, which is the reading that tells a reader the session is
+  // held open between turns rather than working.
+  const isResidentIdleGroup = group === RESIDENT_IDLE_GROUP;
+
   return (
     <section data-running-group={group} data-running-group-count={sessionIds.length} className="space-y-1">
       <div className="mx-2 flex items-center justify-between rounded-lg border border-border/60 bg-card/50 px-3 py-2 shadow-sm">
@@ -198,40 +228,66 @@ function RunningGroup({
       {sessionIds.length === 0 ? (
         <p className="px-4 py-2 text-[11px] text-muted-foreground">{idleHint}</p>
       ) : (
-        sessionIds.map((sessionId) => (
-          <div
-            key={sessionId}
-            data-running-session={sessionId}
-            className="mx-2 flex items-center gap-1 rounded-lg border border-border/50 bg-card/30 px-2 py-1.5"
-          >
-            <a
-              href={`/session/${sessionId}`}
-              title={sessionLabel(titles, sessionId, t)}
-              className="min-w-0 flex-1 truncate text-xs text-foreground hover:underline"
+        sessionIds.map((sessionId) => {
+          const activity = isResidentIdleGroup ? undefined : activities.get(sessionId);
+          const presented = presentSessionActivity(activity, now, tChat);
+
+          return (
+            <div
+              key={sessionId}
+              data-running-session={sessionId}
+              // The phase attributes are the row's contract with a reader
+              // outside the component: only a session with a turn publishes
+              // them, so a resident-idle row cannot be mistaken for a working
+              // one by the attribute a criterion looks for.
+              data-activity-phase={presented.phase ?? undefined}
+              {...(presented.phase === 'tool' ? { 'data-activity-tool': presented.toolName ?? '' } : {})}
+              data-activity-elapsed={presented.elapsedMs ?? undefined}
+              className="mx-2 flex items-center gap-1 rounded-lg border border-border/50 bg-card/30 px-2 py-1.5"
             >
-              {sessionLabel(titles, sessionId, t)}
-            </a>
-            {onClose ? (
-              <button
-                type="button"
-                data-running-close="true"
-                // The visible word alone ("Close") is not a name a screen reader
-                // can attribute to a row, so the accessible name states which
-                // session the button belongs to. Both are shipped strings: the
-                // label is not assembled from the title in code.
-                aria-label={t('running.closeLabel', {
-                  title: sessionLabel(titles, sessionId, t),
-                  defaultValue: 'Close resident session {{title}}',
-                })}
-                onClick={() => onClose(sessionId)}
-                className="flex h-5 flex-shrink-0 items-center gap-0.5 rounded-md px-1 text-[10px] text-muted-foreground hover:bg-accent/80 hover:text-foreground"
+              <a
+                href={`/session/${sessionId}`}
+                title={sessionLabel(titles, sessionId, t)}
+                className="min-w-0 flex-1 truncate text-xs text-foreground hover:underline"
               >
-                <X className="h-3 w-3" aria-hidden="true" />
-                {t('running.close', 'Close')}
-              </button>
-            ) : null}
-          </div>
-        ))
+                {sessionLabel(titles, sessionId, t)}
+              </a>
+              {isResidentIdleGroup ? (
+                <span data-running-idle="true" className="flex-shrink-0 text-[10px] text-muted-foreground">
+                  {t('running.idle', 'Idle')}
+                </span>
+              ) : (
+                <span data-activity-label="true" className="flex flex-shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                  {presented.phaseLabel ? <span className="truncate">{presented.phaseLabel}</span> : null}
+                  {presented.elapsedLabel ? (
+                    <span data-activity-elapsed-label="true" className="tabular-nums">
+                      {presented.elapsedLabel}
+                    </span>
+                  ) : null}
+                </span>
+              )}
+              {onClose ? (
+                <button
+                  type="button"
+                  data-running-close="true"
+                  // The visible word alone ("Close") is not a name a screen reader
+                  // can attribute to a row, so the accessible name states which
+                  // session the button belongs to. Both are shipped strings: the
+                  // label is not assembled from the title in code.
+                  aria-label={t('running.closeLabel', {
+                    title: sessionLabel(titles, sessionId, t),
+                    defaultValue: 'Close resident session {{title}}',
+                  })}
+                  onClick={() => onClose(sessionId)}
+                  className="flex h-5 flex-shrink-0 items-center gap-0.5 rounded-md px-1 text-[10px] text-muted-foreground hover:bg-accent/80 hover:text-foreground"
+                >
+                  <X className="h-3 w-3" aria-hidden="true" />
+                  {t('running.close', 'Close')}
+                </button>
+              ) : null}
+            </div>
+          );
+        })
       )}
     </section>
   );

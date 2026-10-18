@@ -1,13 +1,17 @@
 import { memo, useState } from 'react';
 import { Check, Edit2, Loader2, MoreHorizontal, Trash2, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { Badge, Dialog, DialogContent, DialogTitle, LLMProviderLogo, Tooltip, buttonVariants } from '@/shared/ui';
 import { cn } from '@/shared/utils';
+import { useSessionActivityEntry } from '@/shared/context/SessionProtectionContext';
 import type { LLMProvider, Project, ProjectSession, SessionWithProvider } from '@/shared/types';
 import { PROVIDER_LABELS, createSessionViewModel, formatCompactAge } from '@/modules/sidebar/utils/sidebarProjectFormatting';
+import { presentSessionActivity } from '@/modules/sidebar/utils/sessionActivityPresentation';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { useProviderSessionIdCopy } from '@/modules/sidebar/hooks/useProviderSessionIdCopy';
+import { useTickingNow } from '@/modules/sidebar/hooks/useTickingNow';
 import ResidentMark from '@/modules/sidebar/ResidentMark';
 import SessionBranchBadge from '@/modules/sidebar/SessionBranchBadge';
 import SessionOptions from '@/modules/sidebar/SessionOptions';
@@ -59,12 +63,35 @@ function SidebarSessionItem({
 }: SidebarSessionItemProps) {
   const isCompact = useCompactSidebar();
   const sessionView = createSessionViewModel(session, currentTime, t);
+  // A running row draws what the turn is doing from the session's own activity
+  // entry — the same reading the Running view draws — so the two surfaces say
+  // one thing about one turn. An idle row reads nothing and renders as before.
+  const activity = useSessionActivityEntry(isProcessing ? session.id : null);
+  const activityNow = useTickingNow(isProcessing && activity !== undefined);
+  const { t: tChat } = useTranslation('chat');
+  const activityPresentation = presentSessionActivity(activity, activityNow, tChat);
   const isSelected = selectedSession?.id === session.id;
   const compactSessionAge = formatCompactAge(sessionView.sessionTime, currentTime);
   const [isMobileOptionsOpen, setIsMobileOptionsOpen] = useState(false);
   const showAttentionIndicator = needsAttention && !isSelected;
   const showRecentIndicator = !showAttentionIndicator && !isProcessing && sessionView.isActive;
   const providerLabel = PROVIDER_LABELS[session.__provider];
+  // The compact second line: the phase word plus the turn's age, drawn on a
+  // running row alone. Absent (not empty) on every idle row, so the line does
+  // not change height for sessions that are not working.
+  const activityLabelNode = isProcessing && (activityPresentation.phaseLabel || activityPresentation.elapsedLabel)
+    ? (
+      <span data-activity-label="true" className="min-w-0 truncate text-[10px] text-muted-foreground">
+        {activityPresentation.phaseLabel}
+        {activityPresentation.elapsedLabel ? (
+          <span data-activity-elapsed-label="true" className="tabular-nums">
+            {activityPresentation.phaseLabel ? ' · ' : ''}
+            {activityPresentation.elapsedLabel}
+          </span>
+        ) : null}
+      </span>
+    )
+    : null;
   // Nesting level the sidebar's lineage grouping assigned; 0 for every row that
   // is not a branch, which is what keeps an unbranched row pixel-identical.
   const lineageDepth = session.__lineageDepth ?? 0;
@@ -108,7 +135,18 @@ function SidebarSessionItem({
   };
 
   return (
-    <div className="group relative">
+    <div
+      className="group relative"
+      // The row-level contract: a running session publishes the phase (and, in
+      // the tool phase, the tool's name) it is drawing, so a reader outside the
+      // component can compare the row to the activity map. An idle session
+      // publishes nothing — the absence is the reading.
+      data-activity-phase={isProcessing ? activityPresentation.phase ?? undefined : undefined}
+      {...(isProcessing && activityPresentation.phase === 'tool'
+        ? { 'data-activity-tool': activityPresentation.toolName ?? '' }
+        : {})}
+      data-activity-elapsed={isProcessing ? activityPresentation.elapsedMs ?? undefined : undefined}
+    >
       {(showAttentionIndicator || showRecentIndicator) && (
         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
           <Tooltip
@@ -188,12 +226,13 @@ function SidebarSessionItem({
                   <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground">{compactSessionAge}</span>
                 )}
               </div>
-              <div className="mt-0.5 flex items-center">
+              <div className="mt-0.5 flex items-center gap-2">
                 {sessionView.messageCount > 0 && (
                   <Badge variant="secondary" className="px-1 py-0 text-xs">
                     {sessionView.messageCount}
                   </Badge>
                 )}
+                {activityLabelNode}
               </div>
             </div>
 
@@ -426,8 +465,9 @@ function SidebarSessionItem({
                   </span>
                 )}
               </div>
-              <div className="mt-0.5 flex items-center">
+              <div className="mt-0.5 flex items-center gap-2">
                 {sessionView.messageCount > 0 && <Badge variant="secondary" className="px-1 py-0 text-xs">{sessionView.messageCount}</Badge>}
+                {activityLabelNode}
               </div>
             </div>
           </div>

@@ -516,6 +516,17 @@ export type SessionActivity = {
    * the elapsed-time display and the stale `chat_subscribed` idle-ack guard.
    */
   startedAt: number;
+  /**
+   * The phase the server's activity snapshot last reported for this session's
+   * turn, or absent when no snapshot has named one yet.
+   *
+   * The value is a passthrough of the server's own reduction — the same one the
+   * chat activity dock draws — never a phase the client derives. Sidebar rows
+   * render it so a running session says what it is doing without being opened.
+   */
+  phase?: ActivityPhase;
+  /** The pending tool's name while `phase` is `tool`; null or absent otherwise. */
+  toolName?: string | null;
 };
 
 /** Every session currently producing a response, keyed by session id. Read it to tell whether a session is busy. */
