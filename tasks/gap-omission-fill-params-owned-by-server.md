@@ -19,7 +19,7 @@ GOAL-046 的收口任务。后端改动，遵循 `.agents/skills/backend-module-
 
 做法：
 
-1. 新建 `server/modules/voice-realtime/omission-fill-params.json`，只放 `chosen` 块（h_ms、g_ms、score_t、w_min、w_hallu、dom_n、lookback_ms、len_min、numeral_mode、silence_ms），值取自现 `experiments/voice-relay-qb/omission-fill-params.json` 的 `chosen`。服务端用 `import ... with { type: 'json' }` 读取（`server/tsconfig.json` 已开 `resolveJsonModule`，tsc 会随构建发出），**不再按应用根读 experiments/，删除 `readOmissionFillParams` 的文件读取路径**。
+1. 新建 `server/modules/voice-realtime/omission-fill-params.json`，只放 `chosen` 块（h_ms、g_ms、score_t、w_min、w_hallu、dom_n、lookback_ms、len_min、numeral_mode、silence_ms），值取自现 `experiments/voice-relay-qb/omission-fill-params.json` 的 `chosen`。服务端在模块加载时用 `readFileSync(new URL('./omission-fill-params.json', import.meta.url))` 读一次（AC-394 的 `server-import-cycle-budget` 把 `.json` 相对导入记为 unresolved，而该预算只能降；故 JSON 由 `server/tsconfig.json` 的 `include` 显式列入程序，tsc 随构建发出到 `dist-server/server/modules/voice-realtime/`，与 `.mjs` hook 同一机制），**不再按应用根读 experiments/，删除 `readOmissionFillParams` 每连接的文件读取路径**。
 2. `voice-realtime-settings.ts` 增加可选键 `omissionFill`（局部覆盖内置默认值）：每连接读一次，已建立连接不变；形状非法（类型不对、`numeral_mode` 不在允许集、H/G 越界）时该连接回退到内置默认值，原因进入 `problems` 并写入连接日志。校验沿用该文件「I/O 失败用默认、形状错误拒绝」的既有规则。
 3. `experiments/voice-relay-qb/omission-fill-params.json` 只保留回放门自己的内容：冻结连接清单、阈值、选参理由、基线读数；移除其中的 `chosen`（或改为只读引用）。`replay_rule.py` 从服务端 JSON 读取 `chosen`，新增 `--print-chosen` 打印它；`--check` 与 `--check-labels` 行为与读数不变（47 连接/583 条，丢失 ≥7 字 1.89%）。
 4. SPEC「接入方式」第 4 条与「待验证」表更新：参数所有者是 `server/`，热改走 settings。
@@ -46,6 +46,7 @@ GOAL-046 的收口任务。后端改动，遵循 `.agents/skills/backend-module-
 - server/modules/voice-realtime/tests/voice-realtime-omission-fill-wiring.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts
 - server/shared/tests/quay-test-script.test.ts
+- server/tsconfig.json
 - scripts/suite-duration-baseline.tsv
 - experiments/voice-relay-qb/omission-fill-params.json
 - experiments/voice-relay-qb/replay_rule.py
@@ -58,10 +59,4 @@ GOAL-046 的收口任务。后端改动，遵循 `.agents/skills/backend-module-
 
 读数（2026-10-18，worktree）：AC-402 测试 5/5 通过（duration 2340 ms；假形态已验证：删服务端 JSON ⇒ 红，改 chosen 不改 Python 默认 ⇒ `--print-chosen` 退出 2）；`--check` 47 连接/583 条、LOST≥7 1.89%、raw 14.07%、dup 2.23%、p50 5.20s；`--check-labels` 33 命中 / O=20 D=2 / 90.9%；接线测试 5/5；`tsc --noEmit` 0；`quay-test-script.test.ts` 14/14（pin 366-3=363、366-1=365，AC7 地板绿）。
 
-## Blocker
-
-**2026-10-18T10:27:44.805Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: unresolved internal specifiers=20, over the baseline budget of 19 — the budget may only fall
-- run_id：wk-prod-anchor
-- session_id：5f52a5aa-a1a9-4a3a-bfa7-7e70522ba580
+2026-10-18 第二轮（exited-not-landed 修复）：上一轮 suite 红在 AC-394 的服务器导入环预算——`./omission-fill-params.json` 是扫描集（仅 `.ts`/`.tsx`）之外的内部 specifier，unresolved 由 19 升到 20，而预算只能降。改为 tsconfig `include` 显式列入该 JSON（tsc 照旧把副本发到 dist-server 同目录，`server:bundle` 整目录搬运），服务在模块加载时读一次；不引入任何 import 节点，unresolved 回到 19。AC-402 (d) 同步改为钉 `include` 成员与真实 rootDir→outDir 映射（假形态已验证：删 include ⇒ 该腿红）。第二轮读数：budget 19/19 绿；AC-402 5/5（2465 ms）、wiring 5/5、`tsc --noEmit` 0。
