@@ -57,3 +57,11 @@ GOAL-046 的收口任务。后端改动，遵循 `.agents/skills/backend-module-
 接线测试里原先用 `seams.omissionFillParams` 覆盖参数的用例保持有效；本任务只新增「文件缺失不再关闭生产者」这一侧的断言。服务端 JSON 与 Python 默认值的一致性由 AC-402 (c) 守护。`voice-realtime-omission-fill.test.ts` 与 `quay-test-script.test.ts` 在 Touches 里是因为 `chosen` 搬走/新增测试文件会分别改动它们（前者改读服务端 JSON，后者移动 known/unknown pin），`scripts/suite-duration-baseline.tsv` 为新测试文件追加一行时长。
 
 读数（2026-10-18，worktree）：AC-402 测试 5/5 通过（duration 2340 ms；假形态已验证：删服务端 JSON ⇒ 红，改 chosen 不改 Python 默认 ⇒ `--print-chosen` 退出 2）；`--check` 47 连接/583 条、LOST≥7 1.89%、raw 14.07%、dup 2.23%、p50 5.20s；`--check-labels` 33 命中 / O=20 D=2 / 90.9%；接线测试 5/5；`tsc --noEmit` 0；`quay-test-script.test.ts` 14/14（pin 366-3=363、366-1=365，AC7 地板绿）。
+
+## Blocker
+
+**2026-10-18T10:27:44.805Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: unresolved internal specifiers=20, over the baseline budget of 19 — the budget may only fall
+- run_id：wk-prod-anchor
+- session_id：5f52a5aa-a1a9-4a3a-bfa7-7e70522ba580
