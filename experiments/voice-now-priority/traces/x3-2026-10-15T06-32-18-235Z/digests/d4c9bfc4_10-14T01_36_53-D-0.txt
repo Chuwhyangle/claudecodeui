@@ -1,0 +1,32 @@
+# d4c9bfc4@10-14T01:36:53 arm D rep 0 model sonnet hook true wall 238.8s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after t
+   1.0  == turn
+   6.1     text: 这应该就是记忆里记过的"Q 行冻结"。我先对一下记录。
+   6.9     tool Bash: cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory && cat live-voice-tenth-test-2026
+  16.6     text: 这是已知缺陷的复发：那句话我已经处理了，所以底部 Q 行没有随出队而消失，属于残留行。  记录里有两个相关的缺陷： - **Q 撤回行不消失**：host 已读到出队，行却留在屏上，断点在 host 到浏览器 socket 之间，一直没定位。这和你现在看到的最像。 - **Q 徽章冻结**：计数只在下次 `sent` 时才清。这个已经在 author 分支修了（`3bca0f292`），但要新构建并重启后才生效。  我没法从这里看你屏幕上的是哪一种，也不知道当前运行的构建带没带这个修复。区分方法是再发一句话：如果旧行跟着清掉，就是徽章冻结，修复没生效；如果旧行一直不动，就是撤回行那个没定位的缺
+  16.6  -- result success
+  34.7  · voice [ADD-frag] 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.7  >> DELIVER idle: 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.8  == turn
+  37.7  · voice [ADD] 找出来为什么会出现这些东西。
+  39.3  >> DELIVER quiet next: 找出来为什么会出现这些东西。
+  40.4     text: 对，我看到了，那段英文不是你说的。我先确认一下它是从哪拼进去的。
+  41.0     tool Bash: grep -rn "buildInterruptAftermathNote" server src shared --include=*.ts --include=*.tsx | grep -v test | head
+  44.2     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && sed -n 960,1010p $f && echo ------- && s
+  46.3     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && grep -n "aftermathNote" $f | head -30
+  48.2     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && sed -n 2170,2192p $f; echo -----; sed -n
+  59.6     tool Bash: grep -rnE "previous turn was interrupted|AftermathNote|aftermath" src shared --include=*.ts --include=*.tsx | 
+  64.0  · voice [REMARK-frag] 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  67.5     text: 找到了，这是设计行为，不是随机出现的，而且前端没有任何剥离。  **为什么出现** - 你打断我正在跑的 `Bash`（那次 build）时，`session_interrupt` 中止了这次运行，并且记下了被打断的工具名 `Bash`。 - 这时服务端的 `sessionInterrupt` 会把一句固定英文存进 `aftermathNote`（`voice-realtime-ws-proxy.service.ts:3210`，文本由 `:986` 的 `buildInterruptAftermathNote` 生成）。 - 打断之后你说的第一句话进 CLI 时，`deliverSessio
+  67.5  -- result success
+  67.5  >> DELIVER turn-end: 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  67.5  == turn
+  67.9  · voice [REMARK] 所以地图的Q看来现在是个问题啊。
+  69.4  >> DELIVER quiet next: 所以地图的Q看来现在是个问题啊。
+  78.1     text: 这是同一个 Q 行残留的第三次复现，而且这条是我干活时中途插进来的消息。我派一个后台 agent 去查它的清除信号为什么没到前端，只读不改代码。
+  87.0     tool Agent [BG]: Trace stale Q row clear path
+  91.0     text: 对，这个问题确实存在，今天已经复现三次了。"地图的Q"我按"底部的Q"理解，这是之前记过的识别错误（「底部」被识别成「地图」）。  后台 agent 正在查 Q 行的清除信号为什么没到前端，它只读不改。出结果后我用一两句话告诉你。
+  91.0  -- result success
+ 206.7  == turn
+ 212.7     text: 后台调查结束，没有定位到确定的原因。  **最可能的原因，置信度只有四成多**：Q 行只有一个出口，就是收到带该消息 uuid 的 `completed` 帧，没有超时，也没有别的兜底。如果这一帧发给了"没人在听"的写入端，行就永远留着。  具体路径是：host 把生命周期帧写到较旧那一轮的写入端，而之后才重新订阅的浏览器连接（重连、刷新、第二个标签）只被挂到最新那一轮的写入端上。这样帧就到不了你的页面。  **已排除**： - **修复缺失**：`3bca0f292` 在当前代码里，并且它只管停止时的徽章，不管这种撤回行。 - **uuid 对不上**：前端和服务端用的是同一个 host 打
+ 212.7  -- result success

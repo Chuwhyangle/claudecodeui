@@ -1,0 +1,29 @@
+# d4c9bfc4@10-14T01:36:53 arm E rep 1 model sonnet hook true wall 125.2s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after t
+   0.9  == turn
+   9.9     text: 你说的应该是：你之前那句"诶，你居然猜到了我的想法。来吧，处理这句话"，在屏幕底部的 Q（队列行）里一直挂着，但那句话我早就处理完了，它不该还在。  这是已知问题，记忆里已经有两条：10-14 早上的"Q 撤回行卡住"，和今天凌晨第三次实测的"队列行冻结"。这次算第三次复现。  我怀疑它在 build 被你打断的那一刻被留在队列里，之后没被清掉。这只是推测，还没核对。  要我去查吗？我会对着那句话的 `transcription.completed` 往后找它最终的处置，看队列行为什么没撤。这要读日志，我派后台 Agent 去做，你不用等。
+   9.9  -- result success
+  34.7  · voice [ADD-frag] 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.7  >> DELIVER idle: 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.8  == turn
+  37.7  · voice [ADD] 找出来为什么会出现这些东西。
+  39.3  >> DELIVER quiet next: 找出来为什么会出现这些东西。
+  43.7     text: 对，那段英文不是你说的。它是系统在你打断我正在跑的工具时，自动塞到你那句话前面的提示："上一轮在跑 Bash 工具时被打断，部分改动可能已落地，以下是你当前的指令"。  我收到时它和你的话是连在一起的，所以我是靠方括号和英文判断它不是你的原话。它混在你的消息里，如果内容不一样，我可能会把它当成你的话来执行。  这也是已知问题：10-14 早上的实测记过"中断提示混入原话"。这次可以算复现，而且这次是打断 Bash 工具触发的。  建议和刚才 Q 里那行卡住的问题一起查，两个都和打断有关。我现在派后台 Agent 去查吗？
+  43.7  -- result success
+  43.7  == turn
+  51.3     tool Agent [BG]: Investigate Q row and interrupt-note leak
+  54.1     text: 派了一个后台 Agent 去查两件事，只读代码，不改东西：  - **Q 里那行卡住**：顺着队列行的前端状态和服务端清除事件，找打断工具那一轮在哪一步没把它撤掉。 - **英文提示混进原话**：找那段文字是在我们的转发层拼进去的，还是 Claude CLI/SDK 自己加的，以及有没有也漏进屏幕上的气泡和字幕。  查完我会用一两句话告诉你结论。
+  54.2  -- result success
+  64.0  · voice [REMARK-frag] 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  >> DELIVER idle: 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.1  == turn
+  67.7     text: 收到，这是同一个现象：句子已经被我处理，Q 里那一行没撤。  这次你说的是"找出来为什么"那句，它也是先被处理、Q 里还挂着，所以这个现象不是只有打断工具那一次，每次排队的消息都可能这样。我已经让后台 Agent 把这一点一起纳入排查，它还在跑，结论出来我再告诉你。
+  67.7  -- result success
+  67.9  · voice [REMARK] 所以地图的Q看来现在是个问题啊。
+  68.9  >> DELIVER idle: 所以地图的Q看来现在是个问题啊。
+  69.1  == turn
+  71.2     text: 对，"地图的 Q"应该是"底部的 Q"，识别错了。  是个问题，而且不是新的：记忆里从 10-14 早上就有这条，今天凌晨又复现过一次，现在是第三次。每次表现一样：话已经被处理，队列行还挂在底部不撤。  Agent 还在查，我先不下根因的结论。
+  71.3  -- result success
+  92.6  == turn
+  98.5     text: Agent 查完了，两个问题原因都在本仓，不在 Claude CLI/SDK。  **1. 英文提示混进原话**：已确认。 - `voice-realtime-ws-proxy.service.ts:1132-1150` 的 `buildInterruptAftermathNote()` 生成这段英文，在 `:2727-2733` 被直接拼到你那句话前面，再发给 CLI。 - 所以它会进 transcript，也会进浏览器的投递帧、已投递卡片和 Q 行。字幕不受影响，因为字幕来自 `transcription.completed`。 - 建议改法：投递帧和用户气泡只用原话，提示单独走上下文通道
+  98.5  -- result success

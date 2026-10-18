@@ -1,0 +1,374 @@
+{
+ "episode": "164c3087@10-14T15:16:43",
+ "arm": "C",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "fee63f2383f9b866ff58fcce9e30a9444ec31910",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 6812,
+   "text": "你看啊，第一句的问题是。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 8871,
+   "text": "我大概花了。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 12950,
+   "text": "两秒时间。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 17439,
+   "text": "就把话说完了。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 28767,
+   "text": "但是我看见这边有个动字。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 32252,
+   "text": "可能花了五六秒。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 65026,
+   "text": "但是我看到在我的屏幕上蹦出来。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 69559,
+   "text": "可能要花了二十到三十秒。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 79114,
+   "text": "啊，分析一下原因。",
+   "label": "ADD"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 162597,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "让我们再做一次 live voice 测试。",
+   "parts": []
+  },
+  {
+   "t": 765,
+   "ev": "TURN"
+  },
+  {
+   "t": 4126,
+   "ev": "TEXT",
+   "text": "好，随时开始说话。我这边保持前台短步、长活派后台，方便你测打断和排队。\n\n这轮你想重点看哪块？比如：\n\n- 静默吞句（对照 `transcription.completed` 找零处置）\n- 断线自动重连和横幅\n- Claude 忙时的 hold / 排队行（Q 徽章）\n- 打断后的话语是否抢占\n\n你说完我就按实际读数对账。"
+  },
+  {
+   "t": 4157,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 6818,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "你看啊，第一句的问题是。"
+  },
+  {
+   "t": 7818,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "你看啊，第一句的问题是。",
+   "parts": [
+    "ADD-frag:你看啊，第一句的问题是。"
+   ]
+  },
+  {
+   "t": 7864,
+   "ev": "TURN"
+  },
+  {
+   "t": 8876,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "我大概花了。"
+  },
+  {
+   "t": 9480,
+   "ev": "TEXT",
+   "text": "你的话在“第一句的问题是”这里停住了，后面没传过来。可能是被截断，也可能是还没说完。请接着说，我先不动。"
+  },
+  {
+   "t": 9498,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 9498,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "我大概花了。",
+   "parts": [
+    "ADD-frag:我大概花了。"
+   ]
+  },
+  {
+   "t": 9536,
+   "ev": "TURN"
+  },
+  {
+   "t": 11840,
+   "ev": "TEXT",
+   "text": "收到“我大概花了”，又是半句，后面的时间或内容没带过来。这两句都在句中被切开了，我先记下：第一句“第一句的问题是”、第二句“我大概花了”，都没有完整落地。\n\n你接着说，我等你说完再动。"
+  },
+  {
+   "t": 11854,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 12956,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "两秒时间。"
+  },
+  {
+   "t": 13956,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "两秒时间。",
+   "parts": [
+    "ADD-frag:两秒时间。"
+   ]
+  },
+  {
+   "t": 13996,
+   "ev": "TURN"
+  },
+  {
+   "t": 17445,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "就把话说完了。"
+  },
+  {
+   "t": 18937,
+   "ev": "TEXT",
+   "text": "我把三段拼起来读：「第一句的问题是，我大概花了两秒时间。」\n\n如果这是你想说的，那问题就是你在句中停顿了大约两秒，这句话就被切成三条单独的消息送到我这边，每条都当成一轮。这符合你前几次测试里的“半句落地”。\n\n我的读法对吗？如果对，下一步我去对一下切分的阈值和 `transcription.completed` 的时间戳，看是 VAD 判停太短，还是中继层把停顿当成了一句话结束。"
+  },
+  {
+   "t": 18958,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 18958,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "就把话说完了。",
+   "parts": [
+    "ADD-frag:就把话说完了。"
+   ]
+  },
+  {
+   "t": 18997,
+   "ev": "TURN"
+  },
+  {
+   "t": 25715,
+   "ev": "TEXT",
+   "text": "明白了：整句话你两秒左右就说完了，中间没有长停顿，却被切成了「第一句的问题是」「我大概花了」「两秒时间」「就把话说完了」四条。\n\n这样的话，就不是 VAD 判停太短，更像是转写或中继层把一个连续的话语拆成了多段。这类切分应该能在 `transcription.completed` 的条数和时间戳上直接对出来。\n\n你这轮测完告诉我，我再去查这几条的时间戳，看是上游按段吐出，还是我们这边拆的。"
+  },
+  {
+   "t": 25735,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 28773,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "但是我看见这边有个动字。"
+  },
+  {
+   "t": 29773,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "但是我看见这边有个动字。",
+   "parts": [
+    "ADD-frag:但是我看见这边有个动字。"
+   ]
+  },
+  {
+   "t": 29813,
+   "ev": "TURN"
+  },
+  {
+   "t": 32258,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "可能花了五六秒。"
+  },
+  {
+   "t": 33674,
+   "ev": "TEXT",
+   "text": "“动字”我没完全对上：是界面上有个在动的字，比如 Working… 或转圈的状态？还是转写出来的文字里混进了一个“动”字？\n\n你说一下它出现在哪、什么时候出现的，我对一下。"
+  },
+  {
+   "t": 33697,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 33697,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "可能花了五六秒。",
+   "parts": [
+    "ADD-frag:可能花了五六秒。"
+   ]
+  },
+  {
+   "t": 33737,
+   "ev": "TURN"
+  },
+  {
+   "t": 37417,
+   "ev": "TEXT",
+   "text": "“五六秒”我记下了，但不确定指的是哪一段：是那个动的字出现之后，过了五六秒才有回应？还是你这句话说完到我回话用了五六秒？\n\n你补一句是哪一段，我就拿它去对时间戳。"
+  },
+  {
+   "t": 37445,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 65031,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "但是我看到在我的屏幕上蹦出来。"
+  },
+  {
+   "t": 66032,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "但是我看到在我的屏幕上蹦出来。",
+   "parts": [
+    "ADD-frag:但是我看到在我的屏幕上蹦出来。"
+   ]
+  },
+  {
+   "t": 66078,
+   "ev": "TURN"
+  },
+  {
+   "t": 69565,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "可能要花了二十到三十秒。"
+  },
+  {
+   "t": 71131,
+   "ev": "DELIVER",
+   "kind": "quiet",
+   "priority": "now",
+   "text": "可能要花了二十到三十秒。",
+   "parts": [
+    "ADD-frag:可能要花了二十到三十秒。"
+   ]
+  },
+  {
+   "t": 71133,
+   "ev": "TEXT",
+   "text": "那我这样理解：你说完话，屏幕上的转写字幕过了五六秒才一下子蹦出来，不是边说边出，也不是说完立刻出。\n\n这就有两个可对的读数：\n- 上游 `transcription.completed` 到达的时刻，和你停口的时刻差多少。\n- 前端字幕行出现的时刻，和 `completed` 到达的时刻差多少。\n\n前者大是上游转写慢，后者大是我们中继或前端攒着发。\n\n我等你说完这轮，再去翻日志把这两个差值量出来。你要现在就查，说一声。"
+  },
+  {
+   "t": 71137,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 71175,
+   "ev": "TURN"
+  },
+  {
+   "t": 76470,
+   "ev": "TEXT",
+   "text": "那就是延迟从“五六秒”改成“二十到三十秒”了。这是凭感觉估的，两个数差得很大，要以日志里的时间戳为准。\n\n不管取哪个，二十秒以上的延迟都远超正常转写，值得查。你说“查”，我就派个后台去量 `completed` 到达和字幕出现的两个差值，量完用一两句话报你。"
+  },
+  {
+   "t": 76513,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 79119,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "啊，分析一下原因。"
+  },
+  {
+   "t": 80120,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "啊，分析一下原因。",
+   "parts": [
+    "ADD:啊，分析一下原因。"
+   ]
+  },
+  {
+   "t": 80157,
+   "ev": "TURN"
+  },
+  {
+   "t": 88884,
+   "ev": "TOOL",
+   "name": "Agent",
+   "input": "Analyze live voice caption delay",
+   "bg": true
+  },
+  {
+   "t": 91073,
+   "ev": "TEXT",
+   "text": "已经派了一个后台分析去查，只读，不会动服务。它会量三件事：上游转写返回花了多久，字幕从转写返回到出现又花了多久，以及那句话到底是在哪一层被切成几段的。\n\n出结果我用一两句话报你。你可以继续测，不用等它。"
+  },
+  {
+   "t": 91118,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 129505,
+   "ev": "TURN"
+  },
+  {
+   "t": 135842,
+   "ev": "TEXT",
+   "text": "后台分析回来了，先说一个限制：最近 15 分钟没有任何 voice 日志，最新一份止于今天上午 11:54。它分析的是昨晚（10-14 23:16 CST）的一份日志，里面恰好有你这几句原话。所以下面说的是同一类现象在昨晚的读数，不一定就是你刚才这一轮。\n\n- **切碎**：发生在上游，不是我们拆的。上游 `server_vad` 静音阈值只有 400ms，句内停顿约 0.5s 就被切开，每段各出一条 completed，中继一对一转发。昨晚那句话就是被切成了 4 条。\n- **字幕延迟**：不在字幕转发这一段。停口到 completed 只有 0.25s 以内，completed 到字幕是同一毫秒。延迟来自上游 stall：发送缓冲 `buffered=` 一路涨到约 460KB，积压 5 到 14 秒，和你说的 5 到 30 秒吻合。浏览器渲染那一段没有日志，没法量。\n- **另见**：窗口里有两处 `Unknown function call id` / `Cannot create response after rejected function_call_output`，关闭是带 close frame 的正常关闭，没有裸断。\n\n不确定的有两点：上游为什么会 stall，以及把 400ms 调大能不能接受更晚的判停。\n\n要不要我把静音阈值调大做一轮对比，还是先只记录这次读数？"
+  },
+  {
+   "t": 135870,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

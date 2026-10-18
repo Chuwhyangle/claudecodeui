@@ -1,0 +1,37 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:43:44.052Z",
+  "budgetCny": 0.05,
+  "spendCny": 0.003789,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 3017,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "control": {
+      "text": "现在是十月十五日，来我写第四十车。",
+      "plain": {
+        "deleteOutcome": "n/a",
+        "reading": {
+          "input": 401,
+          "text": 401,
+          "audio": 0,
+          "output": 2,
+          "cny": 0.000611
+        }
+      },
+      "swap": {
+        "deleteOutcome": "deleted",
+        "reading": {
+          "input": 401,
+          "text": 401,
+          "audio": 0,
+          "output": 2,
+          "cny": 0.000611
+        }
+      },
+      "textDelta": 0,
+      "audioDelta": 0
+    }
+  }
+}

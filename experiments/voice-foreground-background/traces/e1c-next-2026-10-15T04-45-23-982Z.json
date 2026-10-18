@@ -1,0 +1,115 @@
+{
+ "model": "haiku",
+ "priority": "next",
+ "dir": "/tmp/e1c-cocGXx",
+ "log": [
+  {
+   "t": 6.1,
+   "ev": "tool_use",
+   "name": "Agent",
+   "cmd": "progress loop",
+   "snap": {
+    "agent": 0,
+    "fg": 0
+   }
+  },
+  {
+   "t": 9.5,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step1 >> /tmp/e1c-cocGXx/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 1,
+    "fg": 0
+   }
+  },
+  {
+   "t": 12.5,
+   "ev": "task",
+   "status": "completed",
+   "summary": "Step 1 of foreground sequence",
+   "snap": {
+    "agent": 3,
+    "fg": 1
+   }
+  },
+  {
+   "t": 14.8,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step2 >> /tmp/e1c-cocGXx/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 4,
+    "fg": 1
+   }
+  },
+  {
+   "t": 16.8,
+   "ev": "PUSH",
+   "priority": "next",
+   "snap": {
+    "agent": 5,
+    "fg": 2
+   }
+  },
+  {
+   "t": 17.8,
+   "ev": "task",
+   "status": "completed",
+   "summary": "Step 2 of foreground sequence",
+   "snap": {
+    "agent": 5,
+    "fg": 2
+   }
+  },
+  {
+   "t": 20.8,
+   "ev": "text",
+   "text": "REDIRECTED",
+   "sincePushS": 4.1,
+   "snap": {
+    "agent": 7,
+    "fg": 2
+   }
+  },
+  {
+   "t": 37.9,
+   "ev": "task",
+   "status": "completed",
+   "summary": "for i in $(seq 1 15); do echo $i >> /tmp",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 39.1,
+   "ev": "task",
+   "status": "completed",
+   "summary": "Agent \"progress loop\" completed",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 40.9,
+   "ev": "result",
+   "n": 1,
+   "subtype": "success",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 75.3,
+   "ev": "FINAL",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   },
+   "agentEnded": true
+  }
+ ]
+}

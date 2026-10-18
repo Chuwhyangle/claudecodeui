@@ -1,0 +1,1508 @@
+{
+  "ranAt": "2026-10-18T04:35:51.757Z",
+  "budgetCny": 0.45,
+  "spendCny": 0.405467,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "P1",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.004393,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "第一次测试。"
+      ],
+      "calls": [
+        "十八日，Live Voice，第一次测试。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.0044,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "The treasure."
+      ],
+      "calls": [
+        "18日，live voice，第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。",
+        "The treasure."
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.004358,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "自测是。"
+      ],
+      "calls": [
+        "第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。",
+        "自测是。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "K1",
+      "rep": 0,
+      "spendCny": 0.004363,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，来我。",
+        "第一次测试。"
+      ],
+      "calls": [
+        "十八日，Line Voice 第一次测试。"
+      ],
+      "missing": [
+        "十八日，来我。"
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P1",
+      "arm": "K1",
+      "rep": 1,
+      "spendCny": 0.004358,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "自测是。"
+      ],
+      "calls": [
+        "十八日 Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。",
+        "自测是。"
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P1",
+      "arm": "K1",
+      "rep": 2,
+      "spendCny": 0.004363,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "第四测试。"
+      ],
+      "calls": [
+        "十八日，line voice 第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。",
+        "第四测试。"
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P1",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.004606,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "次测试。"
+      ],
+      "calls": [
+        "十八日，Line Voice，第一次测试。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.004601,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，来我。",
+        "第四测试。"
+      ],
+      "calls": [
+        "十八日，Line Voice第一次测试。"
+      ],
+      "missing": [
+        "十八日，来我。",
+        "第四测试。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.004606,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "第四测试。"
+      ],
+      "calls": [
+        "十八日，live voice。第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。",
+        "第四测试。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.004653,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "第一次测试。"
+      ],
+      "calls": [
+        "十八日，来我，第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.004647,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "第一次测试。"
+      ],
+      "calls": [
+        "十八日 Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.004647,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "第一次测试。"
+      ],
+      "calls": [
+        "十八日，Live Voice第一次测试。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.004496,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.004459,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "可以查一下吗？"
+      ],
+      "missing": [
+        "总会丢开头的几个字。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.004459,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "你可以查一下吗？"
+      ],
+      "missing": [
+        "会丢开头的几个字。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "K1",
+      "rep": 0,
+      "spendCny": 0.004459,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "你可以查一下吗？"
+      ],
+      "missing": [
+        "总会丢开头的几个字。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "K1",
+      "rep": 1,
+      "spendCny": 0.004465,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "总会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "C1",
+      "arm": "K1",
+      "rep": 2,
+      "spendCny": 0.004459,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "你可以查一下吗？"
+      ],
+      "missing": [
+        "总会丢开头的几个字。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.004709,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.004709,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.004672,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "你可以查一下吗？"
+      ],
+      "missing": [
+        "总会丢开头的几个字。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.004758,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "总会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.004758,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.004758,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.004549,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "请检查是否符合预期。"
+      ],
+      "missing": [
+        "我发现上面的操作不像后台跑的。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.004592,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不像后台跑的，先检查一下是否符合预期。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.004598,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不是用后台跑的，请检查是否符合预期。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "K1",
+      "rep": 0,
+      "spendCny": 0.004568,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作都是往后台跑的，先检查一下是不是符合预期。"
+      ],
+      "missing": [
+        "请检查是否符合预期。"
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P2",
+      "arm": "K1",
+      "rep": 1,
+      "spendCny": 0.004549,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "请检查一下是否符合预期。"
+      ],
+      "missing": [
+        "我发现上面的操作不像后台跑的。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "K1",
+      "rep": 2,
+      "spendCny": 0.006988,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不是用后台跑的，请检查是否符合预期。",
+        "我发现上面的操作不像后台跑的，请检查是否符合预期。"
+      ],
+      "missing": [],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P2",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.004804,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不像后台跑的，请检查是否符合预期。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.007097,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不像后台跑的。",
+        "先检查一下是否符合预期。"
+      ],
+      "missing": [],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P2",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.004804,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作都是用后台跑的，请检查是否符合预期。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.004867,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不需要后台跑的，先检查一下是不是有符合预期。"
+      ],
+      "missing": [
+        "请检查是否符合预期。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.004855,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不像后台跑的，先检查是否符合预期。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "P2",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.004861,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我发现上面的操作不像后台跑的。",
+        "请检查是否符合预期。"
+      ],
+      "calls": [
+        "我发现上面的操作不像后台跑的，请检查是不是符合预期。"
+      ],
+      "missing": [
+        "请检查是否符合预期。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P3",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.007128,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "calls": [
+        "No worries.",
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.007128,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "有呃，后台进行这些操作。"
+      ],
+      "calls": [
+        "No worries.",
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "有呃，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.009543,
+      "responseCreated": 4,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行这些操作。"
+      ],
+      "calls": [
+        "I don't know why, though.",
+        "是不是可以更明确地增加一些指令？",
+        "要求后台执行这些操作。"
+      ],
+      "missing": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]",
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "K1",
+      "rep": 0,
+      "spendCny": 0.007014,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "calls": [
+        "No worries.",
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]",
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "K1",
+      "rep": 1,
+      "spendCny": 0.004861,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "calls": [
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "K1",
+      "rep": 2,
+      "spendCny": 0.004927,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行这些操作。"
+      ],
+      "calls": [
+        "要求后台执行这些操作。"
+      ],
+      "missing": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行这些操作。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P3",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.007455,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "可以增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "calls": [
+        "我为什么笑？",
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我忘了，呵呵。",
+        "可以增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.007455,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "calls": [
+        "Why is that?",
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.005189,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "calls": [
+        "I don't know why, though.",
+        "是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.005322,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我忘了，呵呵。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "calls": [
+        "我忘了，呵呵。是不是可以更明确地增加一些指令，要求后台执行这些操作？"
+      ],
+      "missing": [
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P3",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.010041,
+      "responseCreated": 4,
+      "textReplies": 1,
+      "finals": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "calls": [
+        "Oh, why is that?",
+        "是不是可以更明确地增加一些指令？",
+        "要求后台执行这些操作。"
+      ],
+      "missing": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求嗯，后台进行这些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]",
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P3",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.007507,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "calls": [
+        "I don't know why.",
+        "要求后台执行这些操作。"
+      ],
+      "missing": [
+        "我也是。",
+        "就是可以更明确的增加一些学历。",
+        "要求呃，后台进行一些操作。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.009618,
+      "responseCreated": 4,
+      "textReplies": 2,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "calls": [
+        "我们只会用 response。",
+        "用语音识别的 ASR 输出是没有办法，就是断句这一块，它还是做不到。EASR 这一块。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P4",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.009594,
+      "responseCreated": 4,
+      "textReplies": 2,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "你谁呀？上直播。"
+      ],
+      "calls": [
+        "因为我们只会用response。",
+        "用语音识别的ASR输出没有办法去判定这一块，还是后边到EASR这一路。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "你谁呀？上直播。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P4",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.007389,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "Yeah, that's not good."
+      ],
+      "calls": [
+        "我们只会用 responses。",
+        "用语音识别的 ASR 输出，没有办法去判断丢了一块，还是后边整段 EASR 的结果。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "Yeah, that's not good."
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "K1",
+      "rep": 0,
+      "spendCny": 0.007521,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "calls": [
+        "因为我们只会用 response。",
+        "用语音识别的 ASR 输出，没有办法就串编了一个 prompt 给到 EASR 给我。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "errors": [
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "K1",
+      "rep": 1,
+      "spendCny": 0.005066,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "也算水果。"
+      ],
+      "calls": [
+        "以ASR为主。"
+      ],
+      "missing": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "也算水果。"
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "K1",
+      "rep": 2,
+      "spendCny": 0.007515,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "一，哎呀，上直播。"
+      ],
+      "calls": [
+        "我们只会用response。",
+        "用语音识别的ASR输出，没有办法区分是后接的，还是后边到EAS的结果。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "一，哎呀，上直播。"
+      ],
+      "errors": [
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.007823,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "你谁呀？上直播。"
+      ],
+      "calls": [
+        "因为我们只会用response。",
+        "用语音识别的ASR输出没有办法去算丢了一块还是多了一块，以ASR为准。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "你谁呀？上直播。"
+      ],
+      "errors": [
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.007843,
+      "responseCreated": 4,
+      "textReplies": 2,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "你谁呀？上直播。"
+      ],
+      "calls": [
+        "因为我们只会用response。",
+        "用语音识别的ASR输出，没有办法去算丢了一个字还是多了个字的。以ASR结果。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "你谁呀？上直播。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P4",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.007718,
+      "responseCreated": 4,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "calls": [
+        "因为我们只会用 response。",
+        "用语音识别的 ASR 输出，没有办法去算 token 这一块，还是收不到。",
+        "ASR 这一路。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]",
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.007917,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "你谁呀？上直播。"
+      ],
+      "calls": [
+        "我们只会用 response。",
+        "用语音识别的 ASR 输出，没有办法直接替换掉，还是要通过 LLM。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "你谁呀？上直播。"
+      ],
+      "errors": [
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "P4",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.010155,
+      "responseCreated": 5,
+      "textReplies": 2,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "calls": [
+        "因为我们只会用response。",
+        "用语音识别的ASR输出，没有办法去判断清楚以后才收到这个EASR的结果。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，就算丢了一些，它也会搜得到。",
+        "一，哎呀，上直播。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "P4",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.007941,
+      "responseCreated": 4,
+      "textReplies": 1,
+      "finals": [
+        "我们只会用response。",
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "一，哎呀，上直播。"
+      ],
+      "calls": [
+        "我们只会用 response。",
+        "用语音识别的 ASR 输出没有办法直接拼接以后，还是 output 到 EASR 里面。"
+      ],
+      "missing": [
+        "用语音识别的AI上输出是没有办法，只算丢了一次，他也是搜不到。",
+        "一，哎呀，上直播。"
+      ],
+      "errors": [
+        "[object Object]"
+      ]
+    },
+    {
+      "window": "C2",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.004508,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "十七点，Line Voice第一次测试。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice 第一次测试。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.004508,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "Likewise, Jesus could."
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "Likewise, Jesus could."
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.004508,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "十七点，Line Voice第一次测试。"
+      ],
+      "calls": [
+        "现在是十月十七日，十七点，live voice第一次测试。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "K1",
+      "rep": 0,
+      "spendCny": 0.004483,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "Likewise, this scripture."
+      ],
+      "calls": [
+        "现在是十月十七日，十七点。Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "Likewise, this scripture."
+      ],
+      "errors": [
+        "[object Object]",
+        "{\"type\":\"transport.error\",\"code\":\"RESPONSE_CONCURRENCY_CONFLICT\",\"message\":\"Conversation already has an active response\""
+      ]
+    },
+    {
+      "window": "C2",
+      "arm": "K1",
+      "rep": 1,
+      "spendCny": 0.004526,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "一点，来外，以此可知。"
+      ],
+      "calls": [
+        "现在是10月17日17点，Live Voice第一次测试。"
+      ],
+      "missing": [
+        "应该是十月十七日。",
+        "一点，来外，以此可知。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "K1",
+      "rep": 2,
+      "spendCny": 0.004508,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "Likewise, this scripture."
+      ],
+      "calls": [
+        "现在是十月十七日，十七点，Live Voice第一次测试。"
+      ],
+      "missing": [
+        "Likewise, this scripture."
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.00472,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "一点，来外一次出去。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "一点，来外一次出去。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.004714,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "一点，来外一次出去。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice第一次测试。"
+      ],
+      "missing": [
+        "一点，来外一次出去。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.00472,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "一点，来外一次出去。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "一点，来外一次出去。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.004771,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "一点，来外一次出去。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Line Voice 第一次测试。"
+      ],
+      "missing": [
+        "一点，来外一次出去。"
+      ],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.004767,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "十七点，Line Voice第一次测试。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice第一次测试。"
+      ],
+      "missing": [],
+      "errors": []
+    },
+    {
+      "window": "C2",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.004771,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "应该是十月十七日。",
+        "一点，来外一次出去。"
+      ],
+      "calls": [
+        "现在是十月十七日十七点，Live Voice 第一次测试。"
+      ],
+      "missing": [
+        "一点，来外一次出去。"
+      ],
+      "errors": []
+    }
+  ]
+}

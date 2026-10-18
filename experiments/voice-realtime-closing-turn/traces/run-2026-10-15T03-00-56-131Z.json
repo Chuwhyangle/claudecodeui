@@ -1,0 +1,966 @@
+{
+  "ranAt": "2026-10-15T03:00:56.131Z",
+  "budgetCny": 0.15,
+  "spendCny": 0.152979,
+  "guardTriggered": true,
+  "results": [
+    {
+      "error": "Error: DashScope realtime transport is not open (state=connecting)"
+    },
+    {
+      "error": "Error: DashScope realtime transport is not open (state=connecting)"
+    },
+    {
+      "window": "L2",
+      "arm": "N0",
+      "rep": 0,
+      "note": "stop at ~52 s; \"停下来以后…\" NOT a stop; multi-fragment units",
+      "spendCny": 0.038259,
+      "responses": 12,
+      "usage": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1262,
+          42,
+          37
+        ],
+        [
+          1455,
+          70,
+          38
+        ],
+        [
+          1561,
+          98,
+          52
+        ],
+        [
+          1670,
+          119,
+          2
+        ],
+        [
+          1680,
+          126,
+          28
+        ],
+        [
+          1766,
+          133,
+          27
+        ],
+        [
+          1861,
+          168,
+          34
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          2004,
+          259,
+          56
+        ],
+        [
+          2113,
+          287,
+          36
+        ],
+        [
+          2251,
+          392,
+          59
+        ]
+      ],
+      "insertedOk": 0,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 4672,
+          "kind": "ASR",
+          "text": "月十五日。"
+        },
+        {
+          "at": 4924,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 4988,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"现在是1"
+        },
+        {
+          "at": 4988,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 6380,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 7745,
+          "kind": "ASR",
+          "text": "Likewise, about the DDoS测试."
+        },
+        {
+          "at": 7866,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8048,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在是十月十五日，Live Voice Mode 的第六次测试。"
+        },
+        {
+          "at": 8049,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 8381,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 10381,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 25702,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 25820,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 26010,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 26011,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 27441,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 51754,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 53035,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 53317,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53594,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户明确要求停止当前正在进行的处理任务。"
+        },
+        {
+          "at": 53594,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 54859,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 55682,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 55726,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 55748,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 55749,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 57151,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 57360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 57483,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 57520,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "哎，挺好。"
+        },
+        {
+          "at": 57521,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 73254,
+          "kind": "ASR",
+          "text": "Hey."
+        },
+        {
+          "at": 73360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 73626,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 73757,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "诶。"
+        },
+        {
+          "at": 73758,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 75073,
+          "kind": "ASR",
+          "text": "Six."
+        },
+        {
+          "at": 78690,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去调 cloud code 吗？"
+        },
+        {
+          "at": 78763,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 78923,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Cloud Code 吗？"
+        },
+        {
+          "at": 78924,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 79361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 92653,
+          "kind": "ASR",
+          "text": "我看见调用了，但是为什么会等这么久呢？"
+        },
+        {
+          "at": 95065,
+          "kind": "ASR",
+          "text": "从“停下来”这几个字。"
+        },
+        {
+          "at": 96332,
+          "kind": "ASR",
+          "text": "到泡泡里。"
+        },
+        {
+          "at": 96520,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 96568,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \""
+        },
+        {
+          "at": 96568,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 98010,
+          "kind": "ASR",
+          "text": "以及到哦。"
+        },
+        {
+          "at": 100612,
+          "kind": "ASR",
+          "text": "嗯，car code跑起来好像挺久的。"
+        },
+        {
+          "at": 100709,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 101028,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到 Cloud Code 跑起来，好像挺久的。"
+        },
+        {
+          "at": 101029,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 101360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 116040,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 137421,
+          "kind": "ASR",
+          "text": "当然，这轮到现在没丢东西，这是好的。"
+        },
+        {
+          "at": 137716,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 137877,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "当然，这轮到现在没丢东西，这是好的。"
+        },
+        {
+          "at": 137878,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 139321,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 175537,
+          "kind": "ASR",
+          "text": "就查一下VAD的情况吧。"
+        },
+        {
+          "at": 180803,
+          "kind": "ASR",
+          "text": "看看到现在为止，这一轮测试。"
+        },
+        {
+          "at": 183126,
+          "kind": "ASR",
+          "text": "少VAT滤掉了多少。"
+        },
+        {
+          "at": 185801,
+          "kind": "ASR",
+          "text": "实际发给 real time 模型的有多少？"
+        },
+        {
+          "at": 185937,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 186264,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "查一下 VAD 的情况吧，看看到现在为止这一轮测试总的语音长了多少，VAD 滤掉了多少，实际发给 Realtime 模型的有多少。"
+        },
+        {
+          "at": 186265,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 187380,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 189661,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "L2",
+      "arm": "N1",
+      "rep": 0,
+      "note": "stop at ~52 s; \"停下来以后…\" NOT a stop; multi-fragment units",
+      "spendCny": 0.039502,
+      "responses": 13,
+      "usage": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1255,
+          42,
+          37
+        ],
+        [
+          1459,
+          70,
+          38
+        ],
+        [
+          1576,
+          98,
+          51
+        ],
+        [
+          1684,
+          119,
+          30
+        ],
+        [
+          1776,
+          126,
+          28
+        ],
+        [
+          1873,
+          133,
+          26
+        ],
+        [
+          1978,
+          168,
+          34
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          2132,
+          259,
+          55
+        ],
+        [
+          2251,
+          287,
+          35
+        ],
+        [
+          2399,
+          392,
+          58
+        ]
+      ],
+      "insertedOk": 0,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 4685,
+          "kind": "ASR",
+          "text": "现在是十月十五日。"
+        },
+        {
+          "at": 4897,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 4978,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"现在是十月十五日。\""
+        },
+        {
+          "at": 4979,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 6381,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 7738,
+          "kind": "ASR",
+          "text": "Likewise, about the DDoS测试."
+        },
+        {
+          "at": 7870,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8056,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在是十月十五日，Live Voice Mode 的第六次测试。"
+        },
+        {
+          "at": 8056,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 8381,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 10379,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 25698,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 25801,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 25986,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 25986,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 27441,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 51761,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 53071,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 53277,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53550,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户要求停止当前正在进行的处理任务"
+        },
+        {
+          "at": 53551,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 54859,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 55678,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 55761,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 55905,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "先处理现在的这个请求。"
+        },
+        {
+          "at": 55906,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 57098,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 57361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 57389,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 57505,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "哎，挺好。"
+        },
+        {
+          "at": 57506,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 73244,
+          "kind": "ASR",
+          "text": "Hey."
+        },
+        {
+          "at": 73360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 73642,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 73772,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "行。"
+        },
+        {
+          "at": 73773,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 75004,
+          "kind": "ASR",
+          "text": "Six."
+        },
+        {
+          "at": 78683,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去调 cloud code 吗？"
+        },
+        {
+          "at": 78837,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 79024,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Cloud Code 吗？"
+        },
+        {
+          "at": 79024,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 79361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 92652,
+          "kind": "ASR",
+          "text": "我看见调用了，但是为什么会等这么久呢？"
+        },
+        {
+          "at": 92900,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 92958,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"我看见"
+        },
+        {
+          "at": 92958,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 95066,
+          "kind": "ASR",
+          "text": "从“停下来”这几个字。"
+        },
+        {
+          "at": 96329,
+          "kind": "ASR",
+          "text": "到泡泡里。"
+        },
+        {
+          "at": 96460,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 96558,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"从停下来这几个字到泡泡"
+        },
+        {
+          "at": 96558,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 98009,
+          "kind": "ASR",
+          "text": "以及到哦。"
+        },
+        {
+          "at": 100616,
+          "kind": "ASR",
+          "text": "哦，卡拉扣的跑起来好像挺久的。"
+        },
+        {
+          "at": 100702,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 100978,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看到调用了，但是为什么会等这么久呢？从停下来这几个字到泡泡里，以及到哦 Cloud Code 跑起来，好像挺久的。"
+        },
+        {
+          "at": 100979,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 101361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 116040,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 137416,
+          "kind": "ASR",
+          "text": "当然，这轮到现在没丢东西，这是好的。"
+        },
+        {
+          "at": 137700,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 137860,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "当然这轮到现在没丢东西，这是好的。"
+        },
+        {
+          "at": 137861,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 139321,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 175532,
+          "kind": "ASR",
+          "text": "就查一下VAD的情况吧。"
+        },
+        {
+          "at": 179699,
+          "kind": "ASR",
+          "text": "看看到现在为止，这一轮测试。"
+        },
+        {
+          "at": 183161,
+          "kind": "ASR",
+          "text": "总的语音传了多少？V A T滤掉了多少？"
+        },
+        {
+          "at": 185787,
+          "kind": "ASR",
+          "text": "实际发给 real time 模型的有多少？"
+        },
+        {
+          "at": 185929,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 186226,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "查一下 VAD 的情况吧，看看到现在为止这一轮测试总的语音传了多少，VAD 滤掉了多少，实际发给 realtime 模型的有多少。"
+        },
+        {
+          "at": 186227,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 187380,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 189661,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    }
+  ]
+}

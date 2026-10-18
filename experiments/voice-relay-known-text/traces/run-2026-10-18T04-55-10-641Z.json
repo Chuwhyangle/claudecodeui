@@ -1,0 +1,868 @@
+{
+  "ranAt": "2026-10-18T04:55:10.642Z",
+  "budgetCny": 0.4,
+  "spendCny": 0.116628,
+  "guardTriggered": false,
+  "results": [
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 0,
+      "gapMs": 1000,
+      "spendCny": 0.005287,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262484,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299269444,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299262918,
+          "message": "把 server 里的 voice.service.ts 的超时改成30秒。"
+        },
+        {
+          "t": 1792299269804,
+          "message": "看一下useVoiceInput这个hook是怎么处理recording的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": true
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        }
+      ],
+      "omitted": [],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 1,
+      "gapMs": 1000,
+      "spendCny": 0.005293,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262504,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299269457,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299269902,
+          "message": "看一下useVoiceInput这个hook是怎么处理recordingId的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": false
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 2,
+      "gapMs": 1000,
+      "spendCny": 0.005299,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262542,
+          "text": "把server里的voice点se rest的超时改成三十秒。"
+        },
+        {
+          "t": 1792299269471,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299269832,
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": false
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 0,
+      "gapMs": 1000,
+      "spendCny": 0.00567,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262534,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299269461,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299270080,
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recording 状态的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": true
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        }
+      ],
+      "omitted": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 1,
+      "gapMs": 1000,
+      "spendCny": 0.00556,
+      "responseCreated": 2,
+      "doneStatuses": [
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299263286,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 1792299272522,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299272858,
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": false
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 2,
+      "gapMs": 1000,
+      "spendCny": 0.008136,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "completed",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262492,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299269482,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299262903,
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299269862,
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": true
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        }
+      ],
+      "omitted": [],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 0,
+      "gapMs": 1000,
+      "spendCny": 0.005113,
+      "responseCreated": 2,
+      "doneStatuses": [
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299263931,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 1792299271251,
+          "text": "默认模型换成 Whisper Large，啊不，是 Whisper Turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299271553,
+          "message": "把默认模型换成 whisper-large，不是 whisper-turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 1,
+      "gapMs": 1000,
+      "spendCny": 0.005108,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299265015,
+          "text": "点se，resTS只改voice module TS。"
+        },
+        {
+          "t": 1792299270335,
+          "text": "型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299270566,
+          "message": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 2,
+      "gapMs": 1000,
+      "spendCny": 0.005108,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262148,
+          "text": "不要动，voice点se，voice点ts，只改voice module点ts。"
+        },
+        {
+          "t": 1792299268448,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299269108,
+          "message": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 0,
+      "gapMs": 1000,
+      "spendCny": 0.007911,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "completed",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262129,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 1792299268438,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299262424,
+          "message": "不要动 voice/sse race.ts，只改 voice module.ts。"
+        },
+        {
+          "t": 1792299268766,
+          "message": "把默认模型换成 whisper-large，啊不是 whisper-turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "covered": true
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 1,
+      "gapMs": 1000,
+      "spendCny": 0.005362,
+      "responseCreated": 2,
+      "doneStatuses": [
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299263135,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 1792299271066,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299271436,
+          "message": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 2,
+      "gapMs": 1000,
+      "spendCny": 0.005484,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299262145,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 1792299268457,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299269257,
+          "message": "不要动 voice.s 和 voice.ts，只改 voice module.ts。把默认模型换成 whisper large，啊不是 whisper turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "covered": true
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 0,
+      "gapMs": 1000,
+      "spendCny": 0.011369,
+      "responseCreated": 4,
+      "doneStatuses": [
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299287082,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299294046,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 1792299300451,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299287472,
+          "message": "把 server 里的 voice-service.ts 的超时改成 30 秒。"
+        },
+        {
+          "t": 1792299294424,
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": true
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        },
+        {
+          "clip": "d08",
+          "covered": false
+        }
+      ],
+      "omitted": [
+        "d08"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]",
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 1,
+      "gapMs": 1000,
+      "spendCny": 0.005864,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299287855,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299295002,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 1792299301758,
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299302128,
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": false
+        },
+        {
+          "clip": "d03",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 2,
+      "gapMs": 1000,
+      "spendCny": 0.005864,
+      "responseCreated": 3,
+      "doneStatuses": [
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299287122,
+          "text": "把server里的voice点se rest的超时改成三十秒。"
+        },
+        {
+          "t": 1792299294074,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 1792299300488,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299301009,
+          "message": "把默认模型换成 whisper-large，啊不，是 whisper-turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": false
+        },
+        {
+          "clip": "d03",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 0,
+      "gapMs": 1000,
+      "spendCny": 0.011921,
+      "responseCreated": 4,
+      "doneStatuses": [
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299287143,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299294046,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 1792299300474,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299287473,
+          "message": "把 server 里的 voice.service.ts 的超时改成 30 秒。"
+        },
+        {
+          "t": 1792299294425,
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": true
+        },
+        {
+          "clip": "d03",
+          "covered": true
+        },
+        {
+          "clip": "d08",
+          "covered": false
+        }
+      ],
+      "omitted": [
+        "d08"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]",
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 1,
+      "gapMs": 1000,
+      "spendCny": 0.006129,
+      "responseCreated": 2,
+      "doneStatuses": [
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299295500,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 1792299305231,
+          "text": "下 use voice input 这个 cook 是怎么处理 record 邓 g 的。"
+        },
+        {
+          "t": 1792299309524,
+          "text": "任模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299309918,
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": false
+        },
+        {
+          "clip": "d03",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 2,
+      "gapMs": 1000,
+      "spendCny": 0.00615,
+      "responseCreated": 4,
+      "doneStatuses": [
+        "cancelled",
+        "cancelled",
+        "completed",
+        "completed"
+      ],
+      "finals": [
+        {
+          "t": 1792299287155,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 1792299294065,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 1792299300466,
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        }
+      ],
+      "calls": [
+        {
+          "t": 1792299287526,
+          "message": "把 server 里的 voice.service.ts 的超时改成 30 秒。"
+        },
+        {
+          "t": 1792299300873,
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。"
+        }
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "covered": true
+        },
+        {
+          "clip": "d03",
+          "covered": false
+        },
+        {
+          "clip": "d08",
+          "covered": true
+        }
+      ],
+      "omitted": [
+        "d03"
+      ],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+# b5d01c21@10-13T15:59:28 arm A rep 0 model sonnet hook false wall 103.8s
+   0.0  >> DELIVER prompt: 好，现在整体检查一下这次 live voice 语音测试的过程。然后分析一下其中发生的问题。
+   2.1  == turn
+   6.2     tool Bash: cd ~/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat live-voice-fourth-test-2026-10-13-night
+  19.7     tool Bash: J=~/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl; echo "transcripts nonempty: $(jq 
+  23.0  · voice [REDIRECT] 先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。
+  40.4     tool Bash: cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat >> live-voice-fourth-test
+  40.4     (blocked by sandbox)
+  56.4     text: 这次测试从 23:56:18 到 16:01:48（UTC，日志时间），journal 是 `b5d01c21`，构建 `cc92c094f`，`mode: continuous`。**传输面是干净的**，问题全在我们自己的工具层、投递层和前端。记忆文件我没写进去，沙箱不允许写工作区外，所以下面的终局读数请当作对 `live-voice-fourth-test-2026-10-13-night-findings` 的补充。  ## 总体读数  | 项目 | 数值 | |---|---| | 断线 / 重连 | 0；16:01:48 浏览器正常发 close frame 收尾 | | 转写 | 
+  56.4  -- result success
+  56.4  >> DELIVER turn-end: 先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。
+  56.4  == turn
+  60.2     tool Bash: J=~/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl; for p in 'input_audio_buffer.spee
+  61.6  · voice [REMARK] 你看，这句“先暂停一下”居然会排在queue里面。
+  67.7     text: 统计结果如下（来自 journal `b5d01c21`）：  | | 数量 | |---|---| | 你说的话（VAD 检出并提交的语音段） | **31 段** | | 识别输出（`transcription.completed`） | **31 条**：30 条有内容，1 条空串 | | 前端收到的字幕气泡 | 31 条（含那条空的） | | 模型发起的 `session_send` | 20 次 | | 实际投递给会话的消息 | 约 11 条（20 次调用被 2.5 s 窗口合并） | | `session_interrupt` | 1 次，被 schema 拒 |  31 段输入对
+  67.7  -- result success
+  67.7  >> DELIVER turn-end: 你看，这句“先暂停一下”居然会排在queue里面。
+  67.7  == turn
+  69.0  · voice [ASK] 要等到前面那句话处理完了，它才能排进去吗？
+  71.6     text: 对，这句话在 journal 里有记录：  - 15:59:53 "先暂停一下……"投递成功，但当时我的回合还在跑，它进了 CLI 队列。 - 到 16:00:58 才出队，等了约 65 s。  "暂停"这类话进了队列，就得等要暂停的东西跑完才会被读到，等于没说。能让它生效的只有抢占：服务端在会话忙时遇到这类话，直接中断当前回合。这就是前面第 7 条要立的提案，修好 `session_interrupt` 的 `intent` 参数是第一步。
+  71.6  -- result success
+  71.6  >> DELIVER turn-end: 要等到前面那句话处理完了，它才能排进去吗？
+  71.6  == turn
+  77.0     text: 不是。它不用等前一句处理完才能进队列，是进了队列之后要等前一句处理完才会被读到。  journal 里的时间线：  - 15:59:53.673：合并窗口结束，消息投递，耗时 1 ms，已进入 CLI 队列（`phase=queued queued=1/102B`）。 - 16:00:58：我上一个回合跑完，队列出队，这时才开始处理。  队列本身不是瓶颈，消息进去很快。慢在 CLI 只在回合边界才读队列，所以你看到的是"已经排上了，但还没轮到"。  这也说明你要的抢占放在哪一层：不是让它更快地进队列，而是在会话忙时遇到"暂停/停止"这类话，直接中断当前回合，不再等回合边界。
+  77.0  -- result success

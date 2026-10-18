@@ -1,0 +1,57 @@
+{
+  "audio": "/data/home/yale/work/claudecodeui/experiments/voice-provider-paired-quality/fixtures/d01-o65.wav",
+  "fromMs": -1,
+  "durationMs": 3000,
+  "reference": "把 server 里的 voice.service.ts 的超时改成三十秒",
+  "arms": [
+    {
+      "arm": "K",
+      "rep": 1,
+      "echo": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 1128,
+      "stoppedMs": 2419,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "P1500",
+      "rep": 1,
+      "echo": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1500,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 1020,
+      "stoppedMs": 2301,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    }
+  ],
+  "spendCny": 0
+}

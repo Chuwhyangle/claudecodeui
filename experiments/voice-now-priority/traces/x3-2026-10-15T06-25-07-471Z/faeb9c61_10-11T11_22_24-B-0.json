@@ -1,0 +1,481 @@
+{
+ "episode": "faeb9c61@10-11T11:22:24",
+ "arm": "B",
+ "rep": 0,
+ "model": "haiku",
+ "hook": true,
+ "commit": "b0e5886a5898de9870e0eb0403c52421d58378b2",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 16106,
+   "text": "当前会话应当是一次常驻会话，请检查。",
+   "label": "ADD"
+  },
+  {
+   "offsetMs": 33178,
+   "text": "到现在为止，我看到的情况都还不错。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 74037,
+   "text": "当然，现在对第一句输入的处理耗时太长。",
+   "label": "NEXT-frag"
+  },
+  {
+   "offsetMs": 78196,
+   "text": "这可能提示我们。",
+   "label": "NEXT-frag"
+  },
+  {
+   "offsetMs": 86937,
+   "text": "需要为Live Voice Mode提供用语音终止之前处理的能力。",
+   "label": "NEXT"
+  },
+  {
+   "offsetMs": 112354,
+   "text": "我前面是说，为Live Mode、Live Voice Mode提供这个能力。",
+   "label": "NEXT-fix"
+  },
+  {
+   "offsetMs": 163351,
+   "text": "我看到对第一句话的处理现在已经花了两分多钟。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 179525,
+   "text": "看上去现在语音识别的处理很慢，也很慢，很奇怪。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 201241,
+   "text": "如果现在按下那个停止键。",
+   "label": "ASK-frag"
+  },
+  {
+   "offsetMs": 207276,
+   "text": "它是会停止Live Voice Mode。",
+   "label": "ASK-frag"
+  },
+  {
+   "offsetMs": 211652,
+   "text": "还是会停止第一句话的处理。",
+   "label": "ASK-frag"
+  },
+  {
+   "offsetMs": 219098,
+   "text": "我这些没有被处理的输入会被丢掉吗？",
+   "label": "ASK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 274581,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "让我们再做一次LiveMOT的语音输入。",
+   "parts": []
+  },
+  {
+   "t": 1979,
+   "ev": "TURN"
+  },
+  {
+   "t": 5974,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "grep -ril \"livemot\" --include=*.md --include=*.ts --include=*.js --include=*.sh --include=*.json . 2>/dev/null | grep -v node_modules | head -30; ls /data/home/",
+   "bg": false
+  },
+  {
+   "t": 8785,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat voice-capture-records-and-latency-forensics.md | head -60; echo ----; cat l",
+   "bg": false
+  },
+  {
+   "t": 10615,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat voice-retest-input-arrives-in-this-session-answer-fast.md; echo ----; ls -t",
+   "bg": false
+  },
+  {
+   "t": 14254,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd ~/.cloudcli/voice-realtime-log/ && f=$(ls -t | head -1); echo \"$f\"; tail -n 3 \"$f\" | cut -c1-300",
+   "bg": false
+  },
+  {
+   "t": 16138,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "当前会话应当是一次常驻会话，请检查。"
+  },
+  {
+   "t": 17499,
+   "ev": "TEXT",
+   "text": "收到，这句语音已经进到本会话。我刚看了最新的语音连接 `7c01be7e`，它的日志正常收尾（`response.done status=completed`）。\n\n这一轮我只做了这一个检查，没有展开调查。你可以接着说话，我会在每个工具边界看新话。要复盘这一轮，我会对照 `transcription.completed` 和 `session_send` 检查每句话有没有对应的处置，有遗漏的话单独列出来。"
+  },
+  {
+   "t": 17522,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 17522,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "当前会话应当是一次常驻会话，请检查。",
+   "parts": [
+    "ADD:当前会话应当是一次常驻会话，请检查。"
+   ]
+  },
+  {
+   "t": 17569,
+   "ev": "TURN"
+  },
+  {
+   "t": 20683,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && sed -n 1,40p topic-claude-resident-provider-lessons.md | cut -c1-400; echo ----",
+   "bg": false
+  },
+  {
+   "t": 33210,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "到现在为止，我看到的情况都还不错。"
+  },
+  {
+   "t": 41734,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat cli-registry-file-lives-only-as-long-as-the-child.md | cut -c1-500 | head -",
+   "bg": false
+  },
+  {
+   "t": 73449,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "ps -o pid,ppid,etimes,stat,args -p 3321991 | cut -c1-400; ps -o pid,ppid,args -p $(ps -o ppid= -p 3321991) | cut -c1-200; cat ~/.cloudcli/local-server.json 2>/d",
+   "bg": false
+  },
+  {
+   "t": 74068,
+   "ev": "PIECE",
+   "label": "NEXT-frag",
+   "text": "当然，现在对第一句输入的处理耗时太长。"
+  },
+  {
+   "t": 78228,
+   "ev": "PIECE",
+   "label": "NEXT-frag",
+   "text": "这可能提示我们。"
+  },
+  {
+   "t": 86969,
+   "ev": "PIECE",
+   "label": "NEXT",
+   "text": "需要为Live Voice Mode提供用语音终止之前处理的能力。"
+  },
+  {
+   "t": 106091,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "ps -o pid,etimes,args -p 507915 | cut -c1-160; (ss -ltnp 2>/dev/null | grep -E \":3001|:3002\" | cut -c1-200); cd /data/home/yale/.claude/projects/-data-home-yale",
+   "bg": false
+  },
+  {
+   "t": 106098,
+   "ev": "BLOCKED"
+  },
+  {
+   "t": 107588,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "ps -o pid,etimes,args -p 507915 | cut -c1-160; cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && grep -l \"常驻\" *.md | head; grep -",
+   "bg": false
+  },
+  {
+   "t": 112385,
+   "ev": "PIECE",
+   "label": "NEXT-fix",
+   "text": "我前面是说，为Live Mode、Live Voice Mode提供这个能力。"
+  },
+  {
+   "t": 158868,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cat /proc/3321991/cmdline | tr '\\0' '\\n' | grep -A1 -E \"resume|session\" | head; echo ---; tr '\\0' ' ' < /proc/3321568/cmdline | cut -c1-400; echo; echo ---; ls ",
+   "bg": false
+  },
+  {
+   "t": 163383,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "我看到对第一句话的处理现在已经花了两分多钟。"
+  },
+  {
+   "t": 163578,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/work/claudecodeui && head -c 1500 experiments/voice-now-priority/x3-replay.mts; echo; echo ----; grep -n \"lifecycle\\|resident\\|x3wt\\|port\\|30",
+   "bg": false
+  },
+  {
+   "t": 172260,
+   "ev": "TEXT",
+   "text": "**结论：当前会话不是常驻会话。** 它是 X3 回放实验的一个分叉臂，不是你在 :3001 上用的那个会话。\n\n证据：\n\n- 我的 Claude 进程是 PID `3321991`，工作目录是 `/tmp/x3wt/faeb9c61-B-0-mv95mj68`，后缀 `B-0` 表示 arm B、第 0 次重复。\n- 它的父进程是 PID `3321583`，再往上是 `x3-replay.mts`（PID `3321568`，参数 `--arms B --reps 2 --parallel 6 --model haiku`）。这个实验脚本自己建一次性 worktree，用 `resume + forkSession` 在原会话的原位置分叉，再按臂回放真实语音。\n- 主服务是 PID `507915`（`dist-server/server/index.js`，端口 3001），它并不托管这个进程。\n- 实验脚本的沙箱会拦截 `:3001`、`quay`、`git commit` 等操作，所以这个分叉臂不能写主仓库或动生产服务。\n\n所以，我前一轮说「这句语音已经进到本会话」是错的。我当时只看了最新的 `voice-realtime-log` 连接 `7c01be7e`，没有核对它属于哪个服务进程。那条日志的归属我没有验证，应当撤回这个判断。你说的语音输入，有可能被回放进了这个分叉臂，而不是你真正的会话。\n\n我没有动任何进程。`x3-replay`（PID `3321568`）还在跑，结束它或处理它的产物需要你决定。\n\n需要你定一件事：\n\n1. 请在 :3001 上打开你真正的常驻会话，之后的语音测试在那里做。这是我的建议。\n2. 或者保留当前分叉臂，只把它当实验记录来看。"
+  },
+  {
+   "t": 172283,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 172283,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "到现在为止，我看到的情况都还不错。当然，现在对第一句输入的处理耗时太长。这可能提示我们。需要为Live Voice Mode提供用语音终止之前处理的能力。我前面是说，为Live Mode、Live Voice Mode提供这个能力。我看到对第一句话的处理现在已经花了两分多钟。",
+   "parts": [
+    "REMARK:到现在为止，我看到的情况都还不错。",
+    "NEXT-frag:当然，现在对第一句输入的处理耗时太长。",
+    "NEXT-frag:这可能提示我们。",
+    "NEXT:需要为Live Voice Mode提供用语音终止之前处理的能力。",
+    "NEXT-fix:我前面是说，为Live Mode、Live Voice Mode提供这个能力。",
+    "REMARK:我看到对第一句话的处理现在已经花了两分多钟。"
+   ]
+  },
+  {
+   "t": 172327,
+   "ev": "TURN"
+  },
+  {
+   "t": 175680,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && sed -n 1,30p live-voice-intent-control-aplus-ruling.md | cut -c1-500",
+   "bg": false
+  },
+  {
+   "t": 179557,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "看上去现在语音识别的处理很慢，也很慢，很奇怪。"
+  },
+  {
+   "t": 180168,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "timeout 20 grep -rn \"session_interrupt\" server src --include=*.ts --include=*.tsx -l 2>/dev/null | grep -v test | head -20",
+   "bg": false
+  },
+  {
+   "t": 182665,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "timeout 20 grep -rln \"voice\" server/modules --include=*.ts | grep -v test | xargs grep -ln \"interrupt\" 2>/dev/null | head -20; echo ---; timeout 20 grep -rn \"se",
+   "bg": false
+  },
+  {
+   "t": 184512,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "timeout 20 grep -n \"interrupt\" server/modules/voice-realtime/voice-realtime-bridge.service.ts | head -30 | cut -c1-260; echo ---; timeout 20 grep -rn \"interrupt",
+   "bg": false
+  },
+  {
+   "t": 187218,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "timeout 20 grep -rln \"session_send\" server/modules/voice-realtime server/modules/voice 2>/dev/null | grep -v test; timeout 20 grep -rn \"session_interrupt\" serve",
+   "bg": false
+  },
+  {
+   "t": 188820,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "timeout 20 grep -n \"name:\\|interrupt\\|Interrupt\" server/modules/voice-realtime/voice-realtime-tools.ts | head -40 | cut -c1-260",
+   "bg": false
+  },
+  {
+   "t": 192320,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "sed -n 262,285p server/modules/voice-realtime/voice-realtime-tools.ts | cut -c1-300; timeout 20 grep -rn \"session_interrupt\\|interrupt\" docs/proposals/voice-rea",
+   "bg": false
+  },
+  {
+   "t": 194188,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "sed -n 286,300p server/modules/voice-realtime/voice-realtime-tools.ts | cut -c1-300; timeout 20 grep -n \"interrupt\" docs/proposals/voice-realtime-persistent-con",
+   "bg": false
+  },
+  {
+   "t": 197049,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "sed -n 200,221p server/modules/voice-realtime/voice-realtime-tools.ts | cut -c1-300; timeout 20 grep -rn \"send_now\\|intent\" server/modules/voice-realtime/voice-",
+   "bg": false
+  },
+  {
+   "t": 201273,
+   "ev": "PIECE",
+   "label": "ASK-frag",
+   "text": "如果现在按下那个停止键。"
+  },
+  {
+   "t": 206555,
+   "ev": "TEXT",
+   "text": "这个能力目前没有。语音侧只暴露一个工具 `session_send`，看不到任何中断或停止的入口。\n\n证据：\n\n- `server/modules/voice-realtime/voice-realtime-tools.ts` 里语音平面只广告 `session_send`，文件注释写明这是因为语音模型只做中继。其余五个工具已被移除。\n- `session_send` 的 schema 只有 `session`、`message`、`waitSeconds`，没有优先级或中断字段。\n- 文本侧的 `session_interrupt` 在 MCP 网关里（`server/modules/mcp-gateway/mcp-gateway.write-tools.ts:196`），语音侧没有接入。\n- 之前的裁定（`live-voice-intent-control-aplus-ruling`）写的是语音模型「语义调用 `session_interrupt`」，但这个工具没有接到语音侧，所以这条裁定实际上没落地。\n\n关于第一句耗时两分多钟：我还没有核对，所以不能判断是上游慢还是中继卡住。需要的话，我可以从这个连接的 `voice-realtime-log` 里读出各段时间点。\n\n我的建议：\n\n1. 把 `session_interrupt` 以语音绑定的形式加进语音工具列表，不要求传 `session`，复用网关里 `session_interrupt` 的同一个中断接缝。\n2. 在语音指令里写明：只在用户说「停」「算了」「取消」这类终止意图时调用，不用来修正方向。这沿用了 A+ 裁定的边界，避免「修正方向」引出 stale-first 问题。\n3. 代价是每次响应多一个工具的 schema 开销，数量很小。\n\n有一件事需要你定：这个改动要在哪里做。当前这个会话是 X3 回放实验的分叉臂，沙箱禁止测试、构建、git 提交和访问 :3001，所以我不能在这里实现和验证它。我建议二选一：\n\n- 在主仓库或者一个正式的 quay 任务里做，我来写代码并跑测试。\n- 你先确认上面的方案，我再去派一个后台代理，去对接具体的文件和测试。\n\n你选哪个？"
+  },
+  {
+   "t": 206581,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 206581,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "看上去现在语音识别的处理很慢，也很慢，很奇怪。如果现在按下那个停止键。",
+   "parts": [
+    "REMARK:看上去现在语音识别的处理很慢，也很慢，很奇怪。",
+    "ASK-frag:如果现在按下那个停止键。"
+   ]
+  },
+  {
+   "t": 206621,
+   "ev": "TURN"
+  },
+  {
+   "t": 207307,
+   "ev": "PIECE",
+   "label": "ASK-frag",
+   "text": "它是会停止Live Voice Mode。"
+  },
+  {
+   "t": 209603,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd ~/.cloudcli/voice-realtime-log/ && f=$(ls -t | head -1); echo $f; grep -o '\"kind\":\"[a-z_.]*\"' \"$f\" | sort | uniq -c | sort -rn | head -15; grep '\"kind\":\"tran",
+   "bg": false
+  },
+  {
+   "t": 211587,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd ~/.cloudcli/voice-realtime-log/ && f=7c01be7e-24a7-4728-81a5-f50bcee9a847.jsonl; grep -E '\"kind\":\"(connection|session_send|prefix)\"' $f | cut -c1-300; grep -",
+   "bg": false
+  },
+  {
+   "t": 211683,
+   "ev": "PIECE",
+   "label": "ASK-frag",
+   "text": "还是会停止第一句话的处理。"
+  },
+  {
+   "t": 216174,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd ~/.cloudcli/voice-realtime-log/ && grep -E '03:5[2-4]:' 7c01be7e-24a7-4728-81a5-f50bcee9a847.jsonl | grep -v \"audio frames\\|speech_\\|committed\\|transcription",
+   "bg": false
+  },
+  {
+   "t": 219130,
+   "ev": "PIECE",
+   "label": "ASK",
+   "text": "我这些没有被处理的输入会被丢掉吗？"
+  },
+  {
+   "t": 220933,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd ~/.cloudcli/voice-realtime-log/ && awk -F'\"at\":\"' '{print}' 7c01be7e-24a7-4728-81a5-f50bcee9a847.jsonl | grep -E '03:5(2:(3|4|5)|3:|4:)' | grep -v \"audio fra",
+   "bg": false
+  },
+  {
+   "t": 227588,
+   "ev": "TEXT",
+   "text": "ASR 本身不慢。日志里每段话的 `transcription.completed` 大约在停说后 0.2–0.3 秒到达，`session_send` 投递只要 0–6 毫秒。\n\n慢在实时模型这一层的回合：\n\n- 03:52:04，模型开始发 `session_send` 函数调用，但在调用还没完成时，服务端 VAD 检测到你又开口了，回合被以 `turn_detected` 取消。\n- 紧接着 `Unknown function call id` 和 `Cannot create response after rejected function_call_output` 两个错误，这次调用被拒。\n- 03:52:33 和 03:52:38 同样的事又发生了两次：模型的 `session_send` 调用刚生成就被 `turn_detected` 截断。\n- 03:52:30 到 03:54:49 之间没有一次成功的 `session_send`。第一次真正送达的消息是 03:52:30 的 busy hold 合并投递，之后要等到 03:54:49 才看到下一次 `response.done`。这两分多钟里我还没有查清模型在等什么，只能确认它一直被截断、反复重发。\n\n所以问题在于：每次你新开口都会取消模型正在进行的那一次函数调用，它只能重来，前面的话就一直等着。\n\n关于「按下停止键」：我还没有查停止键在前端实际做什么。我在日志里能看到的只是服务端的 VAD 取消，而不是一个用户主动的停止。如果你要我确认停止键的行为，我需要去读前端对应的代码路径。另外，如果停止键只是断开语音连接或静音，它不会取消服务端正在进行的模型回合，而这恰恰是你刚才描述的「终止之前处理」要解决的问题。\n\n要不要我现在去读停止键的前端代码，并确认它到底触发什么？"
+  },
+  {
+   "t": 227609,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 227609,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "它是会停止Live Voice Mode。还是会停止第一句话的处理。我这些没有被处理的输入会被丢掉吗？",
+   "parts": [
+    "ASK-frag:它是会停止Live Voice Mode。",
+    "ASK-frag:还是会停止第一句话的处理。",
+    "ASK:我这些没有被处理的输入会被丢掉吗？"
+   ]
+  },
+  {
+   "t": 227647,
+   "ev": "TURN"
+  },
+  {
+   "t": 230038,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "timeout 20 grep -rln \"useVoiceRealtimeSession\" src | grep -v test | head; timeout 20 grep -rn \"stop\\|Stop\" src/components/voice* -r 2>/dev/null | grep -v test |",
+   "bg": false
+  },
+  {
+   "t": 232262,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /tmp/x3wt/faeb9c61-B-0-mv95mj68/src/modules/chat/voice-realtime && grep -n -i \"stop\\|disconnect\\|hangup\\|end\" VoiceRealtimeBar.tsx | head -30 | cut -c1-220; ",
+   "bg": false
+  },
+  {
+   "t": 234404,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "sed -n 480,500p useVoiceRealtimeSession.ts | cut -c1-220; echo ---; grep -n \"const end = \\|end = useCallback\\|const end\" useVoiceRealtimeSession.ts; n=$(grep -n",
+   "bg": false
+  },
+  {
+   "t": 238506,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /tmp/x3wt/faeb9c61-B-0-mv95mj68/server/modules/voice-realtime && grep -n -i \"type === 'close'\\|case 'close'\\|teardown\\|busy hold\\|hold.*flush\\|flush.*hold\" v",
+   "bg": false
+  },
+  {
+   "t": 241109,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "sed -n 1301,1330p voice-realtime-ws-proxy.service.ts | cut -c1-230",
+   "bg": false
+  },
+  {
+   "t": 248559,
+   "ev": "TEXT",
+   "text": "**End 停的是 Live Voice Mode 本身，不是第一句话的处理。** 我从代码里确认的行为如下（前端 `useVoiceRealtimeSession.ts` 的 `end()`，服务端 `voice-realtime-ws-proxy.service.ts` 的 `teardown`）：\n\n**会被处理的：**\n\n- 你正在说、还没切段的那句话，会先被flush，作为最后一段发出去。\n- 已经送达 Claude CLI 的消息，照常由 Claude 处理。我没有看到 teardown 里调用任何中断操作，所以正在跑的那一轮 Claude 很可能会继续跑完。这一点我还没在运行时验证，只是从代码看没有取消路径。\n\n**会被丢掉的：**\n\n- 服务端正在等转写结果、还没投递的那条指令，teardown 会调用 `releaseHeldDelivery`，记录为「未投递」，不会补发。\n- 模型正在生成、还没完成的那次 `session_send` 函数调用，随连接关闭一起被截断。\n- 前端还没送到服务端的音频帧（等待连接打开时排队的）会直接清空。\n- 底部 Q 徽章会被清成 0，但 CLI 队列里可能仍有排着的消息。这是显示和实际状态不一致。\n\n所以，你说的「没有被处理的输入会被丢掉吗」答案是：会。End 之后，还没送到 Claude 的那些话，有一部分会丢，丢掉的不一定只是正在处理的那句。这和之前「每句必投递」的裁定是冲突的，应该记为一个缺陷。\n\n如果你想要的是「只停掉第一句话的处理，但保留后面的输入」，现在没有这个按钮。最接近的是 End，但它会结束整个会话。\n\n要不要我把这一点记下来，作为一个待修的缺陷？"
+  },
+  {
+   "t": 248583,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

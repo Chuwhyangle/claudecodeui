@@ -1,0 +1,394 @@
+[
+ {
+  "name": "b-now",
+  "priority": "now",
+  "count": 1,
+  "rep": 0,
+  "results": 2,
+  "inits": 2,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 1,
+    "lifecycle": [
+     "queued@0.5",
+     "started@0.5",
+     "cancelled@9.8"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8269,
+    "lifecycle": [
+     "queued@8.3",
+     "started@9.8",
+     "completed@37.0"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 6,
+   "system/init": 2,
+   "rate_limit_event": 1,
+   "system/thinking_tokens": 4,
+   "assistant": 12,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 2
+  }
+ },
+ {
+  "name": "b-next",
+  "priority": "next",
+  "count": 1,
+  "rep": 0,
+  "results": 1,
+  "inits": 1,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.6",
+     "started@0.6",
+     "completed@39.3"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8881,
+    "lifecycle": [
+     "queued@8.9",
+     "started@10.4",
+     "completed@39.3"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 6,
+   "system/init": 1,
+   "rate_limit_event": 1,
+   "system/thinking_tokens": 2,
+   "assistant": 13,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 1
+  }
+ },
+ {
+  "name": "d-now",
+  "priority": "now",
+  "count": 3,
+  "rep": 0,
+  "results": 2,
+  "inits": 2,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.5",
+     "started@0.5",
+     "cancelled@10.3"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8738,
+    "lifecycle": [
+     "queued@8.7",
+     "started@10.3",
+     "completed@38.0"
+    ]
+   },
+   {
+    "label": "W1",
+    "pushedAt": 8738,
+    "lifecycle": [
+     "queued@8.7",
+     "started@10.3",
+     "completed@38.0"
+    ]
+   },
+   {
+    "label": "W2",
+    "pushedAt": 8738,
+    "lifecycle": [
+     "queued@8.7",
+     "started@10.3",
+     "completed@38.0"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 12,
+   "system/init": 2,
+   "rate_limit_event": 1,
+   "system/thinking_tokens": 4,
+   "assistant": 13,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 2
+  }
+ },
+ {
+  "name": "d-next",
+  "priority": "next",
+  "count": 3,
+  "rep": 0,
+  "results": 1,
+  "inits": 1,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.6",
+     "started@0.6",
+     "completed@43.1"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 9862,
+    "lifecycle": [
+     "queued@9.9",
+     "started@11.4",
+     "completed@43.1"
+    ]
+   },
+   {
+    "label": "W1",
+    "pushedAt": 9862,
+    "lifecycle": [
+     "queued@9.9",
+     "started@11.4",
+     "completed@43.1"
+    ]
+   },
+   {
+    "label": "W2",
+    "pushedAt": 9862,
+    "lifecycle": [
+     "queued@9.9",
+     "started@11.4",
+     "completed@43.1"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 12,
+   "system/init": 1,
+   "rate_limit_event": 1,
+   "system/thinking_tokens": 6,
+   "assistant": 13,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 1
+  }
+ },
+ {
+  "name": "b-now",
+  "priority": "now",
+  "count": 1,
+  "rep": 1,
+  "results": 2,
+  "inits": 2,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.5",
+     "started@0.5",
+     "cancelled@9.7"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8167,
+    "lifecycle": [
+     "queued@8.2",
+     "started@9.7",
+     "completed@37.9"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 6,
+   "system/init": 2,
+   "system/thinking_tokens": 6,
+   "assistant": 13,
+   "rate_limit_event": 2,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 2
+  }
+ },
+ {
+  "name": "b-next",
+  "priority": "next",
+  "count": 1,
+  "rep": 1,
+  "results": 1,
+  "inits": 1,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.5",
+     "started@0.5",
+     "completed@36.8"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8518,
+    "lifecycle": [
+     "queued@8.5",
+     "started@10.0",
+     "completed@36.8"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 6,
+   "system/init": 1,
+   "rate_limit_event": 1,
+   "system/thinking_tokens": 4,
+   "assistant": 12,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 1
+  }
+ },
+ {
+  "name": "d-now",
+  "priority": "now",
+  "count": 3,
+  "rep": 1,
+  "results": 2,
+  "inits": 2,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.5",
+     "started@0.5",
+     "cancelled@10.3"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8769,
+    "lifecycle": [
+     "queued@8.8",
+     "started@10.3",
+     "completed@39.8"
+    ]
+   },
+   {
+    "label": "W1",
+    "pushedAt": 8769,
+    "lifecycle": [
+     "queued@8.8",
+     "started@10.3",
+     "completed@39.8"
+    ]
+   },
+   {
+    "label": "W2",
+    "pushedAt": 8769,
+    "lifecycle": [
+     "queued@8.8",
+     "started@10.3",
+     "completed@39.8"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 12,
+   "system/init": 2,
+   "rate_limit_event": 2,
+   "assistant": 11,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 2,
+   "system/thinking_tokens": 2
+  }
+ },
+ {
+  "name": "d-next",
+  "priority": "next",
+  "count": 3,
+  "rep": 1,
+  "results": 1,
+  "inits": 1,
+  "per": [
+   {
+    "label": "first",
+    "pushedAt": 0,
+    "lifecycle": [
+     "queued@0.5",
+     "started@0.5",
+     "completed@38.1"
+    ]
+   },
+   {
+    "label": "W0",
+    "pushedAt": 8793,
+    "lifecycle": [
+     "queued@8.8",
+     "started@10.3",
+     "completed@38.1"
+    ]
+   },
+   {
+    "label": "W1",
+    "pushedAt": 8793,
+    "lifecycle": [
+     "queued@8.8",
+     "started@10.3",
+     "completed@38.1"
+    ]
+   },
+   {
+    "label": "W2",
+    "pushedAt": 8793,
+    "lifecycle": [
+     "queued@8.8",
+     "started@10.3",
+     "completed@38.1"
+    ]
+   }
+  ],
+  "foreign": [],
+  "types": {
+   "command_lifecycle": 12,
+   "system/init": 1,
+   "rate_limit_event": 1,
+   "system/thinking_tokens": 6,
+   "assistant": 13,
+   "system/task_started": 8,
+   "system/task_notification": 8,
+   "user": 8,
+   "result/success": 1
+  }
+ }
+]

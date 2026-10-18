@@ -1,0 +1,318 @@
+{
+ "episode": "99df08d8@10-12T01:24:07",
+ "arm": "C",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "fe7f119d6afbfd9eac602083d3c44a2fc1721fcb",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 6022,
+   "text": "第一句识别出来了，我们看看第二句。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 12059,
+   "text": "现在第三句。",
+   "label": "NOISE"
+  },
+  {
+   "offsetMs": 18941,
+   "text": "第四句。",
+   "label": "NOISE"
+  },
+  {
+   "offsetMs": 39432,
+   "text": "到现在为止识别的还可以。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 55148,
+   "text": "只是对于第一句的处理慢一些，但这是正常的。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 93323,
+   "text": "现在后面这几句话都在 queue 里面在等。",
+   "label": "REMARK-frag"
+  },
+  {
+   "offsetMs": 99472,
+   "text": "或者说队列，在队列里面等。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 129040,
+   "text": "所以你能看见 cancel 这样的操作吗？",
+   "label": "ASK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 158630,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "我们再试一下 live voice mode。",
+   "parts": []
+  },
+  {
+   "t": 848,
+   "ev": "TURN"
+  },
+  {
+   "t": 6045,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "第一句识别出来了，我们看看第二句。"
+  },
+  {
+   "t": 6089,
+   "ev": "TEXT",
+   "text": "好，我在听。这条是通过 Live Voice 进来的，所以链路目前是通的。\n\n你这次想测什么？我可以先做好准备：\n\n- **转发/打断**：我忙的时候你连说几句，看有没有丢句、打断提示是否混入原话。\n- **断线重连**：看语音 socket 裸断后能否自动重连、横幅是否出现。\n- **其他**：比如 Q 队列行、mute 状态。\n\n你直接开始说就行，测完告诉我哪里不对，我再去对 `transcription.completed` 和日志。"
+  },
+  {
+   "t": 6122,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 6122,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "第一句识别出来了，我们看看第二句。",
+   "parts": [
+    "REMARK:第一句识别出来了，我们看看第二句。"
+   ]
+  },
+  {
+   "t": 6167,
+   "ev": "TURN"
+  },
+  {
+   "t": 7314,
+   "ev": "TEXT",
+   "text": "好，第一句识别正常。第二句你接着说，我这边等着。"
+  },
+  {
+   "t": 7336,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 12081,
+   "ev": "PIECE",
+   "label": "NOISE",
+   "text": "现在第三句。"
+  },
+  {
+   "t": 13081,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "现在第三句。",
+   "parts": [
+    "NOISE:现在第三句。"
+   ]
+  },
+  {
+   "t": 13120,
+   "ev": "TURN"
+  },
+  {
+   "t": 14242,
+   "ev": "TEXT",
+   "text": "收到，第二句和这句「现在第三句」都到了。你继续说第三句的内容，我接着听。"
+  },
+  {
+   "t": 14261,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 18964,
+   "ev": "PIECE",
+   "label": "NOISE",
+   "text": "第四句。"
+  },
+  {
+   "t": 19964,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "第四句。",
+   "parts": [
+    "NOISE:第四句。"
+   ]
+  },
+  {
+   "t": 20003,
+   "ev": "TURN"
+  },
+  {
+   "t": 20942,
+   "ev": "TEXT",
+   "text": "收到，第四句到了。目前四句都完整进来了，没有丢句。你继续。"
+  },
+  {
+   "t": 20964,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 39455,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "到现在为止识别的还可以。"
+  },
+  {
+   "t": 40456,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "到现在为止识别的还可以。",
+   "parts": [
+    "REMARK:到现在为止识别的还可以。"
+   ]
+  },
+  {
+   "t": 40496,
+   "ev": "TURN"
+  },
+  {
+   "t": 41788,
+   "ev": "TEXT",
+   "text": "好，到目前为止识别和转发都正常。要不要接着试更难的场景，比如我在忙的时候你连续插几句，或者中途打断我？"
+  },
+  {
+   "t": 41806,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 55171,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "只是对于第一句的处理慢一些，但这是正常的。"
+  },
+  {
+   "t": 56171,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "只是对于第一句的处理慢一些，但这是正常的。",
+   "parts": [
+    "REMARK:只是对于第一句的处理慢一些，但这是正常的。"
+   ]
+  },
+  {
+   "t": 56209,
+   "ev": "TURN"
+  },
+  {
+   "t": 57320,
+   "ev": "TEXT",
+   "text": "对，第一句慢一些是冷启动，会话和连接刚建立，后面几句就快了。这个不算问题。"
+  },
+  {
+   "t": 57339,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 93347,
+   "ev": "PIECE",
+   "label": "REMARK-frag",
+   "text": "现在后面这几句话都在 queue 里面在等。"
+  },
+  {
+   "t": 94347,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "现在后面这几句话都在 queue 里面在等。",
+   "parts": [
+    "REMARK-frag:现在后面这几句话都在 queue 里面在等。"
+   ]
+  },
+  {
+   "t": 94389,
+   "ev": "TURN"
+  },
+  {
+   "t": 98361,
+   "ev": "TEXT",
+   "text": "从我这边看，每一句都已经到了，我也都回了：第二、三、四句和刚才这几句，没有哪句是我没收到的。\n\n所以如果你的界面上这几句还显示在 queue 里等，那是队列行的状态没有跟着更新，不是消息没送达。这和之前记录过的「Q 徽章冻结」是同一类。\n\n你看一下界面：那几行是一直停在 queue 不动，还是过一会儿会消失？要是一直不动，我去对一下日志，看它们的投递处置是不是没回写给前端。"
+  },
+  {
+   "t": 98391,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 99495,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "或者说队列，在队列里面等。"
+  },
+  {
+   "t": 100495,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "或者说队列，在队列里面等。",
+   "parts": [
+    "REMARK:或者说队列，在队列里面等。"
+   ]
+  },
+  {
+   "t": 100540,
+   "ev": "TURN"
+  },
+  {
+   "t": 104734,
+   "ev": "TEXT",
+   "text": "明白，你说的是界面上的队列行：后面几句显示在队列里等，没有变成已投递。\n\n这和我这边的情况对不上：每一句我都收到并回复了，所以它们实际已经投递，只是队列行没有更新。这属于显示/回写的问题，不是识别或转发丢句。\n\n我现在可以去查日志，对这几句的 `transcription.completed` 和投递处置，确认是不是回写没发出去。要查的话你说一声，我派到后台去做。"
+  },
+  {
+   "t": 104756,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 129064,
+   "ev": "PIECE",
+   "label": "ASK",
+   "text": "所以你能看见 cancel 这样的操作吗？"
+  },
+  {
+   "t": 130063,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "所以你能看见 cancel 这样的操作吗？",
+   "parts": [
+    "ASK:所以你能看见 cancel 这样的操作吗？"
+   ]
+  },
+  {
+   "t": 130102,
+   "ev": "TURN"
+  },
+  {
+   "t": 132571,
+   "ev": "TEXT",
+   "text": "看不见。我这边只收到每一句最终投递过来的文本，没有任何「取消」「撤回」之类的事件。\n\n所以如果你在界面上取消了某条排队的话，我这边不会知道：要么那句根本没送过来，要么已经送过来了、我已经回了。\n\n你刚才有取消过哪一句吗？告诉我是哪句，我可以对照我收到的内容，看它到底有没有到我这里。"
+  },
+  {
+   "t": 132583,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

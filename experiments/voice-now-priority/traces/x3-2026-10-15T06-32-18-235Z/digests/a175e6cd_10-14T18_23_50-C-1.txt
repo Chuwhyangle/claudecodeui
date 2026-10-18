@@ -1,0 +1,30 @@
+# a175e6cd@10-14T18:23:50 arm C rep 1 model sonnet hook true wall 85.9s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted before it finished. Any partial changes the interrupted turn had already made may still be present. Everything after this not
+   1.1  == turn
+   2.5  · voice [DUP] 先处理现在的这个请求。
+   4.0  · voice [REMARK] 哎，挺好。
+   4.4     tool ListAgents: 
+   5.6  >> DELIVER quiet now: 先处理现在的这个请求。哎，挺好。
+   5.6  -- result success
+   5.7  == turn
+  11.1     text: 好，前面那轮调查已经停了。我没有起任何后台 Agent 或后台命令，所以没有需要再清理的东西，工作区也是干净的，没改过任何文件。  顺带记一下你刚才说的：这次是用 DeepSeek 在跑。
+  11.1  -- result success
+  20.3  · voice [NOISE] 哎。
+  21.3  >> DELIVER idle: 哎。
+  21.3  == turn
+  22.8     text: 我在。需要我继续看这次测试的日志，还是你有别的要做的，直接说就行。
+  22.8  -- result success
+  25.6  · voice [ASK-superseded] 停下来以后就没有再去调 Claude Code 吗？
+  26.6  >> DELIVER idle: 停下来以后就没有再去调 Claude Code 吗？
+  26.6  == turn
+  29.5     text: 我查一下日志，看停下之后有没有再往 Claude Code 投递。
+  30.6     tool Bash: cd ~/.cloudcli/voice-realtime-log && f=a175e6cd-1aab-4d0d-b66a-c9d712326d66.jsonl && jq -r 'select(.kind=="log
+  34.3     tool Bash: cd ~/.cloudcli/voice-realtime-log && f=a175e6cd-1aab-4d0d-b66a-c9d712326d66.jsonl && jq -r 'select(.kind=="log
+  38.7     text: 停下之后还是调了 Claude Code，停止本身是生效的，但随后的话照常继续投递了。  日志里的顺序是这样的：  - **18:23:50**：你说「让他把前面那个处理停下来」，中继发出 `session_interrupt`，结果是 `aborted=true`，积压 1 条，前一轮被中止。 - **18:23:52 起**：「先处理现在的这个请求」「哎，挺好」「哎」「停下来以后就没有再去调……吗？」，每一句都各发了一条 `session_send`，所以确实又调用了 Claude Code。  这是设计上的行为：打断只中止正在跑的那一轮，之后你说的每句话仍然会被转发。我这边之所以"停下"
+  38.7  -- result success
+  47.7  · voice [ASK] 哦，看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到让 Claude Code 跑起来，好像挺久的。
+  48.7  >> DELIVER idle: 哦，看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到让 Claude Code 跑起来，好像挺久的。
+  48.7  == turn
+  51.8     tool Bash: cd ~/.cloudcli/voice-realtime-log && f=a175e6cd-1aab-4d0d-b66a-c9d712326d66.jsonl && jq -r 'select(.kind=="log
+  60.2     text: 从日志看，语音这一段几乎没有等待，慢在 Claude Code 那一侧，而且有一处明显的延迟还没有定位。  **语音中继段（很快，约 1.5 秒）** - 18:23:49.9：你说完「停下来吧」，转写完成。 - 18:23:50.2：模型发出 `session_interrupt`。 - 18:23:50.265：`aborted=true`，前一轮被中止。  从你说完到中止生效，只用了约 0.4 秒。  **之后的等待（在 Claude Code 侧）** - 18:23:52.3：状态显示 `phase=idle`，也就是被中止的那轮已经停了，Claude Code 空闲。 - 18:2
+  60.2  -- result success

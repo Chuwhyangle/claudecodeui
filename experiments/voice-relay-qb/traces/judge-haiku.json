@@ -1,0 +1,450 @@
+[
+ {
+  "idx": 1,
+  "chars": 53,
+  "label": null,
+  "asr": "检查一下本会话到现在为止已经嗯发出的嗯采集到的语音已经发给 real time 服模型的语音的长度以及相应的费用。",
+  "verdict": "OMITTED | Voice length metric and specific conversation costs omitted; optimization query substituted instead."
+ },
+ {
+  "idx": 2,
+  "chars": 39,
+  "label": null,
+  "asr": "界面上看见了三个气泡下面有video，也就是说这三个气泡都还没有真实的发给服务端。",
+  "verdict": "OMITTED | \"Video\" element and \"not sent to server\" status missing from relay message."
+ },
+ {
+  "idx": 3,
+  "chars": 37,
+  "label": null,
+  "asr": "到现在为止呢，我还没有看见明显的优化。但是，嗯，这次语音的识别或者说转写并不是太准。",
+  "verdict": "OMITTED | Statements about unobserved optimization and poor transcription accuracy missing."
+ },
+ {
+  "idx": 4,
+  "chars": 32,
+  "label": "O",
+  "asr": "我刚 cancel 了给第一个消息的这些做的 assistant 的操作。",
+  "verdict": "OMITTED | Utterance about cancelling assistant operations absent from relayed message."
+ },
+ {
+  "idx": 5,
+  "chars": 26,
+  "label": null,
+  "asr": "但现在发现又有一个行为和我们预期的不一样，我现在已经在。",
+  "verdict": "OMITTED | Utterance's core content about discovering unexpected behavior differences is missing."
+ },
+ {
+  "idx": 6,
+  "chars": 26,
+  "label": "O",
+  "asr": "嗯，你检索一下最近差不多六个小时，就是关于语音的输出讨论。",
+  "verdict": "OMITTED | Time frame (6 hours) missing; output/input distinction reversed."
+ },
+ {
+  "idx": 7,
+  "chars": 25,
+  "label": "O",
+  "asr": "让我们讨论Live Voice的进一步改进及语音输出。",
+  "verdict": "OMITTED | Content about discussing Live Voice improvements is completely missing."
+ },
+ {
+  "idx": 8,
+  "chars": 24,
+  "label": null,
+  "asr": "那么现在再次检查最近十二小时的My Watch记录。",
+  "verdict": "OMITTED | Forwarded message searches for voice input discussions, not My Watch records from 12 hours."
+ },
+ {
+  "idx": 9,
+  "chars": 23,
+  "label": "D",
+  "asr": "但是，reclamation lost闪过恢复以后。",
+  "verdict": "OMITTED | Relay reported system error instead of forwarding utterance content"
+ },
+ {
+  "idx": 10,
+  "chars": 23,
+  "label": "O",
+  "asr": "第二是有时候我们讲打断的稍微慢一点，但这是次要的。",
+  "verdict": "OMITTED | Relay message discusses processing delays, not slow interruptions mentioned in utterance."
+ },
+ {
+  "idx": 11,
+  "chars": 22,
+  "label": null,
+  "asr": "但这个茶这个字呢，也没有跟到前面那段的输入里面。",
+  "verdict": "OMITTED | Utterance discusses input matching issue; forwarded message about stopping is unrelated."
+ },
+ {
+  "idx": 12,
+  "chars": 22,
+  "label": "D",
+  "asr": "Likewise, about the DDoS测试.",
+  "verdict": "OMITTED | DDoS test mention completely absent from relay messages"
+ },
+ {
+  "idx": 13,
+  "chars": 20,
+  "label": "O",
+  "asr": "现在可以看出来啊，当前时间来，Y Smart 和。",
+  "verdict": "OMITTED | Original content about Y Smart and current time not forwarded by relay."
+ },
+ {
+  "idx": 14,
+  "chars": 20,
+  "label": "O",
+  "asr": "啊，以这个ChatGPT版本呢，其实会倾向于。",
+  "verdict": "OMITTED | ChatGPT content absent; relay addressed voice input problems instead"
+ },
+ {
+  "idx": 15,
+  "chars": 20,
+  "label": "D",
+  "asr": "十月十七日，Apple Watch第一次测试。",
+  "verdict": "OMITTED | Apple Watch product name omitted from relay."
+ },
+ {
+  "idx": 16,
+  "chars": 19,
+  "label": "O",
+  "asr": "呃，好像你理解错了 Swift 六十秒的要求。",
+  "verdict": "OMITTED | Core message about misunderstanding of the requirement is missing."
+ },
+ {
+  "idx": 17,
+  "chars": 18,
+  "label": null,
+  "asr": "像刚刚这段话，我说完它应该的话没有十秒。",
+  "verdict": "OMITTED | Original duration estimate not forwarded; relay suggests 20-30 seconds"
+ },
+ {
+  "idx": 18,
+  "chars": 17,
+  "label": "O",
+  "asr": "现在我们可以讨论一下V A D的事情了。",
+  "verdict": "OMITTED | The VAD topic and primary discussion intent are entirely missing."
+ },
+ {
+  "idx": 19,
+  "chars": 17,
+  "label": "O",
+  "asr": "涉及了Live Voice的这些修改。",
+  "verdict": "OMITTED | Live Voice modifications mentioned in utterance but completely absent from forwarded message."
+ },
+ {
+  "idx": 20,
+  "chars": 14,
+  "label": "O",
+  "asr": "十月十八日，Line Voice。",
+  "verdict": "OMITTED | Date and \"Line Voice\" reference missing from forwarded messages."
+ },
+ {
+  "idx": 21,
+  "chars": 14,
+  "label": "O",
+  "asr": "然后，来检查一下你到底发了多少。",
+  "verdict": "OMITTED | Utterance about checking \"how much you sent\" completely absent from forwarded message."
+ },
+ {
+  "idx": 22,
+  "chars": 14,
+  "label": "O",
+  "asr": "我发现上面的操作不像后台跑的。",
+  "verdict": "OMITTED | Content about operation and backend missing from relay messages."
+ },
+ {
+  "idx": 23,
+  "chars": 13,
+  "label": "O",
+  "asr": "然后我会在三十秒钟说一句话。",
+  "verdict": "OMITTED | Original utterance about thirty seconds and speaking absent from relay."
+ },
+ {
+  "idx": 24,
+  "chars": 13,
+  "label": "O",
+  "asr": "我发现这个mute被取消了。",
+  "verdict": "OMITTED | The utterance describes a mute being cancelled, but relay messages discuss inaccessible content instead."
+ },
+ {
+  "idx": 25,
+  "chars": 12,
+  "label": "O",
+  "asr": "还丢不丢？不会丢吧？会丢多少？",
+  "verdict": "OMITTED | Utterance about loss/losing things absent from forwarded message."
+ },
+ {
+  "idx": 26,
+  "chars": 12,
+  "label": "D",
+  "asr": "这是二零二六年十月十五日。",
+  "verdict": "PRESENT | Content reworded with digits instead of words, merged with additional context."
+ },
+ {
+  "idx": 27,
+  "chars": 12,
+  "label": "O",
+  "asr": "当然，总的说来，现在体验已经。",
+  "verdict": "OMITTED | Original utterance content about experience is completely absent from relay."
+ },
+ {
+  "idx": 28,
+  "chars": 11,
+  "label": null,
+  "asr": "我都很寂寞，人多的话就找。",
+  "verdict": "OMITTED | The utterance about loneliness is absent; relay forwarded only an acknowledgment."
+ },
+ {
+  "idx": 29,
+  "chars": 10,
+  "label": "O",
+  "asr": "啊，到底有多少是不包括。",
+  "verdict": "OMITTED | Utterance asks what's not included; forwarded message discusses VAD call reduction instead."
+ },
+ {
+  "idx": 30,
+  "chars": 9,
+  "label": null,
+  "asr": "你让检查服务单，宇去。",
+  "verdict": "OMITTED | Service order checking content missing from forwarded message."
+ },
+ {
+  "idx": 31,
+  "chars": 9,
+  "label": null,
+  "asr": "刘晓红是第五次诉讼。",
+  "verdict": "OMITTED | Liu Xiaohong and fifth lawsuit completely absent from relay messages."
+ },
+ {
+  "idx": 32,
+  "chars": 8,
+  "label": null,
+  "asr": "在后台去执行它的。",
+  "verdict": "OMITTED | Utterance requests background execution; forwarded message discusses foreground problem."
+ },
+ {
+  "idx": 33,
+  "chars": 8,
+  "label": "O",
+  "asr": "让我们来做个实验。",
+  "verdict": "OMITTED | The experiment statement is entirely absent from the relay messages."
+ },
+ {
+  "idx": 34,
+  "chars": 8,
+  "label": "O",
+  "asr": "sleep三十秒。",
+  "verdict": "OMITTED | The relay message contains nothing about sleeping or 30 seconds."
+ },
+ {
+  "idx": 35,
+  "chars": 7,
+  "label": "O",
+  "asr": "那线弄的长一些。",
+  "verdict": "OMITTED | Instruction to make wire/line longer completely absent from relay messages"
+ },
+ {
+  "idx": 36,
+  "chars": 7,
+  "label": "O",
+  "asr": "我说的些语音中。",
+  "verdict": "JUNK | Incomplete fragment with unclear meaning, unsuitable for relay."
+ },
+ {
+  "idx": 37,
+  "chars": 7,
+  "label": "D",
+  "asr": "跟你说，他只掉了。",
+  "verdict": "OMITTED | Relay message 3 explicitly confirms the speaker's words weren't sent."
+ },
+ {
+  "idx": 38,
+  "chars": 6,
+  "label": null,
+  "asr": "一，哎呀，上直播。",
+  "verdict": "OMITTED | Relay message discusses ASR theory, not the utterance's streaming/go-live content."
+ },
+ {
+  "idx": 39,
+  "chars": 6,
+  "label": "O",
+  "asr": "呃，人类语音的。",
+  "verdict": "JUNK | Incomplete fragment, trailing particle indicates unfinished thought."
+ },
+ {
+  "idx": 40,
+  "chars": 6,
+  "label": "O",
+  "asr": "那挺有趣的是。",
+  "verdict": "OMITTED | Utterance about something being interesting absent from messages discussing problems and timing."
+ },
+ {
+  "idx": 41,
+  "chars": 5,
+  "label": "O",
+  "asr": "看上去不错。",
+  "verdict": "OMITTED | Original content about something looking good is absent"
+ },
+ {
+  "idx": 42,
+  "chars": 5,
+  "label": "O",
+  "asr": "第一个问题。",
+  "verdict": "OMITTED | Relay message discusses processing delays, not \"first question\" from utterance."
+ },
+ {
+  "idx": 43,
+  "chars": 4,
+  "label": "O",
+  "asr": "我挺服你。",
+  "verdict": "OMITTED | Person said admiration; forwarded message discusses VAD optimization entirely."
+ },
+ {
+  "idx": 44,
+  "chars": 4,
+  "label": "D",
+  "asr": "真的没有。",
+  "verdict": "OMITTED | Utterance's negation statement absent; relay gave unrelated continuation prompt."
+ },
+ {
+  "idx": 45,
+  "chars": 4,
+  "label": "D",
+  "asr": "人体组织。",
+  "verdict": "OMITTED | Content \"human tissue\" is completely missing from both forwarded messages."
+ },
+ {
+  "idx": 46,
+  "chars": 3,
+  "label": null,
+  "asr": "我不写。",
+  "verdict": "OMITTED | Original refusal to write replaced with system optimization content."
+ },
+ {
+  "idx": 47,
+  "chars": 3,
+  "label": null,
+  "asr": "很奇怪。",
+  "verdict": "OMITTED | Original phrase '很奇怪' (how strange) is entirely absent from relay message."
+ },
+ {
+  "idx": 48,
+  "chars": 3,
+  "label": "D",
+  "asr": "刘向强。",
+  "verdict": "PRESENT | Name conveyed with homophone character substitutions."
+ },
+ {
+  "idx": 49,
+  "chars": 3,
+  "label": "D",
+  "asr": "都躺着。",
+  "verdict": "OMITTED | Utterance content about lying down is absent from the relay's VAD/call analysis message."
+ },
+ {
+  "idx": 50,
+  "chars": 3,
+  "label": "D",
+  "asr": "实际上。",
+  "verdict": "OMITTED | Utterance 实际上 missing from relay message."
+ },
+ {
+  "idx": 51,
+  "chars": 3,
+  "label": "O",
+  "asr": "很糟糕。",
+  "verdict": "OMITTED | Utterance says something is terrible; relay says something is stuck. Completely different meanings."
+ },
+ {
+  "idx": 52,
+  "chars": 3,
+  "label": null,
+  "asr": "呃，当然。",
+  "verdict": "OMITTED | Affirmative response \"of course\" is absent from forwarded messages."
+ },
+ {
+  "idx": 53,
+  "chars": 3,
+  "label": "D",
+  "asr": "而后退。",
+  "verdict": "OMITTED | Content \"而后退\" is absent from relay messages."
+ },
+ {
+  "idx": 54,
+  "chars": 3,
+  "label": "D",
+  "asr": "你表现。",
+  "verdict": "JUNK | Incomplete utterance looks like recognizer error."
+ },
+ {
+  "idx": 55,
+  "chars": 3,
+  "label": "D",
+  "asr": "所以说。",
+  "verdict": "JUNK | Discourse connector; relay forwarded substantive content instead."
+ },
+ {
+  "idx": 56,
+  "chars": 2,
+  "label": "D",
+  "asr": "知道。",
+  "verdict": "OMITTED | The utterance \"知道\" (acknowledgment) is absent from the forwarded technical message about ASR."
+ },
+ {
+  "idx": 57,
+  "chars": 2,
+  "label": "D",
+  "asr": "是的。",
+  "verdict": "OMITTED | Affirmative response \"yes\" not present in forwarded messages."
+ },
+ {
+  "idx": 58,
+  "chars": 2,
+  "label": "D",
+  "asr": "那么。",
+  "verdict": "OMITTED | Opening particle 那么 absent from relay message."
+ },
+ {
+  "idx": 59,
+  "chars": 2,
+  "label": null,
+  "asr": "对的。",
+  "verdict": "OMITTED | Utterance \"correct/that's right\" absent; relay forwarded unrelated processing time message."
+ },
+ {
+  "idx": 60,
+  "chars": 2,
+  "label": "D",
+  "asr": "拜拜。",
+  "verdict": "OMITTED | Utterance \"拜拜\" (goodbye) not present in forwarded messages."
+ },
+ {
+  "idx": 61,
+  "chars": 2,
+  "label": "D",
+  "asr": "呃，从。",
+  "verdict": "JUNK | Cut-off fragment; incomplete utterance with no meaningful content to convey."
+ },
+ {
+  "idx": 62,
+  "chars": 2,
+  "label": "D",
+  "asr": "脱扣。",
+  "verdict": "OMITTED | The utterance '脱扣' (disengaging/tripping) is completely absent from the forwarded messages."
+ },
+ {
+  "idx": 63,
+  "chars": 2,
+  "label": "D",
+  "asr": "好吧。",
+  "verdict": "OMITTED | Original utterance \"好吧\" (okay) absent from forwarded message about processing delays."
+ },
+ {
+  "idx": 64,
+  "chars": 2,
+  "label": "D",
+  "asr": "已经。",
+  "verdict": "OMITTED | The utterance \"已经\" (already) is completely absent from the forwarded message."
+ }
+]

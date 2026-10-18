@@ -1,0 +1,360 @@
+{
+ "episode": "164c3087@10-14T15:16:43",
+ "arm": "E",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "fee63f2383f9b866ff58fcce9e30a9444ec31910",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 6812,
+   "text": "你看啊，第一句的问题是。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 8871,
+   "text": "我大概花了。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 12950,
+   "text": "两秒时间。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 17439,
+   "text": "就把话说完了。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 28767,
+   "text": "但是我看见这边有个动字。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 32252,
+   "text": "可能花了五六秒。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 65026,
+   "text": "但是我看到在我的屏幕上蹦出来。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 69559,
+   "text": "可能要花了二十到三十秒。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 79114,
+   "text": "啊，分析一下原因。",
+   "label": "ADD"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 188361,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "让我们再做一次 live voice 测试。",
+   "parts": []
+  },
+  {
+   "t": 802,
+   "ev": "TURN"
+  },
+  {
+   "t": 3718,
+   "ev": "TEXT",
+   "text": "好，我在听。你接着说，我会尽量短答，方便你测试。"
+  },
+  {
+   "t": 3748,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 6817,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "你看啊，第一句的问题是。"
+  },
+  {
+   "t": 7816,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "你看啊，第一句的问题是。",
+   "parts": [
+    "ADD-frag:你看啊，第一句的问题是。"
+   ]
+  },
+  {
+   "t": 7860,
+   "ev": "TURN"
+  },
+  {
+   "t": 8697,
+   "ev": "TEXT",
+   "text": "嗯，你接着说。"
+  },
+  {
+   "t": 8715,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 8875,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "我大概花了。"
+  },
+  {
+   "t": 9876,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "我大概花了。",
+   "parts": [
+    "ADD-frag:我大概花了。"
+   ]
+  },
+  {
+   "t": 9917,
+   "ev": "TURN"
+  },
+  {
+   "t": 10821,
+   "ev": "TEXT",
+   "text": "嗯，我在听。"
+  },
+  {
+   "t": 10839,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 12954,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "两秒时间。"
+  },
+  {
+   "t": 13955,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "两秒时间。",
+   "parts": [
+    "ADD-frag:两秒时间。"
+   ]
+  },
+  {
+   "t": 13993,
+   "ev": "TURN"
+  },
+  {
+   "t": 15393,
+   "ev": "TEXT",
+   "text": "嗯，两秒的时间，你继续。"
+  },
+  {
+   "t": 15414,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 17443,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "就把话说完了。"
+  },
+  {
+   "t": 18444,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "就把话说完了。",
+   "parts": [
+    "ADD-frag:就把话说完了。"
+   ]
+  },
+  {
+   "t": 18484,
+   "ev": "TURN"
+  },
+  {
+   "t": 21168,
+   "ev": "TEXT",
+   "text": "收到了，四段合起来是完整的一句：「第一句的问题是，我大概花了两秒时间就把话说完了。」没有丢段。你接着说问题是什么。"
+  },
+  {
+   "t": 21188,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 28772,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "但是我看见这边有个动字。"
+  },
+  {
+   "t": 29772,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "但是我看见这边有个动字。",
+   "parts": [
+    "ADD-frag:但是我看见这边有个动字。"
+   ]
+  },
+  {
+   "t": 29810,
+   "ev": "TURN"
+  },
+  {
+   "t": 32256,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "可能花了五六秒。"
+  },
+  {
+   "t": 32407,
+   "ev": "TEXT",
+   "text": "嗯，这边有个「动」字，是显示在哪儿的？你接着说。"
+  },
+  {
+   "t": 32424,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 32424,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "可能花了五六秒。",
+   "parts": [
+    "ADD-frag:可能花了五六秒。"
+   ]
+  },
+  {
+   "t": 32464,
+   "ev": "TURN"
+  },
+  {
+   "t": 33865,
+   "ev": "TEXT",
+   "text": "嗯，我在听。你继续，说完我再合起来理解。"
+  },
+  {
+   "t": 33882,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 65030,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "但是我看到在我的屏幕上蹦出来。"
+  },
+  {
+   "t": 66031,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "但是我看到在我的屏幕上蹦出来。",
+   "parts": [
+    "ADD-frag:但是我看到在我的屏幕上蹦出来。"
+   ]
+  },
+  {
+   "t": 66073,
+   "ev": "TURN"
+  },
+  {
+   "t": 69313,
+   "ev": "TEXT",
+   "text": "我先合起来理解一下：你屏幕上蹦出一个「动」字，从你说完到它出现大概隔了五六秒，对吗？还有别的你接着说。"
+  },
+  {
+   "t": 69328,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 69564,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "可能要花了二十到三十秒。"
+  },
+  {
+   "t": 70564,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "可能要花了二十到三十秒。",
+   "parts": [
+    "ADD-frag:可能要花了二十到三十秒。"
+   ]
+  },
+  {
+   "t": 70603,
+   "ev": "TURN"
+  },
+  {
+   "t": 72503,
+   "ev": "TEXT",
+   "text": "收到，更新一下：你说的是延迟，大概二十到三十秒，不是五六秒。是从你说完到屏幕上出现我的回应的时间吗？"
+  },
+  {
+   "t": 72524,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 79119,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "啊，分析一下原因。"
+  },
+  {
+   "t": 80118,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "啊，分析一下原因。",
+   "parts": [
+    "ADD:啊，分析一下原因。"
+   ]
+  },
+  {
+   "t": 80177,
+   "ev": "TURN"
+  },
+  {
+   "t": 89064,
+   "ev": "TOOL",
+   "name": "Agent",
+   "input": "Live voice 延迟原因分析",
+   "bg": true
+  },
+  {
+   "t": 90675,
+   "ev": "TEXT",
+   "text": "派了一个后台 Agent 去对时间线，查那 20–30 秒卡在哪一层。结果出来我再简报。"
+  },
+  {
+   "t": 90695,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

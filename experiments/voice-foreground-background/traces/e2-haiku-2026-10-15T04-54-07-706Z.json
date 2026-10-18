@@ -1,0 +1,432 @@
+{
+ "model": "haiku",
+ "corpus": [
+  {
+   "origMs": 724878,
+   "kind": "long",
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "origMs": 536186,
+   "kind": "long",
+   "text": "现在我在用live voice。"
+  },
+  {
+   "origMs": 273170,
+   "kind": "long",
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。但是我看到在我的屏幕上蹦出来。可能要花了二十到三十秒。啊，分析一下原因。现在我看见在 Q 里面的这段话实际上漏了不少字。"
+  },
+  {
+   "origMs": 255173,
+   "kind": "long",
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "origMs": 251706,
+   "kind": "long",
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "origMs": 224871,
+   "kind": "long",
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为什么会出现这些东西。"
+  },
+  {
+   "origMs": 224871,
+   "kind": "long",
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "origMs": 4014,
+   "kind": "short",
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "origMs": 2533,
+   "kind": "short",
+   "text": "现在这是第三句。"
+  },
+  {
+   "origMs": 5471,
+   "kind": "short",
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "origMs": 4155,
+   "kind": "short",
+   "text": "但好像推理开始的慢一些。"
+  }
+ ],
+ "results": [
+  {
+   "i": 0,
+   "arm": "on",
+   "kind": "fg-action",
+   "origS": 725,
+   "tool": "Bash",
+   "detail": "List recent tasks to find architecture check progress",
+   "atS": 4.5,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "i": 0,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 725,
+   "tool": "Bash",
+   "detail": "Check current git status",
+   "atS": 5.4,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "i": 1,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 536,
+   "atS": 7.1,
+   "readsBefore": 0,
+   "detail": "了解。我看到你的内存库中有丰富的 Live Voice 相关经验记录（36+ 条课题），包括中继语义、打断、VAD 门控等多个方面。\n\n请告诉我你现在遇到的具体",
+   "hookSeen": false,
+   "text": "现在我在用live voice。"
+  },
+  {
+   "i": 0,
+   "arm": "fast",
+   "kind": "fg-action",
+   "origS": 725,
+   "tool": "TaskList",
+   "detail": "",
+   "atS": 7.6,
+   "readsBefore": 1,
+   "hookSeen": false,
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "i": 1,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 536,
+   "atS": 8.7,
+   "readsBefore": 0,
+   "detail": "收到。我已注意到您在使用 live voice 模式。\n\n我会优化响应速度，避免前台占用时间过长——对于需要 20+ 秒的调查工作会立即派到后台，保持对话流畅。",
+   "hookSeen": false,
+   "text": "现在我在用live voice。"
+  },
+  {
+   "i": 1,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 536,
+   "atS": 10.1,
+   "readsBefore": 0,
+   "detail": "明白。我已准备好为 live voice 模式优化：\n\n✓ **我会保持响应短快**，不会占用你的麦克风时间  \n✓ **超过 20 秒的工作**（调查、测试、",
+   "hookSeen": false,
+   "text": "现在我在用live voice。"
+  },
+  {
+   "i": 3,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 255,
+   "tool": "Bash",
+   "detail": "Check current git status",
+   "atS": 4.7,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "i": 2,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 273,
+   "atS": 20.3,
+   "readsBefore": 0,
+   "detail": "从你的描述看，这像是 **live-voice 实时语音** 的延迟 + 丢字问题。让我梳理一下信号：\n\n**时间轴对不上：**\n- 你说话：2秒（或5-6秒）",
+   "hookSeen": false,
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。"
+  },
+  {
+   "i": 2,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 273,
+   "atS": 19.7,
+   "readsBefore": 0,
+   "detail": "理解了。你在描述**延迟链**和**丢字**的问题：\n\n1. **说话 2s** → **字幕 5-6s**（ASR 处理延迟）→ **屏幕 20-30s**（",
+   "hookSeen": false,
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。"
+  },
+  {
+   "i": 3,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 255,
+   "atS": 7.2,
+   "readsBefore": 0,
+   "detail": "我看到您的消息，但前面的对话没有来得及展示。能快速说一下您要修什么吗？是：\n\n- 某个具体的 bug/test 红？\n- Voice realtime 的某个行",
+   "hookSeen": false,
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "i": 3,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 255,
+   "atS": 6,
+   "readsBefore": 0,
+   "detail": "我需要更多上下文来帮你讨论修复方案。从你的消息看，似乎是在继续之前的对话，但我这边还没有看到具体的问题描述。\n\n能否告诉我：\n\n1. **要修什么**？是代码缺",
+   "hookSeen": false,
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "i": 2,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 273,
+   "atS": 19.3,
+   "readsBefore": 0,
+   "detail": "理解了。听起来是 Live Voice 实时语音在进行中，你遇到了两个问题：\n\n1. **高延迟**：从你说话（2s）→ 屏幕显示（20-30s），中间卡了 1",
+   "hookSeen": false,
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。"
+  },
+  {
+   "i": 4,
+   "arm": "off",
+   "kind": "fg-agent",
+   "origS": 252,
+   "tool": "Agent",
+   "detail": "找 LiveMOT 语音测试的定义和启动流程",
+   "atS": 7.9,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "i": 4,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 252,
+   "atS": 10.3,
+   "readsBefore": 0,
+   "detail": "根据MEMORY看，你们一直在进行Live Voice语音实时测试，最新的是10-15晚间的第三次实测，发现了静默吞句、重连丢mute等问题。\n\n你想要进行的这",
+   "hookSeen": false,
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "i": 4,
+   "arm": "on",
+   "kind": "fg-action",
+   "origS": 252,
+   "tool": "AskUserQuestion",
+   "detail": "",
+   "atS": 11.1,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "i": 5,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 14.2,
+   "readsBefore": 0,
+   "detail": "我看到了。在系统提醒的 MEMORY.md 部分，出现了很多这样的格式：\n\n```\n[[topic-claude-resident-provider-lesso",
+   "hookSeen": false,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为"
+  },
+  {
+   "i": 6,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 5.9,
+   "readsBefore": 0,
+   "detail": "我理解你遇到了一个问题，但需要更多上下文才能帮助你。你能详细说明一下：\n\n1. **你在哪里看到这句话**？是在 Claude Code UI 的某个地方、某个",
+   "hookSeen": false,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "i": 5,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 9.7,
+   "readsBefore": 0,
+   "detail": "那段 `[Live Voice 模式] 用户正在用语音和你对话...` 来自 **Claude Code 的系统 hook**，不是你说的。\n\n具体来说：\n\n1",
+   "hookSeen": false,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为"
+  },
+  {
+   "i": 5,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 16.6,
+   "readsBefore": 0,
+   "detail": "你看到的这些方括号和英文内容是 **Claude Code 系统本身自动注入的系统提示**，不是我生成的，也不是你提供的。\n\n这些内容来自于几个地方：\n\n1. ",
+   "hookSeen": false,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为"
+  },
+  {
+   "i": 6,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 6.4,
+   "readsBefore": 0,
+   "detail": "我听到了。听起来是队列行（Q）的状态映射有不同步的情况——上面消失了但下面的 Q 还在。\n\n能描述一下是在哪个界面看到的，或者复现这个的步骤吗？",
+   "hookSeen": false,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "i": 6,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 7.4,
+   "readsBefore": 0,
+   "detail": "我听到你说的了，但需要更多上下文来帮你诊断。你说的\"底部的Q\"和\"地图的Q\"是指什么呢？是在：\n\n1. **Live Voice 实时对话界面**中 —— 消息",
+   "hookSeen": false,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "i": 7,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 5.3,
+   "readsBefore": 0,
+   "detail": "好的，我准备好了。请继续说第二句话，我来看看识别效果。👂",
+   "hookSeen": false,
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "i": 7,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 5.6,
+   "readsBefore": 0,
+   "detail": "明白。我准备好了，请继续说第二句。",
+   "hookSeen": false,
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "i": 7,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 8.4,
+   "readsBefore": 0,
+   "detail": "我看到你发来的中文消息。不过我需要更多信息来帮助你：\n\n1. **第一句和第二句是什么？** 你提到\"第一句话识别得挺准\"，但我没有看到具体的第一句话内容。是不",
+   "hookSeen": false,
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "i": 8,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 3,
+   "atS": 4.5,
+   "readsBefore": 0,
+   "detail": "我看到您发来了一条消息。不过我还不清楚您想要我做什么。能否请您提供更多的背景信息或说明您的需求？\n\n例如，您可能想要：\n- 了解某个代码库的情况\n- 执行某个特",
+   "hookSeen": false,
+   "text": "现在这是第三句。"
+  },
+  {
+   "i": 8,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 3,
+   "atS": 4.6,
+   "readsBefore": 0,
+   "detail": "收到。我正在 Live Voice 模式下监听，准备好了。👂",
+   "hookSeen": false,
+   "text": "现在这是第三句。"
+  },
+  {
+   "i": 8,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 3,
+   "atS": 6.3,
+   "readsBefore": 0,
+   "detail": "我已收到，准备好了。请继续说您的需求。",
+   "hookSeen": false,
+   "text": "现在这是第三句。"
+  },
+  {
+   "i": 9,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 5,
+   "atS": 8.3,
+   "readsBefore": 0,
+   "detail": "我注意到您在进行 live voice 测试。根据您的描述，识别速度似乎很快。\n\n请问我可以如何帮助？比如：\n\n1. **记录测试观察** — 您想让我记录这次",
+   "hookSeen": false,
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "i": 9,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 5,
+   "atS": 5.6,
+   "readsBefore": 0,
+   "detail": "理解了。我已准备好协助 live voice 的测试工作。有什么具体需要检验或调试的吗？",
+   "hookSeen": false,
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "i": 9,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 5,
+   "atS": 8.6,
+   "readsBefore": 0,
+   "detail": "明白。我已准备好协助你的 Live Voice 测试。请告诉我你想测什么具体内容——比如：\n\n- 检查某个功能是否正常工作？\n- 运行特定的 e2e spec？",
+   "hookSeen": false,
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "i": 10,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 4,
+   "tool": "Skill",
+   "detail": "",
+   "atS": 6.9,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "但好像推理开始的慢一些。"
+  },
+  {
+   "i": 10,
+   "arm": "fast",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 10.2,
+   "readsBefore": 0,
+   "detail": "明白了。你是说**Claude Code 本身**的响应/推理开始得比较慢吗？还是在说某个具体的任务、代码运行、或构建过程？\n\n麻烦再说明一下：\n- 是界面初始",
+   "hookSeen": false,
+   "text": "但好像推理开始的慢一些。"
+  },
+  {
+   "i": 10,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 11.5,
+   "readsBefore": 0,
+   "detail": "我听到了。你能帮我确认一下是什么变慢了吗？\n\n1. **我当前的回应**——我这次推理/生成速度慢？\n2. **Claude Code 界面**——Claude",
+   "hookSeen": false,
+   "text": "但好像推理开始的慢一些。"
+  }
+ ]
+}

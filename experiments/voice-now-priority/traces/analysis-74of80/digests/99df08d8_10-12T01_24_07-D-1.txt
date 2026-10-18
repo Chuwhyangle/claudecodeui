@@ -1,0 +1,45 @@
+# 99df08d8@10-12T01:24:07 arm D rep 1 model sonnet hook true wall 157.6s
+   0.0  >> DELIVER prompt: 我们再试一下 live voice mode。
+   0.8  == turn
+   3.3     text: 好，live voice mode 已经在跑了，我这边能收到你的语音。你直接说下一句就行，要我查什么或改什么都可以。
+   3.4  -- result success
+   6.7  · voice [REMARK] 第一句识别出来了，我们看看第二句。
+   7.7  >> DELIVER idle: 第一句识别出来了，我们看看第二句。
+   7.8  == turn
+   8.8     text: 第二句我这边也收到了，你可以接着说下一句。
+   8.8  -- result success
+  12.1  · voice [NOISE] 现在第三句。
+  13.1  >> DELIVER idle: 现在第三句。
+  13.1  == turn
+  14.2     text: 第三句也收到了。三句都是按顺序到的，没丢也没乱序。要继续测的话，接着说就行。
+  14.3  -- result success
+  18.9  · voice [NOISE] 第四句。
+  19.9  >> DELIVER idle: 第四句。
+  20.0  == turn
+  20.9     text: 第四句收到了，四句都顺序正常。接着说。
+  20.9  -- result success
+  39.4  · voice [REMARK] 到现在为止识别的还可以。
+  40.4  >> DELIVER idle: 到现在为止识别的还可以。
+  40.5  == turn
+  41.6     text: 好，识别目前没问题。你想接着测别的场景（比如打断、长句、让我跑个后台任务）就直接说。
+  41.6  -- result success
+  55.2  · voice [REMARK] 只是对于第一句的处理慢一些，但这是正常的。
+  56.2  >> DELIVER idle: 只是对于第一句的处理慢一些，但这是正常的。
+  56.2  == turn
+  57.6     text: 对，第一句通常要慢一些，多半是会话刚启动、要先把上下文和工具加载起来，后面几句就快了。
+  57.6  -- result success
+  93.3  · voice [REMARK-frag] 现在后面这几句话都在 queue 里面在等。
+  94.3  >> DELIVER idle: 现在后面这几句话都在 queue 里面在等。
+  94.4  == turn
+  97.0     text: 我这边每句话都已经回复了，没看到积压。如果你那边显示还在排队，可能是我的回复到前端有延迟，或者队列徽章没及时清掉。你看一下我最近几条回复有没有出现在界面上。
+  97.0  -- result success
+  99.5  · voice [REMARK] 或者说队列，在队列里面等。
+ 100.5  >> DELIVER idle: 或者说队列，在队列里面等。
+ 100.5  == turn
+ 102.7     text: 你说的是队列这个状态：那几句在你那边显示成"排队等待"。我这边这几句已经处理完并回复了，所以更像是队列状态没及时更新，或者回复在中间某一层被卡住了。  这应该是个值得记下来的现象。你可以记一下大概是哪几句、排了多久，我再去查中继日志，看是显示问题还是真的延迟。
+ 102.8  -- result success
+ 129.0  · voice [ASK] 所以你能看见 cancel 这样的操作吗？
+ 130.0  >> DELIVER idle: 所以你能看见 cancel 这样的操作吗？
+ 130.1  == turn
+ 131.9     text: 看不见。我这边只收到每一句的文字内容，没有队列状态，也没有 cancel 这类操作的信号。如果你在界面上取消了某一句，我这边既不会收到取消通知，也不会知道那一句被撤回了。  如果想确认 cancel 有没有生效，得看中继日志，不能靠我这边的感知。
+ 131.9  -- result success

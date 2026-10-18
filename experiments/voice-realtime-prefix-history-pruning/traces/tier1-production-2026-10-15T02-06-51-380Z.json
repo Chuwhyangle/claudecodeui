@@ -1,0 +1,1432 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T02:06:51.379Z",
+  "budgetCny": 0.22,
+  "spendCny": 0.053963,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 33967,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "production": {
+      "spanA-keep": {
+        "mode": "keep",
+        "span": {
+          "name": "spanA",
+          "startMs": 1000,
+          "endMs": 26000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 639,
+            "headKept": 156,
+            "heldOpen": 2,
+            "dropped": 609,
+            "bypassed": 0,
+            "preRoll": 22
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 0,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "让我们再做一次蓝外测试。",
+            "audioItemIds": [
+              "item_XiIt7jktAopTs8OZ4S22q"
+            ],
+            "itemShape": {
+              "id": "item_XiIt7jktAopTs8OZ4S22q",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "让我们再做一次 Live Voice 测试。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "你看啊，第一句的问题是。",
+            "audioItemIds": [
+              "item_JOyzK8X4uRoho4KIlrB2j"
+            ],
+            "itemShape": {
+              "id": "item_JOyzK8X4uRoho4KIlrB2j",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "花了。",
+            "audioItemIds": [
+              "item_LTmPFPJDZVC7bOVa97778"
+            ],
+            "itemShape": {
+              "id": "item_LTmPFPJDZVC7bOVa97778",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 3,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_H4CyRGBnlCGqRuxZib5E5"
+            ],
+            "itemShape": {
+              "id": "item_H4CyRGBnlCGqRuxZib5E5",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "你看啊，第一句的问题是我大概花了两秒的时间。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 4,
+            "transcript": "就把话说完了。",
+            "audioItemIds": [
+              "item_E5Zp1aM9x5Fdicoa7TXle"
+            ],
+            "itemShape": {
+              "id": "item_E5Zp1aM9x5Fdicoa7TXle",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 5,
+            "transcript": "但是，我看见这边往外蹦字儿。",
+            "audioItemIds": [
+              "item_XN46DtbgG1mEiHmDcDZVH"
+            ],
+            "itemShape": {
+              "id": "item_XN46DtbgG1mEiHmDcDZVH",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看见这边我动字儿。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 809,
+            "text": 788,
+            "audio": 21,
+            "output": 32,
+            "cny": 0.001452
+          },
+          {
+            "input": 892,
+            "text": 871,
+            "audio": 21,
+            "output": 2,
+            "cny": 0.001442
+          },
+          {
+            "input": 976,
+            "text": 906,
+            "audio": 70,
+            "output": 37,
+            "cny": 0.001945
+          },
+          {
+            "input": 1038,
+            "text": 954,
+            "audio": 84,
+            "output": 2,
+            "cny": 0.001944
+          },
+          {
+            "input": 1074,
+            "text": 969,
+            "audio": 105,
+            "output": 32,
+            "cny": 0.002227
+          }
+        ],
+        "transcripts": [
+          "让我们再做一次蓝外测试。",
+          "你看啊，第一句的问题是。",
+          "花了。",
+          "两秒的时间。",
+          "就把话说完了。",
+          "但是，我看见这边往外蹦字儿。"
+        ]
+      },
+      "spanA-twin": {
+        "mode": "twin",
+        "span": {
+          "name": "spanA",
+          "startMs": 1000,
+          "endMs": 26000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 637,
+            "headKept": 156,
+            "heldOpen": 0,
+            "dropped": 611,
+            "bypassed": 0,
+            "preRoll": 22
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 81,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "让我们再做一次蓝外测试。",
+            "audioItemIds": [
+              "item_J3Kb6ChQlbnloxP3KcAfG"
+            ],
+            "itemShape": {
+              "id": "item_J3Kb6ChQlbnloxP3KcAfG",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "让我们再做一次 live voice 测试。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 1,
+            "transcript": "你看啊，第一句的问题是。",
+            "audioItemIds": [
+              "item_PtCsddQBxSvFS1grwU4LT"
+            ],
+            "itemShape": {
+              "id": "item_PtCsddQBxSvFS1grwU4LT",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "可滑了。",
+            "audioItemIds": [
+              "item_HJhVEyBS9HbogQsh8nnSA"
+            ],
+            "itemShape": {
+              "id": "item_HJhVEyBS9HbogQsh8nnSA",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 3,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_HddXLoT2bJD8Wa6EmR1xB"
+            ],
+            "itemShape": {
+              "id": "item_HddXLoT2bJD8Wa6EmR1xB",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "你看啊，第一句的问题是我大概花了两秒时间。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 4,
+            "transcript": "但是，我看见这边往外蹦字儿。",
+            "audioItemIds": [
+              "item_AzICaJgJkPrNPfiYdwMma"
+            ],
+            "itemShape": {
+              "id": "item_AzICaJgJkPrNPfiYdwMma",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看剪这边，我要动字儿。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          }
+        ],
+        "readings": [
+          {
+            "input": 809,
+            "text": 788,
+            "audio": 21,
+            "output": 32,
+            "cny": 0.001452
+          },
+          {
+            "input": 892,
+            "text": 871,
+            "audio": 21,
+            "output": 2,
+            "cny": 0.001442
+          },
+          {
+            "input": 916,
+            "text": 867,
+            "audio": 49,
+            "output": 37,
+            "cny": 0.001761
+          },
+          {
+            "input": 1035,
+            "text": 972,
+            "audio": 63,
+            "output": 2,
+            "cny": 0.001845
+          },
+          {
+            "input": 1071,
+            "text": 987,
+            "audio": 84,
+            "output": 34,
+            "cny": 0.002137
+          }
+        ],
+        "transcripts": [
+          "让我们再做一次蓝外测试。",
+          "你看啊，第一句的问题是。",
+          "可滑了。",
+          "两秒的时间。",
+          "但是，我看见这边往外蹦字儿。"
+        ]
+      },
+      "spanB-keep": {
+        "mode": "keep",
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 684,
+            "headKept": 158,
+            "heldOpen": 12,
+            "dropped": 564,
+            "bypassed": 0,
+            "preRoll": 26
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 0,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "像刚刚这段话，我说完它应该的话没有十秒。",
+            "audioItemIds": [
+              "item_QYhgLdNqDRIzQPPXXc8la"
+            ],
+            "itemShape": {
+              "id": "item_QYhgLdNqDRIzQPPXXc8la",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "但是，我看到在我的屏幕上蹦出来。",
+            "audioItemIds": [
+              "item_VikrBd2lnT7hbaeN72cyk"
+            ],
+            "itemShape": {
+              "id": "item_VikrBd2lnT7hbaeN72cyk",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "可能要花到二十到三十秒。",
+            "audioItemIds": [
+              "item_PixD2rGwhxvq2gRs2BC8i"
+            ],
+            "itemShape": {
+              "id": "item_PixD2rGwhxvq2gRs2BC8i",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 3,
+            "transcript": "你应当检查服务单日志。",
+            "audioItemIds": [
+              "item_AnEurFXPwgGOQPrXiYDie"
+            ],
+            "itemShape": {
+              "id": "item_AnEurFXPwgGOQPrXiYDie",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 4,
+            "transcript": "啊，分析一下原因。",
+            "audioItemIds": [
+              "item_VZQ99FcUR1PZiSL1IS1VQ"
+            ],
+            "itemShape": {
+              "id": "item_VZQ99FcUR1PZiSL1IS1VQ",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "你应当检查服务端日志，分析一下原因。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 816,
+            "text": 788,
+            "audio": 28,
+            "output": 37,
+            "cny": 0.001516
+          },
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 929,
+            "text": 852,
+            "audio": 77,
+            "output": 38,
+            "cny": 0.001911
+          },
+          {
+            "input": 1018,
+            "text": 941,
+            "audio": 77,
+            "output": 2,
+            "cny": 0.001882
+          },
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 1076,
+            "text": 964,
+            "audio": 112,
+            "output": 33,
+            "cny": 0.002266
+          },
+          {
+            "input": 1160,
+            "text": 1048,
+            "audio": 112,
+            "output": 2,
+            "cny": 0.002253
+          }
+        ],
+        "transcripts": [
+          "像刚刚这段话，我说完它应该的话没有十秒。",
+          "但是，我看到在我的屏幕上蹦出来。",
+          "可能要花到二十到三十秒。",
+          "你应当检查服务单日志。",
+          "啊，分析一下原因。"
+        ]
+      },
+      "spanB-twin": {
+        "mode": "twin",
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 678,
+            "headKept": 158,
+            "heldOpen": 2,
+            "dropped": 570,
+            "bypassed": 0,
+            "preRoll": 30
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 81,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "像刚刚这段话，我说完它应该的话没有十秒。",
+            "audioItemIds": [
+              "item_TUs65VqrhvVCDSN6Clsht"
+            ],
+            "itemShape": {
+              "id": "item_TUs65VqrhvVCDSN6Clsht",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 1,
+            "transcript": "但是，我看它在我的屏幕上蹦出来。",
+            "audioItemIds": [
+              "item_AzKC9tjikq7TsI1LevqRK"
+            ],
+            "itemShape": {
+              "id": "item_AzKC9tjikq7TsI1LevqRK",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 2,
+            "transcript": "可能要花到二十到三十秒。",
+            "audioItemIds": [
+              "item_W1bVSJaJFZ3dTRZausb9M"
+            ],
+            "itemShape": {
+              "id": "item_W1bVSJaJFZ3dTRZausb9M",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是，我看它在我的屏幕上蹦出来。像刚刚这段话，我说完它应该的话没有十秒，可能花了二十到三十秒。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "你让检查服务单，与之。",
+            "audioItemIds": [
+              "item_Ec3HaHpctsjqscKi4xYsX"
+            ],
+            "itemShape": {
+              "id": "item_Ec3HaHpctsjqscKi4xYsX",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 4,
+            "transcript": "啊，分析一下原因。",
+            "audioItemIds": [
+              "item_N74jgJXkQlucBdtQSvcDx"
+            ],
+            "itemShape": {
+              "id": "item_N74jgJXkQlucBdtQSvcDx",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "你让检查服务单，与之。啊分析一下原因。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          }
+        ],
+        "readings": [
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 846,
+            "text": 825,
+            "audio": 21,
+            "output": 53,
+            "cny": 0.001602
+          },
+          {
+            "input": 950,
+            "text": 929,
+            "audio": 21,
+            "output": 2,
+            "cny": 0.001528
+          },
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 1004,
+            "text": 969,
+            "audio": 35,
+            "output": 36,
+            "cny": 0.001825
+          },
+          {
+            "input": 1091,
+            "text": 1056,
+            "audio": 35,
+            "output": 2,
+            "cny": 0.001803
+          }
+        ],
+        "transcripts": [
+          "像刚刚这段话，我说完它应该的话没有十秒。",
+          "但是，我看它在我的屏幕上蹦出来。",
+          "可能要花到二十到三十秒。",
+          "你让检查服务单，与之。",
+          "啊，分析一下原因。"
+        ]
+      },
+      "spanC-keep": {
+        "mode": "keep",
+        "span": {
+          "name": "spanC",
+          "startMs": 182000,
+          "endMs": 207000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 449,
+            "headKept": 74,
+            "heldOpen": 0,
+            "dropped": 799,
+            "bypassed": 0,
+            "preRoll": 20
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 0,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "现在我看到啊，从我开始这次Live Watch测试到现在已经过去三分钟了。",
+            "audioItemIds": [
+              "item_IdWUci3x1moCD6JPf8ESv"
+            ],
+            "itemShape": {
+              "id": "item_IdWUci3x1moCD6JPf8ESv",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "现在我看到，从我开始这次 Live Voice 测试到现在已经过去三分钟了。"
+            ],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "然后，两段话话没处理完。",
+            "audioItemIds": [
+              "item_YVqKtMkpfvEbcFOiFYqYr"
+            ],
+            "itemShape": {
+              "id": "item_YVqKtMkpfvEbcFOiFYqYr",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "然后两段话没处理完。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 832,
+            "text": 790,
+            "audio": 42,
+            "output": 39,
+            "cny": 0.001613
+          },
+          {
+            "input": 953,
+            "text": 890,
+            "audio": 63,
+            "output": 31,
+            "cny": 0.001852
+          },
+          {
+            "input": 1035,
+            "text": 972,
+            "audio": 63,
+            "output": 2,
+            "cny": 0.001845
+          }
+        ],
+        "transcripts": [
+          "现在我看到啊，从我开始这次Live Watch测试到现在已经过去三分钟了。",
+          "然后，两段话话没处理完。"
+        ]
+      },
+      "spanC-twin": {
+        "mode": "twin",
+        "span": {
+          "name": "spanC",
+          "startMs": 182000,
+          "endMs": 207000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 453,
+            "headKept": 74,
+            "heldOpen": 4,
+            "dropped": 795,
+            "bypassed": 0,
+            "preRoll": 20
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 231,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "现在我看到啊，从我开始这次Live Watch测试到现在已经过去三分钟了。",
+            "audioItemIds": [
+              "item_CVzU9fkMKJcGLO3Xx1i2Z"
+            ],
+            "itemShape": {
+              "id": "item_CVzU9fkMKJcGLO3Xx1i2Z",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "镜头看到啊，从我开始这次Live Watch测试到现在已经过去三分钟了。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 1,
+            "transcript": "然后，两段话话没处理完。",
+            "audioItemIds": [
+              "item_MguWQEdLDU6su4es3hPDZ"
+            ],
+            "itemShape": {
+              "id": "item_MguWQEdLDU6su4es3hPDZ",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "现在我看到，从我开始这次 Live Watch 测试到现在已经过去三分钟了，然后两段话没处理完。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          }
+        ],
+        "readings": [
+          {
+            "input": 832,
+            "text": 790,
+            "audio": 42,
+            "output": 39,
+            "cny": 0.001613
+          },
+          {
+            "input": 829,
+            "text": 808,
+            "audio": 21,
+            "output": 46,
+            "cny": 0.001545
+          },
+          {
+            "input": 926,
+            "text": 905,
+            "audio": 21,
+            "output": 2,
+            "cny": 0.001492
+          }
+        ],
+        "transcripts": [
+          "现在我看到啊，从我开始这次Live Watch测试到现在已经过去三分钟了。",
+          "然后，两段话话没处理完。"
+        ]
+      },
+      "spanD-keep": {
+        "mode": "keep",
+        "span": {
+          "name": "spanD",
+          "startMs": 214000,
+          "endMs": 239000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 1235,
+            "headKept": 162,
+            "heldOpen": 3,
+            "dropped": 13,
+            "bypassed": 0,
+            "preRoll": 31
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 0,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "然后，这也应该查这几个字。",
+            "audioItemIds": [
+              "item_UC8rq75XOtEOAK5MnoO7z"
+            ],
+            "itemShape": {
+              "id": "item_UC8rq75XOtEOAK5MnoO7z",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "然后，这也应该查这几个字。"
+            ],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "也很奇怪。",
+            "audioItemIds": [
+              "item_EL32jtmmBooFLy7SMuv3m"
+            ],
+            "itemShape": {
+              "id": "item_EL32jtmmBooFLy7SMuv3m",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "也很奇怪。"
+            ],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "啊，我从这个茶寺到后面的话之间的时间间隔相当长。",
+            "audioItemIds": [
+              "item_JwPuiIzwfNIg1FamJxdLo"
+            ],
+            "itemShape": {
+              "id": "item_JwPuiIzwfNIg1FamJxdLo",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "啊，我从这个查字到后面的话之间的时间间隔相当长。"
+            ],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 3,
+            "transcript": "但这个茶这个字呢，也没有跟到前面那段的输入里面。",
+            "audioItemIds": [
+              "item_I3uCto4xG3fNJl816EfmJ"
+            ],
+            "itemShape": {
+              "id": "item_I3uCto4xG3fNJl816EfmJ",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 4,
+            "transcript": "这样，在我前面停止。",
+            "audioItemIds": [
+              "item_SUs9cvQXmWn63ZO7eP6Ew"
+            ],
+            "itemShape": {
+              "id": "item_SUs9cvQXmWn63ZO7eP6Ew",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 809,
+            "text": 788,
+            "audio": 21,
+            "output": 32,
+            "cny": 0.001452
+          },
+          {
+            "input": 866,
+            "text": 831,
+            "audio": 35,
+            "output": 27,
+            "cny": 0.001578
+          },
+          {
+            "input": 959,
+            "text": 875,
+            "audio": 84,
+            "output": 39,
+            "cny": 0.001992
+          }
+        ],
+        "transcripts": [
+          "然后，这也应该查这几个字。",
+          "也很奇怪。",
+          "啊，我从这个茶寺到后面的话之间的时间间隔相当长。",
+          "但这个茶这个字呢，也没有跟到前面那段的输入里面。",
+          "这样，在我前面停止。"
+        ]
+      },
+      "spanD-twin": {
+        "mode": "twin",
+        "span": {
+          "name": "spanD",
+          "startMs": 214000,
+          "endMs": 239000
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 1241,
+            "headKept": 162,
+            "heldOpen": 14,
+            "dropped": 7,
+            "bypassed": 0,
+            "preRoll": 26
+          }
+        },
+        "streamedFrames": 1250,
+        "streamedSeconds": 25,
+        "realtimeDriftMs": 280,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "然后，这也应该查这几个字。",
+            "audioItemIds": [
+              "item_VUtKP3PBDoCah9Ui7ctG3"
+            ],
+            "itemShape": {
+              "id": "item_VUtKP3PBDoCah9Ui7ctG3",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "然后这也应该查这几个字。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 1,
+            "transcript": "也很奇怪。",
+            "audioItemIds": [
+              "item_FZDmVfCfbRUyFZ82GSjRc"
+            ],
+            "itemShape": {
+              "id": "item_FZDmVfCfbRUyFZ82GSjRc",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "也很奇怪。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 2,
+            "transcript": "啊，我从这个茶寺到后面的话之间的时间间隔相当长。",
+            "audioItemIds": [
+              "item_RJ153enfhz2CbrsUbbgsp"
+            ],
+            "itemShape": {
+              "id": "item_RJ153enfhz2CbrsUbbgsp",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "我从这个茶字到后面的话之间的时间间隔相当长。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "但这个茶这个字呢，也没有跟到前面那段的输入里面。",
+            "audioItemIds": [
+              "item_Xq7iOYccVHRUr7PkgP99b"
+            ],
+            "itemShape": {
+              "id": "item_Xq7iOYccVHRUr7PkgP99b",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 4,
+            "transcript": "啊，实际上在我前面停止。",
+            "audioItemIds": [
+              "item_ZrZ4JbUxAqZNfRKjsjsDC"
+            ],
+            "itemShape": {
+              "id": "item_ZrZ4JbUxAqZNfRKjsjsDC",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 809,
+            "text": 788,
+            "audio": 21,
+            "output": 31,
+            "cny": 0.001447
+          },
+          {
+            "input": 813,
+            "text": 799,
+            "audio": 14,
+            "output": 27,
+            "cny": 0.001404
+          },
+          {
+            "input": 962,
+            "text": 899,
+            "audio": 63,
+            "output": 37,
+            "cny": 0.001893
+          },
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          }
+        ],
+        "transcripts": [
+          "然后，这也应该查这几个字。",
+          "也很奇怪。",
+          "啊，我从这个茶寺到后面的话之间的时间间隔相当长。",
+          "但这个茶这个字呢，也没有跟到前面那段的输入里面。",
+          "啊，实际上在我前面停止。"
+        ]
+      }
+    }
+  }
+}

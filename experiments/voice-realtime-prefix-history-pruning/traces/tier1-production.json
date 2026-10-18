@@ -1,0 +1,1373 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T02:01:46.167Z",
+  "budgetCny": 0.4,
+  "spendCny": 0.068174,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 21380,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "production": {
+      "keep0": {
+        "mode": "keep",
+        "span": {
+          "startMs": 18000,
+          "endMs": 30500
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 521,
+            "headKept": 166,
+            "heldOpen": 10,
+            "dropped": 102,
+            "bypassed": 0,
+            "preRoll": 11
+          }
+        },
+        "streamedFrames": 625,
+        "streamedSeconds": 12.5,
+        "realtimeDriftMs": 0,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "是。",
+            "audioItemIds": [
+              "item_H6JfHP3TzZ2rKJZMrPHFl"
+            ],
+            "itemShape": {
+              "id": "item_H6JfHP3TzZ2rKJZMrPHFl",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "我大概花了。",
+            "audioItemIds": [
+              "item_DLc3WmHXibxdOQdmcrZSW"
+            ],
+            "itemShape": {
+              "id": "item_DLc3WmHXibxdOQdmcrZSW",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_P98pMsgi7mYKmlwpPN1CC"
+            ],
+            "itemShape": {
+              "id": "item_P98pMsgi7mYKmlwpPN1CC",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "我大概花了两秒的时间。"
+            ],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 3,
+            "transcript": "就把话说完了。",
+            "audioItemIds": [
+              "item_R6rCS5FQxT96eSEKenKQf"
+            ],
+            "itemShape": {
+              "id": "item_R6rCS5FQxT96eSEKenKQf",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 4,
+            "transcript": "但是，我看见这边往外蹦字儿。",
+            "audioItemIds": [
+              "item_JBDf91hm6wWdgPP14wvVU"
+            ],
+            "itemShape": {
+              "id": "item_JBDf91hm6wWdgPP14wvVU",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看见这边有个洞字儿。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 5,
+            "transcript": "可能花了五六秒。",
+            "audioItemIds": [
+              "item_Yq8lUDZOn2hDtlJx3OTRP"
+            ],
+            "itemShape": {
+              "id": "item_Yq8lUDZOn2hDtlJx3OTRP",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 6,
+            "transcript": "是为什么呢？",
+            "audioItemIds": [
+              "item_Lt39jdsJNgoNhcw1e2ucM"
+            ],
+            "itemShape": {
+              "id": "item_Lt39jdsJNgoNhcw1e2ucM",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "是为什么呢？"
+            ],
+            "replies": [
+              "OK",
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 845,
+            "text": 810,
+            "audio": 35,
+            "output": 31,
+            "cny": 0.001564
+          },
+          {
+            "input": 949,
+            "text": 900,
+            "audio": 49,
+            "output": 2,
+            "cny": 0.001653
+          },
+          {
+            "input": 985,
+            "text": 915,
+            "audio": 70,
+            "output": 32,
+            "cny": 0.001936
+          },
+          {
+            "input": 1042,
+            "text": 958,
+            "audio": 84,
+            "output": 2,
+            "cny": 0.00195
+          },
+          {
+            "input": 1069,
+            "text": 971,
+            "audio": 98,
+            "output": 27,
+            "cny": 0.002166
+          },
+          {
+            "input": 1147,
+            "text": 1049,
+            "audio": 98,
+            "output": 2,
+            "cny": 0.002171
+          }
+        ],
+        "transcripts": [
+          "是。",
+          "我大概花了。",
+          "两秒的时间。",
+          "就把话说完了。",
+          "但是，我看见这边往外蹦字儿。",
+          "可能花了五六秒。",
+          "是为什么呢？"
+        ]
+      },
+      "twin0": {
+        "mode": "twin",
+        "span": {
+          "startMs": 18000,
+          "endMs": 30500
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 511,
+            "headKept": 166,
+            "heldOpen": 0,
+            "dropped": 112,
+            "bypassed": 0,
+            "preRoll": 11
+          }
+        },
+        "streamedFrames": 625,
+        "streamedSeconds": 12.5,
+        "realtimeDriftMs": 82,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "是。",
+            "audioItemIds": [
+              "item_D7xcZr3XUPI1mDZC4PWKN"
+            ],
+            "itemShape": {
+              "id": "item_D7xcZr3XUPI1mDZC4PWKN",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "我大概花了。",
+            "audioItemIds": [
+              "item_WnQxaKI2l3rpzvDoVElCX"
+            ],
+            "itemShape": {
+              "id": "item_WnQxaKI2l3rpzvDoVElCX",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_GN3brCJIzLEpibK6uQO4V"
+            ],
+            "itemShape": {
+              "id": "item_GN3brCJIzLEpibK6uQO4V",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "去，我大概花了两秒时间。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "就把话说完了。",
+            "audioItemIds": [
+              "item_ECAGSHzYW6p8DVMA2385r"
+            ],
+            "itemShape": {
+              "id": "item_ECAGSHzYW6p8DVMA2385r",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 4,
+            "transcript": "但是，我看见这边我还蹦字儿。",
+            "audioItemIds": [
+              "item_TlMAzI5zvj1MuojL9nnX9"
+            ],
+            "itemShape": {
+              "id": "item_TlMAzI5zvj1MuojL9nnX9",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看见这边有个“动”字。",
+              "可能花了五六秒。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 5,
+            "transcript": "可能花了五六秒。",
+            "audioItemIds": [
+              "item_Te25VnA5Auryvj84qSGuI"
+            ],
+            "itemShape": {
+              "id": "item_Te25VnA5Auryvj84qSGuI",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 6,
+            "transcript": "是为什么呢？",
+            "audioItemIds": [
+              "item_SMDmduJKv4FcTOIH95S9k"
+            ],
+            "itemShape": {
+              "id": "item_SMDmduJKv4FcTOIH95S9k",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "是为什么呢？"
+            ],
+            "replies": [
+              "OK",
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          }
+        ],
+        "readings": [
+          {
+            "input": 845,
+            "text": 810,
+            "audio": 35,
+            "output": 33,
+            "cny": 0.001574
+          },
+          {
+            "input": 960,
+            "text": 911,
+            "audio": 49,
+            "output": 2,
+            "cny": 0.001669
+          },
+          {
+            "input": 984,
+            "text": 928,
+            "audio": 56,
+            "output": 33,
+            "cny": 0.001877
+          },
+          {
+            "input": 1056,
+            "text": 986,
+            "audio": 70,
+            "output": 29,
+            "cny": 0.00203
+          },
+          {
+            "input": 1136,
+            "text": 1066,
+            "audio": 70,
+            "output": 2,
+            "cny": 0.002028
+          },
+          {
+            "input": 1148,
+            "text": 1078,
+            "audio": 70,
+            "output": 27,
+            "cny": 0.002159
+          },
+          {
+            "input": 1226,
+            "text": 1156,
+            "audio": 70,
+            "output": 2,
+            "cny": 0.002163
+          }
+        ],
+        "transcripts": [
+          "是。",
+          "我大概花了。",
+          "两秒的时间。",
+          "就把话说完了。",
+          "但是，我看见这边我还蹦字儿。",
+          "可能花了五六秒。",
+          "是为什么呢？"
+        ]
+      },
+      "keep1": {
+        "mode": "keep",
+        "span": {
+          "startMs": 18000,
+          "endMs": 30500
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 525,
+            "headKept": 166,
+            "heldOpen": 14,
+            "dropped": 98,
+            "bypassed": 0,
+            "preRoll": 11
+          }
+        },
+        "streamedFrames": 625,
+        "streamedSeconds": 12.5,
+        "realtimeDriftMs": 0,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "是我。",
+            "audioItemIds": [
+              "item_XNHiiBnSZkruROPG5FFz6"
+            ],
+            "itemShape": {
+              "id": "item_XNHiiBnSZkruROPG5FFz6",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "completed",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "花了。",
+            "audioItemIds": [
+              "item_GJ6uSP9KAgbVp1pph8oiR"
+            ],
+            "itemShape": {
+              "id": "item_GJ6uSP9KAgbVp1pph8oiR",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_EtkrfiLjgQXya3aBPNZ8D"
+            ],
+            "itemShape": {
+              "id": "item_EtkrfiLjgQXya3aBPNZ8D",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "我大概花了两秒时间。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 3,
+            "transcript": "就把话说完了。",
+            "audioItemIds": [
+              "item_G3iiqMBxEaaaDMg9bxxf9"
+            ],
+            "itemShape": {
+              "id": "item_G3iiqMBxEaaaDMg9bxxf9",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "就把话说完了。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 4,
+            "transcript": "但是，我看见这边往外蹦字儿。",
+            "audioItemIds": [
+              "item_Fp2fAtYtwKPxaSL5OlYYG"
+            ],
+            "itemShape": {
+              "id": "item_Fp2fAtYtwKPxaSL5OlYYG",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看见这边有个动字。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 5,
+            "transcript": "可能花了五六秒。",
+            "audioItemIds": [
+              "item_WyQzqq2oaRpnpkKXVgToW"
+            ],
+            "itemShape": {
+              "id": "item_WyQzqq2oaRpnpkKXVgToW",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "可能花了五六秒。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          },
+          {
+            "index": 6,
+            "transcript": "是为什么呢？",
+            "audioItemIds": [
+              "item_CWrKEenFm6Vxv9o1rJSGf"
+            ],
+            "itemShape": {
+              "id": "item_CWrKEenFm6Vxv9o1rJSGf",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "是为什么呢？"
+            ],
+            "replies": [
+              "OK",
+              "OK",
+              "OK"
+            ],
+            "swapped": []
+          }
+        ],
+        "readings": [
+          {
+            "input": 845,
+            "text": 810,
+            "audio": 35,
+            "output": 31,
+            "cny": 0.001564
+          },
+          {
+            "input": 927,
+            "text": 892,
+            "audio": 35,
+            "output": 2,
+            "cny": 0.001557
+          },
+          {
+            "input": 950,
+            "text": 901,
+            "audio": 49,
+            "output": 28,
+            "cny": 0.001772
+          },
+          {
+            "input": 1012,
+            "text": 942,
+            "audio": 70,
+            "output": 31,
+            "cny": 0.001972
+          },
+          {
+            "input": 1068,
+            "text": 984,
+            "audio": 84,
+            "output": 29,
+            "cny": 0.00211
+          },
+          {
+            "input": 1148,
+            "text": 1064,
+            "audio": 84,
+            "output": 2,
+            "cny": 0.002109
+          },
+          {
+            "input": 1171,
+            "text": 1073,
+            "audio": 98,
+            "output": 27,
+            "cny": 0.002319
+          },
+          {
+            "input": 1249,
+            "text": 1151,
+            "audio": 98,
+            "output": 2,
+            "cny": 0.002324
+          }
+        ],
+        "transcripts": [
+          "是我。",
+          "花了。",
+          "两秒的时间。",
+          "就把话说完了。",
+          "但是，我看见这边往外蹦字儿。",
+          "可能花了五六秒。",
+          "是为什么呢？"
+        ]
+      },
+      "twin1": {
+        "mode": "twin",
+        "span": {
+          "startMs": 18000,
+          "endMs": 30500
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 511,
+            "headKept": 166,
+            "heldOpen": 0,
+            "dropped": 112,
+            "bypassed": 0,
+            "preRoll": 11
+          }
+        },
+        "streamedFrames": 625,
+        "streamedSeconds": 12.5,
+        "realtimeDriftMs": 82,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "是。",
+            "audioItemIds": [
+              "item_YgZ2koHzKGaxjqHUULK41"
+            ],
+            "itemShape": {
+              "id": "item_YgZ2koHzKGaxjqHUULK41",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "我大概花了。",
+            "audioItemIds": [
+              "item_OJ7iBZ9PYBuDPib9BMMWT"
+            ],
+            "itemShape": {
+              "id": "item_OJ7iBZ9PYBuDPib9BMMWT",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_Dt2P1BHKdeEq4BrxE7JwO"
+            ],
+            "itemShape": {
+              "id": "item_Dt2P1BHKdeEq4BrxE7JwO",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "是我大概花了两秒时间。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "就把话说完了。",
+            "audioItemIds": [
+              "item_ZG3HFpi3KNA3mos4jlPAN"
+            ],
+            "itemShape": {
+              "id": "item_ZG3HFpi3KNA3mos4jlPAN",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "两秒的时间就把话说完了。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 4,
+            "transcript": "但是，我看见这边往外蹦字儿。",
+            "audioItemIds": [
+              "item_Jzcn5PBtM5N9KklRAkwGg"
+            ],
+            "itemShape": {
+              "id": "item_Jzcn5PBtM5N9KklRAkwGg",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看见这边我要动字儿。"
+            ],
+            "replies": [],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 5,
+            "transcript": "可能花了五六秒。",
+            "audioItemIds": [
+              "item_NVlBRqGiwntpJSmSlIvH8"
+            ],
+            "itemShape": {
+              "id": "item_NVlBRqGiwntpJSmSlIvH8",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "可能花了五六秒。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          },
+          {
+            "index": 6,
+            "transcript": "是为什么呢？",
+            "audioItemIds": [
+              "item_YNX8vCU2WYKps1YdaoFMA"
+            ],
+            "itemShape": {
+              "id": "item_YNX8vCU2WYKps1YdaoFMA",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "是为什么呢？"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted"
+            ]
+          }
+        ],
+        "readings": [
+          {
+            "input": 845,
+            "text": 810,
+            "audio": 35,
+            "output": 31,
+            "cny": 0.001564
+          },
+          {
+            "input": 959,
+            "text": 910,
+            "audio": 49,
+            "output": 31,
+            "cny": 0.001798
+          },
+          {
+            "input": 1081,
+            "text": 1011,
+            "audio": 70,
+            "output": 32,
+            "cny": 0.00208
+          },
+          {
+            "input": 1122,
+            "text": 1059,
+            "audio": 63,
+            "output": 29,
+            "cny": 0.002097
+          },
+          {
+            "input": 1202,
+            "text": 1139,
+            "audio": 63,
+            "output": 2,
+            "cny": 0.002095
+          },
+          {
+            "input": 1214,
+            "text": 1151,
+            "audio": 63,
+            "output": 27,
+            "cny": 0.002226
+          },
+          {
+            "input": 1292,
+            "text": 1229,
+            "audio": 63,
+            "output": 2,
+            "cny": 0.002231
+          }
+        ],
+        "transcripts": [
+          "是。",
+          "我大概花了。",
+          "两秒的时间。",
+          "就把话说完了。",
+          "但是，我看见这边往外蹦字儿。",
+          "可能花了五六秒。",
+          "是为什么呢？"
+        ]
+      },
+      "aggressive0": {
+        "mode": "aggressive",
+        "span": {
+          "startMs": 18000,
+          "endMs": 30500
+        },
+        "upstreamTurnDetection": "server_vad 0.5/400 — this probe never sends response.create",
+        "gate": {
+          "aFrames": 31,
+          "preRollFrames": 10,
+          "stats": {
+            "sent": 511,
+            "headKept": 166,
+            "heldOpen": 0,
+            "dropped": 112,
+            "bypassed": 0,
+            "preRoll": 11
+          }
+        },
+        "streamedFrames": 625,
+        "streamedSeconds": 12.5,
+        "realtimeDriftMs": 382,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "是。",
+            "audioItemIds": [
+              "item_ILu9l5YXfv1AV8oPEYLlS"
+            ],
+            "itemShape": {
+              "id": "item_ILu9l5YXfv1AV8oPEYLlS",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 1,
+            "transcript": "我大概花了。",
+            "audioItemIds": [
+              "item_Xn4gXm9rADruirL4qNHuV"
+            ],
+            "itemShape": {
+              "id": "item_Xn4gXm9rADruirL4qNHuV",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [],
+            "replies": [],
+            "swapped": []
+          },
+          {
+            "index": 2,
+            "transcript": "两秒的时间。",
+            "audioItemIds": [
+              "item_MIKC7eCCW3XDYkFdBbosq"
+            ],
+            "itemShape": {
+              "id": "item_MIKC7eCCW3XDYkFdBbosq",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "我大概花了两秒时间。"
+            ],
+            "replies": [
+              "OK"
+            ],
+            "swapped": [
+              "deleted",
+              "deleted",
+              "deleted",
+              "deleted"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "就把话说完了。",
+            "audioItemIds": [
+              "item_XpfBL5nXCpS9hEIbvXQKv"
+            ],
+            "itemShape": {
+              "id": "item_XpfBL5nXCpS9hEIbvXQKv",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "就把话说完了。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted",
+              "deleted",
+              "deleted",
+              "deleted"
+            ]
+          },
+          {
+            "index": 4,
+            "transcript": "但是，我看见这边往外蹦字儿。",
+            "audioItemIds": [
+              "item_JJJF1H6AUPyXvMfljCuWK"
+            ],
+            "itemShape": {
+              "id": "item_JJJF1H6AUPyXvMfljCuWK",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "但是我看见这边有个洞字儿。"
+            ],
+            "replies": [
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted",
+              "deleted",
+              "deleted",
+              "deleted"
+            ]
+          },
+          {
+            "index": 5,
+            "transcript": "可能花了五六秒。",
+            "audioItemIds": [
+              "item_WAT5Nbv5F42thavDXWTMu"
+            ],
+            "itemShape": {
+              "id": "item_WAT5Nbv5F42thavDXWTMu",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "可能花了五六秒。"
+            ],
+            "replies": [
+              "OK",
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted",
+              "deleted"
+            ]
+          },
+          {
+            "index": 6,
+            "transcript": "是为什么呢？",
+            "audioItemIds": [
+              "item_ElCyYflX47rihKIjwmMmP"
+            ],
+            "itemShape": {
+              "id": "item_ElCyYflX47rihKIjwmMmP",
+              "object": "realtime.item",
+              "type": "message",
+              "status": "in_progress",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_audio"
+                }
+              ]
+            },
+            "delivered": [
+              "是为什么呢？"
+            ],
+            "replies": [
+              "OK",
+              "OK",
+              "OK",
+              "OK"
+            ],
+            "swapped": [
+              "deleted",
+              "deleted",
+              "deleted",
+              "deleted"
+            ]
+          }
+        ],
+        "readings": [
+          {
+            "input": 845,
+            "text": 810,
+            "audio": 35,
+            "output": 31,
+            "cny": 0.001564
+          },
+          {
+            "input": 927,
+            "text": 892,
+            "audio": 35,
+            "output": 2,
+            "cny": 0.001557
+          },
+          {
+            "input": 843,
+            "text": 829,
+            "audio": 14,
+            "output": 28,
+            "cny": 0.001453
+          },
+          {
+            "input": 0,
+            "text": 0,
+            "audio": 0,
+            "output": 0,
+            "cny": 0
+          },
+          {
+            "input": 954,
+            "text": 919,
+            "audio": 35,
+            "output": 32,
+            "cny": 0.001732
+          },
+          {
+            "input": 975,
+            "text": 947,
+            "audio": 28,
+            "output": 29,
+            "cny": 0.001719
+          },
+          {
+            "input": 1055,
+            "text": 1027,
+            "audio": 28,
+            "output": 2,
+            "cny": 0.001717
+          },
+          {
+            "input": 1057,
+            "text": 1029,
+            "audio": 28,
+            "output": 27,
+            "cny": 0.001833
+          },
+          {
+            "input": 1135,
+            "text": 1107,
+            "audio": 28,
+            "output": 2,
+            "cny": 0.001837
+          }
+        ],
+        "transcripts": [
+          "是。",
+          "我大概花了。",
+          "两秒的时间。",
+          "就把话说完了。",
+          "但是，我看见这边往外蹦字儿。",
+          "可能花了五六秒。",
+          "是为什么呢？"
+        ]
+      }
+    }
+  }
+}

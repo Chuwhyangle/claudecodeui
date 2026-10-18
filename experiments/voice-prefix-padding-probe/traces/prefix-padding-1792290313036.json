@@ -1,0 +1,72 @@
+{
+  "audio": "/data/home/yale/.cloudcli/voice-realtime-capture/0256124a-bbdd-4447-93f4-83f5d05bde3e.wav",
+  "fromMs": 0,
+  "durationMs": 6200,
+  "reference": "",
+  "arms": [
+    {
+      "arm": "K",
+      "rep": 1,
+      "echo": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 1579,
+      "stoppedMs": 4156,
+      "transcripts": [
+        "十月十八日，Live Voice。",
+        "第一次测试。"
+      ],
+      "coverage": null,
+      "spendCny": 0
+    },
+    {
+      "arm": "P1000",
+      "rep": 1,
+      "echo": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1000,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 1566,
+      "stoppedMs": 4140,
+      "transcripts": [
+        "十月十八日，Line Voice。",
+        "第一次测试。"
+      ],
+      "coverage": null,
+      "spendCny": 0
+    },
+    {
+      "arm": "P1500",
+      "rep": 1,
+      "echo": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1500,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 1686,
+      "stoppedMs": 4270,
+      "transcripts": [
+        "十月十八日，Live Voice。",
+        "第一次测试。"
+      ],
+      "coverage": null,
+      "spendCny": 0
+    }
+  ],
+  "spendCny": 0
+}

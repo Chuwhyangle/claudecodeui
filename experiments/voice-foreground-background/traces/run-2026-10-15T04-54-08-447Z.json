@@ -1,0 +1,3479 @@
+{
+  "ranAt": "2026-10-15T04:54:08.447Z",
+  "budgetCny": 0.25,
+  "spendCny": 0.288903,
+  "guardTriggered": true,
+  "results": [
+    {
+      "window": "W1",
+      "arm": "I2",
+      "rep": 0,
+      "note": "\"停下它\" at ~67.7 s while running",
+      "spendCny": 0.029108,
+      "responses": 10,
+      "usage": [
+        [
+          1369,
+          28,
+          36
+        ],
+        [
+          1456,
+          28,
+          2
+        ],
+        [
+          1579,
+          70,
+          34
+        ],
+        [
+          1664,
+          70,
+          2
+        ],
+        [
+          1677,
+          105,
+          35
+        ],
+        [
+          1763,
+          105,
+          2
+        ],
+        [
+          1776,
+          126,
+          30
+        ],
+        [
+          1857,
+          126,
+          2
+        ],
+        [
+          1457,
+          7,
+          45
+        ],
+        [
+          1549,
+          7,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 3514,
+          "kind": "ASR",
+          "text": "十月十五日，Live Voice。"
+        },
+        {
+          "at": 4614,
+          "kind": "ASR",
+          "text": "人体组织。"
+        },
+        {
+          "at": 4780,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 4939,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "10月15日 live voice 第三次录制。"
+        },
+        {
+          "at": 4941,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 5324,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 5347,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 5348,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6101,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 17877,
+          "kind": "ASR",
+          "text": "现在我们看看这次会不会再出现。"
+        },
+        {
+          "at": 19504,
+          "kind": "ASR",
+          "text": "才那几个问题。"
+        },
+        {
+          "at": 19695,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 19856,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在我们看看这次会不会再出现刚才那几个问题。"
+        },
+        {
+          "at": 19858,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20159,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 20180,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 20180,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20880,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 23380,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 31729,
+          "kind": "ASR",
+          "text": "尝试执行一个耗时比较长的前台的 batch 操作。"
+        },
+        {
+          "at": 31772,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 32012,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "尝试执行一个耗时比较长的前台 bash 操作。"
+        },
+        {
+          "at": 32012,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 32319,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 32340,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 32345,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 33059,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 39580,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 40097,
+          "kind": "ASR",
+          "text": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 40301,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 40441,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 40442,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 40911,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 40934,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 40935,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 51280,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 68782,
+          "kind": "ASR",
+          "text": "停一下。它。"
+        },
+        {
+          "at": 69745,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 70000,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停下它。",
+          "intent": "用户要求停止当前的运行任务。"
+        },
+        {
+          "at": 70001,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 70299,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 70493,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 70516,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 70516,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "window": "W1",
+      "arm": "I2",
+      "rep": 1,
+      "note": "\"停下它\" at ~67.7 s while running",
+      "spendCny": 0.029146,
+      "responses": 10,
+      "usage": [
+        [
+          1369,
+          28,
+          32
+        ],
+        [
+          1452,
+          28,
+          2
+        ],
+        [
+          1575,
+          70,
+          34
+        ],
+        [
+          1660,
+          70,
+          2
+        ],
+        [
+          1673,
+          105,
+          36
+        ],
+        [
+          1760,
+          105,
+          2
+        ],
+        [
+          1773,
+          126,
+          30
+        ],
+        [
+          1854,
+          126,
+          2
+        ],
+        [
+          1457,
+          7,
+          60
+        ],
+        [
+          1564,
+          7,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 3504,
+          "kind": "ASR",
+          "text": "十月十五日，Live Voice。"
+        },
+        {
+          "at": 4600,
+          "kind": "ASR",
+          "text": "人体组织。"
+        },
+        {
+          "at": 4772,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 4936,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "十月十五日 Live Voice 第三次录制。"
+        },
+        {
+          "at": 4937,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 5320,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 5342,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 5342,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6101,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 17856,
+          "kind": "ASR",
+          "text": "现在我们看看这次会不会再出现。"
+        },
+        {
+          "at": 19445,
+          "kind": "ASR",
+          "text": "刚才那几个问题。"
+        },
+        {
+          "at": 19657,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 19820,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在我们看看这次会不会再出现刚才那几个问题。"
+        },
+        {
+          "at": 19821,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20283,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 20305,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 20305,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20880,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 23380,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 31718,
+          "kind": "ASR",
+          "text": "尝试执行一个耗时比较长的前台的 batch 操作。"
+        },
+        {
+          "at": 31746,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 31934,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "尝试执行一个耗时比较长的前台的 Bash 操作。"
+        },
+        {
+          "at": 31934,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 32253,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 32279,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 32279,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 33060,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 39580,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 40011,
+          "kind": "ASR",
+          "text": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 40221,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 40349,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 40350,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 40856,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 40878,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 40879,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 51281,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 68998,
+          "kind": "ASR",
+          "text": "停一下。它。"
+        },
+        {
+          "at": 69179,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 69499,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停下它。",
+          "intent": "用户要求停止当前正在运行的任务。"
+        },
+        {
+          "at": 69500,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 69993,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 70015,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 70015,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 70301,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "W1",
+      "arm": "K",
+      "rep": 0,
+      "note": "\"停下它\" at ~67.7 s while running",
+      "spendCny": 0.027388,
+      "responses": 10,
+      "usage": [
+        [
+          1258,
+          28,
+          32
+        ],
+        [
+          1341,
+          28,
+          2
+        ],
+        [
+          1464,
+          70,
+          34
+        ],
+        [
+          1549,
+          70,
+          2
+        ],
+        [
+          1562,
+          105,
+          35
+        ],
+        [
+          1648,
+          105,
+          2
+        ],
+        [
+          1661,
+          126,
+          30
+        ],
+        [
+          1742,
+          126,
+          2
+        ],
+        [
+          1346,
+          7,
+          46
+        ],
+        [
+          1439,
+          7,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 3528,
+          "kind": "ASR",
+          "text": "十月十五日，Live Voice。"
+        },
+        {
+          "at": 4584,
+          "kind": "ASR",
+          "text": "是。"
+        },
+        {
+          "at": 4854,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 5040,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "十月十五日 live voice 第三次录制。"
+        },
+        {
+          "at": 5040,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 5402,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 5425,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 5425,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6100,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 17851,
+          "kind": "ASR",
+          "text": "现在我们看看这次会不会再出现。"
+        },
+        {
+          "at": 19430,
+          "kind": "ASR",
+          "text": "刚才那几个问题。"
+        },
+        {
+          "at": 19604,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 19766,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在我们看看这次会不会再出现刚才那几个问题。"
+        },
+        {
+          "at": 19767,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20284,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 20306,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 20306,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20879,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 23379,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 31738,
+          "kind": "ASR",
+          "text": "尝试执行一个耗时比较长的前台的 batch 操作。"
+        },
+        {
+          "at": 31940,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 32136,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "尝试执行一个耗时比较长的前台 bash 操作。"
+        },
+        {
+          "at": 32137,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 32441,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 32463,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 32464,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 33060,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 39579,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 40015,
+          "kind": "ASR",
+          "text": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 40236,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 40380,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 40380,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 40853,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 40875,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 40877,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 51279,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 68777,
+          "kind": "ASR",
+          "text": "停下它。"
+        },
+        {
+          "at": 68943,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 69175,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停下他。",
+          "intent": "用户要求停止当前正在运行的任务。"
+        },
+        {
+          "at": 69176,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 70253,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 70276,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 70277,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 70299,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "W1",
+      "arm": "K",
+      "rep": 1,
+      "note": "\"停下它\" at ~67.7 s while running",
+      "spendCny": 0.027403,
+      "responses": 10,
+      "usage": [
+        [
+          1258,
+          28,
+          32
+        ],
+        [
+          1341,
+          28,
+          2
+        ],
+        [
+          1464,
+          70,
+          34
+        ],
+        [
+          1551,
+          70,
+          2
+        ],
+        [
+          1562,
+          105,
+          36
+        ],
+        [
+          1651,
+          105,
+          2
+        ],
+        [
+          1662,
+          126,
+          30
+        ],
+        [
+          1743,
+          126,
+          2
+        ],
+        [
+          1346,
+          7,
+          46
+        ],
+        [
+          1439,
+          7,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_QQgzSemXIMcvjFkaOu1wa\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+        "{\"event_id\":\"event_JOUwDWlbzp5zae1VAIP9G\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+        "{\"event_id\":\"event_Q2L9tC2eI6p7XJHA5QMPk\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 3571,
+          "kind": "ASR",
+          "text": "十月十五日，Live Voice。"
+        },
+        {
+          "at": 4739,
+          "kind": "ASR",
+          "text": "第三次录制。"
+        },
+        {
+          "at": 4903,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 5090,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "十月十五日，live voice第三次录制。"
+        },
+        {
+          "at": 5091,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 5582,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 5604,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 5605,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6101,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 19538,
+          "kind": "ASR",
+          "text": "现在我们看看这次会不会再出现。"
+        },
+        {
+          "at": 20879,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 21443,
+          "kind": "ASR",
+          "text": "刚才那几个问题。"
+        },
+        {
+          "at": 21632,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 21790,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在我们看看这次会不会再出现刚才那几个问题。"
+        },
+        {
+          "at": 21791,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 22375,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 22694,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 22716,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 22716,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 23380,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 33059,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 36579,
+          "kind": "ASR",
+          "text": "尝试执行一个耗时比较长的前台的 batch 操作。"
+        },
+        {
+          "at": 36815,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 36999,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "尝试执行一个耗时比较长的前台的 Bash 操作。"
+        },
+        {
+          "at": 37000,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 38275,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 38710,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 38731,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 38732,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 39579,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 42285,
+          "kind": "ASR",
+          "text": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 42391,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 42530,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "大概三十秒到一分钟。"
+        },
+        {
+          "at": 42531,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 43434,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 43858,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 43880,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 43881,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 51280,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 68664,
+          "kind": "ASR",
+          "text": "停一下。它。"
+        },
+        {
+          "at": 68843,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 69094,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停下它。",
+          "intent": "用户要求停止当前正在运行的任务。"
+        },
+        {
+          "at": 69095,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 69437,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 69460,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 69460,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 70300,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "W2",
+      "arm": "I2",
+      "rep": 0,
+      "note": "stop at ~51–52 s; \"停下来以后就没有再去调…\" at ~78 s is NOT a stop",
+      "spendCny": 0.029215,
+      "responses": 10,
+      "usage": [
+        [
+          1459,
+          28,
+          38
+        ],
+        [
+          1548,
+          28,
+          2
+        ],
+        [
+          1570,
+          56,
+          51
+        ],
+        [
+          1634,
+          77,
+          30
+        ],
+        [
+          1721,
+          84,
+          28
+        ],
+        [
+          1804,
+          84,
+          2
+        ],
+        [
+          1813,
+          91,
+          27
+        ],
+        [
+          1891,
+          91,
+          2
+        ],
+        [
+          1462,
+          28,
+          34
+        ],
+        [
+          1547,
+          28,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_E6DrinRZhAckcQPB7Yn3V\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_3087e42f45724abfb201a09a\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_XKHxYWi1AbyZGF5kTLEib\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+        "{\"event_id\":\"event_OoLLmPTEtXtk6p9hdcaQv\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_SvVW339UDOrC7E"
+      ],
+      "timeline": [
+        {
+          "at": 6007,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 6137,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6321,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 6322,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6840,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 6862,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 6862,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 7440,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 31982,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 33222,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 33417,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33714,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户希望停止当前正在进行的处理任务"
+        },
+        {
+          "at": 33714,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34170,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_3087e42f45724abfb201a09a\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 34170,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 34860,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 36129,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 36130,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 36237,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "先处理现在的这个请求。"
+        },
+        {
+          "at": 36237,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36469,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_SvVW339UDOrC7ESMdYUdf\"}"
+        },
+        {
+          "at": 37203,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 37360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 37348,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 37462,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "哎，挺好。"
+        },
+        {
+          "at": 37463,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 38071,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 38092,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 38093,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53299,
+          "kind": "ASR",
+          "text": "Okay."
+        },
+        {
+          "at": 53360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 53484,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53601,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "诶。"
+        },
+        {
+          "at": 53602,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 54318,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 54340,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 54340,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 58899,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去调 cloud code 吗？"
+        },
+        {
+          "at": 59036,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 59199,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Cloud Code 吗？"
+        },
+        {
+          "at": 59199,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 59360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 59716,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 59738,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 59738,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "window": "W2",
+      "arm": "I2",
+      "rep": 1,
+      "note": "stop at ~51–52 s; \"停下来以后就没有再去调…\" at ~78 s is NOT a stop",
+      "spendCny": 0.024952,
+      "responses": 9,
+      "usage": [
+        [
+          1459,
+          28,
+          38
+        ],
+        [
+          1548,
+          28,
+          2
+        ],
+        [
+          1558,
+          42,
+          29
+        ],
+        [
+          1598,
+          56,
+          45
+        ],
+        [
+          1656,
+          77,
+          30
+        ],
+        [
+          1695,
+          84,
+          2
+        ],
+        [
+          1712,
+          91,
+          2
+        ],
+        [
+          1462,
+          28,
+          34
+        ],
+        [
+          1547,
+          28,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_EBnJPmaVgebWTo6Ynb8Vb\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_3cf1a91f603f4a188b1a1e9a\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_GF6o3Cci2un9vUedloNZp\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+        "{\"event_id\":\"event_WhyhYdQnR3EylHLGkiV1T\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_ceec685f56894b029c70deea\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_Qcik4rXUK13vPNf3WPMzb\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+        "{\"event_id\":\"event_X4DlUuTfgVxpeys8L9NN3\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_3d61fb2964b64caca68f2c7a\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_MbRbWqGvAAnwcqIGJlqth\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+      ],
+      "timeline": [
+        {
+          "at": 5904,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSec 来跑的了。"
+        },
+        {
+          "at": 5997,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6180,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 6181,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6655,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 6677,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 6677,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 7440,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 32054,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 32236,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 32350,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "让他把前面那个。"
+        },
+        {
+          "at": 32351,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 33203,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_3cf1a91f603f4a188b1a1e9a\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 33203,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 33459,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 33679,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 33913,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "处理停下来吧。",
+          "intent": "用户要求停止正在进行的处理"
+        },
+        {
+          "at": 33914,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34420,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_ceec685f56894b029c70deea\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 34421,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 34860,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 37210,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 37225,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 37361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 37365,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "先处理现在的这些请求。"
+        },
+        {
+          "at": 37366,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 38274,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_3d61fb2964b64caca68f2c7a\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 38274,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 38275,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 38506,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 38529,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 38529,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 53419,
+          "kind": "ASR",
+          "text": "嗯。"
+        },
+        {
+          "at": 53598,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53621,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 53621,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 58720,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去掉 cloud code 吗？"
+        },
+        {
+          "at": 58858,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 59020,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Claude Code 吗？"
+        },
+        {
+          "at": 59021,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 59361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 59393,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 59414,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 59414,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "window": "W2",
+      "arm": "K",
+      "rep": 0,
+      "note": "stop at ~51–52 s; \"停下来以后就没有再去调…\" at ~78 s is NOT a stop",
+      "spendCny": 0.017926,
+      "responses": 8,
+      "usage": [
+        [
+          1348,
+          28,
+          38
+        ],
+        [
+          1438,
+          28,
+          2
+        ],
+        [
+          1459,
+          56,
+          50
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1532,
+          84,
+          33
+        ],
+        [
+          1620,
+          84,
+          2
+        ],
+        [
+          1351,
+          21,
+          33
+        ],
+        [
+          1435,
+          21,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_VhmfUCCMK7GPjdRnKXSuK\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+        "{\"event_id\":\"event_ChTOeHB1737eQlrpDgPtQ\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_796ea8660ada445a9ca57750\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_LsJRQNaObJB9bkyQkMbQ7\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+        "{\"event_id\":\"event_QWMLMO9rTKlmgmeqgNFEs\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 7441,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 7858,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSec 来跑的了。"
+        },
+        {
+          "at": 7938,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8119,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 8120,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 9012,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 9319,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 9341,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 9341,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34682,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 34860,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 35979,
+          "kind": "ASR",
+          "text": "停下来吧。"
+        },
+        {
+          "at": 36162,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 36423,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户要求停止正在进行的处理。"
+        },
+        {
+          "at": 36424,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 37361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 39144,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 39242,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 39276,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \""
+        },
+        {
+          "at": 39277,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 39839,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_796ea8660ada445a9ca57750\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 39839,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 40078,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 40244,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 40431,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "先处理现在的这请求，哎挺好。"
+        },
+        {
+          "at": 40432,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 42231,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 42622,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 42643,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 42643,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53359,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 58862,
+          "kind": "ASR",
+          "text": "以后就没有再去调扣扣的吗？"
+        },
+        {
+          "at": 59073,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 59239,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "以后就没有再去调 Claude Code 吗？"
+        },
+        {
+          "at": 59240,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 59361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 59750,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 59773,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 59773,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "window": "W2",
+      "arm": "K",
+      "rep": 1,
+      "note": "stop at ~51–52 s; \"停下来以后就没有再去调…\" at ~78 s is NOT a stop",
+      "spendCny": 0.027336,
+      "responses": 11,
+      "usage": [
+        [
+          1348,
+          28,
+          38
+        ],
+        [
+          1437,
+          28,
+          2
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1459,
+          56,
+          51
+        ],
+        [
+          1572,
+          77,
+          2
+        ],
+        [
+          1583,
+          84,
+          28
+        ],
+        [
+          1666,
+          84,
+          2
+        ],
+        [
+          1675,
+          91,
+          27
+        ],
+        [
+          1753,
+          91,
+          2
+        ],
+        [
+          1351,
+          28,
+          34
+        ],
+        [
+          1436,
+          28,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_DnzJSPVUChGoIyCvFCVFx\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_DM9iXt1hGfEdDf"
+      ],
+      "timeline": [
+        {
+          "at": 5800,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 5826,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6013,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 6014,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 6380,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 6402,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 6403,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 7440,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 31729,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 31854,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 31862,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": ""
+        },
+        {
+          "at": 31862,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 33135,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 33221,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33507,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户希望停止当前正在进行的处理。"
+        },
+        {
+          "at": 33508,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 33725,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_DM9iXt1hGfEdDf7JmmF2M\"}"
+        },
+        {
+          "at": 34859,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 35669,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 35851,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 35873,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 35873,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 37184,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 37360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 37497,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 37614,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "哎，挺好。"
+        },
+        {
+          "at": 37615,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 38087,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 38109,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 38110,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53276,
+          "kind": "ASR",
+          "text": "Okay."
+        },
+        {
+          "at": 53361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 53401,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53518,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "诶。"
+        },
+        {
+          "at": 53519,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53994,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 54016,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 54016,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 58736,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去调Cloud Code吗？"
+        },
+        {
+          "at": 58942,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 59101,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Cloud Code 了吗？"
+        },
+        {
+          "at": 59102,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 59360,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 59559,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 59586,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 59586,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "window": "W4",
+      "arm": "I2",
+      "rep": 0,
+      "note": "\"OK，现在可以终止它了\" at ~104 s",
+      "spendCny": 0.017642,
+      "responses": 8,
+      "usage": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1483,
+          49,
+          33
+        ],
+        [
+          1570,
+          49,
+          2
+        ],
+        [
+          1579,
+          63,
+          50
+        ],
+        [
+          1681,
+          63,
+          2
+        ],
+        [
+          1689,
+          91,
+          32
+        ],
+        [
+          1772,
+          91,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_MH9BD92gSgTLqOWKyVbNI\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 6815,
+          "kind": "ASR",
+          "text": "我看你。"
+        },
+        {
+          "at": 6979,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6985,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": ""
+        },
+        {
+          "at": 6986,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 8300,
+          "kind": "ASR",
+          "text": "都跑完了。"
+        },
+        {
+          "at": 8494,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8617,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "{\"message\": \"我看你都跑完了？\""
+        },
+        {
+          "at": 8618,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 9161,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 12600,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 12620,
+          "kind": "ASR",
+          "text": "所以你的这个号是叫床是什么？"
+        },
+        {
+          "at": 12741,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 12903,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "所以你的这个号是叫常是什么？"
+        },
+        {
+          "at": 12904,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 13214,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 13497,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 13518,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 13521,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 24478,
+          "kind": "ASR",
+          "text": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 24636,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 24892,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "OK，现在可以终止它了。",
+          "intent": "用户要求终止当前正在运行的任务"
+        },
+        {
+          "at": 24892,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26043,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 26064,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 26065,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26699,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 34361,
+          "kind": "ASR",
+          "text": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 34602,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 34742,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 34743,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 35337,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 35359,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 35359,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36300,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "W4",
+      "arm": "I2",
+      "rep": 1,
+      "note": "\"OK，现在可以终止它了\" at ~104 s",
+      "spendCny": 0.02038,
+      "responses": 8,
+      "usage": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1469,
+          28,
+          29
+        ],
+        [
+          1511,
+          49,
+          31
+        ],
+        [
+          1596,
+          49,
+          2
+        ],
+        [
+          1605,
+          63,
+          51
+        ],
+        [
+          1708,
+          63,
+          2
+        ],
+        [
+          1716,
+          91,
+          32
+        ],
+        [
+          1799,
+          91,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_Vwe6RmSv3emE28Im24JUo\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_c0618482707a4f78ba259a3b\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_SGFzGGT9ECb3MYfT8mlFl\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+        "{\"event_id\":\"event_O8XbNyHAi9EUj4kj521PG\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 6685,
+          "kind": "ASR",
+          "text": "我看你。"
+        },
+        {
+          "at": 6851,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6905,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"我看你。"
+        },
+        {
+          "at": 6906,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 8330,
+          "kind": "ASR",
+          "text": "都跑完了。"
+        },
+        {
+          "at": 8484,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8623,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看你都跑完了？"
+        },
+        {
+          "at": 8623,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 9160,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 9917,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_c0618482707a4f78ba259a3b\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 9917,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 12600,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 13391,
+          "kind": "ASR",
+          "text": "所以你的这个号是叫床是什么？"
+        },
+        {
+          "at": 13484,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 13620,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "所以你的这个耗时较长是什么？"
+        },
+        {
+          "at": 13621,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 14103,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 14556,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 14578,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 14580,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 25743,
+          "kind": "ASR",
+          "text": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 25974,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 26247,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "OK，现在可以终止它了。",
+          "intent": "用户要求立即停止当前正在运行的任务"
+        },
+        {
+          "at": 26248,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26700,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 27258,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 27281,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 27282,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34500,
+          "kind": "ASR",
+          "text": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 34768,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 34907,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 34908,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 35542,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 35564,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 35564,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36301,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "W4",
+      "arm": "K",
+      "rep": 0,
+      "note": "\"OK，现在可以终止它了\" at ~104 s",
+      "spendCny": 0.019206,
+      "responses": 7,
+      "usage": [
+        [
+          1358,
+          28,
+          29
+        ],
+        [
+          1400,
+          49,
+          31
+        ],
+        [
+          1485,
+          49,
+          2
+        ],
+        [
+          1494,
+          63,
+          50
+        ],
+        [
+          1596,
+          63,
+          2
+        ],
+        [
+          1604,
+          91,
+          32
+        ],
+        [
+          1687,
+          91,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_Brtg6LsZ3JjSoF4cJRW5b\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_NnM1LUDoVJAX1r"
+      ],
+      "timeline": [
+        {
+          "at": 6566,
+          "kind": "ASR",
+          "text": "我看你。"
+        },
+        {
+          "at": 7847,
+          "kind": "ASR",
+          "text": "都跑完了。"
+        },
+        {
+          "at": 7975,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8112,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看你都跑完了。"
+        },
+        {
+          "at": 8113,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 8200,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_NnM1LUDoVJAX1rL1uNBn3\"}"
+        },
+        {
+          "at": 9160,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 11041,
+          "kind": "ASR",
+          "text": "所以你的这个号是叫长是什么？"
+        },
+        {
+          "at": 11146,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 11285,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "所以你的这个耗时较长是什么？"
+        },
+        {
+          "at": 11286,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 11649,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 11671,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 11672,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 12601,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 24410,
+          "kind": "ASR",
+          "text": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 24545,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 24799,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "OK，现在可以终止它了。",
+          "intent": "用户要求立即终止当前运行的任务"
+        },
+        {
+          "at": 24800,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 25257,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 25279,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 25280,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26700,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 33525,
+          "kind": "ASR",
+          "text": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 33726,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33867,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 33868,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34149,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 34171,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 34171,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36300,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "W4",
+      "arm": "K",
+      "rep": 1,
+      "note": "\"OK，现在可以终止它了\" at ~104 s",
+      "spendCny": 0.019199,
+      "responses": 7,
+      "usage": [
+        [
+          1358,
+          28,
+          29
+        ],
+        [
+          1400,
+          49,
+          31
+        ],
+        [
+          1485,
+          49,
+          2
+        ],
+        [
+          1494,
+          63,
+          49
+        ],
+        [
+          1595,
+          63,
+          2
+        ],
+        [
+          1603,
+          91,
+          32
+        ],
+        [
+          1687,
+          91,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_CzhHZSocnXjQgArZ9TYEA\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_2a6134b7e74d4e768ed99127\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_RAY2HZXUOHVhKNKFPJnJ5\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+        "{\"event_id\":\"event_PkQ4FmrIYKRbYT927PI9N\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+        "{\"event_id\":\"event_HYofKVOqN3u9iURJ2R72b\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 6856,
+          "kind": "ASR",
+          "text": "我看你。"
+        },
+        {
+          "at": 8328,
+          "kind": "ASR",
+          "text": "都跑完了。"
+        },
+        {
+          "at": 8440,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8579,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看你都跑完了？"
+        },
+        {
+          "at": 8579,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 9160,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 9506,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_2a6134b7e74d4e768ed99127\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 9510,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 12600,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 13970,
+          "kind": "ASR",
+          "text": "所以你的这个号是叫床是什么？"
+        },
+        {
+          "at": 14104,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 14247,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "所以你的这个耗时较长是什么？"
+        },
+        {
+          "at": 14248,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 14988,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 15842,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 15864,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 15865,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 24751,
+          "kind": "ASR",
+          "text": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 24857,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 25106,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "OK，现在可以终止它了。",
+          "intent": "用户要求停止当前运行的任务"
+        },
+        {
+          "at": 25107,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 25872,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 25894,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 25895,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26701,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 35962,
+          "kind": "ASR",
+          "text": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 36179,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 36299,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 36352,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 36352,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36794,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 37169,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 37191,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 37191,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    }
+  ]
+}

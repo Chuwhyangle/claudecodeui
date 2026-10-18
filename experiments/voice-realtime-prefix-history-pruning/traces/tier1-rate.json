@@ -1,0 +1,40 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:55:21.329Z",
+  "budgetCny": 0.03,
+  "spendCny": 0.003852,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 10625,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "rate": {
+      "sourceSampleRate": 16000,
+      "liveSessionHeard": "现在是十月十五日，Live Voice第四十次。",
+      "readings": [
+        {
+          "label": "as-recorded",
+          "sentSampleRate": 16000,
+          "sentSeconds": 4,
+          "transcript": "现在是十月十五日，Live Voice。",
+          "delivered": [
+            "现在是十月十五日，Live Voice。"
+          ],
+          "audioTokens": 28,
+          "textTokens": 390
+        },
+        {
+          "label": "resampled-24k",
+          "sentSampleRate": 24000,
+          "sentSeconds": 4,
+          "transcript": "现在只是十五日来我。",
+          "delivered": [
+            "现在是十月十五日，Live Voice。"
+          ],
+          "audioTokens": 70,
+          "textTokens": 485
+        }
+      ]
+    }
+  }
+}

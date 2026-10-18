@@ -1,0 +1,49 @@
+{
+ "episode": "af12cbaf@10-14T09:52:31",
+ "arm": "C",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "90604965a2bbc3f13e24f5c90382c893f7dda063",
+ "fork": true,
+ "pieces": [],
+ "diffStat": "",
+ "wallMs": 92198,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "来吧，尝试跑一个差不多要一分钟的前台任务。",
+   "parts": []
+  },
+  {
+   "t": 905,
+   "ev": "TURN"
+  },
+  {
+   "t": 4306,
+   "ev": "TEXT",
+   "text": "好，按你要求在前台跑一个约 60 秒的任务（每 5 秒一步，共 12 步）。"
+  },
+  {
+   "t": 5013,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "for i in $(seq 1 12); do sleep 5; echo \"step $i/12 done at $(date +%T)\"; done",
+   "bg": false
+  },
+  {
+   "t": 66588,
+   "ev": "TEXT",
+   "text": "前台任务跑完了：12 步，每步 5 秒，从 14:50:48 到 14:51:43，总共约 60 秒，全程没有报错。\n\n这一分钟里你的新话会排队等到工具边界才进来，这正是这次测试要观察的点。"
+  },
+  {
+   "t": 66608,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

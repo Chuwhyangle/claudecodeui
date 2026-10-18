@@ -1,0 +1,6 @@
+# af12cbaf@10-14T09:52:31 arm A rep 0 model sonnet hook false wall 91.2s
+   0.0  >> DELIVER prompt: 来吧，尝试跑一个差不多要一分钟的前台任务。
+   1.0  == turn
+   3.1     tool Bash: for i in $(seq 1 12); do echo "tick $i"; sleep 5; done; echo done
+  64.4     text: 前台任务跑完了：一个 12 步、每步 5 秒的循环，共约 60 秒，正常退出并打印了 `done`。
+  64.5  -- result success

@@ -1,0 +1,3192 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T02:18:51.385Z",
+  "budgetCny": 0.08,
+  "spendCny": 0.075951,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 35051,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "order": [
+      {
+        "mode": "keep",
+        "rep": 0,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 686,
+          "dropped": 562,
+          "headKept": 158,
+          "heldOpen": 16
+        },
+        "realtimeDriftMs": 0,
+        "responsesSeen": 6,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_Otls1E4xMUjf1vGUO5a4b",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4760
+          },
+          {
+            "turn": 1,
+            "itemId": "item_KJdgx4NBr3bmNJMieW1PF",
+            "text": "但是，我看它在我的屏幕上蹦出来。",
+            "atMs": 7939
+          },
+          {
+            "turn": 2,
+            "itemId": "item_BX9kKIIKG2rIgl1wuCIDK",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 10020
+          },
+          {
+            "turn": 3,
+            "itemId": "item_CJgIf493K1o6yMvVfvJMH",
+            "text": "你让检查服务单，宇志。",
+            "atMs": 13401
+          },
+          {
+            "turn": 4,
+            "itemId": "item_Bg6uAqup5mt6YoxlPcvSS",
+            "text": "啊，分析一下原因。",
+            "atMs": 15020
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_NHpKxPuBAG6CXSnznnPsS",
+            "startedAtMs": 4820,
+            "doneAtMs": 5001,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_PbdRwdES3Lt2PdKdzubqZ",
+            "startedAtMs": 10141,
+            "doneAtMs": 10320,
+            "context": [
+              "A0",
+              "A1",
+              "A2"
+            ],
+            "calls": [
+              "但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_Z49ICZwR3QPk9PN8zuRY1",
+            "startedAtMs": 10781,
+            "doneAtMs": 10800,
+            "context": [
+              "A0",
+              "A1",
+              "A2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_X6Pg22OqWaPrrwsNWWL2a",
+            "startedAtMs": 13500,
+            "doneAtMs": 13520,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3"
+            ],
+            "calls": [
+              ""
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_CEBK7wgqXK3YygED79SK7",
+            "startedAtMs": 15100,
+            "doneAtMs": 15240,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "calls": [
+              "你应当检查服务端日志，分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_Dy9qkEgKiyULLbPWYjiBR",
+            "startedAtMs": 15701,
+            "doneAtMs": 15720,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [],
+        "itemsLog": [
+          {
+            "atMs": 1281,
+            "event": "created",
+            "id": "item_Otls1E4xMUjf1vGUO5a4b",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4820,
+            "event": "created",
+            "id": "item_BQxxUSAPljWQmN8Z98XXa",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_Otls1E4xMUjf1vGUO5a4b",
+            "placedAfter": "item_Otls1E4xMUjf1vGUO5a4b",
+            "appended": true
+          },
+          {
+            "atMs": 5160,
+            "event": "created",
+            "id": "item_KJdgx4NBr3bmNJMieW1PF",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_BQxxUSAPljWQmN8Z98XXa",
+            "placedAfter": "item_BQxxUSAPljWQmN8Z98XXa",
+            "appended": true
+          },
+          {
+            "atMs": 8200,
+            "event": "created",
+            "id": "item_BX9kKIIKG2rIgl1wuCIDK",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_KJdgx4NBr3bmNJMieW1PF",
+            "placedAfter": "item_KJdgx4NBr3bmNJMieW1PF",
+            "appended": true
+          },
+          {
+            "atMs": 10141,
+            "event": "created",
+            "id": "item_SFzaIQPeMMBMihmAKI7L3",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_BX9kKIIKG2rIgl1wuCIDK",
+            "placedAfter": "item_BX9kKIIKG2rIgl1wuCIDK",
+            "appended": true
+          },
+          {
+            "atMs": 10540,
+            "event": "created",
+            "id": "item_QdY5RvILsL2ktfu78TCtS",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_SFzaIQPeMMBMihmAKI7L3",
+            "placedAfter": "item_SFzaIQPeMMBMihmAKI7L3",
+            "appended": true
+          },
+          {
+            "atMs": 10781,
+            "event": "created",
+            "id": "item_XWZWPINVnFkoe9SgH1vgn",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_QdY5RvILsL2ktfu78TCtS",
+            "placedAfter": "item_QdY5RvILsL2ktfu78TCtS",
+            "appended": true
+          },
+          {
+            "atMs": 11341,
+            "event": "created",
+            "id": "item_CJgIf493K1o6yMvVfvJMH",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_XWZWPINVnFkoe9SgH1vgn",
+            "placedAfter": "item_XWZWPINVnFkoe9SgH1vgn",
+            "appended": true
+          },
+          {
+            "atMs": 13500,
+            "event": "created",
+            "id": "item_OQbTjxdha5cInMfOFvnha",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_CJgIf493K1o6yMvVfvJMH",
+            "placedAfter": "item_CJgIf493K1o6yMvVfvJMH",
+            "appended": true
+          },
+          {
+            "atMs": 13661,
+            "event": "created",
+            "id": "item_Bg6uAqup5mt6YoxlPcvSS",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_OQbTjxdha5cInMfOFvnha",
+            "placedAfter": "item_OQbTjxdha5cInMfOFvnha",
+            "appended": true
+          },
+          {
+            "atMs": 15100,
+            "event": "created",
+            "id": "item_ZLXbppgWlTXfhAAmutxko",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_Bg6uAqup5mt6YoxlPcvSS",
+            "placedAfter": "item_Bg6uAqup5mt6YoxlPcvSS",
+            "appended": true
+          },
+          {
+            "atMs": 15440,
+            "event": "created",
+            "id": "item_RT2KyViG5R6BCFYbsVF5a",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_ZLXbppgWlTXfhAAmutxko",
+            "placedAfter": "item_ZLXbppgWlTXfhAAmutxko",
+            "appended": true
+          },
+          {
+            "atMs": 15701,
+            "event": "created",
+            "id": "item_UayqF4Zowm3zgknJUTnRb",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_RT2KyViG5R6BCFYbsVF5a",
+            "placedAfter": "item_RT2KyViG5R6BCFYbsVF5a",
+            "appended": true
+          }
+        ],
+        "finalContext": [
+          "A0",
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ]
+      },
+      {
+        "mode": "keep",
+        "rep": 1,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 677,
+          "dropped": 571,
+          "headKept": 158,
+          "heldOpen": 1
+        },
+        "realtimeDriftMs": 0,
+        "responsesSeen": 5,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_ZKZHAS8A5EpMVS5QQH2g6",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4640
+          },
+          {
+            "turn": 1,
+            "itemId": "item_CMDZ1HzXX3lp6qnqz8Y56",
+            "text": "但是，我看到在我的屏幕上蹦出来。",
+            "atMs": 7840
+          },
+          {
+            "turn": 2,
+            "itemId": "item_TqWqCvnx7XPvOp8RMMRwF",
+            "text": "十秒。",
+            "atMs": 9841
+          },
+          {
+            "turn": 3,
+            "itemId": "item_CBlPDM6cHRFxPJ1S1DYsn",
+            "text": "以量检查负担一致。",
+            "atMs": 13319
+          },
+          {
+            "turn": 4,
+            "itemId": "item_RWZgNuZshNSMwKIWscYL3",
+            "text": "啊，分析一下原因。",
+            "atMs": 14801
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_N8yj71vBObJXBO1zqrIAl",
+            "startedAtMs": 4700,
+            "doneAtMs": 4899,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_IpCbBi83WA3hWWKZuhQTC",
+            "startedAtMs": 10140,
+            "doneAtMs": 10340,
+            "context": [
+              "A0",
+              "A1",
+              "A2"
+            ],
+            "calls": [
+              "但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_OQwaVTd73h9Sq8ciNQUxB",
+            "startedAtMs": 10699,
+            "doneAtMs": 10720,
+            "context": [
+              "A0",
+              "A1",
+              "A2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_RSdNQRwMoVN4BOsMadxtW",
+            "startedAtMs": 14961,
+            "doneAtMs": 15100,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "calls": [
+              "你应当检查服务端日志，分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_ZjfnFenlZJoqpilIV89Ng",
+            "startedAtMs": 15481,
+            "doneAtMs": 15500,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [],
+        "itemsLog": [
+          {
+            "atMs": 1221,
+            "event": "created",
+            "id": "item_ZKZHAS8A5EpMVS5QQH2g6",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4700,
+            "event": "created",
+            "id": "item_MwYfd13zFIbrsTxpYoQLd",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_ZKZHAS8A5EpMVS5QQH2g6",
+            "placedAfter": "item_ZKZHAS8A5EpMVS5QQH2g6",
+            "appended": true
+          },
+          {
+            "atMs": 5060,
+            "event": "created",
+            "id": "item_CMDZ1HzXX3lp6qnqz8Y56",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_MwYfd13zFIbrsTxpYoQLd",
+            "placedAfter": "item_MwYfd13zFIbrsTxpYoQLd",
+            "appended": true
+          },
+          {
+            "atMs": 8940,
+            "event": "created",
+            "id": "item_TqWqCvnx7XPvOp8RMMRwF",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_CMDZ1HzXX3lp6qnqz8Y56",
+            "placedAfter": "item_CMDZ1HzXX3lp6qnqz8Y56",
+            "appended": true
+          },
+          {
+            "atMs": 10140,
+            "event": "created",
+            "id": "item_O8CvRQb2NnZaDI7K2vvHt",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_TqWqCvnx7XPvOp8RMMRwF",
+            "placedAfter": "item_TqWqCvnx7XPvOp8RMMRwF",
+            "appended": true
+          },
+          {
+            "atMs": 10441,
+            "event": "created",
+            "id": "item_JuFPWj7K3LgMo4NHI5dqf",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_O8CvRQb2NnZaDI7K2vvHt",
+            "placedAfter": "item_O8CvRQb2NnZaDI7K2vvHt",
+            "appended": true
+          },
+          {
+            "atMs": 10699,
+            "event": "created",
+            "id": "item_H6m1d1UzJWs5ill7wpOgO",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_JuFPWj7K3LgMo4NHI5dqf",
+            "placedAfter": "item_JuFPWj7K3LgMo4NHI5dqf",
+            "appended": true
+          },
+          {
+            "atMs": 11080,
+            "event": "created",
+            "id": "item_CBlPDM6cHRFxPJ1S1DYsn",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_H6m1d1UzJWs5ill7wpOgO",
+            "placedAfter": "item_H6m1d1UzJWs5ill7wpOgO",
+            "appended": true
+          },
+          {
+            "atMs": 13560,
+            "event": "created",
+            "id": "item_RWZgNuZshNSMwKIWscYL3",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_CBlPDM6cHRFxPJ1S1DYsn",
+            "placedAfter": "item_CBlPDM6cHRFxPJ1S1DYsn",
+            "appended": true
+          },
+          {
+            "atMs": 14961,
+            "event": "created",
+            "id": "item_XLKGIHWyVTsPWAFjj5TdE",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_RWZgNuZshNSMwKIWscYL3",
+            "placedAfter": "item_RWZgNuZshNSMwKIWscYL3",
+            "appended": true
+          },
+          {
+            "atMs": 15181,
+            "event": "created",
+            "id": "item_Txvf9wTHAhOYMFePkXxC4",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_XLKGIHWyVTsPWAFjj5TdE",
+            "placedAfter": "item_XLKGIHWyVTsPWAFjj5TdE",
+            "appended": true
+          },
+          {
+            "atMs": 15481,
+            "event": "created",
+            "id": "item_Wquybvyotp2zzWlJzmcRK",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_Txvf9wTHAhOYMFePkXxC4",
+            "placedAfter": "item_Txvf9wTHAhOYMFePkXxC4",
+            "appended": true
+          }
+        ],
+        "finalContext": [
+          "A0",
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ]
+      },
+      {
+        "mode": "keep",
+        "rep": 2,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 678,
+          "dropped": 570,
+          "headKept": 158,
+          "heldOpen": 2
+        },
+        "realtimeDriftMs": 0,
+        "responsesSeen": 6,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_HwTnbdZwvqUoaPQrzoJDy",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4661
+          },
+          {
+            "turn": 1,
+            "itemId": "item_BF7d7mPHqCxMnUY1K6VxV",
+            "text": "但是，我看到在我的屏幕上蹦出来。",
+            "atMs": 7820
+          },
+          {
+            "turn": 2,
+            "itemId": "item_XGaDpE8zWgKBFuWjun4q6",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 9920
+          },
+          {
+            "turn": 3,
+            "itemId": "item_V51ctSV4iorh3OLHf1Dyk",
+            "text": "你让检查服务单，与之。",
+            "atMs": 13781
+          },
+          {
+            "turn": 4,
+            "itemId": "item_QNpLyDoGqp5oo47cudirI",
+            "text": "一下原因。",
+            "atMs": 14841
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_Qu2hcOq9seeWqtgZcZmGJ",
+            "startedAtMs": 4740,
+            "doneAtMs": 4899,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_GtHYB9Mzd7iBqFUttPWJI",
+            "startedAtMs": 7899,
+            "doneAtMs": 7940,
+            "context": [
+              "A0",
+              "A1"
+            ],
+            "calls": [
+              "{\"message\": \""
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_O61cgtYGk3nAO3ZtwB8kF",
+            "startedAtMs": 10101,
+            "doneAtMs": 10420,
+            "context": [
+              "A0",
+              "A1",
+              "A2"
+            ],
+            "calls": [
+              "像刚才这段话，我说完它应该的话没有十秒。但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_TrKvAe6q3JTDuv5xKU1yg",
+            "startedAtMs": 10800,
+            "doneAtMs": 10820,
+            "context": [
+              "A0",
+              "A1",
+              "A2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_HZ9ZhGaa6cV2EXKAw9Y15",
+            "startedAtMs": 15080,
+            "doneAtMs": 15261,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "calls": [
+              "你应当检查服务端日志，分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_DZtC6wtvMXSZZQkg5sCGA",
+            "startedAtMs": 15601,
+            "doneAtMs": 15641,
+            "context": [
+              "A0",
+              "A1",
+              "A2",
+              "A3",
+              "A4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [],
+        "itemsLog": [
+          {
+            "atMs": 1201,
+            "event": "created",
+            "id": "item_HwTnbdZwvqUoaPQrzoJDy",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4740,
+            "event": "created",
+            "id": "item_AGZHd8nJgv2e2vMV7Uh9f",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_HwTnbdZwvqUoaPQrzoJDy",
+            "placedAfter": "item_HwTnbdZwvqUoaPQrzoJDy",
+            "appended": true
+          },
+          {
+            "atMs": 5040,
+            "event": "created",
+            "id": "item_BF7d7mPHqCxMnUY1K6VxV",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_AGZHd8nJgv2e2vMV7Uh9f",
+            "placedAfter": "item_AGZHd8nJgv2e2vMV7Uh9f",
+            "appended": true
+          },
+          {
+            "atMs": 7921,
+            "event": "created",
+            "id": "item_HtjGyTGXWqtqXqk8O6gsZ",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_BF7d7mPHqCxMnUY1K6VxV",
+            "placedAfter": "item_BF7d7mPHqCxMnUY1K6VxV",
+            "appended": true
+          },
+          {
+            "atMs": 8080,
+            "event": "created",
+            "id": "item_XGaDpE8zWgKBFuWjun4q6",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_HtjGyTGXWqtqXqk8O6gsZ",
+            "placedAfter": "item_HtjGyTGXWqtqXqk8O6gsZ",
+            "appended": true
+          },
+          {
+            "atMs": 10101,
+            "event": "created",
+            "id": "item_ULiLUUZSzMKOwi9fAzF9E",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_XGaDpE8zWgKBFuWjun4q6",
+            "placedAfter": "item_XGaDpE8zWgKBFuWjun4q6",
+            "appended": true
+          },
+          {
+            "atMs": 10521,
+            "event": "created",
+            "id": "item_UyFxKXp4JoSHtiaXskCnv",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_ULiLUUZSzMKOwi9fAzF9E",
+            "placedAfter": "item_ULiLUUZSzMKOwi9fAzF9E",
+            "appended": true
+          },
+          {
+            "atMs": 10800,
+            "event": "created",
+            "id": "item_YThZ4nz7GSU1xLLKev87f",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_UyFxKXp4JoSHtiaXskCnv",
+            "placedAfter": "item_UyFxKXp4JoSHtiaXskCnv",
+            "appended": true
+          },
+          {
+            "atMs": 11079,
+            "event": "created",
+            "id": "item_V51ctSV4iorh3OLHf1Dyk",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_YThZ4nz7GSU1xLLKev87f",
+            "placedAfter": "item_YThZ4nz7GSU1xLLKev87f",
+            "appended": true
+          },
+          {
+            "atMs": 14260,
+            "event": "created",
+            "id": "item_QNpLyDoGqp5oo47cudirI",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_V51ctSV4iorh3OLHf1Dyk",
+            "placedAfter": "item_V51ctSV4iorh3OLHf1Dyk",
+            "appended": true
+          },
+          {
+            "atMs": 15080,
+            "event": "created",
+            "id": "item_AGyCSYaLjCVwegszfFQ8z",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_QNpLyDoGqp5oo47cudirI",
+            "placedAfter": "item_QNpLyDoGqp5oo47cudirI",
+            "appended": true
+          },
+          {
+            "atMs": 15360,
+            "event": "created",
+            "id": "item_KygRkpqhNCzcnZDXMyAEn",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_AGyCSYaLjCVwegszfFQ8z",
+            "placedAfter": "item_AGyCSYaLjCVwegszfFQ8z",
+            "appended": true
+          },
+          {
+            "atMs": 15601,
+            "event": "created",
+            "id": "item_P83Ll5dX4QZGCObbSKffq",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_KygRkpqhNCzcnZDXMyAEn",
+            "placedAfter": "item_KygRkpqhNCzcnZDXMyAEn",
+            "appended": true
+          }
+        ],
+        "finalContext": [
+          "A0",
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ]
+      },
+      {
+        "mode": "twin-append",
+        "rep": 0,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 744,
+          "dropped": 504,
+          "headKept": 158,
+          "heldOpen": 78
+        },
+        "realtimeDriftMs": 1231,
+        "responsesSeen": 6,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_T29DxBPC21QsbSHBePmLX",
+            "text": "像刚刚这段话，我说完它应该的话没有十秒。",
+            "atMs": 4861
+          },
+          {
+            "turn": 1,
+            "itemId": "item_UdiK6o46w7QqSeNogZtp4",
+            "text": "但是，我看它在我的屏幕上蹦出来。",
+            "atMs": 7940
+          },
+          {
+            "turn": 2,
+            "itemId": "item_FL4fYkhknQN5p7xEof1YP",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 10019
+          },
+          {
+            "turn": 3,
+            "itemId": "item_VjOtRioZFXmVrYUURZalX",
+            "text": "以让检查负担一致。",
+            "atMs": 13961
+          },
+          {
+            "turn": 4,
+            "itemId": "item_TVNMbpbXmuFYddTGdoJfN",
+            "text": "啊，分析一下原因。",
+            "atMs": 16121
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_Qip3t2nUgxeXGdqyukPkp",
+            "startedAtMs": 4941,
+            "doneAtMs": 5041,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "{\"message\": \"像刚才这段话，我说完他应该的话没有十"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_B3oENYIxXXiThgS7bC2A9",
+            "startedAtMs": 10140,
+            "doneAtMs": 10439,
+            "context": [
+              "A1",
+              "T0",
+              "A2"
+            ],
+            "calls": [
+              "像刚刚这段话，我说完它应该的话没有十秒，但是我看它在屏幕上蹦出来可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_ZhdpeeAPWZQB3rm16iJc4",
+            "startedAtMs": 10941,
+            "doneAtMs": 10962,
+            "context": [
+              "A1",
+              "T0",
+              "T2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_UZOjESl2woz2YfcT65PhO",
+            "startedAtMs": 14080,
+            "doneAtMs": 14280,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3"
+            ],
+            "calls": [
+              "你可能要检查服务端日志。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_LdqDuJcTcSa6USiGnOOQP",
+            "startedAtMs": 16241,
+            "doneAtMs": 16360,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A4",
+              "T3"
+            ],
+            "calls": [
+              "分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_NvFFNcppYVyhniS3o3ImQ",
+            "startedAtMs": 16959,
+            "doneAtMs": 16981,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "T3",
+              "T4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [
+          {
+            "turn": 0,
+            "atMs": 5292,
+            "outcome": "deleted",
+            "before": [
+              "A0"
+            ]
+          },
+          {
+            "turn": 2,
+            "atMs": 10690,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "A2"
+            ]
+          },
+          {
+            "turn": 3,
+            "atMs": 15531,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A3"
+            ]
+          },
+          {
+            "turn": 4,
+            "atMs": 16710,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A4",
+              "T3"
+            ]
+          }
+        ],
+        "itemsLog": [
+          {
+            "atMs": 1441,
+            "event": "created",
+            "id": "item_T29DxBPC21QsbSHBePmLX",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4941,
+            "event": "created",
+            "id": "item_ClqoJsUWnZYGIjlFIKrBT",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_T29DxBPC21QsbSHBePmLX",
+            "placedAfter": "item_T29DxBPC21QsbSHBePmLX",
+            "appended": true
+          },
+          {
+            "atMs": 5292,
+            "event": "created",
+            "id": "item_UdiK6o46w7QqSeNogZtp4",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ClqoJsUWnZYGIjlFIKrBT",
+            "placedAfter": "item_ClqoJsUWnZYGIjlFIKrBT",
+            "appended": true
+          },
+          {
+            "atMs": 5292,
+            "event": "deleted",
+            "id": "item_T29DxBPC21QsbSHBePmLX",
+            "label": "A0",
+            "wasLive": true
+          },
+          {
+            "atMs": 5499,
+            "event": "created",
+            "id": "item_YKOCksThsWUMenrgYfncY",
+            "label": "T0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_UdiK6o46w7QqSeNogZtp4",
+            "placedAfter": "item_UdiK6o46w7QqSeNogZtp4",
+            "appended": true
+          },
+          {
+            "atMs": 8200,
+            "event": "created",
+            "id": "item_FL4fYkhknQN5p7xEof1YP",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_YKOCksThsWUMenrgYfncY",
+            "placedAfter": "item_YKOCksThsWUMenrgYfncY",
+            "appended": true
+          },
+          {
+            "atMs": 10140,
+            "event": "created",
+            "id": "item_Cizs6StGEydHiFP6oWk7h",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_FL4fYkhknQN5p7xEof1YP",
+            "placedAfter": "item_FL4fYkhknQN5p7xEof1YP",
+            "appended": true
+          },
+          {
+            "atMs": 10690,
+            "event": "created",
+            "id": "item_ZVs45yvcFLsvh8TDYfdRO",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_Cizs6StGEydHiFP6oWk7h",
+            "placedAfter": "item_Cizs6StGEydHiFP6oWk7h",
+            "appended": true
+          },
+          {
+            "atMs": 10690,
+            "event": "deleted",
+            "id": "item_FL4fYkhknQN5p7xEof1YP",
+            "label": "A2",
+            "wasLive": true
+          },
+          {
+            "atMs": 10901,
+            "event": "created",
+            "id": "item_MkwvknTRNmNuPTfKgS54N",
+            "label": "T2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ZVs45yvcFLsvh8TDYfdRO",
+            "placedAfter": "item_ZVs45yvcFLsvh8TDYfdRO",
+            "appended": true
+          },
+          {
+            "atMs": 10941,
+            "event": "created",
+            "id": "item_RfzhOu1vrDhU4ZSkEpCzR",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_ZVs45yvcFLsvh8TDYfdRO",
+            "placedAfter": "item_ZVs45yvcFLsvh8TDYfdRO",
+            "appended": false
+          },
+          {
+            "atMs": 11400,
+            "event": "created",
+            "id": "item_VjOtRioZFXmVrYUURZalX",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_MkwvknTRNmNuPTfKgS54N",
+            "placedAfter": "item_MkwvknTRNmNuPTfKgS54N",
+            "appended": true
+          },
+          {
+            "atMs": 14080,
+            "event": "created",
+            "id": "item_NrEO5I8cLr5AQ76kVAzOP",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_VjOtRioZFXmVrYUURZalX",
+            "placedAfter": "item_VjOtRioZFXmVrYUURZalX",
+            "appended": true
+          },
+          {
+            "atMs": 15531,
+            "event": "created",
+            "id": "item_TVNMbpbXmuFYddTGdoJfN",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_NrEO5I8cLr5AQ76kVAzOP",
+            "placedAfter": "item_NrEO5I8cLr5AQ76kVAzOP",
+            "appended": true
+          },
+          {
+            "atMs": 15531,
+            "event": "deleted",
+            "id": "item_VjOtRioZFXmVrYUURZalX",
+            "label": "A3",
+            "wasLive": true
+          },
+          {
+            "atMs": 15741,
+            "event": "created",
+            "id": "item_Sa32BXA4DR6Ld3OuRFsJN",
+            "label": "T3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_TVNMbpbXmuFYddTGdoJfN",
+            "placedAfter": "item_TVNMbpbXmuFYddTGdoJfN",
+            "appended": true
+          },
+          {
+            "atMs": 16241,
+            "event": "created",
+            "id": "item_VQvBlAhOcVQ1ibrDDPEh3",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_Sa32BXA4DR6Ld3OuRFsJN",
+            "placedAfter": "item_Sa32BXA4DR6Ld3OuRFsJN",
+            "appended": true
+          },
+          {
+            "atMs": 16710,
+            "event": "created",
+            "id": "item_ResJg4k2TbGZClPensh7B",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_VQvBlAhOcVQ1ibrDDPEh3",
+            "placedAfter": "item_VQvBlAhOcVQ1ibrDDPEh3",
+            "appended": true
+          },
+          {
+            "atMs": 16710,
+            "event": "deleted",
+            "id": "item_TVNMbpbXmuFYddTGdoJfN",
+            "label": "A4",
+            "wasLive": true
+          },
+          {
+            "atMs": 16920,
+            "event": "created",
+            "id": "item_ME2bTNhZp7Mcn4gsEgvla",
+            "label": "T4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ResJg4k2TbGZClPensh7B",
+            "placedAfter": "item_ResJg4k2TbGZClPensh7B",
+            "appended": true
+          },
+          {
+            "atMs": 16959,
+            "event": "created",
+            "id": "item_BenpgrhOa77DWDANAu2bZ",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_ResJg4k2TbGZClPensh7B",
+            "placedAfter": "item_ResJg4k2TbGZClPensh7B",
+            "appended": false
+          }
+        ],
+        "finalContext": [
+          "A1",
+          "T0",
+          "T2",
+          "T3",
+          "T4"
+        ]
+      },
+      {
+        "mode": "twin-append",
+        "rep": 1,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 677,
+          "dropped": 571,
+          "headKept": 158,
+          "heldOpen": 1
+        },
+        "realtimeDriftMs": 82,
+        "responsesSeen": 5,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_CDUsYrQkBPRw6KrjPdhvw",
+            "text": "我说完，他应该的话没有十秒。",
+            "atMs": 4601
+          },
+          {
+            "turn": 1,
+            "itemId": "item_OtnYoXaYjObxN3IK5ILIK",
+            "text": "但是，我看到在我的屏幕上蹦出来。",
+            "atMs": 7841
+          },
+          {
+            "turn": 2,
+            "itemId": "item_HeaPNhNcOSvd8LoRJ44K6",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 9902
+          },
+          {
+            "turn": 3,
+            "itemId": "item_Z5FUp5TphDHL4FO9a5DKM",
+            "text": "以让检查负担一致。",
+            "atMs": 13340
+          },
+          {
+            "turn": 4,
+            "itemId": "item_MoQnz4cjpgEjvpWf2B7XI",
+            "text": "啊，分析一下原因。",
+            "atMs": 14820
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_W3BU2WCepcZtiYil6FSzB",
+            "startedAtMs": 4681,
+            "doneAtMs": 4861,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_IZefZRGAsAqcHu6bYaSxo",
+            "startedAtMs": 10040,
+            "doneAtMs": 10201,
+            "context": [
+              "A1",
+              "T0",
+              "A2"
+            ],
+            "calls": [
+              "可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_BiOU5sQdmRE22l9g54dit",
+            "startedAtMs": 10559,
+            "doneAtMs": 10581,
+            "context": [
+              "A1",
+              "T0",
+              "T2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_YCihEqfImrMyLUnn6UEkh",
+            "startedAtMs": 14921,
+            "doneAtMs": 15060,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3",
+              "A4"
+            ],
+            "calls": [
+              "分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_D8kxPPB2VdxpYRhw5IjNR",
+            "startedAtMs": 15401,
+            "doneAtMs": 15420,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3",
+              "T4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [
+          {
+            "turn": 0,
+            "atMs": 4962,
+            "outcome": "deleted",
+            "before": [
+              "A0"
+            ]
+          },
+          {
+            "turn": 2,
+            "atMs": 10302,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "A2"
+            ]
+          },
+          {
+            "turn": 4,
+            "atMs": 15160,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A3",
+              "A4"
+            ]
+          }
+        ],
+        "itemsLog": [
+          {
+            "atMs": 2000,
+            "event": "created",
+            "id": "item_CDUsYrQkBPRw6KrjPdhvw",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4681,
+            "event": "created",
+            "id": "item_LGlzXjRJpikAX1lMIThSI",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_CDUsYrQkBPRw6KrjPdhvw",
+            "placedAfter": "item_CDUsYrQkBPRw6KrjPdhvw",
+            "appended": true
+          },
+          {
+            "atMs": 4962,
+            "event": "deleted",
+            "id": "item_CDUsYrQkBPRw6KrjPdhvw",
+            "label": "A0",
+            "wasLive": true
+          },
+          {
+            "atMs": 5059,
+            "event": "created",
+            "id": "item_OtnYoXaYjObxN3IK5ILIK",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_LGlzXjRJpikAX1lMIThSI",
+            "placedAfter": "item_LGlzXjRJpikAX1lMIThSI",
+            "appended": true
+          },
+          {
+            "atMs": 5059,
+            "event": "created",
+            "id": "item_XRksLwcFPylNbGTKzmm3v",
+            "label": "T0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_OtnYoXaYjObxN3IK5ILIK",
+            "placedAfter": "item_OtnYoXaYjObxN3IK5ILIK",
+            "appended": true
+          },
+          {
+            "atMs": 8001,
+            "event": "created",
+            "id": "item_HeaPNhNcOSvd8LoRJ44K6",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_XRksLwcFPylNbGTKzmm3v",
+            "placedAfter": "item_XRksLwcFPylNbGTKzmm3v",
+            "appended": true
+          },
+          {
+            "atMs": 10040,
+            "event": "created",
+            "id": "item_UioAfoLY1fjzRsDjBxm5Q",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_HeaPNhNcOSvd8LoRJ44K6",
+            "placedAfter": "item_HeaPNhNcOSvd8LoRJ44K6",
+            "appended": true
+          },
+          {
+            "atMs": 10302,
+            "event": "created",
+            "id": "item_UiCPVnyybezeiiKwSKSeF",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_UioAfoLY1fjzRsDjBxm5Q",
+            "placedAfter": "item_UioAfoLY1fjzRsDjBxm5Q",
+            "appended": true
+          },
+          {
+            "atMs": 10302,
+            "event": "deleted",
+            "id": "item_HeaPNhNcOSvd8LoRJ44K6",
+            "label": "A2",
+            "wasLive": true
+          },
+          {
+            "atMs": 10399,
+            "event": "created",
+            "id": "item_Nqz68ise2EC5LtgWXeVm9",
+            "label": "T2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_UiCPVnyybezeiiKwSKSeF",
+            "placedAfter": "item_UiCPVnyybezeiiKwSKSeF",
+            "appended": true
+          },
+          {
+            "atMs": 10560,
+            "event": "created",
+            "id": "item_W4cY1x4E9qED5NWA1cN6y",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_UiCPVnyybezeiiKwSKSeF",
+            "placedAfter": "item_UiCPVnyybezeiiKwSKSeF",
+            "appended": false
+          },
+          {
+            "atMs": 11101,
+            "event": "created",
+            "id": "item_Z5FUp5TphDHL4FO9a5DKM",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_Nqz68ise2EC5LtgWXeVm9",
+            "placedAfter": "item_Nqz68ise2EC5LtgWXeVm9",
+            "appended": true
+          },
+          {
+            "atMs": 13580,
+            "event": "created",
+            "id": "item_MoQnz4cjpgEjvpWf2B7XI",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_Z5FUp5TphDHL4FO9a5DKM",
+            "placedAfter": "item_Z5FUp5TphDHL4FO9a5DKM",
+            "appended": true
+          },
+          {
+            "atMs": 14921,
+            "event": "created",
+            "id": "item_TCws7GdufNyhl6V2nkJiR",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_MoQnz4cjpgEjvpWf2B7XI",
+            "placedAfter": "item_MoQnz4cjpgEjvpWf2B7XI",
+            "appended": true
+          },
+          {
+            "atMs": 15160,
+            "event": "created",
+            "id": "item_GCQ5321OAtkNlslUGTi3e",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_TCws7GdufNyhl6V2nkJiR",
+            "placedAfter": "item_TCws7GdufNyhl6V2nkJiR",
+            "appended": true
+          },
+          {
+            "atMs": 15160,
+            "event": "deleted",
+            "id": "item_MoQnz4cjpgEjvpWf2B7XI",
+            "label": "A4",
+            "wasLive": true
+          },
+          {
+            "atMs": 15261,
+            "event": "created",
+            "id": "item_VcX6FwbMUSo91UaATwvVR",
+            "label": "T4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_GCQ5321OAtkNlslUGTi3e",
+            "placedAfter": "item_GCQ5321OAtkNlslUGTi3e",
+            "appended": true
+          },
+          {
+            "atMs": 15401,
+            "event": "created",
+            "id": "item_PQrITR8VoW7VizqjdxAlR",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_GCQ5321OAtkNlslUGTi3e",
+            "placedAfter": "item_GCQ5321OAtkNlslUGTi3e",
+            "appended": false
+          }
+        ],
+        "finalContext": [
+          "A1",
+          "T0",
+          "T2",
+          "A3",
+          "T4"
+        ]
+      },
+      {
+        "mode": "twin-append",
+        "rep": 2,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 752,
+          "dropped": 496,
+          "headKept": 158,
+          "heldOpen": 80
+        },
+        "realtimeDriftMs": 830,
+        "responsesSeen": 6,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_Ef4NgaDhRgOuOxKJiTg5k",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4741
+          },
+          {
+            "turn": 1,
+            "itemId": "item_CqxQbhGQ1CuwEIq8atgig",
+            "text": "但是，我看到在我的屏幕上蹦出来。",
+            "atMs": 7940
+          },
+          {
+            "turn": 2,
+            "itemId": "item_KekHMWdCiefRbGztVWSbS",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 10101
+          },
+          {
+            "turn": 3,
+            "itemId": "item_TBfw9gymqyAt2hxhwaVSk",
+            "text": "你让检查负担于去。",
+            "atMs": 14880
+          },
+          {
+            "turn": 4,
+            "itemId": "item_QrejBWhVohIsu9i4IZ6Uw",
+            "text": "啊，分析一下原因。",
+            "atMs": 16421
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_Rg1YiA1KeBmTtjrGFpZT6",
+            "startedAtMs": 4801,
+            "doneAtMs": 4979,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_MkDCTOYgjSl5pazw8yDqR",
+            "startedAtMs": 8020,
+            "doneAtMs": 8061,
+            "context": [
+              "A1",
+              "T0"
+            ],
+            "calls": [
+              "{\"message\": \""
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_TYF25fRHIcK5SC1sX6A2J",
+            "startedAtMs": 10240,
+            "doneAtMs": 10399,
+            "context": [
+              "T0",
+              "A2",
+              "T1"
+            ],
+            "calls": [
+              "可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_PULazZdahQYGGEvFn7cul",
+            "startedAtMs": 10839,
+            "doneAtMs": 10860,
+            "context": [
+              "T0",
+              "T1"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_IwVonsh2ZGrNDzae7yqPb",
+            "startedAtMs": 16541,
+            "doneAtMs": 16739,
+            "context": [
+              "T0",
+              "T1",
+              "T2",
+              "A3",
+              "A4"
+            ],
+            "calls": [
+              "你能检查服务端日志，分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_Yxa3xUsr7KuHYOlLEi3GQ",
+            "startedAtMs": 17881,
+            "doneAtMs": 17899,
+            "context": [
+              "T0",
+              "T1",
+              "T2",
+              "A3",
+              "T4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [
+          {
+            "turn": 0,
+            "atMs": 5330,
+            "outcome": "deleted",
+            "before": [
+              "A0"
+            ]
+          },
+          {
+            "turn": 1,
+            "atMs": 8262,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0"
+            ]
+          },
+          {
+            "turn": 2,
+            "atMs": 10600,
+            "outcome": "deleted",
+            "before": [
+              "T0",
+              "A2",
+              "T1"
+            ]
+          },
+          {
+            "turn": 4,
+            "atMs": 17590,
+            "outcome": "refused",
+            "before": [
+              "T0",
+              "T1",
+              "T2",
+              "A3",
+              "A4"
+            ]
+          }
+        ],
+        "itemsLog": [
+          {
+            "atMs": 1280,
+            "event": "created",
+            "id": "item_Ef4NgaDhRgOuOxKJiTg5k",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4841,
+            "event": "created",
+            "id": "item_KwtQAxMqiS5Vo1oMLtimY",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_Ef4NgaDhRgOuOxKJiTg5k",
+            "placedAfter": "item_Ef4NgaDhRgOuOxKJiTg5k",
+            "appended": true
+          },
+          {
+            "atMs": 5330,
+            "event": "created",
+            "id": "item_CqxQbhGQ1CuwEIq8atgig",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_KwtQAxMqiS5Vo1oMLtimY",
+            "placedAfter": "item_KwtQAxMqiS5Vo1oMLtimY",
+            "appended": true
+          },
+          {
+            "atMs": 5330,
+            "event": "deleted",
+            "id": "item_Ef4NgaDhRgOuOxKJiTg5k",
+            "label": "A0",
+            "wasLive": true
+          },
+          {
+            "atMs": 5521,
+            "event": "created",
+            "id": "item_J73HBmjsRVpOVdi7NTsZ8",
+            "label": "T0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_CqxQbhGQ1CuwEIq8atgig",
+            "placedAfter": "item_CqxQbhGQ1CuwEIq8atgig",
+            "appended": true
+          },
+          {
+            "atMs": 8020,
+            "event": "created",
+            "id": "item_YamgjgejAH4YySKufjWoP",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_J73HBmjsRVpOVdi7NTsZ8",
+            "placedAfter": "item_J73HBmjsRVpOVdi7NTsZ8",
+            "appended": true
+          },
+          {
+            "atMs": 8262,
+            "event": "created",
+            "id": "item_KekHMWdCiefRbGztVWSbS",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_YamgjgejAH4YySKufjWoP",
+            "placedAfter": "item_YamgjgejAH4YySKufjWoP",
+            "appended": true
+          },
+          {
+            "atMs": 8262,
+            "event": "deleted",
+            "id": "item_CqxQbhGQ1CuwEIq8atgig",
+            "label": "A1",
+            "wasLive": true
+          },
+          {
+            "atMs": 8461,
+            "event": "created",
+            "id": "item_CVPNcSL9HQ8a46v59vivd",
+            "label": "T1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_KekHMWdCiefRbGztVWSbS",
+            "placedAfter": "item_KekHMWdCiefRbGztVWSbS",
+            "appended": true
+          },
+          {
+            "atMs": 10240,
+            "event": "created",
+            "id": "item_W1DEhxKMSEyzn1BiCkUIC",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_CVPNcSL9HQ8a46v59vivd",
+            "placedAfter": "item_CVPNcSL9HQ8a46v59vivd",
+            "appended": true
+          },
+          {
+            "atMs": 10600,
+            "event": "created",
+            "id": "item_UhTXhEjETkFidliOs6doX",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_W1DEhxKMSEyzn1BiCkUIC",
+            "placedAfter": "item_W1DEhxKMSEyzn1BiCkUIC",
+            "appended": true
+          },
+          {
+            "atMs": 10600,
+            "event": "deleted",
+            "id": "item_KekHMWdCiefRbGztVWSbS",
+            "label": "A2",
+            "wasLive": true
+          },
+          {
+            "atMs": 10839,
+            "event": "created",
+            "id": "item_ApxZZputEk5kgeGtEgPO2",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_UhTXhEjETkFidliOs6doX",
+            "placedAfter": "item_UhTXhEjETkFidliOs6doX",
+            "appended": true
+          },
+          {
+            "atMs": 11039,
+            "event": "created",
+            "id": "item_UJ2NQ8mTnUtd2Mbr5KDf9",
+            "label": "T2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ApxZZputEk5kgeGtEgPO2",
+            "placedAfter": "item_ApxZZputEk5kgeGtEgPO2",
+            "appended": true
+          },
+          {
+            "atMs": 11580,
+            "event": "created",
+            "id": "item_TBfw9gymqyAt2hxhwaVSk",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_UJ2NQ8mTnUtd2Mbr5KDf9",
+            "placedAfter": "item_UJ2NQ8mTnUtd2Mbr5KDf9",
+            "appended": true
+          },
+          {
+            "atMs": 14980,
+            "event": "created",
+            "id": "item_QrejBWhVohIsu9i4IZ6Uw",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_TBfw9gymqyAt2hxhwaVSk",
+            "placedAfter": "item_TBfw9gymqyAt2hxhwaVSk",
+            "appended": true
+          },
+          {
+            "atMs": 16541,
+            "event": "created",
+            "id": "item_J7a15BGTliSydSwTEoG6k",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_QrejBWhVohIsu9i4IZ6Uw",
+            "placedAfter": "item_QrejBWhVohIsu9i4IZ6Uw",
+            "appended": true
+          },
+          {
+            "atMs": 17620,
+            "event": "created",
+            "id": "item_TGXheoawhxfBW2Jjg3sDG",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_J7a15BGTliSydSwTEoG6k",
+            "placedAfter": "item_J7a15BGTliSydSwTEoG6k",
+            "appended": true
+          },
+          {
+            "atMs": 17620,
+            "event": "deleted",
+            "id": "item_QrejBWhVohIsu9i4IZ6Uw",
+            "label": "A4",
+            "wasLive": true
+          },
+          {
+            "atMs": 17781,
+            "event": "created",
+            "id": "item_JaG8kbWmhQpUeETjtEStA",
+            "label": "T4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_TGXheoawhxfBW2Jjg3sDG",
+            "placedAfter": "item_TGXheoawhxfBW2Jjg3sDG",
+            "appended": true
+          },
+          {
+            "atMs": 17881,
+            "event": "created",
+            "id": "item_RefLvbVFaGxB9RxLMWhZB",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_TGXheoawhxfBW2Jjg3sDG",
+            "placedAfter": "item_TGXheoawhxfBW2Jjg3sDG",
+            "appended": false
+          }
+        ],
+        "finalContext": [
+          "T0",
+          "T1",
+          "T2",
+          "A3",
+          "T4"
+        ]
+      },
+      {
+        "mode": "twin-inplace",
+        "rep": 0,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 685,
+          "dropped": 563,
+          "headKept": 158,
+          "heldOpen": 14
+        },
+        "realtimeDriftMs": 230,
+        "responsesSeen": 6,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_JcAuIcoOfpWjus9Wxjdy9",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4740
+          },
+          {
+            "turn": 1,
+            "itemId": "item_ShqGnoGTsBntYiEAh3wSv",
+            "text": "但是，我看到在我的屏幕上蹦出来。",
+            "atMs": 7920
+          },
+          {
+            "turn": 2,
+            "itemId": "item_BGEkAWP8FQ6ZDI7a7R2oo",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 10020
+          },
+          {
+            "turn": 3,
+            "itemId": "item_UMrltub4TngEdxiV6WCtm",
+            "text": "你让检查服务单，你去。",
+            "atMs": 13379
+          },
+          {
+            "turn": 4,
+            "itemId": "item_IeIUkpO7l4lxHwmKvhuMk",
+            "text": "啊，分析一下原因。",
+            "atMs": 15000
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_EDTDGqcfTbBiOuILGgQs6",
+            "startedAtMs": 4820,
+            "doneAtMs": 5000,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_DT1QIfUQsS3DYmiYUNq2F",
+            "startedAtMs": 10160,
+            "doneAtMs": 10420,
+            "context": [
+              "A1",
+              "T0",
+              "A2"
+            ],
+            "calls": [
+              "像刚刚这段话，我说完它应该的话，没有十秒。但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_TYXGCpqJpsExMMKGsuJey",
+            "startedAtMs": 10901,
+            "doneAtMs": 10941,
+            "context": [
+              "A1",
+              "T0",
+              "T2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_Ty4Eeffo9X7QkLNOBJprQ",
+            "startedAtMs": 13501,
+            "doneAtMs": 13501,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3"
+            ],
+            "calls": [
+              ""
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_JUYpJDbYDVzD1uHRjEfON",
+            "startedAtMs": 15101,
+            "doneAtMs": 15260,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A4",
+              "T3"
+            ],
+            "calls": [
+              "你让检查服务单，你去分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_Fp3UwRLfvivSnd6befo6H",
+            "startedAtMs": 15761,
+            "doneAtMs": 15781,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "T3",
+              "T4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [
+          {
+            "turn": 0,
+            "atMs": 5201,
+            "outcome": "refused",
+            "before": [
+              "A0"
+            ]
+          },
+          {
+            "turn": 2,
+            "atMs": 10620,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "A2"
+            ]
+          },
+          {
+            "turn": 3,
+            "atMs": 13701,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A3"
+            ]
+          },
+          {
+            "turn": 4,
+            "atMs": 15510,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A4",
+              "T3"
+            ]
+          }
+        ],
+        "itemsLog": [
+          {
+            "atMs": 1262,
+            "event": "created",
+            "id": "item_JcAuIcoOfpWjus9Wxjdy9",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4820,
+            "event": "created",
+            "id": "item_Ia6PPX8ccWzSjsmQWGow8",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_JcAuIcoOfpWjus9Wxjdy9",
+            "placedAfter": "item_JcAuIcoOfpWjus9Wxjdy9",
+            "appended": true
+          },
+          {
+            "atMs": 5201,
+            "event": "created",
+            "id": "item_ShqGnoGTsBntYiEAh3wSv",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_Ia6PPX8ccWzSjsmQWGow8",
+            "placedAfter": "item_Ia6PPX8ccWzSjsmQWGow8",
+            "appended": true
+          },
+          {
+            "atMs": 5201,
+            "event": "created",
+            "id": "item_ZvcmtdwSyUksncveQrITC",
+            "label": "T0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ShqGnoGTsBntYiEAh3wSv",
+            "placedAfter": "item_ShqGnoGTsBntYiEAh3wSv",
+            "appended": true
+          },
+          {
+            "atMs": 5202,
+            "event": "deleted",
+            "id": "item_JcAuIcoOfpWjus9Wxjdy9",
+            "label": "A0",
+            "wasLive": true
+          },
+          {
+            "atMs": 8180,
+            "event": "created",
+            "id": "item_BGEkAWP8FQ6ZDI7a7R2oo",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ZvcmtdwSyUksncveQrITC",
+            "placedAfter": "item_ZvcmtdwSyUksncveQrITC",
+            "appended": true
+          },
+          {
+            "atMs": 10160,
+            "event": "created",
+            "id": "item_FecM5MGGUPAsKRDPEqkeK",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_BGEkAWP8FQ6ZDI7a7R2oo",
+            "placedAfter": "item_BGEkAWP8FQ6ZDI7a7R2oo",
+            "appended": true
+          },
+          {
+            "atMs": 10620,
+            "event": "created",
+            "id": "item_MM9nmeeVcbRCua1CaWAXW",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_FecM5MGGUPAsKRDPEqkeK",
+            "placedAfter": "item_FecM5MGGUPAsKRDPEqkeK",
+            "appended": true
+          },
+          {
+            "atMs": 10620,
+            "event": "created",
+            "id": "item_Syxgn2IlNw2XxZNESfD1f",
+            "label": "T2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_MM9nmeeVcbRCua1CaWAXW",
+            "placedAfter": "item_MM9nmeeVcbRCua1CaWAXW",
+            "appended": true
+          },
+          {
+            "atMs": 10620,
+            "event": "deleted",
+            "id": "item_BGEkAWP8FQ6ZDI7a7R2oo",
+            "label": "A2",
+            "wasLive": true
+          },
+          {
+            "atMs": 10901,
+            "event": "created",
+            "id": "item_FIFMGaTGq5xteLBUD5Gyh",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_MM9nmeeVcbRCua1CaWAXW",
+            "placedAfter": "item_MM9nmeeVcbRCua1CaWAXW",
+            "appended": false
+          },
+          {
+            "atMs": 11240,
+            "event": "created",
+            "id": "item_UMrltub4TngEdxiV6WCtm",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_Syxgn2IlNw2XxZNESfD1f",
+            "placedAfter": "item_Syxgn2IlNw2XxZNESfD1f",
+            "appended": true
+          },
+          {
+            "atMs": 13501,
+            "event": "created",
+            "id": "item_UXHwDEOQkGlKjezbz6Wg4",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_UMrltub4TngEdxiV6WCtm",
+            "placedAfter": "item_UMrltub4TngEdxiV6WCtm",
+            "appended": true
+          },
+          {
+            "atMs": 13701,
+            "event": "created",
+            "id": "item_IeIUkpO7l4lxHwmKvhuMk",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_UXHwDEOQkGlKjezbz6Wg4",
+            "placedAfter": "item_UXHwDEOQkGlKjezbz6Wg4",
+            "appended": true
+          },
+          {
+            "atMs": 13701,
+            "event": "created",
+            "id": "item_P6hGCtBZQ6BxTFSKVXlQb",
+            "label": "T3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_IeIUkpO7l4lxHwmKvhuMk",
+            "placedAfter": "item_IeIUkpO7l4lxHwmKvhuMk",
+            "appended": true
+          },
+          {
+            "atMs": 13701,
+            "event": "deleted",
+            "id": "item_UMrltub4TngEdxiV6WCtm",
+            "label": "A3",
+            "wasLive": true
+          },
+          {
+            "atMs": 15101,
+            "event": "created",
+            "id": "item_G9ix6Phij2n9wV3vanTNg",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_P6hGCtBZQ6BxTFSKVXlQb",
+            "placedAfter": "item_P6hGCtBZQ6BxTFSKVXlQb",
+            "appended": true
+          },
+          {
+            "atMs": 15510,
+            "event": "created",
+            "id": "item_HKkKGinJEUsjaWyWsNCQ5",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_G9ix6Phij2n9wV3vanTNg",
+            "placedAfter": "item_G9ix6Phij2n9wV3vanTNg",
+            "appended": true
+          },
+          {
+            "atMs": 15510,
+            "event": "created",
+            "id": "item_ZRJO1aw878nButB3PtQtr",
+            "label": "T4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_HKkKGinJEUsjaWyWsNCQ5",
+            "placedAfter": "item_HKkKGinJEUsjaWyWsNCQ5",
+            "appended": true
+          },
+          {
+            "atMs": 15510,
+            "event": "deleted",
+            "id": "item_IeIUkpO7l4lxHwmKvhuMk",
+            "label": "A4",
+            "wasLive": true
+          },
+          {
+            "atMs": 15761,
+            "event": "created",
+            "id": "item_IFKKkGrCI89Z4wm6Ej6RR",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_HKkKGinJEUsjaWyWsNCQ5",
+            "placedAfter": "item_HKkKGinJEUsjaWyWsNCQ5",
+            "appended": false
+          }
+        ],
+        "finalContext": [
+          "A1",
+          "T0",
+          "T2",
+          "T3",
+          "T4"
+        ]
+      },
+      {
+        "mode": "twin-inplace",
+        "rep": 1,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 678,
+          "dropped": 570,
+          "headKept": 158,
+          "heldOpen": 2
+        },
+        "realtimeDriftMs": 80,
+        "responsesSeen": 6,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_LYl9sFvqFcBu5b4zJgjvx",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4661
+          },
+          {
+            "turn": 1,
+            "itemId": "item_Fpw673BXBmVQHG2RVe4cv",
+            "text": "但是，我看它在我的屏幕上蹦出来。",
+            "atMs": 7820
+          },
+          {
+            "turn": 2,
+            "itemId": "item_RMWtADzLp67QXrhlguMwO",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 9901
+          },
+          {
+            "turn": 3,
+            "itemId": "item_VvQFmwnsf11BBHxoUwpgW",
+            "text": "你让检查服务单，与之。",
+            "atMs": 13280
+          },
+          {
+            "turn": 4,
+            "itemId": "item_Jjg1MTkxojzrzDUuEX2G2",
+            "text": "啊，分析一下原因。",
+            "atMs": 14881
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_PKmnOe9ygnytqwtm6Uzw9",
+            "startedAtMs": 4821,
+            "doneAtMs": 4900,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "{\"message\": \"像刚才这段话，我说完他"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_IVTDsIns7WAuEwx4snWb2",
+            "startedAtMs": 10041,
+            "doneAtMs": 10321,
+            "context": [
+              "A1",
+              "T0",
+              "A2"
+            ],
+            "calls": [
+              "像刚刚这段话，我说完它应该的话，没有十秒。但是我看到在我的屏幕上蹦出来，可能要花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_VaOtSv3MYIW9d29x1PGc2",
+            "startedAtMs": 10660,
+            "doneAtMs": 10680,
+            "context": [
+              "A1",
+              "T0",
+              "T2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_LBhgtT74epglALMdbkasV",
+            "startedAtMs": 13421,
+            "doneAtMs": 13421,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3"
+            ],
+            "calls": [
+              ""
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_BlWRP73TFaToaYxsReLnb",
+            "startedAtMs": 15100,
+            "doneAtMs": 15320,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A4",
+              "T3"
+            ],
+            "calls": [
+              "你让检查服务单与之，分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_Kni2tkOxeI2sGYGgddNqT",
+            "startedAtMs": 15681,
+            "doneAtMs": 15701,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "T3",
+              "T4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [
+          {
+            "turn": 0,
+            "atMs": 5000,
+            "outcome": "deleted",
+            "before": [
+              "A0"
+            ]
+          },
+          {
+            "turn": 2,
+            "atMs": 10420,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "A2"
+            ]
+          },
+          {
+            "turn": 3,
+            "atMs": 13520,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A3"
+            ]
+          },
+          {
+            "turn": 4,
+            "atMs": 15420,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A4",
+              "T3"
+            ]
+          }
+        ],
+        "itemsLog": [
+          {
+            "atMs": 1081,
+            "event": "created",
+            "id": "item_LYl9sFvqFcBu5b4zJgjvx",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4821,
+            "event": "created",
+            "id": "item_OgGdlIAkrt6v4yNwZrqEI",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_LYl9sFvqFcBu5b4zJgjvx",
+            "placedAfter": "item_LYl9sFvqFcBu5b4zJgjvx",
+            "appended": true
+          },
+          {
+            "atMs": 5000,
+            "event": "created",
+            "id": "item_KPJqQpNCv21ooedGcBVQi",
+            "label": "T0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_Fpw673BXBmVQHG2RVe4cv",
+            "placedAfter": "item_OgGdlIAkrt6v4yNwZrqEI",
+            "appended": true
+          },
+          {
+            "atMs": 5000,
+            "event": "deleted",
+            "id": "item_LYl9sFvqFcBu5b4zJgjvx",
+            "label": "A0",
+            "wasLive": true
+          },
+          {
+            "atMs": 5041,
+            "event": "created",
+            "id": "item_Fpw673BXBmVQHG2RVe4cv",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_OgGdlIAkrt6v4yNwZrqEI",
+            "placedAfter": "item_OgGdlIAkrt6v4yNwZrqEI",
+            "appended": false
+          },
+          {
+            "atMs": 8081,
+            "event": "created",
+            "id": "item_RMWtADzLp67QXrhlguMwO",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_KPJqQpNCv21ooedGcBVQi",
+            "placedAfter": "item_KPJqQpNCv21ooedGcBVQi",
+            "appended": true
+          },
+          {
+            "atMs": 10041,
+            "event": "created",
+            "id": "item_EgUnD5tL9MPr22enwaj61",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_RMWtADzLp67QXrhlguMwO",
+            "placedAfter": "item_RMWtADzLp67QXrhlguMwO",
+            "appended": true
+          },
+          {
+            "atMs": 10420,
+            "event": "created",
+            "id": "item_KB6Q9OHTwGDNfXg8Ain2I",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_EgUnD5tL9MPr22enwaj61",
+            "placedAfter": "item_EgUnD5tL9MPr22enwaj61",
+            "appended": true
+          },
+          {
+            "atMs": 10420,
+            "event": "created",
+            "id": "item_OWthPtXXGDMU1Fb2lZcXw",
+            "label": "T2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_KB6Q9OHTwGDNfXg8Ain2I",
+            "placedAfter": "item_KB6Q9OHTwGDNfXg8Ain2I",
+            "appended": true
+          },
+          {
+            "atMs": 10420,
+            "event": "deleted",
+            "id": "item_RMWtADzLp67QXrhlguMwO",
+            "label": "A2",
+            "wasLive": true
+          },
+          {
+            "atMs": 10660,
+            "event": "created",
+            "id": "item_G5kjuMTieSjIQ3St5cum2",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_KB6Q9OHTwGDNfXg8Ain2I",
+            "placedAfter": "item_KB6Q9OHTwGDNfXg8Ain2I",
+            "appended": false
+          },
+          {
+            "atMs": 11080,
+            "event": "created",
+            "id": "item_VvQFmwnsf11BBHxoUwpgW",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_OWthPtXXGDMU1Fb2lZcXw",
+            "placedAfter": "item_OWthPtXXGDMU1Fb2lZcXw",
+            "appended": true
+          },
+          {
+            "atMs": 13421,
+            "event": "created",
+            "id": "item_JtsTG5QOHXmOC1laZWMo3",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_VvQFmwnsf11BBHxoUwpgW",
+            "placedAfter": "item_VvQFmwnsf11BBHxoUwpgW",
+            "appended": true
+          },
+          {
+            "atMs": 13520,
+            "event": "created",
+            "id": "item_Y7pRzDY396Iusw1QBYJc1",
+            "label": "T3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_Jjg1MTkxojzrzDUuEX2G2",
+            "placedAfter": "item_JtsTG5QOHXmOC1laZWMo3",
+            "appended": true
+          },
+          {
+            "atMs": 13520,
+            "event": "deleted",
+            "id": "item_VvQFmwnsf11BBHxoUwpgW",
+            "label": "A3",
+            "wasLive": true
+          },
+          {
+            "atMs": 13561,
+            "event": "created",
+            "id": "item_Jjg1MTkxojzrzDUuEX2G2",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_JtsTG5QOHXmOC1laZWMo3",
+            "placedAfter": "item_JtsTG5QOHXmOC1laZWMo3",
+            "appended": false
+          },
+          {
+            "atMs": 15100,
+            "event": "created",
+            "id": "item_G5gEXWNAJs4K7Rvj4uylT",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_Y7pRzDY396Iusw1QBYJc1",
+            "placedAfter": "item_Y7pRzDY396Iusw1QBYJc1",
+            "appended": true
+          },
+          {
+            "atMs": 15420,
+            "event": "created",
+            "id": "item_TcOKimc6guFGRMBC2Fmbo",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_G5gEXWNAJs4K7Rvj4uylT",
+            "placedAfter": "item_G5gEXWNAJs4K7Rvj4uylT",
+            "appended": true
+          },
+          {
+            "atMs": 15420,
+            "event": "created",
+            "id": "item_K7KPMb31fXxJVB6fD7VKH",
+            "label": "T4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_TcOKimc6guFGRMBC2Fmbo",
+            "placedAfter": "item_TcOKimc6guFGRMBC2Fmbo",
+            "appended": true
+          },
+          {
+            "atMs": 15420,
+            "event": "deleted",
+            "id": "item_Jjg1MTkxojzrzDUuEX2G2",
+            "label": "A4",
+            "wasLive": true
+          },
+          {
+            "atMs": 15681,
+            "event": "created",
+            "id": "item_TPwPTMcswXErj6CFQvcdk",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_TcOKimc6guFGRMBC2Fmbo",
+            "placedAfter": "item_TcOKimc6guFGRMBC2Fmbo",
+            "appended": false
+          }
+        ],
+        "finalContext": [
+          "A1",
+          "T0",
+          "T2",
+          "T3",
+          "T4"
+        ]
+      },
+      {
+        "mode": "twin-inplace",
+        "rep": 2,
+        "span": {
+          "name": "spanB",
+          "startMs": 55000,
+          "endMs": 80000
+        },
+        "capture": "164c3087-5830-46b5-8a3b-998897a92488.wav",
+        "gate": {
+          "sent": 678,
+          "dropped": 570,
+          "headKept": 158,
+          "heldOpen": 2
+        },
+        "realtimeDriftMs": 82,
+        "responsesSeen": 5,
+        "transcripts": [
+          {
+            "turn": 0,
+            "itemId": "item_XxIdpRYu3i29D97xm2Jl7",
+            "text": "像刚刚这段话，我说完它应该的话，没有十秒。",
+            "atMs": 4660
+          },
+          {
+            "turn": 1,
+            "itemId": "item_NRcGLkm2HW8r1WVmw56C5",
+            "text": "但是，我看到在我的屏幕上蹦出来。",
+            "atMs": 7820
+          },
+          {
+            "turn": 2,
+            "itemId": "item_ZJMu7KHvMLrBW1RofaWcI",
+            "text": "可能要花到二十到三十秒。",
+            "atMs": 9880
+          },
+          {
+            "turn": 3,
+            "itemId": "item_P2qyFVoSdIaWPmsiiPTYr",
+            "text": "以量检查负担一致。",
+            "atMs": 13261
+          },
+          {
+            "turn": 4,
+            "itemId": "item_HPjfrXuurkRj5HrGmK91K",
+            "text": "啊，分析一下原因。",
+            "atMs": 14879
+          }
+        ],
+        "responses": [
+          {
+            "id": "resp_Thh7t2SbuKndAHTFLeXjf",
+            "startedAtMs": 4760,
+            "doneAtMs": 4901,
+            "context": [
+              "A0"
+            ],
+            "calls": [
+              "{\"message\": \"像刚才这段话，我说完他应该的话没有十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_Q6BEssjGSw8t3qITkSWmK",
+            "startedAtMs": 10040,
+            "doneAtMs": 10320,
+            "context": [
+              "A1",
+              "T0",
+              "A2"
+            ],
+            "calls": [
+              "像刚刚这段话，我说完它应该的话，没有十秒。但是我看到在我的屏幕上蹦出来，可能花了二十到三十秒。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_RXy9RtTqOiVOUA3GvuZGo",
+            "startedAtMs": 10681,
+            "doneAtMs": 10701,
+            "context": [
+              "A1",
+              "T0",
+              "T2"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          },
+          {
+            "id": "resp_KhJxZdwSgY1zFxYTsFXJs",
+            "startedAtMs": 15081,
+            "doneAtMs": 15300,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3",
+              "A4"
+            ],
+            "calls": [
+              "可能要花到二十到三十秒。你应当检查服务端日志，分析一下原因。"
+            ],
+            "text": []
+          },
+          {
+            "id": "resp_NM9CZnngepeJvn3yvdHzk",
+            "startedAtMs": 15881,
+            "doneAtMs": 15900,
+            "context": [
+              "A1",
+              "T0",
+              "T2",
+              "A3",
+              "T4"
+            ],
+            "calls": [],
+            "text": [
+              "OK"
+            ]
+          }
+        ],
+        "orphanCalls": [],
+        "swapLog": [
+          {
+            "turn": 0,
+            "atMs": 5002,
+            "outcome": "deleted",
+            "before": [
+              "A0"
+            ]
+          },
+          {
+            "turn": 2,
+            "atMs": 10421,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "A2"
+            ]
+          },
+          {
+            "turn": 4,
+            "atMs": 15400,
+            "outcome": "deleted",
+            "before": [
+              "A1",
+              "T0",
+              "T2",
+              "A3",
+              "A4"
+            ]
+          }
+        ],
+        "itemsLog": [
+          {
+            "atMs": 1220,
+            "event": "created",
+            "id": "item_XxIdpRYu3i29D97xm2Jl7",
+            "label": "A0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": null,
+            "placedAfter": null,
+            "appended": true
+          },
+          {
+            "atMs": 4760,
+            "event": "created",
+            "id": "item_OYYpzbZ2RjTqiMqo6D6pd",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_XxIdpRYu3i29D97xm2Jl7",
+            "placedAfter": "item_XxIdpRYu3i29D97xm2Jl7",
+            "appended": true
+          },
+          {
+            "atMs": 5002,
+            "event": "created",
+            "id": "item_BKCC6RU1UVguDC8Yfwx5D",
+            "label": "T0",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_NRcGLkm2HW8r1WVmw56C5",
+            "placedAfter": "item_OYYpzbZ2RjTqiMqo6D6pd",
+            "appended": true
+          },
+          {
+            "atMs": 5002,
+            "event": "deleted",
+            "id": "item_XxIdpRYu3i29D97xm2Jl7",
+            "label": "A0",
+            "wasLive": true
+          },
+          {
+            "atMs": 5041,
+            "event": "created",
+            "id": "item_NRcGLkm2HW8r1WVmw56C5",
+            "label": "A1",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_OYYpzbZ2RjTqiMqo6D6pd",
+            "placedAfter": "item_OYYpzbZ2RjTqiMqo6D6pd",
+            "appended": false
+          },
+          {
+            "atMs": 8081,
+            "event": "created",
+            "id": "item_ZJMu7KHvMLrBW1RofaWcI",
+            "label": "A2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_BKCC6RU1UVguDC8Yfwx5D",
+            "placedAfter": "item_BKCC6RU1UVguDC8Yfwx5D",
+            "appended": true
+          },
+          {
+            "atMs": 10040,
+            "event": "created",
+            "id": "item_R4Azrqp27KPVddY43o5YG",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_ZJMu7KHvMLrBW1RofaWcI",
+            "placedAfter": "item_ZJMu7KHvMLrBW1RofaWcI",
+            "appended": true
+          },
+          {
+            "atMs": 10421,
+            "event": "created",
+            "id": "item_XJKoazwLs9XLfTT6jHoD4",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_R4Azrqp27KPVddY43o5YG",
+            "placedAfter": "item_R4Azrqp27KPVddY43o5YG",
+            "appended": true
+          },
+          {
+            "atMs": 10421,
+            "event": "created",
+            "id": "item_ZqgzcUaOv2NNEqGgyKz98",
+            "label": "T2",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_XJKoazwLs9XLfTT6jHoD4",
+            "placedAfter": "item_XJKoazwLs9XLfTT6jHoD4",
+            "appended": true
+          },
+          {
+            "atMs": 10421,
+            "event": "deleted",
+            "id": "item_ZJMu7KHvMLrBW1RofaWcI",
+            "label": "A2",
+            "wasLive": true
+          },
+          {
+            "atMs": 10681,
+            "event": "created",
+            "id": "item_Byixfwv4pWAs2HjNCqFFu",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_XJKoazwLs9XLfTT6jHoD4",
+            "placedAfter": "item_XJKoazwLs9XLfTT6jHoD4",
+            "appended": false
+          },
+          {
+            "atMs": 11081,
+            "event": "created",
+            "id": "item_P2qyFVoSdIaWPmsiiPTYr",
+            "label": "A3",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_ZqgzcUaOv2NNEqGgyKz98",
+            "placedAfter": "item_ZqgzcUaOv2NNEqGgyKz98",
+            "appended": true
+          },
+          {
+            "atMs": 13581,
+            "event": "created",
+            "id": "item_HPjfrXuurkRj5HrGmK91K",
+            "label": "A4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_P2qyFVoSdIaWPmsiiPTYr",
+            "placedAfter": "item_P2qyFVoSdIaWPmsiiPTYr",
+            "appended": true
+          },
+          {
+            "atMs": 15081,
+            "event": "created",
+            "id": "item_NcarO9aza1n8JbvTuoUwt",
+            "label": null,
+            "type": "function_call",
+            "role": null,
+            "previous_item_id": "item_HPjfrXuurkRj5HrGmK91K",
+            "placedAfter": "item_HPjfrXuurkRj5HrGmK91K",
+            "appended": true
+          },
+          {
+            "atMs": 15400,
+            "event": "created",
+            "id": "item_VgmNqpYFqzoeoEsD5t7F6",
+            "label": null,
+            "type": "function_call_output",
+            "role": null,
+            "previous_item_id": "item_NcarO9aza1n8JbvTuoUwt",
+            "placedAfter": "item_NcarO9aza1n8JbvTuoUwt",
+            "appended": true
+          },
+          {
+            "atMs": 15400,
+            "event": "created",
+            "id": "item_LXHPuafrKeTXRObAUIG5C",
+            "label": "T4",
+            "type": "message",
+            "role": "user",
+            "previous_item_id": "item_VgmNqpYFqzoeoEsD5t7F6",
+            "placedAfter": "item_VgmNqpYFqzoeoEsD5t7F6",
+            "appended": true
+          },
+          {
+            "atMs": 15400,
+            "event": "deleted",
+            "id": "item_HPjfrXuurkRj5HrGmK91K",
+            "label": "A4",
+            "wasLive": true
+          },
+          {
+            "atMs": 15881,
+            "event": "created",
+            "id": "item_OdJ9NuQvizP1slGcM5rhm",
+            "label": null,
+            "type": "message",
+            "role": "assistant",
+            "previous_item_id": "item_VgmNqpYFqzoeoEsD5t7F6",
+            "placedAfter": "item_VgmNqpYFqzoeoEsD5t7F6",
+            "appended": false
+          }
+        ],
+        "finalContext": [
+          "A1",
+          "T0",
+          "T2",
+          "A3",
+          "T4"
+        ]
+      }
+    ]
+  }
+}

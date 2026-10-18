@@ -1,0 +1,2673 @@
+{
+  "ranAt": "2026-10-18T07:28:16.233Z",
+  "spendCny": 0.075829,
+  "guardTriggered": true,
+  "results": [
+    {
+      "pattern": "P1",
+      "arm": "BN",
+      "rep": 0,
+      "spendCny": 0.010461,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1420,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 3642,
+          "endMs": 6460,
+          "asr": "把server里的voice点se reis ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 8470,
+          "endMs": 13320,
+          "asr": "看一下useVoiceInput这个hook是怎么处理recording state的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 19218,
+          "endMs": 20200,
+          "asr": "vs点se，vs ts只改vs module ts。",
+          "asrOk": false
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 9273,
+          "endMs": 26600,
+          "asr": "任模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 10102,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "seqs": []
+        },
+        {
+          "t": 21790,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": []
+        },
+        {
+          "t": 35873,
+          "kind": "model",
+          "text": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "seqs": []
+        },
+        {
+          "t": 39418,
+          "kind": "fill",
+          "text": "把server里的voice点se reis ts的超时改成三十秒。 看一下useVoiceInput这个hook是怎么处理recording state的。 vs点se，vs ts只改vs module ts。 任模型换成 whisper large 啊，不是 whisper turbo。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1097,
+          "kind": "endpoint-speech-started",
+          "at": 340
+        },
+        {
+          "t": 9396,
+          "kind": "endpoint-speech-stopped",
+          "at": 6480
+        },
+        {
+          "t": 9396,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            340,
+            6480
+          ]
+        },
+        {
+          "t": 9584,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把server里的voice点se reis ts的超时改成三十秒。"
+        },
+        {
+          "t": 9891,
+          "kind": "response.created"
+        },
+        {
+          "t": 10102,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 10102,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 10312,
+          "kind": "endpoint-speech-started",
+          "at": 7100
+        },
+        {
+          "t": 21268,
+          "kind": "endpoint-speech-stopped",
+          "at": 13360
+        },
+        {
+          "t": 21269,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7100,
+            13360
+          ]
+        },
+        {
+          "t": 21294,
+          "kind": "endpoint-speech-started",
+          "at": 14540
+        },
+        {
+          "t": 21552,
+          "kind": "asr",
+          "seq": 2,
+          "text": "看一下useVoiceInput这个hook是怎么处理recording state的。"
+        },
+        {
+          "t": 21600,
+          "kind": "response.created"
+        },
+        {
+          "t": 21790,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": []
+        },
+        {
+          "t": 21790,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。\"}"
+            }
+          ]
+        },
+        {
+          "t": 28125,
+          "kind": "endpoint-speech-stopped",
+          "at": 20240
+        },
+        {
+          "t": 28125,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            14540,
+            20240
+          ]
+        },
+        {
+          "t": 28142,
+          "kind": "endpoint-speech-started",
+          "at": 21040
+        },
+        {
+          "t": 28381,
+          "kind": "asr",
+          "seq": 3,
+          "text": "vs点se，vs ts只改vs module ts。"
+        },
+        {
+          "t": 28632,
+          "kind": "response.created"
+        },
+        {
+          "t": 29016,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_interrupt",
+              "args": "{\"message\": \"不要动 voice.service.ts，只改 voice.module.ts。\", \"intent\": \"User wants to redirect the current work to only modify voice.module.ts instead of voice.service.ts.\"}"
+            }
+          ]
+        },
+        {
+          "t": 35121,
+          "kind": "endpoint-speech-stopped",
+          "at": 26640
+        },
+        {
+          "t": 35121,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21040,
+            26640
+          ]
+        },
+        {
+          "t": 35463,
+          "kind": "asr",
+          "seq": 4,
+          "text": "任模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 35661,
+          "kind": "response.created"
+        },
+        {
+          "t": 35873,
+          "kind": "call",
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 35873,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper-large，啊不是，whisper-turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 39418,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "把server里的voice点se reis ts的超时改成三十秒。 看一下useVoiceInput这个hook是怎么处理recording state的。 vs点se，vs ts只改vs module ts。 任模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se reis ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 7100,
+          "end": 13360,
+          "text": "看一下useVoiceInput这个hook是怎么处理recording state的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 14540,
+          "end": 20240,
+          "text": "vs点se，vs ts只改vs module ts。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21040,
+          "end": 26640,
+          "text": "任模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P1",
+      "arm": "BN",
+      "rep": 1,
+      "spendCny": 0.010608,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1420,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1249,
+          "endMs": 6460,
+          "asr": "把server里的voice点se rest s的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1255,
+          "endMs": 13320,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 19227,
+          "endMs": 20200,
+          "asr": "不要动，voice点se，rests只改voice module ts。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 12827,
+          "endMs": 26600,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 7709,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成30秒。",
+          "seqs": []
+        },
+        {
+          "t": 14575,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 状态的。",
+          "seqs": []
+        },
+        {
+          "t": 39427,
+          "kind": "fill",
+          "text": "把server里的voice点se rest s的超时改成三十秒。 看一下useless input这个hook是怎么处理recorded g的。 不要动，voice点se，rests只改voice module ts。 把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 939,
+          "kind": "endpoint-speech-started",
+          "at": 340
+        },
+        {
+          "t": 7169,
+          "kind": "endpoint-speech-stopped",
+          "at": 6480
+        },
+        {
+          "t": 7170,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            340,
+            6480
+          ]
+        },
+        {
+          "t": 7316,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把server里的voice点se rest s的超时改成三十秒。"
+        },
+        {
+          "t": 7498,
+          "kind": "response.created"
+        },
+        {
+          "t": 7665,
+          "kind": "endpoint-speech-started",
+          "at": 7100
+        },
+        {
+          "t": 7709,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成30秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 7710,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成30秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 14047,
+          "kind": "endpoint-speech-stopped",
+          "at": 13360
+        },
+        {
+          "t": 14047,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7100,
+            13360
+          ]
+        },
+        {
+          "t": 14194,
+          "kind": "asr",
+          "seq": 2,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 14388,
+          "kind": "response.created"
+        },
+        {
+          "t": 14575,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 状态的。",
+          "consumedSpan": []
+        },
+        {
+          "t": 14575,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 状态的。\"}"
+            }
+          ]
+        },
+        {
+          "t": 15096,
+          "kind": "endpoint-speech-started",
+          "at": 14540
+        },
+        {
+          "t": 20939,
+          "kind": "endpoint-speech-stopped",
+          "at": 20240
+        },
+        {
+          "t": 20939,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            14540,
+            20240
+          ]
+        },
+        {
+          "t": 21171,
+          "kind": "asr",
+          "seq": 3,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "t": 21489,
+          "kind": "response.created"
+        },
+        {
+          "t": 21659,
+          "kind": "endpoint-speech-started",
+          "at": 21040
+        },
+        {
+          "t": 21859,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_interrupt",
+              "args": "{\"message\": \"不要动 voice.service.ts，只改 voice.module.ts。\", \"intent\": \"用户要求停止当前操作，并明确指示只修改 voice.module.ts，不要动 voice.service.ts。\"}"
+            }
+          ]
+        },
+        {
+          "t": 27327,
+          "kind": "endpoint-speech-stopped",
+          "at": 26640
+        },
+        {
+          "t": 27327,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21040,
+            26640
+          ]
+        },
+        {
+          "t": 27569,
+          "kind": "asr",
+          "seq": 4,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 27945,
+          "kind": "response.created"
+        },
+        {
+          "t": 28369,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_interrupt",
+              "args": "{\"message\": \"把默认模型换成 whisper-large，不是 whisper-turbo。\", \"intent\": \"用户纠正了模型选择，要求将默认模型改为 whisper-large 而非 whisper-turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 39427,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "把server里的voice点se rest s的超时改成三十秒。 看一下useless input这个hook是怎么处理recorded g的。 不要动，voice点se，rests只改voice module ts。 把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se rest s的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 7100,
+          "end": 13360,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 14540,
+          "end": 20240,
+          "text": "不要动，voice点se，rests只改voice module ts。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21040,
+          "end": 26640,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P2",
+      "arm": "BN",
+      "rep": 0,
+      "spendCny": 0.010458,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1495,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 34952,
+          "endMs": 5980,
+          "asr": "不要动，voice点se，rests只改voice module ts。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 6482,
+          "endMs": 12380,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 8610,
+          "endMs": 19140,
+          "asr": "里的voice点se rest的超时改成三十秒。",
+          "asrOk": false
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 8577,
+          "endMs": 28100,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 18862,
+          "kind": "model",
+          "text": "把默认模型换成 whisper large，啊不，是 whisper turbo。",
+          "seqs": []
+        },
+        {
+          "t": 27750,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "seqs": []
+        },
+        {
+          "t": 36677,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的？",
+          "seqs": []
+        },
+        {
+          "t": 40932,
+          "kind": "fill",
+          "text": "不要动，voice点se，rests只改voice module ts。 把默认模型换成 whisper large 啊，不是 whisper turbo。 里的voice点se rest的超时改成三十秒。 看一下useless input这个hook是怎么处理recorded g的。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1452,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 7946,
+          "kind": "endpoint-speech-stopped",
+          "at": 6020
+        },
+        {
+          "t": 7946,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6020
+          ]
+        },
+        {
+          "t": 8191,
+          "kind": "asr",
+          "seq": 1,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "t": 8236,
+          "kind": "response.created"
+        },
+        {
+          "t": 8631,
+          "kind": "endpoint-speech-started",
+          "at": 6820
+        },
+        {
+          "t": 8725,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_interrupt",
+              "args": "{\"message\": \"不要动 voice.se 和 voice.ts，只改 voice.module.ts。\", \"intent\": \"用户要求停止当前工作范围，只修改 voice.module.ts，不动 voice.se 和 voice.ts。\"}"
+            }
+          ]
+        },
+        {
+          "t": 18345,
+          "kind": "endpoint-speech-stopped",
+          "at": 12420
+        },
+        {
+          "t": 18345,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6820,
+            12420
+          ]
+        },
+        {
+          "t": 18361,
+          "kind": "endpoint-speech-started",
+          "at": 13020
+        },
+        {
+          "t": 18565,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 18673,
+          "kind": "response.created"
+        },
+        {
+          "t": 18862,
+          "kind": "call",
+          "message": "把默认模型换成 whisper large，啊不，是 whisper turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 18862,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper large，啊不，是 whisper turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 26988,
+          "kind": "endpoint-speech-stopped",
+          "at": 19160
+        },
+        {
+          "t": 26988,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            13020,
+            19160
+          ]
+        },
+        {
+          "t": 27208,
+          "kind": "asr",
+          "seq": 3,
+          "text": "里的voice点se rest的超时改成三十秒。"
+        },
+        {
+          "t": 27542,
+          "kind": "response.created"
+        },
+        {
+          "t": 27750,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 27751,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 27804,
+          "kind": "endpoint-speech-started",
+          "at": 21900
+        },
+        {
+          "t": 34865,
+          "kind": "endpoint-speech-stopped",
+          "at": 28140
+        },
+        {
+          "t": 34865,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21900,
+            28140
+          ]
+        },
+        {
+          "t": 35142,
+          "kind": "asr",
+          "seq": 4,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 36490,
+          "kind": "response.created"
+        },
+        {
+          "t": 36677,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的？",
+          "consumedSpan": []
+        },
+        {
+          "t": 36678,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的？\"}"
+            }
+          ]
+        },
+        {
+          "t": 40932,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "不要动，voice点se，rests只改voice module ts。 把默认模型换成 whisper large 啊，不是 whisper turbo。 里的voice点se rest的超时改成三十秒。 看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点se，rests只改voice module ts。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 6820,
+          "end": 12420,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "里的voice点se rest的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21900,
+          "end": 28140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P2",
+      "arm": "BN",
+      "rep": 1,
+      "spendCny": 0.010124,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1495,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1831,
+          "endMs": 5980,
+          "asr": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1317,
+          "endMs": 12380,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 4473,
+          "endMs": 19140,
+          "asr": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 2452,
+          "endMs": 28100,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 7811,
+          "kind": "model",
+          "text": "不要动 voice.se 和 voice.ts，只改 voice.module.ts。",
+          "seqs": []
+        },
+        {
+          "t": 13697,
+          "kind": "model",
+          "text": "把默认模型换成 whisper-large，不是 whisper-turbo。",
+          "seqs": []
+        },
+        {
+          "t": 23613,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成 30 秒。",
+          "seqs": []
+        },
+        {
+          "t": 30552,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": []
+        },
+        {
+          "t": 40916,
+          "kind": "fill",
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。 把默认模型换成 whisper large 啊，不是 whisper turbo。 把 server 里的 voice 点 s e voice t s 的超时改成三十秒。 看一下useless input这个hook是怎么处理recorded g的。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1279,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 7249,
+          "kind": "endpoint-speech-stopped",
+          "at": 6020
+        },
+        {
+          "t": 7249,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6020
+          ]
+        },
+        {
+          "t": 7493,
+          "kind": "asr",
+          "seq": 1,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 7602,
+          "kind": "response.created"
+        },
+        {
+          "t": 7609,
+          "kind": "endpoint-speech-started",
+          "at": 6820
+        },
+        {
+          "t": 7811,
+          "kind": "call",
+          "message": "不要动 voice.se 和 voice.ts，只改 voice.module.ts。",
+          "consumedSpan": []
+        },
+        {
+          "t": 7811,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"不要动 voice.se 和 voice.ts，只改 voice.module.ts。\"}"
+            }
+          ]
+        },
+        {
+          "t": 13219,
+          "kind": "endpoint-speech-stopped",
+          "at": 12420
+        },
+        {
+          "t": 13219,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6820,
+            12420
+          ]
+        },
+        {
+          "t": 13443,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 13514,
+          "kind": "response.created"
+        },
+        {
+          "t": 13697,
+          "kind": "call",
+          "message": "把默认模型换成 whisper-large，不是 whisper-turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 13697,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper-large，不是 whisper-turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 13875,
+          "kind": "endpoint-speech-started",
+          "at": 13020
+        },
+        {
+          "t": 22920,
+          "kind": "endpoint-speech-stopped",
+          "at": 19160
+        },
+        {
+          "t": 22920,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            13020,
+            19160
+          ]
+        },
+        {
+          "t": 23270,
+          "kind": "asr",
+          "seq": 3,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。"
+        },
+        {
+          "t": 23284,
+          "kind": "endpoint-speech-started",
+          "at": 21900
+        },
+        {
+          "t": 23400,
+          "kind": "response.created"
+        },
+        {
+          "t": 23613,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成 30 秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 23613,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成 30 秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 29858,
+          "kind": "endpoint-speech-stopped",
+          "at": 28140
+        },
+        {
+          "t": 29858,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21900,
+            28140
+          ]
+        },
+        {
+          "t": 30009,
+          "kind": "asr",
+          "seq": 4,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 30362,
+          "kind": "response.created"
+        },
+        {
+          "t": 30552,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": []
+        },
+        {
+          "t": 30553,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。\"}"
+            }
+          ]
+        },
+        {
+          "t": 40916,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。 把默认模型换成 whisper large 啊，不是 whisper turbo。 把 server 里的 voice 点 s e voice t s 的超时改成三十秒。 看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 6820,
+          "end": 12420,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21900,
+          "end": 28140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P3",
+      "arm": "BN",
+      "rep": 0,
+      "spendCny": 0.010409,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1515,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1804,
+          "endMs": 6560,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 3028,
+          "endMs": 13920,
+          "asr": "把server里的voice点se voice ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 4870,
+          "endMs": 22220,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 12828,
+          "endMs": 28500,
+          "asr": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 8364,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": []
+        },
+        {
+          "t": 16948,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "seqs": []
+        },
+        {
+          "t": 27090,
+          "kind": "model",
+          "text": "把默认模型换成 whisper-large……啊不，是 whisper-turbo。",
+          "seqs": []
+        },
+        {
+          "t": 41328,
+          "kind": "fill",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。 把server里的voice点se voice ts的超时改成三十秒。 把默认模型换成 whisper large 啊，不是 whisper turbo。 不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1134,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 7818,
+          "kind": "endpoint-speech-stopped",
+          "at": 6600
+        },
+        {
+          "t": 7818,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6600
+          ]
+        },
+        {
+          "t": 7997,
+          "kind": "asr",
+          "seq": 1,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 8164,
+          "kind": "response.created"
+        },
+        {
+          "t": 8364,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": []
+        },
+        {
+          "t": 8365,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。\"}"
+            }
+          ]
+        },
+        {
+          "t": 8672,
+          "kind": "endpoint-speech-started",
+          "at": 7780
+        },
+        {
+          "t": 16209,
+          "kind": "endpoint-speech-stopped",
+          "at": 13940
+        },
+        {
+          "t": 16209,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7780,
+            13940
+          ]
+        },
+        {
+          "t": 16476,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 16744,
+          "kind": "response.created"
+        },
+        {
+          "t": 16948,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 16948,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成三十秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 17488,
+          "kind": "endpoint-speech-started",
+          "at": 16660
+        },
+        {
+          "t": 26348,
+          "kind": "endpoint-speech-stopped",
+          "at": 22260
+        },
+        {
+          "t": 26348,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            16660,
+            22260
+          ]
+        },
+        {
+          "t": 26575,
+          "kind": "asr",
+          "seq": 3,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 26670,
+          "kind": "endpoint-speech-started",
+          "at": 22840
+        },
+        {
+          "t": 26861,
+          "kind": "response.created"
+        },
+        {
+          "t": 27090,
+          "kind": "call",
+          "message": "把默认模型换成 whisper-large……啊不，是 whisper-turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 27090,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper-large……啊不，是 whisper-turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 30453,
+          "kind": "endpoint-speech-stopped",
+          "at": 28540
+        },
+        {
+          "t": 30453,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            22840,
+            28540
+          ]
+        },
+        {
+          "t": 30709,
+          "kind": "asr",
+          "seq": 4,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 31670,
+          "kind": "response.created"
+        },
+        {
+          "t": 31672,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_interrupt",
+              "args": "{\"message\": \"不要动 voice.service.ts，只改 voice.module.ts。\", \"intent\": \"用户要求停止修改 voice.service.ts 并改为只修改 voice.module.ts。\"}"
+            }
+          ]
+        },
+        {
+          "t": 41328,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "看一下useless input这个hook是怎么处理recorded g的。 把server里的voice点se voice ts的超时改成三十秒。 把默认模型换成 whisper large 啊，不是 whisper turbo。 不要动 voice 点 s e voice t s 只改 voice module t s。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6600,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 7780,
+          "end": 13940,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 16660,
+          "end": 22260,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 22840,
+          "end": 28540,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P3",
+      "arm": "BN",
+      "rep": 1,
+      "spendCny": 0.010473,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1515,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1400,
+          "endMs": 6560,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 4575,
+          "endMs": 13920,
+          "asr": "把server里的rest点se rest ts的超时改成三十秒。",
+          "asrOk": false
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 3678,
+          "endMs": 22220,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 12821,
+          "endMs": 28500,
+          "asr": "不要动，voice点se，rests只改voice module ts。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 7960,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": []
+        },
+        {
+          "t": 18495,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成30秒。",
+          "seqs": []
+        },
+        {
+          "t": 25898,
+          "kind": "model",
+          "text": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "seqs": []
+        },
+        {
+          "t": 41321,
+          "kind": "fill",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。 把server里的rest点se rest ts的超时改成三十秒。 把默认模型换成 whisper large 啊，不是 whisper turbo。 不要动，voice点se，rests只改voice module ts。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1186,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 7447,
+          "kind": "endpoint-speech-stopped",
+          "at": 6600
+        },
+        {
+          "t": 7447,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6600
+          ]
+        },
+        {
+          "t": 7663,
+          "kind": "asr",
+          "seq": 1,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 7773,
+          "kind": "response.created"
+        },
+        {
+          "t": 7960,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": []
+        },
+        {
+          "t": 7960,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。\"}"
+            }
+          ]
+        },
+        {
+          "t": 9956,
+          "kind": "endpoint-speech-started",
+          "at": 7780
+        },
+        {
+          "t": 17811,
+          "kind": "endpoint-speech-stopped",
+          "at": 13940
+        },
+        {
+          "t": 17811,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7780,
+            13940
+          ]
+        },
+        {
+          "t": 18071,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把server里的rest点se rest ts的超时改成三十秒。"
+        },
+        {
+          "t": 18287,
+          "kind": "response.created"
+        },
+        {
+          "t": 18495,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成30秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 18496,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把 server 里的 voice.service.ts 的超时改成30秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 18808,
+          "kind": "endpoint-speech-started",
+          "at": 16660
+        },
+        {
+          "t": 25165,
+          "kind": "endpoint-speech-stopped",
+          "at": 22260
+        },
+        {
+          "t": 25165,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            16660,
+            22260
+          ]
+        },
+        {
+          "t": 25376,
+          "kind": "asr",
+          "seq": 3,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 25533,
+          "kind": "endpoint-speech-started",
+          "at": 22840
+        },
+        {
+          "t": 25692,
+          "kind": "response.created"
+        },
+        {
+          "t": 25898,
+          "kind": "call",
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 25899,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper-large，啊不是，whisper-turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 29359,
+          "kind": "endpoint-speech-stopped",
+          "at": 28540
+        },
+        {
+          "t": 29359,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            22840,
+            28540
+          ]
+        },
+        {
+          "t": 29584,
+          "kind": "asr",
+          "seq": 4,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "t": 29959,
+          "kind": "response.created"
+        },
+        {
+          "t": 30435,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_interrupt",
+              "args": "{\"message\": \"不要动 voice.service.ts，只改 voice.module.ts。\", \"intent\": \"The user wants to stop the current work and redirect it to only modify voice.module.ts, leaving voice.service.ts untouched.\"}"
+            }
+          ]
+        },
+        {
+          "t": 41321,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "看一下useless input这个hook是怎么处理recorded g的。 把server里的rest点se rest ts的超时改成三十秒。 把默认模型换成 whisper large 啊，不是 whisper turbo。 不要动，voice点se，rests只改voice module ts。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6600,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 7780,
+          "end": 13940,
+          "text": "把server里的rest点se rest ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 16660,
+          "end": 22260,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 22840,
+          "end": 28540,
+          "text": "不要动，voice点se，rests只改voice module ts。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P4",
+      "arm": "BN",
+      "rep": 0,
+      "spendCny": 0.004296,
+      "responses": 2,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1410,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 2,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 6116,
+          "endMs": 5900,
+          "asr": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 9784,
+          "endMs": 12180,
+          "asr": "voice点se voice ts只改voice module ts。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 19040,
+          "asr": "",
+          "asrOk": false
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 26400,
+          "asr": "",
+          "asrOk": false
+        }
+      ],
+      "pieces": [
+        {
+          "t": 12016,
+          "kind": "model",
+          "text": "把默认模型换成 whisper large，啊不是，whisper turbo。",
+          "seqs": []
+        },
+        {
+          "t": 21964,
+          "kind": "model",
+          "text": "不要动 voice.secrets.ts，只改 voice.module.ts。",
+          "seqs": []
+        },
+        {
+          "t": 39214,
+          "kind": "fill",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。 voice点se voice ts只改voice module ts。",
+          "seqs": [
+            1,
+            2
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1261,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 11532,
+          "kind": "endpoint-speech-stopped",
+          "at": 5940
+        },
+        {
+          "t": 11532,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            5940
+          ]
+        },
+        {
+          "t": 11560,
+          "kind": "endpoint-speech-started",
+          "at": 6520
+        },
+        {
+          "t": 11752,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        },
+        {
+          "t": 11811,
+          "kind": "response.created"
+        },
+        {
+          "t": 12016,
+          "kind": "call",
+          "message": "把默认模型换成 whisper large，啊不是，whisper turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 12016,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper large，啊不是，whisper turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 21418,
+          "kind": "endpoint-speech-stopped",
+          "at": 12220
+        },
+        {
+          "t": 21419,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6520,
+            12220
+          ]
+        },
+        {
+          "t": 21638,
+          "kind": "asr",
+          "seq": 2,
+          "text": "voice点se voice ts只改voice module ts。"
+        },
+        {
+          "t": 21742,
+          "kind": "endpoint-speech-started",
+          "at": 12820
+        },
+        {
+          "t": 21800,
+          "kind": "response.created"
+        },
+        {
+          "t": 21964,
+          "kind": "call",
+          "message": "不要动 voice.secrets.ts，只改 voice.module.ts。",
+          "consumedSpan": []
+        },
+        {
+          "t": 21964,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"不要动 voice.secrets.ts，只改 voice.module.ts。\"}"
+            }
+          ]
+        },
+        {
+          "t": 39214,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2
+          ],
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。 voice点se voice ts只改voice module ts。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 5940,
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 6520,
+          "end": 12220,
+          "text": "voice点se voice ts只改voice module ts。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P4",
+      "arm": "BN",
+      "rep": 1,
+      "spendCny": 0.009001,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1410,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "claimVoided": 0,
+        "textReplyFills": 0,
+        "asks": 0,
+        "askDropped": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 4,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            1,
+            4
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1209,
+          "endMs": 5900,
+          "asr": "把默认模型换成 whisper large，啊不是 whisper turbo。 server里的voice点se reat s的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1228,
+          "endMs": 12180,
+          "asr": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1463,
+          "endMs": 19040,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "model"
+          ],
+          "latencyMs": -12992,
+          "endMs": 26400,
+          "asr": "",
+          "asrOk": false
+        }
+      ],
+      "pieces": [
+        {
+          "t": 7109,
+          "kind": "model",
+          "text": "把默认模型换成 whisper-large，啊不，是 whisper-turbo。",
+          "seqs": []
+        },
+        {
+          "t": 13408,
+          "kind": "model",
+          "text": "不要动 voice.service.ts，只改 voice.module.ts。",
+          "seqs": []
+        },
+        {
+          "t": 20503,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": []
+        },
+        {
+          "t": 27791,
+          "kind": "model",
+          "text": "server 里的 voice.scripts.ts 的超时改成三十秒。",
+          "seqs": []
+        },
+        {
+          "t": 39222,
+          "kind": "fill",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。 不要动 voice 点 s e voice t s 只改 voice module t s。 看一下useless input这个hook是怎么处理recorded g的。 server里的voice点se reat s的超时改成三十秒。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 928,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 6590,
+          "kind": "endpoint-speech-stopped",
+          "at": 5940
+        },
+        {
+          "t": 6591,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            5940
+          ]
+        },
+        {
+          "t": 6808,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。"
+        },
+        {
+          "t": 6897,
+          "kind": "response.created"
+        },
+        {
+          "t": 7086,
+          "kind": "endpoint-speech-started",
+          "at": 6520
+        },
+        {
+          "t": 7109,
+          "kind": "call",
+          "message": "把默认模型换成 whisper-large，啊不，是 whisper-turbo。",
+          "consumedSpan": []
+        },
+        {
+          "t": 7109,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"把默认模型换成 whisper-large，啊不，是 whisper-turbo。\"}"
+            }
+          ]
+        },
+        {
+          "t": 12921,
+          "kind": "endpoint-speech-stopped",
+          "at": 12220
+        },
+        {
+          "t": 12921,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6520,
+            12220
+          ]
+        },
+        {
+          "t": 13158,
+          "kind": "asr",
+          "seq": 2,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 13247,
+          "kind": "response.created"
+        },
+        {
+          "t": 13396,
+          "kind": "endpoint-speech-started",
+          "at": 12820
+        },
+        {
+          "t": 13408,
+          "kind": "call",
+          "message": "不要动 voice.service.ts，只改 voice.module.ts。",
+          "consumedSpan": []
+        },
+        {
+          "t": 13408,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"不要动 voice.service.ts，只改 voice.module.ts。\"}"
+            }
+          ]
+        },
+        {
+          "t": 19717,
+          "kind": "endpoint-speech-stopped",
+          "at": 19080
+        },
+        {
+          "t": 19717,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            12820,
+            19080
+          ]
+        },
+        {
+          "t": 19852,
+          "kind": "asr",
+          "seq": 3,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 20318,
+          "kind": "response.created"
+        },
+        {
+          "t": 20503,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": []
+        },
+        {
+          "t": 20503,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。\"}"
+            }
+          ]
+        },
+        {
+          "t": 21235,
+          "kind": "endpoint-speech-started",
+          "at": 0
+        },
+        {
+          "t": 27121,
+          "kind": "endpoint-speech-stopped",
+          "at": 5580
+        },
+        {
+          "t": 27121,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            0,
+            5580
+          ]
+        },
+        {
+          "t": 27636,
+          "kind": "asr",
+          "seq": 4,
+          "text": "server里的voice点se reat s的超时改成三十秒。"
+        },
+        {
+          "t": 27636,
+          "kind": "response.created"
+        },
+        {
+          "t": 27791,
+          "kind": "call",
+          "message": "server 里的 voice.scripts.ts 的超时改成三十秒。",
+          "consumedSpan": []
+        },
+        {
+          "t": 27792,
+          "kind": "response.done",
+          "status": "completed",
+          "outputs": [
+            {
+              "fn": "session_send",
+              "args": "{\"message\": \"server 里的 voice.scripts.ts 的超时改成三十秒。\"}"
+            }
+          ]
+        },
+        {
+          "t": 39222,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。 不要动 voice 点 s e voice t s 只改 voice module t s。 看一下useless input这个hook是怎么处理recorded g的。 server里的voice点se reat s的超时改成三十秒。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 5940,
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 6520,
+          "end": 12220,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 12820,
+          "end": 19080,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 0,
+          "end": 5580,
+          "text": "server里的voice点se reat s的超时改成三十秒。",
+          "resolved": "filled"
+        }
+      ]
+    }
+  ]
+}

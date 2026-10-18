@@ -1,0 +1,54 @@
+# 164c3087@10-14T15:16:43 arm A rep 1 model sonnet hook false wall 124.7s
+   0.0  >> DELIVER prompt: 让我们再做一次 live voice 测试。
+   0.7  == turn
+   4.4     tool Bash: curl -s -m 5 localhost:3001/build-info; echo; git rev-parse --short HEAD; ls /data/home/yale/.claude/projects/
+   4.4     (blocked by sandbox)
+   6.8  · voice [ADD-frag] 你看啊，第一句的问题是。
+   6.8     tool Read: /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/live-voice-tenth-test-2026-10-15-que
+   8.9  · voice [ADD-frag] 我大概花了。
+  12.7     text: 可以。语音这一步得由你来说话，我这边没法发声。我先把上次的状态和这次要盯的点理一下。  **上次（10-15 01:01–01:15）的状态** - 1–4 已修，提交在 `3bca0f292`：静默吞句、重连丢 mute、mute 期间 socket 被断、Q 徽章 stop 后冻结。 - 5、6 未修，也没定位：重连后 tool-resume 被拒（`Unknown function call id`），以及 TRANSCRIPTION_FAILED 页面无行。  **这次建议覆盖的场景** 1. **连续快讲几句，Claude 忙时再插话。** 看是否还有静默吞句。 2. **mute 
+  12.7  -- result success
+  12.7  >> DELIVER turn-end: 你看啊，第一句的问题是。我大概花了。
+  12.8  == turn
+  13.0  · voice [ADD-frag] 两秒时间。
+  14.1     text: 你这句话还没说完，停在了"我大概花了"。你想说的是花了多长时间，还是花了多少钱，或者别的？接着往下说就行，我等着。
+  14.1  -- result success
+  14.1  >> DELIVER turn-end: 两秒时间。
+  14.2  == turn
+  17.4  · voice [ADD-frag] 就把话说完了。
+  18.0     text: 记下了：第一句大概花了两秒。我还不确定这两秒指什么，有两种可能：  - **说完到有反应的延迟**：你说完第一句，页面或 Claude 过了约两秒才有动静。 - **第一句被截或被吞**：你开口后约两秒，开头那段没被收进去。  你说的是哪种？如果是别的，直接告诉我。  测完后把大致时间段给我，我去对日志里第一句的 `transcription.completed` 和上游开 response 的时间戳，把这两秒落在哪一段量出来。
+  18.0  -- result success
+  18.0  >> DELIVER turn-end: 就把话说完了。
+  18.0  == turn
+  25.2     text: 明白了，你的意思是：你花了大概两秒才把那句话说完，但系统在你停顿的时候就把它切开了。  这段对话本身就是证据。你的一句话被拆成了几条消息：  1. 「我大概花了。」 2. 「两秒时间。」 3. 「就把话说完了。」  我每次都对着半句话回应，所以才一直在问你到底想说什么。  **这是什么问题**：句中的短停顿（约 2 秒内）被当成了说完，提前提交了一个 turn。这和上次的「门控尾音不够 ⇒ 判停提前」是同一类，但方向相反：这次是句子被切碎，上次是被并吞。  **要查什么**：如果这段是通过 live voice 发的，日志里应该能看到这三条各自的 `transcription.complete
+  25.2  -- result success
+  28.8  · voice [ADD-frag] 但是我看见这边有个动字。
+  29.8  >> DELIVER idle: 但是我看见这边有个动字。
+  29.8  == turn
+  32.3  · voice [ADD-frag] 可能花了五六秒。
+  33.6     text: 我看不到你的屏幕，所以不确定这个「动」字在哪。你能说一下它出现在哪个位置吗？比如：  - **字幕条或 transcript 里**：是不是某句话的开头或结尾多出（或残留）一个「动」字？ - **状态标签上**：是不是类似「活动」「已启动」被截成了单个字？ - **某条消息行里**：是不是一句话只剩一个字？  如果方便，把那一块截图贴过来，或者把那个字所在那一行的完整文字念给我。
+  33.6  -- result success
+  33.6  >> DELIVER turn-end: 可能花了五六秒。
+  33.6  == turn
+  37.2     text: 记下了，把之前的「两秒」改成五六秒。这样更说得通：停顿有五六秒才被切开，不是 2 秒内的短停顿，所以问题不一定出在停顿阈值上。更可能是某个环节卡住了，比如上游没及时出转写，或者字幕等了很久才上屏。  「动」字那件事你还没说在哪出现，我先放着。  这些我都没法凭感觉判断，得看日志。你说一下这段大概是几点到几点，我去读最新的 jsonl，把每句的 `transcription.completed` 时间戳对出来，看这五六秒实际卡在哪一段。
+  37.2  -- result success
+  65.0  · voice [ADD-frag] 但是我看到在我的屏幕上蹦出来。
+  66.0  >> DELIVER idle: 但是我看到在我的屏幕上蹦出来。
+  66.0  == turn
+  69.6  · voice [ADD-frag] 可能要花了二十到三十秒。
+  70.0     text: 明白了，那个「动」字是在你屏幕上蹦出来的。这像是转写的增量（partial）直接上屏了：你还在说话，字幕或输入框里就先冒出几个字，后面的内容过了几秒才补上。这样就能解释为什么「花了五六秒」才把话说完。  这只是我的推测，要看日志才能确定。我现在没有时间段，所以直接去读 `~/.cloudcli/voice-realtime-log/` 里最新的那份 jsonl，看里面有没有单字的 delta、字幕上屏的时间，以及和 `transcription.completed` 之间的间隔。  我这就去查，还是你想先接着测？
+  70.0  -- result success
+  70.0  >> DELIVER turn-end: 可能要花了二十到三十秒。
+  70.0  == turn
+  72.6     text: 记下了：这次要二十到三十秒。你前后给了三个数，2 秒、5 到 6 秒、20 到 30 秒，一次比一次长。我不再追问，直接去查日志。
+  73.0     tool Bash: ls -lt ~/.cloudcli/voice-realtime-log/ | head -8
+  75.3     tool Bash: cd ~/.cloudcli/voice-realtime-log/; date; f=7c01be7e-24a7-4728-81a5-f50bcee9a847.jsonl; head -c 600 $f; echo; 
+  79.1  · voice [ADD] 啊，分析一下原因。
+  81.6     text: 日志里没有你刚才这次测试。  - 现在是 14:53（CST）。 - `~/.cloudcli/voice-realtime-log/` 里最新的一份是 `7c01be7e…`，连接于 11:51，最后写入 11:54，距现在近 3 小时。 - 这 3 小时里没有任何新的 live voice 连接记录。  所以你这几句被切成碎片、「动」字蹦出来、延迟越来越长，大概率**不是走 live voice 中继**发出的。更像是输入框的听写：浏览器或系统自带的语音输入，一边说一边上屏，停顿时就提交一段。听写延迟、单字提前蹦出来，都是这种路径的典型表现。  这影响测试结论：如果你想测的是 live v
+  81.6  -- result success
+  81.6  >> DELIVER turn-end: 啊，分析一下原因。
+  81.6  == turn
+  84.0     tool Bash: cd /tmp/x3wt/164c3087-A-1-mv96lrkn; grep -rlE "webkitSpeechRecognition|SpeechRecognition|MediaRecorder|transcr
+  86.2     tool Bash: cd /tmp/x3wt/164c3087-A-1-mv96lrkn/src/modules/chat; wc -l hooks/useVoiceInput.ts utils/voiceSegments.ts audio
+  98.3     text: 以下是读 `useVoiceInput.ts` 和 `voiceSegments.ts` 后的分析，是从代码推断的，还没有拿真实运行数据验证。  **前提**：日志里没有 live voice 连接，你这次走的是输入框的听写路径（`useVoiceInput`）。它和 live voice 中继是两套机制。  **听写的工作方式**（该文件头部注释）： 1. 流式 VAD 把你的话切成若干段（segment）。 2. 每段单独送去识别，各自重试，并发数有上限。 3. 结果按说话顺序提交，而且只提交连续的前缀。如果第 2 段先回来，第 1 段没回来，就什么都不上屏，等第 1 段到了才一起上。 4
+  98.3  -- result success

@@ -1,0 +1,122 @@
+{
+ "episode": "57279cc1@10-11T15:42:32",
+ "arm": "B",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "9acb31b33af9fa418c5672be003567d32c968de7",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 919,
+   "text": "我不知道是不是因为最近在 VAD……",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 8564,
+   "text": "或者其他的地方加入了更多延迟。",
+   "label": "ADD"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 36734,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "还有呢，就是现在转写输出的延迟好像非常大。",
+   "parts": []
+  },
+  {
+   "t": 882,
+   "ev": "TURN"
+  },
+  {
+   "t": 890,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 924,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "我不知道是不是因为最近在 VAD……"
+  },
+  {
+   "t": 959,
+   "ev": "TURN"
+  },
+  {
+   "t": 1603,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 1607,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 1607,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "我不知道是不是因为最近在 VAD……",
+   "parts": [
+    "ADD-frag:我不知道是不是因为最近在 VAD……"
+   ]
+  },
+  {
+   "t": 1653,
+   "ev": "TURN"
+  },
+  {
+   "t": 2009,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 2011,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 8569,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "或者其他的地方加入了更多延迟。"
+  },
+  {
+   "t": 9569,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "或者其他的地方加入了更多延迟。",
+   "parts": [
+    "ADD:或者其他的地方加入了更多延迟。"
+   ]
+  },
+  {
+   "t": 9615,
+   "ev": "TURN"
+  },
+  {
+   "t": 10191,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 10194,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 36535,
+   "ev": "ERROR",
+   "e": "Error: Claude Code returned an error result: You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  }
+ ]
+}

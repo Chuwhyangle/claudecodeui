@@ -1,0 +1,245 @@
+{
+ "model": "haiku",
+ "priority": "later",
+ "dir": "/tmp/e1c-jzJiDX",
+ "log": [
+  {
+   "t": 3.8,
+   "ev": "tool_use",
+   "name": "Agent",
+   "cmd": "progress loop",
+   "snap": {
+    "agent": 0,
+    "fg": 0
+   }
+  },
+  {
+   "t": 5.5,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step1 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 1,
+    "fg": 0
+   }
+  },
+  {
+   "t": 8.6,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step1 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 2,
+    "fg": 1
+   }
+  },
+  {
+   "t": 10.6,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step2 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 3,
+    "fg": 1
+   }
+  },
+  {
+   "t": 12.6,
+   "ev": "PUSH",
+   "priority": "later",
+   "snap": {
+    "agent": 4,
+    "fg": 2
+   }
+  },
+  {
+   "t": 13.6,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step2 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 5,
+    "fg": 2
+   }
+  },
+  {
+   "t": 14.8,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step3 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 5,
+    "fg": 2
+   }
+  },
+  {
+   "t": 17.9,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step3 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 7,
+    "fg": 3
+   }
+  },
+  {
+   "t": 19.1,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step4 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 7,
+    "fg": 3
+   }
+  },
+  {
+   "t": 22.1,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step4 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 9,
+    "fg": 4
+   }
+  },
+  {
+   "t": 23.8,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step5 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 10,
+    "fg": 4
+   }
+  },
+  {
+   "t": 26.8,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step5 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 11,
+    "fg": 5
+   }
+  },
+  {
+   "t": 28.1,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step6 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 12,
+    "fg": 5
+   }
+  },
+  {
+   "t": 31.1,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step6 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 13,
+    "fg": 6
+   }
+  },
+  {
+   "t": 32.3,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step7 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 14,
+    "fg": 6
+   }
+  },
+  {
+   "t": 35.4,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step7 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 15,
+    "fg": 7
+   }
+  },
+  {
+   "t": 36.4,
+   "ev": "task",
+   "status": "completed",
+   "summary": "for i in $(seq 1 15); do echo $i >> /tmp",
+   "snap": {
+    "agent": 16,
+    "fg": 7
+   }
+  },
+  {
+   "t": 36.7,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step8 >> /tmp/e1c-jzJiDX/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 16,
+    "fg": 7
+   }
+  },
+  {
+   "t": 39.7,
+   "ev": "task",
+   "status": "completed",
+   "summary": "echo step8 >> /tmp/e1c-jzJiDX/fg.txt; fo",
+   "snap": {
+    "agent": 16,
+    "fg": 8
+   }
+  },
+  {
+   "t": 41.3,
+   "ev": "text",
+   "text": "Done.",
+   "sincePushS": 28.7,
+   "snap": {
+    "agent": 16,
+    "fg": 8
+   }
+  },
+  {
+   "t": 41.3,
+   "ev": "result",
+   "n": 1,
+   "subtype": "success",
+   "snap": {
+    "agent": 16,
+    "fg": 8
+   }
+  },
+  {
+   "t": 43.7,
+   "ev": "text",
+   "text": "REDIRECTED",
+   "sincePushS": 31.1,
+   "snap": {
+    "agent": 16,
+    "fg": 8
+   }
+  },
+  {
+   "t": 43.7,
+   "ev": "result",
+   "n": 2,
+   "subtype": "success",
+   "snap": {
+    "agent": 16,
+    "fg": 8
+   }
+  },
+  {
+   "t": 75.5,
+   "ev": "FINAL",
+   "snap": {
+    "agent": 16,
+    "fg": 8
+   },
+   "agentEnded": true
+  }
+ ]
+}

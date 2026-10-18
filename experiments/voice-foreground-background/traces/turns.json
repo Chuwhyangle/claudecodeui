@@ -1,0 +1,5170 @@
+{
+ "turns": [
+  {
+   "appSession": "5e737652",
+   "at": "2026-10-11T16:33:04.310Z",
+   "ms": 21183,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 53,
+   "message": "这次我们用手机来试一下 live voice mode。"
+  },
+  {
+   "appSession": "5e737652",
+   "at": "2026-10-11T16:33:25.535Z",
+   "ms": 4014,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "appSession": "5e737652",
+   "at": "2026-10-11T16:33:29.602Z",
+   "ms": 2533,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在这是第三句。"
+  },
+  {
+   "appSession": "5e737652",
+   "at": "2026-10-11T16:33:35.688Z",
+   "ms": 3514,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "第四句。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T00:43:10.054Z",
+   "ms": 19558,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 49,
+   "message": "十月十三日，第三次 live voice 语音测试。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:44:52.593Z",
+   "ms": 5471,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:45:02.728Z",
+   "ms": 4155,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "但好像推理开始的慢一些。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:45:18.526Z",
+   "ms": 4011,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "当连续有多句的时候，顺序还是错的。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:45:36.589Z",
+   "ms": 23864,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 100,
+   "message": "到现在为止，我第二句话还是没有被处理。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:46:18.895Z",
+   "ms": 22384,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 50,
+   "message": "是的，就是你列出的第一组。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:46:41.298Z",
+   "ms": 20646,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 66,
+   "message": "实际上在我的屏幕上，你的第一组后面那句话“哎，上面这句是不是很快？”一直被作为一个气泡被保留着。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:47:30.483Z",
+   "ms": 22523,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "请讨论更根本的解决方案。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:48:20.385Z",
+   "ms": 48584,
+   "toolCalls": 9,
+   "bgCalls": 0,
+   "toolMs": 299,
+   "message": "现在在我的屏幕上，底部又多出了一个“waiting in the queue”这么一个不管叫泡泡或者说 label。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:49:08.993Z",
+   "ms": 29368,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 43,
+   "message": "我刚说这玩意消失了，但是又又多出了两个泡泡，以两个无法消失的气泡。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:49:51.582Z",
+   "ms": 35541,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 68,
+   "message": "到现在为止看呢，每句话都能够实际被识别出来并推到 Claude Code 的处理，但是在前端交互上还有非常多的问题。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:50:27.143Z",
+   "ms": 23222,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 69,
+   "message": "那我希望啊，用 fake provider 等本地机制可以模拟所有这些问题。"
+  },
+  {
+   "appSession": "aec453a1",
+   "at": "2026-10-13T01:50:27.143Z",
+   "ms": 23222,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 69,
+   "message": "现在屏幕上已经有三行 waiting in the queue 了。"
+  },
+  {
+   "appSession": "2a475477",
+   "at": "2026-10-14T15:16:43.386Z",
+   "ms": 111433,
+   "toolCalls": 16,
+   "bgCalls": 0,
+   "toolMs": 1981,
+   "message": "让我们再做一次 live voice 测试。"
+  },
+  {
+   "appSession": "2a475477",
+   "at": "2026-10-14T15:18:36.344Z",
+   "ms": 273170,
+   "toolCalls": 11,
+   "bgCalls": 0,
+   "toolMs": 678,
+   "message": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。但是我看到在我的屏幕"
+  },
+  {
+   "appSession": "2a475477",
+   "at": "2026-10-14T15:23:09.556Z",
+   "ms": 53563,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 13,
+   "message": "这也应该要查。啊，我从这个“查”字到后面的话之间的时间间隔相当长。啊，实际上在我前面停止。第一段话的推理的时候，这个“这"
+  },
+  {
+   "appSession": "7e8ae374",
+   "at": "2026-10-11T10:09:20.117Z",
+   "ms": 10672,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "让我们再进行一次语音输入。"
+  },
+  {
+   "appSession": "7e8ae374",
+   "at": "2026-10-11T10:09:31.740Z",
+   "ms": 5790,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "实际上我发现当前这个会话不是持久会话。"
+  },
+  {
+   "appSession": "7e8ae374",
+   "at": "2026-10-11T10:09:54.472Z",
+   "ms": 23964,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 36,
+   "message": "但是我在开始 live mode 之前，我在界面上选择了 resident session。"
+  },
+  {
+   "appSession": "7e8ae374",
+   "at": "2026-10-11T10:10:41.164Z",
+   "ms": 3044,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "当前的 live mode。"
+  },
+  {
+   "appSession": "7e8ae374",
+   "at": "2026-10-11T10:10:44.310Z",
+   "ms": 26340,
+   "toolCalls": 8,
+   "bgCalls": 0,
+   "toolMs": 178,
+   "message": "有在浏览器或服务端做 VAD，然后再转发到 DashScope 吗？"
+  },
+  {
+   "appSession": "7e8ae374",
+   "at": "2026-10-11T10:11:33.620Z",
+   "ms": 81733,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 63348,
+   "message": "能查一下我们当前这个会话中已经做了多少次 VAD，效果如何？"
+  },
+  {
+   "appSession": "76af747d",
+   "at": "2026-10-14T17:46:14.492Z",
+   "ms": 435,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在是十月十五日，Live Voice 第四次测试。"
+  },
+  {
+   "appSession": "516a48e1",
+   "at": "2026-10-14T13:45:17.421Z",
+   "ms": 724878,
+   "toolCalls": 41,
+   "bgCalls": 0,
+   "toolMs": 494944,
+   "message": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:56:01.144Z",
+   "ms": 20814,
+   "toolCalls": 6,
+   "bgCalls": 0,
+   "toolMs": 793,
+   "message": "Cloud Code UI 项目现在最活跃的会话是什么？"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T03:04:28.143Z",
+   "ms": 102864,
+   "toolCalls": 10,
+   "bgCalls": 0,
+   "toolMs": 30858,
+   "message": "给这两个会话分别发消息，让他们讨论 send message。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:59:15.520Z",
+   "ms": 13080,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "终止现在的操作。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:59:31.095Z",
+   "ms": 109034,
+   "toolCalls": 18,
+   "bgCalls": 0,
+   "toolMs": 10783,
+   "message": "找到 quay 这个项目最活跃的会话。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:57:48.597Z",
+   "ms": 47396,
+   "toolCalls": 7,
+   "bgCalls": 0,
+   "toolMs": 745,
+   "message": "列出现在最活跃的项目。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:58:40.097Z",
+   "ms": 35413,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 6589,
+   "message": "对，就是 crey。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:59:15.520Z",
+   "ms": 13080,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "quay。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T03:02:32.375Z",
+   "ms": 61984,
+   "toolCalls": 7,
+   "bgCalls": 0,
+   "toolMs": 408,
+   "message": "你可以看到，这个会话正在讨论关于 send message 的这些协议。"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T03:03:34.379Z",
+   "ms": 33382,
+   "toolCalls": 5,
+   "bgCalls": 0,
+   "toolMs": 1469,
+   "message": "而在 quay fleet 这个项目中，实际上我们也在做相应功能。你可以找到 quay fleet 里面相应的那个会话吗"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T02:56:33.868Z",
+   "ms": 60396,
+   "toolCalls": 12,
+   "bgCalls": 0,
+   "toolMs": 8676,
+   "message": "那么 crey 这个项目呢？"
+  },
+  {
+   "appSession": "0dba32bb",
+   "at": "2026-10-15T03:01:36.452Z",
+   "ms": 19940,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 1200,
+   "message": "好，在我的浏览器里面，在我的 PC 浏览器里面打开 quay 去自己语义发现接续这个会话。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:01:48.462Z",
+   "ms": 4609,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "插话到现在为止还是不太符合预期。你在前台。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:01:53.432Z",
+   "ms": 3988,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "我看你能不能正确地退出前面的动作，并尽早地回复我。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:02:11.011Z",
+   "ms": 2851,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "已经开始了。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:02:24.662Z",
+   "ms": 11743,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 9119,
+   "message": "你要 sleep 十秒。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:02:36.414Z",
+   "ms": 2351,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在给我后面的话，你要尽快退出前面的操作。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:02:53.340Z",
+   "ms": 14682,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 12909,
+   "message": "你 sleep 六十秒。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:03:08.031Z",
+   "ms": 2303,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "好，现在打断它，立刻回复我。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:03:50.205Z",
+   "ms": 106753,
+   "toolCalls": 15,
+   "bgCalls": 0,
+   "toolMs": 2556,
+   "message": "你可以分析一下刚才。接下来再来分析可以如何用 VAD 去减少这些调用。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:05:36.998Z",
+   "ms": 47989,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 85,
+   "message": "注意一下你收到的上面这条消息中带方括号的英文片段。对应这些英文片段我都有更长的中文语音输入，但好像都被截断了，只留下了最"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T05:05:36.998Z",
+   "ms": 47989,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 85,
+   "message": "最后这段好像卡住了。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T04:59:21.713Z",
+   "ms": 2412,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在是 live voice mode 今天的第四次测试。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T04:59:33.091Z",
+   "ms": 1369,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "我们现在说的是第二句话，我们看看它会不会丢。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T04:59:45.368Z",
+   "ms": 1677,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在第三句。第四句。第五句。"
+  },
+  {
+   "appSession": "74ba573d",
+   "at": "2026-10-13T04:59:57.788Z",
+   "ms": 1717,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "到现在为止情况还不错。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:38:09.651Z",
+   "ms": 9493,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 170,
+   "message": "来，我们再试一下 live voice mode。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:38:19.169Z",
+   "ms": 18180,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 906,
+   "message": "哦，好像这次出错了。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:38:51.667Z",
+   "ms": 3374,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "你有没有看见错？"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:39:28.515Z",
+   "ms": 5466,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 54,
+   "message": "现在我在屏幕的右下角看见一个 exit 按钮。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:39:49.063Z",
+   "ms": 2844,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "虽然它和之前的停止按钮的确有了视觉上的很大差异，但是出现四个字母和……"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:40:00.346Z",
+   "ms": 9910,
+   "toolCalls": 1,
+   "bgCalls": 1,
+   "toolMs": 14,
+   "message": "我们原来的这些风格还是有蛮大的差异，这个应该要检查和讨论一下。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:40:00.346Z",
+   "ms": 9910,
+   "toolCalls": 1,
+   "bgCalls": 1,
+   "toolMs": 14,
+   "message": "我们原来的这些风格还是有蛮大的差异，这个应该要检查和讨论一下。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:40:00.346Z",
+   "ms": 9910,
+   "toolCalls": 1,
+   "bgCalls": 1,
+   "toolMs": 14,
+   "message": "我们原来的这些风格还是有蛮大的差异，这个应该要检查和讨论一下。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:41:30.521Z",
+   "ms": 2670,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "然后当你在处理我的一个消息的时候，如果继续说……"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:41:36.718Z",
+   "ms": 18338,
+   "toolCalls": 1,
+   "bgCalls": 1,
+   "toolMs": 9,
+   "message": "我会发现新输入的、还没有被处理的这个泡泡，居然会排到正在处理的那个泡泡上面去，这也要查一下。你可以用 MCP 浏览器查一"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:42:32.329Z",
+   "ms": 12250,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 50,
+   "message": "还有呢，就是现在转写输出的延迟好像非常大。"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:42:44.603Z",
+   "ms": 28960,
+   "toolCalls": 6,
+   "bgCalls": 0,
+   "toolMs": 445,
+   "message": "我不知道是不是因为最近在 VAD……"
+  },
+  {
+   "appSession": "79d7515b",
+   "at": "2026-10-11T15:42:44.603Z",
+   "ms": 28960,
+   "toolCalls": 6,
+   "bgCalls": 0,
+   "toolMs": 445,
+   "message": "或者其他的地方加入了更多延迟。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:24:52.747Z",
+   "ms": 3523,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "在上面的多轮语音输入过程中，我观察到的行为还是和我的预期有一点点差异。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:25:26.204Z",
+   "ms": 6936,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "而去用新的更完整的上下文去推动 Claude Code 的处理，但是刚才我们观察到的行为还是有差异的。（无语音内容）嗯。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:25:39.438Z",
+   "ms": 7095,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "你看上面又丢了一段话。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:21:13.512Z",
+   "ms": 14268,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 58,
+   "message": "这是十月十三日第二次 live voice 语音测试。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:21:27.821Z",
+   "ms": 2404,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "第一句话识别得挺准的，现在是第二句话。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:21:33.227Z",
+   "ms": 2343,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在第三句。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:21:46.657Z",
+   "ms": 6564,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 30,
+   "message": "第四句复杂一点，请列出当前目录下所有的文件。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:22:02.578Z",
+   "ms": 5463,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 19,
+   "message": "第五句，检查当前系统的内存和硬盘占用情况。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:22:15.635Z",
+   "ms": 4352,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 12,
+   "message": "第六句显示当前用户和当前目录。"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:23:03.363Z",
+   "ms": 21214,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 175,
+   "message": "后面是 waiting in the queue with job，这是什么？"
+  },
+  {
+   "appSession": "64c08ec0",
+   "at": "2026-10-12T16:23:28.267Z",
+   "ms": 13553,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "看上去上面这段话又丢了一些东西，我在后面这两字之前还说了蛮长一段。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:36:48.583Z",
+   "ms": 11085,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 14,
+   "message": "十月十五日，Live Voice 第二次测试。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:36:59.824Z",
+   "ms": 7103,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "这次好像延迟少了一点点。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:37:12.308Z",
+   "ms": 4364,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在跑一个耗时较长的前台任务。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:37:26.702Z",
+   "ms": 30452,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 6948,
+   "message": "随便，你随便跑一个前台的 bash 就可以。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:38:10.477Z",
+   "ms": 14133,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 9359,
+   "message": "我看你都跑完了？"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:38:24.619Z",
+   "ms": 5584,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "所以你的这个耗时较长是什么？\n\nOK，现在可以终止它了。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:38:35.118Z",
+   "ms": 4358,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "到现在为止，这次测试情况还可以。"
+  },
+  {
+   "appSession": "32b37bd0",
+   "at": "2026-10-14T16:39:04.823Z",
+   "ms": 9548,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 13,
+   "message": "检查一下现在会等的那个静音时间是多少，会不会……"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:09:19.859Z",
+   "ms": 11210,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "这是十月十五日第一次 live voice 测试。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:09:19.859Z",
+   "ms": 11210,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "这是十月十五日第一次 live voice 测试。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:09:37.575Z",
+   "ms": 7692,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "所以我们有了两条一样的消息。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:09:50.403Z",
+   "ms": 11081,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "当然，这主要的原因是由于前面的 connection 时间比较长。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:10:01.700Z",
+   "ms": 3152,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "那是一个小问题。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:10:29.092Z",
+   "ms": 45109,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 32823,
+   "message": "来吧，执行一个时间比较长的前台操作。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:11:14.212Z",
+   "ms": 10593,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "诶，你看这次就又没有触发。就从前台操作到后面这句话。啊，它实际上等的时间比较长。\n\n好了，你可以中断前面的操作。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:11:49.591Z",
+   "ms": 11361,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "所以刚才前台操作这几个字说完以后，我们等了比较长时间才看见它真的开始执行那个 echo。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:12:01.127Z",
+   "ms": 6960,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "啊，这是主要的问题。"
+  },
+  {
+   "appSession": "5841cfa4",
+   "at": "2026-10-14T16:12:29.612Z",
+   "ms": 38322,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 38,
+   "message": "这是主要的问题。之前实际上停的时间非常短。"
+  },
+  {
+   "appSession": "3c308639",
+   "at": "2026-10-15T03:52:08.728Z",
+   "ms": 21359,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 175,
+   "message": "因此，Live Voice 使用过程当中啊，我发现还是会有这么一个问题。在这个会话中，我们马上也会碰到。"
+  },
+  {
+   "appSession": "3c308639",
+   "at": "2026-10-15T03:52:30.179Z",
+   "ms": 1057317,
+   "toolCalls": 61,
+   "bgCalls": 1,
+   "toolMs": 647339,
+   "message": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voi"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:01:13.816Z",
+   "ms": 15279,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "10月15日 live voice 第三次录制。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:01:29.338Z",
+   "ms": 15975,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在我们看看这次会不会再出现刚才那几个问题。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:01:45.527Z",
+   "ms": 11510,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "尝试执行一个耗时比较长的前台的 bash 操作。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:01:57.234Z",
+   "ms": 19019,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 6683,
+   "message": "大概三十秒到一分钟。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:02:16.262Z",
+   "ms": 2251,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "停下它。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:02:30.977Z",
+   "ms": 36656,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 17,
+   "message": "哎，你看刚才停下它这几个字现在还在 Q 里面，还在我屏幕上。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:03:07.776Z",
+   "ms": 19950,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 15,
+   "message": "直到上面这段话出现，那个 Q 才退出去。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:03:42.497Z",
+   "ms": 128063,
+   "toolCalls": 14,
+   "bgCalls": 0,
+   "toolMs": 32433,
+   "message": "检查一下在本会话过程中，浏览器到服务端的语音 socket 有没有断过。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:07:51.766Z",
+   "ms": 23298,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "你看啊，上面这句到有没有断过这几个字，在我的 transcript 栏里面等了可能有几十秒，直到我再说话它才跑上去。现在"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:08:20.262Z",
+   "ms": 75467,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 99,
+   "message": "那现在上面最后这个 queue message 又是等，我估计要等到我现在这段输入进去它才会消失。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:09:44.744Z",
+   "ms": 255173,
+   "toolCalls": 19,
+   "bgCalls": 0,
+   "toolMs": 4017,
+   "message": "讨论一下怎么修吧。"
+  },
+  {
+   "appSession": "7a7adf61",
+   "at": "2026-10-14T17:14:00.105Z",
+   "ms": 205954,
+   "toolCalls": 9,
+   "bgCalls": 0,
+   "toolMs": 195,
+   "message": "我刚才看见说是 connection lost 之类的东西闪了一下。然后刚才最后说的这句话，这几句话又进不了 Q 了。我"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-11T01:54:22.600Z",
+   "ms": 536186,
+   "toolCalls": 11,
+   "bgCalls": 0,
+   "toolMs": 406,
+   "message": "现在我在用live voice。"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-11T02:03:18.814Z",
+   "ms": 67320,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 95,
+   "message": "事情好像我还需要多等几秒，可能差不多有三到五秒，我才会看到我前一句说的字出现在屏幕上。"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-11T02:03:18.814Z",
+   "ms": 67320,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 95,
+   "message": "这是第三句。"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-11T02:03:18.814Z",
+   "ms": 67320,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 95,
+   "message": "现在是第四句。"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-10T18:38:09.138Z",
+   "ms": 46593,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 60,
+   "message": "我说完之后就没反应了。"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-10T18:39:18.136Z",
+   "ms": 28568,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "（用户没有说话）"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-11T00:14:50.096Z",
+   "ms": 74090,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 104,
+   "message": "我现在就在 Live Voice mode。让我看看这次是不是会好一些。"
+  },
+  {
+   "appSession": "d88c6722",
+   "at": "2026-10-11T00:16:04.209Z",
+   "ms": 32965,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 89,
+   "message": "啊，稍好一点。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:24:07.640Z",
+   "ms": 130847,
+   "toolCalls": 17,
+   "bgCalls": 0,
+   "toolMs": 8275,
+   "message": "我们再试一下 live voice mode。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "第一句识别出来了，我们看看第二句。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "现在第三句。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "第四句。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "到现在为止识别的还可以。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "只是对于第一句的处理慢一些，但这是正常的。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "现在后面这几句话都在 queue 里面在等。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:26:18.526Z",
+   "ms": 150175,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "或者说队列，在队列里面等。"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:28:48.738Z",
+   "ms": 136336,
+   "toolCalls": 15,
+   "bgCalls": 0,
+   "toolMs": 324,
+   "message": "所以你能看见 cancel 这样的操作吗？"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:28:48.738Z",
+   "ms": 136336,
+   "toolCalls": 15,
+   "bgCalls": 0,
+   "toolMs": 324,
+   "message": "检查最近执行的任务。你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。你确认一下现在这个任务有没有实"
+  },
+  {
+   "appSession": "b280be43",
+   "at": "2026-10-12T01:31:05.116Z",
+   "ms": 41065,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 13,
+   "message": "好像现在语音输入又断了。哦，只是慢。还是出来了。"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:23:07.472Z",
+   "ms": 33347,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 688,
+   "message": "现在是十月十五日。 Live Voice Mode 的第六次测试。"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:23:50.275Z",
+   "ms": 60982,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 80,
+   "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。\n\n让他把前面那个处理停下来吧。"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:24:51.462Z",
+   "ms": 73479,
+   "toolCalls": 7,
+   "bgCalls": 0,
+   "toolMs": 185,
+   "message": "先处理现在的这个请求。哎，挺好。哎。停下来以后就没有再去调 Claude Code 吗？哦，看见调用了，但是为什么会等这"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:26:05.077Z",
+   "ms": 72860,
+   "toolCalls": 11,
+   "bgCalls": 0,
+   "toolMs": 8663,
+   "message": "当然，这轮到现在没丢东西，这是好的。去查一下 VAD 的情况吧，看看到现在为止这一轮测试总的语音传了多少，VAD 滤掉了"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:27:18.145Z",
+   "ms": 27352,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 52,
+   "message": "总的来说呢，这一轮的可用性是比较高的。"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:27:45.615Z",
+   "ms": 56387,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 36776,
+   "message": "我相信这次测试的场景是比较接近于真实工作的场景的。"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:28:42.135Z",
+   "ms": 15679,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "啊，就是真实的 Claude Code 处理需要时间的，所以人类用户在这儿去等一等是应该的。"
+  },
+  {
+   "appSession": "76d53305",
+   "at": "2026-10-14T18:28:57.914Z",
+   "ms": 13145,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 338,
+   "message": "检查一下当前 author 和 develop 分支是不是已经同步。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:52:05.102Z",
+   "ms": 9936,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "十月十四日，live voice mode，第三次测试。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:52:18.127Z",
+   "ms": 9601,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "刚刚这句话我说完了，差不多还有个一两秒，我才看见它出现在气泡里面。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:52:31.509Z",
+   "ms": 13142,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 6534,
+   "message": "来吧，尝试跑一个差不多要一分钟的前台任务。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:52:44.661Z",
+   "ms": 34750,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 30029,
+   "message": "那改一下，把它改成三十秒。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:53:19.444Z",
+   "ms": 10537,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "再改成十秒。哦，改成十秒这句被 kill 了。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:53:19.444Z",
+   "ms": 10537,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "哎，我看不见这句啊。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:53:30.024Z",
+   "ms": 10106,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "对，他有理解错了吗？"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:53:40.163Z",
+   "ms": 6352,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "哦，它就是慢。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:53:54.482Z",
+   "ms": 10519,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "你看啊，它就是慢这句我没看见，它在第一步的 queue 里面等。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:54:05.029Z",
+   "ms": 6226,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "但是它的确是等了几秒钟才出现在屏幕上。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:54:30.666Z",
+   "ms": 78284,
+   "toolCalls": 6,
+   "bgCalls": 0,
+   "toolMs": 15555,
+   "message": "所以你需要检查一下你收到的处理的音频和从文本真正…… 到这个 cloud code 的时间，这几个时间的顺序、时序到底是"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:55:51.268Z",
+   "ms": 29135,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "也要比较一下最近的 VAD 记录啊。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:55:51.268Z",
+   "ms": 29135,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "VAD 有没有起作用？刚才还看见红色的，好像出错了。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:55:51.268Z",
+   "ms": 29135,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "那现在这个 queue 的时间又非常长了，你把前面动作停下来，先处理当前的输入。"
+  },
+  {
+   "appSession": "3af64b17",
+   "at": "2026-10-14T09:56:20.451Z",
+   "ms": 19803,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 37,
+   "message": "现在这个中断前面操作的这个操作现在是…… 还是很慢，就很。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:56:34.990Z",
+   "ms": 15293,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 564,
+   "message": "这应该是10月13日最后一次live voice mode测试。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:56:53.018Z",
+   "ms": 12984,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 35,
+   "message": "看上去延迟还是有点大。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:57:12.513Z",
+   "ms": 15609,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 121,
+   "message": "识别到实际执行的时间都比较长。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:57:32.500Z",
+   "ms": 17282,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 38,
+   "message": "我也没有看到…… 比较积极的停止前序的推理，然后开启后续的。用更长上下文推理都没有看见。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:57:54.432Z",
+   "ms": 12868,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 33,
+   "message": "让他听到前面这句话，先处理我现在说的这句话。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:58:32.718Z",
+   "ms": 18246,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 104,
+   "message": "这就是比较奇怪的事情，我看见前面那个处理。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:58:50.984Z",
+   "ms": 11138,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 31,
+   "message": "已经执行完了，然后我后一句话也说了，但是切换没上去。没有处理。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T15:59:28.132Z",
+   "ms": 88856,
+   "toolCalls": 5,
+   "bgCalls": 0,
+   "toolMs": 154,
+   "message": "好，现在整体检查一下这次 live voice 语音测试的过程。然后分析一下其中发生的问题。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T16:00:57.021Z",
+   "ms": 30439,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 43,
+   "message": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T16:00:57.021Z",
+   "ms": 30439,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 43,
+   "message": "你看，这句“先暂停一下”居然会排在queue里面。要等到前面那句话处理完了，它才能排进去吗？"
+  },
+  {
+   "appSession": "eb37774b",
+   "at": "2026-10-13T16:01:43.178Z",
+   "ms": 12263,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "好，再次总结。"
+  },
+  {
+   "appSession": "dab49f73",
+   "at": "2026-10-11T11:51:15.220Z",
+   "ms": 41164,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 6138,
+   "message": "这次让我们在手机上做一次 live voice mode 的输入测试。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:34:13.594Z",
+   "ms": 4189,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "14日第一次来，我也是。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:34:27.123Z",
+   "ms": 4872,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "这是第一句识别的，不太准的话。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:34:36.694Z",
+   "ms": 2046,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "看后面会怎么样。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:35:07.335Z",
+   "ms": 10050,
+   "toolCalls": 2,
+   "bgCalls": 1,
+   "toolMs": 54,
+   "message": "你应该让Claude code sleep六十秒。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:35:37.687Z",
+   "ms": 30517,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 19580,
+   "message": "居然不允许前台sleep。这个和我的预期是有点差异的。嗯，那你看看能在前台跑点什么慢的动作吗？"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:36:08.222Z",
+   "ms": 22901,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 11084,
+   "message": "诶，你居然猜到了我的想法。来吧，处理这句话。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:36:31.133Z",
+   "ms": 17265,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 301,
+   "message": "看到我这句话还是被kill了。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:36:31.133Z",
+   "ms": 17265,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 301,
+   "message": "然后再次插话，赶快处理。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:36:53.094Z",
+   "ms": 80696,
+   "toolCalls": 8,
+   "bgCalls": 0,
+   "toolMs": 28816,
+   "message": "我还是看见我之前的那个居然猜到了我的想法，就在Q里面，在屏幕底部有这么一行字。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:38:13.814Z",
+   "ms": 224871,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 125678,
+   "message": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为什么会出现这些东西。"
+  },
+  {
+   "appSession": "854bb889",
+   "at": "2026-10-14T01:38:13.814Z",
+   "ms": 224871,
+   "toolCalls": 13,
+   "bgCalls": 0,
+   "toolMs": 125678,
+   "message": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "appSession": "0a3c1b2f",
+   "at": "2026-10-12T16:01:38.438Z",
+   "ms": 23377,
+   "toolCalls": 6,
+   "bgCalls": 0,
+   "toolMs": 129,
+   "message": "让我们再试一下 Live Voice Mode。"
+  },
+  {
+   "appSession": "0a3c1b2f",
+   "at": "2026-10-12T16:02:08.525Z",
+   "ms": 57276,
+   "toolCalls": 5,
+   "bgCalls": 0,
+   "toolMs": 769,
+   "message": "但是第二段话的 transcript 我到现在还没有看见。"
+  },
+  {
+   "appSession": "0a3c1b2f",
+   "at": "2026-10-12T16:03:05.838Z",
+   "ms": 15475,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "看上去第二段话丢了。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:40:30.987Z",
+   "ms": 10475,
+   "toolCalls": 4,
+   "bgCalls": 0,
+   "toolMs": 378,
+   "message": "这是10月14日Live Voice Mode第二次测试。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:40:41.489Z",
+   "ms": 1078,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "现在看起来凑合了，我尝试稍微快些说话。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:40:58.227Z",
+   "ms": 7857,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 3202,
+   "message": "来吧，尝试在前台做一个稍稍耗时大概60到120秒的操作。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:41:27.527Z",
+   "ms": 11272,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 200,
+   "message": "呃，我看见它的确被 error 了，但是我上面这句话却并没有被处理，好奇怪。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:41:55.416Z",
+   "ms": 5118,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 30,
+   "message": "所以你说它只调了一个 tool call。但是…… 并没有把我的话发给你，是吧？"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:42:22.713Z",
+   "ms": 13870,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 57,
+   "message": "那后面那个方括号也很奇怪呀，对不对？如果说它都也知道自己打断了你，它为什么不在方括号，在那个打断之后直接发这段方括号的内"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:42:36.601Z",
+   "ms": 3990,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "还要等到再发下一句话的时候才发这个方括号，好奇怪。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:42:42.187Z",
+   "ms": 8654,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 31,
+   "message": "你看现在在屏幕底部那个 Q 又出现了。当然很快就消失了。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:43:16.006Z",
+   "ms": 15046,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 39,
+   "message": "但是我上面这句话被处理得还是很晚，我等了好几秒还没有看到它被处理。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:43:36.936Z",
+   "ms": 2173,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "诶，最近几句话处理的延迟就有点大了。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:44:27.950Z",
+   "ms": 3303,
+   "toolCalls": 0,
+   "bgCalls": 0,
+   "toolMs": 0,
+   "message": "那就像从你继续之后，我已经可能十几秒没有看见新的处理了。"
+  },
+  {
+   "appSession": "2a84a13f",
+   "at": "2026-10-14T03:44:43.015Z",
+   "ms": 18272,
+   "toolCalls": 2,
+   "bgCalls": 0,
+   "toolMs": 67,
+   "message": "你要查一下那段时间，那段时间我说了好多话。"
+  },
+  {
+   "appSession": "4810bf08",
+   "at": "2026-10-12T07:47:40.593Z",
+   "ms": 4698,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 55,
+   "message": "这是一轮新的 live voice mode 测试。"
+  },
+  {
+   "appSession": "4810bf08",
+   "at": "2026-10-12T07:48:25.808Z",
+   "ms": 24643,
+   "toolCalls": 3,
+   "bgCalls": 0,
+   "toolMs": 248,
+   "message": "上面我们看见丢了一句话。"
+  },
+  {
+   "appSession": "4810bf08",
+   "at": "2026-10-12T07:49:20.671Z",
+   "ms": 14312,
+   "toolCalls": 1,
+   "bgCalls": 0,
+   "toolMs": 14,
+   "message": "所以你已经可以看到很多错了。"
+  },
+  {
+   "appSession": "77d9d8fd",
+   "at": "2026-10-11T11:22:24.812Z",
+   "ms": 251706,
+   "toolCalls": 6,
+   "bgCalls": 0,
+   "toolMs": 227349,
+   "message": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "appSession": "77d9d8fd",
+   "at": "2026-10-11T11:26:36.545Z",
+   "ms": 48968,
+   "toolCalls": 5,
+   "bgCalls": 0,
+   "toolMs": 832,
+   "message": "当前会话应当是一次常驻会话，请检查。"
+  },
+  {
+   "appSession": "77d9d8fd",
+   "at": "2026-10-11T11:26:36.545Z",
+   "ms": 48968,
+   "toolCalls": 5,
+   "bgCalls": 0,
+   "toolMs": 832,
+   "message": "到现在为止，我看到的情况都还不错。"
+  },
+  {
+   "appSession": "77d9d8fd",
+   "at": "2026-10-11T11:26:36.545Z",
+   "ms": 48968,
+   "toolCalls": 5,
+   "bgCalls": 0,
+   "toolMs": 832,
+   "message": "当然，现在对第一句输入的处理耗时太长。这可能提示我们。"
+  }
+ ],
+ "tools": [
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 54,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 46,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 50,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Edit",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 170,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 219,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 44,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1284,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "ToolSearch",
+   "ms": 6,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 142,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 46,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 223,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 85,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "Agent",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "ListAgents",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "ToolSearch",
+   "ms": 5,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 51,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "SendMessage",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 28,
+   "bg": false
+  },
+  {
+   "name": "AskUserQuestion",
+   "ms": 63348,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 148,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55016,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53311,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55016,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 107695,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 732,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 945,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 95,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 260,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 267,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 65,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55013,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 46,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 60,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 220,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 202,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55012,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 264,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55021,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55012,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 147,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 128,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 147,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 138,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_background",
+   "ms": 152,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 81,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_send",
+   "ms": 74,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_send",
+   "ms": 129,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 67,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 58,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__run_get",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 65,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__run_get",
+   "ms": 25037,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__run_get",
+   "ms": 5328,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 69,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 72,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 66,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 74,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 70,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 109,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 66,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 51,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 6556,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3293,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 113,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 108,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 12,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 11,
+   "bg": false
+  },
+  {
+   "name": "Edit",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__projects_list",
+   "ms": 210,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 139,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 71,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 211,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__sessions_list",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 45,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 938,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_search",
+   "ms": 595,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1146,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3910,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 111,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 61,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_read",
+   "ms": 71,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 51,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 58,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_search",
+   "ms": 719,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_search",
+   "ms": 558,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 72,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_get",
+   "ms": 65,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__overview",
+   "ms": 226,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__projects_list",
+   "ms": 206,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__session_search",
+   "ms": 684,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 642,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 4806,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1140,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 800,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__ui_open_session",
+   "ms": 786,
+   "bg": false
+  },
+  {
+   "name": "mcp__cloudcli__ui_visible_context",
+   "ms": 414,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 9119,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 12909,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 215,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1236,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 627,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 64,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 69,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 44,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 28,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 44,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 28,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 60,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 110,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 818,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 54,
+   "bg": false
+  },
+  {
+   "name": "Agent",
+   "ms": 14,
+   "bg": true
+  },
+  {
+   "name": "Agent",
+   "ms": 14,
+   "bg": true
+  },
+  {
+   "name": "Agent",
+   "ms": 14,
+   "bg": true
+  },
+  {
+   "name": "Agent",
+   "ms": 9,
+   "bg": true
+  },
+  {
+   "name": "Bash",
+   "ms": 50,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 90,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 83,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 140,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 90,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 83,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 140,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 58,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 12,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 69,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 106,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 5,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 41,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 6899,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 9359,
+   "bg": false
+  },
+  {
+   "name": "Agent",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32823,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 68,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 61,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 9,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 9,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 12,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 177,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38832,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 50,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 65,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 41,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 12,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 58,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 61,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 65,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 56,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 59,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "AskUserQuestion",
+   "ms": 542858,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 48,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 28,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 45,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 63587,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 48,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": true
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 6,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 6677,
+   "bg": false
+  },
+  {
+   "name": "Agent",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "ToolSearch",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "SendMessage",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21208,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 7248,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3634,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 102,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 48,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Skill",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3758,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 2,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 97,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 41,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 49,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 54,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 72,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "AskUserQuestion",
+   "ms": 6866,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 12,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1018,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 11,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 45,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 11,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 45,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 25,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 13,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 54,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 276,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 103,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 26,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 18,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 50,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 28,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 111,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3978,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 4320,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 34,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 45,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 52,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 36776,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 234,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 62,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 6534,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30029,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 283,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 15151,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 22,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 63,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 414,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 87,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 121,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 29,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 42,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 40,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 12,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 41,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 43,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 53,
+   "bg": false
+  },
+  {
+   "name": "AskUserQuestion",
+   "ms": 6085,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 6,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 48,
+   "bg": true
+  },
+  {
+   "name": "Bash",
+   "ms": 24,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19556,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 171,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 23,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 10890,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 281,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 20,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 281,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 28,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 635,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27997,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 38,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 111,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 131,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 63,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 145,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 119026,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 2999,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1906,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 800,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 201,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 86,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 79,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 92,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 111,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 131,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 63,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 145,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 119026,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 2999,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 1906,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 800,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 201,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 86,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 79,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 92,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 83,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 11,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 7,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 8,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 707,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 17,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 16,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 19,
+   "bg": false
+  },
+  {
+   "name": "Read",
+   "ms": 10,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 61,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 263,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 21,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 3202,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 200,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 30,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 27,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 39,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 35,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 32,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 55,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 127,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 69,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 52,
+   "bg": false
+  },
+  {
+   "name": "Agent",
+   "ms": 14,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 146,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 54,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 205,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 44,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 101,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 226799,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 619,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 112,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 619,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 112,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 619,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 112,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 37,
+   "bg": false
+  },
+  {
+   "name": "Write",
+   "ms": 33,
+   "bg": false
+  },
+  {
+   "name": "Bash",
+   "ms": 31,
+   "bg": false
+  }
+ ]
+}

@@ -1,0 +1,175 @@
+{
+ "episode": "b5d01c21@10-13T15:59:28",
+ "arm": "A",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": false,
+ "commit": "cc92c094f0f195fe62df700ce1a43ed60eec6cbc",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 23039,
+   "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。",
+   "label": "REDIRECT"
+  },
+  {
+   "offsetMs": 61629,
+   "text": "你看，这句“先暂停一下”居然会排在queue里面。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 69031,
+   "text": "要等到前面那句话处理完了，它才能排进去吗？",
+   "label": "ASK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 103847,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "好，现在整体检查一下这次 live voice 语音测试的过程。然后分析一下其中发生的问题。",
+   "parts": []
+  },
+  {
+   "t": 2140,
+   "ev": "TURN"
+  },
+  {
+   "t": 6193,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd ~/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat live-voice-fourth-test-2026-10-13-night-findings.md; J=~/.cloudcli/voice-realtime-log/b5d",
+   "bg": false
+  },
+  {
+   "t": 19711,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "J=~/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl; echo \"transcripts nonempty: $(jq -r 'select((.line//\"\")|test(\"^<< transcription.com",
+   "bg": false
+  },
+  {
+   "t": 23043,
+   "ev": "PIECE",
+   "label": "REDIRECT",
+   "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。"
+  },
+  {
+   "t": 40411,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/ && cat >> live-voice-fourth-test-2026-10-13-night-findings.md <<'EOF'\n\n**终局读数（jour",
+   "bg": false
+  },
+  {
+   "t": 40418,
+   "ev": "BLOCKED"
+  },
+  {
+   "t": 56409,
+   "ev": "TEXT",
+   "text": "这次测试从 23:56:18 到 16:01:48（UTC，日志时间），journal 是 `b5d01c21`，构建 `cc92c094f`，`mode: continuous`。**传输面是干净的**，问题全在我们自己的工具层、投递层和前端。记忆文件我没写进去，沙箱不允许写工作区外，所以下面的终局读数请当作对 `live-voice-fourth-test-2026-10-13-night-findings` 的补充。\n\n## 总体读数\n\n| 项目 | 数值 |\n|---|---|\n| 断线 / 重连 | 0；16:01:48 浏览器正常发 close frame 收尾 |\n| 转写 | 31 条非空 + 1 条空 |\n| `session_send` 调用 | 20 次，合并成约 11 条投递 |\n| `session_interrupt` | 1 次，**被拒** |\n| 上游报错 `Unknown function call id` | 8 次，每次紧跟一条 `Cannot create response…` |\n| 响应数 / 花费 | 27 次 / ¥0.142 |\n\n## 机械缺陷（都在本仓，不是 Omni 语义）\n\n1. **`session_interrupt` 被自家 schema 拒。**\n   - 58:06.856，你说\"终止前面操作，处理我现在说的这句话\"，模型调用了 interrupt，只带 `message`，没带必填的 `intent`。\n   - `voice-realtime-tools.ts:345` 把 `intent` 设为必填，结果报 `TOOL_ARGUMENT_SCHEMA_VIOLATION`，回合没停。\n   - 这是你要的抢占里最直接的卡点。\n\n2. **空转写守卫误拒整句。**\n   - 57:02.324，\"几步的延迟都有点大，包括识别延迟，然后……\"被判 `not-delivered (empty-transcript)`。\n   - 守卫只看最后一个转写 item，而它恰好是一段 0.37 s 的空转写。\n   - 在这之前的一次同内容调用，因为被 `turn_detected` 取消，参数只剩 `{\"message\": \"`，整句丢失。\n\n3. **函数调用结果被上游拒收。**\n   - 8 次 `Unknown function call id` 全发生在\"调用已发出、上游确认前，你又开口\"的情形。\n   - 消息本身已经投递，所以内容没丢。\n   - 但上游上下文会变乱，前端还会收到一串可恢复错误帧。\n\n4. **被取消的回合留下残缺参数。** 57:08.830 和 16:00:36.392 各有一次半截 `session_send`。后者被后一次完整调用救回，前者在 57:10 被补全。这是同一类问题，要和第 2 条一起处理。\n\n## 体验问题\n\n5. **延迟的主要来源是固定 2.5 s 合并窗口。**\n   - 你说完到送进会话约 3 s：VAD 判停加转写约 0.5 s，合并窗口 2.5 s，投递 1 ms。\n   - 窗口没有\"明显是完整一句就提前放行\"的判断，所以每句都等满。\n\n6. **会话忙时消息排进 CLI 队列，屏上没有它。**\n   - 15:59:53 投递的\"先暂停一下，先统计…\"在队列里等到 16:00:58 才出队，约 65 s。\n   - 你后面又说的两句也并进了同一条。\n   - 你看到的\"气泡没上去\"、\"先暂停居然会排在 Q 里\"就是这个现象。\n   - \"暂停\"这种话在队列里等回合跑完，本身就失去了意义。\n\n7. **新话语不能抢占在跑的回合。**\n   - 目前只有模型自己调 `session_interrupt` 才会打断，这次又被第 1 条挡掉。\n   - 你要的行为是服务端在忙时直接抢占，这会推翻 10-12 A+ 方案里\"补充只进队列\"的裁定。\n\n## Omni / 识别层（模型行为，不算机械丢失）\n\n- **专名误转写。** \"Live Voice\"被转成\"来沃伊斯莫\"和\"Lab Voice\"，尾音被转成\"meu notebook.\"。\n- **转发时改写措辞。** \"气泡\"被改成\"切换\"，意思变了；\"他才能谈\"被改成\"它才能排\"。\n- **判别方法：** 先看 `transcription.completed` 里的原文，再看 `session_send` 的 message，两者不一致才算改写。这次这几处在转写阶段都是对的，是转发时改的。\n\n## 建议顺序\n\n1. 先修第 1 条：把 `intent` 改成可选，或给默认值。这是一个小改动，修好后立刻能实测抢占。\n2. 同批修第 2、4 条：空转写守卫改为\"整次调用里至少有一个非空转写\"，并且对残缺参数的调用做兜底。\n3. 第 3 条要查回传时序：用户开口后，是否应该跳过回传 `function_call_output`，或延后到上游就绪再发。\n4. 实测第 1 条之后，再决定第 7 条怎么改 A+。你需要定的是触发条件，比如忙就抢占，还是只对\"停止/暂停\"这类意图抢占。\n5. 第 5、6 条属于体验调优，等 1 到 4 条落地后再测。\n\n如果你同意，我按这个顺序立案；第 7 条先挂提案，等第 1 条修好并实测后再动。"
+  },
+  {
+   "t": 56429,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 56429,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。",
+   "parts": [
+    "REDIRECT:先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。"
+   ]
+  },
+  {
+   "t": 56448,
+   "ev": "TURN"
+  },
+  {
+   "t": 60202,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "J=~/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl; for p in 'input_audio_buffer.speech_started' 'input_audio_buffer.speech_stopped' 'i",
+   "bg": false
+  },
+  {
+   "t": 61633,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "你看，这句“先暂停一下”居然会排在queue里面。"
+  },
+  {
+   "t": 67696,
+   "ev": "TEXT",
+   "text": "统计结果如下（来自 journal `b5d01c21`）：\n\n| | 数量 |\n|---|---|\n| 你说的话（VAD 检出并提交的语音段） | **31 段** |\n| 识别输出（`transcription.completed`） | **31 条**：30 条有内容，1 条空串 |\n| 前端收到的字幕气泡 | 31 条（含那条空的） |\n| 模型发起的 `session_send` | 20 次 |\n| 实际投递给会话的消息 | 约 11 条（20 次调用被 2.5 s 窗口合并） |\n| `session_interrupt` | 1 次，被 schema 拒 |\n\n31 段输入对应 31 条识别输出，一一对应，没有哪一段漏识别。\n\n我上一条汇总里写的\"31 条非空 + 1 条空\"数错了一条，正确的是 31 条里 30 条非空、1 条空。我之前的正则把空串也算进去了。\n\n从 31 条识别到 20 次调用，再到 11 条投递，是因为你的话经常被切成几个短段，模型把相邻的几段合成一次调用，投递时又合并一次。这本身不算丢失。真正没送达的只有两处：一句被空转写守卫拒掉，一次半截调用被后一次补全。"
+  },
+  {
+   "t": 67718,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 67718,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "你看，这句“先暂停一下”居然会排在queue里面。",
+   "parts": [
+    "REMARK:你看，这句“先暂停一下”居然会排在queue里面。"
+   ]
+  },
+  {
+   "t": 67729,
+   "ev": "TURN"
+  },
+  {
+   "t": 69035,
+   "ev": "PIECE",
+   "label": "ASK",
+   "text": "要等到前面那句话处理完了，它才能排进去吗？"
+  },
+  {
+   "t": 71568,
+   "ev": "TEXT",
+   "text": "对，这句话在 journal 里有记录：\n\n- 15:59:53 \"先暂停一下……\"投递成功，但当时我的回合还在跑，它进了 CLI 队列。\n- 到 16:00:58 才出队，等了约 65 s。\n\n\"暂停\"这类话进了队列，就得等要暂停的东西跑完才会被读到，等于没说。能让它生效的只有抢占：服务端在会话忙时遇到这类话，直接中断当前回合。这就是前面第 7 条要立的提案，修好 `session_interrupt` 的 `intent` 参数是第一步。"
+  },
+  {
+   "t": 71589,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 71589,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "要等到前面那句话处理完了，它才能排进去吗？",
+   "parts": [
+    "ASK:要等到前面那句话处理完了，它才能排进去吗？"
+   ]
+  },
+  {
+   "t": 71599,
+   "ev": "TURN"
+  },
+  {
+   "t": 77011,
+   "ev": "TEXT",
+   "text": "不是。它不用等前一句处理完才能进队列，是进了队列之后要等前一句处理完才会被读到。\n\njournal 里的时间线：\n\n- 15:59:53.673：合并窗口结束，消息投递，耗时 1 ms，已进入 CLI 队列（`phase=queued queued=1/102B`）。\n- 16:00:58：我上一个回合跑完，队列出队，这时才开始处理。\n\n队列本身不是瓶颈，消息进去很快。慢在 CLI 只在回合边界才读队列，所以你看到的是\"已经排上了，但还没轮到\"。\n\n这也说明你要的抢占放在哪一层：不是让它更快地进队列，而是在会话忙时遇到\"暂停/停止\"这类话，直接中断当前回合，不再等回合边界。"
+  },
+  {
+   "t": 77036,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

@@ -1,0 +1,262 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:38:21.487Z",
+  "budgetCny": 0.12,
+  "spendCny": 0.022215,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 22377,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "audio": {
+      "audioSeconds": 4,
+      "audioBytes": 192000,
+      "itemsCreated": [
+        {
+          "id": "item_Pv1mRFRWpUVbv9USIuqYQ",
+          "object": "realtime.item",
+          "type": "message",
+          "status": "completed",
+          "role": "user",
+          "content": [
+            {
+              "type": "input_audio"
+            }
+          ]
+        }
+      ],
+      "withAudio": {
+        "input": 344,
+        "text": 302,
+        "audio": 42,
+        "output": 35,
+        "cny": 0.000863
+      },
+      "afterDelete": {
+        "input": 296,
+        "text": 296,
+        "audio": 0,
+        "output": 42,
+        "cny": 0.000633
+      },
+      "audioTokenDrop": 42,
+      "textTokenDrop": 6,
+      "inputTokenDrop": 48,
+      "deletions": [
+        {
+          "id": "item_Pv1mRFRWpUVbv9USIuqYQ",
+          "outcome": "deleted",
+          "item": {
+            "id": "item_Pv1mRFRWpUVbv9USIuqYQ",
+            "object": "realtime.item",
+            "type": "message",
+            "status": "completed",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_audio"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "tools": {
+      "instructionsChars": 2400,
+      "readings": [
+        {
+          "variant": "probe-single",
+          "tools": 1,
+          "input": 808,
+          "text": 808,
+          "audio": 0,
+          "output": 29,
+          "cny": 0.001342
+        },
+        {
+          "variant": "shipping-send",
+          "tools": 1,
+          "input": 1010,
+          "text": 1010,
+          "audio": 0,
+          "output": 29,
+          "cny": 0.001646
+        },
+        {
+          "variant": "shipping-pair",
+          "tools": 2,
+          "input": 1268,
+          "text": 1268,
+          "audio": 0,
+          "output": 29,
+          "cny": 0.002033
+        }
+      ],
+      "shippingSendOverProbeMinimal": 202,
+      "shippingPairOverShippingSend": 258,
+      "shippingPairOverProbeMinimal": 460
+    },
+    "behaviour": {
+      "keep": {
+        "prune": false,
+        "utterances": 5,
+        "forwarded": 5,
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"把这句话转给会话。\"}"
+              }
+            ],
+            "replies": [
+              "好的，已转给会话。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再加一句，今晚继续测。\"}"
+              }
+            ],
+            "replies": [
+              "好的，已转给会话。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这句话也要转过去。\"}"
+              }
+            ],
+            "replies": [
+              "好的，已转给会话。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "顺便说一句，日志我看过了。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"顺便说一句，日志我看过了。\"}"
+              }
+            ],
+            "replies": [
+              "好的，已转给会话。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "最后一句，先到这里。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"最后一句，先到这里。\"}"
+              }
+            ],
+            "replies": [
+              "好的，已转给会话。"
+            ],
+            "deleted": 0
+          }
+        ],
+        "contextGrowth": {
+          "firstInputTokens": 310,
+          "lastInputTokens": 648,
+          "responses": 10
+        }
+      },
+      "prune": {
+        "prune": true,
+        "utterances": 5,
+        "forwarded": 3,
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"把这句话转给会话。\"}"
+              }
+            ],
+            "replies": [
+              "No response requested."
+            ],
+            "deleted": 4
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再加一句，今晚继续测。\"}"
+              }
+            ],
+            "replies": [
+              "No response requested."
+            ],
+            "deleted": 4
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这句话也要转过去。\"}"
+              },
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"请确认收到。\"}"
+              },
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再转一次。\"}"
+              },
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"最后一句。\"}"
+              }
+            ],
+            "replies": [],
+            "deleted": 10
+          },
+          {
+            "utterance": "顺便说一句，日志我看过了。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 2
+          },
+          {
+            "utterance": "最后一句，先到这里。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 2
+          }
+        ],
+        "contextGrowth": {
+          "firstInputTokens": 310,
+          "lastInputTokens": 374,
+          "responses": 11
+        }
+      }
+    }
+  }
+}

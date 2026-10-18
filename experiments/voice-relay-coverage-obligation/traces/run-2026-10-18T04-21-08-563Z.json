@@ -1,0 +1,188 @@
+{
+  "ranAt": "2026-10-18T04:21:08.564Z",
+  "budgetCny": 0.1,
+  "spendCny": 0.027495,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "P1",
+      "arm": "K",
+      "rep": 0,
+      "note": "live: item1 \"十月十八日…\" never covered; item2 sent",
+      "spendCny": 0.004358,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "次测试。"
+      ],
+      "calls": [
+        "第一次测试。"
+      ],
+      "missing": [
+        "十八日，Line Voice。",
+        "次测试。"
+      ],
+      "coverage": [
+        {
+          "t": "十八日，Line Voice。",
+          "r": 0
+        },
+        {
+          "t": "次测试。",
+          "r": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E1",
+      "rep": 0,
+      "note": "live: item1 \"十月十八日…\" never covered; item2 sent",
+      "spendCny": 0.004601,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，Line Voice。",
+        "第四测试。"
+      ],
+      "calls": [
+        "十八日 live voice 第一次测试。"
+      ],
+      "missing": [
+        "第四测试。"
+      ],
+      "coverage": [
+        {
+          "t": "十八日，Line Voice。",
+          "r": 0.56
+        },
+        {
+          "t": "第四测试。",
+          "r": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "window": "P1",
+      "arm": "E2",
+      "rep": 0,
+      "note": "live: item1 \"十月十八日…\" never covered; item2 sent",
+      "spendCny": 0.004647,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "十八日，来我。",
+        "次测试。"
+      ],
+      "calls": [
+        "十八日 live voice 第一次测试。"
+      ],
+      "missing": [
+        "十八日，来我。",
+        "次测试。"
+      ],
+      "coverage": [
+        {
+          "t": "十八日，来我。",
+          "r": 0
+        },
+        {
+          "t": "次测试。",
+          "r": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "K",
+      "rep": 0,
+      "note": "live: both items covered (control)",
+      "spendCny": 0.004459,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "你可以查一下吗？"
+      ],
+      "missing": [
+        "会丢开头的几个字。"
+      ],
+      "coverage": [
+        {
+          "t": "会丢开头的几个字。",
+          "r": 0
+        },
+        {
+          "t": "你可以查一下吗？",
+          "r": 1
+        }
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E1",
+      "rep": 0,
+      "note": "live: both items covered (control)",
+      "spendCny": 0.004672,
+      "responseCreated": 2,
+      "textReplies": 1,
+      "finals": [
+        "会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "你可以查一下吗？"
+      ],
+      "missing": [
+        "会丢开头的几个字。"
+      ],
+      "coverage": [
+        {
+          "t": "会丢开头的几个字。",
+          "r": 0
+        },
+        {
+          "t": "你可以查一下吗？",
+          "r": 1
+        }
+      ],
+      "errors": []
+    },
+    {
+      "window": "C1",
+      "arm": "E2",
+      "rep": 0,
+      "note": "live: both items covered (control)",
+      "spendCny": 0.004758,
+      "responseCreated": 3,
+      "textReplies": 1,
+      "finals": [
+        "总会丢开头的几个字。",
+        "你可以查一下吗？"
+      ],
+      "calls": [
+        "会丢开头的几个字，你可以查一下吗？"
+      ],
+      "missing": [],
+      "coverage": [
+        {
+          "t": "总会丢开头的几个字。",
+          "r": 0.83
+        },
+        {
+          "t": "你可以查一下吗？",
+          "r": 1
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

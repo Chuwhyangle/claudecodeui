@@ -1,0 +1,133 @@
+{
+ "episode": "57279cc1@10-11T15:42:32",
+ "arm": "C",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "9acb31b33af9fa418c5672be003567d32c968de7",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 919,
+   "text": "我不知道是不是因为最近在 VAD……",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 8564,
+   "text": "或者其他的地方加入了更多延迟。",
+   "label": "ADD"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 62317,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "还有呢，就是现在转写输出的延迟好像非常大。",
+   "parts": []
+  },
+  {
+   "t": 793,
+   "ev": "TURN"
+  },
+  {
+   "t": 801,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 869,
+   "ev": "TURN"
+  },
+  {
+   "t": 925,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "我不知道是不是因为最近在 VAD……"
+  },
+  {
+   "t": 1925,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "我不知道是不是因为最近在 VAD……",
+   "parts": [
+    "ADD-frag:我不知道是不是因为最近在 VAD……"
+   ]
+  },
+  {
+   "t": 8569,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "或者其他的地方加入了更多延迟。"
+  },
+  {
+   "t": 9848,
+   "ev": "TOOL",
+   "name": "Agent",
+   "input": "Investigate voice transcription latency",
+   "bg": true
+  },
+  {
+   "t": 10115,
+   "ev": "DELIVER",
+   "kind": "quiet",
+   "priority": "now",
+   "text": "或者其他的地方加入了更多延迟。",
+   "parts": [
+    "ADD:或者其他的地方加入了更多延迟。"
+   ]
+  },
+  {
+   "t": 10122,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 10164,
+   "ev": "TURN"
+  },
+  {
+   "t": 12463,
+   "ev": "TOOL",
+   "name": "ToolSearch",
+   "input": "",
+   "bg": false
+  },
+  {
+   "t": 16079,
+   "ev": "TOOL",
+   "name": "SendMessage",
+   "input": "",
+   "bg": false
+  },
+  {
+   "t": 18446,
+   "ev": "TEXT",
+   "text": "收到，你的话没说完整：「是不是因为最近在 VAD……」。我已经让后台调查的 Agent 把这一项加进去了，它会连同其他环节一起查。\n\n它现在会查这几处：\n- 最近三天 VAD 门控的改动里，有没有增加固定延迟（尾音、合并窗口、hold 窗口）。\n- 语音结束的判定是否来得比实际晚。\n- 路径上所有固定延迟的常量，逐个列出来。\n\n查完我给你一两句话的结论。你可以接着说完 VAD 那句。"
+  },
+  {
+   "t": 18470,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 31738,
+   "ev": "TURN"
+  },
+  {
+   "t": 36057,
+   "ev": "TEXT",
+   "text": "调查结果：转写本身不慢，延迟出在转写之后的转发这一段，最近三天也没有 VAD 相关的代码改动。\n\n- **转写**：说完到出字大约 0.2 秒，最慢 0.31 秒，和 10-11 那次一样。\n- **转发**：字出来之后要等 2.5 秒的合并窗口才投递，会话空闲时实测约 2.8 秒。\n- **会话忙的时候**：消息会被 hold 住。实测 16 秒一次，另一次长达 2 分 07 秒，直到你断开连接才放出，正好撞上 120 秒的上限。\n- **VAD**：语音相关的最后几个提交都是 10-11，没有新改动。\n- **机器负载**：早些时候负载很高（5 分钟均值 155），如果你测的时候也在这个时段，会拖慢整体。\n\n还有一点要说明：这个分析用的是约 3 小时前的那条连接，不是你刚才测的那条。如果你感觉慢的是刚才这次，我再对着最新的日志看一遍。\n\n你觉得慢的是字幕出得慢，还是说完之后消息很久才到会话？这两个对应的环节不一样。"
+  },
+  {
+   "t": 36076,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

@@ -1,0 +1,32 @@
+# d4c9bfc4@10-14T01:36:53 arm B rep 1 model sonnet hook true wall 180.8s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after t
+   1.1  == turn
+   8.4     text: 这行是"队列行卡住"：那句话我已经处理了（我当时开始跑 build），它却还挂在屏幕底部的 Q 里。我先对一下记忆里有没有同形态的记录。
+   9.2     tool Bash: cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory && sed -n 1,40p live-voice-tenth-
+  17.9     text: 这是已知问题的复现，不是新问题。记忆里"10-14 早实测"那条就有「Q 撤回行不消失（≥2 条）」，当时没定位出断点。  - **这次的读数**：你那句"你居然猜到了我的想法"我已经处理了，所以消息送达了，也出队了。但它的行还挂在底部 Q 里没撤掉。 - **断点推测**：断点在"host 读到出队 → writer → 浏览器 socket"这一段，也就是撤回帧没到浏览器，或者到了没被前端消化。 - **没法定位的原因**：server 不记 lifecycle 帧，没有日志可查。 - **与上一个修复无关**：10-15 修的是 Q 徽章计数冻结（`queuedDepth`），那是计数，
+  17.9  -- result success
+  34.7  · voice [ADD-frag] 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.7  >> DELIVER idle: 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.8  == turn
+  37.7  · voice [ADD] 找出来为什么会出现这些东西。
+  43.0     text: 这段英文不是你说的。它是中断后系统自动拼在你那句话前面的提示：  > [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction…]  这是 `buildInterruptAftermathNote` 的产物，记忆里"10-14 早实测"那条已经记过，"中断提示拼进
+  43.0  -- result success
+  43.0  >> DELIVER turn-end: 找出来为什么会出现这些东西。
+  43.0  == turn
+  46.4     text: 这个调查要读多处代码，会超过 20 秒，我派给后台 Agent 去查，你可以继续说话。
+  54.6     tool Agent [BG]: Investigate voice Q row and interrupt note
+  57.6     text: 已派了一个后台 Agent，只读调查，不改代码，查两件事：  1. **Q 行不消失**：追踪队列行从创建到撤回的完整链路，找出撤回帧在哪一环没发出、被丢弃或没被前端应用。 2. **中断提示出现在你的话前面**：找到 `buildInterruptAftermathNote` 的调用处，确认它是在消息存档和回显之前拼上的，还是只在发给模型时拼的，以及最小的拆分位置。  它还会判断这两个毛病是不是同一条路径上的问题。结果出来后我给你一两句简报。
+  57.6  -- result success
+  64.0  · voice [REMARK-frag] 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  >> DELIVER idle: 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.1  == turn
+  67.9  · voice [REMARK] 所以地图的Q看来现在是个问题啊。
+  68.1     text: 收到，这是第三次复现：你那句"找出来为什么会出现这些东西"我已经处理了（派了后台 Agent），但它的行还挂在底部 Q 里。  这次的情形比前两次更清楚： - **这句话没有被打断**：上一轮我没有被中断，直接处理完了，它的行还是没撤掉。所以这个毛病不依赖中断，只要消息经过队列就会留行。 - **后台 Agent 还在跑**：我不知道它查出了什么，等它回来再说。  我先不另外动手，以免重复它的工作，等结果出来后一并汇报。
+  68.1  -- result success
+  68.1  >> DELIVER turn-end: 所以地图的Q看来现在是个问题啊。
+  68.3  == turn
+  71.5     text: 对，我理解成"底部的 Q"，"地图"应该是"底部"的识别误差，记忆里 10-14 早那次就有同样的误识别。  是个问题，而且已经复现了三次：消息被处理完，行却留在 Q 里不撤。这次排查的后台 Agent 还没回来，等它出结果我再汇报链路上的断点。
+  71.5  -- result success
+ 149.1  == turn
+ 154.0     text: 排查结果回来了，两个毛病是两个独立的原因。  **中断提示混进你的话（高置信，代码已核实）** - `session_send` 把提示和你的原话拼成一个字符串（`voice-realtime-ws-proxy.service.ts:2389-2392`），这一个字符串既发给模型，又被存进对话记录、回显到界面、写进 Q 行。 - 英文原文出自本仓库，不是 CLI 带的。 - 最小的改法：发给模型用拼好的，回显和 Q 行用你的原话。  **Q 行不撤（中置信，链路已核实，哪一环断是推断）** - 行只在收到 `completed` 事件时才撤，`started`（你看到的出队）不撤。 - 最可能
+ 154.0  -- result success

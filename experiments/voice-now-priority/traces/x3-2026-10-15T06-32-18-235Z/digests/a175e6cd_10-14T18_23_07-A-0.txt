@@ -1,0 +1,10 @@
+# a175e6cd@10-14T18:23:07 arm A rep 0 model sonnet hook false wall 47.9s
+   0.0  >> DELIVER prompt: 现在是十月十五日。 Live Voice Mode 的第六次测试。
+   0.8  == turn
+   6.2     text: 收到:10 月 15 日,Live Voice Mode 第六次测试。  这条消息里只有日期和测试编号,没有可以动手的材料。请告诉我你想让我做什么,例如:  - **分析这次测试**:请给出会话 ID、日志或 transcript 的位置,或直接贴出现象。我会先对 `transcription.completed` 找每句话的处置,再看 `buffered=`、`teardown:` 和最后一个上游事件。 - **记录测试结果**:把你的发现整理成记忆或 quay 任务。 - **修复某个已知问题**:告诉我是哪一条现象。  记忆里的 10-15 测试记录按"第几次"编号,和你说的"第六次"不
+   6.2  -- result success
+  15.4  · voice [DUP] 很好啊，我们这次看到是用 DeepSeek 来跑的了。
+  16.4  >> DELIVER idle: 很好啊，我们这次看到是用 DeepSeek 来跑的了。
+  16.4  == turn
+  21.5     text: 明白,这次第六次测试的后端是 DeepSeek。  我手上还没有这次测试的任何数据,所以没法判断它的表现。你想让我做哪一件事?  1. **核对配置**:在仓库里查 DeepSeek 是怎么接进 Live Voice(中继、模型 ID、transport),确认这次跑的确实是它。 2. **分析这次的表现**:给我会话 ID 或日志位置,我来对 `transcription.completed` 逐句查处置、看丢句、延迟、打断和重连。 3. **和之前的测试对比**:拿 DeepSeek 对比之前 Omni / DashScope 的几次记录(丢句、改写原话、interrupt 的行为)。  
+  21.5  -- result success

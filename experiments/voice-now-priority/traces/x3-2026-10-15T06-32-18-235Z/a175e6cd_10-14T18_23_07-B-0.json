@@ -1,0 +1,73 @@
+{
+ "episode": "a175e6cd@10-14T18:23:07",
+ "arm": "B",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "98a4fc6b119d0c980e7a935692cdddc47bd7103e",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 15379,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "label": "DUP"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 46824,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+   "parts": []
+  },
+  {
+   "t": 4219,
+   "ev": "TURN"
+  },
+  {
+   "t": 9793,
+   "ev": "TEXT",
+   "text": "收到，10 月 15 日 Live Voice 第六次测试。你还没说要我做什么，我先不动代码。\n\n你可以直接告诉我下面哪一种：\n\n1. **你边测边口述现象**：我记录，测完后逐条对 `transcription.completed` 找丢句或未转发的处置，归因到转发层、前端或上游。\n2. **测完了要分析**：给我会话 id 或时间段，我按 `teardown:`、`buffered=`、最后上游事件和 queue 行去读日志。\n3. **要我准备测试环境**：我先确认当前 HEAD（`98a4fc6b1`）是否已包含重连横幅和 idle/reconnect 丢句的修复，以及常驻服务是否已重启生效。\n\n另外，今天前几次的实测发现已经在记忆里了（重连丢 mute、静默吞句、Q 徽章冻结等）。这次想重点验证哪几项，说一声即可。"
+  },
+  {
+   "t": 9827,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 15384,
+   "ev": "PIECE",
+   "label": "DUP",
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+  },
+  {
+   "t": 16384,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "parts": [
+    "DUP:很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+   ]
+  },
+  {
+   "t": 16426,
+   "ev": "TURN"
+  },
+  {
+   "t": 20647,
+   "ev": "TEXT",
+   "text": "好的，记下了：这次 Live Voice 的模型是 DeepSeek。这是你看到的，我还没在配置或日志里核实过。\n\n换了模型之后，前几次的结论不一定还成立，尤其是这几处：\n\n- **打断和中断说明**：DeepSeek 是否遵守\"每句必投递\"和\"打断说明随打断出\"，要重新对。\n- **工具调用格式**：`session_send` 之类的调用有没有重复或缺字段。\n- **收尾\"OK\"**：模型会不会多回话，或者漏掉该回的确认。\n\n你测的时候看到了什么现象？如果想让我核实它到底走的哪个模型和 provider，给我会话时间段，我去读配置和日志对一下。"
+  },
+  {
+   "t": 20669,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

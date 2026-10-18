@@ -1,0 +1,162 @@
+{
+ "episode": "b5d01c21@10-13T15:59:28",
+ "arm": "E",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "cc92c094f0f195fe62df700ce1a43ed60eec6cbc",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 23039,
+   "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。",
+   "label": "REDIRECT"
+  },
+  {
+   "offsetMs": 61629,
+   "text": "你看，这句“先暂停一下”居然会排在queue里面。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 69031,
+   "text": "要等到前面那句话处理完了，它才能排进去吗？",
+   "label": "ASK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 103695,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "好，现在整体检查一下这次 live voice 语音测试的过程。然后分析一下其中发生的问题。",
+   "parts": []
+  },
+  {
+   "t": 887,
+   "ev": "TURN"
+  },
+  {
+   "t": 5959,
+   "ev": "TEXT",
+   "text": "我把完整复盘派给后台 Agent 去做，它会逐条对 journal，做完我再简报。"
+  },
+  {
+   "t": 15308,
+   "ev": "TOOL",
+   "name": "Agent",
+   "input": "Review live voice test journal",
+   "bg": true
+  },
+  {
+   "t": 18840,
+   "ev": "TEXT",
+   "text": "我派了一个后台 Agent 去做完整复盘，它在逐句对照 journal `b5d01c21` 和代码。\n\n它会产出：\n- 每句话的处置表：转写、转发内容、是否送达、各环节耗时；\n- 五个已知问题的根因，附代码位置：\n  - 空转写守卫误拒了一整句话；\n  - 上游拒收函数调用结果；\n  - `session_interrupt` 缺 `intent` 被拒；\n  - 排队中的话在界面上不可见；\n  - 模型改写措辞；\n- journal 里我还没发现的其他异常。\n\n它做完后我会把结论压缩成简报发你。在此之前，上面所有判断都只是我边测边看到的读数，还没有逐条核对过。"
+  },
+  {
+   "t": 18865,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 23043,
+   "ev": "PIECE",
+   "label": "REDIRECT",
+   "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。"
+  },
+  {
+   "t": 24044,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。",
+   "parts": [
+    "REDIRECT:先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。"
+   ]
+  },
+  {
+   "t": 24153,
+   "ev": "TURN"
+  },
+  {
+   "t": 29273,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "f=/data/home/yale/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl; echo \"speech_started: $(grep -c 'input_audio_buffer.speech_started' $",
+   "bg": false
+  },
+  {
+   "t": 36960,
+   "ev": "TEXT",
+   "text": "**这次 journal（`b5d01c21`）的数字：**\n\n| 项目 | 数量 |\n|---|---|\n| 你说的话（VAD 判定的语音段，`speech_started` / `committed`） | **31 段** |\n| 识别输出（`transcription.completed`） | **31 条**，其中 1 条是空的 |\n| 模型转发的调用 | `session_send` 20 次 + `session_interrupt` 1 次 |\n| 实际送达会话（合并后） | **11 条消息** |\n| 被拒 | 1 次（`empty-transcript`） |\n\n**怎么从 31 段变成 11 条：**\n- 31 段识别里，30 段非空，其中被模型转发了 21 次（20 次 `session_send` + 1 次 `session_interrupt`，而那次 interrupt 因缺 `intent` 被拒）。\n- 21 次调用里，1 次被空转写守卫拒掉，1 次 interrupt 被拒，剩下的在 2.5 s 合并窗口里并成 11 条投递。合并规模最大的一次把 3 段并成 1 条。\n- 约 9 段识别（30 减去 21）**没有对应的转发调用**。这里面多数是被切碎的半句，模型把几段并到后一次调用里了，比如\"比较积极的。\"、\"停止前期的推理……\"、\"用更长。\"合成一次转发。\n\n**识别质量上的几处错：**\n- \"Live Voice\" 被识别成\"来沃伊斯莫\"、\"Lab Voice\"。\n- \"气泡\"在转发时被模型改成\"切换\"。\n- 一段被识别成 \"meu notebook.\"（实际是\"没有处理\"）。\n\n**需要说明的限制：**\n- 这只算了到 16:01 的 journal。\n- \"9 段无转发\"是用总数相减得出的，没有逐条核对，是否有真正的丢句要等后台 Agent 的逐句表。\n- 后台那个复盘 Agent 还在跑，我没有停它，因为它是只读的。你要它停的话告诉我。\n\n你 16:00:29 提到\"先暂停一下\"这句话排进了 Q 里，等前面那句处理完才被处理，这一点在 journal 里能对上，我复盘时会重点看。"
+  },
+  {
+   "t": 36984,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 61633,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "你看，这句“先暂停一下”居然会排在queue里面。"
+  },
+  {
+   "t": 62634,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "你看，这句“先暂停一下”居然会排在queue里面。",
+   "parts": [
+    "REMARK:你看，这句“先暂停一下”居然会排在queue里面。"
+   ]
+  },
+  {
+   "t": 62773,
+   "ev": "TURN"
+  },
+  {
+   "t": 67427,
+   "ev": "TEXT",
+   "text": "对，这句\"先暂停一下\"也进了队列，没有抢占。\n\njournal 里能对上：你 15:59:45 说\"先暂停一下，先统计一下……\"，那时我正在跑上一个回合（派后台复盘 Agent 那一轮）。它走的是 `session_send`，进了 CLI 队列，等前面的回合结束才轮到处理。所以\"暂停\"这个指令本身要等被暂停的东西跑完才生效，这违背了它的用意。\n\n这是 A+ 方案的直接后果：忙时的话只排队，只有模型主动调 `session_interrupt` 才能打断，而这次模型没调。前面记的\"`session_interrupt` 缺 `intent` 被拒\"是同一类问题：即使模型想打断，调用也会被校验拒掉。\n\n要让\"停止/暂停\"这类话真的抢占，需要服务端层面处理，不能依赖模型自己判断。这条我会放进提案里，和\"新话语抢占\"合并。\n\n后台复盘 Agent 还在跑，要不要我先停掉？"
+  },
+  {
+   "t": 67453,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 69036,
+   "ev": "PIECE",
+   "label": "ASK",
+   "text": "要等到前面那句话处理完了，它才能排进去吗？"
+  },
+  {
+   "t": 70036,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "要等到前面那句话处理完了，它才能排进去吗？",
+   "parts": [
+    "ASK:要等到前面那句话处理完了，它才能排进去吗？"
+   ]
+  },
+  {
+   "t": 70106,
+   "ev": "TURN"
+  },
+  {
+   "t": 77496,
+   "ev": "TEXT",
+   "text": "是的，这次实测里就是这样。\n\n- **观察到的：** 你的话投递成功后，journal 里显示 `phase=queued`，要等我当前回合结束才开始处理。前面\"已经执行完了……\"那两句等了约 13 秒，\"先暂停一下\"同理。\n- **原因：** 语音消息是按\"排队、等回合边界\"这个优先级送进会话的，不会插进正在跑的回合。我记忆里有一条记录，说 CLI 的 `next` 优先级可以在下一个工具边界并入当前回合，`now` 可以切换回合，但目前走的是最慢的那档。\n- **没有验证的：** 我没有在这次 journal 里确认具体用的是哪个优先级，这一点要看代码里 `session_send` 的投递参数才能确定，复盘 Agent 应该会查到。\n\n所以这不是不可避免的：换成更高的优先级，\"暂停\"这类话就能在下一个工具边界插进来，不用等整个回合跑完。"
+  },
+  {
+   "t": 77546,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

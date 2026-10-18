@@ -1,0 +1,28 @@
+# d4c9bfc4@10-14T01:36:53 arm E rep 0 model sonnet hook true wall 106.6s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after t
+   0.9  == turn
+   7.2     text: 这应该就是已知的"Q 行卡住"问题。我先对一下记录。
+   7.9     tool Bash: cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory && cat live-voice-tenth-test-2026
+  16.3     text: 这是已知的"Q 行不消失"，不是新问题。  你看到的那行是我已经处理过的话，却还留在底部队列里。记录里对应 10-14 早上第五次实测：**Q 撤回行卡住**，至少复现两次。host 那边其实已经读到出队了（状态行 `queued=0/0B`），断点在 host→writer→浏览器 socket 之间，**还没定位**。原因是服务端不记 lifecycle 帧，缺日志没法复现。  要区分它和另一个相关问题：  - **Q 徽章计数冻结**：10-15 那次实测的 #4，已在 `3bca0f292` 修了，不过这个提交在 `author` 分支，正在跑的 server 不一定带上。 - **队
+  16.3  -- result success
+  34.7  · voice [ADD-frag] 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.7  >> DELIVER idle: 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.8  == turn
+  37.7  · voice [ADD] 找出来为什么会出现这些东西。
+  39.3  >> DELIVER quiet next: 找出来为什么会出现这些东西。
+  40.2     text: 对得上：你看到的方括号英文，就是打断提示被拼在了你原话前面。我查一下代码里它现在的位置。
+  40.9     tool Bash: grep -rn "buildInterruptAftermathNote" server src shared --include=*.ts --include=*.tsx 2>/dev/null | grep -v 
+  44.9     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && sed -n 960,1010p $f && echo ------- && s
+  48.4     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && grep -n "aftermathNote" $f | head -30
+  50.8     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && sed -n 2170,2192p $f && echo ------ && s
+  61.9     text: 原因找到了，是设计如此，不是识别或改写造成的。  **来源**：`voice-realtime-ws-proxy.service.ts` 里的 `buildInterruptAftermathNote`。你打断后，服务端会把一句固定英文拼到下一条消息前面，原因是被打断的工具（比如 Bash）的副作用不会被撤销，下一轮的模型得知道上一轮停在哪。我收到的内容和它逐字一样：`[The previous turn was interrupted while it was running the \`Bash\` tool. … Everything after this note is your cu
+  61.9  -- result success
+  64.0  · voice [REMARK-frag] 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  >> DELIVER idle: 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  == turn
+  67.9  · voice [REMARK] 所以地图的Q看来现在是个问题啊。
+  69.4  >> DELIVER quiet next: 所以地图的Q看来现在是个问题啊。
+  71.5     text: 这是第二次复现，而且这条是在我干活时插进来的，说明规律可能比"偶发卡住"更具体。我先看日志里有没有这两条的出队帧。
+  72.5     tool Bash: cd ~/.cloudcli/voice-realtime-log 2>/dev/null && f=$(ls -t *.jsonl | head -1) && echo "$f" && ls -l --time-sty
+  80.4     text: 我把"地图的Q"理解成"底部的Q"，是 ASR 又把"底部"写成了"地图"，这在 10-14 早上就出现过。要是理解错了请纠正我。  这个问题现在可以认定了，本会话里已经复现两次，两条都是卡住的行。  - **共同点**：两条都是在我干活时插进来、被中途取走的消息，不是等我一轮结束后才进队列的。这是我读出来的规律，还没证实，但比"偶发卡住"具体。 - **定位不了**：最新那份语音日志里 `command_lifecycle` 一条都没有。服务端不记这类帧，所以断在哪一跳，现在读不出来。  我建议先做日志，不急着改行为：在服务端把 lifecycle 帧（queued、started、dequ
+  80.4  -- result success

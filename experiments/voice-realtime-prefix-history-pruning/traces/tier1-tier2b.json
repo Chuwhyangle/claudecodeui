@@ -1,0 +1,439 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:42:05.913Z",
+  "budgetCny": 0.12,
+  "spendCny": 0.04566,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 30359,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "tier2b": {
+      "twin": {
+        "mode": "twin",
+        "transcript": "现在是十月十五日，来我。",
+        "audioTurnReading": {
+          "input": 345,
+          "text": 310,
+          "audio": 35,
+          "output": 31,
+          "cny": 0.000815
+        },
+        "afterMutation": {
+          "input": 354,
+          "text": 354,
+          "audio": 0,
+          "output": 31,
+          "cny": 0.00067
+        },
+        "audioTokenDelta": 35,
+        "textTokenDelta": -44,
+        "mutation": {
+          "mode": "twin",
+          "deletions": [
+            {
+              "id": "item_H9YaGpwyMjOfZE8EZ7zxj",
+              "outcome": "deleted"
+            }
+          ],
+          "recreated": "现在是十月十五日，来我。"
+        },
+        "followUps": 3,
+        "followUpsForwarded": 3
+      },
+      "keep": {
+        "mode": "keep",
+        "transcript": "现在是十月十五日，来我。",
+        "audioTurnReading": {
+          "input": 345,
+          "text": 310,
+          "audio": 35,
+          "output": 32,
+          "cny": 0.000819
+        },
+        "afterMutation": {
+          "input": 430,
+          "text": 395,
+          "audio": 35,
+          "output": 2,
+          "cny": 0.000812
+        },
+        "audioTokenDelta": 0,
+        "textTokenDelta": -85,
+        "mutation": {
+          "mode": "keep"
+        },
+        "followUps": 3,
+        "followUpsForwarded": 3
+      },
+      "plumbingPrune": {
+        "prune": true,
+        "utterances": 8,
+        "forwarded": 6,
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"把这句话转给会话。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 3,
+            "deletions": [
+              {
+                "id": "item_GjBdsAUpyMqxd72cRHvJj",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_Q7UZb5zbCs5tUef6Zt8Lc",
+                "kind": "function_call_output/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_MDLcHNjpw467uqIm1ZW52",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 391
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再加一句，今晚继续测。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 3,
+            "deletions": [
+              {
+                "id": "item_J5xxPtZkR3V4HEON8a1cJ",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_V2utg28go44eFooOq72uF",
+                "kind": "function_call_output/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_FGtnzPAjHliO1JDuf8bcb",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 481
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 1,
+            "deletions": [
+              {
+                "id": "item_N1IPv1XR1PYKmCamIU6O2",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 487
+          },
+          {
+            "utterance": "顺便说一句，日志我看过了。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"顺便说一句，日志我看过了。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 3,
+            "deletions": [
+              {
+                "id": "item_BlBX3AK8bozR2qHOpgZdy",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_Osv6Oii7q4xDOuqBeNFWJ",
+                "kind": "function_call_output/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_DvqRkY832cQiEluWXq5kU",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 581
+          },
+          {
+            "utterance": "最后一句，先到这里。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"最后一句，先到这里。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 3,
+            "deletions": [
+              {
+                "id": "item_XVgToAv9vDBUnWow42Xnz",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_MLSVmHHuIZTqRFotuANRs",
+                "kind": "function_call_output/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_BStYcgs1pRAA3C2tc8gVD",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 669
+          },
+          {
+            "utterance": "这条也一并转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这条也一并转过去。\"}"
+              }
+            ],
+            "replies": [
+              "好的，这就把这句话转过去。\n\n",
+              "OK"
+            ],
+            "deleted": 4,
+            "deletions": [
+              {
+                "id": "item_IlFskfZ6uGdbnDp5dDQq6",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_V3UqV9DqyDN5fJ4yHlNwz",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_L3QiMlznJ3KSGaOE6Uvwu",
+                "kind": "function_call_output/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_D5zOvYjs3hXAEEg2QJrDi",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 774
+          },
+          {
+            "utterance": "补一句，明天再看结果。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"补一句，明天再看结果。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 3,
+            "deletions": [
+              {
+                "id": "item_XkKhWvbFsNrvTE17aOKmF",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_FRlUsIKRTX95Vb6buLvB8",
+                "kind": "function_call_output/undefined",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_CWrTdpzdvfZpPDsqiNAPc",
+                "kind": "message/assistant",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 847
+          },
+          {
+            "utterance": "再补一句，先不要动线上。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 1,
+            "deletions": [
+              {
+                "id": "item_JCOCGx7Voj1VrjFbIOfEZ",
+                "kind": "function_call/undefined",
+                "outcome": "deleted"
+              }
+            ],
+            "inputTokens": 857
+          }
+        ],
+        "contextGrowth": {
+          "firstInputTokens": 310,
+          "lastInputTokens": 857,
+          "responses": 14
+        }
+      },
+      "plumbingKeep": {
+        "prune": false,
+        "utterances": 8,
+        "forwarded": 6,
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"把这句话转给会话。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 391
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再加一句，今晚继续测。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 487
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这句话也要转过去。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 579
+          },
+          {
+            "utterance": "顺便说一句，日志我看过了。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"顺便说一句，日志我看过了。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 675
+          },
+          {
+            "utterance": "最后一句，先到这里。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"最后一句，先到这里。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 769
+          },
+          {
+            "utterance": "这条也一并转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这条也一并转过去。\"}"
+              }
+            ],
+            "replies": [
+              "OK"
+            ],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 863
+          },
+          {
+            "utterance": "补一句，明天再看结果。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 877
+          },
+          {
+            "utterance": "再补一句，先不要动线上。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 0,
+            "deletions": [],
+            "inputTokens": 926
+          }
+        ],
+        "contextGrowth": {
+          "firstInputTokens": 310,
+          "lastInputTokens": 926,
+          "responses": 14
+        }
+      }
+    }
+  }
+}

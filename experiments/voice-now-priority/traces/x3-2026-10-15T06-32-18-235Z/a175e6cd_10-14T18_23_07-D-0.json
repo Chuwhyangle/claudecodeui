@@ -1,0 +1,73 @@
+{
+ "episode": "a175e6cd@10-14T18:23:07",
+ "arm": "D",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "98a4fc6b119d0c980e7a935692cdddc47bd7103e",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 15379,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "label": "DUP"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 47283,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+   "parts": []
+  },
+  {
+   "t": 930,
+   "ev": "TURN"
+  },
+  {
+   "t": 5947,
+   "ev": "TEXT",
+   "text": "收到：10 月 15 日，Live Voice 第六次测试。\n\n你想让我做什么？比如：\n1. 分析这次测试的日志或 transcript，逐条对 `transcription.completed` 找丢句、吞句和卡住的队列行。\n2. 把这次的发现记进记忆和任务。\n3. 你先说测试里看到的现象，我再去查。\n\n另外，记忆里的编号和今天的\"第六次\"对不上：10-14 午前已经有一份\"第六次\"，今天 10-15 已有 00:08、00:36 和\"第三次\"三份记录。你说的是哪一场？有现象或会话 ID 的话请直接给我。"
+  },
+  {
+   "t": 5979,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 15385,
+   "ev": "PIECE",
+   "label": "DUP",
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+  },
+  {
+   "t": 16385,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "parts": [
+    "DUP:很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+   ]
+  },
+  {
+   "t": 16430,
+   "ev": "TURN"
+  },
+  {
+   "t": 21208,
+   "ev": "TEXT",
+   "text": "好，这次的中继或语音模型换成 DeepSeek 了，我记下了。这是我从你这句话里得知的，我还没去核对配置或日志。\n\n接下来想怎么做？\n1. 我去查这次会话的 transcript 和中继日志，确认实际跑的是哪个模型和哪条链路（ASR、中继、Claude 会话各自用谁），再逐条对 `transcription.completed` 找丢句和吞句。\n2. 你先说测试时的感受，比如延迟、丢句、被打断时的表现，我再有针对性地查。\n\nDeepSeek 没有原生 realtime 音频，所以我想先确认它具体接在哪一环。你选 1 的话，我就派后台 Agent 去查。"
+  },
+  {
+   "t": 21227,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

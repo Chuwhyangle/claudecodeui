@@ -1,0 +1,42 @@
+# d4c9bfc4@10-14T01:36:53 arm B rep 0 model sonnet hook true wall 152.0s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after t
+   0.8  == turn
+   9.0     text: 先对一下记忆里这个现象的记录。
+   9.9     tool Bash: cat /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/live-voice-tenth-test-2026-10-15
+  30.1     tool Agent [BG]: Locate stuck Q row break point
+  32.8     text: 后台 agent 已派出去，在读队列行撤回那条链路，找最可能的断点。结果出来我会用一两句话告诉你。  在这之前，你屏幕底部那行如果还在，先别手动清掉。如果能留着，我们可以拿它当现场，对一下它的 id 和日志里的对不对得上。
+  32.9  -- result success
+  34.7  · voice [ADD-frag] 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.7  >> DELIVER idle: 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.8  == turn
+  37.7  · voice [ADD] 找出来为什么会出现这些东西。
+  40.4     tool Bash: grep -rn "buildInterruptAftermathNote" server src shared --include=*.ts --include=*.tsx | grep -v test | head
+  42.4     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && sed -n 975,1000p $f; grep -n "aftermathN
+  49.2     text: 那段英文是我们自己的代码加的，不是你说的。  它是 `buildInterruptAftermathNote`（`voice-realtime-ws-proxy.service.ts:986`），内容是"The previous turn was interrupted while it was running the `Bash` tool…"。你中断了一个正在跑的回合之后，下一条消息进 CLI 前，代理会把这段话拼在你的原话前面（第 2391 行，`${aftermathNote}\n\n${composed.message}`）。目的是让我知道上一轮被打断、可能留有半成品改动。但界面显示
+  49.2  -- result success
+  49.2  >> DELIVER turn-end: 找出来为什么会出现这些东西。
+  49.4  == turn
+  57.9     tool Agent [BG]: Trace why aftermath note shows as user text
+  60.6     text: 又派了一个后台 agent，专门查那段方括号英文为什么会出现。它要回答三件事： - 当初为什么把它放进消息正文，而不是别的通道； - 它怎么一路走到界面上，变成你的气泡； - 有没有测试或验收条件把它钉在消息里，改的时候会碰到什么。  现在一共有两个在跑：一个查队列行不消失，一个查这段英文。两个都回来我再合起来跟你说。
+  60.7  -- result success
+  64.0  · voice [REMARK-frag] 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  >> DELIVER idle: 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  == turn
+  67.9  · voice [REMARK] 所以地图的Q看来现在是个问题啊。
+  69.2     tool ToolSearch: 
+  72.8     tool SendMessage: 
+  75.8     text: 记下了：现在底部 Q 里有两条都已处理的消息挂着，所以这不是偶发，每次都能复现。  两条的共同点还不明显： - **第一条**是在我前台命令被打断的那一轮之后发的。 - **第二条**是在我空闲、但后台有 agent 在跑的时候发的。  我已经把这两个情形转给查队列行的那个 agent，让它看撤回路径是不是依赖某个这两种情况都跳过的状态，并指出共同经过的是哪一跳。它回来我再汇报。
+  75.8  -- result success
+  75.8  >> DELIVER turn-end: 所以地图的Q看来现在是个问题啊。
+  75.9  == turn
+  78.4     text: 对，"地图的 Q"应该是"底部的 Q"（记忆里记过，"底部"被识别成"地图"）。是个问题，已经确认两条挂着不消失。  两个后台 agent 还在跑，我还没有结论。出来后我先报 Q 行的断点，再报那段方括号英文，两个一起给你。
+  78.4  -- result success
+  80.1  == turn
+  85.4     text: Q 行断点的初步结果出来了，把握约 55%，还没证实。  - **最可能的断点**：撤回帧发给了"旧一轮"的 writer，而那个 writer 手里已经没有活的 socket。忙时发消息会新建一轮，浏览器重连后，只有最新一轮挂着 socket，旧一轮的 writer 把帧写给了没人。host 一侧看起来正常（`queued=0/0B`），浏览器却从没收到，这跟早上的读数吻合。 - **次要可能（约 25%）**：浏览器收到了 `started`，`completed` 丢了或被合并。界面只认 `completed` 才撤行，所以一直停在 `started`。 - **已排除**：id 或 s
+  85.4  -- result success
+  85.4  == turn
+  93.3     text: 方括号英文那个 agent 回来了，原因查清了，结论是它不是 bug，是 AC-344 的设计。  **为什么会出现** - 10-12 有一次中断后，`nohup … & disown` 起的进程在回合被打断后还活着，下一轮却当作上一轮正常结束来回答。 - 所以 AC-344（提交 `245a4003c`）规定：中断后第一条进 CLI 的消息前，要附一段固定说明，告诉模型上一轮被打断、可能留有半成品改动。  **为什么你会看到** - 说明是直接拼进送给 CLI 的用户消息正文里的，CLI 把它存成一条普通 user 行，界面再原样回显成你的气泡。 - 界面有一份"内部内容"隐藏列表，但这段
+  93.4  -- result success
+ 119.1  == turn
+ 125.8     text: Q 行的补充分析回来了，换了一个更可能的嫌疑，把握中等，仍然没有帧级证据。  **新的最可能原因：前端"收养"逻辑认错了行** - 前端收到撤回帧时，如果帧里的 uuid 对不上任何行，会把"最老的一条还没 uuid 的行"收养过来。 - 后台 agent 的通知和被打断的命令也会发 `queued`、`started`、`cancelled`、`completed` 帧，这些外来的帧会把你的待发行绑到别人的 uuid 上。 - 之后你这条消息自己的 `completed` 帧就对不上任何行，行就永远留着。 - **第一条**：打断时的 `cancelled` 帧把行内容清空，之后按文本匹配撤
+ 125.8  -- result success

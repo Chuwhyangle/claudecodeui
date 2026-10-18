@@ -1,0 +1,318 @@
+{
+ "episode": "99df08d8@10-12T01:24:07",
+ "arm": "D",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "fe7f119d6afbfd9eac602083d3c44a2fc1721fcb",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 6022,
+   "text": "第一句识别出来了，我们看看第二句。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 12059,
+   "text": "现在第三句。",
+   "label": "NOISE"
+  },
+  {
+   "offsetMs": 18941,
+   "text": "第四句。",
+   "label": "NOISE"
+  },
+  {
+   "offsetMs": 39432,
+   "text": "到现在为止识别的还可以。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 55148,
+   "text": "只是对于第一句的处理慢一些，但这是正常的。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 93323,
+   "text": "现在后面这几句话都在 queue 里面在等。",
+   "label": "REMARK-frag"
+  },
+  {
+   "offsetMs": 99472,
+   "text": "或者说队列，在队列里面等。",
+   "label": "REMARK"
+  },
+  {
+   "offsetMs": 129040,
+   "text": "所以你能看见 cancel 这样的操作吗？",
+   "label": "ASK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 157780,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "我们再试一下 live voice mode。",
+   "parts": []
+  },
+  {
+   "t": 805,
+   "ev": "TURN"
+  },
+  {
+   "t": 3872,
+   "ev": "TEXT",
+   "text": "好，我在 Live Voice 模式里，能收到你的语音。你直接说，我这边照常响应。\n\n这次想测哪一块？比如打断、忙时插话、断线重连，还是别的？说一下，我好对着记录核对。"
+  },
+  {
+   "t": 3898,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 6029,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "第一句识别出来了，我们看看第二句。"
+  },
+  {
+   "t": 7029,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "第一句识别出来了，我们看看第二句。",
+   "parts": [
+    "REMARK:第一句识别出来了，我们看看第二句。"
+   ]
+  },
+  {
+   "t": 7077,
+   "ev": "TURN"
+  },
+  {
+   "t": 8463,
+   "ev": "TEXT",
+   "text": "收到，第二句等你说。说完我会回你一句短确认，方便你对照这次有没有被识别、有没有丢。"
+  },
+  {
+   "t": 8486,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 12065,
+   "ev": "PIECE",
+   "label": "NOISE",
+   "text": "现在第三句。"
+  },
+  {
+   "t": 13066,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "现在第三句。",
+   "parts": [
+    "NOISE:现在第三句。"
+   ]
+  },
+  {
+   "t": 13104,
+   "ev": "TURN"
+  },
+  {
+   "t": 14266,
+   "ev": "TEXT",
+   "text": "收到第三句，\"现在第三句\"，这一条也进来了。继续说下一句，或者告诉我结果怎么样。"
+  },
+  {
+   "t": 14282,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 18985,
+   "ev": "PIECE",
+   "label": "NOISE",
+   "text": "第四句。"
+  },
+  {
+   "t": 19984,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "第四句。",
+   "parts": [
+    "NOISE:第四句。"
+   ]
+  },
+  {
+   "t": 20023,
+   "ev": "TURN"
+  },
+  {
+   "t": 21121,
+   "ev": "TEXT",
+   "text": "收到第四句。四句都进来了，没有丢。你接着说，或者告诉我想查哪一段。"
+  },
+  {
+   "t": 21144,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 39438,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "到现在为止识别的还可以。"
+  },
+  {
+   "t": 40439,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "到现在为止识别的还可以。",
+   "parts": [
+    "REMARK:到现在为止识别的还可以。"
+   ]
+  },
+  {
+   "t": 40476,
+   "ev": "TURN"
+  },
+  {
+   "t": 41728,
+   "ev": "TEXT",
+   "text": "好，到现在这几句识别和投递都正常。要不要继续试更难的情况，比如我在忙的时候你插话，或者中途打断我？"
+  },
+  {
+   "t": 41747,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 55155,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "只是对于第一句的处理慢一些，但这是正常的。"
+  },
+  {
+   "t": 56154,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "只是对于第一句的处理慢一些，但这是正常的。",
+   "parts": [
+    "REMARK:只是对于第一句的处理慢一些，但这是正常的。"
+   ]
+  },
+  {
+   "t": 56193,
+   "ev": "TURN"
+  },
+  {
+   "t": 58066,
+   "ev": "TEXT",
+   "text": "对，第一句慢是冷启动：会话刚起，要建上游连接、载入上下文，之后的句子就是热路径了。这个延迟我这边没法量，如果你想要具体数字，可以去看当时的日志。"
+  },
+  {
+   "t": 58087,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 93329,
+   "ev": "PIECE",
+   "label": "REMARK-frag",
+   "text": "现在后面这几句话都在 queue 里面在等。"
+  },
+  {
+   "t": 94330,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "现在后面这几句话都在 queue 里面在等。",
+   "parts": [
+    "REMARK-frag:现在后面这几句话都在 queue 里面在等。"
+   ]
+  },
+  {
+   "t": 94367,
+   "ev": "TURN"
+  },
+  {
+   "t": 97227,
+   "ev": "TEXT",
+   "text": "这个我这边看不到。我只能看到每一句是在我答完上一句之后才到的，所以队列里排了多久、是被中继先攒着还是被 CLI 排着，我分不出来。\n\n要对这件事，得看服务端日志里每句的送达时间和我开始处理的时间。你想让我去查吗？"
+  },
+  {
+   "t": 97246,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 99479,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "或者说队列，在队列里面等。"
+  },
+  {
+   "t": 100479,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "或者说队列，在队列里面等。",
+   "parts": [
+    "REMARK:或者说队列，在队列里面等。"
+   ]
+  },
+  {
+   "t": 100517,
+   "ev": "TURN"
+  },
+  {
+   "t": 102346,
+   "ev": "TEXT",
+   "text": "明白，你的意思是那几句话在队列里等，属于正常排队。就我这边看，它们是一条条按顺序到的，没有丢，也没有乱序。\n\n排队本身是预期行为：我在处理上一句时，新的话只能等。只有等待时间长得不合理，才算问题。"
+  },
+  {
+   "t": 102371,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 129046,
+   "ev": "PIECE",
+   "label": "ASK",
+   "text": "所以你能看见 cancel 这样的操作吗？"
+  },
+  {
+   "t": 130046,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "所以你能看见 cancel 这样的操作吗？",
+   "parts": [
+    "ASK:所以你能看见 cancel 这样的操作吗？"
+   ]
+  },
+  {
+   "t": 130086,
+   "ev": "TURN"
+  },
+  {
+   "t": 132068,
+   "ev": "TEXT",
+   "text": "看不见。我只能看到最终送到我这里的消息。如果你在队列里把某句 cancel 掉，那一句根本不会到我这边，我也不会知道它存在过。\n\n所以到目前为止我收到的几句都是完整送达的，但被取消的话我没法替你确认。要核对取消，得看中继或服务端的日志。"
+  },
+  {
+   "t": 132087,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

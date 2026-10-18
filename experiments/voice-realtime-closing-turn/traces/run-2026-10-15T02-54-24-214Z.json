@@ -1,0 +1,168 @@
+{
+  "ranAt": "2026-10-15T02:54:24.214Z",
+  "budgetCny": 0.03,
+  "spendCny": 0.01065,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "W4",
+      "arm": "N2",
+      "rep": 0,
+      "note": "\"OK，现在可以终止它了\" at ~104 s",
+      "spendCny": 0.01065,
+      "responses": 4,
+      "usage": [
+        [
+          1358,
+          28,
+          29
+        ],
+        [
+          1405,
+          49,
+          33
+        ],
+        [
+          1456,
+          63,
+          50
+        ],
+        [
+          1525,
+          91,
+          32
+        ]
+      ],
+      "insertedOk": 4,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_UvbaJ23adBEe1FgCdgHvN\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_4eabfd61fe1c48efbe5b7da1\",\"param\":\"call_id\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 6551,
+          "kind": "ASR",
+          "text": "我看你。"
+        },
+        {
+          "at": 7833,
+          "kind": "ASR",
+          "text": "都跑完了。"
+        },
+        {
+          "at": 7986,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8122,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看你都跑完了？"
+        },
+        {
+          "at": 8124,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 8202,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_4eabfd61fe1c48efbe5b7da1\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 9161,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 11031,
+          "kind": "ASR",
+          "text": "所以你的这个号是叫长是什么？"
+        },
+        {
+          "at": 11184,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 11368,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "所以你的这个号是叫长是什么？"
+        },
+        {
+          "at": 11369,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 12600,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 24423,
+          "kind": "ASR",
+          "text": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 24543,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 24825,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "OK，现在可以终止它了。",
+          "intent": "用户要求停止当前运行的任务。"
+        },
+        {
+          "at": 24826,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26700,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 33509,
+          "kind": "ASR",
+          "text": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 33658,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33797,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 33799,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36300,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    }
+  ]
+}
