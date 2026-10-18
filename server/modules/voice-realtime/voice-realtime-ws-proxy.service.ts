@@ -43,12 +43,7 @@
  * call naming another session. This handler only decides WHEN a send happens,
  * never WHICH session it reaches.
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { WebSocket } from 'ws';
-
-import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
 import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
@@ -79,12 +74,14 @@ import {
   type VoiceRealtimeClosingTurn,
 } from './voice-realtime-closing-turn.js';
 import {
+  OMISSION_FILL_NUMERAL_MODES,
   planOmissionFills,
   type OmissionFill,
   type OmissionFillExecuted,
   type OmissionFillFinal,
   type OmissionFillParams,
 } from './voice-realtime-omission-fill.js';
+import omissionFillParamsFile from './omission-fill-params.json' with { type: 'json' };
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
@@ -415,80 +412,74 @@ export function voiceMessageBytes(message: unknown): number {
 /** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
 export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
 
-/** The locked omission-fill parameter file, relative to the application root (see the reader below). */
-const OMISSION_FILL_PARAMS_PATH = path.join('experiments', 'voice-relay-qb', 'omission-fill-params.json');
-
-/** The `analyse` variants the locked file may name (see `voice-realtime-omission-fill.ts`). */
-const OMISSION_FILL_NUMERAL_MODES: ReadonlySet<string> = new Set(['runs2', 'all', 'quantifier']);
+/** The omission-fill parameters SHIPPED WITH THE SERVER, as the JSON module hands them over. */
+const OMISSION_FILL_PARAMS = omissionFillParamsFile as {
+  chosen?: Record<string, unknown>;
+};
 
 /**
- * Reads and validates the locked omission-fill parameters.
+ * Reads and validates the omission-fill parameters that ship with `server/`.
  *
- * THE PARAMETER FILE IS THE ONLY SOURCE. `experiments/voice-relay-qb/omission-fill-params.json` is
- * what the replay gate (`replay_rule.py --check`) reads, so deriving a second copy here — even a
- * "matching" literal — would let the relay and the measurement drift apart silently. The file is
- * re-read per connection rather than captured at boot, which is what makes an edit to it a hot
- * change: the NEXT connection uses the new values, and live ones keep the values they logged.
+ * THE PARAMETER FILE IS OWNED BY `server/` AND TRAVELS WITH THE BUILD. `omission-fill-params.json`
+ * is imported as a JSON module, so tsc copies it beside this compiled service
+ * (`server/tsconfig.json` sets `resolveJsonModule`): a `dist-server` deployment never needs the
+ * `experiments/` tree. The earlier reader resolved the application root and re-read
+ * `experiments/voice-relay-qb/omission-fill-params.json` on every connection, which made a
+ * deployment's producer silently switch off when that measurement-only directory was absent.
  *
- * `params: null` with a `problem` is the honest answer to a missing or malformed file: the caller
+ * HOT CHANGES GO THROUGH THE SETTINGS FILE. The imported values are fixed at process start; an
+ * operator changes them for the NEXT connection through `voice-realtime-settings.ts`'s optional
+ * `omissionFill` key, which the caller merges over these below. A live connection keeps the values
+ * it logged.
+ *
+ * `params: null` with a `problem` is the honest answer to a malformed shipped block: the caller
  * records it and leaves the producer OFF. A guessed fallback would be a second source of truth, and
  * the rule's own module deliberately declares none.
  *
  * Consumers: {@link handleVoiceRealtimeConnection}, once per connection.
  */
 function readOmissionFillParams(): { params: OmissionFillParams | null; problem: string | null } {
-  try {
-    const root = findApplicationRoot(getModuleDirectory(import.meta.url));
-    const raw = JSON.parse(readFileSync(path.join(root, OMISSION_FILL_PARAMS_PATH), 'utf8')) as {
-      chosen?: Record<string, unknown>;
-    };
-    const chosen = raw.chosen;
-    if (chosen === null || typeof chosen !== 'object') {
-      return { params: null, problem: 'missing chosen block' };
-    }
-    const hMs = chosen.h_ms;
-    const gMs = chosen.g_ms;
-    const scoreT = chosen.score_t;
-    const wMin = chosen.w_min;
-    const wHallu = chosen.w_hallu;
-    const domN = chosen.dom_n;
-    const lookbackMs = chosen.lookback_ms;
-    const silenceMs = chosen.silence_ms;
-    const numeralMode = chosen.numeral_mode;
-    if (
-      typeof hMs !== 'number' ||
-      typeof gMs !== 'number' ||
-      typeof scoreT !== 'number' ||
-      typeof wMin !== 'number' ||
-      typeof wHallu !== 'number' ||
-      typeof domN !== 'number' ||
-      typeof lookbackMs !== 'number' ||
-      !(typeof silenceMs === 'number' || silenceMs === null) ||
-      typeof numeralMode !== 'string' ||
-      !OMISSION_FILL_NUMERAL_MODES.has(numeralMode)
-    ) {
-      return { params: null, problem: 'malformed chosen block' };
-    }
-    return {
-      params: {
-        hMs,
-        gMs,
-        scoreT,
-        wMin,
-        wHallu,
-        domN,
-        lookbackMs,
-        silenceMs,
-        numeralMode: numeralMode as OmissionFillParams['numeralMode'],
-      },
-      problem: null,
-    };
-  } catch (error) {
-    return {
-      params: null,
-      problem: `unreadable (${error instanceof Error ? error.message : String(error)})`,
-    };
+  const chosen = OMISSION_FILL_PARAMS.chosen;
+  if (chosen === null || typeof chosen !== 'object') {
+    return { params: null, problem: 'missing chosen block' };
   }
+  const hMs = chosen.h_ms;
+  const gMs = chosen.g_ms;
+  const scoreT = chosen.score_t;
+  const wMin = chosen.w_min;
+  const wHallu = chosen.w_hallu;
+  const domN = chosen.dom_n;
+  const lookbackMs = chosen.lookback_ms;
+  const silenceMs = chosen.silence_ms;
+  const numeralMode = chosen.numeral_mode;
+  if (
+    typeof hMs !== 'number' ||
+    typeof gMs !== 'number' ||
+    typeof scoreT !== 'number' ||
+    typeof wMin !== 'number' ||
+    typeof wHallu !== 'number' ||
+    typeof domN !== 'number' ||
+    typeof lookbackMs !== 'number' ||
+    !(typeof silenceMs === 'number' || silenceMs === null) ||
+    typeof numeralMode !== 'string' ||
+    !OMISSION_FILL_NUMERAL_MODES.includes(numeralMode as OmissionFillParams['numeralMode'])
+  ) {
+    return { params: null, problem: 'malformed chosen block' };
+  }
+  return {
+    params: {
+      hMs,
+      gMs,
+      scoreT,
+      wMin,
+      wHallu,
+      domN,
+      lookbackMs,
+      silenceMs,
+      numeralMode: numeralMode as OmissionFillParams['numeralMode'],
+    },
+    problem: null,
+  };
 }
 
 /**
@@ -2089,24 +2080,30 @@ export function handleVoiceRealtimeConnection(
   }
   // ---- the omission-fill producer's parameters (GOAL-046) --------------------------------------
   //
-  // READ PER CONNECTION, from the SAME file the replay gate reads, so an edit is a hot change and
-  // the relay can never measure with a copy the rule was not locked against. The readings go into
-  // the journal before any candidate is judged: a replayed journal cannot be checked without them.
+  // The shipped values come from the JSON module beside this file — they travel with the build, so
+  // the producer is on in a deployment that has no `experiments/` tree. The settings file's
+  // `omissionFill` override (validated there, read once per connection) is applied next, then the
+  // seam's partial, so a criterion can shrink one window without inventing the others. The readings
+  // go into the journal before any candidate is judged: a replayed journal cannot be checked
+  // without them.
   //
-  // `seams.omissionFillParams === null` is the criterion-only "not this connection" switch; a
-  // partial is merged over the locked values, so a test shrinks one window without inventing the
-  // others. An unreadable file is recorded and leaves the producer off — never guessed.
-  const lockedOmissionFill = readOmissionFillParams();
+  // `seams.omissionFillParams === null` is the criterion-only "not this connection" switch. A
+  // malformed shipped block is recorded and leaves the producer off — never guessed.
+  const shippedOmissionFill = readOmissionFillParams();
   const omissionFillParams: OmissionFillParams | null =
     seams.omissionFillParams === null
       ? null
-      : lockedOmissionFill.params === null
+      : shippedOmissionFill.params === null
         ? null
-        : { ...lockedOmissionFill.params, ...(seams.omissionFillParams ?? {}) };
+        : {
+            ...shippedOmissionFill.params,
+            ...(settings.omissionFill ?? {}),
+            ...(seams.omissionFillParams ?? {}),
+          };
   if (omissionFillParams === null) {
     seams.log?.(
       `omission_fill disabled (${
-        seams.omissionFillParams === null ? 'seam' : lockedOmissionFill.problem ?? 'no parameters'
+        seams.omissionFillParams === null ? 'seam' : shippedOmissionFill.problem ?? 'no parameters'
       })`,
     );
   } else {

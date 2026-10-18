@@ -7,11 +7,15 @@ compared on identical model output.
    python3 -I replay_rule.py --sweep               # parameter sweep (H x G x SCORE_T x weight threshold)
    python3 -I replay_rule.py --check               # AC-398 gate on the FROZEN connection list + params file
    python3 -I replay_rule.py --check-labels        # AC-399 gate: fills vs the human O/D labels
+   python3 -I replay_rule.py --print-chosen        # the `chosen` parameters the replay reads (AC-402)
    python3 -I replay_rule.py --emit-fixture        # write the TS parity fixture (frozen connections + synthetics)
 
-Both gates read `omission-fill-params.json` (chosen parameters, thresholds, reasons, frozen connections).
-`--params FILE` overrides it (used to demonstrate the false forms: SCORE_T=1.1 fills everything, SCORE_T=0
-fills almost nothing; both must turn the gates red).
+Both gates read `omission-fill-params.json` (thresholds, reasons, frozen connections) AND its `chosen`
+parameters from `server/modules/voice-realtime/omission-fill-params.json` — the copy that ships with the
+build and that the relay imports, so production and the replay can never disagree about the numbers.
+The Python `DEFAULT_PARAMS` below must mirror that `chosen` block; `--print-chosen` (and any gate) exits
+non-zero if they drift. `--params FILE` overrides BOTH files (used to demonstrate the false forms:
+SCORE_T=1.1 fills everything, SCORE_T=0 fills almost nothing; both must turn the gates red).
 
 `--emit-fixture` is the OTHER side of this file's contract: the server-side pure function
 (`server/modules/voice-realtime/voice-realtime-omission-fill.ts`) must reproduce THIS implementation's
@@ -25,6 +29,11 @@ from collections import defaultdict
 LOG = os.path.expanduser('~/.cloudcli/voice-realtime-log')
 HERE = os.path.dirname(os.path.abspath(__file__))
 PARAMS_FILE = os.path.join(HERE, 'omission-fill-params.json')
+# The `chosen` parameters live in the SERVER tree: that copy is imported by
+# `voice-realtime-ws-proxy.service.ts` and emitted by tsc with the build, so production does not need
+# `experiments/`. The replay reads it back from here — the reverse dependency AC-402 asks for.
+SERVER_PARAMS_FILE = os.path.normpath(os.path.join(
+    HERE, '..', '..', 'server', 'modules', 'voice-realtime', 'omission-fill-params.json'))
 LABELS_FILE = os.path.join(HERE, 'labels.json')
 FLAGGED_FILE = os.path.join(HERE, 'flagged-for-review.md')
 FIXTURE_FILE = os.path.join(HERE, 'fixtures', 'omission-fill-cases.json')
@@ -350,23 +359,56 @@ OUTER_THRESHOLDS = {          # AC-398's outer bounds: the params file must not 
 def resolve_params_file(path=None):
     return path or PARAMS_FILE
 
-def load_params(path=None):
-    """-> (params dict, thresholds dict, frozen connections list, raw file object).  Raises SystemExit(2) on a
-    missing/invalid file — a gate must never silently fall back to defaults."""
-    path = resolve_params_file(path)
+def _read_json(path, label):
     if not os.path.exists(path):
-        print(f"FAIL params file missing: {path}", file=sys.stderr)
+        print(f"FAIL {label} missing: {path}", file=sys.stderr)
         raise SystemExit(2)
     try:
-        raw = json.load(open(path))
+        return json.load(open(path))
     except Exception as e:
-        print(f"FAIL params file unreadable: {path}: {e}", file=sys.stderr)
+        print(f"FAIL {label} unreadable: {path}: {e}", file=sys.stderr)
         raise SystemExit(2)
+
+def read_chosen(path):
+    """Read and validate a `chosen` block. Used for the server's shipped file (and, unchanged, for a
+    `--params` override file)."""
+    raw = _read_json(path, 'chosen params file')
     chosen = raw.get('chosen') or {}
     missing = [k for k in REQUIRED_PARAM_KEYS if k not in chosen]
     if missing:
-        print(f"FAIL params file {path} missing chosen keys: {', '.join(missing)}", file=sys.stderr)
+        print(f"FAIL chosen params file {path} missing chosen keys: {', '.join(missing)}", file=sys.stderr)
         raise SystemExit(2)
+    return chosen, raw
+
+def check_chosen_matches_policy(chosen, path):
+    """The server's `chosen` is what the relay runs with; `DEFAULT_PARAMS` below keeps this reference
+    implementation runnable. A value they disagree on is a gate failure, not a preference: the replay
+    would otherwise measure a rule the relay is not running (AC-402 (c))."""
+    drift = [f"{k}: server={chosen[k]!r} python={DEFAULT_PARAMS[k]!r}"
+             for k in REQUIRED_PARAM_KEYS if chosen[k] != DEFAULT_PARAMS[k]]
+    if drift:
+        print(f"FAIL {path}: chosen disagrees with the Python defaults: " + '; '.join(drift), file=sys.stderr)
+        raise SystemExit(2)
+
+def load_params(path=None):
+    """-> (params dict, thresholds dict, frozen connections list, raw file object).  Raises SystemExit(2) on a
+    missing/invalid file — a gate must never silently fall back to defaults.
+
+    Without `--params`, the `chosen` parameters come from the SERVER's shipped JSON and the thresholds +
+    frozen connection list from this directory's file. A `--params FILE` override is self-contained (as
+    before) and deliberately skips the consistency check: it exists to demonstrate false forms."""
+    override = path is not None
+    path = resolve_params_file(path)
+    raw = _read_json(path, 'params file')
+    if override:
+        chosen = raw.get('chosen') or {}
+        missing = [k for k in REQUIRED_PARAM_KEYS if k not in chosen]
+        if missing:
+            print(f"FAIL params file {path} missing chosen keys: {', '.join(missing)}", file=sys.stderr)
+            raise SystemExit(2)
+    else:
+        chosen, _ = read_chosen(SERVER_PARAMS_FILE)
+        check_chosen_matches_policy(chosen, SERVER_PARAMS_FILE)
     P = dict(DEFAULT_PARAMS); P.update({k: chosen[k] for k in REQUIRED_PARAM_KEYS})
     thresholds = raw.get('thresholds') or {}
     for k in OUTER_THRESHOLDS:
@@ -415,6 +457,18 @@ def aggregate(rows):
         for k, v in row['r'].items(): r[k] += v
         lat += row['lat']
     return r, lat
+
+# ── --print-chosen (AC-402) ─────────────────────────────────────────────────────────────────────────────────────────────
+def cmd_print_chosen():
+    """Print the `chosen` block the replay reads, item for item, as JSON.
+
+    The values come from `server/modules/voice-realtime/omission-fill-params.json` (the file the relay
+    imports), and the run fails if that block disagrees with this file's `DEFAULT_PARAMS`. Consumers:
+    AC-402 (c) compares the output with the server file itself."""
+    chosen, _ = read_chosen(SERVER_PARAMS_FILE)
+    check_chosen_matches_policy(chosen, SERVER_PARAMS_FILE)
+    print(json.dumps({k: chosen[k] for k in REQUIRED_PARAM_KEYS}, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
 
 # ── --check (AC-398) ────────────────────────────────────────────────────────────────────────────────────────────────────
 def cmd_check(param_file=None):
@@ -637,7 +691,7 @@ def cmd_emit_fixture(out_path=None):
     doc = {
         'rule': 'voice-realtime-omission-fill-SPEC.md v2',
         'generatedBy': 'python3 -I experiments/voice-relay-qb/replay_rule.py --emit-fixture',
-        'paramsFile': 'experiments/voice-relay-qb/omission-fill-params.json',
+        'paramsFile': 'server/modules/voice-realtime/omission-fill-params.json',
         'planner': 'server/modules/voice-realtime/voice-realtime-omission-fill.ts',
         'caseCount': len(cases),
         'cases': cases,
@@ -709,6 +763,7 @@ def main(argv):
         return cmd_emit_fixture(out)
     if '--check' in argv: return cmd_check(param_file)
     if '--check-labels' in argv: return cmd_check_labels(param_file)
+    if '--print-chosen' in argv: return cmd_print_chosen()
     if '--sweep' in argv: return cmd_sweep()
 
     since = argv[argv.index('--since') + 1] if '--since' in argv else None

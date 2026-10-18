@@ -15,7 +15,7 @@
  * it, because the Realtime model's behaviour is the thing being tuned and a mid-session swap makes
  * the change unattributable.
  *
- * THE KEY SET. Four top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly as
+ * THE KEY SET. Five top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly as
  * it always has been, rather than refused:
  *
  *   · `version`         — a non-empty string, logged beside every injection so an edit is visible.
@@ -29,6 +29,14 @@
  *                         validated HERE, through the resolver's own validator, so a refused value is
  *                         reported in {@link VoiceRealtimeSettings.problems} and the connection falls
  *                         back to the default rather than shipping a half-applied detector.
+ *   · `omissionFill`    — a PARTIAL override of the omission-fill producer's parameters, in the same
+ *                         snake_case spelling the shipped `omission-fill-params.json` uses
+ *                         (`{ "h_ms": 9000, "numeral_mode": "runs2", … }`). Absent keys keep the
+ *                         compiled-in value. This is the hot-change path for parameters that
+ *                         otherwise travel with the build; see {@link VoiceRealtimeSettings.omissionFill}.
+ *                         A type error, an unknown `numeral_mode`, or an out-of-range H/G/score/weight
+ *                         refuses the WHOLE file, so the connection keeps the shipped values and the
+ *                         reason reaches `problems`.
  *
  * FAIL OPEN ON I/O, FAIL CLOSED ON SHAPE. A missing, unreadable or unparseable file falls back to
  * the shipped defaults with the reason in {@link VoiceRealtimeSettings.problems}; a file that
@@ -42,6 +50,11 @@
  */
 import { readFileSync } from 'node:fs';
 
+import {
+  OMISSION_FILL_NUMERAL_MODES,
+  type OmissionFillNumeralMode,
+  type OmissionFillParams,
+} from './voice-realtime-omission-fill.js';
 import {
   validateTurnDetection,
   type TurnDetectionValues,
@@ -108,6 +121,16 @@ export const VOICE_REALTIME_CONTEXT_VARIABLE = `{{${CONTEXT_VARIABLE_NAME}}}`;
 /** Where a reading came from: the shipped defaults, or a file that was read and accepted. */
 export type VoiceRealtimeSettingsSource = 'default' | 'file';
 
+/**
+ * A settings file's PARTIAL override of the omission-fill producer's parameters.
+ *
+ * Same field names as {@link OmissionFillParams}, so the proxy can spread it over the compiled-in
+ * `chosen` block without a translation table; only the fields the file named are present.
+ */
+export type VoiceRealtimeOmissionFill = {
+  -readonly [K in keyof OmissionFillParams]?: OmissionFillParams[K];
+};
+
 /** One reading of the settings, good for exactly one connection. */
 export type VoiceRealtimeSettings = {
   /** The relay prompt the session is opened with, with or without a pack. */
@@ -120,6 +143,13 @@ export type VoiceRealtimeSettings = {
    * to the environment and then to the shipped default rather than pinning the shipped value here.
    */
   turnDetection: TurnDetectionValues;
+  /**
+   * The file's `omissionFill`, VALIDATED: only the fields it named and this loader accepted, or
+   * `null` when the file named none (or the whole file was refused). The proxy merges it over the
+   * parameters shipped in `omission-fill-params.json`, so an operator can retune a window for the
+   * NEXT connection without a rebuild.
+   */
+  omissionFill: VoiceRealtimeOmissionFill | null;
   /** The compiled-in values, or the file's. */
   source: VoiceRealtimeSettingsSource;
   /** The file's own `version`, logged beside every injection so an edit is visible in the log. */
@@ -139,6 +169,7 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
   instructions: string;
   contextTemplate: string;
   turnDetection: TurnDetectionValues;
+  omissionFill: VoiceRealtimeOmissionFill | null;
 } {
   return {
     instructions: baseInstructions,
@@ -146,12 +177,112 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
     // No file, no tuned detector: the empty object means "this source names nothing", so the resolver
     // falls through to the environment and then to its own shipped default.
     turnDetection: {},
+    // No file, no override: the producer keeps the values shipped in `omission-fill-params.json`.
+    omissionFill: null,
   };
 }
 
 /** The `{{…}}` names a template uses, in order of appearance, without their braces. */
 function templateVariables(template: string): string[] {
   return [...template.matchAll(/\{\{([^{}]*)\}\}/g)].map((match) => match[1] ?? '');
+}
+
+/**
+ * The bounds an `omissionFill` override must stay inside, in the shipped file's own units.
+ *
+ * These are sanity bounds, not a second copy of the tuned values: a `h_ms`/`g_ms` below a second (or
+ * above a minute) no longer describes a confirmation window, `score_t` is a coverage fraction, and
+ * the weight/count thresholds must stay positive. A value outside its bound refuses the whole
+ * override so the connection keeps the shipped parameters — the same "shape error rejects" rule the
+ * rest of this file follows, rather than half-applying a typo.
+ */
+const OMISSION_FILL_BOUNDS = {
+  h_ms: [1_000, 60_000],
+  g_ms: [0, 60_000],
+  score_t: [0, 1],
+  w_min: [1, 1_000],
+  w_hallu: [1, 1_000],
+  dom_n: [1, 1_000],
+  lookback_ms: [0, 60_000],
+  silence_ms: [0, 60_000],
+} as const satisfies Readonly<Record<string, readonly [number, number]>>;
+
+/** Reads one numeric override field, recording a problem instead of guessing when it is out of shape. */
+function omissionFillNumber(
+  value: unknown,
+  field: keyof typeof OMISSION_FILL_BOUNDS,
+  problems: string[],
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    problems.push(`\`omissionFill.${field}\` must be a finite number`);
+    return undefined;
+  }
+  const [minimum, maximum] = OMISSION_FILL_BOUNDS[field];
+  if (value < minimum || value > maximum) {
+    problems.push(`\`omissionFill.${field}\` must be between ${minimum} and ${maximum}`);
+    return undefined;
+  }
+  return value;
+}
+
+/**
+ * Validates a settings file's `omissionFill` object into the partial the proxy spreads over the
+ * shipped parameters.
+ *
+ * Unknown sub-keys are IGNORED (the same way this file ignores unknown top-level keys), because the
+ * shipped block carries fields the planner does not read (`len_min` is a replay metric); a known key
+ * with the wrong type, an unknown `numeral_mode`, or a number outside {@link OMISSION_FILL_BOUNDS}
+ * rejects the WHOLE override and returns a problem instead.
+ *
+ * Consumers: {@link loadVoiceRealtimeSettings} only.
+ */
+function validateOmissionFill(value: unknown, filePath: string): {
+  values: VoiceRealtimeOmissionFill | null;
+  problems: string[];
+} {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { values: null, problems: [`${filePath}: \`omissionFill\` must be a JSON object`] };
+  }
+  const record = value as Record<string, unknown>;
+  const problems: string[] = [];
+  const values: VoiceRealtimeOmissionFill = {};
+
+  const hMs = record.h_ms === undefined ? undefined : omissionFillNumber(record.h_ms, 'h_ms', problems);
+  if (hMs !== undefined) values.hMs = hMs;
+  const gMs = record.g_ms === undefined ? undefined : omissionFillNumber(record.g_ms, 'g_ms', problems);
+  if (gMs !== undefined) values.gMs = gMs;
+  const scoreT = record.score_t === undefined ? undefined : omissionFillNumber(record.score_t, 'score_t', problems);
+  if (scoreT !== undefined) values.scoreT = scoreT;
+  const wMin = record.w_min === undefined ? undefined : omissionFillNumber(record.w_min, 'w_min', problems);
+  if (wMin !== undefined) values.wMin = wMin;
+  const wHallu = record.w_hallu === undefined ? undefined : omissionFillNumber(record.w_hallu, 'w_hallu', problems);
+  if (wHallu !== undefined) values.wHallu = wHallu;
+  const domN = record.dom_n === undefined ? undefined : omissionFillNumber(record.dom_n, 'dom_n', problems);
+  if (domN !== undefined) values.domN = domN;
+  const lookbackMs =
+    record.lookback_ms === undefined ? undefined : omissionFillNumber(record.lookback_ms, 'lookback_ms', problems);
+  if (lookbackMs !== undefined) values.lookbackMs = lookbackMs;
+  // `silence_ms: null` is the rule's own "silence-confirmation branch off" switch, so null is a
+  // valid shape here and must not be pushed through the numeric bounds.
+  if (record.silence_ms === null) {
+    values.silenceMs = null;
+  } else if (record.silence_ms !== undefined) {
+    const silenceMs = omissionFillNumber(record.silence_ms, 'silence_ms', problems);
+    if (silenceMs !== undefined) values.silenceMs = silenceMs;
+  }
+
+  if (record.numeral_mode !== undefined) {
+    if (
+      typeof record.numeral_mode !== 'string' ||
+      !OMISSION_FILL_NUMERAL_MODES.includes(record.numeral_mode as OmissionFillNumeralMode)
+    ) {
+      problems.push(`\`omissionFill.numeral_mode\` must be one of ${OMISSION_FILL_NUMERAL_MODES.join(', ')}`);
+    } else {
+      values.numeralMode = record.numeral_mode as OmissionFillNumeralMode;
+    }
+  }
+
+  return { values: problems.length > 0 ? null : values, problems };
 }
 
 /**
@@ -238,6 +369,17 @@ export function loadVoiceRealtimeSettings(options: {
     problems.push(...validated.problems);
   }
 
+  // The omission-fill producer's per-connection retuning. The values shipped in
+  // `omission-fill-params.json` are the defaults; this key lets an operator change them for the NEXT
+  // connection without a rebuild. A refused override contributes to `problems` like any other shape
+  // error, so the whole reading falls back to the shipped values and the log says why.
+  let omissionFill: VoiceRealtimeOmissionFill | null = null;
+  if (record.omissionFill !== undefined) {
+    const validated = validateOmissionFill(record.omissionFill, filePath);
+    omissionFill = validated.values;
+    problems.push(...validated.problems);
+  }
+
   // The shape of the block is a contract, not a preference: the pack has to reach the model, and a
   // template that never mentions the variable — or mentions one nobody defined — would either drop
   // the pack or send the model a literal `{{something}}`.
@@ -253,7 +395,7 @@ export function loadVoiceRealtimeSettings(options: {
   if (problems.length > 0) {
     return { ...defaults, source: 'default', version, path: filePath, problems };
   }
-  return { instructions, contextTemplate, turnDetection, source: 'file', version, path: filePath, problems: [] };
+  return { instructions, contextTemplate, turnDetection, omissionFill, source: 'file', version, path: filePath, problems: [] };
 }
 
 /**

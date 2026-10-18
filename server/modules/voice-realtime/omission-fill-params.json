@@ -1,0 +1,14 @@
+{
+  "chosen": {
+    "h_ms": 12000,
+    "g_ms": 1000,
+    "score_t": 0.25,
+    "w_min": 7,
+    "w_hallu": 12,
+    "dom_n": 10,
+    "lookback_ms": 1000,
+    "len_min": 7,
+    "numeral_mode": "runs2",
+    "silence_ms": 3000
+  }
+}

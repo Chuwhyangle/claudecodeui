@@ -15,8 +15,8 @@
  *    disagreement on any of them is a red. Regenerate with
  *    `python3 -I experiments/voice-relay-qb/replay_rule.py --emit-fixture`.
  *
- * WHY THE FIXTURE'S PARAMS ARE CHECKED AGAINST THE LOCKED FILE. The parameters are locked in
- * `omission-fill-params.json`; a fixture generated before a parameter change would silently pin the
+ * WHY THE FIXTURE'S PARAMS ARE CHECKED AGAINST THE LOCKED FILE. The parameters are locked in the
+ * server's `omission-fill-params.json`; a fixture generated before a parameter change would silently pin the
  * OLD rule. The first parity test maps `chosen` and requires the fixture to carry exactly it, so a
  * change to either the file or the fixture without regenerating the other is red.
  *
@@ -38,7 +38,9 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../../..');
-const PARAMS_FILE = path.join(REPO_ROOT, 'experiments', 'voice-relay-qb', 'omission-fill-params.json');
+// The `chosen` parameters are OWNED by the server module and shipped with the build (task
+// gap-omission-fill-params-owned-by-server); the replay tool reads this same file.
+const PARAMS_FILE = path.join(REPO_ROOT, 'server', 'modules', 'voice-realtime', 'omission-fill-params.json');
 const FIXTURE_FILE = path.join(REPO_ROOT, 'experiments', 'voice-relay-qb', 'fixtures', 'omission-fill-cases.json');
 
 // ── the locked parameters (no second copy: these are read from task 1's file) ──────────────────────

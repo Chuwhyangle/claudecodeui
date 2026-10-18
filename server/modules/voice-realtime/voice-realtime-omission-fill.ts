@@ -9,11 +9,12 @@
  * server side, with no I/O, no timers, no logging and no defaults of its own. The caller owns the
  * clock, the transcripts, the executed messages and the parameters.
  *
- * PARAMETERS ARE THE LOCKED FILE'S, NOT THIS FILE'S. Every value comes from the caller's
+ * PARAMETERS ARE THE SERVER'S SHIPPED FILE'S, NOT THIS FILE'S. Every value comes from the caller's
  * `OmissionFillParams`, which the relay derives from
- * `experiments/voice-relay-qb/omission-fill-params.json`'s `chosen` block. This module deliberately
- * declares NO fallback values: a second copy of H/G/SCORE_T here would be a second source of truth
- * that silently disagrees with the replay gate.
+ * `server/modules/voice-realtime/omission-fill-params.json`'s `chosen` block (imported as a JSON
+ * module, so tsc ships it with the build; the replay tool reads the same file). This module
+ * deliberately declares NO fallback values: a second copy of H/G/SCORE_T here would be a second
+ * source of truth that silently disagrees with the replay gate.
  *
  * EXECUTED MEANS EXECUTED. `executed` is the model messages that actually ran: `session_send` /
  * `session_interrupt` calls whose response finished `completed`. Calls inside a response the endpoint
@@ -52,8 +53,17 @@ export type OmissionFillExecuted = {
 export type OmissionFillNumeralMode = 'runs2' | 'all' | 'quantifier';
 
 /**
+ * Every numeral mode the rule understands, as a runtime value.
+ *
+ * Consumers: `voice-realtime-ws-proxy.service.ts` (validating the shipped `chosen` block) and
+ * `voice-realtime-settings.ts` (validating a per-connection `omissionFill` override). Kept beside
+ * {@link OmissionFillNumeralMode} so the type and the accepted set cannot drift apart.
+ */
+export const OMISSION_FILL_NUMERAL_MODES: readonly OmissionFillNumeralMode[] = ['runs2', 'all', 'quantifier'];
+
+/**
  * The locked rule-v2 parameters. Field names mirror `chosen` in
- * `experiments/voice-relay-qb/omission-fill-params.json`:
+ * `server/modules/voice-realtime/omission-fill-params.json`:
  * `h_ms → hMs`, `g_ms → gMs`, `score_t → scoreT`, `w_min → wMin`, `w_hallu → wHallu`,
  * `dom_n → domN`, `lookback_ms → lookbackMs`, `silence_ms → silenceMs`, `numeral_mode → numeralMode`.
  *

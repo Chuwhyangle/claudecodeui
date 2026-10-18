@@ -1,19 +1,8 @@
 {
-  "_comment": "Omission-fill rule v2 parameter lock (task gap-omission-fill-sweep-and-lock-params). `python3 -I replay_rule.py --check` reads this file, replays ONLY the frozen connections below and asserts the thresholds. The connection list is frozen: it does not grow when new journals appear, otherwise the AC readings would drift.",
+  "_comment": "Omission-fill rule v2 parameter lock (task gap-omission-fill-sweep-and-lock-params; ownership moved to server/ by task gap-omission-fill-params-owned-by-server). `python3 -I replay_rule.py --check` reads the `chosen` parameters from `server/modules/voice-realtime/omission-fill-params.json` (shipped with the build, so production never depends on this directory) and the thresholds + frozen connection list below. The connection list is frozen: it does not grow when new journals appear, otherwise the AC readings would drift.",
   "version": 2,
-  "rule": "voice-realtime-omission-fill-SPEC.md v2 (+ silence confirmation, see chosen.silence_ms)",
-  "chosen": {
-    "h_ms": 12000,
-    "g_ms": 1000,
-    "score_t": 0.25,
-    "w_min": 7,
-    "w_hallu": 12,
-    "dom_n": 10,
-    "lookback_ms": 1000,
-    "len_min": 7,
-    "numeral_mode": "runs2",
-    "silence_ms": 3000
-  },
+  "rule": "voice-realtime-omission-fill-SPEC.md v2 (+ silence confirmation, see the shipped chosen.silence_ms)",
+  "chosen_from": "server/modules/voice-realtime/omission-fill-params.json",
   "thresholds": {
     "lost_long_ratio_max": 0.03,
     "raw_ratio_max": 0.15,

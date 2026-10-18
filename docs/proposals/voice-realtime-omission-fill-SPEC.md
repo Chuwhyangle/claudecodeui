@@ -1,7 +1,7 @@
 # Live Voice 遗漏补发 SPEC —— 以模型改写为主投递，仅在确认遗漏时补发识别原文
 
 状态：Draft / 待实施（规则已在日志回放上验证，未接入 `server/`）
-参数已锁定：`experiments/voice-relay-qb/omission-fill-params.json`（H / G / S / SCORE_T / 权重门槛 / 数字处理方式 + 冻结连接清单 + 阈值与理由）；回放门 `replay_rule.py --check`（AC-398）与 `--check-labels`（AC-399）都读它。
+参数已锁定：`server/modules/voice-realtime/omission-fill-params.json` 的 `chosen` 块（H / G / S / SCORE_T / 权重门槛 / 数字处理方式；随 tsc 构建发出，生产运行时不读 `experiments/`），阈值与冻结连接清单仍在 `experiments/voice-relay-qb/omission-fill-params.json`；回放门 `replay_rule.py --check`（AC-398）与 `--check-labels`（AC-399）反向读取服务端那份 `chosen`。
 决策输入：人 yale 2026-10-18（见「已确认的决策」）
 关系：
 
@@ -143,7 +143,7 @@
 1. 新增一个**纯函数模块**（建议 `omission-fill.ts`）：`planOmissionFills(finals, executed, speechStarts, now, params) → fills`，无 I/O；v2 规则的唯一实现。参数从 `omission-fill-params.json` 的 `chosen` 段派生（实现里不要另立默认值）。
 2. 代理在两个时刻调用它：新转写到达时登记、`T_i` 到期时求值。需要的只有 `F`、`M` 与 `speech_started` 的内存序列（已有）。
 3. **替换而非叠加** settle producer 对"丢话兜底"的触发；`MODEL_TEXT_REPLY` 的逐字分支、忙等待与合并投递保持不变。叠加会使两套兜底互相重复。
-4. 全部参数（权重门槛、`SCORE_T`、`G`、`H`、`S`、数字处理方式）以 `omission-fill-params.json` 的 `chosen` 为唯一正本，并写入连接日志，便于回放。
+4. 全部参数（权重门槛、`SCORE_T`、`G`、`H`、`S`、数字处理方式）以 `server/modules/voice-realtime/omission-fill-params.json` 的 `chosen` 为唯一正本：服务端以 JSON module 导入，tsc 的 `resolveJsonModule` 让它随构建发出，生产运行时不读 `experiments/`。参数写入连接日志，便于回放。热改走 `voice-realtime-settings.ts` 的可选键 `omissionFill`（局部覆盖内置值；每连接读一次，已建立的连接不变；形状非法时该连接回退内置默认值并记录原因）。回放工具 `replay_rule.py` 反向读取同一份 `chosen`（`--print-chosen` 打印它）。
 5. 日志里需要补一条记录：每次补发的 `{i, T_i, coverage, reason}`，以及每个候选被放过的原因，供回放核对。
 
 ## 测试
@@ -157,6 +157,7 @@
 
 | 项 | 说明 |
 |---|---|
+| 参数所有权 | **已迁移（2026-10-18）**：`chosen` 由 `server/modules/voice-realtime/omission-fill-params.json` 拥有并随构建发出，生产不再依赖 `experiments/`；热改走 settings 的 `omissionFill` 键（每连接生效、非法回退默认）；`replay_rule.py --print-chosen` 反向读取服务端那份，`--check` / `--check-labels` 读数不变。 |
 | `H`、`G` 扫描 | **已完成（2026-10-18）**：`--sweep` 180 组，35 组可行；H=12 / G=1 选定，读数见「参数扫描」。H≤8 全部不可行。 |
 | 含"一"的词 | **已解决**：数字处理选 `runs2`（只删连续 ≥2 个数字字符），`一些/一下` 保留；回放读数优于 `all` 与 `quantifier`。 |
 | 沉默确认的代价 | **已测**：沉默分支只改 `T_i`，逐连接的补发/重复/丢失不变；p50 12 s → 5.2 s。真实会话里若模型在 `t+S` 之后才回复并覆盖该句，会记入「模型与补发各一次」——本回放已按 120 s 窗口计入，未观察到新增。 |
