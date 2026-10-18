@@ -82,8 +82,11 @@ test('arguments, stdout/stderr and the exit code are forwarded unchanged', () =>
 });
 
 test('the fallback also applies when the cap is in effect (QUAY_MEMORY_MAX unset)', () => {
+  // The key must be ABSENT (not empty) so the wrapper derives its own cap. An object spread drops
+  // ProcessEnv's string index signature, so type the copy explicitly before deleting the key.
+  /** @type {Record<string, string | undefined>} */
   const env = { ...process.env, PATH: BARE_PATH };
-  delete env.QUAY_MEMORY_MAX; // let the wrapper derive its cap and take a capped exec path
+  delete env.QUAY_MEMORY_MAX;
   const r = spawnSync('bash', [SCRIPT, 'tsx', '--version'], { encoding: 'utf8', env });
   assert.equal(r.status, 0, `expected exit 0, got ${r.status}; stderr: ${r.stderr}`);
   assert.match(r.stdout.split('\n')[0], /^tsx v/, `expected a tsx version line, got: ${JSON.stringify(r.stdout)}`);
