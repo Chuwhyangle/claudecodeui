@@ -105,11 +105,3 @@ ws-proxy 是 GOAL-041/043/044/045 共同的热点文件，本任务与它们修�
 ### 套件计数钉子（2026-10-18 重测）
 
 - 本任务新增 `server/modules/voice-realtime/tests/voice-realtime-omission-fill-wiring.test.ts`，`scripts/test.sh` 收集的 server 测试文件数 364 → 365；`server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 读数相应改为 `unknown=362` / `unknown=364`。merge develop 后实测 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = 365，AC2/AC3 单跑均绿。
-
-## Blocker
-
-**2026-10-18T09:39:38.611Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=75004 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792316053008
-- run_id：wk-prod-anchor
-- session_id：ae76c5c9-ba04-45e5-8a49-993094d3e5d5
