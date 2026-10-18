@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-listening-before-capture-ready
 title: Live Voice 在麦克风首帧到达前就显示 Listening：加「正在启动麦克风」相位，采集就绪后才算 listening
-status: todo
+status: ready
 labels:
   - gap
   - defect
