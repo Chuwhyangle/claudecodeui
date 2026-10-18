@@ -37,6 +37,13 @@ export {
   voiceTranscriptRows,
 } from '@/modules/chat/voice-realtime/placeCaptions';
 export { useFollowSentRun } from '@/modules/chat/voice-realtime/useFollowSentRun';
+// The microphone warm-up: `ChatInterface` starts it on the Live Voice tap, in parallel with the
+// session allocation, and the hook's `start()` adopts the result. `releaseWarmMicrophoneSource`
+// is the tap's own cleanup for a prewarm that will never be started.
+export {
+  releaseWarmMicrophoneSource,
+  warmMicrophoneSource,
+} from '@/modules/chat/voice-realtime/audioSource';
 export {
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,
