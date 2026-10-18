@@ -1,7 +1,7 @@
 ---
 id: gap-omission-fill-wire-into-ws-proxy
 title: ws-proxy 接入遗漏补发：取代 settle producer 的丢话兜底触发，补发写日志，并关闭 interrupt_response
-status: ready
+status: done
 labels:
   - gap
   - voice
