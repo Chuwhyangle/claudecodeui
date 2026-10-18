@@ -27,10 +27,11 @@ extra:
 - [ ] AC1 渲染契约：running 行渲染 `data-activity-phase`/`data-activity-tool`/`data-activity-elapsed`，值与 `useProcessingSessions()` 里该 sessionId 的 `SessionActivity` 一致；resident-idle 行不渲染 `data-activity-phase`。
 - [ ] AC2 标签归约：phase 标签词经 `activityPhaseLabelKey` 归约（非硬编码新表）；`tool` 相位显示 toolName，toolName 为空回退 `toolGeneric`。
 - [ ] AC3 测试绿：新增 `src/modules/sidebar/tests/RunningViewPhase.test.tsx`，覆盖「有 phase / 无 phase（resident-idle）/ tool 无名字」三例；`bash scripts/with-memory-cap.sh vitest run src/modules/sidebar/tests/RunningViewPhase.test.tsx` 退出码 0。
+- [ ] AC4 双视口适配：phase/tool/elapsed 在 `SidebarSessionItem` 的 compact（移动浏览器窄视口）与非 compact（桌面）两分支均渲染；`RunningViewPhase.test.tsx` 覆盖 `useCompactSidebar()` 返回 true/false 两态，断言两态下行内 `data-activity-phase`/`-tool`/`-elapsed` 均存在；`RunningView` 在窄视口下同样携带数据属性（组件渲染断言，不依赖像素）。
 
 ## DoD
 
-Running sessions 视图与 Projects 视图的会话行，running 会话显示阶段+工具+耗时、resident-idle 显示 idle，均与 activity snapshot 一致；AC1/AC2 断言 + AC3 测试随代码落地且绿；`npm run typecheck`、`npm run lint:client` 退出码 0。
+Running sessions 视图与 Projects 视图的会话行，running 会话显示阶段+工具+耗时、resident-idle 显示 idle，均与 activity snapshot 一致；AC1/AC2 断言 + AC3 测试随代码落地且绿；**PC 桌面视口（1280px）与移动浏览器视口（390px）两档下 AC4 双视口验证通过**；`npm run typecheck`、`npm run lint:client` 退出码 0。
 
 ## Touches
 
