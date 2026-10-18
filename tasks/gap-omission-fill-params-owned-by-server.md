@@ -1,7 +1,7 @@
 ---
 id: gap-omission-fill-params-owned-by-server
 title: 遗漏补发的生产参数改由 server/ 拥有（随构建发布），热改走 voice-realtime-settings，回放工具反向读取
-status: todo
+status: ready
 labels:
   - gap
   - voice
