@@ -315,3 +315,19 @@ export {
   type VoiceRealtimeCaptureStoreOptions,
 } from './voice-realtime-audio-capture.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';
+// The omission-fill rule v2 (GOAL-046): a pure planner over the transcripts and executed messages the
+// relay already holds. It has no I/O, no timers and no parameter defaults — the caller passes the locked
+// values from `experiments/voice-relay-qb/omission-fill-params.json`. The ws proxy will call it when it
+// replaces the settle producer; the criterion drives it through THIS barrel, so the module stays behind
+// the boundary like every other sibling.
+export {
+  planOmissionFills,
+  type OmissionFill,
+  type OmissionFillExecuted,
+  type OmissionFillFinal,
+  type OmissionFillNumeralMode,
+  type OmissionFillParams,
+  type OmissionFillPlan,
+  type OmissionFillSkip,
+  type OmissionFillSkipReason,
+} from './voice-realtime-omission-fill.js';
