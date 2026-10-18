@@ -43,10 +43,10 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/chat/voice-realtime/tests/audioSource.warm.test.ts` 退出码 0；该文件断言 (a) 预热完成 `getUserMedia` + `addModule` + 建 node 各一次；(b) 预热后再 `start()` 不重复 `getUserMedia`/`addModule`，且首个采集帧直接经 `onFrame` 交付；(c) 未预热直接 `start()` 仍走原路径（复用 `audioSource.microphoneSuspend.test.ts` 的 FakeAudioContext harness，只 stub `?worker&url`）。
-- [ ] `npx vitest run src/modules/chat/tests/liveVoiceMicPrewarmEntry.test.tsx` 退出码 0；断言：无 session 时点击 live-voice 按钮，预热入口在 `createChatSession` resolve 之前已被调用（spy 调用顺序）；已有 session 时点击按钮同样先发起预热。
-- [ ] `npx vitest run src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx src/modules/chat/voice-realtime/tests/audioSource.microphoneSuspend.test.ts src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出码 0（既有相位/挂起/缓冲行为不回退）。
-- [ ] `npx tsc --noEmit -p tsconfig.json` 退出码 0。
+- [x] `npx vitest run src/modules/chat/voice-realtime/tests/audioSource.warm.test.ts` 退出码 0；该文件断言 (a) 预热完成 `getUserMedia` + `addModule` + 建 node 各一次；(b) 预热后再 `start()` 不重复 `getUserMedia`/`addModule`，且首个采集帧直接经 `onFrame` 交付；(c) 未预热直接 `start()` 仍走原路径（复用 `audioSource.microphoneSuspend.test.ts` 的 FakeAudioContext harness，只 stub `?worker&url`）。
+- [x] `npx vitest run src/modules/chat/tests/liveVoiceMicPrewarmEntry.test.tsx` 退出码 0；断言：无 session 时点击 live-voice 按钮，预热入口在 `createChatSession` resolve 之前已被调用（spy 调用顺序）；已有 session 时点击按钮同样先发起预热。
+- [x] `npx vitest run src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx src/modules/chat/voice-realtime/tests/audioSource.microphoneSuspend.test.ts src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出码 0（既有相位/挂起/缓冲行为不回退）。
+- [x] `npx tsc --noEmit -p tsconfig.json` 退出码 0。
 
 ## DoD
 
