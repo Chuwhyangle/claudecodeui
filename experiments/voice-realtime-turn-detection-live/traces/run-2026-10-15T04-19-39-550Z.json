@@ -1,0 +1,2350 @@
+{
+  "ranAt": "2026-10-15T04:19:39.551Z",
+  "capture": "7c01be7e",
+  "window": {
+    "startMs": 0,
+    "endMs": 48000
+  },
+  "budgetCny": 0.5,
+  "spendCny": 0.081618,
+  "guardTriggered": false,
+  "liveBaseline": {
+    "silenceMs": 400,
+    "speechStopped": 15,
+    "commits": 15,
+    "responses": 11,
+    "cancelled": 5,
+    "spendCny": 0.025593
+  },
+  "referenceFragments": [
+    "因此",
+    "Live Voice 使用过程当中啊",
+    "我发现还是会有这么一个问题",
+    "在这个会话中",
+    "我们马上也会碰到",
+    "就是现在的 Live Voice 还是会比较快地去断句",
+    "去发这些消息",
+    "发 response",
+    "就是现在的 Live Voice 还是会比较快的去断句",
+    "去发这些消息",
+    "发 response",
+    "但实际上就像现在这个会话一样",
+    "可能前后的间隔并不是那么大",
+    "呃",
+    "当然",
+    "这里面会有矛盾",
+    "我们希望",
+    "要尽可能敏感",
+    "当然这里面会有个矛盾",
+    "我们希望它尽可能的敏感",
+    "尽可能的灵敏",
+    "然后更快的有输出",
+    "但另外一方面",
+    "我们又不希望它过快的把消息发出去",
+    "请进一步的量化的进行分析",
+    "然后来实验找出可能的更好的方案"
+  ],
+  "results": [
+    {
+      "arm": "s400",
+      "silenceMs": 400,
+      "rep": 0,
+      "gateAFrames": 31,
+      "sessionId": "sess_MxWd4Nj3MxAbSzoyfPPOh",
+      "spendCny": 0.008661,
+      "speechStarted": 15,
+      "commits": 15,
+      "responses": 7,
+      "cancelled": 5,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。",
+        "这个汇报中，我们马上也会碰到。",
+        "就是现在的来往还是还是会比较快的去。",
+        "嗯，断句去去发这些消息。",
+        "",
+        "但实际上，就像现在的绘画一样。",
+        "可能前后的间隔并不是那么大。",
+        "呃，当然。",
+        "这里面会有矛盾，我们希望。",
+        "要尽可能敏感。",
+        "而且尽可能的灵敏，然后更快的有有输出。",
+        "但另外一方面，我们也不希望他过快的把消息发出去。",
+        "呃，行，进一步的量化的进行分析。",
+        "然后。",
+        "实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 1,
+      "joinedChars": 208,
+      "fragmentsCovered": 13,
+      "fragmentsTotal": 26,
+      "sendCalls": 6,
+      "sendLatencies": [
+        590,
+        469,
+        615,
+        370,
+        654,
+        1220
+      ],
+      "inputTokens": 3341,
+      "outputTokens": 125,
+      "inputs": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1240,
+          343,
+          123
+        ],
+        [
+          1415,
+          343,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_EfPG1PQFLxs8Sc82wuH2L\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_29a911fa2cf64339ac9ce1a6\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_X3Ufe7EdhnOCPyJztBSzL\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+      ],
+      "timeline": [
+        {
+          "at": 5230,
+          "kind": "STOP"
+        },
+        {
+          "at": 5231,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 5461,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。"
+        },
+        {
+          "at": 7264,
+          "kind": "STOP"
+        },
+        {
+          "at": 7264,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 7505,
+          "kind": "ASR",
+          "text": "这个汇报中，我们马上也会碰到。"
+        },
+        {
+          "at": 7577,
+          "kind": "RESP"
+        },
+        {
+          "at": 7854,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"Live voice选不选中了，我发现还是会有这么一个问题，在这个会话中我们马上也会碰到。\""
+        },
+        {
+          "at": 7855,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 11743,
+          "kind": "STOP"
+        },
+        {
+          "at": 11743,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 11998,
+          "kind": "ASR",
+          "text": "就是现在的来往还是还是会比较快的去。"
+        },
+        {
+          "at": 12064,
+          "kind": "RESP"
+        },
+        {
+          "at": 12212,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "就是现在的 live voice 还是会比较快地去……"
+        },
+        {
+          "at": 12213,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 12426,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_29a911fa2cf64339ac9ce1a6\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 12427,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 16123,
+          "kind": "STOP"
+        },
+        {
+          "at": 16123,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 16325,
+          "kind": "ASR",
+          "text": "嗯，断句去去发这些消息。"
+        },
+        {
+          "at": 16851,
+          "kind": "STOP"
+        },
+        {
+          "at": 16851,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 16954,
+          "kind": "ASR",
+          "text": ""
+        },
+        {
+          "at": 21317,
+          "kind": "STOP"
+        },
+        {
+          "at": 21317,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 21508,
+          "kind": "ASR",
+          "text": "但实际上，就像现在的绘画一样。"
+        },
+        {
+          "at": 24036,
+          "kind": "STOP"
+        },
+        {
+          "at": 24036,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 24226,
+          "kind": "ASR",
+          "text": "可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 25031,
+          "kind": "STOP"
+        },
+        {
+          "at": 25031,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 25166,
+          "kind": "ASR",
+          "text": "呃，当然。"
+        },
+        {
+          "at": 27711,
+          "kind": "STOP"
+        },
+        {
+          "at": 27711,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 27901,
+          "kind": "ASR",
+          "text": "这里面会有矛盾，我们希望。"
+        },
+        {
+          "at": 29199,
+          "kind": "STOP"
+        },
+        {
+          "at": 29199,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 29400,
+          "kind": "ASR",
+          "text": "要尽可能敏感。"
+        },
+        {
+          "at": 29543,
+          "kind": "RESP"
+        },
+        {
+          "at": 29814,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是 live voice 使用过程中的话，我发现还是会有这么一个问题。在这个会话中我们马上也会碰到，就是现在的 live voice 还是会"
+        },
+        {
+          "at": 29815,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 32713,
+          "kind": "STOP"
+        },
+        {
+          "at": 32713,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 32936,
+          "kind": "ASR",
+          "text": "而且尽可能的灵敏，然后更快的有有输出。"
+        },
+        {
+          "at": 33074,
+          "kind": "RESP"
+        },
+        {
+          "at": 33083,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": ""
+        },
+        {
+          "at": 33084,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 36304,
+          "kind": "STOP"
+        },
+        {
+          "at": 36304,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 36545,
+          "kind": "ASR",
+          "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+        },
+        {
+          "at": 36672,
+          "kind": "RESP"
+        },
+        {
+          "at": 36958,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是 live voice 使用过程中啊，我发现还是会有这么一个问题。在这个会话中我们马上也会碰到，就是现在的 live voice 还是会比较快的去断句，去发这些消息"
+        },
+        {
+          "at": 36958,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 40204,
+          "kind": "STOP"
+        },
+        {
+          "at": 40204,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 40427,
+          "kind": "ASR",
+          "text": "呃，行，进一步的量化的进行分析。"
+        },
+        {
+          "at": 42268,
+          "kind": "STOP"
+        },
+        {
+          "at": 42269,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 42471,
+          "kind": "ASR",
+          "text": "然后。"
+        },
+        {
+          "at": 44629,
+          "kind": "STOP"
+        },
+        {
+          "at": 44629,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 44814,
+          "kind": "ASR",
+          "text": "实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45020,
+          "kind": "RESP"
+        },
+        {
+          "at": 45849,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此Live Voice使用过程当中啊，我发现还是会有这么一个问题。在这个会话中我们马上也会碰到，就是现在的Live Voice还是会比较快地去断句、去发这些消息、发response，但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。当然这里面会有个矛盾：我们希望它尽可能敏感、尽可能灵敏，然后更快地有输出；但另外一方面我们又不希望它过快地把消息发出去。请进一步量化地进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45850,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46447,
+          "kind": "RESP"
+        },
+        {
+          "at": 46470,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46470,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s600",
+      "silenceMs": 600,
+      "rep": 0,
+      "gateAFrames": 41,
+      "sessionId": "sess_T2xFuRO3ClziHsojqQxMg",
+      "spendCny": 0.008396,
+      "speechStarted": 11,
+      "commits": 11,
+      "responses": 6,
+      "cancelled": 4,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。",
+        "就是现在的来往还是还是会比较快的去。",
+        "断句去去发这些消息，发response。",
+        "但实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。",
+        "当然，这里面会有矛盾，我们希望。",
+        "尽可能敏感。",
+        "而且尽可能的灵敏，然后更快的有有输出。",
+        "另外一方面，我们也不希望他过快的把消息发出去。",
+        "呃，请进一步的量化的进行分析。",
+        "后。",
+        "来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 212,
+      "fragmentsCovered": 12,
+      "fragmentsTotal": 26,
+      "sendCalls": 5,
+      "sendLatencies": [
+        408,
+        328,
+        568,
+        407,
+        1264
+      ],
+      "inputTokens": 3227,
+      "outputTokens": 132,
+      "inputs": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1194,
+          329,
+          130
+        ],
+        [
+          1375,
+          329,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 7321,
+          "kind": "STOP"
+        },
+        {
+          "at": 7321,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 7466,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。"
+        },
+        {
+          "at": 7637,
+          "kind": "RESP"
+        },
+        {
+          "at": 7729,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"Live voice 选不"
+        },
+        {
+          "at": 7730,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 11881,
+          "kind": "STOP"
+        },
+        {
+          "at": 11881,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 12140,
+          "kind": "ASR",
+          "text": "就是现在的来往还是还是会比较快的去。"
+        },
+        {
+          "at": 16601,
+          "kind": "STOP"
+        },
+        {
+          "at": 16601,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 16858,
+          "kind": "ASR",
+          "text": "断句去去发这些消息，发response。"
+        },
+        {
+          "at": 16917,
+          "kind": "RESP"
+        },
+        {
+          "at": 16929,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": ""
+        },
+        {
+          "at": 16929,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 23639,
+          "kind": "STOP"
+        },
+        {
+          "at": 23640,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 23791,
+          "kind": "ASR",
+          "text": "但实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 23994,
+          "kind": "RESP"
+        },
+        {
+          "at": 24207,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是 live voice 使用过中啊，我发现还是会有这么一个问题，在这个"
+        },
+        {
+          "at": 24208,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 27322,
+          "kind": "STOP"
+        },
+        {
+          "at": 27322,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 27525,
+          "kind": "ASR",
+          "text": "当然，这里面会有矛盾，我们希望。"
+        },
+        {
+          "at": 28920,
+          "kind": "STOP"
+        },
+        {
+          "at": 28921,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 29090,
+          "kind": "ASR",
+          "text": "尽可能敏感。"
+        },
+        {
+          "at": 32761,
+          "kind": "STOP"
+        },
+        {
+          "at": 32761,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 32982,
+          "kind": "ASR",
+          "text": "而且尽可能的灵敏，然后更快的有有输出。"
+        },
+        {
+          "at": 36441,
+          "kind": "STOP"
+        },
+        {
+          "at": 36441,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 36682,
+          "kind": "ASR",
+          "text": "另外一方面，我们也不希望他过快的把消息发出去。"
+        },
+        {
+          "at": 36792,
+          "kind": "RESP"
+        },
+        {
+          "at": 36848,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"Live"
+        },
+        {
+          "at": 36848,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 40041,
+          "kind": "STOP"
+        },
+        {
+          "at": 40041,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 40245,
+          "kind": "ASR",
+          "text": "呃，请进一步的量化的进行分析。"
+        },
+        {
+          "at": 41801,
+          "kind": "STOP"
+        },
+        {
+          "at": 41801,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 41962,
+          "kind": "ASR",
+          "text": "后。"
+        },
+        {
+          "at": 44760,
+          "kind": "STOP"
+        },
+        {
+          "at": 44760,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 44957,
+          "kind": "ASR",
+          "text": "来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45122,
+          "kind": "RESP"
+        },
+        {
+          "at": 46024,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此，Live Voice 使用过程当中啊，我发现还是会有这么一个问题。在这个会话中，我们马上也会碰到，就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上，就像现在这个会话一样，可能前后的间隔并不是那么大。当然，这里面会有个矛盾：我们希望它尽可能敏感，尽可能的灵敏，更快的有输出；但另外一方面，我们又不希望它过快地把消息发出去。请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46026,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46511,
+          "kind": "RESP"
+        },
+        {
+          "at": 46533,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46533,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s800",
+      "silenceMs": 800,
+      "rep": 0,
+      "gateAFrames": 51,
+      "sessionId": "sess_SNFNniIgb7CwaIicxIKJZ",
+      "spendCny": 0.008186,
+      "speechStarted": 7,
+      "commits": 7,
+      "responses": 3,
+      "cancelled": 1,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。",
+        "就是现在的Live Voice还是会比较快的去，嗯，断句去去发这些消息，把Response。",
+        "但实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。",
+        "当然，这里面会有矛盾，我们希望。",
+        "尽可能敏感。",
+        "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。",
+        "呃，行，进一步的量化的进行分析，然后，来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 224,
+      "fragmentsCovered": 12,
+      "fragmentsTotal": 26,
+      "sendCalls": 2,
+      "sendLatencies": [
+        405,
+        1348
+      ],
+      "inputTokens": 3129,
+      "outputTokens": 132,
+      "inputs": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1152,
+          322,
+          130
+        ],
+        [
+          1333,
+          322,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 7555,
+          "kind": "STOP"
+        },
+        {
+          "at": 7555,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 7699,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。"
+        },
+        {
+          "at": 16755,
+          "kind": "STOP"
+        },
+        {
+          "at": 16755,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 16910,
+          "kind": "ASR",
+          "text": "就是现在的Live Voice还是会比较快的去，嗯，断句去去发这些消息，把Response。"
+        },
+        {
+          "at": 23799,
+          "kind": "STOP"
+        },
+        {
+          "at": 23800,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 23944,
+          "kind": "ASR",
+          "text": "但实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 24130,
+          "kind": "RESP"
+        },
+        {
+          "at": 24204,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"但实际上，就像"
+        },
+        {
+          "at": 24204,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 27475,
+          "kind": "STOP"
+        },
+        {
+          "at": 27475,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 27683,
+          "kind": "ASR",
+          "text": "当然，这里面会有矛盾，我们希望。"
+        },
+        {
+          "at": 29075,
+          "kind": "STOP"
+        },
+        {
+          "at": 29075,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 29217,
+          "kind": "ASR",
+          "text": "尽可能敏感。"
+        },
+        {
+          "at": 36594,
+          "kind": "STOP"
+        },
+        {
+          "at": 36594,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 36776,
+          "kind": "ASR",
+          "text": "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+        },
+        {
+          "at": 44915,
+          "kind": "STOP"
+        },
+        {
+          "at": 44915,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45160,
+          "kind": "ASR",
+          "text": "呃，行，进一步的量化的进行分析，然后，来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45293,
+          "kind": "RESP"
+        },
+        {
+          "at": 46263,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此 Live Voice 使用过程当中啊，我发现还是会有这么一个问题，在这个绘画中我们马上也会碰到。就是现在的 Live Voice 还是会比较快的去嗯断句，去去发这些消息，发 response。但实际上就像现在这绘画一样，可能前后的间隔并不是那么大。呃当然这里面会有矛盾，我们希望它是尽可能敏感，而且尽可能的灵敏和更快的有有输出。但另外一方面我们也不希望它过快的把消息发出去。呃请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46264,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46677,
+          "kind": "RESP"
+        },
+        {
+          "at": 46699,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46699,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s1000",
+      "silenceMs": 1000,
+      "rep": 0,
+      "gateAFrames": 61,
+      "sessionId": "sess_YwustrVYTUHE53eVzphm9",
+      "spendCny": 0.007827,
+      "speechStarted": 2,
+      "commits": 2,
+      "responses": 2,
+      "cancelled": 0,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。",
+        "当然，这里面会有矛盾。我们希望他尽可能敏感，啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望他过快的把消息发出去，呃，先进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 221,
+      "fragmentsCovered": 13,
+      "fragmentsTotal": 26,
+      "sendCalls": 1,
+      "sendLatencies": [
+        1206
+      ],
+      "inputTokens": 2989,
+      "outputTokens": 127,
+      "inputs": [
+        [
+          1098,
+          308,
+          125
+        ],
+        [
+          1275,
+          308,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 31,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 24042,
+          "kind": "STOP"
+        },
+        {
+          "at": 24042,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 24208,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 45162,
+          "kind": "STOP"
+        },
+        {
+          "at": 45162,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45350,
+          "kind": "ASR",
+          "text": "当然，这里面会有矛盾。我们希望他尽可能敏感，啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望他过快的把消息发出去，呃，先进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45519,
+          "kind": "RESP"
+        },
+        {
+          "at": 46368,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此，Live Voice 使用过中，我发现还是会有这么一个问题，在这个会话中我们马上也会碰到。就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。当然这里面会有矛盾，我们希望它尽可能敏感，尽可能灵敏，然后更快地有输出；但另外一方面我们也不希望它过快地把消息发出去。请进一步量化地进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46369,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46776,
+          "kind": "RESP"
+        },
+        {
+          "at": 46798,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46798,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s1200",
+      "silenceMs": 1200,
+      "rep": 0,
+      "gateAFrames": 71,
+      "sessionId": "sess_O2pkxdH3dZR86QruHvMZe",
+      "spendCny": 0.007772,
+      "speechStarted": 1,
+      "commits": 1,
+      "responses": 2,
+      "cancelled": 0,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。啊，当然这里面会有矛盾，我们希望它尽可能敏感，啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。呃，请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 222,
+      "fragmentsCovered": 14,
+      "fragmentsTotal": 26,
+      "sendCalls": 1,
+      "sendLatencies": [
+        1170
+      ],
+      "inputTokens": 2961,
+      "outputTokens": 124,
+      "inputs": [
+        [
+          1086,
+          308,
+          122
+        ],
+        [
+          1259,
+          308,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 45531,
+          "kind": "STOP"
+        },
+        {
+          "at": 45531,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45727,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。啊，当然这里面会有矛盾，我们希望它尽可能敏感，啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。呃，请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45873,
+          "kind": "RESP"
+        },
+        {
+          "at": 46701,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "就是 live voice 使用过程当中，我发现还是会有这么一个问题，在这个会话中我们马上也会碰到。就是现在的 live voice 还是会比较快地去断句，去发这些消息、response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。当然这里面会有矛盾：我们希望它尽可能敏感、尽可能的灵敏，然后更快地有输出；但另外一方面，我们也不希望它过快把消息发出去。请进一步量化地进行分析，然后通过实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46702,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 47228,
+          "kind": "RESP"
+        },
+        {
+          "at": 47252,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 47253,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s400",
+      "silenceMs": 400,
+      "rep": 1,
+      "gateAFrames": 31,
+      "sessionId": "sess_ASNK1OLMk7ZTpWt9gtLuk",
+      "spendCny": 0.008654,
+      "speechStarted": 15,
+      "commits": 15,
+      "responses": 10,
+      "cancelled": 8,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。",
+        "这个汇报中，我们马上也会碰到。",
+        "就是现在的来往还是还是会比较快的去。",
+        "嗯，断句去去发这些消息。",
+        "False.",
+        "但实际上，就像现在的绘画一样。",
+        "可能前后的间隔并不是那么大。",
+        "呃，当然。",
+        "这里面会有矛盾，我们希望。",
+        "要尽可能敏感。",
+        "啊，去尽可能的灵敏，然后更快的有有输出。",
+        "但另外一方面，我们也不希望他过快的把消息发出去。",
+        "呃，请进一步的量化的进行分析。",
+        "然后。",
+        "来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 215,
+      "fragmentsCovered": 14,
+      "fragmentsTotal": 26,
+      "sendCalls": 9,
+      "sendLatencies": [
+        567,
+        411,
+        568,
+        849,
+        482,
+        485,
+        565,
+        410,
+        1224
+      ],
+      "inputTokens": 3339,
+      "outputTokens": 124,
+      "inputs": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1240,
+          343,
+          122
+        ],
+        [
+          1413,
+          343,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 5087,
+          "kind": "STOP"
+        },
+        {
+          "at": 5088,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 5314,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。"
+        },
+        {
+          "at": 7168,
+          "kind": "STOP"
+        },
+        {
+          "at": 7168,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 7405,
+          "kind": "ASR",
+          "text": "这个汇报中，我们马上也会碰到。"
+        },
+        {
+          "at": 7519,
+          "kind": "RESP"
+        },
+        {
+          "at": 7735,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"因此 Live Voice 使用过程当中啊，我发现还是会有这么一个问题，在这个会话"
+        },
+        {
+          "at": 7735,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 11645,
+          "kind": "STOP"
+        },
+        {
+          "at": 11645,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 11857,
+          "kind": "ASR",
+          "text": "就是现在的来往还是还是会比较快的去。"
+        },
+        {
+          "at": 11964,
+          "kind": "RESP"
+        },
+        {
+          "at": 12056,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是现在的 live voice 还是会"
+        },
+        {
+          "at": 12057,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 15488,
+          "kind": "STOP"
+        },
+        {
+          "at": 15488,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 15742,
+          "kind": "ASR",
+          "text": "嗯，断句去去发这些消息。"
+        },
+        {
+          "at": 16366,
+          "kind": "STOP"
+        },
+        {
+          "at": 16366,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 16493,
+          "kind": "ASR",
+          "text": "False."
+        },
+        {
+          "at": 16718,
+          "kind": "RESP"
+        },
+        {
+          "at": 16934,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是现在的 Live Voice 还是会比较快地去断句、去发这些消息，发 response。"
+        },
+        {
+          "at": 16935,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 20769,
+          "kind": "STOP"
+        },
+        {
+          "at": 20769,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 20954,
+          "kind": "ASR",
+          "text": "但实际上，就像现在的绘画一样。"
+        },
+        {
+          "at": 23407,
+          "kind": "STOP"
+        },
+        {
+          "at": 23407,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 23600,
+          "kind": "ASR",
+          "text": "可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 23744,
+          "kind": "RESP"
+        },
+        {
+          "at": 24256,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"Live voice 使用过程当中，我发现还是会有这么一个问题，在这个会话中我们马上也会碰到。就是现在的 live voice 还是会比较快的去断句、去发这些消息、发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。\""
+        },
+        {
+          "at": 24257,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 24887,
+          "kind": "STOP"
+        },
+        {
+          "at": 24887,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 25028,
+          "kind": "ASR",
+          "text": "呃，当然。"
+        },
+        {
+          "at": 27127,
+          "kind": "STOP"
+        },
+        {
+          "at": 27128,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 27309,
+          "kind": "ASR",
+          "text": "这里面会有矛盾，我们希望。"
+        },
+        {
+          "at": 27502,
+          "kind": "RESP"
+        },
+        {
+          "at": 27609,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"是 live voice 使用过程中啊"
+        },
+        {
+          "at": 27609,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 28728,
+          "kind": "STOP"
+        },
+        {
+          "at": 28728,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 28894,
+          "kind": "ASR",
+          "text": "要尽可能敏感。"
+        },
+        {
+          "at": 29073,
+          "kind": "RESP"
+        },
+        {
+          "at": 29213,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是Live Voice使用过程当中啊，我发现还是会有"
+        },
+        {
+          "at": 29213,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 32568,
+          "kind": "STOP"
+        },
+        {
+          "at": 32568,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 32845,
+          "kind": "ASR",
+          "text": "啊，去尽可能的灵敏，然后更快的有有输出。"
+        },
+        {
+          "at": 36247,
+          "kind": "STOP"
+        },
+        {
+          "at": 36247,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 36528,
+          "kind": "ASR",
+          "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+        },
+        {
+          "at": 36662,
+          "kind": "RESP"
+        },
+        {
+          "at": 36812,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是 live voice 使用过程当中啊，我发现还是会有这么一个问题。"
+        },
+        {
+          "at": 36813,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 39847,
+          "kind": "STOP"
+        },
+        {
+          "at": 39847,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 40075,
+          "kind": "ASR",
+          "text": "呃，请进一步的量化的进行分析。"
+        },
+        {
+          "at": 41606,
+          "kind": "STOP"
+        },
+        {
+          "at": 41606,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 41799,
+          "kind": "ASR",
+          "text": "然后。"
+        },
+        {
+          "at": 42009,
+          "kind": "RESP"
+        },
+        {
+          "at": 42016,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": ""
+        },
+        {
+          "at": 42016,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 44567,
+          "kind": "STOP"
+        },
+        {
+          "at": 44567,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 44798,
+          "kind": "ASR",
+          "text": "来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 44990,
+          "kind": "RESP"
+        },
+        {
+          "at": 45791,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此Live Voice使用过程当中，我发现还是会有这么一个问题。在这个会话中我们马上也会碰到，就是现在的Live Voice还是会比较快的去断句，去发这些消息，发response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。当然这里面会有个矛盾，我们希望它是尽可能敏感，尽可能的灵敏，更快的有输出。但另外一方面我们又不希望它过快地把消息发出去。请进一步的量化地进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45792,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46307,
+          "kind": "RESP"
+        },
+        {
+          "at": 46329,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46329,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s600",
+      "silenceMs": 600,
+      "rep": 1,
+      "gateAFrames": 41,
+      "sessionId": "sess_EKg9vbZ12mdSQBQsOpyX5",
+      "spendCny": 0.00836,
+      "speechStarted": 11,
+      "commits": 11,
+      "responses": 5,
+      "cancelled": 3,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。",
+        "就是现在的来往还是还是会比较快的去。",
+        "嗯，断句去去发这些消息，发个post。",
+        "但实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。",
+        "呃，当然，这里面会有矛盾，我们希望。",
+        "尽可能敏感。",
+        "而且尽可能的灵敏，然后更快的有有输出。",
+        "另一方面，我们也不希望他过快的把消息发出去。",
+        "呃，请进一步的量化的进行分析。",
+        "然后。",
+        "实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 212,
+      "fragmentsCovered": 12,
+      "fragmentsTotal": 26,
+      "sendCalls": 4,
+      "sendLatencies": [
+        388,
+        587,
+        411,
+        1100
+      ],
+      "inputTokens": 3221,
+      "outputTokens": 126,
+      "inputs": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1194,
+          329,
+          124
+        ],
+        [
+          1369,
+          329,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 7687,
+          "kind": "STOP"
+        },
+        {
+          "at": 7687,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 7828,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。"
+        },
+        {
+          "at": 12329,
+          "kind": "STOP"
+        },
+        {
+          "at": 12329,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 12546,
+          "kind": "ASR",
+          "text": "就是现在的来往还是还是会比较快的去。"
+        },
+        {
+          "at": 16723,
+          "kind": "STOP"
+        },
+        {
+          "at": 16723,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 16966,
+          "kind": "ASR",
+          "text": "嗯，断句去去发这些消息，发个post。"
+        },
+        {
+          "at": 17026,
+          "kind": "RESP"
+        },
+        {
+          "at": 17111,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是现在的Live"
+        },
+        {
+          "at": 17111,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 23759,
+          "kind": "STOP"
+        },
+        {
+          "at": 23759,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 23919,
+          "kind": "ASR",
+          "text": "但实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 24078,
+          "kind": "RESP"
+        },
+        {
+          "at": 24346,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是现在的 live voice 还是会比较快的去断句，去发这些消息，而实际上就像现在这个对话一样，可能前后的"
+        },
+        {
+          "at": 24346,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 27477,
+          "kind": "STOP"
+        },
+        {
+          "at": 27477,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 27700,
+          "kind": "ASR",
+          "text": "呃，当然，这里面会有矛盾，我们希望。"
+        },
+        {
+          "at": 29021,
+          "kind": "STOP"
+        },
+        {
+          "at": 29021,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 29215,
+          "kind": "ASR",
+          "text": "尽可能敏感。"
+        },
+        {
+          "at": 33060,
+          "kind": "STOP"
+        },
+        {
+          "at": 33060,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 33291,
+          "kind": "ASR",
+          "text": "而且尽可能的灵敏，然后更快的有有输出。"
+        },
+        {
+          "at": 36575,
+          "kind": "STOP"
+        },
+        {
+          "at": 36575,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 36813,
+          "kind": "ASR",
+          "text": "另一方面，我们也不希望他过快的把消息发出去。"
+        },
+        {
+          "at": 36921,
+          "kind": "RESP"
+        },
+        {
+          "at": 36986,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是 Live Voice "
+        },
+        {
+          "at": 36986,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 40196,
+          "kind": "STOP"
+        },
+        {
+          "at": 40196,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 40410,
+          "kind": "ASR",
+          "text": "呃，请进一步的量化的进行分析。"
+        },
+        {
+          "at": 42041,
+          "kind": "STOP"
+        },
+        {
+          "at": 42041,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 42207,
+          "kind": "ASR",
+          "text": "然后。"
+        },
+        {
+          "at": 44895,
+          "kind": "STOP"
+        },
+        {
+          "at": 44896,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45097,
+          "kind": "ASR",
+          "text": "实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45255,
+          "kind": "RESP"
+        },
+        {
+          "at": 45995,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "是 live voice 使用过程中，我发现还是会有这么一个问题，在这个会话中我们马上也会碰到。就是现在的 live voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。当然这里面会有个矛盾，我们希望它尽可能敏感，尽可能的灵敏，更快的有输出；但另外一方面，我们也不希望它过快的把消息发出去。请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45996,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46580,
+          "kind": "RESP"
+        },
+        {
+          "at": 46603,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46603,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s800",
+      "silenceMs": 800,
+      "rep": 1,
+      "gateAFrames": 51,
+      "sessionId": "sess_PT4Nw99jpCJierGK2OAIy",
+      "spendCny": 0.008155,
+      "speechStarted": 7,
+      "commits": 7,
+      "responses": 3,
+      "cancelled": 1,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。",
+        "就是现在的Live Voice还是会比较快的去，嗯，断句去去发这些消息，把Response。",
+        "嗯，实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。",
+        "呃，当然，这里面会有矛盾，我们希望。",
+        "很敏感。",
+        "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。",
+        "呃，行，进一步的量化的进行分析，然后，来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 225,
+      "fragmentsCovered": 12,
+      "fragmentsTotal": 26,
+      "sendCalls": 2,
+      "sendLatencies": [
+        482,
+        1228
+      ],
+      "inputTokens": 3124,
+      "outputTokens": 127,
+      "inputs": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1152,
+          322,
+          125
+        ],
+        [
+          1328,
+          322,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 8243,
+          "kind": "STOP"
+        },
+        {
+          "at": 8243,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 8395,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。"
+        },
+        {
+          "at": 17969,
+          "kind": "STOP"
+        },
+        {
+          "at": 17969,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 18132,
+          "kind": "ASR",
+          "text": "就是现在的Live Voice还是会比较快的去，嗯，断句去去发这些消息，把Response。"
+        },
+        {
+          "at": 25551,
+          "kind": "STOP"
+        },
+        {
+          "at": 25551,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 25740,
+          "kind": "ASR",
+          "text": "嗯，实际上，就像现在的绘画一样，可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 27746,
+          "kind": "STOP"
+        },
+        {
+          "at": 27746,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 27960,
+          "kind": "ASR",
+          "text": "呃，当然，这里面会有矛盾，我们希望。"
+        },
+        {
+          "at": 29319,
+          "kind": "STOP"
+        },
+        {
+          "at": 29319,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 29455,
+          "kind": "ASR",
+          "text": "很敏感。"
+        },
+        {
+          "at": 36719,
+          "kind": "STOP"
+        },
+        {
+          "at": 36719,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 36907,
+          "kind": "ASR",
+          "text": "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+        },
+        {
+          "at": 37064,
+          "kind": "RESP"
+        },
+        {
+          "at": 37201,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "{\"message\": \"就是现在在Live Voice还是会比较快的去断"
+        },
+        {
+          "at": 37202,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 45040,
+          "kind": "STOP"
+        },
+        {
+          "at": 45040,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45227,
+          "kind": "ASR",
+          "text": "呃，行，进一步的量化的进行分析，然后，来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45392,
+          "kind": "RESP"
+        },
+        {
+          "at": 46268,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此，Live Voice 使用过程当中啊，我发现还是会有这么一个问题。在这个会话中，我们马上也会碰到，就是现在的 Live Voice 还是会比较快的去断句、去发这些消息 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。当然这里面会有矛盾：我们希望它尽可能的敏感、尽可能的灵敏、更快的有输出；但另外一方面，我们又不希望它过快的把消息发出去。请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46268,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 46783,
+          "kind": "RESP"
+        },
+        {
+          "at": 46805,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 46806,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s1000",
+      "silenceMs": 1000,
+      "rep": 1,
+      "gateAFrames": 61,
+      "sessionId": "sess_FOyT8I3rWOb7c3eYvSp9o",
+      "spendCny": 0.007826,
+      "speechStarted": 2,
+      "commits": 2,
+      "responses": 2,
+      "cancelled": 0,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。",
+        "当然，这里面会有矛盾。我们希望他尽可能敏感，啊，就尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望他过快的把消息发出去。呃，先进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 221,
+      "fragmentsCovered": 13,
+      "fragmentsTotal": 26,
+      "sendCalls": 1,
+      "sendLatencies": [
+        1186
+      ],
+      "inputTokens": 2988,
+      "outputTokens": 127,
+      "inputs": [
+        [
+          1098,
+          308,
+          125
+        ],
+        [
+          1274,
+          308,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 20,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 24329,
+          "kind": "STOP"
+        },
+        {
+          "at": 24329,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 24496,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。"
+        },
+        {
+          "at": 45270,
+          "kind": "STOP"
+        },
+        {
+          "at": 45270,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45545,
+          "kind": "ASR",
+          "text": "当然，这里面会有矛盾。我们希望他尽可能敏感，啊，就尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望他过快的把消息发出去。呃，先进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45613,
+          "kind": "RESP"
+        },
+        {
+          "at": 46456,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "因此 LiveVoice 使用中啊，我发现还是会有这么一个问题，在这个绘画中我们马上也会碰到。就是现在的 LiveVoice 还是会比较快的去断句，去发这些消息，response。但实际上就像现在这绘画一样，可能前后的间隔并不是那么大。当然这里面会有个矛盾，我们希望它是尽可能敏感，就尽可能的灵敏，然后更快的有输出。但另外一方面我们也不希望它过快的把消息发下去。请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46457,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 47025,
+          "kind": "RESP"
+        },
+        {
+          "at": 47047,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 47047,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    },
+    {
+      "arm": "s1200",
+      "silenceMs": 1200,
+      "rep": 1,
+      "gateAFrames": 71,
+      "sessionId": "sess_JEhoEYyOMxuPAZSHa5SjI",
+      "spendCny": 0.007784,
+      "speechStarted": 1,
+      "commits": 1,
+      "responses": 2,
+      "cancelled": 0,
+      "textReplies": 1,
+      "transcripts": [
+        "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。啊，当然这里面会有矛盾，我们希望它尽可能敏感，啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。呃，请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+      ],
+      "emptyTranscriptions": 0,
+      "joinedChars": 222,
+      "fragmentsCovered": 14,
+      "fragmentsTotal": 26,
+      "sendCalls": 1,
+      "sendLatencies": [
+        1144
+      ],
+      "inputTokens": 2963,
+      "outputTokens": 126,
+      "inputs": [
+        [
+          1086,
+          308,
+          124
+        ],
+        [
+          1261,
+          308,
+          2
+        ]
+      ],
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 45480,
+          "kind": "STOP"
+        },
+        {
+          "at": 45480,
+          "kind": "COMMIT"
+        },
+        {
+          "at": 45683,
+          "kind": "ASR",
+          "text": "因此，Live Voice使用过程中啊，我发现还是会有这么一个问题。在这个汇报中，我们马上也会碰到。就是现在的Live Voice还是会比较快的去嗯断句，去去发这些消息，发response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。啊，当然这里面会有矛盾，我们希望它尽可能敏感，啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。呃，请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 45821,
+          "kind": "RESP"
+        },
+        {
+          "at": 46624,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "是 Live Voice 选过程中，我发现还是会有这么一个问题。在这个绘画中，我们马上也会碰到，就是现在的 Live Voice 还是会比较快的去断句，去发这些消息 response。但实际上，就像现在这绘画一样，可能前后的间隔并不是那么大。当然这里面会有矛盾，我们希望它尽可能的敏感，尽可能的灵敏，更快的有输出；但另外一方面，我们也不希望它过快地把消息发出去。请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+        },
+        {
+          "at": 46624,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 47140,
+          "kind": "RESP"
+        },
+        {
+          "at": 47162,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 47163,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        }
+      ]
+    }
+  ]
+}

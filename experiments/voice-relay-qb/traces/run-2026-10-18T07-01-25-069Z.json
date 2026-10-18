@@ -1,0 +1,2863 @@
+{
+  "ranAt": "2026-10-18T07:01:25.070Z",
+  "spendCny": 0.040776,
+  "guardTriggered": false,
+  "results": [
+    {
+      "pattern": "P1",
+      "arm": "B",
+      "rep": 0,
+      "spendCny": 0.002034,
+      "responses": 1,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1420,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 2,
+        "settleFires": 0,
+        "settleRearms": 6,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "model"
+          ],
+          "latencyMs": 6102,
+          "endMs": 6460,
+          "asr": "把 server 里的 voice 点 s e r v i c e t s 的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 26099,
+          "endMs": 13320,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 19219,
+          "endMs": 20200,
+          "asr": "动 voice 点 s e voice t s 只改 voice module t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 26600,
+          "asr": "",
+          "asrOk": false
+        }
+      ],
+      "pieces": [
+        {
+          "t": 12562,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成30秒。",
+          "seqs": [
+            1
+          ]
+        },
+        {
+          "t": 39419,
+          "kind": "fill",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。 动 voice 点 s e voice t s 只改 voice module t s。",
+          "seqs": [
+            2,
+            3
+          ],
+          "reason": "end-of-run"
+        }
+      ],
+      "log": [
+        {
+          "t": 1237,
+          "kind": "endpoint-speech-started",
+          "at": 340
+        },
+        {
+          "t": 12047,
+          "kind": "endpoint-speech-stopped",
+          "at": 6480
+        },
+        {
+          "t": 12047,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            340,
+            6480
+          ]
+        },
+        {
+          "t": 12394,
+          "kind": "response.created"
+        },
+        {
+          "t": 12395,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把 server 里的 voice 点 s e r v i c e t s 的超时改成三十秒。"
+        },
+        {
+          "t": 12562,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成30秒。",
+          "consumedSpan": [
+            1
+          ]
+        },
+        {
+          "t": 12563,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 12673,
+          "kind": "endpoint-speech-started",
+          "at": 7100
+        },
+        {
+          "t": 22276,
+          "kind": "endpoint-speech-stopped",
+          "at": 13360
+        },
+        {
+          "t": 22276,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7100,
+            13360
+          ]
+        },
+        {
+          "t": 22299,
+          "kind": "endpoint-speech-started",
+          "at": 14540
+        },
+        {
+          "t": 22405,
+          "kind": "asr",
+          "seq": 2,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 24906,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 27407,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 29908,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 31439,
+          "kind": "endpoint-speech-stopped",
+          "at": 20240
+        },
+        {
+          "t": 31439,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            14540,
+            20240
+          ]
+        },
+        {
+          "t": 31455,
+          "kind": "endpoint-speech-started",
+          "at": 21040
+        },
+        {
+          "t": 31676,
+          "kind": "asr",
+          "seq": 3,
+          "text": "动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 34176,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 36676,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 39176,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 39419,
+          "kind": "fill",
+          "reason": "end-of-run",
+          "seqs": [
+            2,
+            3
+          ],
+          "text": "看一下useless input这个hook是怎么处理recorded g的。 动 voice 点 s e voice t s 只改 voice module t s。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把 server 里的 voice 点 s e r v i c e t s 的超时改成三十秒。",
+          "resolved": "model"
+        },
+        {
+          "seq": 2,
+          "start": 7100,
+          "end": 13360,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 14540,
+          "end": 20240,
+          "text": "动 voice 点 s e voice t s 只改 voice module t s。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P1",
+      "arm": "B",
+      "rep": 1,
+      "spendCny": 0.008211,
+      "responses": 4,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1420,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 4,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 6460,
+          "asr": "把server里的voice点se rest s的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "model"
+          ],
+          "latencyMs": 1250,
+          "endMs": 13320,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 20200,
+          "asr": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "model"
+          ],
+          "latencyMs": 1303,
+          "endMs": 26600,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 14570,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的？",
+          "seqs": [
+            1,
+            2
+          ]
+        },
+        {
+          "t": 27903,
+          "kind": "model",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "seqs": [
+            3,
+            4
+          ]
+        }
+      ],
+      "log": [
+        {
+          "t": 991,
+          "kind": "endpoint-speech-started",
+          "at": 340
+        },
+        {
+          "t": 7221,
+          "kind": "endpoint-speech-stopped",
+          "at": 6480
+        },
+        {
+          "t": 7222,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            340,
+            6480
+          ]
+        },
+        {
+          "t": 7357,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把server里的voice点se rest s的超时改成三十秒。"
+        },
+        {
+          "t": 7510,
+          "kind": "response.created"
+        },
+        {
+          "t": 7652,
+          "kind": "response.done",
+          "status": "cancelled"
+        },
+        {
+          "t": 7652,
+          "kind": "endpoint-speech-started",
+          "at": 7100
+        },
+        {
+          "t": 9857,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 12357,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 14055,
+          "kind": "endpoint-speech-stopped",
+          "at": 13360
+        },
+        {
+          "t": 14055,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7100,
+            13360
+          ]
+        },
+        {
+          "t": 14192,
+          "kind": "asr",
+          "seq": 2,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 14386,
+          "kind": "response.created"
+        },
+        {
+          "t": 14570,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的？",
+          "consumedSpan": [
+            1,
+            2
+          ]
+        },
+        {
+          "t": 14571,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 15119,
+          "kind": "endpoint-speech-started",
+          "at": 14540
+        },
+        {
+          "t": 20926,
+          "kind": "endpoint-speech-stopped",
+          "at": 20240
+        },
+        {
+          "t": 20927,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            14540,
+            20240
+          ]
+        },
+        {
+          "t": 21185,
+          "kind": "asr",
+          "seq": 3,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 21261,
+          "kind": "response.created"
+        },
+        {
+          "t": 21651,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 21654,
+          "kind": "endpoint-speech-started",
+          "at": 21040
+        },
+        {
+          "t": 23684,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 26185,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 27335,
+          "kind": "endpoint-speech-stopped",
+          "at": 26640
+        },
+        {
+          "t": 27335,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21040,
+            26640
+          ]
+        },
+        {
+          "t": 27557,
+          "kind": "asr",
+          "seq": 4,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 27718,
+          "kind": "response.created"
+        },
+        {
+          "t": 27903,
+          "kind": "call",
+          "message": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "consumedSpan": [
+            3,
+            4
+          ]
+        },
+        {
+          "t": 27904,
+          "kind": "response.done",
+          "status": "completed"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se rest s的超时改成三十秒。",
+          "resolved": "model"
+        },
+        {
+          "seq": 2,
+          "start": 7100,
+          "end": 13360,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "model"
+        },
+        {
+          "seq": 3,
+          "start": 14540,
+          "end": 20240,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "resolved": "model"
+        },
+        {
+          "seq": 4,
+          "start": 21040,
+          "end": 26640,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "model"
+        }
+      ]
+    },
+    {
+      "pattern": "P1",
+      "arm": "Q",
+      "rep": 0,
+      "spendCny": 0.003387,
+      "responses": 1,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1420,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 1,
+        "askAborted": 1,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 1,
+        "filledDeadline": 3,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 2
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 5963,
+          "endMs": 6460,
+          "asr": "把server里的voice点se reace ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 6966,
+          "endMs": 13320,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 8904,
+          "endMs": 20200,
+          "asr": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 4968,
+          "endMs": 26600,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 12423,
+          "kind": "fill",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "seqs": [
+            1
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 20286,
+          "kind": "fill",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "seqs": [
+            2
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 29104,
+          "kind": "fill",
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "seqs": [
+            3
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 31568,
+          "kind": "fill",
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "seqs": [
+            4
+          ],
+          "reason": "offered-not-claimed"
+        }
+      ],
+      "log": [
+        {
+          "t": 650,
+          "kind": "local-vad-speech",
+          "fromMs": 600
+        },
+        {
+          "t": 1204,
+          "kind": "endpoint-speech-started",
+          "at": 340
+        },
+        {
+          "t": 6564,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 6300
+        },
+        {
+          "t": 7405,
+          "kind": "endpoint-speech-stopped",
+          "at": 6480
+        },
+        {
+          "t": 7405,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            340,
+            6480
+          ]
+        },
+        {
+          "t": 7464,
+          "kind": "local-vad-speech",
+          "fromMs": 7420
+        },
+        {
+          "t": 7499,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "t": 7504,
+          "kind": "roster-sent",
+          "version": 1,
+          "seqs": [
+            1
+          ],
+          "text": "ROSTER v1\n[1] 0.3–6.5s  \"把server里的voice点se reace ts的超时改成三十秒。\""
+        },
+        {
+          "t": 7756,
+          "kind": "ask-aborted",
+          "why": "local VAD hears speech"
+        },
+        {
+          "t": 7879,
+          "kind": "endpoint-speech-started",
+          "at": 7100
+        },
+        {
+          "t": 12423,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            1
+          ],
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "t": 13424,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 13180
+        },
+        {
+          "t": 14875,
+          "kind": "local-vad-speech",
+          "fromMs": 14800
+        },
+        {
+          "t": 15275,
+          "kind": "endpoint-speech-stopped",
+          "at": 13360
+        },
+        {
+          "t": 15275,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7100,
+            13360
+          ]
+        },
+        {
+          "t": 15394,
+          "kind": "endpoint-speech-started",
+          "at": 14540
+        },
+        {
+          "t": 15425,
+          "kind": "asr",
+          "seq": 2,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 20286,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            2
+          ],
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 20336,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 20060
+        },
+        {
+          "t": 21387,
+          "kind": "local-vad-speech",
+          "fromMs": 21300
+        },
+        {
+          "t": 24065,
+          "kind": "endpoint-speech-stopped",
+          "at": 20240
+        },
+        {
+          "t": 24065,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            14540,
+            20240
+          ]
+        },
+        {
+          "t": 24374,
+          "kind": "asr",
+          "seq": 3,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "t": 24615,
+          "kind": "endpoint-speech-started",
+          "at": 21040
+        },
+        {
+          "t": 26747,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 26460
+        },
+        {
+          "t": 29104,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            3
+          ],
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "t": 29456,
+          "kind": "endpoint-speech-stopped",
+          "at": 26640
+        },
+        {
+          "t": 29456,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21040,
+            26640
+          ]
+        },
+        {
+          "t": 29707,
+          "kind": "asr",
+          "seq": 4,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 29757,
+          "kind": "roster-sent",
+          "version": 2,
+          "seqs": [
+            4
+          ],
+          "text": "ROSTER v2\n[4] 21.0–26.6s  \"把默认模型换成 whisper large 啊，不是 whisper turbo。\""
+        },
+        {
+          "t": 30508,
+          "kind": "ask",
+          "version": 2,
+          "offered": [
+            4
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 31060,
+          "kind": "response.created"
+        },
+        {
+          "t": 31568,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 31568,
+          "kind": "fill",
+          "reason": "offered-not-claimed",
+          "seqs": [
+            4
+          ],
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 7100,
+          "end": 13360,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 14540,
+          "end": 20240,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21040,
+          "end": 26640,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P1",
+      "arm": "Q",
+      "rep": 1,
+      "spendCny": 0.00346,
+      "responses": 2,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1420,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 3,
+        "askAborted": 1,
+        "cancelled": 1,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 1,
+        "calls": 1,
+        "filledOffered": 1,
+        "filledDeadline": 3,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 4
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 5709,
+          "endMs": 6460,
+          "asr": "把server里的voice点se voice ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 5757,
+          "endMs": 13320,
+          "asr": "input这个cook是怎么处理record g的？",
+          "asrOk": false
+        },
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 9149,
+          "endMs": 20200,
+          "asr": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 3686,
+          "endMs": 26600,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 12169,
+          "kind": "fill",
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "seqs": [
+            1
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 19077,
+          "kind": "fill",
+          "text": "input这个cook是怎么处理record g的？",
+          "seqs": [
+            2
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 29349,
+          "kind": "fill",
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "seqs": [
+            3
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 30286,
+          "kind": "model",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "seqs": [],
+          "claimed": []
+        },
+        {
+          "t": 30287,
+          "kind": "fill",
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "seqs": [
+            4
+          ],
+          "reason": "offered-not-claimed"
+        }
+      ],
+      "log": [
+        {
+          "t": 651,
+          "kind": "local-vad-speech",
+          "fromMs": 600
+        },
+        {
+          "t": 935,
+          "kind": "endpoint-speech-started",
+          "at": 340
+        },
+        {
+          "t": 6560,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 6300
+        },
+        {
+          "t": 7164,
+          "kind": "endpoint-speech-stopped",
+          "at": 6480
+        },
+        {
+          "t": 7164,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            340,
+            6480
+          ]
+        },
+        {
+          "t": 7343,
+          "kind": "asr",
+          "seq": 1,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 7364,
+          "kind": "roster-sent",
+          "version": 1,
+          "seqs": [
+            1
+          ],
+          "text": "ROSTER v1\n[1] 0.3–6.5s  \"把server里的voice点se voice ts的超时改成三十秒。\""
+        },
+        {
+          "t": 7465,
+          "kind": "local-vad-speech",
+          "fromMs": 7420
+        },
+        {
+          "t": 7516,
+          "kind": "ask-aborted",
+          "why": "local VAD hears speech"
+        },
+        {
+          "t": 7660,
+          "kind": "endpoint-speech-started",
+          "at": 7100
+        },
+        {
+          "t": 12169,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            1
+          ],
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 13471,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 13180
+        },
+        {
+          "t": 14045,
+          "kind": "endpoint-speech-stopped",
+          "at": 13360
+        },
+        {
+          "t": 14045,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            7100,
+            13360
+          ]
+        },
+        {
+          "t": 14246,
+          "kind": "asr",
+          "seq": 2,
+          "text": "input这个cook是怎么处理record g的？"
+        },
+        {
+          "t": 14296,
+          "kind": "roster-sent",
+          "version": 2,
+          "seqs": [
+            2
+          ],
+          "text": "ROSTER v2\n[2] 7.1–13.4s  \"input这个cook是怎么处理record g的？\""
+        },
+        {
+          "t": 14447,
+          "kind": "ask",
+          "version": 2,
+          "offered": [
+            2
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 14872,
+          "kind": "local-vad-speech",
+          "fromMs": 14800
+        },
+        {
+          "t": 14889,
+          "kind": "response.created"
+        },
+        {
+          "t": 15100,
+          "kind": "response.done",
+          "status": "cancelled"
+        },
+        {
+          "t": 15100,
+          "kind": "ask-cancelled"
+        },
+        {
+          "t": 15100,
+          "kind": "endpoint-speech-started",
+          "at": 14540
+        },
+        {
+          "t": 19077,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            2
+          ],
+          "text": "input这个cook是怎么处理record g的？"
+        },
+        {
+          "t": 20335,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 20060
+        },
+        {
+          "t": 20925,
+          "kind": "endpoint-speech-stopped",
+          "at": 20240
+        },
+        {
+          "t": 20925,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            14540,
+            20240
+          ]
+        },
+        {
+          "t": 21165,
+          "kind": "asr",
+          "seq": 3,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 21176,
+          "kind": "roster-sent",
+          "version": 3,
+          "seqs": [
+            3
+          ],
+          "text": "ROSTER v3\n[3] 14.5–20.2s  \"不要动 voice 点 s e voice t s 只改 voice module t s。\""
+        },
+        {
+          "t": 21327,
+          "kind": "ask",
+          "version": 3,
+          "offered": [
+            3
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 21388,
+          "kind": "local-vad-speech",
+          "fromMs": 21300
+        },
+        {
+          "t": 21655,
+          "kind": "endpoint-speech-started",
+          "at": 21040
+        },
+        {
+          "t": 26744,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 26460
+        },
+        {
+          "t": 27336,
+          "kind": "endpoint-speech-stopped",
+          "at": 26640
+        },
+        {
+          "t": 27336,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21040,
+            26640
+          ]
+        },
+        {
+          "t": 27555,
+          "kind": "asr",
+          "seq": 4,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 29349,
+          "kind": "inflight-timeout"
+        },
+        {
+          "t": 29349,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            3
+          ],
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "t": 29349,
+          "kind": "roster-sent",
+          "version": 4,
+          "seqs": [
+            4
+          ],
+          "text": "ROSTER v4\n[4] 21.0–26.6s  \"把默认模型换成 whisper large 啊，不是 whisper turbo。\""
+        },
+        {
+          "t": 29450,
+          "kind": "ask",
+          "version": 4,
+          "offered": [
+            4
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 29885,
+          "kind": "response.created"
+        },
+        {
+          "t": 30286,
+          "kind": "call",
+          "message": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "roster": "v3",
+          "items": "{\"3\":\"carried\"}",
+          "claimed": []
+        },
+        {
+          "t": 30287,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 30287,
+          "kind": "fill",
+          "reason": "offered-not-claimed",
+          "seqs": [
+            4
+          ],
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 7100,
+          "end": 13360,
+          "text": "input这个cook是怎么处理record g的？",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 14540,
+          "end": 20240,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21040,
+          "end": 26640,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P2",
+      "arm": "B",
+      "rep": 0,
+      "spendCny": 0.00762,
+      "responses": 3,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1495,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 2,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "model"
+          ],
+          "latencyMs": 6605,
+          "endMs": 5980,
+          "asr": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 12380,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "model"
+          ],
+          "latencyMs": -6555,
+          "endMs": 19140,
+          "asr": "server里的voice点se rest的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "model"
+          ],
+          "latencyMs": 8408,
+          "endMs": 28100,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 12585,
+          "kind": "model",
+          "text": "不要动 voice.service.ts，只改 voice.module.ts。",
+          "seqs": [
+            1
+          ]
+        },
+        {
+          "t": 27891,
+          "kind": "model",
+          "text": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "seqs": [
+            2,
+            3
+          ]
+        },
+        {
+          "t": 36508,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": [
+            4
+          ]
+        }
+      ],
+      "log": [
+        {
+          "t": 1276,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 12093,
+          "kind": "endpoint-speech-stopped",
+          "at": 6020
+        },
+        {
+          "t": 12093,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6020
+          ]
+        },
+        {
+          "t": 12359,
+          "kind": "asr",
+          "seq": 1,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "t": 12424,
+          "kind": "response.created"
+        },
+        {
+          "t": 12585,
+          "kind": "call",
+          "message": "不要动 voice.service.ts，只改 voice.module.ts。",
+          "consumedSpan": [
+            1
+          ]
+        },
+        {
+          "t": 12586,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 13256,
+          "kind": "endpoint-speech-started",
+          "at": 6820
+        },
+        {
+          "t": 20148,
+          "kind": "endpoint-speech-stopped",
+          "at": 12420
+        },
+        {
+          "t": 20148,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6820,
+            12420
+          ]
+        },
+        {
+          "t": 20160,
+          "kind": "endpoint-speech-started",
+          "at": 13020
+        },
+        {
+          "t": 20358,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 22858,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 25358,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 27378,
+          "kind": "endpoint-speech-stopped",
+          "at": 19160
+        },
+        {
+          "t": 27378,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            13020,
+            19160
+          ]
+        },
+        {
+          "t": 27603,
+          "kind": "asr",
+          "seq": 3,
+          "text": "server里的voice点se rest的超时改成三十秒。"
+        },
+        {
+          "t": 27707,
+          "kind": "response.created"
+        },
+        {
+          "t": 27891,
+          "kind": "call",
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "consumedSpan": [
+            2,
+            3
+          ]
+        },
+        {
+          "t": 27892,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 30532,
+          "kind": "endpoint-speech-started",
+          "at": 21900
+        },
+        {
+          "t": 35992,
+          "kind": "endpoint-speech-stopped",
+          "at": 28140
+        },
+        {
+          "t": 35992,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21900,
+            28140
+          ]
+        },
+        {
+          "t": 36261,
+          "kind": "asr",
+          "seq": 4,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 36324,
+          "kind": "response.created"
+        },
+        {
+          "t": 36508,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": [
+            4
+          ]
+        },
+        {
+          "t": 36508,
+          "kind": "response.done",
+          "status": "completed"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "resolved": "model"
+        },
+        {
+          "seq": 2,
+          "start": 6820,
+          "end": 12420,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "model"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "server里的voice点se rest的超时改成三十秒。",
+          "resolved": "model"
+        },
+        {
+          "seq": 4,
+          "start": 21900,
+          "end": 28140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "model"
+        }
+      ]
+    },
+    {
+      "pattern": "P2",
+      "arm": "B",
+      "rep": 1,
+      "spendCny": 0.002902,
+      "responses": 3,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1495,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 0,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 0,
+        "filledDeadline": 0,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 9,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 5980,
+          "asr": "不要动，voice点se，rests只改voice，module ts。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 12380,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 0,
+          "kinds": [],
+          "latencyMs": null,
+          "endMs": 19140,
+          "asr": "把server里的voice点se voice ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "model"
+          ],
+          "latencyMs": 7446,
+          "endMs": 28100,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 35546,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "log": [
+        {
+          "t": 1224,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 9943,
+          "kind": "endpoint-speech-stopped",
+          "at": 6020
+        },
+        {
+          "t": 9943,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6020
+          ]
+        },
+        {
+          "t": 10249,
+          "kind": "response.created"
+        },
+        {
+          "t": 10268,
+          "kind": "asr",
+          "seq": 1,
+          "text": "不要动，voice点se，rests只改voice，module ts。"
+        },
+        {
+          "t": 10446,
+          "kind": "response.done",
+          "status": "cancelled"
+        },
+        {
+          "t": 10446,
+          "kind": "endpoint-speech-started",
+          "at": 6820
+        },
+        {
+          "t": 12768,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 15267,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 17768,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 19112,
+          "kind": "endpoint-speech-stopped",
+          "at": 12420
+        },
+        {
+          "t": 19112,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6820,
+            12420
+          ]
+        },
+        {
+          "t": 19347,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 19564,
+          "kind": "response.created"
+        },
+        {
+          "t": 19607,
+          "kind": "response.done",
+          "status": "cancelled"
+        },
+        {
+          "t": 19608,
+          "kind": "endpoint-speech-started",
+          "at": 13020
+        },
+        {
+          "t": 21847,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 24347,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 26848,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 27267,
+          "kind": "endpoint-speech-stopped",
+          "at": 19160
+        },
+        {
+          "t": 27267,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            13020,
+            19160
+          ]
+        },
+        {
+          "t": 27477,
+          "kind": "endpoint-speech-started",
+          "at": 21900
+        },
+        {
+          "t": 27501,
+          "kind": "asr",
+          "seq": 3,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 30000,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 32501,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 35000,
+          "kind": "settle-rearm",
+          "why": "endpoint turn open"
+        },
+        {
+          "t": 35018,
+          "kind": "endpoint-speech-stopped",
+          "at": 28140
+        },
+        {
+          "t": 35018,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21900,
+            28140
+          ]
+        },
+        {
+          "t": 35300,
+          "kind": "asr",
+          "seq": 4,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 35362,
+          "kind": "response.created"
+        },
+        {
+          "t": 35546,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "consumedSpan": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "t": 35546,
+          "kind": "response.done",
+          "status": "completed"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点se，rests只改voice，module ts。",
+          "resolved": "model"
+        },
+        {
+          "seq": 2,
+          "start": 6820,
+          "end": 12420,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "model"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "resolved": "model"
+        },
+        {
+          "seq": 4,
+          "start": 21900,
+          "end": 28140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "model"
+        }
+      ]
+    },
+    {
+      "pattern": "P2",
+      "arm": "Q",
+      "rep": 0,
+      "spendCny": 0.006843,
+      "responses": 2,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1495,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 3,
+        "askAborted": 0,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 2,
+        "calls": 2,
+        "filledOffered": 2,
+        "filledDeadline": 2,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 3
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 9142,
+          "endMs": 5980,
+          "asr": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "fill",
+            "model"
+          ],
+          "latencyMs": 5749,
+          "endMs": 12380,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 1901,
+          "endMs": 19140,
+          "asr": "把server里的voice点se voice ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 2,
+          "kinds": [
+            "model",
+            "fill"
+          ],
+          "latencyMs": 2046,
+          "endMs": 28100,
+          "asr": "看一下Useless input这个hook是怎么处理recorded G的。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 15122,
+          "kind": "fill",
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "seqs": [
+            1
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 18129,
+          "kind": "fill",
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "seqs": [
+            2
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 21041,
+          "kind": "model",
+          "text": "把默认模型换成 whisper large，啊不，是 whisper turbo。把 server 里的 voice.ts、voice.rs 的超时改成三十秒。",
+          "seqs": [],
+          "claimed": []
+        },
+        {
+          "t": 21041,
+          "kind": "fill",
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "seqs": [
+            3
+          ],
+          "reason": "offered-not-claimed"
+        },
+        {
+          "t": 30146,
+          "kind": "model",
+          "text": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "seqs": [],
+          "claimed": []
+        },
+        {
+          "t": 30146,
+          "kind": "fill",
+          "text": "看一下Useless input这个hook是怎么处理recorded G的。",
+          "seqs": [
+            4
+          ],
+          "reason": "offered-not-claimed"
+        }
+      ],
+      "log": [
+        {
+          "t": 650,
+          "kind": "local-vad-speech",
+          "fromMs": 600
+        },
+        {
+          "t": 939,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 6105,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 5840
+        },
+        {
+          "t": 6701,
+          "kind": "endpoint-speech-stopped",
+          "at": 6020
+        },
+        {
+          "t": 6702,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6020
+          ]
+        },
+        {
+          "t": 6986,
+          "kind": "asr",
+          "seq": 1,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "t": 7002,
+          "kind": "roster-sent",
+          "version": 1,
+          "seqs": [
+            1
+          ],
+          "text": "ROSTER v1\n[1] 0.3–6.0s  \"不要动，voice点s e，voice点t s，只改voice module点t s。\""
+        },
+        {
+          "t": 7103,
+          "kind": "ask",
+          "version": 1,
+          "offered": [
+            1
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 7157,
+          "kind": "local-vad-speech",
+          "fromMs": 7100
+        },
+        {
+          "t": 7420,
+          "kind": "endpoint-speech-started",
+          "at": 6820
+        },
+        {
+          "t": 12467,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 12220
+        },
+        {
+          "t": 13089,
+          "kind": "endpoint-speech-stopped",
+          "at": 12420
+        },
+        {
+          "t": 13089,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6820,
+            12420
+          ]
+        },
+        {
+          "t": 13318,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 13368,
+          "kind": "local-vad-speech",
+          "fromMs": 13300
+        },
+        {
+          "t": 13586,
+          "kind": "endpoint-speech-started",
+          "at": 13020
+        },
+        {
+          "t": 15122,
+          "kind": "inflight-timeout"
+        },
+        {
+          "t": 15122,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            1
+          ],
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "t": 18129,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            2
+          ],
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 19231,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 18960
+        },
+        {
+          "t": 19820,
+          "kind": "endpoint-speech-stopped",
+          "at": 19160
+        },
+        {
+          "t": 19820,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            13020,
+            19160
+          ]
+        },
+        {
+          "t": 19953,
+          "kind": "asr",
+          "seq": 3,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 19971,
+          "kind": "roster-sent",
+          "version": 2,
+          "seqs": [
+            3
+          ],
+          "text": "ROSTER v2\n[3] 13.0–19.2s  \"把server里的voice点se voice ts的超时改成三十秒。\""
+        },
+        {
+          "t": 20071,
+          "kind": "ask",
+          "version": 2,
+          "offered": [
+            3
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 20534,
+          "kind": "response.created"
+        },
+        {
+          "t": 21041,
+          "kind": "call",
+          "message": "把默认模型换成 whisper large，啊不，是 whisper turbo。把 server 里的 voice.ts、voice.rs 的超时改成三十秒。",
+          "roster": "v1",
+          "items": "{\"1\": \"carried\"}",
+          "claimed": []
+        },
+        {
+          "t": 21041,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 21041,
+          "kind": "fill",
+          "reason": "offered-not-claimed",
+          "seqs": [
+            3
+          ],
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "t": 22235,
+          "kind": "local-vad-speech",
+          "fromMs": 22160
+        },
+        {
+          "t": 22459,
+          "kind": "endpoint-speech-started",
+          "at": 21900
+        },
+        {
+          "t": 28239,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 27960
+        },
+        {
+          "t": 28861,
+          "kind": "endpoint-speech-stopped",
+          "at": 28140
+        },
+        {
+          "t": 28861,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21900,
+            28140
+          ]
+        },
+        {
+          "t": 29006,
+          "kind": "asr",
+          "seq": 4,
+          "text": "看一下Useless input这个hook是怎么处理recorded G的。"
+        },
+        {
+          "t": 29010,
+          "kind": "roster-sent",
+          "version": 3,
+          "seqs": [
+            4
+          ],
+          "text": "ROSTER v3\n[4] 21.9–28.1s  \"看一下Useless input这个hook是怎么处理recorded G的。\""
+        },
+        {
+          "t": 29161,
+          "kind": "ask",
+          "version": 3,
+          "offered": [
+            4
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 29770,
+          "kind": "response.created"
+        },
+        {
+          "t": 30146,
+          "kind": "call",
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "roster": "v1",
+          "items": "{\"1\": \"carried\"}",
+          "claimed": []
+        },
+        {
+          "t": 30146,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 30146,
+          "kind": "fill",
+          "reason": "offered-not-claimed",
+          "seqs": [
+            4
+          ],
+          "text": "看一下Useless input这个hook是怎么处理recorded G的。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 6820,
+          "end": 12420,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21900,
+          "end": 28140,
+          "text": "看一下Useless input这个hook是怎么处理recorded G的。",
+          "resolved": "filled"
+        }
+      ]
+    },
+    {
+      "pattern": "P2",
+      "arm": "Q",
+      "rep": 1,
+      "spendCny": 0.006318,
+      "responses": 2,
+      "drift": {
+        "lateFrames": 0,
+        "of": 1495,
+        "maxMs": 0,
+        "p90Ms": 0
+      },
+      "diag": {
+        "asks": 2,
+        "askAborted": 2,
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "claimInvalid": 0,
+        "claimOutOfRange": 0,
+        "calls": 0,
+        "filledOffered": 2,
+        "filledDeadline": 2,
+        "filledEnd": 0,
+        "settleFires": 0,
+        "settleRearms": 0,
+        "updates": 4
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "itemSeqs": [
+            1
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 5834,
+          "endMs": 5980,
+          "asr": "不要动，voice点se，rests只改voice module ts。",
+          "asrOk": true
+        },
+        {
+          "clip": "d08",
+          "itemSeqs": [
+            2
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 5746,
+          "endMs": 12380,
+          "asr": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "asrOk": true
+        },
+        {
+          "clip": "d01",
+          "itemSeqs": [
+            3
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 1935,
+          "endMs": 19140,
+          "asr": "把server里的voice点se reace ts的超时改成三十秒。",
+          "asrOk": true
+        },
+        {
+          "clip": "d03",
+          "itemSeqs": [
+            4
+          ],
+          "deliveries": 1,
+          "kinds": [
+            "fill"
+          ],
+          "latencyMs": 1489,
+          "endMs": 28100,
+          "asr": "看一下useless input这个hook是怎么处理recorded g的。",
+          "asrOk": true
+        }
+      ],
+      "pieces": [
+        {
+          "t": 11814,
+          "kind": "fill",
+          "text": "不要动，voice点se，rests只改voice module ts。",
+          "seqs": [
+            1
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 18126,
+          "kind": "fill",
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "seqs": [
+            2
+          ],
+          "reason": "deadline"
+        },
+        {
+          "t": 21075,
+          "kind": "fill",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "seqs": [
+            3
+          ],
+          "reason": "offered-not-claimed"
+        },
+        {
+          "t": 29589,
+          "kind": "fill",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "seqs": [
+            4
+          ],
+          "reason": "offered-not-claimed"
+        }
+      ],
+      "log": [
+        {
+          "t": 650,
+          "kind": "local-vad-speech",
+          "fromMs": 600
+        },
+        {
+          "t": 937,
+          "kind": "endpoint-speech-started",
+          "at": 320
+        },
+        {
+          "t": 6111,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 5840
+        },
+        {
+          "t": 6783,
+          "kind": "endpoint-speech-stopped",
+          "at": 6020
+        },
+        {
+          "t": 6784,
+          "kind": "commit",
+          "seq": 1,
+          "span": [
+            320,
+            6020
+          ]
+        },
+        {
+          "t": 7017,
+          "kind": "asr",
+          "seq": 1,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "t": 7033,
+          "kind": "roster-sent",
+          "version": 1,
+          "seqs": [
+            1
+          ],
+          "text": "ROSTER v1\n[1] 0.3–6.0s  \"不要动，voice点se，rests只改voice module ts。\""
+        },
+        {
+          "t": 7161,
+          "kind": "local-vad-speech",
+          "fromMs": 7100
+        },
+        {
+          "t": 7184,
+          "kind": "ask-aborted",
+          "why": "local VAD hears speech"
+        },
+        {
+          "t": 7417,
+          "kind": "endpoint-speech-started",
+          "at": 6820
+        },
+        {
+          "t": 11814,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            1
+          ],
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "t": 12465,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 12220
+        },
+        {
+          "t": 13088,
+          "kind": "endpoint-speech-stopped",
+          "at": 12420
+        },
+        {
+          "t": 13088,
+          "kind": "commit",
+          "seq": 2,
+          "span": [
+            6820,
+            12420
+          ]
+        },
+        {
+          "t": 13338,
+          "kind": "asr",
+          "seq": 2,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 13339,
+          "kind": "roster-sent",
+          "version": 2,
+          "seqs": [
+            2
+          ],
+          "text": "ROSTER v2\n[2] 6.8–12.4s  \"把默认模型换成 whisper large 啊，不是 whisper turbo。\""
+        },
+        {
+          "t": 13367,
+          "kind": "local-vad-speech",
+          "fromMs": 13300
+        },
+        {
+          "t": 13489,
+          "kind": "ask-aborted",
+          "why": "local VAD hears speech"
+        },
+        {
+          "t": 13583,
+          "kind": "endpoint-speech-started",
+          "at": 13020
+        },
+        {
+          "t": 18126,
+          "kind": "fill",
+          "reason": "deadline",
+          "seqs": [
+            2
+          ],
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "t": 19227,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 18960
+        },
+        {
+          "t": 19865,
+          "kind": "endpoint-speech-stopped",
+          "at": 19160
+        },
+        {
+          "t": 19865,
+          "kind": "commit",
+          "seq": 3,
+          "span": [
+            13020,
+            19160
+          ]
+        },
+        {
+          "t": 20003,
+          "kind": "asr",
+          "seq": 3,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "t": 20014,
+          "kind": "roster-sent",
+          "version": 3,
+          "seqs": [
+            3
+          ],
+          "text": "ROSTER v3\n[3] 13.0–19.2s  \"把server里的voice点se reace ts的超时改成三十秒。\""
+        },
+        {
+          "t": 20164,
+          "kind": "ask",
+          "version": 3,
+          "offered": [
+            3
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 20685,
+          "kind": "response.created"
+        },
+        {
+          "t": 21075,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 21075,
+          "kind": "fill",
+          "reason": "offered-not-claimed",
+          "seqs": [
+            3
+          ],
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "t": 22232,
+          "kind": "local-vad-speech",
+          "fromMs": 22160
+        },
+        {
+          "t": 22456,
+          "kind": "endpoint-speech-started",
+          "at": 21900
+        },
+        {
+          "t": 28240,
+          "kind": "local-vad-quiet",
+          "lastSpeechEnd": 27960
+        },
+        {
+          "t": 28858,
+          "kind": "endpoint-speech-stopped",
+          "at": 28140
+        },
+        {
+          "t": 28858,
+          "kind": "commit",
+          "seq": 4,
+          "span": [
+            21900,
+            28140
+          ]
+        },
+        {
+          "t": 28997,
+          "kind": "asr",
+          "seq": 4,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "t": 29009,
+          "kind": "roster-sent",
+          "version": 4,
+          "seqs": [
+            4
+          ],
+          "text": "ROSTER v4\n[4] 21.9–28.1s  \"看一下useless input这个hook是怎么处理recorded g的。\""
+        },
+        {
+          "t": 29160,
+          "kind": "ask",
+          "version": 4,
+          "offered": [
+            4
+          ],
+          "guard": "quiet and committed"
+        },
+        {
+          "t": 29566,
+          "kind": "response.created"
+        },
+        {
+          "t": 29589,
+          "kind": "response.done",
+          "status": "completed"
+        },
+        {
+          "t": 29589,
+          "kind": "fill",
+          "reason": "offered-not-claimed",
+          "seqs": [
+            4
+          ],
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ],
+      "items": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点se，rests只改voice module ts。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 2,
+          "start": 6820,
+          "end": 12420,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "resolved": "filled"
+        },
+        {
+          "seq": 4,
+          "start": 21900,
+          "end": 28140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "resolved": "filled"
+        }
+      ]
+    }
+  ]
+}

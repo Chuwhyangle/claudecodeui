@@ -1,0 +1,57 @@
+# 164c3087@10-14T15:16:43 arm B rep 1 model sonnet hook true wall 166.2s
+   0.0  >> DELIVER prompt: 让我们再做一次 live voice 测试。
+   0.8  == turn
+   4.7     text: 好，我在线，语音通道已经通着了。你直接说，我照常回应。  测完之后告诉我，我再去对 transcription.completed 和 `teardown:`、`buffered=` 这几处日志，核对有没有吞句、重连、卡行的情况。  这次有想重点测的场景吗？比如打断、我忙的时候连续说话、mute 后断线重连。
+   4.8  -- result success
+   6.8  · voice [ADD-frag] 你看啊，第一句的问题是。
+   7.8  >> DELIVER idle: 你看啊，第一句的问题是。
+   7.9  == turn
+   8.9  · voice [ADD-frag] 我大概花了。
+   9.6     text: 你说的是第一句出了问题，但后半句没传到，只有"第一句的问题是"。  你接着说，是第一句被吞了、转写错了，还是回复里漏了第一句？
+   9.6  -- result success
+   9.6  >> DELIVER turn-end: 我大概花了。
+   9.6  == turn
+  11.6     text: 又只收到半句："我大概花了。"后面没有内容。  这本身可能就是你要测的现象：句子被切成了碎片。我先不猜，你把整句话再完整说一遍，我这边记下收到的每一段原文，之后好对日志。
+  11.6  -- result success
+  13.0  · voice [ADD-frag] 两秒时间。
+  14.0  >> DELIVER idle: 两秒时间。
+  14.0  == turn
+  17.3     text: 我把三段拼起来了：「第一句的问题是，我大概花了，两秒时间。」  大概意思是第一句话你说完，到我这边有反应花了约两秒，对吗？同时这句话被切成了三段才到我这里，这也是一个发现。  两秒是指我开始回复的延迟，还是你说完到句子被转写出来的延迟？
+  17.4  -- result success
+  17.4  · voice [ADD-frag] 就把话说完了。
+  18.4  >> DELIVER idle: 就把话说完了。
+  18.5  == turn
+  22.6     text: 明白了，我重新理解一下：你说第一句话大概只花了两秒，话就说完了，但我这边收到的是被切碎的三段。  所以问题在切句，不在延迟：一句两秒的话被拆成了「第一句的问题是」「我大概花了」「两秒时间」三段，每段都单独触发了一次回复。  这跟 10-15 那几次实测里的「判停过早」是同一类。你确认一下？确认的话我去翻这一轮的日志，看是 VAD 判停太短，还是转写层自己断的句。
+  22.7  -- result success
+  28.8  · voice [ADD-frag] 但是我看见这边有个动字。
+  29.8  >> DELIVER idle: 但是我看见这边有个动字。
+  29.8  == turn
+  32.3  · voice [ADD-frag] 可能花了五六秒。
+  32.9     text: 这句我没听清。「动字」可能是转写错了。  你是说界面上有一个"动"字吗？还是一个在动的指示，比如 Working… 那种转圈或"正在处理"的标记？  你告诉我它出现在哪个位置、什么时候出现的。是你说话的时候，还是我回复之前？
+  32.9  -- result success
+  32.9  >> DELIVER turn-end: 可能花了五六秒。
+  33.0  == turn
+  35.5     text: 我理解成：界面上那个"动"的指示（转圈或"处理中"），大概持续了五六秒才消失。  综合起来：你说完第一句，我这边的"动"状态挂了五六秒，句子又被切成三段。这很可能是同一件事的两面：转写慢了几秒才出来，然后分段到达。  现在可以去翻日志了。我会对这一轮的 transcription.completed 时间戳和三段到达的间隔，看五六秒耗在上游转写还是中继这边。要我现在查吗？
+  35.5  -- result success
+  65.0  · voice [ADD-frag] 但是我看到在我的屏幕上蹦出来。
+  66.0  >> DELIVER idle: 但是我看到在我的屏幕上蹦出来。
+  66.1  == turn
+  69.5     text: 懂了：你的话是在屏幕上"蹦"出来的，也就是说字幕是整块突然出现的，不是边说边出。加上前面五六秒的"动"，这说明转写是等你说完、等了一阵才一次性吐出来，不是流式的。  这样的话，慢在转写出字这一步，不在我回复这一步。  我现在去查日志，把你说话的时间、转写完成的时间、三段到达我这里的时间对在一起，看这五六秒到底耗在哪。
+  69.6  · voice [ADD-frag] 可能要花了二十到三十秒。
+  70.2     tool Bash: ls -t server/logs logs 2>/dev/null | head; ls /data/home/yale/work/claudecodeui/logs 2>/dev/null | head
+  72.0     tool Bash: grep -rIl "transcription.completed" --include=*.log / 2>/dev/null | head -5; ls -t /tmp/*.log /data/home/yale/
+  79.1  · voice [ADD] 啊，分析一下原因。
+  79.4     tool Bash: cd /data/home/yale/work/claudecodeui && ls -la server.log && grep -n "transcription.completed\|teardown:\|buff
+  86.8     tool Bash: cd /data/home/yale/work/claudecodeui && date -u +%FT%TZ; grep -n "第一句\|两秒时间\|我大概花了" server.log | tail -8 | cut
+  89.2     tool Bash: cd /data/home/yale/work/claudecodeui && sed -n 1665590,1666100p server.log | grep -v "to-upstream audio" | gre
+  93.1     tool Bash: cd /data/home/yale/work/claudecodeui && sed -n 1665590,1666100p server.log | grep "2a475477" | grep -v "to-ups
+  97.8     text: 我在对这一轮的日志，已经有初步结论：  - **转写不慢。** 每句在 speech_stopped 之后约 0.2 秒就出字，字幕也是立刻发到浏览器的。所以"蹦出来"是每段各自蹦，不是等了五六秒才出。 - **句子是被服务端 VAD 切碎的。** 静音阈值是 400ms，你的短停顿就判了一句结束，于是切成三段，每段单独触发一次转发。 - **转发给我的那一条很晚。** 三段被"忙时合并"，等我空下来才作为一条发出，实际是 15:18:36，比你说第一句晚了约 106 秒。这才是你感觉到的"动"那么久。 - **还有一条报错。** 第一段的 function_call 被上游以 "Unknow
+  97.8  -- result success
+  97.8  >> DELIVER turn-end: 可能要花了二十到三十秒。啊，分析一下原因。
+  97.8  == turn
+ 106.0     tool Agent [BG]: Analyze live voice latency log
+ 108.3     text: 已派后台去分析原因，主要查两件事：  - 合并后的那条消息为什么拖到 15:18:36 才发给我，是哪条忙时 hold 的释放路径触发的。 - 有两句（"是为什么呢？""像刚刚这段话…"）只有字幕、没有 session_send，我怀疑被吞了，让它确认。  结果出来我用一两句话告诉你。
+ 108.4  -- result success
+ 135.0  == turn
+ 140.2     text: 分析出来了，延迟的主因是忙时 hold。  - **主因：忙时 hold 约 106 秒。** 你的话在 15:16:50 就进了队列，但一直 hold 到 15:18:36 才合并发出。释放信号是 `source=host-rounds`，也就是主机自己的"轮次忙"计数，不是定时器。它为什么一直算忙，日志里没打，只在释放时才印出来。 - **有三句被吞：** "是为什么呢？"、"像刚刚这段话，我说完它应该的话没有十秒"、"你让检查服务单，宇去"。它们有字幕，但中继模型没调 session_send，所以没有处置，也没进合并消息。这三句和上游拒收的报错时间重叠。 - **没有重复。** 那条 
+ 140.3  -- result success

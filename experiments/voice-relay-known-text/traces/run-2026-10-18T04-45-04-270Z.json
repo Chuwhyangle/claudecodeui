@@ -1,0 +1,89 @@
+{
+  "ranAt": "2026-10-18T04:45:04.271Z",
+  "budgetCny": 0.4,
+  "spendCny": 0.14896,
+  "guardTriggered": false,
+  "results": [
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    },
+    {
+      "error": "ReferenceError: id is not defined"
+    }
+  ]
+}

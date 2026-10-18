@@ -1,0 +1,392 @@
+{
+  "ranAt": "2026-10-18T04:48:58.695Z",
+  "budgetCny": 0.4,
+  "spendCny": 0.133622,
+  "guardTriggered": false,
+  "results": [
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.010224,
+      "responseCreated": 4,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成30秒。",
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.010215,
+      "responseCreated": 4,
+      "calls": [
+        "把 server 里的 voice-service.ts 的超时改成三十秒。",
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.010807,
+      "responseCreated": 4,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成三十秒。",
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.010812,
+      "responseCreated": 4,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成 30 秒。",
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.007674,
+      "responseCreated": 3,
+      "calls": [
+        "不要动 voice.sse、voice.ts，只改 voice.module.ts。",
+        "把默认模型换成 whisper-large，不是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": [
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.009927,
+      "responseCreated": 4,
+      "calls": [
+        "不要动 voice.sse race.ts，只改 voice module.ts。",
+        "把默认模型换成 whisper large，不是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.010509,
+      "responseCreated": 4,
+      "calls": [
+        "不要动 voice.service.ts，只改 voice.module.ts。",
+        "把默认模型换成 whisper-large，不是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.010506,
+      "responseCreated": 4,
+      "calls": [
+        "不要动 voice.se，只改 voice.module.ts。",
+        "把默认模型换成 whisper large，啊不，是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.016818,
+      "responseCreated": 6,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成30秒。",
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": false,
+          "anchorCount": 0
+        }
+      ],
+      "omitted": [
+        "d08"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.016583,
+      "responseCreated": 6,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成三十秒。",
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+        "把默认模型换成 whisper-large，啊不是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.008205,
+      "responseCreated": 3,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成 30 秒。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": false,
+          "anchorCount": 0
+        }
+      ],
+      "omitted": [
+        "d03",
+        "d08"
+      ],
+      "duplicated": [],
+      "errors": [
+        "[object Object]",
+        "[object Object]"
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.011342,
+      "responseCreated": 4,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成三十秒。",
+        "把默认模型换成 whisper large，不是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    }
+  ]
+}

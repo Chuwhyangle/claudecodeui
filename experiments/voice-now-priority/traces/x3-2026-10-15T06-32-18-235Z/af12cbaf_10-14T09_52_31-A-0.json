@@ -1,0 +1,44 @@
+{
+ "episode": "af12cbaf@10-14T09:52:31",
+ "arm": "A",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": false,
+ "commit": "90604965a2bbc3f13e24f5c90382c893f7dda063",
+ "fork": true,
+ "pieces": [],
+ "diffStat": "",
+ "wallMs": 91206,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "来吧，尝试跑一个差不多要一分钟的前台任务。",
+   "parts": []
+  },
+  {
+   "t": 970,
+   "ev": "TURN"
+  },
+  {
+   "t": 3144,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "for i in $(seq 1 12); do echo \"tick $i\"; sleep 5; done; echo done",
+   "bg": false
+  },
+  {
+   "t": 64449,
+   "ev": "TEXT",
+   "text": "前台任务跑完了：一个 12 步、每步 5 秒的循环，共约 60 秒，正常退出并打印了 `done`。"
+  },
+  {
+   "t": 64471,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

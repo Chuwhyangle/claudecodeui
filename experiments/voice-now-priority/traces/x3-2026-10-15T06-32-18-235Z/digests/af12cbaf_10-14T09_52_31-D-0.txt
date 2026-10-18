@@ -1,0 +1,7 @@
+# af12cbaf@10-14T09:52:31 arm D rep 0 model sonnet hook true wall 93.3s
+   0.0  >> DELIVER prompt: 来吧，尝试跑一个差不多要一分钟的前台任务。
+   0.8  == turn
+   5.4     text: 好，前台跑一个约 60 秒的任务。
+   6.0     tool Bash: for i in 1 2 3 4 5 6; do sleep 10; echo "tick $i/6 $(date +%T)"; done
+  67.5     text: 前台任务跑完了：6 个 10 秒的节拍，共约 50 秒（14:50:56 → 14:51:46），全程无报错。
+  67.5  -- result success

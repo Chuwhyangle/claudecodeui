@@ -1,0 +1,25 @@
+# 99df08d8@10-12T01:26:18 arm D rep 0 model sonnet hook true wall 68.7s
+   0.0  >> DELIVER prompt: 第一句识别出来了，我们看看第二句。 现在第三句。 第四句。 到现在为止识别的还可以。 只是对于第一句的处理慢一些，但这是正常的。 现在后面这几句话都在 queue 里面在等。 或者说队列，在队列里面等。
+   0.9  == turn
+   4.5     text: 我先看一下这段时间的日志,确认后几句在队列里的投递状态。
+   5.1     tool Bash: cd ~/.cloudcli/voice-realtime-log && f=$(ls -t | head -1); echo $f; ls -la $f; grep -E 'transcription.complete
+  14.5     text: 日志对上了你说的现象:  - **第一条(03:52:13)**:`session_send` 被 hold("session is busy"),把 4 句并成一条,17 秒后在 `busy=false` 时投递,投递本身 0 ms。这符合预期,慢的是 Claude 那一轮,不是语音侧。 - **后面几句(03:52:33–42)**:Omni 连发了 3 次越来越长的累积版本,最后一条在 03:52:42 被 hold。它等了 **2 分 07 秒**,03:54:49 才放行,而且是 `busy=true` 放行,也就是进了 CLI 自己的队列,屏上不可见。 - **没有丢句**:所有 
+  14.5  -- result success
+  17.2  · voice [ADD-frag] 检查最近执行的任务。
+  18.2  >> DELIVER idle: 检查最近执行的任务。
+  18.3  == turn
+  20.6     tool Bash: git log -12 --format='%ci %s' | cut -c1-170; echo ---; ls -t tasks | head -8; echo ---; grep -l "^status: \(in
+  24.6     text: 这个 worktree 停在 10-12 02:57 的提交,不是最新状态。从这里能看到的最近一个任务是 `gap-mcp-correlation-id-write-tools-and-filters`:  - 01:56 被 promotion-driver 自动晋升为 ready。 - 02:18–02:43 完成实现,并修了两处,一处是 run registry 整体传给写工具,一处是 voice-realtime 镜像 `correlationId` 字段。 - 02:49 driver 机械 fan-in 翻 done。 - 02:57 GOAL-040 和 AC-337 随之 ac
+  24.6  -- result success
+  28.6  · voice [ADD] 你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。
+  29.6  >> DELIVER idle: 你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。
+  29.6  == turn
+  32.4     tool Bash: pkill -f /tmp/voice-watch.sh; echo done
+  32.4     (blocked by sandbox)
+  32.7  · voice [ASK] 你确认一下现在这个任务有没有实现。
+  34.2  >> DELIVER quiet next: 你确认一下现在这个任务有没有实现。
+  35.3     tool Write: /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory/live-voice-cancel-inflight-work-proa
+  35.3     (blocked by sandbox)
+  38.6     tool Bash: grep -c "^status: done" tasks/gap-mcp-correlation-id-write-tools-and-filters.md; grep -rln "correlationId" ser
+  42.1     text: 我假设你说的"这个任务"是 `gap-mcp-correlation-id-write-tools-and-filters`,如果指的是别的任务,请告诉我。这个任务已经实现并落地:  - 任务状态是 `done`。 - 代码在 `server/modules/mcp-gateway/` 里,`correlationId` 已经贯穿写工具(`mcp-session-send.ts`、`mcp-session-lifecycle.ts`、`mcp-approvals.ts`、`mcp-ui-open-task.ts` 等)和读工具的过滤(`mcp-gateway.read-tools.ts`)。 
+  42.1  -- result success

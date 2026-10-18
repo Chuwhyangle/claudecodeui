@@ -1,0 +1,314 @@
+{
+ "model": "opus",
+ "corpus": [
+  {
+   "origMs": 724878,
+   "kind": "long",
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "origMs": 536186,
+   "kind": "long",
+   "text": "现在我在用live voice。"
+  },
+  {
+   "origMs": 273170,
+   "kind": "long",
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。但是我看到在我的屏幕上蹦出来。可能要花了二十到三十秒。啊，分析一下原因。现在我看见在 Q 里面的这段话实际上漏了不少字。"
+  },
+  {
+   "origMs": 255173,
+   "kind": "long",
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "origMs": 251706,
+   "kind": "long",
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "origMs": 224871,
+   "kind": "long",
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为什么会出现这些东西。"
+  },
+  {
+   "origMs": 224871,
+   "kind": "long",
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "origMs": 4014,
+   "kind": "short",
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "origMs": 2533,
+   "kind": "short",
+   "text": "现在这是第三句。"
+  },
+  {
+   "origMs": 5471,
+   "kind": "short",
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "origMs": 4155,
+   "kind": "short",
+   "text": "但好像推理开始的慢一些。"
+  }
+ ],
+ "results": [
+  {
+   "i": 1,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 536,
+   "atS": 3.6,
+   "readsBefore": 0,
+   "detail": "收到，我在听。你说吧，有什么要查或要做的？",
+   "hookSeen": false,
+   "text": "现在我在用live voice。"
+  },
+  {
+   "i": 1,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 536,
+   "atS": 4.2,
+   "readsBefore": 0,
+   "detail": "好的，我在。你说吧，需要我做什么？",
+   "hookSeen": false,
+   "text": "现在我在用live voice。"
+  },
+  {
+   "i": 0,
+   "arm": "on",
+   "kind": "fg-action",
+   "origS": 725,
+   "tool": "CronList",
+   "detail": "",
+   "atS": 5,
+   "readsBefore": 1,
+   "hookSeen": false,
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "i": 0,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 725,
+   "tool": "CronList",
+   "detail": "",
+   "atS": 5.9,
+   "readsBefore": 1,
+   "hookSeen": false,
+   "text": "检查最近的自动的架构检查是否有进展。"
+  },
+  {
+   "i": 3,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 255,
+   "atS": 13.1,
+   "readsBefore": 0,
+   "detail": "你说的\"修\"是指哪个问题？我这边没有上下文锚点，最近 memory 里堆着好几条待修的实测发现，比如：\n\n1. **静默吞句**——Claude 忙时新语句掉进",
+   "hookSeen": false,
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "i": 3,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 255,
+   "tool": "AskUserQuestion",
+   "detail": "",
+   "atS": 19.6,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "讨论一下怎么修吧。"
+  },
+  {
+   "i": 2,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 273,
+   "tool": "Bash",
+   "detail": "List memory files by recency",
+   "atS": 26.3,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。"
+  },
+  {
+   "i": 4,
+   "arm": "off",
+   "kind": "fg-action",
+   "origS": 252,
+   "tool": "Bash",
+   "detail": "Inspect repo state",
+   "atS": 11,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "i": 2,
+   "arm": "on",
+   "kind": "background",
+   "origS": 273,
+   "tool": "Agent",
+   "detail": "诊断语音高延迟与Q吞字",
+   "atS": 36.5,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。"
+  },
+  {
+   "i": 4,
+   "arm": "on",
+   "kind": "background",
+   "origS": 252,
+   "tool": "Agent",
+   "detail": "查语音中继服务状态",
+   "atS": 20.9,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "让我们再做一次LiveMOT的语音输入。"
+  },
+  {
+   "i": 5,
+   "arm": "off",
+   "kind": "fg-agent",
+   "origS": 225,
+   "tool": "Agent",
+   "detail": "Find bracketed English prefix injection",
+   "atS": 34.3,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为"
+  },
+  {
+   "i": 6,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 225,
+   "atS": 26,
+   "readsBefore": 0,
+   "detail": "你说的现象我想先对齐一下，因为有一处我没把握。\n\n我的理解是：**某句话已经被处理（投递/消费）了，但底部的队列行（Q）里还留着它没清掉** —— 这正好对上最",
+   "hookSeen": false,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "i": 5,
+   "arm": "on",
+   "kind": "background",
+   "origS": 225,
+   "tool": "Agent",
+   "detail": "Find bracketed English injection in voice relay",
+   "atS": 33.7,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。找出来为"
+  },
+  {
+   "i": 7,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 5.2,
+   "readsBefore": 0,
+   "detail": "好的，第二句也收到了，识别得很清楚。你继续说，我在听。",
+   "hookSeen": false,
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "i": 8,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 3,
+   "atS": 6,
+   "readsBefore": 0,
+   "detail": "收到，这是第三句。我在。有什么需要我做的吗？",
+   "hookSeen": false,
+   "text": "现在这是第三句。"
+  },
+  {
+   "i": 7,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 10,
+   "readsBefore": 0,
+   "detail": "收到——第二句也识别到了，内容清晰完整。继续说下一句吧，我这边都能接住。",
+   "hookSeen": false,
+   "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+  },
+  {
+   "i": 8,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 3,
+   "atS": 6.4,
+   "readsBefore": 0,
+   "detail": "收到，这是第三句。目前还没有具体任务——你接着说就行。",
+   "hookSeen": false,
+   "text": "现在这是第三句。"
+  },
+  {
+   "i": 9,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 5,
+   "atS": 4,
+   "readsBefore": 0,
+   "detail": "收到，语音识别这次确实很快。我在听，你接着说下一句就行。",
+   "hookSeen": false,
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "i": 9,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 5,
+   "atS": 8.4,
+   "readsBefore": 0,
+   "detail": "收到，这句识别确实很快。我在听——你接着说要测什么，或者直接把要我做的事说出来就行。",
+   "hookSeen": false,
+   "text": "好，现在我们再次测一下 live voice mode。哎，上面这句话识别的很快。"
+  },
+  {
+   "i": 6,
+   "arm": "on",
+   "kind": "background",
+   "origS": 225,
+   "tool": "Agent",
+   "detail": "查队列行Q不清除的逻辑",
+   "atS": 33,
+   "readsBefore": 0,
+   "hookSeen": false,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "i": 10,
+   "arm": "off",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 11.1,
+   "readsBefore": 0,
+   "detail": "你指的是哪个场景的「推理开始慢」？目前这条消息没有前文，我不确定对象。几种可能：\n\n- **我（Claude）在这个会话里**回复前的思考/首字延迟偏慢；\n- ",
+   "hookSeen": false,
+   "text": "但好像推理开始的慢一些。"
+  },
+  {
+   "i": 10,
+   "arm": "on",
+   "kind": "answer",
+   "origS": 4,
+   "atS": 11,
+   "readsBefore": 0,
+   "detail": "嗯，你是说模型开始出结果前的那段停顿偏长？这通常是「首 token 延迟」——请求发出到第一个字出现之间的等待。\n\n可能的几个原因：\n- 上游（DashScop",
+   "hookSeen": false,
+   "text": "但好像推理开始的慢一些。"
+  }
+ ]
+}

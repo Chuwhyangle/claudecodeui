@@ -1,0 +1,42 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:37:19.384Z",
+  "budgetCny": 0.12,
+  "spendCny": 0.004029,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 2559,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "prefix": {
+      "readings": [
+        {
+          "instructionsChars": 800,
+          "input": 461,
+          "text": 461,
+          "audio": 0,
+          "output": 29,
+          "cny": 0.000822
+        },
+        {
+          "instructionsChars": 2400,
+          "input": 808,
+          "text": 808,
+          "audio": 0,
+          "output": 29,
+          "cny": 0.001342
+        },
+        {
+          "instructionsChars": 4000,
+          "input": 1156,
+          "text": 1156,
+          "audio": 0,
+          "output": 29,
+          "cny": 0.001865
+        }
+      ],
+      "tokensPerChar": 0.2172,
+      "interceptTokens": 287.1
+    }
+  }
+}

@@ -1,0 +1,199 @@
+{
+ "episode": "d4c9bfc4@10-14T01:36:53",
+ "arm": "E",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "c63a274dd12c7b25dc3d0883f8b0c035c6b2c4a8",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 34714,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 37713,
+   "text": "找出来为什么会出现这些东西。",
+   "label": "ADD"
+  },
+  {
+   "offsetMs": 63986,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。",
+   "label": "REMARK-frag"
+  },
+  {
+   "offsetMs": 67932,
+   "text": "所以地图的Q看来现在是个问题啊。",
+   "label": "REMARK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 125169,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n我还是看见我之前的那个居然猜到了我的想法，就在Q里面，在屏幕底部有这么一行字。",
+   "parts": []
+  },
+  {
+   "t": 858,
+   "ev": "TURN"
+  },
+  {
+   "t": 9873,
+   "ev": "TEXT",
+   "text": "你说的应该是：你之前那句\"诶，你居然猜到了我的想法。来吧，处理这句话\"，在屏幕底部的 Q（队列行）里一直挂着，但那句话我早就处理完了，它不该还在。\n\n这是已知问题，记忆里已经有两条：10-14 早上的\"Q 撤回行卡住\"，和今天凌晨第三次实测的\"队列行冻结\"。这次算第三次复现。\n\n我怀疑它在 build 被你打断的那一刻被留在队列里，之后没被清掉。这只是推测，还没核对。\n\n要我去查吗？我会对着那句话的 `transcription.completed` 往后找它最终的处置，看队列行为什么没撤。这要读日志，我派后台 Agent 去做，你不用等。"
+  },
+  {
+   "t": 9920,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 34718,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。"
+  },
+  {
+   "t": 35718,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。",
+   "parts": [
+    "ADD-frag:然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。"
+   ]
+  },
+  {
+   "t": 35763,
+   "ev": "TURN"
+  },
+  {
+   "t": 37718,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "找出来为什么会出现这些东西。"
+  },
+  {
+   "t": 39320,
+   "ev": "DELIVER",
+   "kind": "quiet",
+   "priority": "next",
+   "text": "找出来为什么会出现这些东西。",
+   "parts": [
+    "ADD:找出来为什么会出现这些东西。"
+   ]
+  },
+  {
+   "t": 43656,
+   "ev": "TEXT",
+   "text": "对，那段英文不是你说的。它是系统在你打断我正在跑的工具时，自动塞到你那句话前面的提示：\"上一轮在跑 Bash 工具时被打断，部分改动可能已落地，以下是你当前的指令\"。\n\n我收到时它和你的话是连在一起的，所以我是靠方括号和英文判断它不是你的原话。它混在你的消息里，如果内容不一样，我可能会把它当成你的话来执行。\n\n这也是已知问题：10-14 早上的实测记过\"中断提示混入原话\"。这次可以算复现，而且这次是打断 Bash 工具触发的。\n\n建议和刚才 Q 里那行卡住的问题一起查，两个都和打断有关。我现在派后台 Agent 去查吗？"
+  },
+  {
+   "t": 43682,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 43723,
+   "ev": "TURN"
+  },
+  {
+   "t": 51300,
+   "ev": "TOOL",
+   "name": "Agent",
+   "input": "Investigate Q row and interrupt-note leak",
+   "bg": true
+  },
+  {
+   "t": 54134,
+   "ev": "TEXT",
+   "text": "派了一个后台 Agent 去查两件事，只读代码，不改东西：\n\n- **Q 里那行卡住**：顺着队列行的前端状态和服务端清除事件，找打断工具那一轮在哪一步没把它撤掉。\n- **英文提示混进原话**：找那段文字是在我们的转发层拼进去的，还是 Claude CLI/SDK 自己加的，以及有没有也漏进屏幕上的气泡和字幕。\n\n查完我会用一两句话告诉你结论。"
+  },
+  {
+   "t": 54154,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 63990,
+   "ev": "PIECE",
+   "label": "REMARK-frag",
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。"
+  },
+  {
+   "t": 64991,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。",
+   "parts": [
+    "REMARK-frag:我现在看见上面这句话被处理了，但是在底部的Q里面还是有。"
+   ]
+  },
+  {
+   "t": 65128,
+   "ev": "TURN"
+  },
+  {
+   "t": 67691,
+   "ev": "TEXT",
+   "text": "收到，这是同一个现象：句子已经被我处理，Q 里那一行没撤。\n\n这次你说的是\"找出来为什么\"那句，它也是先被处理、Q 里还挂着，所以这个现象不是只有打断工具那一次，每次排队的消息都可能这样。我已经让后台 Agent 把这一点一起纳入排查，它还在跑，结论出来我再告诉你。"
+  },
+  {
+   "t": 67720,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 67936,
+   "ev": "PIECE",
+   "label": "REMARK",
+   "text": "所以地图的Q看来现在是个问题啊。"
+  },
+  {
+   "t": 68937,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "所以地图的Q看来现在是个问题啊。",
+   "parts": [
+    "REMARK:所以地图的Q看来现在是个问题啊。"
+   ]
+  },
+  {
+   "t": 69106,
+   "ev": "TURN"
+  },
+  {
+   "t": 71248,
+   "ev": "TEXT",
+   "text": "对，\"地图的 Q\"应该是\"底部的 Q\"，识别错了。\n\n是个问题，而且不是新的：记忆里从 10-14 早上就有这条，今天凌晨又复现过一次，现在是第三次。每次表现一样：话已经被处理，队列行还挂在底部不撤。\n\nAgent 还在查，我先不下根因的结论。"
+  },
+  {
+   "t": 71268,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 92611,
+   "ev": "TURN"
+  },
+  {
+   "t": 98501,
+   "ev": "TEXT",
+   "text": "Agent 查完了，两个问题原因都在本仓，不在 Claude CLI/SDK。\n\n**1. 英文提示混进原话**：已确认。\n- `voice-realtime-ws-proxy.service.ts:1132-1150` 的 `buildInterruptAftermathNote()` 生成这段英文，在 `:2727-2733` 被直接拼到你那句话前面，再发给 CLI。\n- 所以它会进 transcript，也会进浏览器的投递帧、已投递卡片和 Q 行。字幕不受影响，因为字幕来自 `transcription.completed`。\n- 建议改法：投递帧和用户气泡只用原话，提示单独走上下文通道，或者在显示时剥掉。\n\n**2. Q 里那行不撤**：根因找到了，但具体是哪种帧没发，未能确认。\n- 服务端 `pendingQueueUuids()` 认为\"已投递但没收到 `started`\"的命令就还在队列里。\n- 被取消的命令，或被并进被打断那一轮、没有自己的 `started` 帧的命令，永远进不了 `started` 集合，于是一直留在队列里，轮询也不停。前端 Q 行就是显示最新那条。\n- 建议改法：把 `cancelled`、`completed` 也算作\"已离开队列\"，并且那一轮结束后清掉它的 uuid。\n- 未确认：这次实际发出的是哪种帧，要读今天的 journal 才知道。\n\n这两处都在 `server/modules/voice-realtime/` 下。要我现在改吗？我建议先修第一个，它改动小、把握大；第二个先读 journal 确认帧类型再动。"
+  },
+  {
+   "t": 98527,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

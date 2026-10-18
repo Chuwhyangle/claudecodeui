@@ -1,0 +1,1296 @@
+{
+  "ranAt": "2026-10-18T05:40:18.690Z",
+  "spendCny": 0.051448,
+  "guardTriggered": false,
+  "results": [
+    {
+      "span": "S1",
+      "arm": "R-ids",
+      "rep": 0,
+      "spendCny": 0.002804,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice. s e race ts 的超时改成30秒，看一下 use voice input 这个 hook 是怎么处理 recording id 的。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice. s e race ts 的超时改成30秒，看一下 use voice input 这个 hook 是怎么处理 recording id 的。",
+          "covers": "[1]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se rest s的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 1,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ]
+      ]
+    },
+    {
+      "span": "S1",
+      "arm": "R-ids",
+      "rep": 1,
+      "spendCny": 0.002785,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+          "covers": "[1]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reis ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 1,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ]
+      ]
+    },
+    {
+      "span": "S1",
+      "arm": "R-ids",
+      "rep": 2,
+      "spendCny": 0.00279,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成30秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成30秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+          "covers": "[1]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 1,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ]
+      ]
+    },
+    {
+      "span": "S1",
+      "arm": "R-enum",
+      "rep": 0,
+      "spendCny": 0.002762,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 use-voice-input 这个 hook 是怎么处理 recording id 的。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 use-voice-input 这个 hook 是怎么处理 recording id 的。",
+          "items": "{\"1\":\"carried\",\"2\":\"carried\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ]
+      ]
+    },
+    {
+      "span": "S1",
+      "arm": "R-enum",
+      "rep": 1,
+      "spendCny": 0.002671,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": true,
+      "message": "把 server 里的 voice.service.ts 的超时改成 30 秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成 30 秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 0,
+      "missedClaim": 2,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ]
+      ]
+    },
+    {
+      "span": "S1",
+      "arm": "R-enum",
+      "rep": 2,
+      "spendCny": 0.002762,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.secrets.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.secrets.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。",
+          "items": "{\"1\":\"carried\",\"2\":\"carried\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reis ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ]
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "R-ids",
+      "rep": 0,
+      "spendCny": 0.003114,
+      "items": 3,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 3,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成30秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的，把默认模型换成 whisper large。啊不，是 whisper turbo。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成30秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的，把默认模型换成 whisper large。啊不，是 whisper turbo。",
+          "covers": "[1]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把 server 里的 voice 点 s e r v i c e s 的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "下 use voice input 这个 hook 是怎么处理 record 的 G 的。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        },
+        {
+          "n": 3,
+          "clip": "d08",
+          "text": "默认模型换成 whisper large，啊不，是 whisper turbo。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 2,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        },
+        {
+          "id": "d08",
+          "startMs": 14420,
+          "endMs": 19720
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ],
+        [
+          14140,
+          19760
+        ]
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "R-ids",
+      "rep": 1,
+      "spendCny": 0.003128,
+      "items": 3,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 3,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice-service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。把默认模型换成 whisper-large——啊不，是 whisper-turbo。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice-service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。把默认模型换成 whisper-large——啊不，是 whisper-turbo。",
+          "covers": "[1,2]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 3,
+          "clip": "d08",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 1,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        },
+        {
+          "id": "d08",
+          "startMs": 14420,
+          "endMs": 19720
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ],
+        [
+          14140,
+          19760
+        ]
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "R-ids",
+      "rep": 2,
+      "spendCny": 0.003128,
+      "items": 3,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 3,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的，把默认模型换成 whisper-large——啊不是，是 whisper-turbo。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的，把默认模型换成 whisper-large——啊不是，是 whisper-turbo。",
+          "covers": "[1,2]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reis ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "useless input这个hook是怎么处理recorded g的？",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 3,
+          "clip": "d08",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 1,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        },
+        {
+          "id": "d08",
+          "startMs": 14420,
+          "endMs": 19720
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ],
+        [
+          14140,
+          19760
+        ]
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "R-enum",
+      "rep": 0,
+      "spendCny": 0.003072,
+      "items": 3,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 3,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.ts 的超时改成30秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。把默认模型换成 whisper-large……啊不，是 whisper-turbo。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.ts 的超时改成30秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。把默认模型换成 whisper-large……啊不，是 whisper-turbo。",
+          "items": "{\"1\": \"carried\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se rest s的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        },
+        {
+          "n": 3,
+          "clip": "d08",
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 2,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        },
+        {
+          "id": "d08",
+          "startMs": 14420,
+          "endMs": 19720
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ],
+        [
+          14140,
+          19760
+        ]
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "R-enum",
+      "rep": 1,
+      "spendCny": 0.003104,
+      "items": 3,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 3,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的，把默认模型换成 whisper large——啊不，是 whisper turbo。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒，看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的，把默认模型换成 whisper large——啊不，是 whisper turbo。",
+          "items": "{\"1\":\"carried\",\"2\":\"carried\",\"3\":\"carried\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reis ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useless input这个hook是怎么处理recorded g的。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 3,
+          "clip": "d08",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 3,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        },
+        {
+          "id": "d08",
+          "startMs": 14420,
+          "endMs": 19720
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ],
+        [
+          14140,
+          19760
+        ]
+      ]
+    },
+    {
+      "span": "S3",
+      "arm": "R-enum",
+      "rep": 2,
+      "spendCny": 0.003099,
+      "items": 3,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 3,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。把默认模型换成 whisper large，啊不，是 whisper turbo。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。把默认模型换成 whisper large，啊不，是 whisper turbo。",
+          "items": "{\"1\":\"carried\",\"2\":\"carried\",\"3\":\"carried\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把 server 里的 voice 点 s e rvice t s 的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d03",
+          "text": "看一下useVoiceInput这个hook是怎么处理recording state的。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 3,
+          "clip": "d08",
+          "text": "把默认模型换成 whisper large，啊不是 whisper turbo。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 3,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d03",
+          "startMs": 7460,
+          "endMs": 13420
+        },
+        {
+          "id": "d08",
+          "startMs": 14420,
+          "endMs": 19720
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13460
+        ],
+        [
+          14140,
+          19760
+        ]
+      ]
+    },
+    {
+      "span": "S4",
+      "arm": "R-ids",
+      "rep": 0,
+      "spendCny": 0.002727,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "covers": "[1,2]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d01",
+          "text": "把 server 里的 voice 点 s e voice t s 的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d01",
+          "startMs": 7460,
+          "endMs": 13320
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13340
+        ]
+      ]
+    },
+    {
+      "span": "S4",
+      "arm": "R-ids",
+      "rep": 1,
+      "spendCny": 0.002727,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "covers": "[1,2]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d01",
+          "text": "把server里的voice点se rest s的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d01",
+          "startMs": 7460,
+          "endMs": 13320
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13340
+        ]
+      ]
+    },
+    {
+      "span": "S4",
+      "arm": "R-ids",
+      "rep": 2,
+      "spendCny": 0.002718,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "covers": "[1]"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d01",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "present": true,
+          "claimed": false,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 1,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d01",
+          "startMs": 7460,
+          "endMs": 13320
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13340
+        ]
+      ]
+    },
+    {
+      "span": "S4",
+      "arm": "R-enum",
+      "rep": 0,
+      "spendCny": 0.00269,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "items": "{\"1\":\"carried\",\"2\":\"skipped\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se reat s的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d01",
+          "text": "把server里的voice点se reis ts的超时改成三十秒。",
+          "present": true,
+          "claimed": false,
+          "skipped": true
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 1,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 1,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d01",
+          "startMs": 7460,
+          "endMs": 13320
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13340
+        ]
+      ]
+    },
+    {
+      "span": "S4",
+      "arm": "R-enum",
+      "rep": 1,
+      "spendCny": 0.002685,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "items": "{\"1\":\"carried\",\"2\":\"merged\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se voice ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d01",
+          "text": "把server里的voice点se reace ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d01",
+          "startMs": 7460,
+          "endMs": 13320
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13340
+        ]
+      ]
+    },
+    {
+      "span": "S4",
+      "arm": "R-enum",
+      "rep": 2,
+      "spendCny": 0.002685,
+      "items": 2,
+      "nCalls": 1,
+      "unparsable": 0,
+      "errors": [],
+      "rosterSize": 2,
+      "fieldMissing": false,
+      "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+      "calls": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "items": "{\"1\":\"carried\",\"2\":\"merged\"}"
+        }
+      ],
+      "rows": [
+        {
+          "n": 1,
+          "clip": "d01",
+          "text": "把server里的voice点se rest s的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        },
+        {
+          "n": 2,
+          "clip": "d01",
+          "text": "server里的voice点se rese ts的超时改成三十秒。",
+          "present": true,
+          "claimed": true,
+          "skipped": false
+        }
+      ],
+      "falseClaim": 0,
+      "okClaim": 2,
+      "missedClaim": 0,
+      "fillSaves": 0,
+      "skippedPresent": 0,
+      "skippedAbsent": 0,
+      "tsErrMedianMs": null,
+      "truth": [
+        {
+          "id": "d01",
+          "startMs": 600,
+          "endMs": 6460
+        },
+        {
+          "id": "d01",
+          "startMs": 7460,
+          "endMs": 13320
+        }
+      ],
+      "itemSpans": [
+        [
+          340,
+          6480
+        ],
+        [
+          7200,
+          13340
+        ]
+      ]
+    }
+  ]
+}

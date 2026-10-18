@@ -1,0 +1,198 @@
+{
+  "reference": "把 server 里的 voice.service.ts 的超时改成三十秒",
+  "arms": [
+    {
+      "arm": "K",
+      "rep": 1,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 800,
+      "stoppedMs": 2157,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "P1000",
+      "rep": 1,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1000,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 811,
+      "stoppedMs": 2096,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "P1500",
+      "rep": 1,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1500,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 1065,
+      "stoppedMs": 2089,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "T03",
+      "rep": 1,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.3,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 892,
+      "stoppedMs": 2126,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "K",
+      "rep": 2,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 793,
+      "stoppedMs": 2073,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "P1000",
+      "rep": 2,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1000,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 680,
+      "stoppedMs": 1962,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "P1500",
+      "rep": 2,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.5,
+        "prefix_padding_ms": 1500,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 807,
+      "stoppedMs": 2083,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    },
+    {
+      "arm": "T03",
+      "rep": 2,
+      "echoedTurnDetection": {
+        "type": "server_vad",
+        "threshold": 0.3,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 800,
+        "create_response": false,
+        "interrupt_response": true
+      },
+      "errors": [],
+      "startedMs": 885,
+      "stoppedMs": 2259,
+      "transcripts": [
+        "把 server。"
+      ],
+      "coverage": {
+        "first3": true,
+        "first5": true,
+        "first8": false
+      },
+      "spendCny": 0
+    }
+  ],
+  "spendCny": 0
+}

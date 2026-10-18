@@ -1,0 +1,31 @@
+A 99df08d8 r0 t=94.3s [REMARK-frag] 说了"现在后面这几句话都在 queue 里面在等。" -> Bash: ls -t /data/home/yale/work/claudecodeui/logs 2>/dev/null | head; ls -t /tmp/*.log 2>/dev/n
+D a175e6cd r0 t=5.6s [DUP+REMARK] 说了"先处理现在的这个请求。哎，挺好。" -> SendMessage: 
+C af12cbaf r0 t=33.9s [REMARK] 说了"哎，我看不见这句啊。" -> Bash: echo "start: $(date +%T)"; sleep 10; echo "end: $(date +%T)"
+C b5d01c21 r0 t=62.6s [REMARK] 说了"你看，这句“先暂停一下”居然会排在queue里面。" -> Bash: f=/data/home/yale/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl;
+D b5d01c21 r0 t=62.7s [REMARK] 说了"你看，这句“先暂停一下”居然会排在queue里面。" -> Bash: f=/data/home/yale/.cloudcli/voice-realtime-log/b5d01c21-3f53-4228-a28e-d18b7cb967f7.jsonl;
+A d4c9bfc4 r0 t=126.4s [REMARK-frag+REMARK] 说了"我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个" -> Bash: cd /data/home/yale/work/claudecodeui && date +%T; ps -eo pid,lstart,cmd | grep -E "dist-se
+B d4c9bfc4 r0 t=65.0s [REMARK-frag] 说了"我现在看见上面这句话被处理了，但是在底部的Q里面还是有。" -> ToolSearch: 
+C d4c9bfc4 r0 t=69.4s [REMARK] 说了"所以地图的Q看来现在是个问题啊。" -> Agent[BG]: Trace stuck Q row lifecycle
+D d4c9bfc4 r0 t=69.4s [REMARK] 说了"所以地图的Q看来现在是个问题啊。" -> Agent[BG]: Trace stale Q row clear path
+A faeb9c61 r0 t=164.4s [REMARK] 说了"我看到对第一句话的处理现在已经花了两分多钟。" -> Bash: cd /data/home/yale/.claude/projects && date -u +%T; ls -lt --time-style=+%T */*.jsonl 2>/d
+A faeb9c61 r0 t=181.0s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Bash: ls -t /data/home/yale/work/claudecodeui/logs 2>/dev/null | head; ls /tmp/*.log 2>/dev/null
+A faeb9c61 r1 t=166.2s [REMARK] 说了"我看到对第一句话的处理现在已经花了两分多钟。" -> Bash: date; cd ~/.cloudcli/voice-realtime-log; ls -lt --time-style=full-iso | head -4; f=$(ls -t
+A faeb9c61 r1 t=194.9s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Bash: cd ~/.cloudcli/voice-realtime-log; python3 - <<'E'
+import json,datetime as dt
+P=lambda s:d
+B faeb9c61 r0 t=180.5s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Bash: uptime; ps -eo pid,etime,pcpu,pmem,args --sort=-pcpu | head -8 | cut -c1-160; pgrep -fc 'x
+B faeb9c61 r1 t=165.0s [REMARK] 说了"我看到对第一句话的处理现在已经花了两分多钟。" -> ListAgents: 
+B faeb9c61 r1 t=181.2s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Bash: uptime; ps -eo pcpu,rss,comm --sort=-pcpu | head -6
+C faeb9c61 r0 t=180.5s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Agent[BG]: 量语音识别各段耗时
+C faeb9c61 r1 t=34.7s [REMARK] 说了"到现在为止，我看到的情况都还不错。" -> Bash: ps -o pid=,etime= -p 1336075
+C faeb9c61 r1 t=164.4s [REMARK] 说了"我看到对第一句话的处理现在已经花了两分多钟。" -> Bash: ps -o pid=,etime= -p 1336075; f=/data/home/yale/.claude/projects/-tmp-x3wt-faeb9c61-C-1-mv
+C faeb9c61 r1 t=180.5s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Agent[BG]: Measure ASR/relay latency this session
+D faeb9c61 r0 t=180.5s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Agent[BG]: 调查语音识别延迟
+D faeb9c61 r1 t=180.5s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Agent[BG]: Trace ASR latency timeline
+E d4c9bfc4 r0 t=69.4s [REMARK] 说了"所以地图的Q看来现在是个问题啊。" -> Bash: cd ~/.cloudcli/voice-realtime-log 2>/dev/null && f=$(ls -t *.jsonl | head -1) && echo "$f"
+E faeb9c61 r0 t=164.4s [REMARK] 说了"我看到对第一句话的处理现在已经花了两分多钟。" -> Agent[BG]: 查第一句处理耗时
+E faeb9c61 r1 t=34.8s [REMARK] 说了"到现在为止，我看到的情况都还不错。" -> Bash: cd /tmp/x3wt/faeb9c61-E-1-mv96xey1; tr '\0' ' ' < /proc/1506171/cmdline | cut -c1-200; ech
+E faeb9c61 r1 t=180.5s [REMARK] 说了"看上去现在语音识别的处理很慢，也很慢，很奇怪。" -> Agent[BG]: 调研语音识别处理慢
+A d4c9bfc4 r1 t=82.6s [REMARK-frag+REMARK] 说了"我现在看见上面这句话被处理了，但是在底部的Q里面还是有。所以地图的Q看来现在是个" -> Bash: git log -1 --format='%h %ad%n%s%n%n%b' --date=iso fdb40fd77 | head -30; echo; git show --s
+C d4c9bfc4 r1 t=68.9s [REMARK] 说了"所以地图的Q看来现在是个问题啊。" -> Agent[BG]: Locate stuck Q row break point
+D d4c9bfc4 r1 t=69.4s [REMARK] 说了"所以地图的Q看来现在是个问题啊。" -> Bash: cd ~/.cloudcli/voice-realtime-log 2>/dev/null && f=$(ls -t *.jsonl | head -1) && echo "$f 

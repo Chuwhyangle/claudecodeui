@@ -1,0 +1,30 @@
+# d4c9bfc4@10-14T01:36:53 arm D rep 1 model sonnet hook true wall 111.0s
+   0.0  >> DELIVER prompt: [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after t
+   1.0  == turn
+   5.9     text: 你是说，之前那句"居然猜到了我的想法"一直挂在屏幕底部的 Q（队列行）里，没有消失。我先对一下记忆里有没有同类记录。
+   6.7     tool Bash: cd /data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/memory && sed -n 1,40p live-voice-tenth-
+  13.1     text: 这是已知的未定位缺陷，今天又复现了一次。  - **现象**：你说的"Q 里的那一行"，就是第五次实测（10-14 早）记下的"Q 撤回行不消失"。消息其实已经被 CLI 取走，后端状态是 `queued=0/0B`，但屏幕底部的队列行没清掉。 - **没修**：第十次实测修了 Q 徽章 stop 后冻结，不是这一条。撤回行这条一直没定位。 - **断点**：大致在 host、writer 和浏览器 socket 之间，因为 server 不记 lifecycle 帧，没法直接查。  这次的复现条件很干净：这句话是在我跑 Bash 时插进去的，被排进了队列，之后被处理，那一行却留在底部。  下
+  13.1  -- result success
+  34.7  · voice [ADD-frag] 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.7  >> DELIVER idle: 然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。
+  35.8  == turn
+  37.7  · voice [ADD] 找出来为什么会出现这些东西。
+  39.4  >> DELIVER quiet next: 找出来为什么会出现这些东西。
+  40.1     text: 我看到了。上一句开头的方括号英文，是系统自己加的中断提示，不是你说的。具体是这句：  > [The previous turn was interrupted while it was running the `Bash` tool. Any partial changes…]  更早那次插话前面也有一句 `[Request interrupted by user for tool use]`。这对应第五次实测记下的"中断提示拼进用户原话"。我查一下代码里它现在的状态：
+  41.0     tool Bash: grep -rn "buildInterruptAftermathNote" server src shared --include=*.ts --include=*.tsx | grep -v test | head;
+  43.7     text: 我去看这段拼接是怎么来的。
+  44.7     tool Bash: f=server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts && sed -n 960,1010p $f; echo ------; sed -n
+  48.2     tool Bash: sed -n 2375,2402p server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts; echo ----; grep -rn "Reque
+  55.5     text: 原因找到了，是两个来源，都不是你说的。  **1. 方括号英文 `[The previous turn was interrupted while it was running the Bash tool…]`：我们自己的代码加的** - **位置**：`voice-realtime-ws-proxy.service.ts:2390`，函数 `buildInterruptAftermathNote`（构造在 `:986`，在 `:3210` 的 `sessionInterrupt` 里挂起）。 - **触发**：你打断一个正在跑工具的回合并成功中止后，代理把这句话挂起，拼在下一条进 CLI 的
+  55.5  -- result success
+  64.0  · voice [REMARK-frag] 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  >> DELIVER idle: 我现在看见上面这句话被处理了，但是在底部的Q里面还是有。
+  65.0  == turn
+  67.9  · voice [REMARK] 所以地图的Q看来现在是个问题啊。
+  68.2     text: 这是第三条留在 Q 里没消失的消息，说明可以稳定复现。我先看一眼最新的会话日志，看这条消息的生命周期帧有没有发出来。
+  69.4  >> DELIVER quiet next: 所以地图的Q看来现在是个问题啊。
+  69.6     tool Bash: cd ~/.cloudcli/voice-realtime-log 2>/dev/null && f=$(ls -t *.jsonl | head -1) && echo "$f $(wc -l < $f) lines"
+  72.7     text: 对，"地图"应该是"底部"听岔了，我按"底部的 Q 现在是个问题"理解。我把日志里那 3 条相关帧读出来，看这条消息有没有走到撤回。
+  74.1     tool Bash: cd ~/.cloudcli/voice-realtime-log && grep -nE "command_lifecycle|queue_reconcile" 7c01be7e-24a7-4728-81a5-f50b
+  84.5     text: 对，底部的 Q 现在确实是个问题，而且这一场里已经稳定复现了三次。  **我刚读日志得到的信息（有一处没对上）** - 最新的日志 `7c01be7e` 里的句子（"Live Voice 使用过程当中…"）不是咱们这场的内容，所以它不一定是你这个页面的连接。下面的读数只能当旁证，我没法把它直接对到你屏幕上那一行。 - 旁证：整份日志里，服务端发给浏览器的 `queue_reconcile` 只有 3 帧，而且只在"held 数变化"时发。同一份日志里，服务端状态行已经多次读到 `queued=0/0B`（消息被 CLI 取走），但没有对应的、让浏览器清掉那一行的帧。 - 这和第五次实测的结论一
+  84.5  -- result success

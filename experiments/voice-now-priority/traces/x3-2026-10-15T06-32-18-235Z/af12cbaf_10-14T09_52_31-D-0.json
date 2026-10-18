@@ -1,0 +1,49 @@
+{
+ "episode": "af12cbaf@10-14T09:52:31",
+ "arm": "D",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "90604965a2bbc3f13e24f5c90382c893f7dda063",
+ "fork": true,
+ "pieces": [],
+ "diffStat": "",
+ "wallMs": 93321,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "来吧，尝试跑一个差不多要一分钟的前台任务。",
+   "parts": []
+  },
+  {
+   "t": 818,
+   "ev": "TURN"
+  },
+  {
+   "t": 5377,
+   "ev": "TEXT",
+   "text": "好，前台跑一个约 60 秒的任务。"
+  },
+  {
+   "t": 6023,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "for i in 1 2 3 4 5 6; do sleep 10; echo \"tick $i/6 $(date +%T)\"; done",
+   "bg": false
+  },
+  {
+   "t": 67455,
+   "ev": "TEXT",
+   "text": "前台任务跑完了：6 个 10 秒的节拍，共约 50 秒（14:50:56 → 14:51:46），全程无报错。"
+  },
+  {
+   "t": 67475,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

@@ -1,0 +1,880 @@
+{
+  "ranAt": "2026-10-18T04:46:53.546Z",
+  "budgetCny": 0.4,
+  "spendCny": 0.151698,
+  "guardTriggered": false,
+  "results": [
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.005305,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.005299,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.005299,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.005513,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的？"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.005513,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.005513,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recording 状态的？"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.0056,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.005684,
+      "responseCreated": 2,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的？"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S1",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.005592,
+      "responseCreated": 2,
+      "calls": [
+        "看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        }
+      ],
+      "omitted": [
+        "d01"
+      ],
+      "duplicated": [],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.005119,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是，whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.005108,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.005119,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不，是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.005398,
+      "responseCreated": 2,
+      "calls": [
+        "不要动 voice.service.ts，只改 voice.module.ts。把默认模型换成 whisper-large，不是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.005333,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是，是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.005345,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper-large，啊不是，whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.00541,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是，whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.005416,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成whisper large，啊不是，whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S2",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.005398,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d04",
+          "anchor": "voice.module.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d04"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 0,
+      "spendCny": 0.005864,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper-large，啊不，是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 1,
+      "spendCny": 0.005839,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "K",
+      "rep": 2,
+      "spendCny": 0.005851,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper-large，啊不是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E1",
+      "rep": 0,
+      "spendCny": 0.006052,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper large，啊不是 whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E1",
+      "rep": 1,
+      "spendCny": 0.006064,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper-large，啊不是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E1",
+      "rep": 2,
+      "spendCny": 0.006077,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper-large，啊不，是 whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 0,
+      "spendCny": 0.006216,
+      "responseCreated": 2,
+      "calls": [
+        "把默认模型换成 whisper-large，啊不是，whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": false,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [
+        "d01",
+        "d03"
+      ],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 1,
+      "spendCny": 0.006412,
+      "responseCreated": 2,
+      "calls": [
+        "把 server 里的 voice.service.ts 的超时改成三十秒。看一下 useVoiceInput 这个 hook 是怎么处理 recordingId 的。把默认模型换成 whisper-large，啊不是，whisper-turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    },
+    {
+      "span": "S3",
+      "arm": "E2",
+      "rep": 2,
+      "spendCny": 0.006357,
+      "responseCreated": 2,
+      "calls": [
+        "把server里的voice.se reits的超时改成三十秒。看一下use voice input这个hook是怎么处理recording g的。把默认模型换成whisper large啊，不是whisper turbo。"
+      ],
+      "perItem": [
+        {
+          "clip": "d01",
+          "anchor": "voice.service.ts",
+          "covered": true,
+          "anchorCount": 0
+        },
+        {
+          "clip": "d03",
+          "anchor": "usevoiceinput",
+          "covered": true,
+          "anchorCount": 1
+        },
+        {
+          "clip": "d08",
+          "anchor": "whisper",
+          "covered": true,
+          "anchorCount": 2
+        }
+      ],
+      "omitted": [],
+      "duplicated": [
+        "d08"
+      ],
+      "errors": []
+    }
+  ]
+}

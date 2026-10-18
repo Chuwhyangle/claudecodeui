@@ -1,0 +1,168 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:47:12.901Z",
+  "budgetCny": 0.08,
+  "spendCny": 0.013525,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 14882,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "tier4": {
+      "twin": {
+        "mode": "twin",
+        "utterances": 4,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "现在是十月十五日，来我。",
+            "delivered": [
+              "现在只写数日来我。"
+            ],
+            "deletions": [
+              {
+                "id": "item_VuwXbhFj7TUSrLVzP5zko",
+                "outcome": "deleted"
+              }
+            ],
+            "replies": [
+              "OK"
+            ]
+          },
+          {
+            "index": 1,
+            "transcript": "",
+            "delivered": [
+              "现在是十月十五日，来我。"
+            ],
+            "deletions": [
+              {
+                "id": "item_ZCyBCaJUloY2N8QtEZWgT",
+                "outcome": "deleted"
+              },
+              {
+                "id": "item_SbqDbqQLfl6M1l9tOWXn9",
+                "outcome": "deleted"
+              }
+            ],
+            "replies": [
+              "OK"
+            ]
+          },
+          {
+            "index": 2,
+            "transcript": "",
+            "delivered": [
+              "然后，呃，你刚才说的那个方案，我觉得还是有点问题。"
+            ],
+            "deletions": [
+              {
+                "id": "item_Sh5rAOVFMP6dCBJZYYEUN",
+                "outcome": "deleted"
+              }
+            ],
+            "replies": [
+              "OK"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "",
+            "delivered": [
+              "帮我看看这个。"
+            ],
+            "deletions": [
+              {
+                "id": "item_GIWTl3P6WCtLoVlDDL96M",
+                "outcome": "deleted"
+              }
+            ],
+            "replies": [
+              "OK"
+            ]
+          }
+        ],
+        "deliveredTotal": 4,
+        "turnsWithDelivery": 4,
+        "echoes": [
+          {
+            "turn": 1,
+            "message": "现在是十月十五日，来我。",
+            "repeats": "现在是十月十五日，来我。"
+          }
+        ],
+        "foreign": [
+          {
+            "turn": 0,
+            "message": "现在只写数日来我。",
+            "transcript": "现在是十月十五日，来我。"
+          },
+          {
+            "turn": 2,
+            "message": "然后，呃，你刚才说的那个方案，我觉得还是有点问题。",
+            "transcript": ""
+          },
+          {
+            "turn": 3,
+            "message": "帮我看看这个。",
+            "transcript": ""
+          }
+        ]
+      },
+      "keep": {
+        "mode": "keep",
+        "utterances": 4,
+        "turns": [
+          {
+            "index": 0,
+            "transcript": "现在只是数月来我。",
+            "delivered": [
+              "现在是七月十五日，来我。"
+            ],
+            "deletions": [],
+            "replies": [
+              "OK"
+            ]
+          },
+          {
+            "index": 1,
+            "transcript": "",
+            "delivered": [],
+            "deletions": [],
+            "replies": [
+              "OK"
+            ]
+          },
+          {
+            "index": 2,
+            "transcript": "",
+            "delivered": [],
+            "deletions": [],
+            "replies": [
+              "OK"
+            ]
+          },
+          {
+            "index": 3,
+            "transcript": "",
+            "delivered": [],
+            "deletions": [],
+            "replies": [
+              "OK"
+            ]
+          }
+        ],
+        "deliveredTotal": 1,
+        "turnsWithDelivery": 1,
+        "echoes": [],
+        "foreign": [
+          {
+            "turn": 0,
+            "message": "现在是七月十五日，来我。",
+            "transcript": "现在只是数月来我。"
+          }
+        ]
+      }
+    }
+  }
+}

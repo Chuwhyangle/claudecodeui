@@ -1,0 +1,73 @@
+{
+ "episode": "a175e6cd@10-14T18:23:07",
+ "arm": "E",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "98a4fc6b119d0c980e7a935692cdddc47bd7103e",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 15379,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "label": "DUP"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 44822,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+   "parts": []
+  },
+  {
+   "t": 762,
+   "ev": "TURN"
+  },
+  {
+   "t": 2047,
+   "ev": "TEXT",
+   "text": "嗯，第六次测试，我在听。你接着说要测什么、哪里有问题。"
+  },
+  {
+   "t": 2071,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 15384,
+   "ev": "PIECE",
+   "label": "DUP",
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+  },
+  {
+   "t": 16384,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "parts": [
+    "DUP:很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+   ]
+  },
+  {
+   "t": 16426,
+   "ev": "TURN"
+  },
+  {
+   "t": 18456,
+   "ev": "TEXT",
+   "text": "嗯，看到这次是用 DeepSeek 在跑了。你接着说，效果怎么样、哪里有问题？"
+  },
+  {
+   "t": 18495,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

@@ -1,0 +1,155 @@
+{
+ "episode": "99df08d8@10-12T01:26:18",
+ "arm": "B",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "fe7f119d6afbfd9eac602083d3c44a2fc1721fcb",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 17201,
+   "text": "检查最近执行的任务。",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 28597,
+   "text": "你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。",
+   "label": "ADD"
+  },
+  {
+   "offsetMs": 32717,
+   "text": "你确认一下现在这个任务有没有实现。",
+   "label": "ASK"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 61274,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "第一句识别出来了，我们看看第二句。\n现在第三句。\n第四句。\n到现在为止识别的还可以。\n只是对于第一句的处理慢一些，但这是正常的。\n现在后面这几句话都在 queue 里面在等。\n或者说队列，在队列里面等。",
+   "parts": []
+  },
+  {
+   "t": 915,
+   "ev": "TURN"
+  },
+  {
+   "t": 5305,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "ls -la /tmp/voice-watch-capture.jsonl; pgrep -f voice-watch.sh; wc -l /tmp/voice-watch-capture.jsonl; grep -o '\"line\":\"[^\"]*\"' /tmp/voice-watch-capture.jsonl | ",
+   "bg": false
+  },
+  {
+   "t": 6032,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 6036,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 17207,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "检查最近执行的任务。"
+  },
+  {
+   "t": 18207,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "检查最近执行的任务。",
+   "parts": [
+    "ADD-frag:检查最近执行的任务。"
+   ]
+  },
+  {
+   "t": 18256,
+   "ev": "TURN"
+  },
+  {
+   "t": 18698,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 18701,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 28603,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。"
+  },
+  {
+   "t": 29603,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。",
+   "parts": [
+    "ADD:你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。"
+   ]
+  },
+  {
+   "t": 29665,
+   "ev": "TURN"
+  },
+  {
+   "t": 30090,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 30094,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 32723,
+   "ev": "PIECE",
+   "label": "ASK",
+   "text": "你确认一下现在这个任务有没有实现。"
+  },
+  {
+   "t": 33806,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "你确认一下现在这个任务有没有实现。",
+   "parts": [
+    "ASK:你确认一下现在这个任务有没有实现。"
+   ]
+  },
+  {
+   "t": 33851,
+   "ev": "TURN"
+  },
+  {
+   "t": 34259,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 34262,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 60679,
+   "ev": "ERROR",
+   "e": "Error: Claude Code returned an error result: You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  }
+ ]
+}

@@ -1,0 +1,1655 @@
+{
+  "ranAt": "2026-10-18T06:19:14.923Z",
+  "spendCny": 0.088509,
+  "guardTriggered": false,
+  "results": [
+    {
+      "span": "S5",
+      "arm": "E",
+      "rep": 0,
+      "spendCny": 0.006222,
+      "clips": 4,
+      "ok": 2,
+      "lost": 0,
+      "dup": 2,
+      "lostCheck": 0,
+      "dupCheck": 2,
+      "falseClaim": 0,
+      "underClaim": 2,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 1,
+        "completedNoCall": 0,
+        "invalid": 2,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 6
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "把 server 里的 voice.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把默认模型换成 whisper-large，啊不，是 whisper-turbo。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "E",
+      "rep": 1,
+      "spendCny": 0.006215,
+      "clips": 4,
+      "ok": 2,
+      "lost": 0,
+      "dup": 2,
+      "lostCheck": 0,
+      "dupCheck": 2,
+      "falseClaim": 0,
+      "underClaim": 2,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 1,
+        "completedNoCall": 0,
+        "invalid": 2,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 6
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "EN",
+      "rep": 0,
+      "spendCny": 0.005441,
+      "clips": 3,
+      "ok": 1,
+      "lost": 0,
+      "dup": 2,
+      "lostCheck": 0,
+      "dupCheck": 2,
+      "falseClaim": 0,
+      "underClaim": 2,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 1,
+      "neverOffered": 1,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "invalid": 2,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 6
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "flagged": true,
+          "items": 0
+        }
+      ],
+      "applied": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把 server 里的 voice 点 s e r v i c e s 的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "EN",
+      "rep": 1,
+      "spendCny": 0.003585,
+      "clips": 4,
+      "ok": 2,
+      "lost": 1,
+      "dup": 1,
+      "lostCheck": 1,
+      "dupCheck": 1,
+      "falseClaim": 1,
+      "underClaim": 1,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 1,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 5
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": "claimed",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "claimed": [
+            1
+          ],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": true
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把 server 里的 voice 点 s e r v i c e s 的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "一下useless input这个hook是怎么处理recorded g的？"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "任模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "EA",
+      "rep": 0,
+      "spendCny": 0.003852,
+      "clips": 4,
+      "ok": 0,
+      "lost": 3,
+      "dup": 1,
+      "lostCheck": 3,
+      "dupCheck": 1,
+      "falseClaim": 0,
+      "underClaim": 1,
+      "lostBySkip": 3,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 3,
+        "completedNoCall": 0,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 5
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": "skipped",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": "skipped",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": true,
+          "resolved": "skipped",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "把默认模型换成 whisper large，啊不是，whisper turbo。",
+          "claimed": [],
+          "skipped": [
+            1,
+            2,
+            3
+          ],
+          "anchorFail": [],
+          "valid": true
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "EA",
+      "rep": 1,
+      "spendCny": 0.003738,
+      "clips": 4,
+      "ok": 4,
+      "lost": 0,
+      "dup": 0,
+      "lostCheck": 0,
+      "dupCheck": 0,
+      "falseClaim": 0,
+      "underClaim": 0,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 4,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 1,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 4
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        }
+      ],
+      "applied": [],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把 server 里的 voice 点 s e r v i c e s 的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "EO",
+      "rep": 0,
+      "spendCny": 0.0089,
+      "clips": 4,
+      "ok": 1,
+      "lost": 0,
+      "dup": 3,
+      "lostCheck": 0,
+      "dupCheck": 3,
+      "falseClaim": 0,
+      "underClaim": 3,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 1,
+        "completedNoCall": 0,
+        "invalid": 3,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "把 server 里的 voice-service.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把默认模型换成 whisper-large，啊不，是 whisper-turbo。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S5",
+      "arm": "EO",
+      "rep": 1,
+      "spendCny": 0.00593,
+      "clips": 4,
+      "ok": 2,
+      "lost": 0,
+      "dup": 2,
+      "lostCheck": 0,
+      "dupCheck": 2,
+      "falseClaim": 0,
+      "underClaim": 2,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 1,
+        "completedNoCall": 0,
+        "invalid": 2,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d01",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d04",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "把 server 里的 voice.service.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把默认模型换成 whisper-large，啊不是，whisper-turbo。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 340,
+          "end": 6480,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "seq": 2,
+          "start": 7200,
+          "end": 13460,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        },
+        {
+          "seq": 3,
+          "start": 14140,
+          "end": 19840,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 4,
+          "start": 20540,
+          "end": 26140,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "E",
+      "rep": 0,
+      "spendCny": 0.003678,
+      "clips": 4,
+      "ok": 2,
+      "lost": 1,
+      "dup": 1,
+      "lostCheck": 1,
+      "dupCheck": 1,
+      "falseClaim": 1,
+      "underClaim": 1,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 1,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 5
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": "claimed",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d03",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [
+            1
+          ],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": true
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "任模型换成 whisper large，啊不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把 server 里的 voice 点 s e r v i c e s 的超时改成三十秒。"
+        },
+        {
+          "seq": 4,
+          "start": 19880,
+          "end": 26140,
+          "text": "问一下，useverse input这个hook是怎么处理recorded g的？"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "E",
+      "rep": 1,
+      "spendCny": 0.006245,
+      "clips": 4,
+      "ok": 2,
+      "lost": 0,
+      "dup": 2,
+      "lostCheck": 0,
+      "dupCheck": 2,
+      "falseClaim": 0,
+      "underClaim": 2,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 2,
+        "completedNoCall": 0,
+        "invalid": 2,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 6
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d03",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "不要动 voice.se，race.ts 只改 voice module.ts。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点s e，voice点t s，只改voice module点t s。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "seq": 4,
+          "start": 19880,
+          "end": 26140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "EN",
+      "rep": 0,
+      "spendCny": 0.003628,
+      "clips": 4,
+      "ok": 1,
+      "lost": 2,
+      "dup": 1,
+      "lostCheck": 2,
+      "dupCheck": 1,
+      "falseClaim": 1,
+      "underClaim": 1,
+      "lostBySkip": 1,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 1,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 5
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": "skipped",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": "claimed",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d03",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [
+            2
+          ],
+          "skipped": [
+            1
+          ],
+          "anchorFail": [],
+          "valid": true
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se reis ts的超时改成三十秒。"
+        },
+        {
+          "seq": 4,
+          "start": 19880,
+          "end": 26140,
+          "text": "下 use voice input 这个 hook 是怎么处理 recording 的。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "EN",
+      "rep": 1,
+      "spendCny": 0.009273,
+      "clips": 4,
+      "ok": 1,
+      "lost": 0,
+      "dup": 3,
+      "lostCheck": 0,
+      "dupCheck": 3,
+      "falseClaim": 0,
+      "underClaim": 3,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 1,
+        "completedNoCall": 0,
+        "invalid": 3,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 7
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "不要动voice.ts、race.ts，只改voiceModule.ts。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把 server 里的 voice.ts、race.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "seq": 4,
+          "start": 19880,
+          "end": 26140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "EA",
+      "rep": 0,
+      "spendCny": 0.005482,
+      "clips": 3,
+      "ok": 1,
+      "lost": 0,
+      "dup": 2,
+      "lostCheck": 0,
+      "dupCheck": 2,
+      "falseClaim": 0,
+      "underClaim": 2,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 1,
+      "neverOffered": 1,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "invalid": 2,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 5
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d03",
+          "flagged": true,
+          "items": 0
+        }
+      ],
+      "applied": [
+        {
+          "message": "不要动 voice.ts、race.ts，只改 voice-module.ts。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把默认模型换成 whisper-large，啊不是 whisper-turbo。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点se，rests只改voice，module点se。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把 server 里的 voice 点 s e r v i c e s 的超时改成三十秒。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "EA",
+      "rep": 1,
+      "spendCny": 0.012831,
+      "clips": 4,
+      "ok": 0,
+      "lost": 0,
+      "dup": 4,
+      "lostCheck": 0,
+      "dupCheck": 4,
+      "falseClaim": 0,
+      "underClaim": 4,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 0,
+        "completedNoCall": 0,
+        "invalid": 4,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 8
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        },
+        {
+          "clip": "d03",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "不要动 voice.se、voice.ts，只改 voice.module.ts。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把默认模型换成 whisper-large，啊不，是 whisper-turbo。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "把 server 里的 voice.se、voice.ts 的超时改成三十秒。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        },
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": false
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se reace ts的超时改成三十秒。"
+        },
+        {
+          "seq": 4,
+          "start": 19880,
+          "end": 26140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "EO",
+      "rep": 0,
+      "spendCny": 0,
+      "clips": 3,
+      "ok": 3,
+      "lost": 0,
+      "dup": 0,
+      "lostCheck": 0,
+      "dupCheck": 0,
+      "falseClaim": 0,
+      "underClaim": 0,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 1,
+      "neverOffered": 3,
+      "diag": {
+        "cancelled": 2,
+        "completedNoCall": 0,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": false,
+          "resolved": null,
+          "inMsgs": 0,
+          "deliveries": 1
+        },
+        {
+          "clip": "d03",
+          "flagged": true,
+          "items": 0
+        }
+      ],
+      "applied": [],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动 voice 点 s e voice t s 只改 voice module t s。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se、voice点ts的超时改成三十秒。"
+        }
+      ]
+    },
+    {
+      "span": "S6",
+      "arm": "EO",
+      "rep": 1,
+      "spendCny": 0.003491,
+      "clips": 4,
+      "ok": 0,
+      "lost": 3,
+      "dup": 1,
+      "lostCheck": 3,
+      "dupCheck": 1,
+      "falseClaim": 3,
+      "underClaim": 1,
+      "lostBySkip": 0,
+      "anchorTrueCatch": 0,
+      "anchorFalseAlarm": 0,
+      "flagged": 0,
+      "neverOffered": 0,
+      "diag": {
+        "cancelled": 3,
+        "completedNoCall": 0,
+        "invalid": 0,
+        "outOfRange": 0,
+        "doubleClaim": 0,
+        "stale": 0,
+        "noEcho": 0,
+        "anchorMissing": 0,
+        "updates": 0
+      },
+      "perClip": [
+        {
+          "clip": "d04",
+          "seq": 1,
+          "offered": true,
+          "resolved": "claimed",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d08",
+          "seq": 2,
+          "offered": true,
+          "resolved": "claimed",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d01",
+          "seq": 3,
+          "offered": true,
+          "resolved": "claimed",
+          "inMsgs": 0,
+          "deliveries": 0
+        },
+        {
+          "clip": "d03",
+          "seq": 4,
+          "offered": true,
+          "resolved": null,
+          "inMsgs": 1,
+          "deliveries": 2
+        }
+      ],
+      "applied": [
+        {
+          "message": "看一下 useVoiceInput 这个 hook 是怎么处理 recording 的。",
+          "claimed": [
+            1,
+            2,
+            3
+          ],
+          "skipped": [],
+          "anchorFail": [],
+          "valid": true
+        }
+      ],
+      "roster": [
+        {
+          "seq": 1,
+          "start": 320,
+          "end": 6020,
+          "text": "不要动，voice点se，rests只改voice module ts。"
+        },
+        {
+          "seq": 2,
+          "start": 6720,
+          "end": 12320,
+          "text": "把默认模型换成 whisper large 啊，不是 whisper turbo。"
+        },
+        {
+          "seq": 3,
+          "start": 13020,
+          "end": 19160,
+          "text": "把server里的voice点se voice ts的超时改成三十秒。"
+        },
+        {
+          "seq": 4,
+          "start": 19880,
+          "end": 26140,
+          "text": "看一下useless input这个hook是怎么处理recorded g的。"
+        }
+      ]
+    }
+  ]
+}

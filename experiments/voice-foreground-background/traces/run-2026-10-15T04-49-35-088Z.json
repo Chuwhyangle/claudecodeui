@@ -1,0 +1,237 @@
+{
+  "ranAt": "2026-10-15T04:49:35.089Z",
+  "budgetCny": 0.05,
+  "spendCny": 0.017949,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "W4",
+      "arm": "I",
+      "rep": 0,
+      "note": "\"OK，现在可以终止它了\" at ~104 s",
+      "spendCny": 0.017949,
+      "responses": 7,
+      "usage": [
+        [
+          1252,
+          28,
+          29
+        ],
+        [
+          1294,
+          49,
+          33
+        ],
+        [
+          1380,
+          49,
+          2
+        ],
+        [
+          1390,
+          63,
+          32
+        ],
+        [
+          1473,
+          63,
+          2
+        ],
+        [
+          1481,
+          91,
+          32
+        ],
+        [
+          1564,
+          91,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_YWpcFsVWUl874bJDoaUWB\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_714dbfefe4fc4206b8537526\",\"param\":\"call_id\"}}",
+        "{\"event_id\":\"event_ELIkKvNJLNaQHAZR94xki\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+      ],
+      "timeline": [
+        {
+          "at": 6587,
+          "kind": "ASR",
+          "text": "我看你。"
+        },
+        {
+          "at": 7852,
+          "kind": "ASR",
+          "text": "都跑完了。"
+        },
+        {
+          "at": 8001,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8140,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "我看你都跑完了。"
+        },
+        {
+          "at": 8142,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 8238,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_714dbfefe4fc4206b8537526\",\"param\":\"call_id\"}"
+        },
+        {
+          "at": 8238,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+        },
+        {
+          "at": 9160,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 11104,
+          "kind": "ASR",
+          "text": "所以你的这个号是教程是什么？"
+        },
+        {
+          "at": 11249,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 11413,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "所以你的这个号是叫长是什么？"
+        },
+        {
+          "at": 11414,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 11766,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 11788,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 11788,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 12600,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 24432,
+          "kind": "ASR",
+          "text": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 24541,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 24679,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "OK，现在可以终止它了。"
+        },
+        {
+          "at": 24679,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 25057,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 25079,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 25079,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26700,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 33562,
+          "kind": "ASR",
+          "text": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 33684,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33828,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "到现在为止，这次测试情况还可以。"
+        },
+        {
+          "at": 33829,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34289,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 34310,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 34311,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 36300,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    }
+  ]
+}

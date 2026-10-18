@@ -1,0 +1,49 @@
+{
+ "episode": "af12cbaf@10-14T09:52:31",
+ "arm": "B",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "90604965a2bbc3f13e24f5c90382c893f7dda063",
+ "fork": true,
+ "pieces": [],
+ "diffStat": "",
+ "wallMs": 92905,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "来吧，尝试跑一个差不多要一分钟的前台任务。",
+   "parts": []
+  },
+  {
+   "t": 920,
+   "ev": "TURN"
+  },
+  {
+   "t": 4541,
+   "ev": "TEXT",
+   "text": "好，前台跑一个约 60 秒的命令，这期间你可以接着说话测试排队行为。"
+  },
+  {
+   "t": 5240,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "for i in $(seq 1 12); do sleep 5; echo \"tick $i/12\"; done; echo done",
+   "bg": false
+  },
+  {
+   "t": 66764,
+   "ev": "TEXT",
+   "text": "前台任务跑完了，12 次 tick、约 60 秒，期间没有新的消息插进来。你这边看到的排队和回显是什么样的？"
+  },
+  {
+   "t": 66784,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

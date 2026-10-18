@@ -1,0 +1,18 @@
+# 57279cc1@10-11T15:42:32 arm B rep 1 model sonnet hook true wall 36.7s
+   0.0  >> DELIVER prompt: 还有呢，就是现在转写输出的延迟好像非常大。
+   0.9  == turn
+   0.9  -- result success
+   0.9  · voice [ADD-frag] 我不知道是不是因为最近在 VAD……
+   1.0  == turn
+   1.6     text: You've hit your session limit · resets 6:40pm (Asia/Shanghai)
+   1.6  -- result success
+   1.6  >> DELIVER turn-end: 我不知道是不是因为最近在 VAD……
+   1.7  == turn
+   2.0     text: You've hit your session limit · resets 6:40pm (Asia/Shanghai)
+   2.0  -- result success
+   8.6  · voice [ADD] 或者其他的地方加入了更多延迟。
+   9.6  >> DELIVER idle: 或者其他的地方加入了更多延迟。
+   9.6  == turn
+  10.2     text: You've hit your session limit · resets 6:40pm (Asia/Shanghai)
+  10.2  -- result success
+  36.5  !! Error: Claude Code returned an error result: You've hit your session limit · resets 6:40pm (Asia/Shanghai)

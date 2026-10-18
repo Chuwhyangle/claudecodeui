@@ -1,0 +1,250 @@
+[
+ {
+  "name": "b-now",
+  "rep": 0,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [
+   "KIWI:2.9s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append step1 and wait 3 second",
+   "completed:Append step2 and wait 3 second",
+   "completed:Append step3 and wait 3 second",
+   "completed:Append step4 and wait 3 second",
+   "completed:Append step5 and wait 3 second",
+   "completed:Append step6 and wait 3 second",
+   "completed:Append step7 and wait 3 second",
+   "completed:Append step8 and wait 3 second"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "b-next",
+  "rep": 0,
+  "inits": 1,
+  "results": 1,
+  "readAfterPush": [
+   "KIWI:2.9s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append step1 to fg.txt and wai",
+   "completed:Append step2 to fg.txt and wai",
+   "completed:Append step3 to fg.txt and wai",
+   "completed:Append step4 to fg.txt and wai",
+   "completed:Append step6 to fg.txt and wai",
+   "completed:Append step8 to fg.txt and wai"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "c-now",
+  "rep": 0,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [
+   "KIWI:27.8s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append numbers to long.txt wit"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "e1b",
+  "rep": 0,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [],
+  "agentLines": 4,
+  "bashLines": 16,
+  "tasks": [
+   "stopped:progress loop",
+   "stopped:Append numbered lines and end ",
+   "stopped:Run 40-step foreground progres",
+   "completed:Background command \"for i in $"
+  ],
+  "interrupt": {
+   "t": 15321,
+   "ev": "INTERRUPT",
+   "agent": 4,
+   "bash": 6
+  },
+  "errors": []
+ },
+ {
+  "name": "d-now",
+  "rep": 0,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [
+   "W0:3.3s",
+   "W1:3.3s",
+   "W2:3.3s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append step1 and wait 3 second",
+   "completed:Append step2 and wait 3 second",
+   "completed:Append step3 and wait 3 second",
+   "completed:Append step4 and wait 3 second",
+   "completed:Append step5 and wait 3 second",
+   "completed:Append step6 and wait 3 second",
+   "completed:Append step7 and wait 3 second",
+   "completed:Append step8 and wait 3 second"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "c-next",
+  "rep": 0,
+  "inits": 1,
+  "results": 1,
+  "readAfterPush": [
+   "KIWI:28.0s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append numbered lines to long."
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "b-now",
+  "rep": 1,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [
+   "KIWI:3.2s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append step1 to fg.txt and sle",
+   "completed:Append step2 to fg.txt and sle",
+   "completed:Append step3 to fg.txt and sle",
+   "completed:Append step4 to fg.txt and sle",
+   "completed:Append step5 to fg.txt and sle",
+   "completed:Append step6 to fg.txt and sle",
+   "completed:Append step7 to fg.txt and sle",
+   "completed:Append step8 to fg.txt and sle"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "e1b",
+  "rep": 1,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [],
+  "agentLines": 4,
+  "bashLines": 16,
+  "tasks": [
+   "stopped:progress loop",
+   "stopped:Append counter lines to agent.",
+   "stopped:Foreground loop writing to fg.",
+   "completed:Background command \"Background"
+  ],
+  "interrupt": {
+   "t": 15446,
+   "ev": "INTERRUPT",
+   "agent": 4,
+   "bash": 6
+  },
+  "errors": []
+ },
+ {
+  "name": "b-next",
+  "rep": 1,
+  "inits": 1,
+  "results": 1,
+  "readAfterPush": [
+   "KIWI:3.7s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append step1 and wait 3 second",
+   "completed:Append step2 and wait 3 second",
+   "completed:Append step3 and wait 3 second",
+   "completed:Append step4 and wait 3 second",
+   "completed:Append step5 and wait 3 second",
+   "completed:Append step6 and wait 3 second",
+   "completed:Append step7 and wait 3 second",
+   "completed:Append step8 and wait 3 second"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "d-now",
+  "rep": 1,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [
+   "W0:3.2s",
+   "W1:3.2s",
+   "W2:3.2s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append step1 and wait 3 second",
+   "completed:Append step2 and wait 3 second",
+   "completed:Append step3 and wait 3 second",
+   "completed:Append step4 and wait 3 second",
+   "completed:Append step5 and wait 3 second",
+   "completed:Append step6 and wait 3 second",
+   "completed:Append step7 and wait 3 second",
+   "completed:Append step8 and wait 3 second"
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "c-now",
+  "rep": 1,
+  "inits": 2,
+  "results": 2,
+  "readAfterPush": [
+   "KIWI:30.5s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append numbered lines to long."
+  ],
+  "interrupt": null,
+  "errors": []
+ },
+ {
+  "name": "c-next",
+  "rep": 1,
+  "inits": 1,
+  "results": 1,
+  "readAfterPush": [
+   "KIWI:28.3s"
+  ],
+  "agentLines": 0,
+  "bashLines": 0,
+  "tasks": [
+   "completed:Append numbered lines to long."
+  ],
+  "interrupt": null,
+  "errors": []
+ }
+]

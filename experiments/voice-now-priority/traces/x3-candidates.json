@@ -1,0 +1,5648 @@
+[
+ {
+  "id": "faeb9c61@10-11T11:22:24",
+  "conn": "faeb9c61",
+  "appSession": "77d9d8fd-6d5a-4512-8620-3b32c0328a1f",
+  "claudeSession": "9db75ad5-271a-4b69-9574-52be4948496d",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/9db75ad5-271a-4b69-9574-52be4948496d.jsonl",
+  "turnStart": "2026-10-11T11:22:24.812Z",
+  "turnMs": 251706,
+  "tools": 6,
+  "promptUuid": "6b6ad9e9-d837-4cc1-b719-fefa67bbcfe5",
+  "promptParentUuid": null,
+  "prompt": "让我们再做一次LiveMOT的语音输入。",
+  "promptFull": "让我们再做一次LiveMOT的语音输入。",
+  "pieces": [
+   {
+    "offsetMs": 16106,
+    "tool": "session_send",
+    "text": "当前会话应当是一次常驻会话，请检查。"
+   },
+   {
+    "offsetMs": 33178,
+    "tool": "session_send",
+    "text": "到现在为止，我看到的情况都还不错。"
+   },
+   {
+    "offsetMs": 72077,
+    "tool": "session_send",
+    "text": ""
+   },
+   {
+    "offsetMs": 74037,
+    "tool": "session_send",
+    "text": "当然，现在对第一句输入的处理耗时太长。"
+   },
+   {
+    "offsetMs": 78196,
+    "tool": "session_send",
+    "text": "这可能提示我们。"
+   },
+   {
+    "offsetMs": 86937,
+    "tool": "session_send",
+    "text": "需要为Live Voice Mode提供用语音终止之前处理的能力。"
+   },
+   {
+    "offsetMs": 112354,
+    "tool": "session_send",
+    "text": "我前面是说，为Live Mode、Live Voice Mode提供这个能力。"
+   },
+   {
+    "offsetMs": 163351,
+    "tool": "session_send",
+    "text": "我看到对第一句话的处理现在已经花了两分多钟。"
+   },
+   {
+    "offsetMs": 179525,
+    "tool": "session_send",
+    "text": "看上去现在语音识别的处理很慢，也很慢，很奇怪。"
+   },
+   {
+    "offsetMs": 201241,
+    "tool": "session_send",
+    "text": "如果现在按下那个停止键。"
+   },
+   {
+    "offsetMs": 207276,
+    "tool": "session_send",
+    "text": "它是会停止Live Voice Mode。"
+   },
+   {
+    "offsetMs": 211652,
+    "tool": "session_send",
+    "text": "还是会停止第一句话的处理。"
+   },
+   {
+    "offsetMs": 219098,
+    "tool": "session_send",
+    "text": "我这些没有被处理的输入会被丢掉吗？"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3694,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6776,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15667,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 26025,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32745,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 64468,
+    "k": "start"
+   },
+   {
+    "offsetMs": 71756,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 72078,
+    "k": "start"
+   },
+   {
+    "offsetMs": 73521,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 74231,
+    "k": "start"
+   },
+   {
+    "offsetMs": 77767,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 78401,
+    "k": "start"
+   },
+   {
+    "offsetMs": 80326,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 80332,
+    "k": "start"
+   },
+   {
+    "offsetMs": 86421,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 102175,
+    "k": "start"
+   },
+   {
+    "offsetMs": 106856,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 106861,
+    "k": "start"
+   },
+   {
+    "offsetMs": 111766,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 156305,
+    "k": "start"
+   },
+   {
+    "offsetMs": 162916,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 172278,
+    "k": "start"
+   },
+   {
+    "offsetMs": 178258,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 178272,
+    "k": "start"
+   },
+   {
+    "offsetMs": 178995,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 195336,
+    "k": "start"
+   },
+   {
+    "offsetMs": 200804,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 202115,
+    "k": "start"
+   },
+   {
+    "offsetMs": 206846,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 207965,
+    "k": "start"
+   },
+   {
+    "offsetMs": 211201,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 212050,
+    "k": "start"
+   },
+   {
+    "offsetMs": 218645,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "164c3087@10-14T15:16:43",
+  "conn": "164c3087",
+  "appSession": "2a475477-0238-4126-b645-367c4516cb65",
+  "claudeSession": "2567a276-a9d1-4810-bd0b-e2539eb89afa",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/2567a276-a9d1-4810-bd0b-e2539eb89afa.jsonl",
+  "turnStart": "2026-10-14T15:16:43.386Z",
+  "turnMs": 111433,
+  "tools": 16,
+  "promptUuid": "134c7f36-eb0f-4c4a-b6d8-ea4b62046e68",
+  "promptParentUuid": null,
+  "prompt": "让我们再做一次 live voice 测试。",
+  "promptFull": "让我们再做一次 live voice 测试。",
+  "pieces": [
+   {
+    "offsetMs": 6812,
+    "tool": "session_send",
+    "text": "你看啊，第一句的问题是。"
+   },
+   {
+    "offsetMs": 8871,
+    "tool": "session_send",
+    "text": "我大概花了。"
+   },
+   {
+    "offsetMs": 12950,
+    "tool": "session_send",
+    "text": "两秒时间。"
+   },
+   {
+    "offsetMs": 17439,
+    "tool": "session_send",
+    "text": "就把话说完了。"
+   },
+   {
+    "offsetMs": 28767,
+    "tool": "session_send",
+    "text": "但是我看见这边有个动字。"
+   },
+   {
+    "offsetMs": 32252,
+    "tool": "session_send",
+    "text": "可能花了五六秒。"
+   },
+   {
+    "offsetMs": 65026,
+    "tool": "session_send",
+    "text": "但是我看到在我的屏幕上蹦出来。"
+   },
+   {
+    "offsetMs": 69559,
+    "tool": "session_send",
+    "text": "可能要花了二十到三十秒。"
+   },
+   {
+    "offsetMs": 79114,
+    "tool": "session_send",
+    "text": "啊，分析一下原因。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2262,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 4574,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6335,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6873,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8413,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10100,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12939,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 14684,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16888,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 18478,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28190,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29077,
+    "k": "start"
+   },
+   {
+    "offsetMs": 31696,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32583,
+    "k": "start"
+   },
+   {
+    "offsetMs": 42328,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 42731,
+    "k": "start"
+   },
+   {
+    "offsetMs": 54656,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 55147,
+    "k": "start"
+   },
+   {
+    "offsetMs": 64599,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 66423,
+    "k": "start"
+   },
+   {
+    "offsetMs": 69129,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 72203,
+    "k": "start"
+   },
+   {
+    "offsetMs": 77471,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 77481,
+    "k": "start"
+   },
+   {
+    "offsetMs": 78716,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 104073,
+    "k": "start"
+   },
+   {
+    "offsetMs": 112428,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 113536,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "71e53da5@10-14T16:38:10",
+  "conn": "71e53da5",
+  "appSession": "32b37bd0-66bb-47a7-82ac-a700ce674636",
+  "claudeSession": "1bd98c83-d066-4f4c-8aaf-77617e1ee785",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1bd98c83-d066-4f4c-8aaf-77617e1ee785.jsonl",
+  "turnStart": "2026-10-14T16:38:10.477Z",
+  "turnMs": 14133,
+  "tools": 1,
+  "promptUuid": "21521022-9e5e-4a66-8001-04953573287f",
+  "promptParentUuid": "accb6a5d-651c-4662-b55d-ea714ee13539",
+  "prompt": "我看你都跑完了？",
+  "promptFull": "我看你都跑完了？",
+  "pieces": [
+   {
+    "offsetMs": 1087,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 2083,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 2907,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 3850,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 4523,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 5184,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 6067,
+    "tool": "session_send",
+    "text": "所以你的这个耗时较长是什么？"
+   },
+   {
+    "offsetMs": 13781,
+    "tool": "session_interrupt",
+    "text": "OK，现在可以终止它了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4973,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4625,
+    "k": "start"
+   },
+   {
+    "offsetMs": -3877,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -2948,
+    "k": "start"
+   },
+   {
+    "offsetMs": 699,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11589,
+    "k": "start"
+   },
+   {
+    "offsetMs": 13182,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19665,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22910,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 40742,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "99df08d8@10-12T01:24:07",
+  "conn": "99df08d8",
+  "appSession": "b280be43-25b7-4054-86a4-d29c08ce6457",
+  "claudeSession": "c6493eb6-c94f-43ed-9e3e-aa77b1ba138c",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c6493eb6-c94f-43ed-9e3e-aa77b1ba138c.jsonl",
+  "turnStart": "2026-10-12T01:24:07.640Z",
+  "turnMs": 130847,
+  "tools": 17,
+  "promptUuid": "4ddd60b1-d6bd-4c05-a1fc-0cb6233b5176",
+  "promptParentUuid": null,
+  "prompt": "我们再试一下 live voice mode。",
+  "promptFull": "我们再试一下 live voice mode。",
+  "pieces": [
+   {
+    "offsetMs": 6022,
+    "tool": "session_send",
+    "text": "第一句识别出来了，我们看看第二句。"
+   },
+   {
+    "offsetMs": 12059,
+    "tool": "session_send",
+    "text": "现在第三句。"
+   },
+   {
+    "offsetMs": 18941,
+    "tool": "session_send",
+    "text": "第四句。"
+   },
+   {
+    "offsetMs": 39432,
+    "tool": "session_send",
+    "text": "到现在为止识别的还可以。"
+   },
+   {
+    "offsetMs": 55148,
+    "tool": "session_send",
+    "text": "只是对于第一句的处理慢一些，但这是正常的。"
+   },
+   {
+    "offsetMs": 93323,
+    "tool": "session_send",
+    "text": "现在后面这几句话都在 queue 里面在等。"
+   },
+   {
+    "offsetMs": 99472,
+    "tool": "session_send",
+    "text": "或者说队列，在队列里面等。"
+   },
+   {
+    "offsetMs": 129040,
+    "tool": "session_send",
+    "text": "所以你能看见 cancel 这样的操作吗？"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3661,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 3151,
+    "k": "start"
+   },
+   {
+    "offsetMs": 5539,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10260,
+    "k": "start"
+   },
+   {
+    "offsetMs": 11641,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 17293,
+    "k": "start"
+   },
+   {
+    "offsetMs": 18499,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 37192,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38938,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 50780,
+    "k": "start"
+   },
+   {
+    "offsetMs": 54625,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 89270,
+    "k": "start"
+   },
+   {
+    "offsetMs": 92681,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 96683,
+    "k": "start"
+   },
+   {
+    "offsetMs": 98859,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 125453,
+    "k": "start"
+   },
+   {
+    "offsetMs": 128426,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 145352,
+    "k": "start"
+   },
+   {
+    "offsetMs": 147444,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 148192,
+    "k": "start"
+   },
+   {
+    "offsetMs": 151884,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 152284,
+    "k": "start"
+   },
+   {
+    "offsetMs": 155178,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 155668,
+    "k": "start"
+   },
+   {
+    "offsetMs": 158964,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 160287,
+    "k": "start"
+   },
+   {
+    "offsetMs": 160644,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 160761,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:23:50",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:23:50.275Z",
+  "turnMs": 60982,
+  "tools": 2,
+  "promptUuid": "70905fa6-e3f2-485a-ba61-5a108abfb736",
+  "promptParentUuid": "a46b4148-eb31-4ab0-998f-77a87c061832",
+  "prompt": "[The previous turn was interrupted before it finished. Any partial changes the interrupted turn had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n很好啊，我们这次看到是用 DeepSeek 来跑的了。\n\n让他把前面那个处理停下来吧。",
+  "promptFull": "[The previous turn was interrupted before it finished. Any partial changes the interrupted turn had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n很好啊，我们这次看到是用 DeepSeek 来跑的了。\n\n让他把前面那个处理停下来吧。",
+  "pieces": [
+   {
+    "offsetMs": 2488,
+    "tool": "session_send",
+    "text": "先处理现在的这个请求。"
+   },
+   {
+    "offsetMs": 3934,
+    "tool": "session_send",
+    "text": "哎，挺好。"
+   },
+   {
+    "offsetMs": 20252,
+    "tool": "session_send",
+    "text": "哎。"
+   },
+   {
+    "offsetMs": 25557,
+    "tool": "session_send",
+    "text": "停下来以后就没有再去调 Claude Code 吗？"
+   },
+   {
+    "offsetMs": 39511,
+    "tool": "session_send",
+    "text": ""
+   },
+   {
+    "offsetMs": 43138,
+    "tool": "session_send",
+    "text": "{\"message\": \"我看到调用了，但是"
+   },
+   {
+    "offsetMs": 47646,
+    "tool": "session_send",
+    "text": "哦，看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到让 Claude Code 跑起来，好像挺久的。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3343,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1847,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -1513,
+    "k": "start"
+   },
+   {
+    "offsetMs": -582,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 326,
+    "k": "start"
+   },
+   {
+    "offsetMs": 2061,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 2930,
+    "k": "start"
+   },
+   {
+    "offsetMs": 3528,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19395,
+    "k": "start"
+   },
+   {
+    "offsetMs": 19665,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20981,
+    "k": "start"
+   },
+   {
+    "offsetMs": 21422,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21854,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25069,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 36484,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38972,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 39512,
+    "k": "start"
+   },
+   {
+    "offsetMs": 41432,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 41683,
+    "k": "start"
+   },
+   {
+    "offsetMs": 42723,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 43139,
+    "k": "start"
+   },
+   {
+    "offsetMs": 44415,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 44588,
+    "k": "start"
+   },
+   {
+    "offsetMs": 46982,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 80651,
+    "k": "start"
+   },
+   {
+    "offsetMs": 83713,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "71e53da5@10-14T16:37:12",
+  "conn": "71e53da5",
+  "appSession": "32b37bd0-66bb-47a7-82ac-a700ce674636",
+  "claudeSession": "1bd98c83-d066-4f4c-8aaf-77617e1ee785",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1bd98c83-d066-4f4c-8aaf-77617e1ee785.jsonl",
+  "turnStart": "2026-10-14T16:37:12.308Z",
+  "turnMs": 4364,
+  "tools": 0,
+  "promptUuid": "1c74ecc1-9e8a-4f02-8fc2-d7796e928c0b",
+  "promptParentUuid": "104e3b11-9b27-4981-b7d3-e7eab64013ea",
+  "prompt": "现在跑一个耗时较长的前台任务。",
+  "promptFull": "现在跑一个耗时较长的前台任务。",
+  "pieces": [
+   {
+    "offsetMs": 33,
+    "tool": "session_send",
+    "text": "现在跑一个耗时较长的前台任务。"
+   },
+   {
+    "offsetMs": 900,
+    "tool": "session_send",
+    "text": "现在跑一个耗时较长的前台任务。"
+   },
+   {
+    "offsetMs": 1502,
+    "tool": "session_send",
+    "text": "现在跑一个耗时较长的前台任务。"
+   },
+   {
+    "offsetMs": 2386,
+    "tool": "session_send",
+    "text": "现在跑一个耗时较长的前台任务。"
+   },
+   {
+    "offsetMs": 2989,
+    "tool": "session_send",
+    "text": "现在跑一个耗时较长的前台任务。"
+   },
+   {
+    "offsetMs": 3618,
+    "tool": "session_send",
+    "text": "现在跑一个耗时较长的前台任务。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1585,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 9606,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12932,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "b33412ea@10-14T17:09:44",
+  "conn": "b33412ea",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:09:44.744Z",
+  "turnMs": 255173,
+  "tools": 19,
+  "promptUuid": "0673b49f-ce57-4110-a3f4-1dda99a9aef0",
+  "promptParentUuid": "1529a3f3-039e-4eb6-a3eb-ea4a05484243",
+  "prompt": "讨论一下怎么修吧。",
+  "promptFull": "讨论一下怎么修吧。",
+  "pieces": [
+   {
+    "offsetMs": 152737,
+    "tool": "session_send",
+    "text": "我刚才看见说是 connection lost 之类的东西闪了一下。"
+   },
+   {
+    "offsetMs": 196820,
+    "tool": "session_send",
+    "text": "然后刚才最后说的这句话，这几句话又进不了 Q 了。"
+   },
+   {
+    "offsetMs": 207034,
+    "tool": "session_send",
+    "text": ""
+   },
+   {
+    "offsetMs": 210470,
+    "tool": "session_send",
+    "text": "我发现你丢了几句话。"
+   },
+   {
+    "offsetMs": 250241,
+    "tool": "session_send",
+    "text": "你看现在这段话又是进不去了，又进不了 Q 了。"
+   },
+   {
+    "offsetMs": 255171,
+    "tool": "session_send",
+    "text": "哦。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 145636,
+    "k": "start"
+   },
+   {
+    "offsetMs": 152332,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 152750,
+    "k": "start"
+   },
+   {
+    "offsetMs": 154177,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 154355,
+    "k": "start"
+   },
+   {
+    "offsetMs": 158973,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 159325,
+    "k": "start"
+   },
+   {
+    "offsetMs": 164774,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 166566,
+    "k": "start"
+   },
+   {
+    "offsetMs": 168719,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 190012,
+    "k": "start"
+   },
+   {
+    "offsetMs": 195920,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 197499,
+    "k": "start"
+   },
+   {
+    "offsetMs": 198997,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 202820,
+    "k": "start"
+   },
+   {
+    "offsetMs": 206728,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 207036,
+    "k": "start"
+   },
+   {
+    "offsetMs": 210025,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 218728,
+    "k": "start"
+   },
+   {
+    "offsetMs": 223678,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 223854,
+    "k": "start"
+   },
+   {
+    "offsetMs": 229401,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 229542,
+    "k": "start"
+   },
+   {
+    "offsetMs": 234100,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 234456,
+    "k": "start"
+   },
+   {
+    "offsetMs": 237865,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 245907,
+    "k": "start"
+   },
+   {
+    "offsetMs": 249689,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 254145,
+    "k": "start"
+   },
+   {
+    "offsetMs": 254670,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "d4c9bfc4@10-14T01:36:53",
+  "conn": "d4c9bfc4",
+  "appSession": "854bb889-b487-4414-9a43-17e323824f40",
+  "claudeSession": "c50df3c5-b14e-4dec-ae08-7c93777b6e74",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c50df3c5-b14e-4dec-ae08-7c93777b6e74.jsonl",
+  "turnStart": "2026-10-14T01:36:53.094Z",
+  "turnMs": 80696,
+  "tools": 8,
+  "promptUuid": "72f72525-0f1a-4acd-866a-75e411d43be3",
+  "promptParentUuid": "5ecad750-2e34-45e0-9df1-8de2a911b5a1",
+  "prompt": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n我还是看见我之前的那个居然猜到了我的想法，就在Q里面，在屏幕底部有这么一行字。",
+  "promptFull": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n我还是看见我之前的那个居然猜到了我的想法，就在Q里面，在屏幕底部有这么一行字。",
+  "pieces": [
+   {
+    "offsetMs": 27113,
+    "tool": "session_send",
+    "text": "{\"message\": \""
+   },
+   {
+    "offsetMs": 30210,
+    "tool": "session_send",
+    "text": ""
+   },
+   {
+    "offsetMs": 34714,
+    "tool": "session_send",
+    "text": "然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。"
+   },
+   {
+    "offsetMs": 37713,
+    "tool": "session_send",
+    "text": "找出来为什么会出现这些东西。"
+   },
+   {
+    "offsetMs": 63986,
+    "tool": "session_send",
+    "text": "我现在看见上面这句话被处理了，但是在底部的Q里面还是有。"
+   },
+   {
+    "offsetMs": 67932,
+    "tool": "session_send",
+    "text": "所以地图的Q看来现在是个问题啊。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3167,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 22456,
+    "k": "start"
+   },
+   {
+    "offsetMs": 26722,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 27116,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29889,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 30212,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32505,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32615,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34179,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35369,
+    "k": "start"
+   },
+   {
+    "offsetMs": 37262,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 58516,
+    "k": "start"
+   },
+   {
+    "offsetMs": 60796,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 61076,
+    "k": "start"
+   },
+   {
+    "offsetMs": 62249,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 62415,
+    "k": "start"
+   },
+   {
+    "offsetMs": 63465,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 65299,
+    "k": "start"
+   },
+   {
+    "offsetMs": 67359,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "86559798@10-14T17:03:42",
+  "conn": "86559798",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:03:42.497Z",
+  "turnMs": 128063,
+  "tools": 14,
+  "promptUuid": "4deae8c2-2876-415f-a3f7-77662676d1e1",
+  "promptParentUuid": "3797743b-b9b4-483f-a792-a2ae29497d38",
+  "prompt": "检查一下在本会话过程中，浏览器到服务端的语音 socket 有没有断过。",
+  "promptFull": "检查一下在本会话过程中，浏览器到服务端的语音 socket 有没有断过。",
+  "pieces": [
+   {
+    "offsetMs": 66675,
+    "tool": "session_send",
+    "text": "{\"message\": \"你看啊，上面这句到“有没有"
+   },
+   {
+    "offsetMs": 71209,
+    "tool": "session_send",
+    "text": ""
+   },
+   {
+    "offsetMs": 75020,
+    "tool": "session_send",
+    "text": "你看啊，上面这句到有没有断过这几个字，在我的 transcript 栏里面等了可能有几十秒，直到我再说话它才跑上去。"
+   },
+   {
+    "offsetMs": 98641,
+    "tool": "session_send",
+    "text": "{\"message\": \"现在看也是能接受的情况，如果他只是在 transcript 表示其实他认到过了"
+   },
+   {
+    "offsetMs": 100309,
+    "tool": "session_send",
+    "text": "现在看也是能接受的情况，如果他只是在 transcript 表示，其实他认到过了最后的字，好像也能接受。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1576,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 62364,
+    "k": "start"
+   },
+   {
+    "offsetMs": 66196,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 66677,
+    "k": "start"
+   },
+   {
+    "offsetMs": 68985,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 69143,
+    "k": "start"
+   },
+   {
+    "offsetMs": 70924,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 71209,
+    "k": "start"
+   },
+   {
+    "offsetMs": 74418,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 92266,
+    "k": "start"
+   },
+   {
+    "offsetMs": 98143,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 98654,
+    "k": "start"
+   },
+   {
+    "offsetMs": 99715,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "95a9d738@10-11T01:54:22",
+  "conn": "95a9d738",
+  "appSession": "d88c6722-5da6-446a-8ba1-c7f86f434446",
+  "claudeSession": "8d372a06-96a4-424a-b426-5a816f8faa62",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/8d372a06-96a4-424a-b426-5a816f8faa62.jsonl",
+  "turnStart": "2026-10-11T01:54:22.600Z",
+  "turnMs": 536186,
+  "tools": 11,
+  "promptUuid": "631daa3b-285a-4ba3-8285-22d173d46ef5",
+  "promptParentUuid": "29cc75e6-ea75-455b-8aba-0f5c80464d35",
+  "prompt": "现在我在用live voice。",
+  "promptFull": "现在我在用live voice。",
+  "pieces": [
+   {
+    "offsetMs": 30393,
+    "tool": "session_send",
+    "text": "事情好像我还需要多等几秒，可能差不多有三到五秒，我才会看到我前一句说的字出现在屏幕上。"
+   },
+   {
+    "offsetMs": 56034,
+    "tool": "session_send",
+    "text": "这是第三句。"
+   },
+   {
+    "offsetMs": 71546,
+    "tool": "session_send",
+    "text": "现在是第四句。"
+   },
+   {
+    "offsetMs": 151079,
+    "tool": "session_send",
+    "text": "现在我看见只有用\"现在我在用live voice\"这几个字在屏幕上，后面我说的字又都消失了。"
+   },
+   {
+    "offsetMs": 162423,
+    "tool": "session_send",
+    "text": "现在我看见只有\"用现在我在用live voice\"这几个字在屏幕上，后面我说的字又都消失了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3002,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8252,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8903,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8910,
+    "k": "start"
+   },
+   {
+    "offsetMs": 21318,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21643,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29782,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 52335,
+    "k": "start"
+   },
+   {
+    "offsetMs": 55459,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 70499,
+    "k": "start"
+   },
+   {
+    "offsetMs": 71115,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 119590,
+    "k": "start"
+   },
+   {
+    "offsetMs": 150518,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "99df08d8@10-12T01:26:18",
+  "conn": "99df08d8",
+  "appSession": "b280be43-25b7-4054-86a4-d29c08ce6457",
+  "claudeSession": "c6493eb6-c94f-43ed-9e3e-aa77b1ba138c",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c6493eb6-c94f-43ed-9e3e-aa77b1ba138c.jsonl",
+  "turnStart": "2026-10-12T01:26:18.526Z",
+  "turnMs": 150175,
+  "tools": 13,
+  "promptUuid": "f2f81032-aa89-4856-81a3-f4df4c454b30",
+  "promptParentUuid": "bea6afbd-99e7-4065-a69a-4bafa3a86dcb",
+  "prompt": "第一句识别出来了，我们看看第二句。\n现在第三句。\n第四句。\n到现在为止识别的还可以。\n只是对于第一句的处理慢一些，但这是正常的。\n现在后面这几句话都在 queue 里面在等。\n或者说队列，在队列里面等。",
+  "promptFull": "第一句识别出来了，我们看看第二句。\n现在第三句。\n第四句。\n到现在为止识别的还可以。\n只是对于第一句的处理慢一些，但这是正常的。\n现在后面这几句话都在 queue 里面在等。\n或者说队列，在队列里面等。",
+  "pieces": [
+   {
+    "offsetMs": 17201,
+    "tool": "session_send",
+    "text": "检查最近执行的任务。"
+   },
+   {
+    "offsetMs": 21397,
+    "tool": "session_send",
+    "text": "{\"message\": \"你应当能够更主动的去取消。"
+   },
+   {
+    "offsetMs": 24781,
+    "tool": "session_send",
+    "text": "{\"message\": \""
+   },
+   {
+    "offsetMs": 28597,
+    "tool": "session_send",
+    "text": "你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。"
+   },
+   {
+    "offsetMs": 32717,
+    "tool": "session_send",
+    "text": "你确认一下现在这个任务有没有实现。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2460,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 14466,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16558,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 17306,
+    "k": "start"
+   },
+   {
+    "offsetMs": 20998,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21398,
+    "k": "start"
+   },
+   {
+    "offsetMs": 24292,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24782,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28078,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29401,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29758,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29875,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32223,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 155693,
+    "k": "start"
+   },
+   {
+    "offsetMs": 155920,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 155931,
+    "k": "start"
+   },
+   {
+    "offsetMs": 156085,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 156112,
+    "k": "start"
+   },
+   {
+    "offsetMs": 156320,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 156342,
+    "k": "start"
+   },
+   {
+    "offsetMs": 156544,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 156564,
+    "k": "start"
+   },
+   {
+    "offsetMs": 156603,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 156604,
+    "k": "start"
+   },
+   {
+    "offsetMs": 156651,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 156666,
+    "k": "start"
+   },
+   {
+    "offsetMs": 156753,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 157033,
+    "k": "start"
+   },
+   {
+    "offsetMs": 157081,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 159558,
+    "k": "start"
+   },
+   {
+    "offsetMs": 160673,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 161273,
+    "k": "start"
+   },
+   {
+    "offsetMs": 162215,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "164c3087@10-14T15:18:36",
+  "conn": "164c3087",
+  "appSession": "2a475477-0238-4126-b645-367c4516cb65",
+  "claudeSession": "2567a276-a9d1-4810-bd0b-e2539eb89afa",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/2567a276-a9d1-4810-bd0b-e2539eb89afa.jsonl",
+  "turnStart": "2026-10-14T15:18:36.344Z",
+  "turnMs": 273170,
+  "tools": 11,
+  "promptUuid": "6c80c839-d819-48f7-b0b5-26e2a5767281",
+  "promptParentUuid": "bff3dcb2-7659-42e5-8a6f-97e1220faad6",
+  "prompt": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。但是我看到在我的屏幕上蹦出来。可能要花了二十到三十秒。啊，分析一下原因。现在我看见在 Q 里面的这段话实际上漏了不少字。",
+  "promptFull": "你看啊，第一句的问题是。我大概花了。两秒时间。就把话说完了。但是我看见这边有个动字。可能花了五六秒。但是我看到在我的屏幕上蹦出来。可能要花了二十到三十秒。啊，分析一下原因。现在我看见在 Q 里面的这段话实际上漏了不少字。",
+  "pieces": [
+   {
+    "offsetMs": 69964,
+    "tool": "session_send",
+    "text": "这也应该要查。"
+   },
+   {
+    "offsetMs": 120731,
+    "tool": "session_send",
+    "text": "啊，我从这个“查”字到后面的话之间的时间间隔相当长。"
+   },
+   {
+    "offsetMs": 143374,
+    "tool": "session_send",
+    "text": "啊，实际上在我前面停止。"
+   },
+   {
+    "offsetMs": 209184,
+    "tool": "session_send",
+    "text": "第一段话的推理的时候，这个“这也应该要查”这几个字早就说完了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -530,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 578,
+    "k": "start"
+   },
+   {
+    "offsetMs": 69501,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 70749,
+    "k": "start"
+   },
+   {
+    "offsetMs": 88240,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 88254,
+    "k": "start"
+   },
+   {
+    "offsetMs": 93299,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 93507,
+    "k": "start"
+   },
+   {
+    "offsetMs": 100032,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 100046,
+    "k": "start"
+   },
+   {
+    "offsetMs": 104779,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 104789,
+    "k": "start"
+   },
+   {
+    "offsetMs": 120205,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 122742,
+    "k": "start"
+   },
+   {
+    "offsetMs": 134384,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 134389,
+    "k": "start"
+   },
+   {
+    "offsetMs": 143035,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 144144,
+    "k": "start"
+   },
+   {
+    "offsetMs": 208599,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "73f2622b@10-14T16:10:29",
+  "conn": "73f2622b",
+  "appSession": "5841cfa4-f07f-4cdb-8233-1387a003367d",
+  "claudeSession": "aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3.jsonl",
+  "turnStart": "2026-10-14T16:10:29.092Z",
+  "turnMs": 45109,
+  "tools": 1,
+  "promptUuid": "a4b484db-0999-4fa6-867e-6854356c4418",
+  "promptParentUuid": "92eb783f-7b13-4ddf-aa46-954debfecb29",
+  "prompt": "来吧，执行一个时间比较长的前台操作。",
+  "promptFull": "来吧，执行一个时间比较长的前台操作。",
+  "pieces": [
+   {
+    "offsetMs": 5409,
+    "tool": "session_send",
+    "text": "诶，你看这次就又没有触发。"
+   },
+   {
+    "offsetMs": 19323,
+    "tool": "session_send",
+    "text": "就从前台操作到后面这句话。"
+   },
+   {
+    "offsetMs": 26368,
+    "tool": "session_send",
+    "text": "啊，它实际上等的时间比较长。"
+   },
+   {
+    "offsetMs": 45094,
+    "tool": "session_interrupt",
+    "text": "好了，你可以中断前面的操作。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1734,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -1155,
+    "k": "start"
+   },
+   {
+    "offsetMs": 4928,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12547,
+    "k": "start"
+   },
+   {
+    "offsetMs": 18879,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19647,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25916,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 37944,
+    "k": "start"
+   },
+   {
+    "offsetMs": 44297,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 65425,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "af12cbaf@10-14T09:52:44",
+  "conn": "af12cbaf",
+  "appSession": "3af64b17-9900-4cdf-9e3f-51a3be9192c8",
+  "claudeSession": "81379a47-5de2-4202-889b-ec5f15cd967a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/81379a47-5de2-4202-889b-ec5f15cd967a.jsonl",
+  "turnStart": "2026-10-14T09:52:44.661Z",
+  "turnMs": 34750,
+  "tools": 1,
+  "promptUuid": "a3412092-6d17-41b1-a55d-7fc5143edb91",
+  "promptParentUuid": "2df49f88-7291-4d2e-af68-4d69c521ab36",
+  "prompt": "那改一下，把它改成三十秒。",
+  "promptFull": "那改一下，把它改成三十秒。",
+  "pieces": [
+   {
+    "offsetMs": 10052,
+    "tool": "session_send",
+    "text": "再改成十秒。"
+   },
+   {
+    "offsetMs": 21590,
+    "tool": "session_send",
+    "text": "哦，改成十秒这句被 kill 了。"
+   },
+   {
+    "offsetMs": 32473,
+    "tool": "session_send",
+    "text": "哎，我看不见这句啊。"
+   },
+   {
+    "offsetMs": 34697,
+    "tool": "session_send",
+    "text": "对，他有理解错了吗？"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2102,
+    "k": "start"
+   },
+   {
+    "offsetMs": -879,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8700,
+    "k": "start"
+   },
+   {
+    "offsetMs": 9479,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 18812,
+    "k": "start"
+   },
+   {
+    "offsetMs": 19212,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19455,
+    "k": "start"
+   },
+   {
+    "offsetMs": 21148,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 30233,
+    "k": "start"
+   },
+   {
+    "offsetMs": 31833,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32842,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34243,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 42162,
+    "k": "start"
+   },
+   {
+    "offsetMs": 42725,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 60773,
+    "k": "start"
+   },
+   {
+    "offsetMs": 61558,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 61705,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "b5d01c21@10-13T15:59:28",
+  "conn": "b5d01c21",
+  "appSession": "eb37774b-e5d9-4c29-a1ba-bbe43e036bc2",
+  "claudeSession": "5b928357-0337-4a9e-a620-1d6bf2f8a58e",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5b928357-0337-4a9e-a620-1d6bf2f8a58e.jsonl",
+  "turnStart": "2026-10-13T15:59:28.132Z",
+  "turnMs": 88856,
+  "tools": 5,
+  "promptUuid": "e649fb79-6250-4aca-a488-10a9acbd7d61",
+  "promptParentUuid": "d3981845-b4a2-49ea-98de-0502bd101ff1",
+  "prompt": "好，现在整体检查一下这次 live voice 语音测试的过程。然后分析一下其中发生的问题。",
+  "promptFull": "好，现在整体检查一下这次 live voice 语音测试的过程。然后分析一下其中发生的问题。",
+  "pieces": [
+   {
+    "offsetMs": 23039,
+    "tool": "session_send",
+    "text": "先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。"
+   },
+   {
+    "offsetMs": 61629,
+    "tool": "session_send",
+    "text": "你看，这句“先暂停一下”居然会排在queue里面。"
+   },
+   {
+    "offsetMs": 68260,
+    "tool": "session_send",
+    "text": "{\"message\": \"要等到前面那句话处理完了，它才能排。\""
+   },
+   {
+    "offsetMs": 69031,
+    "tool": "session_send",
+    "text": "要等到前面那句话处理完了，它才能排进去吗？"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3231,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12720,
+    "k": "start"
+   },
+   {
+    "offsetMs": 17402,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 17448,
+    "k": "start"
+   },
+   {
+    "offsetMs": 19996,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20362,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22366,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 55025,
+    "k": "start"
+   },
+   {
+    "offsetMs": 60859,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 62573,
+    "k": "start"
+   },
+   {
+    "offsetMs": 67634,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 68261,
+    "k": "start"
+   },
+   {
+    "offsetMs": 68548,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "45c8ee08@10-13T05:03:50",
+  "conn": "45c8ee08",
+  "appSession": "74ba573d-fe71-404f-88ef-8d5ab12d5bdc",
+  "claudeSession": "804aaf30-8d31-4523-9207-fae755efa08a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/804aaf30-8d31-4523-9207-fae755efa08a.jsonl",
+  "turnStart": "2026-10-13T05:03:50.205Z",
+  "turnMs": 106753,
+  "tools": 15,
+  "promptUuid": "d7d66147-2bd2-4524-8d5d-6f2dca914de4",
+  "promptParentUuid": "9cf73510-01cd-4621-acf3-5a5da7b8f237",
+  "prompt": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n你可以分析一下刚才。接下来再来分析可以如何用 VAD 去减少这些调用。",
+  "promptFull": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n你可以分析一下刚才。接下来再来分析可以如何用 VAD 去减少这些调用。",
+  "pieces": [
+   {
+    "offsetMs": 41678,
+    "tool": "session_send",
+    "text": "注意一下你收到的上面这条消息中带方括号的英文片段。"
+   },
+   {
+    "offsetMs": 52172,
+    "tool": "session_send",
+    "text": "对应这些英文片段我都有更长的中文语音输入，但好像都被截断了，只留下了最后一点点。"
+   },
+   {
+    "offsetMs": 102100,
+    "tool": "session_send",
+    "text": "最后这段好像卡住了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4641,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4635,
+    "k": "start"
+   },
+   {
+    "offsetMs": -3212,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35576,
+    "k": "start"
+   },
+   {
+    "offsetMs": 41148,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 42197,
+    "k": "start"
+   },
+   {
+    "offsetMs": 43236,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 43709,
+    "k": "start"
+   },
+   {
+    "offsetMs": 47421,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 47578,
+    "k": "start"
+   },
+   {
+    "offsetMs": 51132,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 97698,
+    "k": "start"
+   },
+   {
+    "offsetMs": 98449,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 99020,
+    "k": "start"
+   },
+   {
+    "offsetMs": 101609,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "7c01be7e@10-15T03:52:30",
+  "conn": "7c01be7e",
+  "appSession": "3c308639-5369-426b-9515-3b77ba1c12ab",
+  "claudeSession": "d053564a-9d88-4c8e-9e3c-a5f5369fa939",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/d053564a-9d88-4c8e-9e3c-a5f5369fa939.jsonl",
+  "turnStart": "2026-10-15T03:52:30.179Z",
+  "turnMs": 1057317,
+  "tools": 61,
+  "promptUuid": "4a10e094-d65e-4ee6-a081-e0de2e4979c4",
+  "promptParentUuid": "f02fee92-bf36-4ee0-99bf-466ec7669848",
+  "prompt": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+  "promptFull": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。呃，当然。这里面会有矛盾，我们希望。要尽可能敏感。",
+  "pieces": [
+   {
+    "offsetMs": 3370,
+    "tool": "session_send",
+    "text": "{\"message\": \"当然，这里面会有个矛盾。我们希望它是尽可能敏感，而且尽可能的灵敏，然后"
+   },
+   {
+    "offsetMs": 8501,
+    "tool": "session_send",
+    "text": "{\"message\": \"当然，这里面会有矛盾。我们希望它尽可能敏感，而且尽可能的灵敏，更快的"
+   },
+   {
+    "offsetMs": 11983,
+    "tool": "session_send",
+    "text": "当然这里面会有个矛盾，我们希望它尽可能的敏感，尽可能的灵敏，然后更快的有输出。但另外一方面，我们又不希望它过快的把消息发出去。请进一步的量化的进行分析，然后来实验找出可能的更好的方案。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4826,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4336,
+    "k": "start"
+   },
+   {
+    "offsetMs": -976,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -678,
+    "k": "start"
+   },
+   {
+    "offsetMs": 2713,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 3371,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6391,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6573,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8093,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8503,
+    "k": "start"
+   },
+   {
+    "offsetMs": 11097,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "99df08d8@10-12T01:28:48",
+  "conn": "99df08d8",
+  "appSession": "b280be43-25b7-4054-86a4-d29c08ce6457",
+  "claudeSession": "c6493eb6-c94f-43ed-9e3e-aa77b1ba138c",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c6493eb6-c94f-43ed-9e3e-aa77b1ba138c.jsonl",
+  "turnStart": "2026-10-12T01:28:48.738Z",
+  "turnMs": 136336,
+  "tools": 15,
+  "promptUuid": "42c8750f-ca56-4b87-8322-b9d9006b6535",
+  "promptParentUuid": "ee52af51-4b82-41f6-af83-8ed98db3bf11",
+  "prompt": "所以你能看见 cancel 这样的操作吗？\n检查最近执行的任务。你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。你确认一下现在这个任务有没有实现。",
+  "promptFull": "所以你能看见 cancel 这样的操作吗？\n检查最近执行的任务。你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。你确认一下现在这个任务有没有实现。",
+  "pieces": [
+   {
+    "offsetMs": 7418,
+    "tool": "session_send",
+    "text": "好像现在语音输入又断了。"
+   },
+   {
+    "offsetMs": 10933,
+    "tool": "session_send",
+    "text": "哦，只是慢。"
+   },
+   {
+    "offsetMs": 12499,
+    "tool": "session_send",
+    "text": "还是出来了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 5481,
+    "k": "start"
+   },
+   {
+    "offsetMs": 5708,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 5719,
+    "k": "start"
+   },
+   {
+    "offsetMs": 5873,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 5900,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6108,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6130,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6332,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6352,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6391,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6392,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6439,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6454,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6541,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6821,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6869,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 9346,
+    "k": "start"
+   },
+   {
+    "offsetMs": 10461,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11061,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12003,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "45c8ee08@10-13T05:02:53",
+  "conn": "45c8ee08",
+  "appSession": "74ba573d-fe71-404f-88ef-8d5ab12d5bdc",
+  "claudeSession": "804aaf30-8d31-4523-9207-fae755efa08a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/804aaf30-8d31-4523-9207-fae755efa08a.jsonl",
+  "turnStart": "2026-10-13T05:02:53.340Z",
+  "turnMs": 14682,
+  "tools": 1,
+  "promptUuid": "ccbfecc2-ea4d-41cc-9aae-eec4c4f9eefa",
+  "promptParentUuid": "21abed28-6e20-4c5f-bb82-aa3ab4d5baf7",
+  "prompt": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n你 sleep 六十秒。",
+  "promptFull": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n你 sleep 六十秒。",
+  "pieces": [
+   {
+    "offsetMs": 12691,
+    "tool": "session_interrupt",
+    "text": "{\"intent\": \"用户要求打断当前运行中的操作\""
+   },
+   {
+    "offsetMs": 14668,
+    "tool": "session_interrupt",
+    "text": "好，现在打断它，立刻回复我。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4970,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4763,
+    "k": "start"
+   },
+   {
+    "offsetMs": -2974,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10469,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12066,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12692,
+    "k": "start"
+   },
+   {
+    "offsetMs": 13942,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 23020,
+    "k": "start"
+   },
+   {
+    "offsetMs": 24145,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 25535,
+    "k": "start"
+   },
+   {
+    "offsetMs": 26487,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 27760,
+    "k": "start"
+   },
+   {
+    "offsetMs": 30296,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 30450,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32726,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 33368,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34797,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35149,
+    "k": "start"
+   },
+   {
+    "offsetMs": 39207,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 39691,
+    "k": "start"
+   },
+   {
+    "offsetMs": 41446,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 42026,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "57279cc1@10-11T15:42:32",
+  "conn": "57279cc1",
+  "appSession": "79d7515b-24b8-409c-b434-f4669105373b",
+  "claudeSession": "c5b83422-48b1-4160-bdad-5eb84099e54a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c5b83422-48b1-4160-bdad-5eb84099e54a.jsonl",
+  "turnStart": "2026-10-11T15:42:32.329Z",
+  "turnMs": 12250,
+  "tools": 1,
+  "promptUuid": "0503cb2c-eb78-4008-aca4-d2113d92e1a0",
+  "promptParentUuid": "a9794147-a56f-40bd-ada8-205c55a0026c",
+  "prompt": "还有呢，就是现在转写输出的延迟好像非常大。",
+  "promptFull": "还有呢，就是现在转写输出的延迟好像非常大。",
+  "pieces": [
+   {
+    "offsetMs": 919,
+    "tool": "session_send",
+    "text": "我不知道是不是因为最近在 VAD……"
+   },
+   {
+    "offsetMs": 8564,
+    "tool": "session_send",
+    "text": "或者其他的地方加入了更多延迟。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 268,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 1197,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8079,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "7c01be7e@10-15T03:52:08",
+  "conn": "7c01be7e",
+  "appSession": "3c308639-5369-426b-9515-3b77ba1c12ab",
+  "claudeSession": "d053564a-9d88-4c8e-9e3c-a5f5369fa939",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/d053564a-9d88-4c8e-9e3c-a5f5369fa939.jsonl",
+  "turnStart": "2026-10-15T03:52:08.728Z",
+  "turnMs": 21359,
+  "tools": 4,
+  "promptUuid": "5352c498-4ec7-41d5-94ab-7e381bf0804f",
+  "promptParentUuid": null,
+  "prompt": "因此，Live Voice 使用过程当中啊，我发现还是会有这么一个问题。在这个会话中，我们马上也会碰到。",
+  "promptFull": "因此，Live Voice 使用过程当中啊，我发现还是会有这么一个问题。在这个会话中，我们马上也会碰到。",
+  "pieces": [
+   {
+    "offsetMs": 4876,
+    "tool": "session_send",
+    "text": "就是现在的 Live Voice 还是会比较快地去断句，去发这些消息，发 response。"
+   },
+   {
+    "offsetMs": 12075,
+    "tool": "session_send",
+    "text": "就是现在的 Live Voice 还是会比较快的去断句，去发这些消息，发 response。但实际上就像现在这个会话一样，可能前后的间隔并不是那么大。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4965,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4291,
+    "k": "start"
+   },
+   {
+    "offsetMs": -389,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -75,
+    "k": "start"
+   },
+   {
+    "offsetMs": 3378,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 3592,
+    "k": "start"
+   },
+   {
+    "offsetMs": 4265,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 4879,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8631,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8801,
+    "k": "start"
+   },
+   {
+    "offsetMs": 11297,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12135,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12768,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 13031,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15008,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 15423,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16625,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 17115,
+    "k": "start"
+   },
+   {
+    "offsetMs": 20475,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20773,
+    "k": "start"
+   },
+   {
+    "offsetMs": 24164,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24822,
+    "k": "start"
+   },
+   {
+    "offsetMs": 27842,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 28024,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29544,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29954,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32548,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "a0284015@10-15T03:02:32",
+  "conn": "a0284015",
+  "appSession": "0dba32bb-f237-4fff-be72-66d069e8a0f0",
+  "claudeSession": "794003ad-70d6-45bf-9ac1-504c368a04a5",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay-fleet/794003ad-70d6-45bf-9ac1-504c368a04a5.jsonl",
+  "turnStart": "2026-10-15T03:02:32.375Z",
+  "turnMs": 61984,
+  "tools": 7,
+  "promptUuid": "fa53bc1d-56e0-4f12-9116-98f03e541192",
+  "promptParentUuid": "9b08ef1b-9d69-4072-858a-214ecea00363",
+  "prompt": "你可以看到，这个会话正在讨论关于 send message 的这些协议。",
+  "promptFull": "你可以看到，这个会话正在讨论关于 send message 的这些协议。",
+  "pieces": [
+   {
+    "offsetMs": 1610,
+    "tool": "session_send",
+    "text": "{\"message\": \""
+   },
+   {
+    "offsetMs": 4857,
+    "tool": "session_send",
+    "text": "而在 quay fleet 这个项目中，实际上我们也在做相应功能。你可以找到 quay fleet 里面相应的那个会话吗？"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3424,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -2787,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1316,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 1612,
+    "k": "start"
+   },
+   {
+    "offsetMs": 4298,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:24:51",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:24:51.462Z",
+  "turnMs": 73479,
+  "tools": 7,
+  "promptUuid": "ccd06e63-c722-492e-9733-f6defbfd2b6e",
+  "promptParentUuid": "4540acda-9c30-4a5b-ae92-247becde7969",
+  "prompt": "先处理现在的这个请求。哎，挺好。哎。停下来以后就没有再去调 Claude Code 吗？哦，看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到让 Claude Code 跑起来，好像挺久的。",
+  "promptFull": "先处理现在的这个请求。哎，挺好。哎。停下来以后就没有再去调 Claude Code 吗？哦，看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到让 Claude Code 跑起来，好像挺久的。",
+  "pieces": [
+   {
+    "offsetMs": 23263,
+    "tool": "session_send",
+    "text": "当然，这轮到现在没丢东西，这是好的。"
+   },
+   {
+    "offsetMs": 71687,
+    "tool": "session_send",
+    "text": "去查一下 VAD 的情况吧，看看到现在为止这一轮测试总的语音传了多少，VAD 滤掉了多少，实际发给 Realtime 模型的有多少。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 19464,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22526,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 58556,
+    "k": "start"
+   },
+   {
+    "offsetMs": 60723,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 61157,
+    "k": "start"
+   },
+   {
+    "offsetMs": 64872,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 65164,
+    "k": "start"
+   },
+   {
+    "offsetMs": 68327,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 68504,
+    "k": "start"
+   },
+   {
+    "offsetMs": 70972,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af12cbaf@10-14T09:54:30",
+  "conn": "af12cbaf",
+  "appSession": "3af64b17-9900-4cdf-9e3f-51a3be9192c8",
+  "claudeSession": "81379a47-5de2-4202-889b-ec5f15cd967a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/81379a47-5de2-4202-889b-ec5f15cd967a.jsonl",
+  "turnStart": "2026-10-14T09:54:30.666Z",
+  "turnMs": 78284,
+  "tools": 6,
+  "promptUuid": "1f966f86-12ad-44e5-8164-a33825da3009",
+  "promptParentUuid": "069603e4-c1fb-43f6-9657-ed1f2de3aa0d",
+  "prompt": "所以你需要检查一下你收到的处理的音频和从文本真正…… 到这个 cloud code 的时间，这几个时间的顺序、时序到底是什么样？需要比较一下。",
+  "promptFull": "所以你需要检查一下你收到的处理的音频和从文本真正…… 到这个 cloud code 的时间，这几个时间的顺序、时序到底是什么样？需要比较一下。",
+  "pieces": [
+   {
+    "offsetMs": 23708,
+    "tool": "session_send",
+    "text": "也要比较一下最近的 VAD 记录啊。"
+   },
+   {
+    "offsetMs": 40252,
+    "tool": "session_send",
+    "text": "VAD 有没有起作用？刚才还看见红色的，好像出错了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2700,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -2438,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1646,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20849,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22954,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24184,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34978,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35200,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38156,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 38163,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38484,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 74217,
+    "k": "start"
+   },
+   {
+    "offsetMs": 79806,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 91852,
+    "k": "start"
+   },
+   {
+    "offsetMs": 96893,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 97600,
+    "k": "start"
+   },
+   {
+    "offsetMs": 98780,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af12cbaf@10-14T09:55:51",
+  "conn": "af12cbaf",
+  "appSession": "3af64b17-9900-4cdf-9e3f-51a3be9192c8",
+  "claudeSession": "81379a47-5de2-4202-889b-ec5f15cd967a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/81379a47-5de2-4202-889b-ec5f15cd967a.jsonl",
+  "turnStart": "2026-10-14T09:55:51.268Z",
+  "turnMs": 29135,
+  "tools": 0,
+  "promptUuid": "22dfbf36-e0ce-4122-875e-0637cbc603c9",
+  "promptParentUuid": "0bd1697c-82e1-4f14-a966-5b45dba755d0",
+  "prompt": "也要比较一下最近的 VAD 记录啊。\nVAD 有没有起作用？刚才还看见红色的，好像出错了。\n那现在这个 queue 的时间又非常长了，你把前面动作停下来，先处理当前的输入。",
+  "promptFull": "也要比较一下最近的 VAD 记录啊。\nVAD 有没有起作用？刚才还看见红色的，好像出错了。\n那现在这个 queue 的时间又非常长了，你把前面动作停下来，先处理当前的输入。",
+  "pieces": [
+   {
+    "offsetMs": 16845,
+    "tool": "session_send",
+    "text": "现在这个中断前面操作的这个操作现在是……"
+   },
+   {
+    "offsetMs": 18664,
+    "tool": "session_send",
+    "text": "还是很慢，就很。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -796,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11250,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16291,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 16998,
+    "k": "start"
+   },
+   {
+    "offsetMs": 18178,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af5559c0@10-13T01:49:51",
+  "conn": "af5559c0",
+  "appSession": "aec453a1-3347-4f04-971e-c086fb4a8352",
+  "claudeSession": "d5682dea-e89d-4d14-8a3c-2559e17d6ba2",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/d5682dea-e89d-4d14-8a3c-2559e17d6ba2.jsonl",
+  "turnStart": "2026-10-13T01:49:51.582Z",
+  "turnMs": 35541,
+  "tools": 4,
+  "promptUuid": "cf667ca7-64dc-4362-8bf3-ad6965681d99",
+  "promptParentUuid": "3911bda3-8013-4e68-a042-e269a30f0aaa",
+  "prompt": "到现在为止看呢，每句话都能够实际被识别出来并推到 Claude Code 的处理，但是在前端交互上还有非常多的问题。",
+  "promptFull": "到现在为止看呢，每句话都能够实际被识别出来并推到 Claude Code 的处理，但是在前端交互上还有非常多的问题。",
+  "pieces": [
+   {
+    "offsetMs": 16746,
+    "tool": "session_send",
+    "text": "那我希望啊，用 fake provider 等本地机制可以模拟所有这些问题。"
+   },
+   {
+    "offsetMs": 28115,
+    "tool": "session_send",
+    "text": "现在屏幕上已经有三行 waiting in the queue 了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3064,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10627,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16218,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24626,
+    "k": "start"
+   },
+   {
+    "offsetMs": 27453,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "b5d01c21@10-13T15:56:53",
+  "conn": "b5d01c21",
+  "appSession": "eb37774b-e5d9-4c29-a1ba-bbe43e036bc2",
+  "claudeSession": "5b928357-0337-4a9e-a620-1d6bf2f8a58e",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5b928357-0337-4a9e-a620-1d6bf2f8a58e.jsonl",
+  "turnStart": "2026-10-13T15:56:53.018Z",
+  "turnMs": 12984,
+  "tools": 1,
+  "promptUuid": "83718130-742c-4567-a381-844b457a5a05",
+  "promptParentUuid": "6c8f5900-23fa-4a4e-b6d0-aff5841300ab",
+  "prompt": "看上去延迟还是有点大。",
+  "promptFull": "看上去延迟还是有点大。",
+  "pieces": [
+   {
+    "offsetMs": 4797,
+    "tool": "session_send",
+    "text": "{\"message\": \""
+   },
+   {
+    "offsetMs": 9306,
+    "tool": "session_send",
+    "text": "几步的延迟都有点大，包括识别延迟，然后……"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2985,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 462,
+    "k": "start"
+   },
+   {
+    "offsetMs": 4426,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 4798,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8300,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8305,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8677,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10924,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12572,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12577,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15409,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 15813,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16559,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 23047,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25049,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 25829,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29042,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29462,
+    "k": "start"
+   },
+   {
+    "offsetMs": 33891,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 34424,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34958,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35448,
+    "k": "start"
+   },
+   {
+    "offsetMs": 36544,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "b5d01c21@10-13T15:57:12",
+  "conn": "b5d01c21",
+  "appSession": "eb37774b-e5d9-4c29-a1ba-bbe43e036bc2",
+  "claudeSession": "5b928357-0337-4a9e-a620-1d6bf2f8a58e",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5b928357-0337-4a9e-a620-1d6bf2f8a58e.jsonl",
+  "turnStart": "2026-10-13T15:57:12.513Z",
+  "turnMs": 15609,
+  "tools": 1,
+  "promptUuid": "f6ce926a-b5bf-433a-9832-21a59600753c",
+  "promptParentUuid": "a611c2fc-c23d-451d-8ea6-6a912b32eb9f",
+  "prompt": "识别到实际执行的时间都比较长。",
+  "promptFull": "识别到实际执行的时间都比较长。",
+  "pieces": [
+   {
+    "offsetMs": 6113,
+    "tool": "session_send",
+    "text": "我也没有看到……"
+   },
+   {
+    "offsetMs": 14921,
+    "tool": "session_send",
+    "text": "比较积极的停止前序的推理，然后开启后续的。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4086,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -3682,
+    "k": "start"
+   },
+   {
+    "offsetMs": -2936,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 3552,
+    "k": "start"
+   },
+   {
+    "offsetMs": 5554,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6334,
+    "k": "start"
+   },
+   {
+    "offsetMs": 9547,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 9967,
+    "k": "start"
+   },
+   {
+    "offsetMs": 14396,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 14929,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15463,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 15953,
+    "k": "start"
+   },
+   {
+    "offsetMs": 17049,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35092,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38713,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "b5d01c21@10-13T15:58:32",
+  "conn": "b5d01c21",
+  "appSession": "eb37774b-e5d9-4c29-a1ba-bbe43e036bc2",
+  "claudeSession": "5b928357-0337-4a9e-a620-1d6bf2f8a58e",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5b928357-0337-4a9e-a620-1d6bf2f8a58e.jsonl",
+  "turnStart": "2026-10-13T15:58:32.718Z",
+  "turnMs": 18246,
+  "tools": 3,
+  "promptUuid": "441be226-fdbf-4fa6-92a9-0d72b5cc482f",
+  "promptParentUuid": "8b50bd74-79ad-413a-b217-a7729be2fc46",
+  "prompt": "这就是比较奇怪的事情，我看见前面那个处理。",
+  "promptFull": "这就是比较奇怪的事情，我看见前面那个处理。",
+  "pieces": [
+   {
+    "offsetMs": 3470,
+    "tool": "session_send",
+    "text": "已经执行完了，然后我后一句话也说了，但是切换没上去。"
+   },
+   {
+    "offsetMs": 4165,
+    "tool": "session_send",
+    "text": "没有处理。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4779,
+    "k": "start"
+   },
+   {
+    "offsetMs": 2885,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 3472,
+    "k": "start"
+   },
+   {
+    "offsetMs": 3479,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 38024,
+    "k": "start"
+   },
+   {
+    "offsetMs": 43254,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 43438,
+    "k": "start"
+   },
+   {
+    "offsetMs": 47174,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "d4c9bfc4@10-14T01:35:37",
+  "conn": "d4c9bfc4",
+  "appSession": "854bb889-b487-4414-9a43-17e323824f40",
+  "claudeSession": "c50df3c5-b14e-4dec-ae08-7c93777b6e74",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c50df3c5-b14e-4dec-ae08-7c93777b6e74.jsonl",
+  "turnStart": "2026-10-14T01:35:37.687Z",
+  "turnMs": 30517,
+  "tools": 2,
+  "promptUuid": "6c87acda-0d43-4016-9ece-cc2233e037f2",
+  "promptParentUuid": "8c50dc1d-f9a0-419a-a8e1-014281c8f8fe",
+  "prompt": "居然不允许前台sleep。这个和我的预期是有点差异的。嗯，那你看看能在前台跑点什么慢的动作吗？",
+  "promptFull": "居然不允许前台sleep。这个和我的预期是有点差异的。嗯，那你看看能在前台跑点什么慢的动作吗？",
+  "pieces": [
+   {
+    "offsetMs": 15841,
+    "tool": "session_send",
+    "text": "诶，你居然猜到了我的想法。来吧，处理这句话。"
+   },
+   {
+    "offsetMs": 29416,
+    "tool": "session_send",
+    "text": "看到我这句话还是被kill了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3253,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11566,
+    "k": "start"
+   },
+   {
+    "offsetMs": 13478,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 13843,
+    "k": "start"
+   },
+   {
+    "offsetMs": 14374,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 14568,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15285,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 26636,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28716,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 50398,
+    "k": "start"
+   },
+   {
+    "offsetMs": 51586,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 51937,
+    "k": "start"
+   },
+   {
+    "offsetMs": 52643,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "d4c9bfc4@10-14T01:36:31",
+  "conn": "d4c9bfc4",
+  "appSession": "854bb889-b487-4414-9a43-17e323824f40",
+  "claudeSession": "c50df3c5-b14e-4dec-ae08-7c93777b6e74",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c50df3c5-b14e-4dec-ae08-7c93777b6e74.jsonl",
+  "turnStart": "2026-10-14T01:36:31.133Z",
+  "turnMs": 17265,
+  "tools": 2,
+  "promptUuid": "3e0d6931-c964-412b-be45-33819c7d7e6d",
+  "promptParentUuid": "5a9b6f87-b950-4ab4-87b2-956913ca567e",
+  "prompt": "看到我这句话还是被kill了。\n然后再次插话，赶快处理。",
+  "promptFull": "看到我这句话还是被kill了。\n然后再次插话，赶快处理。",
+  "pieces": [
+   {
+    "offsetMs": 14579,
+    "tool": "session_send",
+    "text": "{\"message\": \"我还是看见我之前的那个居然猜到了我的想法。\""
+   },
+   {
+    "offsetMs": 16484,
+    "tool": "session_send",
+    "text": "{\"message\": \""
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3048,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1860,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -1509,
+    "k": "start"
+   },
+   {
+    "offsetMs": -803,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 9470,
+    "k": "start"
+   },
+   {
+    "offsetMs": 11820,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11988,
+    "k": "start"
+   },
+   {
+    "offsetMs": 14071,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 14580,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16061,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 16485,
+    "k": "start"
+   },
+   {
+    "offsetMs": 18794,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 44417,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "e650117b@10-14T03:40:30",
+  "conn": "e650117b",
+  "appSession": "2a84a13f-6b6d-48c9-a6e6-db4ad4e49be1",
+  "claudeSession": "1ccae377-55e1-416f-b2e4-3af85a784738",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1ccae377-55e1-416f-b2e4-3af85a784738.jsonl",
+  "turnStart": "2026-10-14T03:40:30.987Z",
+  "turnMs": 10475,
+  "tools": 4,
+  "promptUuid": "a72cc1d5-219e-48c0-8df1-a8298448b2a3",
+  "promptParentUuid": null,
+  "prompt": "这是10月14日Live Voice Mode第二次测试。",
+  "promptFull": "这是10月14日Live Voice Mode第二次测试。",
+  "pieces": [
+   {
+    "offsetMs": 7540,
+    "tool": "session_send",
+    "text": "{\"message\": \""
+   },
+   {
+    "offsetMs": 9327,
+    "tool": "session_send",
+    "text": "现在看起来凑合了，我尝试稍微快些说话。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3639,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -3501,
+    "k": "start"
+   },
+   {
+    "offsetMs": -2292,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 4217,
+    "k": "start"
+   },
+   {
+    "offsetMs": 7062,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 7541,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8908,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19383,
+    "k": "start"
+   },
+   {
+    "offsetMs": 19817,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19986,
+    "k": "start"
+   },
+   {
+    "offsetMs": 23305,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 23657,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25706,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32261,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34428,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "06800a8d@10-14T13:45:17",
+  "conn": "06800a8d",
+  "appSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "claudeSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay/516a48e1-fd62-4880-94cf-b83bd978e0e7.jsonl",
+  "turnStart": "2026-10-14T13:45:17.421Z",
+  "turnMs": 724878,
+  "tools": 41,
+  "promptUuid": "14f0a37b-8b6a-43be-ae3b-66c34f013f5a",
+  "promptParentUuid": "b8525f41-7256-44f1-91ba-3d9d0e783d9b",
+  "prompt": "检查最近的自动的架构检查是否有进展。",
+  "promptFull": "检查最近的自动的架构检查是否有进展。",
+  "pieces": [
+   {
+    "offsetMs": 337797,
+    "tool": "session_send",
+    "text": "好神奇的错误啊。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 327977,
+    "k": "start"
+   },
+   {
+    "offsetMs": 337401,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 338136,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "08138645@10-11T16:33:04",
+  "conn": "08138645",
+  "appSession": "5e737652-ab03-413d-803f-ebcec462b5b9",
+  "claudeSession": "b5ea9d14-f6fc-4731-b4ae-f391f2215387",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/b5ea9d14-f6fc-4731-b4ae-f391f2215387.jsonl",
+  "turnStart": "2026-10-11T16:33:04.310Z",
+  "turnMs": 21183,
+  "tools": 1,
+  "promptUuid": "f2f0940b-84d1-4cca-a62a-7757dc484ad5",
+  "promptParentUuid": null,
+  "prompt": "这次我们用手机来试一下 live voice mode。",
+  "promptFull": "这次我们用手机来试一下 live voice mode。",
+  "pieces": [
+   {
+    "offsetMs": 10639,
+    "tool": "session_send",
+    "text": "第一句话识别得挺准，我们看看第二句怎么样。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3695,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 7374,
+    "k": "start"
+   },
+   {
+    "offsetMs": 10162,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20093,
+    "k": "start"
+   },
+   {
+    "offsetMs": 21372,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 27723,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28412,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "08138645@10-11T16:33:25",
+  "conn": "08138645",
+  "appSession": "5e737652-ab03-413d-803f-ebcec462b5b9",
+  "claudeSession": "b5ea9d14-f6fc-4731-b4ae-f391f2215387",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/b5ea9d14-f6fc-4731-b4ae-f391f2215387.jsonl",
+  "turnStart": "2026-10-11T16:33:25.535Z",
+  "turnMs": 4014,
+  "tools": 0,
+  "promptUuid": "91a0f4dd-20dd-401a-9be3-1f3e5d59362d",
+  "promptParentUuid": "d18a8d3e-4936-4281-95d6-076ff6ee6cd7",
+  "prompt": "第一句话识别得挺准，我们看看第二句怎么样。",
+  "promptFull": "第一句话识别得挺准，我们看看第二句怎么样。",
+  "pieces": [
+   {
+    "offsetMs": 562,
+    "tool": "session_send",
+    "text": "现在这是第三句。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1132,
+    "k": "start"
+   },
+   {
+    "offsetMs": 147,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6498,
+    "k": "start"
+   },
+   {
+    "offsetMs": 7187,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "1875ca4b@10-11T10:09:20",
+  "conn": "1875ca4b",
+  "appSession": "7e8ae374-563a-42c8-817b-faae622bd400",
+  "claudeSession": "5ba3b9b3-41d2-4d9a-98d6-3378a6befeb7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5ba3b9b3-41d2-4d9a-98d6-3378a6befeb7.jsonl",
+  "turnStart": "2026-10-11T10:09:20.117Z",
+  "turnMs": 10672,
+  "tools": 0,
+  "promptUuid": "46224928-1a10-4893-a45e-04a5ed1f4e83",
+  "promptParentUuid": null,
+  "prompt": "让我们再进行一次语音输入。",
+  "promptFull": "让我们再进行一次语音输入。",
+  "pieces": [
+   {
+    "offsetMs": 6860,
+    "tool": "session_send",
+    "text": "实际上我发现当前这个会话不是持久会话。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4949,
+    "k": "start"
+   },
+   {
+    "offsetMs": -3652,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 2858,
+    "k": "start"
+   },
+   {
+    "offsetMs": 6424,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6912,
+    "k": "start"
+   },
+   {
+    "offsetMs": 8190,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 22363,
+    "k": "start"
+   },
+   {
+    "offsetMs": 27528,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 27856,
+    "k": "start"
+   },
+   {
+    "offsetMs": 30600,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "1875ca4b@10-11T10:11:33",
+  "conn": "1875ca4b",
+  "appSession": "7e8ae374-563a-42c8-817b-faae622bd400",
+  "claudeSession": "5ba3b9b3-41d2-4d9a-98d6-3378a6befeb7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5ba3b9b3-41d2-4d9a-98d6-3378a6befeb7.jsonl",
+  "turnStart": "2026-10-11T10:11:33.620Z",
+  "turnMs": 81733,
+  "tools": 1,
+  "promptUuid": "0fc89b4b-063f-40cf-9ad2-c0d4bfbd21c5",
+  "promptParentUuid": "8dd9cf6c-713f-47c3-8aee-c10eda2606cd",
+  "prompt": "能查一下我们当前这个会话中已经做了多少次 VAD，效果如何？",
+  "promptFull": "能查一下我们当前这个会话中已经做了多少次 VAD，效果如何？",
+  "pieces": [
+   {
+    "offsetMs": 47922,
+    "tool": "session_send",
+    "text": "现在我在界面上看到了“waiting for approval”，还有一个对话框让我选择会话指代，但是我现在点不了这个对话框。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3933,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 34765,
+    "k": "start"
+   },
+   {
+    "offsetMs": 39055,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 39273,
+    "k": "start"
+   },
+   {
+    "offsetMs": 44146,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 44161,
+    "k": "start"
+   },
+   {
+    "offsetMs": 47291,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "402fad85@10-15T02:58:40",
+  "conn": "402fad85",
+  "appSession": "0dba32bb-f237-4fff-be72-66d069e8a0f0",
+  "claudeSession": "794003ad-70d6-45bf-9ac1-504c368a04a5",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay-fleet/794003ad-70d6-45bf-9ac1-504c368a04a5.jsonl",
+  "turnStart": "2026-10-15T02:58:40.097Z",
+  "turnMs": 35413,
+  "tools": 4,
+  "promptUuid": "f0d45bf3-352b-4d75-80e5-0423e1547ece",
+  "promptParentUuid": "0b97bf6c-bdeb-4f53-b058-d9ec66bfc0f1",
+  "prompt": "对，就是 crey。",
+  "promptFull": "对，就是 crey。",
+  "pieces": [
+   {
+    "offsetMs": 35401,
+    "tool": "session_interrupt",
+    "text": "终止现在的操作。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 33077,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34715,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 44763,
+    "k": "start"
+   },
+   {
+    "offsetMs": 45554,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 45801,
+    "k": "start"
+   },
+   {
+    "offsetMs": 48277,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 48439,
+    "k": "start"
+   },
+   {
+    "offsetMs": 49557,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "45c8ee08@10-13T05:01:48",
+  "conn": "45c8ee08",
+  "appSession": "74ba573d-fe71-404f-88ef-8d5ab12d5bdc",
+  "claudeSession": "804aaf30-8d31-4523-9207-fae755efa08a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/804aaf30-8d31-4523-9207-fae755efa08a.jsonl",
+  "turnStart": "2026-10-13T05:01:48.462Z",
+  "turnMs": 4609,
+  "tools": 0,
+  "promptUuid": "d2f38296-68f3-481e-8bd8-dcb511678527",
+  "promptParentUuid": "a2c213f0-1b64-451a-ae16-06faf495c192",
+  "prompt": "插话到现在为止还是不太符合预期。你在前台。",
+  "promptFull": "插话到现在为止还是不太符合预期。你在前台。",
+  "pieces": [
+   {
+    "offsetMs": 2461,
+    "tool": "session_send",
+    "text": "我看你能不能正确地退出前面的动作，并尽早地回复我。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 456,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 461,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1817,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 18500,
+    "k": "start"
+   },
+   {
+    "offsetMs": 19465,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 28852,
+    "k": "start"
+   },
+   {
+    "offsetMs": 31468,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 31829,
+    "k": "start"
+   },
+   {
+    "offsetMs": 33262,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "45c8ee08@10-13T05:02:24",
+  "conn": "45c8ee08",
+  "appSession": "74ba573d-fe71-404f-88ef-8d5ab12d5bdc",
+  "claudeSession": "804aaf30-8d31-4523-9207-fae755efa08a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/804aaf30-8d31-4523-9207-fae755efa08a.jsonl",
+  "turnStart": "2026-10-13T05:02:24.662Z",
+  "turnMs": 11743,
+  "tools": 1,
+  "promptUuid": "d667c17a-3e2e-4282-848e-9cfa430a95be",
+  "promptParentUuid": "194a3cc2-00dc-45b2-b030-027724424fe0",
+  "prompt": "你要 sleep 十秒。",
+  "promptFull": "你要 sleep 十秒。",
+  "pieces": [
+   {
+    "offsetMs": 11730,
+    "tool": "session_interrupt",
+    "text": "现在给我后面的话，你要尽快退出前面的操作。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4732,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4371,
+    "k": "start"
+   },
+   {
+    "offsetMs": -2938,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 5674,
+    "k": "start"
+   },
+   {
+    "offsetMs": 10942,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21907,
+    "k": "start"
+   },
+   {
+    "offsetMs": 23708,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 23915,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25704,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 39147,
+    "k": "start"
+   },
+   {
+    "offsetMs": 40744,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 41370,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "48520328@10-14T13:45:17",
+  "conn": "48520328",
+  "appSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "claudeSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay/516a48e1-fd62-4880-94cf-b83bd978e0e7.jsonl",
+  "turnStart": "2026-10-14T13:45:17.421Z",
+  "turnMs": 724878,
+  "tools": 41,
+  "promptUuid": "14f0a37b-8b6a-43be-ae3b-66c34f013f5a",
+  "promptParentUuid": "b8525f41-7256-44f1-91ba-3d9d0e783d9b",
+  "prompt": "检查最近的自动的架构检查是否有进展。",
+  "promptFull": "检查最近的自动的架构检查是否有进展。",
+  "pieces": [
+   {
+    "offsetMs": 227705,
+    "tool": "session_send",
+    "text": "检查最近的自动的架构检查是否有进展。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 219953,
+    "k": "start"
+   },
+   {
+    "offsetMs": 226247,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "52cef4e0@10-14T13:45:17",
+  "conn": "52cef4e0",
+  "appSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "claudeSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay/516a48e1-fd62-4880-94cf-b83bd978e0e7.jsonl",
+  "turnStart": "2026-10-14T13:45:17.421Z",
+  "turnMs": 724878,
+  "tools": 41,
+  "promptUuid": "14f0a37b-8b6a-43be-ae3b-66c34f013f5a",
+  "promptParentUuid": "b8525f41-7256-44f1-91ba-3d9d0e783d9b",
+  "prompt": "检查最近的自动的架构检查是否有进展。",
+  "promptFull": "检查最近的自动的架构检查是否有进展。",
+  "pieces": [
+   {
+    "offsetMs": 69410,
+    "tool": "session_send",
+    "text": "检查最近的自动的架构检查是否有进展。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 63966,
+    "k": "start"
+   },
+   {
+    "offsetMs": 68950,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "57279cc1@10-11T15:38:09",
+  "conn": "57279cc1",
+  "appSession": "79d7515b-24b8-409c-b434-f4669105373b",
+  "claudeSession": "c5b83422-48b1-4160-bdad-5eb84099e54a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c5b83422-48b1-4160-bdad-5eb84099e54a.jsonl",
+  "turnStart": "2026-10-11T15:38:09.651Z",
+  "turnMs": 9493,
+  "tools": 2,
+  "promptUuid": "0b4b3de2-0bb5-4e99-b95a-c5a24eab422f",
+  "promptParentUuid": null,
+  "prompt": "来，我们再试一下 live voice mode。",
+  "promptFull": "来，我们再试一下 live voice mode。",
+  "pieces": [
+   {
+    "offsetMs": 3300,
+    "tool": "session_send",
+    "text": "哦，好像这次出错了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4833,
+    "k": "start"
+   },
+   {
+    "offsetMs": -3657,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 63,
+    "k": "start"
+   },
+   {
+    "offsetMs": 736,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 899,
+    "k": "start"
+   },
+   {
+    "offsetMs": 2846,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 37404,
+    "k": "start"
+   },
+   {
+    "offsetMs": 39024,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "57279cc1@10-11T15:41:30",
+  "conn": "57279cc1",
+  "appSession": "79d7515b-24b8-409c-b434-f4669105373b",
+  "claudeSession": "c5b83422-48b1-4160-bdad-5eb84099e54a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c5b83422-48b1-4160-bdad-5eb84099e54a.jsonl",
+  "turnStart": "2026-10-11T15:41:30.521Z",
+  "turnMs": 2670,
+  "tools": 0,
+  "promptUuid": "0a38f1c6-1b85-4119-bbc1-1b6761b77e23",
+  "promptParentUuid": "7cb7c19e-f4e3-4249-8042-9394f2bae3fc",
+  "prompt": "然后当你在处理我的一个消息的时候，如果继续说……",
+  "promptFull": "然后当你在处理我的一个消息的时候，如果继续说……",
+  "pieces": [
+   {
+    "offsetMs": 884,
+    "tool": "session_send",
+    "text": "我会发现新输入的、还没有被处理的这个泡泡，居然会排到正在处理的那个泡泡上面去，这也要查一下。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3264,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -2775,
+    "k": "start"
+   },
+   {
+    "offsetMs": 308,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 1286,
+    "k": "start"
+   },
+   {
+    "offsetMs": 3236,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "59e6a9b6@10-14T13:45:17",
+  "conn": "59e6a9b6",
+  "appSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "claudeSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay/516a48e1-fd62-4880-94cf-b83bd978e0e7.jsonl",
+  "turnStart": "2026-10-14T13:45:17.421Z",
+  "turnMs": 724878,
+  "tools": 41,
+  "promptUuid": "14f0a37b-8b6a-43be-ae3b-66c34f013f5a",
+  "promptParentUuid": "b8525f41-7256-44f1-91ba-3d9d0e783d9b",
+  "prompt": "检查最近的自动的架构检查是否有进展。",
+  "promptFull": "检查最近的自动的架构检查是否有进展。",
+  "pieces": [
+   {
+    "offsetMs": 193567,
+    "tool": "session_send",
+    "text": "检查最近的自动架构检查是否有进展。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 188126,
+    "k": "start"
+   },
+   {
+    "offsetMs": 193165,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "64b34ff3@10-12T16:21:13",
+  "conn": "64b34ff3",
+  "appSession": "64c08ec0-f11a-4573-9c9c-d2e0f34be7f8",
+  "claudeSession": "1b3753fd-ae73-4078-a0fe-425031927501",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1b3753fd-ae73-4078-a0fe-425031927501.jsonl",
+  "turnStart": "2026-10-12T16:21:13.512Z",
+  "turnMs": 14268,
+  "tools": 1,
+  "promptUuid": "7a1d1d86-1e95-4814-9cd6-e121248aefaf",
+  "promptParentUuid": null,
+  "prompt": "这是十月十三日第二次 live voice 语音测试。",
+  "promptFull": "这是十月十三日第二次 live voice 语音测试。",
+  "pieces": [
+   {
+    "offsetMs": 8160,
+    "tool": "session_send",
+    "text": "第一句话识别得挺准的，现在是第二句话。"
+   }
+  ],
+  "speech": []
+ },
+ {
+  "id": "71c6340d@10-15T02:58:40",
+  "conn": "71c6340d",
+  "appSession": "0dba32bb-f237-4fff-be72-66d069e8a0f0",
+  "claudeSession": "794003ad-70d6-45bf-9ac1-504c368a04a5",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay-fleet/794003ad-70d6-45bf-9ac1-504c368a04a5.jsonl",
+  "turnStart": "2026-10-15T02:58:40.097Z",
+  "turnMs": 35413,
+  "tools": 4,
+  "promptUuid": "f0d45bf3-352b-4d75-80e5-0423e1547ece",
+  "promptParentUuid": "0b97bf6c-bdeb-4f53-b058-d9ec66bfc0f1",
+  "prompt": "对，就是 crey。",
+  "promptFull": "对，就是 crey。",
+  "pieces": [
+   {
+    "offsetMs": 12508,
+    "tool": "session_send",
+    "text": "quay。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2906,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1423,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10378,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12074,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 17270,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "71e53da5@10-14T16:36:48",
+  "conn": "71e53da5",
+  "appSession": "32b37bd0-66bb-47a7-82ac-a700ce674636",
+  "claudeSession": "1bd98c83-d066-4f4c-8aaf-77617e1ee785",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1bd98c83-d066-4f4c-8aaf-77617e1ee785.jsonl",
+  "turnStart": "2026-10-14T16:36:48.583Z",
+  "turnMs": 11085,
+  "tools": 1,
+  "promptUuid": "b6a3ce85-2842-4a8f-8375-71dace84095f",
+  "promptParentUuid": null,
+  "prompt": "十月十五日，Live Voice 第二次测试。",
+  "promptFull": "十月十五日，Live Voice 第二次测试。",
+  "pieces": [
+   {
+    "offsetMs": 8416,
+    "tool": "session_send",
+    "text": "这次好像延迟少了一点点。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2422,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 4553,
+    "k": "start"
+   },
+   {
+    "offsetMs": 7919,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 16913,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22140,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 33331,
+    "k": "start"
+   },
+   {
+    "offsetMs": 36657,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "73f2622b@10-14T16:09:19",
+  "conn": "73f2622b",
+  "appSession": "5841cfa4-f07f-4cdb-8233-1387a003367d",
+  "claudeSession": "aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3.jsonl",
+  "turnStart": "2026-10-14T16:09:19.859Z",
+  "turnMs": 11210,
+  "tools": 0,
+  "promptUuid": "079dc1f5-9d03-40c4-90ac-6ff5b9ed4554",
+  "promptParentUuid": null,
+  "prompt": "这是十月十五日第一次 live voice 测试。",
+  "promptFull": "这是十月十五日第一次 live voice 测试。",
+  "pieces": [
+   {
+    "offsetMs": 3594,
+    "tool": "session_send",
+    "text": "这是十月十五日第一次 live voice 测试。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2306,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -606,
+    "k": "start"
+   },
+   {
+    "offsetMs": 3126,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11563,
+    "k": "start"
+   },
+   {
+    "offsetMs": 16198,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21992,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28026,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29061,
+    "k": "start"
+   },
+   {
+    "offsetMs": 31899,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "73f2622b@10-14T16:09:50",
+  "conn": "73f2622b",
+  "appSession": "5841cfa4-f07f-4cdb-8233-1387a003367d",
+  "claudeSession": "aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3.jsonl",
+  "turnStart": "2026-10-14T16:09:50.403Z",
+  "turnMs": 11081,
+  "tools": 0,
+  "promptUuid": "58b7f4ae-729b-44e8-8104-b9c64b932ecb",
+  "promptParentUuid": "7a9018b5-821c-41c3-8691-c0f4c0b6d373",
+  "prompt": "当然，这主要的原因是由于前面的 connection 时间比较长。",
+  "promptFull": "当然，这主要的原因是由于前面的 connection 时间比较长。",
+  "pieces": [
+   {
+    "offsetMs": 1758,
+    "tool": "session_send",
+    "text": "那是一个小问题。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2518,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -1483,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1355,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20849,
+    "k": "start"
+   },
+   {
+    "offsetMs": 36955,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 37534,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "73f2622b@10-14T16:11:49",
+  "conn": "73f2622b",
+  "appSession": "5841cfa4-f07f-4cdb-8233-1387a003367d",
+  "claudeSession": "aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/aeda35e9-4a4a-41c1-b65c-b4f991c1c7c3.jsonl",
+  "turnStart": "2026-10-14T16:11:49.591Z",
+  "turnMs": 11361,
+  "tools": 0,
+  "promptUuid": "88320b10-74d1-4a35-97f0-df434cedd417",
+  "promptParentUuid": "54398955-f7c5-4aaf-8651-849169b971b8",
+  "prompt": "所以刚才前台操作这几个字说完以后，我们等了比较长时间才看见它真的开始执行那个 echo。",
+  "promptFull": "所以刚才前台操作这几个字说完以后，我们等了比较长时间才看见它真的开始执行那个 echo。",
+  "pieces": [
+   {
+    "offsetMs": 3448,
+    "tool": "session_send",
+    "text": "啊，这是主要的问题。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1619,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 400,
+    "k": "start"
+   },
+   {
+    "offsetMs": 2913,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 25772,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28052,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 28530,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38464,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "86559798@10-14T17:01:13",
+  "conn": "86559798",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:01:13.816Z",
+  "turnMs": 15279,
+  "tools": 0,
+  "promptUuid": "240dcdc6-9969-4fe8-9b39-8ff85efcb1a3",
+  "promptParentUuid": null,
+  "prompt": "10月15日 live voice 第三次录制。",
+  "promptFull": "10月15日 live voice 第三次录制。",
+  "pieces": [
+   {
+    "offsetMs": 13006,
+    "tool": "session_send",
+    "text": "现在我们看看这次会不会再出现刚才那几个问题。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3461,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -3277,
+    "k": "start"
+   },
+   {
+    "offsetMs": -2265,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 7898,
+    "k": "start"
+   },
+   {
+    "offsetMs": 10908,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11076,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12494,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20166,
+    "k": "start"
+   },
+   {
+    "offsetMs": 24735,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 31337,
+    "k": "start"
+   },
+   {
+    "offsetMs": 33034,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "86559798@10-14T17:01:29",
+  "conn": "86559798",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:01:29.338Z",
+  "turnMs": 15975,
+  "tools": 0,
+  "promptUuid": "76e0aada-2016-4b13-9ed5-ab3a05c40df4",
+  "promptParentUuid": "aabb760a-699e-44df-91e8-a277ac83dbdd",
+  "prompt": "现在我们看看这次会不会再出现刚才那几个问题。",
+  "promptFull": "现在我们看看这次会不会再出现刚才那几个问题。",
+  "pieces": [
+   {
+    "offsetMs": 9658,
+    "tool": "session_send",
+    "text": "尝试执行一个耗时比较长的前台的 bash 操作。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4614,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4446,
+    "k": "start"
+   },
+   {
+    "offsetMs": -3028,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 4644,
+    "k": "start"
+   },
+   {
+    "offsetMs": 9213,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 15815,
+    "k": "start"
+   },
+   {
+    "offsetMs": 17512,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 45480,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "86559798@10-14T17:01:45",
+  "conn": "86559798",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:01:45.527Z",
+  "turnMs": 11510,
+  "tools": 0,
+  "promptUuid": "0510ebfa-8fb9-40e4-b171-a3d7425d09da",
+  "promptParentUuid": "712deb96-afb6-40eb-b74d-cb0e2cc145d6",
+  "prompt": "尝试执行一个耗时比较长的前台的 bash 操作。",
+  "promptFull": "尝试执行一个耗时比较长的前台的 bash 操作。",
+  "pieces": [
+   {
+    "offsetMs": 1919,
+    "tool": "session_send",
+    "text": "大概三十秒到一分钟。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -374,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1323,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29291,
+    "k": "start"
+   },
+   {
+    "offsetMs": 30019,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 38863,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "86559798@10-14T17:01:57",
+  "conn": "86559798",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:01:57.234Z",
+  "turnMs": 19019,
+  "tools": 2,
+  "promptUuid": "88933724-2b6d-4061-81b2-62871440857f",
+  "promptParentUuid": "c058873a-40a4-459e-b35c-86399009f746",
+  "prompt": "大概三十秒到一分钟。",
+  "promptFull": "大概三十秒到一分钟。",
+  "pieces": [
+   {
+    "offsetMs": 19006,
+    "tool": "session_interrupt",
+    "text": "停下它。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 17584,
+    "k": "start"
+   },
+   {
+    "offsetMs": 18312,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 27156,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32169,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 43450,
+    "k": "start"
+   },
+   {
+    "offsetMs": 45275,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 45361,
+    "k": "start"
+   },
+   {
+    "offsetMs": 46884,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "86559798@10-14T17:02:30",
+  "conn": "86559798",
+  "appSession": "7a7adf61-a14c-46a2-aad3-309722ef1a4c",
+  "claudeSession": "ead9f2a3-7220-452a-b5dd-e01bab4f6b3a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/ead9f2a3-7220-452a-b5dd-e01bab4f6b3a.jsonl",
+  "turnStart": "2026-10-14T17:02:30.977Z",
+  "turnMs": 36656,
+  "tools": 1,
+  "promptUuid": "d343aab7-a5fb-4edd-8141-f558513a9ba0",
+  "promptParentUuid": "84d40cb9-bbcf-488c-a7aa-332329f0169e",
+  "prompt": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n哎，你看刚才停下它这几个字现在还在 Q 里面，还在我屏幕上。",
+  "promptFull": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n哎，你看刚才停下它这几个字现在还在 Q 里面，还在我屏幕上。",
+  "pieces": [
+   {
+    "offsetMs": 13605,
+    "tool": "session_send",
+    "text": "直到上面这段话出现，那个 Q 才退出去。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1574,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 9707,
+    "k": "start"
+   },
+   {
+    "offsetMs": 11532,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11618,
+    "k": "start"
+   },
+   {
+    "offsetMs": 13141,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 62406,
+    "k": "start"
+   },
+   {
+    "offsetMs": 64817,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 64987,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:23:07",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:23:07.472Z",
+  "turnMs": 33347,
+  "tools": 13,
+  "promptUuid": "fef63c4f-fbcc-4e52-b153-ec01fc4b0527",
+  "promptParentUuid": null,
+  "prompt": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+  "promptFull": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+  "pieces": [
+   {
+    "offsetMs": 15379,
+    "tool": "session_send",
+    "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3070,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11979,
+    "k": "start"
+   },
+   {
+    "offsetMs": 14832,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 39460,
+    "k": "start"
+   },
+   {
+    "offsetMs": 40956,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 41290,
+    "k": "start"
+   },
+   {
+    "offsetMs": 42221,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 43129,
+    "k": "start"
+   },
+   {
+    "offsetMs": 44864,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 45733,
+    "k": "start"
+   },
+   {
+    "offsetMs": 46331,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 62198,
+    "k": "start"
+   },
+   {
+    "offsetMs": 62468,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:26:05",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:26:05.077Z",
+  "turnMs": 72860,
+  "tools": 11,
+  "promptUuid": "62543348-068d-4ce2-96f9-c5a71efe1666",
+  "promptParentUuid": "46017437-0dfe-4e86-935c-c8b8238b24ba",
+  "prompt": "当然，这轮到现在没丢东西，这是好的。去查一下 VAD 的情况吧，看看到现在为止这一轮测试总的语音传了多少，VAD 滤掉了多少，实际发给 Realtime 模型的有多少。",
+  "promptFull": "当然，这轮到现在没丢东西，这是好的。去查一下 VAD 的情况吧，看看到现在为止这一轮测试总的语音传了多少，VAD 滤掉了多少，实际发给 Realtime 模型的有多少。",
+  "pieces": [
+   {
+    "offsetMs": 49724,
+    "tool": "session_send",
+    "text": "总的来说呢，这一轮的可用性是比较高的。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -2643,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 45153,
+    "k": "start"
+   },
+   {
+    "offsetMs": 49169,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 90924,
+    "k": "start"
+   },
+   {
+    "offsetMs": 95629,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 96215,
+    "k": "start"
+   },
+   {
+    "offsetMs": 99065,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 99488,
+    "k": "start"
+   },
+   {
+    "offsetMs": 101546,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 101663,
+    "k": "start"
+   },
+   {
+    "offsetMs": 102281,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:27:18",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:27:18.145Z",
+  "turnMs": 27352,
+  "tools": 1,
+  "promptUuid": "8dbd4eff-820c-41fd-bf64-90807fc37f9d",
+  "promptParentUuid": "d72ed4d8-bb25-4638-9fb4-2d64746c8b1c",
+  "prompt": "总的来说呢，这一轮的可用性是比较高的。",
+  "promptFull": "总的来说呢，这一轮的可用性是比较高的。",
+  "pieces": [
+   {
+    "offsetMs": 23144,
+    "tool": "session_send",
+    "text": "我相信这次测试的场景是比较接近于真实工作的场景的。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 17856,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22561,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 23147,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25997,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 26420,
+    "k": "start"
+   },
+   {
+    "offsetMs": 28478,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 28595,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29213,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:27:45",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:27:45.615Z",
+  "turnMs": 56387,
+  "tools": 1,
+  "promptUuid": "2f5a682b-e995-49c3-83ad-ccb1940dd60b",
+  "promptParentUuid": "c9b879e5-8374-478d-9928-4abc1f2dd553",
+  "prompt": "我相信这次测试的场景是比较接近于真实工作的场景的。",
+  "promptFull": "我相信这次测试的场景是比较接近于真实工作的场景的。",
+  "pieces": [
+   {
+    "offsetMs": 2332,
+    "tool": "session_send",
+    "text": "啊，就是真实的 Claude Code 处理需要时间的，所以人类用户在这儿去等一等是应该的。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4909,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4323,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1473,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -1050,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1008,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 1125,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1743,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 64882,
+    "k": "start"
+   },
+   {
+    "offsetMs": 67127,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 67296,
+    "k": "start"
+   },
+   {
+    "offsetMs": 69346,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 69442,
+    "k": "start"
+   },
+   {
+    "offsetMs": 69996,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "a175e6cd@10-14T18:28:42",
+  "conn": "a175e6cd",
+  "appSession": "76d53305-8178-43cb-9417-988954db5131",
+  "claudeSession": "1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1eab9dbc-ebc4-47c0-ae34-5c99199fcbf3.jsonl",
+  "turnStart": "2026-10-14T18:28:42.135Z",
+  "turnMs": 15679,
+  "tools": 0,
+  "promptUuid": "679b1575-45af-4f6b-9c08-1e7bd55878bd",
+  "promptParentUuid": "5c5b501d-3edc-4123-8834-d5eccf4a95de",
+  "prompt": "啊，就是真实的 Claude Code 处理需要时间的，所以人类用户在这儿去等一等是应该的。",
+  "promptFull": "啊，就是真实的 Claude Code 处理需要时间的，所以人类用户在这儿去等一等是应该的。",
+  "pieces": [
+   {
+    "offsetMs": 13998,
+    "tool": "session_send",
+    "text": "检查一下当前 author 和 develop 分支是不是已经同步。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 8362,
+    "k": "start"
+   },
+   {
+    "offsetMs": 10607,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10776,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12826,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12922,
+    "k": "start"
+   },
+   {
+    "offsetMs": 13476,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af12cbaf@10-14T09:52:31",
+  "conn": "af12cbaf",
+  "appSession": "3af64b17-9900-4cdf-9e3f-51a3be9192c8",
+  "claudeSession": "81379a47-5de2-4202-889b-ec5f15cd967a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/81379a47-5de2-4202-889b-ec5f15cd967a.jsonl",
+  "turnStart": "2026-10-14T09:52:31.509Z",
+  "turnMs": 13142,
+  "tools": 1,
+  "promptUuid": "bb729d92-f861-4087-bf69-d39c80f6c1fc",
+  "promptParentUuid": "985a0d35-2e7c-433c-be4a-6dd5623a68f5",
+  "prompt": "来吧，尝试跑一个差不多要一分钟的前台任务。",
+  "promptFull": "来吧，尝试跑一个差不多要一分钟的前台任务。",
+  "pieces": [
+   {
+    "offsetMs": 13128,
+    "tool": "session_interrupt",
+    "text": "那改一下，把它改成三十秒。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1485,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 11050,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12273,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21852,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22631,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 31964,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32364,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32607,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34300,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af12cbaf@10-14T09:53:19",
+  "conn": "af12cbaf",
+  "appSession": "3af64b17-9900-4cdf-9e3f-51a3be9192c8",
+  "claudeSession": "81379a47-5de2-4202-889b-ec5f15cd967a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/81379a47-5de2-4202-889b-ec5f15cd967a.jsonl",
+  "turnStart": "2026-10-14T09:53:19.444Z",
+  "turnMs": 10537,
+  "tools": 0,
+  "promptUuid": "f408839b-35f3-462c-bfcd-b5b80ae139ea",
+  "promptParentUuid": "e94aae58-9ffe-45b0-8028-55c2c20c1d64",
+  "prompt": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n再改成十秒。哦，改成十秒这句被 kill 了。\n哎，我看不见这句啊。",
+  "promptFull": "[The previous turn was interrupted while it was running the `Bash` tool. Any partial changes that tool had already made may still be present. Everything after this note is your current instruction and takes precedence over any conflicting thing said earlier.]\n\n再改成十秒。哦，改成十秒这句被 kill 了。\n哎，我看不见这句啊。",
+  "pieces": [
+   {
+    "offsetMs": 8563,
+    "tool": "session_send",
+    "text": "哦，它就是慢。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4550,
+    "k": "start"
+   },
+   {
+    "offsetMs": -2950,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -1941,
+    "k": "start"
+   },
+   {
+    "offsetMs": -540,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 7379,
+    "k": "start"
+   },
+   {
+    "offsetMs": 7942,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 25990,
+    "k": "start"
+   },
+   {
+    "offsetMs": 26775,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 26922,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29968,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29974,
+    "k": "start"
+   },
+   {
+    "offsetMs": 31440,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32287,
+    "k": "start"
+   },
+   {
+    "offsetMs": 35572,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af12cbaf@10-14T09:53:54",
+  "conn": "af12cbaf",
+  "appSession": "3af64b17-9900-4cdf-9e3f-51a3be9192c8",
+  "claudeSession": "81379a47-5de2-4202-889b-ec5f15cd967a",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/81379a47-5de2-4202-889b-ec5f15cd967a.jsonl",
+  "turnStart": "2026-10-14T09:53:54.482Z",
+  "turnMs": 10519,
+  "tools": 0,
+  "promptUuid": "0225efd6-e599-4215-8d4c-d9d39c0264d0",
+  "promptParentUuid": "31809f40-07cc-49f8-9ffe-d090c09f9479",
+  "prompt": "你看啊，它就是慢这句我没看见，它在第一步的 queue 里面等。",
+  "promptFull": "你看啊，它就是慢这句我没看见，它在第一步的 queue 里面等。",
+  "pieces": [
+   {
+    "offsetMs": 1069,
+    "tool": "session_send",
+    "text": "但是它的确是等了几秒钟才出现在屏幕上。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3598,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -2751,
+    "k": "start"
+   },
+   {
+    "offsetMs": 534,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 18844,
+    "k": "start"
+   },
+   {
+    "offsetMs": 24038,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24501,
+    "k": "start"
+   },
+   {
+    "offsetMs": 25800,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 26137,
+    "k": "start"
+   },
+   {
+    "offsetMs": 27478,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 28366,
+    "k": "start"
+   },
+   {
+    "offsetMs": 30504,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 30673,
+    "k": "start"
+   },
+   {
+    "offsetMs": 33484,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 33746,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34538,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af5559c0@10-13T01:46:18",
+  "conn": "af5559c0",
+  "appSession": "aec453a1-3347-4f04-971e-c086fb4a8352",
+  "claudeSession": "d5682dea-e89d-4d14-8a3c-2559e17d6ba2",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/d5682dea-e89d-4d14-8a3c-2559e17d6ba2.jsonl",
+  "turnStart": "2026-10-13T01:46:18.895Z",
+  "turnMs": 22384,
+  "tools": 1,
+  "promptUuid": "db5333f4-1eca-4a3a-b596-631f379f5097",
+  "promptParentUuid": "197eb471-8a91-48ab-a033-0b97deb6c77f",
+  "prompt": "是的，就是你列出的第一组。",
+  "promptFull": "是的，就是你列出的第一组。",
+  "pieces": [
+   {
+    "offsetMs": 16011,
+    "tool": "session_send",
+    "text": "实际上在我的屏幕上，你的第一组后面那句话“哎，上面这句是不是很快？”一直被作为一个气泡被保留着。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3006,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 6817,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12747,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12904,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15386,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "af5559c0@10-13T01:48:20",
+  "conn": "af5559c0",
+  "appSession": "aec453a1-3347-4f04-971e-c086fb4a8352",
+  "claudeSession": "d5682dea-e89d-4d14-8a3c-2559e17d6ba2",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/d5682dea-e89d-4d14-8a3c-2559e17d6ba2.jsonl",
+  "turnStart": "2026-10-13T01:48:20.385Z",
+  "turnMs": 48584,
+  "tools": 9,
+  "promptUuid": "910e9040-f579-463e-b8c7-10f2d4b4cab5",
+  "promptParentUuid": "91cff032-bfff-4150-9939-d06b9bb5b7c4",
+  "prompt": "现在在我的屏幕上，底部又多出了一个“waiting in the queue”这么一个不管叫泡泡或者说 label。",
+  "promptFull": "现在在我的屏幕上，底部又多出了一个“waiting in the queue”这么一个不管叫泡泡或者说 label。",
+  "pieces": [
+   {
+    "offsetMs": 27900,
+    "tool": "session_send",
+    "text": "我刚说这玩意消失了，但是又又多出了两个泡泡，以两个无法消失的气泡。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -4877,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -4758,
+    "k": "start"
+   },
+   {
+    "offsetMs": -3155,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21021,
+    "k": "start"
+   },
+   {
+    "offsetMs": 27252,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 78307,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "b26f3158@10-14T13:45:17",
+  "conn": "b26f3158",
+  "appSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "claudeSession": "516a48e1-fd62-4880-94cf-b83bd978e0e7",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-quay/516a48e1-fd62-4880-94cf-b83bd978e0e7.jsonl",
+  "turnStart": "2026-10-14T13:45:17.421Z",
+  "turnMs": 724878,
+  "tools": 41,
+  "promptUuid": "14f0a37b-8b6a-43be-ae3b-66c34f013f5a",
+  "promptParentUuid": "b8525f41-7256-44f1-91ba-3d9d0e783d9b",
+  "prompt": "检查最近的自动的架构检查是否有进展。",
+  "promptFull": "检查最近的自动的架构检查是否有进展。",
+  "pieces": [
+   {
+    "offsetMs": 38445,
+    "tool": "session_send",
+    "text": "检查最近的自动架构检查是否有进展。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": 33006,
+    "k": "start"
+   },
+   {
+    "offsetMs": 37987,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "b3aff806@10-10T18:38:09",
+  "conn": "b3aff806",
+  "appSession": "d88c6722-5da6-446a-8ba1-c7f86f434446",
+  "claudeSession": "8d372a06-96a4-424a-b426-5a816f8faa62",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/8d372a06-96a4-424a-b426-5a816f8faa62.jsonl",
+  "turnStart": "2026-10-10T18:38:09.138Z",
+  "turnMs": 46593,
+  "tools": 2,
+  "promptUuid": "24a92ffa-0b07-4da8-aa66-cc7612a5034e",
+  "promptParentUuid": "ba15a61b-f8e7-45c7-9134-da925a54384e",
+  "prompt": "我说完之后就没反应了。",
+  "promptFull": "我说完之后就没反应了。",
+  "pieces": [
+   {
+    "offsetMs": 21912,
+    "tool": "session_send",
+    "text": "（用户没有说话）"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3082,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "b5d01c21@10-13T15:57:54",
+  "conn": "b5d01c21",
+  "appSession": "eb37774b-e5d9-4c29-a1ba-bbe43e036bc2",
+  "claudeSession": "5b928357-0337-4a9e-a620-1d6bf2f8a58e",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/5b928357-0337-4a9e-a620-1d6bf2f8a58e.jsonl",
+  "turnStart": "2026-10-13T15:57:54.432Z",
+  "turnMs": 12868,
+  "tools": 1,
+  "promptUuid": "c41cfca4-e9a8-4cd3-9f1b-0e9644886b5a",
+  "promptParentUuid": "53d6aff7-cd16-4d7b-bf9b-2c59732097c9",
+  "prompt": "让他听到前面这句话，先处理我现在说的这句话。",
+  "promptFull": "让他听到前面这句话，先处理我现在说的这句话。",
+  "pieces": [
+   {
+    "offsetMs": 12424,
+    "tool": "session_interrupt",
+    "text": "停止前面的操作，处理我现在说的这句话。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3206,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 8263,
+    "k": "start"
+   },
+   {
+    "offsetMs": 10439,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 10984,
+    "k": "start"
+   },
+   {
+    "offsetMs": 11964,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24361,
+    "k": "start"
+   },
+   {
+    "offsetMs": 29030,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 29037,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32768,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 33507,
+    "k": "start"
+   },
+   {
+    "offsetMs": 41171,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 41758,
+    "k": "start"
+   },
+   {
+    "offsetMs": 41765,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "d4c9bfc4@10-14T01:36:08",
+  "conn": "d4c9bfc4",
+  "appSession": "854bb889-b487-4414-9a43-17e323824f40",
+  "claudeSession": "c50df3c5-b14e-4dec-ae08-7c93777b6e74",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/c50df3c5-b14e-4dec-ae08-7c93777b6e74.jsonl",
+  "turnStart": "2026-10-14T01:36:08.222Z",
+  "turnMs": 22901,
+  "tools": 3,
+  "promptUuid": "a70de9b4-ee83-4945-b05e-40d2451d5137",
+  "promptParentUuid": "a46c089c-f82f-4d49-8761-4aaf6fbff1f5",
+  "prompt": "诶，你居然猜到了我的想法。来吧，处理这句话。",
+  "promptFull": "诶，你居然猜到了我的想法。来吧，处理这句话。",
+  "pieces": [
+   {
+    "offsetMs": 22889,
+    "tool": "session_interrupt",
+    "text": "然后再次插话，赶快处理。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3899,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1819,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19863,
+    "k": "start"
+   },
+   {
+    "offsetMs": 21051,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21402,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22108,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32381,
+    "k": "start"
+   },
+   {
+    "offsetMs": 34731,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 34899,
+    "k": "start"
+   },
+   {
+    "offsetMs": 36982,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 37491,
+    "k": "start"
+   },
+   {
+    "offsetMs": 38972,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 39396,
+    "k": "start"
+   },
+   {
+    "offsetMs": 41705,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "e22ac831@10-12T16:02:08",
+  "conn": "e22ac831",
+  "appSession": "0a3c1b2f-5ace-4c61-a3a3-19c37f741056",
+  "claudeSession": "f6b76252-b994-479a-8b67-2f2d4edaaa4f",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/f6b76252-b994-479a-8b67-2f2d4edaaa4f.jsonl",
+  "turnStart": "2026-10-12T16:02:08.525Z",
+  "turnMs": 57276,
+  "tools": 5,
+  "promptUuid": "1c8bf371-bb7b-4cf1-94bd-f7261fa0afcb",
+  "promptParentUuid": "74854376-774b-43f9-ace8-7bff31808d76",
+  "prompt": "但是第二段话的 transcript 我到现在还没有看见。",
+  "promptFull": "但是第二段话的 transcript 我到现在还没有看见。",
+  "pieces": [
+   {
+    "offsetMs": 6117,
+    "tool": "session_send",
+    "text": "看上去第二段话丢了。"
+   }
+  ],
+  "speech": []
+ },
+ {
+  "id": "e650117b@10-14T03:40:58",
+  "conn": "e650117b",
+  "appSession": "2a84a13f-6b6d-48c9-a6e6-db4ad4e49be1",
+  "claudeSession": "1ccae377-55e1-416f-b2e4-3af85a784738",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1ccae377-55e1-416f-b2e4-3af85a784738.jsonl",
+  "turnStart": "2026-10-14T03:40:58.227Z",
+  "turnMs": 7857,
+  "tools": 1,
+  "promptUuid": "3e21ac94-8311-4e22-93e7-3e07e05a2dcf",
+  "promptParentUuid": "3a506964-4170-4265-b1de-9df28c901442",
+  "prompt": "来吧，尝试在前台做一个稍稍耗时大概60到120秒的操作。",
+  "promptFull": "来吧，尝试在前台做一个稍稍耗时大概60到120秒的操作。",
+  "pieces": [
+   {
+    "offsetMs": 7845,
+    "tool": "session_interrupt",
+    "text": ""
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3935,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -3583,
+    "k": "start"
+   },
+   {
+    "offsetMs": -1534,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 5021,
+    "k": "start"
+   },
+   {
+    "offsetMs": 7188,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 20164,
+    "k": "start"
+   },
+   {
+    "offsetMs": 24001,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 24413,
+    "k": "start"
+   },
+   {
+    "offsetMs": 26813,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 27072,
+    "k": "start"
+   },
+   {
+    "offsetMs": 27774,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "e650117b@10-14T03:42:22",
+  "conn": "e650117b",
+  "appSession": "2a84a13f-6b6d-48c9-a6e6-db4ad4e49be1",
+  "claudeSession": "1ccae377-55e1-416f-b2e4-3af85a784738",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1ccae377-55e1-416f-b2e4-3af85a784738.jsonl",
+  "turnStart": "2026-10-14T03:42:22.713Z",
+  "turnMs": 13870,
+  "tools": 2,
+  "promptUuid": "b5b79269-24c8-410d-8153-1b9667c5d232",
+  "promptParentUuid": "57b762d3-9b01-4bc9-b54e-138da4a5e281",
+  "prompt": "那后面那个方括号也很奇怪呀，对不对？如果说它都也知道自己打断了你，它为什么不在方括号，在那个打断之后直接发这段方括号的内容？",
+  "promptFull": "那后面那个方括号也很奇怪呀，对不对？如果说它都也知道自己打断了你，它为什么不在方括号，在那个打断之后直接发这段方括号的内容？",
+  "pieces": [
+   {
+    "offsetMs": 1869,
+    "tool": "session_send",
+    "text": "还要等到再发下一句话的时候才发这个方括号，好奇怪。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3479,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -2772,
+    "k": "start"
+   },
+   {
+    "offsetMs": 408,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 589,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1087,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 12070,
+    "k": "start"
+   },
+   {
+    "offsetMs": 12895,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 13150,
+    "k": "start"
+   },
+   {
+    "offsetMs": 14392,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 14470,
+    "k": "start"
+   },
+   {
+    "offsetMs": 15571,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 16543,
+    "k": "start"
+   },
+   {
+    "offsetMs": 17919,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 33615,
+    "k": "start"
+   },
+   {
+    "offsetMs": 35458,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 35510,
+    "k": "start"
+   },
+   {
+    "offsetMs": 36410,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 36479,
+    "k": "start"
+   },
+   {
+    "offsetMs": 36886,
+    "k": "stop"
+   }
+  ]
+ },
+ {
+  "id": "e650117b@10-14T03:42:36",
+  "conn": "e650117b",
+  "appSession": "2a84a13f-6b6d-48c9-a6e6-db4ad4e49be1",
+  "claudeSession": "1ccae377-55e1-416f-b2e4-3af85a784738",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/1ccae377-55e1-416f-b2e4-3af85a784738.jsonl",
+  "turnStart": "2026-10-14T03:42:36.601Z",
+  "turnMs": 3990,
+  "tools": 0,
+  "promptUuid": "398cabfe-d1f6-411b-9e5a-cb30cb6a6979",
+  "promptParentUuid": "698ff45e-7448-4b64-98c7-616ed3e8aca3",
+  "prompt": "还要等到再发下一句话的时候才发这个方括号，好奇怪。",
+  "promptFull": "还要等到再发下一句话的时候才发这个方括号，好奇怪。",
+  "pieces": [
+   {
+    "offsetMs": 2227,
+    "tool": "session_send",
+    "text": "你看现在在屏幕底部那个 Q 又出现了。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -1818,
+    "k": "start"
+   },
+   {
+    "offsetMs": -993,
+    "k": "stop"
+   },
+   {
+    "offsetMs": -738,
+    "k": "start"
+   },
+   {
+    "offsetMs": 504,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 582,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1683,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 2655,
+    "k": "start"
+   },
+   {
+    "offsetMs": 4031,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 19727,
+    "k": "start"
+   },
+   {
+    "offsetMs": 21570,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 21622,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22522,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 22591,
+    "k": "start"
+   },
+   {
+    "offsetMs": 22998,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 30542,
+    "k": "start"
+   },
+   {
+    "offsetMs": 32443,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 32517,
+    "k": "start"
+   }
+  ]
+ },
+ {
+  "id": "f6166468@10-11T00:14:50",
+  "conn": "f6166468",
+  "appSession": "d88c6722-5da6-446a-8ba1-c7f86f434446",
+  "claudeSession": "8d372a06-96a4-424a-b426-5a816f8faa62",
+  "jsonlPath": "/data/home/yale/.claude/projects/-data-home-yale-work-claudecodeui/8d372a06-96a4-424a-b426-5a816f8faa62.jsonl",
+  "turnStart": "2026-10-11T00:14:50.096Z",
+  "turnMs": 74090,
+  "tools": 2,
+  "promptUuid": "3edf5876-1feb-4bd6-8843-24f7102bf3fd",
+  "promptParentUuid": "9f26e6ae-4d91-486c-ad5c-3a51a01b0228",
+  "prompt": "我现在就在 Live Voice mode。让我看看这次是不是会好一些。",
+  "promptFull": "我现在就在 Live Voice mode。让我看看这次是不是会好一些。",
+  "pieces": [
+   {
+    "offsetMs": 4604,
+    "tool": "session_send",
+    "text": "啊，稍好一点。"
+   }
+  ],
+  "speech": [
+   {
+    "offsetMs": -3010,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 974,
+    "k": "start"
+   },
+   {
+    "offsetMs": 986,
+    "k": "stop"
+   },
+   {
+    "offsetMs": 1236,
+    "k": "start"
+   },
+   {
+    "offsetMs": 1924,
+    "k": "stop"
+   }
+  ]
+ }
+]

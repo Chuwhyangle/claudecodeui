@@ -1,0 +1,45 @@
+# 99df08d8@10-12T01:24:07 arm E rep 1 model sonnet hook true wall 159.2s
+   0.0  >> DELIVER prompt: 我们再试一下 live voice mode。
+   0.8  == turn
+   2.6     text: 好，我在听，你接着说。
+   2.6  -- result success
+   6.0  · voice [REMARK] 第一句识别出来了，我们看看第二句。
+   7.0  >> DELIVER idle: 第一句识别出来了，我们看看第二句。
+   7.1  == turn
+   8.5     text: 收到，第二句也到了。你接着测，我这边没有别的动作。
+   8.5  -- result success
+  12.1  · voice [NOISE] 现在第三句。
+  13.1  >> DELIVER idle: 现在第三句。
+  13.1  == turn
+  14.1     text: 第三句也收到了，识别正常。继续说，或者告诉我你想看哪方面的结果。
+  14.1  -- result success
+  18.9  · voice [NOISE] 第四句。
+  19.9  >> DELIVER idle: 第四句。
+  20.0  == turn
+  20.9     text: 第四句收到了。四句都正常识别，没有丢句。
+  21.0  -- result success
+  39.4  · voice [REMARK] 到现在为止识别的还可以。
+  40.4  >> DELIVER idle: 到现在为止识别的还可以。
+  40.5  == turn
+  41.6     text: 好，到目前为止五句都对得上，没有丢句。你想继续压测的话，可以试试打断我说话，或者我在忙的时候连说几句。
+  41.7  -- result success
+  55.2  · voice [REMARK] 只是对于第一句的处理慢一些，但这是正常的。
+  56.2  >> DELIVER idle: 只是对于第一句的处理慢一些，但这是正常的。
+  56.2  == turn
+  57.8     text: 明白，第一句慢多半是首轮冷启动（建连、会话初始化），后面几句就正常了。要不要我之后专门查一下首句的耗时分布，看看慢在哪一段？
+  57.8  -- result success
+  93.3  · voice [REMARK-frag] 现在后面这几句话都在 queue 里面在等。
+  94.3  >> DELIVER idle: 现在后面这几句话都在 queue 里面在等。
+  94.4  == turn
+  96.8     text: 对，这几句在队列里等，是因为我每一轮都要先处理完才轮到下一句。从你这边看，后面几句的识别是好的，但回复被排在前面那轮之后了。  如果你想查，我可以对一下这几句的送达时间和队列等待时长，看看是卡在首轮处理，还是队列本身放行得慢。
+  96.8  -- result success
+  99.5  · voice [REMARK] 或者说队列，在队列里面等。
+ 100.5  >> DELIVER idle: 或者说队列，在队列里面等。
+ 100.5  == turn
+ 101.6     text: 明白，你说的是在队列里等，不是丢了。这几句我都收到了，现在一起处理完了，没有需要再补的。
+ 101.6  -- result success
+ 129.0  · voice [ASK] 所以你能看见 cancel 这样的操作吗？
+ 130.0  >> DELIVER idle: 所以你能看见 cancel 这样的操作吗？
+ 130.1  == turn
+ 132.3     text: 看不见。我这边只收到作为消息送进来的文本，队列里的撤回（cancel）操作发生在 UI 或中继层，不会作为消息或事件传给我。  所以如果你在队列里撤回了某一句，我这边是不知道的：要么那句根本没送达，要么已经送达、我照常处理了。想让我知道撤回，得由中继层把它作为一条显式消息传进来，比如"上一句作废"。
+ 132.4  -- result success

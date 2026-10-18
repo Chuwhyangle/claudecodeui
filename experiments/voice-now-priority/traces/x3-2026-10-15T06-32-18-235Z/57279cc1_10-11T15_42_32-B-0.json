@@ -1,0 +1,131 @@
+{
+ "episode": "57279cc1@10-11T15:42:32",
+ "arm": "B",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "9acb31b33af9fa418c5672be003567d32c968de7",
+ "fork": true,
+ "pieces": [
+  {
+   "offsetMs": 919,
+   "text": "我不知道是不是因为最近在 VAD……",
+   "label": "ADD-frag"
+  },
+  {
+   "offsetMs": 8564,
+   "text": "或者其他的地方加入了更多延迟。",
+   "label": "ADD"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 151643,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "还有呢，就是现在转写输出的延迟好像非常大。",
+   "parts": []
+  },
+  {
+   "t": 768,
+   "ev": "TURN"
+  },
+  {
+   "t": 774,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 831,
+   "ev": "TURN"
+  },
+  {
+   "t": 923,
+   "ev": "PIECE",
+   "label": "ADD-frag",
+   "text": "我不知道是不是因为最近在 VAD……"
+  },
+  {
+   "t": 1924,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "我不知道是不是因为最近在 VAD……",
+   "parts": [
+    "ADD-frag:我不知道是不是因为最近在 VAD……"
+   ]
+  },
+  {
+   "t": 6200,
+   "ev": "TOOL",
+   "name": "Bash",
+   "input": "cd /data/home/yale/.cloudcli/voice-realtime-log; f=$(ls -t | head -1); echo $f; date -u +%T; python3 -I - \"$f\" <<'E'\nimport json,sys\nfrom datetime import dateti",
+   "bg": false
+  },
+  {
+   "t": 8569,
+   "ev": "PIECE",
+   "label": "ADD",
+   "text": "或者其他的地方加入了更多延迟。"
+  },
+  {
+   "t": 14817,
+   "ev": "TEXT",
+   "text": "先说结论：从我能查到的日志看，转写这一步本身不慢，但那份日志不是你现在这次连接的，所以还不能下结论。\n\n- **我量到的数据**：最新一份日志里，从语音提交到转写文字出来只要 0.14 到 0.31 秒。\n- **这份日志的局限**：它是今天 03:52 UTC 的那次连接，已经关了三个多小时。你现在这次的日志我没找到，所以现在的延迟我没量到。\n- **VAD 的影响**：VAD 不在这 0.2 秒里，它在更前面，决定什么时候判定你说完了并提交。我这次只量了提交之后的部分。如果慢的是 VAD 判停，在我量的这一段里是看不出来的。\n\n你的话说到「是不是因为最近在 VAD……」就断了，后面是什么？比如你觉得是 VAD 改动让字幕出来得更慢吗？\n\n另外，你感觉到的延迟是下面哪一种：\n- 说完很久字幕才出来；\n- 字幕出来了，但很久之后才有回应；\n- 整句话说完才出字，中间没有逐字出现。\n\n告诉我是哪种，我再去量对应的那一段。"
+  },
+  {
+   "t": 14837,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 14837,
+   "ev": "DELIVER",
+   "kind": "turn-end",
+   "priority": null,
+   "text": "或者其他的地方加入了更多延迟。",
+   "parts": [
+    "ADD:或者其他的地方加入了更多延迟。"
+   ]
+  },
+  {
+   "t": 14877,
+   "ev": "TURN"
+  },
+  {
+   "t": 21942,
+   "ev": "TOOL",
+   "name": "Agent",
+   "input": "Voice latency breakdown by stage",
+   "bg": true
+  },
+  {
+   "t": 23931,
+   "ev": "TEXT",
+   "text": "我派了一个后台任务，把延迟按阶段拆开量：\n\n- 说完到提交\n- 提交到转写出来\n- 转写到发给会话\n- 合并窗口和 VAD 判停的等待\n\n同时对照最近几天的提交，找有没有哪次改动加了延迟。\n\n等结果期间你可以接着说。出来后我用一两句话告诉你哪一段变慢了。"
+  },
+  {
+   "t": 23957,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 121186,
+   "ev": "TURN"
+  },
+  {
+   "t": 125721,
+   "ev": "TEXT",
+   "text": "量完了，变慢的不是转写，是「会话忙时的等待」。\n\n- **转写本身**：从提交到文字出来稳定在 0.15 到 0.31 秒，没变慢。\n- **说完到提交**：几乎为零。\n- **VAD 判停**：新增了约 0.6 秒的尾音，只是让「说完」晚判 0.6 秒，不算大。\n- **变慢的一段**：从模型决定发送，到消息真正送进会话，这段等待从约 1 秒涨到中位数 9.4 秒、最长 127 秒。原因是会话忙的时候消息会被「忙时保持」挡住，合并成一条等会话空闲才放行。\n\n可疑的提交是 `9ccdc6eb7`（只保留一条合并的待发消息）和 `4f18537b1`（忙时真的保持住）。日志里还反复出现 `Cannot create response after rejected function_call_output`，说明有一些投递被拒后又重试。\n\n这个结论只来自 11:54 那份日志，不是你现在这次连接，而且 127 秒那条只有 3 个样本。\n\n想让我进一步看哪个？是看忙时保持能不能更早放行，还是先查那个被拒的报错。"
+  },
+  {
+   "t": 125745,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

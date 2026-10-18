@@ -1,0 +1,7 @@
+# af12cbaf@10-14T09:52:31 arm C rep 0 model sonnet hook true wall 92.2s
+   0.0  >> DELIVER prompt: 来吧，尝试跑一个差不多要一分钟的前台任务。
+   0.9  == turn
+   4.3     text: 好，按你要求在前台跑一个约 60 秒的任务（每 5 秒一步，共 12 步）。
+   5.0     tool Bash: for i in $(seq 1 12); do sleep 5; echo "step $i/12 done at $(date +%T)"; done
+  66.6     text: 前台任务跑完了：12 步，每步 5 秒，从 14:50:48 到 14:51:43，总共约 60 秒，全程没有报错。  这一分钟里你的新话会排队等到工具边界才进来，这正是这次测试要观察的点。
+  66.6  -- result success

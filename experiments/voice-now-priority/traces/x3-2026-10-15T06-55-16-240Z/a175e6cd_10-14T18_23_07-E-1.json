@@ -1,0 +1,78 @@
+{
+ "episode": "a175e6cd@10-14T18:23:07",
+ "arm": "E",
+ "rep": 1,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "98a4fc6b119d0c980e7a935692cdddc47bd7103e",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 15379,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "label": "DUP"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 43665,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+   "parts": []
+  },
+  {
+   "t": 814,
+   "ev": "TURN"
+  },
+  {
+   "t": 3042,
+   "ev": "TEXT",
+   "text": "收到，十月十五日，Live Voice Mode 第六次测试。我在听，你接着说。"
+  },
+  {
+   "t": 3068,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 15384,
+   "ev": "PIECE",
+   "label": "DUP",
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+  },
+  {
+   "t": 16385,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "parts": [
+    "DUP:很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+   ]
+  },
+  {
+   "t": 16431,
+   "ev": "TURN"
+  },
+  {
+   "t": 16785,
+   "ev": "TEXT",
+   "text": "You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  },
+  {
+   "t": 16788,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 43348,
+   "ev": "ERROR",
+   "e": "Error: Claude Code returned an error result: You've hit your session limit · resets 6:40pm (Asia/Shanghai)"
+  }
+ ]
+}

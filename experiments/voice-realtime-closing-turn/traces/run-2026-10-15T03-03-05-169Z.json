@@ -1,0 +1,491 @@
+{
+  "ranAt": "2026-10-15T03:03:05.170Z",
+  "budgetCny": 0.045,
+  "spendCny": 0.037893,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "W2",
+      "arm": "N1",
+      "rep": 0,
+      "note": "stop at ~51–52 s; \"停下来以后就没有再去调…\" at ~78 s is NOT a stop",
+      "spendCny": 0.021562,
+      "responses": 7,
+      "usage": [
+        [
+          1341,
+          28,
+          38
+        ],
+        [
+          1457,
+          56,
+          52
+        ],
+        [
+          1566,
+          77,
+          30
+        ],
+        [
+          1659,
+          84,
+          28
+        ],
+        [
+          1756,
+          91,
+          27
+        ],
+        [
+          1848,
+          98,
+          5
+        ],
+        [
+          1866,
+          126,
+          34
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 5893,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 5986,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6178,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 6179,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 7439,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 31944,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 33192,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 33374,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33630,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户要求停止当前正在进行的处理任务。"
+        },
+        {
+          "at": 33631,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34860,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 35795,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 35996,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 36135,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "先处理现在的这个请求。"
+        },
+        {
+          "at": 36136,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 37211,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 37361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 37539,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 37654,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "哎，挺好。"
+        },
+        {
+          "at": 37655,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 53487,
+          "kind": "ASR",
+          "text": "Okay."
+        },
+        {
+          "at": 53828,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53946,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "诶。"
+        },
+        {
+          "at": 53946,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 55421,
+          "kind": "ASR",
+          "text": "Six."
+        },
+        {
+          "at": 55421,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 55422,
+          "kind": "TEXT",
+          "text": "No response requested."
+        },
+        {
+          "at": 55423,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 58863,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去调 cloud code 吗？"
+        },
+        {
+          "at": 58950,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 59111,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Cloud Code 吗？"
+        },
+        {
+          "at": 59112,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 59361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        }
+      ]
+    },
+    {
+      "window": "W2",
+      "arm": "NS",
+      "rep": 0,
+      "note": "stop at ~51–52 s; \"停下来以后就没有再去调…\" at ~78 s is NOT a stop",
+      "spendCny": 0.016331,
+      "responses": 7,
+      "usage": [
+        [
+          1139,
+          28,
+          38
+        ],
+        [
+          1255,
+          56,
+          50
+        ],
+        [
+          1362,
+          77,
+          30
+        ],
+        [
+          1455,
+          84,
+          28
+        ],
+        [
+          1552,
+          91,
+          26
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1658,
+          126,
+          34
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 5735,
+          "kind": "ASR",
+          "text": "很好啊，我们这次看到是用 DeepSeq 来跑的了。"
+        },
+        {
+          "at": 5825,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 6009,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+        },
+        {
+          "at": 6011,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 7441,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 31692,
+          "kind": "ASR",
+          "text": "让他把前面那个。"
+        },
+        {
+          "at": 33091,
+          "kind": "ASR",
+          "text": "处理，停下来吧。"
+        },
+        {
+          "at": 33183,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 33460,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "让他把前面那个处理停下来吧。",
+          "intent": "用户要求停止正在运行的处理任务"
+        },
+        {
+          "at": 33462,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 34860,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 35652,
+          "kind": "ASR",
+          "text": "先处理现在的这请求。"
+        },
+        {
+          "at": 35823,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 35967,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "先处理现在的这个请求。"
+        },
+        {
+          "at": 35967,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 37135,
+          "kind": "ASR",
+          "text": "哎，挺好。"
+        },
+        {
+          "at": 37361,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 37359,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 37473,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "哎，挺好。"
+        },
+        {
+          "at": 37474,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 53242,
+          "kind": "ASR",
+          "text": "Okay."
+        },
+        {
+          "at": 53359,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 53554,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 53670,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停。"
+        },
+        {
+          "at": 53677,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 55004,
+          "kind": "ASR",
+          "text": "Six."
+        },
+        {
+          "at": 55267,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 55281,
+          "kind": "TEXT",
+          "text": "No"
+        },
+        {
+          "at": 55282,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 58665,
+          "kind": "ASR",
+          "text": "停下来以后就没有再去调 cloud code 吗？"
+        },
+        {
+          "at": 58740,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 58902,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "停下来以后就没有再去调 Cloud Code 吗？"
+        },
+        {
+          "at": 58903,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 59359,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        }
+      ]
+    }
+  ]
+}

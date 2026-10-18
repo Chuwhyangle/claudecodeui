@@ -1,0 +1,51 @@
+# 164c3087@10-14T15:16:43 arm E rep 1 model sonnet hook true wall 188.4s
+   0.0  >> DELIVER prompt: 让我们再做一次 live voice 测试。
+   0.8  == turn
+   3.7     text: 好，我在听。你接着说，我会尽量短答，方便你测试。
+   3.7  -- result success
+   6.8  · voice [ADD-frag] 你看啊，第一句的问题是。
+   7.8  >> DELIVER idle: 你看啊，第一句的问题是。
+   7.9  == turn
+   8.7     text: 嗯，你接着说。
+   8.7  -- result success
+   8.9  · voice [ADD-frag] 我大概花了。
+   9.9  >> DELIVER idle: 我大概花了。
+   9.9  == turn
+  10.8     text: 嗯，我在听。
+  10.8  -- result success
+  13.0  · voice [ADD-frag] 两秒时间。
+  14.0  >> DELIVER idle: 两秒时间。
+  14.0  == turn
+  15.4     text: 嗯，两秒的时间，你继续。
+  15.4  -- result success
+  17.4  · voice [ADD-frag] 就把话说完了。
+  18.4  >> DELIVER idle: 就把话说完了。
+  18.5  == turn
+  21.2     text: 收到了，四段合起来是完整的一句：「第一句的问题是，我大概花了两秒时间就把话说完了。」没有丢段。你接着说问题是什么。
+  21.2  -- result success
+  28.8  · voice [ADD-frag] 但是我看见这边有个动字。
+  29.8  >> DELIVER idle: 但是我看见这边有个动字。
+  29.8  == turn
+  32.3  · voice [ADD-frag] 可能花了五六秒。
+  32.4     text: 嗯，这边有个「动」字，是显示在哪儿的？你接着说。
+  32.4  -- result success
+  32.4  >> DELIVER turn-end: 可能花了五六秒。
+  32.5  == turn
+  33.9     text: 嗯，我在听。你继续，说完我再合起来理解。
+  33.9  -- result success
+  65.0  · voice [ADD-frag] 但是我看到在我的屏幕上蹦出来。
+  66.0  >> DELIVER idle: 但是我看到在我的屏幕上蹦出来。
+  66.1  == turn
+  69.3     text: 我先合起来理解一下：你屏幕上蹦出一个「动」字，从你说完到它出现大概隔了五六秒，对吗？还有别的你接着说。
+  69.3  -- result success
+  69.6  · voice [ADD-frag] 可能要花了二十到三十秒。
+  70.6  >> DELIVER idle: 可能要花了二十到三十秒。
+  70.6  == turn
+  72.5     text: 收到，更新一下：你说的是延迟，大概二十到三十秒，不是五六秒。是从你说完到屏幕上出现我的回应的时间吗？
+  72.5  -- result success
+  79.1  · voice [ADD] 啊，分析一下原因。
+  80.1  >> DELIVER idle: 啊，分析一下原因。
+  80.2  == turn
+  89.1     tool Agent [BG]: Live voice 延迟原因分析
+  90.7     text: 派了一个后台 Agent 去对时间线，查那 20–30 秒卡在哪一层。结果出来我再简报。
+  90.7  -- result success

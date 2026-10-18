@@ -1,0 +1,73 @@
+{
+ "episode": "a175e6cd@10-14T18:23:07",
+ "arm": "C",
+ "rep": 0,
+ "model": "sonnet",
+ "hook": true,
+ "commit": "98a4fc6b119d0c980e7a935692cdddc47bd7103e",
+ "fork": false,
+ "pieces": [
+  {
+   "offsetMs": 15379,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "label": "DUP"
+  }
+ ],
+ "diffStat": "",
+ "wallMs": 45562,
+ "capped": false,
+ "events": [
+  {
+   "t": 0,
+   "ev": "DELIVER",
+   "kind": "prompt",
+   "priority": null,
+   "text": "现在是十月十五日。 Live Voice Mode 的第六次测试。",
+   "parts": []
+  },
+  {
+   "t": 796,
+   "ev": "TURN"
+  },
+  {
+   "t": 5068,
+   "ev": "TEXT",
+   "text": "收到，今天是 10 月 15 日，Live Voice Mode 第六次测试。\n\n我这边语音通道正常，能听到你说话。你可以直接开始说测试内容，或者告诉我想重点观察哪一类问题，例如丢句、打断、重连或队列显示，我会照着记录。"
+  },
+  {
+   "t": 5099,
+   "ev": "RESULT",
+   "subtype": "success"
+  },
+  {
+   "t": 15384,
+   "ev": "PIECE",
+   "label": "DUP",
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+  },
+  {
+   "t": 16385,
+   "ev": "DELIVER",
+   "kind": "idle",
+   "priority": null,
+   "text": "很好啊，我们这次看到是用 DeepSeek 来跑的了。",
+   "parts": [
+    "DUP:很好啊，我们这次看到是用 DeepSeek 来跑的了。"
+   ]
+  },
+  {
+   "t": 16437,
+   "ev": "TURN"
+  },
+  {
+   "t": 19620,
+   "ev": "TEXT",
+   "text": "收到。如果这次底层换成了 DeepSeek，有两点值得留意，我可以顺手帮你核对：\n\n- **工具调用与打断**：看它对「中途插话」「后台任务查状态」这类工具边界的处理是否和之前一致。\n- **丢句与延迟**：对着 transcription.completed 逐句核对有没有未处置的话，再看首字延迟。\n\n我这边不能直接确认当前跑的模型，要确认的话可以读会话 transcript 里的 model 记录。需要我现在去查吗？还是你先继续说测试内容，我边听边记？"
+  },
+  {
+   "t": 19646,
+   "ev": "RESULT",
+   "subtype": "success"
+  }
+ ]
+}

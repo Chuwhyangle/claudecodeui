@@ -1,0 +1,278 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:39:54.627Z",
+  "budgetCny": 0.25,
+  "spendCny": 0.026056,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 29749,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "tier2": {
+      "transcriptSurvival": {
+        "sourceWav": "1b3011d1-15e9-4d42-b8f3-92bc08559a77.wav",
+        "sourceSampleRate": 16000,
+        "sentSeconds": 4,
+        "transcript": [
+          "现在只许数日来我。"
+        ],
+        "itemsCreated": [
+          {
+            "id": "item_AhRbwWV1JzHf9xwLxHusc",
+            "object": "realtime.item",
+            "type": "message",
+            "status": "completed",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_audio"
+              }
+            ]
+          }
+        ],
+        "withAudio": {
+          "input": 344,
+          "text": 302,
+          "audio": 42,
+          "output": 35,
+          "cny": 0.000863
+        },
+        "afterDelete": {
+          "input": 296,
+          "text": 296,
+          "audio": 0,
+          "output": 23,
+          "cny": 0.000548
+        },
+        "audioTokenDrop": 42,
+        "textTokenDrop": 6,
+        "deletions": [
+          {
+            "id": "item_AhRbwWV1JzHf9xwLxHusc",
+            "outcome": "deleted"
+          }
+        ]
+      },
+      "plumbingKeep": {
+        "prune": false,
+        "utterances": 5,
+        "forwarded": 6,
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"把这句话转给会话。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再加一句，今晚继续测。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这句话也要转过去。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "顺便说一句，日志我看过了。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"顺便说一句，日志我看过了。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "最后一句，先到这里。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"最后一句，先到这里。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "这条也一并转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这条也一并转过去。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 0
+          },
+          {
+            "utterance": "补一句，明天再看结果。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 0
+          },
+          {
+            "utterance": "再补一句，先不要动线上。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 0
+          }
+        ],
+        "contextGrowth": {
+          "firstInputTokens": 310,
+          "lastInputTokens": 770,
+          "responses": 14
+        }
+      },
+      "plumbingPrune": {
+        "prune": true,
+        "utterances": 5,
+        "forwarded": 6,
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"把这句话转给会话。\"}"
+              }
+            ],
+            "replies": [
+              "已转交。"
+            ],
+            "deleted": 3
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"再加一句，今晚继续测。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 3
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这句话也要转过去。\"}"
+              }
+            ],
+            "replies": [
+              "已经转过去了。"
+            ],
+            "deleted": 3
+          },
+          {
+            "utterance": "顺便说一句，日志我看过了。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"顺便说一句，日志我看过了。\"}"
+              }
+            ],
+            "replies": [
+              "已转达。"
+            ],
+            "deleted": 3
+          },
+          {
+            "utterance": "最后一句，先到这里。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"最后一句，先到这里。\"}"
+              }
+            ],
+            "replies": [
+              "全部转过去了。"
+            ],
+            "deleted": 3
+          },
+          {
+            "utterance": "这条也一并转过去。",
+            "forwarded": true,
+            "calls": [
+              {
+                "name": "session_send",
+                "arguments": "{\"message\":\"这条也一并转过去。\"}"
+              }
+            ],
+            "replies": [
+              "已转给会话。"
+            ],
+            "deleted": 3
+          },
+          {
+            "utterance": "补一句，明天再看结果。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 1
+          },
+          {
+            "utterance": "再补一句，先不要动线上。",
+            "forwarded": false,
+            "calls": [],
+            "replies": [],
+            "deleted": 1
+          }
+        ],
+        "contextGrowth": {
+          "firstInputTokens": 310,
+          "lastInputTokens": 716,
+          "responses": 14
+        }
+      }
+    }
+  }
+}

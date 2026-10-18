@@ -1,0 +1,1474 @@
+{
+  "ranAt": "2026-10-15T16:44:57.550Z",
+  "budgetCny": 0.18,
+  "spendCny": 0.15039,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "S_A",
+      "arm": "K",
+      "rep": 0,
+      "note": "whole session 312 s, 15 responses live; stop at 110.8 s, next sentence at 155 s",
+      "spendCny": 0.051439,
+      "responses": 14,
+      "usage": [
+        [
+          1250,
+          35,
+          36
+        ],
+        [
+          1337,
+          35,
+          2
+        ],
+        [
+          1460,
+          77,
+          43
+        ],
+        [
+          1554,
+          77,
+          2
+        ],
+        [
+          1584,
+          147,
+          48
+        ],
+        [
+          1683,
+          147,
+          2
+        ],
+        [
+          1694,
+          168,
+          29
+        ],
+        [
+          1774,
+          168,
+          2
+        ],
+        [
+          1787,
+          196,
+          63
+        ],
+        [
+          1905,
+          196,
+          2
+        ],
+        [
+          1918,
+          252,
+          46
+        ],
+        [
+          2015,
+          252,
+          2
+        ],
+        [
+          2026,
+          280,
+          38
+        ],
+        [
+          2115,
+          280,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [
+        "{\"event_id\":\"event_TmhP6qbr76t2Ytx4w5gUC\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+        "{\"event_id\":\"event_OwBldWZkTP5RFXTgUT4Fo\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+        "{\"event_id\":\"event_DbD23T9b34Pr6f3CJuXxt\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+      ],
+      "timeline": [
+        {
+          "at": 9710,
+          "kind": "ASR",
+          "text": "十月十五日二十三点，Live Voice Mall第四次测试。"
+        },
+        {
+          "at": 9776,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 9961,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "十月十五日二十三点，live voice mode 第四次测试。"
+        },
+        {
+          "at": 9962,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 10380,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 10459,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 10692,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 10714,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 10714,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 20812,
+          "kind": "ASR",
+          "text": "你看，我比较喜欢的就是每一次，它就摸了就能认对了。"
+        },
+        {
+          "at": 21907,
+          "kind": "ASR",
+          "text": "好神奇啊。"
+        },
+        {
+          "at": 22120,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 22372,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "你看我比较喜欢的就是每次它跟 model 就能认对了，这好神奇啊。"
+        },
+        {
+          "at": 22373,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 23069,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 23091,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 23092,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 24960,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 28999,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 30459,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 53116,
+          "kind": "ASR",
+          "text": "啊，现在跑一个时间长一些的前台 batch 测试，啊，batch 命令吧。"
+        },
+        {
+          "at": 55246,
+          "kind": "ASR",
+          "text": "到了，怎么样。"
+        },
+        {
+          "at": 55404,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 55681,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "啊，现在跑一个时间长一些的前台 bash 测试，bash 命令吧。大概三十到六十秒。"
+        },
+        {
+          "at": 55681,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 55911,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 56794,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 56817,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 56818,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 62821,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 78480,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 97931,
+          "kind": "ASR",
+          "text": "列出当前目录的文件。"
+        },
+        {
+          "at": 98235,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 98350,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "列出当前目录的文件。"
+        },
+        {
+          "at": 98351,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 98793,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 98816,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 98816,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 99700,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 109133,
+          "kind": "ASR",
+          "text": "停掉前面的 batch，直接跑当前的目录文件。"
+        },
+        {
+          "at": 109402,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 109746,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停掉前面的 bash，直接跑当前目录文件。",
+          "intent": "用户要求停止正在运行的前台 bash 测试，改为直接列出当前目录文件。"
+        },
+        {
+          "at": 109746,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 110209,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 110242,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 110242,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 112820,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 152445,
+          "kind": "ASR",
+          "text": "好，不要管那些文件了。啊，在当前目录及子目录里面统计一下到底有多少 TypeScript 的脚本。"
+        },
+        {
+          "at": 152618,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 152848,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "好，不要管那些文件了。在当前目录及子目录里面统计一下到底有多少 TypeScript 脚本。"
+        },
+        {
+          "at": 152849,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 153352,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 153376,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 153376,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 157399,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 1
+        },
+        {
+          "at": 159400,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 201517,
+          "kind": "ASR",
+          "text": "检查一下这work trees是不是都还有用？有没有要清理。"
+        },
+        {
+          "at": 201749,
+          "kind": "ERROR",
+          "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+        },
+        {
+          "at": 201797,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 201984,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "检查一下 worktrees 是不是都还有用，有没有要清理的。"
+        },
+        {
+          "at": 201985,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 202466,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 202488,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 202488,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 204760,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "S_A",
+      "arm": "K",
+      "rep": 1,
+      "note": "whole session 312 s, 15 responses live; stop at 110.8 s, next sentence at 155 s",
+      "spendCny": 0.051314,
+      "responses": 14,
+      "usage": [
+        [
+          1250,
+          35,
+          35
+        ],
+        [
+          1336,
+          35,
+          2
+        ],
+        [
+          1459,
+          77,
+          41
+        ],
+        [
+          1551,
+          77,
+          2
+        ],
+        [
+          1581,
+          147,
+          45
+        ],
+        [
+          1677,
+          147,
+          2
+        ],
+        [
+          1688,
+          168,
+          29
+        ],
+        [
+          1768,
+          168,
+          2
+        ],
+        [
+          1781,
+          196,
+          64
+        ],
+        [
+          1900,
+          196,
+          2
+        ],
+        [
+          1913,
+          252,
+          44
+        ],
+        [
+          2008,
+          252,
+          2
+        ],
+        [
+          2019,
+          280,
+          38
+        ],
+        [
+          2108,
+          280,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 7667,
+          "kind": "ASR",
+          "text": "十月十五日二十三点，Live Voice Mall 第四次测试。"
+        },
+        {
+          "at": 7752,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 7936,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "十月十五日二十三点，Live Voice Mode第四次测试。"
+        },
+        {
+          "at": 7937,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 8302,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 8323,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 8324,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 10460,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 20327,
+          "kind": "ASR",
+          "text": "你看，我比较喜欢的就是每一次，它就摸了就能认对了。"
+        },
+        {
+          "at": 21855,
+          "kind": "ASR",
+          "text": "这好神奇啊。"
+        },
+        {
+          "at": 22013,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 22242,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "你看我比较喜欢的就是每次它就model就能认对了，这好神奇啊。"
+        },
+        {
+          "at": 22242,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 22646,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 22669,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 22669,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 24961,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 29000,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 30459,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 51150,
+          "kind": "ASR",
+          "text": "啊，现在跑一个时间长一些的前台 batch 测试，啊，batch 命令吧。"
+        },
+        {
+          "at": 53661,
+          "kind": "ASR",
+          "text": "大概三十到六十秒。"
+        },
+        {
+          "at": 53789,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 54055,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在跑一个时间长一些的前台bash测试，然后bash命令吧，大概三十到六十秒。"
+        },
+        {
+          "at": 54056,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 54375,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 54397,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 54397,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 62820,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 78479,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 97669,
+          "kind": "ASR",
+          "text": "列出当前目录的文件。"
+        },
+        {
+          "at": 97935,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 98052,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "列出当前目录的文件。"
+        },
+        {
+          "at": 98052,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 98371,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 98393,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 98394,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 99699,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 108835,
+          "kind": "ASR",
+          "text": "停掉前面的 batch，直接跑当前的目录文件。"
+        },
+        {
+          "at": 109066,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 109462,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停掉前面的bash，直接跑当前目录文件。",
+          "intent": "用户要求停止正在运行的前台 bash 测试并立即执行列出当前目录文件的命令。"
+        },
+        {
+          "at": 109463,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 109794,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 109816,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 109817,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 112819,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 152278,
+          "kind": "ASR",
+          "text": "好，不要管那些文件了。啊，在当前目录及子目录里面统计一下到底有多少 TypeScript 的脚本。"
+        },
+        {
+          "at": 152427,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 152658,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "不要管那些文件了，在当前目录及子目录里面统计一下到底有多少 TypeScript 脚本。"
+        },
+        {
+          "at": 152658,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 152986,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 153009,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 153009,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 157400,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 1
+        },
+        {
+          "at": 159400,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 199931,
+          "kind": "ASR",
+          "text": "检查一下这work trees是不是都还有用？有没有要清理。"
+        },
+        {
+          "at": 200145,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 200329,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "检查一下 worktrees 是不是都还有用，有没有要清理的？"
+        },
+        {
+          "at": 200330,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 200672,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 200694,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 200694,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 204761,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "S_A",
+      "arm": "NS",
+      "rep": 0,
+      "note": "whole session 312 s, 15 responses live; stop at 110.8 s, next sentence at 155 s",
+      "spendCny": 0.02382,
+      "responses": 8,
+      "usage": [
+        [
+          1041,
+          35,
+          36
+        ],
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          1256,
+          77,
+          43
+        ],
+        [
+          1385,
+          147,
+          50
+        ],
+        [
+          1502,
+          168,
+          29
+        ],
+        [
+          1600,
+          196,
+          62
+        ],
+        [
+          1724,
+          252,
+          46
+        ],
+        [
+          1837,
+          280,
+          39
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 7810,
+          "kind": "ASR",
+          "text": "十月十五日二十三点，Live Voice Mall第四次测试。"
+        },
+        {
+          "at": 7903,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 8088,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "十月十五日二十三点，Live Voice Mode 第四次测试。"
+        },
+        {
+          "at": 8089,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 10461,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 20419,
+          "kind": "ASR",
+          "text": "你看，我比较喜欢的就是每一次，它就摸了就能认对了。"
+        },
+        {
+          "at": 20483,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 20500,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": ""
+        },
+        {
+          "at": 20501,
+          "kind": "DONE",
+          "status": "cancelled",
+          "details": {
+            "type": "cancelled",
+            "reason": "turn_detected"
+          }
+        },
+        {
+          "at": 22050,
+          "kind": "ASR",
+          "text": "这好神奇啊。"
+        },
+        {
+          "at": 22194,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 22422,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "你看我比较喜欢的就是，每一次它这个model就能认对了。这好神奇啊。"
+        },
+        {
+          "at": 22422,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 24960,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 29000,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 30461,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 51375,
+          "kind": "ASR",
+          "text": "啊，现在跑一个时间长一些的前台Bash测试，啊Bash命令吧。"
+        },
+        {
+          "at": 53736,
+          "kind": "ASR",
+          "text": "在三十到六十秒。"
+        },
+        {
+          "at": 53898,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 54173,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "啊，现在跑一个时间长一些的前台 bash 测试。啊，bash 命令吧，大概三十到六十秒。"
+        },
+        {
+          "at": 54173,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 62820,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 78481,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 97799,
+          "kind": "ASR",
+          "text": "列出当前目录的文件。"
+        },
+        {
+          "at": 98059,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 98176,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "列出当前目录的文件。"
+        },
+        {
+          "at": 98176,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 99699,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 108966,
+          "kind": "ASR",
+          "text": "停掉前面的 batch，直接跑当前的目录文件。"
+        },
+        {
+          "at": 109181,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 109554,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停掉前面的 bash，直接跑当前目录文件。",
+          "intent": "用户要求停止前面正在运行的 bash 测试，改为直接运行当前目录的文件"
+        },
+        {
+          "at": 109555,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 112821,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 152508,
+          "kind": "ASR",
+          "text": "好，不要管那些文件了。啊，在当前目录及子目录里面统计一下到底有多少 TypeScript 的脚本。"
+        },
+        {
+          "at": 152624,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 152880,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "好，不要管那些文件了。在当前目录及子目录里面统计一下到底有多少 TypeScript 脚本。"
+        },
+        {
+          "at": 152881,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 157399,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 1
+        },
+        {
+          "at": 159401,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 200051,
+          "kind": "ASR",
+          "text": "检查一下这work trees是不是都还有用？有没有要清理。"
+        },
+        {
+          "at": 200267,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 200451,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "检查一下这 worktrees 是不是都还有用，有没有要清理的。"
+        },
+        {
+          "at": 200451,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 204759,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "S_A",
+      "arm": "NS",
+      "rep": 1,
+      "note": "whole session 312 s, 15 responses live; stop at 110.8 s, next sentence at 155 s",
+      "spendCny": 0.023817,
+      "responses": 7,
+      "usage": [
+        [
+          1041,
+          35,
+          40
+        ],
+        [
+          1260,
+          77,
+          41
+        ],
+        [
+          1387,
+          147,
+          48
+        ],
+        [
+          1502,
+          168,
+          29
+        ],
+        [
+          1600,
+          196,
+          61
+        ],
+        [
+          1723,
+          252,
+          46
+        ],
+        [
+          1836,
+          280,
+          38
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 7665,
+          "kind": "ASR",
+          "text": "十月十五日二十三点，Live Voice Mall 第四次测试。"
+        },
+        {
+          "at": 7721,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 7902,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "10月15日23点，Live Voice Mode第四次测试。"
+        },
+        {
+          "at": 7904,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 10460,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 20316,
+          "kind": "ASR",
+          "text": "你看，我比较喜欢的就是每一次它就摸了，就能认对了。"
+        },
+        {
+          "at": 21841,
+          "kind": "ASR",
+          "text": "这好神奇啊。"
+        },
+        {
+          "at": 21988,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 22221,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "你看我比较喜欢的就是每一次他就摸了就能认对了，这好神奇啊。"
+        },
+        {
+          "at": 22222,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 24959,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 29001,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 30461,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 51140,
+          "kind": "ASR",
+          "text": "啊，现在跑一个时间长一些的前台 batch 测试，啊，batch 命令吧。"
+        },
+        {
+          "at": 53647,
+          "kind": "ASR",
+          "text": "大概三十到六十秒。"
+        },
+        {
+          "at": 53872,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 54155,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "现在跑一个时间长一些的前台 bash 测试，bash 命令吧，大概30到60秒。"
+        },
+        {
+          "at": 54156,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 62819,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 78481,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        },
+        {
+          "at": 97666,
+          "kind": "ASR",
+          "text": "列出当前目录的文件。"
+        },
+        {
+          "at": 97925,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 98039,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "列出当前目录的文件。"
+        },
+        {
+          "at": 98040,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 99700,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 1
+        },
+        {
+          "at": 108831,
+          "kind": "ASR",
+          "text": "停掉前面的 batch，直接跑当前的目录文件。"
+        },
+        {
+          "at": 109059,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 109400,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "停掉前面的bash，直接跑当前目录文件。",
+          "intent": "用户要求停掉前面的 bash，直接运行列出当前目录文件的命令。"
+        },
+        {
+          "at": 109401,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 112820,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 152277,
+          "kind": "ASR",
+          "text": "好，不要管那些文件了。啊，在当前目录及子目录里面统计一下到底有多少 TypeScript 的脚本。"
+        },
+        {
+          "at": 152390,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 152623,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "好，不要管那些文件了。在当前目录及子目录里面统计一下到底有多少 TypeScript 脚本。"
+        },
+        {
+          "at": 152624,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 157400,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 1
+        },
+        {
+          "at": 159401,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        },
+        {
+          "at": 199895,
+          "kind": "ASR",
+          "text": "检查一下这work trees是不是都还有用？有没有要清理。"
+        },
+        {
+          "at": 200132,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 200316,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "检查一下这些 worktrees 是不是都还有用，有没有要清理。"
+        },
+        {
+          "at": 200316,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 204760,
+          "kind": "STATUS",
+          "phase": "queued",
+          "queued": 0
+        }
+      ]
+    }
+  ]
+}

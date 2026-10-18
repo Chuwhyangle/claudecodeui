@@ -1,0 +1,177 @@
+{
+  "schema": "voice-realtime-prefix-history-pruning/1",
+  "ranAt": "2026-10-15T01:49:04.311Z",
+  "budgetCny": 0.08,
+  "spendCny": 0.029368,
+  "guardTriggered": false,
+  "guardClosedSessions": 0,
+  "elapsedMs": 21625,
+  "estimatorCheck": 0.0021479999999999997,
+  "results": {
+    "tier5": {
+      "echoSwap": {
+        "mode": "swap",
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "delivered": [
+              "把这句话转给会话。"
+            ],
+            "swapped": true
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "delivered": [
+              "今晚继续测。"
+            ],
+            "swapped": true
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "delivered": [
+              "再加一句，今晚继续测。"
+            ],
+            "swapped": true
+          }
+        ],
+        "quietDelivered": [
+          "这句话也要转过去。"
+        ],
+        "faithful": 1,
+        "deliveredTotal": 3,
+        "duplicated": 0,
+        "echoes": [
+          {
+            "turn": 2,
+            "message": "再加一句，今晚继续测。"
+          }
+        ]
+      },
+      "echoPlain": {
+        "mode": "plain",
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "delivered": [
+              "把这句话转给会话。"
+            ],
+            "swapped": false
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "delivered": [
+              "再加一句，今晚继续测。"
+            ],
+            "swapped": false
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "delivered": [
+              "这句话也要转过去。"
+            ],
+            "swapped": false
+          }
+        ],
+        "quietDelivered": [],
+        "faithful": 3,
+        "deliveredTotal": 3,
+        "duplicated": 0,
+        "echoes": []
+      },
+      "echoInplace": {
+        "mode": "inplace",
+        "turns": [
+          {
+            "utterance": "把这句话转给会话。",
+            "delivered": [
+              "把这句话转给会话。"
+            ],
+            "swapped": true
+          },
+          {
+            "utterance": "再加一句，今晚继续测。",
+            "delivered": [
+              "再加一句，今晚继续测。"
+            ],
+            "swapped": true
+          },
+          {
+            "utterance": "这句话也要转过去。",
+            "delivered": [
+              "再加一句，今晚继续测。"
+            ],
+            "swapped": true
+          }
+        ],
+        "quietDelivered": [
+          "这句话也要转过去。"
+        ],
+        "faithful": 2,
+        "deliveredTotal": 3,
+        "duplicated": 1,
+        "echoes": [
+          {
+            "turn": 2,
+            "message": "再加一句，今晚继续测。"
+          }
+        ]
+      },
+      "silenceTwin": {
+        "mode": "twin",
+        "turns": [
+          {
+            "i": 0,
+            "transcript": "",
+            "delivered": [
+              "帮我看看这个文件。"
+            ]
+          },
+          {
+            "i": 1,
+            "transcript": "",
+            "delivered": [
+              "[Voice input] 嗯。"
+            ]
+          },
+          {
+            "i": 2,
+            "transcript": "",
+            "delivered": [
+              "嗯。"
+            ]
+          }
+        ],
+        "deliveredOnSilence": 3,
+        "quietTurns": 0
+      },
+      "silenceKeep": {
+        "mode": "keep",
+        "turns": [
+          {
+            "i": 0,
+            "transcript": "",
+            "delivered": [
+              "用户说：嗯。"
+            ]
+          },
+          {
+            "i": 1,
+            "transcript": "",
+            "delivered": [
+              "用户说：嗯。"
+            ]
+          },
+          {
+            "i": 2,
+            "transcript": "",
+            "delivered": [
+              "用户说：嗯。"
+            ]
+          }
+        ],
+        "deliveredOnSilence": 3,
+        "quietTurns": 0
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+# 99df08d8@10-12T01:26:18 arm A rep 0 model sonnet hook false wall 91.4s
+   0.0  >> DELIVER prompt: 第一句识别出来了，我们看看第二句。 现在第三句。 第四句。 到现在为止识别的还可以。 只是对于第一句的处理慢一些，但这是正常的。 现在后面这几句话都在 queue 里面在等。 或者说队列，在队列里面等。
+   0.9  == turn
+   5.4     text: 我先读一下这段时间的日志捕获。
+   6.9     tool Bash: ls -la /tmp/voice-watch-capture.jsonl; pgrep -f voice-watch.sh; date; ls -lat ~/.cloudcli/voice-realtime-log/ 
+  17.2  · voice [ADD-frag] 检查最近执行的任务。
+  26.6     tool Bash: find / -xdev -path /proc -prune -o -type f -name '*.jsonl' -mmin -15 -path '*voice*' -print 2>/dev/null | head
+  26.6     (blocked by sandbox)
+  28.2     tool Bash: ls -lat ~/.cloudcli/voice-realtime-log/ | head -5; date
+  28.6  · voice [ADD] 你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。
+  32.7  · voice [ASK] 你确认一下现在这个任务有没有实现。
+  34.2     text: 我这边没读到你刚才这几句的日志,没法分析。  - **默认日志目录没有新 journal**:`~/.cloudcli/voice-realtime-log/` 里最新的一份是 11:54(`7c01be7e-…`),现在是 14:44,这几分钟内没有新连接的记录。 - **监听器已失效**:`/tmp/voice-watch-capture.jsonl` 停在 10-12 09:29,只抓到了那次旧连接。  所以你这轮测试大概率没有写进这个目录。可能是连到了另一个实例(不同端口或另一份 worktree,日志目录由 `VOICE_REALTIME_LOG_DIR` 指定),也可能是 3001
+  34.2  -- result success
+  34.2  >> DELIVER turn-end: 检查最近执行的任务。你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。你确认一下现在这个任务有没有实现。
+  34.2  == turn
+  38.1     tool Bash: git log --since='2 days ago' --format='%h %ci %s' -- tasks | grep -i -E 'interrupt|preempt|cancel|abort|抢占|打断|
+  40.8     tool Bash: git log -8 --format='%h %ci %s' ; echo; for f in gap-live-voice-voice-terminated-interrupt gap-chat-control-ow
+  44.0     tool Bash: git branch -a --sort=-committerdate | head -5; for b in develop; do git log $b -1 --format='%h %ci'; git log $
+  46.6     tool Bash: for t in gap-live-voice-busy-utterance-preemption-proposal gap-live-voice-interrupt-missing-intent-drops-stop 
+  49.8     tool Bash: git ls-tree -r --name-only develop tasks | grep -i -E 'preemption|instruction-reliab'; for t in $(git ls-tree 
+  49.8     (blocked by sandbox)
+  53.3     tool Bash: git ls-tree -r --name-only develop tasks | grep -i -E 'preemption|instruction-reliab'
+  55.4     tool Bash: git show develop:tasks/gap-voice-busy-preemption-instruction-reliability.md | sed -n 1,14p; echo ...; git show
+  65.5     text: **结论:按 10-14 的人裁定,这个任务已经实现(done);但"一律主动取消前序"没有做,也被明确禁止了。**  | 项 | 状态 | |---|---| | `gap-live-voice-busy-utterance-preemption-proposal` | done。提案文档已写,裁定是保留现有架构:要不要抢占由模型语义判断,不加时长门槛,不做"一律抢占"。 | | `gap-live-voice-interrupt-missing-intent-drops-stop` | done。上次实测里 `session_interrupt` 因缺 `intent` 被拒的缺陷已修。 
+  65.5  -- result success

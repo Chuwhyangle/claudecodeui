@@ -1,0 +1,125 @@
+{
+ "model": "haiku",
+ "priority": "now",
+ "dir": "/tmp/e1c-vv4ZFw",
+ "log": [
+  {
+   "t": 4.9,
+   "ev": "tool_use",
+   "name": "Agent",
+   "cmd": "progress loop",
+   "snap": {
+    "agent": 0,
+    "fg": 0
+   }
+  },
+  {
+   "t": 7.2,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step1 >> /tmp/e1c-vv4ZFw/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 1,
+    "fg": 0
+   }
+  },
+  {
+   "t": 10.2,
+   "ev": "task",
+   "status": "completed",
+   "summary": "Step 1: append step1 and sleep",
+   "snap": {
+    "agent": 2,
+    "fg": 1
+   }
+  },
+  {
+   "t": 12.2,
+   "ev": "tool_use",
+   "name": "Bash",
+   "cmd": "echo step2 >> /tmp/e1c-vv4ZFw/fg.txt; for i in 1 2",
+   "snap": {
+    "agent": 3,
+    "fg": 1
+   }
+  },
+  {
+   "t": 14.2,
+   "ev": "PUSH",
+   "priority": "now",
+   "snap": {
+    "agent": 4,
+    "fg": 2
+   }
+  },
+  {
+   "t": 15.2,
+   "ev": "task",
+   "status": "completed",
+   "summary": "Step 2: append step2 and sleep",
+   "snap": {
+    "agent": 5,
+    "fg": 2
+   }
+  },
+  {
+   "t": 16.4,
+   "ev": "text",
+   "text": "REDIRECTED",
+   "sincePushS": 2.2,
+   "snap": {
+    "agent": 6,
+    "fg": 2
+   }
+  },
+  {
+   "t": 36.4,
+   "ev": "task",
+   "status": "completed",
+   "summary": "for i in $(seq 1 15); do echo $i >> /tmp",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 37.2,
+   "ev": "task",
+   "status": "completed",
+   "summary": "Agent \"progress loop\" completed",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 39.2,
+   "ev": "text",
+   "text": "The background agent completed successfully with result: **done**",
+   "sincePushS": 25,
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 39.2,
+   "ev": "result",
+   "n": 1,
+   "subtype": "success",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   }
+  },
+  {
+   "t": 75.3,
+   "ev": "FINAL",
+   "snap": {
+    "agent": 16,
+    "fg": 2
+   },
+   "agentEnded": true
+  }
+ ]
+}

@@ -1,0 +1,7493 @@
+{
+ "ranAt": "2026-10-15T12-36-55-294Z",
+ "budgetCny": 0.45,
+ "scheduleUntilMs": 480000,
+ "segments": [
+  {
+   "id": "7c01be7e",
+   "startMs": 20500,
+   "endMs": 44500,
+   "stops": 10,
+   "sessionStops": 15,
+   "sessionDeliveries": 3
+  },
+  {
+   "id": "a175e6cd",
+   "startMs": 50500,
+   "endMs": 74500,
+   "stops": 6,
+   "sessionStops": 28,
+   "sessionDeliveries": 8
+  },
+  {
+   "id": "86559798",
+   "startMs": 0,
+   "endMs": 24000,
+   "stops": 4,
+   "sessionStops": 21,
+   "sessionDeliveries": 11
+  }
+ ],
+ "arms": [
+  "s400",
+  "s800",
+  "verdict"
+ ],
+ "reps": 4,
+ "parallel": 6,
+ "stopped": "",
+ "spendCny": 0.353281,
+ "guardTriggered": false,
+ "wallMs": 222561,
+ "completed": 36,
+ "failed": 0,
+ "results": [
+  {
+   "segment": "7c01be7e",
+   "arm": "s400",
+   "rep": 0,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_VYCEOfzlbJNjFalyhi5Hm",
+   "spendCny": 0.013281,
+   "wallMs": 36218,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 8,
+   "cancelled": 3,
+   "textReplies": 1,
+   "callsTotal": 7,
+   "callsRaw": 2,
+   "callsEmpty": 1,
+   "callsEffective": 4,
+   "effectivePerStop": 0.444,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    435,
+    419,
+    492,
+    324,
+    619,
+    419,
+    754
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "呃，行，进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 116,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_JGXukEH2DH3yvG4mhbnYP\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_QAZFC4QGmmtTgN",
+    "{\"event_id\":\"event_LwksOnlFUpcgtN27JjaWj\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_0c2460e82f4c495cbd7425d5\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_AdbAfEleuVmrzfBHwIfWI\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_Sict2WpfcvyDaNu4kM52t\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_d928507785a14c34b59bd17b\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_ZDFF55SCDNcOJScgojrCq\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2962,
+     "kind": "STOP"
+    },
+    {
+     "at": 2962,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3156,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3254,
+     "kind": "RESP"
+    },
+    {
+     "at": 3397,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": null
+    },
+    {
+     "at": 3398,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3736,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_QAZFC4QGmmtTgNq2iIyOm\"}"
+    },
+    {
+     "at": 4470,
+     "kind": "STOP"
+    },
+    {
+     "at": 4471,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4627,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6594,
+     "kind": "STOP"
+    },
+    {
+     "at": 6594,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6822,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 6969,
+     "kind": "RESP"
+    },
+    {
+     "at": 7013,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"",
+     "part": null
+    },
+    {
+     "at": 7013,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8196,
+     "kind": "STOP"
+    },
+    {
+     "at": 8196,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8409,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 8505,
+     "kind": "RESP"
+    },
+    {
+     "at": 8688,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "这里面会有矛盾，我们希望它是尽可能敏感。",
+     "part": null
+    },
+    {
+     "at": 8688,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 8773,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_0c2460e82f4c495cbd7425d5\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 8774,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 12038,
+     "kind": "STOP"
+    },
+    {
+     "at": 12038,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12271,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 12351,
+     "kind": "RESP"
+    },
+    {
+     "at": 12362,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "",
+     "part": null
+    },
+    {
+     "at": 12362,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 15724,
+     "kind": "STOP"
+    },
+    {
+     "at": 15724,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 15964,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 16059,
+     "kind": "RESP"
+    },
+    {
+     "at": 16343,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "而且尽可能的灵敏，然后更快的有输出。但另外一方面，我们又不希望它过快的把消息发出去。",
+     "part": null
+    },
+    {
+     "at": 16344,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 16434,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_d928507785a14c34b59bd17b\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 16434,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 19314,
+     "kind": "STOP"
+    },
+    {
+     "at": 19314,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19568,
+     "kind": "ASR",
+     "text": "呃，行，进一步的量化的进行分析。"
+    },
+    {
+     "at": 21073,
+     "kind": "STOP"
+    },
+    {
+     "at": 21074,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21234,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 21431,
+     "kind": "RESP"
+    },
+    {
+     "at": 21492,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"请进一步的",
+     "part": null
+    },
+    {
+     "at": 21493,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 24045,
+     "kind": "STOP"
+    },
+    {
+     "at": 24045,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24245,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 24381,
+     "kind": "RESP"
+    },
+    {
+     "at": 24799,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "请进一步的量化的进行分析，然后来实验找出可能的更好的方案。",
+     "part": null
+    },
+    {
+     "at": 24799,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 25194,
+     "kind": "RESP"
+    },
+    {
+     "at": 25217,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 25217,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s800",
+   "rep": 0,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_IGvMAsumOWPCf3zqQZZyD",
+   "spendCny": 0.008451,
+   "wallMs": 36224,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 6,
+   "cancelled": 2,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    440,
+    427
+   ],
+   "transcripts": [
+    "前面那个处理停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 28,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 2808,
+     "kind": "STOP"
+    },
+    {
+     "at": 2809,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2984,
+     "kind": "ASR",
+     "text": "前面那个处理停下来吧。"
+    },
+    {
+     "at": 3133,
+     "kind": "RESP"
+    },
+    {
+     "at": 3215,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "{\"message\": \"把那个处理停下来吧",
+     "part": null
+    },
+    {
+     "at": 3216,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 5372,
+     "kind": "STOP"
+    },
+    {
+     "at": 5372,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5546,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5672,
+     "kind": "RESP"
+    },
+    {
+     "at": 5858,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "{\"message\": \"先处理现在的这个请求。\", \"intent\": \"用户",
+     "part": null
+    },
+    {
+     "at": 5859,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 6922,
+     "kind": "STOP"
+    },
+    {
+     "at": 6922,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7061,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 7245,
+     "kind": "RESP"
+    },
+    {
+     "at": 7362,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 7363,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7716,
+     "kind": "RESP"
+    },
+    {
+     "at": 7739,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7740,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22985,
+     "kind": "STOP"
+    },
+    {
+     "at": 22985,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23108,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23300,
+     "kind": "RESP"
+    },
+    {
+     "at": 23412,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎。",
+     "part": null
+    },
+    {
+     "at": 23413,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23796,
+     "kind": "RESP"
+    },
+    {
+     "at": 23818,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23818,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s400",
+   "rep": 0,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_IGpYlLkfOL8ndeOItWnvZ",
+   "spendCny": 0.01292,
+   "wallMs": 36227,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 6,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.6,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    473,
+    457,
+    444
+   ],
+   "transcripts": [
+    "前面那个。",
+    "下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 26,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_Ey5JLaUl59pMwv6IjCo7N\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_1f70096fa1bb4ccc9202b7c4\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_WNd7oj9G3Y3LvzDc1UBXY\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_LegGVPdEu9CgJZMgZCrJa\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_9d8e51e759064b11b0a77947\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_Ogy8NEEUqxNfxL5vxLV3W\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 1269,
+     "kind": "STOP"
+    },
+    {
+     "at": 1269,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1759,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 2556,
+     "kind": "STOP"
+    },
+    {
+     "at": 2556,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2689,
+     "kind": "ASR",
+     "text": "下来吧。"
+    },
+    {
+     "at": 2890,
+     "kind": "RESP"
+    },
+    {
+     "at": 3170,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 3172,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3825,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_1f70096fa1bb4ccc9202b7c4\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 3826,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 5430,
+     "kind": "STOP"
+    },
+    {
+     "at": 5430,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5616,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5764,
+     "kind": "RESP"
+    },
+    {
+     "at": 5903,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这个请求。",
+     "part": null
+    },
+    {
+     "at": 5903,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 6196,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_9d8e51e759064b11b0a77947\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 6196,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 6756,
+     "kind": "STOP"
+    },
+    {
+     "at": 6756,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6899,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 7099,
+     "kind": "RESP"
+    },
+    {
+     "at": 7213,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 7214,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7686,
+     "kind": "RESP"
+    },
+    {
+     "at": 7709,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7709,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22960,
+     "kind": "STOP"
+    },
+    {
+     "at": 22960,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23093,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23290,
+     "kind": "RESP"
+    },
+    {
+     "at": 23404,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "行。",
+     "part": null
+    },
+    {
+     "at": 23404,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23891,
+     "kind": "RESP"
+    },
+    {
+     "at": 23912,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23912,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s400",
+   "rep": 0,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_Pe1xGL2BrcXd17cNiI8Qb",
+   "spendCny": 0.008406,
+   "wallMs": 36239,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 5,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 1,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    519,
+    339,
+    499
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "是。",
+    "现在我们看看这次会不会再出现。",
+    "刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 42,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_IPecKnVNgB5nlbV9wVnoB\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+   ],
+   "timeline": [
+    {
+     "at": 3441,
+     "kind": "STOP"
+    },
+    {
+     "at": 3441,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3693,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 5000,
+     "kind": "STOP"
+    },
+    {
+     "at": 5000,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5132,
+     "kind": "ASR",
+     "text": "是。"
+    },
+    {
+     "at": 5312,
+     "kind": "RESP"
+    },
+    {
+     "at": 5519,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日，Live Voice 第三次录制。",
+     "part": null
+    },
+    {
+     "at": 5520,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5991,
+     "kind": "RESP"
+    },
+    {
+     "at": 6012,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 6012,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 27026,
+     "kind": "STOP"
+    },
+    {
+     "at": 27026,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 27219,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现。"
+    },
+    {
+     "at": 27359,
+     "kind": "RESP"
+    },
+    {
+     "at": 27365,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "",
+     "part": null
+    },
+    {
+     "at": 27366,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 30859,
+     "kind": "STOP"
+    },
+    {
+     "at": 30859,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 31039,
+     "kind": "ASR",
+     "text": "刚才那几个问题。"
+    },
+    {
+     "at": 31196,
+     "kind": "RESP"
+    },
+    {
+     "at": 31358,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 31359,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 31669,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 31951,
+     "kind": "RESP"
+    },
+    {
+     "at": 31973,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 31974,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s800",
+   "rep": 0,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_NuNrr4Z5NQd2gHnlbhOeg",
+   "spendCny": 0.008259,
+   "wallMs": 36226,
+   "upstreamStops": 2,
+   "commits": 2,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 1,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    498,
+    469
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice第三次录制。",
+    "现在我们看看这次会不会再出现刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 44,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_PxFl5tcLiaZMxD1qLbUuI\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+   ],
+   "timeline": [
+    {
+     "at": 7101,
+     "kind": "STOP"
+    },
+    {
+     "at": 7102,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7307,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice第三次录制。"
+    },
+    {
+     "at": 7416,
+     "kind": "RESP"
+    },
+    {
+     "at": 7599,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "10月15日 LiveVoice 第三次录制。",
+     "part": null
+    },
+    {
+     "at": 7600,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7721,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 8131,
+     "kind": "RESP"
+    },
+    {
+     "at": 8153,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 8154,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20136,
+     "kind": "STOP"
+    },
+    {
+     "at": 20137,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 20367,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现刚才那几个问题。"
+    },
+    {
+     "at": 20444,
+     "kind": "RESP"
+    },
+    {
+     "at": 20605,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 20605,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 21212,
+     "kind": "RESP"
+    },
+    {
+     "at": 21212,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 21212,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s800",
+   "rep": 0,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_PXBZKc8l19ZBrCg5s95a4",
+   "spendCny": 0.002033,
+   "wallMs": 36247,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 2,
+   "cancelled": 1,
+   "textReplies": 0,
+   "callsTotal": 2,
+   "callsRaw": 1,
+   "callsEmpty": 0,
+   "callsEffective": 1,
+   "effectivePerStop": 0.25,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    335,
+    484
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "当然，这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 81,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_CAYDNMp3nxQ6UTaIvEItQ\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_935fed3f157c42fcab9a35fd\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_BMJNXZ49DwvpmfTGElNPg\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 4595,
+     "kind": "STOP"
+    },
+    {
+     "at": 4595,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4788,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 4893,
+     "kind": "RESP"
+    },
+    {
+     "at": 4930,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"",
+     "part": null
+    },
+    {
+     "at": 4930,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 9647,
+     "kind": "STOP"
+    },
+    {
+     "at": 9647,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 9842,
+     "kind": "ASR",
+     "text": "当然，这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 9950,
+     "kind": "RESP"
+    },
+    {
+     "at": 10131,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "呃，当然这里面会有矛盾。我们希望。",
+     "part": null
+    },
+    {
+     "at": 10132,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 11220,
+     "kind": "STOP"
+    },
+    {
+     "at": 11220,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 11395,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 13011,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_935fed3f157c42fcab9a35fd\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 13011,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 18491,
+     "kind": "STOP"
+    },
+    {
+     "at": 18492,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 18678,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "verdict",
+   "rep": 0,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_TFDN5il3ueR55wDEImWho",
+   "spendCny": 0.009035,
+   "wallMs": 36223,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 7,
+   "cancelled": 4,
+   "textReplies": 1,
+   "callsTotal": 6,
+   "callsRaw": 4,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.222,
+   "deliveries": 2,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0.333,
+   "completes": 2,
+   "continues": 0,
+   "mergedChars": [
+    14,
+    14
+   ],
+   "deliveryCharsTotal": 28,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    614,
+    518,
+    516,
+    641,
+    420,
+    601
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "而且尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "呃，请进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 114,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_Z6lApGYx8afH7m6zTkjUO\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_TT1DxilzvLeHcg"
+   ],
+   "timeline": [
+    {
+     "at": 2967,
+     "kind": "STOP"
+    },
+    {
+     "at": 2967,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3159,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3376,
+     "kind": "RESP"
+    },
+    {
+     "at": 3581,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": "completes"
+    },
+    {
+     "at": 3582,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3772,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_TT1DxilzvLeHcgGx1nGh9\"}"
+    },
+    {
+     "at": 4446,
+     "kind": "STOP"
+    },
+    {
+     "at": 4446,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4584,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6595,
+     "kind": "STOP"
+    },
+    {
+     "at": 6595,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6830,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 6964,
+     "kind": "RESP"
+    },
+    {
+     "at": 7113,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"当然，这里面会有矛盾。我们希望",
+     "part": null
+    },
+    {
+     "at": 7113,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8196,
+     "kind": "STOP"
+    },
+    {
+     "at": 8197,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8428,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 8570,
+     "kind": "RESP"
+    },
+    {
+     "at": 8712,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"当然，这里面会有个矛盾，我们希望它尽可能敏感。\"",
+     "part": null
+    },
+    {
+     "at": 8713,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 12043,
+     "kind": "STOP"
+    },
+    {
+     "at": 12043,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12262,
+     "kind": "ASR",
+     "text": "而且尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 15726,
+     "kind": "STOP"
+    },
+    {
+     "at": 15726,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 15964,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 16107,
+     "kind": "RESP"
+    },
+    {
+     "at": 16367,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"当然这里面会有矛盾，我们希望它尽可能敏感，尽可能的灵敏，更快的有输出。但另外一方面，我们又不希望它过快的把消息",
+     "part": null
+    },
+    {
+     "at": 16367,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 19325,
+     "kind": "STOP"
+    },
+    {
+     "at": 19325,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19566,
+     "kind": "ASR",
+     "text": "呃，请进一步的量化的进行分析。"
+    },
+    {
+     "at": 21075,
+     "kind": "STOP"
+    },
+    {
+     "at": 21075,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21232,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 21452,
+     "kind": "RESP"
+    },
+    {
+     "at": 21495,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"",
+     "part": null
+    },
+    {
+     "at": 21495,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 24125,
+     "kind": "STOP"
+    },
+    {
+     "at": 24125,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24317,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 24469,
+     "kind": "RESP"
+    },
+    {
+     "at": 24726,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "来实验找出可能的更好的方案。",
+     "part": "completes"
+    },
+    {
+     "at": 24727,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 25266,
+     "kind": "RESP"
+    },
+    {
+     "at": 25286,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 25286,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "verdict",
+   "rep": 0,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_RHsACa47ueWW5SkEZkrTf",
+   "spendCny": 0.009771,
+   "wallMs": 36225,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 2,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 1,
+   "completes": 2,
+   "continues": 0,
+   "mergedChars": [
+    23,
+    22
+   ],
+   "deliveryCharsTotal": 45,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    585,
+    584
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "人体组织。",
+    "这次会不会再出现？",
+    "刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 39,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3255,
+     "kind": "STOP"
+    },
+    {
+     "at": 3255,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3487,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 4463,
+     "kind": "STOP"
+    },
+    {
+     "at": 4464,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4593,
+     "kind": "ASR",
+     "text": "人体组织。"
+    },
+    {
+     "at": 4788,
+     "kind": "RESP"
+    },
+    {
+     "at": 5048,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日 Live Voice 第三次录制。",
+     "part": "completes"
+    },
+    {
+     "at": 5049,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5422,
+     "kind": "RESP"
+    },
+    {
+     "at": 5443,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5444,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 17663,
+     "kind": "STOP"
+    },
+    {
+     "at": 17664,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 17840,
+     "kind": "ASR",
+     "text": "这次会不会再出现？"
+    },
+    {
+     "at": 19259,
+     "kind": "STOP"
+    },
+    {
+     "at": 19259,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19437,
+     "kind": "ASR",
+     "text": "刚才那几个问题。"
+    },
+    {
+     "at": 19612,
+     "kind": "RESP"
+    },
+    {
+     "at": 19843,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": "completes"
+    },
+    {
+     "at": 19844,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20238,
+     "kind": "RESP"
+    },
+    {
+     "at": 20262,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 20262,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s400",
+   "rep": 1,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_OqUInuhpya8a38eJA4cGk",
+   "spendCny": 0.013797,
+   "wallMs": 36231,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 7,
+   "cancelled": 2,
+   "textReplies": 2,
+   "callsTotal": 5,
+   "callsRaw": 1,
+   "callsEmpty": 0,
+   "callsEffective": 4,
+   "effectivePerStop": 0.444,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    445,
+    401,
+    492,
+    710,
+    493
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "而且尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "呃，请进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 114,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_FpRAJGvnvomR26VDCYsCu\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_VRaaEQ92C4K7dl",
+    "{\"event_id\":\"event_RUSxSAiQH4gU1oC6HVBff\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_f9fd684968334bd79443008b\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_FQOrS2dplDmx5VNcsWHXa\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_Shu2gbPIkF4HfCYocIoNc\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_15394a79d3dc4dd0b16d7f84\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_GCpUiXCTiY9xgkxr9FG44\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2961,
+     "kind": "STOP"
+    },
+    {
+     "at": 2961,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3153,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3266,
+     "kind": "RESP"
+    },
+    {
+     "at": 3406,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": null
+    },
+    {
+     "at": 3406,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3719,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_VRaaEQ92C4K7dl7zhWSXQ\"}"
+    },
+    {
+     "at": 4431,
+     "kind": "STOP"
+    },
+    {
+     "at": 4431,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4570,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6603,
+     "kind": "STOP"
+    },
+    {
+     "at": 6604,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6833,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 6922,
+     "kind": "RESP"
+    },
+    {
+     "at": 7004,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"呃，当然这里面",
+     "part": null
+    },
+    {
+     "at": 7004,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8196,
+     "kind": "STOP"
+    },
+    {
+     "at": 8196,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8403,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 8509,
+     "kind": "RESP"
+    },
+    {
+     "at": 8688,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "这里面会有矛盾，我们希望它是尽可能敏感。",
+     "part": null
+    },
+    {
+     "at": 8689,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8776,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_f9fd684968334bd79443008b\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 8776,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 12062,
+     "kind": "STOP"
+    },
+    {
+     "at": 12062,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12279,
+     "kind": "ASR",
+     "text": "而且尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 15720,
+     "kind": "STOP"
+    },
+    {
+     "at": 15720,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 15968,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 16112,
+     "kind": "RESP"
+    },
+    {
+     "at": 16430,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "当然，这里面会有矛盾。我们希望它尽可能敏感，而且尽可能的灵敏，然后更快的有输出。但另外一方面，我们也不希望它过快的把消息发出去。",
+     "part": null
+    },
+    {
+     "at": 16431,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 16562,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_15394a79d3dc4dd0b16d7f84\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 16562,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 19315,
+     "kind": "STOP"
+    },
+    {
+     "at": 19315,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19555,
+     "kind": "ASR",
+     "text": "呃，请进一步的量化的进行分析。"
+    },
+    {
+     "at": 21075,
+     "kind": "STOP"
+    },
+    {
+     "at": 21075,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21236,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 21378,
+     "kind": "RESP"
+    },
+    {
+     "at": 21400,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 21400,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24043,
+     "kind": "STOP"
+    },
+    {
+     "at": 24043,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24238,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 24397,
+     "kind": "RESP"
+    },
+    {
+     "at": 24536,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "来实验找出可能的更好的方案。",
+     "part": null
+    },
+    {
+     "at": 24537,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24939,
+     "kind": "RESP"
+    },
+    {
+     "at": 24961,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 24961,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s400",
+   "rep": 1,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_Tj8SO8Kuysdzslc6lPGqB",
+   "spendCny": 0.013605,
+   "wallMs": 36227,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 8,
+   "cancelled": 2,
+   "textReplies": 3,
+   "callsTotal": 4,
+   "callsRaw": 1,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.6,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    364,
+    498,
+    425,
+    456
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "Hey."
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 32,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_TkpOMdkWuPFizHQOBci1r\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_DTkRhwZdbrjilC"
+   ],
+   "timeline": [
+    {
+     "at": 1033,
+     "kind": "STOP"
+    },
+    {
+     "at": 1034,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1174,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 1342,
+     "kind": "RESP"
+    },
+    {
+     "at": 1397,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"那个",
+     "part": null
+    },
+    {
+     "at": 1397,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 2394,
+     "kind": "STOP"
+    },
+    {
+     "at": 2394,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2625,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 2711,
+     "kind": "RESP"
+    },
+    {
+     "at": 3011,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 3011,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3265,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_DTkRhwZdbrjilCgQJjY34\"}"
+    },
+    {
+     "at": 4979,
+     "kind": "STOP"
+    },
+    {
+     "at": 4979,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5204,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5341,
+     "kind": "RESP"
+    },
+    {
+     "at": 5477,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这些请求。",
+     "part": null
+    },
+    {
+     "at": 5478,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5840,
+     "kind": "RESP"
+    },
+    {
+     "at": 5857,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5857,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 6660,
+     "kind": "STOP"
+    },
+    {
+     "at": 6660,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6809,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 6971,
+     "kind": "RESP"
+    },
+    {
+     "at": 7085,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 7086,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7441,
+     "kind": "RESP"
+    },
+    {
+     "at": 7463,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7463,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22546,
+     "kind": "STOP"
+    },
+    {
+     "at": 22546,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 22680,
+     "kind": "ASR",
+     "text": "Hey."
+    },
+    {
+     "at": 22888,
+     "kind": "RESP"
+    },
+    {
+     "at": 23002,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "诶。",
+     "part": null
+    },
+    {
+     "at": 23003,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23384,
+     "kind": "RESP"
+    },
+    {
+     "at": 23405,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23405,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "verdict",
+   "rep": 0,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_RsBYXrnCY9pDTOTCLmR1Q",
+   "spendCny": 0.017473,
+   "wallMs": 36238,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 7,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 4,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 4,
+   "effectivePerStop": 0.8,
+   "deliveries": 4,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 1,
+   "completes": 4,
+   "continues": 0,
+   "mergedChars": [
+    5,
+    10,
+    5,
+    2
+   ],
+   "deliveryCharsTotal": 22,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    509,
+    526,
+    557,
+    543
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 30,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_GpA8eCxU5UyuLpywqq1Bx\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_5eb51969e080443fa0a4af49\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_L4vs3ySv7B2mbNNz71mUG\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_NgF254EqOInXGh2hxEryC\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_22bf5d78bcca4eab92b2c262\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_Du4oEYEnWAhoHMqXhFu5T\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_Ph8ySGQbqynb73bFpLrsK\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+    "{\"event_id\":\"event_Y1izdA5gPHH8lHQfiLmfO\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_57a91b48925048c2a226d060\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_GBZ1cOgjsULi6m3HdVJzN\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2736,
+     "kind": "STOP"
+    },
+    {
+     "at": 2737,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2873,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 3040,
+     "kind": "RESP"
+    },
+    {
+     "at": 3245,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "前面那个。",
+     "part": "completes"
+    },
+    {
+     "at": 3246,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 4965,
+     "kind": "STOP"
+    },
+    {
+     "at": 4965,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5165,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 5318,
+     "kind": "RESP"
+    },
+    {
+     "at": 5573,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 5573,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 6841,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_5eb51969e080443fa0a4af49\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 6841,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 10150,
+     "kind": "STOP"
+    },
+    {
+     "at": 10150,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 10402,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 10465,
+     "kind": "RESP"
+    },
+    {
+     "at": 10676,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的接请求。",
+     "part": "completes"
+    },
+    {
+     "at": 10676,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 12265,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_22bf5d78bcca4eab92b2c262\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 12266,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 12783,
+     "kind": "STOP"
+    },
+    {
+     "at": 12783,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12934,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 13110,
+     "kind": "RESP"
+    },
+    {
+     "at": 13340,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": "completes"
+    },
+    {
+     "at": 13341,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 13440,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 13440,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_57a91b48925048c2a226d060\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 13440,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 14233,
+     "kind": "RESP"
+    },
+    {
+     "at": 14255,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 14256,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23012,
+     "kind": "STOP"
+    },
+    {
+     "at": 23012,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23181,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23346,
+     "kind": "RESP"
+    },
+    {
+     "at": 23555,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎。",
+     "part": "completes"
+    },
+    {
+     "at": 23555,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24501,
+     "kind": "RESP"
+    },
+    {
+     "at": 24523,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 24523,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s400",
+   "rep": 1,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_FDZvkr3zqCK5YbVeM42z8",
+   "spendCny": 0.008388,
+   "wallMs": 36240,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    495,
+    476
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "第三次录制。",
+    "现在我们看看这次会不会再出现。",
+    "才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 45,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_TM96lIQAJIAXROxBBAPHg\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+    "{\"event_id\":\"event_QqlmevnZTaFXYEFtiGH9z\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+   ],
+   "timeline": [
+    {
+     "at": 4814,
+     "kind": "STOP"
+    },
+    {
+     "at": 4815,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4995,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 6088,
+     "kind": "STOP"
+    },
+    {
+     "at": 6088,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6246,
+     "kind": "ASR",
+     "text": "第三次录制。"
+    },
+    {
+     "at": 6400,
+     "kind": "RESP"
+    },
+    {
+     "at": 6583,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日Live Voice第三次录制。",
+     "part": null
+    },
+    {
+     "at": 6583,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 8257,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 8519,
+     "kind": "RESP"
+    },
+    {
+     "at": 8541,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 8542,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 19630,
+     "kind": "STOP"
+    },
+    {
+     "at": 19630,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19822,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现。"
+    },
+    {
+     "at": 21693,
+     "kind": "STOP"
+    },
+    {
+     "at": 21693,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21902,
+     "kind": "ASR",
+     "text": "才那几个问题。"
+    },
+    {
+     "at": 22008,
+     "kind": "RESP"
+    },
+    {
+     "at": 22169,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 22169,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22599,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 22863,
+     "kind": "RESP"
+    },
+    {
+     "at": 22886,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 22887,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s800",
+   "rep": 1,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_Cutes26kz4HtAb1sMjaaA",
+   "spendCny": 0,
+   "wallMs": 36217,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 1,
+   "cancelled": 1,
+   "textReplies": 0,
+   "callsTotal": 1,
+   "callsRaw": 0,
+   "callsEmpty": 1,
+   "callsEffective": 0,
+   "effectivePerStop": 0,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    336
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "当然，这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 81,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3604,
+     "kind": "STOP"
+    },
+    {
+     "at": 3604,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3789,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 8770,
+     "kind": "STOP"
+    },
+    {
+     "at": 8771,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8972,
+     "kind": "ASR",
+     "text": "当然，这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 9095,
+     "kind": "RESP"
+    },
+    {
+     "at": 9106,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "",
+     "part": null
+    },
+    {
+     "at": 9106,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 10814,
+     "kind": "STOP"
+    },
+    {
+     "at": 10815,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 10981,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 20862,
+     "kind": "STOP"
+    },
+    {
+     "at": 20862,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21032,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s800",
+   "rep": 1,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_JGxneGeQ6UDBAnlxZsb3i",
+   "spendCny": 0.008307,
+   "wallMs": 36227,
+   "upstreamStops": 2,
+   "commits": 2,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 1,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    496,
+    470
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice第三次录制。",
+    "现在我们看看这次会不会再出现刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 44,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 4856,
+     "kind": "STOP"
+    },
+    {
+     "at": 4857,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5059,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice第三次录制。"
+    },
+    {
+     "at": 5167,
+     "kind": "RESP"
+    },
+    {
+     "at": 5352,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日，Live Voice第三次录制。",
+     "part": null
+    },
+    {
+     "at": 5353,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5677,
+     "kind": "RESP"
+    },
+    {
+     "at": 5699,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5700,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 19654,
+     "kind": "STOP"
+    },
+    {
+     "at": 19654,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19882,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现刚才那几个问题。"
+    },
+    {
+     "at": 19964,
+     "kind": "RESP"
+    },
+    {
+     "at": 20124,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 20124,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20490,
+     "kind": "RESP"
+    },
+    {
+     "at": 20512,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 20512,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s800",
+   "rep": 1,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_NIhQUyMdaAw3J6yyEUt8y",
+   "spendCny": 0.008363,
+   "wallMs": 36230,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 1,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.75,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    476,
+    451,
+    483
+   ],
+   "transcripts": [
+    "前面那个处理停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 28,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_EVRe6wcj53bwcGaNRz46d\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_17b48f1ad1e34cf5b6cb38c0\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_LM3SuyzdgDzkB8jXB3RnO\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_EWQkY2BhKxYcmhbkZh88s\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+    "{\"event_id\":\"event_OTZklFNEhUX8Mfa9LwRqI\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_dd791511d0894d47a4d542a1\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_OFez3B1VZlnE8pqVVN3KV\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2991,
+     "kind": "STOP"
+    },
+    {
+     "at": 2991,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3183,
+     "kind": "ASR",
+     "text": "前面那个处理停下来吧。"
+    },
+    {
+     "at": 6621,
+     "kind": "STOP"
+    },
+    {
+     "at": 6621,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6801,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 6960,
+     "kind": "RESP"
+    },
+    {
+     "at": 7097,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这些请求。",
+     "part": null
+    },
+    {
+     "at": 7097,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 8985,
+     "kind": "STOP"
+    },
+    {
+     "at": 8985,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 9142,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 9201,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_17b48f1ad1e34cf5b6cb38c0\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 9201,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 9318,
+     "kind": "RESP"
+    },
+    {
+     "at": 9436,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 9436,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 10513,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 10800,
+     "kind": "RESP"
+    },
+    {
+     "at": 10821,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 10822,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24325,
+     "kind": "STOP"
+    },
+    {
+     "at": 24325,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24472,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 24669,
+     "kind": "RESP"
+    },
+    {
+     "at": 24808,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "诶。",
+     "part": null
+    },
+    {
+     "at": 24808,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 26663,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_dd791511d0894d47a4d542a1\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 26663,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "verdict",
+   "rep": 1,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_ZYCPQZJs86i5GePm1MRZu",
+   "spendCny": 0.00904,
+   "wallMs": 36221,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 8,
+   "cancelled": 5,
+   "textReplies": 1,
+   "callsTotal": 7,
+   "callsRaw": 5,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.222,
+   "deliveries": 2,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0.286,
+   "completes": 2,
+   "continues": 0,
+   "mergedChars": [
+    14,
+    16
+   ],
+   "deliveryCharsTotal": 30,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    520,
+    373,
+    476,
+    412,
+    644,
+    397,
+    586
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "呃，行，进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 116,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_DMNz2WegUG7SareMCZmi9\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_L3vA2iDtnUocys"
+   ],
+   "timeline": [
+    {
+     "at": 2973,
+     "kind": "STOP"
+    },
+    {
+     "at": 2973,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3165,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3285,
+     "kind": "RESP"
+    },
+    {
+     "at": 3493,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": "completes"
+    },
+    {
+     "at": 3493,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3748,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_L3vA2iDtnUocysFmxDEMo\"}"
+    },
+    {
+     "at": 4445,
+     "kind": "STOP"
+    },
+    {
+     "at": 4445,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4591,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6638,
+     "kind": "STOP"
+    },
+    {
+     "at": 6638,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6888,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 6972,
+     "kind": "RESP"
+    },
+    {
+     "at": 7011,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"",
+     "part": null
+    },
+    {
+     "at": 7011,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8237,
+     "kind": "STOP"
+    },
+    {
+     "at": 8237,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8429,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 8567,
+     "kind": "RESP"
+    },
+    {
+     "at": 8713,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"呃当然，这里面会有个矛盾，我们希望它尽可能",
+     "part": null
+    },
+    {
+     "at": 8713,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 12044,
+     "kind": "STOP"
+    },
+    {
+     "at": 12045,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12264,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 12381,
+     "kind": "RESP"
+    },
+    {
+     "at": 12456,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"当然，这里面",
+     "part": null
+    },
+    {
+     "at": 12457,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 15727,
+     "kind": "STOP"
+    },
+    {
+     "at": 15727,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 15970,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 16072,
+     "kind": "RESP"
+    },
+    {
+     "at": 16371,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"呃，当然这里面会有个矛盾，我们希望它是尽可能敏感，啊就尽可能的灵敏，然后更快的有有输出。但另外一方面我们又不希望它过",
+     "part": null
+    },
+    {
+     "at": 16372,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 19334,
+     "kind": "STOP"
+    },
+    {
+     "at": 19334,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19593,
+     "kind": "ASR",
+     "text": "呃，行，进一步的量化的进行分析。"
+    },
+    {
+     "at": 21092,
+     "kind": "STOP"
+    },
+    {
+     "at": 21093,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21250,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 21441,
+     "kind": "RESP"
+    },
+    {
+     "at": 21489,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"呃",
+     "part": null
+    },
+    {
+     "at": 21489,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 24042,
+     "kind": "STOP"
+    },
+    {
+     "at": 24042,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24241,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 24393,
+     "kind": "RESP"
+    },
+    {
+     "at": 24628,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "然后来实验找出可能的更好的方案。",
+     "part": "completes"
+    },
+    {
+     "at": 24628,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 25131,
+     "kind": "RESP"
+    },
+    {
+     "at": 25151,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 25152,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "verdict",
+   "rep": 1,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_EL74gPJHfJzc3mUu3X9xd",
+   "spendCny": 0.015695,
+   "wallMs": 36230,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 7,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 4,
+   "callsRaw": 0,
+   "callsEmpty": 1,
+   "callsEffective": 3,
+   "effectivePerStop": 0.6,
+   "deliveries": 3,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0.75,
+   "completes": 3,
+   "continues": 0,
+   "mergedChars": [
+    11,
+    5,
+    2
+   ],
+   "deliveryCharsTotal": 18,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    328,
+    597,
+    563,
+    575
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "Hey."
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 32,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_Y8FD7haF3yTQzqtBFDPro\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_BPCsjcOclb3oxP",
+    "{\"event_id\":\"event_Q8BbCDwneHEjvYi8Skd96\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_IsjSyHrJn6OLLT"
+   ],
+   "timeline": [
+    {
+     "at": 1037,
+     "kind": "STOP"
+    },
+    {
+     "at": 1037,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1172,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 1364,
+     "kind": "RESP"
+    },
+    {
+     "at": 1365,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "",
+     "part": null
+    },
+    {
+     "at": 1365,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 2403,
+     "kind": "STOP"
+    },
+    {
+     "at": 2403,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2623,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 2723,
+     "kind": "RESP"
+    },
+    {
+     "at": 2996,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "那个处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 2996,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3234,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_BPCsjcOclb3oxPXCFo5SJ\"}"
+    },
+    {
+     "at": 4982,
+     "kind": "STOP"
+    },
+    {
+     "at": 4982,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5205,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5363,
+     "kind": "RESP"
+    },
+    {
+     "at": 5579,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这些请求。",
+     "part": "completes"
+    },
+    {
+     "at": 5579,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5847,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_IsjSyHrJn6OLLT2uU7kw4\"}"
+    },
+    {
+     "at": 6474,
+     "kind": "STOP"
+    },
+    {
+     "at": 6474,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6621,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 6822,
+     "kind": "RESP"
+    },
+    {
+     "at": 7037,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": "completes"
+    },
+    {
+     "at": 7038,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7416,
+     "kind": "RESP"
+    },
+    {
+     "at": 7438,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7438,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22584,
+     "kind": "STOP"
+    },
+    {
+     "at": 22584,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 22715,
+     "kind": "ASR",
+     "text": "Hey."
+    },
+    {
+     "at": 22945,
+     "kind": "RESP"
+    },
+    {
+     "at": 23159,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "行。",
+     "part": "completes"
+    },
+    {
+     "at": 23160,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23660,
+     "kind": "RESP"
+    },
+    {
+     "at": 23683,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23683,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "verdict",
+   "rep": 1,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_GVhRn5KtrcSTZy3PiOCw4",
+   "spendCny": 0.00978,
+   "wallMs": 36230,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 2,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 1,
+   "completes": 2,
+   "continues": 0,
+   "mergedChars": [
+    23,
+    22
+   ],
+   "deliveryCharsTotal": 45,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    634,
+    549
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "是。",
+    "现在我们看看这次会不会再出现。",
+    "刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 42,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3499,
+     "kind": "STOP"
+    },
+    {
+     "at": 3500,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3763,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 5666,
+     "kind": "STOP"
+    },
+    {
+     "at": 5666,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5806,
+     "kind": "ASR",
+     "text": "是。"
+    },
+    {
+     "at": 6042,
+     "kind": "RESP"
+    },
+    {
+     "at": 6300,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日，Live Voice 第三次录制。",
+     "part": "completes"
+    },
+    {
+     "at": 6301,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7534,
+     "kind": "RESP"
+    },
+    {
+     "at": 7555,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7556,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 18967,
+     "kind": "STOP"
+    },
+    {
+     "at": 18967,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19319,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现。"
+    },
+    {
+     "at": 20372,
+     "kind": "STOP"
+    },
+    {
+     "at": 20372,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 20552,
+     "kind": "ASR",
+     "text": "刚才那几个问题。"
+    },
+    {
+     "at": 20693,
+     "kind": "RESP"
+    },
+    {
+     "at": 20921,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": "completes"
+    },
+    {
+     "at": 20922,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22892,
+     "kind": "RESP"
+    },
+    {
+     "at": 22914,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 22914,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s400",
+   "rep": 2,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_SIehSZBl9TLfnGE8ZVUCy",
+   "spendCny": 0.010737,
+   "wallMs": 36221,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 5,
+   "cancelled": 1,
+   "textReplies": 1,
+   "callsTotal": 4,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 4,
+   "effectivePerStop": 0.444,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    452,
+    645,
+    495,
+    527
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 112,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_LfaWqMsPSHUJ17Q6lkURX\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_ec6d12945bb644f28c5f70ab\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_QbGHE6D8h5BON5nSROuYD\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_J2mfdfEWvAXhqspcy4644\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_876d6e32ac2845b288088159\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_B3wcVrc2vmxi5wMMnpUhi\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_CY9RocoeOk4qQfLcp6DqQ\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_f5519817cde1460da243212c\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_BjIzeSMv8AfSlfTjr3J68\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 3695,
+     "kind": "STOP"
+    },
+    {
+     "at": 3695,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3872,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 4005,
+     "kind": "RESP"
+    },
+    {
+     "at": 4147,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": null
+    },
+    {
+     "at": 4148,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 4964,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_ec6d12945bb644f28c5f70ab\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 4964,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 5033,
+     "kind": "STOP"
+    },
+    {
+     "at": 5033,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5170,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 7887,
+     "kind": "STOP"
+    },
+    {
+     "at": 7887,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8106,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 8902,
+     "kind": "STOP"
+    },
+    {
+     "at": 8903,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 9113,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 13898,
+     "kind": "STOP"
+    },
+    {
+     "at": 13898,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 14115,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 14249,
+     "kind": "RESP"
+    },
+    {
+     "at": 14543,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "当然，这里面会有矛盾。我们希望它尽可能敏感，而且尽可能的灵敏，然后更快的有输出。",
+     "part": null
+    },
+    {
+     "at": 14544,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 17651,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_876d6e32ac2845b288088159\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 17651,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 20050,
+     "kind": "STOP"
+    },
+    {
+     "at": 20051,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 20289,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 23282,
+     "kind": "STOP"
+    },
+    {
+     "at": 23282,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23529,
+     "kind": "ASR",
+     "text": "进一步的量化的进行分析。"
+    },
+    {
+     "at": 24961,
+     "kind": "STOP"
+    },
+    {
+     "at": 24961,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 25134,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 25340,
+     "kind": "RESP"
+    },
+    {
+     "at": 25456,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "然后。",
+     "part": null
+    },
+    {
+     "at": 25457,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 29131,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_f5519817cde1460da243212c\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 29131,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 29169,
+     "kind": "STOP"
+    },
+    {
+     "at": 29169,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 29367,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 29554,
+     "kind": "RESP"
+    },
+    {
+     "at": 29696,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "来实验找出可能的更好的方案。",
+     "part": null
+    },
+    {
+     "at": 29697,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 30767,
+     "kind": "RESP"
+    },
+    {
+     "at": 30789,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 30789,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s400",
+   "rep": 2,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_Zq42DT1pSIjXb94EDttnG",
+   "spendCny": 0.010965,
+   "wallMs": 36224,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 6,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 1,
+   "callsEffective": 2,
+   "effectivePerStop": 0.4,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    316,
+    508,
+    452
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "Hey."
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 32,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_MPcK3tF9pDJvtxGcZGitU\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_NmLF3da7fqPbzF",
+    "{\"event_id\":\"event_EaNxpuB8v1gQoh6nVLowq\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_CXggGBcwwIL4Sq"
+   ],
+   "timeline": [
+    {
+     "at": 1060,
+     "kind": "STOP"
+    },
+    {
+     "at": 1061,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1200,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 1362,
+     "kind": "RESP"
+    },
+    {
+     "at": 1376,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "",
+     "part": null
+    },
+    {
+     "at": 1376,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 2409,
+     "kind": "STOP"
+    },
+    {
+     "at": 2409,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2624,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 2702,
+     "kind": "RESP"
+    },
+    {
+     "at": 2986,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 2986,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3239,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_NmLF3da7fqPbzFo2ck5xO\"}"
+    },
+    {
+     "at": 4999,
+     "kind": "STOP"
+    },
+    {
+     "at": 5000,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5217,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5362,
+     "kind": "RESP"
+    },
+    {
+     "at": 5507,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这个请求。",
+     "part": null
+    },
+    {
+     "at": 5507,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5869,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_CXggGBcwwIL4SqucYblbD\"}"
+    },
+    {
+     "at": 6490,
+     "kind": "STOP"
+    },
+    {
+     "at": 6490,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6640,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 6755,
+     "kind": "RESP"
+    },
+    {
+     "at": 6776,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 6777,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22600,
+     "kind": "STOP"
+    },
+    {
+     "at": 22601,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 22733,
+     "kind": "ASR",
+     "text": "Hey."
+    },
+    {
+     "at": 22917,
+     "kind": "RESP"
+    },
+    {
+     "at": 23052,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。哎。",
+     "part": null
+    },
+    {
+     "at": 23053,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23434,
+     "kind": "RESP"
+    },
+    {
+     "at": 23455,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23455,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s400",
+   "rep": 2,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_VLAmDbfS8eWdzz971Xl8n",
+   "spendCny": 0.008424,
+   "wallMs": 36227,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    503,
+    514
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "人体组织。",
+    "这次会不会再出现？",
+    "才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 38,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3257,
+     "kind": "STOP"
+    },
+    {
+     "at": 3257,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3530,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 4464,
+     "kind": "STOP"
+    },
+    {
+     "at": 4464,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4602,
+     "kind": "ASR",
+     "text": "人体组织。"
+    },
+    {
+     "at": 4801,
+     "kind": "RESP"
+    },
+    {
+     "at": 4967,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "10月15日Live Voice第三次录制。",
+     "part": null
+    },
+    {
+     "at": 4968,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5323,
+     "kind": "RESP"
+    },
+    {
+     "at": 5344,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5344,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 17684,
+     "kind": "STOP"
+    },
+    {
+     "at": 17684,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 17864,
+     "kind": "ASR",
+     "text": "这次会不会再出现？"
+    },
+    {
+     "at": 19337,
+     "kind": "STOP"
+    },
+    {
+     "at": 19337,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19528,
+     "kind": "ASR",
+     "text": "才那几个问题。"
+    },
+    {
+     "at": 19685,
+     "kind": "RESP"
+    },
+    {
+     "at": 19851,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 19852,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20215,
+     "kind": "RESP"
+    },
+    {
+     "at": 20238,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 20238,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s800",
+   "rep": 2,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_F54nks32gjvKN2SfzK3ri",
+   "spendCny": 0,
+   "wallMs": 36247,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 0,
+   "cancelled": 0,
+   "textReplies": 0,
+   "callsTotal": 0,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 0,
+   "effectivePerStop": 0,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": null,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然，这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 83,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3481,
+     "kind": "STOP"
+    },
+    {
+     "at": 3482,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3676,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 6982,
+     "kind": "STOP"
+    },
+    {
+     "at": 6982,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7196,
+     "kind": "ASR",
+     "text": "呃，当然，这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 8583,
+     "kind": "STOP"
+    },
+    {
+     "at": 8583,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8754,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 16182,
+     "kind": "STOP"
+    },
+    {
+     "at": 16182,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 16365,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s800",
+   "rep": 2,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_Gd9452v9VlJKaRU5Zag9S",
+   "spendCny": 0.010608,
+   "wallMs": 36241,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 6,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.75,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    446,
+    498,
+    414
+   ],
+   "transcripts": [
+    "前面那个处理停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 28,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_PkVIyRQ2YUHQMKA5dQy3R\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_20f61ce20a614b89a60d08dd\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_FFFdshM5HvBYQzTUSka38\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2804,
+     "kind": "STOP"
+    },
+    {
+     "at": 2804,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3004,
+     "kind": "ASR",
+     "text": "前面那个处理停下来吧。"
+    },
+    {
+     "at": 3087,
+     "kind": "RESP"
+    },
+    {
+     "at": 3199,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "{\"message\": \"前面那个处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 3200,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 5365,
+     "kind": "STOP"
+    },
+    {
+     "at": 5366,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5555,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5673,
+     "kind": "RESP"
+    },
+    {
+     "at": 5811,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这些请求。",
+     "part": null
+    },
+    {
+     "at": 5812,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5905,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_20f61ce20a614b89a60d08dd\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 5905,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 6884,
+     "kind": "STOP"
+    },
+    {
+     "at": 6885,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7039,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 7255,
+     "kind": "RESP"
+    },
+    {
+     "at": 7382,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 7382,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7727,
+     "kind": "RESP"
+    },
+    {
+     "at": 7749,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7750,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22981,
+     "kind": "STOP"
+    },
+    {
+     "at": 22981,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23121,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23281,
+     "kind": "RESP"
+    },
+    {
+     "at": 23395,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "诶。",
+     "part": null
+    },
+    {
+     "at": 23396,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23752,
+     "kind": "RESP"
+    },
+    {
+     "at": 23774,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23774,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s800",
+   "rep": 2,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_KwUzn8ij2PwwiwuwtPsIo",
+   "spendCny": 0.008307,
+   "wallMs": 36205,
+   "upstreamStops": 2,
+   "commits": 2,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 1,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    482,
+    487
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice第三次录制。",
+    "现在我们看看这次会不会再出现刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 44,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 4911,
+     "kind": "STOP"
+    },
+    {
+     "at": 4911,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5108,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice第三次录制。"
+    },
+    {
+     "at": 5210,
+     "kind": "RESP"
+    },
+    {
+     "at": 5393,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日，Live Voice第三次录制。",
+     "part": null
+    },
+    {
+     "at": 5394,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5743,
+     "kind": "RESP"
+    },
+    {
+     "at": 5765,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5766,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 19661,
+     "kind": "STOP"
+    },
+    {
+     "at": 19661,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19880,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现刚才那几个问题。"
+    },
+    {
+     "at": 19984,
+     "kind": "RESP"
+    },
+    {
+     "at": 20148,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 20148,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20516,
+     "kind": "RESP"
+    },
+    {
+     "at": 20540,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 20540,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "verdict",
+   "rep": 2,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_KKCdwURFraTauWFl9cX9H",
+   "spendCny": 0.014696,
+   "wallMs": 36221,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 6,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 4,
+   "callsRaw": 0,
+   "callsEmpty": 1,
+   "callsEffective": 3,
+   "effectivePerStop": 0.333,
+   "deliveries": 3,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0.75,
+   "completes": 3,
+   "continues": 0,
+   "mergedChars": [
+    14,
+    24,
+    17
+   ],
+   "deliveryCharsTotal": 55,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    537,
+    397,
+    615,
+    549
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "呃，行，进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 116,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_UH6Zego2l2pWTV24Z5Q5o\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_AhWCIfGuphBrcy",
+    "{\"event_id\":\"event_I1aBCZjwcMfMBLC9r7MpF\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_7719f9d605bc43739b4c750d\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_OIjGDQO4yPO7omRfR8XUk\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2959,
+     "kind": "STOP"
+    },
+    {
+     "at": 2959,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3152,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3287,
+     "kind": "RESP"
+    },
+    {
+     "at": 3496,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": "completes"
+    },
+    {
+     "at": 3497,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3726,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_AhWCIfGuphBrcyv8IMDqE\"}"
+    },
+    {
+     "at": 4439,
+     "kind": "STOP"
+    },
+    {
+     "at": 4439,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4583,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6609,
+     "kind": "STOP"
+    },
+    {
+     "at": 6609,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6836,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 6992,
+     "kind": "RESP"
+    },
+    {
+     "at": 7006,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "",
+     "part": null
+    },
+    {
+     "at": 7006,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8209,
+     "kind": "STOP"
+    },
+    {
+     "at": 8210,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8419,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 8500,
+     "kind": "RESP"
+    },
+    {
+     "at": 8522,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 8523,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 12048,
+     "kind": "STOP"
+    },
+    {
+     "at": 12049,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12286,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 15720,
+     "kind": "STOP"
+    },
+    {
+     "at": 15720,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 15970,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 16080,
+     "kind": "RESP"
+    },
+    {
+     "at": 16335,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "但另外一方面，我们又不希望他过快的把消息发出去。",
+     "part": "completes"
+    },
+    {
+     "at": 16336,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 16425,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_7719f9d605bc43739b4c750d\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 16425,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 19323,
+     "kind": "STOP"
+    },
+    {
+     "at": 19323,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19576,
+     "kind": "ASR",
+     "text": "呃，行，进一步的量化的进行分析。"
+    },
+    {
+     "at": 21090,
+     "kind": "STOP"
+    },
+    {
+     "at": 21090,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21251,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 24038,
+     "kind": "STOP"
+    },
+    {
+     "at": 24038,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24233,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 24333,
+     "kind": "RESP"
+    },
+    {
+     "at": 24587,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "然后，来实验找出可能的更好的方案。",
+     "part": "completes"
+    },
+    {
+     "at": 24588,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24911,
+     "kind": "RESP"
+    },
+    {
+     "at": 24934,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 24934,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "verdict",
+   "rep": 2,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_TJKCTRsed7GDqKtekYUbw",
+   "spendCny": 0.015734,
+   "wallMs": 36217,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 6,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.6,
+   "deliveries": 3,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 1,
+   "completes": 3,
+   "continues": 0,
+   "mergedChars": [
+    10,
+    5,
+    2
+   ],
+   "deliveryCharsTotal": 17,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    587,
+    545,
+    651
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "Hey."
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 32,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_FurktTjQL9ZbA49Pk3BUF\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_R5s1KAQiK9bNRy",
+    "{\"event_id\":\"event_OpJIOuLOWov5LBMHypuwQ\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_WkH6u6UjywEzOk"
+   ],
+   "timeline": [
+    {
+     "at": 1050,
+     "kind": "STOP"
+    },
+    {
+     "at": 1050,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1190,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 2400,
+     "kind": "STOP"
+    },
+    {
+     "at": 2400,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2624,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 2702,
+     "kind": "RESP"
+    },
+    {
+     "at": 2986,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "前面那个，处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 2988,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3230,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_R5s1KAQiK9bNRy6VyA45I\"}"
+    },
+    {
+     "at": 4985,
+     "kind": "STOP"
+    },
+    {
+     "at": 4985,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5213,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5362,
+     "kind": "RESP"
+    },
+    {
+     "at": 5572,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这请求。",
+     "part": "completes"
+    },
+    {
+     "at": 5573,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5857,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_WkH6u6UjywEzOkMNsyUca\"}"
+    },
+    {
+     "at": 6481,
+     "kind": "STOP"
+    },
+    {
+     "at": 6481,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6632,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 6817,
+     "kind": "RESP"
+    },
+    {
+     "at": 7026,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": "completes"
+    },
+    {
+     "at": 7027,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7398,
+     "kind": "RESP"
+    },
+    {
+     "at": 7421,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7421,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22575,
+     "kind": "STOP"
+    },
+    {
+     "at": 22575,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 22709,
+     "kind": "ASR",
+     "text": "Hey."
+    },
+    {
+     "at": 23019,
+     "kind": "RESP"
+    },
+    {
+     "at": 23226,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎。",
+     "part": "completes"
+    },
+    {
+     "at": 23227,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23721,
+     "kind": "RESP"
+    },
+    {
+     "at": 23743,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23744,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "verdict",
+   "rep": 2,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_Uo1hcFTOQkQ6Wm9RoAqC9",
+   "spendCny": 0.012442,
+   "wallMs": 36240,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 5,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.75,
+   "deliveries": 3,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 1,
+   "completes": 3,
+   "continues": 0,
+   "mergedChars": [
+    22,
+    15,
+    8
+   ],
+   "deliveryCharsTotal": 45,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    555,
+    541,
+    531
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "第三次录制。",
+    "现在我们看看这次会不会再出现。",
+    "刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 46,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_SUYbMxmvyGcje7C2HAyYM\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_d9bc1151528243c7be0b3682\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_UOafaO98RxcI8hyKxyWV9\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 3447,
+     "kind": "STOP"
+    },
+    {
+     "at": 3447,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3694,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 4726,
+     "kind": "STOP"
+    },
+    {
+     "at": 4726,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4884,
+     "kind": "ASR",
+     "text": "第三次录制。"
+    },
+    {
+     "at": 5031,
+     "kind": "RESP"
+    },
+    {
+     "at": 5281,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日，Live Voice第三次录制。",
+     "part": "completes"
+    },
+    {
+     "at": 5281,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5762,
+     "kind": "RESP"
+    },
+    {
+     "at": 5784,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5785,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 17742,
+     "kind": "STOP"
+    },
+    {
+     "at": 17742,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 17936,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现。"
+    },
+    {
+     "at": 18073,
+     "kind": "RESP"
+    },
+    {
+     "at": 18283,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现。",
+     "part": "completes"
+    },
+    {
+     "at": 18284,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 18485,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_d9bc1151528243c7be0b3682\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 18485,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 19450,
+     "kind": "STOP"
+    },
+    {
+     "at": 19450,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19624,
+     "kind": "ASR",
+     "text": "刚才那几个问题。"
+    },
+    {
+     "at": 19773,
+     "kind": "RESP"
+    },
+    {
+     "at": 19981,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "刚才那几个问题。",
+     "part": "completes"
+    },
+    {
+     "at": 19981,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 21017,
+     "kind": "RESP"
+    },
+    {
+     "at": 21040,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 21040,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s400",
+   "rep": 3,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_IyzisPJhDcDm1NTk5KNdO",
+   "spendCny": 0.014962,
+   "wallMs": 36239,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 7,
+   "cancelled": 0,
+   "textReplies": 3,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.6,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    395,
+    430,
+    443
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 30,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_SZH34dGqVig4nvXn7MDWw\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_e2f5472ff8b445c7a96e0f9b\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_DMGwjOdV2e6m8gHYjO8wR\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_F87lkKf8N7V13LdOHxRAY\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_JeVOsY4BBdovMf"
+   ],
+   "timeline": [
+    {
+     "at": 1238,
+     "kind": "STOP"
+    },
+    {
+     "at": 1239,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1378,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 1520,
+     "kind": "RESP"
+    },
+    {
+     "at": 1633,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "前面那个。",
+     "part": null
+    },
+    {
+     "at": 1633,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 1924,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_e2f5472ff8b445c7a96e0f9b\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 1924,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 2565,
+     "kind": "STOP"
+    },
+    {
+     "at": 2565,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2780,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 2864,
+     "kind": "RESP"
+    },
+    {
+     "at": 3096,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 3097,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3377,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_JeVOsY4BBdovMf6KrB2s7\"}"
+    },
+    {
+     "at": 6812,
+     "kind": "STOP"
+    },
+    {
+     "at": 6812,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6986,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 7070,
+     "kind": "RESP"
+    },
+    {
+     "at": 7092,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7093,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7861,
+     "kind": "STOP"
+    },
+    {
+     "at": 7862,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8008,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 8172,
+     "kind": "RESP"
+    },
+    {
+     "at": 8291,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 8291,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 8768,
+     "kind": "RESP"
+    },
+    {
+     "at": 8790,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 8791,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22708,
+     "kind": "STOP"
+    },
+    {
+     "at": 22708,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 22830,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23036,
+     "kind": "RESP"
+    },
+    {
+     "at": 23151,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "行。",
+     "part": null
+    },
+    {
+     "at": 23152,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23676,
+     "kind": "RESP"
+    },
+    {
+     "at": 23698,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23698,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s400",
+   "rep": 3,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_Rfp8ktg2wFiyhepKmJ68n",
+   "spendCny": 0.008583,
+   "wallMs": 36238,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 7,
+   "cancelled": 4,
+   "textReplies": 1,
+   "callsTotal": 6,
+   "callsRaw": 4,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.222,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    385,
+    422,
+    527,
+    389,
+    491,
+    462
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "而且尽可能的灵敏，然后更快的有有输出。",
+    "方面，我们也不希望他过快的把消息发出去。",
+    "呃，行，进一步的量化的进行分析。",
+    "",
+    "先找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 1,
+   "joinedChars": 106,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_HMsO9Y6rwGa5RbwemPXnb\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_be626a970fd744f29bb92540\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_RudN2IxyacG1tDUDRVqf4\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 4173,
+     "kind": "STOP"
+    },
+    {
+     "at": 4173,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4364,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 4474,
+     "kind": "RESP"
+    },
+    {
+     "at": 4558,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"可能前后的间隔并不是那么大。",
+     "part": null
+    },
+    {
+     "at": 4558,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 4874,
+     "kind": "STOP"
+    },
+    {
+     "at": 4874,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5016,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6924,
+     "kind": "STOP"
+    },
+    {
+     "at": 6924,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7176,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 7216,
+     "kind": "RESP"
+    },
+    {
+     "at": 7346,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"这里面会有矛盾，我们希望。\"",
+     "part": null
+    },
+    {
+     "at": 7346,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 9002,
+     "kind": "STOP"
+    },
+    {
+     "at": 9002,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 9211,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 9291,
+     "kind": "RESP"
+    },
+    {
+     "at": 9529,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"可能前后的间隔并不是那么大。呃，当然这里面会有矛盾，我们希望它是尽可能敏感。\"",
+     "part": null
+    },
+    {
+     "at": 9530,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 12735,
+     "kind": "STOP"
+    },
+    {
+     "at": 12735,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12952,
+     "kind": "ASR",
+     "text": "而且尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 13036,
+     "kind": "RESP"
+    },
+    {
+     "at": 13124,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"啊，当然这里面",
+     "part": null
+    },
+    {
+     "at": 13124,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 18649,
+     "kind": "STOP"
+    },
+    {
+     "at": 18649,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 18884,
+     "kind": "ASR",
+     "text": "方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 18958,
+     "kind": "RESP"
+    },
+    {
+     "at": 19140,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "但另外一方面，我们也不希望它过快地把消息发出去。",
+     "part": null
+    },
+    {
+     "at": 19141,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23146,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_be626a970fd744f29bb92540\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 23146,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 23179,
+     "kind": "STOP"
+    },
+    {
+     "at": 23179,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23394,
+     "kind": "ASR",
+     "text": "呃，行，进一步的量化的进行分析。"
+    },
+    {
+     "at": 25449,
+     "kind": "STOP"
+    },
+    {
+     "at": 25449,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 25571,
+     "kind": "ASR",
+     "text": ""
+    },
+    {
+     "at": 29832,
+     "kind": "STOP"
+    },
+    {
+     "at": 29832,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 30072,
+     "kind": "ASR",
+     "text": "先找出可能的更好的方案。"
+    },
+    {
+     "at": 30155,
+     "kind": "RESP"
+    },
+    {
+     "at": 30294,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "来实验找出可能的更好的方案。",
+     "part": null
+    },
+    {
+     "at": 30295,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 30793,
+     "kind": "RESP"
+    },
+    {
+     "at": 30815,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 30815,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s400",
+   "rep": 3,
+   "silenceMs": 400,
+   "verdict": false,
+   "sessionId": "sess_KWShUhsHzEffepIjrG715",
+   "spendCny": 0.008397,
+   "wallMs": 36236,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    504,
+    471
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "人体组织。",
+    "现在我们看看这次会不会再出现。",
+    "才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 44,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3257,
+     "kind": "STOP"
+    },
+    {
+     "at": 3257,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3494,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 4455,
+     "kind": "STOP"
+    },
+    {
+     "at": 4456,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4792,
+     "kind": "ASR",
+     "text": "人体组织。"
+    },
+    {
+     "at": 4792,
+     "kind": "RESP"
+    },
+    {
+     "at": 4959,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日，Live Voice第三次录制。",
+     "part": null
+    },
+    {
+     "at": 4960,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5289,
+     "kind": "RESP"
+    },
+    {
+     "at": 5312,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5312,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 17653,
+     "kind": "STOP"
+    },
+    {
+     "at": 17653,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 17864,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现。"
+    },
+    {
+     "at": 19254,
+     "kind": "STOP"
+    },
+    {
+     "at": 19254,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19477,
+     "kind": "ASR",
+     "text": "才那几个问题。"
+    },
+    {
+     "at": 19565,
+     "kind": "RESP"
+    },
+    {
+     "at": 19725,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 19725,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20101,
+     "kind": "RESP"
+    },
+    {
+     "at": 20123,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 20124,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "s800",
+   "rep": 3,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_SSZ3eBgQOXwIo8ubTqvMx",
+   "spendCny": 0,
+   "wallMs": 36222,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 1,
+   "cancelled": 1,
+   "textReplies": 0,
+   "callsTotal": 1,
+   "callsRaw": 1,
+   "callsEmpty": 0,
+   "callsEffective": 0,
+   "effectivePerStop": 0,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    364
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "当然，这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 78,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 3397,
+     "kind": "STOP"
+    },
+    {
+     "at": 3397,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3585,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3710,
+     "kind": "RESP"
+    },
+    {
+     "at": 3761,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"可能前后的间隔并不是",
+     "part": null
+    },
+    {
+     "at": 3761,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 6963,
+     "kind": "STOP"
+    },
+    {
+     "at": 6964,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7162,
+     "kind": "ASR",
+     "text": "当然，这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 8567,
+     "kind": "STOP"
+    },
+    {
+     "at": 8567,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8775,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 16159,
+     "kind": "STOP"
+    },
+    {
+     "at": 16159,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 16317,
+     "kind": "ASR",
+     "text": "尽可能的灵敏，然后更快的有有输出。但另外一方面，我们也不希望它过快的把消息发出去。"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "s800",
+   "rep": 3,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_SLMKgWlekaWspD9GY3bEq",
+   "spendCny": 0.010608,
+   "wallMs": 36214,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 6,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 3,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.75,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    510,
+    457,
+    475
+   ],
+   "transcripts": [
+    "前面那个处理停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 28,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_VQpPzZiDLk9OGYuO2lhcr\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_06f10d55d05e4c7ea3b873e2\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_B9WPfBqNvvgsX8dbxNyPj\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 2805,
+     "kind": "STOP"
+    },
+    {
+     "at": 2805,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 2972,
+     "kind": "ASR",
+     "text": "前面那个处理停下来吧。"
+    },
+    {
+     "at": 3116,
+     "kind": "RESP"
+    },
+    {
+     "at": 3230,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "{\"message\": \"前面那个处理停下来吧。\", \"intent\": ",
+     "part": null
+    },
+    {
+     "at": 3231,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 5365,
+     "kind": "STOP"
+    },
+    {
+     "at": 5365,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5530,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 5714,
+     "kind": "RESP"
+    },
+    {
+     "at": 5875,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这请求。",
+     "part": null
+    },
+    {
+     "at": 5875,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5967,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_06f10d55d05e4c7ea3b873e2\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 5967,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 6884,
+     "kind": "STOP"
+    },
+    {
+     "at": 6884,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 7024,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 7226,
+     "kind": "RESP"
+    },
+    {
+     "at": 7341,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": null
+    },
+    {
+     "at": 7341,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 7721,
+     "kind": "RESP"
+    },
+    {
+     "at": 7743,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 7744,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 22996,
+     "kind": "STOP"
+    },
+    {
+     "at": 22996,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23122,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23332,
+     "kind": "RESP"
+    },
+    {
+     "at": 23471,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "诶。",
+     "part": null
+    },
+    {
+     "at": 23471,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23912,
+     "kind": "RESP"
+    },
+    {
+     "at": 23934,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 23935,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "s800",
+   "rep": 3,
+   "silenceMs": 800,
+   "verdict": false,
+   "sessionId": "sess_WFwcpciA8syr2NN3RFTmI",
+   "spendCny": 0.008298,
+   "wallMs": 36224,
+   "upstreamStops": 2,
+   "commits": 2,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 1,
+   "deliveries": 0,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0,
+   "completes": 0,
+   "continues": 0,
+   "mergedChars": [],
+   "deliveryCharsTotal": 0,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    447,
+    473
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice第三次录制。",
+    "现在我们看看这次会不会再出现刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 44,
+   "abortedAt": null,
+   "errors": [],
+   "timeline": [
+    {
+     "at": 4866,
+     "kind": "STOP"
+    },
+    {
+     "at": 4866,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5067,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice第三次录制。"
+    },
+    {
+     "at": 5153,
+     "kind": "RESP"
+    },
+    {
+     "at": 5313,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "十月十五日Live Voice第三次录制。",
+     "part": null
+    },
+    {
+     "at": 5314,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5675,
+     "kind": "RESP"
+    },
+    {
+     "at": 5697,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5697,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 19667,
+     "kind": "STOP"
+    },
+    {
+     "at": 19667,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19891,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现刚才那几个问题。"
+    },
+    {
+     "at": 19979,
+     "kind": "RESP"
+    },
+    {
+     "at": 20140,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": null
+    },
+    {
+     "at": 20141,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20509,
+     "kind": "RESP"
+    },
+    {
+     "at": 20532,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 20533,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "7c01be7e",
+   "arm": "verdict",
+   "rep": 3,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_UU4Vj3LMeT1ZZaE5grjwy",
+   "spendCny": 0.009047,
+   "wallMs": 36227,
+   "upstreamStops": 9,
+   "commits": 9,
+   "responses": 7,
+   "cancelled": 4,
+   "textReplies": 1,
+   "callsTotal": 6,
+   "callsRaw": 4,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.222,
+   "deliveries": 2,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0.333,
+   "completes": 2,
+   "continues": 0,
+   "mergedChars": [
+    14,
+    17
+   ],
+   "deliveryCharsTotal": 31,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    540,
+    466,
+    500,
+    645,
+    415,
+    619
+   ],
+   "transcripts": [
+    "可能前后的间隔并不是那么大。",
+    "呃，当然。",
+    "这里面会有矛盾，我们希望。",
+    "要尽可能敏感。",
+    "啊，去尽可能的灵敏，然后更快的有有输出。",
+    "但另外一方面，我们也不希望他过快的把消息发出去。",
+    "呃，行，进一步的量化的进行分析。",
+    "然后。",
+    "来实验找出可能的更好的方案。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 116,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_NGBu5bmjpVzyW8mFL6Psr\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_Tjya1DQ5sua9M5"
+   ],
+   "timeline": [
+    {
+     "at": 2963,
+     "kind": "STOP"
+    },
+    {
+     "at": 2963,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3149,
+     "kind": "ASR",
+     "text": "可能前后的间隔并不是那么大。"
+    },
+    {
+     "at": 3294,
+     "kind": "RESP"
+    },
+    {
+     "at": 3503,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "可能前后的间隔并不是那么大。",
+     "part": "completes"
+    },
+    {
+     "at": 3504,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 3735,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Response request cancelled by new input\",\"param\":\"response\",\"event_id\":\"event_Tjya1DQ5sua9M5H6w9aW1\"}"
+    },
+    {
+     "at": 4457,
+     "kind": "STOP"
+    },
+    {
+     "at": 4457,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4591,
+     "kind": "ASR",
+     "text": "呃，当然。"
+    },
+    {
+     "at": 6600,
+     "kind": "STOP"
+    },
+    {
+     "at": 6600,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 6826,
+     "kind": "ASR",
+     "text": "这里面会有矛盾，我们希望。"
+    },
+    {
+     "at": 6972,
+     "kind": "RESP"
+    },
+    {
+     "at": 7066,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"当然，这里面会有个矛盾，我们希望。",
+     "part": null
+    },
+    {
+     "at": 7067,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 8204,
+     "kind": "STOP"
+    },
+    {
+     "at": 8204,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 8409,
+     "kind": "ASR",
+     "text": "要尽可能敏感。"
+    },
+    {
+     "at": 8535,
+     "kind": "RESP"
+    },
+    {
+     "at": 8704,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"呃，当然这里面会有个矛盾，我们希望它尽可能的敏感。\"",
+     "part": null
+    },
+    {
+     "at": 8704,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 12078,
+     "kind": "STOP"
+    },
+    {
+     "at": 12078,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12305,
+     "kind": "ASR",
+     "text": "啊，去尽可能的灵敏，然后更快的有有输出。"
+    },
+    {
+     "at": 15734,
+     "kind": "STOP"
+    },
+    {
+     "at": 15734,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 15972,
+     "kind": "ASR",
+     "text": "但另外一方面，我们也不希望他过快的把消息发出去。"
+    },
+    {
+     "at": 16080,
+     "kind": "RESP"
+    },
+    {
+     "at": 16379,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"当然这里面会有个矛盾，我们希望它尽可能敏感，就是尽可能的灵敏，然后更快的有输出。但另外一方面，我们又不希望它过快的把消息发出去。\"",
+     "part": null
+    },
+    {
+     "at": 16380,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 19326,
+     "kind": "STOP"
+    },
+    {
+     "at": 19326,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 19533,
+     "kind": "ASR",
+     "text": "呃，行，进一步的量化的进行分析。"
+    },
+    {
+     "at": 21083,
+     "kind": "STOP"
+    },
+    {
+     "at": 21083,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 21226,
+     "kind": "ASR",
+     "text": "然后。"
+    },
+    {
+     "at": 21455,
+     "kind": "RESP"
+    },
+    {
+     "at": 21498,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"",
+     "part": null
+    },
+    {
+     "at": 21498,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 24048,
+     "kind": "STOP"
+    },
+    {
+     "at": 24049,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 24236,
+     "kind": "ASR",
+     "text": "来实验找出可能的更好的方案。"
+    },
+    {
+     "at": 24412,
+     "kind": "RESP"
+    },
+    {
+     "at": 24667,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "然后来实验，找出可能的更好的方案。",
+     "part": "completes"
+    },
+    {
+     "at": 24667,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 25153,
+     "kind": "RESP"
+    },
+    {
+     "at": 25175,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 25176,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "a175e6cd",
+   "arm": "verdict",
+   "rep": 3,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_GTihdJs172j8oQ34FsVpM",
+   "spendCny": 0.015055,
+   "wallMs": 36222,
+   "upstreamStops": 5,
+   "commits": 5,
+   "responses": 7,
+   "cancelled": 1,
+   "textReplies": 2,
+   "callsTotal": 4,
+   "callsRaw": 1,
+   "callsEmpty": 0,
+   "callsEffective": 3,
+   "effectivePerStop": 0.6,
+   "deliveries": 3,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 0.75,
+   "completes": 3,
+   "continues": 0,
+   "mergedChars": [
+    11,
+    5,
+    2
+   ],
+   "deliveryCharsTotal": 18,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    324,
+    511,
+    532,
+    558
+   ],
+   "transcripts": [
+    "前面那个。",
+    "处理，停下来吧。",
+    "先处理现在的这请求。",
+    "哎，挺好。",
+    "哎。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 30,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_FMyQyaM8XqrzW653dJ7IP\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_ac820c14c51244ba8b165a2a\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_SMUINZEVQW9Jhm6GjrgK4\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for ",
+    "{\"event_id\":\"event_HnAUQZzqySzaaXt5nQXZY\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}",
+    "{\"event_id\":\"event_BC8Q6llVwfrnaHRLCfXgx\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_755f5275344744f3a0df5597\",\"param\":\"call_id\"}}",
+    "{\"event_id\":\"event_FABUZWbwlD52J22LQi2hB\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for "
+   ],
+   "timeline": [
+    {
+     "at": 1494,
+     "kind": "STOP"
+    },
+    {
+     "at": 1494,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 1632,
+     "kind": "ASR",
+     "text": "前面那个。"
+    },
+    {
+     "at": 1791,
+     "kind": "RESP"
+    },
+    {
+     "at": 1818,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "{\"message\": \"",
+     "part": null
+    },
+    {
+     "at": 1818,
+     "kind": "DONE",
+     "status": "cancelled"
+    },
+    {
+     "at": 5322,
+     "kind": "STOP"
+    },
+    {
+     "at": 5322,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 5498,
+     "kind": "ASR",
+     "text": "处理，停下来吧。"
+    },
+    {
+     "at": 5628,
+     "kind": "RESP"
+    },
+    {
+     "at": 5905,
+     "kind": "CALL",
+     "tool": "session_interrupt",
+     "message": "处理停下来吧。",
+     "part": null
+    },
+    {
+     "at": 5906,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 9929,
+     "kind": "STOP"
+    },
+    {
+     "at": 9929,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 10169,
+     "kind": "ASR",
+     "text": "先处理现在的这请求。"
+    },
+    {
+     "at": 10232,
+     "kind": "RESP"
+    },
+    {
+     "at": 10440,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "先处理现在的这些请求。",
+     "part": "completes"
+    },
+    {
+     "at": 10441,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 12416,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_ac820c14c51244ba8b165a2a\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 12416,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 12461,
+     "kind": "STOP"
+    },
+    {
+     "at": 12461,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 12658,
+     "kind": "ASR",
+     "text": "哎，挺好。"
+    },
+    {
+     "at": 12782,
+     "kind": "RESP"
+    },
+    {
+     "at": 12993,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎，挺好。",
+     "part": "completes"
+    },
+    {
+     "at": 12993,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 13727,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 13729,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Unknown function call id: call_755f5275344744f3a0df5597\",\"param\":\"call_id\"}"
+    },
+    {
+     "at": 13729,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Cannot create response after rejected function_call_output; submit valid input or retry for the current input\",\"param\":\"response\"}"
+    },
+    {
+     "at": 14041,
+     "kind": "RESP"
+    },
+    {
+     "at": 14068,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 14068,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 23132,
+     "kind": "STOP"
+    },
+    {
+     "at": 23132,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23259,
+     "kind": "ASR",
+     "text": "哎。"
+    },
+    {
+     "at": 23482,
+     "kind": "RESP"
+    },
+    {
+     "at": 23690,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "哎。",
+     "part": "completes"
+    },
+    {
+     "at": 23690,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24523,
+     "kind": "RESP"
+    },
+    {
+     "at": 24544,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 24544,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  },
+  {
+   "segment": "86559798",
+   "arm": "verdict",
+   "rep": 3,
+   "silenceMs": 400,
+   "verdict": true,
+   "sessionId": "sess_Wp3LaM45OOcoWX4DQvURc",
+   "spendCny": 0.009816,
+   "wallMs": 36227,
+   "upstreamStops": 4,
+   "commits": 4,
+   "responses": 4,
+   "cancelled": 0,
+   "textReplies": 2,
+   "callsTotal": 2,
+   "callsRaw": 0,
+   "callsEmpty": 0,
+   "callsEffective": 2,
+   "effectivePerStop": 0.5,
+   "deliveries": 2,
+   "deliveriesForced": 0,
+   "forcedReasons": [],
+   "partFillRate": 1,
+   "completes": 2,
+   "continues": 0,
+   "mergedChars": [
+    24,
+    22
+   ],
+   "deliveryCharsTotal": 46,
+   "strandedPieces": 0,
+   "strandedChars": 0,
+   "sendLatencies": [
+    579,
+    563
+   ],
+   "transcripts": [
+    "十月十五日，Live Voice。",
+    "人体组织。",
+    "现在我们看看这次会不会再出现。",
+    "刚才那几个问题。"
+   ],
+   "emptyTranscriptions": 0,
+   "joinedChars": 45,
+   "abortedAt": null,
+   "errors": [
+    "{\"event_id\":\"event_N2mBIrkfsQigdhwZjuUSZ\",\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}}"
+   ],
+   "timeline": [
+    {
+     "at": 3428,
+     "kind": "STOP"
+    },
+    {
+     "at": 3428,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 3615,
+     "kind": "ASR",
+     "text": "十月十五日，Live Voice。"
+    },
+    {
+     "at": 4610,
+     "kind": "STOP"
+    },
+    {
+     "at": 4610,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 4745,
+     "kind": "ASR",
+     "text": "人体组织。"
+    },
+    {
+     "at": 4929,
+     "kind": "RESP"
+    },
+    {
+     "at": 5189,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "10月15日，Live Voice 第三次录制。",
+     "part": "completes"
+    },
+    {
+     "at": 5190,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 5641,
+     "kind": "RESP"
+    },
+    {
+     "at": 5662,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 5662,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 20569,
+     "kind": "STOP"
+    },
+    {
+     "at": 20569,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 20764,
+     "kind": "ASR",
+     "text": "现在我们看看这次会不会再出现。"
+    },
+    {
+     "at": 23459,
+     "kind": "STOP"
+    },
+    {
+     "at": 23459,
+     "kind": "COMMIT"
+    },
+    {
+     "at": 23638,
+     "kind": "ASR",
+     "text": "刚才那几个问题。"
+    },
+    {
+     "at": 23784,
+     "kind": "RESP"
+    },
+    {
+     "at": 24022,
+     "kind": "CALL",
+     "tool": "session_send",
+     "message": "现在我们看看这次会不会再出现刚才那几个问题。",
+     "part": "completes"
+    },
+    {
+     "at": 24023,
+     "kind": "DONE",
+     "status": "completed"
+    },
+    {
+     "at": 24913,
+     "kind": "ERROR",
+     "error": "{\"type\":\"invalid_request_error\",\"message\":\"Error committing input audio buffer: buffer too small, or have no audio.\"}"
+    },
+    {
+     "at": 25213,
+     "kind": "RESP"
+    },
+    {
+     "at": 25236,
+     "kind": "TEXT",
+     "text": "OK"
+    },
+    {
+     "at": 25237,
+     "kind": "DONE",
+     "status": "completed"
+    }
+   ]
+  }
+ ]
+}

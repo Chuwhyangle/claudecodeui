@@ -1,0 +1,73 @@
+[
+ {"id":"faeb9c61@10-11T11:22","task":"再做一次 Live Voice 输入测试；Claude 在核对会话/进程/日志（252 s）",
+  "expect":"把『检查是否常驻会话』纳入当前核对；旁白不改道；把『语音终止之前处理的能力』当作以后的需求记下，不当场开做；回答停止键那个问题",
+  "pieces":[
+   {"text":"当前会话应当是一次常驻会话，请检查。","label":"ADD"},
+   {"text":"到现在为止，我看到的情况都还不错。","label":"REMARK"},
+   {"text":"当然，现在对第一句输入的处理耗时太长。","label":"NEXT-frag"},
+   {"text":"这可能提示我们。","label":"NEXT-frag"},
+   {"text":"需要为Live Voice Mode提供用语音终止之前处理的能力。","label":"NEXT"},
+   {"text":"我前面是说，为Live Mode、Live Voice Mode提供这个能力。","label":"NEXT-fix"},
+   {"text":"我看到对第一句话的处理现在已经花了两分多钟。","label":"REMARK"},
+   {"text":"看上去现在语音识别的处理很慢，也很慢，很奇怪。","label":"REMARK"},
+   {"text":"如果现在按下那个停止键。","label":"ASK-frag"},
+   {"text":"它是会停止Live Voice Mode。","label":"ASK-frag"},
+   {"text":"还是会停止第一句话的处理。","label":"ASK-frag"},
+   {"text":"我这些没有被处理的输入会被丢掉吗？","label":"ASK"}]},
+ {"id":"164c3087@10-14T15:16","task":"再做一次 Live Voice 测试；Claude 在准备/观察（111 s）",
+  "expect":"8 段碎片是一段观察（说完 2 s、上屏 5–6 s、再到 20–30 s），最后一段把它变成请求：分析原因。应作为一个完整请求处理，不对前几段碎片单独动手",
+  "pieces":[
+   {"text":"你看啊，第一句的问题是。","label":"ADD-frag"},{"text":"我大概花了。","label":"ADD-frag"},{"text":"两秒时间。","label":"ADD-frag"},
+   {"text":"就把话说完了。","label":"ADD-frag"},{"text":"但是我看见这边有个动字。","label":"ADD-frag"},{"text":"可能花了五六秒。","label":"ADD-frag"},
+   {"text":"但是我看到在我的屏幕上蹦出来。","label":"ADD-frag"},{"text":"可能要花了二十到三十秒。","label":"ADD-frag"},
+   {"text":"啊，分析一下原因。","label":"ADD"}]},
+ {"id":"99df08d8@10-12T01:24","task":"再试一下 Live Voice；Claude 在核对环境、读任务（131 s）",
+  "expect":"测试旁白（第二句/第三句/第四句）与评论不改道、不逐句回应；回答『能否看见 cancel 这样的操作』",
+  "pieces":[
+   {"text":"第一句识别出来了，我们看看第二句。","label":"REMARK"},{"text":"现在第三句。","label":"NOISE"},{"text":"第四句。","label":"NOISE"},
+   {"text":"到现在为止识别的还可以。","label":"REMARK"},{"text":"只是对于第一句的处理慢一些，但这是正常的。","label":"REMARK"},
+   {"text":"现在后面这几句话都在 queue 里面在等。","label":"REMARK-frag"},{"text":"或者说队列，在队列里面等。","label":"REMARK"},
+   {"text":"所以你能看见 cancel 这样的操作吗？","label":"ASK"}]},
+ {"id":"a175e6cd@10-14T18:23","task":"打断后的续接轮：停掉前面的处理、先处理当前请求；Claude 在查打断路径（61 s）",
+  "expect":"『先处理现在的这个请求』是 prompt 里已有的话（重叠），不重复处理；『挺好/哎』不回应不改道；两个关于『停下后为何久不调用』的问题，后一个修正前一个，只答一次",
+  "pieces":[
+   {"text":"先处理现在的这个请求。","label":"DUP"},{"text":"哎，挺好。","label":"REMARK"},{"text":"哎。","label":"NOISE"},
+   {"text":"停下来以后就没有再去调 Claude Code 吗？","label":"ASK-superseded"},
+   {"text":"哦，看见调用了，但是为什么会等这么久呢？从“停下来”这几个字到泡泡里，以及到让 Claude Code 跑起来，好像挺久的。","label":"ASK"}]},
+ {"id":"b33412ea@10-14T17:09","task":"讨论怎么修（队列状态不复位）；Claude 在读代码（255 s）",
+  "expect":"把新观察（connection lost 闪过、几句话进不了 Q、丢了几句话）纳入当前的修复讨论；不放弃当前讨论；『哦』不回应",
+  "pieces":[
+   {"text":"我刚才看见说是 connection lost 之类的东西闪了一下。","label":"ADD"},
+   {"text":"然后刚才最后说的这句话，这几句话又进不了 Q 了。","label":"ADD"},
+   {"text":"我发现你丢了几句话。","label":"ADD"},
+   {"text":"你看现在这段话又是进不去了，又进不了 Q 了。","label":"ADD-repeat"},
+   {"text":"哦。","label":"NOISE"}]},
+ {"id":"d4c9bfc4@10-14T01:36","task":"打断后的续接轮：查 Q 行为何不清；Claude 在读前端队列代码（81 s）",
+  "expect":"继续 Q 行调查（第 3–4 段是对当前任务的确认）；把『方括号英文片段不是我说的、找出原因』作为新增调查项接住（当场或做完 Q 之后），不能丢",
+  "pieces":[
+   {"text":"然后你再看一下上面处理的这一句消息，开头又有方括号包括了一段英文的消息，那段英文不是我说的。","label":"ADD-frag"},
+   {"text":"找出来为什么会出现这些东西。","label":"ADD"},
+   {"text":"我现在看见上面这句话被处理了，但是在底部的Q里面还是有。","label":"REMARK-frag"},
+   {"text":"所以地图的Q看来现在是个问题啊。","label":"REMARK"}]},
+ {"id":"99df08d8@10-12T01:26","task":"分析排队现象；Claude 在读代码查 depth（150 s）",
+  "expect":"新增：检查最近执行的任务里是否已实现『更主动地取消在执行的动作』并回答；不放弃当前分析",
+  "pieces":[
+   {"text":"检查最近执行的任务。","label":"ADD-frag"},
+   {"text":"你应当能够更主动地去取消已经在执行的这些动作，以更快的推进后面的操作。","label":"ADD"},
+   {"text":"你确认一下现在这个任务有没有实现。","label":"ASK"}]},
+ {"id":"af12cbaf@10-14T09:52","task":"把前台命令改成 30 秒并跑；Claude 在跑 sleep 30（35 s）",
+  "expect":"『再改成十秒』是改道：最后应跑一个 10 秒的命令（30 秒那条已在跑，停不下）；后两句是对界面的观察；回答『他有理解错了吗』",
+  "pieces":[
+   {"text":"再改成十秒。","label":"REDIRECT"},{"text":"哦，改成十秒这句被 kill 了。","label":"REMARK"},
+   {"text":"哎，我看不见这句啊。","label":"REMARK"},{"text":"对，他有理解错了吗？","label":"ASK"}]},
+ {"id":"b5d01c21@10-13T15:59","task":"整体检查本次语音测试并分析问题；Claude 在读 journal（89 s）",
+  "expect":"『先暂停一下，先统计…几段话』是改优先级：先给出输入段数/识别段数的统计；随后的两句是对排队的观察和提问",
+  "pieces":[
+   {"text":"先暂停一下，先统计一下这次我到底输入了几段话，识别输出又输出了几段。","label":"REDIRECT"},
+   {"text":"你看，这句“先暂停一下”居然会排在queue里面。","label":"REMARK"},
+   {"text":"要等到前面那句话处理完了，它才能排进去吗？","label":"ASK"}]},
+ {"id":"57279cc1@10-11T15:42","task":"转写输出延迟很大；Claude 在读日志分析（12 s）",
+  "expect":"两段是一句话：『是不是最近在 VAD 或其他地方加了延迟』——作为假设纳入分析",
+  "pieces":[
+   {"text":"我不知道是不是因为最近在 VAD……","label":"ADD-frag"},{"text":"或者其他的地方加入了更多延迟。","label":"ADD"}]}
+]
