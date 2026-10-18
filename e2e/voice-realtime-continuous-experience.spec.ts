@@ -86,6 +86,12 @@ import {
   type ScriptedUpstreamServer,
   type ScriptedVadRecord,
 } from './voiceRealtimeScriptedUpstream';
+import {
+  awaitClientMounted,
+  warmClientStartup,
+  type ClientWarmupReading,
+  type RequestFailure,
+} from './support/client-startup-warmup';
 
 // ── the page's own vocabulary, copied from the sibling voice specs ────────────────────────────────
 const PANE = '.chat-messages-pane';
@@ -785,6 +791,19 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       const sessionId = await armScenario(api, workspacePath, deck('continuous experience baseline'));
       await startResidentProcess(api, sessionId);
 
+      // ── this run's dependency pre-bundle, committed before any page of this run exists ────────
+      // The optimizer is per-run and commits during the first page load, replacing the document it
+      // was triggered from. That cost is paid here, over plain HTTP, and the wait ends when the
+      // optimizer's own `browserHash` has stopped moving — see `client-startup-warmup.ts`.
+      let warmup: ClientWarmupReading | null = null;
+      try {
+        warmup = await warmClientStartup(clientUrl, dataDir);
+      } catch (error) {
+        // A warm-up that cannot commit a pre-bundle is the same failure the criterion would meet on
+        // its first navigation, reported with its own readings instead of a 30s locator timeout.
+        throw new Error(`this run could not pre-commit its dependency optimizer: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
       const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
       // THE BROWSER HALF OF "ZERO CLOUD CALLS": every non-loopback request is aborted before it
       // leaves, and the ones that were refused are collected so the reading can say the guard fired.
@@ -846,8 +865,10 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
 
       const page = await context.newPage();
       const warnings: string[] = [];
+      const consoleErrors: string[] = [];
       page.on('console', (message) => {
         if (message.type() === 'warning' || message.type() === 'error') warnings.push(message.text());
+        if (message.type() === 'error') consoleErrors.push(message.text());
       });
       // Uncaught exceptions, kept apart from the console stream on purpose. A refused request is
       // something THIS spec caused (see the egress route above) and a library deprecation notice is
@@ -855,6 +876,13 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       // `window.onerror` is.
       const pageErrors: string[] = [];
       page.on('pageerror', (error) => pageErrors.push(String(error)));
+      // Requests the browser never completed, with Playwright's own `failureText`. This is the stream
+      // that tells an optimizer-triggered document replacement (`net::ERR_ABORTED` on the module
+      // graph) apart from a server that never answered, and it is what the startup guard reports.
+      const requestFailures: RequestFailure[] = [];
+      page.on('requestfailed', (request) => {
+        requestFailures.push({ url: request.url(), failureText: request.failure()?.errorText ?? '(no failureText)' });
+      });
       const browserFrames: Array<Record<string, unknown>> = [];
       // The same frames, stamped: WHEN the app was told something is what tells an app-side delay
       // apart from an endpoint-side one, and the journal's own `at` fields are on this clock.
@@ -881,7 +909,15 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       );
 
       await page.goto(`/session/${sessionId}`);
-      await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
+      // The first navigation's mount gate. Same 30s budget as before, but a miss reports the page's
+      // own evidence (text, pageerrors, console errors, failed requests) and this run's optimizer
+      // readings instead of a bare locator timeout — see `client-startup-warmup.ts`.
+      await awaitClientMounted(page, PANE, 30_000, {
+        pageErrors,
+        consoleErrors,
+        requestFailures,
+        warmup,
+      });
 
       // ── the plane BEFORE the walk: nothing is in flight, so the dock has nothing to say ────────
       // This is the first half of X-1's alternation condition, and it is read rather than assumed:
