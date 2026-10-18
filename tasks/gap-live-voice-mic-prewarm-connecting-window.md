@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-mic-prewarm-connecting-window
 title: Live Voice 初始 Connecting 窗口的语音丢失：预热麦克风采集，连接前说的话 catch 下来待 open 后重放
-status: ready
+status: done
 labels:
   - gap
   - defect
