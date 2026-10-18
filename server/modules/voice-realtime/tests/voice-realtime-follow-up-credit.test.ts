@@ -4,20 +4,29 @@
  * left the socket, never the tool result alone.
  *
  * THE DEFECT THIS PINS. `sendFunctionCallOutput` used to bump the credit
- * unconditionally. But the transport drops the synthesized `response.create` whole
- * when it is configured `respondToToolOutputs: false`. The credit was then a claim
- * about a frame that was never sent, and the NEXT `response.created` — a real user
- * reply — consumed it and had its non-empty text TOLERATED instead of surfacing
- * `MODEL_TEXT_REPLY`. Suppressing the follow-up turn therefore turned the relay's
- * strongest correctness guard off for whichever response came next.
+ * unconditionally. At the time the transport could drop the synthesized
+ * `response.create` whole (`respondToToolOutputs: false`), so the credit was a claim
+ * about a frame that was never sent: the NEXT `response.created` — a real user reply —
+ * consumed it and had its non-empty text TOLERATED instead of surfacing
+ * `MODEL_TEXT_REPLY`. The bridge now accrues the credit only from the transport's
+ * actual-send hook, so "credit > 0 ⇒ a synthesized create this session sent is still
+ * outstanding" holds by construction.
  *
- * HOW IT IS DRIVEN. The bridge runs over the REAL DashScope transport (so the
- * suppression is the transport's own decision, not a re-implementation), whose
- * socket is a small scripted stand-in that records every frame the transport wrote
- * and lets the test deliver server frames by hand. That explicit control is what
- * makes the in-flight (deferred-create) case reachable: the shared harness answers a
- * tool result with `response.done` synchronously, which clears the in-flight state
- * before the synthesized create is even considered.
+ * 2026-10-18 UPDATE. The transport no longer has a configuration that suppresses the
+ * tool resume: skipping it left one unconsumed turn in the endpoint's turn queue per
+ * tool result, and the ninth user turn overflowed (`Turn queue overflow: capacity=8`);
+ * see `voice-realtime-tool-resume-always-sent.test.ts`. BOTH closing-turn values now
+ * send exactly one resume per tool result. The credit and its invariants are unchanged;
+ * the `respond: false` arm below now reads like the ON arm, because the frame it tracks
+ * is genuinely sent.
+ *
+ * HOW IT IS DRIVEN. The bridge runs over the REAL DashScope transport (so the credit is
+ * granted by the transport's own decision, not a re-implementation), whose socket is a
+ * small scripted stand-in that records every frame the transport wrote and lets the test
+ * deliver server frames by hand. That explicit control is what makes the in-flight
+ * (deferred-create) case reachable: the shared harness answers a tool result with
+ * `response.done` synchronously, which clears the in-flight state before the synthesized
+ * create is even considered.
  *
  * Provenance (goal record AC-321 / this task's AC1): run with THIS repo's runner —
  *
@@ -27,7 +36,9 @@
  * `node --test` does not remap them and dies on `../index.js`.
  *
  * Consumers: the quay worker's AC state for
- * `gap-voice-realtime-followup-credit-blind-consumption`.
+ * `gap-voice-realtime-followup-credit-blind-consumption`, and for
+ * `gap-voice-realtime-silent-closing-orphans-tool-resume-overflow` (the resume is
+ * unconditional, so the silent arm can no longer starve the credit).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -135,7 +146,8 @@ const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5
  * The script: advertise the session, (optionally) open an in-flight response, let the
  * model call a tool, (optionally) let that in-flight response complete — which is when
  * a held create is flushed — then start the NEXT response and close it with non-empty
- * text. In the suppressed config that next response stands in for a real user reply.
+ * text. In the `respond: false` config that next response is still a follow-up: the
+ * transport resumed the turn with a real create, so the credit is genuinely outstanding.
  */
 async function drive(
   respond: boolean,
@@ -213,25 +225,27 @@ async function drive(
   return { frames, errors, samples, creditAfterToolOutput };
 }
 
-test('AC2: suppressed, a tool result grants NO credit, so the next real reply is a loud MODEL_TEXT_REPLY', async () => {
+test('AC2: the silent closing turn sends the resume too, so its follow-up is credited and claimed', async () => {
   const result = await drive(false);
 
-  // The transport genuinely suppressed the synthesized create — the premise of the AC.
+  // The resume is protocol-mandatory: `respond: false` asks for silence, not for a missing frame.
   assert.equal(
     result.frames.filter((frame) => frame === 'response.create').length,
+    1,
+    'respondToToolOutputs:false must still send the synthesized response.create',
+  );
+  assert.equal(result.creditAfterToolOutput, 1, 'the sent create must grant exactly one credit');
+  // ...and the follow-up response claims it, leaving none outstanding.
+  assert.equal(
+    result.samples.find((s) => s.label === 'next-response-created')?.credit,
     0,
-    'respondToToolOutputs:false must send no synthesized response.create',
+    'the follow-up response must claim the credit',
   );
-  // ...so no credit may have been accrued, and the next response is NOT consumed.
-  assert.equal(result.creditAfterToolOutput, 0, 'a suppressed create must grant no follow-up credit');
-  assert.ok(
-    result.samples.every((s) => s.credit === 0),
-    `the credit must stay 0 throughout a suppressed run: ${JSON.stringify(result.samples)}`,
-  );
-  // ...and the next response's non-empty text is news, not something to tolerate.
-  assert.ok(
-    result.errors.includes('MODEL_TEXT_REPLY'),
-    `the real user reply must surface MODEL_TEXT_REPLY, got ${JSON.stringify(result.errors)}`,
+  // The credit is real, so the follow-up's non-empty text is tolerated rather than misreported.
+  assert.equal(
+    result.errors.some((code) => code === 'MODEL_TEXT_REPLY'),
+    false,
+    `the credited follow-up must stay tolerated, got ${JSON.stringify(result.errors)}`,
   );
 });
 
@@ -255,6 +269,7 @@ test('AC3: the ON config still tolerates the follow-up it actually asked for (ne
 });
 
 test('AC4: credit > 0 only while a synthesized create is genuinely in flight', async () => {
+  // Both closing-turn values send the resume now; the invariant is about the SEND, not the flag.
   for (const respond of [false, true]) {
     for (const deferCreate of [false, true]) {
       const result = await drive(respond, { deferCreate });
@@ -264,13 +279,6 @@ test('AC4: credit > 0 only while a synthesized create is genuinely in flight', a
         assert.ok(
           !(point.credit > 0 && point.createsSent === 0),
           `${where} ${point.label}: credit > 0 with NO synthesized create sent — the blind-credit window`,
-        );
-      }
-      if (!respond) {
-        // Suppressed: the create never leaves, so the credit never appears — at any point.
-        assert.ok(
-          result.samples.every((s) => s.credit === 0),
-          `${where}: suppressed must hold the credit at 0 throughout`,
         );
       }
     }

@@ -8,15 +8,19 @@
  * default constants below, never the environment, so a criterion that sets nothing sees the same
  * default a deployment that sets nothing does.
  *
- * THE CLOSING TURN. After a delivered `session_send` the transport used to synthesize a
- * `response.create` so the model could answer "OK" to nobody. Each such response re-reads the whole
+ * THE CLOSING TURN. After a delivered `session_send` the transport synthesizes a
+ * `response.create` so the model can answer "OK" to nobody. Each such response re-reads the whole
  * context. On the 2026-10-15 23:00–00:02 journals 18 of 38 responses were exactly that, 46% of the
- * spend. Removing the response alone had regressed twice the day it was tried (the next utterance's
+ * spend. Removing the RESPONSE alone had regressed twice the day it was tried (the next utterance's
  * response was spent on the reply the model had been told it owed), because the tool result and the
- * prompt still said "Reply with the single word OK". `silent` removes the response AND both requests
- * together; replays through the shipped transport and bridge (`experiments/voice-realtime-closing-
- * turn`: ten whole sessions and windows, ¥0.40) kept every stop and lost no unit the closing turn
- * delivered, at 46–50% of its cost. `respond` is the previous behaviour, byte for byte — the rollback.
+ * prompt still said "Reply with the single word OK". `silent` removes both REQUESTS instead —
+ * the tool-result tail and the after-stop sentence — while the transport keeps sending the
+ * protocol-mandatory resume: a `function_call_output` that is never followed by a `response.create`
+ * leaves the turn unconsumed upstream, and eight such orphans filled the endpoint's turn queue
+ * until the ninth user turn was refused (`Turn queue overflow: capacity=8`, 2026-10-18). Replays
+ * through the shipped transport and bridge (`experiments/voice-realtime-closing-turn`: ten whole
+ * sessions and windows, ¥0.40) kept every stop and lost no unit the closing turn delivered, at
+ * 46–50% of its cost. `respond` is the previous wording, byte for byte — the rollback.
  *
  * THE SLIM SEND TOOL. The voice plane advertises `session_send` and `session_interrupt`. The first
  * carries the gateway's generic description and three fields (`session`, `waitSeconds`,
@@ -46,8 +50,9 @@ export const VOICE_REALTIME_SLIM_SEND_TOOL_ENV = 'VOICE_REALTIME_SLIM_SEND_TOOL'
 /**
  * Whether the model is asked to speak again after a delivered `session_send`.
  *
- * `silent` — no synthesized `response.create`, and neither the tool result nor the prompt asks for
- * an "OK". `respond` — the shipped behaviour before 2026-10-16, the rollback.
+ * `silent` — neither the tool result nor the prompt asks for an "OK"; the transport still resumes
+ * the turn with its protocol-mandatory `response.create`, and that resumed turn is expected to
+ * produce no speech. `respond` — the shipped spoken request before 2026-10-16, the rollback.
  */
 export type VoiceRealtimeClosingTurn = 'silent' | 'respond';
 

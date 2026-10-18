@@ -373,7 +373,7 @@ test('the voice plane advertises session_send and session_interrupt, with their 
   socket.close();
 });
 
-test('a relay does not ask the model to speak again after a delivery, but the result is still written', async () => {
+test('a relay resumes the turn after a delivery in BOTH closing-turn modes, and the result is still written', async () => {
   for (const respond of [false, true]) {
     const socket = new FakeBrowserSocket();
     const upstream = createFakeDashscopeServer({ functionCallAfterAudioFrames: 1_000_000 });
@@ -387,9 +387,12 @@ test('a relay does not ask the model to speak again after a delivery, but the re
     upstream.peerSend({ type: 'response.function_call_arguments.done', call_id: `c-${respond}`, name: 'session_send', arguments: JSON.stringify({ message: 'x' }) });
     await waitFor(() => upstream.sent.some((frame) => frame.type === 'conversation.item.create'));
     await new Promise((resolve) => setTimeout(resolve, 50));
+    // The resume is protocol-mandatory: without it the turn stays unconsumed upstream and the
+    // ninth user turn overflows the endpoint's 8-slot queue (2026-10-18). `respondToToolOutputs`
+    // now selects only whether the model is asked to SPEAK on that resumed turn.
     assert.equal(
       upstream.sent.filter((frame) => frame.type === 'response.create').length,
-      respond ? 1 : 0,
+      1,
       `respondToToolOutputs=${respond}`,
     );
     socket.close();

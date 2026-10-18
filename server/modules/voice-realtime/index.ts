@@ -200,9 +200,10 @@ export {
   type VoiceRealtimeTransport,
 } from './voice-realtime-mode.js';
 // The closing turn and the slim `session_send`: two independent deployment switches, resolved as pure
-// functions of the environment. `server/index.ts` calls them at the assembly point and hands the
-// results to the transport (`respondToToolOutputs`), the prompt and the proxy seams together, so the
-// three can never disagree about whether the model is asked to speak again.
+// functions of the environment. `server/index.ts` calls them at the assembly point and hands the result
+// to the prompt, the proxy seams and the transport's declared intent (`respondToToolOutputs`; the
+// resume `response.create` is protocol-mandatory and always sent), so the three can never disagree
+// about whether the model is asked to speak again.
 export {
   DEFAULT_VOICE_REALTIME_CLOSING_TURN,
   DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL,

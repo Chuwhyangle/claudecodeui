@@ -656,13 +656,13 @@ const buildVoiceRealtimeSeams = (input: {
               })
             : null;
 
-    // The closing turn and the slim `session_send`, resolved ONCE here so the transport
-    // (`respondToToolOutputs`), the prompt and the proxy's tool-result wording are all driven by the
-    // SAME value and cannot disagree about whether the model is asked to speak again. Defaults are the
-    // new behaviour (2026-10-16: 18 of 38 responses on the previous hour's journals were the "OK"
-    // remark, 46% of the spend); `VOICE_REALTIME_CLOSING_TURN=respond` and
-    // `VOICE_REALTIME_SLIM_SEND_TOOL=off` are the rollbacks and need a restart, no browser release. A
-    // misspelt value falls back to the default AND is logged, so a typo cannot pass for a rollback.
+    // The closing turn and the slim `session_send`, resolved ONCE here so the prompt, the proxy's
+    // tool-result wording and the transport's DECLARED closing-turn intent all read the SAME value and
+    // cannot disagree about whether the model is asked to speak again. Defaults are the new behaviour
+    // (2026-10-16: 18 of 38 responses on the previous hour's journals were the "OK" remark, 46% of the
+    // spend); `VOICE_REALTIME_CLOSING_TURN=respond` and `VOICE_REALTIME_SLIM_SEND_TOOL=off` are the
+    // rollbacks and need a restart, no browser release. A misspelt value falls back to the default AND
+    // is logged, so a typo cannot pass for a rollback.
     const closingTurn = resolveVoiceRealtimeClosingTurn(process.env);
     const slimSendTool = resolveVoiceRealtimeSlimSendTool(process.env);
     for (const note of [describeVoiceRealtimeClosingTurn(closingTurn), describeVoiceRealtimeSlimSendTool(slimSendTool)]) {
@@ -726,14 +726,19 @@ const buildVoiceRealtimeSeams = (input: {
                 },
                 // The model's one-line remark after a delivered `session_send` is OFF by default
                 // (`VOICE_REALTIME_CLOSING_TURN`, resolved above). It was tried on 2026-10-10 and reverted
-                // the same day: with the response gone but the tool result and the prompt still saying
-                // "Reply with the single word OK", the model owed a reply and spent the NEXT utterance's
-                // response on it — "No response requested." in text, 3 of 5 spoken instructions never
-                // relayed. The two requests now move with the response (the proxy's result wording and
-                // `voiceRealtimeInstructionsFor`, both driven by `closingTurn.closingTurn`). Replayed on
-                // 2026-10-15/16 through this transport and bridge over ten whole sessions and windows
-                // (`experiments/voice-realtime-closing-turn`): no stop missed, no unit lost that the
-                // closing turn had delivered, at 46–50% of its cost. `respond` restores the old wire.
+                // the same day: with the spoken request removed but the tool result and the prompt still
+                // saying "Reply with the single word OK", the model owed a reply and spent the NEXT
+                // utterance's response on it — "No response requested." in text, 3 of 5 spoken
+                // instructions never relayed. The two requests now move together (the proxy's result
+                // wording and `voiceRealtimeInstructionsFor`, both driven by `closingTurn.closingTurn`),
+                // and the transport resumes the turn regardless: a `function_call_output` without a
+                // `response.create` leaves the turn unconsumed upstream, and eight of those fill the
+                // endpoint's queue until the ninth user turn is refused (`Turn queue overflow:
+                // capacity=8`, 2026-10-18). So `false` here means "ask for silence", never "skip the
+                // resume". Replayed on 2026-10-15/16 through this transport and bridge over ten whole
+                // sessions and windows (`experiments/voice-realtime-closing-turn`): no stop missed, no
+                // unit lost that the closing turn had delivered, at 46–50% of its cost. `respond`
+                // restores the spoken wire.
                 respondToToolOutputs: closingTurn.closingTurn === 'respond',
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the

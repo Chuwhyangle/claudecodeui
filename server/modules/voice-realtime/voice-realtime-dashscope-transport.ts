@@ -344,11 +344,21 @@ export type DashscopeTransportOptions = {
    */
   sessionDefaults?: Readonly<Record<string, unknown>>;
   /**
-   * Whether a delivered tool result asks the model to speak again (`response.create`). Default
-   * true, which is the endpoint's normal tool-call loop. A pure relay has nothing to say about the
-   * result, and each such response re-reads the WHOLE session context (measured: 4 of 8 responses
-   * in a recorded four-instruction session were only the model remarking "sent"), so the voice
-   * connection turns it off. The result item is still written, so the model's context stays honest.
+   * Whether the deployment asks the model to SPEAK after a delivered tool result. Default true,
+   * the endpoint's normal tool-call loop (the model remarks "OK" on the result). A pure relay has
+   * nothing to say about the result, and each spoken turn re-reads the WHOLE session context
+   * (measured: 4 of 8 responses in a recorded four-instruction session were only the model
+   * remarking "sent"), so the voice connection declares `false` when its tool-result wording asks
+   * for silence (`VOICE_REALTIME_CLOSING_TURN=silent`).
+   *
+   * IT DOES NOT GATE THE TOOL-RESUME `response.create`. That create is protocol-mandatory — the
+   * endpoint only drains the resumed turn when it is asked to run one — and suppressing it leaked
+   * one orphan turn per tool result until `Turn queue overflow: capacity=8` rejected the ninth
+   * user turn and the whole session went silent (2026-10-18 journals). The transport therefore
+   * ALWAYS sends the synthesized resume; whether the model says anything is carried by the prompt
+   * (the `silent` wording asks it to say nothing), never by the wire. The option stays as the
+   * deployment's DECLARED intent so the composition root still names one closing-turn value where
+   * the prompt seam is composed; the send path does not read it.
    */
   respondToToolOutputs?: boolean;
   /** Socket opener. Defaults to a real `ws` client; the criteria inject a fake. */
@@ -971,6 +981,15 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
    * creates are coalesced: N tool results resolved during one response become ONE
    * resume, which is all the endpoint needs to continue the turn.
    *
+   * THE RESUME IS ALWAYS SENT. `respondToToolOutputs: false` means the deployment does not want
+   * the model to SPEAK about a tool result; it does NOT mean the frame may be dropped. DashScope
+   * requires a `response.create` after a `function_call_output` to resume the turn, and an
+   * unresumed turn stays queued upstream. Dropping the frame for every result filled the
+   * endpoint's 8-turn queue and rejected the ninth user turn — `Turn queue overflow: capacity=8`,
+   * after which the session produced no transcription and no delivery at all (2026-10-18
+   * journals). The silence the flag asks for is already carried by the prompt wording; the frame
+   * itself is protocol traffic.
+   *
    * The gate is `synthesizedToolResume`'s, and ONLY that. A `response.create` the CLIENT
    * asked for — the manual-segment path's, which follows one `input_audio_buffer.commit`
    * one-for-one — is not a resume of somebody else's turn and must go out even when this
@@ -982,20 +1001,15 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
   function sendClientFrames(frames: readonly unknown[], synthesizedToolResume: boolean): void {
     for (const frame of frames) {
       const synthesizedCreate = synthesizedToolResume && isResponseCreateFrame(frame);
-      if (synthesizedCreate) {
-        if (options.respondToToolOutputs === false) {
-          continue;
-        }
-        if (activeResponseId !== null) {
-          deferredResponseCreates += 1;
-          continue;
-        }
+      if (synthesizedCreate && activeResponseId !== null) {
+        deferredResponseCreates += 1;
+        continue;
       }
       sendFrame(frame);
       countUpstreamAudioFrame(frame);
-      // The resume is only "expected" once it is genuinely out: a frame skipped by
-      // `respondToToolOutputs: false`, or held by the in-flight gate, must NOT notify
-      // here — the flush below is the point that notifies for a deferred one.
+      // The resume is only "expected" once it is genuinely out: a frame held by the
+      // in-flight gate must NOT notify here — the flush below is the point that
+      // notifies for a deferred one.
       if (synthesizedCreate) notifySynthesizedToolResume();
     }
   }

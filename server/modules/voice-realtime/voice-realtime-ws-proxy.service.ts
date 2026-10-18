@@ -1462,8 +1462,10 @@ export type VoiceRealtimeProxySeams = {
   /**
    * Whether the model is asked to speak again after a delivered `session_send`. Selects the wording
    * of the tool results the model reads — `silent` asks for nothing, `respond` asks for "OK" — and
-   * must agree with the transport's `respondToToolOutputs` and with `instructions`
-   * (see {@link voiceRealtimeInstructionsFor}); the composition root resolves all three from one value.
+   * must agree with the transport's declared `respondToToolOutputs` intent and with `instructions`
+   * (see {@link voiceRealtimeInstructionsFor}); the composition root resolves all three from one
+   * value. The transport always resumes the turn; this seam decides only whether the model is asked
+   * to say anything on that resumed turn.
    * Optional: absent is {@link DEFAULT_VOICE_REALTIME_CLOSING_TURN}, never the environment.
    */
   closingTurn?: VoiceRealtimeClosingTurn;
@@ -2029,8 +2031,9 @@ export function handleVoiceRealtimeConnection(
   // behind by any one of them keeps injecting rules into a session nobody is talking to.
   markVoiceSessionActive(boundSessionId);
 
-  // The tool result's closing sentence, chosen once per connection from the same value that selects the
-  // transport's `respondToToolOutputs` and the prompt (see `VoiceRealtimeProxySeams.closingTurn`).
+  // The tool result's closing sentence, chosen once per connection from the same value that names the
+  // transport's declared `respondToToolOutputs` intent and the prompt (see
+  // `VoiceRealtimeProxySeams.closingTurn`).
   const acceptedTail = acceptedResultTail(seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN);
   const advertisedTools = voiceRealtimeToolsFor(seams.slimSendTool ?? DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL);
 

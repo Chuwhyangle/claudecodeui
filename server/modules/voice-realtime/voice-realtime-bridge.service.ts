@@ -197,8 +197,11 @@ export type RealtimeTransport = {
    * whether one left, so only such a transport implements this; a transport that never
    * synthesizes one (the criteria's plain fake, a non-DashScope adapter) omits it, and
    * the bridge then never expects a follow-up response — which is exactly right, because
-   * no create was sent that could produce one. The DashScope transport implements it; its
-   * `respondToToolOutputs: false` path skips the create and therefore never notifies.
+   * no create was sent that could produce one. The DashScope transport implements it,
+   * notifying at the two points a resume genuinely leaves (the immediate send and the
+   * in-flight flush). It does NOT skip the create when `respondToToolOutputs` is false:
+   * that frame is what drains the upstream turn, and skipping it leaked one orphan turn
+   * per tool result until the ninth user turn was refused (2026-10-18).
    *
    * Returns an unsubscribe function, like {@link subscribe}/{@link onClose}.
    */
@@ -919,12 +922,14 @@ export function connect(
    * have genuinely left the socket and whose own `response.created` has not yet claimed them.
    *
    * GRANTED BY THE TRANSPORT, NOT BY SENDING A TOOL RESULT. The credit is a claim that
-   * "the model will speak once more because we asked it to"; when the transport suppresses
-   * that `response.create` (`respondToToolOutputs: false`) the claim is false and must not
-   * be made, or the NEXT real user response would be silently misread as a follow-up. So
-   * the bridge accrues the credit only from {@link RealtimeTransport.onSynthesizedToolResume},
-   * which fires at the actual outbound point (deferred creates notify at their flush), and
-   * the invariant "额度 > 0 ⇒ 有一次已外发的合成 create 尚未被收走" holds by construction.
+   * "the model will speak once more because we asked it to", so it is only made when a
+   * synthesized `response.create` actually left the socket. A transport that suppresses or
+   * never synthesizes one does not notify, and the claim is not made; the DashScope
+   * transport now always sends the protocol-mandatory resume (2026-10-18: skipping it left
+   * the turn unconsumed upstream), so its credit tracks that real send. The bridge accrues
+   * the credit only from {@link RealtimeTransport.onSynthesizedToolResume}, which fires at
+   * the actual outbound point (deferred creates notify at their flush), and the invariant
+   * "额度 > 0 ⇒ 有一次已外发的合成 create 尚未被收走" holds by construction.
    */
   let followUpResponsesExpected = 0;
   /** Ids of the follow-up responses (the model's remark on a tool result), whose text is expected. */
