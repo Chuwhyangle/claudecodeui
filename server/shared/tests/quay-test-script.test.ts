@@ -159,8 +159,10 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 363 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-17 after eighteen tasks each added one criterion file — the
+    // the tree collects 364 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-18 after gap-omission-fill-pure-module-and-parity added
+    // server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts (363 + 1 = 364).
+    // Re-measured 2026-10-17 after eighteen tasks each added one criterion file — the
     // five above (gap-ac377 claude-resident-cold-head-merge.test.ts, gap-ac378
     // claude-resident-ledger-invariants.test.ts, gap-ac379 claude-resident-cli-contract.test.ts,
     // gap-ac381 claude-resident-unattended-after-turns.test.ts and gap-ac380
@@ -180,9 +182,10 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // gap-ac397-composition-root-wiring (server/shared/tests/composition-root-wiring.test.ts).
     // The same day gap-live-voice-stream-delivery-not-command removed ONE: the settle producer
     // replaced the fragment heuristic, so voice-realtime-partial-relay-fragments.test.ts went with
-    // it (364 - 1 = 363).
-    // This fixture names 3 known files, so 363 - 3 = 360.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=360$/);
+    // it (364 - 1 = 363). Then gap-omission-fill-pure-module-and-parity put one back
+    // (363 + 1 = 364).
+    // This fixture names 3 known files, so 364 - 3 = 361.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=361$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -231,9 +234,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 363 files on this tree — but this fixture names ONE known file,
-    // so 363 - 1 = 362 (AC2 reads 360 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=362$/);
+    // same collection as AC2 — 364 files on this tree — but this fixture names ONE known file,
+    // so 364 - 1 = 363 (AC2 reads 361 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=363$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
