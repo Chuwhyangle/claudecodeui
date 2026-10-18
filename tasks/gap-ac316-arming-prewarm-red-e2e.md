@@ -1,7 +1,7 @@
 ---
 id: gap-ac316-arming-prewarm-red-e2e
 title: 恢复 AC-316 判据绿：arming 相位要求首帧而 live e2e 假图从不送帧；麦克风预热在注入 seam 下仍调 getUserMedia
-status: todo
+status: ready
 labels:
   - gap
   - defect
