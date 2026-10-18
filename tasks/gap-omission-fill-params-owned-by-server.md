@@ -41,8 +41,12 @@ GOAL-046 的收口任务。后端改动，遵循 `.agents/skills/backend-module-
 - server/modules/voice-realtime/omission-fill-params.json
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-settings.ts
+- server/modules/voice-realtime/voice-realtime-omission-fill.ts
 - server/modules/voice-realtime/tests/voice-realtime-omission-fill-params-source.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-omission-fill-wiring.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - experiments/voice-relay-qb/omission-fill-params.json
 - experiments/voice-relay-qb/replay_rule.py
 - docs/proposals/voice-realtime-omission-fill-SPEC.md
@@ -50,4 +54,4 @@ GOAL-046 的收口任务。后端改动，遵循 `.agents/skills/backend-module-
 
 ## Notes
 
-接线测试里原先用 `seams.omissionFillParams` 覆盖参数的用例保持有效；本任务只新增「文件缺失不再关闭生产者」这一侧的断言。服务端 JSON 与 Python 默认值的一致性由 AC-402 (c) 守护。
+接线测试里原先用 `seams.omissionFillParams` 覆盖参数的用例保持有效；本任务只新增「文件缺失不再关闭生产者」这一侧的断言。服务端 JSON 与 Python 默认值的一致性由 AC-402 (c) 守护。`voice-realtime-omission-fill.test.ts` 与 `quay-test-script.test.ts` 在 Touches 里是因为 `chosen` 搬走/新增测试文件会分别改动它们（前者改读服务端 JSON，后者移动 known/unknown pin），`scripts/suite-duration-baseline.tsv` 为新测试文件追加一行时长。
