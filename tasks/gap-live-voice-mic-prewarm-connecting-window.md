@@ -61,3 +61,11 @@ extra:
 - src/modules/chat/voice-realtime/tests/audioSource.warm.test.ts
 - src/modules/chat/tests/liveVoiceMicPrewarmEntry.test.tsx
 - tasks/gap-live-voice-mic-prewarm-connecting-window.md
+
+## Blocker
+
+**2026-10-18T10:45:59.843Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=7225 src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx passed=false end_ms=1792320313480
+- run_id：wk-prod-anchor
+- session_id：5fa3772e-cd8e-42d3-a062-578adc117457
