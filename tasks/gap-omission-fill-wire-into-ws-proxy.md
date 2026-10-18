@@ -100,3 +100,11 @@ ws-proxy 是 GOAL-041/043/044/045 共同的热点文件，本任务与它们修�
   - `session.update`（首次与后续）与 `session.turn_detection` 的 `turn_detection` 均带 `interrupt_response:false`；segmented 的 `null` 保持 `null`。
 - 全 `server/modules/voice-realtime/tests/voice-realtime-*.test.ts`（clamped `--test-concurrency=4`）：705/705 pass。
 - `npx tsc --noEmit -p server/tsconfig.json`：退出码 0。
+
+## Blocker
+
+**2026-10-18T09:39:38.611Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=75004 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792316053008
+- run_id：wk-prod-anchor
+- session_id：ae76c5c9-ba04-45e5-8a49-993094d3e5d5
