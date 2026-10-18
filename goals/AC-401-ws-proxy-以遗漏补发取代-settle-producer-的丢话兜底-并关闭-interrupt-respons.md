@@ -1,7 +1,7 @@
 ---
 id: AC-401
 title: ws-proxy 以遗漏补发取代 settle producer 的丢话兜底，并关闭 interrupt_response
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-046
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -25,6 +25,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-18T09:57:37.190Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
