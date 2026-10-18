@@ -43,6 +43,13 @@ silent 默认下真实 Live Voice 会话连续 ≥12 段全投递、journal 0 �
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
+- server/modules/voice-realtime/voice-realtime-closing-turn.ts
+- server/modules/voice-realtime/voice-realtime-bridge.service.ts
+- server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
+- server/modules/voice-realtime/index.ts
 - server/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-tool-resume-always-sent.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-follow-up-credit.test.ts
+- server/modules/voice-realtime/tests/voice-realtime-ws-proxy.real-transport.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-voice-realtime-silent-closing-orphans-tool-resume-overflow.md
