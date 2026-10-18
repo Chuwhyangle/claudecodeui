@@ -78,17 +78,17 @@ await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterTh
 
 ## AC
 
-- [ ] **AC1 spec 适配 arming**：`grep -c "pushFirstCaptureFrame" e2e/voice-realtime-composer-embedded.spec.ts` ≥ 3（1 处定义 + `enterLiveVoice` 内 1 处 + 375px bare-click 腿 1 处）；`pushFirstFrame()` 只在 `port.onmessage` 已由 `start()` 接线后推帧；`waitForPhase` 的 25 s 与 `mode: 'serial'` 不变。
-- [ ] **AC2 首帧不吃 call 预算**：fake upstream 的「每连接最多一次 `session_send`」（`callSent`）语义不变；首帧推进时 `boundSessionId` 为空（进入前后清空/恢复或 case 6 延后绑定）；case 6 的 `upstream.callCount() >= callsBefore + 1` 断言原样保留并通过。
-- [ ] **AC3 整份 spec 绿**：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` exit 0，`7 passed`、0 failed、0 skipped（serial 文件必须整份跑，不能用 `-g` 单跑代替）。
-- [ ] **AC4 CMD1 绿**：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` exit 0、0 failed（本轮基线 18 passed），记录 wall time；贴 list reporter 摘要。
-- [ ] **AC5 CMD2 / CMD3 绿**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` 与 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` 均 exit 0；贴 `Test Files 20 passed` / `Tests 196 passed` 与 `6 passed` 形状原文。
-- [ ] **AC6 判据截止抬高**：`goals/AC-323-composer-内双语音入口-容器内-live-voice-紧凑栏-波形-时长-字幕-模型-mute-end-桌面与.md` 的 `timeoutMs` 改为 > 本次实测三段串行墙钟且留 ≥15% 余量（基线 124.05 + 5.16 + 27.2 ≈ 156.4 s ⇒ 建议 200000）；`git diff -- goals/` 的增删行只有 `-timeoutMs: 115000` / `+timeoutMs: <N>`，其余字段逐字节不变。
-- [ ] **AC7 闸自证**：`quay goal gate AC-323 --dry-run --root <工作树>` exit 0，stdout `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`，贴原文。若 `--root` 仍解析到主检出的旧记录，用 store 方言（如 `--store --root <工作树>`）或把 goal 目录指到工作树；必须证明读到的 `timeoutMs` 是声明值，不得谎报。
-- [ ] **AC8 取假形态 (a)（首帧回归）**：临时删掉 `enterLiveVoice` 里的 `pushFirstCaptureFrame` 调用 ⇒ 整份 spec 在 `waitForPhase('listening')` 红（`Expected: "listening" / Received: "arming"`）；record 原始输出后恢复。
-- [ ] **AC9 取假形态 (b)（call 预算回归）**：临时去掉首帧前的绑定清空/恢复（让首帧仍带绑定）⇒ case 6 在 `:1121` 红（`Expected: >= N+1 / Received: N`）；记录后恢复。
-- [ ] **AC10 取假形态 (c)（deadline 回归）**：把 `timeoutMs` 临时改回 115000 ⇒ `quay goal gate AC-323 --dry-run` 报 `verdict == "not-evaluated"`、`cause == "timeout"`（reason 含 `timed out after 115000ms`）；恢复声明值后同命令复绿。
-- [ ] **AC11 隔离性**：`git diff --stat develop HEAD` 恰好只有 `e2e/voice-realtime-composer-embedded.spec.ts`、`goals/AC-323-…md`（+ 本任务文件）；无产品代码改动、无其他 goal 记录 diff；假形态恢复后 `git status --porcelain` 为空。
+- [x] **AC1 spec 适配 arming**：`grep -c "pushFirstCaptureFrame" e2e/voice-realtime-composer-embedded.spec.ts` ≥ 3（1 处定义 + `enterLiveVoice` 内 1 处 + 375px bare-click 腿 1 处）；`pushFirstFrame()` 只在 `port.onmessage` 已由 `start()` 接线后推帧；`waitForPhase` 的 25 s 与 `mode: 'serial'` 不变。
+- [x] **AC2 首帧不吃 call 预算**：fake upstream 的「每连接最多一次 `session_send`」（`callSent`）语义不变；首帧推进时 `boundSessionId` 为空（进入前后清空/恢复或 case 6 延后绑定）；case 6 的 `upstream.callCount() >= callsBefore + 1` 断言原样保留并通过。
+- [x] **AC3 整份 spec 绿**：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` exit 0，`7 passed`、0 failed、0 skipped（serial 文件必须整份跑，不能用 `-g` 单跑代替）。
+- [x] **AC4 CMD1 绿**：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` exit 0、0 failed（本轮基线 18 passed），记录 wall time；贴 list reporter 摘要。
+- [x] **AC5 CMD2 / CMD3 绿**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` 与 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` 均 exit 0；贴 `Test Files 20 passed` / `Tests 196 passed` 与 `6 passed` 形状原文。
+- [x] **AC6 判据截止抬高**：`goals/AC-323-composer-内双语音入口-容器内-live-voice-紧凑栏-波形-时长-字幕-模型-mute-end-桌面与.md` 的 `timeoutMs` 改为 > 本次实测三段串行墙钟且留 ≥15% 余量（基线 124.05 + 5.16 + 27.2 ≈ 156.4 s ⇒ 建议 200000）；`git diff -- goals/` 的增删行只有 `-timeoutMs: 115000` / `+timeoutMs: <N>`，其余字段逐字节不变。
+- [x] **AC7 闸自证**：`quay goal gate AC-323 --dry-run --root <工作树>` exit 0，stdout `verdict == "pass"`、`cause == null`、`timeoutMs == <声明值>`，贴原文。若 `--root` 仍解析到主检出的旧记录，用 store 方言（如 `--store --root <工作树>`）或把 goal 目录指到工作树；必须证明读到的 `timeoutMs` 是声明值，不得谎报。
+- [x] **AC8 取假形态 (a)（首帧回归）**：临时删掉 `enterLiveVoice` 里的 `pushFirstCaptureFrame` 调用 ⇒ 整份 spec 在 `waitForPhase('listening')` 红（`Expected: "listening" / Received: "arming"`）；record 原始输出后恢复。
+- [x] **AC9 取假形态 (b)（call 预算回归）**：临时去掉首帧前的绑定清空/恢复（让首帧仍带绑定）⇒ case 6 在 `:1121` 红（`Expected: >= N+1 / Received: N`）；记录后恢复。
+- [x] **AC10 取假形态 (c)（deadline 回归）**：把 `timeoutMs` 临时改回 115000 ⇒ `quay goal gate AC-323 --dry-run` 报 `verdict == "not-evaluated"`、`cause == "timeout"`（reason 含 `timed out after 115000ms`）；恢复声明值后同命令复绿。
+- [x] **AC11 隔离性**：`git diff --stat develop HEAD` 恰好只有 `e2e/voice-realtime-composer-embedded.spec.ts`、`goals/AC-323-…md`（+ 本任务文件）；无产品代码改动、无其他 goal 记录 diff；假形态恢复后 `git status --porcelain` 为空。
 
 ## DoD
 
