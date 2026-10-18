@@ -1,7 +1,7 @@
 ---
 id: gap-omission-fill-sweep-and-lock-params
 title: 遗漏补发规则 v2：扫 H/G 与阈值、锁定参数文件、接上人工标注精确率，建立回放门（--check / --check-labels）
-status: todo
+status: ready
 labels:
   - gap
   - voice
