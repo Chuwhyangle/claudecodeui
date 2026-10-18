@@ -2,7 +2,7 @@
 id: gap-with-memory-cap-resolve-repo-local-command
 title: scripts/with-memory-cap.sh 对裸命令回退到仓库 node_modules/.bin：让 AC-400 判据在
   driver PATH 下原样可运行
-status: ready
+status: done
 labels:
   - gap
 parent: null
