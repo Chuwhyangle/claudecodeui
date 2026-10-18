@@ -29,11 +29,11 @@ goal_ac: AC-400
 
 ## AC
 
-- [ ] AC1 判据原样（driver 形态的 PATH，不含 node_modules/.bin）退出 0：`env PATH="$(dirname "$(command -v node)"):/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts` → 退出码 0，输出含 `ℹ tests 82` 与 `ℹ fail 0`。
-- [ ] AC2 回退命中且不遮蔽：同一 PATH 下 `env PATH="…同上…" bash scripts/with-memory-cap.sh tsx --version` 退出 0 且首行匹配 `tsx v`；再把一个打印 `PATH-WINS` 的假 `tsx` 放到 PATH 最前（`tmp=$(mktemp -d); printf '#!/bin/sh\necho PATH-WINS\n' > "$tmp/tsx"; chmod +x "$tmp/tsx"`），同一命令输出 `PATH-WINS`（证明 PATH 优先，回退只在找不到时发生）。
-- [ ] AC3 负控制与参数转发：同一 PATH 下 `bash scripts/with-memory-cap.sh definitely-not-a-command-xyz` 退出码非 0；`bash scripts/with-memory-cap.sh bash -c 'exit 7'` 退出码恰为 7（参数与退出码原样转发）。
-- [ ] AC4 既有行为回归：`node --test scripts/with-memory-cap-effective-default.test.mjs` → 全部通过（既有 6 例）；`QUAY_MEMORY_MAX=off bash scripts/with-memory-cap.sh true` → 退出 0；在正常（含 node_modules/.bin 的）PATH 下 `bash scripts/with-memory-cap.sh tsx --version` 仍退出 0。
-- [ ] AC5 新自测：`node --test scripts/with-memory-cap-command-resolution.test.mjs` → 全部通过。
+- [x] AC1 判据原样（driver 形态的 PATH，不含 node_modules/.bin）退出 0：`env PATH="$(dirname "$(command -v node)"):/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin" bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts` → 退出码 0，输出含 `ℹ tests 82` 与 `ℹ fail 0`。
+- [x] AC2 回退命中且不遮蔽：同一 PATH 下 `env PATH="…同上…" bash scripts/with-memory-cap.sh tsx --version` 退出 0 且首行匹配 `tsx v`；再把一个打印 `PATH-WINS` 的假 `tsx` 放到 PATH 最前（`tmp=$(mktemp -d); printf '#!/bin/sh\necho PATH-WINS\n' > "$tmp/tsx"; chmod +x "$tmp/tsx"`），同一命令输出 `PATH-WINS`（证明 PATH 优先，回退只在找不到时发生）。
+- [x] AC3 负控制与参数转发：同一 PATH 下 `bash scripts/with-memory-cap.sh definitely-not-a-command-xyz` 退出码非 0；`bash scripts/with-memory-cap.sh bash -c 'exit 7'` 退出码恰为 7（参数与退出码原样转发）。
+- [x] AC4 既有行为回归：`node --test scripts/with-memory-cap-effective-default.test.mjs` → 全部通过（既有 6 例）；`QUAY_MEMORY_MAX=off bash scripts/with-memory-cap.sh true` → 退出 0；在正常（含 node_modules/.bin 的）PATH 下 `bash scripts/with-memory-cap.sh tsx --version` 仍退出 0。
+- [x] AC5 新自测：`node --test scripts/with-memory-cap-command-resolution.test.mjs` → 全部通过。
 
 ## DoD
 
