@@ -14,9 +14,11 @@
  * WHAT IS REAL AND WHAT IS NOT. Real: the browser, the app server, the `/voice-realtime` proxy, the
  * bridge, the live executor, the real `session_send`/`session_interrupt` reaching the real MCP
  * control plane, the chat websocket, the provider runtime and the host driver's own command queue.
- * Not real: the microphone (no CI machine has one — an init script installs an INERT Web Audio graph
- * that nothing here pushes PCM into; every utterance below reaches the proxy as the endpoint's own
- * final transcript, exactly as it does in `voice-realtime-scripted-scenarios.spec.ts`) and the
+ * Not real: the microphone (no CI machine has one — an init script installs a Web Audio graph whose
+ * worklet the spec pulses with ONE captured frame, because `listening` only becomes true after the
+ * first captured frame, and the fake graph would otherwise never deliver one; every utterance below
+ * still reaches the proxy as the endpoint's own final transcript, exactly as it does in
+ * `voice-realtime-scripted-scenarios.spec.ts`) and the
  * DashScope endpoint itself (the app dials the port `playwright.config.ts` points it at, on which
  * this file binds its own `ws` server).
  *
@@ -469,6 +471,7 @@ async function openHeldRun(
   await startResidentProcess(api, armed.sessionId);
   await openSession(page, armed.sessionId);
   await enterLiveVoice(page);
+  await pushFirstCaptureFrame(page);
   await waitForPhase(page, 'listening');
   void fireClock(api, armed.sessionId);
   await waitForTurnAfter(armed.transcriptPath, 0, 30_000);
@@ -559,16 +562,34 @@ const isLoopbackUrl = (url: string): boolean =>
   /^(wss?|https?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url);
 
 // ---------------------------------------------------------------------------------------------
-// The fake audio graph. No CI machine has a microphone, so the browser's capture is an inert graph;
-// nothing in this file pushes PCM into it (every case is driven by the scripted upstream).
+// The fake audio graph. No CI machine has a microphone, so the browser's capture is an inert graph.
+// The ONE thing this file pushes into it is a first captured frame (`pushFirstCaptureFrame`):
+// `listening` is only true once capture delivers a frame, and the scripted upstream drives every
+// utterance from then on.
 // ---------------------------------------------------------------------------------------------
+
+/** The page-side capture probe `pushFirstCaptureFrame` drives (installed by {@link installFakeAudioGraph}). */
+type CaptureProbe = {
+  /** The most recently constructed worklet — the one the next `start()` adopts and wires. */
+  node: { port: { onmessage: ((message: unknown) => void) | null } } | null;
+  /** Worklets constructed so far: one per Live Voice capture session on this page. */
+  constructed: number;
+  /** `constructed` as of the last frame this file pushed. */
+  pushed: number;
+};
 
 function installFakeAudioGraph(): void {
   type Port = { onmessage: ((m: unknown) => void) | null; postMessage: () => void };
+  // The worklet is what capture delivers frames through, so the most recently constructed one is
+  // the node a first frame has to reach. `constructed`/`pushed` let the helper make "exactly one
+  // first frame per capture session" a page-side fact instead of a caller's promise.
+  const capture = { node: null as { port: Port } | null, constructed: 0, pushed: 0 };
   class FakeWorkletNode {
     port: Port;
     constructor() {
       this.port = { onmessage: null, postMessage: () => undefined };
+      capture.node = this;
+      capture.constructed += 1;
     }
 
     connect() {
@@ -606,6 +627,45 @@ function installFakeAudioGraph(): void {
     configurable: true,
     value: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => undefined }] }) },
   });
+  (window as unknown as { __voiceCaptureProbe: typeof capture }).__voiceCaptureProbe = capture;
+}
+
+/**
+ * Pushes the one captured frame that makes `listening` reachable.
+ *
+ * WHY IT IS NEEDED. Upstream `state: open` only takes the bar to `arming`; `listening` is set when
+ * capture delivers its FIRST frame (`useVoiceRealtimeSession.ts` → `beginCapture`). The fake graph
+ * is inert, so without this frame every `waitForPhase(page, 'listening')` below would poll `arming`
+ * until it timed out — the contract `c99a0eaba` introduced ("an arming phase until the first
+ * captured frame") is real, and this spec has to satisfy it.
+ *
+ * WHEN IT LANDS. Only after `start()` has WIRED the most recently constructed worklet — `port.onmessage`
+ * is assigned after the asynchronous acquisition, and a frame pushed before that is dropped — and only
+ * once per worklet, so a later capture session's first frame cannot be satisfied by an earlier one.
+ */
+async function pushFirstCaptureFrame(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const capture = (window as unknown as { __voiceCaptureProbe?: CaptureProbe }).__voiceCaptureProbe;
+          const node = capture?.node;
+          if (!capture || !node || node.port.onmessage === null) return false;
+          if (capture.pushed >= capture.constructed) return false;
+          const samples = new Float32Array(3_200); // 200 ms at 16 kHz
+          for (let index = 0; index < samples.length; index += 1) {
+            samples[index] = 0.2 * Math.sin((2 * Math.PI * 180 * index) / 16_000);
+          }
+          node.port.onmessage({ data: { type: 'pcm', samples } });
+          capture.pushed = capture.constructed;
+          return true;
+        }),
+      {
+        timeout: 20_000,
+        message: 'the capture graph never wired a worklet to receive the first captured frame',
+      },
+    )
+    .toBe(true);
 }
 
 /**
@@ -1176,6 +1236,7 @@ test.describe('voice realtime intent control', () => {
     vacancy = Date.now();
 
     await enterLiveVoice(page);
+    await pushFirstCaptureFrame(page);
     await waitForPhase(page, 'listening');
     await waitForTurnAfter(armed.transcriptPath, vacancy, 20_000);
     await hearUtterance(page, upstream, 'order-heard-spoken', SPOKEN);
@@ -1705,6 +1766,7 @@ test.describe('voice realtime intent control', () => {
     await startResidentProcess(api, armed.sessionId);
     await openSession(page, armed.sessionId);
     await enterLiveVoice(page);
+    await pushFirstCaptureFrame(page);
     await waitForPhase(page, 'listening');
     void fireClock(api, armed.sessionId);
     await waitForTurnAfter(armed.transcriptPath, 0, 30_000);
