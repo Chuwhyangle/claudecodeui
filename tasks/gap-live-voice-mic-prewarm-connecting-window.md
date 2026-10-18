@@ -60,6 +60,7 @@ extra:
 - src/modules/chat/ChatInterface.tsx
 - src/modules/chat/voice-realtime/tests/audioSource.warm.test.ts
 - src/modules/chat/tests/liveVoiceMicPrewarmEntry.test.tsx
+- src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx
 - tasks/gap-live-voice-mic-prewarm-connecting-window.md
 
 ## Blocker
