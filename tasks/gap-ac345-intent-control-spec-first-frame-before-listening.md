@@ -58,11 +58,11 @@ AC-345 自己的判据文件，保持独立验收。
 
 ## AC
 
-- [ ] AC1：`cd /data/home/yale/work/claudecodeui && f=e2e/voice-realtime-intent-control.spec.ts; DASHSCOPE_API_KEY= npx playwright test "$f"` 退出 0，输出 `8 passed`（不是 `1 failed / 7 did not run`），wall clock < 118000 ms（AC-345 记录声明的 timeoutMs）。
-- [ ] AC2：`grep -c "test\.fail\|test\.skip\|fixme" e2e/voice-realtime-intent-control.spec.ts` 输出 0；`grep -c "waitForPhase(page, 'listening')" e2e/voice-realtime-intent-control.spec.ts` ≥ 3；`grep -c "pushFirstCaptureFrame" e2e/voice-realtime-intent-control.spec.ts` ≥ 3。
-- [ ] AC3：落地 diff 相对 develop 只含 `e2e/voice-realtime-intent-control.spec.ts` 与本任务文件（`git diff --name-only develop...HEAD | sort` 逐行核对），没有产品代码改动。
-- [ ] AC4：同一判据连续运行两次都退出 0，且各输出 `8 passed`（排除单次抖动）。
-- [ ] AC5：全程 `DASHSCOPE_API_KEY` 为空；用例 1 既有的零云读数保留并通过（`upgradeHeaders` 无 `authorization`、页面无 loopback 以外的 WebSocket）。
+- [x] AC1：`cd /data/home/yale/work/claudecodeui && f=e2e/voice-realtime-intent-control.spec.ts; DASHSCOPE_API_KEY= npx playwright test "$f"` 退出 0，输出 `8 passed`（不是 `1 failed / 7 did not run`），wall clock < 118000 ms（AC-345 记录声明的 timeoutMs）。
+- [x] AC2：`grep -c "test\.fail\|test\.skip\|fixme" e2e/voice-realtime-intent-control.spec.ts` 输出 0；`grep -c "waitForPhase(page, 'listening')" e2e/voice-realtime-intent-control.spec.ts` ≥ 3；`grep -c "pushFirstCaptureFrame" e2e/voice-realtime-intent-control.spec.ts` ≥ 3。
+- [x] AC3：落地 diff 相对 develop 只含 `e2e/voice-realtime-intent-control.spec.ts` 与本任务文件（`git diff --name-only develop...HEAD | sort` 逐行核对），没有产品代码改动。
+- [x] AC4：同一判据连续运行两次都退出 0，且各输出 `8 passed`（排除单次抖动）。
+- [x] AC5：全程 `DASHSCOPE_API_KEY` 为空；用例 1 既有的零云读数保留并通过（`upgradeHeaders` 无 `authorization`、页面无 loopback 以外的 WebSocket）。
 
 ## DoD
 
@@ -70,6 +70,21 @@ AC-345 自己的判据文件，保持独立验收。
 八条用例逐条运行并通过：用例 1 在首帧推进后读到 `listening`，并完成忙时零逐句投递、唯一合并
 pending 卡、enqueue-then-abort 的读数；用例 2–8 的原有读数全部恢复；零云调用断言仍是直接读数。
 任务 `## Notes` 抄录两次运行的 `8 passed` 行与 wall clock，并注明只改测试、未动产品代码。
+
+## Notes
+
+只改测试、未动产品代码：`git diff --name-only develop...HEAD` 只含
+`e2e/voice-realtime-intent-control.spec.ts`，`src/`、`server/` 无改动。
+
+- 连续两次运行同一判据（worktree 内，`DASHSCOPE_API_KEY=` 置空）：
+  - run 1：`8 passed (1.6m)`，退出 0（Playwright 自身取整，约 96 s）。
+  - run 2：`8 passed (1.6m)`，退出 0；`/usr/bin/time` 读数 `WALL_SECONDS=95.07`（< 118000 ms）。
+- 用例 1 既有零云读数保留并通过：`cloud.dialed=1 cloud.strayHosts=[] cloud.webSockets=[]`，
+  `upstream.upgradeHeaders().some((headers) => 'authorization' in headers)` 的断言通过。
+- 首帧探针：`installFakeAudioGraph` 保存最近构造的 worklet；`pushFirstCaptureFrame(page)` 只在
+  `port.onmessage` 已接线后推一帧 200 ms PCM（16 kHz），每个 worklet 只推一次；
+  `openHeldRun`、用例 2 的二次进入、用例 8 三处各调用一次。
+- 未删除/弱化 `listening` 断言，未加 `test.skip` / `test.fail` / `fixme`，未改成只等 `arming`。
 
 ## Touches
 
