@@ -1,7 +1,7 @@
 ---
 id: gap-omission-fill-pure-module-and-parity
 title: 遗漏补发规则 v2 的服务端纯函数 planOmissionFills，及与 Python 参考实现的逐例一致性夹具
-status: ready
+status: done
 labels:
   - gap
   - voice

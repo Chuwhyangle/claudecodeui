@@ -7,10 +7,17 @@ compared on identical model output.
    python3 -I replay_rule.py --sweep               # parameter sweep (H x G x SCORE_T x weight threshold)
    python3 -I replay_rule.py --check               # AC-398 gate on the FROZEN connection list + params file
    python3 -I replay_rule.py --check-labels        # AC-399 gate: fills vs the human O/D labels
+   python3 -I replay_rule.py --emit-fixture        # write the TS parity fixture (frozen connections + synthetics)
 
 Both gates read `omission-fill-params.json` (chosen parameters, thresholds, reasons, frozen connections).
 `--params FILE` overrides it (used to demonstrate the false forms: SCORE_T=1.1 fills everything, SCORE_T=0
 fills almost nothing; both must turn the gates red).
+
+`--emit-fixture` is the OTHER side of this file's contract: the server-side pure function
+(`server/modules/voice-realtime/voice-realtime-omission-fill.ts`) must reproduce THIS implementation's
+decisions case for case.  The fixture carries the inputs (finals / executed / speech starts / chosen
+parameters) and this file's own output (fill indices, due times, coverage, and every skip reason), so a
+rule change on either side without the other turns the TS test red.
 """
 import json, glob, os, re, sys, datetime
 from collections import defaultdict
@@ -20,6 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PARAMS_FILE = os.path.join(HERE, 'omission-fill-params.json')
 LABELS_FILE = os.path.join(HERE, 'labels.json')
 FLAGGED_FILE = os.path.join(HERE, 'flagged-for-review.md')
+FIXTURE_FILE = os.path.join(HERE, 'fixtures', 'omission-fill-cases.json')
 
 # ── parameters: settle (as in production: VOICE_SPAN_SETTLE_MS) and the rule ──────────────────────────────────────────
 SETTLE_MS = 2500
@@ -216,16 +224,15 @@ def _analyse_corpus(finals, executed, P):
     mode = P['numeral_mode']
     return [analyse(x, mode) for _, x in finals], [analyse(m, mode) for _, m in executed]
 
-def policy_R2(finals, executed, events=None, P=None, cache=None):
-    """The rule v2 fill decision.
+def _plan_R2(finals, executed, events=None, P=None, cache=None, want_reasons=False):
+    """The one implementation of rule v2.  `policy_R2` is the fill-only view of this.
 
-    Decision time T_i:
-      * τ_first = first executed message at/after t_i − LOOKBACK.
-      * if τ_first exists and τ_first <= t_i + H:  T_i = min(τ_first + G, t_i + H)
-      * elif the model has been silent (no executed message) AND the user did not start speaking again
-        within S:                               T_i = t_i + S      ← latency fix: no need to wait the full H
-      * otherwise:                              T_i = t_i + H
-    Action at T_i: if coverage over [t_i − LOOKBACK, T_i] < SCORE_T, fill x_i verbatim.
+    With want_reasons=True the return is (fills, skipped, coverage):
+      * fills     — [(T_i, [i])] exactly as policy_R2 returns them
+      * skipped   — [(i, reason)] in index order, reason ∈ weight | empty-grams | wrong-script |
+                    incomparable | covered — every reason an eligible-looking transcription can be
+                    passed over (the vocabulary the TS planner must reproduce)
+      * coverage  — {i: coverage} for every filled item (0.0 when the window was empty)
     """
     P = P or PARAMS
     if cache is None:
@@ -235,14 +242,21 @@ def policy_R2(finals, executed, events=None, P=None, cache=None):
     starts = [t for t, k, _ in (events or []) if k == 'start']
     W_MIN, W_HALLU, DOM_N = P['w_min'], P['w_hallu'], P['dom_n']
     SCORE_T = P['score_t']; GRACE_MS, HARD_MS, LOOKBACK_MS, SILENCE_MS = P['g_ms'], P['h_ms'], P['lookback_ms'], P['silence_ms']
-    fills = []
+    fills = []; skipped = []; coverage = {}
     for i, (t, x) in enumerate(finals):
         g, w, dom = A[i]
-        if w < W_MIN or not g: continue
+        if w < W_MIN:
+            if want_reasons: skipped.append((i, 'weight'))
+            continue
+        if not g:
+            if want_reasons: skipped.append((i, 'empty-grams'))
+            continue
         prior = defaultdict(int)
         for j in range(max(0, i - DOM_N), i):
             if A[j][2]: prior[A[j][2]] += 1
-        if prior and dom != max(prior, key=prior.get) and w < W_HALLU: continue      # wrong-script short line → recogniser hallucination
+        if prior and dom != max(prior, key=prior.get) and w < W_HALLU:
+            if want_reasons: skipped.append((i, 'wrong-script'))
+            continue
         first = next((tau for tau, _ in executed if tau >= t - LOOKBACK_MS), None)
         if first is not None and first <= t + HARD_MS:
             T = min(first + GRACE_MS, t + HARD_MS)
@@ -250,16 +264,36 @@ def policy_R2(finals, executed, events=None, P=None, cache=None):
             T = t + SILENCE_MS                                                       # model silent, user quiet → confirmed
         else:
             T = t + HARD_MS
+        cov = 0.0
         win = [k for k, (tau, _) in enumerate(executed) if t - LOOKBACK_MS <= tau <= T]
         if win:
             wd = defaultdict(int)
             for k in win:
                 if EA[k][2]: wd[EA[k][2]] += 1
-            if wd and max(wd, key=wd.get) != dom: continue                           # messages in another script: not comparable
+            if wd and max(wd, key=wd.get) != dom:
+                if want_reasons: skipped.append((i, 'incomparable'))
+                continue                                                             # messages in another script: not comparable
             mg = set().union(*[EA[k][0] for k in win])
-            if sum(1 for q in g if q in mg) / len(g) >= SCORE_T: continue
+            cov = sum(1 for q in g if q in mg) / len(g)
+            if cov >= SCORE_T:
+                if want_reasons: skipped.append((i, 'covered'))
+                continue
         fills.append((T, [i]))
-    return fills
+        coverage[i] = cov
+    return (fills, skipped, coverage) if want_reasons else fills
+
+def policy_R2(finals, executed, events=None, P=None, cache=None):
+    """The rule v2 fill decision (see _plan_R2 for the reason-tracking form).
+
+    Decision time T_i:
+      * τ_first = first executed message at/after t_i − LOOKBACK.
+      * if τ_first exists and τ_first <= t_i + H:  T_i = min(τ_first + G, t_i + H)
+      * elif the model has been silent (no executed message) AND the user did not start speaking again
+        within S:                               T_i = t_i + S      ← latency fix: no need to wait the full H
+      * otherwise:                              T_i = t_i + H
+    Action at T_i: if coverage over [t_i − LOOKBACK, T_i] < SCORE_T, fill x_i verbatim.
+    """
+    return _plan_R2(finals, executed, events, P, cache, want_reasons=False)
 
 # ── scoring a policy ───────────────────────────────────────────────────────────────────────────────────────────────────
 def carried(i, finals, executed, P=None):
@@ -491,6 +525,132 @@ def cmd_check_labels(param_file=None):
     print("PASS --check-labels")
     return 0
 
+# ── --emit-fixture (the TS planner's parity corpus) ─────────────────────────────────────────────────────────────────────
+#
+# The server-side planner (server/modules/voice-realtime/voice-realtime-omission-fill.ts) is a PORT of
+# `_plan_R2`.  A port that drifts silently is the failure this fixture exists to make impossible: every
+# case below carries the inputs AND this file's own answer (fill indices, due times, coverage, skip
+# reasons), and the TS test compares all four.  Regenerate with:
+#
+#     python3 -I experiments/voice-relay-qb/replay_rule.py --emit-fixture
+#
+# The frozen connections make up the bulk of the corpus; the synthetic cases pin the branches the real
+# journals do not exercise (pure English, Cyrillic/Greek, cross-script translation, the silence branch,
+# the eligibility and coverage boundaries, and the cancelled-response input contract).
+FIXTURE_PARAM_MAP = {             # chosen key in omission-fill-params.json → the TS planner's field name
+    'h_ms': 'hMs', 'g_ms': 'gMs', 'score_t': 'scoreT', 'w_min': 'wMin', 'w_hallu': 'wHallu',
+    'dom_n': 'domN', 'lookback_ms': 'lookbackMs', 'silence_ms': 'silenceMs', 'numeral_mode': 'numeralMode',
+}
+
+def fixture_params(P):
+    return {ts_key: P[py_key] for py_key, ts_key in FIXTURE_PARAM_MAP.items()}
+
+def _case(name, finals, executed, starts, P, note, source='synthetic', connection=None):
+    """Run THIS file's rule on one case and freeze its answer in the fixture's shape."""
+    cache = _analyse_corpus(finals, executed, P)
+    events = [(t, 'start', None) for t in starts]
+    fills, skipped, cov = _plan_R2(finals, executed, events, P, cache, want_reasons=True)
+    case = {
+        'name': name,
+        'source': source,
+        'finals': [{'t': t, 'text': x} for t, x in finals],
+        'executed': [{'t': t, 'text': x} for t, x in executed],
+        'speechStarts': list(starts),
+        'params': fixture_params(P),
+        'expected': {
+            'fills': [{'index': i, 'dueAt': T, 'coverage': cov[i]} for T, idxs in fills for i in idxs],
+            'skipped': [{'index': i, 'reason': reason} for i, reason in skipped],
+        },
+    }
+    if connection is not None: case['connection'] = connection
+    if note: case['note'] = note
+    return case
+
+SYNTH_BASE = 1760000000000          # fixed clock: the fixture must not change when it is regenerated
+
+def synthetic_cases(P):
+    """Cases the frozen journals do not contain, one per branch the TS port could get wrong."""
+    B = SYNTH_BASE
+    return [
+        _case('synthetic-pure-english-omission', [(B, 'the connection keeps dropping')], [], [], P,
+              'Pure English, model silent and user quiet: the silence branch confirms at t+S.'),
+        _case('synthetic-pure-english-covered', [(B, 'the connection keeps dropping')],
+              [(B + 500, 'the connection keeps dropping again')], [], P,
+              'Pure English, same-script model message covers the item.'),
+        _case('synthetic-mixed-script-covered', [(B, '我们check the logs之后再说吧')],
+              [(B + 500, '我们check the logs之后再说')], [], P,
+              'Chinese + English in one utterance; cjk dominates by unit count (chars vs words).'),
+        _case('synthetic-cross-script-translation', [(B, '服务器一直连接不上')],
+              [(B + 500, 'the server cannot connect at all')], [], P,
+              'The model translated the speech into another script: not comparable, never fill.'),
+        _case('synthetic-hallucination-wrong-script',
+              [(B, '我们今天讨论一下这个问题'), (B + 5000, 'hello there my friend')], [], [], P,
+              'A short line in a different script than the recent past is a recogniser hallucination.'),
+        _case('synthetic-pure-cyrillic-covered', [(B, 'сервер постоянно отключается сегодня')],
+              [(B + 500, 'сервер постоянно отключается сегодня снова')], [], P,
+              'Pure Cyrillic: word trigrams, Cyrillic dominant.'),
+        _case('synthetic-greek-covered', [(B, 'ο διακομιστής αποσυνδέεται συνέχεια')],
+              [(B + 500, 'ο διακομιστής αποσυνδέεται συνέχεια τώρα')], [], P,
+              'Greek with combining marks: NFD + Mn stripping before grams.'),
+        _case('synthetic-numeral-runs2',
+              [(B, '我们下午三点十八分见吧'), (B + 5000, '订单号是12345678请查收')],
+              [(B + 500, '我们下午三点十八分见吧'), (B + 5500, '订单号是请查收')], [], P,
+              'runs2: the 十八 run and the 8-digit run are stripped on BOTH sides.'),
+        _case('synthetic-silence-branch-speech-restart', [(B, '服务器一直连接不上')], [], [B + 1000], P,
+              'The user started speaking again inside S, so the silence branch does not fire: wait H.'),
+        _case('synthetic-empty-window', [(B, '服务器一直连接不上')], [(B - 5000, '服务器一直连接不上')], [], P,
+              'The only model message predates the look-back window: the window is empty, fill at t+S.'),
+        _case('synthetic-cancelled-response-call', [(B, '服务器一直连接不上')], [], [], P,
+              'The covering call lived in a CANCELLED response, so the caller kept it out of `executed`; '
+              'the planner must fill. Feeding it as executed is the false form.'),
+        _case('synthetic-coverage-boundary-025', [(B, '甲乙丙丁戊己庚辛壬')], [(B + 500, '甲乙丙')], [], P,
+              'coverage is exactly SCORE_T=0.25 (2 of 8 bigrams): `>=` covers, `>` would fill.'),
+        _case('synthetic-coverage-below-024',
+              [(B, '甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥天地玄黄')],
+              [(B + 500, '甲乙丙丁戊己庚')], [], P,
+              'coverage 6/25 = 0.24 < 0.25: just below the threshold, fill.'),
+        _case('synthetic-weight-boundary', [(B, '今天天气不错呀'), (B + 5000, '今天天气不错')], [], [], P,
+              'w=7 qualifies, w=6 does not (the wall is inclusive).'),
+        _case('synthetic-first-executed-at-hard-cap', [(B, '服务器一直连接不上')],
+              [(B + 12000, '今天天气不错呀')], [], P,
+              'The first executed message lands exactly at t+H: `<=` keeps T_i at the cap, same script, '
+              'no coverage → fill at t+H.'),
+        _case('synthetic-first-executed-just-after-cap', [(B, '服务器一直连接不上')],
+              [(B + 12001, '今天天气不错呀')], [], P,
+              'The first executed message lands after t+H: the silence branch owns T_i (t+S), and the '
+              'late message is outside the window.'),
+    ]
+
+def cmd_emit_fixture(out_path=None):
+    P, thresholds, conns, raw = load_params()
+    cases = []
+    for prefix in conns:
+        jf, hits = find_connection(prefix)
+        if jf is None:
+            print(f"FAIL frozen connection {prefix}: no unique journal under {LOG}", file=sys.stderr)
+            return 2
+        mode, started, finals, executed, ev, delivered = load(jf)
+        starts = [t for t, k, _ in ev if k == 'start']
+        cases.append(_case(f'connection-{prefix}', finals, executed, starts, P, None,
+                           source='frozen-connection', connection=prefix))
+    cases.extend(synthetic_cases(P))
+    doc = {
+        'rule': 'voice-realtime-omission-fill-SPEC.md v2',
+        'generatedBy': 'python3 -I experiments/voice-relay-qb/replay_rule.py --emit-fixture',
+        'paramsFile': 'experiments/voice-relay-qb/omission-fill-params.json',
+        'planner': 'server/modules/voice-realtime/voice-realtime-omission-fill.ts',
+        'caseCount': len(cases),
+        'cases': cases,
+    }
+    out_path = out_path or FIXTURE_FILE
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, ensure_ascii=False, indent=2)
+        f.write('\n')
+    n_conn = sum(1 for c in cases if c['source'] == 'frozen-connection')
+    print(f"wrote {len(cases)} cases ({n_conn} frozen connections, {len(cases) - n_conn} synthetic) to {out_path}")
+    return 0
+
 # ── --sweep ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 SWEEP_H = (4, 6, 8, 10, 12)
 SWEEP_G = (1, 2, 3, 5)
@@ -543,6 +703,10 @@ def cmd_sweep():
 # ── default comparison table ────────────────────────────────────────────────────────────────────────────────────────────
 def main(argv):
     param_file = argv[argv.index('--params') + 1] if '--params' in argv else None
+    if '--emit-fixture' in argv:
+        k = argv.index('--emit-fixture')
+        out = argv[k + 1] if k + 1 < len(argv) and not argv[k + 1].startswith('--') else None
+        return cmd_emit_fixture(out)
     if '--check' in argv: return cmd_check(param_file)
     if '--check-labels' in argv: return cmd_check_labels(param_file)
     if '--sweep' in argv: return cmd_sweep()
