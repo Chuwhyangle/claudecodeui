@@ -39,6 +39,17 @@ goal_ac: AC-400
 
 真实落地标准：在 PATH 不含 `node_modules/.bin` 的环境里，AC-400 的判据命令**原样**退出 0，并贴出改动前后的对照读数：改动前同命令 exit 1 + `Failed to find executable tsx`，改动后 exit 0 + `ℹ tests 82 / ℹ pass 82 / ℹ fail 0`。同时贴出条件性证据：PATH 上的假 `tsx` 仍优先（输出 `PATH-WINS`），不存在的命令仍非 0。既有 `scripts/with-memory-cap-effective-default.test.mjs` 复跑全绿。未验证项：AC-400 的取假形态（覆盖度改成 `>`；取消 response 里的调用算已执行）由上一个任务记录过红色读数，本任务不动模块，故不重复演练；若执行中因任何原因改了模块，必须重读这两条假形态并恢复。
 
+## Notes
+
+实现读数（worktree `/data/home/yale/work/claudecodeui-wt-memcap-resolve`，commit 87fabcd6e）：
+
+- 改动前（develop 基线，driver 形态 PATH）：AC1 同一条命令 `Failed to find executable tsx: No such file or directory`，exit 1。
+- 改动后（同一 PATH）：`ℹ tests 82 / ℹ pass 82 / ℹ fail 0`，exit 0。
+- 条件性证据：裸 PATH 下 `tsx --version` → `tsx v4.21.0` / exit 0；PATH 前置假 `tsx` → `PATH-WINS`（未被仓库本地遮蔽）；`definitely-not-a-command-xyz` → `Failed to find executable …`，exit 1；`bash -c 'exit 7'` → exit 7。
+- 回归：`node --test scripts/with-memory-cap-effective-default.test.mjs` → 6/6 pass；`QUAY_MEMORY_MAX=off … true` → exit 0；正常 PATH 下 `tsx --version` → exit 0。
+- 新自测：`node --test scripts/with-memory-cap-command-resolution.test.mjs` → 6/6 pass（含「裸 PATH 无 tsx」前提断言，避免回退用例真空绿）。
+- 模块未改动（`voice-realtime-omission-fill.ts` 及其测试/夹具零 diff），故未重演 AC-400 的两条取假形态。
+
 ## Touches
 
 - scripts/with-memory-cap.sh
