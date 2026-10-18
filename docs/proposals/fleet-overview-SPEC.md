@@ -13,6 +13,7 @@
   该改动由 **quay 仓库 task `gap-goal-list-ledger-scan`** 交付，**本仓库不实现**，只消费其输出。
 - **2026-10-18** 定：`inFlight` 与甘特共享 `readLive`，**无便宜读取路径**，归 lazy（展开才读）。
 - **2026-10-18** 定（默认，可推翻）：`lastMessagePreview` 脱敏 = **结构性白名单**（只取 user/assistant text，不取 tool 参数）+ 黑名单正则兜底 + 120 字符截断。
+- **2026-10-18 修订**：§3 原「`SessionActivity` 已带 `phase`/`toolName`/`elapsedMs`」的现状引文**有误**（写 SPEC 时未读 `SessionActivity` 类型体，仅凭 `deriveActivityDockView` 的入参推断）。P1 实现已校正：phase/tool 在 activity snapshot 的 `turn.phase`/`turn.toolName`，P1 折进 `SessionActivity`（snapshot/upsert、heartbeat、subscribe hello 三来源）并为每 running 会话补 `activity.subscribe`；elapsed 由 `startedAt` 经 `useTickingNow` 派生。§3 已按校正后现状改写。
 
 ## 1. 问题与实测基线 [M]
 
@@ -61,7 +62,7 @@
 
 | 数据 | 现状 | 位置 |
 |---|---|---|
-| 会话实时阶段/耗时 | 已算好：activity snapshot 带 `phase`(thinking/writing/tool/compacting/awaitingPermission) + `toolName` + `elapsedMs` + `taskCount`/`scheduleCount` | `SessionActivity`（`shared/types.ts:510`）；侧栏可经 `useProcessingSessions()`（`SessionProtectionContext`）读 `SessionActivityMap` |
+| 会话实时阶段/耗时 | activity snapshot 带 `turn.phase`(thinking/writing/tool/compacting/awaitingPermission) + `turn.toolName`；**P1 已折进 `SessionActivity`**（snapshot/upsert、heartbeat、subscribe hello 三来源）+ 每 running 会话 `activity.subscribe`；elapsed 由 `startedAt` 经 `useTickingNow` 每秒推进 | `SessionActivity`（`shared/types.ts`）；`presentSessionActivity`（`src/modules/sidebar/utils/sessionActivityPresentation.ts`）；phase 词经 `activityPhaseLabelKey`（chat barrel 再导出） |
 | 忙/闲 + resident | 已有 `useSessionHosts()` + `classifyRunningSessions` | `shared/hooks/useSessionHosts.ts` |
 | 项目级 quay 计数 | 已算好：`QuaySnapshot` 含 `tasks`(byStatus/ready/needsHuman/done)、`goals`(breakdown.byStatus)、`inFlight`、`gantt`、`tests`、`fanIn` | `GET /:projectId/snapshot`（`server/modules/quay/quay.service.ts` 计算）；前端 `QuayPanel` + `LoopPulseGantt` |
 | 会话消息正文 | 在 transcript jsonl（`sessions.jsonl_path`），不在 DB；需语义尾解析 | chat 模块已有 `messageTransforms.ts` / `sessionMessagePagination.ts` |
