@@ -31,9 +31,9 @@ GOAL-046 第一个任务，免费、只动 `experiments/` 与 SPEC，不碰 `ser
 
 ## AC
 
-- [ ] `python3 -I experiments/voice-relay-qb/replay_rule.py --check` 退出码 0（即 GOAL-046 的 AC-398）。
-- [ ] `python3 -I experiments/voice-relay-qb/replay_rule.py --check-labels` 退出码 0（即 AC-399）。
-- [ ] `python3 -I experiments/voice-relay-qb/replay_rule.py --sweep` 退出码 0 并在标准输出打印扫参表，表中至少含 H=4 与 H=12 两行，且每行带丢失 ≥7 字、识别原文占比、重复、补发延迟 p50。
+- [x] `python3 -I experiments/voice-relay-qb/replay_rule.py --check` 退出码 0（即 GOAL-046 的 AC-398）。
+- [x] `python3 -I experiments/voice-relay-qb/replay_rule.py --check-labels` 退出码 0（即 AC-399）。
+- [x] `python3 -I experiments/voice-relay-qb/replay_rule.py --sweep` 退出码 0 并在标准输出打印扫参表，表中至少含 H=4 与 H=12 两行，且每行带丢失 ≥7 字、识别原文占比、重复、补发延迟 p50。
 
 ## DoD
 
@@ -44,9 +44,15 @@ GOAL-046 第一个任务，免费、只动 `experiments/` 与 SPEC，不碰 `ser
 - experiments/voice-relay-qb/replay_rule.py
 - experiments/voice-relay-qb/omission-fill-params.json
 - experiments/voice-relay-qb/OMISSION_FILL_RULE.md
+- experiments/voice-relay-qb/labels.json
+- experiments/voice-relay-qb/flagged-for-review.md
 - docs/proposals/voice-realtime-omission-fill-SPEC.md
 - tasks/gap-omission-fill-sweep-and-lock-params.md
 
 ## Notes
 
 日志在仓库之外（`~/.cloudcli/voice-realtime-log/`），所以清单只存前缀，`--check` 缺任何一个连接日志就红，不能静默跳过。
+
+`labels.json` 与 `flagged-for-review.md` 加入 Touches：`--check-labels` 以它们为输入（前者是人工 O/D，后者是 64 条复核单正本），不随本任务提交则该门在 develop 上不可运行。
+
+读数（脚本输出）：`--check` PASS — LOST≥7 1.89%、识别原文 14.07%、重复 2.23%、补发延迟 p50 5.20s < H=12s；`--check-labels` PASS — 64 条命中 33 条补发，O/D 标注 22 条中 O=20（90.9%）；`--sweep` exit 0，180 组中 35 组可行（H≤8 全部不可行）。取假形态：SCORE_T=1.1 ⇒ `--check` 红（识别原文 71.87%、重复 58.83%）；SCORE_T=0 ⇒ `--check` 红（LOST≥7 6.35%、p50=12s）且 `--check-labels` 红（命中 9 < 15）。
