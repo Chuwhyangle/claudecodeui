@@ -2,7 +2,7 @@
 id: gap-continuous-experience-criterion-boot-race-under-load
 title: AC-361 判据同树 7 pass / 2 fail：连续体验 spec 首个导航后客户端未挂载（46
   个模块请求同刻中止）——补客户端启动预热与有界自报守卫（只改 e2e 夹具）
-status: todo
+status: ready
 labels:
   - gap
   - defect
