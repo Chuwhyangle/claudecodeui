@@ -52,6 +52,7 @@ GOAL-046 第三个任务。依赖任务 `gap-omission-fill-pure-module-and-parit
 - server/modules/voice-realtime/tests/voice-realtime-manual-vad-session-update.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-diagnose.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-log.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-omission-fill-wire-into-ws-proxy.md
 
 ## Notes
@@ -100,6 +101,10 @@ ws-proxy 是 GOAL-041/043/044/045 共同的热点文件，本任务与它们修�
   - `session.update`（首次与后续）与 `session.turn_detection` 的 `turn_detection` 均带 `interrupt_response:false`；segmented 的 `null` 保持 `null`。
 - 全 `server/modules/voice-realtime/tests/voice-realtime-*.test.ts`（clamped `--test-concurrency=4`）：705/705 pass。
 - `npx tsc --noEmit -p server/tsconfig.json`：退出码 0。
+
+### 套件计数钉子（2026-10-18 重测）
+
+- 本任务新增 `server/modules/voice-realtime/tests/voice-realtime-omission-fill-wiring.test.ts`，`scripts/test.sh` 收集的 server 测试文件数 364 → 365；`server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 读数相应改为 `unknown=362` / `unknown=364`。merge develop 后实测 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = 365，AC2/AC3 单跑均绿。
 
 ## Blocker
 
