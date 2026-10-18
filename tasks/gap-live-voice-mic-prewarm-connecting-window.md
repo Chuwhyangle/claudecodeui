@@ -55,6 +55,7 @@ extra:
 ## Touches
 
 - src/modules/chat/voice-realtime/audioSource.ts
+- src/modules/chat/voice-realtime/index.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/ChatInterface.tsx
 - src/modules/chat/voice-realtime/tests/audioSource.warm.test.ts
