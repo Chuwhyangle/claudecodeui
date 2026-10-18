@@ -1,7 +1,7 @@
 ---
 id: AC-399
 title: 遗漏补发规则 v2 对人工 O/D 标注的精确率
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-046
 criterion: python3 -I experiments/voice-relay-qb/replay_rule.py --check-labels
@@ -19,6 +19,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-18T08:45:27.595Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
