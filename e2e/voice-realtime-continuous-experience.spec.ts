@@ -909,10 +909,13 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
       );
 
       await page.goto(`/session/${sessionId}`);
-      // The first navigation's mount gate. Same 30s budget as before, but a miss reports the page's
-      // own evidence (text, pageerrors, console errors, failed requests) and this run's optimizer
-      // readings instead of a bare locator timeout — see `client-startup-warmup.ts`.
-      await awaitClientMounted(page, PANE, 30_000, {
+      // The first navigation's mount gate. A 12s budget: the warm-up above has already committed
+      // this run's pre-bundle, so the document either mounts quickly or something in this run's own
+      // startup failed — and a miss reports the page's evidence (text, pageerrors, console errors,
+      // failed requests) plus this run's optimizer readings instead of a bare locator timeout. The
+      // budget is deliberately well inside the 30s the AC allows the failure to take, so the whole
+      // failing run ends inside it. See `client-startup-warmup.ts`.
+      await awaitClientMounted(page, PANE, 12_000, {
         pageErrors,
         consoleErrors,
         requestFailures,
