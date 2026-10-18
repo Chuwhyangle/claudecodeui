@@ -24,10 +24,10 @@ extra:
 
 ## AC
 
-- [ ] AC1 渲染契约：running 行渲染 `data-activity-phase`/`data-activity-tool`/`data-activity-elapsed`，值与 `useProcessingSessions()` 里该 sessionId 的 `SessionActivity` 一致；resident-idle 行不渲染 `data-activity-phase`。
-- [ ] AC2 标签归约：phase 标签词经 `activityPhaseLabelKey` 归约（非硬编码新表）；`tool` 相位显示 toolName，toolName 为空回退 `toolGeneric`。
-- [ ] AC3 测试绿：新增 `src/modules/sidebar/tests/RunningViewPhase.test.tsx`，覆盖「有 phase / 无 phase（resident-idle）/ tool 无名字」三例；`bash scripts/with-memory-cap.sh vitest run src/modules/sidebar/tests/RunningViewPhase.test.tsx` 退出码 0。
-- [ ] AC4 双视口适配：phase/tool/elapsed 在 `SidebarSessionItem` 的 compact（移动浏览器窄视口）与非 compact（桌面）两分支均渲染；`RunningViewPhase.test.tsx` 覆盖 `useCompactSidebar()` 返回 true/false 两态，断言两态下行内 `data-activity-phase`/`-tool`/`-elapsed` 均存在；`RunningView` 在窄视口下同样携带数据属性（组件渲染断言，不依赖像素）。
+- [x] AC1 渲染契约：running 行渲染 `data-activity-phase`/`data-activity-tool`/`data-activity-elapsed`，值与 `useProcessingSessions()` 里该 sessionId 的 `SessionActivity` 一致；resident-idle 行不渲染 `data-activity-phase`。
+- [x] AC2 标签归约：phase 标签词经 `activityPhaseLabelKey` 归约（非硬编码新表）；`tool` 相位显示 toolName，toolName 为空回退 `toolGeneric`。
+- [x] AC3 测试绿：新增 `src/modules/sidebar/tests/RunningViewPhase.test.tsx`，覆盖「有 phase / 无 phase（resident-idle）/ tool 无名字」三例；`bash scripts/with-memory-cap.sh vitest run src/modules/sidebar/tests/RunningViewPhase.test.tsx` 退出码 0。
+- [x] AC4 双视口适配：phase/tool/elapsed 在 `SidebarSessionItem` 的 compact（移动浏览器窄视口）与非 compact（桌面）两分支均渲染；`RunningViewPhase.test.tsx` 覆盖 `useCompactSidebar()` 返回 true/false 两态，断言两态下行内 `data-activity-phase`/`-tool`/`-elapsed` 均存在；`RunningView` 在窄视口下同样携带数据属性（组件渲染断言，不依赖像素）。
 
 ## DoD
 
@@ -38,4 +38,15 @@ Running sessions 视图与 Projects 视图的会话行，running 会话显示阶
 - src/modules/sidebar/RunningView.tsx
 - src/modules/sidebar/SidebarSessionItem.tsx
 - src/modules/sidebar/tests/RunningViewPhase.test.tsx
+- src/modules/sidebar/hooks/useTickingNow.ts
+- src/modules/sidebar/utils/sessionActivityPresentation.ts
+- src/shared/types.ts
+- src/shared/context/SessionProtectionContext.tsx
+- src/modules/chat/index.ts
 - tasks/fleet-overview-p1-running-phase-tool-elapsed.md
+
+## Completion notes
+
+- 现状校正：`SessionActivity` 在本分支并不带 `phase`/`toolName`/`elapsedMs`（原 Proposal 的 SPEC §3 引文与代码不符）。实现把 activity snapshot 的 `turn.phase`/`turn.toolName`（snapshot/upsert、heartbeat、subscribe hello 三个来源）折进 `SessionActivity`，并为每个 running 会话补发 `activity.subscribe`（绝不能走 `chat.subscribe`，其 reply 是冻结的 run replay 流）。elapsed 由 `SessionActivity.startedAt`（activity map 自身的起跑锚）按秒推进。
+- 验证：`bash scripts/with-memory-cap.sh vitest run src/modules/sidebar/tests/RunningViewPhase.test.tsx` → 5 tests pass，exit 0；`npm run typecheck` exit 0；`npx oxlint src/`（= `npm run lint:client`）exit 0。
+- AC4 的两条腿由 `RunningViewPhase.test.tsx` 中 compact=true / compact=false 两个用例分别验证，且断言桌面分支的 `<a href="/session/...">` 只在非 compact 出现，确保测的是真实分支。
