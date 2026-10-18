@@ -2,7 +2,7 @@
 id: gap-voice-realtime-silent-closing-orphans-tool-resume-overflow
 title: Live Voice：silent 收尾轮连 tool-resume 的 response.create 一起砍，上游 turn queue 第
   9 段溢出后静默丢话——resume 恒发、该轮静默
-status: todo
+status: ready
 labels:
   - gap
   - defect
