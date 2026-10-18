@@ -2,7 +2,7 @@
 id: gap-continuous-experience-arming-phase-before-first-frame
 title: AC-361 再红：arming 相位落地后连续体验 spec 在推首帧前等 listening，25 s 超时——判据适配「首帧后才是
   listening」并重跑 X-1..X-7 读数（只改测试）
-status: todo
+status: ready
 labels:
   - gap
   - defect
