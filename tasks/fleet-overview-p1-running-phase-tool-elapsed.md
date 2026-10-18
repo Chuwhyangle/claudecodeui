@@ -2,7 +2,7 @@
 id: fleet-overview-p1-running-phase-tool-elapsed
 title: Running sessions 视图与会话行：渲染 activity snapshot 的
   phase/tool/elapsed（fleet-overview P1）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
