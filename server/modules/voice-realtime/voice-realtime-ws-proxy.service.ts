@@ -43,6 +43,8 @@
  * call naming another session. This handler only decides WHEN a send happens,
  * never WHICH session it reaches.
  */
+import { readFileSync } from 'node:fs';
+
 import { WebSocket } from 'ws';
 
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
@@ -81,7 +83,6 @@ import {
   type OmissionFillFinal,
   type OmissionFillParams,
 } from './voice-realtime-omission-fill.js';
-import omissionFillParamsFile from './omission-fill-params.json' with { type: 'json' };
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
@@ -412,33 +413,61 @@ export function voiceMessageBytes(message: unknown): number {
 /** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
 export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
 
-/** The omission-fill parameters SHIPPED WITH THE SERVER, as the JSON module hands them over. */
-const OMISSION_FILL_PARAMS = omissionFillParamsFile as {
-  chosen?: Record<string, unknown>;
-};
+/**
+ * The omission-fill parameters SHIPPED WITH THE SERVER, loaded ONCE at module load.
+ *
+ * WHY A LOAD-TIME READ RATHER THAN `import … with { type: 'json' }`. A relative `.json` specifier is
+ * an internal specifier whose target is outside AC-394's `.ts`/`.tsx` scan set, so the
+ * `server-import-cycle-budget` criterion counts it as unresolved — and that budget may only fall.
+ * The shipping contract is unchanged: `server/tsconfig.json` lists the JSON in `include` (the same
+ * way it lists the `.mjs` hook), so tsc copies it to
+ * `dist-server/server/modules/voice-realtime/omission-fill-params.json`, exactly beside this
+ * compiled service, and `import.meta.url` finds it in a built tree.
+ *
+ * Reading it HERE (module evaluation) rather than per connection is also what keeps the per-
+ * connection filesystem seam in AC-402 (a) discriminating: that seam throws for any path naming
+ * `omission-fill-params.json`, so a reader that went back to opening `experiments/…` on every
+ * connection would be caught, while these shipped values are already in memory.
+ *
+ * A file that is missing, unreadable, or not a JSON object yields `null`; {@link readOmissionFillParams}
+ * then reports the reason and leaves the producer OFF. Never a guessed parameter set.
+ */
+const OMISSION_FILL_PARAMS: { chosen?: Record<string, unknown> } | null = (() => {
+  try {
+    const parsed: unknown = JSON.parse(
+      readFileSync(new URL('./omission-fill-params.json', import.meta.url), 'utf8'),
+    );
+    return parsed !== null && typeof parsed === 'object' ? (parsed as { chosen?: Record<string, unknown> }) : null;
+  } catch {
+    return null;
+  }
+})();
 
 /**
  * Reads and validates the omission-fill parameters that ship with `server/`.
  *
  * THE PARAMETER FILE IS OWNED BY `server/` AND TRAVELS WITH THE BUILD. `omission-fill-params.json`
- * is imported as a JSON module, so tsc copies it beside this compiled service
- * (`server/tsconfig.json` sets `resolveJsonModule`): a `dist-server` deployment never needs the
- * `experiments/` tree. The earlier reader resolved the application root and re-read
- * `experiments/voice-relay-qb/omission-fill-params.json` on every connection, which made a
- * deployment's producer silently switch off when that measurement-only directory was absent.
+ * is listed in `server/tsconfig.json`'s `include`, so tsc copies it beside this compiled service: a
+ * `dist-server` deployment never needs the `experiments/` tree. The earlier reader resolved the
+ * application root and re-read `experiments/voice-relay-qb/omission-fill-params.json` on every
+ * connection, which made a deployment's producer silently switch off when that measurement-only
+ * directory was absent.
  *
- * HOT CHANGES GO THROUGH THE SETTINGS FILE. The imported values are fixed at process start; an
+ * HOT CHANGES GO THROUGH THE SETTINGS FILE. The loaded values are fixed at process start; an
  * operator changes them for the NEXT connection through `voice-realtime-settings.ts`'s optional
  * `omissionFill` key, which the caller merges over these below. A live connection keeps the values
  * it logged.
  *
- * `params: null` with a `problem` is the honest answer to a malformed shipped block: the caller
- * records it and leaves the producer OFF. A guessed fallback would be a second source of truth, and
- * the rule's own module deliberately declares none.
+ * `params: null` with a `problem` is the honest answer to an unreadable or malformed shipped block:
+ * the caller records it and leaves the producer OFF. A guessed fallback would be a second source of
+ * truth, and the rule's own module deliberately declares none.
  *
  * Consumers: {@link handleVoiceRealtimeConnection}, once per connection.
  */
 function readOmissionFillParams(): { params: OmissionFillParams | null; problem: string | null } {
+  if (OMISSION_FILL_PARAMS === null) {
+    return { params: null, problem: 'unreadable omission-fill-params.json' };
+  }
   const chosen = OMISSION_FILL_PARAMS.chosen;
   if (chosen === null || typeof chosen !== 'object') {
     return { params: null, problem: 'missing chosen block' };

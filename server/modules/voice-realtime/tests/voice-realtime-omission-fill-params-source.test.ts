@@ -16,10 +16,12 @@
  *      reason in the connection log.
  *  (c) The replay tool reads the SAME `chosen` block: `--print-chosen` prints it item for item, and
  *      the two replay gates still pass.
- *  (d) tsc really emits the JSON with the build: the server tsconfig's own `resolveJsonModule`
- *      option, driven over a virtual module that imports the shipping file, writes a copy beside the
- *      compiled output (`dist-server.next/server/modules/voice-realtime/…`, mirrored here into a
- *      temp outDir).
+ *  (d) tsc really emits the JSON with the build: the real server tsconfig lists the shipping file in
+ *      `include`, and its own options (the same `outDir`/`rootDir` mapping the build uses) write a
+ *      copy beside the compiled module (`dist-server/server/modules/voice-realtime/…`). The service
+ *      reads that copy from its own `import.meta.url` at load time instead of importing the JSON as
+ *      a module: a relative `.json` specifier is an internal specifier AC-394's import-cycle budget
+ *      counts as unresolved, and that budget may only fall.
  *
  * The server JSON is the ONLY expected-value source in this file — nothing falls back to
  * `experiments/`, which is what makes deleting the server file a red rather than a pass.
@@ -179,8 +181,8 @@ function tempDir(prefix: string): string {
  *
  * The fs seam replaces `node:fs`'s `readFileSync` for the duration of the connection and throws for
  * ANY path naming `omission-fill-params.json` — the file the reverted reader used to open. The new
- * reader never opens a file (the JSON is a module import evaluated at load time), so the producer
- * stays on and its parameters are the server file's.
+ * reader loads the JSON ONCE at module evaluation (before this test can arm the seam), so the
+ * producer stays on and its parameters are the server file's.
  */
 test('(a) a connection with no experiments/ tree and that file unreadable still runs on the server JSON', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
@@ -353,20 +355,26 @@ test('(c) replay_rule.py --print-chosen is the server chosen block, and both gat
 });
 
 /**
- * (d) tsc emits the JSON with the build: the real server tsconfig's options, a virtual module that
- * imports the shipping file, and a temp outDir that mirrors `dist-server.next`.
+ * (d) tsc emits the JSON with the build: the shipping file is part of the real server program
+ * (`include`), and the real tsconfig's own options copy it beside the compiled module under a temp
+ * outDir that mirrors `dist-server.next`.
  */
-test('(d) the server tsconfig emits omission-fill-params.json beside the compiled module', () => {
+test('(d) the server tsconfig includes omission-fill-params.json and emits it beside the compiled module', () => {
   const configPath = path.join(REPO_ROOT, 'server', 'tsconfig.json');
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
   assert.equal(config.error, undefined, `server/tsconfig.json must parse: ${String(config.error?.messageText)}`);
   const parsed = ts.parseJsonConfigFileContent(
-    { ...(config.config as Record<string, unknown>), files: [], include: [] },
+    config.config as Record<string, unknown>,
     ts.sys,
     path.dirname(configPath),
   );
   const outDir = tempDir('omission-emit-');
   try {
+    assert.ok(
+      parsed.fileNames.includes(SERVER_PARAMS_FILE),
+      'the server build program must include the shipping JSON — the service reads it from its own import.meta.url; ' +
+        'left out of `include` the file would not exist in a built tree',
+    );
     const options: ts.CompilerOptions = {
       ...parsed.options,
       outDir,
@@ -375,22 +383,10 @@ test('(d) the server tsconfig emits omission-fill-params.json beside the compile
     };
     assert.equal(options.resolveJsonModule, true, 'the server build must enable resolveJsonModule');
 
-    const virtualRoot = path.join(REPO_ROOT, '__omission-fill-emit-probe.ts');
-    const source =
-      "import params from './server/modules/voice-realtime/omission-fill-params.json' with { type: 'json' };\n" +
-      'export default params;\n';
-    const host = ts.createCompilerHost(options, true);
-    const originalGetSourceFile = host.getSourceFile.bind(host);
-    const originalFileExists = host.fileExists.bind(host);
-    const originalReadFile = host.readFile.bind(host);
-    host.fileExists = (file) => file === virtualRoot || originalFileExists(file);
-    host.readFile = (file) => (file === virtualRoot ? source : originalReadFile(file));
-    host.getSourceFile = (file, languageVersion, onError, shouldCreateNewSourceFile) =>
-      file === virtualRoot
-        ? ts.createSourceFile(file, source, languageVersion, true)
-        : originalGetSourceFile(file, languageVersion, onError, shouldCreateNewSourceFile);
-
-    const program = ts.createProgram([virtualRoot], options, host);
+    // Emit exactly the program member the build would copy; the mapping under test is
+    // rootDir → outDir, so `server/modules/voice-realtime/omission-fill-params.json` lands beside
+    // the compiled service in a real `dist-server.next`.
+    const program = ts.createProgram([SERVER_PARAMS_FILE], options);
     const diagnostics = ts.getPreEmitDiagnostics(program);
     assert.deepEqual(
       diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
@@ -401,7 +397,7 @@ test('(d) the server tsconfig emits omission-fill-params.json beside the compile
     assert.equal(emitted.emitSkipped, false, 'emit must not be skipped');
 
     const emittedParams = path.join(outDir, 'server', 'modules', 'voice-realtime', 'omission-fill-params.json');
-    assert.ok(existsSync(emittedParams), 'tsc must copy the imported JSON into the build output');
+    assert.ok(existsSync(emittedParams), 'tsc must copy the shipping JSON into the build output');
     assert.deepEqual(
       JSON.parse(readFileSync(emittedParams, 'utf8')),
       JSON.parse(readFileSync(SERVER_PARAMS_FILE, 'utf8')),

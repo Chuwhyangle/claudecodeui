@@ -43,7 +43,22 @@
   // the program the file would simply not exist in a built tree, and the launch would register a
   // `UserPromptSubmit` command pointing at nothing — a failure with no error, which is the one shape
   // this wiring must not have.
-  "include": ["./**/*.js", "./**/*.mjs", "./**/*.ts", "../shared/**/*.js", "../shared/**/*.ts"],
+  //
+  // `modules/voice-realtime/omission-fill-params.json` is listed for the same reason: the omission-fill
+  // parameters are owned by `server/` and must travel with the build, but the service reads them at
+  // module load instead of importing them as a JSON module. A relative `.json` import is a specifier
+  // AC-394's `server-import-cycle-budget` criterion counts as unresolved (its scan set is `.ts`/`.tsx`
+  // only, and that budget may only fall); an explicitly included JSON is still part of the program, so
+  // tsc copies it to `dist-server/server/modules/voice-realtime/omission-fill-params.json` — the path
+  // the service resolves from its own `import.meta.url`.
+  "include": [
+    "./**/*.js",
+    "./**/*.mjs",
+    "./**/*.ts",
+    "./modules/voice-realtime/omission-fill-params.json",
+    "../shared/**/*.js",
+    "../shared/**/*.ts"
+  ],
   // ./modules/voice/tmp holds no source: it is the git-ignored scratch directory the voice criteria's
   // positive controls plant transient probe files in (e.g. voice-dashscope-settings AC4(b)'s
   // `__stray-shipping-probe-<pid>.ts`). Those probes are written and removed inside one test case, while
