@@ -43,9 +43,12 @@
  * call naming another session. This handler only decides WHEN a send happens,
  * never WHICH session it reaches.
  */
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { WebSocket } from 'ws';
+
+import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
 import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
@@ -75,6 +78,13 @@ import {
   afterStopSentence,
   type VoiceRealtimeClosingTurn,
 } from './voice-realtime-closing-turn.js';
+import {
+  planOmissionFills,
+  type OmissionFill,
+  type OmissionFillExecuted,
+  type OmissionFillFinal,
+  type OmissionFillParams,
+} from './voice-realtime-omission-fill.js';
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
@@ -405,20 +415,81 @@ export function voiceMessageBytes(message: unknown): number {
 /** The reason code a refused `session_send` carries — stable, so the model can act on it, and so the log can be read. */
 export const VOICE_QUEUE_FULL_REASON = 'VOICE_QUEUE_FULL';
 
+/** The locked omission-fill parameter file, relative to the application root (see the reader below). */
+const OMISSION_FILL_PARAMS_PATH = path.join('experiments', 'voice-relay-qb', 'omission-fill-params.json');
+
+/** The `analyse` variants the locked file may name (see `voice-realtime-omission-fill.ts`). */
+const OMISSION_FILL_NUMERAL_MODES: ReadonlySet<string> = new Set(['runs2', 'all', 'quantifier']);
+
 /**
- * The settle boundary's production window, in milliseconds (R2, 2026-10-17).
+ * Reads and validates the locked omission-fill parameters.
  *
- * Every FINAL transcription starts this window. If a model response covers the span inside it, the
- * response is the delivery; if not, the endpoint's own words go verbatim when it closes. The value
- * is the model's own measured response latency on the live journals (the same order as the 1–2.5 s
- * coalescing windows the relay already used), so a healthy response wins the race and a response the
- * endpoint never opened loses it.
+ * THE PARAMETER FILE IS THE ONLY SOURCE. `experiments/voice-relay-qb/omission-fill-params.json` is
+ * what the replay gate (`replay_rule.py --check`) reads, so deriving a second copy here — even a
+ * "matching" literal — would let the relay and the measurement drift apart silently. The file is
+ * re-read per connection rather than captured at boot, which is what makes an edit to it a hot
+ * change: the NEXT connection uses the new values, and live ones keep the values they logged.
  *
- * Deliberately short relative to the busy hold: this is the "nobody is going to answer for it"
- * boundary, not the "the person has stopped speaking" one — the hold and its quiet window still
- * decide WHERE a settled message goes (the CLI's queue, under `next`).
+ * `params: null` with a `problem` is the honest answer to a missing or malformed file: the caller
+ * records it and leaves the producer OFF. A guessed fallback would be a second source of truth, and
+ * the rule's own module deliberately declares none.
+ *
+ * Consumers: {@link handleVoiceRealtimeConnection}, once per connection.
  */
-export const VOICE_SPAN_SETTLE_MS = 2_500;
+function readOmissionFillParams(): { params: OmissionFillParams | null; problem: string | null } {
+  try {
+    const root = findApplicationRoot(getModuleDirectory(import.meta.url));
+    const raw = JSON.parse(readFileSync(path.join(root, OMISSION_FILL_PARAMS_PATH), 'utf8')) as {
+      chosen?: Record<string, unknown>;
+    };
+    const chosen = raw.chosen;
+    if (chosen === null || typeof chosen !== 'object') {
+      return { params: null, problem: 'missing chosen block' };
+    }
+    const hMs = chosen.h_ms;
+    const gMs = chosen.g_ms;
+    const scoreT = chosen.score_t;
+    const wMin = chosen.w_min;
+    const wHallu = chosen.w_hallu;
+    const domN = chosen.dom_n;
+    const lookbackMs = chosen.lookback_ms;
+    const silenceMs = chosen.silence_ms;
+    const numeralMode = chosen.numeral_mode;
+    if (
+      typeof hMs !== 'number' ||
+      typeof gMs !== 'number' ||
+      typeof scoreT !== 'number' ||
+      typeof wMin !== 'number' ||
+      typeof wHallu !== 'number' ||
+      typeof domN !== 'number' ||
+      typeof lookbackMs !== 'number' ||
+      !(typeof silenceMs === 'number' || silenceMs === null) ||
+      typeof numeralMode !== 'string' ||
+      !OMISSION_FILL_NUMERAL_MODES.has(numeralMode)
+    ) {
+      return { params: null, problem: 'malformed chosen block' };
+    }
+    return {
+      params: {
+        hMs,
+        gMs,
+        scoreT,
+        wMin,
+        wHallu,
+        domN,
+        lookbackMs,
+        silenceMs,
+        numeralMode: numeralMode as OmissionFillParams['numeralMode'],
+      },
+      problem: null,
+    };
+  } catch (error) {
+    return {
+      params: null,
+      problem: `unreadable (${error instanceof Error ? error.message : String(error)})`,
+    };
+  }
+}
 
 /**
  * The most pack text one `context` frame may carry, in UTF-16 code units.
@@ -1509,22 +1580,19 @@ export type VoiceRealtimeProxySeams = {
    */
   segmentedRelay?: boolean;
   /**
-   * How long the continuous relay waits, after a final transcription, before delivering the heard
-   * span verbatim — the ACOUSTIC settle boundary (R2).
+   * The omission-fill rule's parameters for this connection, or a test-shaped override of them.
    *
-   * THE PRODUCER IS NOT THE MODEL ANY MORE. A spoken sentence used to reach the session only when
-   * the realtime model chose to call `session_send`, so a model that answered in text, or whose
-   * response was truncated by the next turn, left the sentence undelivered (the 2026-10-17
-   * dropped-input audit: 3 of 5 sentences lost on `764f0c7a`). Now every final transcription arms
-   * this window; if a model response covers the span inside it, the response is the delivery text,
-   * and if none does, the endpoint's own words go as one message. There is no text-side heuristic
-   * and no uncovered-fragment detection: the span is delivered WHOLE or the model's response is
-   * delivered WHOLE, and a span that was already settled is never delivered again (the watermark).
+   * ABSENT USES THE LOCKED FILE. The rule's parameters live in exactly one place —
+   * `experiments/voice-relay-qb/omission-fill-params.json`, the file the replay gate reads — and
+   * this seam only lets a criterion shrink the (12 s / 3 s) windows so a fill is observable in
+   * milliseconds. A partial is merged OVER the locked values, so a test that names one window still
+   * exercises the locked thresholds.
    *
-   * ABSENT USES THE PRODUCTION WINDOW. Tests set it small (0 included) to make the boundary
-   * observable without waiting; a deployment never has to name it.
+   * `null` DISABLES the producer. That is not a deployment switch: it exists so a criterion about
+   * some other relay behaviour (interrupts, the busy hold, segments) does not have fills landing in
+   * the middle of its readings. A deployment leaves it unset.
    */
-  settleMs?: number;
+  omissionFillParams?: Partial<OmissionFillParams> | null;
   /**
    * THIS connection's transport choice, or absent (the per-connection opt-in).
    *
@@ -2018,6 +2086,31 @@ export function handleVoiceRealtimeConnection(
     if (settingsTurnDetectionNote !== null) {
       seams.log?.(settingsTurnDetectionNote);
     }
+  }
+  // ---- the omission-fill producer's parameters (GOAL-046) --------------------------------------
+  //
+  // READ PER CONNECTION, from the SAME file the replay gate reads, so an edit is a hot change and
+  // the relay can never measure with a copy the rule was not locked against. The readings go into
+  // the journal before any candidate is judged: a replayed journal cannot be checked without them.
+  //
+  // `seams.omissionFillParams === null` is the criterion-only "not this connection" switch; a
+  // partial is merged over the locked values, so a test shrinks one window without inventing the
+  // others. An unreadable file is recorded and leaves the producer off — never guessed.
+  const lockedOmissionFill = readOmissionFillParams();
+  const omissionFillParams: OmissionFillParams | null =
+    seams.omissionFillParams === null
+      ? null
+      : lockedOmissionFill.params === null
+        ? null
+        : { ...lockedOmissionFill.params, ...(seams.omissionFillParams ?? {}) };
+  if (omissionFillParams === null) {
+    seams.log?.(
+      `omission_fill disabled (${
+        seams.omissionFillParams === null ? 'seam' : lockedOmissionFill.problem ?? 'no parameters'
+      })`,
+    );
+  } else {
+    seams.log?.(`omission_fill params ${JSON.stringify(omissionFillParams)}`);
   }
   /** The pack this connection was sent, or `''` before it arrives (and for a session with nothing said). */
   let contextText = '';
@@ -2524,25 +2617,26 @@ export function handleVoiceRealtimeConnection(
    * The two upstream events are independent: a `committed` creates the input item, and its
    * transcription lands later (sometimes seconds later, and out of order across items). A model
    * response can therefore be produced BEFORE the transcription of the sentence it answers arrives.
-   * Without this set, the late transcript would look unanswered and the settle producer would
-   * deliver it verbatim — a duplicate of a sentence the model already carried. See
+   * Without this set, the late transcript would look unanswered and the `MODEL_TEXT_REPLY` net
+   * would deliver it verbatim — a duplicate of a sentence the model already carried. See
    * {@link claimOutstandingCommits}.
    */
   const committedPendingTranscription = new Set<string>();
   /**
    * The committed items a model response has already answered for, waiting for their transcription.
    * A final transcription for one of these is CONSUMED by the response: it is recorded (the digest
-   * and the transcript view still read it) but it neither joins {@link transcribedSinceWatermark}
-   * nor arms the settle window.
+   * and the transcript view still read it) and it does not join {@link transcribedSinceWatermark} —
+   * so the `MODEL_TEXT_REPLY` net cannot deliver it again. The omission planner still sees it: the
+   * rule's coverage question is answered from the executed messages, not from this set.
    */
   const committedCoveredByResponse = new Set<string>();
   /**
-   * Whether any FINAL transcription has landed on this connection. Once it has, the settle producer
-   * owns delivery: a model response arriving with no new speech since the last accepted delivery is
-   * a restatement of a span that is already delivered, and is refused by the watermark rather than by
-   * comparing its words. A connection that has never heard a final keeps the pre-settle behaviour
-   * (every call is its own delivery), which is what keeps fixture connections that drive
-   * `session_send` directly working unchanged.
+   * Whether any FINAL transcription has landed on this connection. Once it has, the watermark owns
+   * the duplicate question: a model response arriving with no new speech since the last accepted
+   * delivery is a restatement of a span that is already delivered, and is refused by the watermark
+   * rather than by comparing its words. A connection that has never heard a final keeps the
+   * pre-watermark behaviour (every call is its own delivery), which is what keeps fixture
+   * connections that drive `session_send` directly working unchanged.
    */
   let finalTranscriptHeard = false;
   /**
@@ -2564,9 +2658,9 @@ export function handleVoiceRealtimeConnection(
    * The normalized text of the last few accepted deliveries, newest last — the window a no-new-speech
    * call is checked against for RESTATEMENT.
    *
-   * WHY A WINDOW AND NOT JUST THE LAST DELIVERY. Under the settle producer a span can be delivered
-   * verbatim BEFORE the model's response for it arrives (the response lost the race and is a
-   * restatement of the endpoint's own words). The last delivery may already be the NEXT span, so
+   * WHY A WINDOW AND NOT JUST THE LAST DELIVERY. A span can be delivered verbatim (by the
+   * `MODEL_TEXT_REPLY` net or an omission fill) BEFORE the model's response for it arrives (the
+   * response lost the race and is a restatement of the endpoint's own words). The last delivery may already be the NEXT span, so
    * comparing only against it would let the earlier sentence through a second time — the active
    * duplicate this task closes. A bounded window keeps that comparison local without keeping the
    * whole conversation.
@@ -2580,8 +2674,33 @@ export function handleVoiceRealtimeConnection(
    * recently delivered ⇒ echo; anything that adds words is a delivery.
    */
   const recentDeliveredTexts: string[] = [];
-  /** The open settle timer for the heard span, or `null`. See {@link armSettleWindow}. */
-  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * The omission-fill rule's in-memory inputs (GOAL-046): every final transcription `F_i`, every
+   * EXECUTED model message `M_k`, and the endpoint's `speech_started` times.
+   *
+   * THE PLAN IS RECOMPUTED FROM THESE, NEVER INCREMENTALLY. The rule's decision time `T_i` depends
+   * on messages that had not arrived when the final did, and the silence branch depends on whether
+   * the user speaks again inside `S`; incrementally patching a plan would be a second implementation
+   * of §3. The arrays stay small for a voice connection (one entry per final / executed response),
+   * and the pure planner is cheap.
+   */
+  const omissionFinals: OmissionFillFinal[] = [];
+  const omissionExecuted: OmissionFillExecuted[] = [];
+  const omissionSpeechStarts: number[] = [];
+  /**
+   * Item id → the index of that item's final in {@link omissionFinals}. The `MODEL_TEXT_REPLY` net
+   * already delivers some finals verbatim; mapping back to the index is what lets it CLOSE the
+   * planner's candidate, so the rule does not deliver the same sentence a second time.
+   */
+  const omissionIndexByItemId = new Map<string, number>();
+  /**
+   * The indices whose disposition is final: filled, or skipped for a recorded reason. An item is
+   * decided exactly once — a late model message must never un-fill words already delivered, and a
+   * fill must never be re-delivered on the next recompute.
+   */
+  const omissionSettled = new Set<number>();
+  /** The one timer waiting for the earliest undecided `T_i`, or `null`. See `evaluateOmissionFill`. */
+  let omissionTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * The `triggerSeq` this connection has already interrupted for — the idempotent half of the fence.
    * Set when a model stop RUNS, read by {@link decideModelInterrupt}, and never reset: a repeat of
@@ -3778,12 +3897,11 @@ export function handleVoiceRealtimeConnection(
     // forms (the AC8 mutation suite reddens the missing `seq` gate by expecting the replay to land
     // twice). The defect this guard closes is precisely that continuous mode carries no `seq`.
     const normalizedRelay = normalizeRelayText(typeof args.message === 'string' ? args.message : '');
-    // ── THE SETTLE WATERMARK (R2, 2026-10-17) ──
-    // On the continuous wire, once a final transcription has been heard, delivery is driven by the
-    // settle boundary: a span is consumed by whichever comes first, the model's response or the
-    // deadline, and the watermark (`speechEpoch`/`deliveredEpoch`) is what stops the same span from
-    // being delivered again — the 2026-10-11 `57279cc1` shape, where one sentence was sent three
-    // times, and the `cae49fed` phantom rewrite the old identity/containment comparison missed.
+    // ── THE DELIVERY WATERMARK (GOAL-046 keeps it; the settle producer did not) ──
+    // On the continuous wire, once a final transcription has been heard, the watermark
+    // (`speechEpoch`/`deliveredEpoch`) is what stops the same span from being delivered again — the
+    // 2026-10-11 `57279cc1` shape, where one sentence was sent three times, and the `cae49fed`
+    // phantom rewrite the old identity/containment comparison missed.
     //
     // The watermark answers "is there a NEW span?", not "are these words already in the session?".
     // A call with no new speech can still be the FIRST delivery of words nobody holds: the
@@ -4057,62 +4175,175 @@ export function handleVoiceRealtimeConnection(
       heldTimer.unref?.();
     });
 
-  // ---- the settle producer (R2, 2026-10-17) ---------------------------------------------------
+  // ---- the omission-fill producer (GOAL-046, rule v2) -----------------------------------------
   //
-  // THE MODEL IS NO LONGER THE DELIVERY JUDGE. Before this, a spoken sentence reached the session
-  // only if the realtime model happened to call `session_send` for it. The 2026-10-17 audit read the
-  // consequence out of six live journals: four rounds lost input, `764f0c7a` lost 3 of 5 sentences,
-  // and the loss was invisible because the model had done something ELSE (a text reply, a call
-  // covering only the newest span, a call the next utterance truncated). The producer is now the
-  // RELAY, triggered by the endpoint's own final transcription:
+  // THE MODEL IS STILL THE PRIMARY DELIVERY; THE RELAY IS THE NET FOR WHAT IT DID NOT CARRY. The
+  // 2026-10-17 settle producer replaced the model as the delivery judge, and that was one rule too
+  // many: it delivered the whole heard span verbatim whenever no response arrived in 2.5 s, even
+  // when the model had carried the sentence in its own words. The rule this replaces it with is the
+  // one measured on 47 frozen connections (`docs/proposals/voice-realtime-omission-fill-SPEC.md`):
+  // a final transcription is delivered VERBATIM only when the model's executed messages do not
+  // contain it (`planOmissionFills`, the pure planner this module owns). No settle timer, no span
+  // consumption by a model message, no text-side heuristic here — the ordering decisions belong to
+  // the planner.
   //
-  //   · every final arrives into `transcribedSinceWatermark` (as before) and arms {@link
-  //     armSettleWindow};
-  //   · a model response inside the window is the QUALITY arm — its words are delivered, the window
-  //     is cancelled, and the span is consumed by the response;
-  //   · no response by the deadline is the DETERMINISTIC arm — the endpoint's words for that span go
-  //     verbatim, as ONE message;
-  //   · either way the watermark advances (`proceedRelay`'s acceptance), so the same span can never
-  //     be delivered twice (the 2026-10-11 `57279cc1` triple-send, and the `3d2d3b2c` span-guard
-  //     duplicate, are the two shapes this replaces).
-  //
-  // WHAT THIS DELIBERATELY DOES NOT DO. It does not compare the response's words to the transcript
-  // (R3): no overlap test, no uncovered-fragment concept, no minimum character count. A response that
-  // covers the span is used whole even when it rewords it (the `3d2d3b2c` mishearing repair is the
-  // case that measure got wrong), and a span the response does not cover is delivered whole.
-  /** How long a heard span waits for the model before the relay delivers it verbatim. */
-  const settleWindowMs = seams.settleMs ?? VOICE_SPAN_SETTLE_MS;
-
-  /** The heard span since the last settled delivery: item order, non-empty words, joined. */
-  const heardSpanText = (): string => {
-    const words: string[] = [];
-    for (const itemId of transcribedSinceWatermark) {
-      if (itemTranscriptEmpty.get(itemId) === true) {
-        continue;
-      }
-      const text = (itemTranscriptText.get(itemId) ?? '').trim();
-      if (text !== '') {
-        words.push(text);
-      }
-    }
-    return joinParts(words);
+  // THE THREE REGISTRATION POINTS are the planner's whole input: a final transcription, an EXECUTED
+  // model message, and `speech_started`. Each recomputes the plan; only `T_i` (the planner's own
+  // `dueAt`) decides when a candidate is judged, and an index is decided exactly once.
+  const logOmissionFill = (payload: Record<string, unknown>): void => {
+    seams.log?.(`omission_fill ${JSON.stringify(payload)}`);
   };
 
-  /** Drops the open settle timer. Idempotent, and safe when none is armed. */
-  const clearSettleWindow = (): void => {
-    if (settleTimer !== null) {
-      clearTimeout(settleTimer);
-      settleTimer = null;
+  /** Drops the waiting decision timer. Idempotent, and safe when none is armed. */
+  const clearOmissionTimer = (): void => {
+    if (omissionTimer !== null) {
+      clearTimeout(omissionTimer);
+      omissionTimer = null;
     }
   };
 
   /**
-   * Marks every committed-but-untranscribed item as answered by the model response that just went
-   * out, so its late transcription is CONSUMED instead of settled a second time.
+   * Delivers one planned fill through the EXISTING relay path — busy hold, coalescing window, byte
+   * bound and watermark included. It deliberately does not go through {@link sessionSend}: that
+   * wrapper registers the call as an EXECUTED MODEL MESSAGE, and a fill is the relay's own words.
+   */
+  const deliverOmissionFill = async (message: string): Promise<unknown> =>
+    proceedRelay({ message }, null, false);
+
+  /**
+   * Recomputes the plan and acts on everything whose `T_i` has arrived, then arms the next one.
    *
-   * Called on BOTH arms: a response with a heard span behind it answers those items too (the model
-   * saw them in its conversation), and a response with NO span behind it is the model answering an
-   * utterance whose transcription had not arrived yet.
+   * SKIPPED CANDIDATES ARE LOGGED AS SOON AS THE PLAN NAMES THEM. Every skip reason the planner
+   * produces is stable once true: weight / empty-grams / wrong-script do not depend on time, and
+   * `covered` / `incomparable` only become MORE covered as executed messages arrive (the covering
+   * window starts at `t_i − lookback` and its first message is already inside it). Logging them at
+   * once is what makes the journal say why a candidate was passed over, instead of leaving a gap.
+   *
+   * FILLS WAIT FOR THEIR OWN `dueAt`. Fills sharing a `dueAt` are delivered as ONE message, in
+   * transcript order; different due times are delivered in order, sequentially, because the send
+   * path has a single-flight guard that a concurrent second delivery would trip.
+   */
+  function evaluateOmissionFill(): void {
+    clearOmissionTimer();
+    if (closed || segmentedRelay || omissionFillParams === null) {
+      return;
+    }
+    const now = Date.now();
+    const plan = planOmissionFills(
+      omissionFinals,
+      omissionExecuted,
+      omissionFillParams,
+      omissionSpeechStarts,
+    );
+
+    for (const skip of plan.skipped) {
+      if (omissionSettled.has(skip.index)) continue;
+      omissionSettled.add(skip.index);
+      logOmissionFill({ i: skip.index, reason: skip.reason });
+    }
+
+    let earliest: number | null = null;
+    const dueByTime = new Map<number, OmissionFill[]>();
+    for (const fill of plan.fills) {
+      if (omissionSettled.has(fill.index)) continue;
+      if (fill.dueAt <= now) {
+        const group = dueByTime.get(fill.dueAt) ?? [];
+        group.push(fill);
+        dueByTime.set(fill.dueAt, group);
+      } else if (earliest === null || fill.dueAt < earliest) {
+        earliest = fill.dueAt;
+      }
+    }
+
+    const dueTimes = [...dueByTime.keys()].sort((left, right) => left - right);
+    if (dueTimes.length > 0) {
+      const messages: string[] = [];
+      for (const dueAt of dueTimes) {
+        const group = (dueByTime.get(dueAt) ?? []).sort((left, right) => left.index - right.index);
+        for (const fill of group) {
+          omissionSettled.add(fill.index);
+          logOmissionFill({ i: fill.index, dueAt: fill.dueAt, coverage: fill.coverage, reason: 'fill' });
+        }
+        const message = joinParts(group.map((fill) => omissionFinals[fill.index].text));
+        if (message !== '') messages.push(message);
+      }
+      void (async (): Promise<void> => {
+        for (const message of messages) {
+          try {
+            await deliverOmissionFill(message);
+          } catch (error) {
+            // One failed fill does not cancel the others, and it is NOT retried: the rule is a
+            // single action (SPEC §4.3). The failure is reported the same way a failed relay is.
+            send(
+              errorFrame(
+                'TOOL_EXECUTION_FAILED',
+                `The omitted speech could not be delivered: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                true,
+              ),
+            );
+          }
+        }
+      })();
+    }
+
+    if (earliest !== null) {
+      omissionTimer = setTimeout(evaluateOmissionFill, Math.max(0, earliest - now));
+      omissionTimer.unref?.();
+    }
+  }
+
+  /** Registers one final transcription (`F_i`) and lets the planner re-decide. */
+  const registerOmissionFinal = (text: string, itemId: string): void => {
+    if (closed || segmentedRelay || omissionFillParams === null) return;
+    if (itemId !== '') omissionIndexByItemId.set(itemId, omissionFinals.length);
+    omissionFinals.push({ t: Date.now(), text });
+    evaluateOmissionFill();
+  };
+
+  /**
+   * Closes the candidates the `MODEL_TEXT_REPLY` net just delivered verbatim, so the planner does
+   * not fill the same words again at `T_i`. The net is the relay's own path, not an executed model
+   * message, so the planner cannot see it; this is the relay saying "these are delivered".
+   */
+  const closeOmissionFillsDeliveredVerbatim = (itemIds: readonly string[]): void => {
+    for (const itemId of itemIds) {
+      const index = omissionIndexByItemId.get(itemId);
+      if (index === undefined || omissionSettled.has(index)) continue;
+      omissionSettled.add(index);
+      logOmissionFill({ i: index, reason: 'text-reply' });
+    }
+  };
+
+  /**
+   * Registers one EXECUTED model message (`M_k`) — a `session_send` / `session_interrupt` call whose
+   * own response completed. A call from a response the endpoint CANCELLED never reaches these
+   * executors at all (the bridge reports `TRUNCATED_BY_TURN` before dispatch), which is the input
+   * contract `planOmissionFills` requires.
+   */
+  const registerOmissionExecuted = (message: unknown): void => {
+    if (closed || segmentedRelay || omissionFillParams === null) return;
+    if (typeof message !== 'string' || message.trim() === '') return;
+    omissionExecuted.push({ t: Date.now(), text: message });
+    evaluateOmissionFill();
+  };
+
+  /** Registers one `input_audio_buffer.speech_started` arrival (the planner's silence branch). */
+  const registerOmissionSpeechStart = (): void => {
+    if (closed || segmentedRelay || omissionFillParams === null) return;
+    omissionSpeechStarts.push(Date.now());
+    evaluateOmissionFill();
+  };
+
+  /**
+   * Marks every committed-but-untranscribed item as answered by the model response that just went
+   * out, so its late transcription does not join the verbatim span the `MODEL_TEXT_REPLY` net
+   * delivers.
+   *
+   * NOTE — THIS IS NOT SPAN CONSUMPTION FOR THE OMISSION RULE. The omission planner sees every final
+   * transcription regardless of this set (`registerOmissionFinal` runs before the branch below);
+   * this only keeps the MODEL_TEXT_REPLY fallback from delivering words a response already carried.
    */
   const claimOutstandingCommits = (): void => {
     for (const itemId of committedPendingTranscription) {
@@ -4122,79 +4353,12 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
-   * Closes one settle boundary: delivers the heard span verbatim when no model response covered it.
-   *
-   * A no-op when the span is already empty (the response consumed it, or every item was silence).
-   * The empty case still advances the watermark, for the same reason the empty-span refusal does:
-   * items left behind it could only make a later, genuinely-empty span look non-empty.
+   * The relay body behind BOTH the model's `session_send` and the relay's own verbatim deliveries
+   * (`MODEL_TEXT_REPLY`'s net, and omission fills). It is not exported and not the executor entry
+   * point: the difference is that a call arriving here is already known to be a delivery, not the
+   * model's response, so it must not register as an EXECUTED model message.
    */
-  const settleHeardSpan = (): void => {
-    settleTimer = null;
-    if (closed || segmentedRelay) {
-      return;
-    }
-    const heard = heardSpanText();
-    if (heard === '') {
-      transcribedSinceWatermark.length = 0;
-      return;
-    }
-    // THE PERSON IS STILL TALKING: this boundary may not close. The window counts SILENCE, and
-    // silence between two utterances is exactly where the model's combined response for the
-    // ongoing turn will land (AC-361, 2026-10-18). The failing journal (`67374906-*`, 12.745):
-    // U4's `speech_started` had already arrived, the window armed by U3's final expired anyway,
-    // and the relay delivered U2+U3 verbatim; the model's response then carried U3 again, and the
-    // coalescer emitted one sentence with U3 twice. `upstreamTalking` is the product's existing
-    // reading of "the endpoint's turn is open" (`onUpstreamTurn`), and the busy quiet window
-    // already releases only while it is false. Re-arming (not dropping) keeps the span owed: the
-    // turn close re-arms the window so the 2.5 s is counted from the CLOSE, not from a deadline
-    // that lands mid-sentence.
-    if (upstreamTalking) {
-      armSettleWindow();
-      return;
-    }
-    // A delivery already in flight is not a reason to lose the span: the window reopens and the
-    // next close delivers it. Re-arming rather than queueing keeps ONE producer (this timer) and
-    // leaves the in-flight path's own single-slot guard untouched.
-    if (sending) {
-      armSettleWindow();
-      return;
-    }
-    seams.log?.(
-      `settle: no model response covered ${transcribedSinceWatermark.length} heard item(s); delivering them verbatim`,
-    );
-    void proceedRelay({ message: heard }, null, false).catch((error: unknown) => {
-      send(
-        errorFrame(
-          'TOOL_EXECUTION_FAILED',
-          `The spoken span could not be delivered: ${error instanceof Error ? error.message : String(error)}`,
-          true,
-        ),
-      );
-    });
-  };
-
-  /**
-   * (Re)arms the settle window. Called on every final transcription and by the in-flight retry
-   * above; the LAST boundary wins, so finals arriving inside one window are delivered together.
-   */
-  function armSettleWindow(): void {
-    if (closed || segmentedRelay) {
-      return;
-    }
-    clearSettleWindow();
-    settleTimer = setTimeout(settleHeardSpan, settleWindowMs);
-    settleTimer.unref?.();
-  }
-
-  /**
-   * `session_send`, executed immediately (AC-316) — behind the empty-transcript guard.
-   *
-   * The guard sits HERE, at the delivery point, and not only where the transcription arrives: the
-   * endpoint's transcript and the model's relay are independent upstream events and either may land
-   * first. Deciding when the call arrives therefore covers both orders, and the hold above makes the
-   * decision the same one whichever it was.
-   */
-  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+  const relaySessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
     // A connection the browser has already left has nowhere to deliver to. Without this the relay
     // of a segment that arrived after the socket closed was handed to the session anyway, and the
     // page was never told because there was no page — the "silent disappearance" of 2026-10-11.
@@ -4247,27 +4411,35 @@ export function handleVoiceRealtimeConnection(
         transcribedSinceWatermark.length = 0;
         return handledWithoutDelivery();
       }
-      // ── THE MODEL'S RESPONSE COVERS THIS SPAN (R2/R3, 2026-10-17) ──
-      // The model is no longer the producer: the settle window below is. A response that arrives
-      // while a heard span is open is the QUALITY arm of the settle — its words are the delivery,
-      // whole, and the span is answered for rather than measured against the response. There is
-      // deliberately no uncovered-fragment comparison here: the deleted guard's pair-overlap
-      // measure could not tell a rewrite from an omission, and under R3 a coarse "response when
-      // there is one, verbatim otherwise" is the rule. So this call only CANCELS the pending
-      // verbatim settle and claims the committed-but-not-yet-transcribed items on its way out;
-      // `proceedRelay` advances the watermark, which is what keeps the same span from being
-      // delivered a second time.
-      clearSettleWindow();
+      // ── THE MODEL'S RESPONSE IS THE PRIMARY DELIVERY (GOAL-046) ──
+      // Whether these words cover the span is the omission planner's question, not this path's:
+      // the call was registered as an EXECUTED message by {@link sessionSend} before it got here,
+      // and the planner judges every final against it at `T_i`. This branch only claims the
+      // committed-but-not-yet-transcribed items so their late finals do not enter the
+      // `MODEL_TEXT_REPLY` net; `proceedRelay` advances the watermark as before.
       claimOutstandingCommits();
     } else if (!segmentedRelay) {
       // The response arrived BEFORE the span's transcription. There is nothing to judge here — the
       // endpoint has not said what was heard yet — but the items it has COMMITTED are exactly the
       // ones this response answers for, so they are claimed now: their late final transcriptions
-      // must not arm a second, verbatim delivery of words the model already carried.
-      clearSettleWindow();
+      // must not arm the verbatim `MODEL_TEXT_REPLY` delivery of words the model already carried.
       claimOutstandingCommits();
     }
     return proceedRelay(relayArgs, activeSegmentSeq, activeSegmentIsReplay);
+  };
+
+  /**
+   * `session_send`, executed immediately (AC-316) — the MODEL's call, registered as an executed
+   * message before it is relayed.
+   *
+   * The guard sits HERE, at the delivery point, and not only where the transcription arrives: the
+   * endpoint's transcript and the model's relay are independent upstream events and either may land
+   * first. Deciding when the call arrives therefore covers both orders, and the hold above makes the
+   * decision the same one whichever it was.
+   */
+  const sessionSend = async (args: Record<string, unknown>): Promise<unknown> => {
+    registerOmissionExecuted(args.message);
+    return relaySessionSend(args);
   };
 
   /**
@@ -4393,6 +4565,10 @@ export function handleVoiceRealtimeConnection(
    * `noteCarried`.
    */
   const sessionInterrupt = async (args: Record<string, unknown>): Promise<unknown> => {
+    // The stop's `message` is the model's own words for this utterance, exactly like a
+    // `session_send`. It is registered BEFORE the fence, because whether the call is a repeat does
+    // not change the fact that the model's response carries those words.
+    registerOmissionExecuted(args.message);
     // WHAT THE INTERRUPTED RUN WAS DOING, read ONCE for the whole stop (SPEC §0.3 D-8, §18.5). The
     // audit record, the `stopped` frame's run and the note the next MESSAGE carries all name what this
     // one reading answered, so they cannot disagree — and a reading that cannot be taken is `null`
@@ -4575,19 +4751,19 @@ export function handleVoiceRealtimeConnection(
     // the abort found a run to stop — "the same triggerSeq runs once" is the guarantee, and it holds
     // for a session with no lifecycle channel too.
     abortedTriggerSeq = fenceTriggerSeq;
-    // THE STOP IS A MODEL RESPONSE FOR THE SPAN (AC-361; X-5's "no delivery may follow the stop").
-    // A `session_interrupt` call is a response that arrives inside the same settle window a
-    // `session_send` would, and the endpoint's final for the interrupted sentence arms that window.
-    // The correction path above advances the watermark only when the stop carried a `message`; a
-    // stop whose correction is only an `intent` (the e2e's U5, journal `19:02:05.781`) left the
-    // window armed, and the deterministic arm delivered the sentence the stop had already disposed
-    // of 2.5 s later — a second disposition, and a delivery AFTER the stop, which the stop contract
-    // forbids. R2's quality arm is "the model response inside the window is the delivery"; the stop
-    // is that response, so it consumes the span the same way a `session_send` does. A `covered`
-    // repeat (fenced above) and a stop that never ran (refused, returned above) do not reach here:
-    // they answered nothing, so the span stays owed to the deterministic arm.
-    clearSettleWindow();
+    // NO VERBATIM DELIVERY MAY FOLLOW THE STOP (X-5, AC-361). A stop whose correction is only an
+    // `intent` (the e2e's U5, journal `19:02:05.781`) carries no message for the omission planner to
+    // match, so without this the sentence the stop just disposed of would be filled at `T_i` — a
+    // second disposition, after the stop. The span the person had spoken up to this stop is
+    // therefore CLOSED: every candidate already known is decided now, with `reason: 'stop'`, and
+    // the watermark advances as it always did. A `covered` repeat (fenced above) and a stop that
+    // never ran (refused, returned above) do not reach here: they answered nothing.
     if (!segmentedRelay) {
+      for (let index = 0; index < omissionFinals.length; index += 1) {
+        if (omissionSettled.has(index)) continue;
+        omissionSettled.add(index);
+        logOmissionFill({ i: index, reason: 'stop' });
+      }
       transcribedSinceWatermark.length = 0;
     }
     // The frame names the run the stop ENDED (`audit.runId`, read from the aggregator before the
@@ -4759,17 +4935,15 @@ export function handleVoiceRealtimeConnection(
         if (!open) {
           upstreamTurnCloseCount += 1;
           lastUpstreamSilenceAt = Date.now();
-          // THE SETTLE WINDOW'S CLOCK RESTARTS FROM THE CLOSE (AC-361). A deadline that landed
-          // while the turn was open re-armed itself in `settleHeardSpan`; restarting here means
-          // the full window is counted from the moment the person stopped, not from the deadline
-          // that was interrupted. A connection with nothing heard gets no timer.
-          if (settleTimer !== null || transcribedSinceWatermark.length > 0) {
-            armSettleWindow();
-          }
         } else {
           // A NEW turn starting retires any pending forced-commit snapshot: whatever the next
           // `committed` answers, it no longer answers the turn this relay closed itself.
           forcedCommitCloseSnapshot = null;
+          // THE OMISSION PLANNER'S SILENCE BRANCH. `speech_started` inside `(t_i, t_i + S]` means the
+          // model may still answer for `x_i` in its response to the newer speech, so the decision
+          // waits the full H instead of confirming at S (SPEC §3). The planner needs the ARRIVAL
+          // TIME, which is why the time is recorded here rather than only the boolean above.
+          registerOmissionSpeechStart();
         }
         armBusyQuietWindow();
       },
@@ -4790,8 +4964,8 @@ export function handleVoiceRealtimeConnection(
           // it (`seq === null` is the endpoint's own detector committing a piece of speech): the item
           // exists and is the user's either way, and it is in front of the model from this moment.
           lastCommittedUserItemId = itemId;
-          // The settle producer's pending set: this item exists but has not been transcribed yet, so
-          // a model response from now on answers for it even if its final lands afterwards.
+          // This item exists but has not been transcribed yet, so a model response from now on
+          // answers for it even if its final lands afterwards (the `MODEL_TEXT_REPLY` net's input).
           if (!segmentedRelay) {
             committedPendingTranscription.add(itemId);
           }
@@ -4914,13 +5088,19 @@ export function handleVoiceRealtimeConnection(
             // text reply sets the whole run aside — the sentences before it got no disposition at all.
             // The relay delivers what no `session_send` answered for, verbatim, through the model's
             // own path (hold, window, bound and watermark included).
-            const unanswered = transcribedSinceWatermark
-              .filter((itemId) => itemTranscriptEmpty.get(itemId) === false)
-              .map((itemId) => itemTranscriptText.get(itemId) ?? '');
+            const unansweredItemIds = transcribedSinceWatermark.filter(
+              (itemId) => itemTranscriptEmpty.get(itemId) === false,
+            );
+            const unanswered = unansweredItemIds.map((itemId) => itemTranscriptText.get(itemId) ?? '');
             if (unanswered.some((text) => text.trim() !== '')) {
               const message = joinParts(unanswered);
               seams.log?.(`relayed verbatim after a text reply: ${unanswered.length} unanswered sentence(s)`);
-              void sessionSend({ message });
+              // These sentences are delivered by THIS net, so the planner must not fill them
+              // again at `T_i` — it cannot see a relay delivery (only executed model messages).
+              closeOmissionFillsDeliveredVerbatim(unansweredItemIds);
+              // THE RELAY'S OWN WORDS, NOT THE MODEL'S: the body is used directly so the net's
+              // delivery is not recorded as an executed model message for the omission planner.
+              void relaySessionSend({ message });
               return;
             }
             seams.log?.(`to-browser heard-not-forwarded: ${describeBridgeError(error)}`);
@@ -4996,6 +5176,13 @@ export function handleVoiceRealtimeConnection(
               // The words that seq stood for, for the RunDigest's `covers.last` (see `utteranceTextBySeq`).
               utteranceTextBySeq.set(utteranceSeq, caption.text);
             }
+            // THE OMISSION PLANNER'S `F_i` (GOAL-046). Every final with words is registered,
+            // including one a response already claimed (`coveredByResponse` below): the rule's
+            // coverage question is answered by `planOmissionFills` from the executed messages, not
+            // by this wire's span accounting. Silence is not a candidate (the SPEC excludes it).
+            if (!segmentedRelay && !empty) {
+              registerOmissionFinal(caption.text, caption.itemId);
+            }
             // THE CONTINUOUS WIRE'S SPAN (SPEC §10, decision doc §12.5「按条目自身空转写判定」). With no
             // segment to key on, the guard keys on the ITEMS transcribed since its watermark: the
             // endpoint's own per-item reading is recorded beside the `empty` it is decided from, and
@@ -5017,13 +5204,10 @@ export function handleVoiceRealtimeConnection(
                 } else {
                   transcribedSinceWatermark.push(caption.itemId);
                   itemTranscriptText.set(caption.itemId, caption.text);
-                  // THE SETTLE BOUNDARY (R2): a final with words is a span the endpoint will not
-                  // change any more. The window below either loses the race to a model response (the
-                  // response is then the delivery) or closes on its own and delivers these words
-                  // verbatim. Silence (`empty`) arms nothing: there is nothing to deliver.
+                  // A final with words is the reading the duplicate guard needs; whether it becomes a
+                  // verbatim delivery is the omission planner's decision, made at `T_i`.
                   if (!empty) {
                     finalTranscriptHeard = true;
-                    armSettleWindow();
                   }
                 }
               }
@@ -5121,6 +5305,9 @@ export function handleVoiceRealtimeConnection(
       clearTimeout(drainPollTimer);
       drainPollTimer = null;
     }
+    // A due omission fill has nowhere to go once the connection is gone: `evaluateOmissionFill`
+    // guards on `closed` too, but dropping the timer is the cheaper half of the same rule.
+    clearOmissionTimer();
     armReconcilePoll(false);
     // An instruction still waiting on its segment's transcript will never get it now: releasing it
     // here records the non-delivery instead of leaving it held until the grace timer fires into a

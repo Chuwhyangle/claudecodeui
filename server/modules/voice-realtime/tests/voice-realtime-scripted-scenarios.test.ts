@@ -25,7 +25,12 @@ import test from 'node:test';
 
 import { WebSocket as WS } from 'ws';
 
-import { createDashscopeTransport, createVoiceRealtimeLiveExecutor, type RealtimeToolExecutor } from '../index.js';
+import {
+  createDashscopeTransport,
+  createVoiceRealtimeLiveExecutor,
+  type OmissionFillParams,
+  type RealtimeToolExecutor,
+} from '../index.js';
 import {
   buildInterruptAftermathNote,
   handleVoiceRealtimeConnection,
@@ -463,11 +468,10 @@ type ContinuousOptions = {
    */
   readonly module?: { handleVoiceRealtimeConnection: typeof handleVoiceRealtimeConnection };
   /**
-   * The settle producer's window (`VOICE_SPAN_SETTLE_MS` by default). A short value makes the
-   * deterministic arm observable in-test; a long one keeps the model the only settler in an arm that
-   * is about the model's response.
+   * The omission-fill planner's windows, or `null`/absent to DISABLE the producer. Most legs are
+   * about other relay behaviour; leg B passes shrunk windows so its fills are observable in-test.
    */
-  readonly settleMs?: number;
+  readonly omissionFillParams?: Partial<OmissionFillParams> | null;
 };
 
 /**
@@ -544,7 +548,7 @@ function startContinuous(options: ContinuousOptions): ContinuousScenario {
       statusRateMs: 1,
       stallMs: 0,
       segmentedRelay: false,
-      ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
+      omissionFillParams: options.omissionFillParams ?? null,
       hostQueueTurnBoundaryRefresh: false,
       log: (line) => logs.push(line),
       onExecStatus: (reading) => {
@@ -1197,12 +1201,12 @@ async function emitSessionSend(scenario: ContinuousScenario, message: string, ca
   await settle();
 }
 
-test('leg B: the settle boundary delivers each heard span once — the endpoint’s words when the model is silent, and no second delivery for a late restatement', async () => {
+test('leg B: the omission-fill rule delivers each unanswered utterance once and refuses a late restatement', async () => {
   const scenario = startContinuous({
     host: createScriptedCliHost(),
-    // A short settle window: the arm this leg is about is the model saying NOTHING for a heard
-    // utterance (journal `764f0c7a`), which the settle producer now delivers verbatim.
-    settleMs: 40,
+    // Millisecond-scale windows: the arm this leg is about is the model saying NOTHING for a heard
+    // utterance (journal `764f0c7a`), which rule v2 delivers at its own decision time.
+    omissionFillParams: { hMs: 300, gMs: 60, silenceMs: 80 },
     turns: [
       { text: PHANTOM_A, policy: 'silent' },
       { text: PHANTOM_B, policy: 'silent' },
@@ -1211,14 +1215,14 @@ test('leg B: the settle boundary delivers each heard span once — the endpoint�
   try {
     await openSession(scenario);
 
-    // (1) A is heard and the model relays nothing. The settle boundary closes and the endpoint's
+    // (1) A is heard and the model relays nothing. Its decision time arrives and the endpoint's
     // own words go — the input the old producer lost.
     await speakHeardTurn(scenario, 1);
     await waitFor(() => scenario.delivered.length === 1, 4_000);
     assert.deepEqual(
       scenario.delivered,
       [PHANTOM_A],
-      `an unanswered utterance is delivered verbatim by its settle boundary: ${JSON.stringify(scenario.delivered)}`,
+      `an unanswered utterance is delivered verbatim at its decision time: ${JSON.stringify(scenario.delivered)}`,
     );
 
     // (2) B likewise: each span is its own delivery, in spoken order.
@@ -1257,13 +1261,13 @@ test('leg B: the settle boundary delivers each heard span once — the endpoint�
   }
 });
 
-test('leg B shape preserved: a model response inside the settle window is the span’s one delivery', async () => {
-  // (a) The model answers a fresh span INSIDE the window. Under R3 the response is used whole, even
-  // though it rewords the utterance; the span is consumed, so no verbatim copy follows it. The long
-  // window makes the model the only possible settler in this arm.
+test('leg B shape preserved: a model response that covers the utterance is its one delivery', async () => {
+  // (a) The model answers a fresh span. Rule v2 compares GRAMS: the rewrite covers the utterance,
+  // so no verbatim copy follows it. The long window keeps the decision time out of this arm, which
+  // is about the model's response being the delivery.
   const fresh = startContinuous({
     host: createScriptedCliHost(),
-    settleMs: 60_000,
+    omissionFillParams: { hMs: 60_000, gMs: 1_000, silenceMs: 60_000 },
     turns: [
       { text: PHANTOM_A, policy: 'silent' },
       { text: PHANTOM_B, policy: 'silent' },
@@ -1291,12 +1295,12 @@ test('leg B shape preserved: a model response inside the settle window is the sp
   }
 
   // (b) The live late-forward shape (2026-10-15 01:13, journal `b33412ea`): the model answers in TEXT
-  // instead of relaying. The relay's text-reply net delivers the sentence (or the settle does first —
-  // both are the endpoint's own words, and the outcome is one delivery either way); the model's later
-  // restatement has no new speech behind it and is refused.
+  // instead of relaying. The relay's text-reply net delivers the sentence and closes the planner's
+  // candidate, so the rule does not deliver it a second time; the model's later restatement has no
+  // new speech behind it and is refused.
   const late = startContinuous({
     host: createScriptedCliHost(),
-    settleMs: 40,
+    omissionFillParams: { hMs: 300, gMs: 60, silenceMs: 80 },
     turns: [
       { text: PHANTOM_A, policy: 'silent' },
       { text: PHANTOM_B, policy: 'text' },

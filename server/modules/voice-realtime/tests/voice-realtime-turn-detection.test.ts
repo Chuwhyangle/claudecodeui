@@ -74,8 +74,15 @@ const SERVER_INDEX = path.resolve(HERE, '../../../index.ts');
 const TEMP_PREFIX = '__criterion-falsify-';
 const ownCopy = (label: string): string => path.resolve(HERE, `../${TEMP_PREFIX}${label}-${process.pid}.ts`);
 
-/** The exact byte string the shipped default produces on the wire (key order included). */
-const DEFAULT_WIRE = '{"type":"server_vad","threshold":0.5,"silence_duration_ms":800}';
+/**
+ * The exact byte string the shipped default produces on the wire (key order included).
+ *
+ * `interrupt_response:false` is appended by the transport's composer on EVERY `session.update`
+ * (GOAL-046), so it is part of the shipped wire bytes whether or not the resolver names it.
+ */
+const DEFAULT_WIRE = '{"type":"server_vad","threshold":0.5,"silence_duration_ms":800,"interrupt_response":false}';
+/** The shipped detector as it reaches the wire: the resolver's default plus the composer's field. */
+const DEFAULT_ON_WIRE = { ...DEFAULT_TURN_DETECTION, interrupt_response: false };
 
 /** Picks the client frames of one wire `type`. */
 function sentOfType(sent: Array<Record<string, unknown>>, type: string): Array<Record<string, unknown>> {
@@ -137,7 +144,7 @@ test('AC1 default: with nothing configured the wire carries the exact shipped de
   const { resolution, session } = await wireTurnDetection({});
   assert.equal(resolution.invalid, null, 'an unset environment must not be reported as invalid');
   // The default is READ from the shipping constant, not typed in here.
-  assert.deepEqual(session.turn_detection, DEFAULT_TURN_DETECTION);
+  assert.deepEqual(session.turn_detection, DEFAULT_ON_WIRE);
   assert.equal(JSON.stringify(session.turn_detection), DEFAULT_WIRE, 'the wire bytes must be unchanged');
 });
 
@@ -148,7 +155,7 @@ test('AC1 env: a valid type / silence window / threshold land on the actual fram
     [VOICE_REALTIME_TURN_DETECTION_THRESHOLD_ENV]: '0.7',
   });
   assert.equal(resolution.invalid, null);
-  assert.deepEqual(session.turn_detection, { type: 'semantic_vad', threshold: 0.7, silence_duration_ms: 800 });
+  assert.deepEqual(session.turn_detection, { type: 'semantic_vad', threshold: 0.7, silence_duration_ms: 800, interrupt_response: false });
 });
 
 test('AC1 override: a per-run override wins over the environment, field by field', async () => {
@@ -157,7 +164,7 @@ test('AC1 override: a per-run override wins over the environment, field by field
     { silenceMs: 900, type: 'semantic_vad' },
   );
   // threshold is neither overridden nor in the environment, so it keeps the shipped default.
-  assert.deepEqual(session.turn_detection, { type: 'semantic_vad', threshold: 0.5, silence_duration_ms: 900 });
+  assert.deepEqual(session.turn_detection, { type: 'semantic_vad', threshold: 0.5, silence_duration_ms: 900, interrupt_response: false });
 });
 
 test('AC1 invalid: an out-of-range or unknown value falls back to the default AND is reported', async () => {
@@ -172,7 +179,7 @@ test('AC1 invalid: an out-of-range or unknown value falls back to the default AN
   for (const { label, env, override } of cases) {
     const { resolution, session } = await wireTurnDetection(env, override);
     assert.notEqual(resolution.invalid, null, `${label}: a refused value must be reported`);
-    assert.deepEqual(session.turn_detection, DEFAULT_TURN_DETECTION, `${label}: must fall back to the shipped default`);
+    assert.deepEqual(session.turn_detection, DEFAULT_ON_WIRE, `${label}: must fall back to the shipped default`);
     assert.match(describeTurnDetection(resolution) ?? '', /using the default/, `${label}: the log line must say so`);
   }
 });
@@ -191,7 +198,7 @@ test('AC5 line-neutral: the composed default session body is byte-identical to t
       modalities: ['text'],
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm24',
-      turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 800 },
+      turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 800, interrupt_response: false },
       voice: 'Tina',
       instructions: 'be brief',
     }),
@@ -206,12 +213,12 @@ test('AC6 negative control: every "off"-shaped value is refused and the frame ke
     assert.notEqual(resolution.invalid, null, `"${value}" must be refused`);
     assert.equal(resolution.turnDetection.type, 'server_vad', `"${value}" must resolve to the default`);
     assert.notEqual(session.turn_detection, null, `"${value}" must not blank the detector on the wire`);
-    assert.deepEqual(session.turn_detection, DEFAULT_TURN_DETECTION, `"${value}" must leave the shipped detector in place`);
+    assert.deepEqual(session.turn_detection, DEFAULT_ON_WIRE, `"${value}" must leave the shipped detector in place`);
   }
   // The override path cannot blank it either.
   const { resolution, session } = await wireTurnDetection({}, { type: null });
   assert.notEqual(resolution.invalid, null, 'a null override type must be refused');
-  assert.deepEqual(session.turn_detection, DEFAULT_TURN_DETECTION);
+  assert.deepEqual(session.turn_detection, DEFAULT_ON_WIRE);
 });
 
 // ── AC5 false form: a changed default must redden the line-neutral check ───────────────────────

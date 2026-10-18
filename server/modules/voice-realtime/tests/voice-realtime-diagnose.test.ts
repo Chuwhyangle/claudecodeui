@@ -404,7 +404,13 @@ test('AC2: a per-run turnDetection override lands on the upstream session.update
     },
     seamsForTurnDetection(upstream),
   );
-  assert.deepEqual(turnDetectionUpstream(upstream), { type: 'semantic_vad', threshold: 0.7, silence_duration_ms: 800 });
+  assert.deepEqual(turnDetectionUpstream(upstream), {
+    type: 'semantic_vad',
+    threshold: 0.7,
+    silence_duration_ms: 800,
+    // The transport's composer appends this to every session.update (GOAL-046).
+    interrupt_response: false,
+  });
   // The override did not disturb the rest of the session body.
   assert.ok(report.wire.some((entry) => entry.summary.startsWith('session.update voice=Tina')));
 });
@@ -417,7 +423,7 @@ test('AC2: an out-of-range override falls back to the deployment default, by the
     seamsForTurnDetection(upstream),
   );
   // Never applied — refused down to the shipped default on the real frame...
-  assert.deepEqual(turnDetectionUpstream(upstream), DEFAULT_TURN_DETECTION);
+  assert.deepEqual(turnDetectionUpstream(upstream), { ...DEFAULT_TURN_DETECTION, interrupt_response: false });
   // ...and reported by the very resolver the assembly point uses.
   assert.notEqual(resolveTurnDetection(process.env, override).invalid, null);
 });

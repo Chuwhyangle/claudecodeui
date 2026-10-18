@@ -216,12 +216,6 @@ export {
   type VoiceRealtimeClosingTurnResolution,
   type VoiceRealtimeSlimSendToolResolution,
 } from './voice-realtime-closing-turn.js';
-// The settle producer's production window (R2, 2026-10-17). The relay is the producer now: a final
-// transcription arms this window, a model response inside it is the quality arm, and the endpoint's
-// own words go verbatim when it closes with no response. There is no span-guard arm and no fragment
-// measure to export any more — the split-compensation heuristic was removed with the producer it
-// compensated for.
-export { VOICE_SPAN_SETTLE_MS } from './voice-realtime-ws-proxy.service.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
 // and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
 // and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's

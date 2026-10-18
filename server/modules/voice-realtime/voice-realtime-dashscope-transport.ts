@@ -486,6 +486,29 @@ function toWireOutput(output: unknown): string {
 export type TurnDetectionSwitch = 'server_vad' | null | undefined;
 
 /**
+ * Adds the one detector field the relay MUST set on every `session.update`: `interrupt_response`.
+ *
+ * THE ENDPOINT'S DEFAULT IS `true`, AND IT IS THE LOSS MECHANISM THIS RULE EXISTS FOR. With it, a
+ * response in flight is CANCELLED the moment the person speaks again — measured on the 2026-10-17
+ * replay as 8 of 24 responses cancelled — and whatever the model had not relayed for the earlier
+ * utterance never reaches the session. Setting it `false` is the live measurement that reduced that
+ * to 0 of 30 (SPEC §「配套设置」); the omission-fill rule then covers what the model still omits.
+ *
+ * WHY IT IS APPLIED HERE, PER FRAME, RATHER THAN ONLY IN THE DEFAULTS. The segmented path re-states
+ * the whole session body on every later full update and on reconnect (see {@link TurnDetectionSwitch}),
+ * and a deployment may hand in its own `sessionDefaults`; forcing the field at the one composer every
+ * full/partial update passes through is what makes "every `session.update` carries it" a property of
+ * the wire rather than of a particular caller. `turn_detection: null` stays null: the segmented relay
+ * owns its utterance boundaries and has no detector object to annotate.
+ */
+function withInterruptResponse(turnDetection: unknown): unknown {
+  if (turnDetection === null || typeof turnDetection !== 'object' || Array.isArray(turnDetection)) {
+    return turnDetection;
+  }
+  return { ...(turnDetection as Record<string, unknown>), interrupt_response: false };
+}
+
+/**
  * Translates ONE bridge message into the DashScope frames it becomes (one or two).
  *
  * `instructions`/`tools` are written AFTER the spread so a caller's
@@ -512,6 +535,13 @@ export function toDashscopeFrames(
         ...(switchedTurnDetection === undefined ? {} : { turn_detection: switchedTurnDetection }),
         instructions: message.session.instructions,
       };
+      // Every full update re-states `interrupt_response:false` — including the later ones the
+      // segmented path sends after its switch and the reconnect's own re-advertisement. Applied to
+      // the COMPOSED value, so the switch (`null`) still wins and the switch-spread's absence is
+      // still observable as "the deployment's own detector came back".
+      if (session.turn_detection !== undefined) {
+        session.turn_detection = withInterruptResponse(session.turn_detection);
+      }
       // An empty `tools` array is rejected by some dialects; omit it when there is nothing to advertise.
       if (message.session.tools.length > 0) {
         session.tools = message.session.tools.map(toWireTool);
@@ -522,7 +552,16 @@ export function toDashscopeFrames(
     // modalities) stay, only `turn_detection` changes. It therefore carries no
     // `instructions`/`tools`, and cannot blank a session body already advertised.
     case 'session.turn_detection':
-      return [{ type: 'session.update', session: { ...sessionDefaults, turn_detection: message.turnDetection } }];
+      return [
+        {
+          type: 'session.update',
+          session: {
+            ...sessionDefaults,
+            // A switch back ON carries the field too; the segmented path's `null` stays null.
+            turn_detection: withInterruptResponse(message.turnDetection),
+          },
+        },
+      ];
     case 'input_audio_buffer.append':
       return [{ type: 'input_audio_buffer.append', audio: message.audio }];
     // The two frames that close a manually segmented utterance. They travel 1:1 — this

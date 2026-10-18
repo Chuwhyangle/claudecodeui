@@ -129,6 +129,35 @@ export type VoiceRealtimeLogEntry =
       reason?: string;
       error?: string;
     }
+  /**
+   * One omission-fill decision (GOAL-046): a candidate the rule filled, or one it passed over.
+   *
+   * `reason: 'fill'` is a delivery (`dueAt` and `coverage` are the planner's own readings); every
+   * other reason is the planner's skip vocabulary (`weight`, `empty-grams`, `wrong-script`,
+   * `incomparable`, `covered`) plus the relay's own `stop` (the utterance was disposed of before its
+   * decision time). `line` keeps the proxy's original JSON line beside the parsed fields.
+   */
+  | {
+      at: string;
+      kind: 'omission_fill';
+      connectionId: string;
+      line: string;
+      index: number;
+      reason: string;
+      dueAt?: number;
+      coverage?: number;
+    }
+  /**
+   * The omission-fill parameters this connection judged with (GOAL-046), written before any
+   * candidate. Replaying a journal is only possible when the H/G/S/score values are in it.
+   */
+  | {
+      at: string;
+      kind: 'omission_fill_params';
+      connectionId: string;
+      line: string;
+      params: Record<string, unknown>;
+    }
   /** One upstream session rotation (SPEC §C3): which session replaced which, and the measured switch. */
   | { at: string; kind: 'rotation'; connectionId: string; line: string; from: number; to: number; idleMs: number; standbyAgeMs: number; switchMs: number }
   /**
@@ -507,6 +536,69 @@ const INTERRUPT_AUDIT_LINE = /^session_interrupt audit (\{.*\})$/;
  * having to know about the other.
  */
 const SEGMENT_FORENSICS_LINE = /^segment_forensics (\{.*\})$/;
+/**
+ * The omission-fill lines (GOAL-046): `omission_fill params {json}` once per connection, then one
+ * `omission_fill {json}` per decided candidate. The leading word is the discriminator, the same
+ * pattern the other JSON-bearing lines follow.
+ */
+const OMISSION_FILL_LINE = /^omission_fill (.*)$/;
+
+/**
+ * Parses one omission-fill line into its journal entry, or `null` when the payload is not the shape
+ * this classifier names.
+ *
+ * CHECKED FIELD BY FIELD, like {@link parseInterruptAudit}: a truncated line or a future payload
+ * falls back to the verbatim `log` entry rather than being recorded under a class it does not name.
+ * A candidate record requires an integer `i` and a non-empty `reason`; a params record requires a
+ * JSON object. The optional `dueAt`/`coverage` are carried only when they are the expected type.
+ */
+function parseOmissionFill(
+  payload: string,
+  connectionId: string,
+  line: string,
+  at: string,
+): VoiceRealtimeLogEntry | null {
+  if (payload.startsWith('params ')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload.slice('params '.length));
+    } catch {
+      return null;
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return {
+      at,
+      kind: 'omission_fill_params',
+      connectionId,
+      line,
+      params: parsed as Record<string, unknown>,
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+  const raw = parsed as Record<string, unknown>;
+  if (typeof raw.i !== 'number' || !Number.isInteger(raw.i)) return null;
+  if (typeof raw.reason !== 'string' || raw.reason === '') return null;
+  return {
+    at,
+    kind: 'omission_fill',
+    connectionId,
+    line,
+    index: raw.i,
+    reason: raw.reason,
+    ...(typeof raw.dueAt === 'number' ? { dueAt: raw.dueAt } : {}),
+    ...(typeof raw.coverage === 'number' ? { coverage: raw.coverage } : {}),
+  };
+}
 
 /** The three causes a forensics reading may name — the payload's `kind`, checked before it is trusted. */
 const FORENSICS_CLASSES: ReadonlySet<string> = new Set(['upstream-close', 'replay-exhausted', 'pairing-mismatch']);
@@ -828,6 +920,22 @@ export function createVoiceRealtimeRecorder(options: {
       const reading = parseSegmentForensics(forensics[1] ?? '');
       if (reading !== null) {
         safeAppend({ at: at(), kind: 'segment_forensics', connectionId: options.connectionId, line, ...reading });
+        return;
+      }
+    }
+
+    // The omission-fill producer's own record (GOAL-046): the parameters first, then one decision
+    // per candidate. Same fall-through as the payloads above — an unparseable line is still on disk.
+    const omissionFill = OMISSION_FILL_LINE.exec(line);
+    if (omissionFill !== null) {
+      const reading = parseOmissionFill(
+        omissionFill[1] ?? '',
+        options.connectionId,
+        line,
+        at(),
+      );
+      if (reading !== null) {
+        safeAppend(reading);
         return;
       }
     }

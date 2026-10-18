@@ -186,6 +186,11 @@ test('the recorder turns the proxy\'s lines into structured readings', () => {
     recorder.log('session_send start {"message":"second"}');
     recorder.log('session_send failed after 7 ms: upstream refused');
     recorder.log('upstream-pool rotate from=1 to=2 idleMs=90000 standbyAgeMs=512 switchMs=13');
+    recorder.log(
+      'omission_fill params {"hMs":12000,"gMs":1000,"scoreT":0.25,"wMin":7,"wHallu":12,"domN":10,"lookbackMs":1000,"silenceMs":3000,"numeralMode":"runs2"}',
+    );
+    recorder.log('omission_fill {"i":2,"dueAt":1760000011000,"coverage":0.125,"reason":"fill"}');
+    recorder.log('omission_fill {"i":3,"reason":"covered"}');
     recorder.log('a line the classifier does not know');
 
     const entries = readEntries(directory, 'conn-shape');
@@ -208,6 +213,18 @@ test('the recorder turns the proxy\'s lines into structured readings', () => {
     assert.equal(sends[1]!.outcome, 'failed');
     assert.equal(sends[1]!.latencyMs, 7);
     assert.equal(sends[1]!.error, 'upstream refused');
+
+    const fillParams = byKind('omission_fill_params')[0] as Extract<VoiceRealtimeLogEntry, { kind: 'omission_fill_params' }>;
+    assert.equal(fillParams.params.hMs, 12000, 'the parameters are readable as fields, not only prose');
+    const fills = byKind('omission_fill') as Array<Extract<VoiceRealtimeLogEntry, { kind: 'omission_fill' }>>;
+    assert.equal(fills.length, 2, 'one decision per candidate line');
+    assert.equal(fills[0]!.index, 2);
+    assert.equal(fills[0]!.reason, 'fill');
+    assert.equal(fills[0]!.dueAt, 1760000011000);
+    assert.equal(fills[0]!.coverage, 0.125);
+    assert.equal(fills[1]!.index, 3);
+    assert.equal(fills[1]!.reason, 'covered');
+    assert.equal(fills[1]!.dueAt, undefined, 'a skip carries no decision time');
 
     const rotation = byKind('rotation')[0] as Extract<VoiceRealtimeLogEntry, { kind: 'rotation' }>;
     assert.equal(rotation.from, 1);

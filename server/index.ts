@@ -670,11 +670,12 @@ const buildVoiceRealtimeSeams = (input: {
             input.log?.(note);
         }
     }
-    // THE SETTLE PRODUCER (R2, 2026-10-17). Delivery is no longer gated on the model choosing to
-    // call `session_send`: the proxy arms its window from every final transcription and delivers the
-    // endpoint's own words when no response covers the span. The window's production value lives in
-    // the proxy (`VOICE_SPAN_SETTLE_MS`); no deployment switch is offered, because "did the model
-    // answer for this sentence" is not an arm to A/B — it is the defect this replaces.
+    // THE OMISSION-FILL PRODUCER (GOAL-046). Delivery is no longer gated on the model choosing to
+    // call `session_send`: the proxy registers every final transcription and delivers the endpoint's
+    // own words only when the model's executed messages do not carry them (rule v2). The rule's
+    // parameters live in `experiments/voice-relay-qb/omission-fill-params.json`, the same file the
+    // replay gate reads; no deployment switch is offered, because "did the model answer for this
+    // sentence" is not an arm to A/B — it is the defect the rule closes.
 
     // The provenance cell behind `session_status` (SPEC §6.3/§8.2): the LAST aggregator reading the
     // S-A status line was rendered from, captured as the proxy publishes it. A `session_status` call

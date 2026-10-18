@@ -58,7 +58,12 @@ import test from 'node:test';
 
 import { WebSocket as WS } from 'ws';
 
-import type { RealtimeSegmentCommitMode, RealtimeServerMessage, RealtimeToolExecutor } from '../index.js';
+import type {
+  OmissionFillParams,
+  RealtimeSegmentCommitMode,
+  RealtimeServerMessage,
+  RealtimeToolExecutor,
+} from '../index.js';
 import {
   handleVoiceRealtimeConnection,
   readVoiceRealtimeInboundFrame,
@@ -113,10 +118,12 @@ type RecordedSend = { args: Record<string, unknown> };
  */
 function createFakeBaseExecutor(options: { manual?: boolean } = {}): {
   calls: RecordedSend[];
+  interruptCalls: RecordedSend[];
   executor: RealtimeToolExecutor;
   release: () => void;
 } {
   const calls: RecordedSend[] = [];
+  const interruptCalls: RecordedSend[] = [];
   let gate: Promise<void> | null = null;
   let release = (): void => undefined;
   if (options.manual) {
@@ -132,8 +139,12 @@ function createFakeBaseExecutor(options: { manual?: boolean } = {}): {
       }
       return { ok: true, echoedMessage: args.message };
     },
+    session_interrupt: async (args: Record<string, unknown>) => {
+      interruptCalls.push({ args });
+      return { aborted: false, runId: null };
+    },
   };
-  return { calls, executor, release };
+  return { calls, interruptCalls, executor, release };
 }
 
 /** Delivers one `function_call` event from the fake upstream for `session_send`. */
@@ -153,15 +164,24 @@ function wireConnection(
     manual?: boolean;
     coalesceMs?: number;
     segmentCommit?: RealtimeSegmentCommitMode;
-    /** The settle producer's window; a small value makes the boundary observable in-test. */
-    settleMs?: number;
+    /**
+     * The omission-fill planner's windows. Absent DISABLES the producer — most cases below are
+     * about other relay behaviour and must not have a fill land in their readings; the cases that
+     * are about the rule pass a shrunk `Partial<OmissionFillParams>`.
+     */
+    omissionFillParams?: Partial<OmissionFillParams> | null;
     /** Receives the proxy's own log lines, so a criterion can read the journal the operator reads. */
     log?: (line: string) => void;
   } = {},
 ): {
   socket: FakeBrowserSocket;
   transport: FakeTransport;
-  base: { calls: RecordedSend[]; executor: RealtimeToolExecutor; release: () => void };
+  base: {
+    calls: RecordedSend[];
+    interruptCalls: RecordedSend[];
+    executor: RealtimeToolExecutor;
+    release: () => void;
+  };
   boundSessionId: string;
 } {
   const socket = new FakeBrowserSocket();
@@ -174,7 +194,8 @@ function wireConnection(
     instructions: 'test instructions',
     ...(options.coalesceMs === undefined ? {} : { coalesceMs: options.coalesceMs }),
     ...(options.segmentCommit === undefined ? {} : { segmentCommit: options.segmentCommit }),
-    ...(options.settleMs === undefined ? {} : { settleMs: options.settleMs }),
+    // Absent means OFF here, not "use the locked file": this suite is not the rule's criterion.
+    omissionFillParams: options.omissionFillParams ?? null,
     ...(options.log === undefined ? {} : { log: options.log }),
   };
   handleVoiceRealtimeConnection(socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0], boundSessionId, seams);
@@ -742,27 +763,25 @@ test('AC3 (negative control): a repeat announced by a TRANSCRIPTION alone — no
   );
 });
 
-// ── AC2 (R2): the three live journals, replayed against the settle producer ─────────────────────
+// ── GOAL-046: the omission-fill producer replaces the settle producer ────────────────────────────
 //
-// THE DEFECT THIS FILE'S NEW ARM REPRODUCES. On 2026-10-17 the dropped-input audit aligned every
-// final transcription in six journals against the `session_send` calls on the same connection. Four
-// rounds lost input; `764f0c7a` lost 3 of 5 sentences. The losses were not "the model heard and
-// refused": they were utterances for which the endpoint opened NO response (A), calls the next
-// utterance truncated (B), and calls that answered only the newest span. The model was the delivery
-// judge, and the judge was absent.
+// THE RULE THESE CASES MEASURE. A final transcription is delivered verbatim only when the model's
+// EXECUTED messages do not carry it (`planOmissionFills`, rule v2). The three live journals the old
+// settle arm replayed are replayed again, against the shipped rule:
+//   · `57279cc1` — one sentence relayed three times. The first call covers it; the repeats are
+//     refused by the watermark. The planner must add NO verbatim copy.
+//   · `764f0c7a` — five finals, two answers. The two answered utterances are covered; the three
+//     unanswered ones are each filled exactly once, at their own `T_i`.
+//   · `3d2d3b2c` — a repair of an ASR mishearing. The repair's words carry the heard words
+//     (coverage >= SCORE_T), so the response is the whole delivery and no verbatim copy follows.
 //
-// THE THREE SEQUENCES BELOW ARE THOSE JOURNALS, reduced to the events that decide delivery. They are
-// replayed against the SHIPPED producer, so what is measured is the rule and not a fixture:
-//   · `57279cc1` — one sentence relayed three times, 15:39:57 / 15:40:13 / 15:40:30 (CST). The
-//     settlement must deliver it ONCE; the watermark, not a text comparison, is what refuses the
-//     repeats.
-//   · `764f0c7a` — five finals, two answers (`05:40:38` and `05:42:12Z`). The three unanswered
-//     sentences must each reach the session verbatim: no lost span, and no span delivered twice.
-//   · `3d2d3b2c` — the endpoint misheard "LiveWire" as "来望也" and the model repaired it from the
-//     audio. The response is the delivery, WHOLE: the mishearing is not prepended (that was the
-//     deleted fragment heuristic), and the sentence is delivered once.
+// The windows are shrunk so `T_i` is observable in milliseconds; every other parameter is the
+// locked file's (the seam merges a partial over it).
 
-/** The endpoint's final transcription of one input item — what arms the settle window. */
+/** Locked thresholds, millisecond-scale windows: `T_i` lands within one `waitFor`. */
+const FAST_FILL: Partial<OmissionFillParams> = { hMs: 240, gMs: 50, silenceMs: 57 };
+
+/** The endpoint's final transcription of one input item — what registers the omission candidate. */
 function deliverFinalTranscript(transport: FakeTransport, itemId: string, text: string): void {
   transport.peerSend({
     type: 'conversation.item.input_audio_transcription.completed',
@@ -771,14 +790,22 @@ function deliverFinalTranscript(transport: FakeTransport, itemId: string, text: 
   });
 }
 
-/** A macrotask boundary wide enough for one settle window (the callers set it well below `wait`). */
+/** A macrotask boundary wide enough for one decision time (the callers set it well below `wait`). */
 const settleWait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('AC2 replay 57279cc1: one heard sentence relayed three times is delivered exactly once', async () => {
+/** The proxy's own decision records from a captured log. */
+function omissionFillLines(logs: readonly string[]): string[] {
+  return logs.filter((line) => line.startsWith('omission_fill '));
+}
+
+test('omission fill 57279cc1: a covered sentence is not copied, and the model`s repeats add nothing', async () => {
   const SENTENCE = '我们原来的这些风格还是有蛮大的差异，这个应该要检查和讨论一下。';
-  // Long enough that only the model's own response can settle the span in this case: the triple
-  // re-send is about the WATERMARK, not about the deadline.
-  const { transport, base } = wireConnection({ settleMs: 60_000 });
+  const logs: string[] = [];
+  const { transport, base } = wireConnection({
+    coalesceMs: 0,
+    omissionFillParams: FAST_FILL,
+    log: (line) => logs.push(line),
+  });
   await waitFor(() => transport.openCalls >= 1);
 
   deliverFinalTranscript(transport, 'item-57279-1', SENTENCE);
@@ -786,21 +813,26 @@ test('AC2 replay 57279cc1: one heard sentence relayed three times is delivered e
   await waitFor(() => base.calls.length === 1);
 
   // The same response twice more with NO new audio behind it — the live shape (three calls, 33 s
-  // apart, identical words). The first settled the span; the watermark says there is nothing new
-  // for the others to deliver.
+  // apart, identical words). The first delivered the sentence; the watermark refuses the others.
   deliverSessionSendCall(transport, 'call-57279-2', SENTENCE);
   deliverSessionSendCall(transport, 'call-57279-3', SENTENCE);
-  await waitFor(() => (transport.sent.filter((message) => message.type === 'function_call_output').length) >= 3);
-  await settleWait(20);
+  await waitFor(
+    () => transport.sent.filter((message) => message.type === 'function_call_output').length >= 3,
+  );
+  await settleWait(150);
 
   assert.deepEqual(
     base.calls.map((call) => call.args.message),
     [SENTENCE],
-    'one heard span is one delivery however many times the model restates it',
+    'a sentence the model carried is delivered once and never copied verbatim',
+  );
+  assert.ok(
+    omissionFillLines(logs).some((line) => line.includes('"i":0') && line.includes('"reason":"covered"')),
+    `the planner must record why the candidate was passed over: ${omissionFillLines(logs).join(' | ')}`,
   );
 });
 
-test('AC2 replay 764f0c7a: five heard sentences, two model answers — every span delivered once, none lost', async () => {
+test('omission fill 764f0c7a: five heard sentences, two model answers — the other three are filled once each', async () => {
   const SPOKEN = [
     '让我们讨论Live Voice的进一步改进及语音输出。',
     '当然，我并不希望这个语音输出只是简单把 Claude Code 的输出念一遍。',
@@ -812,16 +844,14 @@ test('AC2 replay 764f0c7a: five heard sentences, two model answers — every spa
     '当然，我并不希望这个语音输出只是简单把 Claude Code 的输出念一遍。',
     '我们来进一步讨论一下这个问题。',
   ];
-  // A short window: the two unanswered spans must be delivered by the deadline, which is the arm
-  // this journal's 3-of-5 loss lived on. A missed deadline shows up as a missing text below.
-  const { transport, base } = wireConnection({ settleMs: 40 });
+  const { transport, base } = wireConnection({ coalesceMs: 0, omissionFillParams: FAST_FILL });
   await waitFor(() => transport.openCalls >= 1);
 
-  // 1 — heard, never answered (the journal's first call was truncated by the next turn).
+  // 1 — heard, never answered: filled at T_i.
   deliverFinalTranscript(transport, 'item-764-1', SPOKEN[0]!);
   await waitFor(() => base.calls.length === 1);
 
-  // 2 — heard, answered inside the window.
+  // 2 — heard, answered inside the window: the response is the delivery.
   deliverFinalTranscript(transport, 'item-764-2', SPOKEN[1]!);
   deliverSessionSendCall(transport, 'call-764-2', ANSWERED[0]!);
   await waitFor(() => base.calls.length === 2);
@@ -837,108 +867,95 @@ test('AC2 replay 764f0c7a: five heard sentences, two model answers — every spa
   deliverSessionSendCall(transport, 'call-764-5', ANSWERED[1]!);
   await waitFor(() => base.calls.length === 5);
 
-  // Let a late deadline fire if one was left armed: a span already settled must produce NOTHING.
-  await settleWait(80);
+  // Let a late decision fire if one was left armed: a covered sentence must produce NOTHING.
+  await settleWait(160);
 
   assert.deepEqual(
     base.calls.map((call) => call.args.message),
     [SPOKEN[0], ANSWERED[0], SPOKEN[2], SPOKEN[3], ANSWERED[1]],
-    'each heard span is delivered once: the response where there is one, the endpoint\'s words otherwise',
+    'each unanswered utterance is delivered once; an answered one is never copied',
   );
 });
 
-test('AC2 replay 3d2d3b2c: a model repair of an ASR mishearing is the whole delivery, never prefixed', async () => {
+test('omission fill 3d2d3b2c: a repair of an ASR mishearing covers the heard words and is the whole delivery', async () => {
   const HEARD = '十月十五日，来望也，嗯，第一次考试。';
   const REPAIRED = '十月十五日，LiveWire 第一次测试。';
-  const { transport, base } = wireConnection({ settleMs: 40 });
+  const logs: string[] = [];
+  const { transport, base } = wireConnection({
+    coalesceMs: 0,
+    omissionFillParams: FAST_FILL,
+    log: (line) => logs.push(line),
+  });
   await waitFor(() => transport.openCalls >= 1);
 
   deliverFinalTranscript(transport, 'item-3d2d-1', HEARD);
-  // The model answers from the AUDIO, correcting the name. Under the deleted fragment guard the
-  // pair overlap scored this repair as an omission and delivered the mishearing in front of it.
+  // The model answers from the AUDIO, correcting the name. Rule v2 compares GRAMS, not literal
+  // words: the repair's overlap with the mishearing is above SCORE_T, so the utterance is covered.
   deliverSessionSendCall(transport, 'call-3d2d-1', REPAIRED);
   await waitFor(() => base.calls.length === 1);
-  await settleWait(80);
+  await settleWait(150);
 
   assert.deepEqual(
     base.calls.map((call) => call.args.message),
     [REPAIRED],
-    'a response that covers the span is delivered WHOLE; no text-side measure may prepend the transcript',
+    'a covering response is delivered whole; no verbatim copy may be prepended or appended',
+  );
+  assert.ok(
+    omissionFillLines(logs).some((line) => line.includes('"reason":"covered"')),
+    'the repair must be read as covering, not as an omission',
   );
 });
 
-// ── AC-361: the settle boundary may not close while the person is still speaking ─────────────────
-//
-// THE DEFECT THESE CASES REPRODUCE (gap-continuous-experience-settle-window-mid-utterance). The
-// settle producer's deadline counted only silence: 2.5 s after the last FINAL. In the failing run's
-// journal (2026-10-17T18:54Z, `67374906-*`) the endpoint's `speech_started` for U4 had already
-// arrived — the proxy's `upstreamTalking` was true — when U3's window expired at 12.745 and the
-// producer delivered U2+U3 verbatim. The model's combined response for U4 arrived 1 ms after U4's
-// own final at 12.944 and carried U3 again, so the coalescer emitted one sentence with U3 twice.
-// The rule the producer was missing is the same one the busy quiet window already applies: a span
-// may only settle once the upstream has CLOSED its turn (`onUpstreamTurn(false)`).
-
-test('settle boundary waits for the upstream turn: a window expiring mid-utterance delivers nothing', async () => {
-  const { transport, base } = wireConnection({ settleMs: 40 });
+test('a speech_started inside S defers the fill to t+H instead of confirming at t+S', async () => {
+  const TEXT = '服务器一直连接不上';
+  const { transport, base } = wireConnection({
+    coalesceMs: 0,
+    omissionFillParams: { hMs: 240, gMs: 50, silenceMs: 60 },
+  });
   await waitFor(() => transport.openCalls >= 1);
 
-  // One heard span, its window armed while the turn is still closed...
-  deliverFinalTranscript(transport, 'item-settle-mid-1', '嗯…那个… 我想想');
-  // ...and the person starts the NEXT utterance before the deadline. The spans heard so far are
-  // exactly what the model's response for the ongoing turn will cover; settling them now would
-  // deliver them a second time inside that response.
+  deliverFinalTranscript(transport, 'item-silence-1', TEXT);
+  // The person starts speaking again INSIDE S: no model message may answer the first sentence yet,
+  // but the newer speech means the model can still cover it, so T_i moves to t+H. (A few ms later,
+  // not the same millisecond: the rule's branch is `startedAt > t`, and two events in one tick are
+  // not "speaking again".)
+  await settleWait(6);
   transport.peerSend({ type: 'input_audio_buffer.speech_started' });
-
-  // Several windows pass with the turn open. The false form (no `upstreamTalking` guard) delivers
-  // the span here — this assertion is the one that reads red without the guard.
-  await settleWait(140);
+  await settleWait(130);
   assert.deepEqual(
     base.calls.map((call) => call.args.message),
     [],
-    'a settle deadline that fires while the upstream turn is open must re-arm, not deliver a span the ongoing response will cover',
+    'the silence branch may not confirm at t+S when the user spoke again',
   );
+
+  await waitFor(() => base.calls.length === 1, 1_200);
+  assert.deepEqual(base.calls.map((call) => call.args.message), [TEXT], 'the sound is still filled at t+H');
 });
 
-test('settle boundary closes after the upstream turn ends: the heard span is delivered verbatim once', async () => {
-  const { transport, base } = wireConnection({ settleMs: 40 });
+test('a stop closes the candidates it disposed of: no verbatim fill follows it', async () => {
+  const TEXT = '把刚才那个改动回滚掉吧';
+  const { transport, base } = wireConnection({
+    coalesceMs: 0,
+    omissionFillParams: { hMs: 240, gMs: 50, silenceMs: 60 },
+  });
   await waitFor(() => transport.openCalls >= 1);
 
-  deliverFinalTranscript(transport, 'item-settle-close-1', '我想想');
-  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
-  // Mid-utterance deadlines pass without a delivery; the span is still owed.
-  await settleWait(100);
-  assert.deepEqual(base.calls.map((call) => call.args.message), []);
-
-  // The endpoint closes the turn. The window restarts from the CLOSE, and with no model response
-  // behind it the heard span goes out verbatim — the deterministic arm R2 must keep.
-  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' });
-  await waitFor(() => base.calls.length === 1);
-  // A stale window must not deliver the same span a second time.
-  await settleWait(100);
-  assert.deepEqual(
-    base.calls.map((call) => call.args.message),
-    ['我想想'],
-    'after the turn closes the heard span is delivered verbatim exactly once',
-  );
-});
-
-test('a model response inside the window is the delivery: the span is never re-sent verbatim', async () => {
-  const { transport, base } = wireConnection({ settleMs: 40 });
-  await waitFor(() => transport.openCalls >= 1);
-
-  deliverFinalTranscript(transport, 'item-settle-resp-1', '我想想');
-  transport.peerSend({ type: 'input_audio_buffer.speech_started' });
-  await settleWait(80);
-  // The model answers the ongoing turn. This response is the QUALITY arm: it covers the span and
-  // the verbatim arm must stay silent even though the turn closes afterwards.
-  deliverSessionSendCall(transport, 'call-settle-resp-1', '我想想然后跑一下测试');
-  await waitFor(() => base.calls.length >= 1);
-  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' });
-  await settleWait(120);
+  deliverFinalTranscript(transport, 'item-stop-1', TEXT);
+  // The model disposes of the utterance with a stop that carries no correction. Rule v2 has no
+  // message to match, so the relay itself must close the candidate — otherwise the sentence the
+  // stop just threw away is delivered after the stop.
+  transport.peerSend({
+    type: 'function_call',
+    name: 'session_interrupt',
+    callId: 'call-stop-1',
+    arguments: JSON.stringify({ intent: 'cancel the last sentence' }),
+  });
+  await waitFor(() => base.interruptCalls.length === 1);
+  await settleWait(320);
 
   assert.deepEqual(
     base.calls.map((call) => call.args.message),
-    ['我想想然后跑一下测试'],
-    'a span a model response covered is answered for; closing the turn must not arm a second delivery',
+    [],
+    'a sentence the stop disposed of must not be filled afterwards',
   );
 });

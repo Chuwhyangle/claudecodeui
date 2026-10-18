@@ -74,6 +74,12 @@ const RESOLVED_TURN_DETECTION = resolveTurnDetection({
   [VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV]: '900',
 }).turnDetection;
 
+/**
+ * The detector as it reaches the wire: the transport's composer appends `interrupt_response:false`
+ * to every non-null `turn_detection` (GOAL-046), so a reading of the assembled body contains it.
+ */
+const RESOLVED_TURN_DETECTION_ON_WIRE = { ...RESOLVED_TURN_DETECTION, interrupt_response: false };
+
 /** Exactly what `server/index.ts` hands `createDashscopeTransport`: the defaults, detector replaced. */
 const SESSION_DEFAULTS: Readonly<Record<string, unknown>> = {
   ...DEFAULT_SESSION_DEFAULTS,
@@ -278,7 +284,7 @@ test('AC1 false form: removing the switch spread from the transport puts `server
     assert.ok(liveDetectors.length > 0, `the mutant must still inject a body: ${JSON.stringify(broken)}`);
     assert.deepEqual(
       liveDetectors[0],
-      RESOLVED_TURN_DETECTION,
+      RESOLVED_TURN_DETECTION_ON_WIRE,
       `restoring the plain spread must put the deployment's own detector back on the wire: ${JSON.stringify(broken)}`,
     );
   } finally {
@@ -384,7 +390,7 @@ test('AC3: with the relay off (`VOICE_REALTIME_MODE=continuous`) an update still
   for (const body of bodies) {
     assert.deepEqual(
       body.turn_detection,
-      RESOLVED_TURN_DETECTION,
+      RESOLVED_TURN_DETECTION_ON_WIRE,
       `a continuous session advertises the resolved detector on every update: ${JSON.stringify(body)}`,
     );
   }
