@@ -2,7 +2,7 @@
 id: gap-ac323-composer-embedded-arming-first-frame-and-criterion-deadline
 title: 恢复 AC-323 判据绿：composer-embedded spec 仍在首帧前等 listening（arming 相位）、首帧吃掉
   fake upstream 每连接唯一一次 call、115s 判据截止低于实测串行 ≈156s
-status: todo
+status: ready
 labels:
   - gap
   - defect
