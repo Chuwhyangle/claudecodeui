@@ -48,10 +48,28 @@ set -u
 
 [ "$#" -gt 0 ] || { echo "usage: with-memory-cap.sh <cmd> [args...]" >&2; exit 2; }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve a bare command against this checkout's own node_modules/.bin when — and only when — it is
+# not already reachable on PATH. Why: the acceptance environment (a driver PATH of
+# $QUAY_PLUGIN_DIR/bin + slice shim + the nvm node dir + system dirs) has no repo node_modules/.bin,
+# so a bare `tsx`/`vitest` that obviously exists in the repo dies with "Failed to find executable
+# tsx" before the command can run. The fallback is CONDITIONAL rather than an unconditional PATH
+# prepend on purpose: prepending would change resolution priority for every command run through this
+# wrapper (repo-local tsc/vitest would shadow system ones), which is a larger behavior change than
+# this bug needs. PATH always wins when the name is present; only a name PATH cannot resolve falls
+# back, and a name resolvable in neither place still fails exactly as before (not masked).
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+if ! command -v -- "$1" >/dev/null 2>&1; then
+  REPO_BIN="$REPO_ROOT/node_modules/.bin/$1"
+  if [ -f "$REPO_BIN" ] && [ -x "$REPO_BIN" ]; then
+    set -- "$REPO_BIN" "${@:2}"
+  fi
+fi
+
 if [ -n "${QUAY_MEMORY_MAX:-}" ]; then
   CAP="$QUAY_MEMORY_MAX"
 else
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   PROBE="$SCRIPT_DIR/effective-capacity.sh"
   DERIVED_MB=""
   if [ -r "$PROBE" ]; then
