@@ -160,6 +160,14 @@ type FakeUpstream = {
   /** Arms the stand-in: it answers audio with a call only once the bound session is known. */
   setBoundSessionId(id: string): void;
   /**
+   * The session the stand-in currently answers, `''` while none is bound.
+   *
+   * `pushFirstCaptureFrame` needs it to clear the binding across the first captured frame: that
+   * frame is uploaded like any other, and if the endpoint answered it the connection's
+   * once-only `session_send` budget would be spent before the spec's own burst.
+   */
+  getBoundSessionId(): string;
+  /**
    * Makes the endpoint unreachable: every handshake is dropped before it completes.
    *
    * This is how the criterion's "the server closed the socket" is produced from
@@ -292,6 +300,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         setBoundSessionId: (id: string) => {
           boundSessionId = id;
         },
+        getBoundSessionId: () => boundSessionId,
         setRefusing: (value: boolean) => {
           refusing = value;
         },
@@ -498,6 +507,65 @@ const speak = (page: Page, seconds: number): Promise<void> =>
     (window as unknown as { __voiceFake: { speak(seconds: number): void } }).__voiceFake.speak(value);
   }, seconds);
 
+/** The page-side capture probe `pushFirstCaptureFrame` drives (installed in the init script). */
+type CaptureProbe = {
+  /** The most recently constructed worklet — the one the next `start()` adopts and wires. */
+  node: { port: { onmessage: ((message: unknown) => void) | null } } | null;
+  /** Constructed worklets, and how many of them the last push satisfied. */
+  constructed: number;
+  pushed: number;
+  /** Pushes the one frame that makes `listening` reachable; `false` until the graph is wired. */
+  pushFirstFrame: () => boolean;
+};
+
+/**
+ * Pushes the one captured frame that makes `listening` reachable — WITHOUT spending the endpoint's call.
+ *
+ * WHY IT IS NEEDED. Upstream `state: open` only takes the bar to `arming`; `listening` is set when
+ * capture delivers its FIRST frame (`c99a0eaba`). The fake graph is inert — frames only leave it via
+ * `__voiceFake.speak()` — so every initial `waitForPhase(page, 'listening')` below would poll
+ * `arming` until it timed out. This is the same contract `e2e/voice-realtime-live-session-send.spec.ts`
+ * and `e2e/voice-realtime-intent-control.spec.ts` satisfy with their own helpers.
+ *
+ * WHY THE BINDING IS CLEARED ACROSS IT. The stand-in answers the FIRST audio frame of each connection
+ * with a `session_send` — and only the first (`callSent`). That frame is uploaded exactly like any
+ * other, so if the endpoint were bound while it arrived, the arming frame would spend the connection's
+ * once-only call budget and the spec's own `speak()` would never produce the call it measures
+ * (case 6's `callCount() >= callsBefore + 1`). It is cleared, the frame is pushed, and the binding is
+ * restored only once the frame has REACHED the upstream (`audioFrameCount`), so the append is
+ * processed while unbound rather than racing the restore.
+ */
+async function pushFirstCaptureFrame(page: Page, upstream: FakeUpstream): Promise<void> {
+  const boundSessionId = upstream.getBoundSessionId();
+  const framesBefore = upstream.audioFrameCount();
+  upstream.setBoundSessionId('');
+  try {
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const capture = (window as unknown as { __voiceCaptureProbe?: CaptureProbe }).__voiceCaptureProbe;
+            return capture?.pushFirstFrame() ?? false;
+          }),
+        {
+          timeout: 20_000,
+          message: 'the capture graph never wired a worklet to receive the first captured frame',
+        },
+      )
+      .toBe(true);
+    // The browser uploads that frame asynchronously. Wait for the upstream to have SEEN it, so the
+    // restore below cannot beat the append and hand the arming frame a `session_send` after all.
+    await expect
+      .poll(() => upstream.audioFrameCount(), {
+        timeout: 20_000,
+        message: 'the first captured frame never reached the fake upstream',
+      })
+      .toBeGreaterThanOrEqual(framesBefore + 1);
+  } finally {
+    upstream.setBoundSessionId(boundSessionId);
+  }
+}
+
 /**
  * Writes a screenshot when QUAY_LIVE_VOICE_SHOT_DIR is set; a no-op in ordinary runs.
  *
@@ -535,7 +603,7 @@ async function barBox(page: Page): Promise<{ height: number; top: number; bottom
  * asks for 1280 measures and photographs 1280 no matter what the case before it
  * left behind.
  */
-async function enterLiveVoice(page: Page, width: number): Promise<void> {
+async function enterLiveVoice(page: Page, width: number, upstream: FakeUpstream): Promise<void> {
   await page.setViewportSize({ width, height: 800 });
   await expect(page.getByTestId('live-voice-enter')).toHaveCount(0);
   const entry = page.getByTestId('live-voice-button');
@@ -554,6 +622,7 @@ async function enterLiveVoice(page: Page, width: number): Promise<void> {
   await entry.click();
   await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeHidden();
+  await pushFirstCaptureFrame(page, upstream);
   await waitForPhase(page, 'listening');
 }
 
@@ -676,24 +745,64 @@ test.describe('voice realtime composer embedded bar', () => {
           return samples;
         };
         type Port = { port: { onmessage: ((m: unknown) => void) | null } };
-        const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
+        // `constructed`/`pushed` make "exactly one first frame per capture session" a page-side
+        // fact rather than a caller's promise; they are shared with `__voiceCaptureProbe` below.
+        const state: {
+          node: Port | null;
+          atSample: number;
+          constructed: number;
+          pushed: number;
+          speak: (seconds: number) => void;
+          pushFirstFrame: () => boolean;
+        } = {
           node: null,
           atSample: 0,
-          speak(seconds: number) {
+          constructed: 0,
+          pushed: 0,
+          speak(seconds) {
             const node = state.node;
             if (!node) throw new Error('the fake capture was not connected yet');
             const samples = buildSpeechBurst(seconds);
             node.port.onmessage?.({ data: { type: 'pcm', samples, atSample: state.atSample } });
             state.atSample += samples.length;
           },
+          /**
+           * The one captured frame that takes the bar from `arming` to `listening`.
+           *
+           * Upstream `state: open` only reaches `arming`; `listening` is set by the first frame
+           * capture delivers (`c99a0eaba`). This graph is inert — frames only leave it through
+           * `speak()` — so `waitForPhase(page, 'listening')` would poll `arming` until it timed out.
+           *
+           * WHEN IT LANDS. Only once `start()` has WIRED the most recently constructed worklet:
+           * `port.onmessage` is assigned after the asynchronous acquisition, and a frame pushed
+           * before that is dropped. And only once per worklet, so a later capture session's first
+           * frame cannot be satisfied by an earlier one.
+           */
+          pushFirstFrame() {
+            const node = state.node;
+            if (!node || node.port.onmessage === null) return false;
+            if (state.pushed >= state.constructed) return false;
+            const samples = new Float32Array(3_200); // 200 ms at 16 kHz
+            for (let index = 0; index < samples.length; index += 1) {
+              samples[index] = 0.2 * Math.sin((2 * Math.PI * 180 * index) / 16_000);
+            }
+            node.port.onmessage({ data: { type: 'pcm', samples, atSample: state.atSample } });
+            state.atSample += samples.length;
+            state.pushed = state.constructed;
+            return true;
+          },
         };
         (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;
+        // The probe `pushFirstCaptureFrame` drives. Same object, so the first-frame push keeps the
+        // segmenter's `atSample` ledger contiguous with `speak`'s bursts.
+        (window as unknown as { __voiceCaptureProbe: typeof state }).__voiceCaptureProbe = state;
 
         class FakeWorkletNode {
           port: { onmessage: ((m: unknown) => void) | null; postMessage: () => void };
           constructor() {
             this.port = { onmessage: null, postMessage: () => undefined };
             state.node = this as unknown as typeof state.node;
+            state.constructed += 1;
           }
 
           connect() {
@@ -777,7 +886,7 @@ test.describe('voice realtime composer embedded bar', () => {
     const bar = page.locator(BAR);
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
 
-    await enterLiveVoice(page, 1280);
+    await enterLiveVoice(page, 1280, upstream);
 
     // (b) state one — listening.
     const listening = await barBox(page);
@@ -852,7 +961,7 @@ test.describe('voice realtime composer embedded bar', () => {
     // A healthy connection first, so the drop below is a connection that really opened and then
     // ended, not one that never started.
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
-    await enterLiveVoice(page, 1280);
+    await enterLiveVoice(page, 1280, upstream);
     const framesOnHealthy = upstream.audioFrameCount();
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesOnHealthy + 1);
@@ -905,7 +1014,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
 
-    await enterLiveVoice(page, 375);
+    await enterLiveVoice(page, 375, upstream);
     const bar = page.locator(BAR);
     const listening = await barBox(page);
     expect(listening.left).toBeGreaterThanOrEqual(0);
@@ -961,6 +1070,8 @@ test.describe('voice realtime composer embedded bar', () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.getByTestId('live-voice-button').click();
     await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+    // The bare-click leg owns its own first frame, as `enterLiveVoice` does for the others.
+    await pushFirstCaptureFrame(page, upstream);
     await waitForPhase(page, 'listening');
     await leaveLiveVoice(page);
 
@@ -1019,7 +1130,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
 
-    await enterLiveVoice(page, 1280);
+    await enterLiveVoice(page, 1280, upstream);
 
     // The selector is INSIDE the bar — not a second copy beside it — and it is the
     // composer's own menu: opening it lists the model the user's library holds.
@@ -1081,7 +1192,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
 
-    await enterLiveVoice(page, 1280);
+    await enterLiveVoice(page, 1280, upstream);
 
     // A model call in flight: the session is processing, so the turn's own Stop is on the row. The
     // call is counted from BEFORE the burst, because earlier cases have already spent calls.
@@ -1140,7 +1251,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
     await waitForChatSocket(page);
 
-    await enterLiveVoice(page, 1280);
+    await enterLiveVoice(page, 1280, upstream);
     const before = await barBox(page);
     await expect(page.getByText(PANEL_HEADER)).toHaveCount(0);
 
