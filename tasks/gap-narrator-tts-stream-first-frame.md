@@ -2,7 +2,7 @@
 id: gap-narrator-tts-stream-first-frame
 title: Live Voice narrator 首帧即播：TTS leaf 等完整 SSE 合成后才发帧、页面等 tts_done 才起播，9
   字播报也要约 2.1s 才出声
-status: ready
+status: done
 labels:
   - gap
   - defect
