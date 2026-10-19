@@ -382,3 +382,187 @@ export function describeTurnDetection(resolution: TurnDetectionResolution, origi
   if (origin === undefined) return null;
   return `turn detection: ${values} — silence from ${origin}`;
 }
+
+// --------------------------- BACKCHANNEL AT AN UNCERTAIN PAUSE ------------
+
+/**
+ * THE PREREQUISITE VERDICT THIS POLICY STANDS ON: `semantic_vad` does NOT expose an observable
+ * "the user may not be finished" state, so the shipped arm is the task's FALLBACK — pause detection
+ * plus a proactive `response.create`.
+ *
+ * HOW IT WAS VERIFIED (2026-10-19, from evidence already in this repo, no paid run):
+ *
+ *   · THE WIRE HAS NO INTERMEDIATE EVENT. The endpoint's observed server-VAD surface is exactly
+ *     `input_audio_buffer.speech_started`, `.speech_stopped` and `.committed`
+ *     (`voice-realtime-bridge.service.ts`, `TOLERATED_ENDPOINT_EVENTS`, enumerated from the preserved
+ *     live capture `experiments/voice-realtime-ambiguity/real-trace/qwen38-omni-realtime-trace.json`).
+ *     There is no "maybe" frame between speaking and silence.
+ *   · `semantic_vad` DECIDES LATER; IT DOES NOT NARRATE THE DECISION. `docs/operations/
+ *     voice-realtime-continuous-calibration.md` §C-1 (2026-10-12, qwen3.8-omni-flash-realtime) shows a
+ *     real behavioural difference — 2 segments instead of 6 — but its timeline is
+ *     `speech_started` at 11673 ms and `speech_stopped`/`committed` 2 ms later: one retrospective
+ *     decision, not an in-flight uncertain state. The earlier P0-S4 probe had already found the
+ *     control-plane acceptance of `semantic_vad` to be an echo
+ *     (`docs/proposals/voice-realtime-segmented-relay-SPEC.md` §P0-S4, `echoDiscriminates=false`).
+ *   · THEREFORE the "uncertain" state can only be INFERRED on the relay side from the length of a pause
+ *     the relay itself measured (the uplink VAD's non-speech run) while the upstream turn is still open.
+ *     That inference is what {@link decideBackchannel} encodes, and emitting it needs the relay's own
+ *     proactive `response.create`.
+ *
+ * `false` IS A VERDICT, NOT A DEFAULT. If a future endpoint exposes a real uncertain-state event, flip
+ * this only together with a measured reading; until then no caller may claim a semantic signal exists.
+ *
+ * Consumed by the backchannel criterion (`tests/voice-realtime-backchannel.test.ts`), which asserts the
+ * fallback arm is the one the policy is built on.
+ */
+export const SEMANTIC_VAD_EXPOSES_UNCERTAIN_PAUSE = false;
+
+/**
+ * The acknowledgement. ONE character — never a sentence, never a filler phrase.
+ *
+ * WHY IT MUST STAY ONE CHARACTER. Each acknowledgement is a proactive `response.create`: the model
+ * re-reads the whole context to say it, exactly the spend `voice-realtime-closing-turn.ts` exists to
+ * remove (the closing turn was 46% of the 2026-10-15 journal's spend). A one-character receipt is the
+ * smallest possible version of that cost; anything longer turns this mechanism into the expense it is
+ * meant to buy time for.
+ *
+ * Consumed by {@link decideBackchannel} and by the criterion.
+ */
+export const BACKCHANNEL_TEXT = '嗯';
+
+/**
+ * How many acknowledgements ONE utterance may carry.
+ *
+ * WHY ONE. The receipt is only for the "uncertain" edge, and an utterance that has already been
+ * acknowledged has been told "go on" — repeating it on every further pause is the "fixed interval"
+ * behaviour the task forbids, and multiplies the per-response cost by the number of pauses.
+ *
+ * Consumed by {@link decideBackchannel} and by the criterion.
+ */
+export const BACKCHANNEL_MAX_PER_UTTERANCE = 1;
+
+/**
+ * When the receipt fires, as a fraction of the turn-closing window: at 3/4 of it (the shipped 800 ms
+ * window fires at 600 ms), leaving enough of the window for the receipt itself to be spoken before the
+ * detector would otherwise cut the speaker off.
+ *
+ * Consumed by {@link decideBackchannel} and by the criterion.
+ */
+export const BACKCHANNEL_TRIGGER_RATIO = 0.75;
+
+/**
+ * The longer silence window is this multiple of the configured one — the shipped 800 ms window becomes
+ * 2000 ms once the person has been acknowledged, so they get the additional room the receipt is buying.
+ * Clamped to {@link SILENCE_DURATION_MS_RANGE}: a deployment already at the ceiling has no room to
+ * extend, and the policy reports the ceiling rather than an out-of-range value.
+ *
+ * Consumed by {@link decideBackchannel} and by the criterion.
+ */
+export const BACKCHANNEL_EXTENSION_FACTOR = 2.5;
+
+/**
+ * Why {@link decideBackchannel} answered as it did.
+ *
+ *   · `uncertain-pause` — the pause is long enough to be a considered pause, the person has not been
+ *     acknowledged yet in this utterance, and the turn has not run past the longer window: give the
+ *     receipt and the longer window.
+ *   · `already-acknowledged` — this utterance already got its one receipt: say nothing, keep the longer
+ *     window for the rest of the utterance (the room was already bought).
+ *   · `word-gap` — an ordinary gap between words: say nothing, and leave the configured window alone.
+ *   · `turn-end` — the pause has reached the longer window: the person has stopped for long enough that
+ *     speaking now would talk over a finished turn; let the detector close it.
+ *
+ * Consumed by the criterion; a caller logs it beside the decision rather than re-deriving the reason.
+ */
+export type BackchannelPauseKind = 'uncertain-pause' | 'already-acknowledged' | 'word-gap' | 'turn-end';
+
+/**
+ * One pause as the relay measured it. `silenceMs` is the continuous non-speech since the last voiced
+ * frame (the uplink VAD's own reading), while the upstream turn is still open — the policy is never
+ * asked about a closed turn. `acknowledged` is how many receipts this utterance has already carried,
+ * which is the frequency-cap state; it defaults to none.
+ *
+ * Consumed by {@link decideBackchannel} and by the criterion.
+ */
+export type BackchannelPauseObservation = {
+  silenceMs: number;
+  acknowledged?: number;
+};
+
+/**
+ * The decision for one pause: whether to speak, what to say, and which silence window applies from now
+ * on for this utterance.
+ *
+ * `emit` and `text` are the exact pair a caller needs for the fallback mechanism: on `true`, send one
+ * proactive `response.create` whose only instruction is to say `text`; on `false`, send nothing. The
+ * `silenceDurationMs` is not an echo of the current setting — it is the window to APPLY (the extended
+ * one while the receipt is in force), and it is always an integer inside `SILENCE_DURATION_MS_RANGE`.
+ *
+ * Consumed by the criterion today; the ws-proxy is the intended caller when the relay wires the
+ * fallback arm, so the shape is deliberately the one a socket-side decision needs.
+ */
+export type BackchannelDecision = {
+  emit: boolean;
+  text: string | null;
+  silenceDurationMs: number;
+  kind: BackchannelPauseKind;
+};
+
+/** Clamps one silence window into the documented range; a non-finite input reads as the shipped default. */
+function clampSilenceWindow(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_TURN_DETECTION.silence_duration_ms;
+  return Math.min(SILENCE_DURATION_MS_RANGE.max, Math.max(SILENCE_DURATION_MS_RANGE.min, Math.round(value)));
+}
+
+/**
+ * The two edges of the uncertain band, derived from the window the session would otherwise close on:
+ * `fromMs` is where the receipt fires ({@link BACKCHANNEL_TRIGGER_RATIO} of the window) and `extendedMs`
+ * is the longer window itself ({@link BACKCHANNEL_EXTENSION_FACTOR} of it, clamped).
+ *
+ * Derived rather than written as two absolute numbers so a deployment that tunes the window keeps the
+ * same relationship — a 400 ms deployment fires at 300 ms, not at a 600 ms constant that would land after
+ * its turn had already been cut.
+ */
+function backchannelWindow(defaultSilenceMs: number): { baseMs: number; fromMs: number; extendedMs: number } {
+  const baseMs = clampSilenceWindow(defaultSilenceMs);
+  return {
+    baseMs,
+    fromMs: clampSilenceWindow(baseMs * BACKCHANNEL_TRIGGER_RATIO),
+    extendedMs: clampSilenceWindow(baseMs * BACKCHANNEL_EXTENSION_FACTOR),
+  };
+}
+
+/**
+ * Decides one pause: the one-character receipt only at the UNCERTAIN edge, and the longer silence window
+ * that buys the speaker room to finish.
+ *
+ * THE CRITICAL DISTINCTION THIS ENCODES: not every pause is the uncertain state. A gap shorter than
+ * {@link BACKCHANNEL_TRIGGER_RATIO} of the window is an ordinary word gap (speaking there interrupts a
+ * person who is mid-flow), and a pause at or past the extended window is a finished turn (speaking there
+ * talks over someone who has stopped). Only the band between them is ambiguous enough that a receipt
+ * helps, and only the first one in an utterance is spoken. That is why "every pause gets a receipt" is a
+ * false form of this policy rather than a variant of it.
+ *
+ * Pure and total: every input yields a decision inside `SILENCE_DURATION_MS_RANGE`; a non-finite or
+ * negative `silenceMs` reads as no silence. Consumed by the criterion today and by the ws-proxy when the
+ * relay wires the fallback arm.
+ */
+export function decideBackchannel(
+  observation: BackchannelPauseObservation,
+  defaultSilenceMs: number = DEFAULT_TURN_DETECTION.silence_duration_ms,
+): BackchannelDecision {
+  const { baseMs, fromMs, extendedMs } = backchannelWindow(defaultSilenceMs);
+  const acknowledged = Number.isFinite(observation.acknowledged) ? Math.max(0, observation.acknowledged ?? 0) : 0;
+  const silenceMs = Number.isFinite(observation.silenceMs) ? Math.max(0, observation.silenceMs) : 0;
+
+  if (silenceMs >= extendedMs) {
+    return { emit: false, text: null, silenceDurationMs: baseMs, kind: 'turn-end' };
+  }
+  if (acknowledged >= BACKCHANNEL_MAX_PER_UTTERANCE) {
+    return { emit: false, text: null, silenceDurationMs: extendedMs, kind: 'already-acknowledged' };
+  }
+  if (silenceMs >= fromMs) {
+    return { emit: true, text: BACKCHANNEL_TEXT, silenceDurationMs: extendedMs, kind: 'uncertain-pause' };
+  }
+  return { emit: false, text: null, silenceDurationMs: baseMs, kind: 'word-gap' };
+}
