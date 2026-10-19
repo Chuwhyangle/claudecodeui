@@ -9,6 +9,8 @@ children: []
 extra:
   schema: execution
 ---
+## Proposal
+
 <!-- dedup-ref --> 相关既有任务 `gap-asr-dashscope-user-credential-configured-mask-and-log` 已把 `dashscopeApiKey`/`dashscopeEndpoint`/`dashscopeModel` 加进 per-user 设置并接进 one-shot ASR 路径；本任务是把**同一把 key** 接到 realtime 路径——realtime 现在只读 `DASHSCOPE_API_KEY` env，机制不同、不重复它。
 
 现状：live voice realtime 的 DashScope 凭据只读服务端环境变量 `DASHSCOPE_API_KEY`（`server/index.ts:762` 注入 `createDashscopeTransport({ apiKey: process.env.DASHSCOPE_API_KEY })`，拨号时使用，缺了报 `MISSING_API_KEY`）；而 voice input 的 one-shot `dashscope-omni` 已走 per-user 设置——`voice.service.ts:293-294` 用户 `dashscopeApiKey` 优先、回落 env。同一把 DashScope key 分两处、只有一路上了设置页。
