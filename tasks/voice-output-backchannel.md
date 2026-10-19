@@ -1,7 +1,7 @@
 ---
 id: voice-output-backchannel
 title: backchannel：停顿「不确定态」给「嗯」，换更长 silence window（前置验 semantic_vad）
-status: ready
+status: done
 labels:
   - feature
 parent: null
