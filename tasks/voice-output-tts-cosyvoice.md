@@ -17,7 +17,7 @@ goal_ac: AC-405
 
 ## AC
 
-- [ ] AC-405：给定文本 → cosyvoice 合成非空音频、时长与文本同量级 → 浏览器下行帧到达；假模型名合成必失败且错误码上报（非静默空音频）。
+- [x] AC-405：给定文本 → cosyvoice 合成非空音频、时长与文本同量级 → 浏览器下行帧到达；假模型名合成必失败且错误码上报（非静默空音频）。
 
 ## DoD
 
@@ -27,4 +27,5 @@ goal_ac: AC-405
 
 - server/modules/voice-realtime/voice-realtime-tts.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts（新增 server 测试文件把收集数 367→368，AC2/AC3 的 unknown 钉子随之 364→365、366→367）
 - tasks/voice-output-tts-cosyvoice.md
