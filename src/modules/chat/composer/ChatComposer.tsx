@@ -547,27 +547,49 @@ export default function ChatComposer({
     : sendOnEnter
       ? t('input.hintText.enter')
       : t('input.hintText.ctrlEnter');
-  const submitAriaLabel = canQueueDraft
-    ? busySendGoesToProcess
-      ? t('input.send')
-      : hasQueuedDraft
-        ? t('input.queue.update', { defaultValue: 'Update queued message' })
-        : t('input.queue.sendNext', { defaultValue: 'Queue next message' })
-    : isLoading
-      ? isResidentSession
-        ? t('resident.stopResident')
-        : t('input.stop')
-      : t('input.send');
+  // The send button doubles as the Live Voice entry while the draft is empty (the ChatGPT pattern):
+  // an empty composer has nothing to send, so the button that would be a disabled send becomes the
+  // one control that starts a voice conversation. The dictation mic sits beside it for "dictate into
+  // the draft" and is unaffected. Every busier tier above this one (loading / recording / transcribing
+  // / queueing) is checked first and wins, and a session held by a background job is not offered
+  // Live Voice either — the composer is read-only there, and the occupied notice explains why.
+  const submitIsVoice = Boolean(
+    onLiveVoice
+      && !isLoading
+      && !isRecording
+      && !isTranscribing
+      && !isOccupied
+      && input.trim() === ''
+      && attachedFiles.length === 0,
+  );
+
+  const submitAriaLabel = submitIsVoice
+    ? t('voice.realtime.enter', { defaultValue: 'Start Live Voice' })
+    : canQueueDraft
+      ? busySendGoesToProcess
+        ? t('input.send')
+        : hasQueuedDraft
+          ? t('input.queue.update', { defaultValue: 'Update queued message' })
+          : t('input.queue.sendNext', { defaultValue: 'Queue next message' })
+      : isLoading
+        ? isResidentSession
+          ? t('resident.stopResident')
+          : t('input.stop')
+        : t('input.send');
   // The Esc hint used to sit in the dock's own Stop control. With that control gone
   // the global Escape listener's key is named on the one stop entry that remains —
   // the composer's submit button — so the hint survives the tab's removal. While the
   // server is unreachable the reason replaces the plain hint, but the key is still
   // named: Escape is handled globally and keeps working when the button does not.
-  const submitTitle = isLoading && !canQueueDraft
-    ? stopUnreachable
-      ? `${submitAriaLabel} (Esc) — ${stopUnreachableReason ?? ''}`.trim()
-      : `${submitAriaLabel} (Esc)`
-    : submitAriaLabel;
+  const submitTitle = submitIsVoice
+    ? liveVoiceDisabled
+      ? liveVoiceUnavailableNotice
+      : submitAriaLabel
+    : isLoading && !canQueueDraft
+      ? stopUnreachable
+        ? `${submitAriaLabel} (Esc) — ${stopUnreachableReason ?? ''}`.trim()
+        : `${submitAriaLabel} (Esc)`
+      : submitAriaLabel;
 
   // The replay pair's own row, drawn on the compact tier only — the wide tier keeps the pair in the
   // tools group. Held as a value rather than written inline because the inline-tools tier mounts it
@@ -911,9 +933,10 @@ export default function ChatComposer({
           ].filter(Boolean).join(' ')}
         >
           <PromptInputTools
-            // Seven controls now share the compact row (attach, dictation mic, Live Voice, more, then
-            // the hand, model and send). Below 360px the long-model-name reading overflows the box by
-            // a few px, so the tool buttons narrow by 4px each there (height stays, so the row alignment holds); wider widths are untouched.
+            // Six controls now share the compact row (attach and more on the left; model, permission,
+            // the dictation mic and send on the right). Below 360px the long-model-name reading
+            // overflows the box by a few px, so the tool buttons narrow by 4px each there (height
+            // stays, so the row alignment holds); wider widths are untouched.
             className={isCompactTier ? 'shrink-0 max-[359px]:[&_button]:w-7' : 'min-w-0 flex-wrap'}
           >
             <PromptInputButton
@@ -924,61 +947,18 @@ export default function ChatComposer({
               <PaperclipIcon />
             </PromptInputButton>
 
-            {onVoiceTranscript && voiceAvailable && (
-              <VoiceInputButton
-                state={voiceState}
-                inFlight={voiceInFlight}
-                onToggle={handleVoiceToggle}
-              />
-            )}
-
             {/*
-              The voice path's other entry, and only while the debug switch asks for it: an install
-              that never sets `?voiceDebug=1` renders the same composer it always has. Beside the mic
-              because it is the same chain — the file goes where the recording goes.
+              The voice path's file entry, shown only while the debug switch asks for it: an install
+              that never sets `?voiceDebug=1` renders the same composer it always has. The file goes
+              through the same transcription chain as a recording.
             */}
-            {onLiveVoice && (
-              <span className="relative inline-block">
-                <PromptInputButton
-                  tooltip={{
-                    content: liveVoiceDisabled
-                      ? liveVoiceUnavailableNotice
-                      : t('voice.realtime.enter', { defaultValue: 'Start Live Voice' }),
-                  }}
-                  aria-label={t('voice.realtime.enter', { defaultValue: 'Start Live Voice' })}
-                  aria-disabled={liveVoiceDisabled ? true : undefined}
-                  data-testid="live-voice-button"
-                  className={liveVoiceDisabled ? 'opacity-50' : undefined}
-                  onClick={(e: { preventDefault: () => void }) => {
-                    e.preventDefault();
-                    if (liveVoiceDisabled) {
-                      setLiveVoiceNotice(liveVoiceUnavailableNotice);
-                      return;
-                    }
-                    onLiveVoice();
-                  }}
-                >
-                  <AudioLinesIcon />
-                </PromptInputButton>
-                {liveVoiceNotice && (
-                  <span
-                    role="status"
-                    data-testid="live-voice-notice"
-                    className="absolute bottom-full left-0 z-50 mb-2 w-56 rounded-md border border-border bg-popover px-2 py-1.5 text-[11px] leading-snug text-popover-foreground shadow-md"
-                  >
-                    {liveVoiceNotice}
-                  </span>
-                )}
-              </span>
-            )}
-
             {onVoiceTranscript && voiceAvailable && isVoiceDebugEnabled() && (
               <VoiceUploadButton state={voiceState} onSelectFile={transcribeFile} />
             )}
 
             {/*
-              Right of the mic: a clip only exists because the mic produced it. On the wide tier it
-              stays here, where it has always been. On the compact tier this row is exactly the six
+              A clip only exists because the mic produced it. On the wide tier it stays here, in the
+              tools group, where it has always been. On the compact tier this row is exactly the six
               controls that send a message and may not wrap, so the pair goes to a row of its own
               instead — see the clip row between the box and the footer.
             */}
@@ -1066,43 +1046,84 @@ export default function ChatComposer({
               providerLabel={providerLabel}
             />
 
-            <PromptInputSubmit
-              onClick={
-                canQueueDraft
-                  ? (e: MouseEvent<HTMLButtonElement>) => {
-                      e.preventDefault();
-                      handleComposerSubmit(e);
-                    }
-                  : isLoading
-                    ? onAbortSession
+            {onVoiceTranscript && voiceAvailable && (
+              <VoiceInputButton
+                state={voiceState}
+                inFlight={voiceInFlight}
+                onToggle={handleVoiceToggle}
+              />
+            )}
+
+            {/*
+              The submit and its Live Voice double. While the draft is empty the submit becomes the
+              Live Voice entry (see `submitIsVoice`), so the notice a refused start leaves behind is
+              anchored to it rather than to a button of its own. `right-0` instead of `left-0`: the
+              submit is the footer's last control, so a left-anchored notice would leave the box's
+              right edge.
+            */}
+            <span className="relative inline-block">
+              <PromptInputSubmit
+                onClick={
+                  canQueueDraft
+                    ? (e: MouseEvent<HTMLButtonElement>) => {
+                        e.preventDefault();
+                        handleComposerSubmit(e);
+                      }
+                    : isLoading
+                      ? onAbortSession
+                      : isRecording
+                        ? (e: MouseEvent<HTMLButtonElement>) => {
+                            e.preventDefault();
+                            voiceStop({ send: true });
+                          }
+                        : submitIsVoice
+                          ? (e: MouseEvent<HTMLButtonElement>) => {
+                              e.preventDefault();
+                              if (liveVoiceDisabled) {
+                                setLiveVoiceNotice(liveVoiceUnavailableNotice);
+                                return;
+                              }
+                              onLiveVoice?.();
+                            }
+                          : undefined
+                }
+                disabled={
+                  isLoading
+                    ? canQueueDraft
+                      ? false
+                      : stopUnreachable
                     : isRecording
-                      ? (e: MouseEvent<HTMLButtonElement>) => {
-                          e.preventDefault();
-                          voiceStop({ send: true });
-                        }
-                      : undefined
-              }
-              disabled={
-                isLoading
-                  ? canQueueDraft
-                    ? false
-                    : stopUnreachable
-                  : isRecording
-                    ? false
-                    : isTranscribing
-                      ? true
-                      : isOccupied || (!input.trim() && attachedFiles.length === 0)
-              }
-              aria-label={submitAriaLabel}
-              title={submitTitle}
-              className="h-10 w-10 sm:h-10 sm:w-10"
-            >
-              {isTranscribing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : canQueueDraft ? (
-                <ArrowUpIcon className="h-4 w-4" />
-              ) : undefined}
-            </PromptInputSubmit>
+                      ? false
+                      : isTranscribing
+                        ? true
+                        : submitIsVoice
+                          ? false
+                          : isOccupied || (!input.trim() && attachedFiles.length === 0)
+                }
+                aria-label={submitAriaLabel}
+                title={submitTitle}
+                aria-disabled={submitIsVoice && liveVoiceDisabled ? true : undefined}
+                data-testid={submitIsVoice ? 'live-voice-button' : undefined}
+                className={`h-10 w-10 sm:h-10 sm:w-10${submitIsVoice && liveVoiceDisabled ? ' opacity-50' : ''}`}
+              >
+                {isTranscribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : canQueueDraft ? (
+                  <ArrowUpIcon className="h-4 w-4" />
+                ) : submitIsVoice ? (
+                  <AudioLinesIcon className="h-4 w-4" />
+                ) : undefined}
+              </PromptInputSubmit>
+              {liveVoiceNotice && (
+                <span
+                  role="status"
+                  data-testid="live-voice-notice"
+                  className="absolute bottom-full right-0 z-50 mb-2 w-56 rounded-md border border-border bg-popover px-2 py-1.5 text-[11px] leading-snug text-popover-foreground shadow-md"
+                >
+                  {liveVoiceNotice}
+                </span>
+              )}
+            </span>
           </div>
 
           {/*
@@ -1112,10 +1133,14 @@ export default function ChatComposer({
             `hidden lg:block` alone would hand a ≥1024px tablet (landscape iPad, Surface) the
             keyboard wording, whose Shift a soft keyboard does not have. A keyboard device keeps the
             narrower behaviour it always had — hidden below lg, visible from lg up.
+
+            The voice tier fades it too: while the draft is empty the submit is the Live Voice entry
+            (`submitIsVoice`), and starting Live Voice has no keyboard key, so the key-naming line
+            would describe a key that does nothing — the same wrong-wording the touch rule removes.
           */}
           <div
             className={`order-last basis-full px-2 text-center text-xs leading-4 text-muted-foreground/50 transition-opacity duration-200 ${touchOnly ? 'hidden' : 'hidden lg:block'} ${
-              input.trim() && !canQueueDraft ? 'opacity-0' : 'opacity-100'
+              (input.trim() && !canQueueDraft) || submitIsVoice ? 'opacity-0' : 'opacity-100'
             }`}
           >
             {submitHint}

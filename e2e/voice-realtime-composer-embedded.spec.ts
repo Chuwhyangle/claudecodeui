@@ -12,9 +12,9 @@
  * the SERVER closed leaves the user a Retry that really reconnects. This file
  * reads each of them as a DOM or protocol fact:
  *
- *   · the default composer carries two independent voice entries inside
- *     `[data-slot="prompt-input"]` — the dictation mic, then Live Voice — at
- *     1280px and at 375px;
+ *   · the default composer carries the dictation mic and, right of it, the
+ *     submit button doubled as the Live Voice entry (empty draft) inside
+ *     `[data-slot="prompt-input"]` — at 1280px and at 375px;
  *   · the bar's height AND its top edge are the same (within 2px) while
  *     listening, while muted, and while a model call is executing;
  *   · a ≥400-character interim caption is truncated by its own cell
