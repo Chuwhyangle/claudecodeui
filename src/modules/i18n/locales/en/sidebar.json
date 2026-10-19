@@ -1,4 +1,5 @@
 {
+  "overview": "Overview",
   "sessionMenu": {
     "convertToResident": "Convert to resident",
     "convertToResidentHint": "Keep the session running between turns.",

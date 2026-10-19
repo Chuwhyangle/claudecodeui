@@ -45,6 +45,10 @@ goal_ac: AC-408
 - server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/index.ts
+- server/modules/voice-realtime/tests/voice-realtime-status-injection.test.ts (stale missing-key assertion left by develop 4e433b1c1)
+- server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts (the same stale missing-key assertion)
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts (the same stale missing-key assertion)
+- server/modules/voice/tests/voice-config.routes.test.ts (exhaustive settings literals gain liveVoiceDashscopeApiKey)
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/settings/tabs/VoiceSettingsTab.tsx
 - src/modules/i18n/locales/en/settings.json
@@ -52,3 +56,11 @@ goal_ac: AC-408
 - e2e/voice-output-e2e-harness.spec.ts
 - experiments/voice-e2e-harness/run.mjs
 - tasks/voice-output-tts-downlink-wiring.md
+
+## Blocker
+
+**2026-10-19T09:14:06.264Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice-realtime/tests/voice-realtime-status-injection.test.ts:   AssertionError [ERR_ASSERTION]: The input did not match the regular expression /DASHSCOPE_API_KEY is required/. Input: [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/voice-realtime/tests/voice-realtime-status-injection.test.ts,server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts,server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts]
+- run_id：wk-prod-anchor
+- session_id：1a14d971-731f-4e44-aa0b-5900d7046a85

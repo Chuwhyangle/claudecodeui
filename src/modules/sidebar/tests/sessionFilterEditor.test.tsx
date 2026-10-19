@@ -291,6 +291,7 @@ test('title-search results flagged filtered carry the 已过滤 mark', () => {
     isRefreshing: false,
     onCreateProject: noop,
     onCollapseSidebar: noop,
+    onGoHome: noop,
     updateAvailable: false,
     restartRequired: false,
     releaseInfo: null,

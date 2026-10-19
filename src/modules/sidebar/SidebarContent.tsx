@@ -129,6 +129,8 @@ type SidebarContentProps = {
   isRefreshing: boolean;
   onCreateProject: () => void;
   onCollapseSidebar: () => void;
+  /** Clears the selected project and session and returns to the landing overview. */
+  onGoHome: () => void;
   updateAvailable: boolean;
   restartRequired: boolean;
   releaseInfo: ReleaseInfo | null;
@@ -176,6 +178,7 @@ export default function SidebarContent({
   isRefreshing,
   onCreateProject,
   onCollapseSidebar,
+  onGoHome,
   updateAvailable,
   restartRequired,
   releaseInfo,
@@ -232,6 +235,7 @@ export default function SidebarContent({
         isRefreshing={isRefreshing}
         onCreateProject={onCreateProject}
         onCollapseSidebar={onCollapseSidebar}
+        onGoHome={onGoHome}
         t={t}
       />
 

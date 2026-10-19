@@ -1,7 +1,7 @@
 ---
 id: AC-408
 title: 端到端典型场景：announce/总结文本经 TTS 合成、浏览器播放、narrator_done 推进
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-047
 criterion: node experiments/voice-e2e-harness/run.mjs --sample 402fad85
@@ -13,4 +13,10 @@ expect: 退出码 0。scripted relay + scripted TTS stand-in 下跑一次完整 
 origin: 本会话 2026-10-19 讨论产出；北极星「跑通完整典型场景」的 suite 侧判据。当前 TTS
   leaf（voice-realtime-tts.ts）已完整但未接线，AC-405 的「浏览器下行帧到达」是假绿（帧推进注入数组，无浏览器）。
 activatedAt: 2026-10-19T08:54:35.363Z
+statusLog:
+  - at: 2026-10-19T09:10:09.813Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 ---
