@@ -44,3 +44,11 @@ extra:
 - server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-api-key-resolution.test.ts (new)
 - tasks/gap-voice-realtime-per-user-key.md (self)
+
+## Blocker
+
+**2026-10-19T06:48:18.051Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=76931 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792392160727
+- run_id：wk-prod-anchor
+- session_id：e179731c-cc3c-45b0-81fc-c02482f0c4f0
