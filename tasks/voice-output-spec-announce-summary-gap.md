@@ -31,8 +31,8 @@ announce 文本的接线已完成：`bridge.onFollowUpText` → ws-proxy announc
 
 ## AC
 
-- [ ] 转交后（announce 模式）`__voiceFrames` 收到 `narrator_speak`，text 是 ≤15 字的开始确认、非「OK」。
-- [ ] run 结束后 `__voiceFrames` 收到 `narrator_speak`，text 是 ≤40 字、无 Markdown 的总结。
+- [x] 转交后（announce 模式）`__voiceFrames` 收到 `narrator_speak`，text 是 ≤15 字的开始确认、非「OK」。
+- [x] run 结束后 `__voiceFrames` 收到 `narrator_speak`，text 是 ≤40 字、无 Markdown 的总结。
 
 ## DoD
 
@@ -44,4 +44,20 @@ announce 文本的接线已完成：`bridge.onFollowUpText` → ws-proxy announc
 - e2e/voiceRealtimeScriptedUpstream.ts
 - experiments/voice-e2e-harness/run.mjs
 - playwright.config.ts
+- server/index.ts
+- server/modules/voice-realtime/index.ts
+- server/modules/voice-realtime/voice-realtime-narrator.ts
+- src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - tasks/voice-output-spec-announce-summary-gap.md
+
+## Notes
+
+### 落地（2026-10-19，worker）
+
+两条 AC 由 E0 harness 的两条新断言机械验证：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 连续两次 `6 passed`（32.2 s / 32.3 s），narrator speaks 读数为 `["好的，我来查一下。","本轮任务已结束，全部检查通过。","好的，我来查一下。","好的，我来查一下。","好的，我来查一下。"]`。
+
+- **announce 腿**：scripted endpoint 对每次 `session_send` 的 resumed response 回 `response.created` + `response.text.done`（`armFollowUpText`）；服务器以 `VOICE_REALTIME_CLOSING_TURN=announce` 启动，proxy 的 announce 门把该文本入 narrator 队列 → 浏览器收到 `narrator_speak`（9 字，非「OK」，utteranceId `announce-N`）。
+- **run-end 腿**：armed scenario 的每一轮在 2 s 处 `turn-end`（每个被投递的消息都会重跑该 walk），proxy 的 host poll 观测到真实的 `running → idle`；400 ms settle 后 stand-in producer（`VOICE_REALTIME_SUMMARY_STANDIN`）注入 → 浏览器收到 `narrator_speak`（15 字、无 Markdown，utteranceId `run-end-summary-N`）。
+- **执行中发现并修复的缺口**：客户端帧处理器把「未识别的帧」落到协议错误分支并 `setPhase('failed')`；`narrator_speak`/`narrator_stop` 因此会让整个 voice session 变 failed（每次 narration 一出现就断）。客户端现显式声明并容忍这两类帧；真正播放仍属后续 TTS task。没有这一步，服务器一旦启用 announce/总结就会打断会话。
+- **生产接线**：`buildVoiceRealtimeNarratorWiring` 每连接注入 `narrator.attach`；只有部署命名 stand-in 时才安装 run-end producer。默认（silent、无 stand-in）返回 `null`，wire 与之前逐字节相同。
+- **边界**：summary producer 是 stand-in，不是 B-1 真模型（真模型需要凭据与外联，与本 e2e 的零外联断言冲突）；task B 部分的真实 cosyvoice TTS、backchannel 真链、其余 4 个样本均未做。
