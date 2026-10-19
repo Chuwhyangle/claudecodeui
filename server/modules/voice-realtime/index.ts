@@ -217,6 +217,16 @@ export {
   type VoiceRealtimeClosingTurnResolution,
   type VoiceRealtimeSlimSendToolResolution,
 } from './voice-realtime-closing-turn.js';
+// The narrator layer's assembly: the per-connection queue the announce closing turn and the run-end
+// summary speak through, plus the stand-in producer a criterion can name. `server/index.ts` builds one
+// wiring per connection at the assembly point; `null` keeps the pre-narrator wire byte-for-byte.
+export {
+  VOICE_REALTIME_SUMMARY_STANDIN_ENV,
+  buildVoiceRealtimeNarratorWiring,
+  describeVoiceRealtimeSummaryStandin,
+  resolveVoiceRealtimeSummaryStandin,
+  type VoiceRealtimeNarratorWiring,
+} from './voice-realtime-narrator.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
 // and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
 // and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's

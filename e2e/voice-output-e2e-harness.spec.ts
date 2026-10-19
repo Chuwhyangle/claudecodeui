@@ -21,6 +21,12 @@
  *       answered with a valid WAV, so the leg proves "text → HTTP → bytes → browser playback"
  *       end-to-end without a cloud bill. The sibling AC-405 task owns the real cosyvoice synth;
  *       when its downlink frame lands, this spec is where its audio assertion is added.
+ *     · the model's follow-up remark and the run-end summary are the harness's own sentences: the
+ *       scripted endpoint says the announce text after each delivered `session_send`, and the app
+ *       server runs with `VOICE_REALTIME_CLOSING_TURN=announce` plus a summary stand-in, so the
+ *       narrator's WHOLE production path (gate → queue → `narrator_speak`) is exercised without a
+ *       side text model. The run-end transition is real: the armed scenario ends each turn two
+ *       seconds after it opens, and the proxy's own host poll observes that end.
  *
  * WHY THIS FILE IS UNDER `e2e/`. `playwright.config.ts` has `testDir: './e2e'` and a closed list of
  * spec basenames that arm the scripted endpoint, the debug-agent fixture home and continuous mode.
@@ -79,6 +85,23 @@ if (PLAN.version !== 1 || PLAN.expectedTranscripts.length !== PLAN.vad.expectedU
   throw new Error(`the plan at ${PLAN_PATH} is not a version-1 plan with one transcript per utterance`);
 }
 
+/**
+ * The two sentences the narrator is expected to say, published by `run.mjs` beside the plan.
+ *
+ * They are read from the environment rather than restated here: the announce text is what the
+ * scripted endpoint puts on the wire, and the summary text is what the app server's stand-in
+ * producer returns. A literal on this side would be a second copy that could agree with itself
+ * while disagreeing with what the run actually said.
+ */
+const ANNOUNCE_TEXT = process.env.VOICE_E2E_ANNOUNCE_TEXT;
+const SUMMARY_TEXT = process.env.VOICE_E2E_SUMMARY_TEXT;
+if (!ANNOUNCE_TEXT || !SUMMARY_TEXT) {
+  throw new Error(
+    'VOICE_E2E_ANNOUNCE_TEXT / VOICE_E2E_SUMMARY_TEXT are not set — run this file through ' +
+      '`node experiments/voice-e2e-harness/run.mjs`, which publishes both beside the plan.',
+  );
+}
+
 /** Reads the window out of the sample's WAV as the PCM16 the fake microphone will replay. */
 function readWindowPcm(plan: Plan): { pcm16Base64: string; frames: number } {
   const buffer = readFileSync(plan.wavPath);
@@ -117,8 +140,21 @@ const SEED_USER_TEXT = 'seeded turn for the voice end-to-end harness';
 const OUTPUT_TEXT = '语音输出端到端基线：这段文字应当经 TTS 合成后到达浏览器。';
 /** How long the walk is parked past the test's lifetime; the scenario's own steps never reach it. */
 const WALK_PARKED_AT_MS = 120_000;
+/**
+ * When each armed walk's turn ends, in ms from that turn's own start.
+ *
+ * The narrator's run-end trigger is a `running → idle` transition observed by the proxy's host poll
+ * (every 250 ms). Every delivered message opens a walk of its own in this fixture, so a `turn-end`
+ * two seconds in is what makes each of those runs genuinely end while the connection is live — a
+ * parked turn would leave `busy: true` forever and the summary would never be asked for.
+ */
+const RUN_TURN_END_MS = 2_000;
 const DELIVERY_TIMEOUT_MS = 40_000;
 const TTS_OBSERVE_MS = 30_000;
+/** How long the run-end summary is waited for: a delivered turn ends 2 s in, then a 400 ms settle. */
+const SUMMARY_OBSERVE_MS = 45_000;
+/** How long the announce remark is waited for; it follows the first delivery by one round trip. */
+const ANNOUNCE_OBSERVE_MS = 20_000;
 
 /** A small, valid, decodable WAV the TTS route hands back — 2.5 s of a 440 Hz tone. */
 function standinTtsWav(): Buffer {
@@ -189,6 +225,30 @@ const relayedMessages = (entries: JournalEntry[]): Array<{ message: string; outc
 /** Compare on letters/digits only: whitespace and punctuation are not what "the right message" means. */
 const normalize = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
 
+/** One `narrator_speak` the page received, with the id the queue paces on. */
+type NarratorSpeak = { atMs: number; utteranceId: string; text: string };
+
+/**
+ * Every narrator narration the page received, in arrival order.
+ *
+ * Read from the same `__voiceFrames` tap the other legs use, so the assertion is about the frames
+ * that actually crossed the browser's own socket — not about a queue reading the server would have
+ * to be trusted for.
+ */
+const readNarratorSpeaks = (page: Page): Promise<NarratorSpeak[]> =>
+  page.evaluate(() => {
+    const frames =
+      (window as unknown as { __voiceFrames?: Array<{ atMs: number; frame: Record<string, unknown> }> })
+        .__voiceFrames ?? [];
+    return frames
+      .filter((entry) => entry.frame.type === 'narrator_speak' && typeof entry.frame.text === 'string')
+      .map((entry) => ({
+        atMs: entry.atMs,
+        utteranceId: typeof entry.frame.utteranceId === 'string' ? entry.frame.utteranceId : '',
+        text: String(entry.frame.text),
+      }));
+  });
+
 // ── fixture helpers (copied from the sibling specs: there is no shared module for these) ─────
 async function createAccount(api: APIRequestContext): Promise<string> {
   const register = await api.post('/api/auth/register', { data: { username: USERNAME, password: PASSWORD } });
@@ -238,6 +298,7 @@ type HarnessRun = {
     playback: PlaybackRecord[];
   };
   egress: { logExists: boolean; blocked: boolean; dials: number; authorizationSeen: boolean };
+  narrator: { speaks: NarratorSpeak[] };
   page: { phase: string; caption: string; status: string; pageErrors: string[]; consoleErrors: string[] };
 };
 
@@ -270,6 +331,12 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     const egressLog = path.join(dataDir, 'egress.jsonl');
 
     const upstream = await startScriptedUpstream(upstreamPort);
+    // The model's follow-up remark on a delivered `session_send`. Armed HERE, beside the detector,
+    // because the two are the two halves of the same reply: the detector closes the utterance and
+    // calls `session_send`, and the transport's synthesized resume opens the response this text
+    // answers. The app server runs with `VOICE_REALTIME_CLOSING_TURN=announce`, so the proxy's gate
+    // turns this sentence into a narration rather than swallowing it as display-only.
+    upstream.armFollowUpText(ANNOUNCE_TEXT);
     upstream.armVad({
       timeBase: PLAN.vad.timeBase,
       threshold: PLAN.vad.threshold,
@@ -302,6 +369,10 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           // and a held turn lease would push the relay's deliveries into the busy-input hold
           // instead of the session's queue, which is a different reading than the one here.
           { at: 0, op: 'row', role: 'assistant', text: OUTPUT_TEXT },
+          // The run END the narrator's summary waits for. Everything the session is given re-runs
+          // this walk, so each delivered message opens a turn and this step ends it two seconds
+          // later: the proxy's host poll reads `running → idle` and asks the summary producer once.
+          { at: RUN_TURN_END_MS, op: 'turn-end' },
           { at: WALK_PARKED_AT_MS, op: 'wait' },
         ],
         expect: { rows: { delta: 1 }, content: { mustContain: [SEED_USER_TEXT] } },
@@ -354,10 +425,23 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
             if (!url.includes('/voice-realtime')) return;
             this.addEventListener('message', (event: MessageEvent) => {
               if (typeof event.data !== 'string') return;
+              let frame: Record<string, unknown>;
               try {
-                frames.push({ atMs: Date.now(), frame: JSON.parse(event.data) as Record<string, unknown> });
+                frame = JSON.parse(event.data) as Record<string, unknown>;
               } catch {
-                /* not a JSON frame */
+                return; // not a JSON frame
+              }
+              frames.push({ atMs: Date.now(), frame });
+              // The narrator queue is PACED: it says one narration and waits for the page's
+              // `narrator_done` before the next. This tap stands in for the page's playback
+              // completion here — without the ack a run-end summary would sit behind the last
+              // announce remark forever and the frame the criterion reads would never be sent.
+              if (frame.type === 'narrator_speak' && typeof frame.utteranceId === 'string') {
+                try {
+                  this.send(JSON.stringify({ type: 'narrator_done', utteranceId: frame.utteranceId }));
+                } catch {
+                  /* the socket is going away; the frames already recorded are the reading */
+                }
               }
             });
           }
@@ -509,6 +593,25 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         await page.waitForTimeout(250);
       }
 
+      // ── the narrator's two automatic outputs ─────────────────────────────────────────────────
+      // 1. The announce remark follows a delivered message: the closing turn's follow-up text on
+      //    the resumed response, which the proxy's announce gate routes into the narrator queue.
+      //    Waited for as a FRAME, not for a clock — the queue paces on the page's ack above.
+      let narratorSpeaks = await readNarratorSpeaks(page);
+      const announceDeadline = Date.now() + ANNOUNCE_OBSERVE_MS;
+      while (Date.now() < announceDeadline && !narratorSpeaks.some((speak) => speak.text === ANNOUNCE_TEXT)) {
+        await page.waitForTimeout(250);
+        narratorSpeaks = await readNarratorSpeaks(page);
+      }
+      // 2. The run-end summary. Every delivered message opens a walk of its own and the armed deck
+      //    ends each turn two seconds in, so the transition is a real `running → idle` the proxy's
+      //    host poll observes; the 400 ms settle and the stand-in producer's answer follow it.
+      const summaryDeadline = Date.now() + SUMMARY_OBSERVE_MS;
+      while (Date.now() < summaryDeadline && !narratorSpeaks.some((speak) => speak.text === SUMMARY_TEXT)) {
+        await page.waitForTimeout(250);
+        narratorSpeaks = await readNarratorSpeaks(page);
+      }
+
       const vad = upstream.vad();
       const headers = upstream.upgradeHeaders();
       const egressText = existsSync(egressLog) ? readFileSync(egressLog, 'utf8') : '';
@@ -559,6 +662,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           dials: upstream.dialed(),
           authorizationSeen: headers.some((header) => header.authorization !== undefined),
         },
+        narrator: { speaks: narratorSpeaks },
         page: {
           phase: ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim(),
           caption: ((await page.locator(CAPTION).textContent().catch(() => '')) ?? '').trim(),
@@ -616,6 +720,36 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     expect(run.voiceOutput.audioBytes, 'the TTS response must carry audio bytes').toBeGreaterThan(0);
     expect(run.voiceOutput.played, `playback records were ${JSON.stringify(run.voiceOutput.playback)}`).toBe(true);
     expect(run.voiceOutput.durationSec, 'the browser must have decoded the delivered audio').toBeGreaterThan(0.5);
+  });
+
+  test('the announce closing turn reached the browser as narrator speech', () => {
+    const speaks = run.narrator.speaks;
+    const announce = speaks.find((speak) => speak.text === ANNOUNCE_TEXT);
+    expect(
+      announce,
+      `the narrator frames were ${JSON.stringify(speaks.map((speak) => speak.text))}`,
+    ).toBeDefined();
+    // The frame's own readings, not the constants': the AC is about what crossed the socket.
+    const text = announce!.text.trim();
+    expect([...text].length, `the announcement was ${JSON.stringify(text)}`).toBeLessThanOrEqual(15);
+    expect(normalize(text), 'the announcement must not be the old one-word "OK"').not.toBe('ok');
+    expect(text, 'the announcement must be the announce producer\'s, not a summary').not.toBe(SUMMARY_TEXT.trim());
+    expect(announce!.utteranceId).toMatch(/^announce-\d+$/);
+  });
+
+  test('the run-end summary reached the browser as narrator speech', () => {
+    const speaks = run.narrator.speaks;
+    const summary = speaks.find((speak) => speak.text === SUMMARY_TEXT);
+    expect(
+      summary,
+      `the narrator frames were ${JSON.stringify(speaks.map((speak) => speak.text))}`,
+    ).toBeDefined();
+    // The same three readings the proxy's own gate applies before it injects a summary.
+    const text = summary!.text.trim();
+    expect([...text].length, `the summary was ${JSON.stringify(text)}`).toBeLessThanOrEqual(40);
+    expect([...text].filter((character) => '#*`|-'.includes(character)), 'the summary must carry no Markdown').toEqual([]);
+    expect(text, 'the summary must be one line of speech').not.toContain('\n');
+    expect(summary!.utteranceId).toMatch(/^run-end-summary-\d+$/);
   });
 
   test('the run stayed on loopback and carried no cloud credential', () => {

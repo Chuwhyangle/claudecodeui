@@ -124,6 +124,18 @@ type ServerFrame =
    */
   | { type: 'stopped'; aborted: boolean; depth?: number }
   /**
+   * A narration the narrator layer wants spoken (GOAL-047), and the cut that ends the current one.
+   *
+   * TEXT-ONLY TODAY. The page has no playback wiring for these yet (the TTS downlink is its own
+   * task), but they are DECLARED and TOLERATED here rather than left to fall through: the frame
+   * handler's last branch treats any unrecognised frame as a protocol error, so a deployment that
+   * runs the `announce` closing turn or a run-end summary would fail the whole voice session the
+   * first time the narrator spoke. `utteranceId` is the id the queue paces on; `narrator_done` is
+   * the page→server ack and is not a frame this side receives.
+   */
+  | { type: 'narrator_speak'; utteranceId: string; text: string }
+  | { type: 'narrator_stop'; utteranceId: string; reason?: string }
+  /**
    * The host's own account of which of the person's delivered commands its queue STILL holds — the
    * reconcile set (see the proxy's `VoiceRealtimeOutboundFrame`). `queuedMessageUuids` names only
    * THIS person's own deliveries the host has not yet dequeued, so an EMPTY array is the real
@@ -1871,6 +1883,14 @@ export function useVoiceRealtimeSession({
           setStopped({ aborted: frame.aborted, depth });
           setQueuedDepth(depth);
           voiceLog(`stopped aborted=${frame.aborted} backlog=${depth}`);
+          return;
+        }
+        // The narrator's output is TOLERATED here, not spoken: the page has no TTS playback wiring
+        // yet (GOAL-047's next task). The branch must exist because the fall-through below treats
+        // any unrecognised frame as a protocol failure — without it, the first narration a
+        // deployment produced would fail the whole voice session. `narrator_stop` is the duplex
+        // rule cutting playback, never an error.
+        if (frame.type === 'narrator_speak' || frame.type === 'narrator_stop') {
           return;
         }
         // A recoverable error spoiled one model turn, not the connection: the session recovers on

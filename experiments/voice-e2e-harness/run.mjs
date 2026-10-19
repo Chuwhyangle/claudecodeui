@@ -58,6 +58,25 @@ const SPEC = 'e2e/voice-output-e2e-harness.spec.ts';
 /** The default sample: the shortest capture that still carries several real utterances. */
 const DEFAULT_SAMPLE = '402fad85';
 
+/**
+ * The announce closing turn's remark, as the scripted endpoint says it.
+ *
+ * The task's AC reads the frame the browser receives: ≤15 characters, not the old "OK". It rides a
+ * follow-up response after each delivered `session_send`, so the relay's own announce gate —
+ * `VOICE_REALTIME_CLOSING_TURN=announce` in the server's environment below — turns it into speech.
+ */
+const ANNOUNCE_TEXT = '好的，我来查一下。';
+
+/**
+ * The run-end summary the narrator says, as the stand-in producer.
+ *
+ * The real producer is a side text model; this run supplies the text through the deployment's own
+ * stand-in seam (`VOICE_REALTIME_SUMMARY_STANDIN`), so the whole replay stays on loopback. Chosen to
+ * satisfy the same gate a model's answer would face: ≤40 characters, no Markdown, and no tail shared
+ * with the context pack it summarizes.
+ */
+const SUMMARY_TEXT = '本轮任务已结束，全部检查通过。';
+
 /** Candidate detector parameters, swept by {@link calibrate}. */
 const THRESHOLD_CANDIDATES = [0.05, 0.08, 0.1, 0.12, 0.15, 0.2, 0.25, 0.3];
 const SILENCE_CANDIDATES = [300, 400, 500, 600, 700, 800, 1000, 1200];
@@ -361,7 +380,21 @@ if (doubleDash >= 0) passthrough.push(...process.argv.slice(doubleDash + 1));
 const result = spawnSync(playwright, ['test', SPEC, ...passthrough], {
   cwd: REPO_ROOT,
   stdio: 'inherit',
-  env: { ...process.env, VOICE_E2E_PLAN: planPath, VOICE_E2E_DUMP: dumpPath },
+  env: {
+    ...process.env,
+    VOICE_E2E_PLAN: planPath,
+    VOICE_E2E_DUMP: dumpPath,
+    // THE DEPLOYMENT SWITCHES. Playwright passes its own environment to every webServer it spawns,
+    // so setting them here is how they reach the app server: `announce` makes the closing turn speak
+    // the endpoint's follow-up remark, and the stand-in text is what the run-end narrator says. Both
+    // are read by `server/index.ts` when it assembles a connection's seams.
+    VOICE_REALTIME_CLOSING_TURN: 'announce',
+    VOICE_REALTIME_SUMMARY_STANDIN: SUMMARY_TEXT,
+    // The same two sentences to the spec, so what it asserts and what the endpoint says are one
+    // source rather than two literals that could quietly drift apart.
+    VOICE_E2E_ANNOUNCE_TEXT: ANNOUNCE_TEXT,
+    VOICE_E2E_SUMMARY_TEXT: SUMMARY_TEXT,
+  },
 });
 
 // ── the verdict, in one line, from the run's own artifact when it exists ─────────────────────
@@ -369,10 +402,12 @@ if (existsSync(dumpPath)) {
   try {
     const dump = JSON.parse(readFileSync(dumpPath, 'utf8'));
     const messages = Array.isArray(dump.relay?.messages) ? dump.relay.messages : [];
+    const narrator = Array.isArray(dump.narrator?.speaks) ? dump.narrator.speaks : [];
     process.stdout.write(
       `[voice-e2e] played frames=${dump.mic?.frames ?? 'n/a'} samples=${dump.mic?.samples ?? 'n/a'} ` +
         `utterances=${dump.detector?.speechStopped ?? 'n/a'}/${plan.vad.expectedUtterances}\n` +
         `[voice-e2e] relayed messages=${JSON.stringify(messages)}\n` +
+        `[voice-e2e] narrator speaks=${JSON.stringify(narrator.map((speak) => speak.text))}\n` +
         `[voice-e2e] voice-output tts-requests=${dump.voiceOutput?.requests ?? 'n/a'} ` +
         `audio-bytes=${dump.voiceOutput?.audioBytes ?? 'n/a'} played=${dump.voiceOutput?.played ?? 'n/a'} ` +
         `duration=${dump.voiceOutput?.durationSec ?? 'n/a'}s\n` +

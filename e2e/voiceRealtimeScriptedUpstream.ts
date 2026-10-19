@@ -173,6 +173,21 @@ export type ScriptedUpstreamServer = {
    */
   armVad(config: ScriptedVadOptions | null): void;
   /**
+   * Arms (or, with `null`, disarms) the model's FOLLOW-UP remark on a tool result.
+   *
+   * The relay's `session_send` is a tool call: the app returns its `function_call_output`, and the
+   * transport always resumes that turn with a synthesized `response.create`. This server's detector
+   * answers the tool result with `response.created` + `response.done`; with a text armed here it says
+   * `response.text.done` between them, carrying that text and the SAME `response.id`. The bridge reads
+   * a text on a follow-up response as the model's remark (`onFollowUpText`), which is what the
+   * `announce` closing turn turns into a narration. The proxy must be running with
+   * `VOICE_REALTIME_CLOSING_TURN=announce` for that gate to open — the wording is the endpoint's, the
+   * gate is the deployment's.
+   */
+  armFollowUpText(text: string | null): void;
+  /** The follow-up text armed for connections dialled from now on, or `null`. */
+  followUpText(): string | null;
+  /**
    * The detector of the most recently dialled connection, or `null` when none is armed.
    *
    * A scenario reads the X-1/X-2 tables off this — `records`, `forwarded`, `speechStopped` — rather
@@ -233,10 +248,21 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
   const toolOutputs: Array<Record<string, unknown>> = [];
   const listeners = new Set<(frame: Record<string, unknown>) => void>();
   let commits = 0;
+  /**
+   * A tool result whose resumed response has not been answered yet.
+   *
+   * The two machines differ in WHEN they answer it: the detector replies to the
+   * `conversation.item.create` itself, while the protocol machine waits for the synthesized
+   * `response.create` the transport sends next. This flag is what lets the follow-up text ride
+   * whichever response actually opens, exactly once.
+   */
+  let toolResultAwaitingResume = false;
   /** The protocol config connections dialled from now on are armed with; `null` = script-only. */
   let armed: ScriptedProtocolOptions | null = null;
   /** The acoustic detector config connections dialled from now on are armed with; `null` = no detector. */
   let armedVad: ScriptedVadOptions | null = null;
+  /** The model's follow-up remark a tool result is answered with; `null` = say nothing. */
+  let armedFollowUpText: string | null = null;
   /** The most recently dialled connection's detector — what a scenario reads its table off. */
   let latestVad: ScriptedVadDetector | null = null;
   /** One detector per live socket, so each connection hears independently and a dead one is dropped. */
@@ -318,18 +344,44 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
       }
       frames.push(frame);
       if (frame.type === 'input_audio_buffer.commit') commits += 1;
+      const item = frame.item as Record<string, unknown> | undefined;
+      const isToolResult = frame.type === 'conversation.item.create' && item?.type === 'function_call_output';
+      if (isToolResult) toolResultAwaitingResume = true;
+      /**
+       * Says one machine's answers, inserting the follow-up text between `response.created` and the
+       * frames that close it. The response id is taken from the created frame itself, because the
+       * bridge pairs `response.text.done` to it (`followUpResponseIds`) and a different id would be
+       * read as the model replying to the user instead of as the tool result's remark.
+       */
+      const sayAnswers = (answers: Array<Record<string, unknown>>): void => {
+        const followUpText = armedFollowUpText;
+        for (const answer of answers) {
+          socket.send(JSON.stringify(answer));
+          if (answer.type !== 'response.created') continue;
+          const isResumeCreate = frame.type === 'response.create' && toolResultAwaitingResume;
+          // ONE remark per tool result, even if both machines answer the same frame: the first
+          // created frame this result opened carries it, and the flag then says the resume is spent.
+          if (!isToolResult && !isResumeCreate) continue;
+          toolResultAwaitingResume = false;
+          if (followUpText === null) continue;
+          const response = answer.response as { id?: unknown } | undefined;
+          if (typeof response?.id === 'string') {
+            socket.send(JSON.stringify(modelTextReply(followUpText, response.id)));
+          }
+        }
+      };
       // The armed machine answers the frames a real endpoint reacts to (a commit, a
       // `response.create`, a cancel). Disarmed, this loop never runs and the wire below is exactly
       // what it was before the machine existed.
       if (protocol !== null) {
-        for (const answer of protocol.receive(frame)) socket.send(JSON.stringify(answer));
+        sayAnswers(protocol.receive(frame));
       }
       // The acoustic detector answers the frames only IT can answer — an append carrying sound, and
       // the frames a client sends only when the endpoint's detector is off. Its answers go out
       // BEFORE the `session.update` handshake below, so a detector that hears the app turn it off
       // has already stopped by the time the session is confirmed.
       if (detector !== null) {
-        for (const answer of detector.receive(frame)) socket.send(JSON.stringify(answer));
+        sayAnswers(detector.receive(frame));
       }
       // The endpoint answers the app's `session.update`. The bridge must TOLERATE this — it is the
       // endpoint answering us, not a failure, and a session that never reaches `open` is no session.
@@ -341,8 +393,7 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
       }
       // A tool result the app returned for a call the script made: acknowledge it, so the model is
       // never left waiting on a call it made (the same contract the in-process stand-in keeps).
-      const item = frame.item as Record<string, unknown> | undefined;
-      if (frame.type === 'conversation.item.create' && item?.type === 'function_call_output') {
+      if (isToolResult) {
         toolOutputs.push(frame);
         socket.send(JSON.stringify({ type: 'response.done', response: { id: 'resp_scripted', status: 'completed' } }));
       }
@@ -402,6 +453,10 @@ export function startScriptedUpstream(port: number): Promise<ScriptedUpstreamSer
         armVad: (config) => {
           armedVad = config;
         },
+        armFollowUpText: (text) => {
+          armedFollowUpText = text === null || text.trim() === '' ? null : text;
+        },
+        followUpText: () => armedFollowUpText,
         vad: () => latestVad,
         waitForUtterances: async (count, timeoutMs = 30_000) => {
           const deadline = Date.now() + timeoutMs;
