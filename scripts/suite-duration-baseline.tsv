@@ -148,6 +148,10 @@
 # REGENERATE (prints the data body on stdout; keep THIS header above it, then diff):
 #   node -e 'const fs=require("fs");const rows=fs.readFileSync(process.argv[1],"utf8").trim().split("\n").map(l=>{try{return JSON.parse(l)}catch{return null}}).filter(Boolean);const g=[...rows].reverse().find(r=>r.fail===0&&Array.isArray(r.perFile));const s=g.perFile.filter(p=>p.file.startsWith("server/")).sort((a,b)=>b.durationMs-a.durationMs||(a.file<b.file?-1:1));process.stdout.write(s.map(p=>p.durationMs+"\t"+p.file).join("\n")+"\n")' /data/home/yale/work/claudecodeui/.quay/verification-round.jsonl
 
+#   and the voice-realtime-model-reply-narrator / voice-realtime-tts-local rows by
+#   the MODEL_TEXT_REPLY narration and local-Kokoro-TTS tasks (2026-10-19).
+1614	server/modules/voice-realtime/tests/voice-realtime-model-reply-narrator.test.ts
+1361	server/modules/voice-realtime/tests/voice-realtime-tts-local.test.ts
 128905	server/modules/voice/tests/voice-error-classification.false-forms.test.ts
 52109	server/modules/voice/tests/voice-capture-secrets.false-forms.test.ts
 46082	server/modules/voice/tests/voice-capture-audio.false-forms.test.ts

@@ -340,6 +340,17 @@ export {
   type VoiceRealtimeTtsFrame,
   type VoiceRealtimeTtsOptions,
 } from './voice-realtime-tts.js';
+// The LOCAL CPU TTS leaf (2026-10-19): the same narrator text synthesized by a bundled Kokoro model
+// through sherpa-onnx-node instead of the DashScope cloud. `server/index.ts` switches to it when
+// `VOICE_REALTIME_TTS_LOCAL` is set; unset keeps the cloud leaf.
+export {
+  VOICE_REALTIME_TTS_LOCAL_ENV,
+  VOICE_REALTIME_TTS_LOCAL_DIR_ENV,
+  VOICE_REALTIME_TTS_LOCAL_SID_ENV,
+  VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID,
+  createLocalVoiceRealtimeTtsSeam,
+  type LocalVoiceRealtimeTtsOptions,
+} from './voice-realtime-tts-local.js';
 // The announce closing turn's FIXED sentence table and the per-connection cache that pre-synthesizes
 // it (2026-10-19 live capture: five 8–9-character remarks, each paying its own synthesis round trip).
 // `server/index.ts` hands the table to the cache at connection assembly and the proxy picks one

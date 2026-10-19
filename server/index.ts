@@ -131,7 +131,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, ANNOUNCE_PHRASES, createVoiceRealtimeTtsCache, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, ANNOUNCE_PHRASES, createVoiceRealtimeTtsCache, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -705,13 +705,26 @@ const buildVoiceRealtimeSeams = (input: {
         closingTurn: closingTurn.closingTurn,
         summaryStandin,
     });
+    // THE LOCAL TTS SWITCH (2026-10-19). When `VOICE_REALTIME_TTS_LOCAL` is set, the narrator
+    // synthesizes through the bundled Kokoro model (`sherpa-onnx-node`) instead of the DashScope
+    // cloud. A local sentence is ~0.1 s, so this path needs no pre-synthesis cache — the announce
+    // phrases and the model's own reply are spoken on the spot. Unset (the shipped state) keeps the
+    // cloud leaf and its cache.
+    const ttsLocalEnabled = (process.env[VOICE_REALTIME_TTS_LOCAL_ENV] ?? '').trim() !== '';
+    const ttsLocalDir =
+        (process.env[VOICE_REALTIME_TTS_LOCAL_DIR_ENV] ?? '').trim() ||
+        path.join(os.homedir(), '.cache', 'claudecodeui', 'tts', 'kokoro-multi-lang-v1_1');
+    const ttsLocalSid = parseLocalTtsSid(process.env[VOICE_REALTIME_TTS_LOCAL_SID_ENV]);
+    if (ttsLocalEnabled) {
+        input.log?.(`narrator TTS: local Kokoro (dir=${ttsLocalDir}, sid=${ttsLocalSid})`);
+    }
     // THE ANNOUNCE PHRASE CACHE (2026-10-19). The announce closing turn no longer speaks the model's
     // own wording; it speaks one of a fixed short table (see `voice-realtime-announce-phrases.ts`),
     // and this per-connection cache pre-synthesizes the whole table as soon as the credential is
     // known. A cached sentence then costs zero synthesis requests when it is announced. An unwarmed
     // or failed entry simply falls back to the on-the-spot path, so the cache adds no failure mode.
     const ttsCache =
-        narratorWiring === null
+        narratorWiring === null || ttsLocalEnabled
             ? null
             : createVoiceRealtimeTtsCache({
                   options: {
@@ -727,19 +740,24 @@ const buildVoiceRealtimeSeams = (input: {
         // re-synthesized on the spot when it is actually announced.
         void ttsCache.warm();
     }
+    const localTtsSeam =
+        narratorWiring === null || !ttsLocalEnabled
+            ? null
+            : createLocalVoiceRealtimeTtsSeam({ modelDir: ttsLocalDir, sid: ttsLocalSid });
     // The TTS seam rides the SAME narrator wiring object the proxy reads. A silent deployment
     // (`null` here) synthesizes nothing at all — the pre-narrator, pre-TTS wire is unchanged.
     const narratorWiringWithTts =
-        narratorWiring === null || ttsCache === null
+        narratorWiring === null || (ttsCache === null && localTtsSeam === null)
             ? null
             : {
                   ...narratorWiring,
                   narrator: {
                       ...narratorWiring.narrator,
-                      tts: {
-                          speak: (utterance: Parameters<VoiceRealtimeNarratorTtsSeam['speak']>[0], downlink: Parameters<VoiceRealtimeNarratorTtsSeam['speak']>[1]) =>
-                              ttsCache.speak(utterance, downlink),
-                      },
+                      tts:
+                          localTtsSeam ??
+                          ({
+                              speak: (utterance, downlink) => ttsCache!.speak(utterance, downlink),
+                          } satisfies VoiceRealtimeNarratorTtsSeam),
                   },
               };
     // THE OMISSION-FILL PRODUCER (GOAL-046). Delivery is no longer gated on the model choosing to
@@ -1022,6 +1040,20 @@ function resolveIdleRotateMs(): number | null {
         return null;
     }
     return Math.trunc(parsed);
+}
+
+/**
+ * The local Kokoro speaker id, parsed from the environment, or the first Chinese female voice.
+ *
+ * A non-blank, non-negative integer wins; anything else falls back to the default rather than
+ * passing a fractional or negative sid to the synthesizer, which would fail in a way the narrator
+ * cannot attribute. Consumed by the TTS assembly in `handleVoiceRealtimeConnection`.
+ */
+function parseLocalTtsSid(raw: string | undefined): number {
+    const trimmed = (raw ?? '').trim();
+    if (trimmed === '') return VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID;
+    const parsed = Number(trimmed);
+    return Number.isInteger(parsed) && parsed >= 0 ? parsed : VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID;
 }
 
 // The `/voice-realtime` handler (GOAL-031 / AC-312). The browser opens this path
