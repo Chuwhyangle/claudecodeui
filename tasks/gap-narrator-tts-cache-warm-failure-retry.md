@@ -1,7 +1,7 @@
 ---
 id: gap-narrator-tts-cache-warm-failure-retry
 title: Live Voice TTS 缓存预热失败不可观测且不重试：一条短语 warm 失败后首次播报仍走 803ms 现合成，日志只有 miss
-status: ready
+status: done
 labels:
   - gap
   - defect
