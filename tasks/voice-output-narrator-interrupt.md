@@ -1,7 +1,7 @@
 ---
 id: voice-output-narrator-interrupt
 title: 双工打断 + 可清空队列：播报中用户开口即停、排队即清，不当作异常
-status: todo
+status: ready
 labels:
   - feature
 parent: null
@@ -27,3 +27,4 @@ narrator 播报队列「可清空」：播报进行中注入用户语音（新 u
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-narrator-interrupt.test.ts
+- tasks/voice-output-narrator-interrupt.md

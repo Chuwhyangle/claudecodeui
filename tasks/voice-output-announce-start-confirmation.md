@@ -1,7 +1,7 @@
 ---
 id: voice-output-announce-start-confirmation
 title: 占位确认 announce 模式：实现已完成待落地（commit + merge + build）
-status: todo
+status: needs-human
 labels:
   - feature
 parent: null
@@ -36,3 +36,8 @@ announce 代码 commit 并 merge 到 develop；`npm run typecheck` 与 `npm run 
 - experiments/voice-realtime-closing-turn/run.mts
 - experiments/voice-realtime-announce-summary/summarize.mts
 - experiments/voice-realtime-announce-summary/fixtures/real-claude-output.json
+## Needs-Human
+
+**执行 2026-10-19T00:08:33.366Z — 连续修满重试上限仍不合格（标 needs-human）**
+
+- 阻碍原因：unsatisfiableUnannotatedAc=[AC-403 的 criterion 测试 `voice-realtime-closing-turn.test.ts` 退出 0（已 20/20 绿，落地后复跑确认）。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
