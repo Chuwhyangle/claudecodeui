@@ -1,7 +1,7 @@
 ---
 id: voice-output-run-end-summary
 title: 结束总结触发闭环：run 结束 → narrator 产出 ≤40 字小结（文本层）
-status: ready
+status: done
 labels:
   - feature
 parent: null

@@ -1610,6 +1610,104 @@ export type UplinkVadSeam = {
  */
 export const UPLINK_VAD_EXIT_WAIT_MS = 1_500;
 
+// ---- the narrator's run-end summary (TEXT layer only) -------------------------------------------
+//
+// WHAT THIS IS. When a run ends, the narrator — a SIDE text model, never the realtime relay — is
+// asked for one short spoken summary of the run's latest output. The relay stays the "pen": it
+// forwards words and reports what happened, and this file only decides WHEN to ask and carries the
+// answer to the narrator's own text queue. TTS is a later task; here the loop closes at text.
+//
+// WHY THE SETTLE WAIT IS LOAD-BEARING. The context pack the browser built may lag the run's last
+// output by the time the run ends. Asking the summarizer at the transition itself would summarize
+// the PREVIOUS state of the work — the exact timing failure this mechanism has to survive. So the
+// summarizer is asked `settleMs` after the transition and reads the context pack THAT MOMENT, not
+// the one the transition saw.
+//
+// WHY THE HOST IS POLLED. The relay is never told a run ended (see `busyPollMs`): the host's own
+// activity record is a PULL reading. The watcher below samples `hostRunActivity` while the status
+// says a run is live and treats only an explicit `busy: false` as the end — an unreadable host
+// (`null`) keeps waiting rather than inventing an end.
+
+/** How long after a run ends the summarizer is asked, so the last output has landed in the context pack. */
+export const DEFAULT_RUN_END_SUMMARY_SETTLE_MS = 400;
+
+/** How often the host's run-activity reading is sampled while a run is believed live. */
+export const DEFAULT_RUN_END_SUMMARY_POLL_MS = 250;
+
+/** The most characters a spoken summary may carry (the B-1 probe's own target). */
+export const RUN_END_SUMMARY_MAX_CHARS = 40;
+
+/**
+ * The most characters the summary's longest shared SUFFIX with the source may carry.
+ *
+ * The B-1 probe's `verbatimTail` reading: a summary whose tail is the output's own tail is reading
+ * the output back instead of summarizing it. A few characters of overlap (punctuation, a common
+ * ending) are not that, so the bound is small but not zero.
+ */
+export const RUN_END_SUMMARY_MAX_VERBATIM_TAIL = 6;
+
+/**
+ * The three mechanical quality readings `experiments/voice-realtime-announce-summary/summarize.mts`
+ * pinned, kept here so the gate and the experiment judge a summary the same way.
+ *
+ * `chars` is the summary's length, `markdown` the glyphs a voice cannot pronounce (`# * \` | -`,
+ * each recorded once), and `verbatimTail` the longest suffix the summary shares with the source.
+ *
+ * Consumers: the proxy's run-end gate (it refuses to inject a summary that breaks them) and
+ * `tests/voice-realtime-run-end-summary.test.ts` (it re-reads the injected text with the same
+ * function, so the criterion cannot pass on a different idea of "short" or "verbatim").
+ */
+export type VoiceRealtimeSummaryQuality = {
+  chars: number;
+  markdown: string[];
+  verbatimTail: number;
+};
+
+/**
+ * Reads one summary's mechanical quality against the source it summarizes.
+ *
+ * The readings are the experiment's, copied deliberately: `verbatimTail` walks the shared suffix
+ * outward until it stops matching, and `markdown` records each forbidden glyph once. Pure and
+ * total — an empty source answers `verbatimTail: 0`.
+ */
+export function readVoiceRealtimeSummaryQuality(
+  summary: string,
+  source: string,
+): VoiceRealtimeSummaryQuality {
+  const markdown: string[] = [];
+  for (const ch of summary) {
+    if ('#*`|'.includes(ch) || (ch === '-' && !markdown.includes('-'))) markdown.push(ch);
+  }
+  let verbatimTail = 0;
+  for (let n = 1; n <= Math.min(summary.length, source.length); n++) {
+    if (summary.slice(-n) === source.slice(-n)) verbatimTail = n;
+    else break;
+  }
+  return { chars: summary.length, markdown, verbatimTail };
+}
+
+/**
+ * The narrator's run-end summary, as the proxy sees it: a side text model, the queue its text is
+ * injected into, and the two timings a criterion shrinks.
+ *
+ * `summarize` is ASYNC and OUTSIDE this module on purpose — the relay must not become the
+ * summarizer (the B-1 decision). `inject` is the text-layer boundary: the narrator's own queue (and,
+ * in a later task, its TTS) consumes it. Called EXACTLY once per run end, and only for a summary that
+ * passes {@link readVoiceRealtimeSummaryQuality}.
+ */
+export type VoiceRealtimeRunEndSummarySeams = {
+  /** Ask the bypass text model for one spoken summary of `context` (the latest context pack). */
+  summarize(input: { context: string; runId: string | null }): Promise<string | null>;
+  /** Inject the accepted summary text into the narrator's queue. */
+  inject(text: string, meta: { runId: string | null }): void;
+  /** The settle wait; see {@link DEFAULT_RUN_END_SUMMARY_SETTLE_MS}. */
+  settleMs?: number;
+  /** The host poll cadence; see {@link DEFAULT_RUN_END_SUMMARY_POLL_MS}. */
+  pollMs?: number;
+  /** Overrides {@link RUN_END_SUMMARY_MAX_VERBATIM_TAIL} (a criterion may tighten it). */
+  verbatimTailMax?: number;
+};
+
 /**
  * What the handler needs from the composition root, all injected.
  *
@@ -1920,6 +2018,20 @@ export type VoiceRealtimeProxySeams = {
    * always passes it, resolved from the process-wide activity store's turn reading.
    */
   hostRunActivity?: (sessionId: string) => HostRunActivityReading | null;
+  /**
+   * The narrator's run-end summary (task `voice-output-run-end-summary`), or absent for "no
+   * narrator on this connection".
+   *
+   * LEFT UNSET BY EVERY CALLER WITH NO NARRATOR, and absence is byte-neutral: nothing below is
+   * armed, sampled or sent, so every criterion written before this seam existed keeps its exact
+   * behaviour. The composition root that owns the side text model passes it.
+   *
+   * WHEN IT FIRES. The status aggregator's `running → idle` transition — observed either from the
+   * host watcher below (`hostRunActivity` answering `busy: false`) or from a stop — schedules the
+   * summarizer once, `settleMs` later, with the context pack standing THEN. A new run beginning
+   * inside that window supersedes the pending summary instead of producing two.
+   */
+  runEndSummary?: VoiceRealtimeRunEndSummarySeams;
   /**
    * The narrator's playback queue and the duplex rule's switch, or absent for "no narrator".
    *
@@ -2399,6 +2511,9 @@ export function handleVoiceRealtimeConnection(
    * than of the connection.
    */
   const noteStatus = (patch: VoiceRealtimeExecStatusPatch): void => {
+    // The phase BEFORE this observation — the run-end transition below is a comparison of two
+    // readings, not a second interpretation of the patch.
+    const beforePhase = execStatus.reading().phase;
     // `queuedKnown` is always written from the current term, so a reading that fell out of a host
     // source says so. The host is sampled by the CALLER before it computes the depth this patch
     // carries (a delivery result, a stop), so the numbers and this flag describe one sample.
@@ -2412,11 +2527,26 @@ export function handleVoiceRealtimeConnection(
     // `hostQueueTurnBoundaryRefresh`). A patch that settles the run drops the poll instead.
     armDrainPoll();
     if (newRun) {
+      // A new run supersedes any summary still waiting out its settle window: the person has moved
+      // on, and that summary describes work the new run has already replaced. Bumping the generation
+      // also voids a summarizer call that is already in flight.
+      runEndGeneration += 1;
+      clearRunEndSettle();
       statusInjectionsThisRun = 0;
       statusChangesThisRun = 0;
       statusCapReached = false;
       statusMarker = null;
     }
+    // THE NARRATOR'S TRIGGER: exactly the transition the task names. Initial `idle` never matches,
+    // and a change that stays within a phase never matches — only `running → idle` does. The stop
+    // path and the host watcher both fold their end through this one comparison.
+    if (beforePhase === 'running' && execStatus.reading().phase === 'idle') {
+      scheduleRunEndSummary();
+    }
+    // The host watcher exists exactly while a run is believed live; `pollRunEnd` folds its end back
+    // through this same function, so arming it is part of every observation rather than a caller's
+    // duty.
+    armRunEndWatch();
     if (!changed) {
       return;
     }
@@ -3717,6 +3847,149 @@ export function handleVoiceRealtimeConnection(
       flushStatus();
     }
     armDrainPoll();
+  };
+
+  // ---- the narrator's run-end summary (TEXT layer) ---------------------------------------------
+  //
+  // Gated on the seam: no narrator means no timer, no host sample, no behaviour change. See
+  // `VoiceRealtimeProxySeams.runEndSummary` for the contract and the settle wait's purpose.
+  const runEndSummary = seams.runEndSummary;
+  const runEndSettleMs = runEndSummary?.settleMs ?? DEFAULT_RUN_END_SUMMARY_SETTLE_MS;
+  const runEndPollMs = runEndSummary?.pollMs ?? DEFAULT_RUN_END_SUMMARY_POLL_MS;
+  const runEndVerbatimTailMax = runEndSummary?.verbatimTailMax ?? RUN_END_SUMMARY_MAX_VERBATIM_TAIL;
+  /** The open run-end watcher, or `null`. Armed only while the status says a run is live. */
+  let runEndWatchTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The open settle wait between a transition and the summarizer call, or `null`. */
+  let runEndSettleTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Bumped by every transition and by teardown, so an ASYNC summarizer that resolves after a newer
+   * run ended (or after the connection died) cannot inject a stale summary. `null` of the two is
+   * "exactly once per transition" across the one await this machinery has.
+   */
+  let runEndGeneration = 0;
+
+  /** Drops the settle wait. Idempotent; the summarizer's own generation guard is the other half. */
+  const clearRunEndSettle = (): void => {
+    if (runEndSettleTimer !== null) {
+      clearTimeout(runEndSettleTimer);
+      runEndSettleTimer = null;
+    }
+  };
+
+  /**
+   * Asks the narrator, judges its answer, and injects it — the settle timer's body.
+   *
+   * The context pack is read HERE, not at the transition: that is the whole point of the settle
+   * wait (the browser's pack may already carry the run's last output by now). A summary that breaks
+   * the B-1 readings is NOT injected — the narrator's contract is short, plain, non-verbatim speech,
+   * and a violation is logged rather than voiced.
+   */
+  const summarizeRunEnd = async (generation: number, runId: string | null): Promise<void> => {
+    if (runEndSummary === undefined || closed) return;
+    const context = contextText.trim();
+    if (context === '') {
+      seams.log?.('run-end summary skipped: no context pack to summarize');
+      return;
+    }
+    let raw: string | null;
+    try {
+      raw = await runEndSummary.summarize({ context, runId });
+    } catch (error) {
+      seams.log?.(
+        `run-end summary failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
+    // A newer run ended (or the connection died) while the side model was thinking: this answer is
+    // about a run the person has already moved past. Dropped, not injected late.
+    if (generation !== runEndGeneration || closed) return;
+    // ONE line of speech: the model's newlines/indentation are not a spoken structure.
+    const text = (raw ?? '').trim().replace(/\s+/g, ' ');
+    if (text === '') {
+      seams.log?.('run-end summary skipped: the narrator returned nothing');
+      return;
+    }
+    const quality = readVoiceRealtimeSummaryQuality(text, context);
+    if (
+      quality.chars > RUN_END_SUMMARY_MAX_CHARS ||
+      quality.markdown.length > 0 ||
+      quality.verbatimTail > runEndVerbatimTailMax
+    ) {
+      seams.log?.(
+        `run-end summary refused: chars=${quality.chars}/${RUN_END_SUMMARY_MAX_CHARS} ` +
+          `markdown=[${quality.markdown.join('')}] verbatimTail=${quality.verbatimTail}/${runEndVerbatimTailMax}`,
+      );
+      return;
+    }
+    runEndSummary.inject(text, { runId });
+    seams.log?.(
+      `run-end summary injected chars=${quality.chars} verbatimTail=${quality.verbatimTail} run=${runId ?? '-'}`,
+    );
+  };
+
+  /**
+   * Arms the settle wait for one `running → idle` transition.
+   *
+   * A pending wait is DROPPED and its generation invalidated: two transitions inside one settle
+   * window describe two runs, and only the later one is still what the person is looking at.
+   */
+  const scheduleRunEndSummary = (): void => {
+    if (runEndSummary === undefined || closed) return;
+    const generation = (runEndGeneration += 1);
+    const runId = execStatus.reading().runId;
+    clearRunEndSettle();
+    runEndSettleTimer = setTimeout(() => {
+      runEndSettleTimer = null;
+      void summarizeRunEnd(generation, runId);
+    }, runEndSettleMs);
+    runEndSettleTimer.unref?.();
+  };
+
+  /**
+   * Samples the host's activity while a run is believed live; `busy: false` settles the status.
+   *
+   * The relay is never told a run ended, so this bounded poll is how `running → idle` is observed at
+   * all. Only an EXPLICIT `false` ends the run — an absent seam, a throw, a `null` reading or a
+   * reading without `busy` all mean "cannot say" and leave the watcher waiting (the same three-way
+   * reading the busy hold uses, see `readRunBusy`).
+   */
+  const pollRunEnd = (): void => {
+    runEndWatchTimer = null;
+    if (closed || bridge.state !== 'open') return;
+    const current = execStatus.reading();
+    if (current.phase === 'idle') return;
+    if (readRunBusy() !== false) {
+      armRunEndWatch();
+      return;
+    }
+    // The transition itself: `noteStatus` detects `running → idle` and arms the settle wait, so the
+    // stop path and this natural end share one trigger rather than two.
+    noteStatus({
+      phase: 'idle',
+      runId: current.runId,
+      queuedItems: queuedDepth(),
+      queuedBytes: queuedBytes(),
+    });
+  };
+
+  /**
+   * Arms — or drops — the run-end watcher from the status reading standing now.
+   *
+   * Idempotent, and called after every status observation so the timer exists exactly while a run is
+   * live. A transition to `idle` clears it; a connection torn down clears it (see `teardown`).
+   */
+  const armRunEndWatch = (): void => {
+    if (runEndSummary === undefined || seams.hostRunActivity === undefined) return;
+    if (closed || bridge.state !== 'open' || execStatus.reading().phase === 'idle') {
+      if (runEndWatchTimer !== null) {
+        clearTimeout(runEndWatchTimer);
+        runEndWatchTimer = null;
+      }
+      return;
+    }
+    if (runEndWatchTimer !== null) return;
+    runEndWatchTimer = setTimeout(pollRunEnd, runEndPollMs);
+    runEndWatchTimer.unref?.();
   };
 
   /**
@@ -5563,6 +5836,14 @@ export function handleVoiceRealtimeConnection(
       clearTimeout(drainPollTimer);
       drainPollTimer = null;
     }
+    // The narrator's two timers and any summarizer call in flight: a summary injected after the
+    // connection is gone has no queue to land in, and the generation guard drops a late resolve.
+    if (runEndWatchTimer !== null) {
+      clearTimeout(runEndWatchTimer);
+      runEndWatchTimer = null;
+    }
+    clearRunEndSettle();
+    runEndGeneration += 1;
     // A due omission fill has nowhere to go once the connection is gone: `evaluateOmissionFill`
     // guards on `closed` too, but dropping the timer is the cheaper half of the same rule.
     clearOmissionTimer();
