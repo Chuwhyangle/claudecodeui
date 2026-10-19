@@ -66,11 +66,3 @@ announce 文本的接线已完成：`bridge.onFollowUpText` → ws-proxy announc
 ### 第二轮（2026-10-19，续做 exited-not-landed）
 
 上一轮 suite 唯一的红是 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 收集计数 pin：`f18c966ee` 在 pin 于 08:57 重测为 371 之后新增了 `server/modules/voice-realtime/tests/voice-realtime-announce-narrator.test.ts`，树变成 372 个文件，而 pin 仍写 368/370。用 `git archive develop` 导出干净 develop 复现了同样两条红，确认是 develop 侧的过期 pin、不是本分支 delta；已重测为 `unknown=369/371` 并把该文件加入 Touches。本轮 harness 再跑一次 `6 passed`（31.9 s），narrator speaks 读数与上一轮一致；`npm run typecheck` 退出 0。
-
-## Blocker
-
-**2026-10-19T02:00:42.154Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=73821 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792374835419 [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/shared/tests/quay-test-script.test.ts]
-- run_id：wk-prod-anchor
-- session_id：9594c79b-7cf4-4059-8d5e-e5aeb63525b1
