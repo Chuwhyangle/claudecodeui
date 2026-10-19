@@ -1,7 +1,7 @@
 ---
 id: AC-407
 title: 停顿「不确定态」给一个「嗯」级回执，换更长 silence window、继续说比例上升
-status: draft
+status: active
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -13,4 +13,15 @@ expect: 退出码 0（⚠️ 当前必红：测试文件不存在，且依赖
   window；「继续说比例」上升。取假形态：把「不确定态」触发换成「每个停顿都回执」，必红（回执只在不确定态，不是每个 pause）。
 origin: 本会话 2026-10-19 讨论产出；短信号换等待（一个「嗯」换数秒 silence
   window，非等长填充），回执只在「不确定态」这个临界点、不是每个停顿。
+activatedAt: 2026-10-19T00:27:08.232Z
+statusLog:
+  - at: 2026-10-19T00:27:08.232Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-19T00:27:08.232Z
 ---
