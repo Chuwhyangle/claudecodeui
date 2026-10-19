@@ -990,21 +990,31 @@ export function useChatSessionState({
    * new row, an arriving row, an external refresh's tail — and fired a moment
    * later, by which time the pane may no longer belong to the follow.
    *
-   * Both guards are needed, and neither is a distance to the bottom. The state
-   * is what the app knows the intent to be; the offset is what the pane has done
-   * since the app last placed it, and that is the half which catches a gesture
-   * the app has *seen* but not yet been *told* about — a key moves the offset as
-   * its default action while the `scroll` it raises waits for the next frame, so
-   * at fire time the intent still reads "following" over a pane the user has
-   * already taken. Firing there is exactly the bug this refuses: the deferred
-   * write lands on top of a gesture the user just made, inside the window a
-   * small gesture is asserting itself in.
+   * The state is what the app knows the intent to be; the offset is what the
+   * pane has done since the app last placed it, and that is the half which
+   * catches a gesture the app has *seen* but not yet been *told* about — a key
+   * moves the offset as its default action while the `scroll` it raises waits
+   * for the next frame, so at fire time the intent still reads "following" over
+   * a pane the user has already taken. Firing there is exactly the bug this
+   * refuses: the deferred write lands on top of a gesture the user just made,
+   * inside the window a small gesture is asserting itself in.
+   *
+   * The offset guard is skipped when the pane is already at the bottom. A turn
+   * settling shrinks the content — or grows the pane — by a couple of pixels,
+   * and the browser clamps the offset down to that new bottom, a `scroll` nobody
+   * caused. `lastPlacedTopRef` does not follow the clamp, so the offset reads as
+   * "moved up" by exactly the few pixels the clamp took — the one case where
+   * "below where the app last placed it" is still the bottom. At the bottom is
+   * at the bottom, whichever of the two put it there.
    */
   const scrollToBottom = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     if (isUserScrolledUpRef.current) return;
-    if (container.scrollTop < lastPlacedTopRef.current - TRANSCRIPT_FOLLOW_TOLERANCE_PX) return;
+    const atBottom = Math.abs(
+      container.scrollHeight - container.scrollTop - container.clientHeight
+    ) <= TRANSCRIPT_FOLLOW_TOLERANCE_PX;
+    if (!atBottom && container.scrollTop < lastPlacedTopRef.current - TRANSCRIPT_FOLLOW_TOLERANCE_PX) return;
     placeTranscriptAtBottom();
   }, [placeTranscriptAtBottom]);
 
