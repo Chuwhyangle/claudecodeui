@@ -43,6 +43,7 @@ extra:
 - server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
 - server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-api-key-resolution.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts (re-measure the collected-server-file unknown-count pins after the new criterion file: 374→375)
 - tasks/gap-voice-realtime-per-user-key.md (self)
 
 ## Blocker
