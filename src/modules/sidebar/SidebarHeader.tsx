@@ -1,4 +1,4 @@
-import { Activity, Archive, Folder, FolderPlus, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
+import { Activity, Archive, Folder, FolderPlus, LayoutGrid, MessageSquare, Plus, RefreshCw, Search, X, PanelLeftClose } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button, Input, Tooltip } from '@/shared/ui';
@@ -27,6 +27,8 @@ type SidebarHeaderProps = {
   isRefreshing: boolean;
   onCreateProject: () => void;
   onCollapseSidebar: () => void;
+  /** Clears the selected project and session and returns to the landing overview. */
+  onGoHome: () => void;
   t: TFunction;
 };
 
@@ -67,6 +69,7 @@ export default function SidebarHeader({
   isRefreshing,
   onCreateProject,
   onCollapseSidebar,
+  onGoHome,
   t,
 }: SidebarHeaderProps) {
   const showSearchTools = (projectsCount > 0 || runningSessionsCount > 0 || archivedSessionsCount > 0 || isArchivedSessionsLoading) && !isLoading;
@@ -106,7 +109,18 @@ export default function SidebarHeader({
               <LogoBlock t={t} />
             </a>
           ) : (
-            <LogoBlock t={t} />
+            <a
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                onGoHome();
+              }}
+              className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80 active:opacity-70"
+              title={t('overview', 'Overview')}
+              data-sidebar-go-home="true"
+            >
+              <LogoBlock t={t} />
+            </a>
           )}
 
           <div className="flex flex-shrink-0 items-center gap-0.5">
@@ -273,7 +287,18 @@ export default function SidebarHeader({
               <LogoBlock t={t} />
             </a>
           ) : (
-            <LogoBlock t={t} />
+            <a
+              href="/"
+              onClick={(event) => {
+                event.preventDefault();
+                onGoHome();
+              }}
+              className="flex min-w-0 items-center gap-2.5 transition-opacity hover:opacity-80 active:opacity-70"
+              title={t('overview', 'Overview')}
+              data-sidebar-go-home="true"
+            >
+              <LogoBlock t={t} />
+            </a>
           )}
 
           <div className="flex flex-shrink-0 gap-1.5">
@@ -292,6 +317,19 @@ export default function SidebarHeader({
             </button>
           </div>
         </div>
+
+        {/* The mobile drawer's labelled way back to the landing overview; the
+            wordmark above is the same action, but a wordless icon is not a
+            discoverable destination on a narrow screen. */}
+        <button
+          type="button"
+          onClick={onGoHome}
+          className="mt-2 flex w-full items-center gap-2 rounded-lg border border-border/60 bg-card/40 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent/60 active:scale-[0.98]"
+          data-sidebar-overview-entry="true"
+        >
+          <LayoutGrid className="h-4 w-4 text-muted-foreground" />
+          {t('overview', 'Overview')}
+        </button>
 
         {/* Mobile search */}
         {showSearchTools && (

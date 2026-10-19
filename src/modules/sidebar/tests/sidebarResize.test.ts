@@ -152,6 +152,7 @@ const sidebarProps = (isMobile: boolean): React.ComponentProps<typeof SidebarCon
   isRefreshing: false,
   onCreateProject: noop,
   onCollapseSidebar: noop,
+  onGoHome: noop,
   updateAvailable: false,
   restartRequired: false,
   releaseInfo: null,

@@ -1176,6 +1176,16 @@ export function useProjectsState({
     [isMobile, navigate],
   );
 
+  // The landing overview is the "no project selected" state, reached by clearing
+  // both selections and going to the root route. The wordmark and the mobile
+  // drawer's overview entry both call this; the project list has no other way to
+  // un-select a project, so this is the only path back to the overview.
+  const handleGoHome = useCallback(() => {
+    setSelectedProject(null);
+    setSelectedSession(null);
+    navigate('/');
+  }, [navigate]);
+
   const handleSessionSelect = useCallback(
     (session: ProjectSession) => {
       clearSessionAttention(session.id);
@@ -1350,6 +1360,7 @@ export function useProjectsState({
       attentionSessionIds,
       onProjectSelect: handleProjectSelect,
       onSessionSelect: handleSessionSelect,
+      onGoHome: handleGoHome,
       onNewSession: handleNewSession,
       onSessionDelete: handleSessionDelete,
       onLoadMoreSessions: loadMoreProjectSessions,
@@ -1375,6 +1386,7 @@ export function useProjectsState({
       handleNewSession,
       handleProjectDelete,
       handleProjectSelect,
+      handleGoHome,
       handleSessionDelete,
       loadMoreProjectSessions,
       handleSessionSelect,

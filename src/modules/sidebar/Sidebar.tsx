@@ -20,6 +20,8 @@ type SidebarProps = {
   attentionSessionIds: ReadonlySet<string>;
   onProjectSelect: (project: Project) => void;
   onSessionSelect: (session: ProjectSession) => void;
+  /** Clears the selected project and session and returns to the landing overview. */
+  onGoHome: () => void;
   onNewSession: (project: Project) => void;
   onSessionDelete?: (sessionId: string) => void;
   onLoadMoreSessions?: (projectId: string) => Promise<void> | void;
@@ -60,6 +62,7 @@ function Sidebar({
   attentionSessionIds,
   onProjectSelect,
   onSessionSelect,
+  onGoHome,
   onNewSession,
   onSessionDelete,
   onLoadMoreSessions,
@@ -298,6 +301,7 @@ function Sidebar({
             isMobile={isMobile}
             isLoading={isLoading}
             projects={projects}
+            onGoHome={onGoHome}
             runningSessionsCount={runningSessionsCount}
             archivedProjects={archivedProjects}
             archivedSessions={archivedSessions}
