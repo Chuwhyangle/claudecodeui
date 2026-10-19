@@ -683,11 +683,10 @@ const buildVoiceRealtimeSeams = (input: {
         input.log?.(summaryStandinNote);
     }
     // THE TTS DOWNLINK (GOAL-047 / AC-408). The narrator's text is SPEECH, not just display: every
-    // sentence the queue starts is synthesized by the CosyVoice leaf and streamed to the page as
+    // sentence the queue starts is synthesized by the Qwen3-TTS leaf and streamed to the page as
     // `tts_audio`/`tts_done`/`tts_error` frames on the same socket. The credential is the user's own
-    // Live Voice DashScope key (one account key for both realtime and TTS), and the voice is the
-    // deployment's enrolled voice id: `cosyvoice-v3.5-flash` ships no system timbres, so there is no
-    // honest fallback and an unnamed voice resolves to the leaf's `TTS_NOT_CONFIGURED` refusal.
+    // Live Voice DashScope key (one account key for both realtime and TTS), and the voice resolves to
+    // the deployment's `VOICE_REALTIME_TTS_VOICE` or the leaf's `Cherry` system voice.
     //
     // A MASKED PLACEHOLDER IS NOT A CREDENTIAL. The settings page renders a saved key as `••••••••`;
     // if that round-tripped into storage, sending it would dial with the wrong bearer. It is blanked

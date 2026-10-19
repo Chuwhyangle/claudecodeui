@@ -80,8 +80,7 @@ const SUMMARY_TEXT = '本轮任务已结束，全部检查通过。';
 /**
  * The voice id this run names for the scripted TTS stand-in.
  *
- * `cosyvoice-v3.5-flash` has no system voices, so a real deployment must name a cloned/designed id;
- * a stand-in accepts any non-empty value. What matters here is that the leaf refuses an EMPTY voice
+ * A stand-in accepts any non-empty value. What matters here is that the leaf refuses an EMPTY voice
  * before dialling, so the criterion has to name one to exercise the downlink at all.
  */
 const TTS_VOICE = 'voice-e2e-standin';

@@ -1,12 +1,12 @@
 /**
- * AC-405: the Live Voice TTS leaf — text becomes CosyVoice audio, the audio reaches the browser as
+ * AC-405: the Live Voice TTS leaf — text becomes Qwen3-TTS audio, the audio reaches the browser as
  * ordered downlink frames, and every refusal is a named failure rather than silence.
  *
  * WHAT THIS FILE PINS, one reason per block:
  *
  *   · THE HAPPY PATH IS THE WHOLE CHAIN. One text goes through the shipped request builder to the
- *     documented CosyVoice HTTP endpoint, the stand-in answers with the SSE shape the real service
- *     documents (`output.audio.data` base64 chunks inside `sentence-synthesis` events), and the
+ *     documented multimodal-generation endpoint, the stand-in answers with the SSE shape the real
+ *     service documents (`output.audio.data` base64 chunks inside `result` events), and the
  *     criterion reads the frames the downlink sink received. The base64 pieces are reassembled and
  *     compared with the bytes the stand-in produced, so a module that forwards only the first
  *     chunk, reorders chunks, or drops one is red.
@@ -207,7 +207,7 @@ const EXPECTED_DURATION_MS = (SAMPLE_COUNT / SAMPLE_RATE) * 1000;
 function optionsWith(overrides: Partial<VoiceRealtimeTtsOptions> = {}): VoiceRealtimeTtsOptions {
   return {
     apiKey: 'test-dashscope-key',
-    voice: 'test-cloned-voice',
+    voice: 'test-voice',
     ...overrides,
   };
 }
@@ -248,9 +248,7 @@ test('AC-405 text is synthesized into non-empty audio whose frames arrive in ord
   const input = body.input as Record<string, unknown>;
   assert.deepEqual(input, {
     text: TEXT,
-    voice: 'test-cloned-voice',
-    format: 'wav',
-    sample_rate: SAMPLE_RATE,
+    voice: 'test-voice',
   });
 
   // Non-empty audio, and the frame contract around it.
@@ -323,7 +321,7 @@ test('AC-405 the synthesis function alone returns the bytes and reads the same d
 test('AC-405 a fake model name fails with the service code, and no audio frame is ever sent', async () => {
   const requests: CapturedRequest[] = [];
   const frames: VoiceRealtimeTtsFrame[] = [];
-  const fakeModel = 'cosyvoice-imaginary-flash';
+  const fakeModel = 'qwen3-tts-imaginary';
 
   const result = await speakVoiceRealtimeText(
     { utteranceId: 'utterance-bad-model', text: TEXT },

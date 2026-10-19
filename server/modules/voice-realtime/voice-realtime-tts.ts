@@ -5,22 +5,21 @@
  * WHY THIS LEAF EXISTS. Until now the Realtime session is text-only (`DEFAULT_SESSION_DEFAULTS`
  * declares `modalities: ['text']`) and therefore produces no sound at all: the relay's placeholder
  * acknowledgement and its run-end summary reached the page as words, never as voice. This module is
- * the other direction of the wire — text in, CosyVoice audio out — and it is deliberately a LEAF:
+ * the other direction of the wire — text in, Qwen3-TTS audio out — and it is deliberately a LEAF:
  * it opens no WebSocket, registers no route and reads no environment variable. The composition root
  * resolves the credential/voice and the `voice-realtime-ws-proxy.service.ts` downlink will call it;
  * a criterion drives it through an injected `fetch` and an injected downlink sink, so the whole
  * path (request shape, streamed bytes, frame order, error reporting) is provable offline.
  *
- * THE WIRE IS COSYVOICE'S OWN HTTP API, NOT THE OPENAI-COMPATIBLE ONE. `cosyvoice-v3.5-flash` is
- * served by `POST /api/v1/services/audio/tts/SpeechSynthesizer` with a `{model, input:{text, voice,
- * format, sample_rate}}` body. This task's proposal calls the API "HTTP 兼容模式"; the compatible
- * mode (`/compatible-mode/v1/...`) has no documented speech-synthesis route for CosyVoice, so a
- * client pointed there would 404 against the real service. The endpoint constant below is the
- * documented one, and the criterion pins it.
+ * THE WIRE IS DASHSCOPE'S MULTIMODAL-GENERATION API. `qwen3-tts-flash` is served by
+ * `POST /api/v1/services/aigc/multimodal-generation/generation` with a `{model, input:{text,
+ * voice}}` body. It is NOT the CosyVoice `SpeechSynthesizer` route (which `cosyvoice-v3.5-flash`
+ * used), and it is not the OpenAI-compatible `/audio/speech` route either. The endpoint constant
+ * below is the documented one, and the criterion pins it.
  *
- * WHY THE ANSWER IS READ AS SSE. With `X-DashScope-SSE: enable` the service streams
- * `sentence-synthesis` events whose `output.audio.data` is a base64 audio chunk; the non-streaming
- * answer carries only a 24-hour URL and requires a second, unauthenticated download. Streaming is
+ * WHY THE ANSWER IS READ AS SSE. With `X-DashScope-SSE: enable` the service streams `result`
+ * events whose `output.audio.data` is a base64 WAV chunk; the non-streaming answer carries a
+ * 24-hour URL in `output.audio.url` and requires a second, unauthenticated download. Streaming is
  * one request, gives the relay bytes it can forward while synthesis is still running, and lets the
  * criterion assert frame ORDER rather than a single blob.
  *
@@ -30,24 +29,26 @@
  */
 
 /**
- * The CosyVoice model this leaf ships for the placeholder-confirmation / run-end-summary text.
+ * The DashScope speech-synthesis model this leaf ships for the placeholder-confirmation /
+ * run-end-summary text.
  *
- * Exported so a later composition root and the AC-405 criterion read the same literal instead of
- * each spelling a model name that could drift from the other.
+ * Exported so the composition root and the AC-405 criterion read the same literal instead of each
+ * spelling a model name that could drift from the other. `qwen3-tts-flash` is chosen over the
+ * CosyVoice line because it ships SYSTEM voices: `cosyvoice-v3.5-flash` accepts only a
+ * cloned/designed per-account voice id, which no deployment default can name.
  */
-export const DEFAULT_VOICE_REALTIME_TTS_MODEL = 'cosyvoice-v3.5-flash';
+export const DEFAULT_VOICE_REALTIME_TTS_MODEL = 'qwen3-tts-flash';
 
 /** The DashScope host the documented HTTP TTS endpoint hangs off. Consumed by the composition root. */
 export const DEFAULT_VOICE_REALTIME_TTS_BASE_URL = 'https://dashscope.aliyuncs.com';
 
 /**
- * The environment variable a deployment names its CosyVoice voice id in.
+ * The environment variable a deployment names its Qwen3-TTS voice id in.
  *
- * Read by `server/index.ts` at its assembly point. There is no usable system-voice default for
- * `cosyvoice-v3.5-flash`: the v3.5 line ships NO system timbres and accepts only a cloned/designed
- * voice id from the account. A deployment therefore names the voice it enrolled; naming none means
- * the narrator cannot speak, which is reported as `TTS_NOT_CONFIGURED` rather than dialling with a
- * system voice the service would reject.
+ * Read by `server/index.ts` at its assembly point. The default is a system voice (`Cherry`, see
+ * {@link DEFAULT_VOICE_REALTIME_TTS_VOICE}); a deployment overrides it only to speak in a different
+ * system voice or a cloned one it enrolled. An explicitly empty voice is still refused as
+ * `TTS_NOT_CONFIGURED`, because speaking in an unnamed voice is indistinguishable from silence.
  */
 export const VOICE_REALTIME_TTS_VOICE_ENV = 'VOICE_REALTIME_TTS_VOICE';
 
@@ -64,25 +65,30 @@ export const VOICE_REALTIME_TTS_ENDPOINT_ENV = 'VOICE_REALTIME_TTS_ENDPOINT';
 /**
  * The voice id resolved when the deployment names none.
  *
- * EMPTY ON PURPOSE — see {@link VOICE_REALTIME_TTS_VOICE_ENV}. An empty voice is refused by
- * {@link synthesizeVoiceRealtimeSpeech} before any request is made, so the page receives a named
- * `tts_error` instead of silence that looks like a successful utterance.
+ * `Cherry` is a documented `qwen3-tts-flash` SYSTEM voice (see the Qwen-TTS voice list), so the
+ * narrator can speak with no per-account enrollment. {@link synthesizeVoiceRealtimeSpeech} still
+ * refuses an explicitly empty voice, so the page receives a named `tts_error` instead of silence
+ * that looks like a successful utterance.
  */
-export const DEFAULT_VOICE_REALTIME_TTS_VOICE = '';
+export const DEFAULT_VOICE_REALTIME_TTS_VOICE = 'Cherry';
 
 /**
  * The documented non-realtime speech-synthesis path.
  *
  * Consumed by this module's request builder and by the AC-405 criterion, which asserts the request
- * reaches exactly this path rather than a compatible-mode `/audio/speech` route CosyVoice does not
- * serve.
+ * reaches exactly this path rather than the CosyVoice `/audio/tts/SpeechSynthesizer` route or an
+ * OpenAI-compatible `/audio/speech` route this model does not serve.
  */
-export const VOICE_REALTIME_TTS_PATH = '/api/v1/services/audio/tts/SpeechSynthesizer';
+export const VOICE_REALTIME_TTS_PATH = '/api/v1/services/aigc/multimodal-generation/generation';
 
-/** The audio container requested by default. WAV keeps the duration readable from the bytes. */
+/**
+ * The audio container the service returns. `qwen3-tts-flash` streams a RIFF/WAVE payload, and WAV
+ * keeps the duration readable from the bytes; the container is no longer a request parameter, only
+ * the frame metadata the browser uses.
+ */
 export const DEFAULT_VOICE_REALTIME_TTS_FORMAT = 'wav';
 
-/** The sample rate requested by default (the CosyVoice HTTP API's own default). */
+/** The sample rate the service returns (`qwen3-tts-flash` streams 24 kHz WAV). */
 export const DEFAULT_VOICE_REALTIME_TTS_SAMPLE_RATE = 24_000;
 
 /** How long one synthesis request may run before it is aborted. */
@@ -97,7 +103,7 @@ export const DEFAULT_VOICE_REALTIME_TTS_TIMEOUT_MS = 30_000;
  */
 export const DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES = 16 * 1024;
 
-/** One audio container the CosyVoice HTTP API can return. */
+/** One audio container the speech-synthesis service can return. */
 export type VoiceRealtimeTtsFormat = 'wav' | 'pcm' | 'mp3' | 'opus';
 
 /**
@@ -131,10 +137,10 @@ export type VoiceRealtimeTtsFetch = (url: string, init: RequestInit) => Promise<
 /**
  * Everything one synthesis call needs.
  *
- * `voice` is REQUIRED and has no fallback. CosyVoice v3.5 voices are cloned/designed per account;
- * silently substituting a system voice would either fail upstream with a misleading error or speak
- * in a voice the deployment never chose, so an absent voice is refused here as
- * `TTS_NOT_CONFIGURED`.
+ * `voice` is REQUIRED, and the composition root always resolves one — the deployment's
+ * `VOICE_REALTIME_TTS_VOICE` or the {@link DEFAULT_VOICE_REALTIME_TTS_VOICE} system voice. An
+ * explicitly empty voice is refused here as `TTS_NOT_CONFIGURED` rather than dialling a request
+ * that would either fail upstream or speak in a voice the deployment never chose.
  */
 export type VoiceRealtimeTtsOptions = {
   /** Bearer credential. Never placed in a frame, a result or an error message. */
@@ -441,21 +447,16 @@ function parseEvent(data: string): Record<string, unknown> | null {
 }
 
 /**
- * The request body the documented CosyVoice HTTP API expects.
+ * The request body the documented multimodal-generation API expects for `qwen3-tts-flash`.
  *
- * `format` and `sample_rate` belong to `input` (not `parameters`) on this endpoint; the criterion
- * reads them out of the captured request so a client that put them anywhere else is red.
+ * `input` carries only `text` and `voice`; `format` and `sample_rate` are NOT parameters on this
+ * endpoint (the service returns a 24 kHz WAV). The criterion reads the captured body so a client
+ * that resurrected the old CosyVoice fields is red.
  */
-function requestBody(
-  text: string,
-  model: string,
-  voice: string,
-  format: VoiceRealtimeTtsFormat,
-  sampleRate: number,
-): string {
+function requestBody(text: string, model: string, voice: string): string {
   return JSON.stringify({
     model,
-    input: { text, voice, format, sample_rate: sampleRate },
+    input: { text, voice },
   });
 }
 
@@ -504,7 +505,7 @@ export async function synthesizeVoiceRealtimeSpeech(
         // Ask for the streamed answer: one request, audio chunks inside it.
         'X-DashScope-SSE': 'enable',
       },
-      body: requestBody(trimmed, model, options.voice, format, sampleRate),
+      body: requestBody(trimmed, model, options.voice),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
