@@ -1,7 +1,7 @@
 ---
 id: GOAL-047
 title: 语音输出作为信心层：eyes-off 用户耳闻「在听、听懂了、可继续说」的信心
-status: active
+status: achieved
 kind: goal
 origin: 本会话 2026-10-19 yale 与 Claude 讨论产出；退出条件标题改回逐字 `##
   退出条件`（gap-goal-047-exit-condition-heading-suffix-unreadable 选型 b），第 7 条分离为非 AC
@@ -13,6 +13,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-19T10:10:42.921Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
