@@ -1,7 +1,7 @@
 ---
 id: fleet-overview-p3-landing-overview-session-terminal
 title: Landing 总览三面板 + 会话终态派生（fleet-overview P3）
-status: ready
+status: done
 labels:
   - feature
 parent: null
