@@ -46,3 +46,11 @@ quay 项目行显示 task 计数徽标且与 `fleet-summary` 一致；TTL 内轮
 - src/shared/api.ts
 - src/shared/types.ts
 - tasks/fleet-overview-p2-project-task-counts-fleet-summary.md
+
+## Blocker
+
+**2026-10-19T03:50:01.412Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/chat/tests/voiceClipPlayback.test.tsx: AssertionError [ERR_ASSERTION]: the pair sits right of the microphone it was recorded from [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/quay-test-script.test.ts,server/shared/tests/quay-test-script.test.ts changed=src/modules/chat/tests/voiceClipPlayback.test.tsx,src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx]
+- run_id：wk-prod-anchor
+- session_id：66d47dfa-74b7-4025-b515-773e51298e2a
