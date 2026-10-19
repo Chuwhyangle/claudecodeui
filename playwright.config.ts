@@ -467,6 +467,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // settle window is 2.5 s of the timeline and the hold's quiet window is another 2 s, so the file does
   // not fit the default 55 s single-file ceiling; 240_000 is the sibling voice entries' value.
   'live-voice-stream-representation.spec.ts': 240_000,
+  // The E0 end-to-end replay harness (voice-output-e2e-harness): one frozen corpus window is played
+  // through the fake capture graph in REAL TIME (the default sample's window is ~19.5 s), then the
+  // relay round trip, the TTS request and the browser's own playback are waited on. The file is
+  // therefore floor-bound by the recording itself, not by a fixture of a few seconds; 240_000 is the
+  // sibling voice entries' value and clears the ~40 s the run was measured at.
+  'voice-output-e2e-harness.spec.ts': 240_000,
 };
 
 /**
@@ -2609,6 +2615,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // sidebar. The same fixture home and the same minimal armed scenario every voice entry above uses;
   // nothing is ever sent into the session, so the command queue plays no part in its readings.
   'voice-realtime-capture-ready-status.spec.ts',
+  // The E0 end-to-end replay harness (voice-output-e2e-harness): the relayed `session_send` calls have
+  // to reach a REAL resident session's control plane, exactly like the entries above, and the
+  // read-aloud leg needs an assistant row the fixture wrote. The same fixture home and the same
+  // resident scenario shape; the walk parks immediately so no held turn lease diverts deliveries.
+  'voice-output-e2e-harness.spec.ts',
 ];
 const debugAgentFixtureHome = selectedSpecFiles().some((file) => DEBUG_AGENT_SPEC_FILES.includes(file))
   ? path.join(dataDir, 'debug-agent-home')
@@ -2752,6 +2763,12 @@ const voiceRealtimeSelection =
   // captured frame, so the app must dial the spec's listener (which answers `session.update`) rather
   // than the network — and its microphone is the spec's own delayed `getUserMedia` stand-in.
   selectedSpecFiles().includes('voice-realtime-capture-ready-status.spec.ts') ||
+  // The E0 end-to-end replay harness binds the scripted upstream too — the replay's utterance
+  // boundaries are the endpoint's acoustic detector, and the transcript it completes for each
+  // utterance is the recording's own frozen recogniser output. Same `VOICE_REALTIME_ENDPOINT` +
+  // blanked-credential selection as the entries above; the blank is what makes its zero-egress
+  // reading meaningful.
+  selectedSpecFiles().includes('voice-output-e2e-harness.spec.ts') ||
   // The scenario-runner browser surface (`gap-scenario-runner-playwright-executor-same-timeline`)
   // does NOT drive the voice wire — but it is selected here for the OTHER half of what this flag
   // arms: the server-side EGRESS GUARD. Its zero-egress criterion is "the guard's own log exists
@@ -2800,7 +2817,11 @@ const voiceContinuousOnlySelection = (() => {
       // transcriptions, and the segmented relay has no such span (its deliveries are keyed by `seq`).
       // The criterion therefore has to run this deployment in continuous mode, and — like the two
       // entries above — only when it is the whole selection, for the same one-server reason.
-      selected[0] === 'live-voice-stream-representation.spec.ts')
+      selected[0] === 'live-voice-stream-representation.spec.ts' ||
+      // The E0 replay harness is a continuous-wire criterion: its scripted endpoint decides the
+      // utterance boundaries acoustically (`armVad`, `server_vad`), which is the continuous path's
+      // contract. It is measured as the run's only spec, the same strict single-file shape.
+      selected[0] === 'voice-output-e2e-harness.spec.ts')
   );
 })();
 if (voiceContinuousOnlySelection) {
