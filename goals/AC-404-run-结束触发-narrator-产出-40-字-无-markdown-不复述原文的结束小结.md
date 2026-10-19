@@ -1,7 +1,7 @@
 ---
 id: AC-404
 title: run 结束触发 narrator 产出 ≤40 字、无 Markdown、不复述原文的结束小结
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -22,6 +22,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-19T09:09:04.530Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
