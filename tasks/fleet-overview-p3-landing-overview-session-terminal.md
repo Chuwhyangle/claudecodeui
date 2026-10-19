@@ -48,6 +48,7 @@ extra:
 - server/modules/resident-ledger/terminal-state.ts
 - server/modules/resident-ledger/index.ts
 - server/modules/resident-ledger/tests/terminal-state.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - e2e/landing-overview.spec.ts
 - tasks/fleet-overview-p3-landing-overview-session-terminal.md
 
