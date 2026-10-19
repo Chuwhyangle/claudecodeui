@@ -100,7 +100,7 @@ GOAL-047 的退出条件节标题逐字为：
 - [x] **AC1 退出条件标题已改为逐字 `## 退出条件`、且节体非空**：修订后 `goals/GOAL-047-*.md` 满足 `f=$(ls goals/GOAL-047-*.md); test "$(grep -c '^## 退出条件$' "$f")" = 1` 且该节节体含非空白文本（`sed -n '/^## 退出条件$/,/^## /p' "$f" | sed '1d;$d' | grep -q '[^[:space:]]'`），退出码 0。取假形态：标题改回 `## 退出条件（…）` 时 `grep -c '^## 退出条件$'` = 0，必红。该行只能由被授权的 goal 写入路径落地（待外部）
 - [x] **AC2 编号退出条件恰 6 条、逐条点名在域 AC-403…408，且节内不再出现「非 AC」；第 7 条人工门文本逐字保留**：修订后 `f=$(ls goals/GOAL-047-*.md); sec=$(sed -n '/^## 退出条件$/,/^## /p' "$f"); test "$(printf '%s\n' "$sec" | grep -cE '^[0-9]+\. ')" = 6`、`test "$(printf '%s\n' "$sec" | grep -c '非 AC')" = 0`、且 `for n in 403 404 405 406 407 408; do printf '%s\n' "$sec" | grep -q "AC-$n" || exit 1; done`、且 `grep -c 'MCP 浏览器真实连 DashScope，跑一次完整交互，耳闻 announce + 总结出声' "$f"` = 1，总退出码 0。取假形态：第 7 条仍留在编号列表里（节内出现「非 AC」）时必红；删除人工门文本时最后一条必红。该行只能由被授权的 goal 写入路径落地（待外部）
 - [x] **AC3 人（yale）已裁定并被记录**：本任务 `## Resolution` 小节写明 (i) 是否采纳本修订（采纳 / 改措辞 / 不采纳），(ii) 第 7 条的定位是否为「非 AC 人工验收门 H1」（不得改立为 AC，或给出另立的任务 id）——该行只能由人 yale 写入（待外部）
-- [ ] **AC4 修订后语义判官确已运行、输入已换掉**：修订合入并跑过一轮 goal-driver 后，`.quay/goal-sufficiency-followup.json` 中 GOAL-047 的 `key` **不再是** `689c510678c2cdc7fc7cac96668856d549e4f4a4e0c63e60465a12b710ea2529`，且 `.quay/goal-sufficiency-cache.json` 中存在该新 key 的裁决条目（正面控制：该文件只有语义判官会写；其存在证明机械短路已被绕开），或 `.quay/goal-round.jsonl` 最新一轮 GOAL-047 的 `goal-sufficiency` verdict 不再是机械短路态——该行须在修订合入并跑过一轮 driver 之后才读得到（待外部）
+- [x] **AC4 修订后语义判官确已运行、输入已换掉**：修订合入并跑过一轮 goal-driver 后，`.quay/goal-sufficiency-followup.json` 中 GOAL-047 的 `key` **不再是** `689c510678c2cdc7fc7cac96668856d549e4f4a4e0c63e60465a12b710ea2529`，且 `.quay/goal-sufficiency-cache.json` 中存在该新 key 的裁决条目（正面控制：该文件只有语义判官会写；其存在证明机械短路已被绕开），或 `.quay/goal-round.jsonl` 最新一轮 GOAL-047 的 `goal-sufficiency` verdict 不再是机械短路态——该行须在修订合入并跑过一轮 driver 之后才读得到（待外部）
 
 ## Resolution
 
@@ -109,6 +109,8 @@ GOAL-047 的退出条件节标题逐字为：
 1. **采纳选型 (b)**：GOAL-047 的 `## 退出条件` 标题改回逐字 `## 退出条件`（无后缀），原括号短语作为节体首行保留；第 7 条从编号列表移出，单列为「人工验收门」小节。落地时措辞微调一处：`## 人工验收门` 标题去掉「（非 AC）」——因为本任务 AC2 的 grep 契约把节区间隔的下一个 `## ` 标题也计入 `sec`，标题里若留「非 AC」会让 `grep -c '非 AC'` 落 1 而非 0；「非 AC」标记保留在 H1 行内（`- H1 人工确认（非 AC）：…`），语义零丢失。
 
 2. 第 7 条定位为**「非 AC 人工验收门 H1」**：不立 AC、不改为可运行判据；其文本与义务逐字保留（`MCP 浏览器真实连 DashScope，跑一次完整交互，耳闻 announce + 总结出声`）。该门由 H1 在后续真实浏览器验收时兑现，不计入充分性判定。
+
+证据（round log）：`.quay/goal-round.jsonl` round 787（2026-10-19T09:49:20.935Z）GOAL-047 `goal-sufficiency` verdict=`not-evaluated`（cause=`samples-disagree`）——机械层已不再短路（语义判官两次采样才产生该裁决），且 `.quay/goal-sufficiency-followup.json` 中 GOAL-047 的旧 key 已清除。
 
 ## DoD
 
