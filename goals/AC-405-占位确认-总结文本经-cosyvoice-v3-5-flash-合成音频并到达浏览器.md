@@ -1,7 +1,7 @@
 ---
 id: AC-405
 title: 占位确认/总结文本经 cosyvoice-v3.5-flash 合成音频并到达浏览器
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -19,6 +19,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-19T09:09:25.662Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
