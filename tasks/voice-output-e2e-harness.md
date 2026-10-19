@@ -77,3 +77,13 @@ node experiments/voice-e2e-harness/run.mjs --sample 402fad85
 - **TTS 服务是本地 stand-in**：spec 用 `page.route('**/api/voice/tts')` 返回一段可解码 WAV，验证的是「浏览器侧下行与播放」这一半真链（UI 触发 → 请求携带正确文本 → 字节 → 浏览器解码播放）。真实 cosyvoice 合成属于 `voice-output-tts-cosyvoice`（AC-405）自己的单测；当 AC-405 的浏览器下行音频帧落地后，在本 spec 的第 3 条腿上加音频帧断言即可，无需另起底座。
 - **endpoint 是 scripted 上游**：它按收到的真实音频做声学切句，但每个 utterance 的 transcript 取自该录音的冻结识别结果（不是实时 ASR）。因此本 harness 证明的是「采集 → 编码 → 服务器 → relay → 会话」的真链，以及浏览器 TTS 下行/播放；不证明实时识别质量。
 - 浏览器对非 loopback 请求的 route 拒绝会产生若干 `Failed to load resource` 控制台行（版本检查等），属既有 noise；断言只看 `pageerror` 为空。
+
+## Blocker
+
+**2026-10-19T00:30:35.126Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/voice-output-e2e-harness.md）⇒ 判惰性，⛔ 未调分类器
+fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
+fan-in-ff-merge: measure ff_only_locked=false
+- run_id：wk-prod-anchor
+- session_id：314f2717-aec0-4dd7-be36-962e6f7cf1fb
