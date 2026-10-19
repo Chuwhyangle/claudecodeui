@@ -26,10 +26,10 @@ extra:
 
 ## AC
 
-- [ ] `grep -n "dashscopeApiKey" server/index.ts` 命中，且 `grep -nE "apiKey: process\.env\.DASHSCOPE_API_KEY" server/index.ts | wc -l` 为 0（组装点改为经 per-user 设置解析，不再只读 env）。
-- [ ] 新增服务端单测钉住 `resolveRealtimeApiKey` 优先级：`('u','e')→'u'`、`('','e')→'e'`、`('  ','e')→'e'`、`('','')→''`；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-api-key-resolution.test.ts` exit 0。
-- [ ] 既有 `voice-realtime-dashscope-transport` 的 `MISSING_API_KEY` 与「拨号 URL/日志不含凭据」判据仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts` exit 0。
-- [ ] `npx tsc --noEmit -p server/tsconfig.json` 与 `npx oxlint server/` 对改动文件 exit 0。
+- [x] `grep -n "dashscopeApiKey" server/index.ts` 命中，且 `grep -nE "apiKey: process\.env\.DASHSCOPE_API_KEY" server/index.ts | wc -l` 为 0（组装点改为经 per-user 设置解析，不再只读 env）。
+- [x] 新增服务端单测钉住 `resolveRealtimeApiKey` 优先级：`('u','e')→'u'`、`('','e')→'e'`、`('  ','e')→'e'`、`('','')→''`；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-api-key-resolution.test.ts` exit 0。
+- [x] 既有 `voice-realtime-dashscope-transport` 的 `MISSING_API_KEY` 与「拨号 URL/日志不含凭据」判据仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-dashscope-transport.test.ts` exit 0。
+- [x] `npx tsc --noEmit -p server/tsconfig.json` 与 `npx oxlint server/` 对改动文件 exit 0。
 
 ## DoD
 
