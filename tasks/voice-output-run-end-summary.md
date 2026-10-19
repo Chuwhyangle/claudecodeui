@@ -33,8 +33,8 @@ goal_ac: AC-404
 
 ## Blocker
 
-**2026-10-19T00:13:33.370Z — worker 未落地（exited-not-landed）**
+**2026-10-19T00:26:32.798Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 0/1，剩余未勾 1）——续做只需验证并勾选 AC
+- 未落地原因：step=suite: __PERFILE__ duration_ms=75774 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792369258305
 - run_id：wk-prod-anchor
-- session_id：19e690ba-7c2e-4a8c-acfe-2c8fea3a3bd5
+- session_id：236fc4b2-26c1-4332-9a8b-0da4e8fe68ef
