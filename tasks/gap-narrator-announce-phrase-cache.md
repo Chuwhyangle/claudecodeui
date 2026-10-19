@@ -1,7 +1,7 @@
 ---
 id: gap-narrator-announce-phrase-cache
 title: Live Voice 高频固定播报句预合成：announce 仍由模型自由造句、每句付一次 TTS 往返；改为固定短语表并在连接建立时预热缓存
-status: todo
+status: ready
 labels:
   - gap
 parent: null
