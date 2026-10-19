@@ -194,8 +194,10 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (367 + 1 = 368) and
     // voice-output-backchannel added its AC-407 criterion
     // server/modules/voice-realtime/tests/voice-realtime-backchannel.test.ts (368 + 1 = 369).
-    // This fixture names 3 known files, so 369 - 3 = 366.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=366$/);
+    // Then voice-output-narrator-interrupt added its AC-406 criterion
+    // server/modules/voice-realtime/tests/voice-realtime-narrator-interrupt.test.ts (369 + 1 = 370).
+    // This fixture names 3 known files, so 370 - 3 = 367.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=367$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -244,9 +246,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 369 files on this tree — but this fixture names ONE known file,
-    // so 369 - 1 = 368 (AC2 reads 366 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=368$/);
+    // same collection as AC2 — 370 files on this tree — but this fixture names ONE known file,
+    // so 370 - 1 = 369 (AC2 reads 367 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=369$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

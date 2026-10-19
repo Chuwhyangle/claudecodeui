@@ -982,6 +982,14 @@ export type VoiceRealtimeInboundFrame =
    * trusted, because the cap is what bounds what reaches the upstream.
    */
   | { type: 'context'; text: string; chars: number; rows: number }
+  /**
+   * The browser finished playing one narration. THE NARRATOR QUEUE'S PACING SIGNAL: the queue sends
+   * one `narrator_speak` at a time and waits for this ack before sending the next, so what is still
+   * waiting is held on the SERVER — where a new user utterance can actually drop it. A late ack for
+   * an utterance the person already interrupted is ignored (the id is the correlation, and only the
+   * utterance standing now can end normally). See {@link VoiceRealtimeNarratorQueue}.
+   */
+  | { type: 'narrator_done'; utteranceId: string }
   | { type: 'close' };
 
 /** One outbound server frame. */
@@ -1197,7 +1205,26 @@ export type VoiceRealtimeOutboundFrame =
    * command still reads as waiting), which KEEPS rows rather than dropping them — the safe
    * direction, because only the host's own word may clear a row.
    */
-  | { type: 'queue_reconcile'; queuedMessageUuids: string[] };
+  | { type: 'queue_reconcile'; queuedMessageUuids: string[] }
+  /**
+   * The narrator should start speaking this utterance — the browser's queue takes it now, and
+   * answers with `narrator_done` when playback ends. TEXT layer: the page owns synthesis/playback
+   * (the server's TTS leaf is wired separately), so this frame carries words, not audio.
+   *
+   * The narrator's output is DROPPABLE by design (see {@link VoiceRealtimeNarratorQueue}): the next
+   * user utterance stops it, and a `narrator_stop` for this `utteranceId` is the only thing the page
+   * needs to hear to cut playback. A `narrator_speak` for an id that already has a `narrator_stop`
+   * never follows it — the queue drops what the person has moved past.
+   */
+  | { type: 'narrator_speak'; utteranceId: string; text: string }
+  /**
+   * Stop playing this utterance: the person spoke, and a narration is not worth talking over them.
+   *
+   * NOT an `error` and not a failure of the utterance — it is the duplex rule working. Nothing more
+   * will arrive for this id (the queue cleared it and everything behind it), so the page can drop
+   * it without waiting for a closing frame.
+   */
+  | { type: 'narrator_stop'; utteranceId: string; reason: VoiceRealtimeNarratorInterruptReason };
 
 /**
  * How much of the person's text the bound session's OWN queue is still holding.
@@ -1398,6 +1425,148 @@ export function buildInterruptAftermathNote(inFlightTool: string | null): string
     'conflicting thing said earlier.]'
   );
 }
+
+// ---- the narrator's playback queue: the droppable layer ------------------------------------------
+//
+// WHAT THIS IS. Voice output on a Live Voice connection belongs to the NARRATOR — a bypass producer
+// (run-end summary now, TTS next) that says short sentences so an eyes-off person keeps the
+// confidence that the system heard them. It is NOT the relay model's reply and NOT the person's
+// conversation: nothing it says is information they must be able to recall, so every narration is
+// DROPPABLE.
+//
+// WHY THE PERSON SPEAKING CLEARS IT. Duplex conversation advances when they talk. A narration that
+// keeps playing after their first word competes with them; one replayed after they have moved on is
+// a stale summary of work they already left. So the rule is one line — a new user utterance stops
+// the current narration and clears everything queued behind it. Not paused-and-resumed: dropped.
+// Interrupting is conversation, not an error, and nothing here reports one.
+//
+// WHY THE QUEUE IS PACED. One narration is sent at a time and the next waits for the browser's
+// `narrator_done`. If every item went out immediately, "clearing the queue" could not stop a
+// narration the page already held — which is exactly the behaviour this layer exists to prevent.
+//
+// PRESENCE IS THE SWITCH, like every other narrator seam here: a connection wired without
+// {@link VoiceRealtimeProxySeams.narrator} creates no queue and takes no hook, so every criterion
+// written before this feature keeps its exact wire.
+
+/** Why a narration was stopped. One value today, named rather than implied so the wire can grow. */
+export type VoiceRealtimeNarratorInterruptReason = 'user-spoke';
+
+/** One narration the narrator wants this connection to speak, with the id the page correlates on. */
+export type VoiceRealtimeNarration = { utteranceId: string; text: string };
+
+/** What the narrator queue holds right now. Read by the journal and by the AC-406 criterion. */
+export type VoiceRealtimeNarratorReading = {
+  /** The id of the utterance being played, or `null` when nothing is playing. */
+  current: string | null;
+  /** How many narrations are waiting behind it. */
+  queued: number;
+  /** How many narrations this connection has dropped because the person spoke (monotonic). */
+  dropped: number;
+};
+
+/** One connection's narrator queue. See the block comment above for the contract. */
+export type VoiceRealtimeNarratorQueue = {
+  /** Queue one narration; if nothing is playing it starts at once. No-op after {@link close}. */
+  enqueue(narration: VoiceRealtimeNarration): void;
+  /** The page finished `utteranceId`; advance to the next. A stale id is ignored. */
+  completed(utteranceId: string): void;
+  /** The person spoke: stop the current narration and DROP everything queued. Returns how many. */
+  interrupt(reason: VoiceRealtimeNarratorInterruptReason): number;
+  /** What the queue holds right now. */
+  reading(): VoiceRealtimeNarratorReading;
+  /** The connection is gone: drop everything, send nothing. */
+  close(): void;
+};
+
+/**
+ * Builds the queue over this connection's browser downlink.
+ *
+ * The downlink is injected rather than reached for, for the same reason every other leaf here takes
+ * one: the criterion hands it a recorder, and the handler hands it its own `send`.
+ */
+export function createVoiceRealtimeNarratorQueue(input: {
+  send: (frame: VoiceRealtimeOutboundFrame) => void;
+  log?: (line: string) => void;
+}): VoiceRealtimeNarratorQueue {
+  /** The narration the page holds now, or `null`. Only one at a time — see the pacing note. */
+  let current: VoiceRealtimeNarration | null = null;
+  /** Narrations the page has NOT been sent. This is what an interrupt can still drop. */
+  const pending: VoiceRealtimeNarration[] = [];
+  let dropped = 0;
+  let closed = false;
+
+  /** Sends the next narration when the page is free. The ONLY place `narrator_speak` is emitted. */
+  const pump = (): void => {
+    if (closed || current !== null || pending.length === 0) return;
+    const next = pending.shift() as VoiceRealtimeNarration;
+    current = next;
+    input.send({ type: 'narrator_speak', utteranceId: next.utteranceId, text: next.text });
+    input.log?.(`narrator speak ${next.utteranceId} chars=${next.text.length} queued=${pending.length}`);
+  };
+
+  return {
+    enqueue(narration: VoiceRealtimeNarration): void {
+      if (closed) return;
+      pending.push(narration);
+      pump();
+    },
+    completed(utteranceId: string): void {
+      // Only the utterance STANDING NOW can end normally. A done for one the person already
+      // interrupted (a frame the page sent before it processed the stop) must not advance the
+      // cleared queue — it is the stale ack the drop exists to make harmless.
+      if (closed || current === null || current.utteranceId !== utteranceId) return;
+      current = null;
+      pump();
+    },
+    interrupt(reason: VoiceRealtimeNarratorInterruptReason): number {
+      if (closed) return 0;
+      const droppedNow = (current === null ? 0 : 1) + pending.length;
+      if (current !== null) {
+        input.send({ type: 'narrator_stop', utteranceId: current.utteranceId, reason });
+      }
+      current = null;
+      pending.length = 0;
+      dropped += droppedNow;
+      // One INFO line, never an error: this is the duplex rule working, and a journal that calls it
+      // a failure would send an operator looking for a fault that does not exist.
+      if (droppedNow > 0) {
+        input.log?.(`narrator cleared reason=${reason} dropped=${droppedNow}`);
+      }
+      return droppedNow;
+    },
+    reading(): VoiceRealtimeNarratorReading {
+      return { current: current === null ? null : current.utteranceId, queued: pending.length, dropped };
+    },
+    close(): void {
+      closed = true;
+      current = null;
+      pending.length = 0;
+    },
+  };
+}
+
+/**
+ * The narrator seam: this connection's queue handoff and the duplex rule's switch.
+ *
+ * LEFT UNSET BY EVERY CALLER WITH NO NARRATOR, and absence is byte-neutral: no queue is built, no
+ * hook fires, and the wire is exactly what it was before this feature existed.
+ */
+export type VoiceRealtimeNarratorSeams = {
+  /**
+   * Receives the connection's narrator queue once the browser downlink exists. The composition
+   * root's narrator producers (the run-end summary, the TTS wiring) enqueue through it; the queue
+   * owns order, pacing and the interrupt rule.
+   */
+  attach?: (queue: VoiceRealtimeNarratorQueue) => void;
+  /**
+   * Whether a new user utterance stops the current narration and clears the queue.
+   *
+   * OMITTED MEANS ENABLED — the shipped duplex rule, so the mechanism is on without a
+   * composition-root change. `false` is the FALSE FORM the AC-406 criterion builds: narration plays
+   * and queues through the person's speech, which is what reddens "去掉新语音清空队列的钩子必红".
+   */
+  interruptOnUserSpeech?: boolean;
+};
 
 /**
  * The uplink VAD seam: one connection's classifier, plus the two numbers the gate derives from.
@@ -1751,6 +1920,16 @@ export type VoiceRealtimeProxySeams = {
    * always passes it, resolved from the process-wide activity store's turn reading.
    */
   hostRunActivity?: (sessionId: string) => HostRunActivityReading | null;
+  /**
+   * The narrator's playback queue and the duplex rule's switch, or absent for "no narrator".
+   *
+   * The queue is the droppable layer of Live Voice output (GOAL-047): narration is played ONE
+   * utterance at a time, and a new user utterance stops what is playing and clears what is queued.
+   * A composition root that owns a narrator producer passes {@link VoiceRealtimeNarratorSeams} and
+   * enqueues through the queue it receives in `attach`; a caller with no narrator passes nothing and
+   * the connection is byte-neutral.
+   */
+  narrator?: VoiceRealtimeNarratorSeams;
 };
 
 /**
@@ -1992,6 +2171,13 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
     };
   }
 
+  // The narrator queue's pacing ack. Like `hello`'s protocol, the id is read as a string and nothing
+  // more: whether it names the utterance standing NOW is the QUEUE's decision (a stale ack must not
+  // advance it), not this shape-check's.
+  if (frame.type === 'narrator_done' && typeof frame.utteranceId === 'string') {
+    return { type: 'narrator_done', utteranceId: frame.utteranceId };
+  }
+
   if (frame.type === 'close') {
     return { type: 'close' };
   }
@@ -2049,7 +2235,9 @@ export function handleVoiceRealtimeConnection(
           frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
         }${frame.type === 'caption' ? ` ${JSON.stringify(frame.text)}` : ''}${
           frame.type === 'queued' || frame.type === 'refused' || frame.type === 'stopped' ? ` depth=${frame.depth}` : ''
-        }${frame.type === 'queue_reconcile' ? ` held=${frame.queuedMessageUuids.length}` : ''}`,
+        }${frame.type === 'queue_reconcile' ? ` held=${frame.queuedMessageUuids.length}` : ''}${
+          frame.type === 'narrator_speak' || frame.type === 'narrator_stop' ? ` utterance=${frame.utteranceId}` : ''
+        }`,
       );
     }
     if (socket.readyState === WebSocket.OPEN) {
@@ -2060,6 +2248,33 @@ export function handleVoiceRealtimeConnection(
   let sending = false;
   let closed = false;
   let audioFramesFromBrowser = 0;
+
+  // ---- the narrator's queue (GOAL-047; see `createVoiceRealtimeNarratorQueue`) ------------------
+  //
+  // Built over THIS connection's downlink, and only when a narrator is wired: with no seam there is
+  // no queue, no hook and no change to the wire. The composition root receives the queue through
+  // `attach` and its producer (run-end summary, TTS) enqueues text into it.
+  const narratorQueue: VoiceRealtimeNarratorQueue | null =
+    seams.narrator === undefined ? null : createVoiceRealtimeNarratorQueue({ send, log: seams.log });
+  if (narratorQueue !== null) {
+    seams.narrator?.attach?.(narratorQueue);
+  }
+  /** The duplex rule's switch. Omitted means enabled — the shipped behaviour. */
+  const narratorInterruptsOnUserSpeech = seams.narrator?.interruptOnUserSpeech ?? true;
+
+  /**
+   * The person opened their mouth: a narration must not talk over them.
+   *
+   * Called from every path that learns a NEW utterance started — the endpoint's own `speech_started`,
+   * the browser's segment boundary, and the local speech gate — because the three transports see the
+   * same fact at different moments and the earliest one wins. Idempotent: a queue with nothing playing
+   * and nothing queued drops 0 and sends nothing.
+   */
+  const noteUserSpokeForNarrator = (): void => {
+    if (narratorQueue !== null && narratorInterruptsOnUserSpeech) {
+      narratorQueue.interrupt('user-spoke');
+    }
+  };
 
   /**
    * Where the person's utterance began and ended, as heard on THIS side of the wire. One per
@@ -2073,6 +2288,10 @@ export function handleVoiceRealtimeConnection(
    */
   const reportLocalSpeechBoundary = (boundary: LocalSpeechBoundary | null): void => {
     if (boundary === 'started') {
+      // The earliest of the three readings of "they started talking": the browser's own audio,
+      // judged on this side. The narrator is cleared here BEFORE the watchdog is armed, so a
+      // narration never overlaps the first syllable even when the endpoint's `speech_started` lags.
+      noteUserSpokeForNarrator();
       bridge.noteLocalUtteranceStart();
       return;
     }
@@ -4973,6 +5192,11 @@ export function handleVoiceRealtimeConnection(
           // A NEW turn starting retires any pending forced-commit snapshot: whatever the next
           // `committed` answers, it no longer answers the turn this relay closed itself.
           forcedCommitCloseSnapshot = null;
+          // THE DUPLEX RULE'S ENDPOINT READING (AC-406): the endpoint heard the person start a new
+          // utterance, so the narrator stops and its queue is cleared. This path is the one the
+          // deployed `server_vad` always fires; the browser's segment boundary and the local speech
+          // gate are the other two readings of the same fact (see `noteUserSpokeForNarrator`).
+          noteUserSpokeForNarrator();
           // THE OMISSION PLANNER'S SILENCE BRANCH. `speech_started` inside `(t_i, t_i + S]` means the
           // model may still answer for `x_i` in its response to the newer speech, so the decision
           // waits the full H instead of confirming at S (SPEC §3). The planner needs the ARRIVAL
@@ -5342,6 +5566,9 @@ export function handleVoiceRealtimeConnection(
     // A due omission fill has nowhere to go once the connection is gone: `evaluateOmissionFill`
     // guards on `closed` too, but dropping the timer is the cheaper half of the same rule.
     clearOmissionTimer();
+    // The narrator has no page to speak to any more. Dropped with NO stop frame: the socket is
+    // going, and the page's own teardown discards playback with it.
+    narratorQueue?.close();
     armReconcilePoll(false);
     // An instruction still waiting on its segment's transcript will never get it now: releasing it
     // here records the non-delivery instead of leaving it held until the grace timer fires into a
@@ -5552,8 +5779,21 @@ export function handleVoiceRealtimeConnection(
       return;
     }
 
+    // The narrator queue's pacing ack. Handled before the speech branches: it is a statement about
+    // PLAYBACK, never about the person having spoken (an ack arriving while they talk must not look
+    // like a new utterance, and a stale one is ignored by the queue itself).
+    if (frame.type === 'narrator_done') {
+      narratorQueue?.completed(frame.utteranceId);
+      return;
+    }
+
     if (frame.type === 'segment_start') {
       segmentFrameCounts.set(frame.seq, 0);
+      // THE SEGMENTED PATH'S READING of "they started talking" — the browser's own boundary. On this
+      // wire there is no endpoint `speech_started` to clear the narrator (the relay runs
+      // `turn_detection: null`), so this is the only early signal, and clearing here is what keeps
+      // a narration from talking over the first segment.
+      noteUserSpokeForNarrator();
       bridge.startSegment(frame.seq);
       // The SEGMENTED path's own boundary, handed to the same watchdog the continuous path feeds.
       // It needs its own: this wire runs `turn_detection: null`, so the endpoint never sends the
