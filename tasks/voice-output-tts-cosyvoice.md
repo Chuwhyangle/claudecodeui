@@ -1,7 +1,7 @@
 ---
 id: voice-output-tts-cosyvoice
 title: TTS 接入：占位确认/总结文本经 cosyvoice-v3.5-flash 合成音频并播放
-status: todo
+status: ready
 labels:
   - feature
 parent: null
