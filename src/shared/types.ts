@@ -428,6 +428,47 @@ export type QuayProjectStatus = {
   hasQuayConfig: boolean;
 };
 
+//----------------- QUAY FLEET SUMMARY ------------
+
+/**
+ * One project's task status counts from `GET /api/quay/fleet-summary`; the sidebar's
+ * project row renders the todo / ready / needs-human numbers as its task badge.
+ */
+export type QuayFleetTaskCounts = {
+  /** Every task the store reports, including statuses the badge has no bucket for. */
+  total: number;
+  todo: number;
+  ready: number;
+  needsHuman: number;
+  done: number;
+};
+
+/** One quay project's entry in the eager cross-project fleet summary. */
+export type QuayFleetProjectSummary = {
+  projectId: string;
+  projectPath: string;
+  /** The worker driver reading; `unavailable` means the status command did not answer. */
+  driver: { state: QuayDriverState };
+  tasks: QuayFleetTaskCounts;
+  /** Whether this entry was served from the backend's per-project TTL cache. */
+  cached: boolean;
+  /** The backend's reason when this project's reading failed; `null` on success. */
+  error: string | null;
+};
+
+/**
+ * The eager cross-project reading behind the project-row task badges. It carries driver
+ * state and task counts only: goals, in-flight tasks and the gantt stay on the lazy
+ * Tier-2 snapshot that is read when a project is opened.
+ */
+export type QuayFleetSummary = {
+  projects: QuayFleetProjectSummary[];
+  generatedAt: string;
+  ttlPerProjectMs: number;
+  /** `true` only when every project in the response came from the TTL cache. */
+  cached: boolean;
+};
+
 // ---------------------------
 
 // After the projectName → projectId migration the backend no longer returns a

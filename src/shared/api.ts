@@ -327,6 +327,10 @@ export const api = {
   // Quay display endpoints (read-only). `refresh` bypasses the backend's TTL cache.
   quayStatus: (projectId: string) =>
     get(`/api/quay/${encodeURIComponent(projectId)}/status`),
+  // The eager cross-project reading: driver state + task counts for every quay project,
+  // served from the backend's per-project TTL (a poll inside the window spawns no CLI).
+  quayFleetSummary: () =>
+    get('/api/quay/fleet-summary'),
   quaySnapshot: (
     projectId: string,
     { refresh = false, hours }: { refresh?: boolean; hours?: number } = {},

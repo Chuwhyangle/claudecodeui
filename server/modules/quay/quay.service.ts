@@ -138,6 +138,22 @@ export const QUAY_TASK_INDEX_MAX_STDOUT_BYTES = 8 * 1024 * 1024;
 export const QUAY_TASK_INDEX_TITLE_LIMIT = 80;
 
 /**
+ * How long one project's fleet-summary reading stays fresh. The summary is polled by
+ * the sidebar; inside this window a repeat request must cost zero CLI spawns. Two
+ * minutes is long enough that a busy front end polls the store at most a few times a
+ * minute, and short enough that a flipped task reaches the badge promptly.
+ */
+export const QUAY_FLEET_SUMMARY_TTL_MS = 120_000;
+
+/**
+ * How many projects the fleet summary may read at once. Measured on a real fleet, four
+ * concurrent `quay` reads take roughly the wall clock of one (the host absorbs the
+ * parallelism) but their CPU and memory grow linearly, so this bounds the fan-out
+ * rather than letting a twenty-project workspace spawn twenty children in one burst.
+ */
+export const QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS = 4;
+
+/**
  * One task row of the compact status index: what `changes` needs to notice a
  * transition and to say when it happened, and nothing else. The whole task
  * document (body, children, extra) is deliberately absent — the index is built
@@ -185,6 +201,57 @@ export type QuayTaskCounts = {
   done: number;
   /** Up to `QUAY_RECENT_LIST_LIMIT` tasks, most recently updated first. */
   recent: QuayListItem[];
+};
+
+//----------------- FLEET SUMMARY ------------
+
+/**
+ * The task status counts one project contributes to the fleet summary. This is the
+ * `--no-body` reading, narrowed to the five numbers the sidebar badge renders, so a
+ * fleet request can never carry a task body (contrast {@link QuayTaskCounts}, whose
+ * `byStatus`/`recent` serve the Tier-2 panel).
+ */
+export type QuayFleetTaskCounts = {
+  total: number;
+  todo: number;
+  ready: number;
+  needsHuman: number;
+  done: number;
+};
+
+/**
+ * One project's entry in the fleet summary. `driver`, `tasks` and `error` describe a
+ * single reading taken together, so a consumer never mixes sections of two reads.
+ */
+export type QuayFleetProjectSummary = {
+  projectId: string;
+  projectPath: string;
+  /**
+   * The worker driver reading, or `{ state: 'unavailable' }` when that command did not
+   * answer. `unavailable` is deliberately its own state rather than `stale`: a failed
+   * read is "no reading", not the observation that the driver is not alive.
+   */
+  driver: { state: QuayDriverState | 'unavailable' };
+  tasks: QuayFleetTaskCounts;
+  /** `true` when this entry was served from the per-project TTL cache. */
+  cached: boolean;
+  /** Why this project's reading failed, or `null` when both commands answered. */
+  error: string | null;
+};
+
+/**
+ * The eager, cheap cross-project reading behind the sidebar's task-count badges:
+ * driver state plus task status counts for every project with a `.quay/config.yml`.
+ * It deliberately carries no goal, in-flight or gantt section — those stay on the
+ * lazy Tier-2 snapshot, which is only read when a project is opened.
+ */
+export type QuayFleetSummary = {
+  projects: QuayFleetProjectSummary[];
+  generatedAt: string;
+  /** How long one project's cached reading stays fresh. */
+  ttlPerProjectMs: number;
+  /** `true` only when every project in the response came from the TTL cache. */
+  cached: boolean;
 };
 
 /** Goal counts read from `quay goal list --json`; the panel shows the stage breakdown. */
@@ -581,6 +648,13 @@ export function isReadOnlyQuayCommand(args: readonly string[]): boolean {
 type QuayServiceDependencies = {
   fileExists(filePath: string): boolean;
   resolveProjectPathById(projectId: string): string | null;
+  /**
+   * Every project the composition knows about, as (id, absolute path) pairs. The fleet
+   * summary is the only reader: it must fan out over ALL projects rather than a request
+   * roster, so it cannot be built from `resolveProjectPathById`. Optional so a
+   * composition without a project registry yields an empty summary instead of a crash.
+   */
+  listProjects?(): readonly { projectId: string; projectPath: string }[];
   runCommand: QuayCommandRunner;
   /** Read-only filesystem boundary for the `.quay/` carrier files behind the Tests and Fan-in cards. */
   readFile: QuayFileReader;
@@ -620,6 +694,22 @@ function parseJson(stdout: string): unknown {
     return null;
   }
   return JSON.parse(trimmed);
+}
+
+/**
+ * Parses a command's stdout when it may legitimately be empty. The fleet summary reads
+ * the driver status this way: an absent body is "no reading" (reported as `unavailable`
+ * by the caller), never a parse error that would hide the project from the response.
+ */
+function parseJsonOrNull(stdout: string): unknown {
+  if (!stdout.trim()) {
+    return null;
+  }
+  try {
+    return parseJson(stdout);
+  } catch {
+    return null;
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -701,6 +791,38 @@ function summarizeTasks(value: unknown): QuayTaskCounts | null {
     done: byStatus.done ?? 0,
     recent: summarizeRecentItems(value),
   };
+}
+
+/** The all-zero counts a fleet entry carries when its task read did not answer. */
+const EMPTY_FLEET_TASK_COUNTS: QuayFleetTaskCounts = {
+  total: 0,
+  todo: 0,
+  ready: 0,
+  needsHuman: 0,
+  done: 0,
+};
+
+/**
+ * Narrows a `task list --json --no-body` array to the five counts the fleet badge
+ * renders. Any status the store reports that is not one of those four is still
+ * counted in `total` (the badge's "all tasks" figure) but has no bucket of its own.
+ * A non-array body is not a task list at all, so the caller gets `null` and keeps the
+ * error it already recorded rather than a fabricated zero reading.
+ */
+function summarizeFleetTaskCounts(value: unknown): QuayFleetTaskCounts | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const counts = { ...EMPTY_FLEET_TASK_COUNTS, total: value.length };
+  for (const task of value) {
+    const status = asRecord(task)?.status;
+    if (status === 'todo') counts.todo += 1;
+    else if (status === 'ready') counts.ready += 1;
+    else if (status === 'needs-human') counts.needsHuman += 1;
+    else if (status === 'done') counts.done += 1;
+  }
+  return counts;
 }
 
 function summarizeGoals(value: unknown): QuayGoalCounts | null {
@@ -1680,6 +1802,151 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     return null;
   };
 
+  // ── the fleet summary (fleet-overview P2) ─────────────────────────────────────────────────
+  //
+  // A per-project reading of driver state + task counts, so the sidebar can show every
+  // project's board at a glance without opening any of them. Each entry has its own TTL,
+  // because projects are read independently: a project whose cache is still fresh is served
+  // without touching the CLI even when another project in the same request is stale.
+  const fleetSummaryCache = new Map<string, { expiresAt: number; summary: QuayFleetProjectSummary }>();
+  const inFlightFleetProjects = new Map<string, Promise<QuayFleetProjectSummary>>();
+
+  /** The cheapest task read the CLI offers: no bodies, only the status the badge counts. */
+  const QUAY_FLEET_TASKS_COMMAND: readonly string[] = ['task', 'list', '--json', '--no-body'];
+  const QUAY_FLEET_DRIVER_COMMAND: readonly string[] = ['driver', 'status', '--kind', 'worker', '--json'];
+
+  // A counting semaphore over PROJECT loads. It is deliberately not a per-command limiter:
+  // a project load spawns its two reads concurrently, so bounding projects at N also bounds
+  // each command at N. A released slot is handed straight to the next waiter without
+  // decrementing, so a waiter can never race a fresh acquirer past the ceiling.
+  let fleetProjectsInFlight = 0;
+  const fleetSlotWaiters: (() => void)[] = [];
+
+  const acquireFleetSlot = (): Promise<void> => {
+    if (fleetProjectsInFlight < QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS) {
+      fleetProjectsInFlight += 1;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => fleetSlotWaiters.push(resolve));
+  };
+
+  const releaseFleetSlot = (): void => {
+    const next = fleetSlotWaiters.shift();
+    if (next) {
+      // The slot's ownership transfers; the count already includes it.
+      next();
+      return;
+    }
+    fleetProjectsInFlight -= 1;
+  };
+
+  /** Reads one project's driver state and task counts, with at most two child processes. */
+  const loadFleetProject = async (
+    candidate: { projectId: string; projectPath: string },
+  ): Promise<QuayFleetProjectSummary> => {
+    await acquireFleetSlot();
+    try {
+      const [tasksRead, driverRead] = await Promise.all([
+        runQuayCommand(candidate.projectPath, QUAY_FLEET_TASKS_COMMAND),
+        runQuayCommand(candidate.projectPath, QUAY_FLEET_DRIVER_COMMAND),
+      ]);
+
+      const failures: string[] = [];
+      let tasks: QuayFleetTaskCounts | null = null;
+      if (!tasksRead.ok) {
+        failures.push(`task list: ${tasksRead.error ?? `exit ${tasksRead.code === null ? 'abnormally' : tasksRead.code}`}`);
+      } else {
+        try {
+          tasks = summarizeFleetTaskCounts(parseJson(tasksRead.stdout));
+        } catch {
+          // Reported through the same `error` channel as a failed child, so the caller has
+          // one place to look for "this project's counts are not a reading".
+        }
+        if (tasks === null) {
+          failures.push('task list: returned no task array');
+        }
+      }
+
+      let driver: QuayFleetProjectSummary['driver'] = { state: 'unavailable' };
+      if (driverRead.ok) {
+        const summary = summarizeDriver(parseJsonOrNull(driverRead.stdout));
+        if (summary) {
+          driver = { state: summary.state };
+        } else {
+          failures.push('driver status: returned no driver record');
+        }
+      } else {
+        failures.push(`driver status: ${driverRead.error ?? `exit ${driverRead.code === null ? 'abnormally' : driverRead.code}`}`);
+      }
+
+      return {
+        projectId: candidate.projectId,
+        projectPath: candidate.projectPath,
+        driver,
+        tasks: tasks ?? EMPTY_FLEET_TASK_COUNTS,
+        cached: false,
+        error: failures.length > 0 ? failures.join('; ') : null,
+      };
+    } finally {
+      releaseFleetSlot();
+    }
+  };
+
+  /**
+   * Reads the fleet summary: every project with a `.quay/config.yml`, each carrying its
+   * driver state and task counts. Projects without that carrier are absent from the
+   * result — the fleet is quay projects, not every project the server knows.
+   *
+   * A project inside its TTL window is served from cache and marked `cached: true`; a
+   * project already loading has its in-flight read joined rather than duplicated, so
+   * concurrent requests cost one child per project. Failed readings are returned (with
+   * their `error`) but not cached, so a transient CLI failure cannot pin a wrong reading
+   * for a whole TTL.
+   */
+  const getFleetSummary = async (): Promise<QuayFleetSummary> => {
+    const candidates = (dependencies.listProjects?.() ?? []).filter((candidate) =>
+      detectQuayConfig(candidate.projectPath),
+    );
+
+    const projects = await Promise.all(
+      candidates.map(async (candidate): Promise<QuayFleetProjectSummary> => {
+        const cached = fleetSummaryCache.get(candidate.projectId);
+        if (cached && cached.expiresAt > dependencies.now()) {
+          return { ...cached.summary, cached: true };
+        }
+
+        const pending = inFlightFleetProjects.get(candidate.projectId);
+        if (pending) {
+          return pending;
+        }
+
+        const load = (async (): Promise<QuayFleetProjectSummary> => {
+          try {
+            const reading = await loadFleetProject(candidate);
+            if (reading.error === null) {
+              fleetSummaryCache.set(candidate.projectId, {
+                expiresAt: dependencies.now() + QUAY_FLEET_SUMMARY_TTL_MS,
+                summary: reading,
+              });
+            }
+            return reading;
+          } finally {
+            inFlightFleetProjects.delete(candidate.projectId);
+          }
+        })();
+        inFlightFleetProjects.set(candidate.projectId, load);
+        return load;
+      }),
+    );
+
+    return {
+      projects,
+      generatedAt: new Date(dependencies.now()).toISOString(),
+      ttlPerProjectMs: QUAY_FLEET_SUMMARY_TTL_MS,
+      cached: projects.length > 0 && projects.every((project) => project.cached),
+    };
+  };
+
   return {
     detectQuayConfig,
     runQuayCommand,
@@ -1691,5 +1958,9 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // full coverage without ever waiting on — or spawning — a snapshot.
     readTaskIndex,
     requestTaskIndexLoad,
+    // The eager cross-project reading (fleet-overview P2): driver state + task counts
+    // for every quay project, per-project TTL, bounded fan-out. The sidebar consumes it
+    // for the project-row task badges; the lazy Tier-2 snapshot stays the expanded view.
+    getFleetSummary,
   };
 }

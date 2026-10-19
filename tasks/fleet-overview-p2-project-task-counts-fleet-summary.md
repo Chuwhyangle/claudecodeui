@@ -1,7 +1,7 @@
 ---
 id: fleet-overview-p2-project-task-counts-fleet-summary
 title: 项目行 task 计数徽标 + fleet-summary 端点骨架（fleet-overview P2）
-status: ready
+status: done
 labels:
   - feature
 parent: null
