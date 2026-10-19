@@ -52,6 +52,6 @@ Live Voice 设置独立：Settings - Voice 分「Voice Input / Live Voice」两�
 5. AC-407：停顿「不确定态」给「嗯」级回执（semantic_vad 不可观测已回退）。
 6. AC-408：端到端典型场景（scripted endpoint，suite 内可判）——announce/总结文本经 TTS 合成、`tts_audio` 帧按 seq 到达浏览器、播放后回 `narrator_done` 推进下一句。
 
-## 人工验收门（非 AC，不计入充分性判定）
+## 人工验收门（不计入充分性判定）
 
 - H1 人工确认（非 AC）：MCP 浏览器真实连 DashScope，跑一次完整交互，耳闻 announce + 总结出声。
