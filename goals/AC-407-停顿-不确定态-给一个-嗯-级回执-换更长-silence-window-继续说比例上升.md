@@ -1,7 +1,7 @@
 ---
 id: AC-407
 title: 停顿「不确定态」给一个「嗯」级回执，换更长 silence window、继续说比例上升
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -20,6 +20,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-19T09:09:32.855Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
