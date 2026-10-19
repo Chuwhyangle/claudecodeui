@@ -3,7 +3,9 @@ id: GOAL-047
 title: 语音输出作为信心层：eyes-off 用户耳闻「在听、听懂了、可继续说」的信心
 status: active
 kind: goal
-origin: 本会话 2026-10-19 yale 与 Claude 讨论产出（北极星改为「跑通完整典型场景」）
+origin: 本会话 2026-10-19 yale 与 Claude 讨论产出；退出条件标题改回逐字 `##
+  退出条件`（gap-goal-047-exit-condition-heading-suffix-unreadable 选型 b），第 7 条分离为非 AC
+  人工验收门 H1
 activatedAt: 2026-10-19T08:54:24.497Z
 statusLog:
   - at: 2026-10-19T08:54:24.498Z
@@ -39,9 +41,9 @@ Live Voice 设置独立：Settings - Voice 分「Voice Input / Live Voice」两�
 - 不朗读 Claude 完整回答——narrator 只说短确认/摘要；朗读完整回答是另一个 producer，需单独设计。
 - 不引入新 UI 之外的改动；不发布、不重启 :3001（上线需人工 build/restart）。
 
-## 退出条件（北极星：跑通完整典型场景）
+## 退出条件
 
-一次完整的 Live Voice 交互端到端跑通：用户说一句话 → realtime 转写并转交 → announce 语音「好的，我来做 X」经 TTS 出声 → run 结束 → 总结语音经 TTS 出声。用户耳闻「开始确认」与「结束总结」，而非只看到文本。判定链：
+北极星：跑通完整典型场景。一次完整的 Live Voice 交互端到端跑通：用户说一句话 → realtime 转写并转交 → announce 语音「好的，我来做 X」经 TTS 出声 → run 结束 → 总结语音经 TTS 出声。用户耳闻「开始确认」与「结束总结」，而非只看到文本。判定链：
 
 1. AC-403：announce 转交后说 ≤15 字开始确认，非 OK、非复述。
 2. AC-404：run 结束触发 narrator 产出 ≤40 字、无 Markdown、verbatimTail≈0 的小结。
@@ -49,4 +51,7 @@ Live Voice 设置独立：Settings - Voice 分「Voice Input / Live Voice」两�
 4. AC-406：播报中注入用户语音 → 当前播报终止、队列清空。
 5. AC-407：停顿「不确定态」给「嗯」级回执（semantic_vad 不可观测已回退）。
 6. AC-408：端到端典型场景（scripted endpoint，suite 内可判）——announce/总结文本经 TTS 合成、`tts_audio` 帧按 seq 到达浏览器、播放后回 `narrator_done` 推进下一句。
-7. 人工确认（非 AC）：MCP 浏览器真实连 DashScope，跑一次完整交互，耳闻 announce + 总结出声。
+
+## 人工验收门（非 AC，不计入充分性判定）
+
+- H1 人工确认（非 AC）：MCP 浏览器真实连 DashScope，跑一次完整交互，耳闻 announce + 总结出声。
