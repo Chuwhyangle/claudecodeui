@@ -461,13 +461,14 @@ async function shot(page: Page, name: string): Promise<void> {
 
 /** Enters Live Voice and waits for the bar to have replaced the composer. */
 async function enterLiveVoice(page: Page): Promise<void> {
-  // The entry lives INSIDE the composer, as its own control beside the dictation mic — never in a
-  // strip above the box. The old external button's id must be gone.
+  // The entry lives INSIDE the composer — the submit button's Live Voice double while the draft is
+  // empty, right of the dictation mic — never in a strip above the box. The old external button's
+  // id must be gone.
   await expect(page.getByTestId('live-voice-enter')).toHaveCount(0);
   const entry = page.getByTestId('live-voice-button');
   await expect(entry).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-slot="prompt-input"]').getByTestId('live-voice-button')).toHaveCount(1);
-  // Order: attach, the dictation mic, then Live Voice, on one row — two separate buttons.
+  // The dictation mic and the submit-as-Live-Voice sit on one row, mic first.
   const mic = page.getByTestId('voice-input-button');
   await expect(mic).toBeVisible({ timeout: 15_000 });
   const micBox = await mic.boundingBox();
