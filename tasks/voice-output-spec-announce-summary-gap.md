@@ -1,7 +1,7 @@
 ---
 id: voice-output-spec-announce-summary-gap
 title: E0 充分性缺口：spec 补 announce/总结自动输出断言（核心接线已落地 f18c966ee）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
