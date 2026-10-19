@@ -189,10 +189,13 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // (364 + 1 = 365). Then gap-omission-fill-params-owned-by-server added the AC-402 source test
     // (365 + 1 = 366). Then gap-voice-realtime-silent-closing-orphans-tool-resume-overflow added
     // server/modules/voice-realtime/tests/voice-realtime-tool-resume-always-sent.test.ts
-    // (366 + 1 = 367). Then voice-output-backchannel added its AC-407 criterion
-    // server/modules/voice-realtime/tests/voice-realtime-backchannel.test.ts (367 + 1 = 368).
-    // This fixture names 3 known files, so 368 - 3 = 365.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=365$/);
+    // (366 + 1 = 367). Then two independent tasks each added one criterion file:
+    // voice-output-tts-cosyvoice added the AC-405 TTS criterion
+    // server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (367 + 1 = 368) and
+    // voice-output-backchannel added its AC-407 criterion
+    // server/modules/voice-realtime/tests/voice-realtime-backchannel.test.ts (368 + 1 = 369).
+    // This fixture names 3 known files, so 369 - 3 = 366.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=366$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -241,9 +244,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 368 files on this tree — but this fixture names ONE known file,
-    // so 368 - 1 = 367 (AC2 reads 365 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=367$/);
+    // same collection as AC2 — 369 files on this tree — but this fixture names ONE known file,
+    // so 369 - 1 = 368 (AC2 reads 366 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=368$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
