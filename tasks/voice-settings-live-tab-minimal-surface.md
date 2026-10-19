@@ -26,7 +26,7 @@ goal_ac: AC-409
 
 ## AC
 
-- [ ] **AC-409**：`npx vitest run src/modules/settings/tests/voiceSettingsLiveTabMinimalSurface.test.tsx` 退出码 0。Live Voice 子 tab 只暴露 `liveVoiceDashscopeApiKey`（不渲染 endpoint/model/voice），key 填写→保存→readback 掩码、再保存不写回掩码。取假形态：Live Voice tab 多渲染一个 endpoint/model/voice 字段，必红。
+- [x] **AC-409**：`npx vitest run src/modules/settings/tests/voiceSettingsLiveTabMinimalSurface.test.tsx` 退出码 0。Live Voice 子 tab 只暴露 `liveVoiceDashscopeApiKey`（不渲染 endpoint/model/voice），key 填写→保存→readback 掩码、再保存不写回掩码。取假形态：Live Voice tab 多渲染一个 endpoint/model/voice 字段，必红。
 
 ## DoD
 
@@ -41,3 +41,11 @@ goal_ac: AC-409
 - goals/AC-409-Live-Voice-配置最小面-只暴露-liveVoiceDashscopeApiKey-endpoint-model-voice-用后端默认.md
 - goals/GOAL-047-语音输出作为信心层-eyes-off-用户获得-在听-听懂了-可继续说-的信心.md
 - tasks/voice-settings-live-tab-minimal-surface.md
+
+## Blocker
+
+**2026-10-19T09:59:56.317Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/1，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：b0aa26b7-f98d-4bc7-ba1e-96cb12859972
