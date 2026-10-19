@@ -1,7 +1,7 @@
 ---
 id: voice-output-tts-downlink-wiring
 title: TTS 音频下行接线：narrator 文本 → cosyvoice 合成 → tts_audio 帧 → 浏览器播放（含 Voice 分 tab）
-status: ready
+status: done
 labels:
   - feature
 parent: null
