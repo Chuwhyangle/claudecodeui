@@ -48,6 +48,7 @@ announce 文本的接线已完成：`bridge.onFollowUpText` → ws-proxy announc
 - server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/voice-realtime-narrator.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
+- server/shared/tests/quay-test-script.test.ts
 - tasks/voice-output-spec-announce-summary-gap.md
 
 ## Notes
@@ -61,6 +62,10 @@ announce 文本的接线已完成：`bridge.onFollowUpText` → ws-proxy announc
 - **执行中发现并修复的缺口**：客户端帧处理器把「未识别的帧」落到协议错误分支并 `setPhase('failed')`；`narrator_speak`/`narrator_stop` 因此会让整个 voice session 变 failed（每次 narration 一出现就断）。客户端现显式声明并容忍这两类帧；真正播放仍属后续 TTS task。没有这一步，服务器一旦启用 announce/总结就会打断会话。
 - **生产接线**：`buildVoiceRealtimeNarratorWiring` 每连接注入 `narrator.attach`；只有部署命名 stand-in 时才安装 run-end producer。默认（silent、无 stand-in）返回 `null`，wire 与之前逐字节相同。
 - **边界**：summary producer 是 stand-in，不是 B-1 真模型（真模型需要凭据与外联，与本 e2e 的零外联断言冲突）；task B 部分的真实 cosyvoice TTS、backchannel 真链、其余 4 个样本均未做。
+
+### 第二轮（2026-10-19，续做 exited-not-landed）
+
+上一轮 suite 唯一的红是 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3 收集计数 pin：`f18c966ee` 在 pin 于 08:57 重测为 371 之后新增了 `server/modules/voice-realtime/tests/voice-realtime-announce-narrator.test.ts`，树变成 372 个文件，而 pin 仍写 368/370。用 `git archive develop` 导出干净 develop 复现了同样两条红，确认是 develop 侧的过期 pin、不是本分支 delta；已重测为 `unknown=369/371` 并把该文件加入 Touches。本轮 harness 再跑一次 `6 passed`（31.9 s），narrator speaks 读数与上一轮一致；`npm run typecheck` 退出 0。
 
 ## Blocker
 
