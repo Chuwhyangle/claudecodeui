@@ -32,7 +32,7 @@ statusLog:
 5. backchannel（semantic_vad 不可观测，已回退「暂停检测 + 主动 response.create」）—— AC-407。
 
 横切底座 E0：端到端验证/开发平台（scripted endpoint，suite 内可判）。
-Live Voice 设置独立：Settings - Voice 分「Voice Input / Live Voice」两个子 tab，`liveVoiceDashscopeApiKey` 只在 Live Voice tab（首轮只放 key，endpoint/model/voice 用后端默认）。
+Live Voice 设置独立：Settings - Voice 分「Voice Input / Live Voice」两个子 tab，`liveVoiceDashscopeApiKey` 只在 Live Voice tab（首轮只放 key，endpoint/model/voice 用后端默认）—— AC-409。
 
 ## 非目标
 
@@ -51,6 +51,7 @@ Live Voice 设置独立：Settings - Voice 分「Voice Input / Live Voice」两�
 4. AC-406：播报中注入用户语音 → 当前播报终止、队列清空。
 5. AC-407：停顿「不确定态」给「嗯」级回执（semantic_vad 不可观测已回退）。
 6. AC-408：端到端典型场景（scripted endpoint，suite 内可判）——announce/总结文本经 TTS 合成、`tts_audio` 帧按 seq 到达浏览器、播放后回 `narrator_done` 推进下一句。
+7. AC-409：Live Voice 配置最小面——Live Voice 子 tab 只暴露 `liveVoiceDashscopeApiKey`（endpoint/model/voice 用后端默认），仅配 key 即具备跑通典型场景的配置前提。
 
 ## 人工验收门（不计入充分性判定）
 
