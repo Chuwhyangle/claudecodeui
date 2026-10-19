@@ -242,8 +242,17 @@ function narratorTtsWav(): Buffer {
   return buffer;
 }
 const NARRATOR_TTS_WAV = narratorTtsWav();
-/** How many `tts_audio` frames the leaf must produce for one stand-in utterance. */
-const NARRATOR_TTS_FRAMES = Math.ceil(NARRATOR_TTS_WAV.length / DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES);
+/**
+ * Where the stand-in WAV's PCM begins (the `data` chunk body).
+ *
+ * The streaming leaf sends this prefix as its own `seq: 0` frame, so the number of frames is
+ * `1 + ceil(pcmBytes / frameBytes)` — NOT `ceil(totalBytes / frameBytes)`: the header does not
+ * share a slice with PCM any more.
+ */
+const NARRATOR_TTS_DATA_START = NARRATOR_TTS_WAV.indexOf(Buffer.from('data')) + 8;
+/** How many `tts_audio` frames the streaming leaf must produce for one stand-in utterance. */
+const NARRATOR_TTS_FRAMES =
+  1 + Math.ceil((NARRATOR_TTS_WAV.length - NARRATOR_TTS_DATA_START) / DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES);
 
 /** One request the scripted TTS server answered, with the body it read. */
 type ScriptedTtsRequest = { atMs: number; path: string; text: string; voice: string; model: string };
@@ -417,15 +426,25 @@ type NarratorTtsReading = {
   utteranceId: string;
   text: string;
   speakAtMs: number;
+  /** When the first `tts_audio` frame (the WAV header) reached the page. */
+  firstAudioAtMs: number | null;
   seqs: number[];
   doneAtMs: number | null;
   doneFrames: number | null;
   doneBytes: number | null;
   errorCode: string | null;
   ackedAtMs: number | null;
+  /** The first AudioContext source the page started after this utterance's header arrived. */
+  firstStartAtMs: number | null;
+  /** The page's own final caption before this narration — the end of the speech it answers. */
+  speechEndAtMs: number | null;
 };
 
-function readNarratorTts(frames: VoiceFrameEntry[], sent: VoiceFrameEntry[]): NarratorTtsReading[] {
+function readNarratorTts(
+  frames: VoiceFrameEntry[],
+  sent: VoiceFrameEntry[],
+  sourceStarts: number[],
+): NarratorTtsReading[] {
   const readings = new Map<string, NarratorTtsReading>();
   const ensure = (utteranceId: string): NarratorTtsReading => {
     let reading = readings.get(utteranceId);
@@ -434,12 +453,15 @@ function readNarratorTts(frames: VoiceFrameEntry[], sent: VoiceFrameEntry[]): Na
         utteranceId,
         text: '',
         speakAtMs: Number.POSITIVE_INFINITY,
+        firstAudioAtMs: null,
         seqs: [],
         doneAtMs: null,
         doneFrames: null,
         doneBytes: null,
         errorCode: null,
         ackedAtMs: null,
+        firstStartAtMs: null,
+        speechEndAtMs: null,
       };
       readings.set(utteranceId, reading);
     }
@@ -453,6 +475,7 @@ function readNarratorTts(frames: VoiceFrameEntry[], sent: VoiceFrameEntry[]): Na
       reading.text = typeof frame.text === 'string' ? frame.text : '';
       reading.speakAtMs = entry.atMs;
     } else if (frame.type === 'tts_audio') {
+      if (reading.firstAudioAtMs === null) reading.firstAudioAtMs = entry.atMs;
       reading.seqs.push(typeof frame.seq === 'number' ? frame.seq : -1);
     } else if (frame.type === 'tts_done') {
       reading.doneAtMs = entry.atMs;
@@ -467,6 +490,21 @@ function readNarratorTts(frames: VoiceFrameEntry[], sent: VoiceFrameEntry[]): Na
     if (frame.type !== 'narrator_done' || typeof frame.utteranceId !== 'string') continue;
     const reading = readings.get(frame.utteranceId);
     if (reading !== undefined) reading.ackedAtMs = entry.atMs;
+  }
+  // The final captions the page heard, in arrival order: the end of the speech a narration answers.
+  const captionFinals = frames
+    .filter((entry) => entry.frame.type === 'caption' && entry.frame.final === true)
+    .map((entry) => entry.atMs);
+  for (const reading of readings.values()) {
+    if (reading.firstAudioAtMs !== null) {
+      // A source started by this utterance's audio, before its ack. AudioBufferSourceNode is only
+      // used by the narrator's streaming path, so the window is enough to attribute it.
+      const upper = reading.ackedAtMs ?? Number.POSITIVE_INFINITY;
+      reading.firstStartAtMs =
+        sourceStarts.find((at) => at >= reading.firstAudioAtMs! && at <= upper) ?? null;
+    }
+    const before = captionFinals.filter((at) => at <= reading.speakAtMs);
+    reading.speechEndAtMs = before.length === 0 ? null : before[before.length - 1]!;
   }
   return [...readings.values()];
 }
@@ -526,10 +564,14 @@ type HarnessRun = {
     tts: NarratorTtsReading[];
     /** The requests the scripted CosyVoice server answered, in order. */
     requests: ScriptedTtsRequest[];
-    /** Narrator clips the browser actually decoded and played (duration-matched, not read-aloud). */
+    /** Narrator clips the browser actually scheduled on an AudioContext (the streaming path). */
     played: number;
+    /** Narrator clips the browser decoded through a media element (the Blob fallback path). */
+    elementPlayed: number;
+    /** Every AudioBufferSourceNode start the page made, on the browser clock. */
+    starts: number[];
   };
-  page: { phase: string; caption: string; status: string; pageErrors: string[]; consoleErrors: string[] };
+  page: { phase: string; caption: string; status: string; pageErrors: string[]; consoleErrors: string[]; consoleLogs: string[] };
 };
 
 test.describe('the frozen wav sample through the real Live Voice chain', () => {
@@ -733,10 +775,30 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         } as typeof HTMLMediaElement.prototype.play;
       });
 
+      // The narrator's streaming playback goes through an AudioContext, not a media element. Tap
+      // `AudioBufferSourceNode.start()` so the criterion can say WHEN the first audio was actually
+      // scheduled — the reading the streaming task exists for ("the first source starts before
+      // tts_done").
+      await context.addInitScript(() => {
+        const starts: number[] = [];
+        (window as unknown as { __narratorStarts: typeof starts }).__narratorStarts = starts;
+        const originalStart = AudioBufferSourceNode.prototype.start;
+        AudioBufferSourceNode.prototype.start = function patchedStart(
+          ...args: Parameters<typeof originalStart>
+        ): void {
+          starts.push(Date.now());
+          originalStart.apply(this, args);
+        };
+      });
+
       const page = await context.newPage();
       const consoleErrors: string[] = [];
+      const consoleLogs: string[] = [];
       page.on('console', (message) => {
         if (message.type() === 'error') consoleErrors.push(message.text());
+        // The client's own `[voice-realtime]` narration diagnostics: the dump carries them so a red
+        // run can say WHY the page took the element fallback instead of the streaming path.
+        if (message.text().includes('[voice-realtime]')) consoleLogs.push(message.text());
       });
       const pageErrors: string[] = [];
       page.on('pageerror', (error) => pageErrors.push(String(error)));
@@ -848,12 +910,16 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       let narratorSentFrames: VoiceFrameEntry[] = [];
       let narratorSpeaks = await readNarratorSpeaks(page);
       let narratorTts: NarratorTtsReading[] = [];
+      let narratorStarts: number[] = [];
       const narratorDeadline = Date.now() + SUMMARY_OBSERVE_MS;
       while (Date.now() < narratorDeadline) {
         narratorFrames = await readVoiceFrames(page);
         narratorSentFrames = await readSentFrames(page);
         narratorSpeaks = await readNarratorSpeaks(page);
-        narratorTts = readNarratorTts(narratorFrames, narratorSentFrames);
+        narratorStarts = await page.evaluate(
+          () => ((window as unknown as { __narratorStarts?: number[] }).__narratorStarts ?? []).slice(),
+        );
+        narratorTts = readNarratorTts(narratorFrames, narratorSentFrames, narratorStarts);
         const announce = narratorTts.find((reading) => reading.text === ANNOUNCE_TEXT);
         const summary = narratorTts.find((reading) => reading.text === SUMMARY_TEXT);
         if (
@@ -888,6 +954,9 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         (record) =>
           record.src.startsWith('blob:') && record.duration !== null && record.duration > 0.5 && record.duration < 1.5,
       ).length;
+      // The streaming path never creates a media element for a narration; the scheduled
+      // AudioBufferSourceNodes are its playback record.
+      const narratorStreamedStarts = narratorStarts.length;
 
       run = {
         sessionId,
@@ -933,7 +1002,9 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           speaks: narratorSpeaks,
           tts: narratorTts,
           requests: scriptedTts.requests.slice(),
-          played: narratorPlayed,
+          played: narratorStreamedStarts,
+          elementPlayed: narratorPlayed,
+          starts: narratorStarts.slice(),
         },
         page: {
           phase: ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim(),
@@ -941,6 +1012,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           status: ((await page.locator(STATUS).textContent().catch(() => '')) ?? '').trim(),
           pageErrors,
           consoleErrors,
+          consoleLogs,
         },
       };
 
@@ -1065,11 +1137,11 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     expect(announce, 'the announce utterance must exist').toBeDefined();
     expect(summary, 'the run-end summary utterance must exist').toBeDefined();
 
-    // PLAYBACK, not mere receipt: a 1 s narrator clip the browser decoded (the read-aloud stand-in
-    // is 2.5 s, so the duration band identifies the narrator's own audio).
+    // PLAYBACK, not mere receipt: the page scheduled the narrator's PCM on an AudioContext (the
+    // streaming path). The read-aloud element is tapped separately below and is not counted here.
     expect(
       run.narrator.played,
-      `narrator playback records were ${JSON.stringify(run.narrator.tts)}`,
+      `narrator playback records were ${JSON.stringify({ starts: run.narrator.starts, tts: run.narrator.tts })}`,
     ).toBeGreaterThan(0);
 
     // The ack is the page's own, sent from its playback completion handler — and sent AFTER the
@@ -1087,6 +1159,39 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       later.map((reading) => reading.text),
       `utterances after the announce ack: ${JSON.stringify(later.map((reading) => reading.text))}`,
     ).not.toHaveLength(0);
+  });
+
+  test('the first narrator audio started BEFORE tts_done, and within the speech-end budget', () => {
+    const announce = run.narrator.tts.find((reading) => reading.text === ANNOUNCE_TEXT);
+    expect(announce, 'the announce utterance must exist').toBeDefined();
+
+    // THE STREAMING CRITERION: the first scheduled source precedes the utterance's completion.
+    expect(announce!.firstAudioAtMs, 'the announce must have delivered at least one tts_audio frame').not.toBeNull();
+    expect(announce!.firstStartAtMs, 'the page must have scheduled the announce audio').not.toBeNull();
+    expect(announce!.doneAtMs, 'the announce must have completed').not.toBeNull();
+    expect(
+      announce!.firstStartAtMs!,
+      `firstStart=${announce!.firstStartAtMs} firstAudio=${announce!.firstAudioAtMs} done=${announce!.doneAtMs}`,
+    ).toBeLessThan(announce!.doneAtMs!);
+
+    // THE DoD'S BUDGET: from the end of the speech the narration answers to the first source.
+    // `speechEndAtMs` is the page's own final caption for that utterance.
+    expect(announce!.speechEndAtMs, 'the announce must follow a final caption on this page').not.toBeNull();
+    expect(
+      announce!.firstStartAtMs! - announce!.speechEndAtMs!,
+      `speechEnd=${announce!.speechEndAtMs} firstAudio=${announce!.firstAudioAtMs} ` +
+        `firstStart=${announce!.firstStartAtMs} done=${announce!.doneAtMs}`,
+    ).toBeLessThan(1200);
+
+    // The timing table the DoD asks the Notes to carry.
+    console.log(
+      `narrator first-frame timing: speechEnd=${new Date(announce!.speechEndAtMs!).toISOString()} ` +
+        `firstAudio=${new Date(announce!.firstAudioAtMs!).toISOString()} ` +
+        `firstStart=${new Date(announce!.firstStartAtMs!).toISOString()} ` +
+        `ttsDone=${new Date(announce!.doneAtMs!).toISOString()} ` +
+        `speechEndToStartMs=${announce!.firstStartAtMs! - announce!.speechEndAtMs!} ` +
+        `firstAudioToStartMs=${announce!.firstStartAtMs! - announce!.firstAudioAtMs!}`,
+    );
   });
 
   test('the run stayed on loopback and carried no cloud credential', () => {

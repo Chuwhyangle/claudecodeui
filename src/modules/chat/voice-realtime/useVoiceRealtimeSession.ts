@@ -1836,6 +1836,7 @@ export function useVoiceRealtimeSession({
         } catch {
           // A context that cannot build a buffer is a playback failure, not an utterance failure:
           // the collected slices can still be played through the element path at `tts_done`.
+          voiceLog(`narrator stream fallback ${stream.utteranceId}: createBuffer refused`);
           fallBackToElement(stream);
           return;
         }
@@ -1867,6 +1868,9 @@ export function useVoiceRealtimeSession({
         } catch {
           /* a context closed under us has nothing left to schedule */
         }
+        if (stream.sources.length === 1) {
+          voiceLog(`narrator stream first source ${stream.utteranceId} at=${startAt.toFixed(3)}`);
+        }
       };
 
       /**
@@ -1884,13 +1888,18 @@ export function useVoiceRealtimeSession({
       ): void => {
         const Ctor = typeof AudioContext === 'undefined' ? undefined : AudioContext;
         if (stream.format !== 'wav' || typeof Ctor !== 'function') {
+          voiceLog(`narrator stream fallback ${stream.utteranceId}: format=${stream.format} context=${typeof Ctor}`);
           stream.fallback = true;
           return;
         }
         let context: AudioContext;
         try {
           context = new Ctor();
-        } catch {
+        } catch (error) {
+          voiceLog(
+            `narrator stream fallback ${stream.utteranceId}: AudioContext threw ` +
+              `${error instanceof Error ? error.name : String(error)}`,
+          );
           stream.fallback = true;
           return;
         }
@@ -1898,8 +1907,12 @@ export function useVoiceRealtimeSession({
         stream.header = header;
         stream.nextStartTime = 0;
         if (context.state === 'suspended') {
-          void context.resume().catch(() => {
+          void context.resume().catch((error: unknown) => {
             if (stream.stopped || stream.fallback) return;
+            voiceLog(
+              `narrator stream fallback ${stream.utteranceId}: resume rejected ` +
+                `${error instanceof Error ? error.name : String(error)}`,
+            );
             fallBackToElement(stream);
           });
         }
@@ -1944,12 +1957,14 @@ export function useVoiceRealtimeSession({
         if (stream.fallback || stream.stopped) return;
         const bytes = narratorBase64Bytes(frame.audio);
         if (bytes === null) {
+          voiceLog(`narrator stream fallback ${frame.utteranceId}: slice ${frame.seq} is not base64`);
           stream.fallback = true;
           return;
         }
         if (frame.seq === 0 && stream.header === null) {
           const header = parseNarratorWavHeader(bytes);
           if (header === null) {
+            voiceLog(`narrator stream fallback ${frame.utteranceId}: unreadable WAV header`);
             stream.fallback = true;
             return;
           }
@@ -1959,6 +1974,7 @@ export function useVoiceRealtimeSession({
         if (stream.header === null) {
           // A window that starts mid-utterance (or a producer that never sent the header) cannot be
           // scheduled; the element path still gets whatever slices exist and plays them at done.
+          voiceLog(`narrator stream fallback ${frame.utteranceId}: first audio frame was seq ${frame.seq}`);
           stream.fallback = true;
           return;
         }

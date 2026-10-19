@@ -149,11 +149,39 @@ export async function installWavMic(context: BrowserContext, plan: WavMicPlan): 
 
       // The capture `AudioContext`. `audioSource.ts` subscribes with `addEventListener('statechange')`
       // and calls `resume()`, so both must exist or the mic source throws inside its own async body.
+      //
+      // THE PLAYBACK SURFACE DELEGATES TO A REAL CONTEXT. The capture graph is fake, but the
+      // narrator's streaming playback (the `tts_audio` path) schedules PCM through
+      // `createBuffer`/`createBufferSource`; a capture-only stub made that path look like a
+      // playback failure and silently fall back to the media element, which is not the product's
+      // shipped behaviour. `real` is a genuine AudioContext, and only the playback members are
+      // forwarded to it — the capture members above stay inert.
+      const NativeAudioContext = (window as unknown as { AudioContext: typeof AudioContext }).AudioContext;
       class FakeAudioContext {
         sampleRate = rate;
-        destination = {};
         state = 'running';
         audioWorklet = { addModule: async () => undefined };
+        private readonly real = new NativeAudioContext();
+
+        get destination(): AudioDestinationNode {
+          return this.real.destination;
+        }
+
+        get currentTime(): number {
+          return this.real.currentTime;
+        }
+
+        createBuffer(
+          channels: number,
+          length: number,
+          sampleRate: number,
+        ): AudioBuffer {
+          return this.real.createBuffer(channels, length, sampleRate);
+        }
+
+        createBufferSource(): AudioBufferSourceNode {
+          return this.real.createBufferSource();
+        }
 
         createGain() {
           return { gain: { value: 0 }, connect: () => undefined };
@@ -164,7 +192,7 @@ export async function installWavMic(context: BrowserContext, plan: WavMicPlan): 
         }
 
         close() {
-          return Promise.resolve();
+          return this.real.close();
         }
 
         addEventListener() {
@@ -172,7 +200,7 @@ export async function installWavMic(context: BrowserContext, plan: WavMicPlan): 
         }
 
         resume() {
-          return Promise.resolve();
+          return this.real.resume();
         }
       }
 
