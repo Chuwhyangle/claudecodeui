@@ -159,8 +159,10 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 379 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-19 after gap-narrator-announce-phrase-cache added
+    // the tree collects 380 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-19 after voice-realtime-model-reply-narrator added
+    // server/modules/voice-realtime/tests/voice-realtime-model-reply-narrator.test.ts (379 + 1 = 380).
+    // Before that, gap-narrator-announce-phrase-cache added
     // server/modules/voice-realtime/tests/voice-realtime-tts-cache.test.ts and
     // server/modules/voice-realtime/tests/voice-realtime-announce-phrases.test.ts (377 + 2 = 379).
     // Before that, gap-narrator-tts-stream-first-frame added
@@ -213,8 +215,8 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // server/modules/voice-realtime/tests/voice-realtime-api-key-resolution.test.ts (374 + 1 = 375).
     // Then gap-narrator-local-gate-no-interrupt added its criterion
     // server/modules/voice-realtime/tests/voice-realtime-narrator-local-gate.test.ts (375 + 1 = 376).
-    // This fixture names 3 known files, so 379 - 3 = 376.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=376$/);
+    // This fixture names 3 known files, so 380 - 3 = 377.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=377$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -263,9 +265,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 379 files on this tree — but this fixture names ONE known file,
-    // so 379 - 1 = 378 (AC2 reads 376 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=378$/);
+    // same collection as AC2 — 380 files on this tree — but this fixture names ONE known file,
+    // so 380 - 1 = 379 (AC2 reads 377 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=379$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

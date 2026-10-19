@@ -2489,6 +2489,8 @@ export function handleVoiceRealtimeConnection(
   }
   /** The narrator's own utterance-id counter, so the announce remark's `narrator_speak` id is unique. */
   let announceNarrationSeq = 0;
+  /** The counter for a MODEL TEXT REPLY's narration, kept separate so its ids never collide with an announce's. */
+  let modelReplyNarrationSeq = 0;
   /** The duplex rule's switch. Omitted means enabled — the shipped behaviour. */
   const narratorInterruptsOnUserSpeech = seams.narrator?.interruptOnUserSpeech ?? true;
   /**
@@ -5753,6 +5755,15 @@ export function handleVoiceRealtimeConnection(
           // P6, the segmented replay e2e), where a text reply is the retired relay's regression rather
           // than this disposition. The reading goes to the journal either way.
           if (error.code === 'MODEL_TEXT_REPLY' && !segmentedRelay) {
+            // SPEAK THE MODEL'S OWN WORDS (2026-10-19). A text reply is not only a disposition to
+            // report — it is the model talking to the person, and the person should HEAR it. The
+            // sentence is enqueued verbatim into the narrator (the queue the announce remark and the
+            // run-end summary share), so a connection with the narrator wired speaks exactly what the
+            // model said. A connection without a narrator still gets the disposition below unchanged.
+            if (narratorQueue !== null && error.text.trim() !== '') {
+              narratorQueue.enqueue({ utteranceId: `model-reply-${modelReplyNarrationSeq}`, text: error.text.trim() });
+              modelReplyNarrationSeq += 1;
+            }
             // EVERY FINISHED SENTENCE IS DELIVERED (ruling 2026-10-14, "a pen, not an agent"; live
             // 2026-10-15 b33412ea). When the person speaks again within a beat of finishing, the
             // endpoint opens no response for the sentence just committed, and the next response's
