@@ -24,11 +24,11 @@ extra:
 
 ## AC
 
-- [ ] AC1 终态 taxonomy 定义 + pin：在 `server/modules/resident-ledger/` 新起纯函数，从 delivery/turn 账本归约终态（建议 成功/出错/needs-human/被打断/超时）；每个终态至少一个正例 + 一个可区分的负例，pin 成测试。
-- [ ] AC2 终态判别测试：新增 `server/modules/resident-ledger/tests/terminal-state.test.ts`，注入账本 fixture 断言各终态归约正确，且「出错」与「超时」可区分。
-- [ ] AC3 Landing 三面板渲染：无会话选中时 `WorkspaceStateView` 渲染「正在跑 / 刚结束 / task·goal 变迁」三块；「正在跑」跨项目聚合 P1 的 phase/tool/elapsed，「刚结束」来自终态派生。
-- [ ] AC4 移动端：390px 视口顶部脉冲条出现 + 三页可切换；1280px 三面板并列。vitest 覆盖 compact 分支 + Playwright 双视口断言数据属性。
-- [ ] AC5 测试绿：新增前端 Landing 测试 + AC2 服务端测试；`npm run typecheck`、`npm run lint` 退出码 0。
+- [x] AC1 终态 taxonomy 定义 + pin：在 `server/modules/resident-ledger/` 新起纯函数，从 delivery/turn 账本归约终态（建议 成功/出错/needs-human/被打断/超时）；每个终态至少一个正例 + 一个可区分的负例，pin 成测试。
+- [x] AC2 终态判别测试：新增 `server/modules/resident-ledger/tests/terminal-state.test.ts`，注入账本 fixture 断言各终态归约正确，且「出错」与「超时」可区分。
+- [x] AC3 Landing 三面板渲染：无会话选中时 `WorkspaceStateView` 渲染「正在跑 / 刚结束 / task·goal 变迁」三块；「正在跑」跨项目聚合 P1 的 phase/tool/elapsed，「刚结束」来自终态派生。
+- [x] AC4 移动端：390px 视口顶部脉冲条出现 + 三页可切换；1280px 三面板并列。vitest 覆盖 compact 分支 + Playwright 双视口断言数据属性。
+- [x] AC5 测试绿：新增前端 Landing 测试 + AC2 服务端测试；`npm run typecheck`、`npm run lint` 退出码 0。
 
 ## DoD
 
