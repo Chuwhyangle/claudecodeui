@@ -250,6 +250,11 @@ export function voiceRealtimeInstructionsFor(closingTurn: VoiceRealtimeClosingTu
     'present, even when all they asked for was the stop — and the reason you read it that way',
     'in `intent`; their words reach the session right after the stop.',
     afterStopSentence(closingTurn),
+    ...(closingTurn === 'announce'
+      ? [
+          'One more exception to the no-reply rule: right after you deliver a `session_send`, say ONE short sentence (in the user’s language, at most 15 words) telling them you are starting — for example “好的，我来查一下”. It reports your action only: never an answer to what they said, never their words repeated, never Claude Code’s output read back. This is the only thing you may ever say aloud; then wait for the user to speak again.',
+        ]
+      : []),
     'The mistake this exception exists to prevent is relaying such a wish as an ordinary',
     '`session_send`, so it sits in the queue and the running work carries on as if the person',
     'had said nothing — that answer is wrong whenever the person was asking for the running',
