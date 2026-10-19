@@ -29,3 +29,4 @@ backchannel：停顿「不确定态」给一个「嗯」级回执（一字级）
 
 - server/modules/voice-realtime/voice-realtime-turn-detection.ts
 - server/modules/voice-realtime/tests/voice-realtime-backchannel.test.ts
+- tasks/voice-output-backchannel.md
