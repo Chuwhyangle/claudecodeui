@@ -29,3 +29,4 @@ goal_ac: AC-404
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts
+- tasks/voice-output-run-end-summary.md
