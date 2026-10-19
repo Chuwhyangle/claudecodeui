@@ -7,11 +7,13 @@ labels:
 parent: null
 children: []
 extra: {}
-goal_ac: "null"
+goal_ac: AC-405
 ---
 ## Proposal
 
-横切底座：端到端验证/开发平台。用 MCP 浏览器（Playwright）+ HTTP 接口 + DashScope 各服务，无人值守把现有 wav 语料（`~/.cloudcli/voice-realtime-closing-turn-corpus/capture/` 的 5 个冻结 wav）驱动过三层——离体能力探针（realtime 服务直接连，run.mts 那种）、服务器回归 gate、浏览器端到端。分别服务「开发（先探能不能做到）/ 测试（回归 gate）/ 验证（真链对不对）」三个用途，是 AC-404 之后一切真机验证的前置（本 task 不关联单条 AC，服务于 GOAL-047 的 AC-404 到 AC-407）。
+横切底座：端到端验证/开发平台。用 MCP 浏览器（Playwright）+ HTTP 接口 + DashScope 各服务，无人值守把现有 wav 语料（`~/.cloudcli/voice-realtime-closing-turn-corpus/capture/` 的 5 个冻结 wav）驱动过三层——离体能力探针（realtime 服务直接连，run.mts 那种）、服务器回归 gate、浏览器端到端。分别服务「开发（先探能不能做到）/ 测试（回归 gate）/ 验证（真链对不对）」三个用途。
+
+本 task 不实现任何语音机制，是 AC-405（TTS 真机可听）、AC-406（播报打断）、AC-407（backchannel）这三条 AC 真机验证的前置底座（挂 AC-405 下作为第一用例；同时服务 AC-406/AC-407）。
 
 现有 run.mts 是离体 replay（绕过浏览器和服务器），验证不了「浏览器采集 → 服务器 → relay → TTS 播放 → UI」这条真链；E0 补上这条。
 
