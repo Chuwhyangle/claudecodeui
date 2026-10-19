@@ -2,7 +2,7 @@
 id: gap-narrator-local-gate-no-interrupt
 title: Live Voice 本地语音门单独打断 narrator：环境噪声（RMS 300–470）在播报期间开出 started
   边界，announce 在 tts_done 前被 narrator_stop 清空 ⇒ 整条播报静音
-status: todo
+status: ready
 labels:
   - gap
   - defect
