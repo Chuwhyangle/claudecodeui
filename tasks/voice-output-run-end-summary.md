@@ -30,3 +30,11 @@ goal_ac: AC-404
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts
 - tasks/voice-output-run-end-summary.md
+
+## Blocker
+
+**2026-10-19T00:13:33.370Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/1，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：19e690ba-7c2e-4a8c-acfe-2c8fea3a3bd5
