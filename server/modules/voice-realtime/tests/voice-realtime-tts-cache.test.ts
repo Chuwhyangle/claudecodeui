@@ -394,6 +394,10 @@ test('cache warm permanent: two failed attempts are logged, nothing is cached, a
 
   const { frames, result } = await speak(cache, 'announce-1', phrase);
   assert.equal(requestCount(requests, phrase), 3, 'the miss dials on the spot exactly once');
+  assert.ok(
+    log.includes(`tts cache miss text=${phrase} chars=${phrase.trim().length}`),
+    'a phrase that failed both warm-up attempts was never cached',
+  );
   assert.equal(result.ok, true);
   assert.ok(frames.some((frame) => frame.type === 'tts_audio'), 'the fallback still produces audio');
   assert.equal(frames.at(-1)?.type, 'tts_done');
