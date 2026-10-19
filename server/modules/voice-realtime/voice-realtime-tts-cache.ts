@@ -17,6 +17,12 @@
  *    are delivered as the same `tts_error` frame, and a failed synthesis is NEVER stored. A cache
  *    that was not warmed (or whose warm-up failed) therefore cannot add a new failure mode: it
  *    falls back to exactly the behaviour the narrator had before this module existed.
+ *  - A FAILED WARM-UP IS OBSERVABLE AND RETRIED ONCE. Each failed warm-up attempt writes one
+ *    `tts cache warm failed` line (attempt, code, upstream code, length) and a phrase that failed
+ *    is retried once after {@link WARM_RETRY_DELAY_MS}; a success on that retry writes
+ *    `tts cache warm recovered`. A second failure is logged and stops — warm-up never retries
+ *    forever, never throws, and never blocks the connection. On-demand (`speak`) failures are NOT
+ *    retried.
  *  - CONCURRENT REQUESTS FOR ONE TEXT SYNTHESIZE ONCE. The in-flight map is keyed with the cache
  *    key, so `warm()` and a racing `speak()` (or two simultaneous speaks) share one request.
  *  - THE KEY IS model + voice + text. A deployment that switches voice or model cannot replay audio
@@ -40,6 +46,13 @@ import {
 /** How many synthesized sentences one connection keeps before the oldest is discarded. */
 export const DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES = 64;
 
+/**
+ * How long `warm()` waits before its single retry of a phrase whose first attempt failed, in
+ * milliseconds. Short enough not to delay a connection that is already accepting traffic (warm-up
+ * is fire-and-forget), long enough to clear a transient service hiccup.
+ */
+export const WARM_RETRY_DELAY_MS = 250;
+
 /** The bytes of one successful synthesis, as the cache stores them. */
 type CachedSynthesis = Extract<VoiceRealtimeTtsSynthesis, { ok: true }>;
 
@@ -49,7 +62,9 @@ type CachedSynthesis = Extract<VoiceRealtimeTtsSynthesis, { ok: true }>;
  * `options` is the SAME object the on-the-spot path would receive (credential, voice, endpoint,
  * optional injected `fetch`), so a criterion can count requests without a socket. `phrases` is the
  * warm-up set; `maxEntries` bounds the map, oldest-first. `log` is the composition root's sink: it
- * receives one `tts cache hit`/`tts cache miss` line per narration.
+ * receives one `tts cache hit`/`tts cache miss` line per narration, plus one
+ * `tts cache warm failed` per failed warm-up attempt and one `tts cache warm recovered` when the
+ * retry succeeds — the readings that let an operator tell a failed warm-up from a missing one.
  *
  * Consumed by `server/index.ts` (one cache per connection) and by the cache criterion.
  */
@@ -64,13 +79,16 @@ export type VoiceRealtimeTtsCacheOptions = {
 /**
  * One connection's narrator TTS cache.
  *
- * `warm()` is deliberately non-throwing and safe to call while nothing is playing ("failure is
- * silently skipped, the connection is not blocked"): a phrase that could not be pre-synthesized
- * simply misses later and is synthesized on the spot. `speak()` never rejects either — every
- * outcome, including a thrown transport, is delivered as a frame or a named result.
+ * `warm()` is deliberately non-throwing and safe to call while nothing is playing: a phrase that
+ * could not be pre-synthesized is logged, retried once, and — if that also fails — simply misses
+ * later and is synthesized on the spot. `speak()` never rejects either — every outcome, including a
+ * thrown transport, is delivered as a frame or a named result.
  */
 export type VoiceRealtimeTtsCache = {
-  /** Pre-synthesize every configured phrase, concurrently. Never rejects; safe to fire and forget. */
+  /**
+   * Pre-synthesize every configured phrase, concurrently. Never rejects; safe to fire and forget.
+   * A phrase whose first attempt fails is retried once after {@link WARM_RETRY_DELAY_MS}.
+   */
   warm(): Promise<void>;
   /** Speak one utterance, from the cache when possible. Emits frames through `downlink`. */
   speak(input: VoiceRealtimeTtsInput, downlink: VoiceRealtimeTtsDownlink): Promise<VoiceRealtimeTtsResult>;
@@ -79,6 +97,11 @@ export type VoiceRealtimeTtsCache = {
 /** One log line's text field: whitespace collapsed so a multiline model sentence cannot break the line. */
 function logText(text: string): string {
   return text.trim().replace(/\s+/g, ' ');
+}
+
+/** Waits `ms` milliseconds; used only by the single warm-up retry. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -140,18 +163,56 @@ export function createVoiceRealtimeTtsCache(input: VoiceRealtimeTtsCacheOptions)
     return promise;
   };
 
+  /**
+   * Runs one warm-up attempt and logs its outcome. A failure logs its attempt number, the leaf's
+   * named code and the upstream code (or `none`) so an operator can tell "warm failed" from
+   * "warm never ran"; a success on attempt 2 logs that the retry recovered.
+   */
+  const warmAttempt = async (
+    phrase: string,
+    key: string,
+    attempt: 1 | 2,
+  ): Promise<VoiceRealtimeTtsSynthesis> => {
+    const synthesis = await syntheses(phrase, key);
+    if (synthesis.ok) {
+      if (attempt === 2) {
+        input.log?.(`tts cache warm recovered text=${logText(phrase)} attempt=2`);
+      }
+      return synthesis;
+    }
+    const chars = phrase.trim().length;
+    const upstream = synthesis.upstreamCode ?? 'none';
+    input.log?.(
+      `tts cache warm failed text=${logText(phrase)} attempt=${attempt} code=${synthesis.code} upstream=${upstream} chars=${chars}`,
+    );
+    return synthesis;
+  };
+
+  /**
+   * Pre-synthesizes one phrase: skip blank/already-cached entries, then try once and — on failure —
+   * retry exactly once after {@link WARM_RETRY_DELAY_MS}. A racing `speak()` that stored the
+   * phrase during the delay satisfies the retry without a second request.
+   */
+  const warmPhrase = async (phrase: string): Promise<void> => {
+    if (phrase.trim() === '') return;
+    const key = keyFor(phrase);
+    if (entries.has(key)) return;
+    const first = await warmAttempt(phrase, key, 1);
+    if (first.ok) return;
+    await delay(WARM_RETRY_DELAY_MS);
+    if (entries.has(key)) {
+      input.log?.(`tts cache warm recovered text=${logText(phrase)} attempt=2`);
+      return;
+    }
+    await warmAttempt(phrase, key, 2);
+  };
+
   return {
     async warm(): Promise<void> {
       // Concurrent on purpose: the phrases are independent, and the caller does not await this
-      // before accepting the connection. A failed phrase is stored nowhere and misses later.
-      await Promise.all(
-        input.phrases.map(async (phrase) => {
-          if (phrase.trim() === '') return;
-          const key = keyFor(phrase);
-          if (entries.has(key)) return;
-          await syntheses(phrase, key);
-        }),
-      );
+      // before accepting the connection. A phrase that fails both attempts is stored nowhere and
+      // misses later; `speak()` is never retried here.
+      await Promise.all(input.phrases.map((phrase) => warmPhrase(phrase)));
     },
 
     async speak(

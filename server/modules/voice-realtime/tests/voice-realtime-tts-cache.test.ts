@@ -14,6 +14,10 @@
  *   · WARM — every configured phrase is pre-synthesized once, then every phrase speaks with no
  *     further request and produces `tts_audio` + `tts_done`; a phrase whose warm-up failed falls
  *     back to on-the-spot synthesis and still produces audio.
+ *   · WARM TRANSIENT — a phrase whose first warm-up attempt fails is retried once, logged as
+ *     `tts cache warm failed … attempt=1` then `tts cache warm recovered … attempt=2`, and is a hit.
+ *   · WARM PERMANENT — a phrase that fails both attempts is logged twice, never cached, and its
+ *     next `speak()` falls back to exactly one on-the-spot synthesis.
  *
  * The stand-in `fetch` speaks the same SSE wire the real service documents and records every
  * request, so "the cache served this" is read from the network rather than from the cache's own
@@ -132,13 +136,18 @@ function failingFetch(requests: CapturedRequest[]): typeof fetch {
   }) as typeof fetch;
 }
 
-/** A `fetch` that refuses the FIRST attempt at one exact text and answers every later text normally. */
-function failOneTextFetch(requests: CapturedRequest[], failingText: string): typeof fetch {
+/**
+ * A `fetch` that refuses one exact text a bounded number of times and answers it normally after
+ * that (every other text always answers normally). The budget is what distinguishes a transient
+ * warm-up failure ({@link 1} refusal: the retry succeeds) from a permanent one ({@link 2} refusals:
+ * both warm-up attempts fail, and the later on-the-spot `speak()` succeeds).
+ */
+function failTextTimesFetch(requests: CapturedRequest[], failingText: string, failures: number): typeof fetch {
   const fallback = countingFetch(requests);
-  let failedOnce = false;
+  let remainingFailures = failures;
   return (async (url: string | URL | Request, init?: RequestInit) => {
-    if (!failedOnce && requestText(init ?? {}) === failingText) {
-      failedOnce = true;
+    if (remainingFailures > 0 && requestText(init ?? {}) === failingText) {
+      remainingFailures -= 1;
       requests.push({ url: String(url), init: init ?? {} });
       return new Response(JSON.stringify({ code: 'InvalidParameter', message: 'warm-up refusal' }), {
         status: 400,
@@ -147,6 +156,11 @@ function failOneTextFetch(requests: CapturedRequest[], failingText: string): typ
     }
     return fallback(url, init);
   }) as typeof fetch;
+}
+
+/** How many requests the stand-in received for one exact text. */
+function requestCount(requests: CapturedRequest[], text: string): number {
+  return requests.filter((request) => requestText(request.init) === text).length;
 }
 
 // ── shared readings ─────────────────────────────────────────────────────────────────────────────
@@ -295,10 +309,16 @@ test('cache eviction: beyond maxEntries the oldest entry is discarded first', as
 
 test('cache warm: every phrase is pre-synthesized, then all speak with no request and produce audio', async () => {
   const requests: CapturedRequest[] = [];
-  const cache = cacheWith({ fetch: countingFetch(requests) });
+  const log: string[] = [];
+  const cache = cacheWith({ fetch: countingFetch(requests), log: (line) => log.push(line) });
 
   await cache.warm();
   assert.equal(requests.length, ANNOUNCE_PHRASES.length, 'warm-up dials once per phrase');
+  assert.equal(
+    log.filter((line) => line.includes('tts cache warm failed')).length,
+    0,
+    'a fully successful warm-up logs no failure',
+  );
 
   requests.length = 0;
   for (const [index, phrase] of ANNOUNCE_PHRASES.entries()) {
@@ -310,13 +330,88 @@ test('cache warm: every phrase is pre-synthesized, then all speak with no reques
   assert.equal(requests.length, 0, 'every warmed phrase is served without a request');
 });
 
+// ── WARM TRANSIENT: one failed attempt, one retry, then a hit ─────────────────────────────────
+
+test('cache warm transient: a phrase that fails once is retried, logged as recovered, and then hits', async () => {
+  const phrase = ANNOUNCE_PHRASES[1]!;
+  const requests: CapturedRequest[] = [];
+  const log: string[] = [];
+  const cache = cacheWith({
+    fetch: failTextTimesFetch(requests, phrase, 1),
+    log: (line) => log.push(line),
+  });
+
+  await cache.warm();
+
+  assert.equal(requestCount(requests, phrase), 2, 'the transient phrase was attempted twice');
+  const failures = log.filter(
+    (line) => line.includes('tts cache warm failed') && line.includes(`text=${phrase}`),
+  );
+  assert.equal(failures.length, 1, 'exactly one failed attempt is logged');
+  assert.match(failures[0]!, /attempt=1/, 'the failure is the first attempt');
+  const recovered = log.filter(
+    (line) => line.includes('tts cache warm recovered') && line.includes(`text=${phrase}`),
+  );
+  assert.equal(recovered.length, 1, 'the successful retry is logged');
+  assert.match(recovered[0]!, /attempt=2/, 'the recovery is the second attempt');
+
+  const before = requestCount(requests, phrase);
+  const { frames, result } = await speak(cache, 'announce-1', phrase);
+  assert.equal(result.ok, true);
+  assert.ok(frames.some((frame) => frame.type === 'tts_audio'));
+  assert.equal(requestCount(requests, phrase), before, 'the recovered phrase is served from the cache');
+  assert.ok(
+    log.includes(`tts cache hit text=${phrase} chars=${phrase.trim().length}`),
+    'the speak after a recovered warm-up is a hit',
+  );
+});
+
+// ── WARM PERMANENT: both attempts fail, never cached, the speak falls back ────────────────────
+
+test('cache warm permanent: two failed attempts are logged, nothing is cached, and speak falls back', async () => {
+  const phrase = ANNOUNCE_PHRASES[1]!;
+  const requests: CapturedRequest[] = [];
+  const log: string[] = [];
+  const cache = cacheWith({
+    fetch: failTextTimesFetch(requests, phrase, 2),
+    log: (line) => log.push(line),
+  });
+
+  await cache.warm();
+
+  const failures = log.filter(
+    (line) => line.includes('tts cache warm failed') && line.includes(`text=${phrase}`),
+  );
+  assert.equal(failures.length, 2, 'both attempts are logged');
+  assert.match(failures[0]!, /attempt=1/);
+  assert.match(failures[1]!, /attempt=2/);
+  assert.equal(
+    log.filter((line) => line.includes('tts cache warm recovered')).length,
+    0,
+    'a permanent failure never logs a recovery',
+  );
+  assert.equal(requestCount(requests, phrase), 2, 'the bounded retry stops after two attempts');
+
+  const { frames, result } = await speak(cache, 'announce-1', phrase);
+  assert.equal(requestCount(requests, phrase), 3, 'the miss dials on the spot exactly once');
+  assert.equal(result.ok, true);
+  assert.ok(frames.some((frame) => frame.type === 'tts_audio'), 'the fallback still produces audio');
+  assert.equal(frames.at(-1)?.type, 'tts_done');
+});
+
 test('cache warm failure: the failed phrase falls back to on-the-spot synthesis and still speaks', async () => {
   const failingText = ANNOUNCE_PHRASES[1]!;
   const requests: CapturedRequest[] = [];
-  const cache = cacheWith({ fetch: failOneTextFetch(requests, failingText) });
+  // A permanent failure: with the bounded warm retry, the phrase needs TWO refusals to stay
+  // uncached (the first attempt plus its retry).
+  const cache = cacheWith({ fetch: failTextTimesFetch(requests, failingText, 2) });
 
   await cache.warm();
-  assert.equal(requests.length, ANNOUNCE_PHRASES.length, 'warm-up attempted every phrase');
+  assert.equal(
+    requests.length,
+    ANNOUNCE_PHRASES.length + 1,
+    'warm-up attempted every phrase, and the failed one was retried once',
+  );
 
   requests.length = 0;
   const warmed = await speak(cache, 'announce-0', ANNOUNCE_PHRASES[0]!);
