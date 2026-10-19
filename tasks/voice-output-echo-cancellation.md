@@ -21,7 +21,7 @@ goal_ac: AC-406
 
 ## AC
 
-- [ ] 一个回声/串音测量探针：外放场景下播放一段系统播报，测麦克风采回该音频的程度；产出结论（echoCancellation 够 / 需真 AEC）。
+- [x] 一个回声/串音测量探针：外放场景下播放一段系统播报，测麦克风采回该音频的程度；产出结论（echoCancellation 够 / 需真 AEC）。
 
 ## DoD
 
@@ -32,3 +32,11 @@ goal_ac: AC-406
 - experiments/voice-echo-probe/run.mts (new)
 - experiments/voice-echo-probe/README.md (new)
 - tasks/voice-output-echo-cancellation.md
+
+## Blocker
+
+**2026-10-19T00:24:39.373Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/1，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：804d81f2-67e0-417e-b0e6-5dfe00cdf3f1
