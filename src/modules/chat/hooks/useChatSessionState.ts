@@ -837,7 +837,16 @@ export function useChatSessionState({
     if (isUserScrolledUpRef.current) return null;
 
     const previousBottom = Math.max(previous.scrollHeight - previous.clientHeight, 0);
-    if (Math.abs(container.scrollTop - previousBottom) > TRANSCRIPT_FOLLOW_TOLERANCE_PX) return null;
+    // The second guard only fires while a gesture is in flight. A scrollTop that
+    // drifted with no input in front of it is the browser's own — scroll
+    // anchoring, a clamp — not the user taking the pane, and refusing the follow
+    // over it is the bug: a new row lands a few pixels below the recorded bottom,
+    // this guard calls that drift "the user left", and the whole reply is then
+    // never followed.
+    if (
+      userScrollGestureRef.current
+      && Math.abs(container.scrollTop - previousBottom) > TRANSCRIPT_FOLLOW_TOLERANCE_PX
+    ) return null;
 
     const bottom = container.scrollHeight - container.clientHeight;
     if (Math.abs(container.scrollTop - bottom) <= TRANSCRIPT_FOLLOW_TOLERANCE_PX) return null;

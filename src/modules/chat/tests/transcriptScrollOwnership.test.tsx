@@ -601,16 +601,50 @@ describe('content-growth follow', () => {
 
   it('leaves the viewport where a gesture put it', async () => {
     const { container, observer } = await mountFollow();
+    // The intent listener is on the window, so the pane has to be a node the
+    // wheel can reach it through — the gesture is what marks the drift as the
+    // user's, not the bare offset.
+    document.body.appendChild(container.element);
+    try {
+      // The user wheels away from the bottom; the follow must read that as drift
+      // the user owns, not as a gap it is free to close.
+      act(() => {
+        container.element.dispatchEvent(new Event('wheel'));
+      });
+      container.scrollTo(container.bottom - 300);
+      act(() => {
+        observer.emit();
+      });
+      act(() => {
+        runFrames();
+      });
+      container.writes.length = 0;
 
-    // The user wheels away from the bottom; the follow must read that as drift
-    // the user owns, not as a gap it is free to close.
-    container.scrollTo(container.bottom - 300);
-    act(() => {
-      observer.emit();
-    });
-    act(() => {
-      runFrames();
-    });
+      container.grow(400);
+      act(() => {
+        observer.emit();
+      });
+      act(() => {
+        runFrames();
+      });
+
+      assert.deepEqual(
+        container.writes,
+        [],
+        `growth must open the gap a scrolled-away viewport is holding; got ${JSON.stringify(container.writes)}`,
+      );
+    } finally {
+      container.element.remove();
+    }
+  });
+
+  it('follows growth after the browser nudges the viewport a few pixels on its own', async () => {
+    const { container, observer } = await mountFollow();
+
+    // The browser's own scroll anchoring (no input in front of it) moves the
+    // offset a few pixels below the recorded bottom. That drift is not the user
+    // leaving, and the growth that follows must still be pinned.
+    container.scrollTo(container.bottom - 4);
     container.writes.length = 0;
 
     container.grow(400);
@@ -623,8 +657,8 @@ describe('content-growth follow', () => {
 
     assert.deepEqual(
       container.writes,
-      [],
-      `growth must open the gap a scrolled-away viewport is holding; got ${JSON.stringify(container.writes)}`,
+      [container.bottom],
+      `a viewport the browser nudged must still be followed; got ${JSON.stringify(container.writes)}`,
     );
   });
 
