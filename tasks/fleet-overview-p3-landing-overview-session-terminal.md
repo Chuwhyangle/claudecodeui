@@ -50,3 +50,13 @@ extra:
 - server/modules/resident-ledger/tests/terminal-state.test.ts
 - e2e/landing-overview.spec.ts
 - tasks/fleet-overview-p3-landing-overview-session-terminal.md
+
+## Blocker
+
+**2026-10-19T04:01:22.281Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging src/shared/api.ts
+CONFLICT (content): Merge conflict in src/shared/api.ts
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：b8729794-f1d0-49f7-a816-25828d03a588
