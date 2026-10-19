@@ -1,7 +1,7 @@
 ---
 id: voice-output-announce-start-confirmation
 title: 占位确认 announce 模式：实现已完成待落地（commit + merge + build）
-status: needs-human
+status: done
 labels:
   - feature
 parent: null
