@@ -1,7 +1,7 @@
 ---
 id: AC-403
 title: 转交后 realtime 模型说一句 ≤15 字的开始确认：非 OK、非复述原话、不念输出
-status: draft
+status: active
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -19,4 +19,15 @@ expect: 退出码 0。announce closing-turn 的四个断言存在且绿：(a)
 origin: 本会话 2026-10-19 讨论产出；announce 枚举已落地（voice-realtime-closing-turn.ts /
   voice-realtime-ws-proxy.service.ts / server/index.ts）并离线 20/20 绿 + typecheck
   过；真机 replay（P1 窗口，¥0.02）转交后模型说「好的，我来查找 quay 最活跃的会话」。
+activatedAt: 2026-10-19T00:27:03.411Z
+statusLog:
+  - at: 2026-10-19T00:27:03.411Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-19T00:27:03.411Z
 ---
