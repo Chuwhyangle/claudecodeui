@@ -84,6 +84,11 @@ import {
   type OmissionFillParams,
 } from './voice-realtime-omission-fill.js';
 import { voiceRealtimeToolsFor } from './voice-realtime-tools.js';
+import type {
+  VoiceRealtimeTtsFrame,
+  VoiceRealtimeTtsInput,
+  VoiceRealtimeTtsResult,
+} from './voice-realtime-tts.js';
 import { createLocalSpeechGate, type LocalSpeechBoundary } from './voice-realtime-local-speech.js';
 import { createSilenceTailGate, type SilenceTailOptions } from './voice-realtime-silence-tail.js';
 import {
@@ -1224,7 +1229,17 @@ export type VoiceRealtimeOutboundFrame =
    * will arrive for this id (the queue cleared it and everything behind it), so the page can drop
    * it without waiting for a closing frame.
    */
-  | { type: 'narrator_stop'; utteranceId: string; reason: VoiceRealtimeNarratorInterruptReason };
+  | { type: 'narrator_stop'; utteranceId: string; reason: VoiceRealtimeNarratorInterruptReason }
+  /**
+   * The narrator's synthesized audio, in the leaf's own frame contract.
+   *
+   * `tts_audio` frames carry base64 slices in `seq` order, `tts_done` closes the utterance with the
+   * byte/duration readings the page needs, and `tts_error` is the destination of every refusal.
+   * Declared as the leaf's union rather than re-spelled here: the producer and the wire cannot
+   * drift, and the page's own union mirrors the same three shapes. See
+   * `voice-realtime-tts.ts` for why silence is never an `ok` answer.
+   */
+  | VoiceRealtimeTtsFrame;
 
 /**
  * How much of the person's text the bound session's OWN queue is still holding.
@@ -1487,6 +1502,15 @@ export type VoiceRealtimeNarratorQueue = {
 export function createVoiceRealtimeNarratorQueue(input: {
   send: (frame: VoiceRealtimeOutboundFrame) => void;
   log?: (line: string) => void;
+  /**
+   * The TTS seam this connection's narrator speaks through, or absent for the text-only wire.
+   *
+   * ABSENCE IS THE PRE-TTS BEHAVIOUR, and every criterion written before the downlink existed uses
+   * it: the queue emits `narrator_speak` and waits for the page's `narrator_done` exactly as before.
+   * With a seam, the same `pump()` that emitted the text also synthesizes it and streams the audio
+   * to the same page; the pacing ack still comes from the page, after playback.
+   */
+  tts?: VoiceRealtimeNarratorTtsSeam;
 }): VoiceRealtimeNarratorQueue {
   /** The narration the page holds now, or `null`. Only one at a time — see the pacing note. */
   let current: VoiceRealtimeNarration | null = null;
@@ -1500,8 +1524,44 @@ export function createVoiceRealtimeNarratorQueue(input: {
     if (closed || current !== null || pending.length === 0) return;
     const next = pending.shift() as VoiceRealtimeNarration;
     current = next;
+    // The TEXT frame goes first even when audio follows: it is the sentence the page can display,
+    // and it is the fallback a page without TTS playback can still honour. The audio frames are
+    // ordered BEHIND it on the same socket, so a page that receives either has the correlation id.
     input.send({ type: 'narrator_speak', utteranceId: next.utteranceId, text: next.text });
     input.log?.(`narrator speak ${next.utteranceId} chars=${next.text.length} queued=${pending.length}`);
+
+    const tts = input.tts;
+    if (tts === undefined) return;
+    // The downlink is guarded rather than trusted: an utterance the person has already cleared
+    // (`interrupt` sets `current` to null) must not receive late audio AFTER its `narrator_stop`,
+    // and a closed connection has no page to send to. The synth call itself is not cancellable
+    // (the leaf's timeout is its bound); dropping the output is what makes the cut immediate.
+    void tts
+      .speak({ utteranceId: next.utteranceId, text: next.text }, (frame) => {
+        if (closed || current === null || current.utteranceId !== next.utteranceId) return;
+        input.send(frame);
+      })
+      .then((result) => {
+        if (result.ok) {
+          input.log?.(
+            `narrator tts done ${next.utteranceId} frames=${result.frames} bytes=${result.bytes} ` +
+              `durationMs=${result.durationMs === null ? '-' : Math.round(result.durationMs)}`,
+          );
+        }
+        // A failure already reached the page as a `tts_error` frame (the leaf emits exactly one);
+        // the log line is the server-side reading of the same refusal. The queue stays paced: the
+        // page answers `narrator_done` on the error frame, so the next narration is still advanced.
+        else {
+          input.log?.(
+            `narrator tts failed ${next.utteranceId} code=${result.code} upstream=${result.upstreamCode ?? '-'}`,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        input.log?.(
+          `narrator tts threw ${next.utteranceId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
   };
 
   return {
@@ -1546,6 +1606,25 @@ export function createVoiceRealtimeNarratorQueue(input: {
 }
 
 /**
+ * The narrator's speech synthesis, as the proxy sees it.
+ *
+ * The proxy owns WHEN an utterance starts and the queue's pacing; the composition root owns the
+ * credential, the voice and the endpoint the TTS leaf dials. This seam is that boundary: the proxy
+ * hands over the utterance and a downlink, and the leaf decides every frame that reaches the page.
+ *
+ * `speak` MUST emit either audio frames or exactly one `tts_error` — never neither (see
+ * `voice-realtime-tts.ts`). The proxy never inspects the result to decide whether to send a frame;
+ * the downlink is the only channel, so a fake implementation in a criterion sees exactly what the
+ * browser would. Consumed by `createVoiceRealtimeNarratorQueue` and built in `server/index.ts`.
+ */
+export type VoiceRealtimeNarratorTtsSeam = {
+  speak(
+    input: VoiceRealtimeTtsInput,
+    downlink: (frame: VoiceRealtimeTtsFrame) => void,
+  ): Promise<VoiceRealtimeTtsResult>;
+};
+
+/**
  * The narrator seam: this connection's queue handoff and the duplex rule's switch.
  *
  * LEFT UNSET BY EVERY CALLER WITH NO NARRATOR, and absence is byte-neutral: no queue is built, no
@@ -1566,6 +1645,14 @@ export type VoiceRealtimeNarratorSeams = {
    * and queues through the person's speech, which is what reddens "去掉新语音清空队列的钩子必红".
    */
   interruptOnUserSpeech?: boolean;
+  /**
+   * This connection's speech synthesis, or absent for the text-only wire.
+   *
+   * OMITTED IS THE PRE-TTS CONTRACT: the queue emits text and the page's own ack advances it. A
+   * composition root that owns a TTS leaf passes this, and the queue's `pump()` then also sends the
+   * leaf's `tts_audio`/`tts_done`/`tts_error` frames. See {@link VoiceRealtimeNarratorTtsSeam}.
+   */
+  tts?: VoiceRealtimeNarratorTtsSeam;
 };
 
 /**
@@ -2343,7 +2430,10 @@ export function handleVoiceRealtimeConnection(
   const advertisedTools = voiceRealtimeToolsFor(seams.slimSendTool ?? DEFAULT_VOICE_REALTIME_SLIM_SEND_TOOL);
 
   const send = (frame: VoiceRealtimeOutboundFrame): void => {
-    if (frame.type === 'caption' ? frame.final : true) {
+    // One line per outbound frame, EXCEPT non-final captions and `tts_audio` slices: the audio
+    // frames are a STREAM (one bounded slice each), and a journal line per slice would bury the
+    // utterance-level readings that matter — `narrator speak`, `tts_done` and `tts_error`.
+    if (frame.type === 'caption' ? frame.final : frame.type !== 'tts_audio') {
       seams.log?.(
         `to-browser ${frame.type}${frame.type === 'state' ? ` ${frame.state}` : ''}${
           frame.type === 'error' ? ` ${frame.code}${frame.recoverable === true ? ' (recoverable)' : ''}: ${frame.message}` : ''
@@ -2369,7 +2459,15 @@ export function handleVoiceRealtimeConnection(
   // no queue, no hook and no change to the wire. The composition root receives the queue through
   // `attach` and its producer (run-end summary, TTS) enqueues text into it.
   const narratorQueue: VoiceRealtimeNarratorQueue | null =
-    seams.narrator === undefined ? null : createVoiceRealtimeNarratorQueue({ send, log: seams.log });
+    seams.narrator === undefined
+      ? null
+      : createVoiceRealtimeNarratorQueue({
+          send,
+          log: seams.log,
+          // The connection's own TTS send. Absent keeps the queue on the text-only wire every
+          // pre-TTS criterion was written against.
+          ...(seams.narrator.tts === undefined ? {} : { tts: seams.narrator.tts }),
+        });
   if (narratorQueue !== null) {
     seams.narrator?.attach?.(narratorQueue);
   }

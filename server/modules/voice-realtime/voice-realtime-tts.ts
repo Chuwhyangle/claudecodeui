@@ -41,6 +41,36 @@ export const DEFAULT_VOICE_REALTIME_TTS_MODEL = 'cosyvoice-v3.5-flash';
 export const DEFAULT_VOICE_REALTIME_TTS_BASE_URL = 'https://dashscope.aliyuncs.com';
 
 /**
+ * The environment variable a deployment names its CosyVoice voice id in.
+ *
+ * Read by `server/index.ts` at its assembly point. There is no usable system-voice default for
+ * `cosyvoice-v3.5-flash`: the v3.5 line ships NO system timbres and accepts only a cloned/designed
+ * voice id from the account. A deployment therefore names the voice it enrolled; naming none means
+ * the narrator cannot speak, which is reported as `TTS_NOT_CONFIGURED` rather than dialling with a
+ * system voice the service would reject.
+ */
+export const VOICE_REALTIME_TTS_VOICE_ENV = 'VOICE_REALTIME_TTS_VOICE';
+
+/**
+ * The environment variable that points this leaf at a different HTTP base URL.
+ *
+ * It exists for ONE caller, exactly like `VOICE_REALTIME_ENDPOINT`: a criterion run whose stand-in
+ * TTS server lives on loopback. Its presence is also the switch saying "no real credential" — a
+ * stand-in accepts any bearer — so a run that names it never bills the cloud. Unset (the shipped
+ * state) means the documented DashScope host above.
+ */
+export const VOICE_REALTIME_TTS_ENDPOINT_ENV = 'VOICE_REALTIME_TTS_ENDPOINT';
+
+/**
+ * The voice id resolved when the deployment names none.
+ *
+ * EMPTY ON PURPOSE — see {@link VOICE_REALTIME_TTS_VOICE_ENV}. An empty voice is refused by
+ * {@link synthesizeVoiceRealtimeSpeech} before any request is made, so the page receives a named
+ * `tts_error` instead of silence that looks like a successful utterance.
+ */
+export const DEFAULT_VOICE_REALTIME_TTS_VOICE = '';
+
+/**
  * The documented non-realtime speech-synthesis path.
  *
  * Consumed by this module's request builder and by the AC-405 criterion, which asserts the request

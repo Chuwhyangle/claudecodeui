@@ -344,7 +344,7 @@ test('the stand-in is the only endpoint a scenario can reach', async () => {
   const cloudless = createDashscopeTransport({ apiKey: '', endpoint: SCRIPTED_ENDPOINT_URL });
   await assert.rejects(
     () => cloudless.open(),
-    /DASHSCOPE_API_KEY is required/,
+    /a DashScope key is required to open the real DashScope realtime transport/,
     'a transport with neither a key nor a stand-in must refuse rather than dial',
   );
   scenario.socket.close();

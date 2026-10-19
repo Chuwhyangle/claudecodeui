@@ -60,6 +60,7 @@ const SAMPLE_SETTINGS = {
   dashscopeEndpoint: '',
   dashscopeApiKey: '',
   dashscopeModel: '',
+  liveVoiceDashscopeApiKey: '',
 };
 
 const EMPTY_SETTINGS = {
@@ -73,6 +74,7 @@ const EMPTY_SETTINGS = {
   dashscopeEndpoint: '',
   dashscopeApiKey: '',
   dashscopeModel: '',
+  liveVoiceDashscopeApiKey: '',
 };
 
 /** Distinct from `SAMPLE_SETTINGS.apiKey`, so a leak from either path is attributable. */

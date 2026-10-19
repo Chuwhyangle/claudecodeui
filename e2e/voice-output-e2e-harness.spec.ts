@@ -17,10 +17,14 @@
  *       app's handshake and, through `armVad`, closes utterances acoustically from the audio the
  *       app really sends. The transcript it completes for each utterance is the FROZEN recogniser
  *       output for this exact recording (`log/<id>.jsonl`), not an invented sentence;
- *     · the TTS backend is a local route stand-in: the browser's real `/api/voice/tts` request is
- *       answered with a valid WAV, so the leg proves "text → HTTP → bytes → browser playback"
- *       end-to-end without a cloud bill. The sibling AC-405 task owns the real cosyvoice synth;
- *       when its downlink frame lands, this spec is where its audio assertion is added.
+ *     · the READ-ALOUD backend is a local route stand-in: the browser's real `/api/voice/tts`
+ *       request is answered with a valid WAV, so the leg proves "text → HTTP → bytes → browser
+ *       playback" end-to-end without a cloud bill.
+ *     · the NARRATOR's TTS backend is a scripted CosyVoice HTTP server on loopback
+ *       (`startScriptedTts`): the app server's real TTS leaf dials it, the real SSE bytes are
+ *       framed and sent as `tts_audio`/`tts_done`, and the real page decodes and plays them before
+ *       answering `narrator_done`. The cloud synth (AC-405) is the same leaf against DashScope;
+ *       this leg proves the downlink wiring, not the provider's audio quality.
  *     · the model's follow-up remark and the run-end summary are the harness's own sentences: the
  *       scripted endpoint says the announce text after each delivered `session_send`, and the app
  *       server runs with `VOICE_REALTIME_CLOSING_TURN=announce` plus a summary stand-in, so the
@@ -41,10 +45,17 @@
  *   VOICE_E2E_PLAN=/path/plan.json node_modules/.bin/playwright test e2e/voice-output-e2e-harness.spec.ts
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import path from 'node:path';
 
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 
+import {
+  DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES,
+  DEFAULT_VOICE_REALTIME_TTS_MODEL,
+  VOICE_REALTIME_TTS_PATH,
+  VOICE_REALTIME_TTS_VOICE_ENV,
+} from '../server/modules/voice-realtime/voice-realtime-tts';
 import { installWavMic, playWavMic, wavMicReading } from '../experiments/voice-e2e-harness/wavMic';
 import { startScriptedUpstream, type ScriptedUpstreamServer } from './voiceRealtimeScriptedUpstream';
 import {
@@ -102,6 +113,22 @@ if (!ANNOUNCE_TEXT || !SUMMARY_TEXT) {
   );
 }
 
+/**
+ * The scripted TTS stand-in's port and the voice the app server was started with.
+ *
+ * BOTH SIDES NAME THE SAME PORT: `run.mjs` allocates it before Playwright spawns the app server,
+ * publishes the address as `VOICE_REALTIME_TTS_ENDPOINT` to the server and the bare number to this
+ * spec. The spec binds it and answers the leaf's HTTP request; nothing here reaches a cloud service.
+ */
+const TTS_PORT = Number(process.env.VOICE_E2E_TTS_PORT);
+const TTS_VOICE = process.env[VOICE_REALTIME_TTS_VOICE_ENV];
+if (!Number.isInteger(TTS_PORT) || TTS_PORT <= 0 || !TTS_VOICE) {
+  throw new Error(
+    'VOICE_E2E_TTS_PORT / VOICE_REALTIME_TTS_VOICE are not set — run this file through ' +
+      '`node experiments/voice-e2e-harness/run.mjs`, which allocates the stand-in port.',
+  );
+}
+
 /** Reads the window out of the sample's WAV as the PCM16 the fake microphone will replay. */
 function readWindowPcm(plan: Plan): { pcm16Base64: string; frames: number } {
   const buffer = readFileSync(plan.wavPath);
@@ -153,8 +180,6 @@ const DELIVERY_TIMEOUT_MS = 40_000;
 const TTS_OBSERVE_MS = 30_000;
 /** How long the run-end summary is waited for: a delivered turn ends 2 s in, then a 400 ms settle. */
 const SUMMARY_OBSERVE_MS = 45_000;
-/** How long the announce remark is waited for; it follows the first delivery by one round trip. */
-const ANNOUNCE_OBSERVE_MS = 20_000;
 
 /** A small, valid, decodable WAV the TTS route hands back — 2.5 s of a 440 Hz tone. */
 function standinTtsWav(): Buffer {
@@ -183,6 +208,119 @@ function standinTtsWav(): Buffer {
   return buffer;
 }
 const STANDIN_TTS_WAV = standinTtsWav();
+
+/**
+ * The WAV the SCRIPTED TTS SERVER streams to the app server for every narrator sentence.
+ *
+ * 1.0 s at 24 kHz — the leaf's default sample rate — so a full utterance spans more than one
+ * `tts_audio` frame at the leaf's 16 KiB slice size. That is what makes `seq` order and the
+ * reassembled byte total real readings rather than a single-frame tautology.
+ */
+function narratorTtsWav(): Buffer {
+  const rate = 24_000;
+  const seconds = 1;
+  const count = Math.round(rate * seconds);
+  const dataBytes = count * 2;
+  const buffer = Buffer.alloc(44 + dataBytes);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + dataBytes, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(rate, 24);
+  buffer.writeUInt32LE(rate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(dataBytes, 40);
+  for (let index = 0; index < count; index += 1) {
+    const envelope = 0.3 * (0.7 + 0.3 * Math.sin((2 * Math.PI * 2 * index) / rate));
+    buffer.writeInt16LE(Math.round(envelope * Math.sin((2 * Math.PI * 440 * index) / rate) * 32767), 44 + index * 2);
+  }
+  return buffer;
+}
+const NARRATOR_TTS_WAV = narratorTtsWav();
+/** How many `tts_audio` frames the leaf must produce for one stand-in utterance. */
+const NARRATOR_TTS_FRAMES = Math.ceil(NARRATOR_TTS_WAV.length / DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES);
+
+/** One request the scripted TTS server answered, with the body it read. */
+type ScriptedTtsRequest = { atMs: number; path: string; text: string; voice: string; model: string };
+type ScriptedTtsServer = { requests: ScriptedTtsRequest[]; close(): Promise<void> };
+
+/**
+ * The scripted CosyVoice HTTP server the app server's TTS leaf dials.
+ *
+ * It speaks the documented wire: `POST /api/v1/services/audio/tts/SpeechSynthesizer` with
+ * `X-DashScope-SSE` answered by `sentence-synthesis` events whose `output.audio.data` is a base64
+ * slice. The WAV is sent in THREE SSE events, so the leaf's own 16 KiB framing is measurable apart
+ * from the upstream chunking. Every request is recorded, so the assertion can say the announce and
+ * summary TEXTS really reached synthesis rather than reading the server's own queue.
+ */
+async function startScriptedTts(port: number): Promise<ScriptedTtsServer> {
+  const requests: ScriptedTtsRequest[] = [];
+  const server = createServer((incoming, outgoing) => {
+    if (incoming.method !== 'POST' || (incoming.url ?? '') !== VOICE_REALTIME_TTS_PATH) {
+      outgoing.statusCode = 404;
+      outgoing.end('not found');
+      return;
+    }
+    let raw = '';
+    incoming.setEncoding('utf8');
+    incoming.on('data', (chunk: string) => {
+      raw += chunk;
+    });
+    incoming.on('end', () => {
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        /* an unreadable body is still a request this stand-in reports */
+      }
+      const input = (typeof body.input === 'object' && body.input !== null ? body.input : {}) as Record<
+        string,
+        unknown
+      >;
+      requests.push({
+        atMs: Date.now(),
+        path: incoming.url ?? '',
+        text: typeof input.text === 'string' ? input.text : '',
+        voice: typeof input.voice === 'string' ? input.voice : '',
+        model: typeof body.model === 'string' ? body.model : '',
+      });
+
+      outgoing.writeHead(200, {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      });
+      const slices = 3;
+      const per = Math.ceil(NARRATOR_TTS_WAV.length / slices);
+      for (let offset = 0; offset < NARRATOR_TTS_WAV.length; offset += per) {
+        const data = NARRATOR_TTS_WAV.subarray(offset, Math.min(offset + per, NARRATOR_TTS_WAV.length)).toString(
+          'base64',
+        );
+        outgoing.write(
+          `data: ${JSON.stringify({ output: { type: 'sentence-synthesis', audio: { data } }, usage: { characters: 8 } })}\n\n`,
+        );
+      }
+      outgoing.write(`data: ${JSON.stringify({ output: { type: 'sentence-end', finish_reason: 'stop' } })}\n\n`);
+      outgoing.end();
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => resolve());
+  });
+  return {
+    requests,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      }),
+  };
+}
 
 // ── journal readers (same construction as the sibling voice criteria) ────────────────────────
 type JournalEntry = Record<string, unknown>;
@@ -249,6 +387,90 @@ const readNarratorSpeaks = (page: Page): Promise<NarratorSpeak[]> =>
       }));
   });
 
+/** One frame the page received or sent, stamped by the browser's clock. */
+type VoiceFrameEntry = { atMs: number; frame: Record<string, unknown> };
+
+/** Everything the page received on the `/voice-realtime` socket. */
+const readVoiceFrames = (page: Page): Promise<VoiceFrameEntry[]> =>
+  page.evaluate(
+    () =>
+      ((window as unknown as { __voiceFrames?: Array<{ atMs: number; frame: Record<string, unknown> }> })
+        .__voiceFrames ?? []).slice(),
+  );
+
+/** Everything the page SENT on the `/voice-realtime` socket (the pacing acks live here). */
+const readSentFrames = (page: Page): Promise<VoiceFrameEntry[]> =>
+  page.evaluate(
+    () =>
+      ((window as unknown as { __voiceSentFrames?: Array<{ atMs: number; frame: Record<string, unknown> }> })
+        .__voiceSentFrames ?? []).slice(),
+  );
+
+/**
+ * One narrator utterance's synthesized audio, reassembled from the frames that crossed the socket.
+ *
+ * `seqs` is the ORDER THE PAGE RECEIVED, not a sorted view — the AC is that the slices arrive in
+ * `seq` order, and sorting here would hide exactly the defect it names. `doneBytes` is the leaf's
+ * own reading and is compared with the stand-in WAV's length below.
+ */
+type NarratorTtsReading = {
+  utteranceId: string;
+  text: string;
+  speakAtMs: number;
+  seqs: number[];
+  doneAtMs: number | null;
+  doneFrames: number | null;
+  doneBytes: number | null;
+  errorCode: string | null;
+  ackedAtMs: number | null;
+};
+
+function readNarratorTts(frames: VoiceFrameEntry[], sent: VoiceFrameEntry[]): NarratorTtsReading[] {
+  const readings = new Map<string, NarratorTtsReading>();
+  const ensure = (utteranceId: string): NarratorTtsReading => {
+    let reading = readings.get(utteranceId);
+    if (reading === undefined) {
+      reading = {
+        utteranceId,
+        text: '',
+        speakAtMs: Number.POSITIVE_INFINITY,
+        seqs: [],
+        doneAtMs: null,
+        doneFrames: null,
+        doneBytes: null,
+        errorCode: null,
+        ackedAtMs: null,
+      };
+      readings.set(utteranceId, reading);
+    }
+    return reading;
+  };
+  for (const entry of frames) {
+    const frame = entry.frame;
+    if (typeof frame.utteranceId !== 'string') continue;
+    const reading = ensure(frame.utteranceId);
+    if (frame.type === 'narrator_speak') {
+      reading.text = typeof frame.text === 'string' ? frame.text : '';
+      reading.speakAtMs = entry.atMs;
+    } else if (frame.type === 'tts_audio') {
+      reading.seqs.push(typeof frame.seq === 'number' ? frame.seq : -1);
+    } else if (frame.type === 'tts_done') {
+      reading.doneAtMs = entry.atMs;
+      reading.doneFrames = typeof frame.frames === 'number' ? frame.frames : -1;
+      reading.doneBytes = typeof frame.bytes === 'number' ? frame.bytes : -1;
+    } else if (frame.type === 'tts_error') {
+      reading.errorCode = typeof frame.code === 'string' ? frame.code : 'UNNAMED';
+    }
+  }
+  for (const entry of sent) {
+    const frame = entry.frame;
+    if (frame.type !== 'narrator_done' || typeof frame.utteranceId !== 'string') continue;
+    const reading = readings.get(frame.utteranceId);
+    if (reading !== undefined) reading.ackedAtMs = entry.atMs;
+  }
+  return [...readings.values()];
+}
+
 // ── fixture helpers (copied from the sibling specs: there is no shared module for these) ─────
 async function createAccount(api: APIRequestContext): Promise<string> {
   const register = await api.post('/api/auth/register', { data: { username: USERNAME, password: PASSWORD } });
@@ -298,7 +520,15 @@ type HarnessRun = {
     playback: PlaybackRecord[];
   };
   egress: { logExists: boolean; blocked: boolean; dials: number; authorizationSeen: boolean };
-  narrator: { speaks: NarratorSpeak[] };
+  narrator: {
+    speaks: NarratorSpeak[];
+    /** One entry per utterance the server synthesized, read off the frames the page received. */
+    tts: NarratorTtsReading[];
+    /** The requests the scripted CosyVoice server answered, in order. */
+    requests: ScriptedTtsRequest[];
+    /** Narrator clips the browser actually decoded and played (duration-matched, not read-aloud). */
+    played: number;
+  };
   page: { phase: string; caption: string; status: string; pageErrors: string[]; consoleErrors: string[] };
 };
 
@@ -331,6 +561,9 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     const egressLog = path.join(dataDir, 'egress.jsonl');
 
     const upstream = await startScriptedUpstream(upstreamPort);
+    // The CosyVoice HTTP stand-in the app server's TTS leaf dials. Started here, before any page
+    // connects, so the first announce remark's synthesis never races a missing listener.
+    const scriptedTts = await startScriptedTts(TTS_PORT);
     // The model's follow-up remark on a delivered `session_send`. Armed HERE, beside the detector,
     // because the two are the two halves of the same reply: the detector closes the utterance and
     // calls `session_send`, and the transport's synthesized resume opens the response this text
@@ -413,10 +646,18 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         sampleRate: PLAN.sampleRate,
         frameMs: PLAN.mic.frameMs,
       });
-      // The voice socket's inbound frames: the relay's own words to the page, stamped.
+      // The voice socket's frames in BOTH directions, stamped.
+      //
+      // NOTHING IS AUTO-ACKED HERE ANY MORE. The previous version of this tap answered every
+      // `narrator_speak` with `narrator_done` itself, which meant the server's queue advanced on a
+      // frame the browser never earned. The AC is that PLAYBACK completion paces the queue: the
+      // real page now plays the TTS audio and sends the ack from its own `ended` handler, and the
+      // outbound tap below records that ack so the assertion can read when it happened.
       await context.addInitScript(() => {
         const frames: Array<{ atMs: number; frame: Record<string, unknown> }> = [];
+        const sent: Array<{ atMs: number; frame: Record<string, unknown> }> = [];
         (window as unknown as { __voiceFrames: typeof frames }).__voiceFrames = frames;
+        (window as unknown as { __voiceSentFrames: typeof sent }).__voiceSentFrames = sent;
         const Original = window.WebSocket;
         class Tapped extends Original {
           constructor(...args: ConstructorParameters<typeof WebSocket>) {
@@ -432,18 +673,17 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
                 return; // not a JSON frame
               }
               frames.push({ atMs: Date.now(), frame });
-              // The narrator queue is PACED: it says one narration and waits for the page's
-              // `narrator_done` before the next. This tap stands in for the page's playback
-              // completion here — without the ack a run-end summary would sit behind the last
-              // announce remark forever and the frame the criterion reads would never be sent.
-              if (frame.type === 'narrator_speak' && typeof frame.utteranceId === 'string') {
-                try {
-                  this.send(JSON.stringify({ type: 'narrator_done', utteranceId: frame.utteranceId }));
-                } catch {
-                  /* the socket is going away; the frames already recorded are the reading */
-                }
-              }
             });
+          }
+          send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+            if (typeof data === 'string' && this.url.includes('/voice-realtime')) {
+              try {
+                sent.push({ atMs: Date.now(), frame: JSON.parse(data) as Record<string, unknown> });
+              } catch {
+                /* a non-JSON string is not a frame this criterion reads */
+              }
+            }
+            super.send(data);
           }
         }
         (window as unknown as { WebSocket: unknown }).WebSocket = Tapped;
@@ -593,23 +833,40 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         await page.waitForTimeout(250);
       }
 
-      // ── the narrator's two automatic outputs ─────────────────────────────────────────────────
+      // ── the narrator's two automatic outputs, through TTS ────────────────────────────────────
       // 1. The announce remark follows a delivered message: the closing turn's follow-up text on
       //    the resumed response, which the proxy's announce gate routes into the narrator queue.
-      //    Waited for as a FRAME, not for a clock — the queue paces on the page's ack above.
-      let narratorSpeaks = await readNarratorSpeaks(page);
-      const announceDeadline = Date.now() + ANNOUNCE_OBSERVE_MS;
-      while (Date.now() < announceDeadline && !narratorSpeaks.some((speak) => speak.text === ANNOUNCE_TEXT)) {
-        await page.waitForTimeout(250);
-        narratorSpeaks = await readNarratorSpeaks(page);
-      }
       // 2. The run-end summary. Every delivered message opens a walk of its own and the armed deck
       //    ends each turn two seconds in, so the transition is a real `running → idle` the proxy's
       //    host poll observes; the 400 ms settle and the stand-in producer's answer follow it.
-      const summaryDeadline = Date.now() + SUMMARY_OBSERVE_MS;
-      while (Date.now() < summaryDeadline && !narratorSpeaks.some((speak) => speak.text === SUMMARY_TEXT)) {
-        await page.waitForTimeout(250);
+      //
+      // BOTH ARE WAITED FOR AS COMPLETE TTS UTTERANCES — the text frame, every audio slice, the
+      // `tts_done` reading AND the page's own `narrator_done` — because the queue is PACED: the
+      // second sentence is only sent after the first has PLAYED. A wait on the text frame alone
+      // would be satisfied before the leg this criterion exists for had run.
+      let narratorFrames: VoiceFrameEntry[] = [];
+      let narratorSentFrames: VoiceFrameEntry[] = [];
+      let narratorSpeaks = await readNarratorSpeaks(page);
+      let narratorTts: NarratorTtsReading[] = [];
+      const narratorDeadline = Date.now() + SUMMARY_OBSERVE_MS;
+      while (Date.now() < narratorDeadline) {
+        narratorFrames = await readVoiceFrames(page);
+        narratorSentFrames = await readSentFrames(page);
         narratorSpeaks = await readNarratorSpeaks(page);
+        narratorTts = readNarratorTts(narratorFrames, narratorSentFrames);
+        const announce = narratorTts.find((reading) => reading.text === ANNOUNCE_TEXT);
+        const summary = narratorTts.find((reading) => reading.text === SUMMARY_TEXT);
+        if (
+          announce !== undefined &&
+          announce.doneAtMs !== null &&
+          announce.ackedAtMs !== null &&
+          summary !== undefined &&
+          summary.doneAtMs !== null &&
+          summary.ackedAtMs !== null
+        ) {
+          break;
+        }
+        await page.waitForTimeout(250);
       }
 
       const vad = upstream.vad();
@@ -621,6 +878,16 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           record.duration !== null && (longest === null || record.duration > longest) ? record.duration : longest,
         null,
       );
+      // RE-READ the playback tap: the narrator clips play AFTER the read-aloud leg above. The
+      // read-aloud stand-in is 2.5 s and a narrator clip is 1.0 s, so the duration band below is
+      // what separates "the browser decoded our TTS bytes" from "the earlier read-aloud happened".
+      const allPlayback: PlaybackRecord[] = await page.evaluate(
+        () => ((window as unknown as { __voicePlayback?: PlaybackRecord[] }).__voicePlayback ?? []).slice(),
+      );
+      const narratorPlayed = allPlayback.filter(
+        (record) =>
+          record.src.startsWith('blob:') && record.duration !== null && record.duration > 0.5 && record.duration < 1.5,
+      ).length;
 
       run = {
         sessionId,
@@ -662,7 +929,12 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           dials: upstream.dialed(),
           authorizationSeen: headers.some((header) => header.authorization !== undefined),
         },
-        narrator: { speaks: narratorSpeaks },
+        narrator: {
+          speaks: narratorSpeaks,
+          tts: narratorTts,
+          requests: scriptedTts.requests.slice(),
+          played: narratorPlayed,
+        },
         page: {
           phase: ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim(),
           caption: ((await page.locator(CAPTION).textContent().catch(() => '')) ?? '').trim(),
@@ -686,6 +958,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     } finally {
       await api.dispose();
       await upstream.close();
+      await scriptedTts.close();
     }
   });
 
@@ -750,6 +1023,70 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     expect([...text].filter((character) => '#*`|-'.includes(character)), 'the summary must carry no Markdown').toEqual([]);
     expect(text, 'the summary must be one line of speech').not.toContain('\n');
     expect(summary!.utteranceId).toMatch(/^run-end-summary-\d+$/);
+  });
+
+  test('the narrator speech was synthesized and streamed as ordered tts_audio frames', () => {
+    const announce = run.narrator.tts.find((reading) => reading.text === ANNOUNCE_TEXT);
+    const summary = run.narrator.tts.find((reading) => reading.text === SUMMARY_TEXT);
+    const readings = run.narrator.tts.map((reading) => ({ id: reading.utteranceId, text: reading.text }));
+    expect(announce, `narrator tts readings were ${JSON.stringify(readings)}`).toBeDefined();
+    expect(summary, `narrator tts readings were ${JSON.stringify(readings)}`).toBeDefined();
+
+    for (const [label, reading] of [
+      ['announce', announce!],
+      ['summary', summary!],
+    ] as const) {
+      // A NAMED refusal is red here: the whole point of the downlink is that a sentence the queue
+      // accepted is actually spoken, and `tts_error` is the leaf's honest alternative to audio.
+      expect(reading.errorCode, `${label}: tts_error ${reading.errorCode ?? ''}`).toBeNull();
+      // THE AC's "按 seq 从 0 连续": the received order must BE the sequence, not merely a set.
+      expect(reading.seqs, `${label}: tts_audio seq order`).toEqual([...Array(NARRATOR_TTS_FRAMES).keys()]);
+      expect(reading.doneFrames, `${label}: tts_done frames`).toBe(NARRATOR_TTS_FRAMES);
+      // "bytes 等于合成字节数": the leaf's own total is the stand-in WAV's exact length.
+      expect(reading.doneBytes, `${label}: tts_done bytes`).toBe(NARRATOR_TTS_WAV.length);
+    }
+
+    // The TEXTS reached synthesis, read off the stand-in's recorded requests. A run whose narrator
+    // frames carried words but whose TTS request body carried something else would pass the frame
+    // assertions alone, which is exactly the wire this AC is about.
+    const synthesized = run.narrator.requests.map((request) => request.text);
+    expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(ANNOUNCE_TEXT);
+    expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(SUMMARY_TEXT);
+    for (const request of run.narrator.requests) {
+      expect(request.path, 'the leaf must dial the documented CosyVoice path').toBe(VOICE_REALTIME_TTS_PATH);
+      expect(request.model, 'the leaf must request the pinned CosyVoice model').toBe(DEFAULT_VOICE_REALTIME_TTS_MODEL);
+      expect(request.voice, 'the leaf must send the voice the deployment named').toBe(TTS_VOICE);
+    }
+  });
+
+  test('the browser played each narration and its narrator_done advanced the queue', () => {
+    const announce = run.narrator.tts.find((reading) => reading.text === ANNOUNCE_TEXT);
+    const summary = run.narrator.tts.find((reading) => reading.text === SUMMARY_TEXT);
+    expect(announce, 'the announce utterance must exist').toBeDefined();
+    expect(summary, 'the run-end summary utterance must exist').toBeDefined();
+
+    // PLAYBACK, not mere receipt: a 1 s narrator clip the browser decoded (the read-aloud stand-in
+    // is 2.5 s, so the duration band identifies the narrator's own audio).
+    expect(
+      run.narrator.played,
+      `narrator playback records were ${JSON.stringify(run.narrator.tts)}`,
+    ).toBeGreaterThan(0);
+
+    // The ack is the page's own, sent from its playback completion handler — and sent AFTER the
+    // audio stream closed. An ack raced on `narrator_speak` (the old harness tap) fails this.
+    expect(announce!.ackedAtMs, 'the announce narration must be acked by the page').not.toBeNull();
+    expect(summary!.ackedAtMs, 'the summary narration must be acked by the page').not.toBeNull();
+    expect(announce!.ackedAtMs!, 'the announce ack must follow its tts_done').toBeGreaterThan(announce!.doneAtMs!);
+    expect(summary!.ackedAtMs!, 'the summary ack must follow its tts_done').toBeGreaterThan(summary!.doneAtMs!);
+
+    // THE QUEUE ADVANCED: another narration started only after the announce's playback ack. This is
+    // the reading that says the ack is load-bearing — with no ack (or with it ignored), the summary
+    // would sit behind the announce forever and the second frame would never be emitted.
+    const later = run.narrator.tts.filter((reading) => reading.speakAtMs > announce!.ackedAtMs!);
+    expect(
+      later.map((reading) => reading.text),
+      `utterances after the announce ack: ${JSON.stringify(later.map((reading) => reading.text))}`,
+    ).not.toHaveLength(0);
   });
 
   test('the run stayed on loopback and carried no cloud credential', () => {

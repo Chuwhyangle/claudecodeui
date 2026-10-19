@@ -147,6 +147,7 @@ export {
   type HostQueueReading,
   type HostRunActivityReading,
   type VoiceRealtimeInboundFrame,
+  type VoiceRealtimeNarratorTtsSeam,
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from './voice-realtime-ws-proxy.service.js';
@@ -322,6 +323,20 @@ export {
   type VoiceRealtimeCaptureStoreOptions,
 } from './voice-realtime-audio-capture.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';
+// The Live Voice TTS leaf (GOAL-047 / AC-405, wired by AC-408). The composition root builds its
+// options (credential, voice, endpoint override) and hands `speakVoiceRealtimeText` to the narrator
+// queue through the proxy's `tts` seam; the browser receives the leaf's three frame shapes. Nothing
+// here opens a socket or reads the environment — the leaf takes every input as an option.
+export {
+  // The assembler reads the voice id from the deployment and the credential from the user; the two
+  // env names live with the leaf so the composition root and this module cannot spell them apart.
+  DEFAULT_VOICE_REALTIME_TTS_VOICE,
+  VOICE_REALTIME_TTS_ENDPOINT_ENV,
+  VOICE_REALTIME_TTS_VOICE_ENV,
+  speakVoiceRealtimeText,
+  type VoiceRealtimeTtsFrame,
+  type VoiceRealtimeTtsOptions,
+} from './voice-realtime-tts.js';
 // The omission-fill rule v2 (GOAL-046): a pure planner over the transcripts and executed messages the
 // relay already holds. It has no I/O, no timers and no parameter defaults — the caller passes the locked
 // values from `experiments/voice-relay-qb/omission-fill-params.json`. The ws proxy will call it when it

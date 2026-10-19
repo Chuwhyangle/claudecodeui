@@ -550,7 +550,10 @@ test('AC7: the injection run is offline by construction and the stand-in saw the
   // than dial a real endpoint with an empty credential. That refusal is what makes `apiKey: ''` a
   // statement about this run and not a wish.
   const cloudless = createDashscopeTransport({ apiKey: '', endpoint: SCRIPTED_ENDPOINT_URL });
-  await assert.rejects(() => cloudless.open(), /DASHSCOPE_API_KEY is required/);
+  await assert.rejects(
+    () => cloudless.open(),
+    /a DashScope key is required to open the real DashScope realtime transport/,
+  );
 
   const sequence = instructionTexts(scenario).map((text, index) => ({
     update: index + 1,

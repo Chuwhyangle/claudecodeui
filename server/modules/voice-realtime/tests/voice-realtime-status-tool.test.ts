@@ -574,7 +574,10 @@ test('AC7: the status-tool run is offline by construction — empty credential a
   // And it is enforced, not merely intended: the SAME parameters WITHOUT the stand-in refuse rather
   // than dial a real endpoint with an empty credential.
   const cloudless = createDashscopeTransport({ apiKey: '', endpoint: SCRIPTED_ENDPOINT_URL });
-  await assert.rejects(() => cloudless.open(), /DASHSCOPE_API_KEY is required/);
+  await assert.rejects(
+    () => cloudless.open(),
+    /a DashScope key is required to open the real DashScope realtime transport/,
+  );
 
   assert.ok(scenario.upstream.clientFrames.length > 0, 'the stand-in saw the frames, so it was the endpoint');
   scenario.socket.close();
