@@ -25,5 +25,6 @@ goal_ac: AC-405
 
 ## Touches
 
-- server/modules/voice-realtime/（新增 TTS 模块文件）
-- server/modules/voice-realtime/tests/voice-realtime-tts.test.ts
+- server/modules/voice-realtime/voice-realtime-tts.ts (new)
+- server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (new)
+- tasks/voice-output-tts-cosyvoice.md
