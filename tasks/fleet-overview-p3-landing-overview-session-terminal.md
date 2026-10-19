@@ -38,7 +38,15 @@ extra:
 
 - src/modules/project-workspace/WorkspaceStateView.tsx
 - src/modules/project-workspace/tests/WorkspaceStateViewOverview.test.tsx
+- src/modules/project-workspace/hooks/useRecentSessionEndings.ts
+- src/modules/project-workspace/hooks/useFleetSummary.ts
+- src/modules/project-workspace/context/ProjectsStateContext.tsx
+- src/modules/project-workspace/ProjectMainRegion.tsx
+- src/modules/project-workspace/WorkspaceMain.tsx
+- src/modules/sidebar/index.ts
+- src/shared/api.ts
 - server/modules/resident-ledger/terminal-state.ts
 - server/modules/resident-ledger/index.ts
 - server/modules/resident-ledger/tests/terminal-state.test.ts
+- e2e/landing-overview.spec.ts
 - tasks/fleet-overview-p3-landing-overview-session-terminal.md
