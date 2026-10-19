@@ -2,7 +2,7 @@
 id: gap-goal-047-exit-condition-heading-suffix-unreadable
 title: GOAL-047 退出条件节被标题后缀「（北极星：…）」挡在逐字解析器外 ⇒ 机械层读成空、语义判官从未运行；提议（选型 b）标题改回逐字 `##
   退出条件` 并把「人工确认（非 AC）」分离为独立非 AC 门，交人裁定
-status: todo
+status: needs-human
 labels:
   - gap
 parent: null
