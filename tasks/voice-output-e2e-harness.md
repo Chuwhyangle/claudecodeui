@@ -1,7 +1,7 @@
 ---
 id: voice-output-e2e-harness
 title: E0 端到端验证/开发平台：浏览器 + HTTP + DashScope 服务，无人值守回放现有语料
-status: ready
+status: done
 labels:
   - feature
 parent: null

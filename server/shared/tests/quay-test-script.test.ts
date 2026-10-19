@@ -159,11 +159,8 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 369 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-19 after voice-output-run-end-summary added its AC-404
-    // criterion server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts
-    // (368 + 1 = 369).
-    // Before that, re-measured 2026-10-18 after gap-omission-fill-wire-into-ws-proxy added
+    // the tree collects 367 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-18 after gap-omission-fill-wire-into-ws-proxy added
     // server/modules/voice-realtime/tests/voice-realtime-omission-fill-wiring.test.ts (364 + 1 = 365).
     // Before that, gap-omission-fill-pure-module-and-parity added
     // server/modules/voice-realtime/tests/voice-realtime-omission-fill.test.ts (363 + 1 = 364).
@@ -192,10 +189,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // (364 + 1 = 365). Then gap-omission-fill-params-owned-by-server added the AC-402 source test
     // (365 + 1 = 366). Then gap-voice-realtime-silent-closing-orphans-tool-resume-overflow added
     // server/modules/voice-realtime/tests/voice-realtime-tool-resume-always-sent.test.ts
-    // (366 + 1 = 367). Then voice-output-backchannel added its AC-407 criterion
-    // server/modules/voice-realtime/tests/voice-realtime-backchannel.test.ts (367 + 1 = 368).
-    // Then voice-output-run-end-summary added its AC-404 criterion
-    // server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts (368 + 1 = 369).
+    // (366 + 1 = 367). Then two independent tasks each added one criterion file:
+    // voice-output-tts-cosyvoice added the AC-405 TTS criterion
+    // server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (367 + 1 = 368) and
+    // voice-output-backchannel added its AC-407 criterion
+    // server/modules/voice-realtime/tests/voice-realtime-backchannel.test.ts (368 + 1 = 369).
     // This fixture names 3 known files, so 369 - 3 = 366.
     assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=366$/);
   } finally {
