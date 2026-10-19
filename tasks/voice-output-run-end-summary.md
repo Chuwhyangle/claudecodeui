@@ -34,8 +34,10 @@ goal_ac: AC-404
 
 ## Blocker
 
-**2026-10-19T00:26:32.798Z — worker 未落地（exited-not-landed）**
+**2026-10-19T00:41:44.870Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=75774 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792369258305
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/quay-test-script.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
+Automatic merge failed; fix conflicts and then commit the result.
 - run_id：wk-prod-anchor
-- session_id：236fc4b2-26c1-4332-9a8b-0da4e8fe68ef
+- session_id：1722adef-7084-453a-8c55-bbd63a528be3
