@@ -1,7 +1,7 @@
 ---
 id: voice-settings-live-tab-minimal-surface
 title: Voice 设置 Live Voice 子 tab 最小面：只暴露 liveVoiceDashscopeApiKey（AC-409）
-status: todo
+status: ready
 labels: []
 parent: null
 children: []
