@@ -44,7 +44,8 @@ import {
   sleep,
   type P0Session,
 } from '../voice-realtime-segmented/p0/probe-lib.mts';
-import { VOICE_REALTIME_INSTRUCTIONS, VOICE_REALTIME_TOOLS } from '../../server/modules/voice-realtime/index.js';
+import { VOICE_REALTIME_INSTRUCTIONS, VOICE_REALTIME_TOOLS, voiceRealtimeInstructionsFor } from '../../server/modules/voice-realtime/index.js';
+import { acceptedResultTail } from '../../server/modules/voice-realtime/voice-realtime-closing-turn.js';
 import {
   VOICE_REALTIME_STATUS_HEADER,
   VOICE_REALTIME_STATUS_STALENESS_RULE,
@@ -99,7 +100,7 @@ const WINDOWS: Record<string, { capture: string; startMs: number; endMs: number;
   M2: { capture: '7c01be7e', startMs: 0, endMs: 400_000, note: '170 s multi-fragment: 13 ASR finals feeding 3 sends' },
 };
 
-type Arm = 'K' | 'N0' | 'N1' | 'N2' | 'S' | 'NS';
+type Arm = 'K' | 'N0' | 'N1' | 'N2' | 'S' | 'NS' | 'A';
 
 const SHIPPED_RESULT = {
   accepted: true,
@@ -116,13 +117,18 @@ if (!VOICE_REALTIME_INSTRUCTIONS.includes(OK_SENTENCE)) {
   throw new Error('the shipped prompt no longer contains the "reply OK" sentence N1 replaces — re-derive N1');
 }
 const N1_INSTRUCTIONS = VOICE_REALTIME_INSTRUCTIONS.replace(OK_SENTENCE, 'Then say nothing more.');
+const ANNOUNCE_INSTRUCTIONS = voiceRealtimeInstructionsFor('announce');
+const ANNOUNCE_RESULT = {
+  accepted: true,
+  instruction: `The message was accepted and will reach the session. Do not call session_send again for it. ${acceptedResultTail('announce')}`,
+};
 const SHIPPED_INTERRUPT = VOICE_REALTIME_TOOLS.find((t) => t.name === 'session_interrupt')!;
 
 const armSpec = (arm: Arm) => ({
-  instructions: arm === 'N1' || arm === 'NS' ? N1_INSTRUCTIONS : VOICE_REALTIME_INSTRUCTIONS,
+  instructions: arm === 'N1' || arm === 'NS' ? N1_INSTRUCTIONS : arm === 'A' ? ANNOUNCE_INSTRUCTIONS : VOICE_REALTIME_INSTRUCTIONS,
   tools: arm === 'S' || arm === 'NS' ? [SESSION_SEND_TOOL, SHIPPED_INTERRUPT] : VOICE_REALTIME_TOOLS,
-  resume: arm === 'K' || arm === 'S',
-  sendResult: arm === 'N1' || arm === 'NS' ? NO_REPLY_RESULT : SHIPPED_RESULT,
+  resume: arm === 'K' || arm === 'S' || arm === 'A',
+  sendResult: arm === 'N1' || arm === 'NS' ? NO_REPLY_RESULT : arm === 'A' ? ANNOUNCE_RESULT : SHIPPED_RESULT,
   assistantOk: arm === 'N2',
 });
 

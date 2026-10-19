@@ -53,8 +53,11 @@ export const VOICE_REALTIME_SLIM_SEND_TOOL_ENV = 'VOICE_REALTIME_SLIM_SEND_TOOL'
  * `silent` — neither the tool result nor the prompt asks for an "OK"; the transport still resumes
  * the turn with its protocol-mandatory `response.create`, and that resumed turn is expected to
  * produce no speech. `respond` — the shipped spoken request before 2026-10-16, the rollback.
+ * `announce` — the model says ONE short sentence telling the user it is starting (a progress
+ * report, not an answer and not Claude Code's output read back); the no-reply rule is relaxed for
+ * that one sentence and nothing else.
  */
-export type VoiceRealtimeClosingTurn = 'silent' | 'respond';
+export type VoiceRealtimeClosingTurn = 'silent' | 'respond' | 'announce';
 
 /** The closing turn a deployment that names none gets. Consumed by the proxy's seam default and by the criteria. */
 export const DEFAULT_VOICE_REALTIME_CLOSING_TURN: VoiceRealtimeClosingTurn = 'silent';
@@ -89,7 +92,7 @@ export function resolveVoiceRealtimeClosingTurn(
     return { closingTurn: DEFAULT_VOICE_REALTIME_CLOSING_TURN, invalid: null };
   }
   const value = raw.trim();
-  if (value === 'silent' || value === 'respond') {
+  if (value === 'silent' || value === 'respond' || value === 'announce') {
     return { closingTurn: value, invalid: null };
   }
   return { closingTurn: DEFAULT_VOICE_REALTIME_CLOSING_TURN, invalid: value };
@@ -120,7 +123,7 @@ export function resolveVoiceRealtimeSlimSendTool(
  */
 export function describeVoiceRealtimeClosingTurn(resolution: VoiceRealtimeClosingTurnResolution): string | null {
   if (resolution.invalid === null) return null;
-  return `closing-turn: ${VOICE_REALTIME_CLOSING_TURN_ENV}="${resolution.invalid}" is not a known value (silent | respond) — using the default (${DEFAULT_VOICE_REALTIME_CLOSING_TURN})`;
+  return `closing-turn: ${VOICE_REALTIME_CLOSING_TURN_ENV}="${resolution.invalid}" is not a known value (silent | respond | announce) — using the default (${DEFAULT_VOICE_REALTIME_CLOSING_TURN})`;
 }
 
 /**
@@ -141,9 +144,13 @@ export function describeVoiceRealtimeSlimSendTool(resolution: VoiceRealtimeSlimS
  * Consumed by `voice-realtime-ws-proxy.service.ts` (the six result wordings).
  */
 export function acceptedResultTail(closingTurn: VoiceRealtimeClosingTurn): string {
-  return closingTurn === 'respond'
-    ? 'Reply with the single word OK.'
-    : 'Nothing more is needed from you: say nothing and wait for the user to speak again.';
+  if (closingTurn === 'respond') {
+    return 'Reply with the single word OK.';
+  }
+  if (closingTurn === 'announce') {
+    return 'Say ONE short sentence (in the user’s language, at most 15 words) telling them you are starting — for example “好的，我来查一下”. Report your action only: never answer what they said, never repeat their words, never read Claude Code’s output back.';
+  }
+  return 'Nothing more is needed from you: say nothing and wait for the user to speak again.';
 }
 
 /**

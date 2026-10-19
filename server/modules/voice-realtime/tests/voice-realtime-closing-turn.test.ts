@@ -72,6 +72,13 @@ test('`respond` is the rollback, spelled exactly; whitespace is trimmed', () => 
   });
 });
 
+test('`announce` is a third closing turn, spelled exactly', () => {
+  assert.deepEqual(resolveVoiceRealtimeClosingTurn({ [VOICE_REALTIME_CLOSING_TURN_ENV]: 'announce' }), {
+    closingTurn: 'announce',
+    invalid: null,
+  });
+});
+
 test('an unknown closing-turn value is NOT obeyed as a rollback: it resolves to the default and says so', () => {
   const resolution = resolveVoiceRealtimeClosingTurn({ [VOICE_REALTIME_CLOSING_TURN_ENV]: 'respnd' });
   assert.deepEqual(resolution, { closingTurn: 'silent', invalid: 'respnd' });
@@ -92,7 +99,7 @@ test('the slim send tool is ON by default; `off` is the rollback; an unknown val
 });
 
 test('the two switches are independent: every combination resolves, none reads the other', () => {
-  for (const closing of ['silent', 'respond']) {
+  for (const closing of ['silent', 'respond', 'announce']) {
     for (const slim of ['on', 'off']) {
       const env = { [VOICE_REALTIME_CLOSING_TURN_ENV]: closing, [VOICE_REALTIME_SLIM_SEND_TOOL_ENV]: slim };
       assert.equal(resolveVoiceRealtimeClosingTurn(env).closingTurn, closing);
@@ -115,6 +122,17 @@ test('the respond prompt is byte-identical to the shipped one; the silent prompt
     respond.replace('Then reply with the single word OK and say nothing else.', 'Then say nothing more.'),
     'nothing else in the prompt may move with the switch',
   );
+});
+
+test('the announce prompt is the silent prompt plus ONE starting-report exception', () => {
+  const announce = voiceRealtimeInstructionsFor('announce');
+  const silent = voiceRealtimeInstructionsFor('silent');
+  assert.doesNotMatch(announce, /single word OK/);
+  assert.match(announce, /Then say nothing more\./);
+  assert.match(announce, /One more exception to the no-reply rule/);
+  const added =
+    'One more exception to the no-reply rule: right after you deliver a `session_send`, say ONE short sentence (in the user’s language, at most 15 words) telling them you are starting — for example “好的，我来查一下”. It reports your action only: never an answer to what they said, never their words repeated, never Claude Code’s output read back. This is the only thing you may ever say aloud; then wait for the user to speak again.';
+  assert.equal(announce.replace(` ${added}`, ''), silent, 'nothing else in the prompt may move with the switch');
 });
 
 // ----------------------------------------------------------------- the tool result the model reads
@@ -192,6 +210,15 @@ test('silent: the tool result no longer asks for "OK" and says nothing more is n
 test('respond: the tool result is the shipped wording, byte for byte', async () => {
   const text = await firstToolOutput({ closingTurn: 'respond' });
   assert.match(text, /Do not call session_send again for it\. Reply with the single word OK\./);
+});
+
+test('announce: the tool result asks for ONE starting sentence, not OK and not silence', async () => {
+  const text = await firstToolOutput({ closingTurn: 'announce' });
+  assert.doesNotMatch(text, /single word OK/);
+  assert.doesNotMatch(text, /say nothing and wait for the user to speak again/);
+  assert.match(text, /Do not call session_send again/, 'the loop guard wording must survive');
+  assert.match(text, /Say ONE short sentence/);
+  assert.match(text, /never read Claude Code/);
 });
 
 test('a proxy handed no closing-turn seam ships the default (silent), without reading the environment', async () => {
