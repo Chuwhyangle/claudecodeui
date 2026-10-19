@@ -1,7 +1,7 @@
 ---
 id: AC-403
 title: 转交后 realtime 模型说一句 ≤15 字的开始确认：非 OK、非复述原话、不念输出
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -26,6 +26,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-19T09:09:00.678Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
