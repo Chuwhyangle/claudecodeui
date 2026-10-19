@@ -48,6 +48,7 @@ import { readFileSync } from 'node:fs';
 import { WebSocket } from 'ws';
 
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
+import { pickAnnouncePhrase } from './voice-realtime-announce-phrases.js';
 import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
 import {
   connect,
@@ -5913,15 +5914,22 @@ export function handleVoiceRealtimeConnection(
           // The person is still talking: the quiet window starts over.
           armCoalesce();
         },
-      // The announce closing turn's "I'm starting" remark — the model's follow-up text after a
-      // delivered session_send, which the bridge would otherwise swallow as display-only. Routed into
-      // the narrator queue so the browser speaks it, ONLY for `announce`: `silent` produces no text,
+      // The announce closing turn's "I'm starting" remark. The trigger stays the model's follow-up
+      // text after a delivered session_send, but the SENTENCE is now this connection's fixed
+      // announce phrase (see `voice-realtime-announce-phrases.ts`) rather than the model's wording:
+      // the five remarks in the 2026-10-19 capture were 8–9 characters and semantically identical,
+      // so per-utterance wording bought nothing while every one of them paid a separate synthesis
+      // round trip. The model's own prompt contract is unchanged (still "one short sentence"), so
+      // this wiring change is independent of it.
+      //
+      // Still routed into the narrator queue and ONLY for `announce`: `silent` produces no text,
       // `respond`'s "OK" must not be spoken, and a text the model said in answer to the user is
       // MODEL_TEXT_REPLY (a different path). No queue (no narrator wired) is a no-op, not an error.
-      onFollowUpText: ({ text }) => {
+      onFollowUpText: () => {
         if ((seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN) !== 'announce') return;
         if (narratorQueue === null) return;
-        narratorQueue.enqueue({ utteranceId: `announce-${announceNarrationSeq}`, text });
+        const seq = announceNarrationSeq;
+        narratorQueue.enqueue({ utteranceId: `announce-${seq}`, text: pickAnnouncePhrase(seq) });
         announceNarrationSeq += 1;
       },
     };

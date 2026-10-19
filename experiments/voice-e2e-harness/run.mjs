@@ -59,11 +59,11 @@ const SPEC = 'e2e/voice-output-e2e-harness.spec.ts';
 const DEFAULT_SAMPLE = '402fad85';
 
 /**
- * The announce closing turn's remark, as the scripted endpoint says it.
+ * The model's follow-up remark the scripted endpoint says after a delivered `session_send`.
  *
- * The task's AC reads the frame the browser receives: ≤15 characters, not the old "OK". It rides a
- * follow-up response after each delivered `session_send`, so the relay's own announce gate —
- * `VOICE_REALTIME_CLOSING_TURN=announce` in the server's environment below — turns it into speech.
+ * Since `gap-narrator-announce-phrase-cache` this is only the TRIGGER: the proxy ignores its wording
+ * and speaks the connection's fixed announce phrase instead (`voice-realtime-announce-phrases.ts`).
+ * The spec asserts this exact sentence never reaches the page or the TTS stand-in.
  */
 const ANNOUNCE_TEXT = '好的，我来查一下。';
 

@@ -845,24 +845,28 @@ function deliverVoiceRealtimeTtsFailure(
 }
 
 /**
- * Synthesizes one text and sends its audio to the browser as ordered downlink frames.
+ * Frames one COMPLETED synthesis onto the browser downlink.
  *
  * THE ORDER IS THE CONTRACT. Decoded audio is sliced into `frameBytes` pieces and each piece is one
- * `tts_audio` frame with a zero-based `seq`; `tts_done` follows with the total readings. Every
- * failure path emits exactly one `tts_error` frame and NO audio, so a page that joined whatever it
- * received can never mistake a refusal for a short utterance.
+ * `tts_audio` frame with a zero-based `seq`; `tts_done` follows with the total readings. A failed
+ * synthesis is answered with exactly one `tts_error` and NO audio, so a page that joined whatever
+ * it received can never mistake a refusal for a short utterance.
+ *
+ * WHY IT IS EXPORTED. The pre-synthesized cache (`voice-realtime-tts-cache.ts`) replays a synthesis
+ * it already holds, and a cached utterance MUST reach the page with the same frames, `seq` order
+ * and `tts_done` readings as a freshly synthesized one. Sharing this function is what makes that
+ * true by construction rather than by two implementations agreeing.
  *
  * A throwing downlink is reported as `TTS_DELIVERY_FAILED` rather than escaping: the sink is the
  * transport, and a closed browser socket must not turn into an unhandled rejection on the relay.
- * Consumed by the AC-405 criterion; the shipped narrator path uses
- * {@link streamVoiceRealtimeSpeech} so the first frame does not wait for the last byte.
+ * Consumed by {@link speakVoiceRealtimeText}, the cache, and the AC-405 criterion.
  */
-export async function speakVoiceRealtimeText(
+export function emitVoiceRealtimeSynthesisFrames(
   input: VoiceRealtimeTtsInput,
   options: VoiceRealtimeTtsOptions,
+  synthesis: VoiceRealtimeTtsSynthesis,
   downlink: VoiceRealtimeTtsDownlink,
-): Promise<VoiceRealtimeTtsResult> {
-  const synthesis = await synthesizeVoiceRealtimeSpeech(input.text, options);
+): VoiceRealtimeTtsResult {
   if (!synthesis.ok) return deliverVoiceRealtimeTtsFailure(input, synthesis, downlink);
 
   const frameBytes = Math.max(1, Math.floor(options.frameBytes ?? DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES));
@@ -899,6 +903,22 @@ export async function speakVoiceRealtimeText(
     durationMs: synthesis.durationMs,
     characters: synthesis.characters,
   };
+}
+
+/**
+ * Synthesizes one text and sends its audio to the browser as ordered downlink frames.
+ *
+ * Consumed by the AC-405 criterion and by callers that want the complete-blob framing. The shipped
+ * narrator path uses either the pre-synthesized cache (fixed phrases) or
+ * {@link streamVoiceRealtimeSpeech} (anything synthesized on the spot).
+ */
+export async function speakVoiceRealtimeText(
+  input: VoiceRealtimeTtsInput,
+  options: VoiceRealtimeTtsOptions,
+  downlink: VoiceRealtimeTtsDownlink,
+): Promise<VoiceRealtimeTtsResult> {
+  const synthesis = await synthesizeVoiceRealtimeSpeech(input.text, options);
+  return emitVoiceRealtimeSynthesisFrames(input, options, synthesis, downlink);
 }
 
 /** A downlink rejection, distinguished from an upstream/stream failure inside the streaming loop. */

@@ -131,7 +131,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, streamVoiceRealtimeSpeech, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, ANNOUNCE_PHRASES, createVoiceRealtimeTtsCache, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -701,28 +701,47 @@ const buildVoiceRealtimeSeams = (input: {
     );
     const liveVoiceKey = isMaskedDashscopeApiKey(storedLiveVoiceKey) ? '' : storedLiveVoiceKey;
     const ttsVoice = (process.env[VOICE_REALTIME_TTS_VOICE_ENV] ?? '').trim() || DEFAULT_VOICE_REALTIME_TTS_VOICE;
-    const narratorTts: VoiceRealtimeNarratorTtsSeam = {
-        speak: (utterance, downlink) =>
-            streamVoiceRealtimeSpeech(
-                utterance,
-                {
-                    apiKey: ttsEndpointOverride === '' ? liveVoiceKey : 'voice-realtime-tts-standin',
-                    voice: ttsVoice,
-                    ...(ttsEndpointOverride === '' ? {} : { baseUrl: ttsEndpointOverride }),
-                },
-                downlink,
-            ),
-    };
     const narratorWiring = buildVoiceRealtimeNarratorWiring({
         closingTurn: closingTurn.closingTurn,
         summaryStandin,
     });
+    // THE ANNOUNCE PHRASE CACHE (2026-10-19). The announce closing turn no longer speaks the model's
+    // own wording; it speaks one of a fixed short table (see `voice-realtime-announce-phrases.ts`),
+    // and this per-connection cache pre-synthesizes the whole table as soon as the credential is
+    // known. A cached sentence then costs zero synthesis requests when it is announced. An unwarmed
+    // or failed entry simply falls back to the on-the-spot path, so the cache adds no failure mode.
+    const ttsCache =
+        narratorWiring === null
+            ? null
+            : createVoiceRealtimeTtsCache({
+                  options: {
+                      apiKey: ttsEndpointOverride === '' ? liveVoiceKey : 'voice-realtime-tts-standin',
+                      voice: ttsVoice,
+                      ...(ttsEndpointOverride === '' ? {} : { baseUrl: ttsEndpointOverride }),
+                  },
+                  phrases: ANNOUNCE_PHRASES,
+                  log: input.log,
+              });
+    if (ttsCache !== null && closingTurn.closingTurn === 'announce') {
+        // Fire and forget: the connection must not wait for synthesis, and a failed phrase is
+        // re-synthesized on the spot when it is actually announced.
+        void ttsCache.warm();
+    }
     // The TTS seam rides the SAME narrator wiring object the proxy reads. A silent deployment
     // (`null` here) synthesizes nothing at all — the pre-narrator, pre-TTS wire is unchanged.
     const narratorWiringWithTts =
-        narratorWiring === null
+        narratorWiring === null || ttsCache === null
             ? null
-            : { ...narratorWiring, narrator: { ...narratorWiring.narrator, tts: narratorTts } };
+            : {
+                  ...narratorWiring,
+                  narrator: {
+                      ...narratorWiring.narrator,
+                      tts: {
+                          speak: (utterance: Parameters<VoiceRealtimeNarratorTtsSeam['speak']>[0], downlink: Parameters<VoiceRealtimeNarratorTtsSeam['speak']>[1]) =>
+                              ttsCache.speak(utterance, downlink),
+                      },
+                  },
+              };
     // THE OMISSION-FILL PRODUCER (GOAL-046). Delivery is no longer gated on the model choosing to
     // call `session_send`: the proxy registers every final transcription and delivers the endpoint's
     // own words only when the model's executed messages do not carry them (rule v2). The rule's

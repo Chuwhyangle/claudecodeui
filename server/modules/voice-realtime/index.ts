@@ -340,6 +340,17 @@ export {
   type VoiceRealtimeTtsFrame,
   type VoiceRealtimeTtsOptions,
 } from './voice-realtime-tts.js';
+// The announce closing turn's FIXED sentence table and the per-connection cache that pre-synthesizes
+// it (2026-10-19 live capture: five 8–9-character remarks, each paying its own synthesis round trip).
+// `server/index.ts` hands the table to the cache at connection assembly and the proxy picks one
+// sentence per announcement; the criteria read both through this barrel.
+export { ANNOUNCE_PHRASES, pickAnnouncePhrase } from './voice-realtime-announce-phrases.js';
+export {
+  DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES,
+  createVoiceRealtimeTtsCache,
+  type VoiceRealtimeTtsCache,
+  type VoiceRealtimeTtsCacheOptions,
+} from './voice-realtime-tts-cache.js';
 // The omission-fill rule v2 (GOAL-046): a pure planner over the transcripts and executed messages the
 // relay already holds. It has no I/O, no timers and no parameter defaults — the caller passes the locked
 // values from `experiments/voice-relay-qb/omission-fill-params.json`. The ws proxy will call it when it

@@ -2,13 +2,15 @@
  * GOAL-047 / AC-403 — the announce closing turn's "I'm starting" remark reaches the narrator.
  *
  * WHAT THIS FILE PINS. `announce` makes the relay say ONE short sentence after a delivered
- * `session_send` (the model's follow-up text on the resumed turn). That text would otherwise be
- * swallowed by the bridge as display-only; the wiring under test routes it into the narrator queue
- * so the browser speaks it. The gate is the closing turn itself: `silent` produces no text and
- * `respond`'s "OK" must not be spoken — only `announce` turns a follow-up remark into a narration.
+ * `session_send`. That follow-up text would otherwise be swallowed by the bridge as display-only;
+ * the wiring under test routes the announcement into the narrator queue so the browser speaks it.
+ * Since `gap-narrator-announce-phrase-cache` the SENTENCE is the connection's fixed announce phrase
+ * (`ANNOUNCE_PHRASES`), not the model's own wording — the model's follow-up text only supplies the
+ * trigger, and never reaches an outbound frame. The gate is the closing turn itself: `silent`
+ * produces no text and `respond`'s "OK" must not be spoken.
  *
  *   · AC-403(narrator)(a) — under `announce`, a follow-up text (the bridge's `onFollowUpText`)
- *     enqueues ONE `narrator_speak` carrying that text, with a fresh `utteranceId`.
+ *     enqueues ONE `narrator_speak` carrying the next fixed phrase, with a fresh `utteranceId`.
  *   · AC-403(narrator)(b) — under `silent`, the same follow-up text enqueues NOTHING (the remark is
  *     not a narration; the model simply would not say it).
  *
@@ -27,6 +29,7 @@ import test from 'node:test';
 import { WebSocket as WS } from 'ws';
 
 import type { RealtimeServerMessage, RealtimeToolExecutor } from '../index.js';
+import { ANNOUNCE_PHRASES, pickAnnouncePhrase } from '../voice-realtime-announce-phrases.js';
 import {
   handleVoiceRealtimeConnection,
   type VoiceRealtimeInboundFrame,
@@ -110,15 +113,18 @@ function followUpText(transport: FakeTransport, text: string): void {
   transport.peerSend({ type: 'response.text.done', response_id: 'resp-1', text } as RealtimeServerMessage);
 }
 
-test('announce: a follow-up remark is spoken through the narrator', async () => {
+test('announce: the fixed phrase is spoken through the narrator, not the model text', async () => {
   const h = wire('announce');
   await open(h.socket, h.transport);
 
-  followUpText(h.transport, '好的，我来查一下这个报错。');
+  const modelText = '好的，我来查一下这个报错。';
+  followUpText(h.transport, modelText);
   await waitFor(() => speakFrames(h.socket).length === 1);
 
   const spoken = speakFrames(h.socket)[0]!;
-  assert.equal(spoken.text, '好的，我来查一下这个报错。');
+  assert.equal(spoken.text, pickAnnouncePhrase(0));
+  assert.ok(ANNOUNCE_PHRASES.includes(spoken.text), `${spoken.text} must be one of the fixed phrases`);
+  assert.notEqual(spoken.text, modelText, 'the model wording must not reach the narrator');
   assert.match(spoken.utteranceId, /^announce-\d+$/);
 });
 

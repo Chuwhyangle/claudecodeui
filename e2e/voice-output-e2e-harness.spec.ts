@@ -56,6 +56,7 @@ import {
   VOICE_REALTIME_TTS_PATH,
   VOICE_REALTIME_TTS_VOICE_ENV,
 } from '../server/modules/voice-realtime/voice-realtime-tts';
+import { ANNOUNCE_PHRASES } from '../server/modules/voice-realtime/voice-realtime-announce-phrases';
 import { installWavMic, playWavMic, wavMicReading } from '../experiments/voice-e2e-harness/wavMic';
 import { startScriptedUpstream, type ScriptedUpstreamServer } from './voiceRealtimeScriptedUpstream';
 import {
@@ -99,19 +100,21 @@ if (PLAN.version !== 1 || PLAN.expectedTranscripts.length !== PLAN.vad.expectedU
 /**
  * The two sentences the narrator is expected to say, published by `run.mjs` beside the plan.
  *
- * They are read from the environment rather than restated here: the announce text is what the
- * scripted endpoint puts on the wire, and the summary text is what the app server's stand-in
- * producer returns. A literal on this side would be a second copy that could agree with itself
- * while disagreeing with what the run actually said.
+ * The ANNOUNCE sentence is the connection's FIRST fixed phrase: since
+ * `gap-narrator-announce-phrase-cache` the proxy ignores the model's follow-up wording and speaks
+ * `pickAnnouncePhrase(0)` instead, so that is what the page must receive. The endpoint's own
+ * follow-up text (`VOICE_E2E_ANNOUNCE_TEXT`) is only the TRIGGER here and is asserted NOT to cross
+ * the wire below. The summary text is what the app server's stand-in producer returns.
  */
-const ANNOUNCE_TEXT = process.env.VOICE_E2E_ANNOUNCE_TEXT;
+const MODEL_FOLLOW_UP = process.env.VOICE_E2E_ANNOUNCE_TEXT;
 const SUMMARY_TEXT = process.env.VOICE_E2E_SUMMARY_TEXT;
-if (!ANNOUNCE_TEXT || !SUMMARY_TEXT) {
+if (!MODEL_FOLLOW_UP || !SUMMARY_TEXT) {
   throw new Error(
     'VOICE_E2E_ANNOUNCE_TEXT / VOICE_E2E_SUMMARY_TEXT are not set — run this file through ' +
       '`node experiments/voice-e2e-harness/run.mjs`, which publishes both beside the plan.',
   );
 }
+const ANNOUNCE_TEXT = ANNOUNCE_PHRASES[0]!;
 
 /**
  * The scripted TTS stand-in's port and the voice the app server was started with.
@@ -243,16 +246,14 @@ function narratorTtsWav(): Buffer {
 }
 const NARRATOR_TTS_WAV = narratorTtsWav();
 /**
- * Where the stand-in WAV's PCM begins (the `data` chunk body).
+ * How many `tts_audio` frames the narrator cache emits for one stand-in utterance.
  *
- * The streaming leaf sends this prefix as its own `seq: 0` frame, so the number of frames is
- * `1 + ceil(pcmBytes / frameBytes)` — NOT `ceil(totalBytes / frameBytes)`: the header does not
- * share a slice with PCM any more.
+ * Since `gap-narrator-announce-phrase-cache` both a warmed phrase and an on-the-spot synthesis are
+ * framed by `emitVoiceRealtimeSynthesisFrames()` over the COMPLETE WAV, so the count is the plain
+ * whole-blob slice count (the streaming leaf's separate header frame applies only to
+ * `streamVoiceRealtimeSpeech`, which the narrator no longer calls).
  */
-const NARRATOR_TTS_DATA_START = NARRATOR_TTS_WAV.indexOf(Buffer.from('data')) + 8;
-/** How many `tts_audio` frames the streaming leaf must produce for one stand-in utterance. */
-const NARRATOR_TTS_FRAMES =
-  1 + Math.ceil((NARRATOR_TTS_WAV.length - NARRATOR_TTS_DATA_START) / DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES);
+const NARRATOR_TTS_FRAMES = Math.ceil(NARRATOR_TTS_WAV.length / DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES);
 
 /** One request the scripted TTS server answered, with the body it read. */
 type ScriptedTtsRequest = { atMs: number; path: string; text: string; voice: string; model: string };
@@ -611,7 +612,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     // calls `session_send`, and the transport's synthesized resume opens the response this text
     // answers. The app server runs with `VOICE_REALTIME_CLOSING_TURN=announce`, so the proxy's gate
     // turns this sentence into a narration rather than swallowing it as display-only.
-    upstream.armFollowUpText(ANNOUNCE_TEXT);
+    upstream.armFollowUpText(MODEL_FOLLOW_UP);
     upstream.armVad({
       timeBase: PLAN.vad.timeBase,
       threshold: PLAN.vad.threshold,
@@ -1124,6 +1125,15 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     const synthesized = run.narrator.requests.map((request) => request.text);
     expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(ANNOUNCE_TEXT);
     expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(SUMMARY_TEXT);
+    // THE PHRASE CACHE'S READING: the announce sentence was synthesized during WARM-UP (the fixed
+    // table is pre-synthesized when the connection opens), and the model's follow-up wording — the
+    // trigger — never became a synthesis request at all.
+    for (const phrase of ANNOUNCE_PHRASES) {
+      expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(phrase);
+    }
+    expect(synthesized, `the model follow-up reached synthesis: ${JSON.stringify(synthesized)}`).not.toContain(
+      MODEL_FOLLOW_UP,
+    );
     for (const request of run.narrator.requests) {
       expect(request.path, 'the leaf must dial the documented CosyVoice path').toBe(VOICE_REALTIME_TTS_PATH);
       expect(request.model, 'the leaf must request the pinned CosyVoice model').toBe(DEFAULT_VOICE_REALTIME_TTS_MODEL);
