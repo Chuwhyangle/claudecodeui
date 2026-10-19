@@ -21,12 +21,12 @@ extra:
 
 ## AC
 
-- [ ] AC1 端点契约：`GET /api/quay/fleet-summary` 返回 `{ projects: [{ projectId, driver:{state}, tasks:{total, todo, ready, needsHuman, done} }] }`；仅含存在 `.quay/config.yml` 的项目；无 quay 项目不在返回集。
-- [ ] AC2 TTL：2min 内二次请求不重新 spawn `quay task list`（注入 CLI spawn spy 断言 spawn 次数不变、返回 cached 标记）；TTL 过期后重新计算。
-- [ ] AC3 concurrency 上限：>4 个 quay 项目扇出时，同时活跃的 `quay task list` 子进程峰值 ≤4（spy 计数）。
-- [ ] AC4 前端渲染：项目行对 quay 项目渲染 task 计数徽标（todo/ready/needs-human，值与 fleet-summary 一致）；无 quay 项目行不变。
-- [ ] AC5 双视口：PC（1280px）与移动（390px）两视口下 task 计数徽标均可见（沿用 P1 双视口纪律）。
-- [ ] AC6 测试绿：新增 `server/modules/quay/tests/quay-fleet-summary.test.ts` + 前端测试；`npm run typecheck`、`npm run lint` 退出码 0。
+- [x] AC1 端点契约：`GET /api/quay/fleet-summary` 返回 `{ projects: [{ projectId, driver:{state}, tasks:{total, todo, ready, needsHuman, done} }] }`；仅含存在 `.quay/config.yml` 的项目；无 quay 项目不在返回集。
+- [x] AC2 TTL：2min 内二次请求不重新 spawn `quay task list`（注入 CLI spawn spy 断言 spawn 次数不变、返回 cached 标记）；TTL 过期后重新计算。
+- [x] AC3 concurrency 上限：>4 个 quay 项目扇出时，同时活跃的 `quay task list` 子进程峰值 ≤4（spy 计数）。
+- [x] AC4 前端渲染：项目行对 quay 项目渲染 task 计数徽标（todo/ready/needs-human，值与 fleet-summary 一致）；无 quay 项目行不变。
+- [x] AC5 双视口：PC（1280px）与移动（390px）两视口下 task 计数徽标均可见（沿用 P1 双视口纪律）。
+- [x] AC6 测试绿：新增 `server/modules/quay/tests/quay-fleet-summary.test.ts` + 前端测试；`npm run typecheck`、`npm run lint` 退出码 0。
 
 ## DoD
 
@@ -40,6 +40,9 @@ quay 项目行显示 task 计数徽标且与 `fleet-summary` 一致；TTL 内轮
 - server/modules/quay/index.ts
 - server/modules/quay/tests/quay-fleet-summary.test.ts
 - src/modules/sidebar/SidebarProjectItem.tsx
+- src/modules/sidebar/hooks/useFleetTaskCounts.ts
 - src/modules/sidebar/utils/sidebarProjectFormatting.ts
 - src/modules/sidebar/tests/SidebarProjectItemTaskCounts.test.tsx
+- src/shared/api.ts
+- src/shared/types.ts
 - tasks/fleet-overview-p2-project-task-counts-fleet-summary.md
