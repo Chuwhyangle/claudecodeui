@@ -2371,6 +2371,8 @@ export function handleVoiceRealtimeConnection(
   if (narratorQueue !== null) {
     seams.narrator?.attach?.(narratorQueue);
   }
+  /** The narrator's own utterance-id counter, so the announce remark's `narrator_speak` id is unique. */
+  let announceNarrationSeq = 0;
   /** The duplex rule's switch. Omitted means enabled — the shipped behaviour. */
   const narratorInterruptsOnUserSpeech = seams.narrator?.interruptOnUserSpeech ?? true;
 
@@ -5774,6 +5776,17 @@ export function handleVoiceRealtimeConnection(
           // The person is still talking: the quiet window starts over.
           armCoalesce();
         },
+      // The announce closing turn's "I'm starting" remark — the model's follow-up text after a
+      // delivered session_send, which the bridge would otherwise swallow as display-only. Routed into
+      // the narrator queue so the browser speaks it, ONLY for `announce`: `silent` produces no text,
+      // `respond`'s "OK" must not be spoken, and a text the model said in answer to the user is
+      // MODEL_TEXT_REPLY (a different path). No queue (no narrator wired) is a no-op, not an error.
+      onFollowUpText: ({ text }) => {
+        if ((seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN) !== 'announce') return;
+        if (narratorQueue === null) return;
+        narratorQueue.enqueue({ utteranceId: `announce-${announceNarrationSeq}`, text });
+        announceNarrationSeq += 1;
+      },
     };
     bridge =
       seams.upstreamPool === undefined

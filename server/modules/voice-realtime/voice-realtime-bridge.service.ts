@@ -551,6 +551,18 @@ export type RealtimeBridgeHooks = {
    * {@link RealtimeSegmentForensics} for why nothing may branch on it.
    */
   onSegmentForensics?: (event: RealtimeSegmentForensics) => void;
+  /**
+   * The model's remark on a tool result — the follow-up response's text, delivered on the resumed
+   * turn the transport always opens after a function call. Non-empty only when the closing turn
+   * asked the model to speak (`announce`); the `silent` turn produces none, and `respond` produces
+   * "OK". This bridge would otherwise SWALLOW that text (`response.text.done` is display-only), so
+   * the hook is the only path by which an announce remark can reach a consumer.
+   *
+   * The proxy routes it into the narrator queue when the connection's closing turn is `announce`;
+   * every other closing turn ignores it. Not an error: the remark is expected traffic, unlike
+   * {@link MODEL_TEXT_REPLY}, which is the model answering the USER instead of relaying.
+   */
+  onFollowUpText?: (event: { text: string }) => void;
 };
 
 /** How `connect` is configured. `maxConnectAttempts` bounds the initial connect AND reconnects. */
@@ -1449,6 +1461,9 @@ export function connect(
       // tool result is expected; only a real reply to the user's words is news.
       if (text !== '' && !isFollowUp) {
         throw new RealtimeBridgeFault({ code: 'MODEL_TEXT_REPLY', text });
+      }
+      if (text !== '' && isFollowUp) {
+        hooks.onFollowUpText?.({ text });
       }
       return;
     }

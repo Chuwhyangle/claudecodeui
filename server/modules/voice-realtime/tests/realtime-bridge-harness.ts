@@ -111,6 +111,8 @@ export type FakeTransport = RealtimeTransport & {
   peerSend(message: RealtimeServerMessage): void;
   /** The peer drops the socket (an UNEXPECTED close, i.e. the reconnect trigger). */
   drop(): void;
+  /** Tell the bridge its synthesized tool-resume `response.create` left — the follow-up credit's source. */
+  notifySynthesizedToolResume(): void;
 };
 
 /** Builds a fresh fake transport. */
@@ -121,6 +123,7 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
   let openCalls = 0;
   let closeCalls = 0;
   let remainingFailingOpens = options.failOpens ?? 0;
+  let synthesizedResumeHandler: (() => void) | null = null;
 
   return {
     sent,
@@ -164,6 +167,15 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
       for (const handler of [...closeHandlers]) {
         handler();
       }
+    },
+    onSynthesizedToolResume(handler: () => void): () => void {
+      synthesizedResumeHandler = handler;
+      return () => {
+        synthesizedResumeHandler = null;
+      };
+    },
+    notifySynthesizedToolResume(): void {
+      synthesizedResumeHandler?.();
     },
   };
 }
