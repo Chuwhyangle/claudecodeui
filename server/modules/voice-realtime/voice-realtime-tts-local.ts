@@ -50,7 +50,7 @@ type SherpaRuntime = {
 export type LocalVoiceRealtimeTtsOptions = {
   /** Directory holding model.onnx / voices.bin / tokens.txt / espeak-ng-data / lexicon. */
   modelDir: string;
-  /** The Kokoro speaker id. Kokoro multi-lang v1.1 carries 8 Chinese voices; 0 is the first female. */
+  /** The Kokoro speaker id. v1.1 Chinese female voices are sids 3–57; 3 is `zf_001`. */
   sid?: number;
   /** Playback speed (1.0 = the model's own pace). */
   speed?: number;
@@ -75,8 +75,8 @@ export const VOICE_REALTIME_TTS_LOCAL_DIR_ENV = 'VOICE_REALTIME_TTS_LOCAL_DIR';
 /** The environment variable that names the Kokoro speaker id. Read by `server/index.ts`. */
 export const VOICE_REALTIME_TTS_LOCAL_SID_ENV = 'VOICE_REALTIME_TTS_LOCAL_SID';
 
-/** The speaker id used when the deployment names none. 0 is the first Chinese female voice. */
-export const VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID = 0;
+/** The speaker id used when the deployment names none. 3 is `zf_001`, the first Chinese female voice. */
+export const VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID = 3;
 
 /**
  * The Kokoro lexicon files, comma-joined the way the sherpa Kokoro config spells them. The two
