@@ -327,6 +327,14 @@ export const api = {
   // Quay display endpoints (read-only). `refresh` bypasses the backend's TTL cache.
   quayStatus: (projectId: string) =>
     get(`/api/quay/${encodeURIComponent(projectId)}/status`),
+  /**
+   * The cheap, cross-project task/goal counts the landing overview's third panel reads.
+   *
+   * One request for every quay-configured project rather than one snapshot request
+   * per project: the snapshot is the lazy tier (in-flight tasks and the gantt),
+   * and the overview must not spawn a CLI per project just to draw a count.
+   */
+  quayFleetSummary: () => get('/api/quay/fleet-summary'),
   quaySnapshot: (
     projectId: string,
     { refresh = false, hours }: { refresh?: boolean; hours?: number } = {},

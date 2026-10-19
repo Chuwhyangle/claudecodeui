@@ -29,6 +29,8 @@ import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBo
 const LIFECYCLE_MODE_POLL_MS = 2_000;
 
 type WorkspaceMainProps = {
+  /** The whole sidebar listing, drawn by the landing overview when no project is selected. */
+  projects: Project[];
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
   activeTab: AppTab;
@@ -51,6 +53,7 @@ type WorkspaceMainProps = {
 
 /** Rendered by ProjectMainRegion to show the selected project's active tab: chat, files, shell, git, tasks, browser or a plugin. */
 function WorkspaceMain({
+  projects,
   selectedProject,
   selectedSession,
   activeTab,
@@ -251,11 +254,25 @@ function WorkspaceMain({
   usePaletteOpsRegister({ openFile, openFileInEditor, openDirectory });
 
   if (isLoading) {
-    return <WorkspaceStateView mode="loading" isMobile={isMobile} onMenuClick={onMenuClick} />;
+    return (
+      <WorkspaceStateView
+        mode="loading"
+        isMobile={isMobile}
+        onMenuClick={onMenuClick}
+        projects={projects}
+      />
+    );
   }
 
   if (!selectedProject) {
-    return <WorkspaceStateView mode="empty" isMobile={isMobile} onMenuClick={onMenuClick} />;
+    return (
+      <WorkspaceStateView
+        mode="empty"
+        isMobile={isMobile}
+        onMenuClick={onMenuClick}
+        projects={projects}
+      />
+    );
   }
 
   return (
