@@ -77,6 +77,15 @@ const ANNOUNCE_TEXT = '好的，我来查一下。';
  */
 const SUMMARY_TEXT = '本轮任务已结束，全部检查通过。';
 
+/**
+ * The voice id this run names for the scripted TTS stand-in.
+ *
+ * `cosyvoice-v3.5-flash` has no system voices, so a real deployment must name a cloned/designed id;
+ * a stand-in accepts any non-empty value. What matters here is that the leaf refuses an EMPTY voice
+ * before dialling, so the criterion has to name one to exercise the downlink at all.
+ */
+const TTS_VOICE = 'voice-e2e-standin';
+
 /** Candidate detector parameters, swept by {@link calibrate}. */
 const THRESHOLD_CANDIDATES = [0.05, 0.08, 0.1, 0.12, 0.15, 0.2, 0.25, 0.3];
 const SILENCE_CANDIDATES = [300, 400, 500, 600, 700, 800, 1000, 1200];
@@ -370,6 +379,31 @@ if (process.argv.includes('--plan-only')) {
   process.stdout.write(`[voice-e2e] plan-only: ${JSON.stringify(plan)}\n`);
   process.exit(0);
 }
+/**
+ * A free loopback port for the scripted TTS stand-in.
+ *
+ * The spec binds the port and answers the leaf's HTTP request; the SERVER has to be told the same
+ * address at start-up, so the number is allocated here — before Playwright spawns the app server —
+ * and published both as the endpoint and as the spec-side port. Node's own bind/close in a child
+ * process is used because this script is synchronous by design (it blocks in `spawnSync` below).
+ */
+function freePort() {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      "const server=require('node:net').createServer();server.listen(0,'127.0.0.1',()=>{process.stdout.write(String(server.address().port));server.close();});",
+    ],
+    { encoding: 'utf8' },
+  );
+  const port = Number((result.stdout ?? '').trim());
+  if (!Number.isInteger(port) || port <= 0) {
+    fail(`could not allocate a TTS stand-in port: ${(result.stderr ?? '').trim()}`);
+  }
+  return port;
+}
+
+const ttsPort = freePort();
 const playwright = path.join(REPO_ROOT, 'node_modules', '.bin', 'playwright');
 if (!existsSync(playwright)) fail(`playwright bin not found at ${playwright} (run npm install)`);
 
@@ -390,6 +424,14 @@ const result = spawnSync(playwright, ['test', SPEC, ...passthrough], {
     // are read by `server/index.ts` when it assembles a connection's seams.
     VOICE_REALTIME_CLOSING_TURN: 'announce',
     VOICE_REALTIME_SUMMARY_STANDIN: SUMMARY_TEXT,
+    // THE SCRIPTED TTS STAND-IN (AC-408). The server assembles the narrator's TTS leaf from these:
+    // the endpoint override points its CosyVoice HTTP client at loopback (and, by its presence, says
+    // "no real credential"), and the voice id is what stops the leaf refusing before it dials. The
+    // spec binds `VOICE_E2E_TTS_PORT` and answers with a valid WAV; both sides therefore name the
+    // SAME port rather than each choosing one.
+    VOICE_REALTIME_TTS_ENDPOINT: `http://127.0.0.1:${ttsPort}`,
+    VOICE_REALTIME_TTS_VOICE: TTS_VOICE,
+    VOICE_E2E_TTS_PORT: String(ttsPort),
     // The same two sentences to the spec, so what it asserts and what the endpoint says are one
     // source rather than two literals that could quietly drift apart.
     VOICE_E2E_ANNOUNCE_TEXT: ANNOUNCE_TEXT,

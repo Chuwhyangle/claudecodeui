@@ -126,15 +126,37 @@ type ServerFrame =
   /**
    * A narration the narrator layer wants spoken (GOAL-047), and the cut that ends the current one.
    *
-   * TEXT-ONLY TODAY. The page has no playback wiring for these yet (the TTS downlink is its own
-   * task), but they are DECLARED and TOLERATED here rather than left to fall through: the frame
-   * handler's last branch treats any unrecognised frame as a protocol error, so a deployment that
-   * runs the `announce` closing turn or a run-end summary would fail the whole voice session the
-   * first time the narrator spoke. `utteranceId` is the id the queue paces on; `narrator_done` is
-   * the page→server ack and is not a frame this side receives.
+   * The words are the DISPLAY/fallback half of what is said; the audio arrives just behind them as
+   * the three `tts_*` frames below. `utteranceId` is the id the queue paces on and the correlation
+   * key between the text, the audio slices and the `narrator_done` ack. `narrator_done` is the
+   * page→server frame and is not one this side receives.
    */
   | { type: 'narrator_speak'; utteranceId: string; text: string }
   | { type: 'narrator_stop'; utteranceId: string; reason?: string }
+  /**
+   * The narrator's synthesized audio, produced by the server's TTS leaf (the `voice-realtime-tts`
+   * frame contract). `tts_audio` carries a bounded base64 slice with a zero-based `seq`;
+   * `tts_done` closes the utterance with the byte/duration readings; `tts_error` is the named
+   * refusal that replaces silence. The utterance is played here and answered with `narrator_done`
+   * — the server's queue is PACED on that ack, so playback completion is what advances narration.
+   */
+  | { type: 'tts_audio'; utteranceId: string; seq: number; audio: string; format: string; sampleRate: number }
+  | {
+      type: 'tts_done';
+      utteranceId: string;
+      frames: number;
+      bytes: number;
+      durationMs: number | null;
+      characters: number;
+    }
+  | {
+      type: 'tts_error';
+      utteranceId: string;
+      code: string;
+      message: string;
+      upstreamCode?: string;
+      httpStatus?: number;
+    }
   /**
    * The host's own account of which of the person's delivered commands its queue STILL holds — the
    * reconcile set (see the proxy's `VoiceRealtimeOutboundFrame`). `queuedMessageUuids` names only
@@ -149,6 +171,38 @@ type ServerFrame =
    */
   | { type: 'queue_depth'; depth?: number; bytes?: number }
   | { type: 'error'; code: string; message: string; recoverable?: true };
+
+/**
+ * The audio the server is still assembling for ONE narrator utterance.
+ *
+ * Slices are keyed by the server's own `seq` because a WebSocket delivers them in order but the
+ * page must not depend on that: assembling by `seq` is what lets `tts_done` locate every slice the
+ * utterance declared, and a missing one is a reading the page can report rather than silently
+ * playing a shorter clip.
+ */
+type NarratorTtsBuffer = {
+  utteranceId: string;
+  format: string;
+  sampleRate: number;
+  chunks: Map<number, string>;
+};
+
+/** The narrator utterance whose `<audio>` element is playing now. */
+type NarratorPlaying = { utteranceId: string; url: string };
+
+/**
+ * The MIME type one TTS container is decoded as.
+ *
+ * `wav` is the leaf's default and the only shape this page needs; the other three are declared so a
+ * deployment that changes the leaf's format is still handed to the media element as the container
+ * it is, rather than as a mislabelled blob.
+ */
+const NARRATOR_TTS_MIME: Record<string, string> = {
+  wav: 'audio/wav',
+  mp3: 'audio/mpeg',
+  opus: 'audio/ogg',
+  pcm: 'audio/L16',
+};
 
 /**
  * What the model heard, as the transcript renders it (AC-317).
@@ -922,6 +976,18 @@ export function useVoiceRealtimeSession({
   });
 
   const socketRef = useRef<WebSocket | null>(null);
+  /**
+   * The narrator's TTS playback state (GOAL-047): the one `<audio>` element every narration is
+   * played through, the slices still being assembled for the utterance the server is reading, and
+   * the utterance playing now.
+   *
+   * ONE ELEMENT, because the server's narrator queue is PACED — it sends the next utterance only
+   * after this page's `narrator_done` — so there is never more than one narration to play. Reusing
+   * the element also keeps the playback unlock a single gesture-scoped action (see `start`).
+   */
+  const narratorAudioRef = useRef<HTMLAudioElement | null>(null);
+  const narratorTtsRef = useRef<NarratorTtsBuffer | null>(null);
+  const narratorPlayingRef = useRef<NarratorPlaying | null>(null);
   // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
   // an uploaded file — so `end()` and the socket's own `onclose` can release
   // it without knowing which one it was.
@@ -1212,6 +1278,32 @@ export function useVoiceRealtimeSession({
     resetSegmentation();
   }, [resetSegmentation, sendSegment]);
 
+  /**
+   * Cuts narrator playback and drops any bytes still being assembled.
+   *
+   * THE DUPLEX RULE'S CLIENT HALF. The server sends `narrator_stop` when the person speaks; by then
+   * it has already dropped the queue and will send nothing more for that id, so this only has to
+   * make the page quiet — pause the element, revoke its URL and forget the partial utterance. It is
+   * called on `end` too: a connection that is going away has no audio to finish.
+   */
+  const stopNarratorAudio = useCallback(() => {
+    const playing = narratorPlayingRef.current;
+    narratorPlayingRef.current = null;
+    narratorTtsRef.current = null;
+    if (playing !== null) {
+      URL.revokeObjectURL(playing.url);
+    }
+    const audio = narratorAudioRef.current;
+    if (audio !== null) {
+      try {
+        audio.pause();
+      } catch {
+        /* an element the browser already detached */
+      }
+      audio.removeAttribute('src');
+    }
+  }, []);
+
   const end = useCallback(() => {
     // Whether a connection is really being torn down here. `end` is also the unmount cleanup and the
     // effect cleanup that follows the bar's own Exit, so it runs a second time on an already-closed
@@ -1279,6 +1371,9 @@ export function useVoiceRealtimeSession({
     setRefusal(null);
     setStopped(null);
     setUndelivered([]);
+    // The narration playing (or being synthesized) belongs to the connection going away; a blob
+    // URL left behind would keep the utterance audible after Exit.
+    stopNarratorAudio();
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -1288,7 +1383,7 @@ export function useVoiceRealtimeSession({
       socket.close();
     }
     setPhase('idle');
-  }, [cancelReconnect, flushSegments, releaseCapture, resetSegmentVerdicts]);
+  }, [cancelReconnect, flushSegments, releaseCapture, resetSegmentVerdicts, stopNarratorAudio]);
 
   // `end` is stable, so the cleanup runs once per mount. A page that
   // navigates away with the microphone open is the one state this must not
@@ -1400,6 +1495,8 @@ export function useVoiceRealtimeSession({
         releaseCapture();
         previous?.close();
       }
+      // A narration belongs to the connection that sent it; the new one has its own queue.
+      stopNarratorAudio();
       if (!sessionId || !token) {
         // A failure here has no close to schedule the next attempt from, so a reconnect ends with it.
         cancelReconnect();
@@ -1477,6 +1574,116 @@ export function useVoiceRealtimeSession({
         return;
       }
       socketRef.current = socket;
+
+      /**
+       * Answers the narrator queue's pacing ack for one narration.
+       *
+       * SOCKET-IDENTITY GUARDED: a clip that finishes after its connection was replaced must not
+       * ack on the NEW socket, where that id belongs to no queue this page holds — the server would
+       * ignore it, but sending it would claim a completion that never happened there.
+       */
+      const ackNarratorDone = (utteranceId: string): void => {
+        if (socketRef.current !== socket || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        socket.send(JSON.stringify({ type: 'narrator_done', utteranceId }));
+        voiceLog(`narrator done ${utteranceId}`);
+      };
+
+      /**
+       * Plays one narrator utterance after its last `tts_audio` slice (`tts_done`).
+       *
+       * THE SLICES ARE DECODED ONE BY ONE, not concatenated as base64 text: the server encodes each
+       * raw byte slice independently, so a slice may end in `=` padding and joining the strings
+       * would corrupt every slice after it. The byte total is compared with the frame's own
+       * `bytes` reading — a stream that lost a slice is a reading the page reports, and the audio
+       * it did receive is still played rather than swallowed whole.
+       *
+       * BOTH terminal media events ACK. `ended` is playback finishing; `error` (and a rejected
+       * `play()`, e.g. no autoplay permission) is an utterance the element could not play. In
+       * either case this narration is over, and leaving the server's queue without the ack would
+       * hold every narration behind it for the life of the connection.
+       */
+      const playNarratorTts = (frame: Extract<ServerFrame, { type: 'tts_done' }>): void => {
+        const buffer = narratorTtsRef.current;
+        narratorTtsRef.current = null;
+        if (buffer === null || buffer.utteranceId !== frame.utteranceId) {
+          voiceLog(`tts done without bytes utterance=${frame.utteranceId}`);
+          ackNarratorDone(frame.utteranceId);
+          return;
+        }
+
+        const parts: Uint8Array[] = [];
+        let total = 0;
+        for (let seq = 0; seq < frame.frames; seq += 1) {
+          const chunk = buffer.chunks.get(seq);
+          if (chunk === undefined) {
+            voiceLog(`tts missing seq=${seq} utterance=${frame.utteranceId} frames=${frame.frames}`);
+            continue;
+          }
+          try {
+            const raw = atob(chunk);
+            const bytes = new Uint8Array(raw.length);
+            for (let index = 0; index < raw.length; index += 1) {
+              bytes[index] = raw.charCodeAt(index);
+            }
+            parts.push(bytes);
+            total += bytes.length;
+          } catch {
+            voiceLog(`tts chunk not base64 seq=${seq} utterance=${frame.utteranceId}`);
+          }
+        }
+        if (total !== frame.bytes) {
+          voiceLog(
+            `tts bytes deviation assembled=${total} declared=${frame.bytes} utterance=${frame.utteranceId}`,
+          );
+        }
+        if (total === 0) {
+          voiceLog(`tts done with no audio utterance=${frame.utteranceId}`);
+          ackNarratorDone(frame.utteranceId);
+          return;
+        }
+
+        const merged = new Uint8Array(total);
+        let offset = 0;
+        for (const part of parts) {
+          merged.set(part, offset);
+          offset += part.length;
+        }
+        const blob = new Blob([merged], { type: NARRATOR_TTS_MIME[buffer.format] ?? 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        // One narration at a time (the server paces on our ack), but a replacement can still race a
+        // state edge; releasing the previous URL here keeps blob memory from accumulating.
+        const previous = narratorPlayingRef.current;
+        if (previous !== null) {
+          URL.revokeObjectURL(previous.url);
+        }
+        narratorPlayingRef.current = { utteranceId: frame.utteranceId, url };
+
+        const audio = narratorAudioRef.current ?? (narratorAudioRef.current = new Audio());
+        const finish = (reason: string): void => {
+          const playing = narratorPlayingRef.current;
+          if (playing === null || playing.utteranceId !== frame.utteranceId) {
+            return;
+          }
+          narratorPlayingRef.current = null;
+          URL.revokeObjectURL(url);
+          if (reason !== 'ended') {
+            voiceLog(`narrator playback ${reason} utterance=${frame.utteranceId}`);
+          }
+          ackNarratorDone(frame.utteranceId);
+        };
+        audio.onended = () => finish('ended');
+        audio.onerror = () => finish('error');
+        audio.src = url;
+        audio.load();
+        const started = audio.play();
+        if (started && typeof started.catch === 'function') {
+          started.catch((error: unknown) => {
+            finish(`rejected:${error instanceof Error ? error.name : String(error)}`);
+          });
+        }
+      };
 
       // The offer goes out the moment the socket is usable: the client states what it can
       // send, and says nothing else about it until the server answers. A proxy that
@@ -1885,12 +2092,51 @@ export function useVoiceRealtimeSession({
           voiceLog(`stopped aborted=${frame.aborted} backlog=${depth}`);
           return;
         }
-        // The narrator's output is TOLERATED here, not spoken: the page has no TTS playback wiring
-        // yet (GOAL-047's next task). The branch must exist because the fall-through below treats
-        // any unrecognised frame as a protocol failure — without it, the first narration a
-        // deployment produced would fail the whole voice session. `narrator_stop` is the duplex
-        // rule cutting playback, never an error.
-        if (frame.type === 'narrator_speak' || frame.type === 'narrator_stop') {
+        // ---- the narrator's speech (GOAL-047): text, then TTS audio, then the playback ack ------
+        // The text frame is the sentence (display/fallback); the audio arrives behind it. These
+        // branches must exist because the fall-through below treats any unrecognised frame as a
+        // protocol failure — a deployment that runs the `announce` closing turn or a run-end
+        // summary would otherwise fail the whole voice session the first time the narrator spoke.
+        if (frame.type === 'narrator_speak') {
+          voiceLog(`narrator speak ${frame.utteranceId} chars=${frame.text.length}`);
+          return;
+        }
+        if (frame.type === 'tts_audio') {
+          // Slices are keyed by `seq`; a frame for a NEW utterance starts its own buffer, so a late
+          // slice cannot be appended to the sentence that has already begun.
+          const existing = narratorTtsRef.current;
+          const buffer: NarratorTtsBuffer =
+            existing !== null && existing.utteranceId === frame.utteranceId
+              ? existing
+              : {
+                  utteranceId: frame.utteranceId,
+                  format: frame.format,
+                  sampleRate: frame.sampleRate,
+                  chunks: new Map(),
+                };
+          buffer.chunks.set(frame.seq, frame.audio);
+          narratorTtsRef.current = buffer;
+          return;
+        }
+        if (frame.type === 'tts_done') {
+          playNarratorTts(frame);
+          return;
+        }
+        if (frame.type === 'tts_error') {
+          // A refusal is a DISPLAYED outcome, not a dead session: the rest of Live Voice is healthy,
+          // and the queue stays paced because the ack below advances it. The bytes assembled so far
+          // are dropped — a partial utterance is never played as if it were the sentence.
+          voiceLog(`tts error ${frame.utteranceId} ${frame.code}: ${frame.message}`);
+          stopNarratorAudio();
+          fail(frame.message, frame.code);
+          ackNarratorDone(frame.utteranceId);
+          return;
+        }
+        if (frame.type === 'narrator_stop') {
+          // The person spoke: cut playback and drop what was buffered. NO ack — the server has
+          // already cleared the queue and will not wait for this id.
+          voiceLog(`narrator stop ${frame.utteranceId} reason=${frame.reason ?? '-'}`);
+          stopNarratorAudio();
           return;
         }
         // A recoverable error spoiled one model turn, not the connection: the session recovers on
@@ -2036,6 +2282,7 @@ export function useVoiceRealtimeSession({
       resetSegmentVerdicts,
       resetSegmentation,
       settleSegmentTranscript,
+      stopNarratorAudio,
     ],
   );
 
@@ -2043,6 +2290,9 @@ export function useVoiceRealtimeSession({
     connectRef.current = connect;
   }, [connect]);
 
+  // The narrator's media element is created on the FIRST TTS frame rather than here: the click that
+  // starts Live Voice already grants this document sticky autoplay permission, so a later `play()`
+  // is allowed, and an element nobody needs yet is one less thing a test environment must emulate.
   const start = useCallback(() => connect(microphoneAudioSource(), { reconnectable: true }), [connect]);
 
   const startWithFile = useCallback(

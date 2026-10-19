@@ -8,6 +8,7 @@ import { useVoiceClientAsrStatus } from '@/modules/chat';
 import SettingsSection from '@/modules/settings/SettingsSection';
 import SettingsToggle from '@/modules/settings/SettingsToggle';
 import { api } from '@/shared/api';
+import { cn } from '@/shared/utils';
 import { useUiPreferences, useSetUiPreference } from '@/shared/context/UiPreferencesContext';
 import { useVoiceConfig } from '@/modules/settings/hooks/useVoiceConfig';
 import { useVoiceProviderOptions } from '@/modules/settings/hooks/useVoiceProviderOptions';
@@ -99,6 +100,12 @@ export default function VoiceSettingsTab() {
   // the deployment's, which no server could honour for anyone else. An empty value means "whichever the
   // deployment offers first", which is what the resolver answers when no choice has been made.
   const [fallbackChoice, setFallbackChoice] = useState(() => readVoiceFallbackPreference() ?? '');
+  /**
+   * Which half of the Voice settings is on screen: the speech-to-text / read-aloud backend
+   * (Voice Input), or the Live Voice realtime credential. Kept as local UI state because it is a
+   * view choice, not a stored preference — reopening Settings starts on the input half.
+   */
+  const [voiceTab, setVoiceTab] = useState<'input' | 'live'>('input');
 
   // THE CAPACITY BOX'S DRAFT. `voiceDataMaxBytes` is a bounded whole number the store enforces, but
   // the box the user types in is text: binding it straight to the committed number would rewrite the
@@ -199,6 +206,43 @@ export default function VoiceSettingsTab() {
       </SettingsSection>
 
       {voiceEnabled && (
+        // Two halves with different owners: Voice Input configures the recogniser/read-aloud backend,
+        // Live Voice its own realtime credential. Same `role=tablist` pattern as the Agents settings.
+        <div className="flex-shrink-0 border-b border-border">
+          <div role="tablist" className="flex overflow-x-auto">
+            <button
+              role="tab"
+              aria-selected={voiceTab === 'input'}
+              data-testid="voice-settings-tab-input"
+              onClick={() => setVoiceTab('input')}
+              className={cn(
+                'whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium touch-manipulation transition-colors duration-150',
+                voiceTab === 'input'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t('voiceSettings.tabInput')}
+            </button>
+            <button
+              role="tab"
+              aria-selected={voiceTab === 'live'}
+              data-testid="voice-settings-tab-live"
+              onClick={() => setVoiceTab('live')}
+              className={cn(
+                'whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium touch-manipulation transition-colors duration-150',
+                voiceTab === 'live'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t('voiceSettings.tabLiveVoice')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {voiceEnabled && voiceTab === 'input' && (
         <SettingsSection title={t('voiceSettings.backendTitle')} description={t('voiceSettings.backendDescription')}>
           <div className="space-y-4">
             <label className="block space-y-1">
@@ -417,7 +461,7 @@ export default function VoiceSettingsTab() {
         </SettingsSection>
       )}
 
-      {voiceEnabled && (
+      {voiceEnabled && voiceTab === 'live' && (
         // Live Voice 的独立设置：realtime relay 用自己的 DashScope key，不复用上面 voice-input
         // 的 `dashscopeApiKey`。两者是不同的服务（一个是识别器，一个是实时语音对话模型）。
         <SettingsSection title={t('voiceSettings.liveVoiceTitle')} description={t('voiceSettings.liveVoiceDescription')}>
@@ -435,7 +479,7 @@ export default function VoiceSettingsTab() {
         </SettingsSection>
       )}
 
-      {voiceEnabled && (
+      {voiceEnabled && voiceTab === 'input' && (
         // D1: THE USER'S OWN KEPT RECORDINGS. On by default, stored on the machine that runs the
         // server, and clearable in one confirmed action — the promise this section puts on screen.
         // It is its own section rather than a field among the backend's, because nothing here
