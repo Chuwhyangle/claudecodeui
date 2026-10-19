@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, Mic, Square, Loader2, XIcon } from 'lucide-react';
 
-import { PromptInputButton } from '@/modules/chat/composer/PromptInput';
 import { voiceErrorMessage, voiceErrorTechnicalDetail } from '@/modules/chat/utils/voiceErrorMessages';
 import type { VoiceFailureReport, VoiceInputState } from '@/shared/types';
 
@@ -43,25 +42,28 @@ export default function VoiceInputButton({ state, onToggle, inFlight = false }: 
 
   const icon =
     state === 'recording' ? (
-      <Square className="text-red-500" />
+      <Square className="h-4 w-4 text-red-500" />
     ) : state === 'transcribing' ? (
-      <Loader2 className="animate-spin" />
+      <Loader2 className="h-4 w-4 animate-spin" />
     ) : (
-      <Mic />
+      <Mic className="h-4 w-4" />
     );
 
-  // One label, read by both the tooltip and the accessible name. The tooltip is a
-  // self-drawn layer: it is not announced, so the button needs `aria-label` too, and
-  // two separate expressions would let the announced name drift from the visible one.
+  // One label, read by the native title (hover) and the accessible name. The title is
+  // not announced, so the button needs `aria-label` too, and two separate expressions
+  // would let the announced name drift from the visible one.
   const label = state === 'recording' ? t('voice.stopRecording') : t('voice.input');
 
   return (
-    <PromptInputButton
+    <button
+      type="button"
       // The in-flight dot is positioned against this button, so it has to be the containing block.
-      className="relative"
+      // The shell is the permission menu trigger's chip — a bordered muted square — so the mic sits
+      // beside the model and permission selectors as one of them rather than a bare ghost icon.
+      className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/50 text-muted-foreground transition-colors hover:bg-muted"
       data-testid="voice-input-button"
-      tooltip={{ content: label }}
       aria-label={label}
+      title={label}
       onClick={(e: { preventDefault: () => void }) => {
         e.preventDefault();
         onToggle();
@@ -83,7 +85,7 @@ export default function VoiceInputButton({ state, onToggle, inFlight = false }: 
           className="pointer-events-none absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500 motion-safe:animate-pulse"
         />
       )}
-    </PromptInputButton>
+    </button>
   );
 }
 

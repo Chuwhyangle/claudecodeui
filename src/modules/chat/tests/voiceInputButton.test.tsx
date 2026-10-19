@@ -55,3 +55,23 @@ test('an idle button reads its default and draws no dot', () => {
   const { queryByTestId } = renderButton('idle');
   assert.equal(queryByTestId('voice-inflight-dot'), null, 'the default state must not carry a dot');
 });
+
+/**
+ * The mic's shell in the composer's right group.
+ *
+ * The mic sits beside the model and permission selectors, whose triggers are bordered muted chips.
+ * A bare ghost icon there reads as a missing container, so the mic carries the same chip tokens —
+ * a border, the chip radius and the muted fill — rather than the ghost icon it used in the tools
+ * group. The one thing it must NOT keep is the ghost hover, whose accent flash would set it apart
+ * from the neighbours it is meant to match.
+ */
+test('the mic renders as a bordered chip like the permission menu trigger', () => {
+  const { getByTestId } = renderButton('idle');
+
+  const classes = getByTestId('voice-input-button').className;
+
+  assert.ok(classes.includes('border'), 'the mic must carry a border');
+  assert.ok(classes.includes('rounded-lg'), 'the mic must use the chip radius');
+  assert.ok(classes.includes('bg-muted/50'), 'the mic must carry the muted chip fill');
+  assert.ok(!classes.includes('hover:bg-accent'), 'the mic must not keep the ghost hover');
+});
