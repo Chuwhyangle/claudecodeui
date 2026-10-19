@@ -31,7 +31,7 @@ goal_ac: AC-408
 
 ## AC
 
-- [ ] AC-408：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 退出 0（scripted relay + scripted TTS stand-in）：announce/总结文本经 TTS 合成，`tts_audio` 帧按 seq 到达浏览器、`tts_done` bytes 正确、播放后 `narrator_done` 推进下一句。
+- [x] AC-408：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 退出 0（scripted relay + scripted TTS stand-in）：announce/总结文本经 TTS 合成，`tts_audio` 帧按 seq 到达浏览器、`tts_done` bytes 正确、播放后 `narrator_done` 推进下一句。
 
 ## DoD
 
@@ -47,5 +47,8 @@ goal_ac: AC-408
 - server/index.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/settings/tabs/VoiceSettingsTab.tsx
+- src/modules/i18n/locales/en/settings.json
+- src/modules/i18n/locales/zh-CN/settings.json
 - e2e/voice-output-e2e-harness.spec.ts
+- experiments/voice-e2e-harness/run.mjs
 - tasks/voice-output-tts-downlink-wiring.md
