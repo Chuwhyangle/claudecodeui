@@ -27,3 +27,4 @@ narrator 播报队列「可清空」：播报进行中注入用户语音（新 u
 
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/tests/voice-realtime-narrator-interrupt.test.ts
+- tasks/voice-output-narrator-interrupt.md
