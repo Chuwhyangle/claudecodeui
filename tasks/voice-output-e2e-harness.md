@@ -29,4 +29,5 @@ goal_ac: AC-405
 
 ## Touches
 
-- experiments/voice-e2e-harness/（新目录，回放脚本）
+- experiments/voice-e2e-harness/ (new)
+- tasks/voice-output-e2e-harness.md
