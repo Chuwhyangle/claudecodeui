@@ -30,6 +30,11 @@ Chrome 153/Linux 的能力读数：
 因此：沿用 `src/modules/chat/hooks/useVoiceInput.ts` 现在的 `echoCancellation: true` 即可；
 TTS 走浏览器内播放（WebAudio / `<audio>`）时不要再做 `remote-only` 或 `setSinkId` 到别的设备。
 
+产品侧的两条采集路径都在结论覆盖范围内：
+`src/modules/chat/voice-realtime/audioSource.ts` 用 `getUserMedia({ audio: true })`（Chrome 默认
+`echoCancellation: true`；本机 fake 设备读数 `getSettings().echoCancellation === true`），
+`src/modules/chat/hooks/useVoiceInput.ts` 显式 `echoCancellation: true`。
+
 > 旧资料说「Chromium 只把 PeerConnection 远端流当参考」是 Chrome 97 时代的行为
 > （https://issues.chromium.org/issues/40213260），早于 Linux 上 Chrome-wide AEC 默认开启。
 > 本 task 以现行 Chromium 源码 + 本机能力读数为准。
