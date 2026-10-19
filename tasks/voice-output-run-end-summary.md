@@ -19,7 +19,7 @@ goal_ac: AC-404
 
 ## AC
 
-- [ ] AC-404：scripted bridge + 假时钟驱动 ws-proxy，running→idle 触发恰好一次总结注入；≤40 字、无 Markdown、verbatimTail≈0；删 transition 必红、初始 idle 不触发。
+- [x] AC-404：scripted bridge + 假时钟驱动 ws-proxy，running→idle 触发恰好一次总结注入；≤40 字、无 Markdown、verbatimTail≈0；删 transition 必红、初始 idle 不触发。
 
 ## DoD
 
