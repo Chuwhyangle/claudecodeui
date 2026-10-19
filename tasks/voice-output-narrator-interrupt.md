@@ -1,7 +1,7 @@
 ---
 id: voice-output-narrator-interrupt
 title: 双工打断 + 可清空队列：播报中用户开口即停、排队即清，不当作异常
-status: ready
+status: done
 labels:
   - feature
 parent: null
