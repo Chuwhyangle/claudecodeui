@@ -385,6 +385,50 @@ describe('deferred scroll-to-bottom', () => {
       `a placement must not fire over a pane that has moved up since the app placed it; got ${JSON.stringify(container.writes)}`,
     );
   });
+
+  /**
+   * The clamp the browser makes when a turn settles is not the gesture the
+   * offset guard exists to refuse. A settle shrinks the content — or grows the
+   * pane — by a couple of pixels, and the browser clamps the offset down to that
+   * new bottom, a `scroll` nobody caused. `lastPlacedTopRef` does not follow the
+   * clamp, so the offset reads as "moved up" by exactly the few pixels the clamp
+   * took — and the next send's placement was refused over a viewport that was
+   * still at the bottom, leaving the new row and the whole reply below the fold.
+   */
+  it('still pins when a settle clamped the pane to a new bottom', async () => {
+    const messages = new Map<string, NormalizedMessage[]>([
+      [SESSION_A, [buildMessage(0, '2026-01-01T00:00:00.000Z')]],
+    ]);
+    const store = createStore(messages);
+    const { result } = await renderChatSessionState({
+      session: { id: SESSION_A } as ProjectSession,
+      store,
+    });
+
+    const container = createContainer(5000, 500);
+    (result.current.scrollContainerRef as { current: HTMLDivElement | null }).current = container.element;
+
+    // The app puts the pane on the bottom and takes note of where that landed.
+    act(() => {
+      result.current.scrollToBottom();
+    });
+    container.writes.length = 0;
+
+    // The browser clamps the offset to the new bottom the settle left — the
+    // viewport is at the bottom, a couple of pixels below what the app recorded.
+    container.element.scrollTop = container.element.scrollHeight - container.element.clientHeight;
+    container.writes.length = 0;
+
+    act(() => {
+      result.current.scrollToBottom();
+    });
+
+    assert.deepEqual(
+      container.writes,
+      [container.scrollHeight],
+      `a viewport the browser clamped to the bottom must still pin; got ${JSON.stringify(container.writes)}`,
+    );
+  });
 });
 
 describe('content-growth follow', () => {
