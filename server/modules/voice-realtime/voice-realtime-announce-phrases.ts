@@ -22,16 +22,20 @@
 /**
  * The announce closing turn's sentence table.
  *
- * Every entry keeps the "I have started" meaning and stays short enough to be spoken in one breath
- * (7–9 characters; the announce criterion's 15-character budget applies to whichever one is used).
+ * INTERJECTION-LENGTH ON PURPOSE. The announce gate carries the "I heard you and I am on it"
+ * meaning by itself; the sentence only has to be a human-like acknowledgement, and the shortest one
+ * speaks soonest and overlaps the person least. The 2026-10-19 live test asked for exactly that —
+ * "可以用更短……单独用语气词，比如说'哦'" — after the 8-character table still occupied 1.44–2.08 s of
+ * audio. Every entry is now 1–3 characters, comfortably inside the announce criterion's
+ * 15-character budget.
  * Consumed by `voice-realtime-ws-proxy.service.ts` (which picks one per announcement) and by
  * `server/index.ts` (which hands the whole table to the per-connection TTS cache for warm-up).
  */
 export const ANNOUNCE_PHRASES: readonly string[] = [
-  '好的，我开始了。',
-  '收到，马上开始。',
-  '明白，这就开始。',
-  '好的，正在处理。',
+  '哦。',
+  '嗯。',
+  '好。',
+  '收到。',
 ];
 
 /**
