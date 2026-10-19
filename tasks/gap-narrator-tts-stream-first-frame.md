@@ -65,18 +65,51 @@ separate：`task-granularity-advice` 对 Touches 返回 `peers: []`；本任务�
 - server/shared/tests/quay-test-script.test.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/voice-realtime/tests/voiceRealtimeNarratorStream.test.tsx
+- e2e/voice-output-e2e-harness.spec.ts
+- experiments/voice-e2e-harness/wavMic.ts
 - tasks/gap-narrator-tts-stream-first-frame.md
 
 ## AC
 
-- [ ] 新增服务端判据 `voice-realtime-tts-stream.test.ts`：stand-in 把 WAV 拆成多个 SSE 事件并在关闭时置一个 `closed` 标志；断言第一个 `tts_audio` 帧在 `closed` 之前到达 downlink，`seq: 0` 解码后以 `RIFF` 开头，全部帧重组后等于 stand-in 的完整 WAV，`tts_done` 是最后一帧。`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts-stream.test.ts` exit 0。
-- [ ] 同文件的错误腿（独立 `test()` 块，名字含 `error-leg`）：SSE 在音频开始前报错时只发一个 `tts_error`、不发 `tts_audio`/`tts_done`。同一命令 exit 0。
-- [ ] 新增页面判据 `voiceRealtimeNarratorStream.test.tsx`：用记录 `start()` 时刻的 fake `AudioContext`，断言首个 source 的 `start()` 发生在 `tts_done` 之前；`tts_done` 与最后一个 source 的 `ended` 之后恰好一次 `narrator_done`。`npx vitest run src/modules/chat/voice-realtime/tests/voiceRealtimeNarratorStream.test.tsx` exit 0。
-- [ ] 同文件的回退腿（独立 `test()` 块，名字含 `fallback`）：没有 `AudioContext` 时仍走 Blob 路径并在播放结束后 ack；`narrator_stop` 对所有已调度 source 调 `stop()` 且不发 `narrator_done`。同一命令 exit 0。
-- [ ] 既有 AC-405 判据仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts.test.ts` exit 0。
-- [ ] 新增 server 测试文件后重测并更新 `server/shared/tests/quay-test-script.test.ts` 的两处 known/unknown pin（按 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` 的实测值），并在注释里点名本任务文件；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` exit 0。
-- [ ] `npm run typecheck`、`npm run lint`、`npm run build:client` 均 exit 0。
+- [x] 新增服务端判据 `voice-realtime-tts-stream.test.ts`：stand-in 把 WAV 拆成多个 SSE 事件并在关闭时置一个 `closed` 标志；断言第一个 `tts_audio` 帧在 `closed` 之前到达 downlink，`seq: 0` 解码后以 `RIFF` 开头，全部帧重组后等于 stand-in 的完整 WAV，`tts_done` 是最后一帧。`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts-stream.test.ts` exit 0。
+- [x] 同文件的错误腿（独立 `test()` 块，名字含 `error-leg`）：SSE 在音频开始前报错时只发一个 `tts_error`、不发 `tts_audio`/`tts_done`。同一命令 exit 0。
+- [x] 新增页面判据 `voiceRealtimeNarratorStream.test.tsx`：用记录 `start()` 时刻的 fake `AudioContext`，断言首个 source 的 `start()` 发生在 `tts_done` 之前；`tts_done` 与最后一个 source 的 `ended` 之后恰好一次 `narrator_done`。`npx vitest run src/modules/chat/voice-realtime/tests/voiceRealtimeNarratorStream.test.tsx` exit 0。
+- [x] 同文件的回退腿（独立 `test()` 块，名字含 `fallback`）：没有 `AudioContext` 时仍走 Blob 路径并在播放结束后 ack；`narrator_stop` 对所有已调度 source 调 `stop()` 且不发 `narrator_done`。同一命令 exit 0。
+- [x] 既有 AC-405 判据仍绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts.test.ts` exit 0。
+- [x] 新增 server 测试文件后重测并更新 `server/shared/tests/quay-test-script.test.ts` 的两处 known/unknown pin（按 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` 的实测值），并在注释里点名本任务文件；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` exit 0。
+- [x] `npm run typecheck`、`npm run lint`、`npm run build:client` 均 exit 0。
 
 ## DoD
 
 用仓库的 live-voice 回环 harness（`VOICE_REALTIME_TTS_ENDPOINT` 指向 loopback stand-in）+ 真实浏览器页面播放一条 9 字 announce，在 Notes 贴出两个时刻：首个 `tts_audio` 到达并被 `start()` 的时刻，以及 `tts_done` 的时刻。首个 source 必须早于 `tts_done` 起播，且「用户语音结束 → 首个 source 起播」< 1.2s（修复前实测 2.1–2.2s）。只跑单测、没有这张真实页面播放的时序表不算落地。
+
+## Notes
+
+### DoD：真实浏览器 + loopback harness 的时序表
+
+命令：`node experiments/voice-e2e-harness/run.mjs`（scripted DashScope upstream + 真实 app server + 真实 Chromium 页面；`VOICE_REALTIME_TTS_ENDPOINT` 指向 loopback TTS stand-in，后者用 3 个 SSE 事件发一段 1.0s WAV）。结果 `9 passed`，`RESULT: PASS`。announce 文本 `好的，我来查一下。`（9 字）。
+
+| 读数 | 时刻 |
+| --- | --- |
+| 该 announce 所回应的用户语音结束（页面收到的最后一条 `caption final`） | 2026-10-19T13:03:43.334Z |
+| 首个 `tts_audio` 帧到达页面 | 2026-10-19T13:03:43.354Z |
+| 首个 `AudioBufferSourceNode.start()`（开始播放） | 2026-10-19T13:03:43.356Z |
+| `tts_done` 到达页面 | 2026-10-19T13:03:43.358Z |
+
+- 首个 source 起播 − 用户语音结束 = **22 ms**（预算 < 1200 ms；修复前 live 实测 2.1–2.2 s）
+- 首个 source 起播 − 首个 `tts_audio` 到达 = **2 ms**
+- 首个 source 起播早于 `tts_done`：**是**（早 2 ms）
+
+e2e 判据 `the first narrator audio started BEFORE tts_done, and within the speech-end budget` 已把这两条读数钉进 spec。
+
+### 判据执行读数
+
+- `voice-realtime-tts-stream.test.ts`：3/3 pass（含首帧在 `closed=false` 时到达、header 跨事件、`error-leg`）
+- `voice-realtime-tts.test.ts`（AC-405）：8/8 pass
+- `quay-test-script.test.ts`：14/14 pass；server 测试文件实测 377（376 + 1）
+- `voiceRealtimeNarratorStream.test.tsx`：2/2 pass；既有 `useVoiceRealtimeSession.test.tsx` 55/55 pass
+- `npm run typecheck` / `npm run lint` / `npm run build:client`：exit 0
+
+### harness 侧的必要修正
+
+`experiments/voice-e2e-harness/wavMic.ts` 的 capture `AudioContext` 原本是只实现采集接口的 stub；页面的流式播放会向它要 `createBuffer`/`createBufferSource`，于是静默走 Blob 回退，真实浏览器从未走到流式腿。现在该 fake 把播放面委托给一个真实 `AudioContext`；e2e spec 同时按新帧形态计数（`1 + ceil(pcm/frameBytes)`）并 tap `AudioBufferSourceNode.start` 记录起播时刻。
