@@ -29,4 +29,6 @@ goal_ac: AC-406
 
 ## Touches
 
-- experiments/voice-echo-probe/（探针脚本）
+- experiments/voice-echo-probe/run.mts (new)
+- experiments/voice-echo-probe/README.md (new)
+- tasks/voice-output-echo-cancellation.md
