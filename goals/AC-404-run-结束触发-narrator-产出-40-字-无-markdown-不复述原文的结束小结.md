@@ -1,7 +1,7 @@
 ---
 id: AC-404
 title: run 结束触发 narrator 产出 ≤40 字、无 Markdown、不复述原文的结束小结
-status: draft
+status: active
 kind: criterion
 goal: GOAL-047
 criterion: bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json
@@ -15,4 +15,15 @@ expect: 退出码 0（⚠️ 当前必红：测试文件不存在）。用 scrip
 origin: 本会话 2026-10-19 讨论产出；生成质量已由 B-1
   探针验证（experiments/voice-realtime-announce-summary/summarize.mts，qwen3.8-omni-flash
   产出 32–41 字小结、无 Markdown、verbatimTail≈0）。
+activatedAt: 2026-10-19T00:27:04.308Z
+statusLog:
+  - at: 2026-10-19T00:27:04.308Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-19T00:27:04.308Z
 ---

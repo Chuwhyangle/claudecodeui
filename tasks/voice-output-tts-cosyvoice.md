@@ -29,3 +29,13 @@ goal_ac: AC-405
 - server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (new)
 - server/shared/tests/quay-test-script.test.ts（新增 server 测试文件把收集数 367→368，AC2/AC3 的 unknown 钉子随之 364→365、366→367）
 - tasks/voice-output-tts-cosyvoice.md
+
+## Blocker
+
+**2026-10-19T00:26:33.449Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/quay-test-script.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：3b2b9970-f9ec-4c55-8d6c-d04e594deebb
