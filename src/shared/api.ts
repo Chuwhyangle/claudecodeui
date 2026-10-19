@@ -330,6 +330,8 @@ export const api = {
   /**
    * The cheap, cross-project task/goal counts the landing overview's third panel reads.
    *
+   * The eager cross-project reading: driver state + task counts for every quay project,
+   * served from the backend's per-project TTL (a poll inside the window spawns no CLI).
    * One request for every quay-configured project rather than one snapshot request
    * per project: the snapshot is the lazy tier (in-flight tasks and the gantt),
    * and the overview must not spawn a CLI per project just to draw a count.

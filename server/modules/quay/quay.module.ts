@@ -74,6 +74,14 @@ const probeWebService = async (host: string, port: number): Promise<boolean> => 
 export const quayService = createQuayService({
   fileExists: (filePath) => fs.existsSync(filePath),
   resolveProjectPathById: (projectId) => projectsDb.getProjectPathById(projectId),
+  // The fleet summary fans out over the whole active project registry, so it needs the
+  // listing itself rather than one id at a time. Archived projects are excluded by
+  // `getProjectPaths`, matching what the sidebar shows.
+  listProjects: () =>
+    projectsDb.getProjectPaths().map((project) => ({
+      projectId: project.project_id,
+      projectPath: project.project_path,
+    })),
   // Binary resolution is project-scoped inside the adapter: the service passes each
   // project's `projectPath` as the runner's `cwd`, and the adapter resolves
   // `<cwd>/.quay/plugin/bin/quay` from it. The explicit `warn` binding routes the

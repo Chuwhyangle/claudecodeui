@@ -4,14 +4,19 @@ import type { TFunction } from 'i18next';
 
 import { Button } from '@/shared/ui';
 import { cn } from '@/shared/utils';
-import type { LLMProvider, MCPServerStatus, Project, ProjectSession, SessionWithProvider } from '@/shared/types';
+import type { LLMProvider, MCPServerStatus, Project, ProjectSession, QuayFleetTaskCounts, SessionWithProvider } from '@/shared/types';
 import { getQuayIndicatorStatus, getTaskIndicatorStatus } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import QuayIndicator from '@/modules/sidebar/QuayIndicator';
 import SidebarProjectSessions from '@/modules/sidebar/SidebarProjectSessions';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
+import { useFleetTaskCounts } from '@/modules/sidebar/hooks/useFleetTaskCounts';
 
-type SidebarProjectItemProps = {
+/**
+ * Props for one project row. Exported for the module's tests, which render the real row
+ * (rather than a stub) to assert the task-count badge in both sidebar layouts.
+ */
+export type SidebarProjectItemProps = {
   project: Project;
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
@@ -59,6 +64,44 @@ const getSessionCountDisplay = (project: Project, sessions: SessionWithProvider[
   const total = Number(project.sessionMeta?.total ?? sessions.length);
   return String(total);
 };
+
+/**
+ * A project row's task badge: the todo / ready / needs-human counts from the shared
+ * fleet summary. Defined here because `SidebarProjectItem` is its only consumer. The
+ * `data-*` attributes carry exactly the numbers the chips show, so a test can compare
+ * the rendered row with the endpoint's reading instead of parsing styled text.
+ */
+function ProjectTaskCountsBadge({ counts, className }: { counts: QuayFleetTaskCounts; className?: string }) {
+  const label = `${counts.todo} todo, ${counts.ready} ready, ${counts.needsHuman} needs-human`;
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground',
+        className,
+      )}
+      data-project-task-counts=""
+      data-task-todo={counts.todo}
+      data-task-ready={counts.ready}
+      data-task-needs-human={counts.needsHuman}
+      aria-label={label}
+      title={label}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-gray-400 dark:bg-gray-500" aria-hidden />
+        {counts.todo}
+      </span>
+      <span className="inline-flex items-center gap-0.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 dark:bg-blue-400" aria-hidden />
+        {counts.ready}
+      </span>
+      <span className="inline-flex items-center gap-0.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 dark:bg-amber-400" aria-hidden />
+        {counts.needsHuman}
+      </span>
+    </span>
+  );
+}
 
 /** Rendered by SidebarProjectList for one project row, including its expand, rename, star and delete controls. */
 function SidebarProjectItem({
@@ -109,6 +152,10 @@ function SidebarProjectItem({
   const sessionCountLabel = `${sessionCountDisplay} session${totalSessionCount === 1 ? '' : 's'}`;
   const taskStatus = getTaskIndicatorStatus(project, mcpServerStatus);
   const quayStatus = getQuayIndicatorStatus(project, null);
+  // Task counts come from the shared fleet summary. Non-quay projects never render the
+  // badge, so their row is unchanged even though the shared read covers the whole fleet.
+  const fleetTaskCounts = useFleetTaskCounts(project.projectId);
+  const showTaskCounts = Boolean(project.hasQuayConfig) && fleetTaskCounts !== null;
   const mobileRenameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -222,6 +269,9 @@ function SidebarProjectItem({
                       <div className="flex min-w-0 flex-1 items-center justify-between">
                         <h3 className="truncate text-sm font-normal text-foreground">{project.displayName}</h3>
                         <div className="ml-2 flex flex-shrink-0 items-center gap-1">
+                          {showTaskCounts && fleetTaskCounts && (
+                            <ProjectTaskCountsBadge counts={fleetTaskCounts} />
+                          )}
                           <QuayIndicator
                             hasQuayConfig={Boolean(project.hasQuayConfig)}
                             status={quayStatus}
@@ -388,6 +438,9 @@ function SidebarProjectItem({
                       size="xs"
                       className="flex-shrink-0"
                     />
+                    {showTaskCounts && fleetTaskCounts && (
+                      <ProjectTaskCountsBadge counts={fleetTaskCounts} className="flex-shrink-0" />
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {sessionCountDisplay}

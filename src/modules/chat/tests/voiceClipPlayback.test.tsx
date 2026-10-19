@@ -590,7 +590,7 @@ test('(a) mobile: the pair lands in its own row between the box and the footer, 
   );
 });
 
-test('(b) desktop: the pair stays in the left tool group inside the footer, right of the mic', async () => {
+test('(b) desktop: the pair stays in the left tool group inside the footer, left of the mic', async () => {
   setViewportWidth(DESKTOP_WIDTH);
   const view = renderComposer(() => undefined);
   const { container, getByRole } = view;
@@ -612,10 +612,14 @@ test('(b) desktop: the pair stays in the left tool group inside the footer, righ
   assert.ok(footer.contains(replayOriginal) && footer.contains(replayTrimmed));
   assert.ok(tools.contains(replayOriginal) && tools.contains(replayTrimmed));
 
+  // The dictation mic moved beside the submit button's Live Voice double (2026-10-19), so the
+  // pair — which stays in the left tool group — is now to its LEFT in document order. The claim
+  // is still the useful one: the pair and the mic that produced it are in the same footer, with
+  // the mic after the pair rather than replacing it.
   const mic = getByRole('button', { name: 'Voice input' });
   assert.ok(
-    mic.compareDocumentPosition(replayOriginal) & Node.DOCUMENT_POSITION_FOLLOWING,
-    'the pair sits right of the microphone it was recorded from',
+    replayOriginal.compareDocumentPosition(mic) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'the microphone sits right of the pair it recorded',
   );
 
   for (const [track, control] of [['original', replayOriginal], ['trimmed', replayTrimmed]] as const) {
