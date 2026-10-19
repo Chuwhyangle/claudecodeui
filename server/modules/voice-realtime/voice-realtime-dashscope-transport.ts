@@ -286,6 +286,13 @@ export type DashscopeWireObserver = (observation: {
 export type DashscopeTransportError =
   | { code: 'MISSING_API_KEY' }
   /**
+   * The stored DashScope key is the frontend's masked placeholder (••••••••) — the settings page
+   * renders a saved key as bullets, and that masked form was written back to the store. Dialling
+   * with it is a guaranteed 401 that reads as "could not reach upstream"; naming it here lets the
+   * page say "misconfigured" instead of "connection failed".
+   */
+  | { code: 'MASKED_API_KEY' }
+  /**
    * The estimated spend of this connection crossed a configured limit. Reported once; the consumer is
    * expected to END the session. A model that retries a tool call in a loop spends ~¥0.0045 every
    * 0.65 s, which no per-request check can see — only the running cost can.
@@ -324,25 +331,31 @@ export type DashscopeResponseConcurrency = {
 
 /**
  * The DashScope credential a Live Voice realtime connection dials with, resolved from the user's
- * saved setting and the deployment's environment variable.
+ * saved setting alone. The deployment's `DASHSCOPE_API_KEY` environment variable is deliberately
+ * NOT read here anymore (2026-10-19 ruling): the user's own key is the only source, so a missing or
+ * wrong value surfaces as a clear credential error instead of silently falling back to a deployment
+ * key the operator may not have meant for this user.
  *
- * Precedence matches the one-shot ASR path (`voice.service.ts`): the user's own key wins, the
- * deployment's `DASHSCOPE_API_KEY` is the fallback, and two unset keys resolve to `''` so the
- * transport's own `MISSING_API_KEY` guard still fires. A whitespace-only stored value counts as
- * unset — a blank bearer header would turn a clear "not configured" into an upstream 401.
- *
- * The transport keeps its OWN `options.apiKey ?? process.env.DASHSCOPE_API_KEY` fallback: other
- * callers (and the criteria that drive the transport directly) rely on it, so this resolver only
- * decides what the shipped assembly point hands in.
+ * An unset or whitespace-only value resolves to `''` so the transport's own `MISSING_API_KEY` guard
+ * still fires; a masked placeholder (••••••••) is passed through unchanged so the transport's
+ * `MASKED_API_KEY` guard names it.
  *
  * Consumers: `server/index.ts` at the realtime assembly point (through this module's barrel), and
- * `tests/voice-realtime-api-key-resolution.test.ts`, which pins the four precedence cases.
+ * `tests/voice-realtime-api-key-resolution.test.ts`.
  */
-export function resolveRealtimeApiKey(
-  userDashscopeApiKey: string | undefined,
-  envApiKey: string | undefined,
-): string {
-  return userDashscopeApiKey?.trim() || envApiKey || '';
+export function resolveRealtimeApiKey(userDashscopeApiKey: string | undefined): string {
+  return userDashscopeApiKey?.trim() ?? '';
+}
+
+/**
+ * Whether a stored DashScope key is the frontend's masked placeholder — every character a bullet
+ * (`•`). The settings page renders a saved key that way, so a value that round-tripped the
+ * masked form is not a credential at all; a whitespace-only or empty string is NOT masked (that is
+ * "unset", judged by {@link MISSING_API_KEY} before this).
+ */
+export function isMaskedDashscopeApiKey(apiKey: string): boolean {
+  const trimmed = apiKey.trim();
+  return trimmed.length > 0 && [...trimmed].every((ch) => ch === '•');
 }
 
 /** How the transport is configured. Every field has a shipping default except the credential. */
@@ -839,7 +852,7 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
     ...baseSessionDefaults,
     ...(options.voice === undefined ? {} : { voice: options.voice }),
   };
-  const apiKey = options.apiKey ?? process.env.DASHSCOPE_API_KEY ?? '';
+  const apiKey = options.apiKey ?? '';
   const url = `${endpoint}?model=${encodeURIComponent(model)}`;
 
   let state: DashscopeTransport['state'] = 'idle';
@@ -1325,7 +1338,12 @@ export function createDashscopeTransport(options: DashscopeTransportOptions = {}
       if (factory === undefined && apiKey === '') {
         state = 'closed';
         emitError({ code: 'MISSING_API_KEY' });
-        throw new Error('DASHSCOPE_API_KEY is required to open the real DashScope realtime transport');
+        throw new Error('a DashScope key is required to open the real DashScope realtime transport');
+      }
+      if (factory === undefined && isMaskedDashscopeApiKey(apiKey)) {
+        state = 'closed';
+        emitError({ code: 'MASKED_API_KEY' });
+        throw new Error('the stored DashScope key is the masked placeholder, not a real credential');
       }
       state = 'connecting';
       deliberateClose = false;

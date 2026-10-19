@@ -2188,6 +2188,8 @@ export function describeTransportError(error: { code: string } & Record<string, 
   switch (error.code) {
     case 'MISSING_API_KEY':
       return 'The Realtime upstream credential is not configured on this server.';
+    case 'MASKED_API_KEY':
+      return 'The stored voice credential is the masked placeholder, not a real key.';
     case 'SPEND_LIMIT':
       return `Voice spending guard: this connection used about ¥${Number(error.cny).toFixed(3)} ${
         error.scope === 'window' ? `in ${Math.round(Number(error.windowMs ?? 0) / 1000)} s` : 'in total'
@@ -5349,6 +5351,12 @@ export function handleVoiceRealtimeConnection(
   };
 
   const reportTransportError = (error: { code: string } & Record<string, unknown>): void => {
+    // Every transport failure is logged with its human sentence — a MISSING_API_KEY or a
+    // MASKED_API_KEY is a server-side misconfiguration, and the log is where the operator reads
+    // WHICH one without the browser's copy (which deliberately never names the key's value).
+    if (error.code !== 'SPEND_LIMIT') {
+      seams.log?.(`to-browser transport error ${error.code}: ${describeTransportError(error)}`);
+    }
     send(errorFrame(error.code, describeTransportError(error)));
     if (error.code === 'SPEND_LIMIT') {
       // Not recoverable: a connection spending at this rate is not left running. The pending

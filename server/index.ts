@@ -765,10 +765,7 @@ const buildVoiceRealtimeSeams = (input: {
                 // heard the browser recognise their speech but got no Live Voice connection. Two
                 // empty keys still reach the transport as `''`, where its `MISSING_API_KEY` guard
                 // reports the missing credential instead of dialling with a blank bearer header.
-                apiKey: resolveRealtimeApiKey(
-                  readVoiceSettings(input.userId).dashscopeApiKey,
-                  process.env.DASHSCOPE_API_KEY,
-                ),
+                apiKey: resolveRealtimeApiKey(readVoiceSettings(input.userId).liveVoiceDashscopeApiKey),
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects
                 // the session the moment a response is created:

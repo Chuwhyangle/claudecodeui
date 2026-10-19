@@ -1957,6 +1957,13 @@ export type VoiceSettings = {
   /** A provider-declared model field: the model the user selected for that recogniser. */
   dashscopeModel?: string;
   /**
+   * The Live Voice realtime relay's own DashScope credential — INDEPENDENT of the voice-input
+   * `dashscopeApiKey` above (that one is the dashscope-omni RECOGNISER's key). The realtime relay is
+   * a different service (the WebSocket speech model), so it carries its own key rather than re-using
+   * the recogniser's. Server-held, masked on readback exactly like the provider-declared credentials.
+   */
+  liveVoiceDashscopeApiKey?: string;
+  /**
    * Whether this user's dictation is kept on this machine as a voice record. Default `true`.
    *
    * THE USER-DATA SWITCH, AND NOT THE DIAGNOSTIC ONE. `VOICE_CAPTURE` is a deployment property read

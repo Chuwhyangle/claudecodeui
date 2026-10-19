@@ -29,6 +29,7 @@ const SAMPLE_SETTINGS: VoiceSettings = {
   dashscopeEndpoint: '',
   dashscopeApiKey: '',
   dashscopeModel: '',
+  liveVoiceDashscopeApiKey: '',
 };
 
 /**
@@ -123,6 +124,7 @@ test('a freshly created database carries an empty user_voice_settings table', as
       dashscopeEndpoint: '',
       dashscopeApiKey: '',
       dashscopeModel: '',
+      liveVoiceDashscopeApiKey: '',
     });
   });
 });
@@ -218,6 +220,7 @@ test('a field the stored document does not carry reads back as unset', async () 
       dashscopeEndpoint: '',
       dashscopeApiKey: '',
       dashscopeModel: '',
+      liveVoiceDashscopeApiKey: '',
     });
 
     // The reading, printed rather than only asserted: the four provider-owned fields are absent from
@@ -261,6 +264,7 @@ test('the four provider-owned fields round-trip through save and get verbatim', 
       dashscopeEndpoint: 'https://llm-szunnpxbx46k86c0.cn-beijing.maas.aliyuncs.com',
       dashscopeApiKey: 'sk-sentinel-dashscope-workspace-key',
       dashscopeModel: 'qwen3.8-omni-flash',
+      liveVoiceDashscopeApiKey: '',
     };
 
     voiceSettingsDb.saveSettings(1, stored);
@@ -338,6 +342,7 @@ test('two users never see each other’s settings', async () => {
       dashscopeEndpoint: '',
       dashscopeApiKey: '',
       dashscopeModel: '',
+      liveVoiceDashscopeApiKey: '',
     });
 
     voiceSettingsDb.saveSettings(2, { ...SAMPLE_SETTINGS, baseUrl: '', apiKey: 'sk-second' });

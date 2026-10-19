@@ -32,6 +32,7 @@ export {
   contextBudgetStatus,
   createDashscopeTransport,
   estimateRealtimeCostCny,
+  isMaskedDashscopeApiKey,
   resolveRealtimeApiKey,
   toBridgeEvent,
   toDashscopeFrames,

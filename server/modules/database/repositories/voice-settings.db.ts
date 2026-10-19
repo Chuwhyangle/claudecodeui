@@ -26,6 +26,7 @@ const VOICE_SETTINGS_FIELDS = [
   'dashscopeEndpoint',
   'dashscopeApiKey',
   'dashscopeModel',
+  'liveVoiceDashscopeApiKey',
 ] as const satisfies readonly (keyof VoiceSettings)[];
 
 /**
@@ -46,6 +47,7 @@ const EMPTY_VOICE_SETTINGS: VoiceSettings = {
   dashscopeEndpoint: '',
   dashscopeApiKey: '',
   dashscopeModel: '',
+  liveVoiceDashscopeApiKey: '',
 };
 
 /**

@@ -54,6 +54,12 @@ export type VoiceConfig = {
   dashscopeApiKey: string;
   dashscopeModel: string;
   /**
+   * The Live Voice realtime relay's own DashScope credential — INDEPENDENT of the voice-input
+   * `dashscopeApiKey` above. Server-held, masked on readback; the settings form edits it in its own
+   * "Live Voice" section, never under the recogniser's provider fields.
+   */
+  liveVoiceDashscopeApiKey: string;
+  /**
    * Whether this user's recordings are KEPT on the machine that runs the server (D1).
    *
    * THE USER-DATA SWITCH, and the other half of the promise the settings page shows: default ON,
@@ -90,6 +96,7 @@ export const VOICE_CONFIG_DEFAULTS: VoiceConfig = {
   dashscopeEndpoint: '',
   dashscopeApiKey: '',
   dashscopeModel: '',
+  liveVoiceDashscopeApiKey: '',
   // D1: recording on, at the store's own 2 GiB ceiling. The two figures live beside the store's
   // defaults rather than being invented here — a fresh user and a fresh deployment agree.
   voiceDataRecording: true,
@@ -116,6 +123,7 @@ const VOICE_CONFIG_FIELDS = [
   'dashscopeEndpoint',
   'dashscopeApiKey',
   'dashscopeModel',
+  'liveVoiceDashscopeApiKey',
 ] as const satisfies readonly (keyof VoiceConfig)[];
 
 /**

@@ -1903,6 +1903,15 @@ export function useVoiceRealtimeSession({
         }
         // The frame's own `code` is the classification — the server knows which class it is
         // reporting, and the bar must not guess it from the message text.
+        //
+        // The FIRST fatal frame wins. A transport that already named the failure
+        // (MISSING_API_KEY / MASKED_API_KEY) also throws, and the bridge then reports
+        // CONNECTION_FAILED for the same event — that second, vaguer frame must not overwrite the
+        // specific code the person should act on. serverEndedRef marks "a fatal reason is already
+        // on screen".
+        if (serverEndedRef.current) {
+          return;
+        }
         serverEndedRef.current = true;
         fail(frame.message, frame.code);
         setPhase('failed');

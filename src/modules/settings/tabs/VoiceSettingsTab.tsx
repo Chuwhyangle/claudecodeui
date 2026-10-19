@@ -418,6 +418,24 @@ export default function VoiceSettingsTab() {
       )}
 
       {voiceEnabled && (
+        // Live Voice 的独立设置：realtime relay 用自己的 DashScope key，不复用上面 voice-input
+        // 的 `dashscopeApiKey`。两者是不同的服务（一个是识别器，一个是实时语音对话模型）。
+        <SettingsSection title={t('voiceSettings.liveVoiceTitle')} description={t('voiceSettings.liveVoiceDescription')}>
+          <div className="space-y-4">
+            <Field
+              name="liveVoiceDashscopeApiKey"
+              label={t('voiceSettings.liveVoiceApiKey')}
+              type="password"
+              autoComplete="off"
+              placeholder="sk-…"
+              value={config.liveVoiceDashscopeApiKey}
+              onChange={(e) => update({ liveVoiceDashscopeApiKey: e.target.value })}
+            />
+          </div>
+        </SettingsSection>
+      )}
+
+      {voiceEnabled && (
         // D1: THE USER'S OWN KEPT RECORDINGS. On by default, stored on the machine that runs the
         // server, and clearable in one confirmed action — the promise this section puts on screen.
         // It is its own section rather than a field among the backend's, because nothing here

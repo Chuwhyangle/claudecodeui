@@ -353,7 +353,48 @@ function maskSettingsForReadback(settings: VoiceSettings): VoiceSettings {
     }
   }
 
+  // The Live Voice realtime key is its own field, NOT a provider-declared credential, so it is
+  // masked here explicitly the same way — server-held, never shown to the browser.
+  const liveKey = writable.liveVoiceDashscopeApiKey;
+  if (typeof liveKey === 'string') {
+    writable.liveVoiceDashscopeApiKey = maskCredential(liveKey);
+  }
+
   return masked;
+}
+
+/**
+ * Replaces a credential field the client sent back as the mask ({@link CREDENTIAL_MASK_MARKER}) with
+ * the STORED value, so a save that did not touch the field cannot destroy the real credential.
+ *
+ * The settings tab reads a masked document and PUTs the whole document back; an untouched field is
+ * therefore the mask, and writing it through would turn "something is stored" into the stored value
+ * — the exact 2026-10-19 defect that left a real DashScope key replaced by bullets. An EMPTY
+ * incoming field is NOT unmasked: empty is the explicit "clear this", so it clears. Only the mask
+ * marker (and only for provider-declared credential fields) means "keep what is stored".
+ */
+function unmaskMaskedCredentials(input: VoiceSettings, stored: VoiceSettings): VoiceSettings {
+  const result: VoiceSettings = { ...input };
+  const writable = result as unknown as Record<string, unknown>;
+  const storedWritable = stored as unknown as Record<string, unknown>;
+
+  for (const adapter of listProviders()) {
+    const fields = adapter.credentials;
+    if (fields === undefined) {
+      continue;
+    }
+    if (writable[fields.apiKeyField] === CREDENTIAL_MASK_MARKER) {
+      writable[fields.apiKeyField] = storedWritable[fields.apiKeyField] ?? '';
+    }
+  }
+
+  // The Live Voice realtime key, unmasked by the same rule: the mask marker means "keep what is
+  // stored"; anything else (including empty) is the explicit new value.
+  if (writable.liveVoiceDashscopeApiKey === CREDENTIAL_MASK_MARKER) {
+    writable.liveVoiceDashscopeApiKey = storedWritable.liveVoiceDashscopeApiKey ?? '';
+  }
+
+  return result;
 }
 
 /**
@@ -1617,6 +1658,7 @@ const VOICE_SETTINGS_FIELDS = [
   'dashscopeEndpoint',
   'dashscopeApiKey',
   'dashscopeModel',
+  'liveVoiceDashscopeApiKey',
 ] as const satisfies readonly (keyof VoiceSettings)[];
 
 /**
@@ -1650,6 +1692,7 @@ const VOICE_SETTINGS_MAX_LENGTHS: Record<VoiceSettingsStringField, number> = {
   dashscopeEndpoint: 2048,
   dashscopeApiKey: 4096,
   dashscopeModel: 256,
+  liveVoiceDashscopeApiKey: 4096,
 };
 
 /**
@@ -1770,6 +1813,7 @@ function parseVoiceSettingsInput(input: unknown): VoiceServiceResult<VoiceSettin
     dashscopeEndpoint: '',
     dashscopeApiKey: '',
     dashscopeModel: '',
+    liveVoiceDashscopeApiKey: '',
   };
 
   for (const field of VOICE_SETTINGS_FIELDS) {
@@ -1838,7 +1882,12 @@ export function createVoiceSettingsService(store: VoiceSettingsStore): VoiceSett
         return parsed;
       }
 
-      store.saveSettings(userId, parsed.value);
+      // Unmask BEFORE persisting: a client that read the masked document and PUT it back unchanged
+      // sent the mask marker for its untouched credential fields, and those must keep the stored
+      // value rather than overwrite it with bullets.
+      const stored = store.getSettings(userId);
+      const value = unmaskMaskedCredentials(parsed.value, stored);
+      store.saveSettings(userId, value);
       return { ok: true, value: parsed.value };
     },
   };

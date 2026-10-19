@@ -113,6 +113,8 @@ function errorCopyKey(code: string | null): string {
       return 'voice.realtime.errors.spendLimit';
     case 'MISSING_API_KEY':
       return 'voice.realtime.errors.missingCredential';
+    case 'MASKED_API_KEY':
+      return 'voice.realtime.errors.invalidCredential';
     case 'MIC_UNAVAILABLE':
       return 'voice.realtime.errors.micUnavailable';
     default:
@@ -125,6 +127,7 @@ const ERROR_COPY_DEFAULTS: Record<string, string> = {
   'voice.realtime.errors.connectionFailed': 'Voice connection failed — exit and start Live Voice again.',
   'voice.realtime.errors.spendLimit': 'This voice session reached its spending limit — exit and start Live Voice again.',
   'voice.realtime.errors.missingCredential': 'The server has no voice service credentials configured.',
+  'voice.realtime.errors.invalidCredential': 'The voice service is misconfigured — check the voice settings.',
   'voice.realtime.errors.micUnavailable': 'Cannot use the microphone.',
   'voice.realtime.errors.generic': 'Voice error — exit and start Live Voice again.',
 };
