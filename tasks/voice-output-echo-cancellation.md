@@ -1,7 +1,7 @@
 ---
 id: voice-output-echo-cancellation
 title: 回声消除（配套）：先验浏览器 echoCancellation 遮不遮得住外放，遮不住才上真 AEC
-status: todo
+status: ready
 labels:
   - feature
 parent: null
