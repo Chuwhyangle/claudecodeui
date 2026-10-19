@@ -45,6 +45,10 @@ goal_ac: AC-408
 - server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/index.ts
+- server/modules/voice-realtime/tests/voice-realtime-status-injection.test.ts (stale missing-key assertion left by develop 4e433b1c1)
+- server/modules/voice-realtime/tests/voice-realtime-status-tool.test.ts (the same stale missing-key assertion)
+- server/modules/voice-realtime/tests/voice-realtime-scripted-scenarios.test.ts (the same stale missing-key assertion)
+- server/modules/voice/tests/voice-config.routes.test.ts (exhaustive settings literals gain liveVoiceDashscopeApiKey)
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/settings/tabs/VoiceSettingsTab.tsx
 - src/modules/i18n/locales/en/settings.json
