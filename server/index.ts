@@ -738,8 +738,11 @@ const buildVoiceRealtimeSeams = (input: {
                 // resume". Replayed on 2026-10-15/16 through this transport and bridge over ten whole
                 // sessions and windows (`experiments/voice-realtime-closing-turn`): no stop missed, no
                 // unit lost that the closing turn had delivered, at 46–50% of its cost. `respond`
-                // restores the spoken wire.
-                respondToToolOutputs: closingTurn.closingTurn === 'respond',
+                // restores the spoken wire. `announce` expects the model to speak its one-sentence
+                // "starting" report, so the intent is set for it the same way; the frame itself is
+                // protocol traffic either way.
+                respondToToolOutputs:
+                  closingTurn.closingTurn === 'respond' || closingTurn.closingTurn === 'announce',
                 apiKey: process.env.DASHSCOPE_API_KEY,
                 // THE ADOPTED MODEL REQUIRES AN EXPLICIT VOICE. Left unset, the
                 // endpoint falls back to its own default (`Chelsie`) and rejects

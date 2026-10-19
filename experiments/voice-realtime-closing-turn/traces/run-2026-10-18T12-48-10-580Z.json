@@ -1,0 +1,258 @@
+{
+  "ranAt": "2026-10-18T12:48:10.579Z",
+  "budgetCny": 0.25,
+  "spendCny": 0.019866,
+  "guardTriggered": false,
+  "results": [
+    {
+      "window": "P1",
+      "arm": "K",
+      "rep": 0,
+      "note": "63 s: stop at 11.4 s, then \"找到 quay 这个项目最活跃的会话\" at 22–27 s",
+      "spendCny": 0.009593,
+      "responses": 4,
+      "usage": [
+        [
+          1246,
+          14,
+          49
+        ],
+        [
+          1343,
+          14,
+          2
+        ],
+        [
+          1454,
+          56,
+          32
+        ],
+        [
+          1537,
+          56,
+          2
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 11166,
+          "kind": "ASR",
+          "text": "终止现在的操作。"
+        },
+        {
+          "at": 11509,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 11784,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "终止现在的操作。",
+          "intent": "The user explicitly asked to stop the current operation."
+        },
+        {
+          "at": 11786,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 12149,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 12173,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 12173,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 13400,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 26087,
+          "kind": "ASR",
+          "text": "找到，que，q u a y这个项目，最活跃的会话。"
+        },
+        {
+          "at": 26266,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 26432,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "找到 quay 这个项目最活跃的会话。"
+        },
+        {
+          "at": 26433,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 26807,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 26831,
+          "kind": "TEXT",
+          "text": "OK"
+        },
+        {
+          "at": 26831,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 27979,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    },
+    {
+      "window": "P1",
+      "arm": "A",
+      "rep": 0,
+      "note": "63 s: stop at 11.4 s, then \"找到 quay 这个项目最活跃的会话\" at 22–27 s",
+      "spendCny": 0.010273,
+      "responses": 4,
+      "usage": [
+        [
+          1337,
+          14,
+          47
+        ],
+        [
+          1432,
+          14,
+          7
+        ],
+        [
+          1548,
+          56,
+          32
+        ],
+        [
+          1681,
+          56,
+          11
+        ]
+      ],
+      "insertedOk": 0,
+      "abortedAt": null,
+      "driftMs": 0,
+      "errors": [],
+      "timeline": [
+        {
+          "at": 11981,
+          "kind": "ASR",
+          "text": "终止现在的操作。"
+        },
+        {
+          "at": 12150,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 12423,
+          "kind": "CALL",
+          "tool": "session_interrupt",
+          "message": "终止现在的操作。",
+          "intent": "用户明确要求停止当前正在执行的操作。"
+        },
+        {
+          "at": 12424,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 12967,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 13035,
+          "kind": "TEXT",
+          "text": "已为您终止当前操作。"
+        },
+        {
+          "at": 13036,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 13400,
+          "kind": "STATUS",
+          "phase": "idle",
+          "queued": 0
+        },
+        {
+          "at": 26730,
+          "kind": "ASR",
+          "text": "找到，que，q u a y这个项目，最活跃的会话。"
+        },
+        {
+          "at": 26849,
+          "kind": "RESP",
+          "trigger": "vad"
+        },
+        {
+          "at": 27062,
+          "kind": "CALL",
+          "tool": "session_send",
+          "message": "找到 quay 这个项目最活跃的会话。"
+        },
+        {
+          "at": 27063,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 27676,
+          "kind": "RESP",
+          "trigger": "closing"
+        },
+        {
+          "at": 27767,
+          "kind": "TEXT",
+          "text": "好的，我来查找 quay 最活跃的会话。"
+        },
+        {
+          "at": 27767,
+          "kind": "DONE",
+          "status": "completed",
+          "details": null
+        },
+        {
+          "at": 27979,
+          "kind": "STATUS",
+          "phase": "running",
+          "queued": 0
+        }
+      ]
+    }
+  ]
+}
