@@ -67,6 +67,11 @@ const HEARD = '把 server 的日志贴出来';
 const state = vi.hoisted(() => ({
   canAbortSession: true,
   aborts: 0,
+  // The session's "a turn is in flight" reading. It has to be mutable: the shipped composer makes
+  // the submit button the Live Voice entry ONLY while nothing is running (every busier tier —
+  // loading / recording / transcribing / queueing — wins), so a case that is in Live Voice while a
+  // turn runs enters first and resumes the turn afterwards.
+  isProcessing: true,
   // The rows the session reports as visible. A cell the AC1/AC2 case moves so the relayed message
   // can land in the transcript the way it really does — a run later than the `sent` frame.
   visibleMessages: [] as ChatMessage[],
@@ -221,7 +226,7 @@ vi.mock('@/modules/chat/hooks/useChatSessionState', () => ({
     markUserTurnUndelivered: () => undefined,
     restoreUserTurn: () => undefined,
     sessionActivity: ACTIVITY,
-    isProcessing: true,
+    isProcessing: state.isProcessing,
     canAbortSession: state.canAbortSession,
     currentSessionId: SESSION_ID,
     setCurrentSessionId: () => undefined,
@@ -346,6 +351,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });
   state.canAbortSession = true;
   state.aborts = 0;
+  state.isProcessing = true;
   state.visibleMessages = [PRIOR_TURN];
   auth.token = 'jwt-token';
   FakeWebSocket.instances = [];
@@ -356,17 +362,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const renderInterface = () =>
-  render(
-    <ChatInterface isActive selectedProject={PROJECT} selectedSession={null} ws={null} sendMessage={() => undefined} />,
-  );
+const interfaceElement = () => (
+  <ChatInterface isActive selectedProject={PROJECT} selectedSession={null} ws={null} sendMessage={() => undefined} />
+);
 
-/** Enters Live Voice on the already-scoped session and opens the fake connection. */
+const renderInterface = () => render(interfaceElement());
+
+/**
+ * Enters Live Voice on the already-scoped session and opens the fake connection.
+ *
+ * The shipped composer makes the submit button the Live Voice entry only while the draft is empty
+ * AND nothing is running (a running turn's Stop outranks it). Every case that reads the LEAVE
+ * against a running turn therefore enters while the session is momentarily idle and resumes the
+ * turn immediately after — the same end state the old always-visible entry produced.
+ */
 const enterVoice = async (view: ReturnType<typeof renderInterface>) => {
+  state.isProcessing = false;
+  view.rerender(interfaceElement());
   fireEvent.click(view.getByTestId('live-voice-button'));
   await waitFor(() => assert.ok(view.getByTestId('voice-realtime-bar'), 'the bar must mount on entry'));
   await waitFor(() => assert.ok(socket(), 'the entry must open the voice connection'));
   act(() => socket().receive({ type: 'state', state: 'open' }));
+  state.isProcessing = true;
+  view.rerender(interfaceElement());
 };
 
 const composerTextarea = (view: ReturnType<typeof renderInterface>): HTMLTextAreaElement => {
