@@ -58,6 +58,7 @@ separate：`task-granularity-advice` 对 Touches 返回 `peers: []`；本任务�
 ## Touches
 
 - server/modules/voice-realtime/voice-realtime-tts.ts
+- server/modules/voice-realtime/index.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-tts-stream.test.ts
