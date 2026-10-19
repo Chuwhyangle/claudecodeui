@@ -1,7 +1,7 @@
 ---
 id: gap-voice-realtime-per-user-key
 title: live voice realtime 凭据改读 per-user dashscopeApiKey（仅 key）
-status: ready
+status: done
 labels:
   - gap
 parent: null
