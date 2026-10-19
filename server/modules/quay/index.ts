@@ -12,6 +12,8 @@ export { quayRoutes, quayService } from './quay.module.js';
 export {
   createQuayService,
   isReadOnlyQuayCommand,
+  QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS,
+  QUAY_FLEET_SUMMARY_TTL_MS,
   QUAY_TASK_INDEX_MAX_CONCURRENT_LOADS,
   QUAY_TASK_INDEX_MAX_STDOUT_BYTES,
   QUAY_TASK_INDEX_MIN_INTERVAL_MS,
@@ -23,6 +25,12 @@ export type {
   QuayCommandRunner,
   QuayDriverState,
   QuayDriverSummary,
+  /** Consumed by the sidebar's project-row task badges: one quay project's fleet entry. */
+  QuayFleetProjectSummary,
+  /** Consumed by `GET /api/quay/fleet-summary`: the eager cross-project reading. */
+  QuayFleetSummary,
+  /** Consumed by the sidebar's project-row task badges: the five counts it renders. */
+  QuayFleetTaskCounts,
   /** Consumed by the MCP gateway's `quay_snapshot` tool: one task the worker driver reports in flight. */
   QuayInFlightTask,
   QuayProjectStatus,

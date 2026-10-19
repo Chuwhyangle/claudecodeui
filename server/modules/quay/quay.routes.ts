@@ -3,6 +3,7 @@
  * ===================
  *
  * Read-only endpoints that expose a project's quay status to the CloudCLI UI:
+ * - `GET /api/quay/fleet-summary`       — the eager cross-project reading, driver + task counts.
  * - `GET /api/quay/:projectId/status`   — Tier 1, whether `.quay/config.yml` exists.
  * - `GET /api/quay/:projectId/snapshot` — Tier 2, task/goal/ADR/driver counts.
  *
@@ -25,6 +26,18 @@ type QuayRouterDependencies = {
 export function createQuayRouter(dependencies: QuayRouterDependencies): express.Router {
   const { quayService } = dependencies;
   const router = express.Router();
+
+  // Declared before the `/:projectId/...` routes so the static segment is never mistaken
+  // for a project id (Express matches in declaration order).
+  router.get(
+    '/fleet-summary',
+    asyncHandler(async (_req, res) => {
+      // One aggregated reading of every quay project. The service owns the fan-out,
+      // the per-project TTL and the concurrency ceiling; the route only relays it.
+      const summary = await quayService.getFleetSummary();
+      return res.json(summary);
+    }),
+  );
 
   router.get(
     '/:projectId/status',
