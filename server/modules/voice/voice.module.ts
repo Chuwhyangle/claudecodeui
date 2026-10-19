@@ -3,7 +3,7 @@ import path from 'node:path';
 import multer from 'multer';
 
 import { voiceSettingsDb } from '@/modules/database/index.js';
-import type { VoiceLogPort } from '@/shared/types.js';
+import type { VoiceLogPort, VoiceSettings } from '@/shared/types.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 // The provider address book, read here for the one figure the transport layer can know without
@@ -357,6 +357,18 @@ const rawAudioUpload = multer({
 // The settings the user saved, read and written through the Voice settings
 // routes. Stored per user so a key no longer lives only in one browser profile.
 const voiceSettingsService = createVoiceSettingsService(voiceSettingsDb);
+
+/**
+ * Reads the voice settings document one user saved.
+ *
+ * Consumers: `server/index.ts`'s Live Voice realtime assembly point, which needs the user's
+ * DashScope key for the connection's bearer credential. It is a narrow read — not the database
+ * handle — so the entry point reaches the settings row through this module's barrel instead of
+ * deep-importing the database repository, and the Voice routes/services keep using the same store.
+ */
+export function readVoiceSettings(userId: number): VoiceSettings {
+  return voiceSettingsDb.getSettings(userId);
+}
 
 /**
  * THE ONE READ of `VOICE_CLIENT_MODEL_DIR` in this process, and the directory the browser

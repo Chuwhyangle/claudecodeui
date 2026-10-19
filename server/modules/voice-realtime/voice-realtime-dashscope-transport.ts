@@ -322,6 +322,29 @@ export type DashscopeResponseConcurrency = {
   readonly deferredResponseCreates: number;
 };
 
+/**
+ * The DashScope credential a Live Voice realtime connection dials with, resolved from the user's
+ * saved setting and the deployment's environment variable.
+ *
+ * Precedence matches the one-shot ASR path (`voice.service.ts`): the user's own key wins, the
+ * deployment's `DASHSCOPE_API_KEY` is the fallback, and two unset keys resolve to `''` so the
+ * transport's own `MISSING_API_KEY` guard still fires. A whitespace-only stored value counts as
+ * unset — a blank bearer header would turn a clear "not configured" into an upstream 401.
+ *
+ * The transport keeps its OWN `options.apiKey ?? process.env.DASHSCOPE_API_KEY` fallback: other
+ * callers (and the criteria that drive the transport directly) rely on it, so this resolver only
+ * decides what the shipped assembly point hands in.
+ *
+ * Consumers: `server/index.ts` at the realtime assembly point (through this module's barrel), and
+ * `tests/voice-realtime-api-key-resolution.test.ts`, which pins the four precedence cases.
+ */
+export function resolveRealtimeApiKey(
+  userDashscopeApiKey: string | undefined,
+  envApiKey: string | undefined,
+): string {
+  return userDashscopeApiKey?.trim() || envApiKey || '';
+}
+
 /** How the transport is configured. Every field has a shipping default except the credential. */
 export type DashscopeTransportOptions = {
   /** Bearer credential. Defaults to `process.env.DASHSCOPE_API_KEY`. Never logged, never traced. */
