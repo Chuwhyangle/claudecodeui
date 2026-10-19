@@ -4,6 +4,10 @@ export { voiceRoutes } from './voice.module.js';
 // and model files same-origin at `/voice-client`, ahead of the static layer and outside the
 // authenticated `/api/voice` prefix.
 export { voiceClientAssetRoutes } from './voice.module.js';
+// readVoiceSettings: used by the server entrypoint's Live Voice realtime assembly point to read the
+// signed-in user's saved DashScope key. One narrow read so the entrypoint does not reach into the
+// database module's repository for a settings row.
+export { readVoiceSettings } from './voice.module.js';
 // voiceLexicon: the U-source lexicon singleton. Used by the chat dispatch to
 // record the identifier-shaped tokens of every message a user sends — the
 // auto-record half of the cold-start-plus-live pair — and by the Voice routes.
