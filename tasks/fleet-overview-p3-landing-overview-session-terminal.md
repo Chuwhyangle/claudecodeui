@@ -53,10 +53,8 @@ extra:
 
 ## Blocker
 
-**2026-10-19T04:01:22.281Z — worker 未落地（exited-not-landed）**
+**2026-10-19T04:12:34.744Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=merge-develop: Auto-merging src/shared/api.ts
-CONFLICT (content): Merge conflict in src/shared/api.ts
-Automatic merge failed; fix conflicts and then commit the result.
+- 未落地原因：step=suite: __PERFILE__ duration_ms=77257 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792382802455
 - run_id：wk-prod-anchor
-- session_id：b8729794-f1d0-49f7-a816-25828d03a588
+- session_id：41b2e852-7be1-48bb-8cfd-59eb461b82bf
