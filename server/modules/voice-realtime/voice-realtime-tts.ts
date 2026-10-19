@@ -447,6 +447,164 @@ function parseEvent(data: string): Record<string, unknown> | null {
 }
 
 /**
+ * What one SSE event contributes to a synthesis, with every refusal already named.
+ *
+ * Shared by the two consumers below ({@link synthesizeVoiceRealtimeSpeech} and
+ * {@link streamVoiceRealtimeSpeech}) so the "an event is JSON, an error can arrive inside a 2xx
+ * stream, and audio data is base64" rules exist once. `characters` is reported even on an event
+ * that carries no audio, because the billed usage can arrive on its own event.
+ */
+type VoiceRealtimeTtsEventReading =
+  | { kind: 'audio'; bytes: Uint8Array; characters: number | null }
+  | { kind: 'none'; characters: number | null }
+  | { kind: 'failure'; failure: Extract<VoiceRealtimeTtsSynthesis, { ok: false }> };
+
+/** Reads one `data:` payload as an event under the contract described above. */
+function readSynthesisEvent(data: string): VoiceRealtimeTtsEventReading {
+  const event = parseEvent(data);
+  if (event === null) {
+    return {
+      kind: 'failure',
+      failure: {
+        ok: false,
+        code: 'TTS_MALFORMED_RESPONSE',
+        message: 'the TTS stream carried an event that is not JSON',
+      },
+    };
+  }
+
+  // An error can arrive INSIDE a 2xx stream (the service already committed the response).
+  const eventCode = stringField(event, 'code') ?? nestedErrorCode(event);
+  if (eventCode !== null) {
+    const message =
+      stringField(event, 'message') ?? nestedErrorMessage(event) ?? 'the TTS service reported an error';
+    return {
+      kind: 'failure',
+      failure: {
+        ok: false,
+        code: 'TTS_UPSTREAM_ERROR',
+        message: boundedMessage(message),
+        upstreamCode: eventCode,
+      },
+    };
+  }
+
+  let characters: number | null = null;
+  const usage = event.usage;
+  if (typeof usage === 'object' && usage !== null) {
+    const billed = (usage as Record<string, unknown>).characters;
+    if (typeof billed === 'number' && Number.isFinite(billed) && billed >= 0) characters = billed;
+  }
+
+  const output = event.output;
+  if (typeof output !== 'object' || output === null) return { kind: 'none', characters };
+  const outputRecord = output as Record<string, unknown>;
+
+  const audio = outputRecord.audio;
+  if (typeof audio !== 'object' || audio === null) return { kind: 'none', characters };
+  const audioData = stringField(audio as Record<string, unknown>, 'data');
+  if (audioData === null || audioData.trim() === '') return { kind: 'none', characters };
+
+  const decoded = decodeAudioChunk(audioData);
+  if (decoded === null) {
+    return {
+      kind: 'failure',
+      failure: {
+        ok: false,
+        code: 'TTS_MALFORMED_RESPONSE',
+        message: 'the TTS stream carried audio data that is not base64',
+      },
+    };
+  }
+  if (decoded.length === 0) return { kind: 'none', characters };
+  return { kind: 'audio', bytes: decoded, characters };
+}
+
+// ── the streaming half: a RIFF/WAVE header recognised while the SSE stream is still open ─────────
+
+/**
+ * A streamed WAV's header fields, read once the `data` chunk header is complete.
+ *
+ * `headerEnd` is the first PCM byte (the `data` chunk's body start). Everything before it is the
+ * header frame the page hands back to the browser's decoder; everything after is PCM it can schedule
+ * without waiting for the stream to close.
+ */
+type VoiceRealtimeTtsRiffHeader = {
+  headerEnd: number;
+  /** `fmt ` byte rate, or `null` when the stream never delivered a readable `fmt ` chunk. */
+  byteRate: number | null;
+};
+
+/** The result of walking the bytes accumulated for a WAV header so far. */
+type VoiceRealtimeTtsRiffScan =
+  | { state: 'incomplete' }
+  | { state: 'invalid' }
+  | ({ state: 'done' } & VoiceRealtimeTtsRiffHeader);
+
+/**
+ * The largest header this leaf will buffer before calling the stream malformed.
+ *
+ * A legitimate RIFF header is tens of bytes; the cap bounds a stream whose declared chunk size is
+ * absurd, so a malformed answer cannot grow the relay's memory until the timeout fires.
+ */
+const MAX_VOICE_REALTIME_TTS_HEADER_BYTES = 64 * 1024;
+
+/** Reads one little-endian unsigned 16-bit integer, or `null` when the bytes are short. */
+function readUint16LE(bytes: Uint8Array, offset: number): number | null {
+  if (offset < 0 || offset + 2 > bytes.length) return null;
+  return bytes[offset]! | (bytes[offset + 1]! << 8);
+}
+
+/**
+ * Walks as much of a RIFF/WAVE header as `bytes` contains.
+ *
+ * The walk is incremental because the SSE stream splits the WAV at arbitrary boundaries: the first
+ * event's audio can end in the middle of the `fmt ` chunk. `incomplete` means "feed me more bytes";
+ * `done` means the `data` chunk's body starts at `headerEnd` and every byte from there on is PCM.
+ * A streamed WAV may declare `0xFFFFFFFF` as its data size — the honest bound is the bytes that
+ * actually arrive, which is why the data size is never used to decide when the header is complete.
+ */
+function scanVoiceRealtimeTtsRiffHeader(bytes: Uint8Array): VoiceRealtimeTtsRiffScan {
+  if (bytes.length >= 4 && chunkId(bytes, 0) !== 'RIFF') return { state: 'invalid' };
+  if (bytes.length < 12) return { state: 'incomplete' };
+  if (chunkId(bytes, 8) !== 'WAVE') return { state: 'invalid' };
+
+  let byteRate: number | null = null;
+  let offset = 12;
+  for (;;) {
+    if (offset + 8 > bytes.length) {
+      return bytes.length > MAX_VOICE_REALTIME_TTS_HEADER_BYTES ? { state: 'invalid' } : { state: 'incomplete' };
+    }
+    const id = chunkId(bytes, offset);
+    const size = readUint32LE(bytes, offset + 4);
+    if (id === null || size === null) return { state: 'invalid' };
+    // The `data` chunk's size may be a placeholder; its body starts right after this header.
+    if (id === 'data') return { state: 'done', headerEnd: offset + 8, byteRate };
+
+    const bodyStart = offset + 8;
+    const advance = 8 + size + (size % 2);
+    if (bodyStart + size > bytes.length) {
+      return bytes.length > MAX_VOICE_REALTIME_TTS_HEADER_BYTES ? { state: 'invalid' } : { state: 'incomplete' };
+    }
+    if (id === 'fmt ' && size >= 16) {
+      byteRate = readUint32LE(bytes, bodyStart + 8);
+    }
+    if (advance <= 8) return { state: 'invalid' }; // a size that cannot advance would never terminate
+    offset += advance;
+  }
+}
+
+/** Concatenates two byte slices, leaving both inputs untouched. */
+function concatBytes(head: Uint8Array, tail: Uint8Array): Uint8Array {
+  if (head.length === 0) return tail;
+  if (tail.length === 0) return head;
+  const merged = new Uint8Array(head.length + tail.length);
+  merged.set(head, 0);
+  merged.set(tail, head.length);
+  return merged;
+}
+
+/**
  * The request body the documented multimodal-generation API expects for `qwen3-tts-flash`.
  *
  * `input` carries only `text` and `voice`; `format` and `sample_rate` are NOT parameters on this
@@ -461,6 +619,139 @@ function requestBody(text: string, model: string, voice: string): string {
 }
 
 /**
+ * The resolved inputs of one synthesis request, after every pre-request refusal.
+ *
+ * Shared by both synthesis entry points so "no text", "no credential", "no voice" and "no fetch"
+ * are refused identically and before any network call, whichever framing the caller wants.
+ */
+type VoiceRealtimeTtsPreflight = {
+  text: string;
+  fetchImpl: VoiceRealtimeTtsFetch;
+  model: string;
+  baseUrl: string;
+  format: VoiceRealtimeTtsFormat;
+  sampleRate: number;
+  timeoutMs: number;
+};
+
+/** Resolves the request inputs, or names the configuration that cannot produce one. */
+function resolveVoiceRealtimeTtsPreflight(
+  text: string,
+  options: VoiceRealtimeTtsOptions,
+): { ok: true; request: VoiceRealtimeTtsPreflight } | { ok: false; failure: Extract<VoiceRealtimeTtsSynthesis, { ok: false }> } {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return { ok: false, failure: { ok: false, code: 'TTS_EMPTY_TEXT', message: 'there is no text to speak' } };
+  }
+  if (options.apiKey.trim() === '') {
+    return { ok: false, failure: configurationFailure('the TTS service needs an API key') };
+  }
+  if (options.voice.trim() === '') {
+    return { ok: false, failure: configurationFailure('the TTS service needs a voice id') };
+  }
+
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    return { ok: false, failure: configurationFailure('this process has no fetch implementation') };
+  }
+
+  return {
+    ok: true,
+    request: {
+      text: trimmed,
+      fetchImpl,
+      model: options.model ?? DEFAULT_VOICE_REALTIME_TTS_MODEL,
+      baseUrl: (options.baseUrl ?? DEFAULT_VOICE_REALTIME_TTS_BASE_URL).replace(/\/+$/, ''),
+      format: options.format ?? DEFAULT_VOICE_REALTIME_TTS_FORMAT,
+      sampleRate: options.sampleRate ?? DEFAULT_VOICE_REALTIME_TTS_SAMPLE_RATE,
+      timeoutMs: options.timeoutMs ?? DEFAULT_VOICE_REALTIME_TTS_TIMEOUT_MS,
+    },
+  };
+}
+
+/** The SSE body of an opened synthesis request, or the named refusal that replaced it. */
+type VoiceRealtimeTtsOpenedStream =
+  | { ok: true; body: ReadableStream<Uint8Array> }
+  | { ok: false; failure: Extract<VoiceRealtimeTtsSynthesis, { ok: false }> };
+
+/**
+ * Opens the documented synthesis request and returns its SSE body.
+ *
+ * The request shape, the credential placement, the SSE opt-in and the transport failures exist
+ * here once: both the whole-blob assembler and the streaming framer open the same call, so a change
+ * to the wire cannot drift between them.
+ */
+async function openVoiceRealtimeTtsStream(
+  request: VoiceRealtimeTtsPreflight,
+  options: VoiceRealtimeTtsOptions,
+): Promise<VoiceRealtimeTtsOpenedStream> {
+  let response: Response;
+  try {
+    response = await request.fetchImpl(`${request.baseUrl}${VOICE_REALTIME_TTS_PATH}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // THE CREDENTIAL TRAVELS ONLY HERE. It is never placed in a frame, a result or a message.
+        Authorization: `Bearer ${options.apiKey}`,
+        // Ask for the streamed answer: one request, audio chunks inside it.
+        'X-DashScope-SSE': 'enable',
+      },
+      body: requestBody(request.text, request.model, options.voice),
+      signal: AbortSignal.timeout(request.timeoutMs),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+      return {
+        ok: false,
+        failure: {
+          ok: false,
+          code: 'TTS_TIMEOUT',
+          message: `the TTS service did not answer within ${Math.round(request.timeoutMs / 1000)}s`,
+        },
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      failure: {
+        ok: false,
+        code: 'TTS_UNREACHABLE',
+        message: boundedMessage(`the TTS service was unreachable: ${message}`),
+      },
+    };
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    return { ok: false, failure: upstreamFailure(response.status, body) };
+  }
+  if (response.body === null) {
+    return {
+      ok: false,
+      failure: {
+        ok: false,
+        code: 'TTS_MALFORMED_RESPONSE',
+        message: 'the TTS service answered without a body',
+      },
+    };
+  }
+  return { ok: true, body: response.body };
+}
+
+/** The named failure owed a stream that stopped before its last event. */
+function streamFailure(error: unknown, timeoutMs: number): Extract<VoiceRealtimeTtsSynthesis, { ok: false }> {
+  if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+    return {
+      ok: false,
+      code: 'TTS_TIMEOUT',
+      message: `the TTS service did not finish within ${Math.round(timeoutMs / 1000)}s`,
+    };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return { ok: false, code: 'TTS_UNREACHABLE', message: boundedMessage(`the TTS stream failed: ${message}`) };
+}
+
+/**
  * Synthesizes one piece of text into audio bytes.
  *
  * Consumed by {@link speakVoiceRealtimeText} and, later, by any caller that wants the bytes without
@@ -472,131 +763,29 @@ export async function synthesizeVoiceRealtimeSpeech(
   text: string,
   options: VoiceRealtimeTtsOptions,
 ): Promise<VoiceRealtimeTtsSynthesis> {
-  const trimmed = text.trim();
-  if (trimmed === '') {
-    return { ok: false, code: 'TTS_EMPTY_TEXT', message: 'there is no text to speak' };
-  }
-  if (options.apiKey.trim() === '') {
-    return configurationFailure('the TTS service needs an API key');
-  }
-  if (options.voice.trim() === '') {
-    return configurationFailure('the TTS service needs a voice id');
-  }
+  const preflight = resolveVoiceRealtimeTtsPreflight(text, options);
+  if (!preflight.ok) return preflight.failure;
+  const request = preflight.request;
 
-  const fetchImpl = options.fetch ?? globalThis.fetch;
-  if (typeof fetchImpl !== 'function') {
-    return configurationFailure('this process has no fetch implementation');
-  }
-
-  const model = options.model ?? DEFAULT_VOICE_REALTIME_TTS_MODEL;
-  const baseUrl = (options.baseUrl ?? DEFAULT_VOICE_REALTIME_TTS_BASE_URL).replace(/\/+$/, '');
-  const format = options.format ?? DEFAULT_VOICE_REALTIME_TTS_FORMAT;
-  const sampleRate = options.sampleRate ?? DEFAULT_VOICE_REALTIME_TTS_SAMPLE_RATE;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_VOICE_REALTIME_TTS_TIMEOUT_MS;
-
-  let response: Response;
-  try {
-    response = await fetchImpl(`${baseUrl}${VOICE_REALTIME_TTS_PATH}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // THE CREDENTIAL TRAVELS ONLY HERE. It is never placed in a frame, a result or a message.
-        Authorization: `Bearer ${options.apiKey}`,
-        // Ask for the streamed answer: one request, audio chunks inside it.
-        'X-DashScope-SSE': 'enable',
-      },
-      body: requestBody(trimmed, model, options.voice),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (error) {
-    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
-      return {
-        ok: false,
-        code: 'TTS_TIMEOUT',
-        message: `the TTS service did not answer within ${Math.round(timeoutMs / 1000)}s`,
-      };
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, code: 'TTS_UNREACHABLE', message: boundedMessage(`the TTS service was unreachable: ${message}`) };
-  }
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    return upstreamFailure(response.status, body);
-  }
-  if (response.body === null) {
-    return {
-      ok: false,
-      code: 'TTS_MALFORMED_RESPONSE',
-      message: 'the TTS service answered without a body',
-    };
-  }
+  const opened = await openVoiceRealtimeTtsStream(request, options);
+  if (!opened.ok) return opened.failure;
 
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
   let characters: number | null = null;
 
   try {
-    for await (const data of sseDataLines(response.body)) {
-      const event = parseEvent(data);
-      if (event === null) {
-        return {
-          ok: false,
-          code: 'TTS_MALFORMED_RESPONSE',
-          message: 'the TTS stream carried an event that is not JSON',
-        };
+    for await (const data of sseDataLines(opened.body)) {
+      const reading = readSynthesisEvent(data);
+      if (reading.kind === 'failure') return reading.failure;
+      if (reading.characters !== null) characters = reading.characters;
+      if (reading.kind === 'audio') {
+        chunks.push(reading.bytes);
+        totalBytes += reading.bytes.length;
       }
-
-      // An error can arrive INSIDE a 2xx stream (the service already committed the response).
-      const eventCode = stringField(event, 'code') ?? nestedErrorCode(event);
-      if (eventCode !== null) {
-        const message =
-          stringField(event, 'message') ?? nestedErrorMessage(event) ?? 'the TTS service reported an error';
-        return {
-          ok: false,
-          code: 'TTS_UPSTREAM_ERROR',
-          message: boundedMessage(message),
-          upstreamCode: eventCode,
-        };
-      }
-
-      const output = event.output;
-      if (typeof output !== 'object' || output === null) continue;
-      const outputRecord = output as Record<string, unknown>;
-
-      const usage = event.usage;
-      if (typeof usage === 'object' && usage !== null) {
-        const billed = (usage as Record<string, unknown>).characters;
-        if (typeof billed === 'number' && Number.isFinite(billed) && billed >= 0) characters = billed;
-      }
-
-      const audio = outputRecord.audio;
-      if (typeof audio !== 'object' || audio === null) continue;
-      const audioData = stringField(audio as Record<string, unknown>, 'data');
-      if (audioData === null || audioData.trim() === '') continue;
-
-      const decoded = decodeAudioChunk(audioData);
-      if (decoded === null) {
-        return {
-          ok: false,
-          code: 'TTS_MALFORMED_RESPONSE',
-          message: 'the TTS stream carried audio data that is not base64',
-        };
-      }
-      if (decoded.length === 0) continue;
-      chunks.push(decoded);
-      totalBytes += decoded.length;
     }
   } catch (error) {
-    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
-      return {
-        ok: false,
-        code: 'TTS_TIMEOUT',
-        message: `the TTS service did not finish within ${Math.round(timeoutMs / 1000)}s`,
-      };
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, code: 'TTS_UNREACHABLE', message: boundedMessage(`the TTS stream failed: ${message}`) };
+    return streamFailure(error, request.timeoutMs);
   }
 
   if (totalBytes === 0) {
@@ -617,11 +806,42 @@ export async function synthesizeVoiceRealtimeSpeech(
   return {
     ok: true,
     bytes,
-    format,
-    sampleRate,
-    durationMs: format === 'wav' ? wavDurationMs(bytes) : null,
-    characters: characters ?? trimmed.length,
+    format: request.format,
+    sampleRate: request.sampleRate,
+    durationMs: request.format === 'wav' ? wavDurationMs(bytes) : null,
+    characters: characters ?? request.text.length,
   };
+}
+
+/**
+ * Emits exactly one `tts_error` frame for a named failure.
+ *
+ * EVERY refusal goes through here, so "a failure is one error frame and no `tts_done`" is a single
+ * implementation rather than a rule each caller re-states. A downlink that rejects the error frame
+ * is reported as `TTS_DELIVERY_FAILED` instead of escaping.
+ */
+function deliverVoiceRealtimeTtsFailure(
+  input: VoiceRealtimeTtsInput,
+  failure: Extract<VoiceRealtimeTtsSynthesis, { ok: false }>,
+  downlink: VoiceRealtimeTtsDownlink,
+): VoiceRealtimeTtsResult {
+  try {
+    downlink({
+      type: 'tts_error',
+      utteranceId: input.utteranceId,
+      code: failure.code,
+      message: failure.message,
+      ...(failure.upstreamCode === undefined ? {} : { upstreamCode: failure.upstreamCode }),
+      ...(failure.httpStatus === undefined ? {} : { httpStatus: failure.httpStatus }),
+    });
+  } catch {
+    return {
+      ok: false,
+      code: 'TTS_DELIVERY_FAILED',
+      message: 'the downlink rejected the error frame',
+    };
+  }
+  return failure;
 }
 
 /**
@@ -634,7 +854,8 @@ export async function synthesizeVoiceRealtimeSpeech(
  *
  * A throwing downlink is reported as `TTS_DELIVERY_FAILED` rather than escaping: the sink is the
  * transport, and a closed browser socket must not turn into an unhandled rejection on the relay.
- * Consumed by the `/voice-realtime` proxy wiring (a later task) and by the AC-405 criterion.
+ * Consumed by the AC-405 criterion; the shipped narrator path uses
+ * {@link streamVoiceRealtimeSpeech} so the first frame does not wait for the last byte.
  */
 export async function speakVoiceRealtimeText(
   input: VoiceRealtimeTtsInput,
@@ -642,25 +863,7 @@ export async function speakVoiceRealtimeText(
   downlink: VoiceRealtimeTtsDownlink,
 ): Promise<VoiceRealtimeTtsResult> {
   const synthesis = await synthesizeVoiceRealtimeSpeech(input.text, options);
-  if (!synthesis.ok) {
-    try {
-      downlink({
-        type: 'tts_error',
-        utteranceId: input.utteranceId,
-        code: synthesis.code,
-        message: synthesis.message,
-        ...(synthesis.upstreamCode === undefined ? {} : { upstreamCode: synthesis.upstreamCode }),
-        ...(synthesis.httpStatus === undefined ? {} : { httpStatus: synthesis.httpStatus }),
-      });
-    } catch {
-      return {
-        ok: false,
-        code: 'TTS_DELIVERY_FAILED',
-        message: 'the downlink rejected the error frame',
-      };
-    }
-    return synthesis;
-  }
+  if (!synthesis.ok) return deliverVoiceRealtimeTtsFailure(input, synthesis, downlink);
 
   const frameBytes = Math.max(1, Math.floor(options.frameBytes ?? DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES));
   let frames = 0;
@@ -696,4 +899,170 @@ export async function speakVoiceRealtimeText(
     durationMs: synthesis.durationMs,
     characters: synthesis.characters,
   };
+}
+
+/** A downlink rejection, distinguished from an upstream/stream failure inside the streaming loop. */
+class VoiceRealtimeTtsDownlinkError extends Error {}
+
+/**
+ * Synthesizes one text and streams its audio to the browser WHILE the SSE answer is still open.
+ *
+ * WHY THIS EXISTS. {@link speakVoiceRealtimeText} awaits the complete WAV before it slices a single
+ * frame, so a nine-character announcement pays a full synthesis round trip before the page hears
+ * anything (measured 1.2–3.5 s of synthesis on the 2026-10-19 live capture). This function reads the
+ * SSE events as they arrive, recognises the RIFF/WAVE header incrementally, and emits:
+ *
+ *   · `seq: 0` — the header bytes, the moment the `data` chunk header is complete;
+ *   · `seq: 1..n` — PCM slices of at most `frameBytes`, as events carrying PCM arrive;
+ *   · `tts_done` — last, when the stream closes.
+ *
+ * The frame type and the reassembly contract are unchanged: a page that joins every `tts_audio`
+ * frame still holds exactly the WAV the service produced. That is what keeps an old page working
+ * against this producer, and what the criterion reads back byte-for-byte.
+ *
+ * NON-WAV CONTAINERS keep the whole-blob path: this function frames RIFF/WAVE only, and a caller
+ * that asked for another format is answered by {@link speakVoiceRealtimeText} unchanged.
+ *
+ * FAILURE SEMANTICS ARE THE SAME AS THE WHOLE-BLOB PATH: exactly one `tts_error` and no `tts_done`.
+ * A failure after audio has already been sent still terminates with that one error frame, which the
+ * page treats as "stop and ack" — a partial utterance is never presented as a complete one.
+ */
+export async function streamVoiceRealtimeSpeech(
+  input: VoiceRealtimeTtsInput,
+  options: VoiceRealtimeTtsOptions,
+  downlink: VoiceRealtimeTtsDownlink,
+): Promise<VoiceRealtimeTtsResult> {
+  const preflight = resolveVoiceRealtimeTtsPreflight(input.text, options);
+  if (!preflight.ok) return deliverVoiceRealtimeTtsFailure(input, preflight.failure, downlink);
+  const request = preflight.request;
+
+  // The incremental framer speaks RIFF/WAVE. Any other container keeps the whole-blob contract.
+  if (request.format !== 'wav') return speakVoiceRealtimeText(input, options, downlink);
+
+  const opened = await openVoiceRealtimeTtsStream(request, options);
+  if (!opened.ok) return deliverVoiceRealtimeTtsFailure(input, opened.failure, downlink);
+
+  const frameBytes = Math.max(1, Math.floor(options.frameBytes ?? DEFAULT_VOICE_REALTIME_TTS_FRAME_BYTES));
+  let characters: number | null = null;
+  // Held in one-element arrays rather than `let … | null` variables: the assignments happen inside
+  // the closures below, and the compiler's flow analysis cannot see through them (it would narrow a
+  // plain `let` to `null` and read the post-loop checks as unreachable).
+  const headers: VoiceRealtimeTtsRiffHeader[] = [];
+  const failures: Array<Extract<VoiceRealtimeTtsSynthesis, { ok: false }>> = [];
+  let headerBuffer: Uint8Array = new Uint8Array(0);
+  let pendingPcm: Uint8Array = new Uint8Array(0);
+  let seq = 0;
+  let headerBytes = 0;
+  let pcmBytes = 0;
+
+  const emitAudio = (slice: Uint8Array): void => {
+    try {
+      downlink({
+        type: 'tts_audio',
+        utteranceId: input.utteranceId,
+        seq,
+        audio: Buffer.from(slice).toString('base64'),
+        format: request.format,
+        sampleRate: request.sampleRate,
+      });
+    } catch {
+      throw new VoiceRealtimeTtsDownlinkError('the downlink rejected an audio frame');
+    }
+    seq += 1;
+  };
+
+  const flushPcm = (final: boolean): void => {
+    for (;;) {
+      if (pendingPcm.length === 0) return;
+      if (!final && pendingPcm.length < frameBytes) return;
+      const take = Math.min(frameBytes, pendingPcm.length);
+      emitAudio(pendingPcm.subarray(0, take));
+      pendingPcm = pendingPcm.subarray(take);
+      pcmBytes += take;
+    }
+  };
+
+  const feed = (bytes: Uint8Array): void => {
+    if (headers.length > 0) {
+      pendingPcm = concatBytes(pendingPcm, bytes);
+      flushPcm(false);
+      return;
+    }
+    headerBuffer = concatBytes(headerBuffer, bytes);
+    const scan = scanVoiceRealtimeTtsRiffHeader(headerBuffer);
+    if (scan.state === 'invalid') {
+      failures.push({
+        ok: false,
+        code: 'TTS_MALFORMED_RESPONSE',
+        message: 'the TTS stream did not carry a readable RIFF/WAVE header',
+      });
+      return;
+    }
+    if (scan.state === 'incomplete') return;
+    headers.push({ headerEnd: scan.headerEnd, byteRate: scan.byteRate });
+    headerBytes = scan.headerEnd;
+    emitAudio(headerBuffer.subarray(0, scan.headerEnd));
+    pendingPcm = concatBytes(pendingPcm, headerBuffer.subarray(scan.headerEnd));
+    headerBuffer = new Uint8Array(0);
+    flushPcm(false);
+  };
+
+  try {
+    for await (const data of sseDataLines(opened.body)) {
+      const reading = readSynthesisEvent(data);
+      if (reading.kind === 'failure') {
+        failures.push(reading.failure);
+        break;
+      }
+      if (reading.characters !== null) characters = reading.characters;
+      if (reading.kind === 'audio') {
+        feed(reading.bytes);
+        if (failures.length > 0) break;
+      }
+    }
+  } catch (error) {
+    if (error instanceof VoiceRealtimeTtsDownlinkError) {
+      return { ok: false, code: 'TTS_DELIVERY_FAILED', message: 'the downlink rejected an audio frame' };
+    }
+    failures.push(streamFailure(error, request.timeoutMs));
+  }
+
+  if (failures.length > 0) return deliverVoiceRealtimeTtsFailure(input, failures[0]!, downlink);
+
+  if (headers.length === 0) {
+    // No readable header at all: an empty stream never produced audio; anything else is malformed.
+    const code = headerBuffer.length === 0 ? 'TTS_EMPTY_AUDIO' : 'TTS_MALFORMED_RESPONSE';
+    const message =
+      headerBuffer.length === 0
+        ? 'the TTS service completed the request without producing any audio'
+        : 'the TTS stream did not carry a readable RIFF/WAVE header';
+    return deliverVoiceRealtimeTtsFailure(input, { ok: false, code, message }, downlink);
+  }
+  const header = headers[0]!;
+
+  try {
+    flushPcm(true);
+  } catch {
+    return { ok: false, code: 'TTS_DELIVERY_FAILED', message: 'the downlink rejected an audio frame' };
+  }
+
+  const bytes = headerBytes + pcmBytes;
+  const durationMs =
+    header.byteRate !== null && header.byteRate > 0 ? (pcmBytes / header.byteRate) * 1000 : null;
+  const reportedCharacters = characters ?? request.text.length;
+
+  try {
+    downlink({
+      type: 'tts_done',
+      utteranceId: input.utteranceId,
+      frames: seq,
+      bytes,
+      durationMs,
+      characters: reportedCharacters,
+    });
+  } catch {
+    return { ok: false, code: 'TTS_DELIVERY_FAILED', message: 'the downlink rejected an audio frame' };
+  }
+
+  return { ok: true, frames: seq, bytes, durationMs, characters: reportedCharacters };
 }

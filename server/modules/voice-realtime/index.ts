@@ -324,9 +324,11 @@ export {
 } from './voice-realtime-audio-capture.js';
 export { createVoiceRealtimeRouter, type VoiceRealtimeRoutesDeps } from './voice-realtime.routes.js';
 // The Live Voice TTS leaf (GOAL-047 / AC-405, wired by AC-408). The composition root builds its
-// options (credential, voice, endpoint override) and hands `speakVoiceRealtimeText` to the narrator
-// queue through the proxy's `tts` seam; the browser receives the leaf's three frame shapes. Nothing
-// here opens a socket or reads the environment — the leaf takes every input as an option.
+// options (credential, voice, endpoint override) and hands `streamVoiceRealtimeSpeech` to the
+// narrator queue through the proxy's `tts` seam; the browser receives the leaf's three frame shapes.
+// The streaming entry point emits the header frame as soon as the RIFF header is readable, so a
+// short announcement starts playing before its synthesis has finished. Nothing here opens a socket
+// or reads the environment — the leaf takes every input as an option.
 export {
   // The assembler reads the voice id from the deployment and the credential from the user; the two
   // env names live with the leaf so the composition root and this module cannot spell them apart.
@@ -334,6 +336,7 @@ export {
   VOICE_REALTIME_TTS_ENDPOINT_ENV,
   VOICE_REALTIME_TTS_VOICE_ENV,
   speakVoiceRealtimeText,
+  streamVoiceRealtimeSpeech,
   type VoiceRealtimeTtsFrame,
   type VoiceRealtimeTtsOptions,
 } from './voice-realtime-tts.js';

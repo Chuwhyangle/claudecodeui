@@ -191,6 +191,163 @@ type NarratorTtsBuffer = {
 type NarratorPlaying = { utteranceId: string; url: string };
 
 /**
+ * The fields of a RIFF/WAVE header streaming playback needs.
+ *
+ * Streaming playback starts before `tts_done`, so the page has to read the container itself: the
+ * `fmt ` chunk says how to turn PCM bytes into samples, and `dataStart` is where the first PCM byte
+ * lives (everything before it is the header frame a media element would need to decode the file).
+ */
+type NarratorWavHeader = {
+  sampleRate: number;
+  channels: number;
+  /** Always 16 for the streaming path; any other depth falls back to the element path. */
+  bitsPerSample: number;
+  dataStart: number;
+};
+
+/**
+ * One narrator utterance being scheduled through an `AudioContext`.
+ *
+ * `fallback` is the whole safety valve: no `AudioContext`, a non-WAV container, an unreadable
+ * header, or a `resume()` rejected by the autoplay policy all set it, and `tts_done` then plays the
+ * assembled Blob exactly as the pre-streaming page did. The slices keep being collected in
+ * {@link NarratorTtsBuffer} while streaming, so that fallback is always possible.
+ */
+type NarratorStream = {
+  utteranceId: string;
+  format: string;
+  header: NarratorWavHeader | null;
+  context: AudioContext | null;
+  fallback: boolean;
+  /** Decoded PCM bytes that do not yet complete a sample frame. */
+  pending: Uint8Array;
+  /** The context time the next scheduled source starts at, keeping slices contiguous. */
+  nextStartTime: number;
+  sources: AudioBufferSourceNode[];
+  lastSource: AudioBufferSourceNode | null;
+  lastEnded: boolean;
+  /** `tts_done` has arrived; the last source's `ended` is what acks. */
+  done: boolean;
+  stopped: boolean;
+  acked: boolean;
+};
+
+/** Decodes one base64 slice, or `null` when it is not base64 at all. */
+function narratorBase64Bytes(payload: string): Uint8Array | null {
+  try {
+    const raw = atob(payload);
+    const bytes = new Uint8Array(raw.length);
+    for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+/** Four ASCII bytes as a chunk id, or `null` when the range is short. */
+function narratorAscii(bytes: Uint8Array, offset: number): string | null {
+  if (offset + 4 > bytes.length) return null;
+  return String.fromCharCode(bytes[offset]!, bytes[offset + 1]!, bytes[offset + 2]!, bytes[offset + 3]!);
+}
+
+function narratorUint16LE(bytes: Uint8Array, offset: number): number | null {
+  if (offset + 2 > bytes.length) return null;
+  return bytes[offset]! | (bytes[offset + 1]! << 8);
+}
+
+function narratorUint32LE(bytes: Uint8Array, offset: number): number | null {
+  if (offset + 4 > bytes.length) return null;
+  return (
+    (bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16) | (bytes[offset + 3]! << 24)) >>> 0
+  );
+}
+
+/** Joins two byte slices without mutating either. */
+function concatNarratorBytes(head: Uint8Array, tail: Uint8Array): Uint8Array {
+  if (head.length === 0) return tail;
+  if (tail.length === 0) return head;
+  const merged = new Uint8Array(head.length + tail.length);
+  merged.set(head, 0);
+  merged.set(tail, head.length);
+  return merged;
+}
+
+/**
+ * Reads the PCM format out of a WAV header, or `null` when it is not a shape this page can schedule.
+ *
+ * `seq: 0` carries the header (the new producer sends exactly the header bytes; the pre-streaming
+ * producer's first frame was 16 KiB, so the header may sit at the front of a slice that also
+ * contains PCM — `dataStart` is what lets both shapes work).
+ */
+function parseNarratorWavHeader(bytes: Uint8Array): NarratorWavHeader | null {
+  if (bytes.length < 12) return null;
+  if (narratorAscii(bytes, 0) !== 'RIFF' || narratorAscii(bytes, 8) !== 'WAVE') return null;
+
+  let audioFormat: number | null = null;
+  let channels: number | null = null;
+  let sampleRate: number | null = null;
+  let bitsPerSample: number | null = null;
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const id = narratorAscii(bytes, offset);
+    const size = narratorUint32LE(bytes, offset + 4);
+    if (id === null || size === null) return null;
+    const bodyStart = offset + 8;
+    if (id === 'data') {
+      if (
+        audioFormat !== 1 ||
+        channels === null ||
+        channels < 1 ||
+        sampleRate === null ||
+        sampleRate <= 0 ||
+        bitsPerSample !== 16
+      ) {
+        return null;
+      }
+      return { sampleRate, channels, bitsPerSample, dataStart: bodyStart };
+    }
+    if (size === 0xffff_ffff || bodyStart + size > bytes.length) return null;
+    if (id === 'fmt ' && size >= 16) {
+      audioFormat = narratorUint16LE(bytes, bodyStart);
+      channels = narratorUint16LE(bytes, bodyStart + 2);
+      sampleRate = narratorUint32LE(bytes, bodyStart + 4);
+      bitsPerSample = narratorUint16LE(bytes, bodyStart + 14);
+    }
+    offset = bodyStart + size + (size % 2);
+  }
+  return null;
+}
+
+/**
+ * Stops every source this stream scheduled and closes its context.
+ *
+ * Used by `narrator_stop`, by a replaced connection and by `end()`: none of those may ack, because
+ * the server has already cleared the utterance and is not waiting for this id.
+ */
+function releaseNarratorStream(stream: NarratorStream): void {
+  stream.stopped = true;
+  for (const source of stream.sources) {
+    source.onended = null;
+    try {
+      source.stop();
+    } catch {
+      /* a source that already ended cannot be stopped again */
+    }
+  }
+  stream.sources.length = 0;
+  stream.lastSource = null;
+  const context = stream.context;
+  stream.context = null;
+  if (context !== null) {
+    try {
+      void context.close();
+    } catch {
+      /* an already-closed context */
+    }
+  }
+}
+
+/**
  * The MIME type one TTS container is decoded as.
  *
  * `wav` is the leaf's default and the only shape this page needs; the other three are declared so a
@@ -988,6 +1145,9 @@ export function useVoiceRealtimeSession({
   const narratorAudioRef = useRef<HTMLAudioElement | null>(null);
   const narratorTtsRef = useRef<NarratorTtsBuffer | null>(null);
   const narratorPlayingRef = useRef<NarratorPlaying | null>(null);
+  // The utterance being scheduled through an AudioContext before its `tts_done` (the streaming
+  // path). `null` means the page is on the element/Blob path for whatever it is playing.
+  const narratorStreamRef = useRef<NarratorStream | null>(null);
   // Holds whichever `VoiceRealtimeAudioSource` is active — the microphone or
   // an uploaded file — so `end()` and the socket's own `onclose` can release
   // it without knowing which one it was.
@@ -1290,6 +1450,13 @@ export function useVoiceRealtimeSession({
     const playing = narratorPlayingRef.current;
     narratorPlayingRef.current = null;
     narratorTtsRef.current = null;
+    // Streaming playback owns scheduled AudioBufferSourceNodes: stop them and close the context
+    // BEFORE the element path below runs, so a cut leaves nothing still sounding.
+    const stream = narratorStreamRef.current;
+    narratorStreamRef.current = null;
+    if (stream !== null) {
+      releaseNarratorStream(stream);
+    }
     if (playing !== null) {
       URL.revokeObjectURL(playing.url);
     }
@@ -1588,6 +1755,239 @@ export function useVoiceRealtimeSession({
         }
         socket.send(JSON.stringify({ type: 'narrator_done', utteranceId }));
         voiceLog(`narrator done ${utteranceId}`);
+      };
+
+      /**
+       * Ends a streaming utterance exactly once: releases the context and sends the pacing ack.
+       *
+       * `acked` is the guard the criterion reads as "exactly one `narrator_done`": the `ended`
+       * event and the `tts_done` frame can both arrive last (a long clip finishes after the stream
+       * closed; a clipped one finishes before it), and only one of them may ack.
+       */
+      /**
+       * Switches an in-flight utterance to the element path, silencing anything already scheduled.
+       *
+       * NOT `releaseNarratorStream`: the utterance is still arriving and `tts_done` must still be
+       * able to play the assembled Blob, so the stream stays current (not `stopped`) and only its
+       * scheduled audio is torn down.
+       */
+      const fallBackToElement = (stream: NarratorStream): void => {
+        for (const source of stream.sources) {
+          source.onended = null;
+          try {
+            source.stop();
+          } catch {
+            /* already ended */
+          }
+        }
+        stream.sources.length = 0;
+        stream.lastSource = null;
+        stream.lastEnded = false;
+        const context = stream.context;
+        stream.context = null;
+        if (context !== null) {
+          try {
+            void context.close();
+          } catch {
+            /* already closed */
+          }
+        }
+        stream.fallback = true;
+      };
+
+      const finishNarratorStream = (stream: NarratorStream): void => {
+        if (stream.acked || stream.stopped) return;
+        stream.acked = true;
+        if (narratorStreamRef.current === stream) narratorStreamRef.current = null;
+        const context = stream.context;
+        stream.context = null;
+        if (context !== null) {
+          try {
+            void context.close();
+          } catch {
+            /* an already-closed context */
+          }
+        }
+        ackNarratorDone(stream.utteranceId);
+      };
+
+      /**
+       * Converts the whole-sample prefix of `bytes` into an `AudioBuffer` and schedules it.
+       *
+       * Slices are scheduled at `max(now, nextStartTime)` so they are contiguous even when a frame
+       * arrives after the previous one finished playing: the play head never jumps backwards, and
+       * an underrun resumes at the current time rather than replaying silence.
+       */
+      const scheduleNarratorPcm = (stream: NarratorStream, bytes: Uint8Array): void => {
+        const context = stream.context;
+        const header = stream.header;
+        if (context === null || header === null || stream.stopped) return;
+        stream.pending = concatNarratorBytes(stream.pending, bytes);
+        const bytesPerSample = (header.bitsPerSample / 8) * header.channels;
+        const frames = Math.floor(stream.pending.length / bytesPerSample);
+        if (frames === 0) return;
+        const usable = frames * bytesPerSample;
+        const pcm = stream.pending.subarray(0, usable);
+        stream.pending = stream.pending.subarray(usable);
+
+        let buffer: AudioBuffer;
+        try {
+          buffer = context.createBuffer(header.channels, frames, header.sampleRate);
+        } catch {
+          // A context that cannot build a buffer is a playback failure, not an utterance failure:
+          // the collected slices can still be played through the element path at `tts_done`.
+          fallBackToElement(stream);
+          return;
+        }
+        const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+        for (let channel = 0; channel < header.channels; channel += 1) {
+          const data = buffer.getChannelData(channel);
+          for (let index = 0; index < frames; index += 1) {
+            const sample = view.getInt16((index * header.channels + channel) * 2, true);
+            data[index] = sample < 0 ? sample / 0x8000 : sample / 0x7fff;
+          }
+        }
+
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        const startAt = Math.max(context.currentTime, stream.nextStartTime);
+        stream.nextStartTime = startAt + buffer.duration;
+        source.onended = () => {
+          if (source !== stream.lastSource) return;
+          stream.lastEnded = true;
+          // `tts_done` may already have arrived (the last slice was short) — then this is the ack.
+          if (stream.done) finishNarratorStream(stream);
+        };
+        stream.sources.push(source);
+        stream.lastSource = source;
+        stream.lastEnded = false;
+        try {
+          source.start(startAt);
+        } catch {
+          /* a context closed under us has nothing left to schedule */
+        }
+      };
+
+      /**
+       * Creates the playback context and starts scheduling the utterance's PCM.
+       *
+       * The header frame (`seq: 0`) is the trigger: its `dataStart` says where PCM begins, and the
+       * remainder of that frame (non-empty only when an older producer sent a full 16 KiB slice) is
+       * scheduled immediately. A `resume()` refused by the autoplay policy tears the sources back
+       * down and sets `fallback`, so `tts_done` plays the assembled Blob as before.
+       */
+      const beginNarratorStream = (
+        stream: NarratorStream,
+        header: NarratorWavHeader,
+        firstPcm: Uint8Array,
+      ): void => {
+        const Ctor = typeof AudioContext === 'undefined' ? undefined : AudioContext;
+        if (stream.format !== 'wav' || typeof Ctor !== 'function') {
+          stream.fallback = true;
+          return;
+        }
+        let context: AudioContext;
+        try {
+          context = new Ctor();
+        } catch {
+          stream.fallback = true;
+          return;
+        }
+        stream.context = context;
+        stream.header = header;
+        stream.nextStartTime = 0;
+        if (context.state === 'suspended') {
+          void context.resume().catch(() => {
+            if (stream.stopped || stream.fallback) return;
+            fallBackToElement(stream);
+          });
+        }
+        if (firstPcm.length > 0) scheduleNarratorPcm(stream, firstPcm);
+      };
+
+      /** The stream state for one utterance; a frame for a new id replaces the previous one. */
+      const ensureNarratorStream = (frame: Extract<ServerFrame, { type: 'tts_audio' }>): NarratorStream => {
+        const existing = narratorStreamRef.current;
+        if (existing !== null && existing.utteranceId === frame.utteranceId && !existing.stopped) {
+          return existing;
+        }
+        if (existing !== null) releaseNarratorStream(existing);
+        const stream: NarratorStream = {
+          utteranceId: frame.utteranceId,
+          format: frame.format,
+          header: null,
+          context: null,
+          fallback: frame.format !== 'wav',
+          pending: new Uint8Array(0),
+          nextStartTime: 0,
+          sources: [],
+          lastSource: null,
+          lastEnded: false,
+          done: false,
+          stopped: false,
+          acked: false,
+        };
+        narratorStreamRef.current = stream;
+        return stream;
+      };
+
+      /**
+       * Feeds one `tts_audio` frame to the streaming scheduler.
+       *
+       * The slices are ALSO kept in {@link NarratorTtsBuffer} by the caller, because every reason to
+       * fall back (no `AudioContext`, a refused resume, an unreadable header) is discovered while
+       * the utterance is still arriving, and the element path needs the complete bytes.
+       */
+      const consumeNarratorAudioFrame = (frame: Extract<ServerFrame, { type: 'tts_audio' }>): void => {
+        const stream = ensureNarratorStream(frame);
+        if (stream.fallback || stream.stopped) return;
+        const bytes = narratorBase64Bytes(frame.audio);
+        if (bytes === null) {
+          stream.fallback = true;
+          return;
+        }
+        if (frame.seq === 0 && stream.header === null) {
+          const header = parseNarratorWavHeader(bytes);
+          if (header === null) {
+            stream.fallback = true;
+            return;
+          }
+          beginNarratorStream(stream, header, bytes.subarray(Math.min(header.dataStart, bytes.length)));
+          return;
+        }
+        if (stream.header === null) {
+          // A window that starts mid-utterance (or a producer that never sent the header) cannot be
+          // scheduled; the element path still gets whatever slices exist and plays them at done.
+          stream.fallback = true;
+          return;
+        }
+        scheduleNarratorPcm(stream, bytes);
+      };
+
+      /**
+       * Handles `tts_done` for both playback paths.
+       *
+       * STREAMING: the frame only means "no more slices"; the ack waits for the last scheduled
+       * source's `ended` (immediately when the clip already finished). ELEMENT: the old behaviour,
+       * assembling the slices into one Blob and playing it.
+       */
+      const finishNarratorTts = (frame: Extract<ServerFrame, { type: 'tts_done' }>): void => {
+        const stream = narratorStreamRef.current;
+        if (
+          stream !== null &&
+          stream.utteranceId === frame.utteranceId &&
+          stream.header !== null &&
+          !stream.fallback &&
+          !stream.stopped
+        ) {
+          // The scheduled audio IS the utterance; the collected slices are no longer needed.
+          narratorTtsRef.current = null;
+          stream.done = true;
+          if (stream.sources.length === 0 || stream.lastEnded) finishNarratorStream(stream);
+          return;
+        }
+        playNarratorTts(frame);
       };
 
       /**
@@ -2116,10 +2516,13 @@ export function useVoiceRealtimeSession({
                 };
           buffer.chunks.set(frame.seq, frame.audio);
           narratorTtsRef.current = buffer;
+          // Start playing NOW when the page can schedule PCM (the first frame is the WAV header);
+          // otherwise this frame only feeds the Blob path that `tts_done` will play.
+          consumeNarratorAudioFrame(frame);
           return;
         }
         if (frame.type === 'tts_done') {
-          playNarratorTts(frame);
+          finishNarratorTts(frame);
           return;
         }
         if (frame.type === 'tts_error') {
