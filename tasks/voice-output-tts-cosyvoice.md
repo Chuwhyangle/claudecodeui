@@ -27,4 +27,5 @@ goal_ac: AC-405
 
 - server/modules/voice-realtime/voice-realtime-tts.ts (new)
 - server/modules/voice-realtime/tests/voice-realtime-tts.test.ts (new)
+- server/shared/tests/quay-test-script.test.ts（新增 server 测试文件把收集数 367→368，AC2/AC3 的 unknown 钉子随之 364→365、366→367）
 - tasks/voice-output-tts-cosyvoice.md
