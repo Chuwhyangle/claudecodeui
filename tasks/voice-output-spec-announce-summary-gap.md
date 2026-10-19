@@ -61,3 +61,11 @@ announce 文本的接线已完成：`bridge.onFollowUpText` → ws-proxy announc
 - **执行中发现并修复的缺口**：客户端帧处理器把「未识别的帧」落到协议错误分支并 `setPhase('failed')`；`narrator_speak`/`narrator_stop` 因此会让整个 voice session 变 failed（每次 narration 一出现就断）。客户端现显式声明并容忍这两类帧；真正播放仍属后续 TTS task。没有这一步，服务器一旦启用 announce/总结就会打断会话。
 - **生产接线**：`buildVoiceRealtimeNarratorWiring` 每连接注入 `narrator.attach`；只有部署命名 stand-in 时才安装 run-end producer。默认（silent、无 stand-in）返回 `null`，wire 与之前逐字节相同。
 - **边界**：summary producer 是 stand-in，不是 B-1 真模型（真模型需要凭据与外联，与本 e2e 的零外联断言冲突）；task B 部分的真实 cosyvoice TTS、backchannel 真链、其余 4 个样本均未做。
+
+## Blocker
+
+**2026-10-19T02:00:42.154Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=73821 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792374835419 [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/shared/tests/quay-test-script.test.ts]
+- run_id：wk-prod-anchor
+- session_id：9594c79b-7cf4-4059-8d5e-e5aeb63525b1
