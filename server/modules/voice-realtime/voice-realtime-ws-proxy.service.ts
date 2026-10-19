@@ -1646,6 +1646,21 @@ export type VoiceRealtimeNarratorSeams = {
    */
   interruptOnUserSpeech?: boolean;
   /**
+   * Whether a LOCAL speech boundary (`voice-realtime-local-speech.ts`) may also stop the narrator.
+   *
+   * OMITTED MEANS NO — and no is the shipped rule since the 2026-10-19 live capture: the local gate
+   * is deliberately coarse (its own header: "not a VAD and must not become one"), and on that
+   * connection its `started` boundary opened five times on ambient noise (RMS 300–470, against
+   * speech at 1000–10000). Each one called `interrupt('user-spoke')` while a narration was playing,
+   * so `narrator_stop` reached the page before `tts_done` and the whole announcement was cleared
+   * before it could be heard — the person heard none of the five.
+   *
+   * The narrator is interrupted by the two PRECISE readings only: the endpoint's own
+   * `speech_started` and the browser's `segment_start`. `true` restores the old wiring and is the
+   * false-form switch the local-gate criterion uses to prove the removed line is load-bearing.
+   */
+  narratorInterruptsOnLocalSpeech?: boolean;
+  /**
    * This connection's speech synthesis, or absent for the text-only wire.
    *
    * OMITTED IS THE PRE-TTS CONTRACT: the queue emits text and the page's own ack advances it. A
@@ -2475,14 +2490,23 @@ export function handleVoiceRealtimeConnection(
   let announceNarrationSeq = 0;
   /** The duplex rule's switch. Omitted means enabled — the shipped behaviour. */
   const narratorInterruptsOnUserSpeech = seams.narrator?.interruptOnUserSpeech ?? true;
+  /**
+   * Whether the COARSE local gate may interrupt the narrator. Omitted means no — see
+   * {@link VoiceRealtimeNarratorSeams.narratorInterruptsOnLocalSpeech} for the live capture that
+   * made ambient noise mute five announcements in a row.
+   */
+  const narratorInterruptsOnLocalSpeech = seams.narrator?.narratorInterruptsOnLocalSpeech ?? false;
 
   /**
    * The person opened their mouth: a narration must not talk over them.
    *
-   * Called from every path that learns a NEW utterance started — the endpoint's own `speech_started`,
-   * the browser's segment boundary, and the local speech gate — because the three transports see the
-   * same fact at different moments and the earliest one wins. Idempotent: a queue with nothing playing
-   * and nothing queued drops 0 and sends nothing.
+   * Called from the two paths that report a PRECISE new-utterance boundary — the endpoint's own
+   * `speech_started` and the browser's `segment_start` — because the two transports see the same
+   * fact at different moments and the earliest one wins. NOT called from the local speech gate: its
+   * boundary is an energy reading that answers the watchdog's question ("has speech been seen at
+   * all?"), not "is this person speaking now", and on the 2026-10-19 capture ambient noise opened it
+   * five times while a narration played. Idempotent: a queue with nothing playing and nothing
+   * queued drops 0 and sends nothing.
    */
   const noteUserSpokeForNarrator = (): void => {
     if (narratorQueue !== null && narratorInterruptsOnUserSpeech) {
@@ -2499,13 +2523,18 @@ export function handleVoiceRealtimeConnection(
   /**
    * Hands a local boundary to the bridge, whose stall watchdog is otherwise armed only by the
    * endpoint's own `speech_started`. Deliberately silent on `null`: most frames close no boundary.
+   *
+   * THE NARRATOR IS NOT STOPPED HERE. This gate is the watchdog's reading and only that: it is
+   * documented as coarse on purpose, and its boundary fires on loud non-speech (measured 2026-10-19:
+   * RMS 300–470 ambient noise against 1000–10000 speech). Interrupting playback on that reading
+   * cleared five complete announcements in one live connection. `narratorInterruptsOnLocalSpeech`
+   * exists only so the criterion can re-wire the old behaviour as its false form.
    */
   const reportLocalSpeechBoundary = (boundary: LocalSpeechBoundary | null): void => {
     if (boundary === 'started') {
-      // The earliest of the three readings of "they started talking": the browser's own audio,
-      // judged on this side. The narrator is cleared here BEFORE the watchdog is armed, so a
-      // narration never overlaps the first syllable even when the endpoint's `speech_started` lags.
-      noteUserSpokeForNarrator();
+      if (narratorInterruptsOnLocalSpeech) {
+        noteUserSpokeForNarrator();
+      }
       bridge.noteLocalUtteranceStart();
       return;
     }
@@ -5575,8 +5604,10 @@ export function handleVoiceRealtimeConnection(
           forcedCommitCloseSnapshot = null;
           // THE DUPLEX RULE'S ENDPOINT READING (AC-406): the endpoint heard the person start a new
           // utterance, so the narrator stops and its queue is cleared. This path is the one the
-          // deployed `server_vad` always fires; the browser's segment boundary and the local speech
-          // gate are the other two readings of the same fact (see `noteUserSpokeForNarrator`).
+          // deployed `server_vad` always fires; the browser's segment boundary is the OTHER precise
+          // reading of the same fact (see `noteUserSpokeForNarrator`). The local speech gate is
+          // deliberately NOT one of them — it is an energy reading for the watchdog, and ambient
+          // noise opened it five times over narrations in the 2026-10-19 live connection.
           noteUserSpokeForNarrator();
           // THE OMISSION PLANNER'S SILENCE BRANCH. `speech_started` inside `(t_i, t_i + S]` means the
           // model may still answer for `x_i` in its response to the newer speech, so the decision
