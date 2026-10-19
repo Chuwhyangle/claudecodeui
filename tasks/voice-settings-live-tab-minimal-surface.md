@@ -26,7 +26,7 @@ goal_ac: AC-409
 
 ## AC
 
-- [ ] **AC-409**：`npx vitest run src/modules/settings/tests/voiceSettingsLiveTabMinimalSurface.test.tsx` 退出码 0。Live Voice 子 tab 只暴露 `liveVoiceDashscopeApiKey`（不渲染 endpoint/model/voice），key 填写→保存→readback 掩码、再保存不写回掩码。取假形态：Live Voice tab 多渲染一个 endpoint/model/voice 字段，必红。
+- [x] **AC-409**：`npx vitest run src/modules/settings/tests/voiceSettingsLiveTabMinimalSurface.test.tsx` 退出码 0。Live Voice 子 tab 只暴露 `liveVoiceDashscopeApiKey`（不渲染 endpoint/model/voice），key 填写→保存→readback 掩码、再保存不写回掩码。取假形态：Live Voice tab 多渲染一个 endpoint/model/voice 字段，必红。
 
 ## DoD
 
