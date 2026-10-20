@@ -32,3 +32,7 @@ goal pg_5847668e18cf's AC GOAL-043 is not achieved and no task exists for it —
 ## DoD
 
 - 一条真实读数（本项目 quay CLI / gate）证明上条达成；quay-fleet 只记录「由谁推动」，不记录「验收通过」。
+
+## Touches
+
+- tasks/fleet-draft-goal-043-9421e8bb.md
