@@ -100,12 +100,12 @@ composition root (server/index.ts)
 | 规则 | 内容 |
 |---|---|
 | R1 | `mcp-contract` 是叶子：只 import `server/shared` 的基础类型与 node builtins，不 import 任何 `modules/**` |
-| R2 | `mcp-tools/<domain>` 只 import `mcp-contract`（**含 domain port 接口类型**）；不 import `mcp-gateway`，不 import 兄弟工具包，也不 import 任何其它 `modules/**` |
+| R2 | `mcp-tools/<domain>` 只 import `mcp-contract` + 既有 `server/shared/ports` + `server/shared/types`（都是 `server/shared/**`）；不 import `mcp-gateway`，不 import 兄弟工具包，也不 import 任何其它 `modules/**` |
 | R3 | `mcp-gateway` 只 import `mcp-contract` + 接收注入的 `ToolRegistry`；不 import 任何具体工具包 |
 | R4 | composition root 是唯一同时 import gateway、工具包、具体 domain services 的地方 |
 | R5 | read/write 是逐工具元数据：`readOnlyHint` 表达读写、`requiredScopes` 表达授权（`ACCESS_TOKEN_SCOPES`）；不是包边界，也不新造 scope 枚举 |
 
-**domain port 接口的位置是硬约束**：port 接口**只**存在于 `mcp-contract`（`server/shared/mcp-contract/ports/`），其**实现**留在领域模块（`session-hosts`、`providers`、`projects`、`websocket`），由 composition root 注入。R2 之所以要求工具包不 import 任何 `modules/**`，正是因为 AC-394 的叶子规则（见 §6.2）规定新 `server/modules/**` 目录出边只许指向 `server/shared/**` 与自身——若 port 类型放在领域模块里，工具包 import 它就不再是叶子，stage 3 会重蹈 F6 覆辙。
+**domain port 接口复用既有 `server/shared/ports/`**：F3 已经把 `session-host-control.port.ts`、`chat-run-registry.port.ts`、`connected-clients.port.ts`、`provider-registry.port.ts`、`voice-rules.port.ts` 放进 `server/shared/ports/`。**不新建 `mcp-contract/ports/`**——`mcp-contract` 只放 MCP 机制契约，domain ports 直接 import `server/shared/ports`（仍属 `shared/**`，工具包 import 它照样是叶子）。port **实现**留在领域模块，由 composition root 注入。R2 之所以要求工具包不 import 任何 `modules/**`，正是因为 AC-394 的叶子规则（见 §6.2）规定新 `server/modules/**` 目录出边只许指向 `server/shared/**` 与自身——若 port 类型放在领域模块里，工具包 import 它就不再是叶子，会重蹈 F6 覆辙。
 
 **类型 import 计入依赖方向**：R1–R5 的判据把 `import type` 当作一条边（与 AC-394 扫描器的口径一致，它同样把 `import type` 计入静态边）。F6 的环一部分就是 `import type { McpToolInputSchema }` 这种类型边，不允许靠「类型边不算」来绕过。
 
@@ -134,20 +134,20 @@ export interface McpToolRegistry {
 
 **读写与授权的表达不新造轴**：read/write 由 `annotations.readOnlyHint` 承担（`mcp-tool-annotations.ts` 已按工具声明，且明确是「DECLARATIVE METADATA，不是 authorization」）；授权由 `requiredScopes` 承担（现有 `ACCESS_TOKEN_SCOPES` 的真实 token）。`McpToolDefinition` 不引入 `McpToolScope` 之类的枚举——它是第三套与既有机制重复且冲突的轴。
 
-Domain port 接口也住在 contract（`server/shared/mcp-contract/ports/`），实现由领域模块提供、composition root 注入：
+Domain port 接口**复用既有 `server/shared/ports/`**（F3 已就位，见 §3.2），实现由领域模块提供、composition root 注入：
 
 ```ts
-// server/shared/mcp-contract/ports/
+// server/shared/ports/session-host-control.port.ts（F3 已存在，本提案不改它的家）
 export interface SessionHostControlPort {
   start(selection: SessionLaunchSelection): Promise<HostControlOutcome>;
   close(sessionId: string, opts: CloseOptions): Promise<HostControlOutcome>;
 }
-export interface ApprovalsPort { /* ... */ }
+// 若 readSessionTurn / approvals 需要 port，优先挂进既有的 provider-registry.port / 新 port 也放 shared/ports，不放 mcp-contract/ports。
 ```
 
 工具包只 import 这些 port **类型**；具体实现从 composition root 传入，工具包不 import 领域模块。
 
-**阶段 1 必须实际搬进 contract 的符号**（否则 F6 的新包仍 import 领域模块、仍不是叶子、AC-394 仍红）。以下是从 F6 worktree 实测的完整非 shared / 非 intra 依赖：
+**阶段 2 拆出的工具包要成为叶子，阶段 1 就必须先把这些符号收进 contract**。以下是 F6 分支实测的新包对领域模块的完整依赖清单（develop 上工具还在 `mcp-gateway` 里，拆包发生在阶段 2；这张表是阶段 2 工具包必须**不再出现**的 import 集合，阶段 1 负责把它们提前落进 contract/shared）：
 
 | 来源模块 | 符号 | 形态 | 处置 |
 |---|---|---|---|
@@ -159,7 +159,7 @@ export interface ApprovalsPort { /* ... */ }
 
 此外，`mcp-tools-read` ↔ `mcp-tools-write` 之间的 5+5 处互 import（`McpControlCaller`、`McpControlSeam`、`McpRunReader`、`McpSessionReconfigureDeps`、`registerMcpSessionCancelQueuedTool`、`registerMcpSessionReconfigureTool` 等）也必须拆掉：共享类型/注册器放到 `mcp-contract` 或独立的 `mcp-tool-kit` 叶子（§3.6 末尾同一条规则），而不是「read 包 import write 包」——否则两个工具包彼此成为对方叶子规则的入边，AC-394 照样红。
 
-`mcp-gateway` 的 26+32 处 import（errors/types/schema/principal/approval deps/`registerMcpApprovalTools`）是另一大块，同样收进 contract——这既是 F6 环的成因，也是阶段 1 的主要工作量。**若不搬完上面这张表（含 read↔write 互 import），阶段 1 后工具包仍不是叶子、AC-394 仍红**；阶段 1 的退出证据必须逐项贴「该符号已不在工具包里出现」。
+`mcp-gateway` 的 26+32 处 import（errors/types/schema/principal/approval deps/`registerMcpApprovalTools`）是另一大块，同样收进 contract——这既是 F6 环的成因，也是阶段 1 的主要工作量。**阶段 1 只要求这些符号已进 contract、原消费者改 import 路径；「工具包里不再出现这些符号」是阶段 2 拆包后的退出证据**（develop 上阶段 1 还没有工具包），阶段 2 必须逐项贴「该符号已不在工具包里出现」。
 
 ### 3.4 Gateway 的形状（草案）
 
@@ -224,7 +224,7 @@ const gateway = createMcpGateway({ registry, auth, audit, transport });
 1. 保留 F6 分支的代码作为素材（fanOut/LOC 收益是真的）；
 2. 把 F6 re-scope 为「阶段 1 + 阶段 2」：抽 `mcp-contract`，gateway 改接收 `ToolRegistry`；
 3. `mcp-tools-read` / `mcp-tools-write` 的包名与 read/write 边界不进入最终形态；领域重组另开任务（阶段 3–4，可选）；
-4. AC-394 在当前阶段不新增例外；F6 的 SCC 读数在阶段 1 完成后应自然下降。
+4. AC-394 在当前阶段不新增例外；F6 的 SCC 读数在阶段 2 完成后应自然下降（develop 上 `mcp-gateway` 本就不在 G1，阶段 2 让工具包成为叶子、网关继续只做 host）。
 
 **F6 任务记录与 worktree 的处置（需在评审时一并裁定）**：
 
@@ -236,13 +236,13 @@ const gateway = createMcpGateway({ registry, auth, audit, transport });
 
 ## 5. 迁移阶段
 
-**范围划分：阶段 1+2 是本提案的承诺范围；阶段 3+4 是可选后续，在阶段 2 完成后重新决策，不预先承诺。** §1.3 的「无新增外部耦合」说明 F6 的问题只在 intra-split 双向 import——抽掉 contract、把 gateway 改成 registry 消费者之后，`mcp-gateway` 预计直接退出 SCC、新工具包成为叶子，AC-394 自然回绿；领域重组（阶段 3）是优化，不是修复，可以等阶段 2 的读数验证后再决定要不要做。
+**范围划分：阶段 1+2 是本提案的承诺范围；阶段 3+4 是可选后续，在阶段 2 完成后重新决策，不预先承诺。** §1.3 的「无新增外部耦合」说明 F6 的问题只在 intra-split 双向 import；develop 上 `mcp-gateway` 已被 F3 摘出 G1（G1=8 不含它），阶段 2 让新工具包成为叶子、网关只做 host 之后，SCC 不增大、AC-394 保持绿；领域重组（阶段 3）是优化，不是修复，可以等阶段 2 的读数验证后再决定要不要做。
 
 | 阶段 | 内容 | 退出证据 |
 |---|---|---|
 | 0 | 评审/接受本提案 | 人裁定本文件方向 |
-| 1 | 抽 `server/shared/mcp-contract`：errors / types / input schemas / principal / approval deps / domain port 类型 / `ToolDefinition` / `ToolRegistry`，并按 §3.3 的符号表搬空工具包对 `oauth` / `providers` / `websocket` / `quay` / `mcp-gateway` 的全部 import | 工具包不再 import 任何 `modules/**`（逐项贴 §3.3 符号表的「已不在工具包出现」读数）；`typecheck` / 既有工具契约测试全绿；无行为变化；`server/shared/mcp-contract` 注册进 AC-394 的 `directoryManifest` + `MANIFEST_PIN` + `nodeCount` 上移（见 §6.2） |
-| 2 | `mcp-gateway` 接收 `ToolRegistry`；删除对工具实现/工具包的 re-export；composition root 装配 | **R1–R5 依赖方向判据（§6.1 的新测试文件）落地并绿**：`mcp-gateway/**` ↛ `mcp-tools/**`，`mcp-tools/**` ↛ `mcp-gateway/**`，工具包之间无 import；AC-394 的 server SCC 不增大（贴前后读数） |
+| 1 | 抽 `server/shared/mcp-contract`（纯 MCP 契约：errors / types / input schemas / principal / approval deps / `ToolDefinition` / `ToolRegistry`）；把 §3.3 符号表里的 `ACCESS_TOKEN_SCOPES`、`readSessionTurn` port、websocket/quay/provider 类型别名提前收进 contract / `shared/ports` / `shared/types`；domain ports 复用既有 `shared/ports` | `typecheck` / `lint` 绿；mcp-gateway + oauth + providers 的 scoped 测试绿；AC-394 绿（contract 是 leaf、SCC 不变）；`server/shared/mcp-contract` 注册进 `directoryManifest` + `MANIFEST_PIN` + `nodeCount` 上移（见 §6.2） |
+| 2 | 把工具实现从 `mcp-gateway` 拆到 `server/modules/mcp-tools/`（先单个叶子，领域切分留 stage 3）；工具包只 import `mcp-contract` + `shared/ports` + `shared/types`；`mcp-gateway` 接收 `ToolRegistry`、删除对工具实现的 re-export；composition root 装配 | **R1–R5 依赖方向判据（§6.1 的新测试文件）落地并绿**：`mcp-gateway/**` ↛ `mcp-tools/**`，`mcp-tools/**` ↛ `mcp-gateway/**`，工具包之间无 import；工具包是真叶子（§3.3 符号表逐项「已不在工具包出现」）；AC-394 的 server SCC 不增大（贴前后读数）；typecheck/lint + mcp-gateway 工具契约测试绿；`server/modules/mcp-tools` 注册 manifest + MANIFEST_PIN + nodeCount |
 | 3 | （可选）按领域重组工具包；read/write 由 `readOnlyHint` 表达 | 每个工具包只 import `mcp-contract`；`mcp-tools-read/write` 退役；`session-hosts`/`providers` 的 F3 端口解耦**不被撤销**（见 §7 开放问题 1） |
 | 4 | （可选）本子树的环组真正缩小时，AC-394 按 shrink 方向降组 | AC-394 基线只降不升；既有全量套件绿 |
 
@@ -267,9 +267,9 @@ const gateway = createMcpGateway({ registry, auth, audit, transport });
 - **§6.1 的 R1–R5 是一个新增测试文件**（照 `server/shared/tests/composition-root-wiring.test.ts` / `server-import-cycle-budget.test.ts` 的先例），**不是对 AC-394 扫描器的修改**。AC-394 没有「子树」概念，它继续扫整个 `server/`。
 - AC-394 本体只在某个环组**真实退役**时按 shrink 方向降为 `[]`（保留槽位，见 `ac394-retired-cycle-group-lowered-to-empty`）；**永不**为容纳拆分而抬基线、加成员、放宽叶子规则。
 - **新目录的落地手续**（`ac394-new-leaf-dir-needs-manifest-plus-pin`）：
-  - `server/shared/mcp-contract` 与阶段 3 的每个 `server/modules/mcp-tools/<domain>` 都是新目录，必须同时注册进 `directoryManifest` 与 `MANIFEST_PIN` 常量，并把 `nodeCount` 上移（测试断言 `nodeCount === directoryManifest.length`）。
+  - `server/shared/mcp-contract`（阶段 1）与 `server/modules/mcp-tools`（阶段 2，以及阶段 3 若再按领域拆出的每个子包）都是新目录，必须同时注册进 `directoryManifest` 与 `MANIFEST_PIN` 常量，并把 `nodeCount` 上移（测试断言 `nodeCount === directoryManifest.length`）。
   - `server/modules/**` 新目录必须满足叶子规则：出边只许 `server/shared/**` 与自身；入边只许目录 `.`（`server/index.ts`）。这正是 R2（工具包不 import 任何 `modules/**`）与 R3（gateway 不 import 工具包）要同时保证的——两条缺一，叶子规则的出边/入边半臂就会红。
-- 阶段 1 若只把 `mcp-gateway` 的 contract 依赖换成 `mcp-contract`、却不搬空 §3.3 符号表（含 read↔write 互 import），工具包仍不是叶子（还 import gateway/oauth/providers/websocket/quay 或彼此）——所以阶段 1 的退出证据必须同时贴 AC-394 的 SCC 读数与叶子规则读数，不能只贴 §6.1 的依赖方向读数。
+- 阶段 1 只把 `mcp-gateway` 的 contract 依赖换成 `mcp-contract`、却不搬空 §3.3 符号表（含 read↔write 互 import），阶段 2 的工具包就仍不是叶子（还 import gateway/oauth/providers/websocket/quay 或彼此）——所以阶段 2 的退出证据必须同时贴 AC-394 的 SCC 读数与叶子规则读数，不能只贴 §6.1 的依赖方向读数。
 
 ---
 
