@@ -121,17 +121,8 @@ AC-394 棘轮红的三条判据（`npx tsx --tsconfig server/tsconfig.json --tes
 
 ## Blocker
 
-**2026-10-20T06:43:35.030Z — worker 未落地（exited-not-landed）**
+**2026-10-20T06:54:08.165Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 0/7，剩余未勾 7）——续做只需验证并勾选 AC
+- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
-- session_id：317e46db-8f02-42ea-90ae-8e492b206545
-
-**2026-10-20 — 结构性阻塞：AC2 的 SCC 子句与 AC-394 目录棘轮定义上冲突（needs-human）**
-
-- AC-394 判据 `server/shared/tests/server-import-cycle-budget.test.ts` 在合入 develop 后的 worktree 上 3 red：`(b)` SCC 包含性、`(c)` 新目录叶子规则、`(g)` 真实树注入臂；读数 `sccs=[13,2,2]`（基线 pin `[11,2,2]`，且 pin 的成员集不含 `modules/mcp-tools-read` / `modules/mcp-tools-write`）。
-- `(c)` 的违规分两类：①两个新包出边到 `mcp-gateway` / `providers` / `websocket` / `oauth` / `quay` 及彼此；②`mcp-gateway` 入边到两个新包（`index.ts` 转出口 + `transport.ts` 装配 import）。
-- 该判据文档明确：新目录必须是叶子（出边只允许 `server/shared/**` 与自己；不得被其它 `modules/**` 目录 import），且基线 JSON 与 `MANIFEST_PIN` 都不许为容纳红而改；`Do NOT raise the baseline: find the import that closed the loop.`
-- 因此本条的 AC5/DoD ②（网关 transport 必须调用两个注册函数）与 AC-394 的叶子规则互斥；「注册代码搬进新子包且网关经 dependency bag 调用」这一 DoD 在任何不修改棘轮的实现下都不会绿。
-- 需要人工裁决的选项：(a) 显式修改 AC2/AC5 并把两个新目录登记进 `directoryManifest` + `MANIFEST_PIN`（同时仍需把新包对 `mcp-gateway`/`providers`/`websocket` 的出边搬走以离开 SCC——这是一次新的、要授权的棘轮放宽）；(b) 改变拆分形状（由 `server/index.ts` 组合根注入、类型下沉到 `server/shared`、新包互不 import），但这会扩大 Touches 并改动大量既有 import，且 `index.ts` 转出口仍会产生入边；(c) 放弃本条拆分。
-- 分支状态：`task/gap-mcp-gateway-tool-registration-extract` 已合入最新 develop（merge commit），工作树无未合并路径；未改任何代码。
+- session_id：4b17b119-f6cd-46da-8f54-52d6e70f4951
