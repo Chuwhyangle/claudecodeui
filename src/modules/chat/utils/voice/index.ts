@@ -4,7 +4,6 @@
  * barrel so the sub-package stays the import surface rather than its individual files.
  */
 export * from '@/modules/chat/utils/voice/activityDockView';
-export * from '@/modules/chat/utils/voice/audioDecode';
 export * from '@/modules/chat/utils/voice/voiceContextPack';
 export * from '@/modules/chat/utils/voice/voiceErrorMessages';
 export * from '@/modules/chat/utils/voice/voiceInsertion';

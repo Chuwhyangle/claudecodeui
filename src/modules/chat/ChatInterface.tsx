@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { ArrowDownIcon } from 'lucide-react';
 
-import { useTasksSettings } from '@/modules/task-master';
+import { NextTaskBanner, useTasksSettings } from '@/modules/task-master';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import PermissionContext from '@/modules/chat/context/PermissionContext';
 import { MarkdownWorkspaceContext } from '@/modules/chat/context/MarkdownWorkspaceContext';
@@ -1018,6 +1018,9 @@ function ChatInterface({
             tasksEnabled={tasksEnabled}
             isTaskMasterInstalled={isTaskMasterInstalled}
             onShowAllTasks={onShowAllTasks}
+            // The empty state is in the transcript package, which must not depend on
+            // task-master; the banner is handed in from here, which already does.
+            nextTaskBanner={NextTaskBanner}
             setInput={setInput}
             canRunResident={canRunResident}
             residentEnabled={residentEnabled}

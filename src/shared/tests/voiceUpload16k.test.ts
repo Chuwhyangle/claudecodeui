@@ -28,7 +28,7 @@ import { beforeEach, test, vi } from 'vitest';
 import type { PauseCuesDeclaration } from '@shared/asr/asrRegistry';
 
 import { useVoiceInput } from '@/modules/chat/hooks/useVoiceInput';
-import * as audio from '@/modules/chat/utils/voice/audioDecode';
+import * as audio from '@/shared/audioDecode';
 import type * as SharedApi from '@/shared/api';
 
 // The module under test, kept as a namespace because the hook's mock below is built from it.
@@ -189,7 +189,7 @@ const { transcribeVoice } = vi.hoisted(() => ({ transcribeVoice: vi.fn() }));
 /** What the doubled decoder hands the chain; `speech` decides a trim that runs from a guard that fired. */
 const { decoderFixture } = vi.hoisted(() => ({ decoderFixture: { speech: true } }));
 
-vi.mock('@/modules/chat/utils/voice/audioDecode', async (importOriginal) => ({
+vi.mock('@/shared/audioDecode', async (importOriginal) => ({
   ...(await importOriginal<typeof audio>()),
   decodeVoiceBlob: async () => ({
     // One second of speech at 48 kHz, or one second of digital silence: the second makes the real

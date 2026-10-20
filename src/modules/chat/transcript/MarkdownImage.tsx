@@ -4,7 +4,7 @@ import { ImageOff } from 'lucide-react';
 
 import { api } from '@/shared/api';
 import { useMarkdownWorkspaceProjectId } from '@/modules/chat/context/MarkdownWorkspaceContext';
-import { ImageLightbox } from '@/modules/chat/transcript/ChatMessageImages';
+import { ImageLightbox } from '@/modules/chat/components/ImageLightbox';
 
 type MarkdownImageProps = {
   node?: unknown;

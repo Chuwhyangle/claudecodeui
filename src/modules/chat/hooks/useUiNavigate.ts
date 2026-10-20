@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { readMcpNavigationPolicy, writeMcpNavigationPolicy } from '@/modules/settings';
+import {
+  readMcpNavigationPolicy,
+  writeMcpNavigationPolicy,
+} from '@/shared';
 import type { ServerEvent, UiNavigateReveal, UiNavigateTarget } from '@/shared/types';
 
 /**

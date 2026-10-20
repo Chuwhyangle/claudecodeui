@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, test, vi } from 'vitest';
 
 import { useVoiceInput } from '@/modules/chat/hooks/useVoiceInput';
-import type * as AudioDecode from '@/modules/chat/utils/voice/audioDecode';
+import type * as AudioDecode from '@/shared/audioDecode';
 import type * as SharedApi from '@/shared/api';
 
 /**
@@ -50,7 +50,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 const decoded: { samples: Float32Array; sampleRate: number } = { samples: new Float32Array(0), sampleRate: 16_000 };
 
 /** The decoder, doubled because jsdom has none; the segmenter above it is the shipping module. */
-vi.mock('@/modules/chat/utils/voice/audioDecode', async (importOriginal) => ({
+vi.mock('@/shared/audioDecode', async (importOriginal) => ({
   ...(await importOriginal<typeof AudioDecode>()),
   decodeVoiceBlob: async () => ({ samples: decoded.samples, sampleRate: decoded.sampleRate }),
 }));

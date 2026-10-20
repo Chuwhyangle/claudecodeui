@@ -4,7 +4,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, test, vi } from 'vitest';
 
-import { ModelLibraryPanel } from '@/modules/chat';
+import ModelLibraryPanel from '@/shared/ui/ModelLibraryPanel';
 import type {
   CustomProviderModelInput,
   LLMProvider,
@@ -19,8 +19,9 @@ import type {
  *
  * The panel is rendered directly rather than through ModelsContent, because the
  * actions are a prop — so a submission is observable as the arguments of one
- * call, with no HTTP layer to stand in for. It is imported through the chat
- * barrier, as every cross-module import here has to be.
+ * call, with no HTTP layer to stand in for. It is imported from `shared` because
+ * both chat and settings render it, and the two feature modules may not import
+ * each other.
  *
  * react-i18next is mocked with the shipped English copy instead of echoing keys,
  * so the pre-filled name is asserted as the user actually sees it and a key the

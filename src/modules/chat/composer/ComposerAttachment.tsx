@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FileIcon, XIcon } from 'lucide-react';
 
-import { ImageLightbox } from '@/modules/chat/transcript/ChatMessageImages';
+import { ImageLightbox } from '@/modules/chat/components/ImageLightbox';
 
 type ComposerAttachmentProps = {
   file: File;

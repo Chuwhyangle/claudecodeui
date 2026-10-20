@@ -1,7 +1,7 @@
 ---
 id: gap-chat-settings-composer-transcript-cycles
 title: Break chat↔settings and composer↔transcript import cycles in src
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -149,11 +149,3 @@ F2（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 - 包级读图：改前 `transcript → task-master` 有 4 条简单路径（经 `task-master/modals→shell` 或 `task-master/context→auth→…→shell`）；改后 `transcript` 到 `composer` 的简单路径为 0（本地包图脚本，含 tsconfig 别名）。`grep -rn task-master src/modules/chat/transcript` 仅剩一句注释。
 - 测试：8 个手工 mock `@/modules/task-master` 的 chat 测试补 `NextTaskBanner: () => null`（`ChatInterface` 在渲染期读取该符号；这些用例 `tasksEnabled` 为 false，banner 永不渲染）。定向读数：上述 8 文件 → `Test Files 8 passed (8)`、`Tests 35 passed (35)`、exit 0；`uiNavigate` + 5 个 pane 测试 → `Test Files 6 passed (6)`、`Tests 57 passed (57)`、exit 0。
 - 退出码：`npm run typecheck` → 0；`npm run lint` → 0（仅既有 warning）。
-
-## Blocker
-
-**2026-10-20T06:55:08.011Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：6ad7090b-dbf9-49c7-be27-1f4a2c033754
