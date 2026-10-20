@@ -9,7 +9,6 @@ import { broadcastSessionUpserted } from '@/modules/websocket/services/session-u
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
   ChatRunLookupMiss,
-  ChatRunLookupResult,
   ChatRunSource,
   ChatRunSummary,
   LLMProvider,
@@ -34,7 +33,16 @@ import type {
 // because the driver cannot import this module (the edge would close the cycle
 // the driver's header states).
 import { residentRunIsTurn } from '@/shared/utils.js';
-export type { ChatRunSummary, ChatRunLookupMiss, ChatRunLookupResult };
+
+// The run-addressing vocabulary's constituents live in `@/shared/types.js` (the
+// tool packages' leaf) and are re-exported here so the websocket barrel keeps
+// its public surface. The union itself is declared HERE, at the point the
+// registry's `getRunById` returns it: AC-253's criterion reads the union off
+// this module (`mcp-gateway-wiring.test.ts`, reading (b)) to prove consuming the
+// union consumes its constituents, and a bare re-export would make it invisible
+// to that reading.
+export type { ChatRunSummary, ChatRunLookupMiss };
+export type ChatRunLookupResult = ChatRunSummary | ChatRunLookupMiss;
 
 
 /**
@@ -190,12 +198,6 @@ export type ChatRunLifecycleForwardLog = {
   /** The application session id the run was opened for — §10.2's `session=`. */
   appSessionId: string;
 };
-
-
-
-
-
-
 
 /**
  * How long a terminal run stays available for replay. Covers the window
