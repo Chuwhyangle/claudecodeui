@@ -3,13 +3,19 @@
  * did, produced by the realtime model's HTTP twin instead of by the relay.
  *
  * WHY THIS FILE EXISTS. The narrator layer already owns WHEN a summary is spoken (the run-end
- * transition, see `voice-realtime-narrator.ts`) and the proxy already owns the quality gate (≤ 40
- * chars, no Markdown, no verbatim tail). What was missing is WHERE the words come from: the first
- * wiring answered with a fixed stand-in sentence. B-1 (see
- * `experiments/voice-realtime-announce-summary/summarize.mts`) showed that `qwen3.8-omni-flash` —
- * the HTTP twin of the realtime relay model — turns a real Claude Code output into a compliant
- * spoken summary under the `voice` prompt variant. This leaf is that probe's production shape: one
- * `chat/completions` request per run end, no streaming, no audio.
+ * transition, see `voice-realtime-narrator.ts`) and the proxy already owns the quality gate (no
+ * Markdown, no verbatim tail; length is a READING, not a refusal — see the 2026-10-20 measurement
+ * below). What was missing is WHERE the words come from: the first wiring answered with a fixed
+ * stand-in sentence. B-1 (see `experiments/voice-realtime-announce-summary/summarize.mts`) showed
+ * that an omni flash model — the HTTP twin of the realtime relay model — turns a real Claude Code
+ * output into a compliant spoken summary under the `voice` prompt variant. This leaf is that
+ * probe's production shape: one `chat/completions` request per run end, no streaming, no audio.
+ *
+ * WHY `qwen-flash` (2026-10-20). The omni twin took 5.9 s on a single ask and 7.4 s / 12.3 s in the
+ * two production turns; `qwen-flash` answered the same request in 0.58–0.69 s. Its answers run
+ * 42–44 chars, which the old ≤40-character gate refused — so the gate was dropped (the prompt now
+ * asks for terseness rather than counting) and the model was swapped. The context pack is NOT
+ * trimmed: 1400 → 600 chars saved ~80 ms and the pack also serves the relay's coreference.
  *
  * A LEAF, NOT AN ASSEMBLY. Nothing here reads the environment, opens a socket at import time, or
  * knows which credential the deployment uses: the composition root (`server/index.ts`) decides
@@ -26,17 +32,22 @@
 export const VOICE_REALTIME_SUMMARY_MODEL_ENV = 'VOICE_REALTIME_SUMMARY_MODEL';
 
 /**
- * The model used when the caller names none. `qwen3.8-omni-flash` is the realtime relay model's
- * HTTP twin and the variant B-1 measured on a real Claude Code output.
+ * The model used when the caller names none. `qwen-flash` measured ~9× faster than the previous
+ * omni twin on the same ~1400-char context (0.58–0.69 s vs 5.9 s, 2026-10-20) and its 42–44-char
+ * answers are now accepted (the length gate was dropped).
  */
-export const DEFAULT_VOICE_REALTIME_SUMMARY_MODEL = 'qwen3.8-omni-flash';
+export const DEFAULT_VOICE_REALTIME_SUMMARY_MODEL = 'qwen-flash';
 
 /** The DashScope compatible-mode endpoint that serves the side text model. */
 const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
 
-/** The B-1 `voice` prompt variant, verbatim. Its "不超过 40 字" is the length the gate then re-reads. */
+/**
+ * The summary prompt. The old "不超过 40 字" bound was dropped with the gate it mirrored: the model
+ * is asked to be terse and to say the RESULT rather than walk through the process, but no hard
+ * character count is imposed. Markdown and reading the output back are still refused downstream.
+ */
 const RUN_END_SUMMARY_PROMPT =
-  '你是语音播报助手。下面是一段 Claude Code 的工作输出。请用一句简短、口语化的中文（不超过 40 字）说出它完成了什么、结论是什么。不要念原文，不要用 Markdown，不要列举，不要复述细节。';
+  '你是语音播报助手。下面是一段 Claude Code 的工作输出。请用一句简短、口语化的中文说出它完成了什么、结论是什么。要精简，讲结果不讲过程，不设硬性字数；不要念原文，不要用 Markdown，不要列举，不要复述细节。';
 
 /** The context a run-end ask carries: the latest context pack, and the run it belongs to. */
 export type VoiceRealtimeRunEndSummarizerInput = {
@@ -93,6 +104,8 @@ export function createVoiceRealtimeRunEndSummarizer(
         model,
         modalities: ['text'],
         stream: false,
+        // A runaway guard only — the prompt sets no hard length and the gate no longer counts.
+        max_tokens: 200,
         messages: [
           {
             role: 'user',

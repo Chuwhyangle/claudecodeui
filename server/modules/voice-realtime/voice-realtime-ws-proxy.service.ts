@@ -1720,6 +1720,12 @@ export const UPLINK_VAD_EXIT_WAIT_MS = 1_500;
 // forwards words and reports what happened, and this file only decides WHEN to ask and carries the
 // answer to the narrator's own text queue. TTS is a later task; here the loop closes at text.
 //
+// THE TRANSITION ALSO SPEAKS A FIXED ACK (2026-10-20). The side model takes 0.6–1 s (previously
+// 6–12 s), but the gap between the run ending and the first sound was still a silent 8–13 s in the
+// live wire. So the SAME transition first enqueues one deployment-chosen confirmation
+// (`VOICE_REALTIME_RUN_END_ACK`), and only then arms the settle wait for the summary. The ack is
+// independent of the pack, the model answer and the quality gate — see `VoiceRealtimeRunEndAckSeam`.
+//
 // WHY THE SETTLE WAIT IS LOAD-BEARING. The context pack the browser built may lag the run's last
 // output by the time the run ends. Asking the summarizer at the transition itself would summarize
 // the PREVIOUS state of the work — the exact timing failure this mechanism has to survive. So the
@@ -1737,9 +1743,6 @@ export const DEFAULT_RUN_END_SUMMARY_SETTLE_MS = 400;
 /** How often the host's run-activity reading is sampled while a run is believed live. */
 export const DEFAULT_RUN_END_SUMMARY_POLL_MS = 250;
 
-/** The most characters a spoken summary may carry (the B-1 probe's own target). */
-export const RUN_END_SUMMARY_MAX_CHARS = 40;
-
 /**
  * The most characters the summary's longest shared SUFFIX with the source may carry.
  *
@@ -1753,10 +1756,11 @@ export const RUN_END_SUMMARY_MAX_VERBATIM_TAIL = 6;
  * The three mechanical quality readings `experiments/voice-realtime-announce-summary/summarize.mts`
  * pinned, kept here so the gate and the experiment judge a summary the same way.
  *
- * `chars` is the summary's length, `markdown` the glyphs a voice cannot pronounce (`# * \` | -`,
- * each recorded once), and `verbatimTail` the longest suffix the summary shares with the source.
+ * `chars` is the summary's length (LOGGED, not gated since 2026-10-20 — `qwen-flash` answers run
+ * 42–44 chars), `markdown` the glyphs a voice cannot pronounce (`# * \` | -`, each recorded once),
+ * and `verbatimTail` the longest suffix the summary shares with the source.
  *
- * Consumers: the proxy's run-end gate (it refuses to inject a summary that breaks them) and
+ * Consumers: the proxy's run-end gate (it refuses Markdown and a read-back tail) and
  * `tests/voice-realtime-run-end-summary.test.ts` (it re-reads the injected text with the same
  * function, so the criterion cannot pass on a different idea of "short" or "verbatim").
  */
@@ -1809,6 +1813,20 @@ export type VoiceRealtimeRunEndSummarySeams = {
   pollMs?: number;
   /** Overrides {@link RUN_END_SUMMARY_MAX_VERBATIM_TAIL} (a criterion may tighten it). */
   verbatimTailMax?: number;
+};
+
+/**
+ * The run-end confirmation, as the proxy sees it: one fixed sentence, spoken at the transition.
+ *
+ * INDEPENDENT OF THE SUMMARY SEAM ON PURPOSE. The ack answers "the run ended, I am still here" and
+ * must not wait for — or depend on — a context pack, a side model answer, or a summary that passes
+ * the quality gate. The proxy calls `speak` exactly once per `running → idle` transition, BEFORE
+ * the settle timer is armed; the composition root's narrator wiring owns candidate selection and
+ * the `run-end-ack-N` id family. Absent means the pre-ack wire, byte for byte.
+ */
+export type VoiceRealtimeRunEndAckSeam = {
+  /** Enqueue one confirmation now, with the run it belongs to. */
+  speak(meta: { runId: string | null }): void;
 };
 
 /**
@@ -2135,6 +2153,15 @@ export type VoiceRealtimeProxySeams = {
    * inside that window supersedes the pending summary instead of producing two.
    */
   runEndSummary?: VoiceRealtimeRunEndSummarySeams;
+  /**
+   * The run-end confirmation (`VOICE_REALTIME_RUN_END_ACK`), or absent for the pre-ack wire.
+   *
+   * Fired at the SAME `running → idle` transition that schedules the summary, but BEFORE the
+   * settle wait: the person hears that the run ended immediately instead of after the side model's
+   * answer. Presence is the switch, and the seam is independent of `runEndSummary` — a deployment
+   * with an ack but no summarizer still speaks the ack.
+   */
+  runEndAck?: VoiceRealtimeRunEndAckSeam;
   /**
    * The narrator's playback queue and the duplex rule's switch, or absent for "no narrator".
    *
@@ -2675,6 +2702,9 @@ export function handleVoiceRealtimeConnection(
     // and a change that stays within a phase never matches — only `running → idle` does. The stop
     // path and the host watcher both fold their end through this one comparison.
     if (beforePhase === 'running' && execStatus.reading().phase === 'idle') {
+      // The ack goes FIRST — at the transition, before the settle timer — and is independent of the
+      // summary (see `VoiceRealtimeRunEndAckSeam`). The summary then follows through the same queue.
+      speakRunEndAck();
       scheduleRunEndSummary();
     }
     // The host watcher exists exactly while a run is believed live; `pollRunEnd` folds its end back
@@ -3988,6 +4018,7 @@ export function handleVoiceRealtimeConnection(
   // Gated on the seam: no narrator means no timer, no host sample, no behaviour change. See
   // `VoiceRealtimeProxySeams.runEndSummary` for the contract and the settle wait's purpose.
   const runEndSummary = seams.runEndSummary;
+  const runEndAck = seams.runEndAck;
   const runEndSettleMs = runEndSummary?.settleMs ?? DEFAULT_RUN_END_SUMMARY_SETTLE_MS;
   const runEndPollMs = runEndSummary?.pollMs ?? DEFAULT_RUN_END_SUMMARY_POLL_MS;
   const runEndVerbatimTailMax = runEndSummary?.verbatimTailMax ?? RUN_END_SUMMARY_MAX_VERBATIM_TAIL;
@@ -4011,12 +4042,27 @@ export function handleVoiceRealtimeConnection(
   };
 
   /**
+   * Speaks the fixed run-end confirmation, if this deployment wired one.
+   *
+   * Called at the `running → idle` transition, BEFORE the settle timer is armed. Deliberately reads
+   * nothing but the run id: no context pack, no summarizer, no quality gate — the ack must arrive
+   * even when the summary has nothing to say. Absence of the seam is the pre-ack wire.
+   */
+  const speakRunEndAck = (): void => {
+    if (runEndAck === undefined || closed) return;
+    const runId = execStatus.reading().runId;
+    runEndAck.speak({ runId });
+    seams.log?.(`run-end ack run=${runId ?? '-'}`);
+  };
+
+  /**
    * Asks the narrator, judges its answer, and injects it — the settle timer's body.
    *
    * The context pack is read HERE, not at the transition: that is the whole point of the settle
    * wait (the browser's pack may already carry the run's last output by now). A summary that breaks
-   * the B-1 readings is NOT injected — the narrator's contract is short, plain, non-verbatim speech,
-   * and a violation is logged rather than voiced.
+   * the narrator's readings (Markdown glyphs, or the output's own tail read back) is NOT injected —
+   * a violation is logged rather than voiced. LENGTH is a reading, not a refusal: `qwen-flash`
+   * answers run 42–44 chars and are still plain speech.
    */
   const summarizeRunEnd = async (generation: number, runId: string | null): Promise<void> => {
     if (runEndSummary === undefined || closed) return;
@@ -4044,13 +4090,9 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     const quality = readVoiceRealtimeSummaryQuality(text, context);
-    if (
-      quality.chars > RUN_END_SUMMARY_MAX_CHARS ||
-      quality.markdown.length > 0 ||
-      quality.verbatimTail > runEndVerbatimTailMax
-    ) {
+    if (quality.markdown.length > 0 || quality.verbatimTail > runEndVerbatimTailMax) {
       seams.log?.(
-        `run-end summary refused: chars=${quality.chars}/${RUN_END_SUMMARY_MAX_CHARS} ` +
+        `run-end summary refused: chars=${quality.chars} ` +
           `markdown=[${quality.markdown.join('')}] verbatimTail=${quality.verbatimTail}/${runEndVerbatimTailMax}`,
       );
       return;

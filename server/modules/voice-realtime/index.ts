@@ -224,16 +224,19 @@ export {
 // summary speak through, plus the stand-in producer a criterion can name. `server/index.ts` builds one
 // wiring per connection at the assembly point; `null` keeps the pre-narrator wire byte-for-byte.
 export {
+  VOICE_REALTIME_RUN_END_ACK_ENV,
   VOICE_REALTIME_SUMMARY_STANDIN_ENV,
   buildVoiceRealtimeNarratorWiring,
   describeVoiceRealtimeSummaryStandin,
+  resolveVoiceRealtimeRunEndAckCandidates,
   resolveVoiceRealtimeSummaryStandin,
   type VoiceRealtimeNarratorWiring,
 } from './voice-realtime-narrator.js';
 // The run-end summary's SIDE TEXT MODEL leaf (2026-10-20): one `chat/completions` ask per run end,
-// `qwen3.8-omni-flash` under the B-1 `voice` prompt. `server/index.ts` builds it when
-// `VOICE_REALTIME_SUMMARY_MODEL` is set (credential = the user's Live Voice DashScope key) and hands
-// its `summarize` to `buildVoiceRealtimeNarratorWiring` as the same seam the stand-in uses.
+// `qwen-flash` under the B-1 `voice` prompt (no hard length; Markdown and read-back are still
+// refused). `server/index.ts` builds it when `VOICE_REALTIME_SUMMARY_MODEL` is set (credential = the
+// user's Live Voice DashScope key) and hands its `summarize` to `buildVoiceRealtimeNarratorWiring` as
+// the same seam the stand-in uses.
 export {
   VOICE_REALTIME_SUMMARY_MODEL_ENV,
   DEFAULT_VOICE_REALTIME_SUMMARY_MODEL,

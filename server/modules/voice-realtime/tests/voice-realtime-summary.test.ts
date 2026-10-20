@@ -4,9 +4,10 @@
  *
  * WHAT THIS FILE PINS, one block per reading:
  *
- *   · a 200 answer is TRIMMED and returned, and the request is the B-1 `voice` ask: model
- *     `qwen3.8-omni-flash`, `modalities: ['text']`, `stream: false`, the context inside `<输出>`, and
- *     the prompt's own "不超过 40 字" bound;
+ *   · a 200 answer is TRIMMED and returned, and the request is the `voice` ask: model
+ *     `qwen-flash`, `modalities: ['text']`, `stream: false`, the context inside `<输出>`, and a
+ *     prompt that asks for terseness WITHOUT a hard character bound;
+ *   · the leaf's default model is `qwen-flash` (the 2026-10-20 latency swap);
  *   · empty/whitespace content resolves to `null` (the narrator speaks nothing);
  *   · a non-2xx answer resolves to `null`;
  *   · a blank apiKey resolves to `null` WITHOUT dialling — the injected fetch is never called;
@@ -20,7 +21,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createVoiceRealtimeRunEndSummarizer } from '../voice-realtime-summary.js';
+import {
+  DEFAULT_VOICE_REALTIME_SUMMARY_MODEL,
+  createVoiceRealtimeRunEndSummarizer,
+} from '../voice-realtime-summary.js';
 
 /** One captured request, as the leaf issued it. */
 type CapturedRequest = { url: string; init: RequestInit };
@@ -71,16 +75,32 @@ test('a 200 answer is trimmed, and the request is the B-1 voice ask', async () =
   assert.equal(headers['Content-Type'], 'application/json');
 
   const body = JSON.parse(String(request.init.body)) as SummaryRequest;
-  assert.equal(body.model, 'qwen3.8-omni-flash', 'the model is the realtime relay model\'s HTTP twin');
+  assert.equal(body.model, 'qwen-flash', 'the fast side model (2026-10-20 latency swap)');
   assert.deepEqual(body.modalities, ['text'], 'a text-only ask: no audio modality');
   assert.equal(body.stream, false, 'the run end waits for one complete sentence');
   assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0]!.role, 'user');
   const prompt = body.messages[0]!.content[0]!.text;
   assert.equal(body.messages[0]!.content[0]!.type, 'text');
-  assert.ok(prompt.includes('不超过 40 字'), 'the B-1 voice prompt carries the length bound');
+  assert.ok(!prompt.includes('不超过 40 字'), 'the hard character bound is gone, not mirrored in the prompt');
+  assert.ok(prompt.includes('不设硬性字数'), 'the prompt asks for terseness instead of a count');
+  assert.ok(prompt.includes('讲结果不讲过程'), 'and names what "terse" means for a spoken summary');
   assert.ok(prompt.includes(CONTEXT), 'the context pack is what the side model summarizes');
   assert.ok(prompt.includes('<输出>') && prompt.includes('</输出>'), 'the pack is fenced as in B-1');
+});
+
+test('the default model is qwen-flash when the caller names none', async () => {
+  const requests: CapturedRequest[] = [];
+  const summarizer = createVoiceRealtimeRunEndSummarizer({
+    apiKey: 'sk-live-voice',
+    fetch: jsonFetch(200, { choices: [{ message: { content: '完成了。' } }] }, requests),
+  });
+
+  assert.equal(DEFAULT_VOICE_REALTIME_SUMMARY_MODEL, 'qwen-flash');
+  await summarizer.summarize({ context: CONTEXT, runId: 'run-default' });
+
+  const body = JSON.parse(String(requests[0]!.init.body)) as SummaryRequest;
+  assert.equal(body.model, DEFAULT_VOICE_REALTIME_SUMMARY_MODEL, 'the leaf default is the model on the wire');
 });
 
 test('empty or whitespace content resolves to null', async () => {
