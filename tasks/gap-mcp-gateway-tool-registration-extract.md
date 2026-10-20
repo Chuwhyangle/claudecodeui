@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-gateway-tool-registration-extract
 title: Extract mcp-gateway tool registration into bounded sub-packages
-status: todo
+status: ready
 labels:
   - gap
 parent: null
