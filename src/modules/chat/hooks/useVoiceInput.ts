@@ -1,27 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/modules/chat/utils/audioDecode';
-import {
-  DEFAULT_FLUSH_SILENCE_SEC,
-  DEFAULT_KEEP_GAP_SEC,
-  DEFAULT_MIN_SEGMENT_SEC,
-  LiveSegmenter,
-  segmentLive,
-  type LiveSegment,
-} from '@/modules/chat/utils/voiceLiveSegmenter';
-import {
-  reassembleText,
-  runSegmentPipeline,
-  type ReassemblyPart,
-  type SegmentJob,
-  type SegmentOutcome,
-} from '@/modules/chat/utils/voiceSegments';
-import {
-  buildVoiceLiveReading,
-  type VoiceSegmentMetric,
-  type VoiceUsage,
-} from '@/modules/chat/utils/voiceLiveReading';
-import { voicePlayer } from '@/modules/chat/utils/voicePlayer';
+import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/modules/chat/utils/voice/audioDecode';
+import { DEFAULT_FLUSH_SILENCE_SEC, DEFAULT_KEEP_GAP_SEC, DEFAULT_MIN_SEGMENT_SEC, LiveSegmenter, segmentLive } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
+import type { LiveSegment } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
+import { reassembleText, runSegmentPipeline } from '@/modules/chat/utils/voice/voiceSegments';
+import type { ReassemblyPart, SegmentJob, SegmentOutcome } from '@/modules/chat/utils/voice/voiceSegments';
+import { buildVoiceLiveReading } from '@/modules/chat/utils/voice/voiceLiveReading';
+import type { VoiceSegmentMetric, VoiceUsage } from '@/modules/chat/utils/voice/voiceLiveReading';
+import { voicePlayer } from '@/modules/chat/utils/voice/voicePlayer';
+
 import { VOICE_FRAME_PROCESSOR_NAME, type VoiceFrameMessage } from '@/modules/chat/audio/voiceFrameProcessor';
 import { voiceFrameProcessorUrl } from '@/modules/chat/audio/voiceFrameProcessorUrl';
 import {

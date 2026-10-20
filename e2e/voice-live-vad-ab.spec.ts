@@ -4,7 +4,7 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 
-import type { VoiceLiveReading } from '../src/modules/chat/utils/voiceLiveReading';
+import type { VoiceLiveReading } from '../src/modules/chat/utils/voice/voiceLiveReading';
 
 /*
  * The continuous voice path's own reading, read off a real page.

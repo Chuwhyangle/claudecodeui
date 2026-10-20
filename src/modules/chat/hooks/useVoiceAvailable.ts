@@ -12,7 +12,7 @@ import {
   voiceClientAsrReadiness,
   type VoiceClientFallbackDetail,
 } from '@/modules/chat/audio/voiceClientAsrWorker';
-import type { VoiceModelProgress } from '@/modules/chat/utils/voiceModelCache';
+import type { VoiceModelProgress } from '@/modules/chat/utils/voice/voiceModelCache';
 import { api, setVoiceProviderProfile, setVoiceProviderRows } from '@/shared/api';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import type { VoiceProviderRow } from '@/shared/types';

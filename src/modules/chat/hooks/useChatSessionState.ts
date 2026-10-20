@@ -4,22 +4,18 @@ import type { MutableRefObject } from 'react';
 import { api } from '@/shared/api';
 import type { MarkSessionIdle, SessionActivityMap,Project,ProjectSession,LLMProvider,NormalizedMessage,ChatMessage,DiffCalculator,ChatReplayCursorMap,SessionTurnOutline } from '@/shared/types';
 import type { SessionStore } from '@/modules/chat/hooks/useSessionStore';
-import { subscribeTargetFor } from '@/modules/chat/utils/replayCursor';
-import {
-  OLDER_MESSAGES_PAGE_SIZE,
-  planOlderPagePrefetch,
-  SESSION_MESSAGES_PAGE_SIZE,
-} from '@/modules/chat/utils/sessionMessagePagination';
-import { createMessageHistoryRefreshCoordinator } from '@/modules/chat/utils/messageHistoryRefreshCoordinator';
-import { createCachedDiffCalculator } from '@/modules/chat/utils/messageTransforms';
-import { collapseMonitorEventRows, normalizedToChatMessages } from '@/modules/chat/hooks/useChatMessages';
-import { MIN_SNIPPET_LENGTH, findSearchTargetIndex, normalizeSearchSnippet, resolveSearchWindowSize } from '@/modules/chat/utils/searchTargetLocator';
-import { createJumpAnchorLock } from '@/modules/chat/utils/jumpAnchorLock';
-import { messageAnchorId } from '@/modules/chat/utils/messageKeys';
-import type { JumpAnchorLock } from '@/modules/chat/utils/jumpAnchorLock';
-import { readSelectedProvider } from '@/shared/selectedProvider';
-import type { SearchTarget } from '@/modules/chat/utils/searchTargetLocator';
+import { subscribeTargetFor } from '@/modules/chat/utils/session/replayCursor';
+import { OLDER_MESSAGES_PAGE_SIZE, planOlderPagePrefetch, SESSION_MESSAGES_PAGE_SIZE } from '@/modules/chat/utils/session/sessionMessagePagination';
+import { createMessageHistoryRefreshCoordinator } from '@/modules/chat/utils/session/messageHistoryRefreshCoordinator';
 
+import { createCachedDiffCalculator } from '@/modules/chat/utils/transcript/messageTransforms';
+import { MIN_SNIPPET_LENGTH, findSearchTargetIndex, normalizeSearchSnippet, resolveSearchWindowSize } from '@/modules/chat/utils/transcript/searchTargetLocator';
+import { createJumpAnchorLock } from '@/modules/chat/utils/transcript/jumpAnchorLock';
+import { messageAnchorId } from '@/modules/chat/utils/transcript/messageKeys';
+import { collapseMonitorEventRows, normalizedToChatMessages } from '@/modules/chat/hooks/useChatMessages';
+import type { JumpAnchorLock } from '@/modules/chat/utils/transcript/jumpAnchorLock';
+import type { SearchTarget } from '@/modules/chat/utils/transcript/searchTargetLocator';
+import { readSelectedProvider } from '@/shared/selectedProvider';
 const INITIAL_VISIBLE_MESSAGES = 100;
 
 /** Messages kept below a search hit so it lands mid-viewport rather than at the edge. */

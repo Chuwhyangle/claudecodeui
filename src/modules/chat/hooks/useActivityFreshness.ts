@@ -43,11 +43,8 @@ import { useContext, useEffect, useReducer, useRef } from 'react';
 
 import WebSocketContext from '@/shared/context/WebSocketContext';
 import type { ActivityConnection, ActivityPhase, ServerEvent } from '@/shared/types';
-import {
-  createActivityFreshness,
-  type ActivityFreshness,
-  type ActivityLiveness,
-} from '@/modules/chat/utils/activityFreshness';
+import { createActivityFreshness } from '@/modules/chat/utils/session/activityFreshness';
+import type { ActivityFreshness, ActivityLiveness } from '@/modules/chat/utils/session/activityFreshness';
 
 /** What the dock needs to know about liveness, with nothing transport-shaped in it. */
 export type ActivityFreshnessReading = {

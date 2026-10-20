@@ -4,7 +4,7 @@ import { Square } from 'lucide-react';
 
 import { useActivityFreshness } from '@/modules/chat/hooks/useActivityFreshness';
 import { selectActiveTasks, useSessionActivity } from '@/modules/chat/hooks/useSessionActivity';
-import { deriveActivityDockView } from '@/modules/chat/utils/activityDockView';
+import { deriveActivityDockView } from '@/modules/chat/utils/voice/activityDockView';
 import ActivityDockPanel from '@/modules/chat/transcript/ActivityDockPanel';
 import type { ForegroundTool } from '@/modules/chat/hooks/useActivityControls';
 import { Shimmer } from '@/shared/ui';

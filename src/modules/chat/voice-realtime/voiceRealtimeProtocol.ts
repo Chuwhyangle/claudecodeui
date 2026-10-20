@@ -11,7 +11,7 @@
  * Consumed by `useVoiceRealtimeSession` (the sender) and by
  * `tests/useVoiceRealtimeSession.segmented.test.tsx`, whose fake server is the declaring peer.
  */
-import type { LiveSegment } from '@/modules/chat/utils/voiceLiveSegmenter';
+import type { LiveSegment } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 
 /** The protocol token the browser offers and the server must answer with to enable segmented relay. */
 export const SEGMENTED_RELAY_PROTOCOL = 'segmented-v1';
@@ -29,7 +29,7 @@ export type VoiceRealtimeReadyFrame = { type: 'ready'; protocol?: string };
  * It travels as text rather than as the rows it was built from, and that is the whole point: the
  * pack is built from the transcript's own visibility rules, which are a frontend concern, while the
  * proxy only has to know how much of it arrived. The three counts are what the proxy logs — never
- * the body, which is the person's conversation (`@/modules/chat/utils/voiceContextPack`).
+ * the body, which is the person's conversation (`@/modules/chat/utils/voice`).
  */
 export type VoiceRealtimeContextFrame = {
   type: 'context';

@@ -24,16 +24,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEGRADED_CACHE_WRITE_FAILED,
-  DEGRADED_NO_CACHE_API,
-  VOICE_CLIENT_MODEL_CACHE_KEY,
-  clearVoiceClientModel,
-  loadVoiceModel,
-  type VoiceClientModelSpec,
-  type VoiceModelCacheEnv,
-  type VoiceModelCacheStore,
-} from '@/modules/chat/utils/voiceModelCache';
+import { DEGRADED_CACHE_WRITE_FAILED, DEGRADED_NO_CACHE_API, VOICE_CLIENT_MODEL_CACHE_KEY, clearVoiceClientModel, loadVoiceModel } from '@/modules/chat/utils/voice/voiceModelCache';
+import type { VoiceClientModelSpec, VoiceModelCacheEnv, VoiceModelCacheStore } from '@/modules/chat/utils/voice/voiceModelCache';
 
 /** The whole model, in miniature: 512 bytes whose first byte is the tag the digest reads. */
 const MODEL_BYTES = 512;

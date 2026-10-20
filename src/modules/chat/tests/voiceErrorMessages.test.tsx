@@ -55,11 +55,7 @@ import { afterEach, beforeEach, test, vi } from 'vitest';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import { useVoiceInput } from '@/modules/chat/hooks/useVoiceInput';
 import { createFakeVoiceCapture } from '@/modules/chat/tests/voiceCaptureTestHarness';
-import {
-  voiceErrorKey,
-  voiceErrorMessage,
-  voiceErrorTechnicalDetail,
-} from '@/modules/chat/utils/voiceErrorMessages';
+import { voiceErrorKey, voiceErrorMessage, voiceErrorTechnicalDetail } from '@/modules/chat/utils/voice/voiceErrorMessages';
 // Through the barrel, not the file: this test lives in chat and `languages.ts` belongs to i18n, and
 // the module-boundary rule the lint enforces is that a cross-module read goes through `index.ts`.
 // The VALUE is still the one `src/modules/i18n/languages.ts` ships — the barrel re-exports it.

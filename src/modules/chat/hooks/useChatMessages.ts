@@ -4,8 +4,8 @@
  */
 
 import type { ChatMessage,NormalizedMessage,SubagentActivity } from '@/shared/types';
-import { formatUsageLimitText } from '@/modules/chat/utils/chatFormatting';
-import { isLiveRowId } from '@/modules/chat/utils/liveRowIdentity';
+import { formatUsageLimitText } from '@/modules/chat/utils/transcript/chatFormatting';
+import { isLiveRowId } from '@/modules/chat/utils/transcript/liveRowIdentity';
 
 /**
  * The `ChatMessage.type` of the divider that introduces a turn nobody typed.

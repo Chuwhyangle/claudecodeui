@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 
 import { api } from '@/shared/api';
-import { escapeRegExp } from '@/modules/chat/utils/chatFormatting';
+import { escapeRegExp } from '@/modules/chat/utils/transcript/chatFormatting';
 import type { Project } from '@/shared/types';
 
 type ProjectFileNode = {
@@ -68,7 +68,6 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
       if (!projectId) {
         return;
       }
-
 
       try {
         const response = await api.getFiles(projectId, {

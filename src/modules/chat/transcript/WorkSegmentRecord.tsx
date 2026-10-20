@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 
 import type { ChatMessage, WorkSegment } from '@/shared/types';
-import { buildWorkSegmentTitle, formatElapsedMs } from '@/modules/chat/utils/workSegmentTitle';
+import { buildWorkSegmentTitle, formatElapsedMs } from '@/modules/chat/utils/transcript/workSegmentTitle';
 
 type WorkSegmentRecordProps = {
   segment: WorkSegment;

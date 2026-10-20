@@ -10,7 +10,7 @@ import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import VoiceClipButton from '@/modules/chat/composer/VoiceClipButton';
 import { useVoiceInput } from '@/modules/chat/hooks/useVoiceInput';
 import { createFakeVoiceCapture } from '@/modules/chat/tests/voiceCaptureTestHarness';
-import { voicePlayer } from '@/modules/chat/utils/voicePlayer';
+import { voicePlayer } from '@/modules/chat/utils/voice/voicePlayer';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 // Type-only, so it is erased before vi.mock's hoisted factory runs.
 import type * as SharedApi from '@/shared/api';

@@ -15,7 +15,7 @@ import { QuestionAnswerContent } from '@/modules/chat/tools/ContentRenderers/Que
 import { PlanDisplay } from '@/modules/chat/tools/PlanDisplay';
 import { ToolStatusBadge } from '@/modules/chat/tools/ToolStatusBadge';
 import { DiffStatsBadge } from '@/modules/chat/tools/DiffStatsBadge';
-import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/messageTransforms';
+import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/transcript/messageTransforms';
 
 type ToolRendererProps = {
   toolName: string;

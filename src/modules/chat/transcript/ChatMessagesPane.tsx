@@ -10,11 +10,12 @@ import type { ChatMessage,
   ProviderModelsDefinition,
   SessionActivity } from '@/shared/types';
 import { RESIDENT_PENDING_MESSAGE_TYPE, UNATTENDED_TURN_MESSAGE_TYPE } from '@/modules/chat/hooks/useChatMessages';
-import { getIntrinsicMessageKey, messageAnchorId } from '@/modules/chat/utils/messageKeys';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
-import { findSearchTargetIndex } from '@/modules/chat/utils/searchTargetLocator';
-import { nextPxPerMessage } from '@/modules/chat/utils/contentHeightModel';
-import type { ContentRowInput } from '@/modules/chat/utils/contentHeightModel';
+import { getIntrinsicMessageKey, messageAnchorId } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
+import { findSearchTargetIndex } from '@/modules/chat/utils/transcript/searchTargetLocator';
+import { nextPxPerMessage } from '@/modules/chat/utils/transcript/contentHeightModel';
+
+import type { ContentRowInput } from '@/modules/chat/utils/transcript/contentHeightModel';
 import { useLazyRowObserver } from '@/modules/chat/hooks/useLazyRowObserver';
 import { findPendingForegroundTool } from '@/modules/chat/hooks/useActivityControls';
 import LazyMessageRow from '@/modules/chat/transcript/LazyMessageRow';

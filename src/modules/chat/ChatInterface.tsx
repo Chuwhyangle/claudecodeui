@@ -28,7 +28,8 @@ import { useSessionStore } from '@/modules/chat/hooks/useSessionStore';
 import { useUiNavigate } from '@/modules/chat/hooks/useUiNavigate';
 import { useUiStateResponder } from '@/modules/chat/hooks/useUiStateResponder';
 import UiNavigatePrompt from '@/modules/chat/components/UiNavigatePrompt';
-import { subscribeTargetFor } from '@/modules/chat/utils/replayCursor';
+import { subscribeTargetFor } from '@/modules/chat/utils/session/replayCursor';
+import { createChatSession } from '@/modules/chat/utils/session/sessionCreation';
 import {
   useProcessingSessions,
   useSessionProtectionActions,
@@ -51,8 +52,8 @@ import {
   warmMicrophoneSource,
 } from '@/modules/chat/voice-realtime';
 import CommandResultModal from '@/modules/chat/modals/CommandResultModal';
-import { downloadTranscriptExport } from '@/modules/chat/utils/chatExport';
-import { createChatSession } from '@/modules/chat/utils/sessionCreation';
+import { downloadTranscriptExport } from '@/modules/chat/utils/transcript/chatExport';
+
 import { useRegisterTranscriptExport } from '@/shared/context/TranscriptExportContext';
 
 /**
@@ -967,7 +968,6 @@ function ChatInterface({
       </div>
     );
   }
-
 
   return (
     <PermissionContext.Provider value={permissionContextValue}>

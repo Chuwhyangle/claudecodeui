@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import { splitStreamingMarkdown } from '@/modules/chat/utils/streamingMarkdown';
+import { splitStreamingMarkdown } from '@/modules/chat/utils/transcript/streamingMarkdown';
 
 /**
  * The split is only sound if `settled + pending === content` and the two halves

@@ -56,7 +56,7 @@ import {
   type VoiceClientWorkerRequest,
   type VoiceClientWorkerScope,
 } from '@/modules/chat/audio/voiceClientAsrWorker';
-import type { VoiceModelProgress } from '@/modules/chat/utils/voiceModelCache';
+import type { VoiceModelProgress } from '@/modules/chat/utils/voice/voiceModelCache';
 import { resolveVoiceFallbackProvider, setVoiceProviderProfile, setVoiceProviderRows, transcribeVoice } from '@/shared/api';
 import type { VoiceClientReadiness, VoiceProviderRow } from '@/shared/types';
 import { VOICE_FALLBACK_STORAGE_KEY } from '@/shared/voiceConfig';

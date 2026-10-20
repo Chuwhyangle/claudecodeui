@@ -5,9 +5,9 @@ import { afterEach, beforeEach, test, vi } from 'vitest';
 
 import type { ChatMessage, NormalizedMessage, WorkSegment, WorkSegmentListItem } from '@/shared/types';
 import { normalizedToChatMessages } from '@/modules/chat/hooks/useChatMessages';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
-import { mergeOlderServerPage } from '@/modules/chat/utils/sessionMessagePagination';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
+import { mergeOlderServerPage } from '@/modules/chat/utils/session/sessionMessagePagination';
 
 /**
  * AC-205: a work segment's anchor is its FIRST member's intrinsic key, and
