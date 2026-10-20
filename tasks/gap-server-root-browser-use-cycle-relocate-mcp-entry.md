@@ -38,13 +38,13 @@ F5（架构校准报告 `/tmp/arch-analysis-calibration-2026-10-20.md`，HEAD `a
 
 ## AC
 
-- [ ] (a) 入口不再从 `modules/browser-use` 内部 import 根 bootstrap：`test -z "$(grep -rn "\.\./\.\./load-env" server/modules/browser-use --include='*.ts' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//')"` 退出 0；**或**入口已移出该模块：`test ! -e server/modules/browser-use/browser-use-mcp.ts` 退出 0 并贴出新绝对路径。贴出改动前计数（当前 1 条，`browser-use-mcp.ts:4`）与改动后计数。
-- [ ] (b) 棘轮收缩且仍绿：`server/shared/tests/server-import-cycle-budget.baseline.json` 的 `cycleGroups.G3` 改为 `[]`（或 `[".", "modules/browser-use"]` 的真子集；**新增成员即判失败**），测试内 `CYCLE_GROUPS` 同值同步；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0，并贴出它的 `files=… staticEdges=… dynamicEdges=… sccs=[…]` 首行。若目录有增删，同一次改动里更新 `directoryManifest` / `nodeCount` / `MANIFEST_PIN`。
-- [ ] (c) 新鲜 `archguard_detect_cycles(outputScope=package)` 在 server scope 上不再报告同时含 `"."` 与 `modules/browser-use` 的 SCC；贴出前（本条立案读数 `{size:2, modules:["", "modules/browser-use"], edges:4}`）与后的成员清单。（待外部）
-- [ ] (d) 新 smoke 判据 `server/modules/browser-use/tests/browser-use-mcp-entry.test.ts`（入口若移位则判据跟随到新模块的同名 `tests/` 下）跑通：`npx tsx --tsconfig server/tsconfig.json --test <该文件>` 退出 0。第一条腿 spawn 该 MCP 入口并向 stdin 写一行 `initialize` 请求，断言回复中 `serverInfo.name == "cloudcli-browser"`；第二条腿在 `DATABASE_PATH` 未设置的子进程环境里断言 bootstrap 装上 `~/.cloudcli/auth.db` 默认值。贴出测试文件数 / pass / fail 与原始回复行。
-- [ ] (e) 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
-- [ ] (f) 新 server 测试文件的注册钉子：按 `<duration_ms>\t<path>` 向 `scripts/suite-duration-baseline.tsv` 追加一行，并按复测值把 `server/shared/tests/quay-test-script.test.ts` 的两条 `unknown=` pin 各上移 1；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
-- [ ] (g) 范围受控：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件，不多一个。
+- [x] (a) 入口不再从 `modules/browser-use` 内部 import 根 bootstrap：`test -z "$(grep -rn "\.\./\.\./load-env" server/modules/browser-use --include='*.ts' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//')"` 退出 0；**或**入口已移出该模块：`test ! -e server/modules/browser-use/browser-use-mcp.ts` 退出 0 并贴出新绝对路径。贴出改动前计数（当前 1 条，`browser-use-mcp.ts:4`）与改动后计数。
+- [x] (b) 棘轮收缩且仍绿：`server/shared/tests/server-import-cycle-budget.baseline.json` 的 `cycleGroups.G3` 改为 `[]`（或 `[".", "modules/browser-use"]` 的真子集；**新增成员即判失败**），测试内 `CYCLE_GROUPS` 同值同步；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0，并贴出它的 `files=… staticEdges=… dynamicEdges=… sccs=[…]` 首行。若目录有增删，同一次改动里更新 `directoryManifest` / `nodeCount` / `MANIFEST_PIN`。
+- [x] (c) 新鲜 `archguard_detect_cycles(outputScope=package)` 在 server scope 上不再报告同时含 `"."` 与 `modules/browser-use` 的 SCC；贴出前（本条立案读数 `{size:2, modules:["", "modules/browser-use"], edges:4}`）与后的成员清单。（待外部）
+- [x] (d) 新 smoke 判据 `server/modules/browser-use/tests/browser-use-mcp-entry.test.ts`（入口若移位则判据跟随到新模块的同名 `tests/` 下）跑通：`npx tsx --tsconfig server/tsconfig.json --test <该文件>` 退出 0。第一条腿 spawn 该 MCP 入口并向 stdin 写一行 `initialize` 请求，断言回复中 `serverInfo.name == "cloudcli-browser"`；第二条腿在 `DATABASE_PATH` 未设置的子进程环境里断言 bootstrap 装上 `~/.cloudcli/auth.db` 默认值。贴出测试文件数 / pass / fail 与原始回复行。
+- [x] (e) 静态门：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] (f) 新 server 测试文件的注册钉子：按 `<duration_ms>\t<path>` 向 `scripts/suite-duration-baseline.tsv` 追加一行，并按复测值把 `server/shared/tests/quay-test-script.test.ts` 的两条 `unknown=` pin 各上移 1；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] (g) 范围受控：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件，不多一个。
 
 ## DoD
 
