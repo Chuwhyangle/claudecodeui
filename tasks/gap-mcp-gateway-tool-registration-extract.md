@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-gateway-tool-registration-extract
 title: Extract mcp-gateway tool registration into bounded sub-packages
-status: ready
+status: needs-human
 labels:
   - gap
 parent: null
@@ -34,12 +34,12 @@ F6（架构校准报告 2026-10-20，ArchGuard 0.1.40；`archguard_detect_god_pa
 ## AC
 
 - [x] 包体上限：`for d in server/modules/mcp-gateway server/modules/mcp-tools-read server/modules/mcp-tools-write; do test "$(find "$d" -name '*.ts' -not -path '*/tests/*' | wc -l)" -le 20 || exit 1; test "$(cat $(find "$d" -name '*.ts' -not -path '*/tests/*') | wc -l)" -le 8000 || exit 1; done` 退出 0；逐包贴出文件数与 LOC（基线 `mcp-gateway` 41 文件 / 17,308 LOC）。— 实测 exit 0：mcp-gateway 20 / 6,966；mcp-tools-read 11 / 6,981；mcp-tools-write 12 / 3,845。
-- [ ] 结构读数（外部工具）：新鲜 `archguard_get_package_metrics` 报告 `mcp-gateway*` 的 fanOut 低于 200（基线 332），且 F3 的 server SCC 规模不大于改动前。贴出前后数值。该读数为 ArchGuard MCP 查询（待外部）。— fanOut 达标：mcp-gateway 332 → 158，mcp-tools-read 173，mcp-tools-write 121（server scope，均 < 200）。SCC 未达标：F3 的 11 成员环 → 13 成员（两个新包进入该环），见 ## Blocker。
+- [ ] 结构读数（外部工具）：新鲜 `archguard_get_package_metrics` 报告 `mcp-gateway*` 的 fanOut 低于 200（基线 332），且 F3 的 server SCC 规模不大于改动前。贴出前后数值。该读数为 ArchGuard MCP 查询（待外部）。— fanOut 部分达标：mcp-gateway 332 → 158，mcp-tools-read 173，mcp-tools-write 121（server scope，均 < 200；该读数为上一轮 ArchGuard 查询结果；本轮 ArchGuard 对 worktree 无新鲜索引，`archguard_get_package_metrics` 返回 `packages: []`）。SCC 部分未达标：AC-394 目录棘轮在合入 develop 后的 worktree 上实测 `sccs=[13,2,2]`（静态读 `[11,2,2]`，动态读 `[13,2,2]`；基线 pin 为 `[11,2,2]` 且成员集不含两个新包），两个新包进入 11 成员环 → 13 成员；同一判据的叶子规则也红。见 ## Blocker：本条 AC 与 AC-394 棘轮定义上冲突，需人工裁决。
 - [x] 既有 MCP 工具契约判据不改一字仍绿：`for f in server/modules/mcp-gateway/tests/*.test.ts; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0；贴出文件数与每个文件 pass 数（至少含 `mcp-read-tools.test.ts` 与 `mcp-session-send.test.ts`）。— 52 个文件、319 个 pass、0 fail；`mcp-read-tools.test.ts` 8 pass、`mcp-session-send.test.ts` 8 pass。注：17 个判据文件仅改了 import 路径/扫描目录集合（断言文本未动），严格读「不改一字」不成立。
 - [x] 公开签名不变：`test "$(grep -rn 'export function registerMcpReadTools' server --include='*.ts' | wc -l)" -eq 1` 且 `test "$(grep -rn 'export function registerMcpWriteTools' server --include='*.ts' | wc -l)" -eq 1`；两处声明所在地分别是两个新子包，参数类型名（`McpReadToolDeps` / `McpWriteToolDeps`）与 `MCP_STAGE3_READ_TOOLS` / `MCP_STAGE4_WRITE_TOOLS` 常量名逐字保留，贴出声明原文。— `register-read-tools.ts:1632 export function registerMcpReadTools(seam: McpReadToolSeam, deps: McpReadToolDeps): void {`；`register-write-tools.ts:370 export function registerMcpWriteTools(seam: McpWriteToolSeam, deps: McpWriteToolDeps): void {`；两个常量名逐字保留。
 - [x] `mcp-gateway` 不再直接持有工具实现：`grep -rln 'registerMcpReadTools\|registerMcpWriteTools' server/modules/mcp-gateway --include='*.ts'` 的命中只允许出现在 `mcp-gateway.transport.ts` 的装配调用与 `index.ts` 的转出口，不允许出现工具定义本体；贴出命中文件清单与判定。— 命中文件仅 `mcp-gateway.transport.ts` 与 `index.ts`；无工具定义本体。
 - [x] `npm run typecheck` 退出 0，`npm run lint` 退出 0。— 两者实测 exit 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。— 47 个文件；Touches 已按实测集合补全，但本条未在落地方向上复验（任务已 park）。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。— 合入 develop 后实测：47 个文件；`anti-drift-touches-check.js --task gap-mcp-gateway-tool-registration-extract --worktree <wt> --merge-target develop` 输出 `ANTI-DRIFT OK: ... 47 actual file(s), all within declared Touches (52 glob(s))`，exit 0。
 
 ## DoD
 
@@ -100,6 +100,25 @@ F6（架构校准报告 2026-10-20，ArchGuard 0.1.40；`archguard_detect_god_pa
 - server/modules/mcp-gateway/tests/mcp-usage-stats.test.ts（注释措辞随迁）
 - tasks/gap-mcp-gateway-tool-registration-extract.md (self)
 
+## Evidence
+
+2026-10-20 本轮（续做，worktree 已在 `task/gap-mcp-gateway-tool-registration-extract`，HEAD = `7cc37bde7` + 合入 develop 的 merge commit；本轮未改任何代码，只做逐条复验）：
+
+| AC | 读数 | 判定 |
+|---|---|---|
+| AC1 | 包体命令 exit 0；mcp-gateway 20 / 6,966，mcp-tools-read 11 / 6,981，mcp-tools-write 12 / 3,845 | 绿 |
+| AC2 fanOut | 上轮 ArchGuard：mcp-gateway 332 → 158，read 173，write 121（< 200） | 达标（读数待外部新鲜索引） |
+| AC2 SCC | AC-394 棘轮 `sccs=[13,2,2]`（基线 pin `[11,2,2]`）；两个新包进入 11 成员环 | 红 |
+| AC3 | 上轮 52 文件 / 319 pass；本轮复验 `mcp-read-tools.test.ts` 8/8、`mcp-session-send.test.ts` 8/8 | 绿 |
+| AC4 | `export function registerMcpReadTools` = 1 处（`server/modules/mcp-tools-read/register-read-tools.ts:1632`）；`export function registerMcpWriteTools` = 1 处（`server/modules/mcp-tools-write/register-write-tools.ts:370`）；`MCP_STAGE3_READ_TOOLS` / `MCP_STAGE4_WRITE_TOOLS` 逐字保留 | 绿 |
+| AC5 | `grep -rln` 命中仅 `mcp-gateway.transport.ts` 与 `index.ts`，无工具定义本体 | 绿 |
+| AC6 | `npm run typecheck` exit 0；`npm run lint` exit 0（仅既有 warning） | 绿 |
+| AC7 | 合入 develop 后 anti-drift：`47 actual file(s), all within declared Touches (52 glob(s))`，exit 0 | 绿 |
+
+AC-394 棘轮红的三条判据（`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts`，merged tree）：`(b)` SCC 包含性、`(c)` 目录 manifest / 新目录叶子规则、`(g)` 真实树注入臂；`tests 11 / pass 8 / fail 3`，`files=327 staticEdges=1325 dynamicEdges=6 sccs=[13,2,2]`。
+
+结构上不可同时满足的理由：AC5/DoD ② 要求 `mcp-gateway.transport.ts` 装配调用两个注册函数，等价于必须有 `server/modules/mcp-gateway → server/modules/mcp-tools-read|write` 的入边；AC5 又允许 `index.ts` 转出口，同向入边。AC-394 的叶子规则要求新目录「零入边（来自其它 `server/modules/**` 目录）」且出边只允许 `server/shared/**` 与自己，并明确基线 JSON / `MANIFEST_PIN` 不得为容纳红而改。故本条的拆分形状与 AC-394 棘轮定义上冲突；该冲突不是实现瑕疵，无法在 Touches 内（且不修改棘轮）消解。
+
 ## Blocker
 
 **2026-10-20T06:43:35.030Z — worker 未落地（exited-not-landed）**
@@ -107,3 +126,12 @@ F6（架构校准报告 2026-10-20，ArchGuard 0.1.40；`archguard_detect_god_pa
 - 未落地原因：AC 未全勾（checked 0/7，剩余未勾 7）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
 - session_id：317e46db-8f02-42ea-90ae-8e492b206545
+
+**2026-10-20 — 结构性阻塞：AC2 的 SCC 子句与 AC-394 目录棘轮定义上冲突（needs-human）**
+
+- AC-394 判据 `server/shared/tests/server-import-cycle-budget.test.ts` 在合入 develop 后的 worktree 上 3 red：`(b)` SCC 包含性、`(c)` 新目录叶子规则、`(g)` 真实树注入臂；读数 `sccs=[13,2,2]`（基线 pin `[11,2,2]`，且 pin 的成员集不含 `modules/mcp-tools-read` / `modules/mcp-tools-write`）。
+- `(c)` 的违规分两类：①两个新包出边到 `mcp-gateway` / `providers` / `websocket` / `oauth` / `quay` 及彼此；②`mcp-gateway` 入边到两个新包（`index.ts` 转出口 + `transport.ts` 装配 import）。
+- 该判据文档明确：新目录必须是叶子（出边只允许 `server/shared/**` 与自己；不得被其它 `modules/**` 目录 import），且基线 JSON 与 `MANIFEST_PIN` 都不许为容纳红而改；`Do NOT raise the baseline: find the import that closed the loop.`
+- 因此本条的 AC5/DoD ②（网关 transport 必须调用两个注册函数）与 AC-394 的叶子规则互斥；「注册代码搬进新子包且网关经 dependency bag 调用」这一 DoD 在任何不修改棘轮的实现下都不会绿。
+- 需要人工裁决的选项：(a) 显式修改 AC2/AC5 并把两个新目录登记进 `directoryManifest` + `MANIFEST_PIN`（同时仍需把新包对 `mcp-gateway`/`providers`/`websocket` 的出边搬走以离开 SCC——这是一次新的、要授权的棘轮放宽）；(b) 改变拆分形状（由 `server/index.ts` 组合根注入、类型下沉到 `server/shared`、新包互不 import），但这会扩大 Touches 并改动大量既有 import，且 `index.ts` 转出口仍会产生入边；(c) 放弃本条拆分。
+- 分支状态：`task/gap-mcp-gateway-tool-registration-extract` 已合入最新 develop（merge commit），工作树无未合并路径；未改任何代码。
