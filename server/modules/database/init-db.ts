@@ -1,4 +1,4 @@
-import { getConnection } from "@/modules/database/connection.js";
+import { getConnection } from "@/modules/database/core/index.js";
 import { runMigrations } from "@/modules/database/migrations.js";
 import { INIT_SCHEMA_SQL } from "@/modules/database/schema.js";
 

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 import type { CreateProjectPathResult, ProjectRepositoryRow } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
 

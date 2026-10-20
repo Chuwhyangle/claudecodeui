@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ModelLibraryPanel } from '@/modules/chat';
+import ModelLibraryPanel from '@/shared/ui/ModelLibraryPanel';
 import { api } from '@/shared/api';
 import type {
   AgentProvider,

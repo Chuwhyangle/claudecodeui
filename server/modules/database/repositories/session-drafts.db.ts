@@ -1,4 +1,4 @@
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /**
  * One chat scope's unsent state: the text still in the composer, plus the

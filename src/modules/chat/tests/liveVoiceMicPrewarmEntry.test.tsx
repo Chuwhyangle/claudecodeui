@@ -65,6 +65,9 @@ vi.mock('@/modules/auth', () => ({ useAuth: () => ({ token: null }) }));
 
 vi.mock('@/modules/task-master', () => ({
   useTasksSettings: () => ({ tasksEnabled: false, isTaskMasterInstalled: null }),
+  // ChatInterface hands this to the transcript's empty state; tasksEnabled is false above, so it
+  // is never rendered. The real one reads TaskMasterContext, which these cases do not provide.
+  NextTaskBanner: () => null,
 }));
 
 vi.mock('@/shared/context/WebSocketContext', async (importOriginal) => {

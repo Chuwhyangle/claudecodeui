@@ -6,10 +6,16 @@
  * exactly the coupling that refactor is trying to break (the ledger inlined in the driver,
  * `RESIDENT_RUN_IS_TURN` read from two places). What this criterion does is serialise that
  * structure into one reading that reds on the FIRST commit that widens it, instead of
- * waiting for a behavioural criterion to red in some other shape. It is a ratchet, not a
- * retirement: the three baseline cycles still exist today and this file must NOT assert
- * them away — it asserts they only ever SHRINK, that brand-new directories stay leaves,
- * and that `server/shared` never grows an edge back into `server/modules/**`.
+ * waiting for a behavioural criterion to red in some other shape. It is a ratchet — the
+ * pinned cycles may only ever SHRINK, brand-new directories must stay leaves, and
+ * `server/shared` must never grow an edge back into `server/modules/**`. A group that
+ * genuinely disappears is lowered explicitly in this file and in the baseline JSON; it is
+ * never re-pinned to accommodate a reading.
+ *
+ * G2 WAS RETIRED on 2026-10-20 by `gap-database-connection-directory-cycle`: the
+ * `modules/database` ↔ `modules/database/repositories` two-member cycle was closed by
+ * moving the connection module into the leaf directory `modules/database/core/`. G2 is now
+ * the empty group in both this file and the committed baseline. G1 and G3 are untouched.
  *
  * Every reading comes from the TypeScript SYNTAX TREE (`ts.createSourceFile`), never from
  * grepped text: a comment mentioning `@/modules/...` (there is exactly one, at
@@ -25,13 +31,14 @@
  * from Tarjan.
  *
  * Readings measured on this tree (2026-10-20, TypeScript compiler API, after
- * `gap-server-provider-websocket-init-cycle-ports`):
+ * `gap-server-provider-websocket-init-cycle-ports` on top of
+ * `gap-database-connection-directory-cycle`):
  *
- *   files=332 staticEdges=1303 dynamicEdges=5 sccs=[8,2,2]   (file-level resolved edges)
+ *   files=332 staticEdges=1301 dynamicEdges=5 sccs=[8,2]   (file-level resolved edges)
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
  *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
- *   node count = 48            (the committed `directoryManifest`, incl. `shared/ports`)
+ *   node count = 49            (the committed `directoryManifest`, incl. `shared/ports` and `modules/database/core`)
  *
  * ONE READING DIVERGES FROM THE立案 NOTE, and the divergence is itself pinned (see the `(b)`
  * case). The note expects the static-only and the static+literal-dynamic readings to agree
@@ -73,9 +80,11 @@ const SERVER_DIR = path.join(REPO_ROOT, 'server');
 const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.json');
 
 /**
- * The ratchet pin. The three baseline cycles, spelled out member by member so a widened
- * cycle cannot be blessed by editing the JSON alone (AC (b): "只许缩小，不许新增成员，
- * 不许合并两组"). Lowering one of these is an explicit edit to this constant.
+ * The ratchet pin. The baseline cycles, spelled out member by member so a widened cycle
+ * cannot be blessed by editing the JSON alone (AC (b): "只许缩小，不许新增成员，不许合并两组").
+ * Lowering one of these is an explicit edit to this constant. G2 keeps its slot but is now
+ * EMPTY: `gap-database-connection-directory-cycle` retired the two-member database cycle,
+ * and an empty group is filtered out of the canonical-group comparison.
  */
 const CYCLE_GROUPS: readonly string[][] = [
   [
@@ -88,7 +97,7 @@ const CYCLE_GROUPS: readonly string[][] = [
     'modules/websocket',
     'modules/websocket/services',
   ],
-  ['modules/database', 'modules/database/repositories'],
+  [],
   ['.', 'modules/browser-use'],
 ];
 
@@ -106,6 +115,14 @@ const CYCLE_GROUPS: readonly string[][] = [
  * inbound edge; with it, the directory is a known one and the leaf rule no longer applies to
  * it, while G1/G2/G3 and every other reading stay exactly as pinned. The set the JSON names
  * is still what this pin checks — it is not a licence to add non-leaf directories.
+ *
+ * A SECOND ENTRY WAS ADDED, by `gap-database-connection-directory-cycle` (2026-10-20), under
+ * the same escape hatch: `modules/database/core` is the leaf that task created (it imports
+ * only node builtins and `better-sqlite3`, nothing from `server/`, and sits in no SCC). Its
+ * inbound edges from `modules/database` and `modules/database/repositories` are the mandated
+ * shape of the fix — the cycle disappears precisely because the repositories now import a
+ * sibling leaf instead of their parent package — so the directory is registered as known
+ * rather than left to red the leaf rule's inbound arm.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -116,6 +133,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/cli',
   'modules/commands',
   'modules/database',
+  'modules/database/core',
   'modules/database/repositories',
   'modules/debug-agent',
   'modules/file-tree',

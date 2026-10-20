@@ -1,6 +1,8 @@
 export { default as Settings } from '@/modules/settings/Settings';
-export {
-  readMcpNavigationPolicy,
-  writeMcpNavigationPolicy,
-} from '@/modules/settings/hooks/useMcpNavigationSettings';
-export type { McpNavigationPolicy } from '@/modules/settings/hooks/useMcpNavigationSettings';
+/**
+ * The device policy moved to `shared` because the chat module reads it too, and
+ * the two feature modules may not import each other. Re-exported here so a
+ * settings consumer keeps one import site.
+ */
+export { readMcpNavigationPolicy, writeMcpNavigationPolicy } from '@/shared';
+export type { McpNavigationPolicy } from '@/shared';

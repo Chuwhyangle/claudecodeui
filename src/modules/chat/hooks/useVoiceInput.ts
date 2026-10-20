@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/modules/chat/utils/audioDecode';
+import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/shared/audioDecode';
 import {
   DEFAULT_FLUSH_SILENCE_SEC,
   DEFAULT_KEEP_GAP_SEC,
@@ -29,7 +29,7 @@ import {
   installVoiceClientAsrEngine,
   routeClientAsrSegment,
   type VoiceClientFallbackReason,
-} from '@/modules/chat/audio/voiceClientAsrWorker';
+} from '@/shared/voiceClientAsrWorker';
 import { api, captureRawVoice, effectivePauseCuesDeclaration, transcribeVoice } from '@/shared/api';
 import type { VoiceUploadAddress } from '@/shared/api';
 import {

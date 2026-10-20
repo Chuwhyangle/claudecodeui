@@ -6,7 +6,7 @@
  * credential kinds can coexist in the same table.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 import type {
   CreateCredentialResult,
   CredentialPublicRow,

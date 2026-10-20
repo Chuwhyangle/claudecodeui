@@ -58,7 +58,7 @@ import {
   type WasmEnginePort,
   type WasmEngineRequest,
 } from '@shared/asr/list/sensevoice-wasm/sensevoice-wasm.asr-provider';
-import { decodeVoiceBlob, downsampleVoice, encodeWavBlob, UPLOAD_SAMPLE_RATE } from '@/modules/chat/utils/audioDecode';
+import { decodeVoiceBlob, downsampleVoice, encodeWavBlob, UPLOAD_SAMPLE_RATE } from '@/shared/audioDecode';
 import {
   VOICE_CLIENT_MODEL_CACHE_NAME,
   loadVoiceModel,
@@ -66,7 +66,7 @@ import {
   type VoiceClientModelSpec,
   type VoiceModelCacheEnv,
   type VoiceModelProgress,
-} from '@/modules/chat/utils/voiceModelCache';
+} from '@/shared/voiceModelCache';
 import {
   VOICE_CLIENT_PROBE_VERSION,
   decodeLogits,
