@@ -1,7 +1,7 @@
 ---
 id: gap-live-voice-audio-cues-replace-transient-words
 title: Live Voice 降认知负担：去掉 Connecting/Listening/Starting 瞬态文案，加进入/退出/断开三种非语音音效
-status: todo
+status: ready
 labels:
   - gap
 parent: null
