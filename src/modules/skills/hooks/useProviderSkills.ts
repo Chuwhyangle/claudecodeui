@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/shared/api';
+import { getApiErrorMessage, toResponseJson } from '@/shared/apiResponse';
 import type { ProviderSkill, ProviderSkillCreateEntryPayload, SkillsProject, SkillsProvider, SkillsScope } from '@/shared/types';
 
 type ProviderSkillCreatePayload = {
@@ -49,34 +50,6 @@ const SKILL_SCOPE_ORDER: Record<SkillsScope, number> = {
   project: 3,
   admin: 4,
   system: 5,
-};
-
-const toResponseJson = async <T>(response: Response): Promise<T> => response.json() as Promise<T>;
-
-const getApiErrorMessage = (payload: unknown, fallback: string): string => {
-  if (!payload || typeof payload !== 'object') {
-    return fallback;
-  }
-
-  const record = payload as Record<string, unknown>;
-  const error = record.error;
-  if (error && typeof error === 'object') {
-    const message = (error as Record<string, unknown>).message;
-    if (typeof message === 'string' && message.trim()) {
-      return message;
-    }
-  }
-
-  if (typeof error === 'string' && error.trim()) {
-    return error;
-  }
-
-  const details = record.details;
-  if (typeof details === 'string' && details.trim()) {
-    return details;
-  }
-
-  return fallback;
 };
 
 const isSkillsScope = (value: unknown): value is SkillsScope => (
