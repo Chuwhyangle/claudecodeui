@@ -51,7 +51,7 @@ import WebSocketContext from '@/shared/context/WebSocketContext';
 import { findSessionHostState, useSessionHosts } from '@/shared/hooks/useSessionHosts';
 import type { SessionHostsSnapshot, SessionHostStateView } from '@/shared/types';
 import type { ChatMessage } from '@/shared/types';
-import type { ActivityLiveness } from '@/modules/chat/utils/activityFreshness';
+import type { ActivityLiveness } from '@/modules/chat/utils/session/activityFreshness';
 
 /** One running foreground tool the dock can offer to move to the background. */
 export type ForegroundTool = {

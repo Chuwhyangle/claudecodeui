@@ -6,8 +6,8 @@ import { test } from 'vitest';
 
 import type { ChatMessage, WorkSegment, WorkSegmentListItem } from '@/shared/types';
 import WorkSegmentRecord from '@/modules/chat/transcript/WorkSegmentRecord';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
 
 /**
  * AC-203: a work segment's collapsed state may hide its rows but must not lose

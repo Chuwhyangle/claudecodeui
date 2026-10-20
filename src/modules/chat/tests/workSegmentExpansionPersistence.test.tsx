@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import { UiPreferencesProvider } from '@/shared/context/UiPreferencesContext';
 import enChat from '@/modules/i18n/locales/en/chat.json';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
 import type {
   ChatMessage,
   Project,

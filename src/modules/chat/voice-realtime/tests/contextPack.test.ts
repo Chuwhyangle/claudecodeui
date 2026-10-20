@@ -16,13 +16,8 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import { shouldHideToolResult } from '@/modules/chat/tools';
-import {
-  buildVoiceContextPack,
-  isVoiceContextRow,
-  VOICE_CONTEXT_BUDGET_CHARS,
-  VOICE_CONTEXT_ROW_CAP_CHARS,
-} from '@/modules/chat/utils/voiceContextPack';
-import { isWorkSegmentMember } from '@/modules/chat/utils/workSegments';
+import { buildVoiceContextPack, isVoiceContextRow, VOICE_CONTEXT_BUDGET_CHARS, VOICE_CONTEXT_ROW_CAP_CHARS } from '@/modules/chat/utils/voice/voiceContextPack';
+import { isWorkSegmentMember } from '@/modules/chat/utils/transcript/workSegments';
 import { contextFrame } from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
 import type { ChatMessage } from '@/shared/types';
 

@@ -33,7 +33,7 @@ import {
   PromptInputSubmit,
 } from '@/modules/chat/composer/PromptInput';
 import CommandMenu from '@/modules/chat/composer/CommandMenu';
-import { deriveActivityDockView } from '@/modules/chat/utils/activityDockView';
+import { deriveActivityDockView } from '@/modules/chat/utils/voice/activityDockView';
 import ComposerAttachment from '@/modules/chat/composer/ComposerAttachment';
 import VoiceInputButton, { VoiceFailureNotice } from '@/modules/chat/composer/VoiceInputButton';
 import VoiceUploadButton from '@/modules/chat/composer/VoiceUploadButton';

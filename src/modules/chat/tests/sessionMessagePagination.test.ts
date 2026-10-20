@@ -3,15 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import type { NormalizedMessage } from '@/shared/types';
-import {
-  buildSessionMessagesUrl,
-  findLatestPageOverlapLength,
-  hasReachedCachedTailTimeBoundary,
-  mergeLatestServerPage,
-  mergeOlderServerPage,
-  planLatestPageBridge,
-  resolveLatestPagePagination,
-} from '@/modules/chat/utils/sessionMessagePagination';
+import { buildSessionMessagesUrl, findLatestPageOverlapLength, hasReachedCachedTailTimeBoundary, mergeLatestServerPage, mergeOlderServerPage, planLatestPageBridge, resolveLatestPagePagination } from '@/modules/chat/utils/session/sessionMessagePagination';
 
 function message(
   number: number,

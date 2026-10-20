@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 
 import type { ServerEvent,ChatReplayCursorMap,MarkSessionIdle,MarkSessionProcessing,PendingPermissionRequest,ProjectSession,LLMProvider,NormalizedMessage,CommandLifecycleState } from '@/shared/types';
-import { reconcileReplayCursorOnAck, recordReplayCursor } from '@/modules/chat/utils/replayCursor';
-import { showCompletionTitleIndicator } from '@/modules/chat/utils/pageTitleNotification';
+import { reconcileReplayCursorOnAck, recordReplayCursor } from '@/modules/chat/utils/session/replayCursor';
+import { showCompletionTitleIndicator } from '@/modules/chat/utils/session/pageTitleNotification';
+
 import { applyActivityFrame, readSessionDeliveries } from '@/modules/chat/hooks/useSessionActivity';
 import { playChatCompletionSound, playNotificationSound } from '@/shared/utils';
 import type { SessionStore } from '@/modules/chat/hooks/useSessionStore';

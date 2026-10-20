@@ -147,7 +147,7 @@ async function buildSegmentTurns() {
     console.error('--segments takes exactly one --wav file');
     process.exit(2);
   }
-  const { segmentLive } = await import(new URL('../src/modules/chat/utils/voiceLiveSegmenter.ts', import.meta.url).href);
+  const { segmentLive } = await import(new URL('../src/modules/chat/utils/voice/voiceLiveSegmenter.ts', import.meta.url).href);
   const { StreamingVad } = await import(new URL('../src/shared/voiceEndpoint.ts', import.meta.url).href);
   const { samples, sampleRate, channels } = wavToFloat32(readFileSync(wavFiles[0]));
   if (sampleRate !== 16_000 || channels !== 1) {

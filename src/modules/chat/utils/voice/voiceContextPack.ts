@@ -1,5 +1,5 @@
 import { shouldHideToolResult } from '@/modules/chat/tools';
-import { isWorkSegmentMember } from '@/modules/chat/utils/workSegments';
+import { isWorkSegmentMember } from '@/modules/chat/utils/transcript/workSegments';
 import type { ChatMessage } from '@/shared/types';
 
 /**

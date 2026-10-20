@@ -8,8 +8,8 @@ import {
 } from '@/modules/chat/context/TranscriptRenderContext';
 import MessageComponent from '@/modules/chat/transcript/MessageComponent';
 import WorkSegmentRecord from '@/modules/chat/transcript/WorkSegmentRecord';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
 
 type TranscriptExportDocumentProps = {
   messages: ChatMessage[];

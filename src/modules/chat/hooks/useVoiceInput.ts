@@ -8,20 +8,20 @@ import {
   LiveSegmenter,
   segmentLive,
   type LiveSegment,
-} from '@/modules/chat/utils/voiceLiveSegmenter';
+} from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 import {
   reassembleText,
   runSegmentPipeline,
   type ReassemblyPart,
   type SegmentJob,
   type SegmentOutcome,
-} from '@/modules/chat/utils/voiceSegments';
+} from '@/modules/chat/utils/voice/voiceSegments';
 import {
   buildVoiceLiveReading,
   type VoiceSegmentMetric,
   type VoiceUsage,
-} from '@/modules/chat/utils/voiceLiveReading';
-import { voicePlayer } from '@/modules/chat/utils/voicePlayer';
+} from '@/modules/chat/utils/voice/voiceLiveReading';
+import { voicePlayer } from '@/modules/chat/utils/voice/voicePlayer';
 import { VOICE_FRAME_PROCESSOR_NAME, type VoiceFrameMessage } from '@/modules/chat/audio/voiceFrameProcessor';
 import { voiceFrameProcessorUrl } from '@/modules/chat/audio/voiceFrameProcessorUrl';
 import {

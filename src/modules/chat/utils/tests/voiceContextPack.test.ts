@@ -23,7 +23,7 @@
  * not fit rather than skipping it — which is what "newest-first until it no longer fits" means.
  *
  * THE FALSE FORMS ARE EXECUTED, NOT DESCRIBED. Section 3 writes a mutated copy of
- * `src/modules/chat/utils/voiceContextPack.ts` beside the suite and imports it: one arm turns the
+ * `src/modules/chat/utils/voice/voiceContextPack.ts` beside the suite and imports it: one arm turns the
  * budget check off (超预算时不截断), the other drops tool rows from the work-row exclusion (把工具
  * 调用/结果放进 pack). Each control runs the SAME reading through both arms — the mutated module and
  * the shipped one — so it cannot pass by being red for some unrelated reason, and both variants are
@@ -38,14 +38,9 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, test } from 'vitest';
 
 import { shouldHideToolResult } from '@/modules/chat/tools';
-import {
-  buildVoiceContextPack,
-  isVoiceContextRow,
-  VOICE_CONTEXT_BUDGET_CHARS,
-  VOICE_CONTEXT_ROW_CAP_CHARS,
-  type VoiceContextPack,
-} from '@/modules/chat/utils/voiceContextPack';
-import { groupWorkSegments, isWorkSegmentMember } from '@/modules/chat/utils/workSegments';
+import { buildVoiceContextPack, isVoiceContextRow, VOICE_CONTEXT_BUDGET_CHARS, VOICE_CONTEXT_ROW_CAP_CHARS } from '@/modules/chat/utils/voice/voiceContextPack';
+import type { VoiceContextPack } from '@/modules/chat/utils/voice/voiceContextPack';
+import { groupWorkSegments, isWorkSegmentMember } from '@/modules/chat/utils/transcript/workSegments';
 import type { ChatMessage } from '@/shared/types';
 
 /** The clock every case reads against, so a `刚刚` in the rendered line is a constant. */
@@ -55,7 +50,7 @@ const NOW = Date.parse('2026-10-10T12:00:00.000Z');
 const FRESH = new Date(NOW - 60_000).toISOString();
 
 /** The source of the module under test, read for the same-source and no-turn-count criteria. */
-const MODULE_PATH = path.resolve(process.cwd(), 'src/modules/chat/utils/voiceContextPack.ts');
+const MODULE_PATH = path.resolve(process.cwd(), 'src/modules/chat/utils/voice/voiceContextPack.ts');
 const TESTS_DIR = path.resolve(process.cwd(), 'src/modules/chat/utils/tests');
 
 // ── 1. The filter, judged against the transcript's own rules on one fixture batch ─────────────
@@ -302,7 +297,7 @@ test('① the pack READS the two predicates rather than restating them', () => {
   // quietly inlined would leave every reading above green.
   const source = readFileSync(MODULE_PATH, 'utf8');
   assert.match(source, /import \{ shouldHideToolResult \} from '@\/modules\/chat\/tools';/);
-  assert.match(source, /import \{ isWorkSegmentMember \} from '@\/modules\/chat\/utils\/workSegments';/);
+  assert.match(source, /import \{ isWorkSegmentMember \} from '@\/modules\/chat\/utils\/transcript\/workSegments';/);
   assert.match(source, /isWorkSegmentMember\(message\)/);
 });
 

@@ -26,8 +26,10 @@ import {
   segmentedRelayOffer,
   type VoiceRealtimeSegmentAck,
 } from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
-import { buildVoiceContextPack } from '@/modules/chat/utils/voiceContextPack';
-import { createLiveSegmenter, type LiveSegment, type LiveSegmenter } from '@/modules/chat/utils/voiceLiveSegmenter';
+import { buildVoiceContextPack } from '@/modules/chat/utils/voice/voiceContextPack';
+import { createLiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
+import type { LiveSegment, LiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
+
 import { voiceRealtimeSocketUrl } from '@/shared/api';
 import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';

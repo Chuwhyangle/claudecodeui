@@ -11,22 +11,14 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/shared/api';
 import type { CommandLifecycleState, DeliveryView, LLMProvider, NormalizedMessage, SessionMessagesQuery, SessionTurnOutline } from '@/shared/types';
-import { createLiveRowId, isLiveRowId } from '@/modules/chat/utils/liveRowIdentity';
-import { removeOptimisticUserEchoes } from '@/modules/chat/utils/sessionMessageReconciliation';
-import { messageAnchorId } from '@/modules/chat/utils/messageKeys';
-import {
-  hasReachedCachedTailTimeBoundary,
-  mergeLatestServerPage,
-  mergeOlderServerPage,
-  messagesRepresentSamePersistedRow,
-  planLatestPageBridge,
-  resolveLatestPagePagination,
-  SESSION_MESSAGES_PAGE_SIZE,
-} from '@/modules/chat/utils/sessionMessagePagination';
-import type { SessionMessagesRequestOptions } from '@/modules/chat/utils/sessionMessagePagination';
+import { createLiveRowId, isLiveRowId } from '@/modules/chat/utils/transcript/liveRowIdentity';
+import { messageAnchorId } from '@/modules/chat/utils/transcript/messageKeys';
+import { removeOptimisticUserEchoes } from '@/modules/chat/utils/session/sessionMessageReconciliation';
+import { hasReachedCachedTailTimeBoundary, mergeLatestServerPage, mergeOlderServerPage, messagesRepresentSamePersistedRow, planLatestPageBridge, resolveLatestPagePagination, SESSION_MESSAGES_PAGE_SIZE } from '@/modules/chat/utils/session/sessionMessagePagination';
+
+import type { SessionMessagesRequestOptions } from '@/modules/chat/utils/session/sessionMessagePagination';
 
 // ─── NormalizedMessage (mirrors server/adapters/types.js) ────────────────────
-
 
 // ─── Per-session slot ────────────────────────────────────────────────────────
 

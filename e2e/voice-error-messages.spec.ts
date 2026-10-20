@@ -784,7 +784,7 @@ test.afterAll(async () => {
   );
   console.log(
     `[voice-error] vocabulary: runtime constant ASR_ERROR_CODES (@shared/asr/asrRegistry), read through `
-      + `voiceErrorKey in src/modules/chat/utils/voiceErrorMessages.ts; voice.errors keys read off the shipped `
+      + `voiceErrorKey in src/modules/chat/utils/voice/voiceErrorMessages.ts; voice.errors keys read off the shipped `
       + `zh-CN file = [${Object.keys(ZH_CHAT.voice.errors).join(',')}]; close control reuses the i18n key `
       + `common.buttons.close ("${UI.close}"); the technical detail is a <details>/<summary> whose summary `
       + `carries a literal aria-label (no locale key names a disclosure) and whose <pre> is mounted only while `

@@ -15,9 +15,11 @@ import { api } from '@/shared/api';
 import { PROVIDER_PERMISSION_PREFERENCE_KEYS } from '@/shared/constants';
 import { readUserPreference } from '@/shared/userSettings';
 import type { CommandModalPayload, CostCommandData, HelpCommandData, MarkSessionIdle, MarkSessionProcessing, ModelCommandData, QueuedDraft, ServerEvent, SessionActivityMap, StatusCommandData,QueuedSendOptions,ChatAttachment,ChatMessage,PendingPermissionRequest,PermissionMode,SessionEstablishedContext,Project,ProjectSession,LLMProvider,SlashCommand } from '@/shared/types';
-import { grantClaudeToolPermission } from '@/modules/chat/utils/chatPermissions';
-import { createChatSession } from '@/modules/chat/utils/sessionCreation';
-import { createSendDelivery, type SendDelivery } from '@/modules/chat/utils/sendDelivery';
+import { grantClaudeToolPermission } from '@/modules/chat/utils/session/chatPermissions';
+import { createChatSession } from '@/modules/chat/utils/session/sessionCreation';
+import { createSendDelivery } from '@/modules/chat/utils/session/sendDelivery';
+import type { SendDelivery } from '@/modules/chat/utils/session/sendDelivery';
+
 import {
   clearQueuedMessage,
   hydrateChatDrafts,
@@ -27,12 +29,9 @@ import {
   writeDraftText,
   writeQueuedMessage,
 } from '@/shared/chatDrafts';
-import { escapeRegExp } from '@/modules/chat/utils/chatFormatting';
-import {
-  applyVoiceChange,
-  beginVoiceInsertion,
-  type VoiceInsertion,
-} from '@/modules/chat/utils/voiceInsertion';
+import { escapeRegExp } from '@/modules/chat/utils/transcript/chatFormatting';
+import { applyVoiceChange, beginVoiceInsertion } from '@/modules/chat/utils/voice/voiceInsertion';
+import type { VoiceInsertion } from '@/modules/chat/utils/voice/voiceInsertion';
 import { useFileMentions } from '@/modules/chat/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import { useSendOnEnter } from '@/modules/chat/hooks/useSendOnEnter';
@@ -149,11 +148,6 @@ type CommandExecutionResult = {
   hasFileIncludes?: boolean;
 };
 
-
-
-
-
-
 const createFakeSubmitEvent = () => {
   return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
 };
@@ -189,7 +183,6 @@ const uploadAttachmentFiles = async (files: File[]): Promise<unknown[]> => {
   }
   return result.attachments;
 };
-
 
 const restoreQueuedDraft = (sessionKey: string): QueuedDraft | null => {
   const saved = readQueuedMessage(sessionKey);

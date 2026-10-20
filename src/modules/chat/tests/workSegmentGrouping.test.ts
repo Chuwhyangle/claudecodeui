@@ -7,8 +7,8 @@ import {
   RESIDENT_PENDING_MESSAGE_TYPE,
   UNATTENDED_DIVIDER_MESSAGE_TYPE,
 } from '@/modules/chat/hooks/useChatMessages';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
 
 /**
  * AC-202: the work-segment selector's boundaries are a pure function of a row's

@@ -40,7 +40,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ActivityScheduleView, ActivityTaskView } from '@/shared/types';
-import type { ActivityLiveness } from '@/modules/chat/utils/activityFreshness';
+import type { ActivityLiveness } from '@/modules/chat/utils/session/activityFreshness';
 import { selectActiveTasks, useSessionActivity } from '@/modules/chat/hooks/useSessionActivity';
 import {
   useActivityControls,

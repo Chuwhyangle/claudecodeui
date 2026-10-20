@@ -8,7 +8,7 @@ import {
   type UseUiStateResponderDeps,
 } from '@/modules/chat/hooks/useUiStateResponder';
 import LazyMessageRow from '@/modules/chat/transcript/LazyMessageRow';
-import { messageAnchorId } from '@/modules/chat/utils/messageKeys';
+import { messageAnchorId } from '@/modules/chat/utils/transcript/messageKeys';
 import { getDeviceId, getTabId } from '@/shared/utils/deviceIdentity';
 import type { ChatMessage, ServerEvent } from '@/shared/types';
 

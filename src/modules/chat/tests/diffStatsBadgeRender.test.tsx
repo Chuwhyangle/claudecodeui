@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import ToolGroupContainer from '@/modules/chat/transcript/ToolGroupContainer';
 import { ToolRenderer } from '@/modules/chat/tools/ToolRenderer';
-import { createCachedDiffCalculator } from '@/modules/chat/utils/messageTransforms';
+import { createCachedDiffCalculator } from '@/modules/chat/utils/transcript/messageTransforms';
 import type { ChatMessage, ToolGroupItem } from '@/shared/types';
 
 const createDiff = createCachedDiffCalculator();

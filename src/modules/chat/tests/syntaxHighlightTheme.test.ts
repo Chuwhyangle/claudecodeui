@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-import { buildSyntaxTheme } from '@/modules/chat/utils/syntaxHighlightTheme';
-import type { PrismStyleSheet } from '@/modules/chat/utils/syntaxHighlightTheme';
+import { buildSyntaxTheme } from '@/modules/chat/utils/transcript/syntaxHighlightTheme';
+import type { PrismStyleSheet } from '@/modules/chat/utils/transcript/syntaxHighlightTheme';
 
 /**
  * The variable theme must be a lossless re-encoding of the two Prism themes:

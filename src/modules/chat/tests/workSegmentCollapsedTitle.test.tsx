@@ -6,7 +6,7 @@ import { test, vi } from 'vitest';
 import type { ChatMessage, WorkSegment } from '@/shared/types';
 import WorkSegmentRecord from '@/modules/chat/transcript/WorkSegmentRecord';
 import { formatToolDisplayName, getToolConfig } from '@/modules/chat/tools/configs/toolConfigs';
-import { getMemberActionLabel } from '@/modules/chat/utils/workSegmentTitle';
+import { getMemberActionLabel } from '@/modules/chat/utils/transcript/workSegmentTitle';
 
 /**
  * AC-208: the collapsed work-segment header carries three readings — the run's
