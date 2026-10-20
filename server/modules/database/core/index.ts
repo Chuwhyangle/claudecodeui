@@ -16,10 +16,27 @@ import { fileURLToPath } from 'url';
 
 import Database from 'better-sqlite3';
 
-import { APP_CONFIG_TABLE_SCHEMA_SQL } from '@/modules/database/schema.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * DDL for the `app_config` table this module creates eagerly on the first
+ * connection, because the auth middleware reads the JWT secret before
+ * `initializeDatabase()` applies the full schema.
+ *
+ * It lives here rather than in `modules/database/schema.ts` so this package
+ * stays a leaf: importing the parent package back would recreate the
+ * `modules/database <-> modules/database/repositories` cycle through this file.
+ * `schema.ts` re-exports it, so migrations keep importing it from their
+ * existing home and there is still one definition.
+ */
+export const APP_CONFIG_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS app_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+`;
 
 // ---------------------------------------------------------------------------
 // Path resolution

@@ -1,3 +1,5 @@
+import { APP_CONFIG_TABLE_SCHEMA_SQL } from '@/modules/database/core/index.js';
+
 const USER_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,13 +202,9 @@ CREATE TABLE IF NOT EXISTS scan_state (
 );
 `;
 
-export const APP_CONFIG_TABLE_SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS app_config (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-`;
+// Defined by the connection package, which creates this table eagerly before
+// the full schema runs; re-exported here so migrations keep their import site.
+export { APP_CONFIG_TABLE_SCHEMA_SQL };
 
 /**
  * Persistent custom-model library used by the Providers module.
