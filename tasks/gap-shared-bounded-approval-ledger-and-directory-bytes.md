@@ -25,12 +25,12 @@ F10（架构校准报告 2026-10-20）：两族重复——纯函数 `directoryB
 
 ## AC
 
-- [ ] `test "$(grep -rn 'function directoryBytes' server --include='*.ts' | wc -l)" -eq 1`，且该唯一命中位于 `server/shared/fs-bytes.ts`（立案时 2 份）。
-- [ ] `test "$(grep -rn 'const MAX_REMEMBERED_APPROVALS' server --include='*.ts' | wc -l)" -eq 1`：常量的唯一定义在共享账本模块；两个调用方经 import 取用，贴出两处 import 行。
-- [ ] 新增 `server/shared/tests/bounded-approval-ledger.test.ts`，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/bounded-approval-ledger.test.ts` 退出 0；用例至少三条：重复插入把 id 移到最新（读回顺序）、超过 cap 插入淘汰最旧、查询被淘汰 id 返回保守原因（逐字写出三组读数与返回原因文案）。
-- [ ] 两条审批路径的既有判据不改一字仍绿：`files=$(grep -rlE 'rememberHeldApproval|ALREADY_DECIDED|MAX_REMEMBERED_APPROVALS' server/modules/debug-agent/tests server/modules/providers/tests) && test -n "$files" && for f in $files; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0，贴出命中文件清单与各文件 pass 数。
-- [ ] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
+- [x] `test "$(grep -rn 'function directoryBytes' server --include='*.ts' | wc -l)" -eq 1`，且该唯一命中位于 `server/shared/fs-bytes.ts`（立案时 2 份）。
+- [x] `test "$(grep -rn 'const MAX_REMEMBERED_APPROVALS' server --include='*.ts' | wc -l)" -eq 1`：常量的唯一定义在共享账本模块；两个调用方经 import 取用，贴出两处 import 行。
+- [x] 新增 `server/shared/tests/bounded-approval-ledger.test.ts`，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/bounded-approval-ledger.test.ts` 退出 0；用例至少三条：重复插入把 id 移到最新（读回顺序）、超过 cap 插入淘汰最旧、查询被淘汰 id 返回保守原因（逐字写出三组读数与返回原因文案）。
+- [x] 两条审批路径的既有判据不改一字仍绿：`files=$(grep -rlE 'rememberHeldApproval|ALREADY_DECIDED|MAX_REMEMBERED_APPROVALS' server/modules/debug-agent/tests server/modules/providers/tests) && test -n "$files" && for f in $files; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0，贴出命中文件清单与各文件 pass 数。
+- [x] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
@@ -42,6 +42,7 @@ F10（架构校准报告 2026-10-20）：两族重复——纯函数 `directoryB
 - server/shared/bounded-approval-ledger.ts (new)（`MAX_REMEMBERED_APPROVALS`、`createBoundedLedger(cap)` 或 `BoundedApprovalLedger`）
 - server/modules/voice-realtime/voice-realtime-log.ts（删除副本，改为导入）
 - server/modules/voice/voice-data.ts（删除副本，改为导入）
+- server/modules/voice/tests/voice-data.test.ts（测试自带的字节口径改名 `regularFileBytes`，保留独立 oracle，让 `directoryBytes` 唯一命中共享实现）
 - server/modules/debug-agent/debug-agent.provider.ts（审批账本改用共享实现）
 - server/modules/providers/list/claude/claude-runtime.provider.ts（审批账本改用共享实现）
 - server/shared/tests/bounded-approval-ledger.test.ts (new)（三条账本语义判据）
