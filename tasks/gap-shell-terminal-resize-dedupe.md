@@ -1,7 +1,7 @@
 ---
 id: gap-shell-terminal-resize-dedupe
 title: Extract fitAndSendResize in useShellTerminal
-status: ready
+status: done
 labels:
   - gap
 parent: null
