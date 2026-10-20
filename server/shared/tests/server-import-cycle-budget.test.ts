@@ -29,7 +29,7 @@
  *   files=314 staticEdges=1244 dynamicEdges=6 sccs=[11,2,2]   (file-level resolved edges)
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
- *   non-literal dynamic specifiers = 1, in the one named file
+ *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
  *   node count = 46            (the committed `directoryManifest`)
  *
  * ONE READING DIVERGES FROM THE立案 NOTE, and the divergence is itself pinned (see the `(b)`
@@ -42,7 +42,8 @@
  * the dynamic one — plus an explicit `(b) DEVIATION:` line naming the difference, so nobody
  * can later mistake it for a scanner artefact. The file-level edge counts also drifted from the
  * note's 1246/1252 to the measured 1244/1250 (the tree moved five commits on since立案; every
- * structural reading — 46 nodes, 19 unresolved, 1 non-literal, the three exact member sets —
+ * structural reading — 46 nodes, 19 unresolved, 2 non-literal (after the 2026-10-20
+ * named exception for `voice-realtime-tts-local.ts`), the three exact member sets —
  * reproduces exactly).
  *
  * The baseline JSON is a committed artifact and a ratchet: the groups may only shrink, the
@@ -299,7 +300,7 @@ type Baseline = {
   directoryManifest: string[];
   cycleGroups: CycleGroups;
   unresolvedInternalBudget: number;
-  nonLiteralDynamic: { allowedFile: string; maxPerFile: number };
+  nonLiteralDynamic: { allowedFiles: Array<{ file: string; maxPerFile: number }> };
 };
 
 /** Reads and validates the committed baseline — no `any`, every field checked. */
@@ -344,10 +345,20 @@ function readBaseline(): Baseline {
   const nonLiteral = record.nonLiteralDynamic;
   assert.ok(typeof nonLiteral === 'object' && nonLiteral !== null, 'baseline.nonLiteralDynamic must be an object');
   const nonLiteralRecord = nonLiteral as Record<string, unknown>;
-  const allowedFile = nonLiteralRecord.allowedFile;
-  const maxPerFile = nonLiteralRecord.maxPerFile;
-  assert.ok(typeof allowedFile === 'string' && allowedFile.length > 0, 'baseline.nonLiteralDynamic.allowedFile must be a non-empty string');
-  assert.ok(typeof maxPerFile === 'number' && Number.isInteger(maxPerFile) && maxPerFile >= 0, 'baseline.nonLiteralDynamic.maxPerFile must be a non-negative integer');
+  const allowedRaw = nonLiteralRecord.allowedFiles;
+  assert.ok(Array.isArray(allowedRaw) && allowedRaw.length > 0, 'baseline.nonLiteralDynamic.allowedFiles must be a non-empty array');
+  const allowedFiles = allowedRaw.map((entry, index): { file: string; maxPerFile: number } => {
+    assert.ok(typeof entry === 'object' && entry !== null, `baseline.nonLiteralDynamic.allowedFiles[${index}] must be an object`);
+    const row = entry as Record<string, unknown>;
+    const file = row.file;
+    const maxPerFile = row.maxPerFile;
+    assert.ok(typeof file === 'string' && file.length > 0, `baseline.nonLiteralDynamic.allowedFiles[${index}].file must be a non-empty string`);
+    assert.ok(
+      typeof maxPerFile === 'number' && Number.isInteger(maxPerFile) && maxPerFile >= 0,
+      `baseline.nonLiteralDynamic.allowedFiles[${index}].maxPerFile must be a non-negative integer`,
+    );
+    return { file, maxPerFile };
+  });
 
   return {
     measuredAt,
@@ -356,7 +367,7 @@ function readBaseline(): Baseline {
     directoryManifest: stringArray('directoryManifest'),
     cycleGroups: { G1: group('G1'), G2: group('G2'), G3: group('G3') },
     unresolvedInternalBudget: budget,
-    nonLiteralDynamic: { allowedFile, maxPerFile },
+    nonLiteralDynamic: { allowedFiles },
   };
 }
 
@@ -546,12 +557,27 @@ test('(e) the non-literal dynamic import and unresolved-internal budgets hold', 
   const perFile = new Map<string, number>();
   for (const hit of graph.nonLiteralDynamic) perFile.set(hit.file, (perFile.get(hit.file) ?? 0) + 1);
   for (const [file, count] of perFile) console.log(`(e) non-literal dynamic: ${repoRelative(file)} x${count} at lines ${graph.nonLiteralDynamic.filter((hit) => hit.file === file).map((hit) => hit.line).join(',')}`);
-  console.log(`(e) non-literal dynamic total=${graph.nonLiteralDynamic.length} budgetFile=${baseline.nonLiteralDynamic.allowedFile} maxPerFile=${baseline.nonLiteralDynamic.maxPerFile}`);
+  console.log(
+    `(e) non-literal dynamic total=${graph.nonLiteralDynamic.length} ` +
+      `budgetFiles=${baseline.nonLiteralDynamic.allowedFiles.map((entry) => `${entry.file}:${entry.maxPerFile}`).join(',')}`,
+  );
 
-  const allowed = baseline.nonLiteralDynamic.allowedFile.startsWith('server/') ? baseline.nonLiteralDynamic.allowedFile.slice('server/'.length) : baseline.nonLiteralDynamic.allowedFile;
-  const strayFiles = [...perFile.keys()].filter((file) => file !== allowed);
-  assert.deepEqual(strayFiles, [], `non-literal dynamic import() may only appear in ${repoRelative(allowed)} — a stray occurrence is a red even if the total is unchanged`);
-  assert.ok((perFile.get(allowed) ?? 0) <= baseline.nonLiteralDynamic.maxPerFile, `${repoRelative(allowed)} holds ${perFile.get(allowed) ?? 0} non-literal dynamic import()s, over the budget of ${baseline.nonLiteralDynamic.maxPerFile}`);
+  const allowed = new Map(
+    baseline.nonLiteralDynamic.allowedFiles.map((entry) => [
+      entry.file.startsWith('server/') ? entry.file.slice('server/'.length) : entry.file,
+      entry.maxPerFile,
+    ]),
+  );
+  const strayFiles = [...perFile.keys()].filter((file) => !allowed.has(file));
+  assert.deepEqual(
+    strayFiles,
+    [],
+    `non-literal dynamic import() may only appear in ${[...allowed.keys()].map((file) => repoRelative(file)).join(', ')} — a stray occurrence is a red even if the total is unchanged`,
+  );
+  for (const [file, budget] of allowed) {
+    const count = perFile.get(file) ?? 0;
+    assert.ok(count <= budget, `${repoRelative(file)} holds ${count} non-literal dynamic import()s, over the budget of ${budget}`);
+  }
 
   console.log(`(e) unresolved internal=${graph.unresolvedInternal.length} budget=${baseline.unresolvedInternalBudget}`);
   for (const hit of graph.unresolvedInternal) console.log(`(e) unresolved ${repoRelative(hit.file)}:${hit.line} ${hit.specifier}`);
