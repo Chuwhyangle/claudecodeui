@@ -498,3 +498,4 @@
 1782	server/modules/voice-realtime/tests/voice-realtime-announce-phrases.test.ts
 1504	server/modules/voice-realtime/tests/voice-realtime-tts-cache.test.ts
 2072	server/modules/providers/tests/claude-transcript-format.test.ts
+2261	server/shared/tests/bounded-approval-ledger.test.ts
