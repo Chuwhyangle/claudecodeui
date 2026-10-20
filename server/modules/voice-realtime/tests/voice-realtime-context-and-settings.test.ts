@@ -278,6 +278,60 @@ test('announcePhrases: an invalid value falls back to the shipped table and is r
   }
 });
 
+// ── the settings file's `runEndAck` and `summaryModel`: the run-end knobs as deployment config ────
+//
+// The second batch of the env-to-file migration. The environment names stay (they are the escape
+// hatch, and `voice-realtime-run-end-summary.test.ts` still pins those arms); these readings pin what
+// the FILE contributes — the values the assembly point merges as `env > file > default`.
+
+test('runEndAck: a settings file names the confirmation table, split on `|`', () => {
+  const loaded = readSettings({ runEndAck: ' 甲收到 | 乙在办 |' }, (settings) => settings);
+  assert.deepEqual(loaded.problems, [], 'a valid table must not be refused');
+  assert.equal(loaded.source, 'file', 'the reading comes from the file, not the fallback');
+  assert.deepEqual(loaded.runEndAck, ['甲收到', '乙在办'], 'the file\'s candidates are the table the transition speaks');
+});
+
+test('runEndAck: no key — or a blank table — means "the file said nothing"', () => {
+  const missing = readSettings({}, (settings) => settings);
+  assert.deepEqual(missing.problems, [], 'omitting the key is not a refusal');
+  assert.deepEqual(missing.runEndAck, [], 'omitting the key is not an override either');
+
+  const blank = readSettings({ runEndAck: '  |  | ' }, (settings) => settings);
+  assert.deepEqual(blank.problems, [], 'a blank table is "said nothing", not a shape error');
+  assert.deepEqual(blank.runEndAck, [], 'no candidate means the assembly point falls through to no ack');
+});
+
+test('runEndAck: a non-string value is refused and the reading falls back', () => {
+  for (const invalid of [42, ['好的', '收到'], { candidates: '好的' }]) {
+    const loaded = readSettings({ runEndAck: invalid }, (settings) => settings);
+    assert.deepEqual(loaded.runEndAck, [], `${JSON.stringify(invalid)} must not half-apply`);
+    assert.equal(loaded.source, 'default', 'a refused value refuses the reading, as every shape error here does');
+    assert.match(loaded.problems.join('; '), /runEndAck/, 'the reason must NAME the key it refused');
+  }
+});
+
+test('summaryModel: a settings file names the side text model', () => {
+  const loaded = readSettings({ summaryModel: '  qwen-flash  ' }, (settings) => settings);
+  assert.deepEqual(loaded.problems, []);
+  assert.equal(loaded.source, 'file');
+  assert.equal(loaded.summaryModel, 'qwen-flash', 'surrounding whitespace is not part of a model id');
+});
+
+test('summaryModel: no key means null — the file said nothing, not "no model"', () => {
+  const loaded = readSettings({}, (settings) => settings);
+  assert.deepEqual(loaded.problems, []);
+  assert.equal(loaded.summaryModel, null, 'null is what lets the environment (then the stand-in) decide');
+});
+
+test('summaryModel: a blank or non-string value is refused and reported', () => {
+  for (const invalid of ['', '   ', 7, null, ['qwen-flash']]) {
+    const loaded = readSettings({ summaryModel: invalid }, (settings) => settings);
+    assert.equal(loaded.summaryModel, null, `${JSON.stringify(invalid)} must not half-apply`);
+    assert.equal(loaded.source, 'default', 'a refused value refuses the reading');
+    assert.match(loaded.problems.join('; '), /summaryModel/, 'the reason must NAME the key it refused');
+  }
+});
+
 test('the resolution is logged with the source it came from', () => {
   // The DoD's line: not just the number, but WHICH of the three sources set it — "800" means something
   // different shipped, tuned in a file, or exported for one run.

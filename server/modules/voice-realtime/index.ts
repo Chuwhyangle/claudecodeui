@@ -379,10 +379,12 @@ export {
   resolveAnnouncePhrases,
   type AnnouncePhraseResolution,
 } from './voice-realtime-announce-phrases.js';
-// The settings file's loader. `server/index.ts` reads it ONCE per connection at assembly so the TTS
-// cache warms the same `announcePhrases` table the proxy's announce gate speaks; the proxy reads it
-// again for the per-connection instructions. Kept on the barrel because the composition root is
-// outside this module and must not deep-import it.
+// The settings file's loader. `server/index.ts` reads it ONCE per connection at assembly: the TTS
+// cache warms the same `announcePhrases` table the proxy's announce gate speaks, and the run-end
+// `summaryModel` / `runEndAck` keys are read from that same reading (environment > file > default,
+// with the environment kept as the escape hatch). The proxy reads it again for the per-connection
+// instructions. Kept on the barrel because the composition root is outside this module and must not
+// deep-import it.
 export { loadVoiceRealtimeSettings, type VoiceRealtimeSettings } from './voice-realtime-settings.js';
 export {
   DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES,

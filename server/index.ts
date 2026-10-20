@@ -670,6 +670,15 @@ const buildVoiceRealtimeSeams = (input: {
             input.log?.(note);
         }
     }
+    // THE SETTINGS FILE, READ ONCE PER CONNECTION (2026-10-20). The run-end confirmation, the
+    // summary model and the announce table all come from this ONE reading, so a connection cannot
+    // take one knob from a file and another from a stale second read — and the TTS cache below
+    // warms the exact table the proxy's announce gate will speak. `env > file > default` is applied
+    // by each consumer below; this loader only reports what the file said (`null`/`[]` = it said
+    // nothing), which is what keeps the environment the escape hatch rather than a deleted knob.
+    const voiceRealtimeSettings = loadVoiceRealtimeSettings({
+        baseInstructions: voiceRealtimeInstructionsFor(closingTurn.closingTurn),
+    });
     // THE NARRATOR (GOAL-047). The announce closing turn's remark and the run-end summary are spoken
     // through one per-connection queue; `buildVoiceRealtimeNarratorWiring` hands the proxy the `attach`
     // seam and, when a producer is named, the summary producer. `null` means this deployment has no
@@ -678,17 +687,24 @@ const buildVoiceRealtimeSeams = (input: {
     // THE RUN-END SUMMARY HAS TWO SOURCES, resolved in this order:
     //   · `VOICE_REALTIME_SUMMARY_MODEL` set → the side text model leaf below (a REAL producer); the
     //     variable's value names the model, the credential is the user's Live Voice DashScope key;
+    //   · else the settings file's `summaryModel` → the same leaf, so the file is now the PRIMARY
+    //     knob and the environment the escape hatch (`env > file > default`);
     //   · else `VOICE_REALTIME_SUMMARY_STANDIN` set → that fixed sentence (the backward-compatible
     //     arm, reported because it changes what the narrator says without a credential);
     //   · neither → no summary producer at all (the shipped state).
-    const summaryModel = (process.env[VOICE_REALTIME_SUMMARY_MODEL_ENV] ?? '').trim();
+    const envSummaryModel = (process.env[VOICE_REALTIME_SUMMARY_MODEL_ENV] ?? '').trim();
+    const summaryModel =
+        envSummaryModel !== '' ? envSummaryModel : (voiceRealtimeSettings.summaryModel ?? '');
     const summaryStandin = summaryModel === '' ? resolveVoiceRealtimeSummaryStandin(process.env) : null;
     const summaryStandinNote = describeVoiceRealtimeSummaryStandin(summaryStandin);
     if (summaryStandinNote !== null) {
         input.log?.(summaryStandinNote);
     }
     if (summaryModel !== '') {
-        input.log?.(`run-end summary: ${VOICE_REALTIME_SUMMARY_MODEL_ENV}=${summaryModel} — the narrator asks the side text model`);
+        const source = envSummaryModel !== '' ? 'the environment' : 'the settings file';
+        input.log?.(
+            `run-end summary: model ${summaryModel} from ${source} — the narrator asks the side text model`,
+        );
     }
     // THE TTS DOWNLINK (GOAL-047 / AC-408). The narrator's text is SPEECH, not just display: every
     // sentence the queue starts is synthesized by the Qwen3-TTS leaf and streamed to the page as
@@ -719,14 +735,16 @@ const buildVoiceRealtimeSeams = (input: {
               ? null
               : async () => summaryStandin;
     // THE RUN-END ACK (2026-10-20). The transition speaks one fixed confirmation immediately, then
-    // the summary follows through the same queue. `|`-separated candidates; unset/empty means no ack
-    // (the pre-ack wire). Independent of the summary producer above, so an ack-only deployment still
-    // keeps the narrator wiring alive.
-    const runEndAckCandidates = resolveVoiceRealtimeRunEndAckCandidates(process.env);
+    // the summary follows through the same queue. `|`-separated candidates from `VOICE_REALTIME_RUN_END_ACK`
+    // (the escape hatch) or the settings file's `runEndAck` (the primary knob); both blank means no
+    // ack (the pre-ack wire). Independent of the summary producer above, so an ack-only deployment
+    // still keeps the narrator wiring alive.
+    const envRunEndAckCandidates = resolveVoiceRealtimeRunEndAckCandidates(process.env);
+    const runEndAckCandidates =
+        envRunEndAckCandidates.length > 0 ? envRunEndAckCandidates : voiceRealtimeSettings.runEndAck;
     if (runEndAckCandidates.length > 0) {
-        input.log?.(
-            `run-end ack: ${VOICE_REALTIME_RUN_END_ACK_ENV} names ${runEndAckCandidates.length} candidate(s)`,
-        );
+        const source = envRunEndAckCandidates.length > 0 ? 'the environment' : 'the settings file';
+        input.log?.(`run-end ack: ${runEndAckCandidates.length} candidate(s) from ${source}`);
     }
     const narratorWiring = buildVoiceRealtimeNarratorWiring({
         closingTurn: closingTurn.closingTurn,
@@ -753,12 +771,10 @@ const buildVoiceRealtimeSeams = (input: {
     // or failed entry simply falls back to the on-the-spot path, so the cache adds no failure mode.
     //
     // THE TABLE COMES FROM THE SETTINGS FILE (2026-10-20), not from the compiled-in constant: this is
-    // the SAME resolution the proxy performs at the top of the connection, so a deployment's
-    // `announcePhrases` override is both what is spoken and what is warmed. Reading it here rather
-    // than importing the default table is what keeps the two legs from drifting apart.
-    const announcePhrases = loadVoiceRealtimeSettings({
-        baseInstructions: voiceRealtimeInstructionsFor(closingTurn.closingTurn),
-    }).announcePhrases;
+    // the SAME reading taken at the top of this assembly (one file read per connection), so a
+    // deployment's `announcePhrases` override is both what is spoken and what is warmed. Reading it
+    // here rather than importing the default table is what keeps the two legs from drifting apart.
+    const announcePhrases = voiceRealtimeSettings.announcePhrases;
     const ttsCache =
         narratorWiring === null || ttsLocalEnabled
             ? null

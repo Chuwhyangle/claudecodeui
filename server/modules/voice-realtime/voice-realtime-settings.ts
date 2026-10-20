@@ -15,8 +15,8 @@
  * it, because the Realtime model's behaviour is the thing being tuned and a mid-session swap makes
  * the change unattributable.
  *
- * THE KEY SET. Six top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly as
- * it always has been, rather than refused:
+ * THE KEY SET. Eight top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly
+ * as it always has been, rather than refused:
  *
  *   · `version`         — a non-empty string, logged beside every injection so an edit is visible.
  *   · `instructions`    — the relay prompt, a non-empty string.
@@ -45,6 +45,18 @@
  *                         variable, so the file is the only knob (the first key of the deployment-knob
  *                         migration away from env). A refused value leaves the shipped table in place
  *                         and puts the reason in `problems`, like every other shape error here.
+ *   · `runEndAck`       — the run-end confirmation's candidate sentences, in the same
+ *                         `|`-separated syntax (`"好的|收到"`), parsed by the SAME splitter the
+ *                         `VOICE_REALTIME_RUN_END_ACK` environment variable uses. An empty table
+ *                         means "the file said nothing", which lets the assembly point fall through
+ *                         to the environment and then to no ack at all. This key and `summaryModel`
+ *                         are the second batch of the env-to-file migration: the environment names
+ *                         stay as escape hatches (environment > file > default), not as deletions.
+ *   · `summaryModel`    — the side text model the run-end summary asks, a non-empty string (e.g.
+ *                         `"qwen-flash"`). `null` means "the file said nothing", so the assembly
+ *                         point falls through to `VOICE_REALTIME_SUMMARY_MODEL` and then to no real
+ *                         producer (the stand-in arm). A blank or non-string value is a shape error
+ *                         and puts the reason in `problems`.
  *
  * FAIL OPEN ON I/O, FAIL CLOSED ON SHAPE. A missing, unreadable or unparseable file falls back to
  * the shipped defaults with the reason in {@link VoiceRealtimeSettings.problems}; a file that
@@ -62,6 +74,7 @@ import {
   ANNOUNCE_PHRASES,
   resolveAnnouncePhrases,
 } from './voice-realtime-announce-phrases.js';
+import { splitVoiceRealtimeRunEndAckCandidates } from './voice-realtime-narrator.js';
 import {
   OMISSION_FILL_NUMERAL_MODES,
   type OmissionFillNumeralMode,
@@ -169,6 +182,19 @@ export type VoiceRealtimeSettings = {
    * one connection speak and pre-synthesize the SAME table.
    */
   announcePhrases: readonly string[];
+  /**
+   * The run-end confirmation's candidate sentences, from the file's `runEndAck` (`|`-separated), or
+   * `[]` when the file named none. `server/index.ts` reads it at assembly and falls through to
+   * `VOICE_REALTIME_RUN_END_ACK` (and then to no ack) on an empty table, so "the file said nothing"
+   * stays distinguishable from a deployment that configured an ack.
+   */
+  runEndAck: readonly string[];
+  /**
+   * The side text model the run-end summary asks, from the file's `summaryModel`, or `null` when the
+   * file named none. `server/index.ts` falls through to `VOICE_REALTIME_SUMMARY_MODEL` (and then to
+   * no real producer) on `null`, so the file never silently turns a real summary into a stand-in.
+   */
+  summaryModel: string | null;
   /** The compiled-in values, or the file's. */
   source: VoiceRealtimeSettingsSource;
   /** The file's own `version`, logged beside every injection so an edit is visible in the log. */
@@ -190,6 +216,8 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
   turnDetection: TurnDetectionValues;
   omissionFill: VoiceRealtimeOmissionFill | null;
   announcePhrases: readonly string[];
+  runEndAck: readonly string[];
+  summaryModel: string | null;
 } {
   return {
     instructions: baseInstructions,
@@ -202,6 +230,10 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
     // No file, no table override: the shipped announce sentences are what a connection speaks and
     // what the TTS cache pre-synthesizes.
     announcePhrases: ANNOUNCE_PHRASES,
+    // No file, no ack: the assembly point falls through to the environment and then to silence.
+    runEndAck: [],
+    // No file, no model: the assembly point falls through to the environment, then to no producer.
+    summaryModel: null,
   };
 }
 
@@ -415,6 +447,31 @@ export function loadVoiceRealtimeSettings(options: {
     problems.push(...resolved.problems);
   }
 
+  // The run-end confirmation's table. The file and the `VOICE_REALTIME_RUN_END_ACK` environment
+  // variable use the SAME splitter, so a deployment moving a table from `.env` into this file gets
+  // the same sentences. An empty table is not a refusal: it is "the file said nothing", and the
+  // assembly point falls through to the environment. A non-string is a shape error like any other.
+  let runEndAck: readonly string[] = defaults.runEndAck;
+  if (record.runEndAck !== undefined) {
+    if (typeof record.runEndAck !== 'string') {
+      problems.push('`runEndAck` must be a `|`-separated string');
+    } else {
+      runEndAck = splitVoiceRealtimeRunEndAckCandidates(record.runEndAck);
+    }
+  }
+
+  // The side text model's id. `null`/absent is "the file said nothing" (fall through to the
+  // environment); a non-string or a blank string is a shape error, because a model id that trims to
+  // nothing would otherwise be indistinguishable from a key the operator forgot to set.
+  let summaryModel: string | null = defaults.summaryModel;
+  if (record.summaryModel !== undefined) {
+    if (typeof record.summaryModel !== 'string' || record.summaryModel.trim() === '') {
+      problems.push('`summaryModel` must be a non-empty string');
+    } else {
+      summaryModel = record.summaryModel.trim();
+    }
+  }
+
   // The shape of the block is a contract, not a preference: the pack has to reach the model, and a
   // template that never mentions the variable — or mentions one nobody defined — would either drop
   // the pack or send the model a literal `{{something}}`.
@@ -430,7 +487,7 @@ export function loadVoiceRealtimeSettings(options: {
   if (problems.length > 0) {
     return { ...defaults, source: 'default', version, path: filePath, problems };
   }
-  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, source: 'file', version, path: filePath, problems: [] };
+  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, runEndAck, summaryModel, source: 'file', version, path: filePath, problems: [] };
 }
 
 /**

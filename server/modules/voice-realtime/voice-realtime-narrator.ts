@@ -46,7 +46,9 @@ import type {
  * The environment variable that names the run-end confirmation's candidate sentences.
  *
  * Read by `server/index.ts` at its assembly point and resolved here. Unset or blank means no ack at
- * all — the pre-ack wire, byte for byte.
+ * all — the pre-ack wire, byte for byte. This is the ESCAPE HATCH, not the primary knob: the
+ * settings file's `runEndAck` key is where a deployment configures the table, and a non-empty value
+ * here overrides it (environment > file > off).
  */
 export const VOICE_REALTIME_RUN_END_ACK_ENV = 'VOICE_REALTIME_RUN_END_ACK';
 
@@ -73,20 +75,37 @@ export type VoiceRealtimeNarratorWiring = {
 };
 
 /**
+ * Splits ONE `|`-separated ack table into its candidate sentences.
+ *
+ * Pure and total: empty segments between separators are dropped, so a trailing `|` cannot put an
+ * empty utterance on the queue, and a blank table answers `[]` (no ack). This is the ONE splitter:
+ * `voice-realtime-settings.ts` parses the file's `runEndAck` key with it and
+ * {@link resolveVoiceRealtimeRunEndAckCandidates} parses the environment escape hatch with it, so
+ * the two sources cannot disagree about what a table means.
+ *
+ * Consumers: `voice-realtime-settings.ts` (the file key) and
+ * {@link resolveVoiceRealtimeRunEndAckCandidates} (the environment key).
+ */
+export function splitVoiceRealtimeRunEndAckCandidates(raw: string): string[] {
+  return raw
+    .split('|')
+    .map((candidate) => candidate.trim())
+    .filter((candidate) => candidate !== '');
+}
+
+/**
  * Splits the configured ack string into its candidate sentences.
  *
- * Pure and total: unset or blank answers `[]`, and empty segments between separators are dropped so
- * a trailing `|` cannot put an empty utterance on the queue. Consumed by `server/index.ts`.
+ * Pure and total: unset or blank answers `[]`. The parsing itself lives in
+ * {@link splitVoiceRealtimeRunEndAckCandidates}, shared with the settings file's `runEndAck` key.
+ * Consumed by `server/index.ts`.
  */
 export function resolveVoiceRealtimeRunEndAckCandidates(
   env: Readonly<Record<string, string | undefined>>,
 ): string[] {
   const raw = env[VOICE_REALTIME_RUN_END_ACK_ENV];
   if (raw === undefined) return [];
-  return raw
-    .split('|')
-    .map((candidate) => candidate.trim())
-    .filter((candidate) => candidate !== '');
+  return splitVoiceRealtimeRunEndAckCandidates(raw);
 }
 
 /**
