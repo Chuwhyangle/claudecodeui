@@ -29,6 +29,12 @@ import {
   truncateSubagentActivity,
 } from '@/shared/utils.js';
 import { sessionsDb } from '@/modules/database/index.js';
+import {
+  buildLocalCommandDisplayText,
+  extractTaggedContent,
+  isInternalContent,
+  parseLocalCommandPayload,
+} from '@/modules/providers/list/claude/claude-transcript-format.js';
 import { summarizeClaudeTokenUsage } from '@/modules/providers/services/provider-token-usage.service.js';
 import { takeHistoryLoadContext } from '@/modules/providers/services/session-history-cache.service.js';
 
@@ -904,45 +910,6 @@ async function getSessionMessages(
 }
 
 /**
- * Claude writes a mix of truly internal transcript rows and "UI-hidden" local
- * command artifacts into the same JSONL stream.
- *
- * Important distinction:
- * - system reminders / caveats / interruption banners should stay hidden
- * - local command payloads (`<command-name>...`) and stdout wrappers
- *   (`<local-command-stdout>...`) should be remapped into normal chat messages
- *   instead of being discarded as internal content
- *
- * Skill bodies belong in the first group. When a skill is invoked, Claude
- * injects the entire SKILL.md as a synthetic user turn. Persisted transcripts
- * tag it `isMeta: true`, but the live SDK stream does not, so without a
- * content-level check the same payload renders as a huge user bubble during the
- * run and then vanishes on reload. The skill is already represented by the
- * `Skill` tool call, so it is never user-visible content.
- */
-const INTERNAL_CONTENT_PREFIXES = [
-  '<system-reminder>',
-  'Caveat:',
-  '[Request interrupted',
-  'Base directory for this skill:',
-] as const;
-
-function isInternalContent(content: string): boolean {
-  return INTERNAL_CONTENT_PREFIXES.some((prefix) => content.startsWith(prefix));
-}
-
-/**
- * Claude wraps local slash-command metadata in lightweight XML-like tags inside
- * a plain string payload. We intentionally parse only the small tag surface we
- * care about instead of introducing a generic XML parser for untrusted history.
- */
-function extractTaggedContent(content: string, tagName: string): string | null {
-  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`<${escapedTagName}>([\\s\\S]*?)<\\/${escapedTagName}>`).exec(content);
-  return match ? match[1] : null;
-}
-
-/**
  * The tag the CLI wraps a message another session sent in.
  *
  * A message delivered by a peer arrives on disk as a `user` row whose content is
@@ -1013,54 +980,6 @@ function readClaudeNotificationOrigin(raw: AnyRecord): MessageOrigin | null {
   }
 
   return { trigger: 'background-task', sender: null };
-}
-
-type ClaudeLocalCommandPayload = {
-  commandName: string;
-  commandMessage: string;
-  commandArgs: string;
-};
-
-/**
- * Converts Claude's hidden local command wrapper into structured metadata.
- *
- * The three tags often coexist in one string payload. Returning `null` lets the
- * normal text path continue untouched for unrelated messages.
- */
-function parseLocalCommandPayload(content: string): ClaudeLocalCommandPayload | null {
-  const commandName = extractTaggedContent(content, 'command-name');
-  const commandMessage = extractTaggedContent(content, 'command-message');
-  const commandArgs = extractTaggedContent(content, 'command-args');
-
-  if (commandName === null && commandMessage === null && commandArgs === null) {
-    return null;
-  }
-
-  return {
-    commandName: commandName ?? '',
-    commandMessage: commandMessage ?? '',
-    commandArgs: commandArgs ?? '',
-  };
-}
-
-/**
- * Produces the short user-visible command string that should appear in chat.
- *
- * We prefer the slash-prefixed command name because that most closely matches
- * what the user actually typed, and only fall back to the message body when the
- * command name is unavailable in older transcript variants.
- */
-function buildLocalCommandDisplayText(payload: ClaudeLocalCommandPayload): string {
-  const commandName = payload.commandName.trim();
-  const commandMessage = payload.commandMessage.trim();
-  const commandArgs = payload.commandArgs.trim();
-  const baseCommand = commandName || commandMessage;
-
-  if (!baseCommand) {
-    return '';
-  }
-
-  return commandArgs ? `${baseCommand} ${commandArgs}` : baseCommand;
 }
 
 /**

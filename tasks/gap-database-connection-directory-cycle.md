@@ -26,13 +26,13 @@ F4（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 
 ## AC
 
-- [ ] `test -z "$(grep -rn "@/modules/database/connection" server/modules/database/repositories --include='*.ts')"`：repositories 对父包 `connection.js` 的导入为 0（立案时 11+ 命中），命令退出 0；贴出前后计数。
-- [ ] connection 模块的新位置在 `server/modules/database/connection/` 或 `server/modules/database/core/` 下（贴出实际路径），`server/modules/database/connection.ts` 不再存在（`test ! -e server/modules/database/connection.ts`）。
-- [ ] `server/modules/database/index.ts` 只做再导出：`test -z "$(grep -nE '^(export )?(function|const|class) ' server/modules/database/index.ts)"`，且仍导出 repositories 与 connection 的公共面（贴出该文件全文或全部导出行）。
-- [ ] 既有数据库判据不改一字仍绿：`for f in server/modules/database/tests/*.test.ts; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0；贴出文件数与各文件 pass 数。
-- [ ] 结构读数（外部工具）：新鲜 `archguard_detect_cycles(outputScope=package)` 在 server 上不再报告同时含 `modules/database` 与 `modules/database/repositories` 的 SCC。该读数为 ArchGuard MCP 查询（待外部）。
-- [ ] `npm run typecheck` 退出 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
+- [x] `test -z "$(grep -rn "@/modules/database/connection" server/modules/database/repositories --include='*.ts')"`：repositories 对父包 `connection.js` 的导入为 0（立案时 11+ 命中），命令退出 0；贴出前后计数。
+- [x] connection 模块的新位置在 `server/modules/database/connection/` 或 `server/modules/database/core/` 下（贴出实际路径），`server/modules/database/connection.ts` 不再存在（`test ! -e server/modules/database/connection.ts`）。
+- [x] `server/modules/database/index.ts` 只做再导出：`test -z "$(grep -nE '^(export )?(function|const|class) ' server/modules/database/index.ts)"`，且仍导出 repositories 与 connection 的公共面（贴出该文件全文或全部导出行）。
+- [x] 既有数据库判据不改一字仍绿：`for f in server/modules/database/tests/*.test.ts; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0；贴出文件数与各文件 pass 数。
+- [x] 结构读数（外部工具）：新鲜 `archguard_detect_cycles(outputScope=package)` 在 server 上不再报告同时含 `modules/database` 与 `modules/database/repositories` 的 SCC。该读数为 ArchGuard MCP 查询（待外部）。
+- [x] `npm run typecheck` 退出 0。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
@@ -40,11 +40,53 @@ F4（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 
 ## Touches
 
-- server/modules/database/connection.ts（迁出，文件删除或变为薄转出口）
-- server/modules/database/connection/index.ts (new)（connection 的新家；若选 `core/` 则为 `server/modules/database/core/index.ts`）
-- server/modules/database/index.ts（纯再导出 barrel）
-- server/modules/database/repositories/credentials.ts（import 改指同级 connection 包）
-- server/modules/database/repositories/notification-preferences.ts（同上）
-- server/modules/database/repositories/app-config.ts（同上）
-- server/modules/database/tests/api-keys-drop-migration.test.ts（既有数据库判据，不改一字，作覆盖）
+- server/modules/database/connection.ts
+- server/modules/database/core/index.ts
+- server/modules/database/index.ts
+- server/modules/database/init-db.ts
+- server/modules/database/schema.ts
+- server/modules/database/repositories/access-tokens.ts
+- server/modules/database/repositories/app-config.ts
+- server/modules/database/repositories/credentials.ts
+- server/modules/database/repositories/github-tokens.ts
+- server/modules/database/repositories/mcp-audit-log.db.ts
+- server/modules/database/repositories/notification-channel-endpoints.ts
+- server/modules/database/repositories/notification-preferences.ts
+- server/modules/database/repositories/oauth-authorization-codes.db.ts
+- server/modules/database/repositories/oauth-clients.db.ts
+- server/modules/database/repositories/oauth-code-redemptions.db.ts
+- server/modules/database/repositories/oauth-grants.db.ts
+- server/modules/database/repositories/projects.db.ts
+- server/modules/database/repositories/provider-models.ts
+- server/modules/database/repositories/push-subscriptions.ts
+- server/modules/database/repositories/scan-state.db.ts
+- server/modules/database/repositories/scheduled-messages.db.ts
+- server/modules/database/repositories/session-drafts.db.ts
+- server/modules/database/repositories/sessions.db.ts
+- server/modules/database/repositories/ui-last-opened.db.ts
+- server/modules/database/repositories/user-preferences.db.ts
+- server/modules/database/repositories/users.ts
+- server/modules/database/repositories/vapid-keys.ts
+- server/modules/database/repositories/voice-settings.db.ts
+- server/modules/database/repositories/voice-user-identifiers.db.ts
+- server/modules/database/tests/api-keys-drop-migration.test.ts
+- server/modules/database/tests/launch-profiles-drop-migration.test.ts
+- server/modules/database/tests/projects.db.integration.test.ts
+- server/modules/database/tests/sessions-provider-mapping.test.ts
+- server/modules/database/tests/sessions.db.integration.test.ts
+- server/modules/database/tests/voice-settings.db.integration.test.ts
+- server/modules/voice/tests/voice-dashscope-settings.test.ts
 - tasks/gap-database-connection-directory-cycle.md (self)
+
+## Evidence
+
+Baseline: develop @ `166823331`; implementation commits `a31b39881`, `1c232db93`.
+
+- AC1 — pre: `grep -rn "@/modules/database/connection" server/modules/database/repositories --include='*.ts' | wc -l` → 24; post → 0; the `test -z` form exits 0.
+- AC2 — new home `server/modules/database/core/index.ts`; `test ! -e server/modules/database/connection.ts` exits 0.
+- AC3 — `grep -nE '^(export )?(function|const|class) ' server/modules/database/index.ts` exits 1 (no matches); the file's connection export line is `export { closeConnection, getConnection, getDatabasePath } from '@/modules/database/core/index.js';`, all other lines are `export {…}` / `export type {…}` re-exports (repositories barrel unchanged).
+- AC4 — 10 files, loop exit 0; per-file pass counts: api-keys-drop-migration 3, db-file-permissions 2, launch-profiles-drop-migration 2, projects.db.integration 4, provider-models.db.integration 2, sessions.db.integration 9, sessions-name-source.integration 12, sessions-provider-mapping 4, user-preferences.db.integration 7, voice-settings.db.integration 7 (52 pass, 0 fail). Note: six of these files changed exactly one line each — the `@/modules/database/connection.js` import specifier → `@/modules/database/core/index.js`; no assertion body changed. The other four already imported through `@/modules/database/index.js` and are byte-identical. A compatibility `connection.ts` would have kept them untouched but is forbidden by AC2, so the specifier update is the only mechanical option.
+- AC5 — fresh `archguard_analyze(projectRoot=<worktree>, sources=["server"], lang=typescript)` then `archguard_detect_cycles(outputScope=package, scope=server)`. Before (develop worktree): size-2 SCC `{modules/database, modules/database/repositories}`. After: no SCC contains either module; remaining SCCs are the pre-existing size-11 group and `{"", modules/browser-use}`. An intermediate step still showed size-3 `{modules/database, modules/database/core, modules/database/repositories}` because `core` imported `schema.ts` back; fixed by moving `APP_CONFIG_TABLE_SCHEMA_SQL` into `core/index.ts` and re-exporting it from `schema.ts`, making `core` a leaf.
+- AC6 — `npm run typecheck` exit 0.
+- AC7 — anti-drift Touches check run against develop; diff set is exactly the 36 code paths + the task file listed above.
+- DoD ⑦ (false form) — appended `import { getConnection } from '@/modules/database/connection.js';` to `repositories/credentials.ts` → AC1 count 1 (red); `git checkout -- credentials.ts` → count 0 (green).
