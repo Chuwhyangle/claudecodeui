@@ -21,6 +21,7 @@ import LazyMessageRow from '@/modules/chat/transcript/LazyMessageRow';
 import MessageComponent from '@/modules/chat/transcript/MessageComponent';
 import PendingResidentMessage from '@/modules/chat/transcript/PendingResidentMessage';
 import ProviderSelectionEmptyState from '@/modules/chat/transcript/ProviderSelectionEmptyState';
+import type { NextTaskBannerComponent } from '@/modules/chat/transcript/ProviderSelectionEmptyState';
 import WorkSegmentRecord from '@/modules/chat/transcript/WorkSegmentRecord';
 import LoadAllMessagesOverlay from '@/modules/chat/transcript/LoadAllMessagesOverlay';
 import { ActivityIndicator } from '@/modules/chat/activity';
@@ -186,6 +187,8 @@ type ChatMessagesPaneProps = {
   tasksEnabled: boolean;
   isTaskMasterInstalled: boolean | null;
   onShowAllTasks?: (() => void) | null;
+  /** The next-task banner, handed in by the caller that owns the task feature — see `ProviderSelectionEmptyState`. */
+  nextTaskBanner?: NextTaskBannerComponent;
   setInput: Dispatch<SetStateAction<string>>;
   /**
    * Whether the selected provider can hold a resident session; the empty state's switch is drawn
@@ -262,6 +265,7 @@ function ChatMessagesPane({
   tasksEnabled,
   isTaskMasterInstalled,
   onShowAllTasks,
+  nextTaskBanner,
   setInput,
   canRunResident = false,
   residentEnabled = false,
@@ -534,6 +538,7 @@ function ChatMessagesPane({
             tasksEnabled={tasksEnabled}
             isTaskMasterInstalled={isTaskMasterInstalled}
             onShowAllTasks={onShowAllTasks}
+            nextTaskBanner={nextTaskBanner}
             setInput={setInput}
             canRunResident={canRunResident}
             residentEnabled={residentEnabled}

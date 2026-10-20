@@ -8,7 +8,6 @@ import type {
   ProviderModelActions,
   ProviderModelsDefinition,
 } from "@/shared/types";
-import { NextTaskBanner } from "@/modules/task-master";
 import {
   Dialog,
   DialogTrigger,
@@ -48,6 +47,20 @@ function modelSearchFilter(value: string, search: string): number {
   return tokens.every((token) => haystack.includes(token)) ? 1 : 0;
 }
 
+/**
+ * The next-task banner's shape, as this empty state uses it.
+ *
+ * The component itself is handed in (`nextTaskBanner`) rather than imported: the banner lives in
+ * task-master, and the transcript package must not depend on that feature — the two would then be
+ * mutually reachable through shell→chat and never separable. `ChatInterface`, which already reads
+ * the task feature's settings, supplies it.
+ */
+export type NextTaskBannerComponent = React.ComponentType<{
+  onStartTask?: (() => void) | null;
+  onShowAllTasks?: (() => void) | null;
+  className?: string;
+}>;
+
 type ProviderSelectionEmptyStateProps = {
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
@@ -78,6 +91,11 @@ type ProviderSelectionEmptyStateProps = {
   residentEnabled: boolean;
   /** Flips `residentEnabled`. This empty state is the switch's only home now. */
   onToggleResident: () => void;
+  /**
+   * Draws the next-task banner above the provider picker. Absent draws nothing —
+   * a standalone render has no task feature to ask.
+   */
+  nextTaskBanner?: NextTaskBannerComponent;
 };
 
 function getModelConfig(
@@ -118,6 +136,7 @@ export default function ProviderSelectionEmptyState({
   canRunResident,
   residentEnabled,
   onToggleResident,
+  nextTaskBanner: NextTaskBanner,
 }: ProviderSelectionEmptyStateProps) {
   const { t } = useTranslation("chat");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -364,7 +383,7 @@ export default function ProviderSelectionEmptyState({
             />
           </p>
 
-          {provider && tasksEnabled && isTaskMasterInstalled && (
+          {provider && tasksEnabled && isTaskMasterInstalled && NextTaskBanner && (
             <div className="mt-5">
               <NextTaskBanner
                 onStartTask={() => setInput(nextTaskPrompt)}
@@ -388,7 +407,7 @@ export default function ProviderSelectionEmptyState({
             {t("session.continue.description")}
           </p>
 
-          {tasksEnabled && isTaskMasterInstalled && (
+          {tasksEnabled && isTaskMasterInstalled && NextTaskBanner && (
             <div className="mt-5">
               <NextTaskBanner
                 onStartTask={() => setInput(nextTaskPrompt)}
