@@ -89,30 +89,12 @@ class FakeWebSocket {
 }
 
 /**
- * The auth session `WebSocketProvider` reads to build the socket URL.
- *
- * `useAuth` is mocked at the module boundary for the socket test only: that case
- * is about the token the provider is HANDED, not about how it obtains one. The
- * positive control renders the real `AuthProvider` through its deep path, which
- * this mock does not touch, and nothing else in that render reads this barrel.
+ * `WebSocketProvider` is handed its auth session as an injected port (it no longer
+ * imports `modules/auth`; see the shared-layer isolation criterion). These socket
+ * cases are about the token the provider is HANDED, so each render below supplies
+ * the session directly. The positive control renders the real `AuthProvider`
+ * through its deep path, which is untouched by this arrangement.
  */
-const session = vi.hoisted(() => ({
-  token: null as string | null,
-}));
-
-vi.mock('@/modules/auth', () => ({
-  useAuth: () => ({
-    isLoading: false,
-    token: session.token,
-    user: session.token ? { id: 1, username: 'criterion' } : null,
-  }),
-}));
-
-// The device name is read when a socket announces itself; nothing here is about
-// it, so it is pinned rather than pulled in with the whole settings module.
-vi.mock('@/modules/settings', () => ({
-  readDeviceName: () => 'Criterion · Linux',
-}));
 
 beforeAll(async () => {
   await i18next.use(initReactI18next).init({
@@ -132,7 +114,6 @@ let token: string;
 beforeEach(() => {
   localStorage.clear();
   FakeWebSocket.instances = [];
-  session.token = null;
   // Capture the real clock FIRST: the token is minted against it, then the page
   // clock the app reads is pushed forward. This ordering is the whole fixture.
   realNow = Date.now();
@@ -187,10 +168,11 @@ test('AC2(i): a token the page clock reads as expired is still handed over and i
 
 test('AC2(ii): the websocket is still opened with that token in its url', () => {
   localStorage.setItem('auth-token', token);
-  session.token = token;
   vi.stubGlobal('WebSocket', FakeWebSocket);
 
-  render(React.createElement(WebSocketProvider, null, null));
+  render(React.createElement(WebSocketProvider, {
+    auth: { isLoading: false, token, user: { id: 1, username: 'criterion' } },
+  }));
 
   const socket = FakeWebSocket.instances.at(-1);
   assert.ok(socket, 'the provider must still open a socket when the page clock reads the token as expired');
@@ -325,9 +307,10 @@ test('AC4: local-clock is a well-formed reason, but the fixed judgement path nev
   localStorage.clear();
   localStorage.setItem('auth-token', token);
   getStoredAuthToken();
-  session.token = token;
   vi.stubGlobal('WebSocket', FakeWebSocket);
-  render(React.createElement(WebSocketProvider, null, null));
+  render(React.createElement(WebSocketProvider, {
+    auth: { isLoading: false, token, user: { id: 1, username: 'criterion' } },
+  }));
 
   assert.equal(
     readBreadcrumb(),

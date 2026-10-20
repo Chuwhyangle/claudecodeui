@@ -8,6 +8,12 @@ import { rgPath } from '@vscode/ripgrep';
 import { isClaudeRequestCaptureRow, stripAnsiSequences } from '@/shared/utils.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { compileStoredSessionFilter } from '@/modules/projects/index.js';
+import {
+  buildLocalCommandDisplayText,
+  extractTaggedContent,
+  isInternalContent,
+  parseLocalCommandPayload,
+} from '@/modules/providers/list/claude/claude-transcript-format.js';
 
 type AnyRecord = Record<string, any>;
 type SearchableProvider = 'claude' | 'codex';
@@ -187,13 +193,6 @@ const UNKNOWN_PROJECT_KEY = '__unknown_project__';
  */
 const DEFAULT_MAX_SCANNED_FILES = 200;
 const DEFAULT_MAX_SCAN_MS = 3_000;
-
-const INTERNAL_CONTENT_PREFIXES = [
-  '<system-reminder>',
-  'Caveat:',
-  'Invalid API key',
-  '[Request interrupted',
-] as const;
 
 /**
  * Codex includes extra internal metadata tags that should not surface as
@@ -398,10 +397,6 @@ function findSessionTitleResults(
     .map(({ matchIndex: _matchIndex, ...result }) => result);
 }
 
-function isInternalContent(content: string): boolean {
-  return INTERNAL_CONTENT_PREFIXES.some((prefix) => content.startsWith(prefix));
-}
-
 function isInternalCodexContent(content: string): boolean {
   const normalized = content.trimStart();
   return CODEX_INTERNAL_CONTENT_PREFIXES.some((prefix) => normalized.startsWith(prefix));
@@ -539,47 +534,6 @@ function extractClaudeText(content: unknown): string {
     .join(' ');
 }
 
-function extractTaggedContent(content: string, tagName: string): string | null {
-  const escapedTagName = tagName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = new RegExp(`<${escapedTagName}>([\\s\\S]*?)<\\/${escapedTagName}>`).exec(content);
-  return match ? match[1] : null;
-}
-
-type ClaudeLocalCommandPayload = {
-  commandName: string;
-  commandMessage: string;
-  commandArgs: string;
-};
-
-function parseClaudeLocalCommandPayload(content: string): ClaudeLocalCommandPayload | null {
-  const commandName = extractTaggedContent(content, 'command-name');
-  const commandMessage = extractTaggedContent(content, 'command-message');
-  const commandArgs = extractTaggedContent(content, 'command-args');
-
-  if (commandName === null && commandMessage === null && commandArgs === null) {
-    return null;
-  }
-
-  return {
-    commandName: commandName ?? '',
-    commandMessage: commandMessage ?? '',
-    commandArgs: commandArgs ?? '',
-  };
-}
-
-function buildClaudeLocalCommandDisplayText(payload: ClaudeLocalCommandPayload): string {
-  const commandName = payload.commandName.trim();
-  const commandMessage = payload.commandMessage.trim();
-  const commandArgs = payload.commandArgs.trim();
-  const baseCommand = commandName || commandMessage;
-
-  if (!baseCommand) {
-    return '';
-  }
-
-  return commandArgs ? `${baseCommand} ${commandArgs}` : baseCommand;
-}
-
 type ClaudeSearchableMessage = {
   text: string;
   role: 'user' | 'assistant';
@@ -611,9 +565,9 @@ function extractClaudeSearchableMessage(entry: AnyRecord): ClaudeSearchableMessa
       };
     }
 
-    const localCommand = parseClaudeLocalCommandPayload(content);
+    const localCommand = parseLocalCommandPayload(content);
     if (localCommand) {
-      const displayText = buildClaudeLocalCommandDisplayText(localCommand);
+      const displayText = buildLocalCommandDisplayText(localCommand);
       return displayText
         ? {
             text: displayText,

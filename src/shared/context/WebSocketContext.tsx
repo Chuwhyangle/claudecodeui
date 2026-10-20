@@ -1,14 +1,30 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useAuth } from '@/modules/auth';
-import { readDeviceName } from '@/modules/settings';
 import { IS_PLATFORM } from '@/shared/utils';
 import { invalidateSessionHosts, setSessionHostsConnection } from '@/shared/hooks/useSessionHosts';
+import { readDeviceName } from '@/shared/userSettings';
 import { getDeviceId, getTabId } from '@/shared/utils/deviceIdentity';
 import type { ServerEvent, UiHelloFrame } from '@/shared/types';
 
 
 type ServerEventListener = (event: ServerEvent) => void;
+
+/**
+ * The auth state this provider needs, supplied by the application assembly point
+ * (`App`) rather than read here.
+ *
+ * The shared layer must not import a feature module, and the auth session is
+ * owned by `modules/auth`. Passing it in keeps the dependency pointing the right
+ * way: the app knows both layers and wires them together.
+ */
+export type WebSocketAuthPort = {
+  /** True while a stored session is still being recovered after a reload. */
+  isLoading: boolean;
+  /** Bearer credential used verbatim in the socket URL; null before sign-in. */
+  token: string | null;
+  /** The signed-in user, or null. Only its presence is read here. */
+  user: unknown;
+};
 
 type WebSocketContextType = {
   ws: WebSocket | null;
@@ -72,7 +88,7 @@ const buildWebSocketUrl = (token: string | null) => {
   return `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`; // OSS mode: Use same host:port that served the page
 };
 
-const useWebSocketProviderState = (): WebSocketContextType => {
+const useWebSocketProviderState = (auth: WebSocketAuthPort): WebSocketContextType => {
   const wsRef = useRef<WebSocket | null>(null);
   const unmountedRef = useRef(false); // Track if component is unmounted
   const hasConnectedRef = useRef(false); // Track if we've ever connected (to detect reconnects)
@@ -84,7 +100,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   const listenersRef = useRef(new Set<ServerEventListener>());
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { isLoading: isAuthLoading, token, user } = useAuth();
+  const { isLoading: isAuthLoading, token, user } = auth;
 
   const dispatch = useCallback((event: ServerEvent) => {
     for (const listener of listenersRef.current) {
@@ -254,9 +270,18 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   return value;
 };
 
-/** Mounted once by App; owns the single chat websocket that the chat, project-workspace and task-master modules subscribe to. */
-export const WebSocketProvider = ({ children }: { children: React.ReactNode }) => {
-  const webSocketData = useWebSocketProviderState();
+/**
+ * Mounted once by App; owns the single chat websocket that the chat, project-workspace
+ * and task-master modules subscribe to.
+ *
+ * `auth` is injected by App (which sits inside `AuthProvider`) so this shared
+ * provider never imports the auth feature: the dependency points feature → shared,
+ * never shared → feature.
+ */
+export const WebSocketProvider = (
+  { children, auth }: { children?: React.ReactNode; auth: WebSocketAuthPort },
+) => {
+  const webSocketData = useWebSocketProviderState(auth);
 
   return (
     <WebSocketContext.Provider value={webSocketData}>
