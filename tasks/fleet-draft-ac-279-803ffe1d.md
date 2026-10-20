@@ -27,11 +27,17 @@ goal pg_5847668e18cf's AC AC-279 is not achieved and no task exists for it — �
 
 ## AC
 
-- [ ] `AC-279` 由本项目自己的 Quay goal gate 判定为 achieved（⛔ 该判定不由 quay-fleet 作出）
+- [x] `AC-279` 由本项目自己的 Quay goal gate 判定为 achieved（⛔ 该判定不由 quay-fleet 作出）
 
 ## DoD
 
 - 一条真实读数（本项目 quay CLI / gate）证明上条达成；quay-fleet 只记录「由谁推动」，不记录「验收通过」。
+
+## Evidence
+
+- 2026-10-20T13:44:15.290Z：`quay goal gate AC-279`（本项目根 `/data/home/yale/work/claudecodeui`，record 默认 `timeoutMs=60000`）→ `verdict: pass`，`reason: acceptance passed (exit 0)`，树 `f122e651fea70bc9631ea850df00ff70f5438944`。
+- 同一时刻 `quay goal show AC-279` → `status: achieved`，`evidence.verdict: pass`；状态翻转记录在 `statusLog`（active→achieved，commit `5fcb0518f`，已在 develop 上）。
+- 判据命令 `npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts` 实际运行约 26s，小于 60s 默认截止时间，未触发超时。
 
 ## Touches
 
