@@ -2,7 +2,7 @@
 id: gap-voice-run-end-summary-side-model
 title: run-end 总结接真旁路文本模型：VOICE_REALTIME_SUMMARY_MODEL 装配 qwen3.8-omni-flash 生成
   ≤40 字小结，替换 stand-in 固定文案
-status: ready
+status: done
 labels:
   - gap
 parent: null
