@@ -1,7 +1,7 @@
 ---
 id: gap-mcp-gateway-tool-registration-extract
 title: Extract mcp-gateway tool registration into bounded sub-packages
-status: todo
+status: superseded
 labels:
   - gap
 parent: null
@@ -126,3 +126,6 @@ AC-394 棘轮红的三条判据（`npx tsx --tsconfig server/tsconfig.json --tes
 - 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
 - run_id：wk-prod-anchor
 - session_id：4b17b119-f6cd-46da-8f54-52d6e70f4951
+
+
+superseded by docs/proposals/mcp-gateway-tool-architecture.md stage 1+2 (2026-10-20): read/write split reverted; fanOut/LOC gains (332→158, 41/17308→20/6966) folded into stage 1+2
