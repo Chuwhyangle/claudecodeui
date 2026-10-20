@@ -12,20 +12,20 @@
  *
  * PRESENCE IS THE SWITCH. Both halves are optional — the proxy builds no queue, takes no hook and
  * behaves byte-for-byte as before when the returned wiring is `null`. The shipped default
- * (`VOICE_REALTIME_CLOSING_TURN=silent`, no summary stand-in) therefore keeps the pre-narrator wire;
- * naming `announce` installs the queue so the remark can be spoken, and naming a summary stand-in
- * installs the producer.
+ * (`VOICE_REALTIME_CLOSING_TURN=silent`, no summary producer) therefore keeps the pre-narrator wire;
+ * naming `announce` installs the queue so the remark can be spoken, and handing in a producer
+ * installs the summary.
  *
- * THE SUMMARY PRODUCER IS A STAND-IN, DELIBERATELY. The real run-end summary is a side text model
- * (the B-1 probe's findings); wiring that model here would need a cloud credential and a network the
- * E0 replay must not have. `VOICE_REALTIME_SUMMARY_STANDIN` is the same kind of deployment seam as
- * `VOICE_REALTIME_ENDPOINT`: a criterion names the text the narrator should say, and the proxy's own
- * quality gate (≤40 chars, no Markdown, no verbatim tail) judges it exactly as it judges a model's
- * answer. Unlike the endpoint seam it is NOT a criterion-only path — a deployment that sets it gets
- * that sentence spoken at every run end — so it is reported at assembly (see
- * {@link describeVoiceRealtimeSummaryStandin}) rather than being silently active.
+ * THE SUMMARY PRODUCER IS A SEAM WITH TWO IMPLEMENTATIONS. The real one is the side text model leaf
+ * (`voice-realtime-summary.ts`, armed by `VOICE_REALTIME_SUMMARY_MODEL`); the other is the fixed
+ * `VOICE_REALTIME_SUMMARY_STANDIN` sentence. Both arrive here as the SAME `summarizeRunEnd` function,
+ * so the proxy cannot tell them apart — it asks, re-reads the answer through its own quality gate
+ * (≤40 chars, no Markdown, no verbatim tail), and injects what passes. The stand-in is the same kind
+ * of deployment seam as `VOICE_REALTIME_ENDPOINT`; because it changes what the narrator says without
+ * a credential, it is reported at assembly (see {@link describeVoiceRealtimeSummaryStandin}).
  */
 import type { VoiceRealtimeClosingTurn } from './voice-realtime-closing-turn.js';
+import type { VoiceRealtimeRunEndSummarizer } from './voice-realtime-summary.js';
 import type {
   VoiceRealtimeNarratorQueue,
   VoiceRealtimeNarratorSeams,
@@ -75,16 +75,19 @@ export function resolveVoiceRealtimeSummaryStandin(
  *
  * The queue is captured through `attach` (the proxy calls it once the browser downlink exists), so
  * the summary producer injects into exactly that connection's queue and two connections can never
- * speak each other's summaries. A wiring built for `silent` with no stand-in returns `null`, which is
+ * speak each other's summaries. A wiring built for `silent` with no producer returns `null`, which is
  * what keeps every criterion written before this feature on its original wire.
+ *
+ * `summarizeRunEnd` is the seam, not the implementation: the composition root passes the side-model
+ * leaf or a closure over the stand-in sentence. Pass `null` for "this deployment has no summary".
  *
  * Consumed by `server/index.ts`; the criteria drive the same proxy through their own injected seams.
  */
 export function buildVoiceRealtimeNarratorWiring(input: {
   closingTurn: VoiceRealtimeClosingTurn;
-  summaryStandin: string | null;
+  summarizeRunEnd: VoiceRealtimeRunEndSummarizer['summarize'] | null;
 }): VoiceRealtimeNarratorWiring | null {
-  if (input.closingTurn !== 'announce' && input.summaryStandin === null) {
+  if (input.closingTurn !== 'announce' && input.summarizeRunEnd === null) {
     return null;
   }
   /** This connection's queue, handed over by the proxy's `attach`. */
@@ -98,11 +101,11 @@ export function buildVoiceRealtimeNarratorWiring(input: {
       },
     },
   };
-  if (input.summaryStandin !== null) {
+  if (input.summarizeRunEnd !== null) {
     wiring.runEndSummary = {
-      // The proxy calls this only after its own context-pack check; the stand-in ignores the pack by
-      // construction and answers the one sentence a criterion asked for.
-      summarize: async () => input.summaryStandin,
+      // The proxy calls this only after its own context-pack check; the producer decides how to
+      // answer — the side model's HTTP leaf, or the one sentence a stand-in criterion asked for.
+      summarize: input.summarizeRunEnd,
       inject: (text) => {
         if (queue === null) return;
         queue.enqueue({ utteranceId: `run-end-summary-${summarySeq}`, text });

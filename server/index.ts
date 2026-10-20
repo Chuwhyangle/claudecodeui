@@ -131,7 +131,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, ANNOUNCE_PHRASES, createVoiceRealtimeTtsCache, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, ANNOUNCE_PHRASES, createVoiceRealtimeTtsCache, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -672,15 +672,23 @@ const buildVoiceRealtimeSeams = (input: {
     }
     // THE NARRATOR (GOAL-047). The announce closing turn's remark and the run-end summary are spoken
     // through one per-connection queue; `buildVoiceRealtimeNarratorWiring` hands the proxy the `attach`
-    // seam and, when a stand-in is named, the summary producer. `null` means this deployment has no
+    // seam and, when a producer is named, the summary producer. `null` means this deployment has no
     // narrator at all — the proxy then builds no queue and every pre-narrator criterion keeps its wire.
-    // The stand-in is reported because it changes what the narrator says without a side model or a
-    // credential — an operator reading the log has to be able to tell it from a real producer. Nothing
-    // here reads the environment outside this assembly point.
-    const summaryStandin = resolveVoiceRealtimeSummaryStandin(process.env);
+    //
+    // THE RUN-END SUMMARY HAS TWO SOURCES, resolved in this order:
+    //   · `VOICE_REALTIME_SUMMARY_MODEL` set → the side text model leaf below (a REAL producer); the
+    //     variable's value names the model, the credential is the user's Live Voice DashScope key;
+    //   · else `VOICE_REALTIME_SUMMARY_STANDIN` set → that fixed sentence (the backward-compatible
+    //     arm, reported because it changes what the narrator says without a credential);
+    //   · neither → no summary producer at all (the shipped state).
+    const summaryModel = (process.env[VOICE_REALTIME_SUMMARY_MODEL_ENV] ?? '').trim();
+    const summaryStandin = summaryModel === '' ? resolveVoiceRealtimeSummaryStandin(process.env) : null;
     const summaryStandinNote = describeVoiceRealtimeSummaryStandin(summaryStandin);
     if (summaryStandinNote !== null) {
         input.log?.(summaryStandinNote);
+    }
+    if (summaryModel !== '') {
+        input.log?.(`run-end summary: ${VOICE_REALTIME_SUMMARY_MODEL_ENV}=${summaryModel} — the narrator asks the side text model`);
     }
     // THE TTS DOWNLINK (GOAL-047 / AC-408). The narrator's text is SPEECH, not just display: every
     // sentence the queue starts is synthesized by the Qwen3-TTS leaf and streamed to the page as
@@ -701,9 +709,18 @@ const buildVoiceRealtimeSeams = (input: {
     );
     const liveVoiceKey = isMaskedDashscopeApiKey(storedLiveVoiceKey) ? '' : storedLiveVoiceKey;
     const ttsVoice = (process.env[VOICE_REALTIME_TTS_VOICE_ENV] ?? '').trim() || DEFAULT_VOICE_REALTIME_TTS_VOICE;
+    // The side-model leaf and the stand-in are the same seam; only how the words are obtained differs.
+    // A blank Live Voice key is passed through deliberately: the leaf answers `null` without dialling,
+    // exactly as the stand-in path is unaffected by credentials.
+    const summarizeRunEnd: VoiceRealtimeRunEndSummarizer['summarize'] | null =
+        summaryModel !== ''
+            ? createVoiceRealtimeRunEndSummarizer({ apiKey: liveVoiceKey, model: summaryModel }).summarize
+            : summaryStandin === null
+              ? null
+              : async () => summaryStandin;
     const narratorWiring = buildVoiceRealtimeNarratorWiring({
         closingTurn: closingTurn.closingTurn,
-        summaryStandin,
+        summarizeRunEnd,
     });
     // THE LOCAL TTS SWITCH (2026-10-19). When `VOICE_REALTIME_TTS_LOCAL` is set, the narrator
     // synthesizes through the bundled Kokoro model (`sherpa-onnx-node`) instead of the DashScope

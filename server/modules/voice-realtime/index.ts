@@ -230,6 +230,18 @@ export {
   resolveVoiceRealtimeSummaryStandin,
   type VoiceRealtimeNarratorWiring,
 } from './voice-realtime-narrator.js';
+// The run-end summary's SIDE TEXT MODEL leaf (2026-10-20): one `chat/completions` ask per run end,
+// `qwen3.8-omni-flash` under the B-1 `voice` prompt. `server/index.ts` builds it when
+// `VOICE_REALTIME_SUMMARY_MODEL` is set (credential = the user's Live Voice DashScope key) and hands
+// its `summarize` to `buildVoiceRealtimeNarratorWiring` as the same seam the stand-in uses.
+export {
+  VOICE_REALTIME_SUMMARY_MODEL_ENV,
+  DEFAULT_VOICE_REALTIME_SUMMARY_MODEL,
+  createVoiceRealtimeRunEndSummarizer,
+  type VoiceRealtimeRunEndSummarizer,
+  type VoiceRealtimeRunEndSummarizerInput,
+  type VoiceRealtimeRunEndSummarizerOptions,
+} from './voice-realtime-summary.js';
 // The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
 // and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
 // and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's
