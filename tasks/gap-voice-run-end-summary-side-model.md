@@ -25,15 +25,19 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-summary.test.ts` 退出 0，钉住叶子契约：200 → trim 文本；空 content → null；非 2xx → null；空 apiKey → null 且 fetch 未被调；请求体 model=qwen3.8-omni-flash 且 prompt 含「不超过 40 字」。
-- [ ] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts` 退出 0（`buildVoiceRealtimeNarratorWiring` 改签名后 stand-in 臂仍绿）。
-- [ ] `grep -q "VOICE_REALTIME_SUMMARY_MODEL" server/index.ts` 且 `grep -q "createVoiceRealtimeRunEndSummarizer" server/index.ts` 均退出 0（装配点引用新 env 与真叶子）。
-- [ ] 新测试文件登记：`server/shared/tests/quay-test-script.test.ts` unknown pin +1、`scripts/suite-duration-baseline.tsv` 增 `voice-realtime-summary.test.ts` 行；`npx vitest run server/shared/tests/quay-test-script.test.ts` 退出 0。
-- [ ] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
+- [x] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-summary.test.ts` 退出 0，钉住叶子契约：200 → trim 文本；空 content → null；非 2xx → null；空 apiKey → null 且 fetch 未被调；请求体 model=qwen3.8-omni-flash 且 prompt 含「不超过 40 字」。
+- [x] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts` 退出 0（`buildVoiceRealtimeNarratorWiring` 改签名后 stand-in 臂仍绿）。
+- [x] `grep -q "VOICE_REALTIME_SUMMARY_MODEL" server/index.ts` 且 `grep -q "createVoiceRealtimeRunEndSummarizer" server/index.ts` 均退出 0（装配点引用新 env 与真叶子）。
+- [x] 新测试文件登记：`server/shared/tests/quay-test-script.test.ts` unknown pin +1、`scripts/suite-duration-baseline.tsv` 增 `voice-realtime-summary.test.ts` 行；`npx vitest run server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
 
 ## DoD
 
 `server/modules/voice-realtime/voice-realtime-summary.ts` 落地并经 barrel 导出；`server/index.ts` 在 `VOICE_REALTIME_SUMMARY_MODEL` 设值时用真叶子装配 run-end 总结（key 取 `liveVoiceDashscopeApiKey`），不设值时行为与今天一致（stand-in 或无总结）。叶子单测绿、现有 run-end-summary 测试仍绿、typecheck + build:server 退出 0、quay-test-script pin 与 suite-duration-baseline 已登记新测试文件。真实 DashScope 出声属 H1 人工验收门，不在本任务 DoD 内。
+
+## Notes
+
+运行器更正（与 `tasks/gap-voice-sensevoice-server-adapter.md` 等记录的是同一处不符）：`vitest.config.ts` 的 `include` 只有 `src/**/*.test.ts(x)`，把 `server/...` 路径交给 `npx vitest run` 会以 `No test files found` 退出 1——这不是用例失败。本仓库服务端测试的规范 runner 是 `npx tsx --tsconfig server/tsconfig.json --test <file>`。AC1/AC2/AC4 三条均按规范 runner 实测：叶子 5 pass / 0 fail、run-end-summary 4 pass / 0 fail、quay-test-script 14 pass / 0 fail。
 
 ## Touches
 
