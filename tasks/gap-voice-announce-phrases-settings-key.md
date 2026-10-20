@@ -31,11 +31,16 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-announce-phrases.test.ts` 退出 0，且新增 `resolveAnnouncePhrases` 用例：`|` 分隔正确拆分、trim、去空；<3 条回退默认、某条空或超 15 字回退默认；默认表每条长度 ≥2。
-- [ ] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0，且新增 `announcePhrases` 键用例：文件覆盖默认表、非法值回退默认并进 `problems`。
-- [ ] 同源判据：`server/index.ts` 与 `voice-realtime-ws-proxy.service.ts` 的 announce 门都不再直接 import/引用硬编码 `ANNOUNCE_PHRASES`（`grep -n "ANNOUNCE_PHRASES" server/index.ts server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 无命中，装配点与 proxy 都读 settings 解析结果）。
-- [ ] 模板/本地分离：`config/voice-realtime.settings.example.json` 存在且被 git 跟踪（`git ls-files` 命中）；`.gitignore` 含 `voice-realtime.settings.json`（或等价本地路径条目）。
-- [ ] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
+- [x] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-announce-phrases.test.ts` 退出 0，且新增 `resolveAnnouncePhrases` 用例：`|` 分隔正确拆分、trim、去空；<3 条回退默认、某条空或超 15 字回退默认；默认表每条长度 ≥2。
+- [x] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0，且新增 `announcePhrases` 键用例：文件覆盖默认表、非法值回退默认并进 `problems`。
+- [x] 同源判据：`server/index.ts` 与 `voice-realtime-ws-proxy.service.ts` 的 announce 门都不再直接 import/引用硬编码 `ANNOUNCE_PHRASES`（`grep -n "ANNOUNCE_PHRASES" server/index.ts server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 无命中，装配点与 proxy 都读 settings 解析结果）。
+- [x] 模板/本地分离：`config/voice-realtime.settings.example.json` 存在且被 git 跟踪（`git ls-files` 命中）；`.gitignore` 含 `voice-realtime.settings.json`（或等价本地路径条目）。
+- [x] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
+
+**AC1/AC2 字面命令的偏差（记录读数，勿误读为用例失败）**：本仓库 `vitest.config.ts` 的 `include` 只有 `src/**/*.test.ts(x)`，把 `server/` 路径交给 `npx vitest run` 会打印 `No test files found` 并退出 1。服务端测试的规范 runner 是 `node:test`（`package.json` 的 `test:server`），实测：
+- `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-announce-phrases.test.ts` → 7/7 通过（含新增的 `resolveAnnouncePhrases` 4 组用例与 settings 覆盖的 proxy 端到端用例）。
+- `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` → 13/13 通过（含 `announcePhrases` 文件覆盖、缺省保持默认、非法值回退并进 `problems` 三组用例）。
+- 兄弟用例 `voice-realtime-tts-cache.test.ts`（9/9）与 `voice-realtime-announce-narrator.test.ts`（2/2）同 runner 全绿，默认表内容变化未红。
 
 ## DoD
 
