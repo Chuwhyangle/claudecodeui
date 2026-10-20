@@ -1,7 +1,7 @@
 ---
 id: AC-279
 title: 停在 Conversations 视图时，新建或改名为命中规则的会话不会冒出来
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-002
 criterion: npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts
@@ -19,4 +19,10 @@ origin: 2026-10-06 落地复核。修复 e3a08557 已进构建并重启，用户
   列表一侧。库里事实是干净的（10-05 12:00Z 之后新建的会话在各项目几乎全被规则命中）且 recent
   接口本身已按规则过滤，所以只有实时路径漏。AC-101 与 AC-102 都只看静态结果，抓不到这条路径。
 activatedAt: 2026-10-06T01:00:39.110Z
+statusLog:
+  - at: 2026-10-20T13:42:03.761Z
+    from: active
+    to: achieved
+    actor: goal-cli
+    reason: ""
 ---
