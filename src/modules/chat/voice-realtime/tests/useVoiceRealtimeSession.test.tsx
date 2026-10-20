@@ -92,6 +92,7 @@ class FakeWebSocket {
   readyState = FakeWebSocket.OPEN;
   sent: string[] = [];
   closed = false;
+  onopen: (() => void) | null = null;
   onmessage: ((event: MessageEvent<string>) => void) | null = null;
   onerror: (() => void) | null = null;
   onclose: (() => void) | null = null;
