@@ -2,7 +2,7 @@
 id: gap-database-connection-directory-cycle
 title: Move the database connection module out of the repositories↔database
   directory cycle
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -76,6 +76,8 @@ F4（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 - server/modules/database/tests/sessions.db.integration.test.ts
 - server/modules/database/tests/voice-settings.db.integration.test.ts
 - server/modules/voice/tests/voice-dashscope-settings.test.ts
+- server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/server-import-cycle-budget.baseline.json
 - tasks/gap-database-connection-directory-cycle.md (self)
 
 ## Evidence
@@ -88,5 +90,6 @@ Baseline: develop @ `166823331`; implementation commits `a31b39881`, `1c232db93`
 - AC4 — 10 files, loop exit 0; per-file pass counts: api-keys-drop-migration 3, db-file-permissions 2, launch-profiles-drop-migration 2, projects.db.integration 4, provider-models.db.integration 2, sessions.db.integration 9, sessions-name-source.integration 12, sessions-provider-mapping 4, user-preferences.db.integration 7, voice-settings.db.integration 7 (52 pass, 0 fail). Note: six of these files changed exactly one line each — the `@/modules/database/connection.js` import specifier → `@/modules/database/core/index.js`; no assertion body changed. The other four already imported through `@/modules/database/index.js` and are byte-identical. A compatibility `connection.ts` would have kept them untouched but is forbidden by AC2, so the specifier update is the only mechanical option.
 - AC5 — fresh `archguard_analyze(projectRoot=<worktree>, sources=["server"], lang=typescript)` then `archguard_detect_cycles(outputScope=package, scope=server)`. Before (develop worktree): size-2 SCC `{modules/database, modules/database/repositories}`. After: no SCC contains either module; remaining SCCs are the pre-existing size-11 group and `{"", modules/browser-use}`. An intermediate step still showed size-3 `{modules/database, modules/database/core, modules/database/repositories}` because `core` imported `schema.ts` back; fixed by moving `APP_CONFIG_TABLE_SCHEMA_SQL` into `core/index.ts` and re-exporting it from `schema.ts`, making `core` a leaf.
 - AC6 — `npm run typecheck` exit 0.
-- AC7 — anti-drift Touches check run against develop; diff set is exactly the 36 code paths + the task file listed above.
+- AC7 — anti-drift Touches check run against develop; diff set is exactly the 36 code paths + the task file listed above, plus (2026-10-20 continuation round) the two AC-394 ratchet files.
 - DoD ⑦ (false form) — appended `import { getConnection } from '@/modules/database/connection.js';` to `repositories/credentials.ts` → AC1 count 1 (red); `git checkout -- credentials.ts` → count 0 (green).
+- AC-394 ratchet (2026-10-20 continuation round) — the prior fan-in suite red was real and task-caused, despite the mechanical UNRELATED label: `server/shared/tests/server-import-cycle-budget.test.ts` pinned the retired two-member cycle (`(b) the measured cycles must match the pinned baseline groups member-for-member`) and the new `modules/database/core` was absent from the committed manifest (`(c)` inbound-edge arm: `server/modules/database` / `server/modules/database/repositories` import it). Lowered the ratchet in its own sanctioned shrink direction: `cycleGroups.G2` → `[]` in both `CYCLE_GROUPS` and the baseline JSON (a re-introduced cycle still reds the exact-equality assertions), registered `modules/database/core` in `MANIFEST_PIN` + `directoryManifest` under AC-394 (c)'s leaf escape hatch (it imports only node builtins and `better-sqlite3`, no `server/` target, and is in no SCC), and re-measured `measuredAt`/`fileEdges.static`/`nodeCount` (2026-10-20, 1280 static / 6 dynamic, 48 nodes). Isolation rerun: `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` → 11 pass, 0 fail; summary `files=325 staticEdges=1280 dynamicEdges=6 sccs=[11,2]`, `(b)` and `(c)` green, `(c) directories present but absent from the manifest: []`.

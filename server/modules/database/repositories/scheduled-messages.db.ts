@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 export type ScheduledMessageStatus = 'pending' | 'sent' | 'failed' | 'cancelled';
 

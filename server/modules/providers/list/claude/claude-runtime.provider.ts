@@ -28,6 +28,7 @@ import {
   CLAUDE_PREDEFINED_MODELS,
   CLAUDE_ULTRACODE_EFFORT
 } from '@/modules/providers/list/claude/claude-models.provider.js';
+import { createBoundedLedger, MAX_REMEMBERED_APPROVALS } from '@/shared/bounded-approval-ledger.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
   createNotificationEvent,
@@ -115,9 +116,6 @@ type ToolApprovalResolver = ((decision: AnyRecord | null) => void) & {
 const activeSessions = new Map<string, ActiveClaudeSession>();
 const pendingToolApprovals = new Map<string, ToolApprovalResolver>();
 
-/** How many settled approval request ids this process remembers. */
-const MAX_REMEMBERED_APPROVALS = 512;
-
 /**
  * The bounded ledger of approval request ids this process has HELD.
  *
@@ -134,18 +132,11 @@ const MAX_REMEMBERED_APPROVALS = 512;
  * `claudeRuntime.permissions.classifyMissingApproval` exposes to
  * `provider-runtime.service.ts` and, through it, to the MCP approval adapter.
  */
-const heldApprovalLedger = new Set<string>();
+const heldApprovalLedger = createBoundedLedger<true>(MAX_REMEMBERED_APPROVALS);
 
 /** Records `requestId` as held, evicting the oldest id past the cap. */
 function rememberHeldApproval(requestId: string): void {
-  heldApprovalLedger.delete(requestId);
-  heldApprovalLedger.add(requestId);
-  if (heldApprovalLedger.size > MAX_REMEMBERED_APPROVALS) {
-    const oldest = heldApprovalLedger.values().next().value;
-    if (oldest !== undefined) {
-      heldApprovalLedger.delete(oldest);
-    }
-  }
+  heldApprovalLedger.remember(requestId, true);
 }
 
 /**
@@ -181,18 +172,11 @@ function classifyMissingApproval(requestId: string): MissingApprovalReason {
  * `claudeRuntime.permissions.readApprovalDecision` exposes to
  * `provider-runtime.service.ts` and, through it, to `chat-control.service.ts`.
  */
-const approvalDecisionLedger = new Map<string, ApprovalDecisionRecord>();
+const approvalDecisionLedger = createBoundedLedger<ApprovalDecisionRecord>(MAX_REMEMBERED_APPROVALS);
 
 /** Records one settled decision, evicting the oldest entry past the cap. */
 function rememberApprovalDecision(requestId: string, record: ApprovalDecisionRecord): void {
-  approvalDecisionLedger.delete(requestId);
-  approvalDecisionLedger.set(requestId, record);
-  if (approvalDecisionLedger.size > MAX_REMEMBERED_APPROVALS) {
-    const oldest = approvalDecisionLedger.keys().next().value;
-    if (oldest !== undefined) {
-      approvalDecisionLedger.delete(oldest);
-    }
-  }
+  approvalDecisionLedger.remember(requestId, record);
 }
 
 /**
@@ -201,7 +185,7 @@ function rememberApprovalDecision(requestId: string, record: ApprovalDecisionRec
  * only ever names requests that were actually settled.
  */
 function readApprovalDecision(requestId: string): ApprovalDecisionRecord | null {
-  return approvalDecisionLedger.get(requestId) ?? null;
+  return approvalDecisionLedger.read(requestId) ?? null;
 }
 
 /**

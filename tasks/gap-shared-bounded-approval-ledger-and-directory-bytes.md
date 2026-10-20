@@ -1,7 +1,7 @@
 ---
 id: gap-shared-bounded-approval-ledger-and-directory-bytes
 title: Extract a shared bounded approval ledger and directoryBytes helper
-status: ready
+status: done
 labels:
   - gap
 parent: null

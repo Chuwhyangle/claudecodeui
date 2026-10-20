@@ -6,7 +6,7 @@
  * users for forward compatibility.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 type UserRow = {
   id: number;

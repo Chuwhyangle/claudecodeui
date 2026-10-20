@@ -13,7 +13,7 @@
  * settings page), all through the database module barrel.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /** A persisted OAuth grant row exactly as stored; `scopes` is a JSON array string. */
 export type OAuthGrantRow = {
