@@ -6,6 +6,7 @@ import { afterEach, beforeEach, test, vi } from 'vitest';
 
 import { WebSocketProvider } from '@/shared/context/WebSocketContext';
 import { getDeviceId, getTabId } from '@/shared/utils/deviceIdentity';
+import { MCP_DEVICE_NAME_STORAGE_KEY } from '@/shared/userSettings';
 import type { UiHelloFrame } from '@/shared/types';
 
 /**
@@ -18,19 +19,18 @@ import type { UiHelloFrame } from '@/shared/types';
  * and so announces itself again — carrying all three fields.
  */
 
-// The provider reads the auth session to build the socket URL. Nothing here is
-// about auth, so it answers as an authenticated OSS client with a token that is
-// not a JWT (`isAuthTokenExpired` reads a non-JWT as "no expiry to enforce").
-vi.mock('@/modules/auth', () => ({
-  useAuth: () => ({ isLoading: false, token: 'test-token', user: { id: 1 } }),
-}));
+/**
+ * The session the provider is handed. The provider is deliberately auth-agnostic
+ * (it receives this port from the application assembly point rather than reading
+ * `useAuth`), so the test supplies the authenticated state directly. Nothing here
+ * is about auth.
+ */
+const AUTH = { isLoading: false, token: 'test-token', user: { id: 1 } };
 
-// The device name has its own criterion; pinning it here makes "the frame
-// carries the device's name" an equality rather than a substring guess.
+// The name is read from the shipped shared reader when the socket announces
+// itself; pinning it in localStorage makes "the frame carries the device's name"
+// an equality rather than a substring guess.
 const DEVICE_NAME = 'Chrome · Linux';
-vi.mock('@/modules/settings', () => ({
-  readDeviceName: () => DEVICE_NAME,
-}));
 
 /** A WebSocket stand-in that records what was sent and lets a test drive the handshake. */
 class FakeWebSocket {
@@ -109,6 +109,7 @@ beforeEach(() => {
   FakeWebSocket.instances = [];
   localStorage.clear();
   sessionStorage.clear();
+  localStorage.setItem(MCP_DEVICE_NAME_STORAGE_KEY, DEVICE_NAME);
 });
 
 afterEach(() => {
@@ -175,7 +176,7 @@ test('an identifier is still produced, without throwing, when the storage area i
 // --------------------------------------------------------- the hello frame --
 
 test('each websocket connection announces the device exactly once, with both ids and the name', () => {
-  render(React.createElement(WebSocketProvider, null, null));
+  render(React.createElement(WebSocketProvider, { auth: AUTH }));
 
   const first = latestSocket();
   assert.equal(first.hellos().length, 0, 'nothing is announced before the handshake completes');
@@ -195,7 +196,7 @@ test('each websocket connection announces the device exactly once, with both ids
 });
 
 test('a reconnect announces the new connection once as well', () => {
-  render(React.createElement(WebSocketProvider, null, null));
+  render(React.createElement(WebSocketProvider, { auth: AUTH }));
 
   const first = latestSocket();
   act(() => {

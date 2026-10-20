@@ -38,6 +38,7 @@ export const USER_PREFERENCES_CHANGED_EVENT = 'user-preferences:changed';
 /** The single localStorage blob mirroring the server's copy. */
 const MIRROR_STORAGE_KEY = 'user-preferences';
 
+
 /**
  * Long enough to collapse a burst of edits (dragging the font-size select,
  * toggling several switches) into one request, short enough that closing the
@@ -360,3 +361,92 @@ export function resetUserPreferences(): void {
 if (typeof localStorage !== 'undefined') {
   preferences = readMirror();
 }
+
+// ----------------------------- this device's name ----------------------------
+
+/**
+ * localStorage key holding this browser's user-editable device name.
+ *
+ * It lives here, not in the MCP navigation settings hook, because the shared
+ * websocket provider reads the name to announce the connection — and `shared`
+ * must not import a feature module to obtain it. The MCP settings UI is one
+ * consumer of this preference, not its owner.
+ */
+export const MCP_DEVICE_NAME_STORAGE_KEY = 'mcpNavigationDeviceName';
+
+/** The User-Agent of the browser this code runs in, or '' outside a browser. */
+const readUserAgent = (): string => (typeof navigator === 'undefined' ? '' : navigator.userAgent);
+
+/**
+ * The browser family named in a User-Agent string, at the coarsest granularity that stays
+ * recognisable to a person. Ordered so the specific tokens win: Edge and Opera also say
+ * "Chrome", and every Chromium browser also says "Safari".
+ */
+const detectBrowserName = (userAgent: string): string => {
+  if (/Edg[eo]?\/|Edge\//.test(userAgent)) {
+    return 'Edge';
+  }
+  if (/OPR\/|Opera/.test(userAgent)) {
+    return 'Opera';
+  }
+  if (/Firefox\/|FxiOS/.test(userAgent)) {
+    return 'Firefox';
+  }
+  if (/Chrome\/|CriOS/.test(userAgent)) {
+    return 'Chrome';
+  }
+  if (/Safari\//.test(userAgent)) {
+    return 'Safari';
+  }
+  return 'Browser';
+};
+
+/**
+ * The operating-system family named in a User-Agent string. Android and iOS are matched
+ * before Linux and macOS, because their User-Agents also contain "Linux" / "Mac OS X".
+ */
+const detectOsName = (userAgent: string): string => {
+  if (/Android/.test(userAgent)) {
+    return 'Android';
+  }
+  if (/iPhone|iPad|iPod/.test(userAgent)) {
+    return 'iOS';
+  }
+  if (/Windows/.test(userAgent)) {
+    return 'Windows';
+  }
+  if (/Mac OS X|Macintosh/.test(userAgent)) {
+    return 'macOS';
+  }
+  if (/Linux|X11/.test(userAgent)) {
+    return 'Linux';
+  }
+  return 'Unknown system';
+};
+
+/**
+ * Derives a human-readable default device name from a User-Agent string, e.g. "Chrome · Linux".
+ * Deliberately coarse — the browser family and the OS family only — so the name carries
+ * neither a version number nor anything that identifies the machine, which is what makes it
+ * safe to publish to the server when the user never names the device themselves.
+ */
+const deriveDefaultDeviceName = (userAgent: string): string =>
+  `${detectBrowserName(userAgent)} · ${detectOsName(userAgent)}`;
+
+/** The effective name for a stored value: the trimmed stored name, or the derived default. */
+export const resolveDeviceName = (stored: string | null): string =>
+  stored !== null && stored.trim().length > 0
+    ? stored.trim()
+    : deriveDefaultDeviceName(readUserAgent());
+
+/**
+ * Reads this device's name straight from localStorage, without React. An unset or blank
+ * stored name answers the User-Agent-derived default, so the device always has a name.
+ */
+export const readDeviceName = (): string => {
+  try {
+    return resolveDeviceName(localStorage.getItem(MCP_DEVICE_NAME_STORAGE_KEY));
+  } catch {
+    return resolveDeviceName(null);
+  }
+};

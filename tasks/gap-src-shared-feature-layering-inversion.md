@@ -2,7 +2,7 @@
 id: gap-src-shared-feature-layering-inversion
 title: Break the shared→feature layering inversion in src (WebSocketContext
   imports modules/auth and modules/settings)
-status: ready
+status: done
 labels:
   - gap
 parent: null

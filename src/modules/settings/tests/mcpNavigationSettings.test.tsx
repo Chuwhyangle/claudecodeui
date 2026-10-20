@@ -4,12 +4,11 @@ import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, test, vi } from 'vitest';
 
 import {
-  MCP_DEVICE_NAME_STORAGE_KEY,
   MCP_NAVIGATION_POLICY_STORAGE_KEY,
-  readDeviceName,
   readMcpNavigationPolicy,
   useMcpNavigationSettings,
 } from '@/modules/settings/hooks/useMcpNavigationSettings';
+import { MCP_DEVICE_NAME_STORAGE_KEY, readDeviceName } from '@/shared/userSettings';
 import CredentialsSettingsTab from '@/modules/settings/tabs/api-settings/CredentialsSettingsTab';
 
 /**

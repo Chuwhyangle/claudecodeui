@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import {
+  MCP_DEVICE_NAME_STORAGE_KEY,
+  readDeviceName,
+  resolveDeviceName,
+} from '@/shared/userSettings';
+
 /**
  * This device's answer to an incoming MCP navigation request: `accept` opens it without
  * asking, `ask` confirms first, `reject` refuses. Stored in this browser's localStorage, so
@@ -9,9 +15,6 @@ export type McpNavigationPolicy = 'accept' | 'ask' | 'reject';
 
 /** localStorage key holding this browser's chosen MCP navigation policy. */
 export const MCP_NAVIGATION_POLICY_STORAGE_KEY = 'mcpNavigationPolicy';
-
-/** localStorage key holding this browser's user-editable device name. */
-export const MCP_DEVICE_NAME_STORAGE_KEY = 'mcpNavigationDeviceName';
 
 /** Every policy the UI offers, in the order the settings section lists them. */
 const MCP_NAVIGATION_POLICIES: readonly McpNavigationPolicy[] = ['accept', 'ask', 'reject'];
@@ -26,71 +29,6 @@ const DEFAULT_MCP_NAVIGATION_POLICY: McpNavigationPolicy = 'ask';
 /** Narrows an arbitrary stored value to a policy; unset or junk is not one. */
 const isMcpNavigationPolicy = (value: unknown): value is McpNavigationPolicy =>
   typeof value === 'string' && (MCP_NAVIGATION_POLICIES as readonly string[]).includes(value);
-
-/** The User-Agent of the browser this code runs in, or '' outside a browser. */
-const readUserAgent = (): string => (typeof navigator === 'undefined' ? '' : navigator.userAgent);
-
-/**
- * The browser family named in a User-Agent string, at the coarsest granularity that stays
- * recognisable to a person. Ordered so the specific tokens win: Edge and Opera also say
- * "Chrome", and every Chromium browser also says "Safari".
- */
-const detectBrowserName = (userAgent: string): string => {
-  if (/Edg[eo]?\/|Edge\//.test(userAgent)) {
-    return 'Edge';
-  }
-  if (/OPR\/|Opera/.test(userAgent)) {
-    return 'Opera';
-  }
-  if (/Firefox\/|FxiOS/.test(userAgent)) {
-    return 'Firefox';
-  }
-  if (/Chrome\/|CriOS/.test(userAgent)) {
-    return 'Chrome';
-  }
-  if (/Safari\//.test(userAgent)) {
-    return 'Safari';
-  }
-  return 'Browser';
-};
-
-/**
- * The operating-system family named in a User-Agent string. Android and iOS are matched
- * before Linux and macOS, because their User-Agents also contain "Linux" / "Mac OS X".
- */
-const detectOsName = (userAgent: string): string => {
-  if (/Android/.test(userAgent)) {
-    return 'Android';
-  }
-  if (/iPhone|iPad|iPod/.test(userAgent)) {
-    return 'iOS';
-  }
-  if (/Windows/.test(userAgent)) {
-    return 'Windows';
-  }
-  if (/Mac OS X|Macintosh/.test(userAgent)) {
-    return 'macOS';
-  }
-  if (/Linux|X11/.test(userAgent)) {
-    return 'Linux';
-  }
-  return 'Unknown system';
-};
-
-/**
- * Derives a human-readable default device name from a User-Agent string, e.g. "Chrome · Linux".
- * Deliberately coarse — the browser family and the OS family only — so the name carries
- * neither a version number nor anything that identifies the machine, which is what makes it
- * safe to publish to the server when the user never names the device themselves.
- */
-const deriveDefaultDeviceName = (userAgent: string): string =>
-  `${detectBrowserName(userAgent)} · ${detectOsName(userAgent)}`;
-
-/** The effective name for a stored value: the trimmed stored name, or the derived default. */
-const resolveDeviceName = (stored: string | null): string =>
-  stored !== null && stored.trim().length > 0
-    ? stored.trim()
-    : deriveDefaultDeviceName(readUserAgent());
 
 /**
  * Reads this device's MCP navigation policy straight from localStorage, without React.
@@ -123,17 +61,8 @@ export const writeMcpNavigationPolicy = (policy: McpNavigationPolicy): void => {
 };
 
 /**
- * Reads this device's name straight from localStorage, without React. An unset or blank
- * stored name answers the User-Agent-derived default, so the device always has a name.
+ * The policy and name the settings UI renders, plus the setters that persist them.
  */
-export const readDeviceName = (): string => {
-  try {
-    return resolveDeviceName(localStorage.getItem(MCP_DEVICE_NAME_STORAGE_KEY));
-  } catch {
-    return resolveDeviceName(null);
-  }
-};
-
 type UseMcpNavigationSettingsResult = {
   policy: McpNavigationPolicy;
   deviceName: string;
