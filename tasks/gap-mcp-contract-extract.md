@@ -60,6 +60,7 @@ extra:
 - **(g)** `server/modules/providers/list/claude/claude-runtime.provider.ts:1191: export function readSessionTurn(...)` — unchanged. Only the type-only `SessionTurnPort` was added under `server/shared/ports/`.
 - **(h)** `anti-drift-touches-check --task gap-mcp-contract-extract --merge-target develop` → `ANTI-DRIFT OK … 24 actual file(s), all within declared Touches (82 glob(s))`.
 - **Leaf proof (DoD ④)** the contract's only non-self imports are `@modelcontextprotocol/sdk/types.js`, `zod` and `@/shared/types.js` — **zero** imports from `server/modules/**`.
+- **(fan-in rerun)** The prior fan-in's only red, `mcp-gateway-wiring.test.ts` (b), was a delta-induced scan failure, not environmental: the extraction left only `export type { ChatRunSummary, ChatRunLookupMiss, ChatRunLookupResult }` in `chat-run-registry.service.ts`, so AC-253's criterion (which parses the union alias declared in that file to prove consuming the union consumes its constituents) reported `unconsumed=["ChatRunSummary","ChatRunLookupMiss"]`. Fix: the constituents still re-export from `@/shared/types.js`, and `export type ChatRunLookupResult = ChatRunSummary | ChatRunLookupMiss;` is declared at the registry again (public barrel surface unchanged). Readings after the fix: isolated `mcp-gateway-wiring.test.ts` → 3 pass / 0 fail, `(b) unconsumed=[]`, `negative.unconsumed=["ac253UnconsumedProbe"]`; `npm run typecheck` exit 0; `npm run lint` exit 0; `server-import-cycle-budget.test.ts` 11 pass / 0 fail; `chat-run-by-id.test.ts` 6 pass / 0 fail.
 
 ## Touches
 
@@ -165,3 +166,11 @@ AC-394 注册：
 自身：
 
 - tasks/gap-mcp-contract-extract.md
+
+## Blocker
+
+**2026-10-20T15:25:15.637Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=9568 server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts passed=false end_ms=1792509724584
+- run_id：wk-prod-anchor
+- session_id：5dadba44-0b20-47fc-bc53-4953f4d9a639
