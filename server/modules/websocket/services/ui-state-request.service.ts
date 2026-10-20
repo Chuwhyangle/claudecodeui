@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   AnyRecord,
   RealtimeClientConnection,
+  UiStateRequestOptions,
   UiStateRequestTarget,
   UiVisibleContextDevice,
   UiVisibleContextReport,
@@ -10,6 +11,8 @@ import type {
 } from '@/shared/types.js';
 import { uiClientRegistry } from '@/modules/websocket/services/ui-client-registry.service.js';
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
+export type { UiStateRequestOptions };
+
 
 /**
  * Asking the browsers what they are showing, and collecting the answers.
@@ -64,13 +67,7 @@ export type UiStateRequestDeps = {
   send?: (connection: RealtimeClientConnection, frame: unknown) => void;
 };
 
-/** One call's arguments: how long to wait, and which single device to ask. */
-export type UiStateRequestOptions = {
-  /** Overrides {@link UI_STATE_REQUEST_DEFAULT_TIMEOUT_MS} for this call. */
-  timeoutMs?: number;
-  /** Ask only this device's tabs; omitted means every connected device. */
-  deviceId?: string;
-};
+
 
 /** The round trip, as its two callers see it: ask, and hand in an answer. */
 export type UiStateRequestService = {

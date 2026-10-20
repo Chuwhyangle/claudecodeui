@@ -3,7 +3,7 @@ id: gap-mcp-contract-extract
 title: Extract server/shared/mcp-contract from mcp-gateway
   (errors/types/schemas/principal/approval-deps + ToolDefinition/ToolRegistry +
   ACCESS_TOKEN_SCOPES + SessionTurnPort)
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -166,11 +166,3 @@ AC-394 注册：
 自身：
 
 - tasks/gap-mcp-contract-extract.md
-
-## Blocker
-
-**2026-10-20T15:25:15.637Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=9568 server/modules/mcp-gateway/tests/mcp-gateway-wiring.test.ts passed=false end_ms=1792509724584
-- run_id：wk-prod-anchor
-- session_id：5dadba44-0b20-47fc-bc53-4953f4d9a639

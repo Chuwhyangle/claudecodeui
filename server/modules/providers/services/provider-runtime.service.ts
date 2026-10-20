@@ -9,6 +9,7 @@ import type { IProvider } from '@/shared/interfaces.js';
 import type {
   AnyRecord,
   ApprovalDecisionRecord,
+  ControlStopTaskOutcome,
   HostBindErrorCode,
   HostMode,
   HostPendingQueuedInputs,
@@ -24,6 +25,8 @@ import type {
   ProviderRuntimeContext,
   ProviderRuntimeWriter,
 } from '@/shared/types.js';
+export type { ControlStopTaskOutcome };
+
 
 /**
  * The refusal a resident driver recorded when it declined to launch a process.
@@ -52,19 +55,7 @@ type RemoteControlRefusalReading = {
   at: number;
 };
 
-/**
- * The answer the stop-task control plane's driver call gives.
- *
- * `requested` means the provider driver was called and its call settled — the
- * request was placed, and nothing about the task's state is claimed.
- * `unsupported` means no driver could carry it (the capability is off, the
- * session is not resident and has no per-run runtime, or the live process
- * exposes no stop verb). `timeout` means the driver call did not settle inside
- * its bound, and `error` means it threw. The three failure values are
- * deliberately distinct: a caller that conflated "cannot" with "did not finish"
- * would report a process-less session as a slow one.
- */
-export type ControlStopTaskOutcome = 'requested' | 'unsupported' | 'timeout' | 'error';
+
 
 /**
  * The answer the background-task control plane's driver call gives.

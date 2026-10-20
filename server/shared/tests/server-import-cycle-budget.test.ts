@@ -49,7 +49,8 @@
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
  *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
- *   node count = 49            (the committed `directoryManifest`, incl. `shared/ports` and `modules/database/core`)
+ *   node count = 50            (the committed `directoryManifest`, incl. `shared/ports`,
+ *                               `shared/mcp-contract` and `modules/database/core`)
  *
  * ONE READING DIVERGES FROM THE立案 NOTE, and the divergence is itself pinned (see the `(b)`
  * case). The note expects the static-only and the static+literal-dynamic readings to agree
@@ -140,6 +141,12 @@ const CYCLE_GROUPS: readonly string[][] = [
  * shape of the fix — the cycle disappears precisely because the repositories now import a
  * sibling leaf instead of their parent package — so the directory is registered as known
  * rather than left to red the leaf rule's inbound arm.
+ * A THIRD ENTRY WAS ADDED, by `gap-mcp-contract-extract` (2026-10-20), under the
+ * same escape hatch: `shared/mcp-contract` is the contract leaf that proposal's
+ * stage 1 created (it imports only external packages, `server/shared/**` and
+ * itself, and sits in no SCC). Its inbound edges from `modules/mcp-gateway` and
+ * `modules/oauth` are the intended shape of the extraction, so the directory is
+ * registered as known rather than left to red the leaf rule's inbound arm.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -190,6 +197,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/worktrees',
   'modules/worktrees/services',
   'shared',
+  'shared/mcp-contract',
   'shared/ports',
 ];
 

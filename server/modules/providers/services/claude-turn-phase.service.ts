@@ -1,3 +1,5 @@
+import type { TurnPhase, TurnState } from '@/shared/types.js';
+export type { TurnPhase, TurnState };
 /**
  * The Turn Tracker: reduces Claude's raw SDK frame stream into the real phase of
  * a session's turn.
@@ -35,34 +37,9 @@
  * seam for the two ids and why they differ.
  */
 
-/**
- * The phase of a session's turn, each value named for the signal that produces
- * it. `idle` is the absence of a turn (before the first frame, or after the
- * turn's `result`).
- *
- * - `thinking`  — a `system/thinking_tokens` estimate arrived.
- * - `writing`   — a text `content_block_delta` (the normalizer's `stream_delta`)
- *                 is in flight.
- * - `tool`      — a `tool_use` block was emitted and its paired `tool_result`
- *                 has not arrived.
- * - `awaitingPermission` — a `permission_request` is outstanding.
- * - `compacting` — a `system/compact_boundary` arrived.
- */
-export type TurnPhase = 'idle' | 'thinking' | 'writing' | 'tool' | 'awaitingPermission' | 'compacting';
 
-/**
- * What a caller reads back for one session.
- *
- * `toolName` is the `name` of the pending `tool_use` block (or `null`); it is
- * never derived from a lookup table or a clock. `toolDurationMs` is the tool's
- * elapsed time when a frame carries one — `null` otherwise, and always `null`
- * today because no captured run emitted a `tool_progress` frame.
- */
-export type TurnState = {
-  phase: TurnPhase;
-  toolName: string | null;
-  toolDurationMs: number | null;
-};
+
+
 
 /** A permission prompt's lifecycle, as the run's writer already emits it. */
 type TurnPermissionEvent = {
