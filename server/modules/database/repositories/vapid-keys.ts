@@ -4,7 +4,7 @@
  * Stores and retrieves the Web Push VAPID key pair.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 type VapidKeyRow = {
   public_key: string;

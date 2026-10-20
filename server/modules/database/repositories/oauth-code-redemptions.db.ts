@@ -15,7 +15,7 @@
  * barrel.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /** A persisted redemption-ledger row exactly as stored. */
 export type OAuthCodeRedemptionRow = {

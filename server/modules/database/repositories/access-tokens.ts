@@ -17,7 +17,7 @@
  * the /access-tokens routes), both through the database module barrel.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /** A persisted access-token row exactly as stored; `scopes` is a JSON array string. */
 export type AccessTokenRow = {

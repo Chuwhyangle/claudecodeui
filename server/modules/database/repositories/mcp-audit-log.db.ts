@@ -18,7 +18,7 @@
  * settings page), both through the database module barrel.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /** A persisted audit row exactly as stored. `outcome` is 'ok' | 'denied' | 'error'. */
 export type McpAuditLogRow = {

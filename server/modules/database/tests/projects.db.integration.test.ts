@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection } from '@/modules/database/connection.js';
+import { closeConnection } from '@/modules/database/core/index.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
 
@@ -72,7 +72,7 @@ test('projectsDb.createProjectPath returns active_conflict for active duplicates
 });
 
 test('session_filter migration adds the column once and leaves existing rows NULL', async () => {
-  const { getConnection } = await import('@/modules/database/connection.js');
+  const { getConnection } = await import('@/modules/database/core/index.js');
   const { runMigrations } = await import('@/modules/database/migrations.js');
   await withIsolatedDatabase(() => {
     const db = getConnection();

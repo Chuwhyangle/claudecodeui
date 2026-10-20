@@ -1,4 +1,4 @@
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 type ScanStateRow = {
   last_scanned_at: string;
