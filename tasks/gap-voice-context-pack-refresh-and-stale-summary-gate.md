@@ -1,7 +1,7 @@
 ---
 id: gap-voice-context-pack-refresh-and-stale-summary-gate
 title: Live Voice context pack 只在连接建立时发送一次 ⇒ run-end summary 播报过期内容：对话变化时重发 + 摘要过期闸
-status: todo
+status: ready
 labels:
   - gap
   - defect
