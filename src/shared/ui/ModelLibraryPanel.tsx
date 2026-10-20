@@ -18,7 +18,7 @@ import ModelEnvEditor, {
   toEditorRows,
   toRequestRows,
   type ModelEnvEditorRow,
-} from '@/modules/chat/modals/ModelEnvEditor';
+} from '@/shared/ui/ModelEnvEditor';
 import type {
   LLMProvider,
   ModelEnvStatus,

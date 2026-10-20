@@ -6,7 +6,7 @@
  * recorded WAV and the model's token list is here: the Kaldi-compatible fbank, the LFR 7/6 window
  * with FunASR-style left padding plus CMVN, the ONNX `metadata_props` reader, log-softmax, and the
  * CTC greedy decode. The `onnxruntime-web` session itself is NOT here — it lives in the worker
- * (`@/modules/chat/audio/voiceClientAsrWorker`) — because this module has to stay runnable, and
+ * (`@/shared/voiceClientAsrWorker`) — because this module has to stay runnable, and
  * therefore testable, with no model and no runtime.
  *
  * WHERE IT COMES FROM. This is a port of the feasibility probe's front end

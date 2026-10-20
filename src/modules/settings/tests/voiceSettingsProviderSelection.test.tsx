@@ -64,7 +64,7 @@ const clientAsrPanel = vi.hoisted(() => ({
   preload: vi.fn(),
 }));
 
-vi.mock('@/modules/chat', () => ({
+vi.mock('@/shared/hooks/useVoiceClientAsrStatus', () => ({
   useVoiceClientAsrStatus: () => clientAsrPanel,
 }));
 

@@ -33,7 +33,7 @@ import {
   type VoiceClientModelSpec,
   type VoiceModelCacheEnv,
   type VoiceModelCacheStore,
-} from '@/modules/chat/utils/voiceModelCache';
+} from '@/shared/voiceModelCache';
 
 /** The whole model, in miniature: 512 bytes whose first byte is the tag the digest reads. */
 const MODEL_BYTES = 512;

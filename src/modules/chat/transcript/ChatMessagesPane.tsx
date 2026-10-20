@@ -23,7 +23,7 @@ import PendingResidentMessage from '@/modules/chat/transcript/PendingResidentMes
 import ProviderSelectionEmptyState from '@/modules/chat/transcript/ProviderSelectionEmptyState';
 import WorkSegmentRecord from '@/modules/chat/transcript/WorkSegmentRecord';
 import LoadAllMessagesOverlay from '@/modules/chat/transcript/LoadAllMessagesOverlay';
-import ActivityIndicator from '@/modules/chat/composer/ActivityIndicator';
+import { ActivityIndicator } from '@/modules/chat/activity';
 
 /**
  * How many of the newest rows mount with real content on the first commit,

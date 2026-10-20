@@ -22,9 +22,9 @@ import {
   Button,
   LLMProviderLogo,
 } from "@/shared/ui";
-import ModelGroupList, { type ModelGroup } from "@/modules/chat/composer/ModelGroupList";
-import { ResidentToggle } from "@/modules/chat/composer/ResidentConsentNotice";
-import ModelLibraryPanel from "@/modules/chat/modals/ModelLibraryPanel";
+import ModelGroupList, { type ModelGroup } from "@/modules/chat/components/ModelGroupList";
+import { ResidentToggle } from "@/modules/chat/components/ResidentConsentNotice";
+import ModelLibraryPanel from "@/shared/ui/ModelLibraryPanel";
 import { writeSelectedProvider } from '@/shared/selectedProvider';
 
 const PROVIDER_META: { id: LLMProvider; name: string }[] = [

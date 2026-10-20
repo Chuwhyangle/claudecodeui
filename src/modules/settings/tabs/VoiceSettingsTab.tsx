@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { clientAsrProviderId } from '@shared/asr/asrRegistry';
 
-import { useVoiceClientAsrStatus } from '@/modules/chat';
+import { useVoiceClientAsrStatus } from '@/shared/hooks/useVoiceClientAsrStatus';
 import SettingsSection from '@/modules/settings/SettingsSection';
 import SettingsToggle from '@/modules/settings/SettingsToggle';
 import { api } from '@/shared/api';

@@ -25,7 +25,7 @@ import type {
   ProviderModelOption,
   ProviderModelsDefinition,CommandModalPayload,CostCommandData,HelpCommandData,ModelCommandData,StatusCommandData
 } from '@/shared/types';
-import ModelLibraryPanel from '@/modules/chat/modals/ModelLibraryPanel';
+import ModelLibraryPanel from '@/shared/ui/ModelLibraryPanel';
 
 type CommandResultModalProps = {
   payload: CommandModalPayload | null;

@@ -14,7 +14,7 @@
  * that must not be cached, a corrupted cache entry that is discarded and refetched, and a
  * `Cache`/quota failure that degrades to "usable this session, re-download next time" — is reachable
  * in a unit test with no browser and no network. The real implementations are supplied by the worker
- * (`@/modules/chat/audio/voiceClientAsrWorker`), which runs where those globals exist.
+ * (`@/shared/voiceClientAsrWorker`), which runs where those globals exist.
  *
  * DEGRADATION IS NEVER SILENT. Every way the cache can fail to keep the model this session returns a
  * user-visible sentence in `VoiceModelLoad.degraded`; the alternative — a model that quietly

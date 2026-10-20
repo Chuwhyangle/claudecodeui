@@ -26,10 +26,6 @@ vi.mock('react-i18next', async (importOriginal) => ({
   ...(await importOriginal() as object),
   useTranslation: () => ({ t: (key: string, options?: { name?: string }) => (options?.name ? `${key}:${options.name}` : key) }),
 }));
-// The chat barrel drags in the whole chat UI; the settings tests need only the panel.
-vi.mock('@/modules/chat', async () => ({
-  ModelLibraryPanel: ((await vi.importActual('@/modules/chat/modals/ModelLibraryPanel')) as { default: unknown }).default,
-}));
 
 const ok = (data: unknown) => Promise.resolve({ ok: true, json: async () => data });
 const catalog = {
