@@ -2,7 +2,7 @@
 id: gap-voice-announce-phrases-settings-key
 title: announce 短语可配置化：落进 voice-realtime.settings.json 的 announcePhrases 键（默认改 2
   字以上），不开新 env；settings 文件补模板/本地分离
-status: todo
+status: ready
 labels:
   - gap
 parent: null
