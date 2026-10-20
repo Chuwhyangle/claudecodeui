@@ -3,7 +3,7 @@ id: gap-mcp-contract-extract
 title: Extract server/shared/mcp-contract from mcp-gateway
   (errors/types/schemas/principal/approval-deps + ToolDefinition/ToolRegistry +
   ACCESS_TOKEN_SCOPES + SessionTurnPort)
-status: ready
+status: done
 labels:
   - gap
 parent: null
