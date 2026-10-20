@@ -171,6 +171,24 @@ export function useShellTerminal({
     setIsInitialized(false);
   }, [fitAddonRef, terminalRef]);
 
+  // Fit the terminal to its container and report the new dimensions to the pty.
+  // Shared by the startup path and the ResizeObserver path so a change to resize
+  // semantics (or the dimensions sent) only has to be made once.
+  const fitAndSendResize = useCallback(function fitAndSendResize() {
+    const fitAddon = fitAddonRef.current;
+    const terminal = terminalRef.current;
+    if (!fitAddon || !terminal) {
+      return;
+    }
+
+    fitAddon.fit();
+    sendSocketMessage(wsRef.current, {
+      type: 'resize',
+      cols: terminal.cols,
+      rows: terminal.rows,
+    });
+  }, [fitAddonRef, terminalRef, wsRef]);
+
   useEffect(() => {
     const terminalContainer = terminalContainerRef.current;
     if (!terminalContainer || !hasSelectedProject || isRestarting || terminalRef.current) {
@@ -292,18 +310,7 @@ export function useShellTerminal({
     });
 
     window.setTimeout(() => {
-      const currentFitAddon = fitAddonRef.current;
-      const currentTerminal = terminalRef.current;
-      if (!currentFitAddon || !currentTerminal) {
-        return;
-      }
-
-      currentFitAddon.fit();
-      sendSocketMessage(wsRef.current, {
-        type: 'resize',
-        cols: currentTerminal.cols,
-        rows: currentTerminal.rows,
-      });
+      fitAndSendResize();
     }, TERMINAL_INIT_DELAY_MS);
 
     setIsInitialized(true);
@@ -321,18 +328,7 @@ export function useShellTerminal({
       }
 
       resizeTimeoutRef.current = window.setTimeout(() => {
-        const currentFitAddon = fitAddonRef.current;
-        const currentTerminal = terminalRef.current;
-        if (!currentFitAddon || !currentTerminal) {
-          return;
-        }
-
-        currentFitAddon.fit();
-        sendSocketMessage(wsRef.current, {
-          type: 'resize',
-          cols: currentTerminal.cols,
-          rows: currentTerminal.rows,
-        });
+        fitAndSendResize();
       }, TERMINAL_RESIZE_DELAY_MS);
     });
 
@@ -353,6 +349,7 @@ export function useShellTerminal({
     closeSocket,
     disposeTerminal,
     fitAddonRef,
+    fitAndSendResize,
     isRestarting,
     hasSelectedProject,
     minimal,
