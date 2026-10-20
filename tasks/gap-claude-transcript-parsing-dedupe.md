@@ -2,7 +2,7 @@
 id: gap-claude-transcript-parsing-dedupe
 title: Deduplicate Claude transcript parsing between claude-sessions.provider
   and session-conversations-search.service
-status: todo
+status: ready
 labels:
   - gap
 parent: null
