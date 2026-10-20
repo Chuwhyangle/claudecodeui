@@ -31,18 +31,35 @@ extra:
 
 ## AC
 
-- [ ] (a) **contract 叶子存在且全绿**：`server/shared/mcp-contract/` 存在且带 `index.ts` barrel；`npm run typecheck` 退出 0 且 `npm run lint` 退出 0。
-- [ ] (b) **搬走的符号可从 contract barrel import，且原定义点不再定义**：`MCP_ERROR_CODES` / `McpToolError` 等可从 `@/shared/mcp-contract` import；grep 定义点证明它们不再 DEFINED 于 `mcp-error-envelope.ts` / `mcp-gateway.audit.ts` / `mcp-gateway.auth.ts`（旧文件现在从 `@/shared/mcp-contract` import）。贴出 grep 原文。
-- [ ] (c) **无新 scope 枚举**：`grep -rn "McpToolScope" server --include='*.ts'` 返回 0 命中。
-- [ ] (d) **无 `mcp-contract/ports/` 目录**：`server/shared/mcp-contract/ports/` 不存在；domain ports 仍在 `server/shared/ports/` 下。贴出 `ls server/shared/ports` 证明。
-- [ ] (e) **AC-394 保持绿（scoped 跑）**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0；`server/shared/mcp-contract` 同时注册进 `server/shared/tests/server-import-cycle-budget.baseline.json` 的 `directoryManifest` **和** `server/shared/tests/server-import-cycle-budget.test.ts` 的 `MANIFEST_PIN` 常量，`nodeCount` 上移到等于 `directoryManifest.length`；`cycleGroups` G1/G2/G3 与 `fileEdges` 不动。
-- [ ] (f) **scoped 消费方测试绿**（逐个跑，或用带并发夹的受限循环）：`## Touches` 里的 mcp-gateway 测试文件，加 `server/modules/oauth/tests/access-token-scopes.test.ts` 与 `server/modules/oauth/tests/oauth-consent-page.test.ts` 与 Touches 里的两个 voice-realtime 测试。记录 pass 数；断言文本未改（仅 import-path 编辑）。
-- [ ] (g) **`readSessionTurn` 仍在其实现处**：grep 函数定义，`readSessionTurn` 仍在 `server/modules/providers/list/claude/claude-runtime.provider.ts`（只往 `server/shared/ports/` 加了 port TYPE，未搬函数）。
-- [ ] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **contract 叶子存在且全绿**：`server/shared/mcp-contract/` 存在且带 `index.ts` barrel；`npm run typecheck` 退出 0 且 `npm run lint` 退出 0。
+- [x] (b) **搬走的符号可从 contract barrel import，且原定义点不再定义**：`MCP_ERROR_CODES` / `McpToolError` 等可从 `@/shared/mcp-contract` import；grep 定义点证明它们不再 DEFINED 于 `mcp-error-envelope.ts` / `mcp-gateway.audit.ts` / `mcp-gateway.auth.ts`（旧文件现在从 `@/shared/mcp-contract` import）。贴出 grep 原文。
+- [x] (c) **无新 scope 枚举**：`grep -rn "McpToolScope" server --include='*.ts'` 返回 0 命中。
+- [x] (d) **无 `mcp-contract/ports/` 目录**：`server/shared/mcp-contract/ports/` 不存在；domain ports 仍在 `server/shared/ports/` 下。贴出 `ls server/shared/ports` 证明。
+- [x] (e) **AC-394 保持绿（scoped 跑）**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0；`server/shared/mcp-contract` 同时注册进 `server/shared/tests/server-import-cycle-budget.baseline.json` 的 `directoryManifest` **和** `server/shared/tests/server-import-cycle-budget.test.ts` 的 `MANIFEST_PIN` 常量，`nodeCount` 上移到等于 `directoryManifest.length`；`cycleGroups` G1/G2/G3 与 `fileEdges` 不动。
+- [x] (f) **scoped 消费方测试绿**（逐个跑，或用带并发夹的受限循环）：`## Touches` 里的 mcp-gateway 测试文件，加 `server/modules/oauth/tests/access-token-scopes.test.ts` 与 `server/modules/oauth/tests/oauth-consent-page.test.ts` 与 Touches 里的两个 voice-realtime 测试。记录 pass 数；断言文本未改（仅 import-path 编辑）。
+- [x] (g) **`readSessionTurn` 仍在其实现处**：grep 函数定义，`readSessionTurn` 仍在 `server/modules/providers/list/claude/claude-runtime.provider.ts`（只往 `server/shared/ports/` 加了 port TYPE，未搬函数）。
+- [x] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
 真实落地标准是「contract 是真叶子（只 import `server/shared/**` + builtins）且阶段 2 工具包可以依赖它」，不是「多了一个目录」。必须贴出：①AC-394 运行原样输出，显示 `shared/mcp-contract` 已注册且 SCC 组（G1/G2/G3）不变；②grep 原样输出，显示搬走符号的原定义点现在从 contract import；③typecheck / lint 退出码与 scoped 测试 pass 计数；④`server/shared/mcp-contract` 的 import 面证明它是叶子（对 `server/modules/**` 零 import）。
+
+## Verification evidence
+
+- **(a)** `npm run typecheck` → exit 0 (client + `server/tsconfig.json` + scripts). `npm run lint` → exit 0 (pre-existing warnings only; no new warning in the touched files). Contract barrel present: `server/shared/mcp-contract/{index,errors,types,schemas,principal,approvals,tool-definition,tool-registry}.ts`.
+- **(b)** Old definition points now import/re-export from the contract:
+  - `mcp-error-envelope.ts:16: export * from '@/shared/mcp-contract/errors.js';`
+  - `mcp-gateway.audit.ts:41: import type { McpToolInputSchema } from '@/shared/mcp-contract/index.js';`
+  - `mcp-gateway.auth.ts:37: import type { McpPrincipal } from '@/shared/mcp-contract/index.js';`
+  - `access-tokens.service.ts:18: import { ACCESS_TOKEN_SCOPES } from '@/shared/mcp-contract/index.js';`
+  - `grep -n "export const MCP_ERROR_CODES\|export class McpToolError\|export type McpToolInputSchema =\|export type McpPrincipal =\|export const ACCESS_TOKEN_SCOPES ="` over those four files → exit 1 (0 matches; no definitions remain).
+- **(c)** `grep -rn "McpToolScope" server --include='*.ts'` → exit 1 (0 hits).
+- **(d)** `ls server/shared/ports` → `chat-run-registry.port.ts connected-clients.port.ts provider-registry.port.ts session-host-control.port.ts session-turn.port.ts voice-rules.port.ts`; `ls -d server/shared/mcp-contract/ports` → No such file or directory.
+- **(e)** `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` → 11 pass / 0 fail, exit 0. Readings: `(c) manifest=50 dirs, measured nodes=50`; `(d) shared->modules edges: 0`; static+dynamic SCC is the pinned 8-member G1, static-only the pinned 7-member sub-part; G2/G3 empty. `directoryManifest` contains `shared/mcp-contract` and `MANIFEST_PIN` names it; `nodeCount` 49 → 50; `cycleGroups` and `fileEdges` unchanged.
+- **(f)** Scoped consumer tests (25 files, one bounded `--test-concurrency=4` run under `scripts/with-memory-cap.sh`) → **172 pass / 0 fail**, exit 0. No test assertion text was edited; no test file was changed at all (the origin barrels/modules kept their public surface).
+- **(g)** `server/modules/providers/list/claude/claude-runtime.provider.ts:1191: export function readSessionTurn(...)` — unchanged. Only the type-only `SessionTurnPort` was added under `server/shared/ports/`.
+- **(h)** `anti-drift-touches-check --task gap-mcp-contract-extract --merge-target develop` → `ANTI-DRIFT OK … 24 actual file(s), all within declared Touches (82 glob(s))`.
+- **Leaf proof (DoD ④)** the contract's only non-self imports are `@modelcontextprotocol/sdk/types.js`, `zod` and `@/shared/types.js` — **zero** imports from `server/modules/**`.
 
 ## Touches
 
