@@ -130,6 +130,16 @@ extra:
 - server/modules/voice-realtime/tests/voice-realtime-interrupt-aftermath.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-live-executor.test.ts
 
+搬进 `server/shared/types.ts` 的工具包类型别名（原定义点保留 re-export，公开面不变）：
+
+- server/shared/types.ts
+- server/modules/providers/services/claude-turn-phase.service.ts
+- server/modules/providers/services/provider-runtime.service.ts
+- server/modules/websocket/services/ui-state-request.service.ts
+- server/modules/websocket/services/chat-run-registry.service.ts
+- server/modules/websocket/services/activity-protocol.service.ts
+- server/modules/quay/quay.service.ts
+
 AC-394 注册：
 
 - server/shared/tests/server-import-cycle-budget.baseline.json
