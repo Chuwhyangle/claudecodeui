@@ -8,7 +8,10 @@ import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-wri
 import { broadcastSessionUpserted } from '@/modules/websocket/services/session-upsert-broadcast.service.js';
 import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
+  ChatRunLookupMiss,
+  ChatRunLookupResult,
   ChatRunSource,
+  ChatRunSummary,
   LLMProvider,
   NormalizedMessage,
   RealtimeClientConnection,
@@ -31,6 +34,8 @@ import type {
 // because the driver cannot import this module (the edge would close the cycle
 // the driver's header states).
 import { residentRunIsTurn } from '@/shared/utils.js';
+export type { ChatRunSummary, ChatRunLookupMiss, ChatRunLookupResult };
+
 
 /**
  * Lifecycle of one tracked run.
@@ -186,45 +191,11 @@ export type ChatRunLifecycleForwardLog = {
   appSessionId: string;
 };
 
-/**
- * Read-only facts about one run, looked up by the run's own id.
- *
- * Deliberately *not* the internal `ChatRun`: a caller addressing a run by id
- * needs its identity and lifecycle and nothing else, and handing out the
- * internal record would leak the live `writer` and the event buffer it could
- * still mutate. Consumed by this module's criterion
- * (`server/modules/websocket/tests/chat-run-by-id.test.ts`) and, through the
- * module barrel, by the MCP gateway's `overview` tool (AC-247), which types the
- * aborted-run reading of `listRecentRuns` against it.
- */
-export type ChatRunSummary = {
-  runId: string;
-  sessionId: string;
-  source: ChatRunSource;
-  status: 'running' | 'completed' | 'aborted';
-  startedAt: number;
-  completedAt: number | null;
-  lastSeq: number;
-};
 
-/**
- * Why a `getRunById` lookup returned no summary.
- *
- * `expired` means the run existed and stayed terminal past the retention
- * window; `unknown` means the id was never handed out. The two are kept apart
- * so a caller can distinguish "you waited too long" from "that id is not
- * ours". Consumed by the same criterion as `ChatRunSummary`.
- */
-export type ChatRunLookupMiss = {
-  status: 'unknown';
-  reason: 'expired' | 'unknown';
-};
 
-/**
- * The result of a run lookup by id: the run's summary, or a typed miss.
- * Consumed by the same criterion as `ChatRunSummary`.
- */
-export type ChatRunLookupResult = ChatRunSummary | ChatRunLookupMiss;
+
+
+
 
 /**
  * How long a terminal run stays available for replay. Covers the window

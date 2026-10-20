@@ -38,6 +38,7 @@ import type { CallToolResult, ToolAnnotations } from '@modelcontextprotocol/sdk/
 import { z } from 'zod';
 
 import { mcpAuditLogDb } from '@/modules/database/index.js';
+import type { McpToolInputSchema } from '@/shared/mcp-contract/index.js';
 
 import { readCorrelationId } from './mcp-correlation-id.js';
 import {
@@ -223,8 +224,12 @@ export function startMcpAuditRetention(options: McpAuditRetentionOptions = {}): 
  * `maximum` on a field. Both arms are one declaration: {@link withMcpAudit}
  * hands the SAME schema to the SDK for `tools/list` and validates against it, so
  * the advertised schema and the validation truth cannot drift.
+ *
+ * The type itself lives in the contract (`server/shared/mcp-contract/schemas.ts`,
+ * proposal stage 1) and is re-exported here so the gateway barrel keeps its
+ * public surface unchanged.
  */
-export type McpToolInputSchema = z.ZodRawShape | z.ZodType;
+export type { McpToolInputSchema };
 
 /**
  * Whether a declared schema is already a built Zod schema rather than a raw

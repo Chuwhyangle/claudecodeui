@@ -34,26 +34,16 @@
 import type { RequestHandler, Response } from 'express';
 
 import type { AccessTokensService } from '@/modules/oauth/index.js';
+import type { McpPrincipal } from '@/shared/mcp-contract/index.js';
 import { bearerToken } from '@/shared/utils.js';
 
 import { readMcpOauthEnabled } from './mcp-gateway.loopback.js';
 
-/**
- * The authenticated caller, attached to `res.locals.mcpPrincipal` on a successful
- * check. `userId` is the token owner; `scopes` are the scopes the token carries;
- * `tokenId` is the token's row id and `clientId` the OAuth client it was issued
- * to (always `null` for a personal access token, which has no client).
- *
- * Consumers: the MCP transport's tool dispatch (AC-245+), which maps it to a
- * `ControlCaller` (`{ userId, via: 'mcp' }`), and the audit wrapper (AC-244),
- * which records `tokenId` / `clientId` on every tool call.
- */
-export type McpPrincipal = {
-  userId: number;
-  tokenId: number;
-  clientId: string | null;
-  scopes: string[];
-};
+// The authenticated caller's shape lives in the contract
+// (`server/shared/mcp-contract/principal.ts`, proposal stage 1); it is
+// re-exported here so the gateway barrel and existing consumers keep importing
+// the same name from the same module.
+export type { McpPrincipal };
 
 /**
  * The OAuth access-token verifier's verdict, as `/mcp` consumes it (AC-263). On

@@ -64,6 +64,7 @@
 import { z } from 'zod';
 
 import type { HostInputPriority, LLMProvider, NormalizedMessage } from '@/shared/types.js';
+import type { McpControlCaller } from '@/shared/mcp-contract/index.js';
 
 import { toPendingInteraction } from './mcp-approvals.js';
 import type { McpPendingInteraction } from './mcp-approvals.js';
@@ -87,11 +88,12 @@ import type { McpRunGetDeps, RunGetPayload } from './mcp-run-get.js';
  * is not a withdrawable pending command (see `ChatRunSource`'s `voice` member).
  * `userId` is the token's owner — never null, because the request reached the
  * tool through the auth middleware that attached the principal.
+ *
+ * The shape itself lives in the contract (`server/shared/mcp-contract/types.ts`,
+ * proposal stage 1) and is re-exported here so the gateway barrel keeps its
+ * public surface unchanged.
  */
-export type McpControlCaller = {
-  userId: string | number | null;
-  via: 'mcp' | 'voice';
-};
+export type { McpControlCaller };
 
 /** The refusals `session_send` translates. The vocabulary is the control service's own. */
 export type McpControlRefusalCode =

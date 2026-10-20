@@ -15,6 +15,7 @@
 import crypto from 'crypto';
 
 import { accessTokensDb } from '@/modules/database/index.js';
+import { ACCESS_TOKEN_SCOPES } from '@/shared/mcp-contract/index.js';
 import { lastUsedStamp } from '@/shared/utils.js';
 
 /** Every token minted by this service carries this prefix, per mcp-gateway-SPEC. */
@@ -35,25 +36,19 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * The complete vocabulary of scopes a personal access token may be issued with,
  * per mcp-gateway-SPEC. `cloudcli:admin` is deliberately absent: it is reserved
  * and cannot be minted. Consumers: {@link normalizeAccessTokenScopes}, this
- * module's `issueToken`, and the settings module's `createAccessToken` (through
- * the OAuth barrel) — this is the single definition, never duplicated.
+ * module's `issueToken`, the settings module's `createAccessToken` and the MCP
+ * tool authorisation checks — this is the single definition, never duplicated.
+ *
+ * The constant itself lives in the contract (`server/shared/mcp-contract`,
+ * proposal `docs/proposals/mcp-gateway-tool-architecture.md` stage 1), because
+ * the stage-2 tool packages must read the same vocabulary without importing
+ * `server/modules/**`. It is re-exported here so this module's and the OAuth
+ * barrel's public surface are unchanged.
+ *
+ * Positional reads predate some appends, so the order is load-bearing: read,
+ * session:send, session:create, session:control, approve, navigate, selection.
  */
-export const ACCESS_TOKEN_SCOPES = [
-  'cloudcli:read',
-  'cloudcli:session:send',
-  'cloudcli:session:create',
-  'cloudcli:session:control',
-  'cloudcli:approve',
-  // gap-mcp-ui-open-session: lets a token drive `ui_open_session`, the first
-  // tool that changes what the user's screen shows. Appended LAST so the five
-  // positional reads that predate it keep their index.
-  'cloudcli:navigate',
-  // gap-ui-visible-context-extended-fields: lets a token read `ui_selected_text`,
-  // the user's transcript selection — the one content-bearing reading, and one
-  // grade more sensitive than an id. Appended LAST so every earlier positional
-  // read keeps its index (the array is read by position in places).
-  'cloudcli:selection',
-] as const;
+export { ACCESS_TOKEN_SCOPES };
 
 /**
  * Why a verification failed. The five values are mutually distinct so a caller
