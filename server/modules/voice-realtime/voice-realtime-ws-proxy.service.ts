@@ -2654,6 +2654,22 @@ export function handleVoiceRealtimeConnection(
   let contextText = '';
   let contextChars = 0;
   let contextRows = 0;
+  /**
+   * Epoch ms the current pack arrived, or `null` before the first one.
+   *
+   * The run-end summary's staleness gate asks whether the pack standing at settle time can possibly
+   * contain THIS run's output. A pack that arrived before the run started cannot — it is the
+   * conversation as it stood earlier — and summarizing it is exactly the defect this task fixes.
+   */
+  let contextReceivedAt: number | null = null;
+  /**
+   * The pack text of the last summary that was actually injected (spoken), or `null`.
+   *
+   * The second half of the same gate: when the conversation has not moved since the last spoken
+   * summary, summarizing the identical pack again would voice the same conclusion twice, once per
+   * run, however little happened in between.
+   */
+  let lastSummarizedContextText: string | null = null;
   /** The (context, status) pair already advertised, so a repeated compose is not a second `session.update`. */
   let advertisedKey: string | null = null;
 
@@ -4076,11 +4092,32 @@ export function handleVoiceRealtimeConnection(
    * a violation is logged rather than voiced. LENGTH is a reading, not a refusal: `qwen-flash`
    * answers run 42–44 chars and are still plain speech.
    */
-  const summarizeRunEnd = async (generation: number, runId: string | null): Promise<void> => {
+  const summarizeRunEnd = async (
+    generation: number,
+    runId: string | null,
+    runStartedAt: number,
+  ): Promise<void> => {
     if (runEndSummary === undefined || closed) return;
     const context = contextText.trim();
     if (context === '') {
       seams.log?.('run-end summary skipped: no context pack to summarize');
+      return;
+    }
+    // THE STALENESS GATE (this task). The pack is read at settle time so a resend that landed
+    // during the window IS summarized; what it must not do is summarize a pack that could not
+    // contain what this run produced. Two shapes are that pack, and both are silence rather than
+    // a confident sentence about work the person has moved past:
+    //   · it arrived BEFORE the run started — nothing this run did can be in it;
+    //   · it is byte-for-byte the pack the last spoken summary already described — the
+    //     conversation did not move, so neither may the narration.
+    // The ACK is deliberately outside this gate: it says "the turn ended", not "here is what
+    // happened", and `speakRunEndAck` has already run at the transition.
+    if (contextReceivedAt !== null && contextReceivedAt < runStartedAt) {
+      seams.log?.('run-end summary skipped: stale context pack (it arrived before this run started)');
+      return;
+    }
+    if (lastSummarizedContextText !== null && lastSummarizedContextText === context) {
+      seams.log?.('run-end summary skipped: stale context pack (the last spoken summary used this pack)');
       return;
     }
     let raw: string | null;
@@ -4110,6 +4147,9 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     runEndSummary.inject(text, { runId });
+    // Remembered only for a summary that was really queued: a refused or empty answer described
+    // nothing, so the next run is free to summarize the same pack again.
+    lastSummarizedContextText = context;
     seams.log?.(
       `run-end summary injected chars=${quality.chars} verbatimTail=${quality.verbatimTail} run=${runId ?? '-'}`,
     );
@@ -4124,11 +4164,17 @@ export function handleVoiceRealtimeConnection(
   const scheduleRunEndSummary = (): void => {
     if (runEndSummary === undefined || closed) return;
     const generation = (runEndGeneration += 1);
-    const runId = execStatus.reading().runId;
+    const reading = execStatus.reading();
+    const runId = reading.runId;
+    // WHEN THIS RUN STARTED, read off the same aggregator the transition was detected from:
+    // `elapsedMs` is measured from the run's own start stamp, so the subtraction is exactly the
+    // moment `noteStatus` first saw this run id. Captured HERE rather than at settle time because
+    // the aggregator may fold a newer observation (or a new run) inside the settle window.
+    const runStartedAt = Date.now() - reading.elapsedMs;
     clearRunEndSettle();
     runEndSettleTimer = setTimeout(() => {
       runEndSettleTimer = null;
-      void summarizeRunEnd(generation, runId);
+      void summarizeRunEnd(generation, runId, runStartedAt);
     }, runEndSettleMs);
     runEndSettleTimer.unref?.();
   };
@@ -6287,6 +6333,10 @@ export function handleVoiceRealtimeConnection(
       contextText = frame.text;
       contextChars = frame.chars;
       contextRows = frame.rows;
+      // The arrival stamp the run-end staleness gate reads. Stamped on EVERY accepted frame, not
+      // only the first: that is what lets a resend during a run make the pack fresh enough to
+      // summarize, and what keeps an unchanged, connection-opening pack from being read as news.
+      contextReceivedAt = Date.now();
       seams.log?.(`context received chars=${contextChars} rows=${contextRows}`);
       advertiseInstructions();
       return;

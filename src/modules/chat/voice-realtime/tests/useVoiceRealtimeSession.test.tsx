@@ -14,6 +14,7 @@ import type {
   VoiceRealtimeMicSuspension,
 } from '@/modules/chat/voice-realtime/audioSource';
 import type { VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
+import type { ChatMessage } from '@/shared/types';
 
 /**
  * Stage C — the browser half of the Live Voice stream, with the wire and the audio source faked.
@@ -1069,5 +1070,101 @@ describe('a network drop reconnects with backoff, and says so', () => {
     const gaveUp = view.getByTestId('voice-realtime-connection-alert');
     expect(gaveUp.getAttribute('data-state')).toBe('disconnected');
     expect(gaveUp.textContent).not.toContain('/5');
+  });
+});
+
+/**
+ * The C2 context pack FOLLOWS the conversation (gap-voice-context-pack-refresh-and-stale-summary-gate).
+ *
+ * It used to be a single frame at `socket.onopen`, and the proxy kept that reading for the whole
+ * connection — so a run-end summary could only ever describe what had been said when Live Voice was
+ * started. The rules pinned here are the client half: a change in what the person can READ is
+ * re-sent after a short quiet window, an unchanged pack is not re-sent (the proxy would report a
+ * new injection for no new context), and a closed connection is never written to.
+ */
+describe('context: the pack is resent when the conversation moves', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // A fixed clock keeps the pack's relative times (`刚刚`) stable across the debounce window, so
+    // "the pack did not change" is a fact of the transcript rather than of how long the test ran.
+    vi.setSystemTime(new Date('2026-10-21T00:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const row = (type: 'user' | 'assistant', content: string): ChatMessage => ({
+    type,
+    content,
+    timestamp: new Date('2026-10-21T00:00:00Z'),
+  });
+
+  const mountWithContext = (contextMessages: readonly ChatMessage[]) =>
+    renderHook(
+      ({ messages }: { messages: readonly ChatMessage[] }) =>
+        useVoiceRealtimeSession({ sessionId: 'sess-1', contextMessages: messages }),
+      { initialProps: { messages: contextMessages } },
+    );
+
+  /** Every `context` frame the page put on this socket, in order. */
+  const contextFrames = (ws: FakeWebSocket) =>
+    ws.sent
+      .map((raw) => JSON.parse(raw) as { type: string; text?: string; chars?: number; rows?: number })
+      .filter((frame) => frame.type === 'context');
+
+  const openWith = (messages: readonly ChatMessage[]) => {
+    const view = mountWithContext(messages);
+    act(() => view.result.current.start());
+    act(() => socket().onopen?.());
+    return view;
+  };
+
+  test('a new visible row is resent after the debounce, and the frame carries the new pack', () => {
+    const first = [row('user', '把登录页改一下。')];
+    const view = openWith(first);
+    const [opening] = contextFrames(socket());
+    expect(opening).toBeDefined();
+
+    view.rerender({ messages: [...first, row('assistant', '已经改好了，单元测试 12/12 通过。')] });
+    // Nothing inside the quiet window: a streaming answer must not put a frame per row on the wire.
+    act(() => vi.advanceTimersByTime(2_499));
+    expect(contextFrames(socket())).toHaveLength(1);
+
+    act(() => vi.advanceTimersByTime(1));
+    const frames = contextFrames(socket());
+    expect(frames).toHaveLength(2);
+    expect(frames[1]!.text).not.toBe(frames[0]!.text);
+    expect(frames[1]!.chars).toBeGreaterThan(frames[0]!.chars!);
+    expect(frames[1]!.rows).toBe(2);
+  });
+
+  test('a transcript change that leaves the pack identical is not sent again', () => {
+    const messages = [row('user', '把登录页改一下。'), row('assistant', '已经改好了。')];
+    const view = openWith(messages);
+    expect(contextFrames(socket())).toHaveLength(1);
+
+    // A new ARRAY with the same rows — the shape a re-render of the transcript hands over.
+    view.rerender({ messages: [...messages] });
+    act(() => vi.advanceTimersByTime(2_500));
+    expect(contextFrames(socket())).toHaveLength(1);
+  });
+
+  test('a closed socket is never written to, and a pending resend is dropped', () => {
+    const first = [row('user', '把登录页改一下。')];
+    const view = openWith(first);
+    expect(contextFrames(socket())).toHaveLength(1);
+
+    // Arm the debounce, then take the connection away before it fires.
+    view.rerender({ messages: [...first, row('assistant', '已经改好了。')] });
+    const ws = socket();
+    act(() => view.result.current.end());
+
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(ws.sent.filter((raw) => (JSON.parse(raw) as { type: string }).type === 'context')).toHaveLength(1);
+
+    // And a change AFTER the close arms nothing on the dead socket.
+    view.rerender({ messages: [...first, row('assistant', '又改了一版。')] });
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(ws.sent.filter((raw) => (JSON.parse(raw) as { type: string }).type === 'context')).toHaveLength(1);
   });
 });

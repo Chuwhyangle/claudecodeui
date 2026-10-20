@@ -765,6 +765,19 @@ export type VoiceRealtimeSession = {
 const VOICE_RECONNECT_DELAYS_MS = [500, 1_000, 2_000, 4_000, 8_000] as const;
 
 /**
+ * How long the transcript must stay quiet before the C2 context pack is re-sent.
+ *
+ * The pack used to be sent once, at `socket.onopen`, and the proxy kept that reading for the whole
+ * connection — so every run-end summary described the conversation as it stood when the person
+ * opened Live Voice. A run's own output lands in the transcript after the run ends, which is a
+ * burst of rows rather than one; debouncing keeps a streaming answer from putting a frame per
+ * token on the wire. 2.5 s is inside the proposal's 2–3 s window and shorter than the proxy's
+ * 400 ms settle wait plus a TTS round trip, so the fresh pack is normally standing before the
+ * run-end summary is asked.
+ */
+const VOICE_CONTEXT_RESEND_DEBOUNCE_MS = 2_500;
+
+/**
  * One console line per lifecycle event of a Live Voice connection. The server log shows what
  * the upstream said; only the page knows why IT started, replaced or ended a connection, and
  * "the session closed right after it opened" is unanswerable without that.
@@ -979,11 +992,13 @@ export function useVoiceRealtimeSession({
   sessionId: string | null;
   onSent?: (() => void) | undefined;
   /**
-   * The conversation the C2 context pack is built from, read once per NEW connection.
+   * The conversation the C2 context pack is built from.
    *
-   * The transcript the pane renders, not the caption rows: what the person is in the middle of
-   * saying is audio the model already hears, and the words land in this list as a real message the
-   * moment the delivery is confirmed.
+   * Read once when a connection opens and again (debounced) whenever this array changes while the
+   * connection stays up, so the proxy's instructions follow the conversation instead of freezing
+   * on the first snapshot. The transcript the pane renders, not the caption rows: what the person
+   * is in the middle of saying is audio the model already hears, and the words land in this list as
+   * a real message the moment the delivery is confirmed.
    */
   contextMessages?: readonly ChatMessage[] | undefined;
 }): VoiceRealtimeSession {
@@ -1245,6 +1260,80 @@ export function useVoiceRealtimeSession({
   useEffect(() => {
     contextMessagesRef.current = contextMessages ?? [];
   });
+
+  /**
+   * The pack text this connection already put on the wire, or `null` before its first frame.
+   *
+   * The resend exists because the conversation grows while ONE connection stays open: the proxy
+   * keeps using whatever pack it last received, so a run-end summary read one connection-opening
+   * snapshot forever. A pack that did not change is NOT re-sent — the proxy composes on every
+   * `context` frame, and a duplicate would move its `context injected` reading without the
+   * conversation moving. Reset per connection, because "already sent" is a fact about one socket.
+   */
+  const sentContextTextRef = useRef<string | null>(null);
+  /** The debounce that re-sends the pack once the transcript settles, or `null`. */
+  const contextResendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Drops a pending pack resend. Safe to call twice and safe on a connection that never sent one. */
+  const clearContextResend = useCallback(() => {
+    if (contextResendTimerRef.current !== null) {
+      clearTimeout(contextResendTimerRef.current);
+      contextResendTimerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Hands the CURRENT conversation to the proxy, if this connection has not already been told it.
+   *
+   * Called from `socket.onopen` (the first pack) and from the debounced resend effect below. The
+   * proxy reads a `context` frame at any point in the connection's life and re-composes the
+   * instructions from it, so neither call has to wait for the upstream session to open: a frame
+   * that arrives before the handshake is picked up by the `whenConnected` path.
+   */
+  const sendContextPack = useCallback((socket: WebSocket) => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    const pack = buildVoiceContextPack(contextMessagesRef.current);
+    const frame = contextFrame(pack);
+    // No frame for an empty pack, and none for a pack that matches what this connection already
+    // sent: the first run over an empty conversation sends nothing at all.
+    if (frame === null || frame.text === sentContextTextRef.current) {
+      return;
+    }
+    sentContextTextRef.current = frame.text;
+    socket.send(JSON.stringify(frame));
+    voiceLog(`context chars=${frame.chars} rows=${frame.rows}`);
+  }, []);
+
+  /**
+   * Keeps the proxy's pack following the conversation while one connection stays open.
+   *
+   * The transcript array is a NEW identity each time rows land, which is exactly the "something
+   * was said" edge this watches: after {@link VOICE_CONTEXT_RESEND_DEBOUNCE_MS} of quiet, the pack
+   * is rebuilt and sent only if it differs from the one already on the wire (a caption row that
+   * changes without changing what the person could READ sends nothing).
+   *
+   * No socket means nothing to follow: the connection's own `onopen` sends the first pack, and a
+   * pending timer is dropped with the close (`end` and `onclose` both call
+   * {@link clearContextResend}), so a dead socket is never written to.
+   */
+  useEffect(() => {
+    clearContextResend();
+    const socket = socketRef.current;
+    if (contextMessages === undefined || socket === null || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    contextResendTimerRef.current = setTimeout(() => {
+      contextResendTimerRef.current = null;
+      const current = socketRef.current;
+      if (current === null) {
+        return;
+      }
+      sendContextPack(current);
+    }, VOICE_CONTEXT_RESEND_DEBOUNCE_MS);
+    return clearContextResend;
+  }, [contextMessages, clearContextResend, sendContextPack]);
 
   /** Releases whichever audio source is active (the microphone, or a file decode). Safe to call twice. */
   const releaseCapture = useCallback(() => {
@@ -1586,6 +1675,9 @@ export function useVoiceRealtimeSession({
     // The narration playing (or being synthesized) belongs to the connection going away; a blob
     // URL left behind would keep the utterance audible after Exit.
     stopNarratorAudio();
+    // A pack still waiting out its debounce has no socket left to reach: the connection is being
+    // taken down here, and `onclose` returns early because `socketRef` is about to be cleared.
+    clearContextResend();
     const socket = socketRef.current;
     socketRef.current = null;
     if (socket) {
@@ -1595,7 +1687,7 @@ export function useVoiceRealtimeSession({
       socket.close();
     }
     setPhase('idle');
-  }, [cancelReconnect, flushSegments, releaseCapture, resetSegmentVerdicts, stopNarratorAudio]);
+  }, [cancelReconnect, clearContextResend, flushSegments, releaseCapture, resetSegmentVerdicts, stopNarratorAudio]);
 
   // `end` is stable, so the cleanup runs once per mount. A page that
   // navigates away with the microphone open is the one state this must not
@@ -1788,6 +1880,10 @@ export function useVoiceRealtimeSession({
       // The previous connection's segment verdicts and their deadlines are not this one's.
       resetSegmentVerdicts();
       resetSegmentation();
+      // "Already sent" was a fact about the PREVIOUS socket: this connection has been told nothing,
+      // so its `onopen` must put the pack on this wire even if the words are the same as before.
+      clearContextResend();
+      sentContextTextRef.current = null;
 
       let socket: WebSocket;
       try {
@@ -2177,13 +2273,9 @@ export function useVoiceRealtimeSession({
         // already on the wire before any `segment_start`: the proxy composes its instructions from
         // the pack it has at that moment, and the upstream session opens well after both frames
         // (the client holds captured audio until the proxy reports `state: open`). A conversation
-        // with nothing said yet sends no frame at all.
-        const pack = buildVoiceContextPack(contextMessagesRef.current);
-        const frame = contextFrame(pack);
-        if (frame) {
-          socket.send(JSON.stringify(frame));
-          voiceLog(`context chars=${frame.chars} rows=${frame.rows}`);
-        }
+        // with nothing said yet sends no frame at all. Later changes to the conversation are
+        // carried by the debounced resend effect, not by a second connection.
+        sendContextPack(socket);
       };
 
       socket.onmessage = (event: MessageEvent<string>) => {
@@ -2698,6 +2790,10 @@ export function useVoiceRealtimeSession({
         }
         setClosedUnshown(unshown);
         socketRef.current = null;
+        // A pack still waiting out its debounce belonged to this connection, and the socket it
+        // would be written to is gone: the next connection starts its own debounce and its own
+        // "already sent" record.
+        clearContextResend();
         pendingFramesRef.current = [];
         socketOpenRef.current = false;
         segmentedRef.current = false;
@@ -2765,6 +2861,7 @@ export function useVoiceRealtimeSession({
     [
       beginCapture,
       cancelReconnect,
+      clearContextResend,
       clearSegmentOutcome,
       clearTranscriptDeadline,
       fail,
@@ -2775,6 +2872,7 @@ export function useVoiceRealtimeSession({
       resetSegmentVerdicts,
       resetSegmentation,
       ringAttentionCueOnce,
+      sendContextPack,
       settleSegmentTranscript,
       stopNarratorAudio,
     ],
