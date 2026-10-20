@@ -33,17 +33,17 @@ Live Voice 目前把连接相位直接写成文字：`Connecting voice…` / `St
 
 ## AC
 
-- [ ] `grep -nE "voice\.realtime\.(connecting|listening)|Starting microphone" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 退出码 1（三个瞬态词不再出现在 bar 的渲染路径），且 `grep -nE "Voice disconnected|voice\.realtime\.(muted|failed)" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 仍有命中（保留态文案未被一起删光）。
-- [ ] `bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出码 0 —— 这两处已重锚：arming/listening 相位下 `[data-testid="voice-realtime-status"]` 的 `textContent` 为空串，`data-capture` 仍读 `starting`/`live`，`data-testid="voice-realtime-phase"` 仍读相位；`muted`/`disconnected`/`failed` 文案断言不变。
-- [ ] `bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/soundCue.test.ts` 退出码 0 —— 新增用例断言：enter cue 在会话首次进入 `listening` 时恰好被调一次、reconnect 再次 `listening` 不重调；exit cue 在 `end()` 恰好一次、未开启过则不调；attention cue 在进入 `disconnected`/`failed` 时恰好一次、正常 `end()` 不调；`soundCue.ts` 经 `createOscillator` 合成而非 `new Audio(` / narrator / TTS 路径。
-- [ ] `grep -rnE "playVoice(Enter|Exit|Attention)Cue|primeVoiceCues" src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts src/modules/chat/ChatInterface.tsx src/modules/chat/voice-realtime/index.ts` 命中分布与上文触发点/barrel 声明一致（cue 只经这三处合流，无散落调用点）。
-- [ ] `npm run typecheck` 退出码 0；`npm run lint` 退出码 0。
-- [ ] `grep -nE "'(Connecting voice|Listening|Starting microphone)'" e2e/voice-realtime-capture-ready-status.spec.ts` 退出码 1（spec 改为读 `data-capture` 与空文案），且 `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts` 退出码 0。
-- [ ] `grep -n "every sample of the state line must carry words" e2e/voice-realtime-continuous-experience.spec.ts` 仍有命中，但其断言体已改为「仅非瞬态相位要求非空」（X-6 不再在 transient 相位要求文字，改读 `data-capture`/相位）。
+- [x] `grep -nE "voice\.realtime\.(connecting|listening)|Starting microphone" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 退出码 1（三个瞬态词不再出现在 bar 的渲染路径），且 `grep -nE "Voice disconnected|voice\.realtime\.(muted|failed)" src/modules/chat/voice-realtime/VoiceRealtimeBar.tsx` 仍有命中（保留态文案未被一起删光）。
+- [x] `bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/voiceCaptureReadyState.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx` 退出码 0 —— 这两处已重锚：arming/listening 相位下 `[data-testid="voice-realtime-status"]` 的 `textContent` 为空串，`data-capture` 仍读 `starting`/`live`，`data-testid="voice-realtime-phase"` 仍读相位；`muted`/`disconnected`/`failed` 文案断言不变。
+- [x] `bash scripts/with-memory-cap.sh npx vitest run src/modules/chat/voice-realtime/tests/soundCue.test.ts` 退出码 0 —— 新增用例断言：enter cue 在会话首次进入 `listening` 时恰好被调一次、reconnect 再次 `listening` 不重调；exit cue 在 `end()` 恰好一次、未开启过则不调；attention cue 在进入 `disconnected`/`failed` 时恰好一次、正常 `end()` 不调；`soundCue.ts` 经 `createOscillator` 合成而非 `new Audio(` / narrator / TTS 路径。
+- [x] `grep -rnE "playVoice(Enter|Exit|Attention)Cue|primeVoiceCues" src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts src/modules/chat/ChatInterface.tsx src/modules/chat/voice-realtime/index.ts` 命中分布与上文触发点/barrel 声明一致（cue 只经这三处合流，无散落调用点）。
+- [x] `npm run typecheck` 退出码 0；`npm run lint` 退出码 0。
+- [x] `grep -nE "'(Connecting voice|Listening|Starting microphone)'" e2e/voice-realtime-capture-ready-status.spec.ts` 退出码 1（spec 改为读 `data-capture` 与空文案），且 `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts` 退出码 0。
+- [x] `grep -n "every sample of the state line must carry words" e2e/voice-realtime-continuous-experience.spec.ts` 仍有命中，但其断言体已改为「仅非瞬态相位要求非空」（X-6 不再在 transient 相位要求文字，改读 `data-capture`/相位）。
 
 ## DoD
 
-- [ ] `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts e2e/voice-realtime-continuous-experience.spec.ts` 退出码 0：脚本化上游下，bar 在 transient 相位无瞬态文案、`data-capture` 读数正确、X-6 重锚后全绿。
+- [x] `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts e2e/voice-realtime-continuous-experience.spec.ts` 退出码 0：脚本化上游下，bar 在 transient 相位无瞬态文案、`data-capture` 读数正确、X-6 重锚后全绿。
 - [ ] 真机实听（桌面浏览器 + 真实麦克风 + 真实上游）：进入上行双音、退出下行双音、断开/失败第三种音各响一次且与 TTS 旁白无混响；「正在连接/正在听/正在启动麦克风」文案不再出现。机器证据（单测断言 cue 恰被调一次 + e2e 无瞬态文案）齐备后，音频的「听得见、不刺耳」由 yale 实听确认（待外部）
 
 ## Touches
