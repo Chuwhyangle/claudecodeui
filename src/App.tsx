@@ -1,10 +1,11 @@
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
+import type { ReactNode } from 'react';
 
 import { OAUTH_CONSENT_SPA_PATH } from '@shared/oauthConsent';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
 import { UiPreferencesProvider } from '@/shared/context/UiPreferencesContext';
-import { AuthProvider, ProtectedRoute } from '@/modules/auth';
+import { AuthProvider, ProtectedRoute, useAuth } from '@/modules/auth';
 import { TaskMasterProvider,TasksSettingsProvider } from '@/modules/task-master';
 import { WebSocketProvider } from '@/shared/context/WebSocketContext';
 import { PluginsProvider } from '@/modules/plugins';
@@ -107,6 +108,19 @@ function detectRouterBasename() {
   return detectedBasename;
 }
 
+/**
+ * Bridges the auth feature into the shared websocket provider.
+ *
+ * This is the application assembly point: the one place allowed to know both
+ * layers. `shared` must not import `modules/auth`, so the session arrives at
+ * `WebSocketProvider` as an injected port instead of being read there. Used only
+ * by `App`.
+ */
+function AuthenticatedWebSocket({ children }: { children: ReactNode }) {
+  const { isLoading, token, user } = useAuth();
+  return <WebSocketProvider auth={{ isLoading, token, user }}>{children}</WebSocketProvider>;
+}
+
 /** Rendered by main.tsx; mounts the shared providers, the auth gate and the project workspace routes. */
 export default function App() {
   const routerBasename = detectRouterBasename();
@@ -116,7 +130,7 @@ export default function App() {
       <ThemeProvider>
         <UiPreferencesProvider>
         <AuthProvider>
-          <WebSocketProvider>
+          <AuthenticatedWebSocket>
             <PluginsProvider>
               <TasksSettingsProvider>
                 <TaskMasterProvider>
@@ -138,7 +152,7 @@ export default function App() {
                 </TaskMasterProvider>
               </TasksSettingsProvider>
             </PluginsProvider>
-          </WebSocketProvider>
+          </AuthenticatedWebSocket>
         </AuthProvider>
         </UiPreferencesProvider>
       </ThemeProvider>
