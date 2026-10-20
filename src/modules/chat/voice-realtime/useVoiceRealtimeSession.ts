@@ -1077,7 +1077,7 @@ export function useVoiceRealtimeSession({
    * included: a fresh wire that drops again is a second loss the person has to hear about.
    */
   const attentionCuedRef = useRef(false);
-  /** Rings the entry cue at most once per session; the three `listening` entry points share it. */
+  /** Rings the entry cue at most once per session; the capture-ready and unmute paths share it. */
   const ringEnterCueOnce = useCallback(() => {
     if (enterCuedRef.current) return;
     enterCuedRef.current = true;
@@ -1627,12 +1627,14 @@ export function useVoiceRealtimeSession({
             if (!captureReadyRef.current) {
               captureReadyRef.current = true;
               setCaptureReady(true);
+              // The cue belongs to the microphone becoming live, not to the wire: capture is ready
+              // before the handshake often enough that waiting for `open` made the cue lag the
+              // first usable frame. Mute still outranks it — `unmute` rings then.
+              if (!mutedRef.current) ringEnterCueOnce();
               // Promote only when the upstream is open and the person is not muted. If `open` has
               // not arrived yet, the open handler reads this ref and goes straight to `listening`;
-              // if muted, `unmute` decides (it reads the same ref). This is the moment the old
-              // transient word said "listening", so it is also where the entry cue sounds.
+              // if muted, `unmute` decides (it reads the same ref).
               if (socketOpenRef.current && !mutedRef.current) {
-                ringEnterCueOnce();
                 setPhase((current) => (current === 'arming' ? 'listening' : current));
               }
             }
@@ -2231,12 +2233,8 @@ export function useVoiceRealtimeSession({
             // The upstream being open is not the microphone being live: if the first captured frame
             // has not arrived yet, the bar says it is still starting the microphone (`arming`) until
             // it does. Mute still outranks the capture reading — a muted session stays `muted`
-            // whether or not frames are flowing, and `unmute` promotes once they are.
-            // If the capture was ready BEFORE the handshake finished, this is the session's first
-            // `listening` and the entry cue's moment.
-            if (!mutedRef.current && captureReadyRef.current) {
-              ringEnterCueOnce();
-            }
+            // whether or not frames are flowing, and `unmute` promotes once they are. The entry cue
+            // is not rung here: it already sounded when capture became ready (see `beginCapture`).
             setPhase(mutedRef.current ? 'muted' : captureReadyRef.current ? 'listening' : 'arming');
           } else if (frame.state === 'closed') {
             serverEndedRef.current = true;
@@ -2775,7 +2773,6 @@ export function useVoiceRealtimeSession({
       resetSegmentVerdicts,
       resetSegmentation,
       ringAttentionCueOnce,
-      ringEnterCueOnce,
       settleSegmentTranscript,
       stopNarratorAudio,
     ],
@@ -2818,8 +2815,8 @@ export function useVoiceRealtimeSession({
     // Capture readiness decides what unmuting means: Mute can be pressed while the microphone is
     // still arming, and unmuting then must NOT claim `listening` — the first frame may be the one
     // that arrives next. When frames are already flowing, this is the old `listening` behaviour —
-    // and, when Mute had hidden the session's first `listening`, the third merged moment for the
-    // entry cue (the first frame and `state: open` are the other two).
+    // and, when Mute had hidden the session's first `captureReady`, the second moment for the entry
+    // cue (the first frame is the other one).
     if (captureReadyRef.current) ringEnterCueOnce();
     setPhase((current) => (current === 'muted' ? (captureReadyRef.current ? 'listening' : 'arming') : current));
   }, [ringEnterCueOnce]);

@@ -136,13 +136,14 @@ describe('the entry cue marks the session first becoming live, exactly once', ()
     expect(cues).toEqual(['enter']);
   });
 
-  test('when capture was ready before the handshake finished, the open frame is the moment', () => {
+  test('when capture was ready before the handshake finished, the first captured frame rings it', () => {
     const { result } = mount();
     act(() => result.current.start());
-    // Capture is live while the upstream is still opening: no cue yet, because the session is not
-    // listening — the frame is held and replayed later.
+    // Capture is live while the upstream is still opening. The cue marks the microphone being
+    // live, not the wire: it rings on the first frame and does not wait for `state: open`.
     act(() => sources[0]!.push(frame([0.1])));
-    expect(cues).toEqual([]);
+    expect(result.current.phase).toBe('connecting');
+    expect(cues).toEqual(['enter']);
 
     act(() => socket().receive({ type: 'state', state: 'open' }));
     expect(result.current.phase).toBe('listening');
