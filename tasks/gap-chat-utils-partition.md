@@ -38,28 +38,29 @@ F7（架构校准报告 2026-10-20，ArchGuard 0.1.40）：前端 god package，
 
 ## Evidence
 
-2026-10-20，worktree `gap-chat-utils-partition`，实现 commit f3d59d581。33 个生产文件全部移入三个子包。
+2026-10-20，worktree `gap-chat-utils-partition`，实现 commit f3d59d581；同日把 `develop`（含 `gap-chat-settings-composer-transcript-cycles` 的环拆分）合并进分支后复测。33 个生产文件落入三个子包；其中 `audioDecode`、`voiceModelCache` 在 develop 侧已上提到 `src/shared`，合并后按 develop 的位置保留（不再位于 voice 子包），其余仍在子包内。合并时 `composer/ActivityIndicator.tsx` 与 `transcript/ActivityDockPanel.tsx` 采用 develop 的薄 re-export（实现移到 `chat/activity/`），并把 `chat/activity/` 两个文件的 import 重指到分包路径（这两处因此写入 `## Touches`）。
 
-① 子包读数（AC1 命令退出 0）：
-- `src/modules/chat/utils/voice`：11 文件 / 2,744 LOC（index.ts + 10 modules）
-- `src/modules/chat/utils/transcript`：14 文件 / 1,605 LOC（index.ts + 13 modules）
-- `src/modules/chat/utils/session`：11 文件 / 1,329 LOC（index.ts + 10 modules）
+① 子包读数（AC1 命令退出 0，合并后复测）：
+- `src/modules/chat/utils/voice`：9 文件 / 2,182 LOC
+- `src/modules/chat/utils/transcript`：14 文件 / 1,605 LOC
+- `src/modules/chat/utils/session`：11 文件 / 1,329 LOC
 基线 aggregate：33 文件 / 5,627 LOC。三包均 ≤15 文件、≤3,000 LOC。
+（合并前 voice 为 11 文件 / 2,744 LOC；差额即随 develop 环拆分移入 `src/shared` 的 `audioDecode` 与 `voiceModelCache`。）
 
 ② 聚合路径导入：改前 0（既有调用方本就直接导入具体文件，不存在 `from '@/modules/chat/utils'`），改后 0。调用方改为具体子包路径，样例：
-- `import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/modules/chat/utils/voice/audioDecode';`
+- `import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/shared/audioDecode';`（develop 侧上提后的落点）
 - `import { formatUsageLimitText } from '@/modules/chat/utils/transcript/chatFormatting';`
 - `import type { ActivityLiveness } from '@/modules/chat/utils/session/activityFreshness';`
 
 ③ `test -f src/modules/chat/utils/voice/voiceLiveSegmenter.ts` → 0；`test ! -e src/modules/chat/utils/voiceLiveSegmenter.ts` → 0。
 
-④ `npx vitest run src/modules/chat/utils/tests`：`Test Files 6 passed (6)`；`Tests 61 passed | 1 skipped (62)`。
+④ `npx vitest run src/modules/chat/utils/tests`（合并后复测）：`Test Files 6 passed (6)`；`Tests 61 passed | 1 skipped (62)`。冲突文件另测：`voiceClientAsrRouting` / `voiceTrimCapabilityWiring` / `voiceUpload16k` 共 `3 passed (3)`，`Tests 23 passed (23)`。
 
 ⑤ ArchGuard（同一工具、同一 `sources=["src"]`）：
 - before（develop a0f7c0544）：`modules/chat/utils` fanIn 131 / fanOut 170。
-- after：`modules/chat/utils/voice` fanIn 52 / fanOut 83；`modules/chat/utils/transcript` fanIn 46 / fanOut 50；`modules/chat/utils/session` fanIn 35 / fanOut 39。三包 fanOut 均 ≤100。
+- after（合并后新鲜查询）：`modules/chat/utils/voice` fanIn 52 / fanOut 83；`modules/chat/utils/transcript` fanIn 46 / fanOut 50；`modules/chat/utils/session` fanIn 35 / fanOut 39；三包 cycleCount 均为 0，fanOut 均 ≤100。
 
-⑥ `npm run typecheck` exit 0；`npm run lint` exit 0。
+⑥ `npm run typecheck` exit 0；`npm run lint` exit 0（均为合并后复测）。
 
 ⑦ 取假形态：把 `activityDockView.ts` 临时移回 `src/modules/chat/utils/` 根并把 `ActivityIndicator.tsx` 的导入改为 `from '@/modules/chat/utils'` ⇒ 第二条 AC 的 grep 读数 1（RED）；还原后读数 0（GREEN）。
 
@@ -74,6 +75,7 @@ F7（架构校准报告 2026-10-20，ArchGuard 0.1.40）：前端 god package，
 - src/modules/chat/utils/*.ts
 - src/modules/chat/tests/**
 - src/modules/chat/hooks/**
+- src/modules/chat/activity/**
 - src/modules/chat/transcript/**
 - src/modules/chat/composer/**
 - src/modules/chat/voice-realtime/**
