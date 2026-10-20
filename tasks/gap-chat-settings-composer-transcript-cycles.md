@@ -1,7 +1,7 @@
 ---
 id: gap-chat-settings-composer-transcript-cycles
 title: Break chat↔settings and composer↔transcript import cycles in src
-status: ready
+status: todo
 labels:
   - gap
 parent: null
@@ -34,8 +34,8 @@ F2（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 ## AC
 
 - [ ] `test -z "$(grep -rn "from '@/modules/settings'" src/modules/chat --include='*.ts' --include='*.tsx')"`：`chat` 对 `@/modules/settings` 的生产导入为 0（立案时 2 条），命令退出 0。
-- [ ] `grep -rn "from '@/modules/chat'" src/modules/settings --include='*.ts' --include='*.tsx' | grep -v '/tests/'` 返回 0 命中（立案时 2 条生产命中：`ModelsContent.tsx:4`、`VoiceSettingsTab.tsx:7`），命令退出 0。
-- [ ] 双向各 0：`grep -rn "@/modules/chat/transcript" src/modules/chat/composer --include='*.ts' --include='*.tsx'` 与 `grep -rn "@/modules/chat/composer" src/modules/chat/transcript --include='*.ts' --include='*.tsx'` 各返回 0 命中；`ActivityIndicator` / `ActivityDockPanel` 的新位置在 `src/modules/chat/activity/` 下（贴出两个文件路径）。
+- [ ] `test -z "$(grep -rn "from '@/modules/chat'" src/modules/settings --include='*.ts' --include='*.tsx' | grep -v '/tests/')"`：`settings` 对 `@/modules/chat` 的生产导入为 0（立案时 2 条：`ModelsContent.tsx:4`、`VoiceSettingsTab.tsx:7`），命令退出 0。
+- [ ] 双向各 0：`test -z "$(grep -rn '@/modules/chat/transcript' src/modules/chat/composer --include='*.ts' --include='*.tsx')"` 与 `test -z "$(grep -rn '@/modules/chat/composer' src/modules/chat/transcript --include='*.ts' --include='*.tsx')"` 各自退出 0；并贴出 `ActivityIndicator` / `ActivityDockPanel` 在 `src/modules/chat/activity/` 下的新路径。
 - [ ] 结构读数（外部工具）：新鲜 `archguard_detect_cycles(outputScope=package)` 在 `src` 上不再报告同时含 `modules/chat/composer` 与 `modules/chat/transcript` 的 SCC。贴出该 SCC 的前后成员清单。该读数为 ArchGuard MCP 查询（待外部）。
 - [ ] 既有导航判据不改一字仍绿：`npx vitest run src/modules/chat/tests/uiNavigate.test.tsx` 退出 0，贴出 `Test Files / Tests` 读数。
 - [ ] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
