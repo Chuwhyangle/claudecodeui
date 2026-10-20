@@ -14,7 +14,7 @@ export { createSessionHostsRouter } from './session-hosts.routes.js';
 // startResidentHost / closeResidentHost: the resident start/close decision,
 // lifted out of the route so a SECOND transport can reach the same code instead
 // of writing its own. Consumers: the MCP gateway's `session_start` /
-// `session_close` adapter (`server/modules/mcp-gateway/mcp-session-host-control.ts`),
+// `session_close` adapter (`mcp-session-host-control.ts` in that module),
 // which delegates every start and close to these two functions and never
 // re-implements them. Exported here (not re-stated in the gateway) so the
 // gateway's on-demand verb is provably the route's verb.

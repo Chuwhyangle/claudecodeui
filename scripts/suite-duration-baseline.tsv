@@ -152,6 +152,9 @@
 #   the MODEL_TEXT_REPLY narration and local-Kokoro-TTS tasks (2026-10-19),
 #   and the voice-realtime-summary row by gap-voice-run-end-summary-side-model, measured one file
 #   at a time on 2026-10-20 (its own new criterion; no green round contains it yet).
+#   and the server-composition-startup row by gap-server-provider-websocket-init-cycle-ports,
+#   measured one file at a time on 2026-10-20.
+5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
 1614	server/modules/voice-realtime/tests/voice-realtime-model-reply-narrator.test.ts
 1361	server/modules/voice-realtime/tests/voice-realtime-tts-local.test.ts

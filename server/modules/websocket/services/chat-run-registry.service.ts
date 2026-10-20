@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
 import { sessionsDb } from '@/modules/database/index.js';
 import { listProcessingSessions, readSessionProcessing } from '@/modules/providers/index.js';
 import { BOOT_ID } from '@/modules/websocket/services/activity-heartbeat.service.js';
@@ -1357,3 +1358,13 @@ export const chatRunRegistry = createChatRunRegistry({
     );
   },
 });
+
+// The process registry's read/write face, installed as the shared
+// `chat-run-registry` port while this module evaluates. The consumer is the MCP
+// gateway's tool assembly, which must not import this module: the gateway is
+// reached from the voice-realtime runtime and the websocket module imports the
+// providers module, so the edge kept the two sides' initialization order
+// coupled. The gateway reads the accessor lazily (with a documented
+// "unknown run" fallback when nothing installed one), and `server/index.ts`
+// repeats the installation in the composition root.
+installChatRunRegistryPort(chatRunRegistry);

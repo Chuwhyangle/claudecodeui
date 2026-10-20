@@ -21,6 +21,26 @@
  * descriptors through `REALTIME_TOOLS` and drive the executor over fake
  * services.
  */
+import { installVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
+
+import { isVoiceSessionActive } from './voice-realtime-active.js';
+import { rulesFor } from './voice-mode-rules.js';
+
+// THE LIVE VOICE DISPATCH SEAM, installed where its two halves are in scope.
+// The resident launch's `UserPromptSubmit` callback needs "is this session in
+// voice" and the rules text, and it must not import this barrel: this module's
+// runtime half reaches the MCP gateway, the gateway reaches the providers
+// module, and the providers module builds the launch — a static or dynamic
+// import of this barrel from the launch closes that initialization cycle (it
+// used to, and measured as `ReferenceError: Cannot access
+// 'ClaudeResidentHostDriver' before initialization`). Installing the two
+// functions into the shared port while this barrel evaluates lets the launch
+// read them through a module that imports nothing, which removes the edge
+// entirely. `server/index.ts` repeats the installation in the composition root;
+// both write the same object, so the second is idempotent documentation of who
+// owns the wiring.
+installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
+
 export {
   CONTEXT_BUDGET_WARNING_TOKENS,
   DASHSCOPE_REALTIME_ENDPOINT,

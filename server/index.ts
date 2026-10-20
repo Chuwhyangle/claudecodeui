@@ -13,6 +13,10 @@ import { WebSocket as WebSocketClient, type WebSocket } from 'ws';
 
 import { AppError, findApplicationRoot, getModuleDirectory, IS_PLATFORM, terminalTextStyles } from '@/shared/utils.js';
 import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRuntimeWriter } from '@/shared/types.js';
+import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
+import { installConnectedClientsPort } from '@/shared/ports/connected-clients.port.js';
+import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
+import { installVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
 import {
     closeSessionsWatcher,
     initializeSessionsWatcher,
@@ -30,7 +34,7 @@ import {
     sweepOrphanClaudeSessionScopes,
     uiLastOpenedSessionService,
 } from '@/modules/providers/index.js';
-import { activityStore, BOOT_ID, broadcastHostsChanged, chatRunRegistry, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService } from '@/modules/websocket/index.js';
+import { activityStore, BOOT_ID, broadcastHostsChanged, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService } from '@/modules/websocket/index.js';
 import { createSessionHostsRouter, sessionHostManager } from '@/modules/session-hosts/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
@@ -131,11 +135,34 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './modules/notifications/index.js';
+
+// --------------------------- composition-root port wiring ---------------------------
+//
+// The seams this task port-ified are installed HERE, by the process's single
+// composition root. Each owner module also installs its own implementation while
+// it evaluates, so a criterion that imports that module directly (or a barrel
+// that never loads this file) still sees a working seam; the lines below are the
+// explicit statement of which process-wide object backs which port. They run at
+// module load, before any request or launch can read a port.
+//
+//   provider-registry  <- the concrete provider table (provider.registry.ts)
+//   chat-run-registry  <- the process run registry (websocket chat-run-registry.service.ts)
+//   connected-clients  <- the websocket module's live connection set
+//   voice-rules        <- the voice-realtime in-process active-session set and rules table
+//
+// Re-installing the same objects is idempotent; nothing here constructs a second
+// registry. The install functions are imported with the rest of the shared
+// imports at the top of this file; the calls stay here so the wiring is readable
+// next to the composition root it belongs to.
+installProviderRegistryPort(providerRegistry);
+installChatRunRegistryPort(chatRunRegistry);
+installConnectedClientsPort({ count: () => connectedClients.size });
+installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
 
 const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.

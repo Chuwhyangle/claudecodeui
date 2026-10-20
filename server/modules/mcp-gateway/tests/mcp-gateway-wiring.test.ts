@@ -14,13 +14,18 @@
  *
  *   (b) a barrel audit over the three module barrels asserts the four declared
  *       GOAL-020 symbols are exported and consumed by the gateway through a
- *       barrel (never a deep path): `getProjectSessionsPage` from projects,
+ *       public seam (never a deep path): `getProjectSessionsPage` from projects,
  *       `startResidentHost` / `closeResidentHost` from session-hosts, and
  *       `getRunById` — landed as the `chatRunRegistry` member AC-248 already
  *       consumes, so per AC-253's own escape clause it is NOT re-exported under a
- *       second name; the audit proves the registry reaches the gateway through
- *       the websocket barrel and is read through `.getRunById(`. A synthetic
- *       unconsumed export (fed as a mutated barrel source) is reported by name.
+ *       second name; the audit proves the registry reaches the gateway and is
+ *       read through `.getRunById(`. The registry seam is the shared
+ *       `chat-run-registry` port (`readChatRunRegistryPort`, installed by the
+ *       websocket service and the composition root): the gateway no longer
+ *       imports the websocket module's value, which is what removes the edge
+ *       from the server initialization cycle, while the websocket barrel
+ *       remains the registry's owner and exporter. A synthetic unconsumed
+ *       export (fed as a mutated barrel source) is reported by name.
  *
  *   (c) a same-instance spy: ONE real `ChatControlService`, wrapped so every
  *       `send` records its caller and bumps one counter, is handed to the
@@ -442,14 +447,29 @@ export function auditBarrelConsumers(input: {
   const websocketConsumed = gatewayImportsFrom('websocket');
   const sessionHostConsumed = gatewayImportsFrom('session-hosts');
   const projectConsumed = gatewayImportsFrom('projects');
+  // The registry seam moved to the shared port layer
+  // (`gap-server-provider-websocket-init-cycle-ports`): the gateway now reads
+  // the process registry through `readChatRunRegistryPort` instead of importing
+  // the websocket module, which removes the `mcp-gateway -> websocket` value
+  // edge that sat inside the server initialization cycle. The websocket barrel
+  // still OWNS and exports `chatRunRegistry`; the port is the public way the
+  // gateway reaches it, so both forms satisfy the GOAL-020 consumption claim.
+  const gatewayConsumesRegistryPort = gatewayImports.some(
+    (entry) =>
+      entry.specifier === '@/shared/ports/chat-run-registry.port.js' &&
+      entry.names.includes('readChatRunRegistryPort'),
+  );
 
   // `getRunById`'s declared export, per SPEC §223, landed as `chatRunRegistry`
   // (AC-248 already consumes the registry's `getRunById` method), so the escape
   // clause says: do not duplicate it under a second name. It counts as exported
-  // when the barrel carries the named form OR the registry the gateway reads.
+  // when the barrel carries the named form OR the registry the gateway reads —
+  // through the websocket barrel or through the shared registry port.
   const websocketGetRunById: BarrelAuditReading['exports']['websocketGetRunById'] = websocketNames.has('getRunById')
     ? 'named'
-    : websocketNames.has('chatRunRegistry') && websocketConsumed.has('chatRunRegistry') && gatewayHasGetRunByIdCall
+    : websocketNames.has('chatRunRegistry') &&
+        (websocketConsumed.has('chatRunRegistry') || gatewayConsumesRegistryPort) &&
+        gatewayHasGetRunByIdCall
       ? 'registry'
       : 'missing';
 
@@ -485,7 +505,7 @@ export function auditBarrelConsumers(input: {
     },
     gateway: {
       projectsBarrelImport: projectConsumed.has('getProjectSessionsPage'),
-      websocketBarrelImport: websocketConsumed.has('chatRunRegistry'),
+      websocketBarrelImport: websocketConsumed.has('chatRunRegistry') || gatewayConsumesRegistryPort,
       sessionHostsBarrelImport: sessionHostConsumed.has('startResidentHost') && sessionHostConsumed.has('closeResidentHost'),
       getRunByIdCallOnRegistry: gatewayHasGetRunByIdCall,
       deepImports,
@@ -558,9 +578,17 @@ test('(b) the three barrels export the GOAL-020 symbols and the gateway consumes
 
   // The gateway reaches each through a barrel and reads the registry's getRunById.
   assert.equal(audit.gateway.projectsBarrelImport, true, 'the gateway must import getProjectSessionsPage via the projects barrel');
-  assert.equal(audit.gateway.websocketBarrelImport, true, 'the gateway must import chatRunRegistry via the websocket barrel');
+  assert.equal(
+    audit.gateway.websocketBarrelImport,
+    true,
+    'the gateway must reach chatRunRegistry via the websocket barrel or the shared registry port',
+  );
   assert.equal(audit.gateway.sessionHostsBarrelImport, true, 'the gateway must import start/closeResidentHost via the session-hosts barrel');
-  assert.equal(audit.gateway.getRunByIdCallOnRegistry, true, 'the gateway must read getRunById off the barrel-imported registry');
+  assert.equal(
+    audit.gateway.getRunByIdCallOnRegistry,
+    true,
+    'the gateway must read getRunById off the registry it reaches through the port',
+  );
   assert.deepEqual(audit.gateway.deepImports, [], 'no gateway cross-module import may take a deep path');
 
   // No declared GOAL-020 export sits unconsumed in a barrel.

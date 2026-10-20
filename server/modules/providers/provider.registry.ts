@@ -11,6 +11,7 @@ import { CodexProvider } from '@/modules/providers/list/codex/codex.provider.js'
 import { CursorProvider } from '@/modules/providers/list/cursor/cursor.provider.js';
 import { OpenCodeProvider } from '@/modules/providers/list/opencode/opencode.provider.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
+import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type { LLMProvider } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
@@ -137,3 +138,14 @@ const debugAgentProvider = createDebugAgentProvider({
 if (debugAgentProvider) {
   providerRegistry.registerDebugAgentProvider(debugAgentProvider);
 }
+
+// The registry's read face, installed as the shared port while this module
+// evaluates. Consumers under `services/` (today: `provider-runtime.service.ts`)
+// reach the registry through the accessor instead of importing this file, which
+// removes the `providers/services -> providers` directory edge that held the
+// parent/services pair inside the server initialization cycle. Installing at the
+// BOTTOM of the body matters: the table and the debug-agent registration above
+// are complete by then, and every port call happens from a method body long
+// after module evaluation. `server/index.ts` repeats the installation in the
+// composition root; the second write is the same object.
+installProviderRegistryPort(providerRegistry);

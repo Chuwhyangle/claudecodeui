@@ -1,5 +1,5 @@
 import { sessionsDb } from '@/modules/database/index.js';
-import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import { readProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
@@ -238,8 +238,8 @@ const DEFAULT_BACKGROUND_TASK_CALL_TIMEOUT_MS = 5_000;
 const BACKGROUND_TASK_CALL_TIMEOUT_ENV = 'CLAUDE_BACKGROUND_TASK_CALL_TIMEOUT_MS';
 
 const defaultDependencies: ProviderRuntimeServiceDependencies = {
-  listProviders: () => providerRegistry.listProviders(),
-  resolveProvider: (provider) => providerRegistry.resolveProvider(provider),
+  listProviders: () => readProviderRegistryPort().listProviders(),
+  resolveProvider: (provider) => readProviderRegistryPort().resolveProvider(provider),
   resolveProviderSessionId: (sessionId) => sessionsService.resolveProviderSessionId(sessionId),
   resolveResumeModel: (provider, sessionId, requestedModel) =>
     providerModelsService.resolveResumeModel(provider, sessionId, requestedModel),

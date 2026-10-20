@@ -18,7 +18,14 @@ import {
   getProjectsWithSessions,
 } from '@/modules/projects/index.js';
 import { projectsDb } from '@/modules/database/index.js';
-import { chatRunRegistry } from '@/modules/websocket/index.js';
+// The chat-run registry is reached through the shared port, never by importing
+// the websocket module: the websocket services import the providers module and
+// the gateway is reached from the voice-realtime runtime, so the value import
+// that used to stand here was one side of the initialization cycle this task
+// removes. `ChatRunLookupResult` stays a TYPE-only import because the deps bag's
+// shape is the gateway's own (a type edge creates no evaluation order).
+import type { ChatRunLookupResult } from '@/modules/websocket/index.js';
+import { readChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
 
 import type { McpToolInputSchema, McpToolRegistrar } from './mcp-gateway.audit.js';
 import { installMcpCallDispatcher, withMcpAudit } from './mcp-gateway.audit.js';
@@ -27,7 +34,7 @@ import type { McpOauthSeam, McpPrincipal } from './mcp-gateway.auth.js';
 import { MCP_GATEWAY_PATH, readMcpGatewayGate } from './mcp-gateway.gate.js';
 import { createMcpLoopbackGuard } from './mcp-gateway.loopback.js';
 import { registerMcpReadTools } from './mcp-gateway.read-tools.js';
-import type { McpReadToolDeps, McpReadToolSeam } from './mcp-gateway.read-tools.js';
+import type { McpReadToolDeps, McpReadToolSeam, McpRunningRun, McpRunSummary } from './mcp-gateway.read-tools.js';
 import { registerMcpResidentTools } from './mcp-gateway.resident-tools.js';
 import type { McpResidentToolDeps, McpResidentToolSeam } from './mcp-gateway.resident-tools.js';
 import { registerMcpWriteTools } from './mcp-gateway.write-tools.js';
@@ -36,7 +43,7 @@ import { resolveInputTargets } from './mcp-resolve-target.js';
 import type { McpResolveDeps } from './mcp-resolve-target.js';
 import type { McpRunGetDeps } from './mcp-run-get.js';
 import type { SelfTargetDeps } from './mcp-self-target.js';
-import type { McpSessionRunGetSeam } from './mcp-session-send.js';
+import type { McpSessionRunGetSeam, McpSessionRunRecord } from './mcp-session-send.js';
 import { readMcpToolAnnotations } from './mcp-tool-annotations.js';
 import { readMcpToolErrorCodes } from './mcp-tool-error-codes.js';
 import type { McpWriteNotification } from './mcp-write-notification.js';
@@ -557,6 +564,23 @@ export type McpGatewayModuleDeps = {
  */
 export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDeps {
   const { control, readTools, writeTools, ...rest } = deps;
+  // The process run registry, read through the shared port. A mount that has not
+  // loaded the websocket module (a focused transport criterion) gets the
+  // documented degradation: every by-id read is an unknown-run miss and the
+  // session-addressed reader holds no run. Production always installs the real
+  // registry — `chat-run-registry.service.ts` at module load and `server/index.ts`
+  // in the composition root — so the fallback never speaks for the product.
+  const runs = readChatRunRegistryPort<
+    McpSessionRunRecord,
+    ChatRunLookupResult,
+    McpRunningRun,
+    McpRunSummary
+  >({
+    getRun: () => undefined,
+    listRunningRuns: () => [],
+    getRunById: () => ({ status: 'unknown', reason: 'unknown' }),
+    getRunBootId: () => null,
+  });
   return {
     ...rest,
     readTools:
@@ -581,7 +605,7 @@ export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDe
               getProjectIdByPath: (projectPath: string) =>
                 projectsDb.getProjectPath(projectPath)?.project_id ?? null,
             },
-            runs: chatRunRegistry,
+            runs,
             // `changes` (AC-335) rides through the spread above untouched: its
             // whole deps bag is built in `server/index.ts` and this module
             // overlays NONE of it, so the ascending `(updatedAt, sessionId)`
@@ -592,7 +616,7 @@ export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDe
             // deliberately left whole — the same way the `projects` override two
             // properties up is deliberately whole.
             runGet:
-              readTools.runGet === undefined ? undefined : { ...readTools.runGet, runs: chatRunRegistry },
+              readTools.runGet === undefined ? undefined : { ...readTools.runGet, runs },
           },
     writeTools: {
       ...writeTools,
@@ -608,8 +632,8 @@ export function createMcpGatewayModule(deps: McpGatewayModuleDeps): McpGatewayDe
       // gateway at a second one — and gives the stamp the same object the reader
       // sees. (It works only because `McpRunReader` names that member exactly as
       // the registry does; the optional-member trap is recorded there.)
-      runs: chatRunRegistry,
-      runGet: { ...writeTools.runGet, deps: { ...writeTools.runGet.deps, runs: chatRunRegistry } },
+      runs,
+      runGet: { ...writeTools.runGet, deps: { ...writeTools.runGet.deps, runs } },
     },
   };
 }

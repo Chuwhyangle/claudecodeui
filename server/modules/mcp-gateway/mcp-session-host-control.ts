@@ -35,17 +35,36 @@
 
 import { z } from 'zod';
 
-import type { HostLease, HostMode } from '@/shared/types.js';
-
+import type { HostLease } from '@/shared/types.js';
+// The lease judgement is owned by the shared layer, not by this module. It is
+// re-exported below so the gateway barrel (and the criteria that read it) keep
+// the names they always had; `modules/session-hosts/session-hosts.routes.ts`
+// imports the same definitions directly from `@/shared/ports`, which is what
+// removes the `session-hosts -> mcp-gateway` edge that used to close the init
+// cycle. Nothing here reaches the session-hosts module for this judgement.
+import {
+  blockingLeases,
+  leasesBlockingMessage,
+  readLiveHost,
+  SESSION_HAS_ACTIVE_LEASES_CODE,
+} from '@/shared/ports/session-host-control.port.js';
+import type { SessionHostControlPort } from '@/shared/ports/session-host-control.port.js';
+// Re-exported from the shared port so the gateway barrel and every existing
+// consumer keep the names they had. The definitions — and the comments that
+// explain the lease judgement — live in the port file.
+export {
+  blockingLeases,
+  leasesBlockingMessage,
+  readLiveHost,
+  SESSION_HAS_ACTIVE_LEASES_CODE,
+} from '@/shared/ports/session-host-control.port.js';
 import {
   closeResidentHost,
   sessionHostManager,
   startResidentHost,
 } from '@/modules/session-hosts/index.js';
 import type {
-  ResidentHostCloseOutcome,
   ResidentHostServiceDeps,
-  ResidentHostStartOutcome,
   SessionHostManager,
 } from '@/modules/session-hosts/index.js';
 
@@ -55,22 +74,15 @@ import type { McpPrincipal } from './mcp-gateway.auth.js';
 // --------------------------- injected services ---------------------------
 
 /**
- * The two host-service verbs (and the one read) `session_start` /
- * `session_close` answer from.
+ * The services `session_start` / `session_close` answer from, all injected.
  *
- * `start` / `close` are `startResidentHost` / `closeResidentHost` themselves
- * (production: through {@link createSessionHostControl}); they are a seam rather
- * than a direct import so the criterion can wrap the real functions in counting
- * spies and prove the gateway reached the service on every call. `liveHost` is
- * the read-only port the `force` gate reads: the live resident host serving a
- * session, or null when none is. It is deliberately NOT a start/close surface —
- * the only mutation a `session_close` performs is the one delegated to `close`.
+ * The control surface itself is the shared {@link SessionHostControlPort}: the
+ * contract belongs to the seam between the two modules, not to the gateway, so
+ * the session-hosts routes can share the lease judgement without importing this
+ * module. The alias keeps the gateway's own type name (and every criterion that
+ * cites it) stable.
  */
-export type McpSessionHostControl = {
-  start(sessionId: string): Promise<ResidentHostStartOutcome>;
-  close(sessionId: string): ResidentHostCloseOutcome;
-  liveHost(sessionId: string): { mode: HostMode; leases: HostLease[] } | null;
-};
+export type McpSessionHostControl = SessionHostControlPort;
 
 /** The services `session_start` / `session_close` answer from, all injected. */
 export type McpSessionHostDeps = {
@@ -144,9 +156,6 @@ export type SessionClosePayload = {
   leases: HostLease[];
 };
 
-/** The structured refusal code `session_close` raises when a lease blocks it. */
-export const SESSION_HAS_ACTIVE_LEASES_CODE = 'SESSION_HAS_ACTIVE_LEASES';
-
 /** Reads and validates `session_start`'s arguments. */
 export function readSessionStartInput(args: Record<string, unknown>): McpSessionStartInput {
   const session = args.session;
@@ -171,52 +180,6 @@ export function readSessionCloseInput(args: Record<string, unknown>): McpSession
   // Only a literal `true` authorises the force-close; anything else (including a
   // missing field) leaves the leases blocking, so the safe reading is the default.
   return { session, force: args.force === true };
-}
-
-/**
- * The sentence a lease-blocked close carries, naming every blocking kind and how
- * many of it are held.
- *
- * The message names WHAT blocks the close and HOW MANY of each, because "held by
- * a lease" alone leaves the caller unable to tell a single cron from a queue of
- * background tasks — and the whole value of the refusal is that the caller can
- * decide whether `force: true` is warranted. Order follows the fixed
- * `cron`-then-`background-task` order of {@link blockingLeases} so the sentence
- * is stable for a given lease set.
- *
- * Exported so the session-hosts REST close route can carry the *same* sentence,
- * from this one definition, rather than growing a second wording of it. See
- * {@link blockingLeases} for the contract the two transports share.
- */
-export function leasesBlockingMessage(blocking: HostLease[]): string {
-  const counts = new Map<string, number>();
-  for (const lease of blocking) {
-    counts.set(lease.kind, (counts.get(lease.kind) ?? 0) + 1);
-  }
-  const parts = [...counts.entries()].map(([kind, count]) => `${kind}×${count}`);
-  return `This resident session holds ${parts.join(', ')}; closing it would end that background work — pass force: true to close anyway.`;
-}
-
-/**
- * The leases a resident close must honour: the two kinds that mean background
- * work, in a fixed order.
- *
- * This is the single definition of the "is this session blocked" judgement, and
- * it is shared on purpose: the MCP `session_close` handler ({@link
- * buildSessionClose}) and the session-hosts REST route
- * (`POST /api/session-hosts/:sessionId/close`) both apply it, so the two
- * transports cannot drift into disagreeing about which leases block a close. The
- * REST side imports this function through the mcp-gateway barrel and calls it —
- * it never re-implements the predicate, and never restates {@link
- * SESSION_HAS_ACTIVE_LEASES_CODE}. The judgement itself is one line because the
- * *set* of blocking kinds is the contract; the `force` / `!== true` reading that
- * pairs with it lives at each call site (both spell it the same way).
- *
- * Exported for that second caller. Consumers: {@link buildSessionClose} and
- * `session-hosts.routes.ts`.
- */
-export function blockingLeases(leases: HostLease[]): HostLease[] {
-  return leases.filter((lease) => lease.kind === 'cron' || lease.kind === 'background-task');
 }
 
 // --------------------------- buildSessionStart ---------------------------
@@ -302,29 +265,6 @@ export function buildSessionClose(
 }
 
 // --------------------------- default wiring over the session-hosts barrel ---------------------------
-
-/**
- * The read-only port the `force` gate reads, over a manager's published view.
- *
- * Delegates to the manager's own `liveHostForSession` — the same call the
- * service makes — then projects down to `{mode, leases}`, so "the gate sees
- * the same host the service would close" is now literally one call, not two
- * implementations kept in step. Reads only: it starts no host and closes
- * none.
- *
- * Consumers: {@link createSessionHostControl}, and this module's criterion, which
- * injects its own manager.
- */
-export function readLiveHost(
-  manager: SessionHostManager,
-  sessionId: string,
-): { mode: HostMode; leases: HostLease[] } | null {
-  const host = manager.liveHostForSession(sessionId);
-  if (!host) {
-    return null;
-  }
-  return { mode: host.mode, leases: host.bindings.get(sessionId)?.leases ?? [] };
-}
 
 /**
  * The production `hosts` control: the session-hosts module's own start/close

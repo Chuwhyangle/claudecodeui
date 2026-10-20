@@ -142,6 +142,10 @@ import type {
   SessionBinding,
 } from '@/shared/types.js';
 import { DELIVERY_SOURCE_OPTION, DELIVERY_TEXT_MAX_CHARS, isTerminalDeliveryState } from '@/shared/types.js';
+// The Live Voice rules seam is a shared PORT (see the `UserPromptSubmit` block
+// below): this module reads whatever the voice-realtime barrel installed, so no
+// import of that module — static or dynamic — appears in this file.
+import { readVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
 // The ledger is a LEAF module now (AC-396): this driver reaches it only through
 // the barrel, and the barrel only re-exports what this file and the ledger's own
 // criterion import. No deep path into `modules/resident-ledger/**` appears here,
@@ -1797,16 +1801,22 @@ export function createSdkResidentProcess(
   // connection returns `{}`, the hook contract's "no decision", and reads byte-for-byte as it did
   // before this hook existed.
   //
-  // WHY THE RULES MODULE IS LOADED HERE AND NOT AT THE TOP OF THIS FILE. A STATIC import of the
+  // WHY THIS READS A PORT INSTEAD OF IMPORTING THE VOICE MODULE. A static import of the
   // voice-realtime barrel from this module closes an initialization cycle —
   // `voice-realtime/index` → `voice-realtime-live-executor` → `mcp-gateway/index` → `providers/index`
   // → `provider.registry` → this file — and the module that closes it throws
   // `ReferenceError: Cannot access 'ClaudeResidentHostDriver' before initialization` before the server
-  // can start at all (measured). The cross-module rule here is that a module is reached through its
-  // barrel, and the barrel is what carries the runtime half that closes the loop, so the edge is made
-  // where it is harmless instead of removing it: at SUBMIT time the barrel is already in the module
-  // cache — the server's composition root imports it at start-up — so this is a cache lookup, not a
-  // load. The registry itself imports nothing, so it costs the providers side nothing new.
+  // can start at all (measured). The previous fix moved the same edge inside the submit callback as a
+  // dynamic `import()`, which avoided the start-up TDZ but left the dependency in place: the
+  // voice-realtime module and this one still constrained each other's initialization. The port removes
+  // the edge outright. `voice-realtime/index.ts` installs `isVoiceSessionActive` / `rulesFor` into
+  // `@/shared/ports/voice-rules.port.js` while it evaluates, and `server/index.ts` names the same
+  // installation in the composition root; this callback reads what was installed. The shared port
+  // imports nothing, so it cannot close a loop of its own.
+  //
+  // A process that never loads the voice-realtime barrel (a focused resident-launch criterion) reads
+  // null, which is treated exactly like an inactive session: `{}`, the hook contract's "no decision".
+  // That is the same reading the callback had before any connection was marked.
   //
   // THE TWO EXPERIMENTAL SWITCHES STAY. `VOICE_MODE_HOOK_FORCE=1` injects regardless of the registry and
   // `VOICE_MODE_RULES_VARIANT` selects the rules arm; both are read HERE, at submit time, so a launch's
@@ -1822,17 +1832,19 @@ export function createSdkResidentProcess(
       {
         hooks: [
           async (hookInput: AnyRecord): Promise<AnyRecord> => {
-            const { isVoiceSessionActive, rulesFor } = await import(
-              '@/modules/voice-realtime/index.js'
-            );
+            const voiceRules = readVoiceRulesPort();
             const sessionId = typeof hookInput.session_id === 'string' ? hookInput.session_id : '';
-            if (process.env.VOICE_MODE_HOOK_FORCE !== '1' && !isVoiceSessionActive(sessionId)) {
+            const forced = process.env.VOICE_MODE_HOOK_FORCE === '1';
+            if (voiceRules === null) {
+              return {};
+            }
+            if (!forced && !voiceRules.isSessionActive(sessionId)) {
               return {};
             }
             return {
               hookSpecificOutput: {
                 hookEventName: 'UserPromptSubmit',
-                additionalContext: rulesFor(process.env.VOICE_MODE_RULES_VARIANT),
+                additionalContext: voiceRules.rulesFor(process.env.VOICE_MODE_RULES_VARIANT),
               },
             };
           },

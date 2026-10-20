@@ -18,7 +18,7 @@ import {
 } from '@/modules/notifications/index.js';
 import { sessionHostManager } from '@/modules/session-hosts/index.js';
 // eslint-disable-next-line boundaries/dependencies -- the websocket barrel would close the eval cycle above; this leaf re-enters nothing.
-import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
+import { readConnectedClientCount } from '@/shared/ports/connected-clients.port.js';
 import type {
   IProviderAuth,
   IProviderFork,
@@ -143,31 +143,23 @@ export class ClaudeProvider extends AbstractProvider {
     /**
      * Whether a browser is connected, read from the registry that owns the set.
      *
-     * This is the one place both modules are in scope, which is why the driver
-     * takes the count as a port: the driver imports nothing from `modules/websocket`
-     * (an edge from it would close a cycle, and the structural reading in
-     * `claude-resident-unattended-turn.test.ts` holds the file to zero), so the
-     * registry's own set is installed here instead.
-     *
-     * The *leaf* module is named rather than the websocket barrel, and that is
-     * load-bearing rather than a style choice: this file is reached from
-     * `provider.registry.ts`, and the barrel pulls in `chat-websocket.service.js`,
-     * which imports the providers barrel back. That edge closes the cycle
-     * `providerRegistry` → `claude.provider` → websocket barrel → chat → providers
-     * barrel → `provider-models.service.js`, whose module body reads
-     * `providerRegistry` while the registry is still evaluating — a TDZ that reds
-     * every test entering the providers graph (`ReferenceError: Cannot access
-     * 'providerRegistry' before initialization`). `websocket-state.service.js` is
-     * a leaf (one `import type`), so naming it re-enters nothing and the closure
-     * stays open. The deep cross-module import is the one boundary rule it
-     * breaks, waived on the line itself.
+     * This is the port shape the driver already takes, fed from the shared
+     * `connected-clients` accessor. The websocket state module installs its own
+     * `Set.size` as that accessor's implementation, and `server/index.ts` names
+     * the installation in the composition root; this module never imports the
+     * websocket module. The alternative — a leaf import of
+     * `websocket-state.service.js` — worked only because that leaf imports
+     * almost nothing, but it still held the `providers/list/claude -> websocket`
+     * edge that kept the two modules' initialization order coupled. The shared
+     * accessor removes the edge outright: neither module can constrain the
+     * other's evaluation.
      *
      * Read at call time rather than captured, so the answer is the connection
      * count when a human-facing request actually arrives — a resident turn can
      * outlive the page that opened it, and the whole point of the reading is that
      * nobody is watching *now*.
      */
-    connectedClientCount: () => connectedClients.size,
+    connectedClientCount: () => readConnectedClientCount(),
   });
 
   /**

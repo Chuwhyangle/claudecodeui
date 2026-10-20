@@ -830,7 +830,7 @@ test('claude declares the ten resident features, and the runtime mirror carries 
   // `task_notification{status:'stopped'}` ~1.0s after the call and the task's
   // own process was gone), so it states `true` too. `liveReconfigure` was
   // measured by AC-272's criterion
-  // (`server/modules/mcp-gateway/tests/mcp-session-reconfigure.test.ts`), which
+  // (`mcp-session-reconfigure.test.ts` in the mcp-gateway module), which
   // drives the resident driver with a scripted query and reads `query.setModel`
   // / `query.setPermissionMode` off the running process — so it is no longer an
   // empty list (`effort` stays out: it is a launch argument, answered
