@@ -2,7 +2,7 @@
 id: fleet-draft-ac-376-5b4172d4
 title: "[fleet-draft] goal pg_5847668e18cf's AC AC-376 is not achieved and no
   task exists for it — §7.1 L1 allows drafting a todo task in an a"
-status: todo
+status: ready
 labels: []
 parent: null
 children: []
