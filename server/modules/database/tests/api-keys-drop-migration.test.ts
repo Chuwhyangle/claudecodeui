@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection, getConnection } from '@/modules/database/connection.js';
+import { closeConnection, getConnection } from '@/modules/database/core/index.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
 import { runMigrations } from '@/modules/database/index.js';
 

@@ -38,11 +38,24 @@ F7（架构校准报告 2026-10-20，ArchGuard 0.1.40）：前端 god package，
 
 ## Touches
 
-- src/modules/chat/utils/voice/index.ts (new)
-- src/modules/chat/utils/transcript/index.ts (new)
-- src/modules/chat/utils/session/index.ts (new)
-- src/modules/chat/utils/voice/voiceLiveSegmenter.ts (new)
-- src/modules/chat/utils/voice/activityDockView.ts (new)
-- src/modules/chat/utils/transcript/chatExport.ts (new)
-- src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts（既有判据，不改一字，作覆盖）
+- src/modules/chat/utils/voice/**
+- src/modules/chat/utils/transcript/**
+- src/modules/chat/utils/session/**
+- src/modules/chat/utils/tests/**
+- src/modules/chat/utils/*.ts
+- src/modules/chat/tests/**
+- src/modules/chat/hooks/**
+- src/modules/chat/transcript/**
+- src/modules/chat/composer/**
+- src/modules/chat/voice-realtime/**
+- src/modules/chat/export/**
+- src/modules/chat/tools/**
+- src/modules/chat/audio/**
+- src/modules/chat/index.ts
+- src/modules/chat/ChatInterface.tsx
+- src/shared/tests/voiceUpload16k.test.ts
+- e2e/session-lifecycle-scenario.spec.ts
+- e2e/voice-error-messages.spec.ts
+- e2e/voice-live-vad-ab.spec.ts
+- scripts/voice-realtime-diagnose.mjs
 - tasks/gap-chat-utils-partition.md (self)

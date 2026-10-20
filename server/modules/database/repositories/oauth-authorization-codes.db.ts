@@ -12,7 +12,7 @@
  * barrel.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /** A persisted authorization-code row exactly as stored; `scopes` is a JSON array string. */
 export type OAuthAuthorizationCodeRow = {

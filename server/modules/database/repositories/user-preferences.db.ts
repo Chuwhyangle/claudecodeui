@@ -1,4 +1,4 @@
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 type PreferenceRow = {
   preference_key: string;

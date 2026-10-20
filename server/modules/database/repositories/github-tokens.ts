@@ -5,7 +5,7 @@
  * Tokens are stored in `user_credentials` with `credential_type = 'github_token'`.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 import { credentialsDb } from '@/modules/database/repositories/credentials.js';
 import type {
   CredentialPublicRow,

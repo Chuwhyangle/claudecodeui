@@ -1,4 +1,4 @@
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 import type {
   CustomProviderModelInput,
   CustomProviderModelRecord,

@@ -11,7 +11,7 @@
  * module barrel.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 /** A persisted OAuth client row exactly as stored; JSON columns stay raw strings. */
 export type OAuthClientRow = {

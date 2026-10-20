@@ -133,3 +133,11 @@ F2（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 - 还原（`git checkout --` 两个文件）。读数：两条各 0，AC3 绿（exit 0）。
 
 ⑧ 定向测试（移动后的既有判据）：activity dock 9 文件 39 pass；settings/voice/shared 11 文件 66 pass（含 `modelLibrary*`、`voiceSettings*`、`mcpNavigationSettings`、`voiceClientAsrRouting`、`voiceModelCache`、`voiceUpload16k`、`sharedLayerIsolation`）。
+
+## Blocker
+
+**2026-10-20T06:55:08.011Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 6/7，剩余未勾 1）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：6ad7090b-dbf9-49c7-be27-1f4a2c033754

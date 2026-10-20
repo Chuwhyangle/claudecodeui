@@ -1,4 +1,4 @@
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
 import type { HostMode, SessionLaunchSelection } from '@/shared/types.js';
 import { normalizeProjectPath } from '@/shared/utils.js';

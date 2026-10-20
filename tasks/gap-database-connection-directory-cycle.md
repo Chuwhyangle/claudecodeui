@@ -2,7 +2,7 @@
 id: gap-database-connection-directory-cycle
 title: Move the database connection module out of the repositories↔database
   directory cycle
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -93,11 +93,3 @@ Baseline: develop @ `166823331`; implementation commits `a31b39881`, `1c232db93`
 - AC7 — anti-drift Touches check run against develop; diff set is exactly the 36 code paths + the task file listed above, plus (2026-10-20 continuation round) the two AC-394 ratchet files.
 - DoD ⑦ (false form) — appended `import { getConnection } from '@/modules/database/connection.js';` to `repositories/credentials.ts` → AC1 count 1 (red); `git checkout -- credentials.ts` → count 0 (green).
 - AC-394 ratchet (2026-10-20 continuation round) — the prior fan-in suite red was real and task-caused, despite the mechanical UNRELATED label: `server/shared/tests/server-import-cycle-budget.test.ts` pinned the retired two-member cycle (`(b) the measured cycles must match the pinned baseline groups member-for-member`) and the new `modules/database/core` was absent from the committed manifest (`(c)` inbound-edge arm: `server/modules/database` / `server/modules/database/repositories` import it). Lowered the ratchet in its own sanctioned shrink direction: `cycleGroups.G2` → `[]` in both `CYCLE_GROUPS` and the baseline JSON (a re-introduced cycle still reds the exact-equality assertions), registered `modules/database/core` in `MANIFEST_PIN` + `directoryManifest` under AC-394 (c)'s leaf escape hatch (it imports only node builtins and `better-sqlite3`, no `server/` target, and is in no SCC), and re-measured `measuredAt`/`fileEdges.static`/`nodeCount` (2026-10-20, 1280 static / 6 dynamic, 48 nodes). Isolation rerun: `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` → 11 pass, 0 fail; summary `files=325 staticEdges=1280 dynamicEdges=6 sccs=[11,2]`, `(b)` and `(c)` green, `(c) directories present but absent from the manifest: []`.
-
-## Blocker
-
-**2026-10-20T06:49:06.781Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: the measured cycles must match the pinned baseline groups member-for-member
-- run_id：wk-prod-anchor
-- session_id：76bb64ff-4a74-484d-b86d-4643c71f7af0

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection, getConnection } from '@/modules/database/connection.js';
+import { closeConnection, getConnection } from '@/modules/database/core/index.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
 import { sessionDraftsDb } from '@/modules/database/repositories/session-drafts.db.js';
 import { userPreferencesDb } from '@/modules/database/repositories/user-preferences.db.js';
