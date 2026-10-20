@@ -28,15 +28,15 @@ F9（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 
 ## AC
 
-- [ ] `test "$(grep -rn 'function extractTaggedContent' server --include='*.ts' | wc -l)" -eq 1`，且该唯一命中位于新建的共享模块。
-- [ ] `test "$(grep -rn 'function isInternalContent' server --include='*.ts' | wc -l)" -eq 1`，且该唯一命中位于新建的共享模块。
-- [ ] `test "$(grep -rnE 'function (parseLocalCommandPayload|parseClaudeLocalCommandPayload|buildLocalCommandDisplayText|buildClaudeLocalCommandDisplayText)' server --include='*.ts' | wc -l)" -eq 2`（两组函数各只保留一处定义）。
-- [ ] 两个调用方都从共享模块导入：`grep -q "claude-transcript-format" server/modules/providers/list/claude/claude-sessions.provider.ts` 且 `grep -q "claude-transcript-format" server/modules/providers/services/session-conversations-search.service.ts`，两条都退出 0。
-- [ ] `test "$(grep -rn 'const INTERNAL_CONTENT_PREFIXES' server/modules/providers --include='*.ts' | wc -l)" -eq 1`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-transcript-format.test.ts` 退出 0；该表驱动用例断言共享解析器对无关内容返回 null、对带标签内容返回 `{commandName,commandMessage,commandArgs}`，并逐字写出两组读数。
-- [ ] 既有会话与搜索判据不改一字仍绿：`files=$(grep -rlE 'session-conversations-search|claude-sessions\.provider' server/modules/providers/tests/*.test.ts) && test -n "$files" && for f in $files; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0，贴出命中文件清单与各文件 pass 数。
-- [ ] `npm run typecheck` 退出 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
+- [x] `test "$(grep -rn 'function extractTaggedContent' server --include='*.ts' | wc -l)" -eq 1`，且该唯一命中位于新建的共享模块。
+- [x] `test "$(grep -rn 'function isInternalContent' server --include='*.ts' | wc -l)" -eq 1`，且该唯一命中位于新建的共享模块。
+- [x] `test "$(grep -rnE 'function (parseLocalCommandPayload|parseClaudeLocalCommandPayload|buildLocalCommandDisplayText|buildClaudeLocalCommandDisplayText)' server --include='*.ts' | wc -l)" -eq 2`（两组函数各只保留一处定义）。
+- [x] 两个调用方都从共享模块导入：`grep -q "claude-transcript-format" server/modules/providers/list/claude/claude-sessions.provider.ts` 且 `grep -q "claude-transcript-format" server/modules/providers/services/session-conversations-search.service.ts`，两条都退出 0。
+- [x] `test "$(grep -rn 'const INTERNAL_CONTENT_PREFIXES' server/modules/providers --include='*.ts' | wc -l)" -eq 1`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-transcript-format.test.ts` 退出 0；该表驱动用例断言共享解析器对无关内容返回 null、对带标签内容返回 `{commandName,commandMessage,commandArgs}`，并逐字写出两组读数。
+- [x] 既有会话与搜索判据不改一字仍绿：`files=$(grep -rlE 'session-conversations-search|claude-sessions\.provider' server/modules/providers/tests/*.test.ts) && test -n "$files" && for f in $files; do npx tsx --tsconfig server/tsconfig.json --test "$f" || exit 1; done` 退出 0，贴出命中文件清单与各文件 pass 数。
+- [x] `npm run typecheck` 退出 0。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
