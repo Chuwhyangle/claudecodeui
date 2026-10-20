@@ -366,11 +366,24 @@ export {
   createLocalVoiceRealtimeTtsSeam,
   type LocalVoiceRealtimeTtsOptions,
 } from './voice-realtime-tts-local.js';
-// The announce closing turn's FIXED sentence table and the per-connection cache that pre-synthesizes
-// it (2026-10-19 live capture: five 8–9-character remarks, each paying its own synthesis round trip).
-// `server/index.ts` hands the table to the cache at connection assembly and the proxy picks one
-// sentence per announcement; the criteria read both through this barrel.
-export { ANNOUNCE_PHRASES, pickAnnouncePhrase } from './voice-realtime-announce-phrases.js';
+// The announce closing turn's sentence table and the per-connection cache that pre-synthesizes it
+// (2026-10-19 live capture: five 8–9-character remarks, each paying its own synthesis round trip).
+// The `announcePhrases` key in the settings file replaces the shipped table; `server/index.ts` reads
+// the RESOLVED table at connection assembly for the cache warm-up and the proxy picks one sentence
+// per announcement. The leaf is also exported so a criterion can pin the parser and the rotation.
+export {
+  ANNOUNCE_PHRASES,
+  ANNOUNCE_PHRASE_MAX_CHARS,
+  pickAnnouncePhrase,
+  pickAnnouncePhraseFrom,
+  resolveAnnouncePhrases,
+  type AnnouncePhraseResolution,
+} from './voice-realtime-announce-phrases.js';
+// The settings file's loader. `server/index.ts` reads it ONCE per connection at assembly so the TTS
+// cache warms the same `announcePhrases` table the proxy's announce gate speaks; the proxy reads it
+// again for the per-connection instructions. Kept on the barrel because the composition root is
+// outside this module and must not deep-import it.
+export { loadVoiceRealtimeSettings, type VoiceRealtimeSettings } from './voice-realtime-settings.js';
 export {
   DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES,
   createVoiceRealtimeTtsCache,

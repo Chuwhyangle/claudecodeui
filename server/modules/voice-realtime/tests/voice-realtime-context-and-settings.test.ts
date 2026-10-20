@@ -32,6 +32,7 @@ import {
   type VoiceRealtimeOutboundFrame,
   type VoiceRealtimeProxySeams,
 } from '../voice-realtime-ws-proxy.service.js';
+import { ANNOUNCE_PHRASES } from '../voice-realtime-announce-phrases.js';
 import { VOICE_REALTIME_CONTEXT_HEADER, loadVoiceRealtimeSettings } from '../voice-realtime-settings.js';
 import {
   DEFAULT_TURN_DETECTION,
@@ -246,6 +247,35 @@ test('AC4: an out-of-range file value falls back to the default AND is reported,
   assert.equal(problems.length > 0, true, 'the refusal must reach the deployment through `problems`');
   assert.match(problems.join('; '), /silence_duration_ms/, 'the reason must NAME the key it refused');
   console.log(`AC4 problems: ${JSON.stringify(problems)}`);
+});
+
+// ── the settings file's `announcePhrases`: the announce table as a deployment knob ──────────────────
+
+test('announcePhrases: a settings file replaces the shipped announce table', () => {
+  const table = ['甲收到', '乙在办', '丙明白'];
+  const loaded = readSettings({ announcePhrases: table.join(' | ') }, (settings) => settings);
+  assert.deepEqual(loaded.problems, [], 'a valid table must not be refused');
+  assert.equal(loaded.source, 'file', 'the reading comes from the file, not the fallback');
+  assert.deepEqual(loaded.announcePhrases, table, 'the file\'s phrases are the table the connection reads');
+});
+
+test('announcePhrases: no key keeps the shipped table, byte for byte', () => {
+  const loaded = readSettings({}, (settings) => settings);
+  assert.deepEqual(loaded.problems, []);
+  assert.deepEqual(loaded.announcePhrases, ANNOUNCE_PHRASES, 'omitting the key is not an override');
+  for (const phrase of loaded.announcePhrases) {
+    assert.ok(phrase.length >= 2, `${JSON.stringify(phrase)} is below the default table's two-character floor`);
+  }
+});
+
+test('announcePhrases: an invalid value falls back to the shipped table and is reported', () => {
+  for (const invalid of ['好的|收到', '好的||收到|明白', `好的|收到|${'长'.repeat(16)}`]) {
+    const loaded = readSettings({ announcePhrases: invalid }, (settings) => settings);
+    assert.deepEqual(loaded.announcePhrases, ANNOUNCE_PHRASES, `${invalid} must not half-apply`);
+    assert.equal(loaded.source, 'default', 'a refused value refuses the reading, as every shape error here does');
+    assert.equal(loaded.problems.length > 0, true, 'the refusal must reach the deployment through `problems`');
+    assert.match(loaded.problems.join('; '), /announcePhrases/, 'the reason must NAME the key it refused');
+  }
 });
 
 test('the resolution is logged with the source it came from', () => {

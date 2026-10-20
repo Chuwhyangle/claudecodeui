@@ -19,12 +19,21 @@
  */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { WebSocket as WS } from 'ws';
 
 import type { RealtimeServerMessage, RealtimeToolExecutor } from '../index.js';
-import { ANNOUNCE_PHRASES, pickAnnouncePhrase } from '../voice-realtime-announce-phrases.js';
+import {
+  ANNOUNCE_PHRASES,
+  ANNOUNCE_PHRASE_MAX_CHARS,
+  pickAnnouncePhrase,
+  pickAnnouncePhraseFrom,
+  resolveAnnouncePhrases,
+} from '../voice-realtime-announce-phrases.js';
 import {
   handleVoiceRealtimeConnection,
   type VoiceRealtimeInboundFrame,
@@ -36,6 +45,62 @@ import {
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
 
 // ── the table ─────────────────────────────────────────────────────────────────────────────────────
+
+test('the default table is two characters or more per phrase', () => {
+  for (const phrase of ANNOUNCE_PHRASES) {
+    assert.ok(
+      phrase.length >= 2,
+      `${JSON.stringify(phrase)} is shorter than the two-character floor the live test asked for`,
+    );
+  }
+});
+
+test('resolveAnnouncePhrases splits on `|`, trims, and drops empty segments at the ends', () => {
+  const resolved = resolveAnnouncePhrases(' 好的 | 收到 | 明白 | ');
+  assert.deepEqual(resolved.problems, [], 'a well-formed list must not be refused');
+  assert.deepEqual(resolved.phrases, ['好的', '收到', '明白'], 'each entry is trimmed and edge separators vanish');
+
+  const four = resolveAnnouncePhrases('好的|收到|明白|在办');
+  assert.deepEqual(four.problems, []);
+  assert.deepEqual(four.phrases, ['好的', '收到', '明白', '在办']);
+
+  const leading = resolveAnnouncePhrases('|好的|收到|明白');
+  assert.deepEqual(leading.problems, []);
+  assert.deepEqual(leading.phrases, ['好的', '收到', '明白']);
+});
+
+test('resolveAnnouncePhrases falls back to the default table and reports why', () => {
+  const cases: { raw: unknown; reason: RegExp }[] = [
+    // Fewer than three sentences cannot rotate.
+    { raw: '好的|收到', reason: /at least 3 phrases/ },
+    // An empty segment BETWEEN two phrases is a hole, unlike a trailing separator.
+    { raw: '好的||收到|明白', reason: /empty phrase/ },
+    // Longer than the announce criterion's 15-character budget.
+    { raw: `好的|收到|${'长'.repeat(ANNOUNCE_PHRASE_MAX_CHARS + 1)}`, reason: /at most 15 characters/ },
+    // A number is not a string, even if it could be coerced.
+    { raw: 42, reason: /must be a .*-separated string/ },
+  ];
+  for (const { raw, reason } of cases) {
+    const resolved = resolveAnnouncePhrases(raw);
+    assert.deepEqual(resolved.phrases, ANNOUNCE_PHRASES, `${JSON.stringify(raw)} must fall back to the shipped table`);
+    assert.ok(resolved.problems.length > 0, `${JSON.stringify(raw)} must say why it was refused`);
+    assert.match(resolved.problems.join('; '), reason, `${JSON.stringify(raw)} must name the broken rule`);
+  }
+});
+
+test('pickAnnouncePhraseFrom rotates through the caller-supplied table, not the shipped one', () => {
+  const table = ['甲的句子', '乙的句子', '丙的句子'];
+  const seen = new Set<string>();
+  for (let seq = 0; seq < table.length; seq += 1) {
+    const phrase = pickAnnouncePhraseFrom(table, seq);
+    assert.equal(phrase, table[seq], `seq ${seq} must pick the table's own entry`);
+    seen.add(phrase);
+  }
+  assert.equal(seen.size, table.length, 'one cycle reaches every entry of the supplied table');
+  assert.equal(pickAnnouncePhraseFrom(table, table.length), table[0], 'the rotation is a cycle');
+  assert.equal(pickAnnouncePhraseFrom(table, -1), table[table.length - 1], 'negative input folds onto the table');
+  assert.equal(pickAnnouncePhraseFrom([], 0), '', 'an empty table answers the queue no-op, never undefined');
+});
 
 test('pickAnnouncePhrase is total, deterministic, and rotates through the table', () => {
   assert.ok(ANNOUNCE_PHRASES.length >= 3, 'the table carries enough phrases for a deterministic rotation');
@@ -94,7 +159,7 @@ type Harness = {
 };
 
 /** One `announce` connection with the narrator seam wired. */
-function wire(): Harness {
+function wire(options: { settingsPath?: string } = {}): Harness {
   const socket = new FakeBrowserSocket();
   const transport = createFakeTransport();
   const executor: RealtimeToolExecutor = {
@@ -106,6 +171,7 @@ function wire(): Harness {
     createExecutor: () => executor,
     instructions: 'test instructions',
     closingTurn: 'announce',
+    ...(options.settingsPath === undefined ? {} : { settingsPath: options.settingsPath }),
     narrator: {
       attach: (attached: VoiceRealtimeNarratorQueue) => {
         queue = attached;
@@ -164,5 +230,35 @@ test('announce: every narrator_speak carries a fixed phrase and the model wordin
   const outbound = h.socket.raw.join('\n');
   for (const modelText of modelTexts) {
     assert.ok(!outbound.includes(modelText), `the model follow-up ${JSON.stringify(modelText)} reached the page`);
+  }
+});
+
+test('announce: the settings file\'s `announcePhrases` are what the connection speaks', async () => {
+  // The DoD's hot-edit reading, on the REAL connection path: point the seam at a file whose table
+  // shares no phrase with the shipped one, and the announce gate must speak the file's first entry.
+  const table = ['甲收到', '乙在办', '丙明白'];
+  const dir = mkdtempSync(join(tmpdir(), 'voice-announce-phrases-settings-'));
+  try {
+    const file = join(dir, 'voice-realtime.settings.json');
+    writeFileSync(file, JSON.stringify({ announcePhrases: table.join('|') }), 'utf8');
+
+    const h = wire({ settingsPath: file });
+    await open(h.socket, h.transport);
+    followUpText(h.transport, 'resp-settings', '这句模型措辞不该被念出来。');
+
+    await waitFor(() => speakFrames(h.socket).length === 1);
+    const spoken = speakFrames(h.socket)[0]!;
+    assert.equal(spoken.text, table[0], 'the file is the table the announce gate reads');
+    for (const shipped of ANNOUNCE_PHRASES) {
+      assert.notEqual(spoken.text, shipped, 'the shipped table must not leak through when the file named one');
+    }
+    // Same table, same rotation function: the second announcement takes the file's second entry.
+    h.socket.receive({ type: 'narrator_done', utteranceId: spoken.utteranceId } as VoiceRealtimeInboundFrame);
+    await waitFor(() => h.queue.reading().current === null);
+    followUpText(h.transport, 'resp-settings-2', '还是模型措辞。');
+    await waitFor(() => speakFrames(h.socket).length === 2);
+    assert.equal(speakFrames(h.socket)[1]!.text, table[1], 'the rotation walks the file\'s table in order');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

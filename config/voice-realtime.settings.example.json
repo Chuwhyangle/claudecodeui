@@ -1,0 +1,17 @@
+{
+  "_comment": "Template for the voice relay's settings file. Copy to voice-realtime.settings.json (git-ignored) and point VOICE_REALTIME_SETTINGS_PATH at it; the server reads it once per connection. Unknown keys, including this one, are ignored. Every key is optional: an omitted key keeps the shipped default.",
+  "version": "example-1",
+  "_version": "A non-empty string logged beside every injection, so an edit is visible in the log.",
+  "contextTemplate": "以下是当前 Claude Code 会话的上下文（用户看得见的内容，最新在后）。\n\n{{context}}",
+  "_contextTemplate": "The block that introduces the context pack; it must carry {{context}}.",
+  "turnDetection": {
+    "type": "server_vad",
+    "threshold": 0.5,
+    "silence_duration_ms": 800
+  },
+  "_turnDetection": "The upstream detector, in wire spelling. Fields left out fall through to the environment and then to the shipped 800 ms window.",
+  "omissionFill": {},
+  "_omissionFill": "A partial override of the omission-fill producer's parameters, in the snake_case spelling of server/modules/voice-realtime/omission-fill-params.json. An empty object keeps the shipped values.",
+  "announcePhrases": "好的|收到|明白|在办",
+  "_announcePhrases": "The announce closing turn's sentence table, '|'-separated. Needs at least 3 phrases; each at most 15 characters. Invalid values are refused whole and the shipped table is used."
+}

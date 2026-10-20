@@ -15,7 +15,7 @@
  * it, because the Realtime model's behaviour is the thing being tuned and a mid-session swap makes
  * the change unattributable.
  *
- * THE KEY SET. Five top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly as
+ * THE KEY SET. Six top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly as
  * it always has been, rather than refused:
  *
  *   · `version`         — a non-empty string, logged beside every injection so an edit is visible.
@@ -37,6 +37,14 @@
  *                         A type error, an unknown `numeral_mode`, or an out-of-range H/G/score/weight
  *                         refuses the WHOLE file, so the connection keeps the shipped values and the
  *                         reason reaches `problems`.
+ *   · `announcePhrases` — the announce closing turn's sentence table, as a `|`-separated string
+ *                         (`"好的|收到|明白|在办"`). Parsed by
+ *                         {@link resolveAnnouncePhrases}, which owns the minimum count, the
+ *                         maximum length and the empty-segment rule. This is the settings-file
+ *                         replacement for the compiled-in table; it deliberately has NO environment
+ *                         variable, so the file is the only knob (the first key of the deployment-knob
+ *                         migration away from env). A refused value leaves the shipped table in place
+ *                         and puts the reason in `problems`, like every other shape error here.
  *
  * FAIL OPEN ON I/O, FAIL CLOSED ON SHAPE. A missing, unreadable or unparseable file falls back to
  * the shipped defaults with the reason in {@link VoiceRealtimeSettings.problems}; a file that
@@ -50,6 +58,10 @@
  */
 import { readFileSync } from 'node:fs';
 
+import {
+  ANNOUNCE_PHRASES,
+  resolveAnnouncePhrases,
+} from './voice-realtime-announce-phrases.js';
 import {
   OMISSION_FILL_NUMERAL_MODES,
   type OmissionFillNumeralMode,
@@ -150,6 +162,13 @@ export type VoiceRealtimeSettings = {
    * NEXT connection without a rebuild.
    */
   omissionFill: VoiceRealtimeOmissionFill | null;
+  /**
+   * The announce closing turn's sentence table, VALIDATED by {@link resolveAnnouncePhrases}: the
+   * file's phrases when it named a valid `announcePhrases` string, otherwise the shipped default.
+   * Read by the proxy's announce gate and by `server/index.ts`'s TTS cache warm-up, so both legs of
+   * one connection speak and pre-synthesize the SAME table.
+   */
+  announcePhrases: readonly string[];
   /** The compiled-in values, or the file's. */
   source: VoiceRealtimeSettingsSource;
   /** The file's own `version`, logged beside every injection so an edit is visible in the log. */
@@ -170,6 +189,7 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
   contextTemplate: string;
   turnDetection: TurnDetectionValues;
   omissionFill: VoiceRealtimeOmissionFill | null;
+  announcePhrases: readonly string[];
 } {
   return {
     instructions: baseInstructions,
@@ -179,6 +199,9 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
     turnDetection: {},
     // No file, no override: the producer keeps the values shipped in `omission-fill-params.json`.
     omissionFill: null,
+    // No file, no table override: the shipped announce sentences are what a connection speaks and
+    // what the TTS cache pre-synthesizes.
+    announcePhrases: ANNOUNCE_PHRASES,
   };
 }
 
@@ -380,6 +403,18 @@ export function loadVoiceRealtimeSettings(options: {
     problems.push(...validated.problems);
   }
 
+  // The announce closing turn's sentence table. Parsed by the leaf that owns the syntax, so the
+  // proxy's announce gate and `server/index.ts`'s cache warm-up cannot disagree about what the file
+  // said. A refusal leaves the shipped table in `defaults` and lands in `problems`; because a
+  // non-empty `problems` refuses the WHOLE reading below, the connection then speaks the shipped
+  // table — never a half-applied one.
+  let announcePhrases: readonly string[] = defaults.announcePhrases;
+  if (record.announcePhrases !== undefined) {
+    const resolved = resolveAnnouncePhrases(record.announcePhrases);
+    announcePhrases = resolved.phrases;
+    problems.push(...resolved.problems);
+  }
+
   // The shape of the block is a contract, not a preference: the pack has to reach the model, and a
   // template that never mentions the variable — or mentions one nobody defined — would either drop
   // the pack or send the model a literal `{{something}}`.
@@ -395,7 +430,7 @@ export function loadVoiceRealtimeSettings(options: {
   if (problems.length > 0) {
     return { ...defaults, source: 'default', version, path: filePath, problems };
   }
-  return { instructions, contextTemplate, turnDetection, omissionFill, source: 'file', version, path: filePath, problems: [] };
+  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, source: 'file', version, path: filePath, problems: [] };
 }
 
 /**

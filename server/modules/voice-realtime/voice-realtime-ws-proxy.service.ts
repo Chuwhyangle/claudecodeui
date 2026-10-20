@@ -48,7 +48,7 @@ import { readFileSync } from 'node:fs';
 import { WebSocket } from 'ws';
 
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
-import { pickAnnouncePhrase } from './voice-realtime-announce-phrases.js';
+import { pickAnnouncePhraseFrom } from './voice-realtime-announce-phrases.js';
 import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
 import {
   connect,
@@ -5975,6 +5975,11 @@ export function handleVoiceRealtimeConnection(
       // round trip. The model's own prompt contract is unchanged (still "one short sentence"), so
       // this wiring change is independent of it.
       //
+      // The TABLE is the settings reading resolved once at the top of this connection
+      // (`settings.announcePhrases`), not the compiled-in constant: a deployment's
+      // `voice-realtime.settings.json` can replace it, and `server/index.ts` warms the TTS cache from
+      // the same resolution, so the spoken sentence is always one the cache pre-synthesized.
+      //
       // Still routed into the narrator queue and ONLY for `announce`: `silent` produces no text,
       // `respond`'s "OK" must not be spoken, and a text the model said in answer to the user is
       // MODEL_TEXT_REPLY (a different path). No queue (no narrator wired) is a no-op, not an error.
@@ -5982,7 +5987,7 @@ export function handleVoiceRealtimeConnection(
         if ((seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN) !== 'announce') return;
         if (narratorQueue === null) return;
         const seq = announceNarrationSeq;
-        narratorQueue.enqueue({ utteranceId: `announce-${seq}`, text: pickAnnouncePhrase(seq) });
+        narratorQueue.enqueue({ utteranceId: `announce-${seq}`, text: pickAnnouncePhraseFrom(settings.announcePhrases, seq) });
         announceNarrationSeq += 1;
       },
     };
