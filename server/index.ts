@@ -608,13 +608,12 @@ const buildVoiceRealtimeSeams = (input: {
                 (silenceTailNote === null ? '' : ` (${silenceTailNote})`),
         );
     }
-    // The upstream turn detector (GOAL-037 / AC-325), resolved ONCE at the assembly point both the
-    // browser socket and the HTTP diagnosis route share — so a browser run and a diagnosis run
-    // configuration-read the SAME value, and a per-run diagnosis override is validated by the SAME
-    // resolver the environment is. A deployment that sets nothing gets the shipped default
-    // (`server_vad`/0.5/800 ms — moved from 400 by the fragment-hold measurement, see
-    // `voice-realtime-turn-detection.ts`); a refused value (out of range, or an "off" spelling) falls
-    // back to that default AND is logged, so a typo cannot pass for a working rollback.
+    // The upstream turn detector (GOAL-037 / AC-325). THIS assembly-time resolution exists to REPORT
+    // a refused value (out of range, or an "off" spelling) once, for both the browser socket and the
+    // HTTP diagnosis route, so a typo cannot pass for a working rollback. The value the WIRE uses is
+    // resolved per connection inside `createTransport` below, because only the proxy reads this
+    // connection's settings file — resolving here would silently drop it (live, 2026-10-20: the log
+    // said 1500 ms, the `session.update` said 800 ms).
     const turnDetection = resolveTurnDetection(process.env, input.turnDetection);
     const turnDetectionNote = describeTurnDetection(turnDetection);
     if (turnDetectionNote !== null) {
@@ -834,7 +833,7 @@ const buildVoiceRealtimeSeams = (input: {
         // connection asked for continuous, vs. the deployment turned the relay off. Absent for a
         // connection that asked for nothing, which is byte-identical to before this seam existed.
         ...(transportChoice === null ? {} : { transport: transportChoice }),
-        createTransport: (reportError) =>
+        createTransport: (reportError, settingsTurnDetection) =>
             createDashscopeTransport({
                 endpoint: upstreamEndpoint,
                 onError: reportError,
@@ -849,7 +848,21 @@ const buildVoiceRealtimeSeams = (input: {
                 // on the wire through the ONE path that already carried the hard-coded literal. Only
                 // `turn_detection` is replaced — the formats, modalities and voice stay the transport's
                 // own defaults, so this cannot drift from them.
-                sessionDefaults: { ...DEFAULT_SESSION_DEFAULTS, turn_detection: turnDetection.turnDetection },
+                //
+                // RESOLVED PER CONNECTION, WITH THE SETTINGS FILE THE PROXY READ. The proxy hands the
+                // file's validated `turnDetection` through the seam; resolving here (rather than at
+                // assembly time, before the proxy has read the file) is what keeps precedence
+                // override > environment > file > shipped default. Without the third argument the
+                // file's value stopped at the local gate/log and the frame kept the shipped 800 ms
+                // (live, 2026-10-20).
+                sessionDefaults: {
+                    ...DEFAULT_SESSION_DEFAULTS,
+                    turn_detection: resolveTurnDetection(
+                        process.env,
+                        input.turnDetection,
+                        settingsTurnDetection ?? {},
+                    ).turnDetection,
+                },
                 // A connection is ended when it spends more than the resolved cap in 30 s — and that
                 // cap is ABSENT unless this deployment named one (see `resolveSpendWindowLimit`
                 // above). It is a RATE limit, not a cost line: a runaway tool-call loop crosses a

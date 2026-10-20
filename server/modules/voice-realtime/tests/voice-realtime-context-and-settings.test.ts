@@ -24,7 +24,12 @@ import test from 'node:test';
 
 import { WebSocket as WS } from 'ws';
 
-import type { RealtimeClientMessage, RealtimeToolExecutor } from '../index.js';
+import {
+  DEFAULT_SESSION_DEFAULTS,
+  createDashscopeTransport,
+  type RealtimeClientMessage,
+  type RealtimeToolExecutor,
+} from '../index.js';
 import {
   VOICE_REALTIME_CONTEXT_MAX_CHARS,
   handleVoiceRealtimeConnection,
@@ -40,9 +45,11 @@ import {
   describeSilenceDurationSource,
   describeTurnDetection,
   resolveTurnDetection,
+  type TurnDetectionValues,
 } from '../voice-realtime-turn-detection.js';
 
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
+import { SCRIPTED_ENDPOINT_URL, createScriptedUpstream } from './voice-realtime-scripted-upstream.js';
 
 /** The browser's socket, as far as `handleVoiceRealtimeConnection` uses it. */
 class FakeBrowserSocket extends EventEmitter {
@@ -80,13 +87,25 @@ function wire(options: { settingsPath?: string } = {}): {
   socket: FakeBrowserSocket;
   transport: FakeTransport;
   logs: string[];
+  /**
+   * The per-connection detector reading the proxy handed the transport seam, in call order.
+   *
+   * A reading of `undefined` means the proxy opened the wire without telling it what this
+   * connection's settings file asked for — the exact gap the 2026-10-20 live session showed as
+   * "the log says 1500 ms, the `session.update` says 800 ms".
+   */
+  settingsTurnDetection: Array<TurnDetectionValues | undefined>;
 } {
   const socket = new FakeBrowserSocket();
   const transport = createFakeTransport();
   const logs: string[] = [];
+  const settingsTurnDetection: Array<TurnDetectionValues | undefined> = [];
   const executor: RealtimeToolExecutor = { session_send: async () => ({ ok: true }) };
   const seams: VoiceRealtimeProxySeams = {
-    createTransport: () => transport,
+    createTransport: (_reportError, turnDetection) => {
+      settingsTurnDetection.push(turnDetection);
+      return transport;
+    },
     createExecutor: () => executor,
     instructions: 'BASE-PROMPT',
     ...(options.settingsPath === undefined ? {} : { settingsPath: options.settingsPath }),
@@ -97,7 +116,7 @@ function wire(options: { settingsPath?: string } = {}): {
     'session-under-test',
     seams,
   );
-  return { socket, transport, logs };
+  return { socket, transport, logs, settingsTurnDetection };
 }
 
 const contextFrame = (text: string, rows = 1): VoiceRealtimeInboundFrame => ({
@@ -378,6 +397,95 @@ test('a connection logs the detector its settings file asked for — edit 600 in
       silent.logs.filter((line) => line.startsWith('turn detection:')).length,
       0,
       'a file that names no detector parameter reads no detector line — the shipped default is not news',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the settings file\'s turnDetection is handed to the transport seam for THIS connection', async () => {
+  // THE READER THIS CLOSES (2026-10-20 live session): the log said `1500ms — silence from the
+  // settings file` while the very same connection's `session.update` carried `silence=800ms`,
+  // because the proxy resolved the file for its gate/log and the transport was built from the
+  // assembly point's file-less resolution. The seam is where the two readings meet: whatever the
+  // proxy read from THIS connection's file must be what the transport opens with.
+  const dir = mkdtempSync(join(tmpdir(), 'voice-turn-detection-seam-'));
+  try {
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ turnDetection: { silence_duration_ms: 1500 } }), 'utf8');
+    const live = wire({ settingsPath: file });
+    await waitFor(() => live.transport.openCalls >= 1);
+    assert.deepEqual(
+      live.settingsTurnDetection.at(-1),
+      { silence_duration_ms: 1500 },
+      'the proxy read this connection\'s file; that reading must travel to the transport that opens the wire',
+    );
+
+    // A connection with no file hands an EMPTY reading, not the shipped 800: the resolver keeps
+    // precedence (override > env > file > default) only when "the file said nothing" stays legible.
+    // The deployment's own `VOICE_REALTIME_SETTINGS_PATH` is cleared for this reading: a developer
+    // shell that exports the repo's config file would otherwise make "no file" mean "the repo file".
+    const ambientSettingsPath = process.env.VOICE_REALTIME_SETTINGS_PATH;
+    delete process.env.VOICE_REALTIME_SETTINGS_PATH;
+    try {
+      const plain = wire();
+      await waitFor(() => plain.transport.openCalls >= 1);
+      assert.deepEqual(plain.settingsTurnDetection.at(-1), {});
+    } finally {
+      if (ambientSettingsPath !== undefined) {
+        process.env.VOICE_REALTIME_SETTINGS_PATH = ambientSettingsPath;
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('wire: the upstream session.update carries the settings file\'s silence window', async () => {
+  // ITEM 2 OF THE 2026-10-20 FIX: the criterion reads the FRAME, not the log line. A settings file
+  // naming 1500 ms must produce an upstream `session.update` whose `turn_detection.
+  // silence_duration_ms` is 1500 — the reading a journal alone could not prove, because the
+  // journal's detector line is written before the transport composes its session body.
+  const dir = mkdtempSync(join(tmpdir(), 'voice-turn-detection-wire-'));
+  try {
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ turnDetection: { silence_duration_ms: 1500 } }), 'utf8');
+
+    const upstream = createScriptedUpstream();
+    const socket = new FakeBrowserSocket();
+    const executor: RealtimeToolExecutor = { session_send: async () => ({ ok: true }) };
+    handleVoiceRealtimeConnection(
+      socket as unknown as Parameters<typeof handleVoiceRealtimeConnection>[0],
+      'session-under-test',
+      {
+        // The same composition `server/index.ts` performs for one connection: the proxy's reading
+        // is resolved (file < env < override; this test names no env or override) and spread into
+        // the transport's session defaults. The real transport then composes the real frame.
+        createTransport: (reportError, settingsTurnDetection) =>
+          createDashscopeTransport({
+            apiKey: '',
+            endpoint: SCRIPTED_ENDPOINT_URL,
+            socketFactory: upstream.socketFactory,
+            onError: reportError,
+            sessionDefaults: {
+              ...DEFAULT_SESSION_DEFAULTS,
+              turn_detection: resolveTurnDetection({}, {}, settingsTurnDetection ?? {}).turnDetection,
+            },
+          }),
+        createExecutor: () => executor,
+        instructions: 'BASE-PROMPT',
+        settingsPath: file,
+      },
+    );
+
+    await waitFor(() => upstream.clientFrames.some((frame) => frame.type === 'session.update'));
+    const update = upstream.clientFrames.find((frame) => frame.type === 'session.update') as
+      | { session?: { turn_detection?: { silence_duration_ms?: number } } }
+      | undefined;
+    assert.equal(
+      update?.session?.turn_detection?.silence_duration_ms,
+      1500,
+      `the frame the endpoint receives must carry the file's window; saw ${JSON.stringify(update)}`,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

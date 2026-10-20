@@ -300,24 +300,40 @@ test('the false forms leave none of this process`s copies behind', () => {
   assert.deepEqual(leftovers, []);
 });
 
-// ── wiring: server/index.ts resolves at the assembly point and lands it on sessionDefaults ─────
+// ── wiring: the seams builder resolves per connection and lands it on sessionDefaults ───────────
 
-test('wiring: the assembly point resolves the detector from the environment + override and splices it in', () => {
+test('wiring: the seams builder resolves the detector from env + override + the connection\'s settings and splices it in', () => {
   const source = readFileSync(SERVER_INDEX, 'utf8');
   assert.match(source, /from '\.\/modules\/voice-realtime\/index\.js'/, 'index.ts must reach the module through its barrel');
-  assert.match(source, /resolveTurnDetection\(process\.env, input\.turnDetection\)/, 'the detector must be resolved from env + the run override');
+  // THREE SOURCES, not two: the proxy hands THIS connection's settings-file reading through the
+  // seam. A two-argument call is the 2026-10-20 defect — the file's window reached the gate/log but
+  // never the `session.update` (1500 ms in the log, 800 ms on the wire).
+  assert.match(
+    source,
+    /resolveTurnDetection\(\s*process\.env,\s*input\.turnDetection,\s*settingsTurnDetection \?\? \{\},?\s*\)/,
+    'the wire resolution must read env + the run override + the connection\'s settings-file reading',
+  );
   assert.match(source, /describeTurnDetection\(turnDetection\)/, 'a misconfiguration must be described for the log');
   assert.match(
     source,
-    /sessionDefaults:\s*\{ \.\.\.DEFAULT_SESSION_DEFAULTS, turn_detection: turnDetection\.turnDetection \}/,
-    'the resolved detector must be handed to the transport as sessionDefaults.turn_detection',
+    /sessionDefaults:\s*\{\s*\.\.\.DEFAULT_SESSION_DEFAULTS,\s*turn_detection:\s*resolveTurnDetection\(\s*process\.env,\s*input\.turnDetection,\s*settingsTurnDetection \?\? \{\},?\s*\)\.turnDetection,?\s*\}/,
+    'the per-connection resolved detector must be handed to the transport as sessionDefaults.turn_detection',
   );
   // The resolution sits INSIDE the seams builder — the ONE assembly point both the browser socket and
-  // the diagnosis route share — not at module scope, where it would be read once at boot.
+  // the diagnosis route share — not at module scope, where it would be read once at boot. It is
+  // per connection because only the proxy reads that connection's settings file.
   const fnStart = source.indexOf('const buildVoiceRealtimeSeams');
   const fnEnd = source.indexOf('function resolveIdleRotateMs');
   assert.ok(fnStart >= 0 && fnEnd > fnStart, 'the seams builder must be findable in index.ts');
   const body = source.slice(fnStart, fnEnd);
-  assert.match(body, /resolveTurnDetection\(process\.env, input\.turnDetection\)/, 'the resolution must sit in the seams builder');
-  assert.match(body, /turn_detection: turnDetection\.turnDetection/, 'the splice must sit in the seams builder');
+  assert.match(
+    body,
+    /resolveTurnDetection\(\s*process\.env,\s*input\.turnDetection,\s*settingsTurnDetection \?\? \{\},?\s*\)/,
+    'the per-connection resolution must sit in the seams builder',
+  );
+  assert.match(
+    body,
+    /turn_detection:\s*resolveTurnDetection\([\s\S]*?settingsTurnDetection \?\? \{\}[\s\S]*?\)\.turnDetection/,
+    'the splice must sit in the seams builder',
+  );
 });

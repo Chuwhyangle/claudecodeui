@@ -108,6 +108,7 @@ import {
   describeSilenceDurationSource,
   describeTurnDetection,
   resolveTurnDetection,
+  type TurnDetectionValues,
 } from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
@@ -1846,8 +1847,19 @@ export type VoiceRealtimeProxySeams = {
    * a malformed upstream frame, …). A transport that is handed no `onError` drops
    * those silently, which is how a rejected `session_send` once read as "Listening…"
    * forever; pass it straight through as the transport's `onError`.
+   *
+   * `settingsTurnDetection` is THIS connection's settings-file reading, VALIDATED by the
+   * loader (the fields the file named, or `{}` when it named none). It travels through the
+   * seam because only the proxy reads the file, while only the composition root builds the
+   * transport: without it the file's `silence_duration_ms` reached the local uplink gate and
+   * the log line but never the `session.update`, which kept the shipped 800 ms (live,
+   * 2026-10-20 — "the log says 1500, the wire says 800"). The builder resolves it with the
+   * SAME precedence as every other reader (override > environment > file > shipped default).
    */
-  createTransport(reportError: (error: { code: string } & Record<string, unknown>) => void): RealtimeTransport;
+  createTransport(
+    reportError: (error: { code: string } & Record<string, unknown>) => void,
+    settingsTurnDetection?: TurnDetectionValues,
+  ): RealtimeTransport;
   /** Builds the live executor whose `session_send` is whitelisted to `boundSessionId`. */
   createExecutor(input: { boundSessionId: string }): RealtimeToolExecutor;
   /** The session instructions sent upstream once connected, and the base of the defaults a settings file overrides. */
@@ -5592,7 +5604,11 @@ export function handleVoiceRealtimeConnection(
    * relay has always made, so an `uplinkVad === null` connection is unwrapped and byte-identical (AC2).
    */
   const openTransport = (): RealtimeTransport => {
-    const inner = seams.createTransport(reportTransportError);
+    // THIS connection's settings reading, handed to the transport that opens the wire. The proxy
+    // resolved the same reading above for its gate and log line; passing it here is what makes the
+    // endpoint's `session.update` carry the same detector instead of the file-less shipped default
+    // (live, 2026-10-20: the log said 1500 ms, the frame said 800 ms).
+    const inner = seams.createTransport(reportTransportError, settings.turnDetection);
     if (uplinkVad === null) {
       return inner;
     }
