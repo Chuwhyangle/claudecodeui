@@ -29,11 +29,11 @@ context pack 不缩：实测 600 字 vs 1400 字只省 ~80 ms，且它同时服�
 
 ## AC
 
-- [ ] AC1：`DEFAULT_VOICE_REALTIME_SUMMARY_MODEL` 为 `qwen-flash`；摘要 leaf 对注入的 fetch 发出的请求体是 `model: 'qwen-flash'`、`modalities: ['text']`、`stream: false`，context 位于 `<输出>` 内；既有 summary 测试的模型 pin 就地更新，其余请求形状断言不变。
-- [ ] AC2：长度不再是拒绝条件——一个 41 字以上、无 Markdown、verbatimTail ≤ 6 的摘要必须被 `run-end summary injected`；Markdown 违规与 verbatimTail > 6 仍分别被拒绝（两条腿各有独立用例，拒绝日志保持可归因）。
-- [ ] AC3：`VOICE_REALTIME_RUN_END_ACK` 未设置或空值时，运行结束不注入确认语（旧 wire 不变）；设置时按 `|` 分隔成候选列表，经可注入的 `random` 纯函数随机选一条，并以独立 id（`run-end-ack-N`）在 settle timer 之前注入；摘要到达后排在确认语之后。测试覆盖 random=0→首条、random→末条、结果 ∈ 候选集。
-- [ ] AC4：确认语独立于摘要：context pack 为空、summarize 返回 null、摘要被 Markdown/verbatim gate 拒绝时，确认语仍被注入并进入 TTS。
-- [ ] AC5：用户开口时确认语与摘要都按既有双工规则收到 `narrator_stop` 并被丢弃；不新增任何旁路或新的停播路径（既有 AC-406 用例保持绿）。
+- [x] AC1：`DEFAULT_VOICE_REALTIME_SUMMARY_MODEL` 为 `qwen-flash`；摘要 leaf 对注入的 fetch 发出的请求体是 `model: 'qwen-flash'`、`modalities: ['text']`、`stream: false`，context 位于 `<输出>` 内；既有 summary 测试的模型 pin 就地更新，其余请求形状断言不变。
+- [x] AC2：长度不再是拒绝条件——一个 41 字以上、无 Markdown、verbatimTail ≤ 6 的摘要必须被 `run-end summary injected`；Markdown 违规与 verbatimTail > 6 仍分别被拒绝（两条腿各有独立用例，拒绝日志保持可归因）。
+- [x] AC3：`VOICE_REALTIME_RUN_END_ACK` 未设置或空值时，运行结束不注入确认语（旧 wire 不变）；设置时按 `|` 分隔成候选列表，经可注入的 `random` 纯函数随机选一条，并以独立 id（`run-end-ack-N`）在 settle timer 之前注入；摘要到达后排在确认语之后。测试覆盖 random=0→首条、random→末条、结果 ∈ 候选集。
+- [x] AC4：确认语独立于摘要：context pack 为空、summarize 返回 null、摘要被 Markdown/verbatim gate 拒绝时，确认语仍被注入并进入 TTS。
+- [x] AC5：用户开口时确认语与摘要都按既有双工规则收到 `narrator_stop` 并被丢弃；不新增任何旁路或新的停播路径（既有 AC-406 用例保持绿）。
 
 ## DoD
 
@@ -47,6 +47,7 @@ context pack 不缩：实测 600 字 vs 1400 字只省 ~80 ms，且它同时服�
 - server/modules/voice-realtime/voice-realtime-summary.ts
 - server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts
 - server/modules/voice-realtime/voice-realtime-narrator.ts
+- server/modules/voice-realtime/index.ts
 - server/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
