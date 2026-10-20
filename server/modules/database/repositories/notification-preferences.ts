@@ -4,7 +4,7 @@
  * Stores per-user notification channel/event preferences as JSON.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 type NotificationPreferences = {
   channels: {

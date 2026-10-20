@@ -43,8 +43,12 @@ function resolveDatabasePath(): string {
  * Used for the one-time migration to the new external location.
  */
 function resolveLegacyDatabasePath(): string {
-  const serverDir = path.resolve(__dirname, '..', '..', '..');
-  return path.join(serverDir, 'database', 'auth.db');
+  // Four levels up from `modules/database/core/` (and from the compiled
+  // `dist-server/server/modules/database/core/`) lands on the same install root
+  // the old `modules/database/connection.ts` reached with three: moving the
+  // module one directory deeper must not move the legacy database it migrates.
+  const installDir = path.resolve(__dirname, '..', '..', '..', '..');
+  return path.join(installDir, 'database', 'auth.db');
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@
  * Persists browser push subscription endpoints and keys per user.
  */
 
-import { getConnection } from '@/modules/database/connection.js';
+import { getConnection } from '@/modules/database/core/index.js';
 
 type PushSubscriptionLookupRow = {
   endpoint: string;
