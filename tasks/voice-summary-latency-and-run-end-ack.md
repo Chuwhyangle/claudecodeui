@@ -1,7 +1,7 @@
 ---
 id: voice-summary-latency-and-run-end-ack
 title: Live Voice 摘要提速（qwen-flash、去 40 字闸）与运行结束随机确认语
-status: ready
+status: done
 labels:
   - feature
 parent: null
