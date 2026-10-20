@@ -120,8 +120,14 @@ const readJson = (file: string): Record<string, unknown> =>
 const filesWith = (directory: string, extension: string): string[] =>
   readdirSync(directory).filter((name) => name.endsWith(extension)).sort();
 
-/** The bytes of every regular file under the directory, the figure the ceiling bounds. */
-function directoryBytes(directory: string): number {
+/**
+ * The bytes of every regular file under the directory, the figure the ceiling bounds.
+ *
+ * Deliberately NOT `directoryBytes` from `server/shared/fs-bytes.ts`: this is the test's own
+ * independent oracle, so a bug in the shipping helper cannot make the ceiling assertion agree
+ * with itself.
+ */
+function regularFileBytes(directory: string): number {
   return readdirSync(directory).reduce((total, name) => {
     const stats = statSync(path.join(directory, name));
     return stats.isFile() ? total + stats.size : total;
@@ -268,7 +274,7 @@ test('the capacity ceiling trims the OLDEST records, and the directory ends with
       ids.push(result.ok ? result.value.recordId : '');
     }
 
-    assert.ok(directoryBytes(directory) <= CAP_BYTES, 'the directory is within its ceiling');
+    assert.ok(regularFileBytes(directory) <= CAP_BYTES, 'the directory is within its ceiling');
     const remaining = new Set(filesWith(directory, '.json'));
     // The oldest records are the ones that went; the newest — the one just written — is still there.
     assert.ok(!remaining.has(`${ids[0]}.json`), 'the oldest record was evicted first');
