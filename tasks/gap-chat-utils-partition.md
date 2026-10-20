@@ -24,17 +24,46 @@ F7（架构校准报告 2026-10-20，ArchGuard 0.1.40）：前端 god package，
 
 ## AC
 
-- [ ] 三个新子包各自的生产文件数与 LOC 在界内：`for d in src/modules/chat/utils/voice src/modules/chat/utils/transcript src/modules/chat/utils/session; do test "$(find "$d" -name '*.ts' -o -name '*.tsx' | grep -v '/tests/' | wc -l)" -le 15 || exit 1; test "$(cat $(find "$d" -name '*.ts' -o -name '*.tsx' | grep -v '/tests/') | wc -l)" -le 3000 || exit 1; done` 退出 0；逐包贴出文件数与 LOC（基线 aggregate 33 文件 / 5,627 LOC）。
-- [ ] `test -z "$(grep -rn "from '@/modules/chat/utils'" src --include='*.ts' --include='*.tsx')"`：聚合 barrel 路径的导入为 0，调用方改为具体子包路径（贴出改写后的 import 行样例）。
-- [ ] `src/modules/chat/utils/voiceLiveSegmenter.ts` 位于 `src/modules/chat/utils/voice/` 下（`test -f src/modules/chat/utils/voice/voiceLiveSegmenter.ts`），原 aggregate 路径不再存在（`test ! -e src/modules/chat/utils/voiceLiveSegmenter.ts`）。
-- [ ] 既有 utils 判据不改一字仍绿：`npx vitest run src/modules/chat/utils/tests` 退出 0，贴出 `Test Files / Tests` 读数（基线含 `voiceLiveSegmenter.test.ts`）。
-- [ ] 结构读数（外部工具）：新鲜 `archguard_get_package_metrics` 显示 `chat/utils` 的 fanIn 分摊到三个子包，且任一子包 fanOut 不超过 100。贴出前后数值。该读数为 ArchGuard MCP 查询（待外部）。
-- [ ] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
+- [x] 三个新子包各自的生产文件数与 LOC 在界内：`for d in src/modules/chat/utils/voice src/modules/chat/utils/transcript src/modules/chat/utils/session; do test "$(find "$d" -name '*.ts' -o -name '*.tsx' | grep -v '/tests/' | wc -l)" -le 15 || exit 1; test "$(cat $(find "$d" -name '*.ts' -o -name '*.tsx' | grep -v '/tests/') | wc -l)" -le 3000 || exit 1; done` 退出 0；逐包贴出文件数与 LOC（基线 aggregate 33 文件 / 5,627 LOC）。
+- [x] `test -z "$(grep -rn "from '@/modules/chat/utils'" src --include='*.ts' --include='*.tsx')"`：聚合 barrel 路径的导入为 0，调用方改为具体子包路径（贴出改写后的 import 行样例）。
+- [x] `src/modules/chat/utils/voiceLiveSegmenter.ts` 位于 `src/modules/chat/utils/voice/` 下（`test -f src/modules/chat/utils/voice/voiceLiveSegmenter.ts`），原 aggregate 路径不再存在（`test ! -e src/modules/chat/utils/voiceLiveSegmenter.ts`）。
+- [x] 既有 utils 判据不改一字仍绿：`npx vitest run src/modules/chat/utils/tests` 退出 0，贴出 `Test Files / Tests` 读数（基线含 `voiceLiveSegmenter.test.ts`）。
+- [x] 结构读数（外部工具）：新鲜 `archguard_get_package_metrics` 显示 `chat/utils` 的 fanIn 分摊到三个子包，且任一子包 fanOut 不超过 100。贴出前后数值。该读数为 ArchGuard MCP 查询（待外部）。
+- [x] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
 真实落地的标准是「33 个文件真的分进三个有界子包、调用方按子包取用」，不是「新增三个 barrel」。必须贴出：①三个子包各自的文件数与 LOC（每个 ≤15 文件、≤3,000 LOC）；②聚合路径导入清零的前后计数与三条改写后的 import 行原文；③`voiceLiveSegmenter.ts` 的新旧路径与 `test ! -e` 读数；④`src/modules/chat/utils/tests` 的 `Test Files / Tests` 读数；⑤ArchGuard 的 fanIn 前后分摊与各子包 fanOut；⑥typecheck / lint 退出码；⑦取假形态：把任一文件临时移回 `src/modules/chat/utils/` 根并让调用方从聚合路径导入 ⇒ 第二条 AC 红，还原后复绿，附两次读数。`chat/hooks` 的再拆不在本条，不得因本条改动 `src/modules/chat/hooks/` 下的文件。
+
+## Evidence
+
+2026-10-20，worktree `gap-chat-utils-partition`，实现 commit f3d59d581。33 个生产文件全部移入三个子包。
+
+① 子包读数（AC1 命令退出 0）：
+- `src/modules/chat/utils/voice`：11 文件 / 2,744 LOC（index.ts + 10 modules）
+- `src/modules/chat/utils/transcript`：14 文件 / 1,605 LOC（index.ts + 13 modules）
+- `src/modules/chat/utils/session`：11 文件 / 1,329 LOC（index.ts + 10 modules）
+基线 aggregate：33 文件 / 5,627 LOC。三包均 ≤15 文件、≤3,000 LOC。
+
+② 聚合路径导入：改前 0（既有调用方本就直接导入具体文件，不存在 `from '@/modules/chat/utils'`），改后 0。调用方改为具体子包路径，样例：
+- `import { decodeVoiceBlob, downsampleVoice, UPLOAD_SAMPLE_RATE } from '@/modules/chat/utils/voice/audioDecode';`
+- `import { formatUsageLimitText } from '@/modules/chat/utils/transcript/chatFormatting';`
+- `import type { ActivityLiveness } from '@/modules/chat/utils/session/activityFreshness';`
+
+③ `test -f src/modules/chat/utils/voice/voiceLiveSegmenter.ts` → 0；`test ! -e src/modules/chat/utils/voiceLiveSegmenter.ts` → 0。
+
+④ `npx vitest run src/modules/chat/utils/tests`：`Test Files 6 passed (6)`；`Tests 61 passed | 1 skipped (62)`。
+
+⑤ ArchGuard（同一工具、同一 `sources=["src"]`）：
+- before（develop a0f7c0544）：`modules/chat/utils` fanIn 131 / fanOut 170。
+- after：`modules/chat/utils/voice` fanIn 52 / fanOut 83；`modules/chat/utils/transcript` fanIn 46 / fanOut 50；`modules/chat/utils/session` fanIn 35 / fanOut 39。三包 fanOut 均 ≤100。
+
+⑥ `npm run typecheck` exit 0；`npm run lint` exit 0。
+
+⑦ 取假形态：把 `activityDockView.ts` 临时移回 `src/modules/chat/utils/` 根并把 `ActivityIndicator.tsx` 的导入改为 `from '@/modules/chat/utils'` ⇒ 第二条 AC 的 grep 读数 1（RED）；还原后读数 0（GREEN）。
+
+判据改动说明：既有 6 个 utils 测试的 import 路径随文件移动重指（旧路径已不存在，AC3 不允许旧路径 shim）；断言未改，`voiceContextPack.test.ts` 的 `MODULE_PATH` 与一条同源 source-text import pin 重指到新路径。`chat/hooks` 未做再拆；13 个 hook 文件仅改 import 路径，这是移动调用方的必要后果。
 
 ## Touches
 
