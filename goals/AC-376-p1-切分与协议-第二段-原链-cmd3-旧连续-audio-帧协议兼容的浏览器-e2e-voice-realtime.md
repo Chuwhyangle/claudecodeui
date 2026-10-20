@@ -2,7 +2,7 @@
 id: AC-376
 title: P1 切分与协议（第二段，原链 CMD3）：旧连续 audio 帧协议兼容的浏览器 e2e ——
   voice-realtime-upload-fixture 与 voice-realtime-live-session-send 两条 spec 全绿
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-034
 criterion: npx playwright test e2e/voice-realtime-upload-fixture.spec.ts
@@ -42,8 +42,8 @@ expect: >-
 
   **逐条相同**：本记录承载 floor 最大的 CMD3（实测 85.8s），声明 `timeoutMs: 115000`（> floor
   85.8s，余量 25% = 1 − 85.8/115.0，即声明值是实测 floor 的 1.34 倍 ⇒ 相对 floor 的余量为
-  +34%，满足「≥30% 相对余量」；30% 相对余量的下界是 1.3 × 85.8s = 111.6s，而 115000 仍
-  < 120000 硬闸，故按实测取 115000）；
+  +34%，满足「≥30% 相对余量」；30% 相对余量的下界是 1.3 × 85.8s = 111.6s，而 115000 仍 < 120000
+  硬闸，故按实测取 115000）；
 
   CMD1+CMD2 留在 AC-319（`timeoutMs: 118000`，其串行 floor 45.3s，余量 61%）。⛔
   未删／未弱化／未合并成更短命令。
@@ -76,5 +76,12 @@ origin: >-
 
   裁定：AC-319 的判据与 timeoutMs 只落到该记录、不动 GOAL-034 的其它记录与主检出在途 WIP。
 activatedAt: 2026-10-13T02:26:40.180Z
+statusLog:
+  - at: 2026-10-20T13:46:40.611Z
+    from: active
+    to: achieved
+    actor: goal-cli
+    reason: quay goal gate AC-376 verdict=pass (acceptance passed, exit 0)
+      @2026-10-20T13:46:35.575Z
 timeoutMs: 115000
 ---
