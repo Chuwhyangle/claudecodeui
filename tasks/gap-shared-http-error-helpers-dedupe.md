@@ -2,7 +2,7 @@
 id: gap-shared-http-error-helpers-dedupe
 title: Extract toResponseJson/getApiErrorMessage into src/shared and remove
   three copies
-status: ready
+status: done
 labels:
   - gap
 parent: null
