@@ -44,7 +44,7 @@ Live Voice 目前把连接相位直接写成文字：`Connecting voice…` / `St
 ## DoD
 
 - [ ] `bash scripts/with-memory-cap.sh npx playwright test e2e/voice-realtime-capture-ready-status.spec.ts e2e/voice-realtime-continuous-experience.spec.ts` 退出码 0：脚本化上游下，bar 在 transient 相位无瞬态文案、`data-capture` 读数正确、X-6 重锚后全绿。
-- [ ] 真机实听（桌面浏览器 + 真实麦克风 + 真实上游）：进入上行双音、退出下行双音、断开/失败第三种音各响一次且与 TTS 旁白无混响，「正在连接/正在听/正在启动麦克风」文案不再出现。**该条只能由人 yale 实听写入（待外部）**——机器证据（单测断言 cue 恰被调一次 + e2e 无瞬态文案）齐备后，音频的「听得见、不刺耳」仍需人耳确认。
+- [ ] 真机实听（桌面浏览器 + 真实麦克风 + 真实上游）：进入上行双音、退出下行双音、断开/失败第三种音各响一次且与 TTS 旁白无混响；「正在连接/正在听/正在启动麦克风」文案不再出现。机器证据（单测断言 cue 恰被调一次 + e2e 无瞬态文案）齐备后，音频的「听得见、不刺耳」由 yale 实听确认（待外部）
 
 ## Touches
 
