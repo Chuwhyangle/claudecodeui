@@ -90,3 +90,11 @@ Baseline: develop @ `166823331`; implementation commits `a31b39881`, `1c232db93`
 - AC6 — `npm run typecheck` exit 0.
 - AC7 — anti-drift Touches check run against develop; diff set is exactly the 36 code paths + the task file listed above.
 - DoD ⑦ (false form) — appended `import { getConnection } from '@/modules/database/connection.js';` to `repositories/credentials.ts` → AC1 count 1 (red); `git checkout -- credentials.ts` → count 0 (green).
+
+## Blocker
+
+**2026-10-20T06:49:06.781Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: the measured cycles must match the pinned baseline groups member-for-member
+- run_id：wk-prod-anchor
+- session_id：76bb64ff-4a74-484d-b86d-4643c71f7af0
