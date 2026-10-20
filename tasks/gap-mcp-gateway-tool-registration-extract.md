@@ -102,12 +102,8 @@ F6（架构校准报告 2026-10-20，ArchGuard 0.1.40；`archguard_detect_god_pa
 
 ## Blocker
 
-执行侧不可满足：本条拆分与仓库既有棘轮 `server/shared/tests/server-import-cycle-budget.test.ts`（AC-394，已 done）冲突，落地即红 fan-in 的全量 suite。实测（worktree `gap-mcp-gateway-tool-registration-extract`，commit `7cc37bde7`）：
+**2026-10-20T06:43:35.030Z — worker 未落地（exited-not-landed）**
 
-- (b) `SCC [modules/mcp-gateway, modules/mcp-tools-read, modules/mcp-tools-write, modules/projects, …] is not contained in any baseline cycle group` —— F3 的 server 环从 11 个目录长到 13 个。
-- (c) `server/modules/mcp-gateway imports the new directory server/modules/mcp-tools-read`，且两个新目录 import `mcp-gateway` / `oauth` / `providers` / `websocket` / `quay` / 彼此 —— 基线 manifest 之外的新目录必须是叶子（出边只许 `server/shared/**` 与自己，且不得被其它 `server/modules/**` 目录 import）。
-- (g) 该判据显式断言「未改动的树保持绿」；棘轮文档明确：基线只许缩小，不许为容纳红而改基线或 `MANIFEST_PIN`。
-
-要同时满足 AC1（新目录承载 9,300+ LOC 工具实现）与棘轮，唯一形态是：两个新目录变成纯叶子（不 import 任何 module、不互相 import，依赖全部注入），注册缝经 `server/index.ts`（目录 `.`，唯一允许的入边来源）注入传输；这要求把共享词汇（错误信封、correlation、draft、approvals、usage-stats、host-control、self-target）与跨模块类型迁到 `server/shared/**`，并改写 `mountMcpGateway` 的 deps 契约。而既有契约判据正是经该契约挂载的（AC3 要求判据「不改一字」），两者互斥。需要人或上游任务在「改 AC / 改棘轮 / 做完整依赖倒置」之间裁决。
-
-已完成（分支 `task/gap-mcp-gateway-tool-registration-extract`，commit `7cc37bde7`，47 个文件）：AC1、AC4、AC5、AC6 绿；AC3 的命令全绿（52 文件 / 319 pass / 0 fail，但 17 个文件有 import-only 机械改动）；AC2 fanOut 达标、SCC 不达标；DoD ⑥ 取假形态因整体不可落地未执行。未改动 `voice-realtime` 与 host driver。
+- 未落地原因：AC 未全勾（checked 0/7，剩余未勾 7）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：317e46db-8f02-42ea-90ae-8e492b206545
