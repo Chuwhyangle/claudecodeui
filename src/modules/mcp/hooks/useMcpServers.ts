@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
+import { getApiErrorMessage, toResponseJson } from '@/shared/apiResponse';
 import { MCP_GLOBAL_SUPPORTED_TRANSPORTS, MCP_PROVIDER_NAMES, MCP_SUPPORTED_SCOPES } from '@/shared/constants';
 import type { McpFormState, McpProject, McpProvider, McpScope, McpTransport, ProviderMcpServer, UpsertProviderMcpServerPayload } from '@/shared/types';
 import {
@@ -67,34 +68,6 @@ const mcpServersCache = new Map<string, McpServersCacheEntry>();
 
 // Settings users often switch between provider tabs repeatedly. A short module
 // cache prevents those tab switches from refetching every project config file.
-
-const toResponseJson = async <T>(response: Response): Promise<T> => response.json() as Promise<T>;
-
-const getApiErrorMessage = (payload: unknown, fallback: string): string => {
-  if (!payload || typeof payload !== 'object') {
-    return fallback;
-  }
-
-  const record = payload as Record<string, unknown>;
-  const error = record.error;
-  if (error && typeof error === 'object') {
-    const message = (error as Record<string, unknown>).message;
-    if (typeof message === 'string' && message.trim()) {
-      return message;
-    }
-  }
-
-  if (typeof error === 'string' && error.trim()) {
-    return error;
-  }
-
-  const details = record.details;
-  if (typeof details === 'string' && details.trim()) {
-    return details;
-  }
-
-  return fallback;
-};
 
 const normalizeTransport = (value: unknown, fallback: McpTransport = 'stdio'): McpTransport => (
   isMcpTransport(value) ? value : fallback
