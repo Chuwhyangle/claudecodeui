@@ -2,7 +2,7 @@
 id: gap-server-provider-websocket-init-cycle-ports
 title: Break the server provider/websocket/mcp-gateway/session-hosts
   initialization cycle with ports
-status: todo
+status: ready
 labels:
   - gap
 parent: null

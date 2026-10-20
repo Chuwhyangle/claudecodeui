@@ -1,7 +1,7 @@
 ---
 id: gap-chat-settings-composer-transcript-cycles
 title: Break chat↔settings and composer↔transcript import cycles in src
-status: todo
+status: ready
 labels:
   - gap
 parent: null
