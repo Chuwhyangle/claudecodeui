@@ -256,6 +256,50 @@ async function armScenario(api: APIRequestContext, projectPath: string, doc: unk
 const phase = async (page: Page): Promise<string> =>
   ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim();
 
+/**
+ * The page-side capture probe `pushFirstCaptureFrame` drives (installed by {@link installFakeMicrophone}).
+ *
+ * WHY THE FIRST FRAME IS NEEDED. Upstream `state: open` only takes the bar to `arming`; the bar says
+ * `listening` when capture delivers its FIRST frame (`c99a0eaba`). The fake graph is inert — frames
+ * only leave it via `__voiceFake.speak()` — so a replay that waits for `listening` BEFORE its first
+ * utterance would poll `arming` until the wait timed out. This helper pushes that one frame; it is
+ * silent (all zeros) so it advances the segmenter's `atSample` ledger without contributing speech.
+ *
+ * WHEN IT LANDS. Only after `start()` has WIRED the most recently constructed worklet
+ * (`port.onmessage` is assigned after the asynchronous acquisition, and a frame pushed before that is
+ * dropped), and only once per worklet — `constructed`/`pushed` make "one first frame per capture
+ * session" a page-side fact, so a later branch's capture cannot be satisfied by an earlier one's.
+ */
+type CaptureProbe = {
+  node: { port: { onmessage: ((m: unknown) => void) | null } } | null;
+  atSample: number;
+  constructed: number;
+  pushed: number;
+};
+
+async function pushFirstCaptureFrame(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const capture = (window as unknown as { __voiceCaptureProbe?: CaptureProbe }).__voiceCaptureProbe;
+          const node = capture?.node;
+          if (!capture || !node || node.port.onmessage === null) return false;
+          if (capture.pushed >= capture.constructed) return false;
+          const samples = new Float32Array(3_200); // 200 ms of silence at 16 kHz
+          node.port.onmessage({ data: { type: 'pcm', samples, atSample: capture.atSample } });
+          capture.atSample += samples.length;
+          capture.pushed = capture.constructed;
+          return true;
+        }),
+      {
+        timeout: 20_000,
+        message: 'the capture graph never wired a worklet to receive the first captured frame',
+      },
+    )
+    .toBe(true);
+}
+
 async function snapshot(page: Page): Promise<Snapshot> {
   return page.evaluate(() => {
     const pane = document.querySelector('.chat-messages-pane');
@@ -296,7 +340,9 @@ async function snapshot(page: Page): Promise<Snapshot> {
  */
 async function shot(page: Page, name: string): Promise<void> {
   const dir = process.env.QUAY_LIVE_VOICE_SHOT_DIR;
-  if (dir) await page.waitForTimeout(700);
+  // A screenshot is a one-shot capture, not an event to sync on: this lets the opt-in picture settle
+  // after the last DOM update. It runs only when QUAY_LIVE_VOICE_SHOT_DIR is set.
+  if (dir) await page.waitForTimeout(700); // fixed-wait: screenshot settle, opt-in only (QUAY_LIVE_VOICE_SHOT_DIR)
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 }
 
@@ -316,9 +362,19 @@ function installFakeMicrophone(): void {
     return samples;
   };
   type Port = { port: { onmessage: ((m: unknown) => void) | null } };
-  const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
+  // `constructed`/`pushed` make "exactly one first frame per capture session" a page-side fact
+  // rather than a caller's promise; they are shared with `__voiceCaptureProbe` below.
+  const state: {
+    node: Port | null;
+    atSample: number;
+    constructed: number;
+    pushed: number;
+    speak: (seconds: number) => void;
+  } = {
     node: null,
     atSample: 0,
+    constructed: 0,
+    pushed: 0,
     speak(seconds: number) {
       const node = state.node;
       if (!node) throw new Error('the fake capture was not connected yet');
@@ -328,12 +384,16 @@ function installFakeMicrophone(): void {
     },
   };
   (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;
+  // The probe `pushFirstCaptureFrame` drives. Same object, so the first-frame push keeps the
+  // segmenter's `atSample` ledger contiguous with `speak`'s bursts.
+  (window as unknown as { __voiceCaptureProbe: typeof state }).__voiceCaptureProbe = state;
 
   class FakeWorkletNode {
     port: { onmessage: ((m: unknown) => void) | null; postMessage: () => void };
     constructor() {
       this.port = { onmessage: null, postMessage: () => undefined };
       state.node = this as unknown as typeof state.node;
+      state.constructed += 1;
     }
 
     connect() {
@@ -549,6 +609,9 @@ async function replay(
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('live-voice-button').click();
   await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+  // `listening` needs capture's FIRST frame (`arming` is the window before it), and the fake graph
+  // only emits when the spec drives it — push that frame, then wait for the phase it promotes.
+  await pushFirstCaptureFrame(page);
   await expect.poll(() => phase(page), { timeout: 25_000 }).toBe('listening');
   // Segmented mode is the premise of the whole replay: the server must have declared it.
   await expect
@@ -1032,9 +1095,27 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(captions(recording.B)).toEqual([`B_A=${S1_HEARD}`, `B_B=${S2}`, `B_D=${S4}`, `B_C=${S3}`, `B_E=${S5}`]);
   });
 
-  test('branch A: Exit back-fills the composer with exactly the unrelayed transcripts, in spoken order', () => {
+  // SUPERSEDED 2026-10-13 by AC-375 (GOAL-044, decision doc §11–§12). A `sent` frame now reports the
+  // committed-item watermark (`coveredThroughItemId`), and the page claims every pending caption up to
+  // it. The model HAD S2 and S4 in front of it when it relayed S5, so they are disposed of — relayed,
+  // reworded or deliberately dropped — and leaving must NOT hand already-handled speech back as a
+  // draft. The reading this leg replaces was `draft was "现在是第二句话。第四句话。"`; what it pins now is
+  // the empty draft, read TOGETHER with the proof that both sentences really were there to be claimed
+  // (their final captions are in the recording) and with the watermark that did the claiming — so an
+  // implementation that simply dropped the sentences cannot pass this leg.
+  test('branch A: Exit does not hand back speech the model already had in front of it', () => {
     const draft = recording.A.draft;
-    expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S4));
+    expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe('');
+    const finals = recording.A.browserFrames
+      .filter((frame) => frame.type === 'caption' && frame.final === true)
+      .map((frame) => normalize(String(frame.text)));
+    expect(finals, `final captions were ${JSON.stringify(finals)}`).toEqual(
+      expect.arrayContaining([normalize(S2), normalize(S4)]),
+    );
+    const s5Delivery = recording.A.browserFrames.find(
+      (frame) => frame.type === 'sent' && normalize(String(frame.message)) === normalize(S5),
+    );
+    expect(s5Delivery?.coveredThroughItemId, 'S5 delivery watermark').toBe('A_E');
   });
 
   // ------------------------------- variant R: the machine answers (POSITIVE) -------------------------------
@@ -1202,13 +1283,20 @@ test.describe('voice realtime segmented replay of the 2026-10-12 session', () =>
     expect(snap.voiceOnlyNodes, reason).toBe(0);
   });
 
-  // GREEN as of the fix for gap-live-voice-segment-honest-heard-unrecognized-state (2026-10-12): the
-  // composer's backlog is read off captions kept in SPOKEN order, so a transcript that arrived late
-  // no longer re-orders the draft. The reading this leg was written against was:
-  //   draft was "现在是第二句话。第四句话。第三句话。"
-  test('(d) branch B: Exit back-fills S2, S3, S4 in SPOKEN order, not arrival order', () => {
+  // SUPERSEDED 2026-10-13 by AC-375 (GOAL-044, decision doc §11–§12), the same watermark rule as the
+  // branch-A leg above: S2, S4 and the late S3 were all committed before the S5 relay's boundary, so
+  // they are the model's to answer and must not come back as a draft. The reading this leg replaces
+  // was `draft was "现在是第二句话。第三句话。第四句话。"` (in spoken order; the earlier
+  // arrival-ordered draft was `"现在是第二句话。第四句话。第三句话。"`).
+  test('(d) branch B: Exit does not hand back the late-arriving sentences either', () => {
     const draft = recording.B.draft;
-    expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe(normalize(S2 + S3 + S4));
+    expect(normalize(draft), `draft was ${JSON.stringify(draft)}`).toBe('');
+    const finals = recording.B.browserFrames
+      .filter((frame) => frame.type === 'caption' && frame.final === true)
+      .map((frame) => normalize(String(frame.text)));
+    expect(finals, `final captions were ${JSON.stringify(finals)}`).toEqual(
+      expect.arrayContaining([normalize(S2), normalize(S3), normalize(S4)]),
+    );
   });
 
   // REWRITTEN with gap-live-voice-remove-transcript-caption-rows (2026-10-13). This leg used to assert

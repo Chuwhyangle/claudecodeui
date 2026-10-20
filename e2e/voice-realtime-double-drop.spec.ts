@@ -275,6 +275,49 @@ const phase = async (page: Page): Promise<string> =>
   ((await page.getByTestId('voice-realtime-phase').textContent()) ?? '').trim();
 
 /**
+ * The page-side capture probe `pushFirstCaptureFrame` drives (installed by {@link installFakeMicrophone}).
+ *
+ * WHY THE FIRST FRAME IS NEEDED. Upstream `state: open` only takes the bar to `arming`; the bar says
+ * `listening` when capture delivers its FIRST frame (`c99a0eaba`). The fake graph is inert — frames
+ * only leave it via `__voiceFake.speak()` — so an entry that waits for `listening` BEFORE its first
+ * utterance would poll `arming` until the wait timed out. This helper pushes that one frame; it is
+ * silent (all zeros) so it advances the segmenter's `atSample` ledger without contributing speech.
+ *
+ * WHEN IT LANDS. Only after `start()` has WIRED the most recently constructed worklet
+ * (`port.onmessage` is assigned after the asynchronous acquisition), and only once per worklet —
+ * `constructed`/`pushed` make "one first frame per capture session" a page-side fact.
+ */
+type CaptureProbe = {
+  node: { port: { onmessage: ((m: unknown) => void) | null } } | null;
+  atSample: number;
+  constructed: number;
+  pushed: number;
+};
+
+async function pushFirstCaptureFrame(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const capture = (window as unknown as { __voiceCaptureProbe?: CaptureProbe }).__voiceCaptureProbe;
+          const node = capture?.node;
+          if (!capture || !node || node.port.onmessage === null) return false;
+          if (capture.pushed >= capture.constructed) return false;
+          const samples = new Float32Array(3_200); // 200 ms of silence at 16 kHz
+          node.port.onmessage({ data: { type: 'pcm', samples, atSample: capture.atSample } });
+          capture.atSample += samples.length;
+          capture.pushed = capture.constructed;
+          return true;
+        }),
+      {
+        timeout: 20_000,
+        message: 'the capture graph never wired a worklet to receive the first captured frame',
+      },
+    )
+    .toBe(true);
+}
+
+/**
  * The transcript as the page shows it.
  *
  * WHAT THIS READS NOW (operator's ruling, 2026-10-14). The conversation carries the real messages and
@@ -333,9 +376,19 @@ function installFakeMicrophone(): void {
     return samples;
   };
   type Port = { port: { onmessage: ((m: unknown) => void) | null } };
-  const state: { node: Port | null; atSample: number; speak: (seconds: number) => void } = {
+  // `constructed`/`pushed` make "exactly one first frame per capture session" a page-side fact
+  // rather than a caller's promise; they are shared with `__voiceCaptureProbe` below.
+  const state: {
+    node: Port | null;
+    atSample: number;
+    constructed: number;
+    pushed: number;
+    speak: (seconds: number) => void;
+  } = {
     node: null,
     atSample: 0,
+    constructed: 0,
+    pushed: 0,
     speak(seconds: number) {
       const node = state.node;
       if (!node) throw new Error('the fake capture was not connected yet');
@@ -345,12 +398,16 @@ function installFakeMicrophone(): void {
     },
   };
   (window as unknown as { __voiceFake: typeof state }).__voiceFake = state;
+  // The probe `pushFirstCaptureFrame` drives. Same object, so the first-frame push keeps the
+  // segmenter's `atSample` ledger contiguous with `speak`'s bursts.
+  (window as unknown as { __voiceCaptureProbe: typeof state }).__voiceCaptureProbe = state;
 
   class FakeWorkletNode {
     port: { onmessage: ((m: unknown) => void) | null; postMessage: () => void };
     constructor() {
       this.port = { onmessage: null, postMessage: () => undefined };
       state.node = this as unknown as typeof state.node;
+      state.constructed += 1;
     }
 
     connect() {
@@ -516,6 +573,9 @@ async function enterVoice(ctx: Ctx, sessionId: string, from: number): Promise<vo
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('live-voice-button').click();
   await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+  // `listening` needs capture's FIRST frame (`arming` is the window before it), and the fake graph
+  // only emits when the spec drives it — push that frame, then wait for the phase it promotes.
+  await pushFirstCaptureFrame(page);
   await expect.poll(() => phase(page), { timeout: 25_000 }).toBe('listening');
   // Segmented mode is the premise of the whole replay: the server must have declared it.
   await syncTo(ctx, from, 'the server declared segmented relay (ready{segmented-v1})', () =>
@@ -783,9 +843,6 @@ const captionSeqs = (rec: BranchRecording): string[] =>
     .filter((frame) => frame.type === 'caption' && frame.final === true)
     .map((frame) => `${String(frame.itemId)}=${String(frame.seq)}`);
 
-/** The index of the row this criterion reads, or -1. A row is named by its text or its own marker. */
-const indexOfRow = (snap: Snapshot, match: (row: Row) => boolean): number => snap.rows.findIndex(match);
-
 /**
  * Every voice-only row on screen, in transcript order — the rows the conversation must NOT have.
  *
@@ -996,41 +1053,27 @@ test.describe('voice realtime double drop (GOAL-043 / AC-368)', () => {
     expect(realRowWith(snap, 'seeded turn for Voice double drop').length).toBeGreaterThanOrEqual(1);
   });
 
-  test('the segments spoken after the drop are each attributed to their own seq, in spoken order', () => {
+  test('the segments spoken after the drop are each attributed to their own seq on the wire; the pane draws only the real messages', () => {
     const rec = recording.doubleDrop;
     // WIRE: one final caption per segment that produced words, each on the seq that segment was spoken
     // as — and NOTHING for seq2, whose commit never reached an endpoint that answered it.
     expect(captionSeqs(rec)).toEqual(['DD_0=0', 'DD_1=1', 'DD_3=3', 'DD_4=4', 'DD_5=5']);
 
-    // PAGE: the sentences that produced words stand as their own rows, in the order they were spoken.
-    // The lost seq2 is NOT among them: it has no words of its own, and the row that used to stand in
-    // its place — "no transcript for this segment" — is gone with the rest of the voice-only rows
-    // (operator's ruling, 2026-10-14). Its absence is the reading now, asserted below rather than
-    // occupying the position seq2's words would have taken.
-    const order = ['S0', 'S1', 'S3', 'S4', 'S5'] as const;
-    const text = { S0, S1, S2, S3, S4, S5 };
-    const positions = order.map((key) =>
-      key === 'S5'
-        ? indexOfRow(rec.snapshots.beforeExit!, (row) => row.testid === null && normalize(row.text).includes(normalize(S5_RELAYED)))
-        : rowIndexOf(rec.snapshots.beforeExit!, text[key]),
-    );
-    const rows = JSON.stringify(rec.snapshots.beforeExit!.rows);
-    expect(positions.every((index) => index >= 0), `not every sentence has a row of its own: ${rows}`).toBe(true);
-    expect(positions, `row indices of S0,S1,S3,S4,S5 in ${rows}`).toEqual([...positions].sort((a, b) => a - b));
-    expect(new Set(positions).size, `the five readings must be five different rows: ${rows}`).toBe(5);
-    // The lost segment draws nothing — no words and no line about the loss. Read by prefix, so any
-    // row of the pane's own voice kind fails here whatever it is called.
-    expect(voiceOnlyRows(rec.snapshots.beforeExit!), `voice-only rows: ${rows}`).toEqual([]);
-    // ...and seq2's words are nowhere on screen either: the segment produced no transcript, so the
-    // sentences the recogniser did answer are the only ones the pane holds.
-    expect(rowIndexOf(rec.snapshots.beforeExit!, S2), `seq2's words must not be drawn: ${rows}`).toBe(-1);
-    // The sentences that produced words on screen are the person's own messages and nothing more:
-    // each is a plain user row, carrying no marker of the voice layer's own kind. Only the relayed
-    // seq5 was replaced by a delivered message, and the lost seq2 has no words of its own to show.
-    for (const spoken of [S0, S1, S3, S4]) {
-      const index = rowIndexOf(rec.snapshots.beforeExit!, spoken);
-      expect(rec.snapshots.beforeExit!.rows[index]!.testid, `"${spoken}" row state: ${rows}`).toBeNull();
+    // PAGE: after the 2026-10-14 operator ruling (and the 2026-10-20 page subtraction) the pane is the
+    // conversation and nothing else. The caption rows this leg used to read — one per unrelayed
+    // sentence, in spoken order — are gone, as is the lost-segment row; what remains is the seeded turn
+    // and the ONE relayed message. The spoken order the old leg read off row indices is still read
+    // above, from the WIRE's caption seqs, so a regression that reordered attribution cannot pass for
+    // an empty page. Every unrelayed sentence (and seq2's absent words) must be absent from the pane.
+    const snap = rec.snapshots.beforeExit!;
+    const rows = JSON.stringify(snap.rows);
+    expect(realRowWith(snap, 'seeded turn for Voice double drop').length, `seeded turn missing: ${rows}`).toBeGreaterThanOrEqual(1);
+    expect(realRowWith(snap, S5_RELAYED).length, `the relayed segment is the real row a delivery leaves: ${rows}`).toBeGreaterThanOrEqual(1);
+    for (const unrelayed of [S0, S1, S2, S3, S4]) {
+      expect(rowIndexOf(snap, unrelayed), `"${unrelayed}" must not be drawn: ${rows}`).toBe(-1);
     }
+    // Read by prefix, so any row of the pane's own voice kind fails here whatever it is called.
+    expect(voiceOnlyRows(snap), `voice-only rows: ${rows}`).toEqual([]);
   });
 
   test('the round delivers at most once: the replayed segment reaches Claude zero times, the relayed one once', () => {
@@ -1093,7 +1136,10 @@ test.describe('voice realtime double drop (GOAL-043 / AC-368)', () => {
     // voice-only reading is not an empty pane), and the wire really did carry the four verdicts whose
     // drawing is being denied — the loop over seqs above is that reading, re-stated here as a count so
     // an empty `verdictsIn` could not make this test pass for the wrong reason.
-    expect(realRowWith(snap, 'seeded turn for Voice double drop').length).toBeGreaterThanOrEqual(1);
+    expect(
+      realRowWith(snap, 'seeded turn for Voice permanent disconnect').length,
+      `seeded turn missing: ${JSON.stringify(snap.rows)}`,
+    ).toBeGreaterThanOrEqual(1);
     expect([0, 1, 2, 3].every((seq) => verdictsIn(rec, seq).length > 0), 'the wire carried no verdicts').toBe(true);
   });
 });

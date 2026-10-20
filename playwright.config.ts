@@ -2829,6 +2829,31 @@ if (voiceContinuousOnlySelection) {
 }
 
 /**
+ * Whether this run is a SEGMENTED criterion (GOAL-043's replay and double-drop specs) and nothing else.
+ *
+ * `VOICE_REALTIME_MODE` now DEFAULTS TO `continuous` (the 2026-10-13 experience-first ruling, GOAL-044),
+ * and `segmented` is the escape hatch `resolveVoiceRealtimeMode` reads. The two GOAL-043 criteria replay
+ * the segmented journal frame for frame — their readings are keyed by `seq`/`itemId` and only exist on
+ * the segmented wire — so their server must be started in that mode. One server process serves the
+ * whole run, so the strict single-file guard is what keeps this arming from reaching any other
+ * criterion: the replay and the double-drop are each measured as the run's ONLY spec.
+ *
+ * Not silent if it goes missing: each spec's own `ready{segmented-v1}` wait times out with that name in
+ * its diagnostic instead of quietly replaying the continuous wire and passing for the wrong reason.
+ */
+const voiceSegmentedOnlySelection = (() => {
+  const selected = selectedSpecFiles();
+  return (
+    selected.length === 1 &&
+    (selected[0] === 'voice-realtime-segmented-replay-20261012.spec.ts' ||
+      selected[0] === 'voice-realtime-double-drop.spec.ts')
+  );
+})();
+if (voiceSegmentedOnlySelection) {
+  process.env.QUAY_E2E_VOICE_REALTIME_MODE = 'segmented';
+}
+
+/**
  * Whether this run is the silence-tail criterion (GOAL-044 / AC-364).
  *
  * `VOICE_REALTIME_SILENCE_TAIL` is a DEPLOYMENT switch and the feature is OFF BY DEFAULT (decision doc
@@ -3039,13 +3064,15 @@ export default defineConfig({
                 .join(' '),
             }
           : {}),
-        // THE MODE, and only for the run that is the continuous baseline alone. `continuous` is the
-        // non-default escape hatch `resolveVoiceRealtimeMode` reads (an unset, empty or unknown value
-        // resolves to `segmented`), and this is the ONE point where the server's environment is
-        // assembled — a spec-time `process.env` write would never reach a process the runner spawns.
-        // The strict single-file guard is the whole safety of the entry: see
-        // `voiceContinuousOnlySelection`.
+        // THE MODE, and only for the two single-file selections that need a NON-default wire.
+        // `resolveVoiceRealtimeMode` resolves an unset, empty or unknown value to `continuous` (the
+        // 2026-10-13 experience-first ruling, GOAL-044): the continuous criteria arm that explicitly,
+        // and the two segmented criteria (the GOAL-043 replay and double-drop) arm `segmented`. This is
+        // the ONE point where the server's environment is assembled — a spec-time `process.env` write
+        // would never reach a process the runner spawns. The strict single-file guards are the whole
+        // safety of the entries: see `voiceContinuousOnlySelection` / `voiceSegmentedOnlySelection`.
         ...(voiceContinuousOnlySelection ? { VOICE_REALTIME_MODE: 'continuous' } : {}),
+        ...(voiceSegmentedOnlySelection ? { VOICE_REALTIME_MODE: 'segmented' } : {}),
         // THE FEATURE SWITCH, for the run that measures suppression and no other. OFF is the shipped
         // default, and every other selection — including the continuous baseline this one shares its
         // mode with — starts with the gate unarmed. See `silenceTailSelection`.
