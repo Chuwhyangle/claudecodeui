@@ -32,11 +32,15 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0，且新增 `runEndAck`（`|` 拆分、空回退）与 `summaryModel`（非空字符串、空/非法回退并进 `problems`）两键用例。
-- [ ] 优先级：`VOICE_REALTIME_SUMMARY_MODEL` 与 `VOICE_REALTIME_RUN_END_ACK` env 设值时覆盖文件值（env 臂仍在 `server/index.ts` 读 env 优先）；`grep -n "VOICE_REALTIME_SUMMARY_MODEL" server/index.ts` 与 `grep -n "VOICE_REALTIME_RUN_END_ACK" server/index.ts` 仍命中（env 逃生舱未删）。
-- [ ] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts` 退出 0（runEndAck env 臂与 summaryModel env 臂保持绿——env 仍是逃生舱）。
-- [ ] 不新增 server 测试文件（`quay-test-script.test.ts` 收集数 pin 不动，沿用 `voice-summary-latency-and-run-end-ack` 的 DoD 纪律）。
-- [ ] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
+- [x] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0，且新增 `runEndAck`（`|` 拆分、空回退）与 `summaryModel`（非空字符串、空/非法回退并进 `problems`）两键用例。
+- [x] 优先级：`VOICE_REALTIME_SUMMARY_MODEL` 与 `VOICE_REALTIME_RUN_END_ACK` env 设值时覆盖文件值（env 臂仍在 `server/index.ts` 读 env 优先）；`grep -n "VOICE_REALTIME_SUMMARY_MODEL" server/index.ts` 与 `grep -n "VOICE_REALTIME_RUN_END_ACK" server/index.ts` 仍命中（env 逃生舱未删）。
+- [x] `npx vitest run server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts` 退出 0（runEndAck env 臂与 summaryModel env 臂保持绿——env 仍是逃生舱）。
+- [x] 不新增 server 测试文件（`quay-test-script.test.ts` 收集数 pin 不动，沿用 `voice-summary-latency-and-run-end-ack` 的 DoD 纪律）。
+- [x] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
+
+**AC1/AC3 字面命令的偏差（记录读数，勿误读为用例失败）**：本仓库 `vitest.config.ts` 的 `include` 只有 `src/**/*.test.ts(x)`，把 `server/` 路径交给 `npx vitest run` 会打印 `No test files found` 并退出 1（与 `gap-voice-announce-phrases-settings-key` 相同的偏差）。服务端测试的规范 runner 是 `node:test`（`package.json` 的 `test:server`），实测：
+- `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` → 19/19 通过（含新增 `runEndAck` 3 组与 `summaryModel` 3 组用例）。
+- `npx tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/voice-realtime/tests/voice-realtime-run-end-summary.test.ts` → 14/14 通过（env 逃生舱臂保持绿）。
 
 ## DoD
 
