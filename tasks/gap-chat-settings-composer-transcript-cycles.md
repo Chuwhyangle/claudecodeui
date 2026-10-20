@@ -51,6 +51,8 @@ F2（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 - src/shared/index.ts（导出 policy 读取/写入）
 - src/modules/settings/hooks/useMcpNavigationSettings.ts（policy 实现迁出，保留转出口）
 - src/modules/settings/index.ts（转出口改指 @/shared）
+- src/modules/settings/tabs/agents-settings/sections/content/ModelsContent.tsx（改从 shared/ui 取 ModelLibraryPanel）
+- src/modules/settings/tabs/VoiceSettingsTab.tsx（改从 shared/hooks 取 ASR 状态 hook）
 - src/modules/chat/hooks/useUiNavigate.ts（改从 @/shared 取 policy）
 - src/modules/chat/hooks/useUiStateResponder.ts（同上，含 readDeviceName）
 - src/shared/ui/ModelLibraryPanel.tsx（new；从 chat/modals 迁入，chat 与 settings 共用）
