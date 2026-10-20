@@ -2,7 +2,7 @@
 id: gap-voice-run-end-ack-summary-model-settings-key
 title: run-end 确认语 + 摘要模型收敛进 voice-realtime.settings.json（runEndAck /
   summaryModel 键，env 保留作逃生舱）
-status: ready
+status: done
 labels:
   - gap
 parent: null
