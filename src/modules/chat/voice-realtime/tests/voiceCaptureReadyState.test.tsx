@@ -15,14 +15,15 @@ import type {
 import type { VoiceRealtimeSession } from '@/modules/chat/voice-realtime/useVoiceRealtimeSession';
 
 /**
- * (this task) The bar must not claim "Listening…" before the microphone is capturing.
+ * (this task) The bar must not claim words for phases the person cannot act on — and the capture
+ * reading must stay legible without any.
  *
  * THE CLAIM. `state: open` says the UPSTREAM session is up; capture is asynchronous
  * (`getUserMedia` → `AudioContext` → the worklet), so it can be hundreds of milliseconds — much
- * longer on the first permission grant — before the first audio frame exists. Across that window
- * the bar used to say `Listening…`, although nothing said in it could reach the WAV or the wire.
- * The phase is now `arming` until the first captured frame arrives; the same reading rides on the
- * status cell as `data-capture="starting" | "live"`, so a test need not depend on the copy.
+ * longer on the first permission grant — before the first audio frame exists. That window used to be
+ * named in copy. It is deliberately silent now (the entry sound marks the live moment instead), so
+ * what this file pins is the stable reading: `data-capture="starting"` until the first frame and
+ * `"live"` from then on, the raw phase on `voice-realtime-phase`, and `Muted` still spoken.
  *
  * The hook and the shipped bar are the unit under test: the wire and the audio source are faked,
  * because this criterion is about what the PAGE does with them. Run:
@@ -132,8 +133,8 @@ const mountBar = () => {
   return { ...view, session, status };
 };
 
-describe('the bar says "Listening…" only once the microphone is capturing', () => {
-  test('(a) upstream open with no captured frame yet: not Listening, and data-capture="starting"', () => {
+describe('the transient phases carry no words, and the capture reading stays on the element', () => {
+  test('(a) upstream open with no captured frame yet: no words, and data-capture="starting"', () => {
     const { session, status, container } = mountBar();
     act(() => session().start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
@@ -142,16 +143,15 @@ describe('the bar says "Listening…" only once the microphone is capturing', ()
     expect(session().phase).toBe('arming');
     expect(session().captureReady).toBe(false);
 
-    // The honest word, and NOT the one that claimed a live microphone.
-    expect(status().textContent).toBe('Starting microphone…');
-    expect(status().textContent).not.toBe('Listening…');
+    // Transient phases are silent: no "starting the microphone" word to watch for.
+    expect(status().textContent).toBe('');
     // The stable reading, independent of copy.
     expect(status().getAttribute('data-capture')).toBe('starting');
     // The raw phase seam agrees.
     expect(container.querySelector('[data-testid="voice-realtime-phase"]')?.textContent).toBe('arming');
   });
 
-  test('(b) the first captured frame promotes the same cell to Listening… and data-capture="live"', () => {
+  test('(b) the first captured frame promotes the phase to listening and data-capture="live", still wordless', () => {
     const { session, status } = mountBar();
     act(() => session().start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
@@ -160,11 +160,11 @@ describe('the bar says "Listening…" only once the microphone is capturing', ()
 
     expect(session().phase).toBe('listening');
     expect(session().captureReady).toBe(true);
-    expect(status().textContent).toBe('Listening…');
+    expect(status().textContent).toBe('');
     expect(status().getAttribute('data-capture')).toBe('live');
   });
 
-  test('a muted session stays Muted when the first frame arrives, and unmute then reads Listening', () => {
+  test('a muted session keeps its word when the first frame arrives, and unmute returns to the silent listening cell', () => {
     const { session, status } = mountBar();
     act(() => session().start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
@@ -182,6 +182,6 @@ describe('the bar says "Listening…" only once the microphone is capturing', ()
 
     act(() => session().unmute());
     expect(session().phase).toBe('listening');
-    expect(status().textContent).toBe('Listening…');
+    expect(status().textContent).toBe('');
   });
 });

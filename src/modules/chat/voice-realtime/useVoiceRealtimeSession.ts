@@ -14,6 +14,11 @@ import {
 // a second copy of it that could drift.
 import { countUnshownUtterances, normalizeForMatch } from '@/modules/chat/voice-realtime/placeCaptions';
 import {
+  playVoiceAttentionCue,
+  playVoiceEnterCue,
+  playVoiceExitCue,
+} from '@/modules/chat/voice-realtime/soundCue';
+import {
   contextFrame,
   declaresSegmentedRelay,
   SEGMENTED_RELAY_PROTOCOL,
@@ -1056,6 +1061,34 @@ export function useVoiceRealtimeSession({
   // connection boundary so a suspension never outlives the capture that reported it.
   const [micSuspended, setMicSuspended] = useState(false);
   const levelRef = useRef(0);
+  /**
+   * Whether the session has ever opened a connection. The exit cue belongs to a session the person
+   * really had; leaving a mode that never connected must not sound like leaving a live one.
+   */
+  const sessionStartedRef = useRef(false);
+  /**
+   * Whether the enter cue has sounded for THIS session. Reset by a start the person asks for, NOT by
+   * a reconnect: the reconnect replaces the wire and the capture, but it is the same session, and
+   * hearing "you are live" again after every tunnel blip would be a new kind of noise.
+   */
+  const enterCuedRef = useRef(false);
+  /**
+   * Whether the attention cue has sounded for THIS connection. Reset by every connection, reconnect
+   * included: a fresh wire that drops again is a second loss the person has to hear about.
+   */
+  const attentionCuedRef = useRef(false);
+  /** Rings the entry cue at most once per session; the three `listening` entry points share it. */
+  const ringEnterCueOnce = useCallback(() => {
+    if (enterCuedRef.current) return;
+    enterCuedRef.current = true;
+    playVoiceEnterCue();
+  }, []);
+  /** Rings the attention cue at most once per connection; every disconnect/failure path shares it. */
+  const ringAttentionCueOnce = useCallback(() => {
+    if (attentionCuedRef.current) return;
+    attentionCuedRef.current = true;
+    playVoiceAttentionCue();
+  }, []);
   const [deliveries, setDeliveries] = useState<VoiceRealtimeDelivery[]>([]);
   // How many utterances the last connection CLOSED on without them ever reaching the screen (P3).
   // Counted in `onclose`, where the connection's own state is still readable, and held so the pane
@@ -1298,9 +1331,12 @@ export function useVoiceRealtimeSession({
     ].sort((left, right) => left.seq - right.seq);
     setSegmentOutcomes(segmentOutcomesRef.current);
     if (outcome.state === 'lost' && outcome.reason === 'connection-closed') {
+      // This verdict is the page's evidence that the voice connection is gone; the person gets the
+      // attention sound once per connection, just as on the explicit close paths.
       setDisconnected(true);
+      ringAttentionCueOnce();
     }
-  }, []);
+  }, [ringAttentionCueOnce]);
 
   /**
    * The transcript for one segment arrived: stop its deadline, and retract a not-recognised mark the
@@ -1480,6 +1516,13 @@ export function useVoiceRealtimeSession({
     if (live) {
       voiceLog('end(): releasing capture and closing the connection');
     }
+    // The falling pair plays once, and only for a session that really opened: `end` is also the
+    // unmount and effect cleanup, so it can run on an already-closed session, and a mode that never
+    // connected must not sound like one that did. The guard is cleared here, so the repeat is silent.
+    if (sessionStartedRef.current) {
+      sessionStartedRef.current = false;
+      playVoiceExitCue();
+    }
     cancelReconnect();
     releaseCapture();
     // Before the socket goes: a sentence still open in the segmenter is delivered as its
@@ -1586,8 +1629,10 @@ export function useVoiceRealtimeSession({
               setCaptureReady(true);
               // Promote only when the upstream is open and the person is not muted. If `open` has
               // not arrived yet, the open handler reads this ref and goes straight to `listening`;
-              // if muted, `unmute` decides (it reads the same ref).
+              // if muted, `unmute` decides (it reads the same ref). This is the moment the old
+              // transient word said "listening", so it is also where the entry cue sounds.
               if (socketOpenRef.current && !mutedRef.current) {
+                ringEnterCueOnce();
                 setPhase((current) => (current === 'arming' ? 'listening' : current));
               }
             }
@@ -1631,9 +1676,10 @@ export function useVoiceRealtimeSession({
           // A capture that will not start is the microphone's failure, whatever the browser's own
           // wording: the person is told they cannot use the microphone, not the exception's text.
           fail(failure instanceof Error ? failure.message : String(failure), 'MIC_UNAVAILABLE');
+          ringAttentionCueOnce();
         });
     },
-    [fail, feedSegmented],
+    [fail, feedSegmented, ringAttentionCueOnce, ringEnterCueOnce],
   );
 
   /**
@@ -1651,6 +1697,15 @@ export function useVoiceRealtimeSession({
       } else {
         cancelReconnect();
       }
+      // Cue bookkeeping for the connection being opened. A start the person asked for begins a NEW
+      // session: its entry cue has not sounded and the previous session's exit cue is spent. A
+      // reconnect is the SAME session (so its entry cue stays spent) but a NEW connection (so a loss
+      // of this wire is news again).
+      if (options.reconnect !== true) {
+        sessionStartedRef.current = false;
+        enterCuedRef.current = false;
+      }
+      attentionCuedRef.current = false;
       reconnectableRef.current = options.reconnectable;
       serverEndedRef.current = false;
       // Starting while a connection exists REPLACES it. Leaving the old socket open
@@ -1671,6 +1726,7 @@ export function useVoiceRealtimeSession({
         // No code: the precondition is nobody's failure class, so the bar falls to the generic
         // sentence — which still tells the person the one thing that helps, "leave and come back".
         fail('Sign in and open a session before starting voice control.', null);
+        ringAttentionCueOnce();
         return;
       }
 
@@ -1738,9 +1794,12 @@ export function useVoiceRealtimeSession({
         // A WebSocket that will not construct never reached the server, so no frame carries a code
         // for it: the browser's own failure to open a connection is classed here as a socket error.
         fail(failure instanceof Error ? failure.message : String(failure), 'SOCKET_ERROR');
+        ringAttentionCueOnce();
         return;
       }
       socketRef.current = socket;
+      // From here the session has a connection to leave; `end()` may sound the exit cue.
+      sessionStartedRef.current = true;
 
       /**
        * Answers the narrator queue's pacing ack for one narration.
@@ -2173,6 +2232,11 @@ export function useVoiceRealtimeSession({
             // has not arrived yet, the bar says it is still starting the microphone (`arming`) until
             // it does. Mute still outranks the capture reading — a muted session stays `muted`
             // whether or not frames are flowing, and `unmute` promotes once they are.
+            // If the capture was ready BEFORE the handshake finished, this is the session's first
+            // `listening` and the entry cue's moment.
+            if (!mutedRef.current && captureReadyRef.current) {
+              ringEnterCueOnce();
+            }
             setPhase(mutedRef.current ? 'muted' : captureReadyRef.current ? 'listening' : 'arming');
           } else if (frame.state === 'closed') {
             serverEndedRef.current = true;
@@ -2182,6 +2246,9 @@ export function useVoiceRealtimeSession({
             // microphone that has nowhere left to send.
             setDisconnected(true);
             setPhase('idle');
+            // The voice connection is gone under a live mode: the person must hear it without
+            // looking, once per connection.
+            ringAttentionCueOnce();
           }
           return;
         }
@@ -2580,6 +2647,9 @@ export function useVoiceRealtimeSession({
         serverEndedRef.current = true;
         fail(frame.message, frame.code);
         setPhase('failed');
+        // This is a connection-ending failure (a recoverable one returned above), so the person is
+        // told by sound as well as by the failure sentence.
+        ringAttentionCueOnce();
       };
       socket.onerror = () => {
         // A drop of a connection that will reconnect is not a failure: the close that follows
@@ -2593,6 +2663,7 @@ export function useVoiceRealtimeSession({
         // is recorded as a socket error and the sentence on the page is the connection one.
         fail('The voice connection failed.', 'SOCKET_ERROR');
         setPhase('failed');
+        ringAttentionCueOnce();
       };
       socket.onclose = () => {
         if (socketRef.current !== socket) {
@@ -2667,6 +2738,9 @@ export function useVoiceRealtimeSession({
         setMicSuspended(false);
         setConnectedAt(null);
         setPhase('idle');
+        // The wire is gone whether or not a reconnect follows, and the person must hear that once
+        // per connection. The guard also keeps this silent after `state: closed` already said it.
+        ringAttentionCueOnce();
         if (!dropped) {
           return;
         }
@@ -2700,6 +2774,8 @@ export function useVoiceRealtimeSession({
       releaseCapture,
       resetSegmentVerdicts,
       resetSegmentation,
+      ringAttentionCueOnce,
+      ringEnterCueOnce,
       settleSegmentTranscript,
       stopNarratorAudio,
     ],
@@ -2741,9 +2817,12 @@ export function useVoiceRealtimeSession({
     mutedRef.current = false;
     // Capture readiness decides what unmuting means: Mute can be pressed while the microphone is
     // still arming, and unmuting then must NOT claim `listening` — the first frame may be the one
-    // that arrives next. When frames are already flowing, this is the old `listening` behaviour.
+    // that arrives next. When frames are already flowing, this is the old `listening` behaviour —
+    // and, when Mute had hidden the session's first `listening`, the third merged moment for the
+    // entry cue (the first frame and `state: open` are the other two).
+    if (captureReadyRef.current) ringEnterCueOnce();
     setPhase((current) => (current === 'muted' ? (captureReadyRef.current ? 'listening' : 'arming') : current));
-  }, []);
+  }, [ringEnterCueOnce]);
 
   // THE ONE DELIVERED-AWAITING-DEQUEUE CARD (AC5). A delivery the host has not dequeued yet has no row
   // of its own on the page, so its wait is drawn as a card — see {@link VoiceRealtimeSession.queuedDeliveryText}.

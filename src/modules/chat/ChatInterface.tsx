@@ -44,6 +44,7 @@ import {
   VoicePendingMessageCard,
   VoiceRealtimeBar,
   collectUndeliveredUtterances,
+  primeVoiceCues,
   releaseWarmMicrophoneSource,
   useFollowSentRun,
   useVoiceRealtimeSession,
@@ -440,6 +441,10 @@ function ChatInterface({
     // touches the microphone, and its criterion reads the `getUserMedia` count as 0 — so the
     // warm-up obeys the same seam as the capture start rather than opening the microphone anyway.
     if (!skipsVoiceAutoStart()) void warmMicrophoneSource();
+    // The Live Voice cues are synthesized locally, but a browser only lets this document start audio
+    // from a gesture — this tap. Primed here, beside the microphone warm-up, so the entry cue is
+    // already allowed to sound by the time the first captured frame arrives.
+    primeVoiceCues();
     if (voiceSessionId) {
       setVoiceEntryNotice(null);
       setVoiceModeSession(voiceSessionId);

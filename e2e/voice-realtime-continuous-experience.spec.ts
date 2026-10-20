@@ -98,6 +98,7 @@ const PANE = '.chat-messages-pane';
 const BAR = '[data-testid="voice-realtime-bar"]';
 const DOCK = '[data-activity-dock]';
 const STATUS = '[data-testid="voice-realtime-status"]';
+const PHASE = '[data-testid="voice-realtime-phase"]';
 const CAPTION = '[data-testid="voice-realtime-caption"]';
 
 /**
@@ -411,6 +412,13 @@ type StatusCell = {
   busy: string | null;
   queuedDepth: string | null;
   queuedBytes: string | null;
+  /**
+   * `data-capture`: `starting` until the first captured frame, `live` from then on. The stable
+   * reading for a transient phase, which carries no words by design.
+   */
+  capture: string | null;
+  /** The raw phase (`voice-realtime-phase`), so a wordless sample can be explained. */
+  phase: string | null;
   text: string;
 };
 
@@ -427,9 +435,10 @@ const probeReading = (
   page: Page,
 ): Promise<{ dock: { state: string | null; phase: string | null; elapsedMs: string | null }; status: StatusCell | null }> =>
   page.evaluate(
-    ({ dockSelector, statusSelector }: { dockSelector: string; statusSelector: string }) => {
+    ({ dockSelector, statusSelector, phaseSelector }: { dockSelector: string; statusSelector: string; phaseSelector: string }) => {
       const dock = document.querySelector(dockSelector);
       const status = document.querySelector(statusSelector);
+      const phaseElement = document.querySelector(phaseSelector);
       return {
         dock: {
           state: dock?.getAttribute('data-activity-state') ?? null,
@@ -443,11 +452,13 @@ const probeReading = (
                 busy: status.getAttribute('data-busy'),
                 queuedDepth: status.getAttribute('data-queued-depth'),
                 queuedBytes: status.getAttribute('data-queued-bytes'),
+                capture: status.getAttribute('data-capture'),
+                phase: (phaseElement?.textContent ?? '').trim() || null,
                 text: (status.textContent ?? '').trim(),
               },
       };
     },
-    { dockSelector: DOCK, statusSelector: STATUS },
+    { dockSelector: DOCK, statusSelector: STATUS, phaseSelector: PHASE },
   );
 
 /** One probe: the dock and the status cell as they stood together, on the wall clock they were taken. */
@@ -1535,14 +1546,33 @@ test.describe('live voice continuous experience (X-1..X-7)', () => {
   });
 
   // ── X-6: the state line, and the frame timeline behind the dock ───────────────────────────────
-  test('X-6: the state line stayed non-empty and fresh, and the dock was explained by its own frames', () => {
-    // 状态行非空. Every probe that found the bar, found words on its status cell — the empty reading
-    // here would be a state line with nothing on it, which is the failure this clause is about.
+  test('X-6: only non-transient phases carried words, the capture reading stayed live, and the dock was explained by its own frames', () => {
+    // 状态行. The clause is "only a phase the person can act on carries words": `idle`,
+    // `connecting`, `arming` and `listening` are transient now — the entry sound marks the live
+    // moment — and their reading is `data-capture`, checked beside the text. A wordless sample in
+    // any OTHER phase is still exactly the failure this clause is about.
+    const TRANSIENT_PHASES = new Set(['idle', 'connecting', 'arming', 'listening']);
     const withStatus = run.probes.filter((probe) => probe.status !== null);
     expect(withStatus.length, 'the bar must have been up for most of the observation').toBeGreaterThan(3);
     expect(
-      withStatus.filter((probe) => probe.status!.text.length === 0),
-      `every sample of the state line must carry words: ${JSON.stringify(withStatus.map((p) => p.status!.text))}`,
+      withStatus.filter((probe) => probe.status!.text.length === 0 && !TRANSIENT_PHASES.has(probe.status!.phase ?? '')),
+      `every sample of the state line must carry words outside a transient phase: ${JSON.stringify(
+        withStatus.map((p) => ({ phase: p.status!.phase, capture: p.status!.capture, text: p.status!.text })),
+      )}`,
+    ).toEqual([]);
+    // The transient samples are wordless BY DESIGN, and the attribute is what makes them legible.
+    const transientSamples = withStatus.filter((probe) => TRANSIENT_PHASES.has(probe.status!.phase ?? ''));
+    expect(
+      transientSamples.length,
+      'the observation must have sampled a transient phase, or the wordless half of this leg is vacuous',
+    ).toBeGreaterThan(0);
+    expect(
+      transientSamples.filter((probe) => probe.status!.text.length > 0),
+      `a transient phase must not carry words: ${JSON.stringify(transientSamples.map((p) => p.status!.text))}`,
+    ).toEqual([]);
+    expect(
+      withStatus.filter((probe) => probe.status!.capture !== 'starting' && probe.status!.capture !== 'live'),
+      `every sample must publish data-capture=starting|live: ${JSON.stringify(withStatus.map((p) => p.status!.capture))}`,
     ).toEqual([]);
     expect(run.status, 'the bar must still publish a status cell at the end').not.toBeNull();
     expect(run.status!.queuedDepth ?? '', 'the status cell must publish the queue depth').toMatch(/^\d+$/);

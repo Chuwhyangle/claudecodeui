@@ -44,6 +44,10 @@ export {
   releaseWarmMicrophoneSource,
   warmMicrophoneSource,
 } from '@/modules/chat/voice-realtime/audioSource';
+// The non-verbal entry cue needs its audio context started inside the Live Voice tap — the only
+// user gesture that lets this document sound. `ChatInterface` calls this beside the microphone
+// warm-up; the hook plays the cues themselves from the connection lifecycle.
+export { primeVoiceCues } from '@/modules/chat/voice-realtime/soundCue';
 export {
   useVoiceRealtimeSession,
   type VoiceRealtimeCaption,

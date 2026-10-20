@@ -1,14 +1,15 @@
 /**
- * The Live Voice bar must not say `Listening…` before the microphone is capturing.
+ * The Live Voice bar must not put transient capture phases into words; the capture reading is the
+ * `data-capture` attribute.
  *
  * WHAT THIS FILE IS FOR. `state: open` reports the UPSTREAM Realtime session; capture is
  * asynchronous (`getUserMedia` → `AudioContext` → the worklet). On 2026-10-18 a real session
- * (`0256124a`) showed the bar on `Listening…` 289 ms before the first captured frame — speech in
- * that window could not reach the WAV or the wire, yet the page claimed to be listening. This spec
- * reads the fix on a real browser against the real app server and the real `/voice-realtime` proxy:
- * while `getUserMedia` is still pending and the upstream has already reported open, the status cell
- * carries `data-capture="starting"` and the not-ready sentence; the first captured frame flips the
- * same cell to `Listening…` / `data-capture="live"`.
+ * (`0256124a`) showed the bar claiming to listen 289 ms before the first captured frame — speech in
+ * that window could not reach the WAV or the wire. This spec reads the shipped behaviour on a real
+ * browser against the real app server and the real `/voice-realtime` proxy: while `getUserMedia` is
+ * still pending and the upstream has already reported open, the status cell is wordless and carries
+ * `data-capture="starting"`; the first captured frame flips the same cell to `data-capture="live"`
+ * with the phase advancing to `listening` — still wordless, because the entry sound marks it.
  *
  * WHAT IS REAL AND WHAT IS NOT. The account, the session, the proxy and the relay are the run's
  * real server. The Realtime upstream is the shared scripted stand-in on
@@ -117,7 +118,7 @@ test.describe.configure({ mode: 'serial' });
 // `voice-realtime-new-session-entry.spec.ts`).
 test.describe.configure({ timeout: 45_000 });
 
-test.describe('the bar says Listening only after the first captured frame', () => {
+test.describe('the capture reading is the attribute, not the words on the status cell', () => {
   let page: Page;
   let api: APIRequestContext;
   let upstream: ScriptedUpstreamServer;
@@ -254,7 +255,7 @@ test.describe('the bar says Listening only after the first captured frame', () =
     await upstream?.close();
   });
 
-  test('before the first captured frame the bar says Starting microphone… / starting; the frame flips it to Listening… / live', async () => {
+  test('before the first captured frame the cell is wordless with data-capture=starting; the frame flips it to live', async () => {
     await page.getByTestId('live-voice-button').click();
     await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
 
@@ -275,9 +276,10 @@ test.describe('the bar says Listening only after the first captured frame', () =
     const status = page.locator(STATUS);
     expect(await status.getAttribute('data-capture'), 'the capture reading before the first frame').toBe('starting');
     const statusText = (await status.textContent()) ?? '';
-    expect(statusText.trim(), 'the bar claimed to be listening before the microphone captured anything').not.toBe('Listening…');
-    expect(statusText.trim()).toBe('Starting microphone…');
-    console.log(`[capture-ready] before-frame phase=arming status="${statusText.trim()}" data-capture=starting frames=${harnessAtWindow.frames}`);
+    // Transient phases are loud in the attributes and silent on screen: the entry sound marks the
+    // live moment, so there is no word to watch for at either end of this window.
+    expect(statusText.trim(), 'a transient capture phase must carry no words').toBe('');
+    console.log(`[capture-ready] before-frame phase=arming status="" data-capture=starting frames=${harnessAtWindow.frames}`);
 
     // ── the first captured frame ─────────────────────────────────────────────────────────────
     // It can only be pushed once the capture graph exists (getUserMedia has returned); wait for it.
@@ -287,10 +289,10 @@ test.describe('the bar says Listening only after the first captured frame', () =
       'the capture graph never accepted the first frame',
     ).toBe(true);
 
-    await expect.poll(() => status.textContent(), { timeout: 15_000 }).toBe('Listening…');
-    expect(await status.getAttribute('data-capture'), 'the capture reading after the first frame').toBe('live');
-    await expect.poll(() => page.getByTestId('voice-realtime-phase').textContent()).toBe('listening');
-    console.log('[capture-ready] after-frame phase=listening status="Listening…" data-capture=live');
+    await expect.poll(() => page.getByTestId('voice-realtime-phase').textContent(), { timeout: 15_000 }).toBe('listening');
+    await expect.poll(() => status.getAttribute('data-capture'), { timeout: 15_000 }).toBe('live');
+    expect(((await status.textContent()) ?? '').trim(), 'the listening phase is transient and wordless').toBe('');
+    console.log('[capture-ready] after-frame phase=listening status="" data-capture=live');
 
     // Leave the mode, so the case leaves no live socket behind.
     await page.getByTestId('voice-realtime-end').click().catch(() => undefined);

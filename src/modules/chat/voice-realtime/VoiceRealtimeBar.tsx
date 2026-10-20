@@ -59,12 +59,21 @@ type Props = {
 /**
  * The bar's single status word; the caption, once there is one, takes its place on screen.
  *
+ * THE FOUR TRANSIENT PHASES SAY NOTHING. `idle`, `connecting`, `arming` and `listening` are windows
+ * the person cannot act on — the microphone is either coming up or it is up — so they render as an
+ * empty cell. Watching for "Connecting…" to turn into "Listening…" was exactly the screen-checking
+ * this bar exists to remove: the enter sound (see `soundCue.ts`) marks the same moment without
+ * asking for a glance, while the icons, waveform, clock and caption stay where they were.
+ *
+ * WHAT REMAINS IS WHAT NEEDS THE PERSON. `Muted` (your words are being dropped), `Voice disconnected`
+ * (nothing is being sent) and the failure sentence stay as words.
+ *
  * A DISCONNECT OUTRANKS THE PHASE (AC-367). The voice connection can die while the page's own socket
  * stays open — the journal's shape: the upstream goes `closed` and the segments after it come back
  * `lost(connection-closed)` — and the phase alone then still reads `listening`, so gating this copy on
- * `phase === 'idle'` left the bar saying "Listening…" over a microphone with nowhere to send. A
- * `failed` session is the one exception: its reason is the more important reading, and `disconnected`
- * is true for every failed socket too (the close follows the error), so the failure keeps its word.
+ * `phase === 'idle'` left a silent cell over a microphone with nowhere to send. A `failed` session is
+ * the one exception: its reason is the more important reading, and `disconnected` is true for every
+ * failed socket too (the close follows the error), so the failure keeps its word.
  */
 function phaseLabel(
   t: (key: string, options?: { defaultValue: string }) => string,
@@ -77,14 +86,10 @@ function phaseLabel(
   switch (phase) {
     case 'idle':
     case 'connecting':
-      return t('voice.realtime.connecting', { defaultValue: 'Connecting voice…' });
-    case 'listening':
-      return t('voice.realtime.listening', { defaultValue: 'Listening…' });
     case 'arming':
-      // The upstream session is open but the microphone has not delivered a frame yet. Saying
-      // "Listening…" here claimed a capture that does not exist yet; this is the honest word for
-      // the same window (see `VoiceRealtimePhase`).
-      return t('voice.realtime.startingMic', { defaultValue: 'Starting microphone…' });
+    case 'listening':
+      // Deliberately wordless: these are transient, and the enter/exit sounds carry them.
+      return '';
     case 'muted':
       return t('voice.realtime.muted', { defaultValue: 'Muted' });
     case 'failed':

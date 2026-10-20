@@ -740,12 +740,12 @@ describe('the status cell reads the connection while Claude is busy, and the bac
     return render(<VoiceRealtimeBar voice={voice} busy onExit={() => {}} />);
   };
 
-  test('busy: the cell still reads the connection phase, and the byte count is on the element rather than in the text', () => {
+  test('busy: the cell stays wordless with a live connection, and the byte count is on the element rather than in the text', () => {
     const { container } = renderBusyBar(480);
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
-    // The connection is up and listening, and that is the whole of the sentence — even though 65
-    // seconds have passed and 480 bytes are waiting behind Claude.
-    expect(status.textContent).toBe('Listening…');
+    // `listening` is a transient phase now: it carries no words even though 65 seconds have passed
+    // and 480 bytes are waiting behind Claude. The readings below still prove the cell is live.
+    expect(status.textContent).toBe('');
     expect(status.textContent).not.toMatch(/\d{2}:\d{2}/);
     expect(status.textContent).not.toContain('480');
     // The waiting is not lost — it is a diagnostic now, read off the element.
@@ -759,9 +759,9 @@ describe('the status cell reads the connection while Claude is busy, and the bac
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
     expect(status.getAttribute('data-queued-bytes')).toBe('0');
     expect(status.getAttribute('data-queued-depth')).toBe('0');
-    // The cell says the same thing with an empty backlog as with a full one: it is reading the
-    // connection. Nothing about the queue reaches the text at either value.
-    expect(status.textContent).toBe('Listening…');
+    // The cell is wordless at either backlog value: the connection is read off `data-capture`.
+    expect(status.textContent).toBe('');
+    expect(status.getAttribute('data-capture')).toBe('starting');
   });
 });
 
@@ -877,22 +877,25 @@ describe('an error is one understandable sentence, with the server words kept on
     expect(testids.length).toBeGreaterThan(2);
   });
 
-  test('while Claude is busy the status cell still reads the connection, not the backlog', () => {
+  test('while Claude is busy the status cell still carries the connection, not the backlog', () => {
     const { container, session } = mountBar(true);
     act(() => session().start());
     act(() => socket().receive({ type: 'state', state: 'open' }));
-    // Capture running, so the cell really is reading the connection's `Listening…` while the
+    // Capture running, so the cell's `data-capture` really is reading this connection while the
     // backlog changes — the claim below is about the queue, not about the arming phase.
     act(() => sources[0]!.push(frame([0.1])));
     act(() => socket().receive({ type: 'queued', depth: 3, bytes: 480 }));
 
     const status = container.querySelector('[data-testid="voice-realtime-status"]')!;
-    expect(status.textContent).toBe(EN_CHAT.voice.realtime.listening as string);
+    // `listening` is transient and wordless; the connection reading is the attribute.
+    expect(status.textContent).toBe('');
+    expect(status.getAttribute('data-capture')).toBe('live');
     expect(status.textContent).not.toMatch(/\d{2}:\d{2}/);
     expect(status.textContent).not.toContain('480');
     expect(status.textContent).not.toContain('3');
     // The backlog the cell no longer prints is still on the element, so nothing was lost by the change.
     expect(status.getAttribute('data-queued-bytes')).toBe('480');
+    expect(status.getAttribute('data-queued-depth')).toBe('3');
   });
 });
 
