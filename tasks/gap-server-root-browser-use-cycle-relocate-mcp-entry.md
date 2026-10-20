@@ -52,20 +52,14 @@ F5（架构校准报告 `/tmp/arch-analysis-calibration-2026-10-20.md`，HEAD `a
 
 ## Touches
 
-- server/modules/browser-use/browser-use-mcp.ts（MCP stdio 入口，移出或改写）
-- server/modules/cli/browser-use-mcp.ts (new)（Arm A 目标：并入已有 cli 目录）
-- server/entrypoints/browser-use-mcp.ts (new)（Arm A 备选目标；新目录须按 (b) 登记）
-- server/modules/browser-use/index.ts（`startBrowserUseMcp()` 的 lazy import 路径更新）
-- server/load-env.ts（Arm B：bootstrap 迁出）
-- server/shared/load-env.ts (new)（Arm B 目标）
-- server/modules/logging/index.ts（Arm B：`installTimestampedConsole` 转出口调整）
-- server/modules/logging/timestamped-console.ts（Arm B：installer 迁往 shared 或改为注入）
-- server/shared/timestamped-console.ts (new)（Arm B only）
-- server/index.ts（bootstrap / browser-use import 若变化）
-- package.json（仅当有 script/bin 指向该入口旧路径）
-- server/modules/browser-use/tests/browser-use-mcp-entry.test.ts (new)（smoke 判据，两条腿）
-- server/shared/tests/server-import-cycle-budget.baseline.json（G3 下调；目录清单 / nodeCount 若变动）
-- server/shared/tests/server-import-cycle-budget.test.ts（`CYCLE_GROUPS` G3 同步下调；`MANIFEST_PIN` 若变动）
-- server/shared/tests/quay-test-script.test.ts（新 server 测试文件 ⇒ 两条 `unknown=` pin 各 +1，按复测值）
+- server/modules/browser-use/browser-use-mcp.ts（MCP stdio 入口，已移出该模块）
+- server/modules/cli/browser-use-mcp.ts (new)（Arm A 选择：并入已有 cli 目录）
+- server/modules/browser-use/index.ts（去掉 startBrowserUseMcp 转出口）
+- server/modules/cli/cli.module.ts（startBrowserUseMcp 改为直接 import 本模块入口）
+- server/modules/browser-use/browser-use.service.ts（getMcpCommand 的构建产物路径随入口移位）
+- server/modules/cli/tests/browser-use-mcp-entry.test.ts (new)（smoke 判据两条腿；入口移位 ⇒ 判据跟随到 cli 的 tests/）
+- server/shared/tests/server-import-cycle-budget.baseline.json（G3 下调为空组；fileEdges.dynamic 5→4）
+- server/shared/tests/server-import-cycle-budget.test.ts（CYCLE_GROUPS 的 G3 同值下调）
+- server/shared/tests/quay-test-script.test.ts（新 server 测试文件 ⇒ 两条 unknown= pin 各 +1，按复测值）
 - scripts/suite-duration-baseline.tsv（新测试文件的时长行）
 - tasks/gap-server-root-browser-use-cycle-relocate-mcp-entry.md (self)
