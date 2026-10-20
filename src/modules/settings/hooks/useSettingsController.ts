@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useTheme } from '@/shared/context/ThemeContext';
 import { api } from '@/shared/api';
+import { toResponseJson } from '@/shared/apiResponse';
 import { setNotificationSoundEnabled } from '@/shared/utils';
 import {
   readCodeEditorSettings,
@@ -72,8 +73,6 @@ const toCodexPermissionMode = (value: unknown): CodexPermissionMode => {
 
   return 'default';
 };
-
-const toResponseJson = async <T>(response: Response): Promise<T> => response.json() as Promise<T>;
 
 const createEmptyClaudePermissions = (): ClaudePermissionsState => ({
   allowedTools: [],
