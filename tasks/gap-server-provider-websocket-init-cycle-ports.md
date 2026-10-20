@@ -36,16 +36,16 @@ F3（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 ## AC
 
 - [ ] 新增 `server/shared/tests/server-composition-startup.test.ts`，`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-composition-startup.test.ts` 退出 0。该用例导入组合根（`server/index.ts` 的模块图或等价的装配函数）并显式断言没有抛出 `ReferenceError: Cannot access ... before initialization`；读数须先打印模块加载清单再断言。
-- [ ] `grep -rn "modules/mcp-gateway" server/modules/session-hosts --include='*.ts'` 返回 0 命中（当前 `session-hosts.routes.ts:45` 命中），或反向 `grep -rn "modules/session-hosts" server/modules/mcp-gateway --include='*.ts'` 返回 0；二者至少一侧为 0，命令退出 0。
+- [ ] 至少一侧为 0：`test -z "$(grep -rn 'modules/mcp-gateway' server/modules/session-hosts --include='*.ts')"` 或 `test -z "$(grep -rn 'modules/session-hosts' server/modules/mcp-gateway --include='*.ts')"` 退出 0（当前 session-hosts 侧命中 `session-hosts.routes.ts:45`）；贴出两侧计数。
 - [ ] `grep -rn "@/modules/websocket" server/modules/providers/list/claude --include='*.ts'` 在注释之外返回 0 命中（当前 `claude.provider.ts:21` 命中）；用不匹配注释行的口径（例如 `grep -rn "@/modules/websocket" ... | grep -v '^[^:]*:[0-9]*: *//'`）并把实际计数贴出。
-- [ ] `grep -n "await import('@/modules/voice-realtime" server/modules/providers/list/claude/claude-host-driver.provider.ts` 返回 0 命中（该接缝改为 port 注入或静态导入），且该文件仍保留 1 处说明接缝归属的注释（`grep -c "voice-realtime" <file>` 至少 1）。
+- [ ] `test -z "$(grep -nE "import\(.@/modules/voice-realtime" server/modules/providers/list/claude/claude-host-driver.provider.ts)"`：该文件不再有指向 voice-realtime 的 import（静态或动态，单双引号均可），命令退出 0；且该文件仍保留 1 处说明接缝归属的注释（`grep -c "voice-realtime" <file>` 至少 1）。
 - [ ] 结构读数（外部工具）：新鲜 `archguard_detect_cycles(outputScope=package)` 在 server 上报告的 SCC 规模严格小于基线 11；贴出前后成员清单（基线 11 成员记在正文）。该读数为 ArchGuard MCP 查询（待外部）。
 - [ ] `npm run typecheck` 退出 0；`npm run build:server` 退出 0。
 - [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
-真实落地的标准是「组合根真的能在去除延迟导入兜底后完成模块初始化」，不是「port 文件存在」。必须贴出：①启动判据的 `tests / pass / fail` 与它先打印的模块加载清单，含明确断言无 `ReferenceError ... before initialization`；②三条点名边（mcp-gateway↔session-hosts、providers/list/claude→websocket、driver 的 voice-realtime 动态导入）的前后 grep 计数；③`server/index.ts` 注入 port 实现的装配行原文（哪个实现对象交给哪个 port）；④ArchGuard 的 SCC 前后成员清单与规模（11 → 实际值）；⑤typecheck / build:server 退出码；⑥取假形态：把一条被移除的静态边临时加回（例如让 `session-hosts.routes.ts` 重新静态导入 `mcp-gateway`），启动判据必须红且红在 `ReferenceError ... before initialization` 或对应的循环边断言上；还原后复绿，附两次读数。若启动判据无法直接导入 `server/index.ts`（例如它会监听端口），允许抽出一个纯装配函数供判据调用，但必须指出该函数在生产启动路径上被真实调用。
+真实落地的标准是「组合根真的能在去除延迟导入兜底后完成模块初始化」，不是「port 文件存在」。必须贴出：①启动判据的 `tests / pass / fail` 与它打印的模块加载清单，含明确断言无 `ReferenceError ... before initialization`；②三条点名边（mcp-gateway↔session-hosts、providers/list/claude→websocket、driver 的 voice-realtime import）的前后 grep 计数；③`server/index.ts` 注入 port 实现的装配行原文（哪个实现对象交给哪个 port）；④ArchGuard 的 SCC 前后成员清单与规模（11 → 实际值）；⑤typecheck / build:server 退出码；⑥取假形态：把一条被移除的静态边临时加回（例如让 `session-hosts.routes.ts` 重新静态导入 `mcp-gateway`），启动判据必须红且红在 `ReferenceError ... before initialization` 或对应的循环边断言上；还原后复绿，附两次读数。若启动判据无法直接导入 `server/index.ts`（例如它会监听端口），允许抽出一个纯装配函数供判据调用，但必须指出该函数在生产启动路径上被真实调用。
 
 ## Touches
 
@@ -62,7 +62,7 @@ F3（架构校准报告 2026-10-20，ArchGuard 0.1.40 加独立源码扫描，HE
 - server/modules/websocket/services/chat-control.service.ts
 - server/modules/websocket/services/shell-websocket.service.ts
 - server/modules/providers/list/claude/claude.provider.ts（去掉对 websocket/services 的静态导入）
-- server/modules/providers/list/claude/claude-host-driver.provider.ts（`voice-realtime` 接缝改为 port 注入）
+- server/modules/providers/list/claude/claude-host-driver.provider.ts（voice-realtime 接缝改为 port 注入）
 - server/modules/providers/index.ts（不再转出口 service 造成父目录环）
 - server/modules/providers/services/provider-runtime.service.ts（不再直接导入 `provider.registry.js`）
 - server/modules/voice-realtime/voice-realtime-live-executor.ts
