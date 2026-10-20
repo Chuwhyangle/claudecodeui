@@ -38,11 +38,11 @@ F7（架构校准报告 2026-10-20，ArchGuard 0.1.40）：前端 god package，
 
 ## Touches
 
-- src/modules/chat/utils/voice/index.ts (new)（voice 子包 barrel）
-- src/modules/chat/utils/transcript/index.ts (new)（transcript 子包 barrel）
-- src/modules/chat/utils/session/index.ts (new)（session 子包 barrel）
-- src/modules/chat/utils/voice/voiceLiveSegmenter.ts (new，自 src/modules/chat/utils/voiceLiveSegmenter.ts 迁入)
-- src/modules/chat/utils/voice/activityDockView.ts (new，自 src/modules/chat/utils/activityDockView.ts 迁入)
-- src/modules/chat/utils/transcript/chatExport.ts (new，自 src/modules/chat/utils/chatExport.ts 迁入)
+- src/modules/chat/utils/voice/index.ts (new)
+- src/modules/chat/utils/transcript/index.ts (new)
+- src/modules/chat/utils/session/index.ts (new)
+- src/modules/chat/utils/voice/voiceLiveSegmenter.ts (new)
+- src/modules/chat/utils/voice/activityDockView.ts (new)
+- src/modules/chat/utils/transcript/chatExport.ts (new)
 - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts（既有判据，不改一字，作覆盖）
 - tasks/gap-chat-utils-partition.md (self)
