@@ -49,3 +49,11 @@ extra:
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-voice-run-end-summary-side-model.md
+
+## Blocker
+
+**2026-10-20T00:10:19.477Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts:   AssertionError [ERR_ASSERTION]: a title offered after adoption reaches the ladder — a launch hands the CLI a title and the CLI writes it down (customTitles=["AC171 Title 28748f52"]) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts,server/shared/tests/server-import-cycle-budget.test.ts,server/modules/providers/tests/claude-peer-name-follows-ai-title.test.ts]
+- run_id：wk-prod-anchor
+- session_id：530d2a52-2ea4-4802-b563-c1cf52f9cebc
