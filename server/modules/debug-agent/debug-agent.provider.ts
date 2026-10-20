@@ -1,4 +1,5 @@
 import type { IProvider, IProviderRuntime, IProviderSessions, IProviderSessionSynchronizer } from '@/shared/interfaces.js';
+import { createBoundedLedger, MAX_REMEMBERED_APPROVALS } from '@/shared/bounded-approval-ledger.js';
 import { CHAT_TURN_OPTION, DELIVERY_SOURCE_OPTION } from '@/shared/types.js';
 import type {
   ApprovalDecisionRecord,
@@ -493,9 +494,6 @@ function createDebugAgentRuntime(
   };
   const pendingApprovals = new Map<string, PendingDebugApproval>();
 
-  /** How many held/decided request ids this runtime remembers. */
-  const MAX_REMEMBERED_APPROVALS = 512;
-
   /**
    * The bounded ids this runtime has HELD.
    *
@@ -507,18 +505,11 @@ function createDebugAgentRuntime(
    * evicted id degrades to the conservative `never_issued`, never a false
    * `expired`.
    */
-  const heldApprovalLedger = new Set<string>();
+  const heldApprovalLedger = createBoundedLedger<true>(MAX_REMEMBERED_APPROVALS);
 
   /** Records `requestId` as held, evicting the oldest id past the cap. */
   function rememberHeldApproval(requestId: string): void {
-    heldApprovalLedger.delete(requestId);
-    heldApprovalLedger.add(requestId);
-    if (heldApprovalLedger.size > MAX_REMEMBERED_APPROVALS) {
-      const oldest = heldApprovalLedger.values().next().value;
-      if (oldest !== undefined) {
-        heldApprovalLedger.delete(oldest);
-      }
-    }
+    heldApprovalLedger.remember(requestId, true);
   }
 
   /**
@@ -534,18 +525,11 @@ function createDebugAgentRuntime(
    * is; an evicted id degrades to `expired`/`never_issued`, never a false
    * `ALREADY_DECIDED`.
    */
-  const approvalDecisionLedger = new Map<string, ApprovalDecisionRecord>();
+  const approvalDecisionLedger = createBoundedLedger<ApprovalDecisionRecord>(MAX_REMEMBERED_APPROVALS);
 
   /** Records one settled decision, evicting the oldest entry past the cap. */
   function rememberApprovalDecision(requestId: string, record: ApprovalDecisionRecord): void {
-    approvalDecisionLedger.delete(requestId);
-    approvalDecisionLedger.set(requestId, record);
-    if (approvalDecisionLedger.size > MAX_REMEMBERED_APPROVALS) {
-      const oldest = approvalDecisionLedger.keys().next().value;
-      if (oldest !== undefined) {
-        approvalDecisionLedger.delete(oldest);
-      }
-    }
+    approvalDecisionLedger.remember(requestId, record);
   }
 
   /**
@@ -654,7 +638,7 @@ function createDebugAgentRuntime(
     },
 
     readApprovalDecision(requestId): ApprovalDecisionRecord | null {
-      return approvalDecisionLedger.get(requestId) ?? null;
+      return approvalDecisionLedger.read(requestId) ?? null;
     },
   };
 
