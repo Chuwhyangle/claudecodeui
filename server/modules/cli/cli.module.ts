@@ -88,8 +88,9 @@ export function createCliApplication(): CliApplication {
       await import('../../index.js');
     },
     startBrowserUseMcp: async () => {
-      const { startBrowserUseMcp } = await import('../browser-use/index.js');
-      await startBrowserUseMcp();
+      // The stdio entry is this module's own subcommand implementation, so it is imported
+      // directly rather than through another feature module's barrel.
+      await import('./browser-use-mcp.js');
     },
   });
 }

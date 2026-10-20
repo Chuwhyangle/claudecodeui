@@ -2,7 +2,7 @@
 id: gap-server-root-browser-use-cycle-relocate-mcp-entry
 title: Break the server root ↔ modules/browser-use cycle by relocating the MCP
   entry/bootstrap
-status: ready
+status: done
 labels:
   - gap
 parent: null
