@@ -45,5 +45,4 @@ F7（架构校准报告 2026-10-20，ArchGuard 0.1.40）：前端 god package，
 - src/modules/chat/utils/voice/activityDockView.ts (new，自 src/modules/chat/utils/activityDockView.ts 迁入)
 - src/modules/chat/utils/transcript/chatExport.ts (new，自 src/modules/chat/utils/chatExport.ts 迁入)
 - src/modules/chat/utils/tests/voiceLiveSegmenter.test.ts（既有判据，不改一字，作覆盖）
-- src/modules/chat/utils/tests（其余既有判据由执行者按实际迁移逐个列入）
 - tasks/gap-chat-utils-partition.md (self)

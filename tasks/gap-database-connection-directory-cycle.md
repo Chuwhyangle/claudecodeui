@@ -2,7 +2,7 @@
 id: gap-database-connection-directory-cycle
 title: Move the database connection module out of the repositories↔database
   directory cycle
-status: todo
+status: ready
 labels:
   - gap
 parent: null
