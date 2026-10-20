@@ -4,7 +4,7 @@ import { BotIcon, GitBranchIcon, PencilIcon } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, LLMProvider,DiffLine,Project,MessageOrigin } from '@/shared/types';
-import { formatUsageLimitText, stripProposedPlanEnvelope } from '@/modules/chat/utils/chatFormatting';
+import { formatUsageLimitText, stripProposedPlanEnvelope } from '@/modules/chat/utils/transcript/chatFormatting';
 import { ToolRenderer, ToolErrorDisplay, SubagentPanel, shouldHideToolResult } from '@/modules/chat/tools';
 import { useTaskByToolUseId } from '@/modules/chat/hooks/useSessionActivity';
 import { LLMProviderLogo } from '@/shared/ui';
@@ -242,7 +242,6 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
   const shouldShowForkControl = Boolean(
     onForkFromMessage && shouldShowAssistantCopyControl && message.forkAnchorId && !isInFlightTurn,
   );
-
 
   const formattedTime = useMemo(() => new Date(message.timestamp).toLocaleTimeString(), [message.timestamp]);
   const dividerLabel = useMemo(

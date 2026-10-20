@@ -6,7 +6,7 @@ import { getToolConfig } from '@/modules/chat/tools';
 import MessageComponent from '@/modules/chat/transcript/MessageComponent';
 import { useIsExportingTranscript } from '@/modules/chat/context/TranscriptRenderContext';
 import { DiffStatsBadge } from '@/modules/chat/tools/DiffStatsBadge';
-import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/messageTransforms';
+import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/transcript/messageTransforms';
 
 type ToolGroupContainerProps = {
   group: ToolGroupItem;

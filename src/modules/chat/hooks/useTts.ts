@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { voicePlayer, voiceId } from '@/modules/chat/utils/voicePlayer';
+import { voicePlayer, voiceId } from '@/modules/chat/utils/voice/voicePlayer';
 import type { VoiceSnapshot } from '@/shared/types';
 
 export type TtsState = VoiceSnapshot['state'];

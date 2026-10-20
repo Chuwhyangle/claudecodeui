@@ -4,6 +4,6 @@ export { default as ChatInterface } from '@/modules/chat/ChatInterface';
  * has none. Used by the sidebar module, whose running rows draw the same phase
  * label the dock draws — one reduction, so the two surfaces cannot disagree.
  */
-export { activityPhaseLabelKey } from '@/modules/chat/utils/activityDockView';
-export { getClaudeSettings } from '@/modules/chat/utils/chatStorage';
+export { activityPhaseLabelKey } from '@/modules/chat/utils/voice/activityDockView';
+export { getClaudeSettings } from '@/modules/chat/utils/session/chatStorage';
 export { default as ResidentSessionBadge } from '@/modules/chat/transcript/ResidentSessionBadge';

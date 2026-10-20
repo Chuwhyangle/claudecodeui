@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, Mic, Square, Loader2, XIcon } from 'lucide-react';
 
-import { voiceErrorMessage, voiceErrorTechnicalDetail } from '@/modules/chat/utils/voiceErrorMessages';
+import { voiceErrorMessage, voiceErrorTechnicalDetail } from '@/modules/chat/utils/voice/voiceErrorMessages';
 import type { VoiceFailureReport, VoiceInputState } from '@/shared/types';
 
 type Props = {

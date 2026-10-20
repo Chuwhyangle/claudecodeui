@@ -1,5 +1,5 @@
 import type { ChatMessage, WorkSegment, WorkSegmentListItem } from '@/shared/types';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
 
 /**
  * Whether a row belongs to a work run.

@@ -196,7 +196,7 @@ describe('the key the transcript derives for a block-keyed turn', () => {
 
   it('is the same while streaming, after the settled frame replaces it, and after the refresh', async () => {
     const { normalizedToChatMessages } = await import('@/modules/chat/hooks/useChatMessages');
-    const { getIntrinsicMessageKey } = await import('@/modules/chat/utils/messageKeys');
+    const { getIntrinsicMessageKey } = await import('@/modules/chat/utils/transcript');
     const view = await loadedStore();
     const store = view.result.current;
 

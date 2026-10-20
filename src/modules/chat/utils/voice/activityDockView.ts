@@ -26,7 +26,7 @@
  */
 
 import type { ActivityDockState, ActivityPhase, SessionActivity } from '@/shared/types';
-import type { ActivityLiveness } from '@/modules/chat/utils/activityFreshness';
+import type { ActivityLiveness } from '@/modules/chat/utils/session/activityFreshness';
 
 /** The i18n key (chat namespace) that explains why the stop is unavailable. */
 export const UNREACHABLE_STOP_REASON_KEY = 'claudeStatus.unreachable.stopReason';

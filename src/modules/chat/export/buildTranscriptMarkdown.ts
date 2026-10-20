@@ -1,6 +1,6 @@
 import type { ChatMessage, DiffLine, LLMProvider } from '@/shared/types';
 import { getToolConfig } from '@/modules/chat/tools';
-import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/messageTransforms';
+import { parseToolPayload, summarizeDiff } from '@/modules/chat/utils/transcript/messageTransforms';
 
 type BuildTranscriptMarkdownInput = {
   messages: ChatMessage[];

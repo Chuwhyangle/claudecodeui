@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { calculateDiff, summarizeDiff } from '@/modules/chat/utils/messageTransforms';
+import { calculateDiff, summarizeDiff } from '@/modules/chat/utils/transcript/messageTransforms';
 
 const count = (oldStr: string, newStr: string) => summarizeDiff(calculateDiff(oldStr, newStr));
 

@@ -2,7 +2,7 @@
 id: gap-chat-utils-partition
 title: Partition src/modules/chat/utils into voice, transcript and session
   sub-packages
-status: ready
+status: done
 labels:
   - gap
 parent: null

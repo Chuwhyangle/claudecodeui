@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { KeyboardEvent, RefObject } from 'react';
 
-import { safeLocalStorage } from '@/modules/chat/utils/chatStorage';
+import { safeLocalStorage } from '@/modules/chat/utils/session/chatStorage';
 
 /**
  * Shell-style input history for the composer: ArrowUp in an empty textarea

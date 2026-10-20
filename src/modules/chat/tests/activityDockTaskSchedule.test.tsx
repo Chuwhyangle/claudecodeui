@@ -15,7 +15,7 @@ import {
   resetSessionActivityStore,
   selectActiveTasks,
 } from '@/modules/chat/hooks/useSessionActivity';
-import { deriveActivityDockView } from '@/modules/chat/utils/activityDockView';
+import { deriveActivityDockView } from '@/modules/chat/utils/voice/activityDockView';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import type { ActivityScheduleView, ActivityTaskState, ActivityTaskView } from '@/shared/types';
 

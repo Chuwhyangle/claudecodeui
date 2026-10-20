@@ -1,5 +1,5 @@
 import type { NormalizedMessage } from '@/shared/types';
-import { isLiveRowId } from '@/modules/chat/utils/liveRowIdentity';
+import { isLiveRowId } from '@/modules/chat/utils/transcript/liveRowIdentity';
 
 const LOCAL_USER_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
 const LOCAL_USER_DEDUPE_CLOCK_SKEW_MS = 10_000;

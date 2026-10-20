@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 
 import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 
-import { createActivityFreshness } from '@/modules/chat/utils/activityFreshness';
-import type { ActivityFrame } from '@/modules/chat/utils/activityFreshness';
+import { createActivityFreshness } from '@/modules/chat/utils/session/activityFreshness';
+import type { ActivityFrame } from '@/modules/chat/utils/session/activityFreshness';
 
 // The server-declared silence budget this suite exercises. Deliberately not the shipped
 // default (5000/15000, pinned by AC-182's own criterion) — the machine must obey whatever

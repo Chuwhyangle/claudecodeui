@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import type { ChatMessage, WorkSegmentListItem } from '@/shared/types';
-import { buildTranscriptExport } from '@/modules/chat/utils/chatExport';
-import { createCachedDiffCalculator } from '@/modules/chat/utils/messageTransforms';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { buildTranscriptExport } from '@/modules/chat/utils/transcript/chatExport';
+import { createCachedDiffCalculator } from '@/modules/chat/utils/transcript/messageTransforms';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
 
 /**
  * AC-206: the HTML export must keep every row the transcript had, even though

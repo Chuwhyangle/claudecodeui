@@ -8,8 +8,9 @@ import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import { normalizedToChatMessages } from '@/modules/chat/hooks/useChatMessages';
-import { getIntrinsicMessageKey } from '@/modules/chat/utils/messageKeys';
-import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/workSegments';
+import { getIntrinsicMessageKey } from '@/modules/chat/utils/transcript/messageKeys';
+import { groupWorkSegments, isWorkSegment } from '@/modules/chat/utils/transcript/workSegments';
+
 import { UiPreferencesProvider } from '@/shared/context/UiPreferencesContext';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import type {

@@ -6,11 +6,11 @@ import { test, vi } from 'vitest';
 import { Markdown } from '@/modules/chat/transcript/Markdown';
 import StreamingMarkdown from '@/modules/chat/transcript/StreamingMarkdown';
 // Type-only, so it is erased before vi.mock's hoisted factory runs.
-import type * as StreamingMarkdownUtils from '@/modules/chat/utils/streamingMarkdown';
+import type * as StreamingMarkdownUtils from '@/modules/chat/utils/transcript/streamingMarkdown';
 
 /** Records what the component asks the splitter for, without changing it. */
 const splitCalls: string[] = [];
-vi.mock('@/modules/chat/utils/streamingMarkdown', async (importOriginal) => {
+vi.mock('@/modules/chat/utils/transcript/streamingMarkdown', async (importOriginal) => {
   const actual = await importOriginal<typeof StreamingMarkdownUtils>();
   return {
     ...actual,

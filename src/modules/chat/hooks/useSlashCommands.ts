@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 
 import { api } from '@/shared/api';
-import { safeLocalStorage } from '@/modules/chat/utils/chatStorage';
+import { safeLocalStorage } from '@/modules/chat/utils/session/chatStorage';
 import type { LLMProvider, Project, SlashCommand } from '@/shared/types';
 
 const COMMAND_QUERY_DEBOUNCE_MS = 150;
-
 
 type UseSlashCommandsOptions = {
   selectedProject: Project | null;

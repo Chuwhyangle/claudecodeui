@@ -7,7 +7,7 @@ import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, describe, test, vi } from 'vitest';
 
 import ActivityIndicator from '@/modules/chat/composer/ActivityIndicator';
-import { UNCONFIRMED_TURN_LABEL_MS } from '@/modules/chat/utils/activityDockView';
+import { UNCONFIRMED_TURN_LABEL_MS } from '@/modules/chat/utils/voice/activityDockView';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import type { ActivityConnection, ServerEvent, SessionActivity } from '@/shared/types';
 
