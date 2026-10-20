@@ -47,6 +47,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
+import { directoryBytes } from '@/shared/fs-bytes.js';
 import type { VoiceDataEditLabel, VoiceSettings } from '@/shared/types.js';
 
 import type { AsrToken } from '../../../shared/asr/asrRegistry.js';
@@ -338,22 +339,6 @@ function listStoredGroups(directory: string): StoredGroup[] {
   return [...groups.values()].sort((left, right) => (
     left.ts - right.ts || left.mtimeMs - right.mtimeMs || 0
   ));
-}
-
-/** The bytes of every regular file directly under the directory. */
-function directoryBytes(directory: string): number {
-  let total = 0;
-  for (const name of readdirSync(directory)) {
-    try {
-      const stats = statSync(path.join(directory, name));
-      if (stats.isFile()) {
-        total += stats.size;
-      }
-    } catch {
-      // A file that vanished between the listing and the stat is not bytes we have to account for.
-    }
-  }
-  return total;
 }
 
 /**
