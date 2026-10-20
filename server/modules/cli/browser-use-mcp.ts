@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// This MCP stdio entry lives in the CLI feature module because it IS the `cloudcli
+// browser-use-mcp` subcommand's implementation, launched by `cli.module.ts`. It used to sit in
+// `modules/browser-use`, where its root-bootstrap import (below) made the server root package and
+// that feature module import each other. Root imports browser-use's routes and service; nothing in
+// `browser-use` may reach back into the root package, so the entry that needs the bootstrap moved
+// out instead of the load-bearing edge being deleted.
+//
 // The MCP executable must load the root environment bootstrap before reading configuration.
 // eslint-disable-next-line boundaries/no-unknown
 import '../../load-env.js';

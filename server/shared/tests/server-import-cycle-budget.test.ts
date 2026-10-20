@@ -15,7 +15,13 @@
  * G2 WAS RETIRED on 2026-10-20 by `gap-database-connection-directory-cycle`: the
  * `modules/database` ↔ `modules/database/repositories` two-member cycle was closed by
  * moving the connection module into the leaf directory `modules/database/core/`. G2 is now
- * the empty group in both this file and the committed baseline. G1 and G3 are untouched.
+ * the empty group in both this file and the committed baseline. G1 was untouched by that task.
+ *
+ * G3 WAS RETIRED on 2026-10-20 by `gap-server-root-browser-use-cycle-relocate-mcp-entry`: the
+ * `.` ↔ `modules/browser-use` cycle was closed by moving the MCP stdio entrypoint out of the
+ * feature module into the existing `modules/cli/` directory, which already imports the root
+ * bootstrap and is never imported by the root. G3 is the empty group in both this file and the
+ * committed baseline; the slot stays so the groups remain a fixed, disjoint three-slot pin.
  *
  * Every reading comes from the TypeScript SYNTAX TREE (`ts.createSourceFile`), never from
  * grepped text: a comment mentioning `@/modules/...` (there is exactly one, at
@@ -34,7 +40,12 @@
  * `gap-server-provider-websocket-init-cycle-ports` on top of
  * `gap-database-connection-directory-cycle`):
  *
- *   files=332 staticEdges=1301 dynamicEdges=5 sccs=[8,2]   (file-level resolved edges)
+ *   files=332 staticEdges=1301 dynamicEdges=4 sccs=[8]   (file-level resolved edges; the
+ *                                two-member `.` ↔ `modules/browser-use` SCC is GONE — the G3
+ *                                slot is now empty, see the `CYCLE_GROUPS` note. `dynamicEdges`
+ *                                fell 5 → 4 because the relocation turned the one dynamic
+ *                                `modules/cli -> modules/browser-use` import into a same-directory
+ *                                one)
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
  *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
@@ -85,6 +96,12 @@ const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.j
  * Lowering one of these is an explicit edit to this constant. G2 keeps its slot but is now
  * EMPTY: `gap-database-connection-directory-cycle` retired the two-member database cycle,
  * and an empty group is filtered out of the canonical-group comparison.
+ *
+ * G3 IS NOW EMPTY TOO, lowered by `gap-server-root-browser-use-cycle-relocate-mcp-entry`
+ * (2026-10-20): the `.` ↔ `modules/browser-use` cycle was closed by moving the MCP stdio
+ * entrypoint into `modules/cli/`. The slot is kept (not deleted) for the same reason as G2 —
+ * the three groups stay disjoint and a future re-formation of this exact cycle has to be
+ * re-pinned explicitly rather than sliding into an unused slot.
  */
 const CYCLE_GROUPS: readonly string[][] = [
   [
@@ -98,7 +115,7 @@ const CYCLE_GROUPS: readonly string[][] = [
     'modules/websocket/services',
   ],
   [],
-  ['.', 'modules/browser-use'],
+  [],
 ];
 
 /**

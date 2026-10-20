@@ -147,7 +147,11 @@ function getPlaywright(): any | null {
 }
 
 function getMcpCommand(): { command: string; args: string[] } {
-  const mcpScriptPath = path.join(__dirname, 'browser-use-mcp.js');
+  // The stdio entry is the CLI module's `browser-use-mcp` subcommand, so in a built tree it sits
+  // under `modules/cli/`, a sibling of this module. This is a FILESYSTEM lookup, not an import:
+  // the service only hands the path to a child process, which keeps the browser-use → cli
+  // direction out of the static module graph.
+  const mcpScriptPath = path.join(__dirname, '..', 'cli', 'browser-use-mcp.js');
   if (fs.existsSync(mcpScriptPath)) {
     return {
       command: process.execPath,
