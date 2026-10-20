@@ -27,12 +27,12 @@ F11（架构校准报告 2026-10-20，低严重度）：同一文件内的复制
 
 ## AC
 
-- [ ] `test "$(grep -c 'fitAddon.fit()' src/modules/shell/hooks/useShellTerminal.ts)" -eq 1`：fit 调用点只剩辅助函数内一处（贴出前后计数，立案时两条相同路径各一次）。
-- [ ] `test "$(grep -c 'fitAndSendResize(' src/modules/shell/hooks/useShellTerminal.ts)" -eq 3`：一处定义 + 两处调用；`grep -n 'fitAndSendResize(' src/modules/shell/hooks/useShellTerminal.ts` 贴出三行的行号与上下文，证明两处调用分别是终端初始化路径与 ResizeObserver 路径。
-- [ ] 新增 `src/modules/shell/tests/useShellTerminalResize.test.tsx`，`npx vitest run src/modules/shell/tests/useShellTerminalResize.test.tsx` 退出 0；用例以 spy 记录辅助函数被调用次数，断言初始化与 resize 两条路径各调用 1 次，并贴出两次计数。
-- [ ] 既有 shell 判据不改一字仍绿：`npx vitest run src/modules/shell` 退出 0，贴出 `Test Files / Tests` 读数。
-- [ ] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
+- [x] `test "$(grep -c 'fitAddon.fit()' src/modules/shell/hooks/useShellTerminal.ts)" -eq 1`：fit 调用点只剩辅助函数内一处（贴出前后计数，立案时两条相同路径各一次）。
+- [x] `test "$(grep -c 'fitAndSendResize(' src/modules/shell/hooks/useShellTerminal.ts)" -eq 3`：一处定义 + 两处调用；`grep -n 'fitAndSendResize(' src/modules/shell/hooks/useShellTerminal.ts` 贴出三行的行号与上下文，证明两处调用分别是终端初始化路径与 ResizeObserver 路径。
+- [x] 新增 `src/modules/shell/tests/useShellTerminalResize.test.tsx`，`npx vitest run src/modules/shell/tests/useShellTerminalResize.test.tsx` 退出 0；用例以 spy 记录辅助函数被调用次数，断言初始化与 resize 两条路径各调用 1 次，并贴出两次计数。
+- [x] 既有 shell 判据不改一字仍绿：`npx vitest run src/modules/shell` 退出 0，贴出 `Test Files / Tests` 读数。
+- [x] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
