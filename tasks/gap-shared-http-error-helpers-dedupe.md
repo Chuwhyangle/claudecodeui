@@ -28,13 +28,13 @@ F8（架构校准报告 2026-10-20）：web-client 的 HTTP 错误辅助函数�
 
 ## AC
 
-- [ ] `test "$(grep -rn 'const getApiErrorMessage' src --include='*.ts' --include='*.tsx' | wc -l)" -eq 1`，且该唯一命中位于 `src/shared/`（贴出路径与行号；立案时 2 份）。
-- [ ] `test "$(grep -rn 'const toResponseJson' src --include='*.ts' --include='*.tsx' | wc -l)" -eq 1`，且该唯一命中位于 `src/shared/`（立案时 3 份）。
-- [ ] 三个 hook 都从共享模块导入：`grep -q "src/shared/apiResponse\|@/shared/apiResponse" src/modules/mcp/hooks/useMcpServers.ts`、`... src/modules/skills/hooks/useProviderSkills.ts`、`... src/modules/settings/hooks/useSettingsController.ts` 三条命令都退出 0。
-- [ ] 新增 `src/shared/tests/apiResponse.test.ts`，`npx vitest run src/shared/tests/apiResponse.test.ts` 退出 0；用例至少覆盖四种形状：`{error:{message}}`、`{error:"str"}`、`{details:"str"}`、以及无错误字段时的兜底，并逐字写出四种返回值。
-- [ ] 三个 hook 的既有判据不改一字仍绿：`npx vitest run src/modules/mcp src/modules/skills src/modules/settings` 退出 0，贴出 `Test Files / Tests` 读数与命中文件清单。
-- [ ] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
-- [ ] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
+- [x] `test "$(grep -rn 'const getApiErrorMessage' src --include='*.ts' --include='*.tsx' | wc -l)" -eq 1`，且该唯一命中位于 `src/shared/`（贴出路径与行号；立案时 2 份）。
+- [x] `test "$(grep -rn 'const toResponseJson' src --include='*.ts' --include='*.tsx' | wc -l)" -eq 1`，且该唯一命中位于 `src/shared/`（立案时 3 份）。
+- [x] 三个 hook 都从共享模块导入：`grep -q "src/shared/apiResponse\|@/shared/apiResponse" src/modules/mcp/hooks/useMcpServers.ts`、`... src/modules/skills/hooks/useProviderSkills.ts`、`... src/modules/settings/hooks/useSettingsController.ts` 三条命令都退出 0。
+- [x] 新增 `src/shared/tests/apiResponse.test.ts`，`npx vitest run src/shared/tests/apiResponse.test.ts` 退出 0；用例至少覆盖四种形状：`{error:{message}}`、`{error:"str"}`、`{details:"str"}`、以及无错误字段时的兜底，并逐字写出四种返回值。
+- [x] 三个 hook 的既有判据不改一字仍绿：`npx vitest run src/modules/mcp src/modules/skills src/modules/settings` 退出 0，贴出 `Test Files / Tests` 读数与命中文件清单。
+- [x] `npm run typecheck` 退出 0，`npm run lint` 退出 0。
+- [x] `git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列文件（不多一个）。
 
 ## DoD
 
