@@ -44,6 +44,9 @@ goal_ac: AC-140
 对外值逐字不变。这条导入方向不是新的：`voice-realtime-dashscope-transport.ts:126` 已经从同一模块
 深引 `PUBLIC_HOSTNAME`（AC-140 上一轮修复留下的先例）；规则模块的导出注释按 backend-module-standards
 补上这两个新消费方，字面量仍只在本文件出现。
+**实现偏差（见 Evidence 末节）**：两个叶子改为从同目录的传输叶子读
+`DASHSCOPE_PUBLIC_HOSTNAME`（它 re-export 规则模块的 `PUBLIC_HOSTNAME`），而不是各自深引规则模块——
+直引会把 AC-394 的 unresolved-internal 棘轮从 19 顶到 23。单源判据与对外值完全不变。
 **被否的方案**：放宽 `findHostBearers`（把 `voice-realtime` 排除）——那是改判据以过关，会把
 「白名单主机只有一个来源」这条实测断言削成空文，不做。
 **不做**：不改 `allowedBaseUrl` 的判否语义；不动 realtime 传输、summary/TTS 的线协议与请求形状；
@@ -60,6 +63,7 @@ goal_ac: AC-140
 - shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts
 - server/modules/voice-realtime/voice-realtime-summary.ts
 - server/modules/voice-realtime/voice-realtime-tts.ts
+- server/modules/voice-realtime/voice-realtime-dashscope-transport.ts
 - server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
 - server/modules/voice-realtime/tests/voice-realtime-tts.test.ts
 - tasks/gap-ac140-voice-realtime-summary-tts-host-single-source.md
@@ -80,6 +84,56 @@ goal_ac: AC-140
 - 取假形态的「必红」在真实运行里被观察到（记录命令与红的 token），不是口述。
 - `npx tsc --noEmit -p tsconfig.json && npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/modules/voice-realtime/ shared/asr/list/dashscope-omni/` 退出 0。
 
+## Evidence
+
+**2026-10-21 — 本轮（exited-not-landed 后的续做轮）实测**
+
+### AC1 / DoD —— 判据回绿
+`node scripts/asr-proxy-only-ssrf-check.mjs` → **exit 0**。读数：
+`reading=endpoint-rule.host-bearers value=1`、`reading=endpoint-rule.single-implementation verdict=ok`；
+无 `FAIL ` 行。`transport[...]` 3 条、`allow[...]` 2 条、`reject[...]` 8 条、`direct-path[...]` 5 条、
+`direct-provider-passthrough[http://127.0.0.1:8080] ok=true calls=1`、`siblings=7/7 exit-0` 全绿。
+
+### AC2 —— 与 `findHostBearers` 同口径
+`grep -rln "dashscope\.aliyuncs\.com" src/ shared/ server/ | grep -vE '/tests/|\.test\.tsx?$'` →
+唯一一行 `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`。
+`grep -c "dashscope\.aliyuncs\.com" server/modules/voice-realtime/voice-realtime-summary.ts server/modules/voice-realtime/voice-realtime-tts.ts`
+→ 两个文件均为 `0`。
+
+### AC3 / AC4 —— 回归守卫可执行、对外值逐字不变
+- `npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts.test.ts server/modules/voice-realtime/tests/voice-realtime-summary.test.ts`
+  → **pass 15 / fail 0**（单跑：tts 9 pass，summary 6 pass）。
+- tts 断言 `DEFAULT_VOICE_REALTIME_TTS_BASE_URL === \`https://${PUBLIC_HOSTNAME}\`` 且逐字 `https://dashscope.aliyuncs.com`；
+  summary 断言默认请求 URL 等于 \`https://${PUBLIC_HOSTNAME}/compatible-mode/v1/chat/completions\` 且逐字与修复前相同；
+  两处 `PUBLIC_HOSTNAME` 均从规则模块 import。
+
+### AC5 —— 假形态（真实运行观察）
+临时树装配脚本 `/tmp/ac140-falseform-probe/run.mjs`（`SHIPPING_FILES` + 两个叶子 + `shared` closure + `node_modules` 软链），
+以 `node scripts/asr-proxy-only-ssrf-check.mjs --root <tmp>` 运行：
+- 对照（未变异）→ exit **0**，`host-bearers value=1`，`verdict=ok`；
+- 只把 `voice-realtime-summary.ts` 还原成主机字面量 → exit **1**，`host-bearers value=2`，
+  `verdict=FAIL ENDPOINT_RULE_NOT_SINGLE_COPY`；
+- 两个叶子都还原成修复前的字面量（即立案时的 shipped 3-bearer 形态）→ exit **1**，
+  `reading=endpoint-rule.host-bearers value=3`、`reading=endpoint-rule.single-implementation verdict=FAIL`，
+  红 token `FAIL ENDPOINT_RULE_NOT_SINGLE_COPY: ... spelled in 3 shipping source file(s)
+  (...asr-provider.ts, ...voice-realtime-summary.ts, ...voice-realtime-tts.ts; test files are out of scope ...)`。
+
+### DoD —— 其余读数
+- `git diff --stat scripts/asr-proxy-only-ssrf-check.mjs scripts/asr-proxy-only-ssrf-check.test.mjs` → 空（判据未被放宽）。
+- `npx tsc --noEmit -p tsconfig.json` → 0；`npx tsc --noEmit -p server/tsconfig.json` → 0。
+- `npx oxlint server/modules/voice-realtime/ shared/asr/list/dashscope-omni/` → 0（仅既有 `importx(order)` warning）。
+- `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts`
+  → 11 pass / 0 fail，`[ac394] unresolvedInternal=19`（棘轮回到 pinned 值；上一轮红在 23）。
+
+### 实现偏差 —— 为什么经传输叶子而不是各自深引规则模块
+上一轮 suite 红的正是这条棘轮：两个叶子各深引「registry + 规则模块」4 条 repo-root `shared/` specifier，
+把 `unresolvedInternalBudget` 从 19 顶到 23，而 baseline 只许降。
+同目录的 `voice-realtime-dashscope-transport.ts` 早已为自身拼装付出同样的两条导入，并且按
+registry-before-provider 的顺序消解 TDZ；本轮让它
+`export { PUBLIC_HOSTNAME as DASHSCOPE_PUBLIC_HOSTNAME }` 作为 in-server 缝，两个叶子从它拼装。
+结果：主机字面量仍只在规则模块出现（AC2 仍是一行），判据读数不变（AC1 仍 value=1），
+而 AC-394 的读数保持 19。`voice-realtime-dashscope-transport.ts` 因此进入 Touches。
+
 ## Blocker
 
 **2026-10-21T01:07:11.833Z — worker 未落地（exited-not-landed）**
@@ -87,3 +141,6 @@ goal_ac: AC-140
 - 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: unresolved internal specifiers=23, over the baseline budget of 19 — the budget may only fall
 - run_id：wk-prod-anchor
 - session_id：79b8211a-9ed5-4b35-9812-5640189cf151
+
+**2026-10-21 — 本轮已消化上述原因**：4 条新 specifier 改为经 in-server 传输叶子读取，
+棘轮读数回到 19（见 Evidence 末节）。
