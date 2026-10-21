@@ -2,7 +2,7 @@
 id: gap-ac408-mount-guard-needs-bounded-navigation-replay
 title: AC-408 挂载守卫没有有界重放：宿主 net::ERR_NETWORK_CHANGED 在 mount 阶段一瞬间打断 58 个同源模块请求
   ⇒ 模块图永不执行、pane 白屏、整条判据红（同树 4 pass 后 1 fail；本轮直跑 exit 0）——给首个导航加有界重放，并让预算真的算得过来
-status: ready
+status: done
 labels:
   - gap
   - defect
