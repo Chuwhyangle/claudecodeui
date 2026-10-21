@@ -63,16 +63,16 @@ goal_ac: AC-323
 
 ## AC
 
-- [ ] AC1 守卫共享且不复制：`test -f e2e/support/pane-reload.ts`；`grep -c 'export const reloadPaneBounded' e2e/support/pane-reload.ts` == 1；`grep -c 'const reloadPaneBounded =' e2e/voice-realtime-upload-fixture.spec.ts` == 0；两份 spec 都从支持模块 import（`grep -c "from './support/pane-reload'" e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts` 各 == 1）。
-- [ ] AC2 两处历史 reload 都走守卫：`grep -n 'await page.reload' e2e/voice-realtime-live-session-send.spec.ts` 只剩 beforeEach 兜底那一行（`:650` 一带）；`grep -c 'reloadPaneBounded(' e2e/voice-realtime-live-session-send.spec.ts` ≥ 2；`npm run typecheck` exit 0。
-- [ ] AC3 判据三条命令逐字绿：CMD1 exit 0 且 `18 passed` / `0 failed` / `0 skipped`，CMD2 exit 0（`Test Files` / `Tests` 均无 failed），CMD3 exit 0（`6 passed`）；各贴 list reporter 摘要与 `echo $?`，并记 wall time。
-- [ ] AC4 负载稳定性：同一 CMD1 在主机负载与今天同量级（load average ≥ 50）时连跑 ≥3 次全部 exit 0；贴每次 wall time，最大值记为 M。
-- [ ] AC5 deadline 与实测匹配：`grep -n '^timeoutMs:' goals/AC-323-*.md` 的值为 N，N ≥ max(420000, 1.15×M)；`git diff -- goals/` 只有 `-timeoutMs: 200000` / `+timeoutMs: N` 两行。
-- [ ] AC6 闸自证：在带新 `timeoutMs` 的树上跑 `quay goal gate AC-323 --dry-run`（必要时 `--root <工作树>` 或 store 方言）⇒ `verdict == "pass"`、`cause == null`、读到的 `timeoutMs == N`；贴原始输出。若 `--root` 仍读主检出的旧记录，必须改用能读到工作树记录的方式，不得谎报。
-- [ ] AC7 确定性假形态（重放这一半）：临时在历史 reload 前装一个只生效一次的 route，把该次 reload 后的 `/src/main.tsx` 请求 `abort()`（复刻「boot 请求被中断一次」）⇒ 判据仍 exit 0，且日志出现 `reload pane: ... (replay 1)`；记录注入 diff 与逐字日志后还原。
-- [ ] AC8 确定性假形态（有界报错这一半）：同一注入改为每次都 `abort()`（或把 `PANE_RELOAD_DEADLINE_MS` 临时降到 500 ms）⇒ 该用例在守卫自己的期限内失败，错误文本是被点名的 label + 页面文本，而不是裸 `locator('.chat-messages-pane')` 的 30 s 超时；记录后还原，`git status --porcelain` 回到注入前。
-- [ ] AC9 不回归兄弟腿：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`（整份 serial）exit 0、`7 passed`；`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` exit 0、`7 passed`。
-- [ ] AC10 隔离性：`git diff --stat develop HEAD` 恰好只有 `e2e/support/pane-reload.ts`（新）、`e2e/voice-realtime-live-session-send.spec.ts`、`e2e/voice-realtime-upload-fixture.spec.ts`、`goals/AC-323-…md`（+本任务文件）；全部注入已还原。
+- [x] AC1 守卫共享且不复制：`test -f e2e/support/pane-reload.ts`；`grep -c 'export const reloadPaneBounded' e2e/support/pane-reload.ts` == 1；`grep -c 'const reloadPaneBounded =' e2e/voice-realtime-upload-fixture.spec.ts` == 0；两份 spec 都从支持模块 import（`grep -c "from './support/pane-reload'" e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-live-session-send.spec.ts` 各 == 1）。
+- [x] AC2 两处历史 reload 都走守卫：`grep -n 'await page.reload' e2e/voice-realtime-live-session-send.spec.ts` 只剩 beforeEach 兜底那一行（`:650` 一带）；`grep -c 'reloadPaneBounded(' e2e/voice-realtime-live-session-send.spec.ts` ≥ 2；`npm run typecheck` exit 0。
+- [x] AC3 判据三条命令逐字绿：CMD1 exit 0 且 `18 passed` / `0 failed` / `0 skipped`，CMD2 exit 0（`Test Files` / `Tests` 均无 failed），CMD3 exit 0（`6 passed`）；各贴 list reporter 摘要与 `echo $?`，并记 wall time。
+- [x] AC4 负载稳定性：同一 CMD1 在主机负载与今天同量级（load average ≥ 50）时连跑 ≥3 次全部 exit 0；贴每次 wall time，最大值记为 M。
+- [x] AC5 deadline 与实测匹配：`grep -n '^timeoutMs:' goals/AC-323-*.md` 的值为 N，N ≥ max(420000, 1.15×M)；`git diff -- goals/` 只有 `-timeoutMs: 200000` / `+timeoutMs: N` 两行。
+- [x] AC6 闸自证：在带新 `timeoutMs` 的树上跑 `quay goal gate AC-323 --dry-run`（必要时 `--root <工作树>` 或 store 方言）⇒ `verdict == "pass"`、`cause == null`、读到的 `timeoutMs == N`；贴原始输出。若 `--root` 仍读主检出的旧记录，必须改用能读到工作树记录的方式，不得谎报。
+- [x] AC7 确定性假形态（重放这一半）：临时在历史 reload 前装一个只生效一次的 route，把该次 reload 后的 `/src/main.tsx` 请求 `abort()`（复刻「boot 请求被中断一次」）⇒ 判据仍 exit 0，且日志出现 `reload pane: ... (replay 1)`；记录注入 diff 与逐字日志后还原。
+- [x] AC8 确定性假形态（有界报错这一半）：同一注入改为每次都 `abort()`（或把 `PANE_RELOAD_DEADLINE_MS` 临时降到 500 ms）⇒ 该用例在守卫自己的期限内失败，错误文本是被点名的 label + 页面文本，而不是裸 `locator('.chat-messages-pane')` 的 30 s 超时；记录后还原，`git status --porcelain` 回到注入前。
+- [x] AC9 不回归兄弟腿：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`（整份 serial）exit 0、`7 passed`；`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts` exit 0、`7 passed`。
+- [x] AC10 隔离性：`git diff --stat develop HEAD` 恰好只有 `e2e/support/pane-reload.ts`（新）、`e2e/voice-realtime-live-session-send.spec.ts`、`e2e/voice-realtime-upload-fixture.spec.ts`、`goals/AC-323-…md`（+本任务文件）；全部注入已还原。
 
 ## DoD
 
