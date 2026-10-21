@@ -22,7 +22,7 @@ goal_ac: AC-415
 - 扩展：`dependencies` 与 `dependents` 两份邻接各走 1 跳（`hops` 默认 1，可参数覆盖），取并集得到 entity 候选节点；边集只保留两端都在节点集内的 entity 边。
 - 聚合：file 级节点 = entity 节点经 `idToFile` 得到的文件集合；file 级边 = entity 边按 `(idToFile[from], idToFile[to])` 归并去重，`from === to` 的自环剔除。
 - 预算：`maxNodes` 由调用方传入（不钉一个出货常量）。候选节点超限时按「距离种子的跳数升序 → entity id 字典序升序」确定性截断，返回 `truncated: true`，输出节点数 ≤ `maxNodes`，且每条边两端都在保留节点内。
-- emit：两份 `.mmd` 都是合法 flowchart——首行 `%%{init: ...}%%` directive；节点 id 只含 `[A-Za-z0-9_]`（其余字符替换为 `_`，数字开头加稳定前缀，清洗后冲突按确定性顺序加后缀）；label 用双引号包裹并把内部 `"` 转义为 `#quot;`；每条边引用的两端节点都在同一份 mmd 内定义过。导出 `validateMermaid(mmd)`，用与测试同源的读数检查 directive、id 合法性、label 引号、边端点已定义，返回问题列表（合法输入为 `[]`）。
+- emit：两份 `.mmd` 都是合法 flowchart——首行 `%%{init: ...}%%` directive；节点 id 只含 `[A-Za-z0-9_]`（其余字符替换为 `_`，数字开头加稳定前缀，清洗后冲突按确定性顺序加后缀）；label 用双引号包裹并把内部 `\"` 转义为 `#quot;`；每条边引用的两端节点都在同一份 mmd 内定义过。导出 `validateMermaid(mmd)`，用与测试同源的读数检查 directive、id 合法性、label 引号、边端点已定义，返回问题列表（合法输入为 `[]`）。
 - 模块边界：`index.ts` barrel 只导出生成器、`validateMermaid` 与本任务需要的类型；模块内不得新增 `types.ts`/`utils.ts`；跨模块只经对方 barrel。AC-415 阶段该目录不 import 任何 `server/modules/**` 兄弟目录——新目录必须保持 leaf，否则 AC-394 ratchet 的 `newDirectoryViolations` 会红；不要改 `server-import-cycle-budget.baseline.json` 或 `MANIFEST_PIN` 去「祝福」它。
 
 测试 fixture：`server/modules/architecture/tests/fixtures/arch-index.sample.json`，从真实 `.archguard/query/93e0a992/arch-index.json` 裁剪一个连通小区块（保留 1 跳邻域闭包），文件头/README 注明来源 scope、`archJsonHash`（快照 `d02930eaf41dacb0b22a498575d9d479bd77931e874e78d97b00db170b5e42f0`）与裁剪范围；它是冻结快照，不是对 live 缓存的断言。测试用例按腿拆成独立 test block，名字以 `AC-415` 开头，便于 `--test-name-pattern` 单腿复跑：
@@ -43,16 +43,16 @@ goal_ac: AC-415
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts` 退出码 0（整份 criterion 绿）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "种子解析" server/modules/architecture/tests/generator.test.ts` 退出码 0：文件种子经 `fileToIds` 全部展开，标识符种子经 `nameToIds` 精确命中，未命中项出现在 `unresolved`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "双向扩展" server/modules/architecture/tests/generator.test.ts` 退出码 0：断言 1 跳 `dependencies ∪ dependents` 的期望节点集与边集（含从 dependents 反向到达的节点）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "file 级聚合" server/modules/architecture/tests/generator.test.ts` 退出码 0：entity 边按 `idToFile` 归并后无重复边、无自环，节点集等于期望文件集。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "节点预算" server/modules/architecture/tests/generator.test.ts` 退出码 0：超预算时 `truncated === true`、节点数 ≤ `maxNodes`、每条边两端都在保留节点内；未超限时 `truncated === false`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "mermaid 合法性" server/modules/architecture/tests/generator.test.ts` 退出码 0：file/entity 两份 mmd 均含 `%%{init` directive、节点 id 符合清洗规则、label 均为双引号包裹、每条边两端都已定义；`validateMermaid` 对生成结果返回 `[]`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "假形态 A" server/modules/architecture/tests/generator.test.ts` 退出码 0：删掉一条 `fileToIds` 映射后，同源期望节点集与生成节点集的差集非空，且 `unresolved.files` 点名该种子——证明该断言有区分力。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "假形态 B" server/modules/architecture/tests/generator.test.ts` 退出码 0：把一条端点被删的 mmd 喂给 `validateMermaid`，问题列表命中该未定义节点——证明合法性断言有区分力。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（392 文件计数与 90% 覆盖率地板均已同步）。
-- [ ] `npm run typecheck` 退出码 0；`npm run lint` 退出码 0。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts` 退出码 0（整份 criterion 绿）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "种子解析" server/modules/architecture/tests/generator.test.ts` 退出码 0：文件种子经 `fileToIds` 全部展开，标识符种子经 `nameToIds` 精确命中，未命中项出现在 `unresolved`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "双向扩展" server/modules/architecture/tests/generator.test.ts` 退出码 0：断言 1 跳 `dependencies ∪ dependents` 的期望节点集与边集（含从 dependents 反向到达的节点）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "file 级聚合" server/modules/architecture/tests/generator.test.ts` 退出码 0：entity 边按 `idToFile` 归并后无重复边、无自环，节点集等于期望文件集。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "节点预算" server/modules/architecture/tests/generator.test.ts` 退出码 0：超预算时 `truncated === true`、节点数 ≤ `maxNodes`、每条边两端都在保留节点内；未超限时 `truncated === false`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "mermaid 合法性" server/modules/architecture/tests/generator.test.ts` 退出码 0：file/entity 两份 mmd 均含 `%%{init` directive、节点 id 符合清洗规则、label 均为双引号包裹、每条边两端都已定义；`validateMermaid` 对生成结果返回 `[]`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "假形态 A" server/modules/architecture/tests/generator.test.ts` 退出码 0：删掉一条 `fileToIds` 映射后，同源期望节点集与生成节点集的差集非空，且 `unresolved.files` 点名该种子——证明该断言有区分力。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "假形态 B" server/modules/architecture/tests/generator.test.ts` 退出码 0：把一条端点被删的 mmd 喂给 `validateMermaid`，问题列表命中该未定义节点——证明合法性断言有区分力。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（392 文件计数与 90% 覆盖率地板均已同步）。
+- [x] `npm run typecheck` 退出码 0；`npm run lint` 退出码 0。
 
 ## DoD
 
