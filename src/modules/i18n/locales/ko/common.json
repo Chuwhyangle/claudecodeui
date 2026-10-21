@@ -38,6 +38,18 @@
     "granularity": "그래프 세분성",
     "fileGraph": "파일 그래프",
     "entityGraph": "엔티티 그래프",
+    "controls": {
+      "maxHops": "홉",
+      "maxNodes": "최대 노드"
+    },
+    "exportMmd": ".mmd 내보내기",
+    "expandHint": "노드에 마우스를 올리면 관계 유형이 표시됩니다. 노드를 클릭하면 다음 홉이 확장됩니다.",
+    "graphAria": "아키텍처 이웃 그래프",
+    "hover": {
+      "none": "들어오거나 나가는 관계 없음",
+      "relations": "{{node}} — 관계: {{relations}}"
+    },
+    "visibleNodes": "{{total}}개 노드 중 {{visible}}개",
     "noSeeds": "이 세션은 분석이 배치할 수 있는 파일이나 식별자를 참조하지 않았습니다.",
     "honesty": {
       "analysis": "분석",

@@ -38,6 +38,18 @@
     "granularity": "图粒度",
     "fileGraph": "文件图",
     "entityGraph": "实体图",
+    "controls": {
+      "maxHops": "跳数",
+      "maxNodes": "最大节点数"
+    },
+    "exportMmd": "导出 .mmd",
+    "expandHint": "悬停节点查看关系类型；点击节点展开下一跳。",
+    "graphAria": "架构邻域图",
+    "hover": {
+      "none": "无出/入边关系",
+      "relations": "{{node}} — 关系：{{relations}}"
+    },
+    "visibleNodes": "{{visible}} / {{total}} 个节点",
     "noSeeds": "该会话未引用分析可定位的任何文件或标识符。",
     "honesty": {
       "analysis": "分析",

@@ -38,6 +38,18 @@
     "granularity": "グラフの粒度",
     "fileGraph": "ファイルグラフ",
     "entityGraph": "エンティティグラフ",
+    "controls": {
+      "maxHops": "ホップ数",
+      "maxNodes": "最大ノード数"
+    },
+    "exportMmd": ".mmd をエクスポート",
+    "expandHint": "ノードにホバーすると関係タイプを表示します。ノードをクリックすると次のホップを展開します。",
+    "graphAria": "アーキテクチャ近傍グラフ",
+    "hover": {
+      "none": "入出力の関係なし",
+      "relations": "{{node}} — 関係: {{relations}}"
+    },
+    "visibleNodes": "{{total}} ノード中 {{visible}} 件",
     "noSeeds": "このセッションには、分析で配置できるファイルや識別子への参照がありません。",
     "honesty": {
       "analysis": "分析",

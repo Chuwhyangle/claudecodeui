@@ -38,6 +38,18 @@
     "granularity": "Graph granularity",
     "fileGraph": "File graph",
     "entityGraph": "Entity graph",
+    "controls": {
+      "maxHops": "Hops",
+      "maxNodes": "Max nodes"
+    },
+    "exportMmd": "Export .mmd",
+    "expandHint": "Hover a node for its relation types; click a node to expand its next hop.",
+    "graphAria": "Architecture neighbourhood graph",
+    "hover": {
+      "none": "no outgoing/incoming relation",
+      "relations": "{{node}} — relations: {{relations}}"
+    },
+    "visibleNodes": "{{visible}} of {{total}} nodes",
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {
       "analysis": "Analysis",

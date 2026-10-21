@@ -38,6 +38,18 @@
     "granularity": "Granularitas graf",
     "fileGraph": "Graf berkas",
     "entityGraph": "Graf entitas",
+    "controls": {
+      "maxHops": "Lompatan",
+      "maxNodes": "Maks. node"
+    },
+    "exportMmd": "Ekspor .mmd",
+    "expandHint": "Arahkan kursor ke node untuk melihat jenis relasinya; klik node untuk memperluas lompatan berikutnya.",
+    "graphAria": "Grafik ketetanggaan arsitektur",
+    "hover": {
+      "none": "tidak ada relasi masuk/keluar",
+      "relations": "{{node}} — relasi: {{relations}}"
+    },
+    "visibleNodes": "{{visible}} dari {{total}} node",
     "noSeeds": "Sesi ini belum merujuk berkas atau pengenal yang dapat ditempatkan oleh analisis.",
     "honesty": {
       "analysis": "Analisis",

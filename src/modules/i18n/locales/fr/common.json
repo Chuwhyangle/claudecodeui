@@ -38,6 +38,18 @@
     "granularity": "Granularité du graphe",
     "fileGraph": "Graphe des fichiers",
     "entityGraph": "Graphe des entités",
+    "controls": {
+      "maxHops": "Sauts",
+      "maxNodes": "Nœuds max"
+    },
+    "exportMmd": "Exporter .mmd",
+    "expandHint": "Survolez un nœud pour voir ses types de relation ; cliquez sur un nœud pour étendre son saut suivant.",
+    "graphAria": "Graphe de voisinage d'architecture",
+    "hover": {
+      "none": "aucune relation entrante/sortante",
+      "relations": "{{node}} — relations : {{relations}}"
+    },
+    "visibleNodes": "{{visible}} nœuds sur {{total}}",
     "noSeeds": "Cette session n'a référencé aucun fichier ni identifiant que l'analyse puisse placer.",
     "honesty": {
       "analysis": "Analyse",

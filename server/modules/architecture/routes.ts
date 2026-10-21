@@ -3,10 +3,12 @@
  *
  * `POST /api/architecture/graph` takes `{ projectId, sessionId }` plus the two
  * optional generation knobs and answers the service's reading unchanged:
- * `{ mmd: { file, entity }, stats, provenance }`. Nothing here reads a file,
- * expands a graph or knows what `.archguard` is — the route parses transport
- * input, calls one service method, and lets the process error middleware
- * translate the service's `AppError`s (404 `PROJECT_NOT_FOUND` /
+ * `{ graph: { file, entity }, mmd: { file, entity }, stats, provenance }`.
+ * `graph` is the render-ready neighbourhood JSON (nodes carry `distance`, edges
+ * carry `relationType`); `mmd` stays as the document export path. Nothing here
+ * reads a file, expands a graph or knows what `.archguard` is — the route parses
+ * transport input, calls one service method, and lets the process error
+ * middleware translate the service's `AppError`s (404 `PROJECT_NOT_FOUND` /
  * `ARCHGUARD_CACHE_NOT_FOUND`, 400 `INVALID_REQUEST`).
  *
  * Consumers: `server/modules/architecture/module.js` (production composition)

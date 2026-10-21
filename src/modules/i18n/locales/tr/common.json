@@ -38,6 +38,18 @@
     "granularity": "Graf ayrıntı düzeyi",
     "fileGraph": "Dosya grafiği",
     "entityGraph": "Varlık grafiği",
+    "controls": {
+      "maxHops": "Atlamalar",
+      "maxNodes": "Maks. düğüm"
+    },
+    "exportMmd": ".mmd dışa aktar",
+    "expandHint": "İlişki türleri için bir düğümün üzerine gelin; sonraki atlamayı genişletmek için düğüme tıklayın.",
+    "graphAria": "Mimari komşuluk grafiği",
+    "hover": {
+      "none": "gelen/giden ilişki yok",
+      "relations": "{{node}} — ilişkiler: {{relations}}"
+    },
+    "visibleNodes": "{{total}} düğümün {{visible}} tanesi",
     "noSeeds": "Bu oturum, analizin yerleştirebileceği hiçbir dosya veya tanımlayıcıya başvurmadı.",
     "honesty": {
       "analysis": "Analiz",

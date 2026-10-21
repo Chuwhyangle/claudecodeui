@@ -38,6 +38,18 @@
     "granularity": "Diagramm-Detailgrad",
     "fileGraph": "Dateidiagramm",
     "entityGraph": "Entitätsdiagramm",
+    "controls": {
+      "maxHops": "Hops",
+      "maxNodes": "Max. Knoten"
+    },
+    "exportMmd": ".mmd exportieren",
+    "expandHint": "Knoten überfahren zeigt Beziehungstypen; Klick auf einen Knoten erweitert den nächsten Hop.",
+    "graphAria": "Architektur-Nachbarschaftsgraph",
+    "hover": {
+      "none": "keine ausgehende/eingehende Beziehung",
+      "relations": "{{node}} — Beziehungen: {{relations}}"
+    },
+    "visibleNodes": "{{visible}} von {{total}} Knoten",
     "noSeeds": "Diese Sitzung hat keine Datei und keinen Bezeichner referenziert, den die Analyse einordnen kann.",
     "honesty": {
       "analysis": "Analyse",

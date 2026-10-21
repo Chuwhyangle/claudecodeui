@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { MermaidDiagram } from '@/modules/code-editor';
+import { CytoscapeGraph } from '@/modules/architecture/CytoscapeGraph';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 
-/** The two documents the endpoint returns together; switching between them is local. */
+/** The two subgraphs the endpoint returns together; switching between them is local. */
 type ArchitectureGranularity = 'file' | 'entity';
+
+/** The view opens at the old product reading (1 hop, 200 nodes) and can be widened locally. */
+const DEFAULT_LOCAL_HOPS = 1;
+const DEFAULT_LOCAL_MAX_NODES = 200;
 
 type ArchitecturePanelProps = {
   /** The selected project's DB id; the endpoint resolves it to a project root. */
@@ -15,10 +19,26 @@ type ArchitecturePanelProps = {
 };
 
 /**
+ * Save a Mermaid document as a `.mmd` file.
+ *
+ * The `.mmd` pair is no longer the default render path (the panel draws the
+ * neighbourhood JSON), but ADR-005 keeps it as the export format: the server
+ * still generates both documents, so exporting is a Blob write with no request.
+ */
+function downloadMermaid(contents: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([contents], { type: 'text/plain;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
  * The honesty bar (ADR-005 decision 7): the analysis time, how many seeds could
- * not be placed in the ArchGuard index, and whether the node budget cut the
- * neighbourhood short. Rendered from the response alone, so it can never claim
- * a fresher reading than the one the diagram came from.
+ * not be placed in the ArchGuard index, and whether the server's loose node
+ * budget cut the neighbourhood short. Rendered from the response alone, so it
+ * can never claim a fresher reading than the one the graph came from.
  */
 function ArchitectureHonestyBar({ result }: { result: ArchitectureGraphResult }) {
   const { t } = useTranslation();
@@ -68,15 +88,22 @@ function ArchitectureEmptyState({ message }: { message: string }) {
 
 /**
  * Rendered by WorkspaceMain when the architecture tab is active. It requests the
- * session's graph on mount (the tab activation) and renders the server-generated
- * Mermaid document; the file/entity switch only selects which of the two
- * already-fetched documents is shown.
+ * session's neighbourhood on mount (the tab activation) and draws it with
+ * cytoscape; the `maxHops`/`maxNodes` sliders and the file/entity switch only
+ * slice that already-fetched payload, so none of them may re-enter the fetch.
+ * The Mermaid documents stay in hand for the `.mmd` export.
  */
 export default function ArchitecturePanel({ projectId, sessionId }: ArchitecturePanelProps) {
   const { t } = useTranslation();
-  // Which of the two server-generated documents is on screen. Purely local state:
-  // both documents arrive in one response, so this must never re-enter the fetch.
+  // Which of the two server subgraphs is on screen. Purely local state: both
+  // arrive in one response, so this must never re-enter the fetch.
   const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
+  // Local hop budget for the graph view; widening it reveals nodes the server
+  // already sent instead of requesting a deeper neighbourhood.
+  const [maxHops, setMaxHops] = useState(DEFAULT_LOCAL_HOPS);
+  // Local node budget for the graph view; it is a deterministic prefix of the
+  // server's (distance, id) order, not a server-side truncation.
+  const [maxNodes, setMaxNodes] = useState(DEFAULT_LOCAL_MAX_NODES);
   const { view, reload } = useArchitectureGraph(projectId, sessionId);
 
   if (!sessionId) {
@@ -117,6 +144,17 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
   const { result } = view;
   const { stats, mmd } = result;
   const hasSeeds = stats.seedFiles > 0 || stats.seedIdentifiers > 0;
+  const neighbourhood = result.graph[granularity];
+
+  // The sliders' ceilings come from the payload: `maxHops` cannot exceed the
+  // deepest distance the server sent, and `maxNodes` cannot exceed what arrived.
+  const hopsCeiling = Math.max(
+    1,
+    neighbourhood.nodes.reduce((deepest, node) => Math.max(deepest, node.distance), 0),
+  );
+  const nodesCeiling = Math.max(1, neighbourhood.nodes.length);
+  const hopsValue = Math.min(maxHops, hopsCeiling);
+  const nodesValue = Math.min(maxNodes, nodesCeiling);
 
   return (
     <div className="flex h-full flex-col overflow-hidden" data-architecture-panel="true">
@@ -124,7 +162,7 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
         <h3 className="text-sm font-semibold text-foreground">
           {t('architecture.title', { defaultValue: 'Architecture' })}
         </h3>
-        {/* Both documents are in hand; toggling only picks one, so it must not refetch. */}
+        {/* Both subgraphs are in hand; toggling only picks one, so it must not refetch. */}
         <div
           role="group"
           aria-label={t('architecture.granularity', { defaultValue: 'Graph granularity' })}
@@ -151,15 +189,62 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
             {t('architecture.entityGraph', { defaultValue: 'Entity graph' })}
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => downloadMermaid(
+            granularity === 'file' ? mmd.file : mmd.entity,
+            `architecture-${granularity}.mmd`,
+          )}
+          data-architecture-export="true"
+          className="rounded-lg border border-border px-2 py-0.5 text-xs font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 border-b border-border/60 px-4 py-1.5 text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-2">
+          <span>{t('architecture.controls.maxHops', { defaultValue: 'Hops' })}</span>
+          <input
+            type="range"
+            min={0}
+            max={hopsCeiling}
+            step={1}
+            value={hopsValue}
+            aria-label={t('architecture.controls.maxHops', { defaultValue: 'Hops' })}
+            data-architecture-max-hops="true"
+            onChange={(event) => setMaxHops(Number(event.target.value))}
+            className="h-1 w-24 accent-primary"
+          />
+          <span data-architecture-max-hops-value={hopsValue}>{hopsValue}</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <span>{t('architecture.controls.maxNodes', { defaultValue: 'Max nodes' })}</span>
+          <input
+            type="range"
+            min={1}
+            max={nodesCeiling}
+            step={1}
+            value={nodesValue}
+            aria-label={t('architecture.controls.maxNodes', { defaultValue: 'Max nodes' })}
+            data-architecture-max-nodes="true"
+            onChange={(event) => setMaxNodes(Number(event.target.value))}
+            className="h-1 w-32 accent-primary"
+          />
+          <span data-architecture-max-nodes-value={nodesValue}>{nodesValue}</span>
+        </label>
       </div>
 
       <ArchitectureHonestyBar result={result} />
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {hasSeeds ? (
-          <div className="px-4 py-2">
-            <MermaidDiagram code={granularity === 'file' ? mmd.file : mmd.entity} />
-          </div>
+          <CytoscapeGraph
+            key={`${sessionId}:${granularity}`}
+            graph={neighbourhood}
+            maxHops={hopsValue}
+            maxNodes={nodesValue}
+          />
         ) : (
           <ArchitectureEmptyState
             message={t('architecture.noSeeds', {

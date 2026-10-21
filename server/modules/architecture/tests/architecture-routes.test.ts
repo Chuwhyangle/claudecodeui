@@ -326,6 +326,180 @@ test('an empty transcript yields empty seeds and never calls the generator', asy
   });
 });
 
+/**
+ * Write a one-scope project whose index is supplied wholesale.
+ *
+ * The JSON-reading criterion needs a fixture it can shape per case (a two-hop
+ * chain; a 300-node fan), so this helper only owns the manifest and leaves the
+ * index body to the caller.
+ */
+function createIndexProject(
+  t: { after(callback: () => void): void },
+  index: ScopeIndexFixture,
+): { root: string } {
+  const root = mkdtempSync(path.join(tmpdir(), 'arch-neighborhood-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  writeJson(path.join(root, '.archguard', 'query', 'manifest.json'), {
+    version: '1.0',
+    generatedAt: MANIFEST_GENERATED_AT,
+    globalScopeKey: 'scope-src',
+    scopes: [
+      { key: 'scope-src', label: 'src (typescript)', language: 'typescript', sources: [path.join(root, 'src')] },
+    ],
+  });
+  writeJson(path.join(root, '.archguard', 'query', 'scope-src', 'arch-index.json'), {
+    version: '1.0',
+    generatedAt: MANIFEST_GENERATED_AT,
+    archJsonHash: SRC_HASH,
+    language: 'typescript',
+    ...index,
+  });
+  return { root };
+}
+
+/** The subset of the response body the neighbourhood-JSON criteria read. */
+type NeighborhoodBody = {
+  graph: {
+    file: { nodes: { id: string; label: string; distance: number }[]; edges: { from: string; to: string; relationType: string }[] };
+    entity: { nodes: { id: string; label: string; distance: number }[]; edges: { from: string; to: string; relationType: string }[] };
+  };
+  stats: Record<string, unknown> & { truncated: boolean; entityNodes: number; entityEdges: number };
+  provenance: { cacheHit: boolean };
+};
+
+/** Run one graph request against a temp project and return its parsed body. */
+async function readGraphBody(
+  root: string,
+  transcript: NormalizedMessage[],
+  request: Record<string, unknown> = {},
+): Promise<NeighborhoodBody> {
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => transcript,
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  let body: NeighborhoodBody | null = null;
+  await withServer(app, async (baseUrl) => {
+    const response = await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, ...request });
+    assert.equal(response.status, 200);
+    body = (await response.json()) as NeighborhoodBody;
+  });
+  if (body === null) throw new Error('the server never answered');
+  return body;
+}
+
+test('the neighbourhood JSON carries true hop distances and each edge relationType', async (t) => {
+  // A three-hop chain, each link a DIFFERENT relation type: Seed -dependency->
+  // One -call-> Two -composition-> Three. Seeding `Seed` at hop 2 must retain
+  // exactly the first two links and report distances 0/1/2.
+  const { root } = createIndexProject(t, {
+    fileToIds: { 'n0.ts': ['N0'], 'n1.ts': ['N1'], 'n2.ts': ['N2'], 'n3.ts': ['N3'] },
+    nameToIds: { Seed: ['N0'], One: ['N1'], Two: ['N2'], Three: ['N3'] },
+    idToFile: { N0: 'n0.ts', N1: 'n1.ts', N2: 'n2.ts', N3: 'n3.ts' },
+    idToName: { N0: 'Seed', N1: 'One', N2: 'Two', N3: 'Three' },
+    dependencies: { N0: ['N1'], N1: ['N2'], N2: ['N3'], N3: [] },
+    dependents: { N0: [], N1: ['N0'], N2: ['N1'], N3: ['N2'] },
+    relationsByType: {
+      dependency: [['N0', 'N1']],
+      call: [['N1', 'N2']],
+      composition: [['N2', 'N3']],
+    },
+  });
+
+  const body = await readGraphBody(root, [
+    message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Start at `Seed`.' }),
+  ], { hops: 2 });
+
+  const entityDistances = new Map(body.graph.entity.nodes.map((node) => [node.id, node.distance]));
+  assert.deepEqual(
+    [...entityDistances.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    [['scope-src/N0', 0], ['scope-src/N1', 1], ['scope-src/N2', 2]],
+    'distance must be the BFS hop count from the seed over both adjacency directions',
+  );
+  assert.deepEqual(
+    body.graph.entity.edges,
+    [
+      { from: 'scope-src/N0', to: 'scope-src/N1', relationType: 'dependency' },
+      { from: 'scope-src/N1', to: 'scope-src/N2', relationType: 'call' },
+    ],
+    'every edge between retained nodes survives WITH its ArchGuard relation type; the N3 link is out of range',
+  );
+
+  // The file graph mirrors the entity reading: n0 at 0, n1 at 1, n2 at 2.
+  const fileDistances = new Map(body.graph.file.nodes.map((node) => [node.id, node.distance]));
+  assert.deepEqual(
+    [...fileDistances.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+    [['src/n0.ts', 0], ['src/n1.ts', 1], ['src/n2.ts', 2]],
+    'a file node inherits the closest distance of the entities it contains',
+  );
+  assert.deepEqual(
+    body.graph.file.edges,
+    [
+      { from: 'src/n0.ts', to: 'src/n1.ts', relationType: 'dependency' },
+      { from: 'src/n1.ts', to: 'src/n2.ts', relationType: 'call' },
+    ],
+  );
+});
+
+test('the loose default budget (2 hops / 2000 nodes) keeps all 300 edges instead of the old 200 cut', async (t) => {
+  // One seed with 300 direct dependents: the old default `maxNodes: 200`
+  // truncated this at 200 nodes and dropped 100 edges. The neighbourhood JSON
+  // now ships the whole 301-node fan, and `truncated` stays false.
+  const WIDTH = 300;
+  const fileToIds: Record<string, string[]> = { 'w0.ts': ['W0'] };
+  const nameToIds: Record<string, string[]> = { Wide: ['W0'] };
+  const idToFile: Record<string, string> = { W0: 'w0.ts' };
+  const idToName: Record<string, string> = { W0: 'Wide' };
+  const dependencies: Record<string, string[]> = { W0: [] };
+  const dependents: Record<string, string[]> = { W0: [] };
+  const pairs: [string, string][] = [];
+  for (let index = 1; index <= WIDTH; index += 1) {
+    const id = `W${index}`;
+    fileToIds[`w${index}.ts`] = [id];
+    idToFile[id] = `w${index}.ts`;
+    idToName[id] = `Wide ${index}`;
+    dependencies[id] = ['W0'];
+    dependents[id] = [];
+    dependents.W0.push(id);
+    pairs.push([id, 'W0']);
+  }
+
+  const { root } = createIndexProject(t, {
+    fileToIds,
+    nameToIds,
+    idToFile,
+    idToName,
+    dependencies,
+    dependents,
+    relationsByType: { dependency: pairs },
+  });
+
+  const body = await readGraphBody(root, [
+    message({ id: 'text-1', kind: 'text', role: 'assistant', content: '`Wide` is the entry.' }),
+  ]);
+
+  assert.equal(body.stats.entityNodes, WIDTH + 1, 'the default budget must not cut a 301-node neighbourhood');
+  assert.equal(body.stats.entityEdges, WIDTH, 'every one-hop edge must survive the default budget');
+  assert.equal(body.stats.truncated, false);
+  assert.equal(body.graph.entity.nodes.length, WIDTH + 1);
+  assert.equal(body.graph.entity.edges.length, WIDTH);
+  assert.ok(body.graph.entity.edges.every((edge) => edge.relationType === 'dependency'));
+  assert.equal(
+    body.graph.entity.nodes.filter((node) => node.distance === 1).length,
+    WIDTH,
+    'each dependent sits exactly one hop from the seed',
+  );
+});
+
 test('a missing project or a malformed body is refused with the transport code, not a 500', async (t) => {
   const { root } = createProject(t);
   const app = express();

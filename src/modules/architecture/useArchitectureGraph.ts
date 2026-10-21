@@ -49,9 +49,44 @@ export type ArchitectureGraphStats = {
   };
 };
 
-/** Both Mermaid documents, generated together so the local toggle never refetches. */
+/**
+ * One node of the server's neighbourhood JSON. `id` is the raw ArchGuard entity
+ * id (or a project-relative file key), `label` the display name, and `distance`
+ * the shortest hop count from the transcript's seeds — the slider's local
+ * `maxHops` filter reads that distance, so it must come from the server rather
+ * than from render order.
+ */
+export type ArchitectureNeighborhoodNode = {
+  readonly id: string;
+  readonly label: string;
+  readonly distance: number;
+};
+
+/** One directed edge of the neighbourhood JSON, carrying ArchGuard's relation kind. */
+export type ArchitectureNeighborhoodEdge = {
+  readonly from: string;
+  readonly to: string;
+  readonly relationType: string;
+};
+
+/**
+ * A render-ready subgraph (the cytoscape input). Every edge endpoint is present
+ * in `nodes`; the node order is (distance, id), so a local prefix is
+ * deterministic.
+ */
+export type ArchitectureNeighborhood = {
+  readonly nodes: readonly ArchitectureNeighborhoodNode[];
+  readonly edges: readonly ArchitectureNeighborhoodEdge[];
+};
+
+/**
+ * The endpoint's full reading: both render-ready subgraphs, both Mermaid
+ * documents (the `.mmd` export path), the counters, and provenance. The panel
+ * slices `graph` locally for the sliders, so it has to arrive whole.
+ */
 export type ArchitectureGraphResult = {
   readonly mmd: { readonly file: string; readonly entity: string };
+  readonly graph: { readonly file: ArchitectureNeighborhood; readonly entity: ArchitectureNeighborhood };
   readonly stats: ArchitectureGraphStats;
   readonly provenance: ArchitectureProvenance;
 };

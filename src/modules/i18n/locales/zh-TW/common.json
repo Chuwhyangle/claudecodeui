@@ -38,6 +38,18 @@
     "granularity": "圖表粒度",
     "fileGraph": "檔案圖",
     "entityGraph": "實體圖",
+    "controls": {
+      "maxHops": "跳數",
+      "maxNodes": "最大節點數"
+    },
+    "exportMmd": "匯出 .mmd",
+    "expandHint": "懸停節點檢視關聯類型；點擊節點展開下一跳。",
+    "graphAria": "架構鄰域圖",
+    "hover": {
+      "none": "無出/入邊關聯",
+      "relations": "{{node}} — 關聯：{{relations}}"
+    },
+    "visibleNodes": "{{visible}} / {{total}} 個節點",
     "noSeeds": "此工作階段未參照分析可定位的任何檔案或識別碼。",
     "honesty": {
       "analysis": "分析",

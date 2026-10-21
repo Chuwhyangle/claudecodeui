@@ -7,7 +7,7 @@
  * `arch-index.json`, then hands the pure pieces over:
  *
  *   transcript (injected reader) → extractSeeds (AC-416) → merged ArchIndex →
- *   generateGraph (AC-415) → `{ mmd, stats, provenance }`
+ *   generateGraph (AC-415) → `{ graph, mmd, stats, provenance }`
  *
  * The result layer of the AC-417 cache memoises the generated reading by the
  * full content key (project, session, seeds, params, every scope fingerprint),
@@ -40,6 +40,7 @@ import {
   type ArchIndex,
   type GenerateGraphResult,
   type GraphStats,
+  type NeighborhoodGraph,
   type RelationType,
   type UnresolvedSeeds,
 } from './generator.js';
@@ -52,14 +53,22 @@ const MANIFEST_RELATIVE_PATH = path.join('.archguard', 'query', 'manifest.json')
 const QUERY_RELATIVE_DIRECTORY = path.join('.archguard', 'query');
 
 /**
- * Default node budget. It only bounds a pathological neighbourhood; the caller
- * may lower or raise it per request. `generateGraph` deliberately ships no
- * default, so the product constant has to live on the route-side caller.
+ * Default node budget. It is deliberately LOOSE: the neighbourhood is shipped
+ * whole (distance-annotated) so the frontend can filter it locally without a
+ * network round-trip, and 2000 only bounds a pathological 2-hop explosion. A
+ * caller may lower or raise it per request; the client's `maxNodes` slider is a
+ * local view filter, not a request parameter. `generateGraph` deliberately ships
+ * no default, so the product constant has to live on the route-side caller.
  */
-export const DEFAULT_MAX_NODES = 200;
+export const DEFAULT_MAX_NODES = 2000;
 
-/** Default BFS depth: the seed's immediate neighbours in both directions. */
-export const DEFAULT_HOPS = 1;
+/**
+ * Default BFS depth. Two hops is the 2026-10-21 reading's "loose" neighbourhood:
+ * one hop is often too little to show a module's context, while three hops in
+ * this repo's 300–1000-node neighbourhoods grows past what a force layout can
+ * usefully display. The client's `maxHops` slider filters this same payload.
+ */
+export const DEFAULT_HOPS = 2;
 
 /**
  * The separator between the project root and the scope key inside the opaque
@@ -141,9 +150,13 @@ export type ArchitectureProvenance = {
   readonly cacheHit: boolean;
 };
 
-/** The endpoint's complete body: both Mermaid documents, the counters, and provenance. */
+/**
+ * The endpoint's complete body: the two render-ready subgraphs, both Mermaid
+ * documents (the export path), the counters, and provenance.
+ */
 export type ArchitectureGraphResult = {
   readonly mmd: { readonly file: string; readonly entity: string };
+  readonly graph: { readonly file: NeighborhoodGraph; readonly entity: NeighborhoodGraph };
   readonly stats: ArchitectureGraphStats;
   readonly provenance: ArchitectureProvenance;
 };
@@ -471,6 +484,10 @@ function resolveSeedFile(projectPath: string, raw: string): string | null {
 function emptyReading(): GenerateGraphResult {
   return {
     mmd: { file: EMPTY_GRAPH_MMD, entity: EMPTY_GRAPH_MMD },
+    graph: {
+      file: { nodes: [], edges: [] },
+      entity: { nodes: [], edges: [] },
+    },
     stats: { entityNodes: 0, fileNodes: 0, entityEdges: 0, fileEdges: 0, truncated: false },
     unresolved: { files: [], identifiers: [] },
   };
@@ -626,6 +643,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         const reading = emptyReading();
         return {
           mmd: reading.mmd,
+          graph: reading.graph,
           stats: buildStats(reading, seeds),
           provenance: {
             generatedAt: manifest.generatedAt,
@@ -652,6 +670,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
 
       return {
         mmd: reading.mmd,
+        graph: reading.graph,
         stats: buildStats(reading, seeds),
         provenance: {
           generatedAt: manifest.generatedAt,

@@ -10,7 +10,8 @@
  * the deterministic transform
  *
  *   seeds → resolve → `hops`-deep bidirectional expansion → node budget →
- *   entity/file aggregation → two Mermaid flowcharts.
+ *   entity/file aggregation → two Mermaid flowcharts (the export path) and the
+ *   same two subgraphs as render-ready JSON with hop distances and typed edges.
  *
  * Keeping it pure is what makes the output reproducible for a fixed
  * (index, seeds, params) triple, which is the property the content-addressed
@@ -104,9 +105,49 @@ export type UnresolvedSeeds = {
   readonly identifiers: string[];
 };
 
-/** The generator's complete output: the two flowcharts, their counts, and the unmatched seeds. */
+/**
+ * One node of the render-ready neighbourhood JSON.
+ *
+ * `id` is the raw merged entity id (or the project-relative file key), `label`
+ * the display name, and `distance` the shortest hop count from the seeds over
+ * BOTH adjacency directions (seeds are distance 0). The frontend slices this
+ * list locally by `distance`, so the distance has to be the true BFS reading,
+ * not an emission-order artefact.
+ */
+export type NeighborhoodNode = {
+  readonly id: string;
+  readonly label: string;
+  readonly distance: number;
+};
+
+/** One directed edge of the neighbourhood JSON, typed by ArchGuard's relation kind. */
+export type NeighborhoodEdge = {
+  readonly from: string;
+  readonly to: string;
+  readonly relationType: RelationType;
+};
+
+/**
+ * A render-ready subgraph: the cytoscape input the architecture panel consumes.
+ *
+ * Every edge endpoint is guaranteed present in `nodes` (truncation can only
+ * remove whole edges, never leave a dangling endpoint), and the node order is
+ * (distance ascending, id ascending) so a client-side `maxNodes` slice is
+ * deterministic.
+ */
+export type NeighborhoodGraph = {
+  readonly nodes: readonly NeighborhoodNode[];
+  readonly edges: readonly NeighborhoodEdge[];
+};
+
+/**
+ * The generator's complete output: the two Mermaid documents (export path), the
+ * same two subgraphs as JSON (the default render path), their counts, and the
+ * unmatched seeds.
+ */
 export type GenerateGraphResult = {
   readonly mmd: { readonly file: string; readonly entity: string };
+  readonly graph: { readonly file: NeighborhoodGraph; readonly entity: NeighborhoodGraph };
   readonly stats: GraphStats;
   readonly unresolved: UnresolvedSeeds;
 };
@@ -399,6 +440,17 @@ function entityLabel(index: ArchIndex, id: string): string {
 }
 
 /**
+ * Map the generator's internal edges onto the JSON wire shape.
+ *
+ * The JSON keeps one entry per (from, to, relationType) triple — the same
+ * de-duplication the Mermaid emitter applies — so the client renders exactly
+ * the edges the export document contains, no more and no less.
+ */
+function toNeighborhoodEdges(edges: readonly RenderEdge[]): NeighborhoodEdge[] {
+  return edges.map((edge) => ({ from: edge.from, to: edge.to, relationType: edge.type }));
+}
+
+/**
  * Build the seeded, budgeted subgraph for one index and return both Mermaid
  * documents plus the counts they were built from.
  *
@@ -440,8 +492,38 @@ export function generateGraph(
     fileEdges,
   );
 
+  // The JSON node list carries each node's true hop distance; `retained` is
+  // already sorted (distance, id), so retaining that order here is what makes a
+  // client-side `maxNodes` prefix meaningful rather than arbitrary.
+  const entityNodes: NeighborhoodNode[] = retained.map((id) => ({
+    id,
+    label: entityLabel(index, id),
+    distance: distance.get(id) ?? 0,
+  }));
+
+  // A file node aggregates several entities; its distance is the closest of
+  // them, which is the hop at which the file first enters the neighbourhood.
+  const fileDistance = new Map<string, number>();
+  for (const id of retained) {
+    const file = index.idToFile[id];
+    if (file === undefined) continue;
+    const hop = distance.get(id) ?? 0;
+    const current = fileDistance.get(file);
+    if (current === undefined || hop < current) fileDistance.set(file, hop);
+  }
+  const fileNodeList: NeighborhoodNode[] = fileNodes.map((file) => ({
+    id: file,
+    label: file,
+    distance: fileDistance.get(file) ?? 0,
+  }));
+  fileNodeList.sort((a, b) => a.distance - b.distance || compareIds(a.id, b.id));
+
   return {
     mmd: { file: fileMmd, entity: entityMmd },
+    graph: {
+      file: { nodes: fileNodeList, edges: toNeighborhoodEdges(fileEdges) },
+      entity: { nodes: entityNodes, edges: toNeighborhoodEdges(entityEdges) },
+    },
     stats: {
       entityNodes: retained.length,
       fileNodes: fileNodes.length,
