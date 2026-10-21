@@ -162,7 +162,10 @@
 #   and the cache-invalidation row by architecture-graph-cache, measured one file at a time on
 #   2026-10-21 with `bash scripts/test.sh server/modules/architecture/tests/cache-invalidation.test.ts`
 #   (its own new criterion; no green round contains it yet — the row also keeps the 90% coverage
-#   floor green now that the tree collects 392 server test files).
+#   floor green now that the tree collects 392 server test files),
+#   and the seed-extraction row by gap-architecture-seed-extraction-from-transcript, measured one
+#   file at a time on 2026-10-21 (its own new criterion; no green round contains it yet — the row
+#   also keeps the 90% coverage floor green now that the tree collects 393 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -515,4 +518,5 @@
 3605	server/modules/cli/tests/browser-use-mcp-entry.test.ts
 2355	server/modules/file-tree/tests/file-tree-lazy-listing.test.ts
 2023	server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts
+1700	server/modules/architecture/tests/seed-extraction.test.ts
 1448	server/modules/architecture/tests/cache-invalidation.test.ts
