@@ -1,0 +1,189 @@
+{
+  "_fixture": {
+    "sourceIndexPath": ".archguard/query/93e0a992/arch-index.json",
+    "sourceScope": "src",
+    "archJsonHash": "d02930eaf41dacb0b22a498575d9d479bd77931e874e78d97b00db170b5e42f0",
+    "generatedAt": "2026-10-20T15:52:34.424Z",
+    "croppedAt": "2026-10-21",
+    "croppedRange": "modules/git-panel/** — the 1-hop neighborhood of modules/git-panel/utils/gitPanelUtils.ts + modules/git-panel/history/CommitHistoryItem.tsx: 8 files, 14 entities, 11 dependency edges. Values are copied verbatim from the real index; two out-of-crop edge targets (useRevertLocalCommit, useSelectedProvider) were trimmed from the adjacency lists so the slice is internally consistent.",
+    "note": "Frozen snapshot for AC-415 tests. It is NOT an assertion against the live .archguard cache."
+  },
+  "version": "1.0",
+  "language": "typescript",
+  "fileToIds": {
+    "modules/git-panel/GitPanel.tsx": [
+      "modules/git-panel/GitPanel.tsx.GitPanel"
+    ],
+    "modules/git-panel/changes/ChangesView.tsx": [
+      "modules/git-panel/changes/ChangesView.tsx.ChangesView"
+    ],
+    "modules/git-panel/changes/FileChangeItem.tsx": [
+      "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem"
+    ],
+    "modules/git-panel/changes/FileStatusLegend.tsx": [
+      "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend"
+    ],
+    "modules/git-panel/history/CommitHistoryItem.tsx": [
+      "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem"
+    ],
+    "modules/git-panel/hooks/useGitPanelController.ts": [
+      "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController"
+    ],
+    "modules/git-panel/utils/commitGraph.ts": [
+      "modules/git-panel/utils/commitGraph.ts.computeCommitGraph",
+      "modules/git-panel/utils/commitGraph.ts.laneColor"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles",
+      "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount",
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass",
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey",
+      "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles",
+      "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles"
+    ]
+  },
+  "nameToIds": {
+    "GitPanel": [
+      "modules/git-panel/GitPanel.tsx.GitPanel"
+    ],
+    "ChangesView": [
+      "modules/git-panel/changes/ChangesView.tsx.ChangesView"
+    ],
+    "FileChangeItem": [
+      "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem"
+    ],
+    "FileStatusLegend": [
+      "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend"
+    ],
+    "CommitHistoryItem": [
+      "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem"
+    ],
+    "useGitPanelController": [
+      "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController"
+    ],
+    "computeCommitGraph": [
+      "modules/git-panel/utils/commitGraph.ts.computeCommitGraph"
+    ],
+    "laneColor": [
+      "modules/git-panel/utils/commitGraph.ts.laneColor"
+    ],
+    "getAllChangedFiles": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles"
+    ],
+    "getChangedFileCount": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount"
+    ],
+    "getStatusBadgeClass": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass"
+    ],
+    "getStatusLabelKey": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey"
+    ],
+    "hasChangedFiles": [
+      "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles"
+    ],
+    "parseCommitFiles": [
+      "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles"
+    ]
+  },
+  "idToFile": {
+    "modules/git-panel/GitPanel.tsx.GitPanel": "modules/git-panel/GitPanel.tsx",
+    "modules/git-panel/changes/ChangesView.tsx.ChangesView": "modules/git-panel/changes/ChangesView.tsx",
+    "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem": "modules/git-panel/changes/FileChangeItem.tsx",
+    "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend": "modules/git-panel/changes/FileStatusLegend.tsx",
+    "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem": "modules/git-panel/history/CommitHistoryItem.tsx",
+    "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController": "modules/git-panel/hooks/useGitPanelController.ts",
+    "modules/git-panel/utils/commitGraph.ts.computeCommitGraph": "modules/git-panel/utils/commitGraph.ts",
+    "modules/git-panel/utils/commitGraph.ts.laneColor": "modules/git-panel/utils/commitGraph.ts",
+    "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles": "modules/git-panel/utils/gitPanelUtils.ts",
+    "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount": "modules/git-panel/utils/gitPanelUtils.ts",
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass": "modules/git-panel/utils/gitPanelUtils.ts",
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey": "modules/git-panel/utils/gitPanelUtils.ts",
+    "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles": "modules/git-panel/utils/gitPanelUtils.ts",
+    "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles": "modules/git-panel/utils/gitPanelUtils.ts"
+  },
+  "idToName": {
+    "modules/git-panel/GitPanel.tsx.GitPanel": "GitPanel",
+    "modules/git-panel/changes/ChangesView.tsx.ChangesView": "ChangesView",
+    "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem": "FileChangeItem",
+    "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend": "FileStatusLegend",
+    "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem": "CommitHistoryItem",
+    "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController": "useGitPanelController",
+    "modules/git-panel/utils/commitGraph.ts.computeCommitGraph": "computeCommitGraph",
+    "modules/git-panel/utils/commitGraph.ts.laneColor": "laneColor",
+    "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles": "getAllChangedFiles",
+    "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount": "getChangedFileCount",
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass": "getStatusBadgeClass",
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey": "getStatusLabelKey",
+    "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles": "hasChangedFiles",
+    "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles": "parseCommitFiles"
+  },
+  "dependencies": {
+    "modules/git-panel/GitPanel.tsx.GitPanel": [
+      "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController",
+      "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount"
+    ],
+    "modules/git-panel/changes/ChangesView.tsx.ChangesView": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles",
+      "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles"
+    ],
+    "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass",
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey"
+    ],
+    "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass"
+    ],
+    "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem": [
+      "modules/git-panel/utils/commitGraph.ts.laneColor",
+      "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass",
+      "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles"
+    ],
+    "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController": [
+      "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles"
+    ],
+    "modules/git-panel/utils/commitGraph.ts.computeCommitGraph": [],
+    "modules/git-panel/utils/commitGraph.ts.laneColor": [],
+    "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles": [],
+    "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount": [],
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass": [],
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey": [],
+    "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles": [],
+    "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles": []
+  },
+  "dependents": {
+    "modules/git-panel/GitPanel.tsx.GitPanel": [],
+    "modules/git-panel/changes/ChangesView.tsx.ChangesView": [],
+    "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem": [],
+    "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend": [],
+    "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem": [],
+    "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController": [
+      "modules/git-panel/GitPanel.tsx.GitPanel"
+    ],
+    "modules/git-panel/utils/commitGraph.ts.computeCommitGraph": [],
+    "modules/git-panel/utils/commitGraph.ts.laneColor": [
+      "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts.getAllChangedFiles": [
+      "modules/git-panel/changes/ChangesView.tsx.ChangesView",
+      "modules/git-panel/hooks/useGitPanelController.ts.useGitPanelController"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts.getChangedFileCount": [
+      "modules/git-panel/GitPanel.tsx.GitPanel"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusBadgeClass": [
+      "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem",
+      "modules/git-panel/changes/FileStatusLegend.tsx.FileStatusLegend",
+      "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts.getStatusLabelKey": [
+      "modules/git-panel/changes/FileChangeItem.tsx.FileChangeItem"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts.hasChangedFiles": [
+      "modules/git-panel/changes/ChangesView.tsx.ChangesView"
+    ],
+    "modules/git-panel/utils/gitPanelUtils.ts.parseCommitFiles": [
+      "modules/git-panel/history/CommitHistoryItem.tsx.CommitHistoryItem"
+    ]
+  }
+}
