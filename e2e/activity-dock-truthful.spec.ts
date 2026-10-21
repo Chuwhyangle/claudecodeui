@@ -1150,35 +1150,6 @@ test.describe('activity dock truthfulness', () => {
  * on the clock rather than waits for.
  */
 
-/** The locale the second scenario's copy is read from — the same one the page is seeded with. */
-const CONSOLIDATION_TITLE = 'Activity dock consolidation — one dock, one answer';
-const CONSOLIDATION_WALK_TEXT = 'the turn the consolidated dock reports';
-
-/**
- * The turn, opened and then ended on a known beat.
- *
- * `turn-end` releases the host's turn lease at 5.0s and the walk ends at 5.5s. The walk
- * itself is only part of what `await clock` costs — the control plane takes several
- * seconds to pick the request up behind this run's page loads, which is why the offsets
- * here are shorter than the wall clock the case body is allowed. That ordering is the whole point: the
- * activity the page reads says "over" half a second before the one-second host
- * poll could have observed the lease go, which is the window AC-188 exists to
- * close.
- */
-const CONSOLIDATION_SCENARIO = {
-  version: 1,
-  dialect: 'claude',
-  home: 'gate',
-  transcript: { mode: 'per-row-jsonl' },
-  seed: { title: CONSOLIDATION_TITLE, userText: SEED_USER_TEXT, lifecycleMode: 'resident' },
-  steps: [
-    { at: 0, op: 'unattended-turn', text: CONSOLIDATION_WALK_TEXT, trigger: 'cron' },
-    { at: 5_000, op: 'turn-end' },
-    { at: 5_500, op: 'wait' },
-  ],
-  expect: { rows: { delta: 1 }, content: { mustContain: [SEED_USER_TEXT, CONSOLIDATION_WALK_TEXT] } },
-};
-
 /** The two markers the pre-consolidation surfaces published. Neither may match anything. */
 const LEGACY_MARKERS = ['.chat-activity-tab', '[data-slot="chat-activity-inline"]'] as const;
 
@@ -1226,6 +1197,51 @@ type ConsistencySample = {
   send: string;
   /** Whether the composer's prompt form was drawn when `send` was read. */
   composer: 'drawn' | 'absent';
+};
+
+/**
+ * The accessible names the composer's one submit control can carry, split by what each one says.
+ *
+ * The submit button is not a send/stop toggle any more: `6ddb14b9d` merged the Live Voice entry
+ * into it, so an empty draft on an idle session shows `voice.realtime.enter` ("Start Live Voice")
+ * instead of `input.send`. A reading that equated "the Send entry is not there" with "the submit
+ * says stop" therefore read every idle-after-turn page as busy (filed red of 2026-10-21: the dock
+ * read `absent`, the sidebar `false`, and the submit still came back `stop`, because the only
+ * thing on the page was the voice entry).
+ *
+ * So the reading names the two states by the words the control itself publishes, and nothing else:
+ *
+ *   - `stop` — the turn is running (`input.stop`, or `resident.stopResident` for a resident
+ *     session, which is the label this scenario's turn actually shows);
+ *   - `send` — the composer is idle (`input.send`, or `voice.realtime.enter` while the draft is
+ *     empty and the submit doubles as the voice entry);
+ *   - `other` — anything else. A label nobody here knows is *not* folded into idle: the turn
+ *     reading (which must be `stop`) and the settled reading (which must be `send`) both fail on
+ *     it, so a new submit wording cannot pass silently as "not busy".
+ */
+type SubmitLabels = { stop: string[]; idle: string[] };
+
+/** Classifies the submit control's accessible name into the sample's `send` field. */
+const classifySubmitLabel = (label: string | null, labels: SubmitLabels): string => {
+  if (label === null) return 'other';
+  if (labels.stop.includes(label)) return 'stop';
+  if (labels.idle.includes(label)) return 'send';
+  return 'other';
+};
+
+/**
+ * The accessible name on the composer's submit control, or `null` when the form draws no button.
+ *
+ * The control is the form's *last* button, not `button[type="submit"]`: `PromptInputSubmit`
+ * renders `type={isActive ? 'button' : 'submit'}` (`src/modules/chat/composer/PromptInput.tsx`),
+ * so while a turn is running — exactly the state whose name this reading is about — the stop
+ * control is a plain `button`, and a `[type="submit"]` selector would find nothing there. The
+ * submit is the footer's final control in both states; the form draws nothing after it.
+ */
+const submitAriaLabel = async (page: Page): Promise<string | null> => {
+  const buttons = page.locator(`${FORM} button`);
+  const count = await buttons.count();
+  return count === 0 ? null : buttons.nth(count - 1).getAttribute('aria-label');
 };
 
 /**
@@ -1300,10 +1316,10 @@ async function ensureRunningView(page: Page, tooltip: string): Promise<void> {
 
 /**
  * One sample: the dock's state, whether the sidebar counts this session as running, and the
- * submit's label — the label read only off a composer that is actually drawn (see the note in
- * the body, and `ConsistencySample.composer`).
+ * submit control's state — read off the control's own accessible name, only on a composer that
+ * is actually drawn (see `ConsistencySample.composer` and `SubmitLabels`).
  */
-async function sample(page: Page, sessionId: string, sendLabel: string): Promise<ConsistencySample> {
+async function sample(page: Page, sessionId: string, submitLabels: SubmitLabels): Promise<ConsistencySample> {
   const group = page.locator(RUNNING_GROUP);
   const groups = await group.count();
   const sidebar = groups > 0
@@ -1316,28 +1332,31 @@ async function sample(page: Page, sessionId: string, sendLabel: string): Promise
       + `badges=${await page.locator('[data-running-badge]').count()} sidebar=${sidebar}`,
     );
   }
-  const escaped = sendLabel.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  // The locator addresses the *send* label, so finding it is the send state and its absence is
-  // the stop state — the composer swaps one accessible name for the other, and the reading is of
-  // the control the user would actually press.
+  // The submit's state is read off the control's own accessible name and classified by
+  // `SubmitLabels`: `stop` only for the stop words, `send` only for the idle words, `other` for
+  // everything else. The control keeps its identity across all three, which is the property the
+  // previous reading lacked — it looked for the *Send* label and read its absence as stop, so the
+  // Live Voice entry (`voice.realtime.enter`) that now replaces Send on an idle empty draft read
+  // as a busy button. See `6ddb14b9d`.
   //
-  // `stop`, though, is a reading *of a composer that is drawn*. The submit button changes its
-  // accessible name only while the composer lives; a workspace that has unmounted has no form and
-  // no submit at all, and the missing button there is not the composer saying "stop" — it is the
-  // whole surface being gone. Reading it as busy is what the filed red of 2026-10-09 was:
-  // `{dock:'absent', sidebar:false, send:'stop'}` in *every* sample of both after-turn windows,
-  // with a React error in the page console unmounting `ProjectWorkspaceRouteContent` mid-window.
-  // Both surfaces vanished together; the send reading then reported an absent button as a busy
-  // one. So `stop` is only read off a drawn composer, and the composer's presence rides on the
-  // sample (`composer`) so a window taken on a torn-down page is visible as such.
-  // The structural guarantee this preserves: `send:'stop'` needs `isLoading`, which needs
-  // `sessionActivity !== null`, which — in the same render — gives the dock a non-null
-  // `activity`/`renderedActivity` and so a state that is never `hidden`. On a drawn composer the
-  // dock can therefore never read `absent` while the send reads `stop`; the disagreement the
-  // window asserts over is live exactly where the defect would be, and cannot fire on a teardown.
+  // `send` is still only a reading *of a composer that is drawn*. A workspace that has unmounted
+  // has no form and no submit at all, and a missing control there is not the composer saying
+  // "stop" nor "send" — it is the whole surface being gone. Reading that absence as busy is what
+  // the filed red of 2026-10-09 was: `{dock:'absent', sidebar:false, send:'stop'}` in *every*
+  // sample of both after-turn windows, with a React error in the page console unmounting
+  // `ProjectWorkspaceRouteContent` mid-window. Both surfaces vanished together; the send reading
+  // then reported an absent button as a busy one. That is why `stop`/`send` are only classified
+  // off a drawn composer, and the composer's presence rides on the sample (`composer`) so a
+  // window taken on a torn-down page is visible as such. Off a torn-down page `send` keeps the
+  // placeholder `'send'` that carries no information — the same value it had before this change.
   const composerDrawn = (await page.locator(FORM).count()) > 0;
-  const submit = page.locator(`${FORM} button[aria-label="${escaped}"]`);
-  const send = composerDrawn && (await submit.count()) === 0 ? 'stop' : 'send';
+  const submitLabel = composerDrawn ? await submitAriaLabel(page) : null;
+  const send = composerDrawn ? classifySubmitLabel(submitLabel, submitLabels) : 'send';
+  if (process.env.AC188_DEBUG) {
+    // The raw word and the class it produced, so a green run can show *which* idle/stop wording
+    // the sample was classified from rather than only the class (`AC188_DEBUG`).
+    console.log(`cb.sample.submit=${JSON.stringify(submitLabel)} send=${send}`);
+  }
   return {
     // `absent`, not an empty string and not a wait: a dock that is not drawn is an *answer* (there is no
     // turn to report), and `getAttribute` on a locator with no match would sit out the whole action
@@ -1361,9 +1380,9 @@ const LIVE_WINDOW_SAMPLES = 24;
 const LIVE_WINDOW_PERIOD_MS = 55;
 
 /**
- * The same readings as {@link sample} — the dock's state, the sidebar's membership, the submit's
- * label read off a drawn composer, and whether that composer was drawn — taken `count` times
- * *inside* the page.
+ * The same readings as {@link sample} — the dock's state, the sidebar's membership, the submit
+ * control's state classified off its accessible name on a drawn composer, and whether that
+ * composer was drawn — taken `count` times *inside* the page.
  *
  * A window that samples through {@link sample} is paced by the harness, and that is the wrong clock
  * for it: every reading costs a `count()` round trip to the browser, so a 24-sample window across
@@ -1382,29 +1401,44 @@ const LIVE_WINDOW_PERIOD_MS = 55;
 async function sampleBurst(
   page: Page,
   sessionId: string,
-  sendLabel: string,
+  submitLabels: SubmitLabels,
   count: number,
   periodMs: number,
 ): Promise<ConsistencySample[]> {
   return page.evaluate(
-    async ({ sessionId: id, sendLabel: label, count: samples, periodMs: period, group, dock, form }) => {
+    async ({ sessionId: id, stopLabels, idleLabels, count: samples, periodMs: period, group, dock, form }) => {
       const escape = (value: string): string => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
       const sessionSelector = `${group} [data-running-session="${escape(id)}"]`;
-      const submitSelector = `${form} button[aria-label="${escape(label)}"]`;
+      // The submit control is the form's last button — see `submitAriaLabel()` for why
+      // `[type="submit"]` is not the address (the control is `type="button"` while a turn runs).
+      const submitSelector = `${form} button`;
+      // The same classification `classifySubmitLabel()` does on the harness side, over the same
+      // two sets: stop words are busy, idle words are idle, and anything else is `other` — which
+      // the turn and settled assertions red on rather than read as either state.
+      const classify = (label: string | null): string => {
+        if (label === null) return 'other';
+        if (stopLabels.includes(label)) return 'stop';
+        if (idleLabels.includes(label)) return 'send';
+        return 'other';
+      };
       const read = (): ConsistencySample => {
         const hasGroup = document.querySelector(group) !== null;
         const dockEl = document.querySelector(dock);
         const composerDrawn = document.querySelector(form) !== null;
+        const submits = composerDrawn ? document.querySelectorAll(submitSelector) : [];
+        const submitLabel = submits.length === 0
+          ? null
+          : submits[submits.length - 1].getAttribute('aria-label');
         return {
           // `absent`, not an empty string: a dock that is not drawn is the answer "there is no turn
           // to report", the same reading `sample()` takes when the locator matches nothing.
           dock: dockEl ? (dockEl.getAttribute('data-activity-state') ?? '') : 'absent',
           sidebar: hasGroup && document.querySelector(sessionSelector) !== null,
-          // The locator addresses the *send* label, so finding it is the send state and its absence
-          // is the stop state — on a composer that is drawn. Off a torn-down workspace the whole
-          // form is gone and there is nothing there to have said "stop"; see `sample()` for why
-          // that is exactly the misreading the filed red was, and why it is not folded in here.
-          send: composerDrawn && document.querySelector(submitSelector) === null ? 'stop' : 'send',
+          // Classified off the submit control's own accessible name on a composer that is drawn.
+          // Off a torn-down workspace the whole form is gone and there is nothing there to have
+          // said "stop" or "send"; see `sample()` for why that is exactly the misreading the filed
+          // 2026-10-09 red was, and why it is not folded in here.
+          send: composerDrawn ? classify(submitLabel) : 'send',
           composer: composerDrawn ? 'drawn' : 'absent',
         };
       };
@@ -1415,7 +1449,16 @@ async function sampleBurst(
       }
       return taken;
     },
-    { sessionId, sendLabel, count, periodMs, group: RUNNING_GROUP, dock: DOCK, form: FORM },
+    {
+      sessionId,
+      stopLabels: submitLabels.stop,
+      idleLabels: submitLabels.idle,
+      count,
+      periodMs,
+      group: RUNNING_GROUP,
+      dock: DOCK,
+      form: FORM,
+    },
   );
 }
 
@@ -1428,7 +1471,7 @@ test.describe('activity dock consolidation', () => {
   let api: APIRequestContext;
   let workspaceName = '';
   let sessionId = '';
-  let sendLabel = '';
+  let submitLabels: SubmitLabels;
   let runningTooltip = '';
 
   test.beforeAll(async ({ browser }) => {
@@ -1440,7 +1483,20 @@ test.describe('activity dock consolidation', () => {
     const workspace = path.join(fixtureHome, 'activity-dock-consolidation-workspace');
     workspaceName = path.basename(workspace);
 
-    sendLabel = String(localeKey(LOCALE, 'input.send'));
+    // The submit control's two vocabularies, resolved from the same locale files the app renders
+    // from: the words it publishes while a turn runs, and the words it publishes while idle. The
+    // idle set has two entries because the Live Voice entry (`6ddb14b9d`) replaced Send on an
+    // empty idle draft; see `SubmitLabels`.
+    submitLabels = {
+      stop: [
+        String(localeKey(LOCALE, 'input.stop')),
+        String(localeKey(LOCALE, 'resident.stopResident')),
+      ],
+      idle: [
+        String(localeKey(LOCALE, 'input.send')),
+        String(localeKey(LOCALE, 'voice.realtime.enter')),
+      ],
+    };
     runningTooltip = String(localeKeyIn(LOCALE, 'sidebar.json', 'search.runningTooltip'));
 
     // Started before the bootstrap and settled after it — the same overlap the describe above makes.
@@ -1591,7 +1647,7 @@ test.describe('activity dock consolidation', () => {
 
     const openWindow: ConsistencySample[] = [];
     for (let i = 0; i < 8; i += 1) {
-      openWindow.push(await sample(page, sessionId, sendLabel));
+      openWindow.push(await sample(page, sessionId, submitLabels));
       await page.waitForTimeout(70);
     }
     console.log(`consistency.turnOpen=${JSON.stringify(openWindow)}`);
@@ -1655,7 +1711,7 @@ test.describe('activity dock consolidation', () => {
         RESIDENT_ACTIVITY_MARKERS.map(async (marker) => ((await tier.page.locator(marker).count()) > 0 ? marker : '')),
       )).filter(Boolean);
 
-      const turn = await sample(tier.page, sessionId, sendLabel);
+      const turn = await sample(tier.page, sessionId, submitLabels);
       console.log(
         `dock.count.${tier.name}=${docks} legacy.tab=${legacy.includes('.chat-activity-tab') ? 1 : 0} `
         + `legacy.inline=${legacy.includes('[data-slot="chat-activity-inline"]') ? 1 : 0} `
@@ -1719,8 +1775,8 @@ test.describe('activity dock consolidation', () => {
     // samples of the same edge, and running them in lockstep would make a page that happened to
     // be quick to clear hide a page that happened to be slow.
     const [liveDesktop, liveMobile] = await Promise.all([
-      sampleBurst(page, sessionId, sendLabel, LIVE_WINDOW_SAMPLES, LIVE_WINDOW_PERIOD_MS),
-      sampleBurst(mobile, sessionId, sendLabel, LIVE_WINDOW_SAMPLES, LIVE_WINDOW_PERIOD_MS),
+      sampleBurst(page, sessionId, submitLabels, LIVE_WINDOW_SAMPLES, LIVE_WINDOW_PERIOD_MS),
+      sampleBurst(mobile, sessionId, submitLabels, LIVE_WINDOW_SAMPLES, LIVE_WINDOW_PERIOD_MS),
     ]);
     const liveWindowMs = Date.now() - liveStart;
     console.log(`consistency.afterTurnLive.desktop=${JSON.stringify(liveDesktop)}`);
@@ -1762,7 +1818,7 @@ test.describe('activity dock consolidation', () => {
       const target = reading.name === 'desktop' ? page : mobile;
       const samples: ConsistencySample[] = [];
       for (let i = 0; i < 8; i += 1) {
-        samples.push(await sample(target, sessionId, sendLabel));
+        samples.push(await sample(target, sessionId, submitLabels));
         await target.waitForTimeout(55);
       }
       reading.afterTurn = samples;
