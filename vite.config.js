@@ -55,7 +55,16 @@ export default defineConfig(({ mode }) => {
         // the relative imports that would otherwise be the only way to reach it. This alias
         // is the bundle's copy; vitest.config.ts carries its own, because vitest does not
         // read this file, and tsconfig.json and .oxlintrc.json carry theirs.
-        '@shared': fileURLToPath(new URL('./shared', import.meta.url))
+        '@shared': fileURLToPath(new URL('./shared', import.meta.url)),
+        // elkjs (`@yalehwang/plantuml-js/elk`'s layout engine) has no `browser` field: its bare
+        // `main` is `lib/main.js`, the Node entry, which does `require('web-worker')` — an optional
+        // Node-only package we deliberately do not install. Vite's dep optimizer resolves that
+        // require statically and the whole pre-bundle fails, so the dev server dies on boot and
+        // every e2e run in the checkout loses its module graph. `lib/elk.bundled.js` is the
+        // browser build (worker inlined, no external requires); upstream's own demo aliases the
+        // same bare specifier to it. Aliased for dev and build alike — same module, so the
+        // first-screen chunk still never sees it (the import stays dynamic).
+        elkjs: fileURLToPath(new URL('./node_modules/elkjs/lib/elk.bundled.js', import.meta.url))
       }
     },
     server: {
