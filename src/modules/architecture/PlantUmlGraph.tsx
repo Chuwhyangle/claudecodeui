@@ -17,6 +17,13 @@ import {
   type ExplosionLodDepth,
   type ExplosionLodScheduler,
 } from '@/modules/architecture/explosionLod';
+import {
+  ASPECT_RELAYOUT_DEBOUNCE_MS,
+  clampAspectRatio,
+  createLayoutEngine,
+  shouldRelayoutForAspect,
+  type ArchitectureLayoutEngine,
+} from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import type {
   ArchitectureRendererGraph,
@@ -41,7 +48,15 @@ type PlantUmlRenderer = {
   render: (puml: string) => Promise<{ svg: string }>;
 };
 
-type PlantUmlRendererFactory = (options: { layout: 'elk'; view?: PlantUmlView }) => PlantUmlRenderer;
+/**
+ * `layout` takes the engine instance, not the `'elk'` keyword: the engine is
+ * built by `createLayoutEngine` so the container's aspect ratio reaches the
+ * layout (see `elkAspectEngine.ts`).
+ */
+type PlantUmlRendererFactory = (options: {
+  layout: ArchitectureLayoutEngine;
+  view?: PlantUmlView;
+}) => PlantUmlRenderer;
 
 /** The alias marker the renderer prefixes on overview group nodes (`grp::<path prefix>`). */
 const GROUP_PREFIX = 'grp::';
@@ -129,15 +144,44 @@ function restoreEntityIds(host: HTMLElement, aliasOf: ReadonlyMap<string, string
 function rendererOptionsFor(
   view: ArchitectureDiagramView,
   diagram: ArchitecturePlantUml,
-): { layout: 'elk'; view?: PlantUmlView } {
-  if (view.kind === 'overview') return { layout: 'elk', view: { kind: 'overview', depth: OVERVIEW_DEPTH } };
+  layout: ArchitectureLayoutEngine,
+): { layout: ArchitectureLayoutEngine; view?: PlantUmlView } {
+  if (view.kind === 'overview') {
+    return { layout, view: { kind: 'overview', depth: OVERVIEW_DEPTH } };
+  }
   if (view.kind === 'neighborhood' && diagram.rendererEntity !== null) {
     return {
-      layout: 'elk',
+      layout,
       view: { kind: 'neighborhood', entity: diagram.rendererEntity, hops: view.hops },
     };
   }
-  return { layout: 'elk' };
+  return { layout };
+}
+
+/**
+ * The container's width/height, clamped by `clampAspectRatio`, or `null` when
+ * it has no box yet (jsdom, or a first paint before layout). Measured from the
+ * scroll container itself — the element the drawing is actually fitted into.
+ */
+function measureLayoutAspect(host: HTMLElement): number | null {
+  const width = host.clientWidth;
+  const height = host.clientHeight;
+  if (!(width > 0) || !(height > 0)) return null;
+  return clampAspectRatio(width / height);
+}
+
+/** A drawing's identity: the view (with its parameters) that produced it. */
+function drawingKeyOf(view: ArchitectureDiagramView): string {
+  switch (view.kind) {
+    case 'overview':
+      return 'overview';
+    case 'group':
+      return `group:${view.prefix}`;
+    case 'neighborhood':
+      return `neighborhood:${view.entityId}:${view.hops}`;
+    case 'hierarchy':
+      return 'hierarchy';
+  }
 }
 
 /** Remove every highlight class the hover interaction may have added. */
@@ -349,6 +393,33 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     };
   }, []);
 
+  // The container ratio the NEXT drawing is laid out for. A resize does not
+  // re-render on its own (the SVG is resized imperatively), so a shape change
+  // that is worth a new layout needs a state write to re-enter the render
+  // effect; it stays `null` until the first such change, letting the first draw
+  // measure the container directly (see `measureLayoutAspect`).
+  const [layoutAspect, setLayoutAspect] = useState<number | null>(null);
+  // The ratio the drawing on screen was laid out with (`null` = the engine's own
+  // default). Read by the resize observer to decide whether the container has
+  // moved far enough to earn a re-layout.
+  const drawnAspectRef = useRef<number | null>(null);
+  // The drawing the LOD level belongs to, so an aspect re-layout of the SAME
+  // view carries the current level and focus over instead of re-deriving them.
+  const drawnKeyRef = useRef<string | null>(null);
+  // Pending debounced re-layout (one timer: the latest reading wins).
+  const aspectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleAspectRelayout = useCallback((aspect: number): void => {
+    if (aspectTimerRef.current !== null) clearTimeout(aspectTimerRef.current);
+    aspectTimerRef.current = setTimeout(() => {
+      aspectTimerRef.current = null;
+      setLayoutAspect(aspect);
+    }, ASPECT_RELAYOUT_DEBOUNCE_MS);
+  }, []);
+  useEffect(() => () => {
+    if (aspectTimerRef.current !== null) clearTimeout(aspectTimerRef.current);
+    aspectTimerRef.current = null;
+  }, []);
+
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
@@ -368,17 +439,27 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       try {
         // The only plantuml-js/elkjs import in the module graph: Vite emits it
         // as its own async chunk, so the first-screen bundle stays untouched.
-        const { createRenderer } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+        const { createRenderer, ElkLayoutEngine } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
           createRenderer: PlantUmlRendererFactory;
+          ElkLayoutEngine: new () => ArchitectureLayoutEngine;
         };
         if (cancelled) return;
 
+        // The container's shape is a LAYOUT input, not a post-render scale: the
+        // engine is built with it so ELK draws for this container instead of
+        // for its own default proportions.
+        const drawnAspect = layoutAspect ?? measureLayoutAspect(host);
+        const engine = createLayoutEngine({
+          aspectRatio: drawnAspect,
+          engine: new ElkLayoutEngine(),
+        });
         const diagram = archguardToPlantUml(graph, { view });
-        const renderer = createRenderer(rendererOptionsFor(view, diagram));
+        const renderer = createRenderer(rendererOptionsFor(view, diagram, engine));
         const { svg } = await renderer.render(diagram.puml);
         if (cancelled) return;
 
         host.innerHTML = svg;
+        drawnAspectRef.current = drawnAspect;
         restoreEntityIds(host, diagram.aliasOf);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
@@ -407,6 +488,14 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
         // A new drawing gets its LOD applied synchronously, so it never flashes
         // at the wrong detail before the debouncer fires. The overview has no
         // entities or package frames to collapse, so it stays out of the LOD.
+        //
+        // A re-layout of the SAME view (the container's shape changed) is not a
+        // new drawing in the user's eyes: keep the level they were reading and
+        // re-centre the package they were focused on. Any other drawing derives
+        // both from the fresh fit scale.
+        const drawingKey = drawingKeyOf(view);
+        const carriedDepth = drawingKey === drawnKeyRef.current ? lodDepthRef.current : null;
+        drawnKeyRef.current = drawingKey;
         if (view.kind === 'overview') {
           lodRef.current = null;
           lodDepthRef.current = null;
@@ -414,7 +503,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
         } else {
           const hierarchy = buildExplosionHierarchy(host, graph);
           lodRef.current = { hierarchy, edges: graph.edges };
-          const depth = resolveLodDepth(drawnScale, null);
+          const depth = carriedDepth ?? resolveLodDepth(drawnScale, null);
           lodDepthRef.current = depth;
           applyExplosionLod({
             host,
@@ -423,8 +512,9 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
             depth,
             focusPackageId: focusPackageOf(hierarchy, [selectedRef.current, centerEntityRef.current]),
             // A fresh drawing was just fitted; scrolling it would fight the
-            // fit rather than preserve a focus across a level cross.
-            centerFocus: false,
+            // fit rather than preserve a focus across a level cross. A carried
+            // level is exactly the case where the focus should be restored.
+            centerFocus: carriedDepth !== null,
           });
           setLodDepth(depth);
         }
@@ -444,7 +534,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     return () => {
       cancelled = true;
     };
-  }, [applyZoom, graph, view]);
+  }, [applyZoom, graph, layoutAspect, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -577,10 +667,20 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
   // A fit diagram follows the container; a manually zoomed one keeps the size
   // the user chose. The scale is compared before writing state so a burst of
   // observer callbacks cannot re-render in a loop.
+  //
+  // The same observer is where a SHAPE change is noticed: a resize that only
+  // re-fits is cheap, but one that turns the container landscape/portrait makes
+  // the drawing's proportions wrong, which only a new layout fixes. That path is
+  // behind `shouldRelayoutForAspect`'s threshold and a debounce, so a drag pays
+  // for one layout, not one per frame.
   useEffect(() => {
     const host = hostRef.current;
     if (host === null || typeof ResizeObserver !== 'function') return;
     const observer = new ResizeObserver(() => {
+      const measured = measureLayoutAspect(host);
+      if (shouldRelayoutForAspect(drawnAspectRef.current, measured) && measured !== null) {
+        scheduleAspectRelayout(measured);
+      }
       if (zoomRef.current.mode !== 'fit') return;
       const viewport = viewportRef.current;
       if (viewport === null) return;
@@ -590,7 +690,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     });
     observer.observe(host);
     return () => observer.disconnect();
-  }, [applyZoom]);
+  }, [applyZoom, scheduleAspectRelayout]);
 
   // The zoom is read through `zoomRef` when the debounced application runs, so
   // a burst of wheel/resize updates coalesces into one visibility toggle rather
