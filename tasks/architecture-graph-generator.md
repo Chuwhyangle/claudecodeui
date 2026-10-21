@@ -26,6 +26,6 @@ goal_ac: AC-415
 
 ## Touches
 
-- server/modules/architecture/generator.ts
-- server/modules/architecture/tests/generator.test.ts
+- server/modules/architecture/generator.ts (new)
+- server/modules/architecture/tests/generator.test.ts (new)
 - tasks/architecture-graph-generator.md
