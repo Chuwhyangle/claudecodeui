@@ -1,7 +1,7 @@
 ---
 id: architecture-readable-default-zoom-focus
 title: 默认视图改为可读缩放 + 聚焦：缩放下限按最小可读字号，宽高比过大时自动退回折叠
-status: ready
+status: done
 labels:
   - feature
 parent: null
