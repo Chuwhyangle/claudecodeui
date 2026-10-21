@@ -59,11 +59,13 @@ const SPEC = 'e2e/voice-output-e2e-harness.spec.ts';
 const DEFAULT_SAMPLE = '402fad85';
 
 /**
- * The model's follow-up remark the scripted endpoint says after a delivered `session_send`.
+ * The model's closing-turn follow-up the scripted endpoint says after a delivered `session_send`.
  *
- * Since `gap-narrator-announce-phrase-cache` this is only the TRIGGER: the proxy ignores its wording
- * and speaks the connection's fixed announce phrase instead (`voice-realtime-announce-phrases.ts`).
- * The spec asserts this exact sentence never reaches the page or the TTS stand-in.
+ * Since `a2c2e8139` ("speak the announce at speech_stopped") the announce no longer waits for this
+ * turn: the endpoint's `speech_stopped` enqueues `announce-early-<seq>` with the connection's fixed
+ * phrase table (`voice-realtime-announce-phrases.ts`), and the real closing turn — this sentence —
+ * is SUPPRESSED inside the 3 s window. It remains armed because it is the trigger the suppression
+ * is measured on; the spec asserts this exact sentence never reaches the page or the TTS stand-in.
  */
 const ANNOUNCE_TEXT = '好的，我来查一下。';
 
@@ -418,9 +420,11 @@ const result = spawnSync(playwright, ['test', SPEC, ...passthrough], {
     VOICE_E2E_PLAN: planPath,
     VOICE_E2E_DUMP: dumpPath,
     // THE DEPLOYMENT SWITCHES. Playwright passes its own environment to every webServer it spawns,
-    // so setting them here is how they reach the app server: `announce` makes the closing turn speak
-    // the endpoint's follow-up remark, and the stand-in text is what the run-end narrator says. Both
-    // are read by `server/index.ts` when it assembles a connection's seams.
+    // so setting them here is how they reach the app server: `announce` arms the narrator's announce
+    // path — since `a2c2e8139` the remark is spoken at `speech_stopped` as `announce-early-<seq>`
+    // from the fixed phrase table, while the endpoint's follow-up text (below) is the suppressed
+    // closing-turn trigger — and the stand-in text is what the run-end narrator says. Both are read
+    // by `server/index.ts` when it assembles a connection's seams.
     VOICE_REALTIME_CLOSING_TURN: 'announce',
     VOICE_REALTIME_SUMMARY_STANDIN: SUMMARY_TEXT,
     // THE SCRIPTED TTS STAND-IN (AC-408). The server assembles the narrator's TTS leaf from these:

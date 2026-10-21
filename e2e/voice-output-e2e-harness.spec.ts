@@ -25,12 +25,16 @@
  *       framed and sent as `tts_audio`/`tts_done`, and the real page decodes and plays them before
  *       answering `narrator_done`. The cloud synth (AC-405) is the same leaf against DashScope;
  *       this leg proves the downlink wiring, not the provider's audio quality.
- *     · the model's follow-up remark and the run-end summary are the harness's own sentences: the
- *       scripted endpoint says the announce text after each delivered `session_send`, and the app
- *       server runs with `VOICE_REALTIME_CLOSING_TURN=announce` plus a summary stand-in, so the
- *       narrator's WHOLE production path (gate → queue → `narrator_speak`) is exercised without a
- *       side text model. The run-end transition is real: the armed scenario ends each turn two
- *       seconds after it opens, and the proxy's own host poll observes that end.
+ *     · the announce and the run-end summary are the harness's own sentences. Since
+ *       `a2c2e8139` the announce is spoken EARLY: the endpoint's `speech_stopped` is the trigger,
+ *       the proxy enqueues `announce-early-<seq>` with the connection's rotating phrase table
+ *       (`ANNOUNCE_PHRASES`), and the model's closing-turn follow-up — the scripted endpoint's own
+ *       sentence after a delivered `session_send` — is suppressed inside the 3 s window and never
+ *       reaches the page or the TTS leaf. The app server still runs with
+ *       `VOICE_REALTIME_CLOSING_TURN=announce` plus a summary stand-in, so the narrator's WHOLE
+ *       production path (trigger → queue → `narrator_speak`) is exercised without a side text
+ *       model. The run-end transition is real: the armed scenario ends each turn two seconds after
+ *       it opens, and the proxy's own host poll observes that end.
  *
  * WHY THIS FILE IS UNDER `e2e/`. `playwright.config.ts` has `testDir: './e2e'` and a closed list of
  * spec basenames that arm the scripted endpoint, the debug-agent fixture home and continuous mode.
@@ -98,13 +102,14 @@ if (PLAN.version !== 1 || PLAN.expectedTranscripts.length !== PLAN.vad.expectedU
 }
 
 /**
- * The two sentences the narrator is expected to say, published by `run.mjs` beside the plan.
+ * The narrator's expected sentences, published by `run.mjs` beside the plan.
  *
- * The ANNOUNCE sentence is the connection's FIRST fixed phrase: since
- * `gap-narrator-announce-phrase-cache` the proxy ignores the model's follow-up wording and speaks
- * `pickAnnouncePhrase(0)` instead, so that is what the page must receive. The endpoint's own
- * follow-up text (`VOICE_E2E_ANNOUNCE_TEXT`) is only the TRIGGER here and is asserted NOT to cross
- * the wire below. The summary text is what the app server's stand-in producer returns.
+ * THE ANNOUNCE IS EARLY AND ROTATES. `a2c2e8139` moved it from the model's closing turn to the
+ * endpoint's `speech_stopped`: every closed turn gets `announce-early-<seq>` carrying
+ * `pickAnnouncePhraseFrom(table, seq)`, so the page must receive the whole table in rotation
+ * (`ANNOUNCE_PHRASES[0]` is only the FIRST one, `announce-early-0`). The model's closing-turn
+ * follow-up text (`VOICE_E2E_ANNOUNCE_TEXT`) is now a suppressed trigger and is asserted NOT to
+ * cross the wire below. The summary text is what the app server's stand-in producer returns.
  */
 const MODEL_FOLLOW_UP = process.env.VOICE_E2E_ANNOUNCE_TEXT;
 const SUMMARY_TEXT = process.env.VOICE_E2E_SUMMARY_TEXT;
@@ -115,6 +120,22 @@ if (!MODEL_FOLLOW_UP || !SUMMARY_TEXT) {
   );
 }
 const ANNOUNCE_TEXT = ANNOUNCE_PHRASES[0]!;
+/**
+ * The id family the CURRENT announce producer emits, and the sequence its id carries.
+ *
+ * `announce-early-<seq>` is minted at the endpoint's `speech_stopped`
+ * (`voice-realtime-ws-proxy.service.ts`, the `onUpstreamTurn` close branch); `seq` starts at 0 and
+ * rotates the phrase table. This is a pin on the producer, not a cosmetic rename: the previous
+ * `announce-<seq>` family belongs to the retired closing-turn path.
+ */
+const EARLY_ANNOUNCE_ID = /^announce-early-\d+$/;
+const earlyAnnounceSeq = (utteranceId: string): number =>
+  Number(utteranceId.slice('announce-early-'.length));
+/** Every early announce in arrival order, oldest sequence first. */
+const earlyAnnouncesOf = (readings: readonly NarratorTtsReading[]): NarratorTtsReading[] =>
+  readings
+    .filter((reading) => EARLY_ANNOUNCE_ID.test(reading.utteranceId))
+    .sort((left, right) => earlyAnnounceSeq(left.utteranceId) - earlyAnnounceSeq(right.utteranceId));
 
 /**
  * The scripted TTS stand-in's port and the voice the app server was started with.
@@ -437,8 +458,15 @@ type NarratorTtsReading = {
   ackedAtMs: number | null;
   /** The first AudioContext source the page started after this utterance's header arrived. */
   firstStartAtMs: number | null;
-  /** The page's own final caption before this narration — the end of the speech it answers. */
-  speechEndAtMs: number | null;
+  /**
+   * The page's first final caption at/after this narration's `narrator_speak`.
+   *
+   * For the EARLY announce this is the transcription of the very speech it acknowledges: the
+   * announce is emitted at the endpoint's `speech_stopped`, a few ms before the final caption lands
+   * (measured 2–4 ms on the frozen sample). The old closing-turn announce followed a caption; the
+   * timing criterion therefore reads the caption on the far side of the frame now.
+   */
+  closingCaptionAtMs: number | null;
 };
 
 function readNarratorTts(
@@ -462,7 +490,7 @@ function readNarratorTts(
         errorCode: null,
         ackedAtMs: null,
         firstStartAtMs: null,
-        speechEndAtMs: null,
+        closingCaptionAtMs: null,
       };
       readings.set(utteranceId, reading);
     }
@@ -504,8 +532,10 @@ function readNarratorTts(
       reading.firstStartAtMs =
         sourceStarts.find((at) => at >= reading.firstAudioAtMs! && at <= upper) ?? null;
     }
-    const before = captionFinals.filter((at) => at <= reading.speakAtMs);
-    reading.speechEndAtMs = before.length === 0 ? null : before[before.length - 1]!;
+    // The final caption that closes the speech this narration answers. The early announce fires at
+    // `speech_stopped`, BEFORE its utterance's caption reaches this page, so the first caption at or
+    // after the speech frame is the correct reference (a later caption belongs to the next turn).
+    reading.closingCaptionAtMs = captionFinals.find((at) => at >= reading.speakAtMs) ?? null;
   }
   return [...readings.values()];
 }
@@ -607,11 +637,11 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     // The CosyVoice HTTP stand-in the app server's TTS leaf dials. Started here, before any page
     // connects, so the first announce remark's synthesis never races a missing listener.
     const scriptedTts = await startScriptedTts(TTS_PORT);
-    // The model's follow-up remark on a delivered `session_send`. Armed HERE, beside the detector,
-    // because the two are the two halves of the same reply: the detector closes the utterance and
-    // calls `session_send`, and the transport's synthesized resume opens the response this text
-    // answers. The app server runs with `VOICE_REALTIME_CLOSING_TURN=announce`, so the proxy's gate
-    // turns this sentence into a narration rather than swallowing it as display-only.
+    // The model's closing-turn follow-up on a delivered `session_send`. Since `a2c2e8139` this
+    // sentence is a TRIGGER the proxy suppresses: the announce was already spoken at the endpoint's
+    // `speech_stopped` (`announce-early-<seq>`), and the closing turn lands inside the 3 s window,
+    // so this text must never reach the page or the TTS leaf (asserted below). It is still armed
+    // because a suppression that stopped being exercised would pass by silence.
     upstream.armFollowUpText(MODEL_FOLLOW_UP);
     upstream.armVad({
       timeBase: PLAN.vad.timeBase,
@@ -896,17 +926,20 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         await page.waitForTimeout(250);
       }
 
-      // ── the narrator's two automatic outputs, through TTS ────────────────────────────────────
-      // 1. The announce remark follows a delivered message: the closing turn's follow-up text on
-      //    the resumed response, which the proxy's announce gate routes into the narrator queue.
+      // ── the narrator's automatic outputs, through TTS ────────────────────────────────────────
+      // 1. ONE EARLY ANNOUNCE PER CLOSED TURN. The endpoint's `speech_stopped` is the trigger
+      //    (`a2c2e8139`): the proxy enqueues `announce-early-<seq>` with the rotating phrase table
+      //    and suppresses the closing turn's follow-up text inside the 3 s window. The frozen
+      //    sample carries four utterances, so FOUR announces — plus the summary — are expected.
       // 2. The run-end summary. Every delivered message opens a walk of its own and the armed deck
       //    ends each turn two seconds in, so the transition is a real `running → idle` the proxy's
       //    host poll observes; the 400 ms settle and the stand-in producer's answer follow it.
       //
-      // BOTH ARE WAITED FOR AS COMPLETE TTS UTTERANCES — the text frame, every audio slice, the
-      // `tts_done` reading AND the page's own `narrator_done` — because the queue is PACED: the
-      // second sentence is only sent after the first has PLAYED. A wait on the text frame alone
-      // would be satisfied before the leg this criterion exists for had run.
+      // EVERY ANNOUNCE IS WAITED FOR AS A COMPLETE TTS UTTERANCE (the text frame, every audio
+      // slice, the `tts_done` reading), and the summary additionally for the page's own
+      // `narrator_done`, because the queue is PACED. Only SOME announces are acked: user speech
+      // clears the queue between turns (AC-406 duplex), which is intent, not a defect — so the ack
+      // requirement is "at least one announce and the summary", never "each announce".
       let narratorFrames: VoiceFrameEntry[] = [];
       let narratorSentFrames: VoiceFrameEntry[] = [];
       let narratorSpeaks = await readNarratorSpeaks(page);
@@ -921,12 +954,12 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
           () => ((window as unknown as { __narratorStarts?: number[] }).__narratorStarts ?? []).slice(),
         );
         narratorTts = readNarratorTts(narratorFrames, narratorSentFrames, narratorStarts);
-        const announce = narratorTts.find((reading) => reading.text === ANNOUNCE_TEXT);
+        const announces = earlyAnnouncesOf(narratorTts);
         const summary = narratorTts.find((reading) => reading.text === SUMMARY_TEXT);
         if (
-          announce !== undefined &&
-          announce.doneAtMs !== null &&
-          announce.ackedAtMs !== null &&
+          announces.length >= PLAN.vad.expectedUtterances &&
+          announces.every((reading) => reading.doneAtMs !== null) &&
+          announces.some((reading) => reading.ackedAtMs !== null) &&
           summary !== undefined &&
           summary.doneAtMs !== null &&
           summary.ackedAtMs !== null
@@ -1068,19 +1101,38 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     expect(run.voiceOutput.durationSec, 'the browser must have decoded the delivered audio').toBeGreaterThan(0.5);
   });
 
-  test('the announce closing turn reached the browser as narrator speech', () => {
+  test('every closed turn reached the browser as an early announce at speech_stopped', () => {
     const speaks = run.narrator.speaks;
-    const announce = speaks.find((speak) => speak.text === ANNOUNCE_TEXT);
+    const announces = speaks
+      .filter((speak) => EARLY_ANNOUNCE_ID.test(speak.utteranceId))
+      .sort((left, right) => earlyAnnounceSeq(left.utteranceId) - earlyAnnounceSeq(right.utteranceId));
     expect(
-      announce,
+      announces.map((announce) => announce.utteranceId),
       `the narrator frames were ${JSON.stringify(speaks.map((speak) => speak.text))}`,
-    ).toBeDefined();
-    // The frame's own readings, not the constants': the AC is about what crossed the socket.
-    const text = announce!.text.trim();
-    expect([...text].length, `the announcement was ${JSON.stringify(text)}`).toBeLessThanOrEqual(15);
-    expect(normalize(text), 'the announcement must not be the old one-word "OK"').not.toBe('ok');
-    expect(text, 'the announcement must be the announce producer\'s, not a summary').not.toBe(SUMMARY_TEXT.trim());
-    expect(announce!.utteranceId).toMatch(/^announce-\d+$/);
+    ).toEqual(
+      [...Array(PLAN.vad.expectedUtterances).keys()].map((seq) => `announce-early-${seq}`),
+    );
+    // The reading this criterion exists for: one announce per closed turn, not a single closing-turn
+    // remark. The detector count and the plan's own expectation are two independent sources.
+    expect(announces.length, 'one early announce per closed turn').toBe(PLAN.vad.expectedUtterances);
+    expect(announces.length, 'the early announce count matches the detector').toBe(run.detector.speechStopped);
+
+    for (const announce of announces) {
+      // The frame's own readings, not the constants': the AC is about what crossed the socket.
+      const text = announce.text.trim();
+      const seq = earlyAnnounceSeq(announce.utteranceId);
+      expect([...text].length, `the announcement was ${JSON.stringify(text)}`).toBeLessThanOrEqual(15);
+      expect(normalize(text), 'the announcement must not be the old one-word "OK"').not.toBe('ok');
+      expect(text, 'the announcement must be the announce producer\'s, not a summary').not.toBe(SUMMARY_TEXT.trim());
+      expect(ANNOUNCE_PHRASES, `the announcement was ${JSON.stringify(text)}`).toContain(text);
+      // ROTATION: the sequence in the id is the phrase table's index, so the page heard the table in
+      // order rather than one repeated sentence.
+      expect(text, `announce-early-${seq} must speak the table's entry ${seq}`).toBe(
+        ANNOUNCE_PHRASES[seq % ANNOUNCE_PHRASES.length],
+      );
+    }
+    // The first closed turn's phrase is what the pinned constant names.
+    expect(announces[0]!.text.trim()).toBe(ANNOUNCE_TEXT);
   });
 
   test('the run-end summary reached the browser as narrator speech', () => {
@@ -1099,16 +1151,19 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
   });
 
   test('the narrator speech was synthesized and streamed as ordered tts_audio frames', () => {
-    const announce = run.narrator.tts.find((reading) => reading.text === ANNOUNCE_TEXT);
+    const announces = earlyAnnouncesOf(run.narrator.tts);
     const summary = run.narrator.tts.find((reading) => reading.text === SUMMARY_TEXT);
     const readings = run.narrator.tts.map((reading) => ({ id: reading.utteranceId, text: reading.text }));
-    expect(announce, `narrator tts readings were ${JSON.stringify(readings)}`).toBeDefined();
+    expect(announces.length, `narrator tts readings were ${JSON.stringify(readings)}`).toBe(
+      PLAN.vad.expectedUtterances,
+    );
     expect(summary, `narrator tts readings were ${JSON.stringify(readings)}`).toBeDefined();
 
-    for (const [label, reading] of [
-      ['announce', announce!],
-      ['summary', summary!],
-    ] as const) {
+    const narrated: Array<readonly [string, NarratorTtsReading]> = [
+      ...announces.map((reading) => [reading.utteranceId, reading] as const),
+      ['summary', summary!] as const,
+    ];
+    for (const [label, reading] of narrated) {
       // A NAMED refusal is red here: the whole point of the downlink is that a sentence the queue
       // accepted is actually spoken, and `tts_error` is the leaf's honest alternative to audio.
       expect(reading.errorCode, `${label}: tts_error ${reading.errorCode ?? ''}`).toBeNull();
@@ -1123,7 +1178,9 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     // frames carried words but whose TTS request body carried something else would pass the frame
     // assertions alone, which is exactly the wire this AC is about.
     const synthesized = run.narrator.requests.map((request) => request.text);
-    expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(ANNOUNCE_TEXT);
+    for (const announce of announces) {
+      expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(announce.text);
+    }
     expect(synthesized, `synthesis requests were ${JSON.stringify(synthesized)}`).toContain(SUMMARY_TEXT);
     // THE PHRASE CACHE'S READING: the announce sentence was synthesized during WARM-UP (the fixed
     // table is pre-synthesized when the connection opens), and the model's follow-up wording — the
@@ -1142,9 +1199,9 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
   });
 
   test('the browser played each narration and its narrator_done advanced the queue', () => {
-    const announce = run.narrator.tts.find((reading) => reading.text === ANNOUNCE_TEXT);
+    const announces = earlyAnnouncesOf(run.narrator.tts);
     const summary = run.narrator.tts.find((reading) => reading.text === SUMMARY_TEXT);
-    expect(announce, 'the announce utterance must exist').toBeDefined();
+    expect(announces.length, 'the early announce utterances must exist').toBe(PLAN.vad.expectedUtterances);
     expect(summary, 'the run-end summary utterance must exist').toBeDefined();
 
     // PLAYBACK, not mere receipt: the page scheduled the narrator's PCM on an AudioContext (the
@@ -1154,17 +1211,26 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       `narrator playback records were ${JSON.stringify({ starts: run.narrator.starts, tts: run.narrator.tts })}`,
     ).toBeGreaterThan(0);
 
+    // THE DUPLEX INTENT (AC-406): user speech clears the narrator queue, so an announce that lands
+    // while the next turn is already open is dropped WITHOUT an ack. The ack reading is therefore
+    // "at least one announce, and the summary" — requiring every announce to be acked would pin the
+    // opposite of the interruption behaviour the product is supposed to have.
+    const acked = announces.find((reading) => reading.ackedAtMs !== null);
+    expect(
+      acked,
+      `no early announce was acked; acks were ${JSON.stringify(announces.map((reading) => reading.ackedAtMs))}`,
+    ).toBeDefined();
+    expect(summary!.ackedAtMs, 'the summary narration must be acked by the page').not.toBeNull();
+
     // The ack is the page's own, sent from its playback completion handler — and sent AFTER the
     // audio stream closed. An ack raced on `narrator_speak` (the old harness tap) fails this.
-    expect(announce!.ackedAtMs, 'the announce narration must be acked by the page').not.toBeNull();
-    expect(summary!.ackedAtMs, 'the summary narration must be acked by the page').not.toBeNull();
-    expect(announce!.ackedAtMs!, 'the announce ack must follow its tts_done').toBeGreaterThan(announce!.doneAtMs!);
+    expect(acked!.ackedAtMs!, 'the announce ack must follow its tts_done').toBeGreaterThan(acked!.doneAtMs!);
     expect(summary!.ackedAtMs!, 'the summary ack must follow its tts_done').toBeGreaterThan(summary!.doneAtMs!);
 
-    // THE QUEUE ADVANCED: another narration started only after the announce's playback ack. This is
-    // the reading that says the ack is load-bearing — with no ack (or with it ignored), the summary
-    // would sit behind the announce forever and the second frame would never be emitted.
-    const later = run.narrator.tts.filter((reading) => reading.speakAtMs > announce!.ackedAtMs!);
+    // THE QUEUE ADVANCED: another narration started only after the acked announce's playback ack.
+    // This is the reading that says the ack is load-bearing — with no ack (or with it ignored), the
+    // next sentence would sit behind that announce forever and never be emitted.
+    const later = run.narrator.tts.filter((reading) => reading.speakAtMs > acked!.ackedAtMs!);
     expect(
       later.map((reading) => reading.text),
       `utterances after the announce ack: ${JSON.stringify(later.map((reading) => reading.text))}`,
@@ -1172,8 +1238,8 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
   });
 
   test('the first narrator audio started BEFORE tts_done, and within the speech-end budget', () => {
-    const announce = run.narrator.tts.find((reading) => reading.text === ANNOUNCE_TEXT);
-    expect(announce, 'the announce utterance must exist').toBeDefined();
+    const announce = earlyAnnouncesOf(run.narrator.tts)[0];
+    expect(announce, 'the first early announce utterance must exist').toBeDefined();
 
     // THE STREAMING CRITERION: the first scheduled source precedes the utterance's completion.
     expect(announce!.firstAudioAtMs, 'the announce must have delivered at least one tts_audio frame').not.toBeNull();
@@ -1185,21 +1251,25 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
     ).toBeLessThan(announce!.doneAtMs!);
 
     // THE DoD'S BUDGET: from the end of the speech the narration answers to the first source.
-    // `speechEndAtMs` is the page's own final caption for that utterance.
-    expect(announce!.speechEndAtMs, 'the announce must follow a final caption on this page').not.toBeNull();
+    // THE EARLY ANNOUNCE SPEAKS BEFORE ITS CAPTION: the trigger is the endpoint's `speech_stopped`,
+    // and the page's final caption for that same utterance lands a few ms LATER (measured 2–4 ms on
+    // the frozen sample). `closingCaptionAtMs` is that caption — the page's own reading of the
+    // speech's end — so the budget is measured against the transcription this announce anticipates,
+    // not against a caption from the previous turn.
+    expect(announce!.closingCaptionAtMs, 'the announce must be paired with its closing caption').not.toBeNull();
     expect(
-      announce!.firstStartAtMs! - announce!.speechEndAtMs!,
-      `speechEnd=${announce!.speechEndAtMs} firstAudio=${announce!.firstAudioAtMs} ` +
+      announce!.firstStartAtMs! - announce!.closingCaptionAtMs!,
+      `closingCaption=${announce!.closingCaptionAtMs} firstAudio=${announce!.firstAudioAtMs} ` +
         `firstStart=${announce!.firstStartAtMs} done=${announce!.doneAtMs}`,
     ).toBeLessThan(1200);
 
     // The timing table the DoD asks the Notes to carry.
     console.log(
-      `narrator first-frame timing: speechEnd=${new Date(announce!.speechEndAtMs!).toISOString()} ` +
+      `narrator first-frame timing: closingCaption=${new Date(announce!.closingCaptionAtMs!).toISOString()} ` +
         `firstAudio=${new Date(announce!.firstAudioAtMs!).toISOString()} ` +
         `firstStart=${new Date(announce!.firstStartAtMs!).toISOString()} ` +
         `ttsDone=${new Date(announce!.doneAtMs!).toISOString()} ` +
-        `speechEndToStartMs=${announce!.firstStartAtMs! - announce!.speechEndAtMs!} ` +
+        `closingCaptionToStartMs=${announce!.firstStartAtMs! - announce!.closingCaptionAtMs!} ` +
         `firstAudioToStartMs=${announce!.firstStartAtMs! - announce!.firstAudioAtMs!}`,
     );
   });

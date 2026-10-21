@@ -2,7 +2,7 @@
 id: gap-ac408-harness-pin-early-announce-id-family
 title: AC-408 e2e 判据仍钉已退役的 announce id 族（/^announce-\d+$/）：a2c2e8139 把 announce
   前移到 speech_stopped 并改用 announce-early-N 后整条判据红；把判据对齐当前生产者并清掉串行模式藏起的后续红
-status: ready
+status: done
 labels:
   - gap
   - defect
