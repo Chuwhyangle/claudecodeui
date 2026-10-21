@@ -37,6 +37,17 @@ extra: {}
 - src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/architecture-overview-adaptive-directory-grouping.md
 
+## Evidence
+
+2026-10-22 续做轮（复用既有 worktree，分支实现 commit 48e1164；本轮另把 develop 合入分支）：
+
+- `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` → 8/8 passed，exit 0
+- `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → 27/27 passed，exit 0
+- `npm run typecheck` → exit 0
+- `npm run build` → exit 0
+- anti-drift Touches check → OK（5 个实际文件均在声明的 Touches 内）
+- DoD 的真机会话视觉复核未在本轮执行：需要运行中的应用与真实 quay 会话，本轮只做到自动化判据全绿。
+
 ## Blocker
 
 **2026-10-21T23:08:15.016Z — worker 未落地（exited-not-landed）**
