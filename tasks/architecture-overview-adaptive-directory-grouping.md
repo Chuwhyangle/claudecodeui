@@ -1,7 +1,7 @@
 ---
 id: architecture-overview-adaptive-directory-grouping
 title: Overview 按目录层自适应分组：叶子目录成一个带计数的组，组数不超过上限
-status: ready
+status: done
 labels:
   - feature
 parent: null
