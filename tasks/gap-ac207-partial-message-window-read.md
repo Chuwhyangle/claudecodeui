@@ -35,9 +35,9 @@ expect(received).toEqual(expected) // deep equality
 
 **机制（从落盘 trace 逐条读出的链，不是猜测）。**
 1. fixture 共 24 条消息：1 条 user prompt + 第一段 7 + 1 条 text + 第二段 8 + 1 条 text + 第三段 5 + 1 条 text（`playwright.config.ts:2099` 的 `seedWorkSegmentTranscript`）。
-2. 客户端首屏按 `SESSION_MESSAGES_PAGE_SIZE = 20` 取最新一页（`src/modules/chat/utils/session/sessionMessagePagination.ts:3`，`useChatSessionState.ts:629/1678`）。失败运行的 network trace 里逐字可见 `GET /api/providers/sessions/e2e-work-segment/messages?limit=20&offset=0 → 200`，随后 `GET …/messages?limit=50&offset=20 → -1`（**未完成**）——Older 页在读数时仍在飞。
+2. 客户端首屏按 `SESSION_MESSAGES_PAGE_SIZE = 20` 取最新一页（`src/modules/chat/utils/session/sessionMessagePagination.ts:3`，`useChatSessionState.ts:629/1678`）。失败运行的 network trace 里逐字可见 `GET /api/providers/sessions/e2e-work-segment/messages?limit=20&offset=0 → 200`，随后 `GET …/messages?limit=50&offset=20 → -1`（**未完成**）——older 页在读数时仍在飞。
 3. 24 取最新 20 ⇒ 丢掉最早的 4 条（prompt + 第一段前 3 个成员）⇒ 第一段只剩 4 个成员；collapsed 画面 = 3 个段头 + 3 条 text = **6 行 / 329px**。
-4. Older 页落地后补齐为 4 条 text + 3 个段头 = 7 行 / 410px，第一段恢复 7 个成员。
+4. older 页落地后补齐为 4 条 text + 3 个段头 = 7 行 / 410px，第一段恢复 7 个成员。
 5. 读数 (i) 是**上界**断言（`< ROW_LIMIT` / `< PX_LIMIT`），窗口没载满反而更容易通过；进入读数的条件只有「第一行 `.chat-message` 可见」＋ `settledDensity` 两次采样相同（`e2e/transcript-work-segments.spec.ts:229-232`），完全不判别 fixture 是否已整份在屏。红最终落在嵌入的 AC-208 标题读数（`:255-260` 的 `toEqual([5,7,8])`）只是因为它恰好是等值断言。⇒ **读数 (i) 的真空绿是本条的根因；标题读数是症状。**
 
 **为什么上一次的修法没兜住。** 8486f354 修的是「全展开正控制在 Vite 整页重载后首段塌回折叠」，它用 `settledDensityWithEverySegment` 把**正控制**的段头状态在读数文档上重建；但最初两个读数（`:232` 的 `collapsed` 与 `:255` 的 `readSegmentTitles`）仍发生在「第一行可见」之后立刻。上一次修的是「跨重载保住展开态」，本条缺的是「夹具的消息窗口已载满」——两条不同的起点条件，所以上一次的修法对它无效。
@@ -54,7 +54,7 @@ expect(received).toEqual(expected) // deep equality
 - [ ] AC4 稳定绿（承重）：安静态 `npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"` 连续 ≥5 次 exit 0；每次落盘 `collapsed` 与 `expanded` 读数，collapsed 每次为 7 行/≈410px（6/329 的形态不再出现），expanded 每次 ≥24 行。5 次读数逐条入 Evidence。
 - [ ] AC5 两条假形态仍红（承重）：(a) `groupWorkSegments` 首行 `return messages;`（一行一块）⇒ 读数 (i) 红；(b) 关掉 `ChatMessagesPane.tsx` 的搜索命中自动展开 ⇒ 读数 (ii) 红。逐条记录变异 diff、逐字失败行，`git checkout -- <file>` 恢复后判据复绿。
 - [ ] AC6 静态门：`npm run typecheck` 与 `npm run lint` 均 exit 0（只改 spec 也要跑）。
-- [ ] AC7 台账翻转：合入 develop 后由驱动重跑判据，AC-207 的 goal acceptance 连续 ≥2 轮 pass，台账尾不再是 fail（待外部）。
+- [ ] AC7 台账翻转：合入 develop 后由驱动重跑判据，AC-207 的 goal acceptance 连续 ≥2 轮 pass，台账尾不再是 fail（待外部）
 
 ## DoD
 
