@@ -7,6 +7,8 @@ labels:
 parent: null
 children: []
 extra: {}
+depends_on:
+  - architecture-renderer-contract
 ---
 ## Proposal
 
