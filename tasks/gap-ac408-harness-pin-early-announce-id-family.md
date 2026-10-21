@@ -2,7 +2,7 @@
 id: gap-ac408-harness-pin-early-announce-id-family
 title: AC-408 e2e 判据仍钉已退役的 announce id 族（/^announce-\d+$/）：a2c2e8139 把 announce
   前移到 speech_stopped 并改用 announce-early-N 后整条判据红；把判据对齐当前生产者并清掉串行模式藏起的后续红
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -60,10 +60,10 @@ AC-408 是一条「边界形状」判据：它不仅要求 announce 经 TTS 出�
 
 ## AC
 
-- [ ] **AC1 判据命令（台账逐字命令）整文件转绿**：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 退出码 0，日志含 `[voice-e2e] RESULT: PASS (exit 0)`，且 Playwright 汇总为 `9 passed`（不得出现 `did not run`）。取假形态：把 announce 断言改回 `/^announce-\d+$/` 时该命令必红在 `Received string: "announce-early-0"`。
-- [ ] **AC2 判据钉的是当前生产者，而不是旧族或空断言**：`grep -qF '/^announce-early-\d+$/' e2e/voice-output-e2e-harness.spec.ts` 退出 0，且 `! grep -qF '/^announce-\d+$/' e2e/voice-output-e2e-harness.spec.ts` 退出 0。取假形态：文件仍只含旧族字面量时第一条必红；把 id 断言整体删成宽松断言时第一条也必红。
-- [ ] **AC3 dump 直接读到 AC 的 (b)(c)(d)**：先跑 `node experiments/voice-e2e-harness/run.mjs --sample 402fad85 --dump /tmp/ac408-dump.json`（退出码 0），再用 `node -e` 读该 dump 并断言：(i) 存在 `utteranceId` 匹配 `/^announce-early-\d+$/` 且 `text === "好的"` 的 announce；(ii) 存在 `utteranceId` 匹配 `/^run-end-summary-\d+$/` 的 summary；(iii) 两者 `errorCode === null`、`seqs` 等于 `[0,1,2]`、`doneBytes === 48044`、`ackedAtMs > doneAtMs`；且 (iv) 全部 early announce 条数 = `detector.speechStopped` = `PLAN.vad.expectedUtterances`，每条 `errorCode === null` 且 `seqs` 从 0 连续。总退出码 0。取假形态：TTS 下行不接时 `narrator.tts` 没有 audio 帧/`doneBytes`，必红。
-- [ ] **AC4 仓库类型检查不回归**：`npm run typecheck` 退出码 0。
+- [x] **AC1 判据命令（台账逐字命令）整文件转绿**：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 退出码 0，日志含 `[voice-e2e] RESULT: PASS (exit 0)`，且 Playwright 汇总为 `9 passed`（不得出现 `did not run`）。取假形态：把 announce 断言改回 `/^announce-\d+$/` 时该命令必红在 `Received string: "announce-early-0"`。
+- [x] **AC2 判据钉的是当前生产者，而不是旧族或空断言**：`grep -qF '/^announce-early-\d+$/' e2e/voice-output-e2e-harness.spec.ts` 退出 0，且 `! grep -qF '/^announce-\d+$/' e2e/voice-output-e2e-harness.spec.ts` 退出 0。取假形态：文件仍只含旧族字面量时第一条必红；把 id 断言整体删成宽松断言时第一条也必红。
+- [x] **AC3 dump 直接读到 AC 的 (b)(c)(d)**：先跑 `node experiments/voice-e2e-harness/run.mjs --sample 402fad85 --dump /tmp/ac408-dump.json`（退出码 0），再用 `node -e` 读该 dump 并断言：(i) 存在 `utteranceId` 匹配 `/^announce-early-\d+$/` 且 `text === "好的"` 的 announce；(ii) 存在 `utteranceId` 匹配 `/^run-end-summary-\d+$/` 的 summary；(iii) 两者 `errorCode === null`、`seqs` 等于 `[0,1,2]`、`doneBytes === 48044`、`ackedAtMs > doneAtMs`；且 (iv) 全部 early announce 条数 = `detector.speechStopped` = `PLAN.vad.expectedUtterances`，每条 `errorCode === null` 且 `seqs` 从 0 连续。总退出码 0。取假形态：TTS 下行不接时 `narrator.tts` 没有 audio 帧/`doneBytes`，必红。
+- [x] **AC4 仓库类型检查不回归**：`npm run typecheck` 退出码 0。
 
 ## DoD
 
