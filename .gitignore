@@ -62,6 +62,10 @@ coverage/
 
 # Dependency directories
 jspm_packages/
+# Python virtual environments — a nested experiment dir (…/worst-cases-replay/.venv,
+# ~34k files) otherwise blows the Files tab's 10,000-entry file-tree budget, because
+# the file-tree service only reads this root .gitignore and does not hard-exclude .venv.
+.venv/
 
 # Optional npm cache directory
 .npm
