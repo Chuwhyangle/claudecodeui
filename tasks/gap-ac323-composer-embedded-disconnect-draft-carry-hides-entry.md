@@ -188,10 +188,17 @@ $ grep -n "getByTestId('live-voice-button')" e2e/voice-realtime-composer-embedde
 }
 ```
 
-非 `--dry-run` 同命令（real 2m42.163s）：`"verdict": "pass"`、`"cause": null`、`"timestamp": "2026-10-21T01:15:03.214Z"`，GateEvent 落到该 root 的 `.quay/gate-events.jsonl`（该目录按 `.gitignore` 是运行态，不随分支落地；`evaluationRoot` = 本工作树、`treeSha` = `9da8ad0a…` = 合并 develop 后的 `HEAD^{tree}`）。AC-323 记录本身未改（`git diff -- goals/` 为空），记录已 `achieved`。
+非 `--dry-run` 同命令：`"verdict": "pass"`、`"cause": null`，GateEvent 落到该 root 的 `.quay/gate-events.jsonl`（该目录按 `.gitignore` 是运行态，不随分支落地；`evaluationRoot` = 本工作树）。跑了两次，第二次是**最终要落地的树**：
+
+| 次 | 时刻 | `treeSha` | wall |
+|---|---|---|---|
+| 合并 develop `bf4a8896` 后 | 2026-10-21T01:15:03.214Z | `9da8ad0a70174d99c715433ffac225727bc58edb` | 2m42.163s |
+| 合并 develop `d6696a50f` 后（**最终 HEAD**） | 2026-10-21T01:19:04.165Z | `cdfc4b32a4c7b76661b7c5498e6b82cf946d901a` | 2m39.363s |
+
+两次都 `verdict: "pass"`、`cause: null`、`timeoutMs: 200000`。AC-323 记录本身未改（`git diff -- goals/` 为空），记录已 `achieved`。
 
 三段串行实测墙钟：CMD1 2m9.147s + CMD2 5.2s + CMD3 26.4s = **160.7s**；`ceil(160.7 × 1.2) = 193s ≤ 200000ms` ⇒ 不抬 `timeoutMs`。
 
 ### 9. 边界
 
-`git diff --stat develop..HEAD` = `e2e/voice-realtime-composer-embedded.spec.ts` + `playwright.config.ts`；`git diff --exit-code develop..HEAD -- src/ server/ goals/` 为空。`handleVoiceExit` / `submitIsVoice` / 草稿交接契约一字未动（`fad808b04`、`9ccdc6eb7` 的 2026-10-14 裁定），既有断言、`SPEECH_SECONDS` / `SEND_WAIT_SECONDS`、`criterion` / `expect` 均未改。
+`git diff --stat develop..HEAD` = `e2e/voice-realtime-composer-embedded.spec.ts` + `playwright.config.ts`；`git diff --exit-code develop..HEAD -- src/ server/ goals/` 为空（develop 期间又落了两批提交——`bf4a8896`、`d6696a50f`——本工作树已 `merge develop` 两次，它们只带来 develop 自己的改动与本任务自己的 task 文件）。`handleVoiceExit` / `submitIsVoice` / 草稿交接契约一字未动（`fad808b04`、`9ccdc6eb7` 的 2026-10-14 裁定），既有断言、`SPEECH_SECONDS` / `SEND_WAIT_SECONDS`、`criterion` / `expect` 均未改。
