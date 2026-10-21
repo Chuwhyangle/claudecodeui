@@ -137,3 +137,11 @@ Received:    43937
 - `.gitignore`（忽略 `/server/.quay-e2e-build/` 构建产物）
 - `e2e/activity-dock-background.spec.ts`（判据本体；只在确有必要时改读侧，读数与上限不动）
 - `tasks/gap-ac194-criterion-pretest-boot-inflation.md`（自触）
+
+## Blocker
+
+**2026-10-21T03:28:44.270Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/resident-legacy-path-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: [ac393-ratchet] supersedeRunning increased: baseline=3 actual=5 cap=3.
+- run_id：wk-prod-anchor
+- session_id：7c9410a0-10f7-4f01-992d-2b9ff860da18
