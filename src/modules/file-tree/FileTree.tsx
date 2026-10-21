@@ -57,7 +57,7 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
   const { expandedDirs, toggleDirectory, expandDirectories, collapseAll } = useExpandedDirectories();
   const { searchQuery, setSearchQuery, filteredFiles } = useFileTreeSearch({
     files,
-    expandDirectories,
+    projectId: selectedProject?.projectId,
   });
 
   // The reveal request already served, so a later tree refresh does not fold

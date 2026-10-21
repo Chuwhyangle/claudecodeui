@@ -40,9 +40,9 @@ import type * as SharedVoiceConfig from '@/shared/voiceConfig';
  * mutation of the shipped hook that reddens it and nothing else.
  */
 
-const { transcribeVoice, getFiles, writeLabels, captureState, saveConfig, recording } = vi.hoisted(() => ({
+const { transcribeVoice, getFileIndex, writeLabels, captureState, saveConfig, recording } = vi.hoisted(() => ({
   transcribeVoice: vi.fn(),
-  getFiles: vi.fn(),
+  getFileIndex: vi.fn(),
   writeLabels: vi.fn(),
   captureState: vi.fn(),
   saveConfig: vi.fn(),
@@ -72,7 +72,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
     // `voice.writeLabels` is the one entry under test; the rest of the voice surface is declared so
     // the whole-module double stays complete rather than because a case reaches it.
     api: {
-      getFiles,
+      getFileIndex,
       voice: { writeLabels, capture: captureState, saveConfig },
     },
     transcribeVoice,
@@ -144,8 +144,12 @@ beforeEach(() => {
 
   // No project names: the repair this composer also runs must not touch the fixture's words, or a
   // case would be reading the repair rather than the label.
-  getFiles.mockReset();
-  getFiles.mockResolvedValue({ ok: true, status: 200, json: async () => [] });
+  getFileIndex.mockReset();
+  getFileIndex.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ files: [], truncated: false }),
+  });
   transcribeVoice.mockReset();
   // A write that succeeds unless the case says otherwise. The hook never inspects the answer — the
   // label is a side channel — so the shape only has to be a resolved promise.

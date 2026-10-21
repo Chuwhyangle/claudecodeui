@@ -417,6 +417,10 @@ export const api = {
     put(`/api/file-tree/projects/${projectId}/file`, { filePath, content }),
   getFiles: (projectId: string, options: ApiRequestOptions = {}) =>
     get(`/api/file-tree/projects/${projectId}/files${query({ respectGitignore: true })}`, options),
+  // Flat `{name, path}[]` index shared by every filename-reference surface. A git
+  // project is served from `git ls-files`, everything else from a bounded walk.
+  getFileIndex: (projectId: string, options: ApiRequestOptions = {}) =>
+    get(`/api/file-tree/projects/${projectId}/files-index`, options),
 
   // File operations
   createFile: (

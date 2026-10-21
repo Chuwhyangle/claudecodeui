@@ -1,41 +1,25 @@
-import { api } from '@/shared/api';
-import { useApiSource } from '@/modules/command-palette/hooks/useApiSource';
+import { useMemo } from 'react';
+
+import { useProjectFileIndex } from '@/modules/file-tree';
 
 export type FileResult = {
   path: string;
   name: string;
 };
 
-type FileNode = {
-  type: 'file' | 'directory';
-  name: string;
-  path: string;
-  children?: FileNode[];
-};
-
 const MAX_FILES = 500;
 
-function flatten(nodes: FileNode[], out: FileResult[]): void {
-  for (const node of nodes) {
-    if (out.length >= MAX_FILES) return;
-    if (node.type === 'file') {
-      out.push({ path: node.path, name: node.name });
-    } else if (node.children && node.children.length > 0) {
-      flatten(node.children, out);
-    }
-  }
-}
-
+/**
+ * The command palette's file source, read from the shared project file index.
+ *
+ * The palette only ever needed the flat `{name, path}` list, which is exactly
+ * what the index publishes — so it joins the same per-project request as the
+ * other reference surfaces instead of fetching and flattening the full tree.
+ */
 export function useFilesSource(projectId: string | undefined, enabled: boolean) {
-  return useApiSource<FileResult, unknown>({
-    enabled: enabled && !!projectId,
-    deps: [projectId],
-    fetcher: (signal) => api.getFiles(projectId!, { signal }),
-    parse: (data) => {
-      const tree: FileNode[] = Array.isArray(data) ? (data as FileNode[]) : [];
-      const flat: FileResult[] = [];
-      flatten(tree, flat);
-      return flat;
-    },
-  });
+  const { files } = useProjectFileIndex(projectId, enabled && !!projectId);
+
+  // The palette keeps its own bound so a very large project cannot push an
+  // unbounded list through the command menu.
+  return useMemo(() => files.slice(0, MAX_FILES), [files]);
 }

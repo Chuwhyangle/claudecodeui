@@ -55,20 +55,85 @@ Received:    43937
 
 ## AC
 
-- [ ] AC1 红态与本轮对照机械入档：`quay-e2e-D7LyT4/.../error-context.md` 的 `# Error details` 逐字入档（`Expected: <= 40000` / `Received: 43937`），落点 `e2e/activity-dock-background.spec.ts:444`；同一 checkout 的静跑对照 exit 0 且自印 `AC-194 wall clock: 21783ms`；写明红那次由 `test.trace` 推导的 pre-test ≈21.5s / beforeAll ≈14.3s / 用例体 ≈8s 与静跑 4.25s / ≈12s / ≈6s。
-- [ ] AC2 boot 分段读数：在复现构造下记录至少两次膨胀运行的 `Running 1 test` 之前分段（npx+config、server 就绪、client 就绪、runner 初始化）与宿主 `load1`，并证明 boot 段 ≥ 静跑的 2 倍（否则构造没复现，换构造再测）。
-- [ ] AC3 杠杆落地：给出被选中杠杆的前后对照（同一构造、同等 `load1` 量级），boot 段可见下降；若选 bundle，入档 bundle 生成耗时、命中/重建判据与 server-root 解析保持方式；`grep` 证明 `goals/AC-194-…md` 的 `criterion:` / `expect:` 与 `e2e/activity-dock-background.spec.ts` 的 40s 断言未被改动。
-- [ ] AC4 同突发下判据达标：修复态在同一并发构造下 ≥2 次运行、出货命令逐字不变、exit 0 且 `AC-194 wall clock ≤ 40000`，入档每次 lane 数、`load1`、boot 段与墙钟。
-- [ ] AC5 静跑不回归：无 lane 在飞时 ≥3 次 exit 0 且 `AC-194 wall clock ≤ 40000`；同文件兄弟 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"` 一次 exit 0。
-- [ ] AC6 未弱化任何东西：`grep -n "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` 仍命中两处（`:444`、`:922`）；`git diff <base>..HEAD -- goals/` 为空；spec 里 `dock.counts`、`running.tasks` / `running.plans`、`settled.*`、`restored.*`、`plan.cancelControls=0`、`settled.cardFoldedStates` 与两条假形态的读数逐字仍在（没有加 retry、没有改判据命令）。
-- [ ] AC7 失败路径如实：若同突发下仍 >40000ms，停手置 `needs-human`，附逐字读数、已试杠杆与排除项；⛔ 不得把静跑通过写成已修。
+- [x] AC1 红态与本轮对照机械入档：`quay-e2e-D7LyT4/.../error-context.md` 的 `# Error details` 逐字入档（`Expected: <= 40000` / `Received: 43937`），落点 `e2e/activity-dock-background.spec.ts:444`；同一 checkout 的静跑对照 exit 0 且自印 `AC-194 wall clock: 21783ms`；写明红那次由 `test.trace` 推导的 pre-test ≈21.5s / beforeAll ≈14.3s / 用例体 ≈8s 与静跑 4.25s / ≈12s / ≈6s。
+- [x] AC2 boot 分段读数：在复现构造下记录至少两次膨胀运行的 `Running 1 test` 之前分段（npx+config、server 就绪、client 就绪、runner 初始化）与宿主 `load1`，并证明 boot 段 ≥ 静跑的 2 倍（否则构造没复现，换构造再测）。
+- [x] AC3 杠杆落地：给出被选中杠杆的前后对照（同一构造、同等 `load1` 量级），boot 段可见下降；若选 bundle，入档 bundle 生成耗时、命中/重建判据与 server-root 解析保持方式；`grep` 证明 `goals/AC-194-…md` 的 `criterion:` / `expect:` 与 `e2e/activity-dock-background.spec.ts` 的 40s 断言未被改动。
+- [x] AC4 同突发下判据达标：修复态在同一并发构造下 ≥2 次运行、出货命令逐字不变、exit 0 且 `AC-194 wall clock ≤ 40000`，入档每次 lane 数、`load1`、boot 段与墙钟。
+- [x] AC5 静跑不回归：无 lane 在飞时 ≥3 次 exit 0 且 `AC-194 wall clock ≤ 40000`；同文件兄弟 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"` 一次 exit 0。
+- [x] AC6 未弱化任何东西：`grep -n "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` 仍命中两处（`:444`、`:922`）；`git diff <base>..HEAD -- goals/` 为空；spec 里 `dock.counts`、`running.tasks` / `running.plans`、`settled.*`、`restored.*`、`plan.cancelControls=0`、`settled.cardFoldedStates` 与两条假形态的读数逐字仍在（没有加 retry，没有改判据命令）。
+- [x] AC7 失败路径如实：若同突发下仍 >40000ms，停手置 `needs-human`，附逐字读数、已试杠杆与排除项；⛔ 不得把静跑通过写成已修。
 
 ## DoD
 
 真实落地判据：在能复现本轮红的并发构造（多路兄弟 `npx playwright test` lane，boot 段 ≥2× 静跑）下，出货命令 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"` 逐字不变、≥2 次 exit 0 且自印 `AC-194 wall clock ≤ 40000`；同一修复在无 lane 的静跑 ≥3 次同样 ≤40000，兄弟 `-g "AC-199"` 不回归；40s 上限、判据命令、`goals/AC-194-…md` 与全部功能读数一字未改。杠杆的证据必须是「同构造前后 boot 段下降」的实测，不是静跑通过。
 
+## Evidence（2026-10-21，worktree `task/gap-ac194-criterion-pretest-boot-inflation`）
+
+### AC1 红态与本轮静跑对照
+- 红态逐字（Proposal 已引，复核根 `quay-e2e-D7LyT4`）：`Expected: <= 40000` / `Received:    43937`，
+  落点 `e2e/activity-dock-background.spec.ts:444`；`test.trace` 推导 pre-test ≈21.5s / beforeAll ≈14.3s /
+  用例体 ≈8s，对照静跑 4.25s / ≈12s / ≈6s。Proposal 的静跑对照自印 `AC-194 wall clock: 21783ms`（exit 0）。
+- 本轮同 checkout 复测（warm，tsx，load1≈45）：exit 0，自印 `AC-194 wall clock: 16473ms`；
+  `Running 1 test` 出现在 4022ms（config+seed ≈0.7s、server 就绪 3590ms、client 就绪 3992ms、
+  runner init ≈30ms），其余为 beforeAll + 用例体。worktree 首跑（冷页缓存）pre-test 20627ms /
+  墙钟 44194ms，与 Proposal 的分段同形（boot 主导）。
+
+### AC2 复现构造与 boot 分段
+- 构造：8 路兄弟 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"` 同时启动，
+  外加 128 个纯 CPU 占用进程模拟 fleet 并发（不分配大内存；在 22s 的 boot 窗口后停止，避免把用例体
+  饿到 55s watchdog——192 个 burners 持续全程时确实发生的是 watchdog 红，不是本轮要复现的 40s 红）。
+- load1：burners 起后 lane 启动时约 130；burners 停止时 144.41（before 臂）/ 149.28（after 臂）。
+- 膨胀运行（修复前 tsx，8 跑，秒表自主进程启动）：npx+config 1.6-2.5s、server 就绪 8.9-12.1s、
+  client 就绪 9.3-13.1s、runner init 98-259ms、`Running 1 test` 之前 9.4-13.3s。
+- 静跑（同 checkout、无 lane、tsx）：`Running 1 test` 之前 4022ms。
+- 膨胀比：9.4-13.3s / 4.0s = **2.35-3.3×**（≥2×）。修复态同构造 pre-test 4.9-6.6s vs 修复态静跑
+  2.2s = 2.2-3.0×，说明构造对修复态同样构成 ≥2× 的 boot 压力。
+
+### AC3 杠杆：esbuild 单文件 bundle
+- 选中杠杆：`scripts/e2e-server-bundle.mjs` 把 `server/index.ts` 的整图（`--packages=external`）打成
+  单文件，webServer 命令由 `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts`
+  改为 `node server/.quay-e2e-build/server-index.<contenthash>.mjs`。
+- 直接对照（同宿主同时刻，load1≈45）：tsx 到 `/health` **7083ms**；bundle 到 `/health` **751ms**（9.4×）。
+- 同构造前后（8 lanes + 128 burners，load1 130-149）：server 就绪 **8.9-12.1s → 4.0-5.0s**；
+  `Running 1 test` 之前 **9.4-13.3s → 4.9-6.6s**；自印墙钟 30.1-33.4s → 28.3-29.9s（用例体占主导，
+  且 burners 已在 boot 后停止）。
+- 生成耗时：内容 hash 358 文件 / 5.9MB ≈ **9ms**；首次 esbuild ≈ **56-60ms**；命中 = 同名 bundle 已存在
+  （不启动 esbuild）。判据：key = sha256(esbuild 版本 + node major + `server/`、`shared/` 下全部非测试
+  `.ts/.tsx/.js/.mjs/.json` 的相对路径与**内容**)。源码一变即换文件名，过期产物不可达（不是 mtime 窗口）。
+  发布走「私有 temp 文件 + rename」，多 lane 并发构建同一 key 不会读到半成品。
+- server-root 解析保持：bundle 发布在 `<serverRoot>/server/.quay-e2e-build/`，比 `server/load-env.ts` 与
+  `server/index.ts` 向上找的 `server` 锚点**低一层**，所以 `getBootstrapApplicationRoot` /
+  `findApplicationRoot` 解析到与源码入口相同的应用根（原先放到 repo 根会以 `Could not resolve server root`
+  退出的坑已避开）。voice 选择在 env-free shadow 根内构建，`.env` 隔离不变；
+  `voice-realtime-ws-proxy.service.ts` 运行时读的 `omission-fill-params.json` 复制到 bundle 旁，
+  `new URL('./omission-fill-params.json', import.meta.url)` 语义保持。
+- 判据未改：`grep -n "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` →
+  `444:` 与 `922:` 两处；`git diff develop..HEAD -- goals/ e2e/` 为空（判据命令逐字、无 retry）。
+
+### AC4 同突发下的修复态
+- 同一构造 8 跑全部 exit 0，自印 `AC-194 wall clock`（ms）：
+  **29250 / 29903 / 28333 / 28791 / 28683 / 28835 / 29091 / 28589**，全部 ≤40000。
+- 每跑 lane 数 8、load1 130-149、pre-test 4.9-6.6s、server 就绪 4.0-5.0s；命令逐字未变。
+
+### AC5 静跑与兄弟
+- 静跑（无 lane）3 连：exit 0，自印 `AC-194 wall clock` **15075ms / 14464ms / 17614ms**
+  （宿主本底 load1 84-124）；另有 14686ms 一跑。全部 ≤40000。
+- 兄弟：`npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"` exit 0，自印 16258ms。
+
+### AC6 未弱化任何东西
+- `toBeLessThanOrEqual(40_000)` 仍两处（`:444`、`:922`）。
+- `git diff develop..HEAD -- goals/` 空；`git diff develop..HEAD -- e2e/` 空。
+- `dock.counts` / `running.tasks` / `running.plans` / `settled.*` / `restored.*` /
+  `plan.cancelControls=0` / `settled.cardFoldedStates` 与两条假形态逐字仍在（grep 15 处命中）。
+- 未加 retry、未改判据命令、未放宽 40s 上限。
+
+### AC7 失败路径
+- 条件未触发：同突发下修复态 8/8 exit 0 且 ≤40000，无需置 `needs-human`。
+
 ## Touches
 
 - `playwright.config.ts`（webServer 启动命令 / test runner 之前的 boot 侧杠杆与缓存）
+- `scripts/e2e-server-bundle.mjs`（bundle 生成、内容 hash 缓存与原子发布）
+- `.gitignore`（忽略 `/server/.quay-e2e-build/` 构建产物）
 - `e2e/activity-dock-background.spec.ts`（判据本体；只在确有必要时改读侧，读数与上限不动）
 - `tasks/gap-ac194-criterion-pretest-boot-inflation.md`（自触）

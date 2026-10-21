@@ -261,15 +261,15 @@ const noCodeRefusal = () => ({
   json: async () => noCodeRefusalBody,
 });
 
-const { transcribeVoice, getFiles } = vi.hoisted(() => ({
+const { transcribeVoice, getFileIndex } = vi.hoisted(() => ({
   transcribeVoice: vi.fn(),
-  getFiles: vi.fn(),
+  getFileIndex: vi.fn(),
 }));
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof SharedApi>();
   return {
-    api: { getFiles },
+    api: { getFileIndex },
     transcribeVoice,
     // The raw-corpus upload the hook fires after a listen; declared so this whole-module double stays
     // complete. It is never awaited, so a listen with the switch off produces no call and no reading
@@ -314,8 +314,7 @@ const fakeStream = { getTracks: () => [{ stop: () => undefined }] };
 
 /** The project's file tree, in the shape `GET …/files` answers with. The composer asks for it on
  * mount and the repair is not this file's subject, so one empty listing is all it needs. */
-const TREE: unknown[] = [];
-
+const FILES: unknown[] = [];
 beforeEach(() => {
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
@@ -328,8 +327,12 @@ beforeEach(() => {
   URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
   URL.revokeObjectURL = revokeObjectURL as unknown as typeof URL.revokeObjectURL;
 
-  getFiles.mockReset();
-  getFiles.mockResolvedValue({ ok: true, status: 200, json: async () => TREE });
+  getFileIndex.mockReset();
+  getFileIndex.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ files: FILES, truncated: false }),
+  });
   transcribeVoice.mockReset();
   transcribeVoice.mockResolvedValue(noCodeRefusal());
 });
