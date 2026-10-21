@@ -1,7 +1,7 @@
 ---
 id: architecture-hierarchy-nested-packages
 title: 桥接发嵌套 package 块 + 前端层级索引（实体→最内层包→祖先链→计数）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
