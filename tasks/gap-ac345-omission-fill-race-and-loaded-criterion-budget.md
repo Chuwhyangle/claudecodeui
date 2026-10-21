@@ -2,7 +2,7 @@
 id: gap-ac345-omission-fill-race-and-loaded-criterion-budget
 title: AC-345 判据负载下连红两次：用例 4 的 omission-fill 在中断前投递「听了未转发」句（转 composer 腿读成空串）、用例
   5 页面 30s 未渲染，且记录 118s 预算低于实测 138s 墙钟
-status: todo
+status: ready
 labels:
   - gap
   - defect
