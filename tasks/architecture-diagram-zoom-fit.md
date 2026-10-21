@@ -1,7 +1,7 @@
 ---
 id: architecture-diagram-zoom-fit
 title: architecture 图缩放与适应容器：默认 fit + +/−/适应/100% 控件 + Ctrl+滚轮锚点缩放
-status: todo
+status: ready
 labels:
   - feature
 parent: null
