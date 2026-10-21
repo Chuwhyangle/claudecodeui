@@ -24,15 +24,15 @@ Live Voice 需要“只由目标用户触发”的能力。离线实验（`exper
 
 ## AC
 
-- [ ] AC1：新增纯逻辑模块 `voice-speaker-attractor.ts`：单位向量、cosine、EMA 更新与单 turn 角度上限、会话状态（first/core score、accepted、drift、provisional）。确定性单测覆盖：归一化、cosine、角度上限、EMA 方向、空/短输入拒绝。
-- [ ] AC2：新增纯逻辑模块 `voice-speaker-bank.ts`：core + satellites、`match/new/promote/merge/evict`、K 上限、candidate 需 ≥2 会话才转正、core 不被单会话淘汰。单测覆盖每个状态转移与容量上限。
-- [ ] AC3：新增纯逻辑模块 `voice-speaker-selector.ts`：2 秒窗口扫描、语音占比/最短时长质量门、选 3–3.5 秒样本、`accept_tracking = max(session, core)`、`authorize_tse` 只在 cluster 被 core 确认时为真。单测覆盖：旁人先说话不被授权、目标窗口被选中、灰区不动作。
-- [ ] AC4：新增 `voice-speaker-tracking-arm.ts`：`resolveSpeakerTracking(env)` 返回 `off|shadow`、模型路径、阈值；未设置/空/`off` 为 off，未知值返回 `invalid` 并打印一行，不启用。`VOICE_SPEAKER_MODEL_PATH` 缺失时 shadow 也降级为 off 并打印一行。
-- [ ] AC5：`server/index.ts` 只在 `shadow` 且模型路径存在时加载一次 CAM++；加载失败只写一行日志并让 seam 为 `undefined`，**不得让连接失败**。`sherpa-onnx-node` 已在依赖内，不新增包。
-- [ ] AC6：`voice-realtime-ws-proxy.service.ts` 增加可选 seam `speakerTracker?:`；`undefined` 时路径与现在逐字节一致。shadow 时从浏览器 16k PCM 帧累积 2 秒窗口，调用注入的 `observe(window) -> {score, track, authorizeTse}`，只写 `speaker_shadow` 行（score、decision、accepted count、first_vs_core、provisional）；**不丢帧、不改帧、不提交、不发客户端帧**。
-- [ ] AC7：shadow 读数包含每连接汇总：windows、accepted、coverage、first_vs_core、reanchor/provisional；不含原始音频、不含逐样本 PCM。连接结束时写一行汇总。
-- [ ] AC8：新增唯一一个测试文件 `server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts`，覆盖 AC1–AC4 与 seam 的“undefined 路径不变/shadow 只观测”。不新增其他 server 测试文件；新增后重测并更新 `server/shared/tests/quay-test-script.test.ts` 的两处收集数 pin（当前全树 388 个 server test 文件、`unknown=385`/`unknown=387`；新增一个测试文件后重测，按该测试自身口径改为 `unknown=386`/`unknown=388`，注释里的全树文件数 388→389）。
-- [ ] AC9：不新建 `server/modules/<new>/` 目录；新文件全部是 `server/modules/voice-realtime/` 下的叶子文件，只经既有 `index.ts` barrel 暴露必要符号；不 deep-import 其他模块。
+- [x] AC1：新增纯逻辑模块 `voice-speaker-attractor.ts`：单位向量、cosine、EMA 更新与单 turn 角度上限、会话状态（first/core score、accepted、drift、provisional）。确定性单测覆盖：归一化、cosine、角度上限、EMA 方向、空/短输入拒绝。
+- [x] AC2：新增纯逻辑模块 `voice-speaker-bank.ts`：core + satellites、`match/new/promote/merge/evict`、K 上限、candidate 需 ≥2 会话才转正、core 不被单会话淘汰。单测覆盖每个状态转移与容量上限。
+- [x] AC3：新增纯逻辑模块 `voice-speaker-selector.ts`：2 秒窗口扫描、语音占比/最短时长质量门、选 3–3.5 秒样本、`accept_tracking = max(session, core)`、`authorize_tse` 只在 cluster 被 core 确认时为真。单测覆盖：旁人先说话不被授权、目标窗口被选中、灰区不动作。
+- [x] AC4：新增 `voice-speaker-tracking-arm.ts`：`resolveSpeakerTracking(env)` 返回 `off|shadow`、模型路径、阈值；未设置/空/`off` 为 off，未知值返回 `invalid` 并打印一行，不启用。`VOICE_SPEAKER_MODEL_PATH` 缺失时 shadow 也降级为 off 并打印一行。
+- [x] AC5：`server/index.ts` 只在 `shadow` 且模型路径存在时加载一次 CAM++；加载失败只写一行日志并让 seam 为 `undefined`，**不得让连接失败**。`sherpa-onnx-node` 已在依赖内，不新增包。
+- [x] AC6：`voice-realtime-ws-proxy.service.ts` 增加可选 seam `speakerTracker?:`；`undefined` 时路径与现在逐字节一致。shadow 时从浏览器 16k PCM 帧累积 2 秒窗口，调用注入的 `observe(window) -> {score, track, authorizeTse}`，只写 `speaker_shadow` 行（score、decision、accepted count、first_vs_core、provisional）；**不丢帧、不改帧、不提交、不发客户端帧**。
+- [x] AC7：shadow 读数包含每连接汇总：windows、accepted、coverage、first_vs_core、reanchor/provisional；不含原始音频、不含逐样本 PCM。连接结束时写一行汇总。
+- [x] AC8：新增唯一一个测试文件 `server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts`，覆盖 AC1–AC4 与 seam 的“undefined 路径不变/shadow 只观测”。不新增其他 server 测试文件；新增后重测并更新 `server/shared/tests/quay-test-script.test.ts` 的两处收集数 pin（当前全树 388 个 server test 文件、`unknown=385`/`unknown=387`；新增一个测试文件后重测，按该测试自身口径改为 `unknown=386`/`unknown=388`，注释里的全树文件数 388→389）。
+- [x] AC9：不新建 `server/modules/<new>/` 目录；新文件全部是 `server/modules/voice-realtime/` 下的叶子文件，只经既有 `index.ts` barrel 暴露必要符号；不 deep-import 其他模块。
 
 ## DoD
 
@@ -57,6 +57,7 @@ Live Voice 需要“只由目标用户触发”的能力。离线实验（`exper
 - server/index.ts
 - .env.example
 - tasks/voice-speaker-tracker-shadow.md
+- scripts/suite-duration-baseline.tsv
 
 ## 参考
 
