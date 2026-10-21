@@ -2,7 +2,7 @@
 id: gap-ac408-beforeall-abort-artifact-and-harness-attribution
 title: AC-408 红跑不可归因且 beforeAll 中止不留证据：08:33 的 fail 无 run.json、gate 只读到 .env
   噪声（同树复跑 3/3 绿）⇒ harness 侧阶段标记 + 部分 dump + 失败原因落 stderr/日志
-status: todo
+status: ready
 labels:
   - gap
   - defect
