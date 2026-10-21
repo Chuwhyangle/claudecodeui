@@ -42,9 +42,10 @@ import {
 
 const MODULE_URL = new URL('./e2e-client-root.mjs', import.meta.url).href;
 
-/** A checkout-shaped fixture: client files, plus the root entries that must NOT be copied. */
+/** A checkout-shaped fixture: client files, plus the root entries that must NOT be copied. @returns {string} */
 function makeFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ac345-client-root-src-'));
+  /** @param {string} relative @param {string} contents */
   const write = (relative, contents) => {
     const absolute = path.join(root, relative);
     fs.mkdirSync(path.dirname(absolute), { recursive: true });
@@ -71,7 +72,7 @@ function makeFixture() {
   return root;
 }
 
-/** Removes a fixture and any snapshot left beside it, whatever the case did. */
+/** Removes a fixture and any snapshot left beside it, whatever the case did. @param {string} root */
 function cleanFixture(root) {
   for (const entry of fs.readdirSync(path.dirname(root))) {
     if (entry.startsWith(snapshotPrefix(root))) {
@@ -81,10 +82,22 @@ function cleanFixture(root) {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
-/** Every snapshot directory currently beside `sourceRoot`. */
+/** Every snapshot directory currently beside `sourceRoot`. @param {string} sourceRoot @returns {string[]} */
 function snapshotsBeside(sourceRoot) {
   const prefix = snapshotPrefix(sourceRoot);
   return fs.readdirSync(path.dirname(sourceRoot)).filter((entry) => entry.startsWith(prefix));
+}
+
+/**
+ * The registered listener for `event`, asserted to exist before it is returned.
+ * @param {Map<string, () => void>} handlers
+ * @param {string} event
+ * @returns {() => void}
+ */
+function handlerFor(handlers, event) {
+  const handler = handlers.get(event);
+  assert.equal(typeof handler, 'function', `${event} cleanup listener is not registered`);
+  return /** @type {() => void} */ (handler);
 }
 
 test('a snapshot is a real copy: an in-place write to the checkout never reaches it', () => {
@@ -153,9 +166,13 @@ test('cleanup removes the snapshot and refuses any directory not named as one', 
 
 test('resolveClientRoot publishes, reuses in a worker, and cleans up on exit', () => {
   const source = makeFixture();
+  /** @type {Map<string, () => void>} */
   const handlers = new Map();
+  /** @type {{ once: (event: string, handler: () => void) => unknown }} */
   const lifecycle = { once: (event, handler) => handlers.set(event, handler) };
+  /** @type {Record<string, string | undefined>} */
   const env = {};
+  /** @type {string[]} */
   const logged = [];
 
   const root = resolveClientRoot({
@@ -182,7 +199,7 @@ test('resolveClientRoot publishes, reuses in a worker, and cleans up on exit', (
     assert.equal(logged.length, 1, 'a worker must not announce a second client root');
     assert.equal(snapshotsBeside(source).length, 1, 'a worker must not create a second snapshot');
 
-    handlers.get('exit')();
+    handlerFor(handlers, 'exit')();
     assert.equal(fs.existsSync(root), false, 'the exit listener left the snapshot behind');
   } finally {
     cleanFixture(source);
@@ -191,7 +208,9 @@ test('resolveClientRoot publishes, reuses in a worker, and cleans up on exit', (
 
 test('a signal cleans the snapshot up before re-raising', () => {
   const source = makeFixture();
+  /** @type {Map<string, () => void>} */
   const handlers = new Map();
+  /** @type {string[]} */
   const raised = [];
   const root = resolveClientRoot({
     configDir: source,
@@ -201,11 +220,11 @@ test('a signal cleans the snapshot up before re-raising', () => {
     kill: (signal) => raised.push(signal),
   });
   try {
-    handlers.get('SIGTERM')();
+    handlerFor(handlers, 'SIGTERM')();
     assert.deepEqual(raised, ['SIGTERM']);
     assert.equal(fs.existsSync(root), false, 'the signal listener left the snapshot behind');
     // The `exit` listener that follows is idempotent: cleanup already ran.
-    handlers.get('exit')();
+    handlerFor(handlers, 'exit')();
     assert.equal(fs.existsSync(root), false);
   } finally {
     cleanFixture(source);
@@ -214,7 +233,9 @@ test('a signal cleans the snapshot up before re-raising', () => {
 
 test('the control arm degrades to the checkout itself and creates no snapshot', () => {
   const source = makeFixture();
+  /** @type {Record<string, string | undefined>} */
   const env = { [CLIENT_ROOT_ENV]: CLIENT_ROOT_CONTROL_VALUE };
+  /** @type {string[]} */
   const logged = [];
   try {
     const root = resolveClientRoot({ configDir: source, env, log: (line) => logged.push(line) });
@@ -240,6 +261,7 @@ for (const outcome of ['green', 'red', 'throw']) {
       };
       run();
     `;
+    /** @type {Record<string, string | undefined>} */
     const env = { ...process.env, AC345_MODULE_URL: MODULE_URL, AC345_CONFIG_DIR: source, AC345_OUTCOME: outcome };
     delete env[CLIENT_ROOT_ENV];
     try {

@@ -69,6 +69,12 @@ const SNAPSHOT_MARKER = '-clientroot-';
 const CLEANUP_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
 
 /**
+ * The slice of a process this module needs. A `process` satisfies it; so does a test double, which
+ * is what lets the cleanup registration be read without standing up a real run.
+ * @typedef {{ once: (event: string, handler: () => void) => unknown }} LifecycleLike
+ */
+
+/**
  * The `mkdtemp` prefix for a snapshot of `sourceRoot`.
  *
  * The basename travels into the prefix so a leftover directory in the parent still says WHICH
@@ -159,9 +165,9 @@ export function createClientSnapshot({ sourceRoot, parent = path.dirname(sourceR
  * re-evaluation (`createSnapshot` is not even called there), and the checkout under the control arm.
  * @param {{
  *   configDir: string,
- *   env?: NodeJS.ProcessEnv,
+ *   env?: Record<string, string | undefined>,
  *   log?: (line: string) => void,
- *   lifecycle?: Pick<NodeJS.Process, 'once'> & { kill?: (signal: string) => void },
+ *   lifecycle?: LifecycleLike,
  *   createSnapshot?: (options: { sourceRoot: string }) => { root: string, cleanup: () => boolean },
  *   kill?: (signal: string) => void,
  * }} options
@@ -173,7 +179,9 @@ export function resolveClientRoot({
   log = (line) => console.log(line),
   lifecycle = process,
   createSnapshot = createClientSnapshot,
-  kill = (signal) => process.kill(process.pid, signal),
+  kill = (signal) => {
+    process.kill(process.pid, signal);
+  },
 }) {
   const published = env[CLIENT_ROOT_ENV];
   if (published === CLIENT_ROOT_CONTROL_VALUE) {
