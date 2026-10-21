@@ -40,7 +40,10 @@ import {
  *  · overview folds the graph into path groups, clicking a group expands it,
  *    clicking an entity drills into its neighbourhood (and clicking the centred
  *    entity again adds a hop) — all from the same payload;
- *  · hovering a node highlights its in/out edges and dims the rest;
+ *  · hovering a node highlights its in/out edges and dims the rest, while a
+ *    click pins that highlight, announces the entity's JSON in/out neighbours
+ *    to sibling panels, and a sibling panel can select an entity by its stable
+ *    id through the same window-level contract;
  *  · the honesty bar carries generatedAt / unresolved / truncated, the `.mmd`
  *    export button writes the document the server returned, and an empty seed
  *    set renders the empty state instead of a graph.
@@ -510,6 +513,126 @@ test('hovering a node highlights its in/out edges and dims the rest', async () =
   assert.equal(outEdge.classList.contains('arch-hl-out'), false, 'leaving the node clears the highlight');
   assert.equal(unrelated.classList.contains('arch-dim'), false, 'leaving the node restores the dimmed edges');
   assert.equal(document.querySelector('[data-architecture-hover]'), null);
+});
+
+test('the drawn SVG carries the stable ids sibling panels query', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
+  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  await waitFor(() => {
+    assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
+    // Wait for the neighbourhood SVG itself, not just the view attribute React
+    // commits synchronously: the renderer replaces the SVG asynchronously.
+    assert.deepEqual(drawnNodeIds(host), [
+      'src/modules/alpha/a.ts',
+      'src/modules/alpha/a2.ts',
+      'src/modules/beta/b.ts',
+    ]);
+  });
+
+  // Nodes are addressable by their ArchGuard id, not the PlantUML alias the
+  // renderer was given, and every edge carries its relation kind.
+  assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]'), 'nodes expose data-entity-id');
+  const outEdge = drawnEdge(host, 'src/modules/alpha/a2.ts', 'src/modules/alpha/a.ts');
+  assert.equal(outEdge.getAttribute('data-edge-source'), 'src/modules/alpha/a2.ts');
+  assert.equal(outEdge.getAttribute('data-edge-target'), 'src/modules/alpha/a.ts');
+  assert.equal(outEdge.getAttribute('data-edge-type'), 'dependency', 'edges expose the ArchGuard relation kind');
+});
+
+test('clicking an entity pins its in/out highlight and announces it to sibling panels', async () => {
+  const selections: Array<{ id: string; incoming: string[]; outgoing: string[] }> = [];
+  const listener = (event: Event): void => {
+    const detail = (event as CustomEvent<{ id: string; incoming: string[]; outgoing: string[] }>).detail;
+    selections.push({ id: detail.id, incoming: [...detail.incoming], outgoing: [...detail.outgoing] });
+  };
+  window.addEventListener('architecture:entity-selected', listener);
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    const host = await waitForDiagram();
+
+    fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+    await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
+    fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+    await waitFor(() => {
+      assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
+      assert.deepEqual(drawnNodeIds(host), [
+        'src/modules/alpha/a.ts',
+        'src/modules/alpha/a2.ts',
+        'src/modules/beta/b.ts',
+      ]);
+    });
+    // A second click on the centre deepens the neighbourhood; the gamma edge is
+    // then drawn and must be the one left dimmed.
+    fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+    await waitFor(() => {
+      assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '2');
+      assert.deepEqual(drawnNodeIds(host), [
+        'src/modules/alpha/a.ts',
+        'src/modules/alpha/a2.ts',
+        'src/modules/beta/b.ts',
+        'src/modules/gamma/c.ts',
+      ]);
+    });
+
+    const outEdge = drawnEdge(host, 'src/modules/alpha/a2.ts', 'src/modules/alpha/a.ts');
+    const inEdge = drawnEdge(host, 'src/modules/beta/b.ts', 'src/modules/alpha/a2.ts');
+    const unrelated = drawnEdge(host, 'src/modules/gamma/c.ts', 'src/modules/beta/b.ts');
+    assert.equal(outEdge.classList.contains('arch-hl-out'), true, 'the clicked entity outgoing edge is highlighted');
+    assert.equal(inEdge.classList.contains('arch-hl-in'), true, 'the clicked entity incoming edge is highlighted');
+    assert.equal(unrelated.classList.contains('arch-dim'), true, 'edges outside the dependency/reverse-dependency set are dimmed');
+
+    // Unlike a hover reading, the click selection survives leaving the node.
+    fireEvent.mouseOut(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+    assert.equal(outEdge.classList.contains('arch-hl-out'), true, 'leaving the node keeps the pinned selection');
+
+    assert.deepEqual(
+      selections.at(-1),
+      {
+        id: 'src/modules/alpha/a2.ts',
+        incoming: ['src/modules/beta/b.ts'],
+        outgoing: ['src/modules/alpha/a.ts'],
+      },
+      'the announced in/out neighbours come from the neighbourhood JSON, not the visible slice',
+    );
+    assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'selection and drilling are local — never a refetch');
+  } finally {
+    window.removeEventListener('architecture:entity-selected', listener);
+  }
+});
+
+test('a sibling panel selects an entity by its stable id and the graph drills to it', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // The documented cross-panel contract: any module that knows an ArchGuard
+  // entity id (e.g. a file referenced in chat) asks the graph for it.
+  act(() => {
+    window.dispatchEvent(new CustomEvent('architecture:highlight-entity', {
+      detail: { id: 'src/modules/beta/b.ts' },
+    }));
+  });
+
+  await waitFor(() => {
+    assert.equal(
+      document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'),
+      'neighborhood',
+      'an external selection is brought into view',
+    );
+    assert.deepEqual(
+      drawnNodeIds(host),
+      ['src/modules/alpha/a2.ts', 'src/modules/beta/b.ts', 'src/modules/gamma/c.ts'],
+      'the selected entity is drawn with its in/out neighbours',
+    );
+  });
+
+  const outEdge = drawnEdge(host, 'src/modules/beta/b.ts', 'src/modules/alpha/a2.ts');
+  const inEdge = drawnEdge(host, 'src/modules/gamma/c.ts', 'src/modules/beta/b.ts');
+  assert.equal(outEdge.classList.contains('arch-hl-out'), true, 'the selected entity outgoing edge is highlighted');
+  assert.equal(inEdge.classList.contains('arch-hl-in'), true, 'the selected entity incoming edge is highlighted');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'an external selection never re-enters the fetch');
 });
 
 test('activating the panel fetches once and the file/entity toggle never refetches', async () => {

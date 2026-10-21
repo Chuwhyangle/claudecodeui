@@ -8,7 +8,10 @@ import {
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
-import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
+import type {
+  ArchitectureRendererGraph,
+  ArchitectureRendererProps,
+} from '@/modules/architecture/rendererContract';
 
 /**
  * The renderer options this component drives. Structural subsets of the
@@ -29,6 +32,24 @@ type PlantUmlRendererFactory = (options: { layout: 'elk'; view?: PlantUmlView })
 const GROUP_PREFIX = 'grp::';
 /** Stub nodes in a view (external neighbours) are not real entities; clicks ignore them. */
 const STUB_PREFIX = 'stub::';
+
+/**
+ * The cross-panel linkage channel. The SVG is the shared surface: a click on an
+ * entity announces it on `window` together with the in/out neighbours read from
+ * the neighbourhood JSON, and a sibling panel (the chat, when a file is
+ * referenced) can select an entity by its stable `data-entity-id` through the
+ * second event. Both names are part of the renderer's documented contract, so a
+ * consumer listens for the literal names rather than importing this module.
+ */
+const ENTITY_SELECTED_EVENT = 'architecture:entity-selected';
+const ENTITY_HIGHLIGHT_EVENT = 'architecture:highlight-entity';
+
+/** The selection announced to sibling panels: one entity and its JSON neighbours. */
+type EntitySelection = {
+  readonly id: string;
+  readonly incoming: readonly string[];
+  readonly outgoing: readonly string[];
+};
 
 /** Diagram chrome: dim everything not on the hovered node's edges. */
 const HIGHLIGHT_STYLE = `
@@ -125,6 +146,46 @@ function highlightRelations(host: HTMLElement, id: string): void {
   }
 }
 
+/**
+ * The entity's dependency direction, read from the neighbourhood JSON already in
+ * hand rather than from the drawn SVG: the SVG is only the visible slice, while
+ * the payload is what a sibling panel is told about.
+ */
+function selectionOf(graph: ArchitectureRendererGraph, id: string): EntitySelection {
+  const incoming: string[] = [];
+  const outgoing: string[] = [];
+  for (const edge of graph.edges) {
+    if (edge.to === id) incoming.push(edge.from);
+    if (edge.from === id) outgoing.push(edge.to);
+  }
+  return { id, incoming, outgoing };
+}
+
+/**
+ * Announce a click to sibling panels. Guarded because the renderer is mounted
+ * in jsdom tests too, where `window` is present, and in a future non-browser
+ * render there would simply be no listener to notify.
+ */
+function announceSelection(graph: ArchitectureRendererGraph, id: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<EntitySelection>(ENTITY_SELECTED_EVENT, {
+    detail: selectionOf(graph, id),
+  }));
+}
+
+/**
+ * Re-apply the selected entity's highlight after a render, and clear it when the
+ * selection is not part of the view that was just drawn (a group view can hide
+ * the entity a previous neighbourhood selection named).
+ */
+function highlightSelection(host: HTMLElement, id: string | null): void {
+  if (id === null || nodeElement(host, id) === null) {
+    clearHighlight(host);
+    return;
+  }
+  highlightRelations(host, id);
+}
+
 /** The relation kinds on the hovered node's VISIBLE edges, read from what was actually drawn. */
 function relationsOf(host: HTMLElement, id: string): string[] {
   const relations = new Set<string>();
@@ -154,8 +215,11 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
  *  · group — clicking an overview group expands just that group;
  *  · neighbourhood — clicking an entity drills into it, and clicking the
  *    centred entity again adds one hop.
- * Hovering a node highlights its in/out edges and dims the rest. Every view is
- * local: nothing here re-enters the fetch. The renderer package is imported
+ * Hovering a node highlights its in/out edges and dims the rest; clicking an
+ * entity pins that highlight and announces the entity with its JSON in/out
+ * neighbours on `architecture:entity-selected`, while a sibling panel can ask
+ * for one by id through `architecture:highlight-entity`. Every view is local:
+ * nothing here re-enters the fetch. The renderer package is imported
  * dynamically, so elkjs never enters the first-screen bundle.
  */
 export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraphProps) {
@@ -176,6 +240,11 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
   const graphRef = useRef(graph);
   const hoverCallbackRef = useRef(onNodeHover);
   const clickCallbackRef = useRef(onNodeClick);
+  // The entity the user clicked (or a sibling panel asked for). Unlike the
+  // hover reading it survives leaving the node and being re-rendered, so the
+  // dependency/reverse-dependency highlight stays pinned until the selection is
+  // replaced or cleared.
+  const selectedRef = useRef<string | null>(null);
   useEffect(() => {
     viewRef.current = view;
     graphRef.current = graph;
@@ -190,6 +259,10 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     let cancelled = false;
     setFailure(null);
     hoverCallbackRef.current?.(null);
+    // A reloaded graph may not contain the previously selected entity.
+    if (selectedRef.current !== null && !graph.nodes.some((node) => node.id === selectedRef.current)) {
+      selectedRef.current = null;
+    }
 
     void (async () => {
       try {
@@ -207,6 +280,8 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
 
         host.innerHTML = svg;
         restoreEntityIds(host, diagram.aliasOf);
+        // A fresh SVG has no highlight classes; re-pin the current selection.
+        highlightSelection(host, selectedRef.current);
         if (view.kind === 'neighborhood') {
           const center = diagram.rendererEntity;
           if (center !== null) {
@@ -258,20 +333,38 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       if (node === null) return;
       const next = event.relatedTarget;
       if (next instanceof Node && node.contains(next)) return;
-      clearHighlight(host);
+      // Hover is transient; a pinned selection is restored when the pointer leaves.
+      highlightSelection(host, selectedRef.current);
       hoverCallbackRef.current?.(null);
     };
 
     const onClick = (event: MouseEvent): void => {
       const node = nodeFrom(event.target);
       const id = node?.getAttribute('data-entity-id') ?? null;
-      if (id === null || id.startsWith(STUB_PREFIX)) return;
+      if (id === null) {
+        // Clicking the background is the "clear the pinned selection" gesture.
+        selectedRef.current = null;
+        clearHighlight(host);
+        hoverCallbackRef.current?.(null);
+        return;
+      }
+      if (id.startsWith(STUB_PREFIX)) return;
       if (id.startsWith(GROUP_PREFIX)) {
+        // Expanding a group is navigation, not entity selection.
+        selectedRef.current = null;
+        clearHighlight(host);
         setView({ kind: 'group', prefix: id.slice(GROUP_PREFIX.length) });
         return;
       }
       const clickedNode = graphRef.current.nodes.find((candidate) => candidate.id === id);
-      if (clickedNode !== undefined) clickCallbackRef.current?.(clickedNode);
+      if (clickedNode !== undefined) {
+        selectedRef.current = id;
+        highlightRelations(host, id);
+        // The JSON lookup is what sibling panels receive, independent of the
+        // hops this click expands.
+        announceSelection(graphRef.current, id);
+        clickCallbackRef.current?.(clickedNode);
+      }
       const current = viewRef.current;
       const hops = current.kind === 'neighborhood' && current.entityId === id
         ? current.hops + 1
@@ -287,6 +380,32 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       host.removeEventListener('mouseout', onMouseOut);
       host.removeEventListener('click', onClick);
     };
+  }, []);
+
+  // The other direction of the cross-panel linkage: a sibling panel selects an
+  // entity by its stable id (e.g. a file referenced in chat). The graph pins the
+  // selection and drills into that entity's neighbourhood, all from the payload
+  // already in hand — no request.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const onExternalHighlight = (event: Event): void => {
+      const id = (event as CustomEvent<{ id?: unknown }>).detail?.id;
+      if (typeof id !== 'string' || id.length === 0) return;
+      const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
+      if (node === undefined) return;
+      selectedRef.current = id;
+      const host = hostRef.current;
+      if (host !== null) highlightSelection(host, id);
+      const current = viewRef.current;
+      const hops = current.kind === 'neighborhood' && current.entityId === id
+        ? current.hops + 1
+        : DEFAULT_NEIGHBORHOOD_HOPS;
+      setView({ kind: 'neighborhood', entityId: id, hops });
+    };
+
+    window.addEventListener(ENTITY_HIGHLIGHT_EVENT, onExternalHighlight);
+    return () => window.removeEventListener(ENTITY_HIGHLIGHT_EVENT, onExternalHighlight);
   }, []);
 
   const viewLabel = view.kind === 'overview'
