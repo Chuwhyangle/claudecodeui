@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "Diyagram yakınlaştırma",
+      "zoomIn": "Yakınlaştır",
+      "zoomOut": "Uzaklaştır",
+      "zoomFit": "Görünüme sığdır",
+      "zoomActual": "Gerçek boyut (%100)"
+    },
     "title": "Mimari",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",
     "loading": "Mimari grafiği oluşturuluyor…",

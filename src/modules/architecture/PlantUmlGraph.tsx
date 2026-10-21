@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -12,6 +12,11 @@ import type {
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
+import {
+  createSvgViewport,
+  ZOOM_STEP,
+  type SvgViewportController,
+} from '@/modules/architecture/svgViewport';
 
 /**
  * The renderer options this component drives. Structural subsets of the
@@ -71,6 +76,18 @@ const HIGHLIGHT_STYLE = `
  * the old maxHops/maxNodes truncation.
  */
 type PlantUmlGraphProps = ArchitectureRendererProps;
+
+/**
+ * The diagram's presentation scale and why it has that value: `fit` follows the
+ * container whenever it resizes, while `custom` is a scale the user chose with
+ * the toolbar or the wheel. A view switch re-derives the scale (a new diagram
+ * has a new natural size) but keeps this mode, so a fit user stays fitted and a
+ * manual user is not silently moved into fit-on-resize.
+ */
+type DiagramZoom = {
+  readonly scale: number;
+  readonly mode: 'fit' | 'custom';
+};
 
 /** The alias → original id direction of the bridge's map. */
 function reverseAliases(aliasOf: ReadonlyMap<string, string>): Map<string, string> {
@@ -252,6 +269,30 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     clickCallbackRef.current = onNodeClick;
   }, [view, graph, onNodeHover, onNodeClick]);
 
+  // The viewed scale and its mode (see DiagramZoom). Rendering reads it for the
+  // toolbar readout and the next attach; the SVG itself is resized imperatively
+  // through `viewportRef`, so scaling never re-enters the drawing path.
+  const [zoom, setZoom] = useState<DiagramZoom>({ scale: 1, mode: 'fit' });
+  // Mirror of `zoom` for the async render / wheel / resize handlers, which run
+  // outside the render that last committed the state.
+  const zoomRef = useRef(zoom);
+  const viewportRef = useRef<SvgViewportController | null>(null);
+  const applyZoom = useCallback((next: DiagramZoom): void => {
+    zoomRef.current = next;
+    setZoom(next);
+  }, []);
+
+  // One controller per mount: it survives the renderer replacing the SVG (each
+  // render re-attaches), so the mode and scale outlive a single drawing.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    viewportRef.current = createSvgViewport(host);
+    return () => {
+      viewportRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
@@ -280,6 +321,15 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
 
         host.innerHTML = svg;
         restoreEntityIds(host, diagram.aliasOf);
+        // Every view has its own natural size, so the scale is re-derived here
+        // rather than carried over; the fit/custom MODE survives so the resize
+        // observer keeps following the container only for a fit user.
+        const drawing = host.querySelector('svg');
+        const viewport = viewportRef.current;
+        if (drawing !== null && viewport !== null) {
+          viewport.attach(drawing);
+          applyZoom({ scale: viewport.fit(), mode: zoomRef.current.mode });
+        }
         // A fresh SVG has no highlight classes; re-pin the current selection.
         highlightSelection(host, selectedRef.current);
         if (view.kind === 'neighborhood') {
@@ -305,7 +355,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     return () => {
       cancelled = true;
     };
-  }, [graph, view]);
+  }, [applyZoom, graph, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -408,6 +458,66 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     return () => window.removeEventListener(ENTITY_HIGHLIGHT_EVENT, onExternalHighlight);
   }, []);
 
+  // Ctrl/Cmd + wheel zooms around the pointer; a plain wheel is left to the
+  // container so the diagram still scrolls normally (no preventDefault).
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+
+    const onWheel = (event: WheelEvent): void => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      const viewport = viewportRef.current;
+      if (viewport === null) return;
+      event.preventDefault();
+      // deltaMode 1 is lines and 2 is pages; normalise so a mouse wheel and a
+      // trackpad zoom at comparable rates.
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
+      const factor = Math.exp(-event.deltaY * unit * 0.0015);
+      applyZoom({
+        scale: viewport.zoomBy(factor, { clientX: event.clientX, clientY: event.clientY }),
+        mode: 'custom',
+      });
+    };
+
+    // `passive: false` is needed because a passive wheel listener may not call
+    // preventDefault — without it the browser's own page zoom would also fire.
+    host.addEventListener('wheel', onWheel, { passive: false });
+    return () => host.removeEventListener('wheel', onWheel);
+  }, [applyZoom]);
+
+  // A fit diagram follows the container; a manually zoomed one keeps the size
+  // the user chose. The scale is compared before writing state so a burst of
+  // observer callbacks cannot re-render in a loop.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(() => {
+      if (zoomRef.current.mode !== 'fit') return;
+      const viewport = viewportRef.current;
+      if (viewport === null) return;
+      const scale = viewport.fit();
+      if (Math.abs(scale - zoomRef.current.scale) < 1e-6) return;
+      applyZoom({ scale, mode: 'fit' });
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [applyZoom]);
+
+  const zoomToScale = (scale: number): void => {
+    const viewport = viewportRef.current;
+    applyZoom({ scale: viewport?.zoomTo(scale) ?? scale, mode: 'custom' });
+  };
+
+  const zoomByStep = (factor: number): void => {
+    const viewport = viewportRef.current;
+    applyZoom({ scale: viewport?.zoomBy(factor) ?? 1, mode: 'custom' });
+  };
+
+  const fitDiagram = (): void => {
+    const viewport = viewportRef.current;
+    applyZoom({ scale: viewport?.fit() ?? 1, mode: 'fit' });
+  };
+
   const viewLabel = view.kind === 'overview'
     ? t('architecture.plantuml.overview', { defaultValue: 'Overview' })
     : view.kind === 'group'
@@ -426,6 +536,8 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       data-architecture-hops={view.kind === 'neighborhood' ? view.hops : undefined}
       data-architecture-visible-nodes={drawn?.view === view ? drawn.nodes : 0}
       data-architecture-visible-edges={drawn?.view === view ? drawn.edges : 0}
+      data-architecture-zoom-mode={zoom.mode}
+      data-architecture-zoom-scale={zoom.scale}
     >
       <style>{HIGHLIGHT_STYLE}</style>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
@@ -449,12 +561,61 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
             })}
           </span>
         </span>
-        <span data-architecture-visible-summary>
-          {t('architecture.visibleNodes', {
-            defaultValue: '{{visible}} of {{total}} nodes',
-            visible: drawn?.view === view ? drawn.nodes : 0,
-            total: graph.nodes.length,
-          })}
+        <span className="flex items-center gap-2">
+          <span
+            role="group"
+            aria-label={t('architecture.plantuml.zoomGroup', { defaultValue: 'Diagram zoom' })}
+            className="flex items-center gap-1"
+          >
+            <button
+              type="button"
+              onClick={() => zoomByStep(1 / ZOOM_STEP)}
+              aria-label={t('architecture.plantuml.zoomOut', { defaultValue: 'Zoom out' })}
+              data-architecture-zoom-out="true"
+              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              −
+            </button>
+            {/* The readout is the single place the actual scale is stated, so a
+                fit scale (e.g. 42%) and an explicit 100% are distinguishable. */}
+            <span data-architecture-zoom-level className="min-w-9 text-center tabular-nums">
+              {Math.round(zoom.scale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => zoomByStep(ZOOM_STEP)}
+              aria-label={t('architecture.plantuml.zoomIn', { defaultValue: 'Zoom in' })}
+              data-architecture-zoom-in="true"
+              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={fitDiagram}
+              aria-pressed={zoom.mode === 'fit'}
+              data-architecture-zoom-fit="true"
+              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.plantuml.zoomFit', { defaultValue: 'Fit to view' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => zoomToScale(1)}
+              aria-pressed={zoom.mode === 'custom' && Math.abs(zoom.scale - 1) < 1e-6}
+              data-architecture-zoom-actual="true"
+              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.plantuml.zoomActual', { defaultValue: 'Actual size (100%)' })}
+            </button>
+          </span>
+          <span data-architecture-visible-summary>
+            {t('architecture.visibleNodes', {
+              defaultValue: '{{visible}} of {{total}} nodes',
+              visible: drawn?.view === view ? drawn.nodes : 0,
+              total: graph.nodes.length,
+            })}
+          </span>
         </span>
       </div>
       <div

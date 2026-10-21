@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "Zoom diagram",
+      "zoomIn": "Perbesar",
+      "zoomOut": "Perkecil",
+      "zoomFit": "Sesuaikan dengan tampilan",
+      "zoomActual": "Ukuran asli (100%)"
+    },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",
     "loading": "Membuat graf arsitektur…",

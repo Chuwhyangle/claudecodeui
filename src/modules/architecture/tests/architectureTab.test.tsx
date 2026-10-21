@@ -79,13 +79,36 @@ await i18next.use(initReactI18next).init({
   react: { useSuspense: false },
 });
 
-// jsdom ships no ResizeObserver; the desktop tab strip observes its own overflow.
-if (typeof globalThis.ResizeObserver !== 'function') {
-  globalThis.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
+// jsdom ships no ResizeObserver. The desktop tab strip observes its own overflow
+// and the diagram observes its scroll container to re-fit; recording the
+// callbacks lets a case deliver a resize the way a laid-out browser would.
+const resizeCallbacks = new Set<ResizeObserverCallback>();
+class RecordingResizeObserver {
+  private readonly callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(): void {
+    resizeCallbacks.add(this.callback);
+  }
+
+  unobserve(): void {
+    resizeCallbacks.delete(this.callback);
+  }
+
+  disconnect(): void {
+    resizeCallbacks.delete(this.callback);
+  }
+}
+globalThis.ResizeObserver = RecordingResizeObserver as unknown as typeof ResizeObserver;
+
+/** Deliver one resize notification to every mounted observer, inside act(). */
+function triggerResize(): void {
+  act(() => {
+    for (const callback of [...resizeCallbacks]) callback([], {} as ResizeObserver);
+  });
 }
 
 // Pay the one-off module compile in the hook budget (20s), not inside the first
@@ -190,6 +213,50 @@ async function waitForDiagram(): Promise<HTMLElement> {
     assert.ok(host.querySelector('svg'), 'the PlantUML renderer must draw an SVG');
   });
   return host;
+}
+
+/** The graph root — the element carrying the zoom readout and mode. */
+function graphRoot(): HTMLElement {
+  const root = document.querySelector('[data-architecture-plantuml-graph]');
+  assert.ok(root instanceof HTMLElement);
+  return root;
+}
+
+/** jsdom performs no layout, so the scroll container's content box is pinned by hand. */
+function sizeHost(host: HTMLElement, width: number, height: number): void {
+  Object.defineProperty(host, 'clientWidth', { configurable: true, value: width });
+  Object.defineProperty(host, 'clientHeight', { configurable: true, value: height });
+}
+
+/** The natural coordinate space the renderer emitted. */
+function svgViewBoxSize(svg: Element): { width: number; height: number } {
+  const parts = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+  assert.equal(parts.length, 4, 'the renderer must emit a viewBox for the viewport to scale');
+  return { width: parts[2], height: parts[3] };
+}
+
+/** The width `fit` should write for this host, derived here without calling the module. */
+function fittedWidthIn(host: HTMLElement, svg: Element): number {
+  const natural = svgViewBoxSize(svg);
+  const scale = Math.min(host.clientWidth / natural.width, host.clientHeight / natural.height, 1);
+  return Math.round(natural.width * scale * 100) / 100;
+}
+
+/** The SVG's presentation width, as the scroll container sees it. */
+function svgWidth(host: HTMLElement): number {
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null, 'the diagram must be drawn before reading its width');
+  return Number(svg.getAttribute('width'));
+}
+
+/** Wait until the drawn SVG matches the fit size for the host we pinned. */
+async function waitForFit(host: HTMLElement): Promise<number> {
+  await waitFor(() => {
+    const svg = host.querySelector('svg');
+    assert.ok(svg !== null);
+    assert.equal(Number(svg.getAttribute('width')), fittedWidthIn(host, svg));
+  });
+  return svgWidth(host);
 }
 
 /** Node ids present in the host's SVG, sorted. */
@@ -388,6 +455,73 @@ test('the renderer draws the neighbourhood as an SVG (PlantUML/ELK, not a fake)'
   assert.ok(host.querySelectorAll('.uml-node').length >= 3, 'the overview folds the graph into path groups');
   assert.ok(host.querySelectorAll('.uml-edge').length >= 2, 'group→group edges must be drawn');
   assert.match(host.innerHTML, /data-entity-id="grp::modules\/alpha"/, 'the overview group node carries its path prefix');
+});
+
+test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await screen.findByTestId('plantuml-host');
+  // Pin the content box a laid-out browser would report, then deliver the resize
+  // notification the way the observer would on a real container change.
+  // Smaller than the drawn diagram, which is what makes fit mean "shrink".
+  sizeHost(host, 160, 120);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+
+  const root = graphRoot();
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit', 'a fresh diagram opens in fit mode');
+  const fitted = await waitForFit(host);
+  const natural = svgViewBoxSize(host.querySelector('svg') as Element);
+  assert.ok(fitted < natural.width, 'fit shrinks a diagram larger than its container');
+  assert.ok(
+    Math.abs(Number(root.getAttribute('data-architecture-zoom-scale')) - fitted / natural.width) < 1e-3,
+    'the readout states the applied scale',
+  );
+
+  // + / − step by the documented factor and switch to the user's own scale.
+  fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+  assert.ok(Math.abs(svgWidth(host) - fitted * 1.25) < 0.05, 'zoom in applies one 1.25× step');
+  fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+  assert.ok(Math.abs(svgWidth(host) - fitted) < 0.05, 'zoom out takes the same step back');
+
+  // 100% is natural size, i.e. the viewBox extent — not the fit size.
+  fireEvent.click(screen.getByRole('button', { name: 'Actual size (100%)' }));
+  assert.equal(svgWidth(host), natural.width);
+  assert.equal(Number(host.querySelector('svg')?.getAttribute('height')), natural.height);
+
+  // Fit returns to the container-derived size.
+  fireEvent.click(screen.getByRole('button', { name: 'Fit to view' }));
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
+  assert.equal(await waitForFit(host), fitted);
+
+  // A plain wheel stays the container's scroll gesture: no zoom, no mode change.
+  const before = svgWidth(host);
+  fireEvent.wheel(host, { deltaY: -120 });
+  assert.equal(svgWidth(host), before, 'a plain wheel must not zoom');
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
+
+  // Ctrl+wheel is the zoom gesture; it switches to the user's own scale.
+  fireEvent.wheel(host, { deltaY: -120, ctrlKey: true });
+  assert.ok(svgWidth(host) > before, 'Ctrl+wheel zooms in');
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+});
+
+test('redrawing a view re-derives the scale from the new drawing and keeps the fit mode', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await screen.findByTestId('plantuml-host');
+  sizeHost(host, 160, 120);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+  await waitForFit(host);
+
+  // Expand a group; the new drawing has a new natural size, so the scale is
+  // re-derived. Fit mode is preserved.
+  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  await waitFor(() => {
+    assert.deepEqual(drawnNodeIds(host), ['src/modules/alpha/a.ts', 'src/modules/alpha/a2.ts']);
+  });
+  assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'fit');
+  await waitForFit(host);
 });
 
 test('overview folds the graph into path groups; clicking a group expands it locally', async () => {

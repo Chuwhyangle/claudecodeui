@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "图表缩放",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "zoomFit": "适应视图",
+      "zoomActual": "实际大小（100%）"
+    },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",
     "loading": "正在生成架构图…",

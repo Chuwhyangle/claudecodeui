@@ -51,6 +51,11 @@
     },
     "visibleNodes": "{{visible}} of {{total}} nodes",
     "plantuml": {
+      "zoomGroup": "Diagram zoom",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomFit": "Fit to view",
+      "zoomActual": "Actual size (100%)",
       "hint": "Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.",
       "overview": "Overview",
       "group": "Group: {{group}}",

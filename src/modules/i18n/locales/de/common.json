@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "Diagramm-Zoom",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "zoomFit": "An Ansicht anpassen",
+      "zoomActual": "Originalgröße (100%)"
+    },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",
     "loading": "Architekturdiagramm wird erzeugt…",

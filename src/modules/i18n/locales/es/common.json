@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "Shell no disponible para sesiones residentes"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "Zoom del diagrama",
+      "zoomIn": "Acercar",
+      "zoomOut": "Alejar",
+      "zoomFit": "Ajustar a la vista",
+      "zoomActual": "Tamaño real (100%)"
+    },
     "title": "Arquitectura",
     "noSession": "Selecciona una sesión para ver la arquitectura de los archivos que tocó.",
     "loading": "Generando el gráfico de arquitectura…",

@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "圖表縮放",
+      "zoomIn": "放大",
+      "zoomOut": "縮小",
+      "zoomFit": "配合檢視",
+      "zoomActual": "實際大小（100%）"
+    },
     "title": "架構",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",
     "loading": "正在產生架構圖…",

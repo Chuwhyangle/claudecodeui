@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "図のズーム",
+      "zoomIn": "拡大",
+      "zoomOut": "縮小",
+      "zoomFit": "表示に合わせる",
+      "zoomActual": "実際のサイズ (100%)"
+    },
     "title": "アーキテクチャ",
     "noSession": "セッションを選択すると、そのセッションが触れたファイルのアーキテクチャが表示されます。",
     "loading": "アーキテクチャグラフを生成しています…",

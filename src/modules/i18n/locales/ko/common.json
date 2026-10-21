@@ -31,6 +31,13 @@
     "shellResidentDisabledLabel": "상주 세션에서는 Shell을 사용할 수 없습니다"
   },
   "architecture": {
+    "plantuml": {
+      "zoomGroup": "다이어그램 확대/축소",
+      "zoomIn": "확대",
+      "zoomOut": "축소",
+      "zoomFit": "화면에 맞추기",
+      "zoomActual": "실제 크기 (100%)"
+    },
     "title": "아키텍처",
     "noSession": "세션을 선택하면 해당 세션이 건드린 파일의 아키텍처를 볼 수 있습니다.",
     "loading": "아키텍처 그래프를 생성하는 중…",
