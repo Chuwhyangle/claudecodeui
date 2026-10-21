@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 
-import { api } from '@/shared/api';
+import { useProjectFileIndex } from '@/modules/file-tree';
 import { escapeRegExp } from '@/modules/chat/utils/transcript/chatFormatting';
 import type { Project } from '@/shared/types';
-
-type ProjectFileNode = {
-  name: string;
-  type: 'file' | 'directory';
-  path?: string;
-  children?: ProjectFileNode[];
-};
 
 export type MentionableFile = {
   name: string;
@@ -25,30 +18,25 @@ type UseFileMentionsOptions = {
   textareaRef: RefObject<HTMLTextAreaElement>;
 };
 
-const flattenFileTree = (files: ProjectFileNode[], basePath = ''): MentionableFile[] => {
-  let flattened: MentionableFile[] = [];
+// The shared index names every file absolutely; a mention inserts the
+// project-relative path, so strip the selected project's root when the file is
+// under it. A path outside the root (or a project with no root) keeps its
+// absolute form rather than silently losing its leading segments.
+const toMentionableFile = (
+  file: { name: string; path: string },
+  projectRoot: string | undefined,
+): MentionableFile => {
+  const normalizedRoot = projectRoot?.replace(/\\/g, '/').replace(/\/+$/, '');
+  const normalizedPath = file.path.replace(/\\/g, '/');
+  const path =
+    normalizedRoot && normalizedPath.startsWith(`${normalizedRoot}/`)
+      ? normalizedPath.slice(normalizedRoot.length + 1)
+      : normalizedPath;
 
-  files.forEach((file) => {
-    const fullPath = basePath ? `${basePath}/${file.name}` : file.name;
-    if (file.type === 'directory' && file.children) {
-      flattened = flattened.concat(flattenFileTree(file.children, fullPath));
-      return;
-    }
-
-    if (file.type === 'file') {
-      flattened.push({
-        name: file.name,
-        path: fullPath,
-        relativePath: file.path,
-      });
-    }
-  });
-
-  return flattened;
+  return { name: file.name, path, relativePath: file.path };
 };
 
 export function useFileMentions({ selectedProject, input, setInput, textareaRef }: UseFileMentionsOptions) {
-  const [fileList, setFileList] = useState<MentionableFile[]>([]);
   const [fileMentions, setFileMentions] = useState<string[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<MentionableFile[]>([]);
   const [showFileDropdown, setShowFileDropdown] = useState(false);
@@ -56,43 +44,15 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
   const [cursorPosition, setCursorPosition] = useState(0);
   const [atSymbolPosition, setAtSymbolPosition] = useState(-1);
 
-  useEffect(() => {
-    const abortController = new AbortController();
-
-    const fetchProjectFiles = async () => {
-      // File list is keyed by DB projectId now; the backend resolves it to
-      // the project's path before reading.
-      const projectId = selectedProject?.projectId;
-      setFileList([]);
-      setFilteredFiles([]);
-      if (!projectId) {
-        return;
-      }
-
-      try {
-        const response = await api.getFiles(projectId, {
-          signal: abortController.signal,
-        });
-        if (!response.ok) {
-          return;
-        }
-
-        const files = (await response.json()) as ProjectFileNode[];
-        setFileList(flattenFileTree(files));
-      } catch (error) {
-        // Ignore aborts from rapid project switches; we only care about the latest request.
-        if ((error as { name?: string })?.name === 'AbortError') {
-          return;
-        }
-        console.error('Error fetching files:', error);
-      }
-    };
-
-    fetchProjectFiles();
-    return () => {
-      abortController.abort();
-    };
-  }, [selectedProject?.projectId]);
+  const projectId = selectedProject?.projectId;
+  const projectRoot = selectedProject?.path || selectedProject?.fullPath;
+  // The shared flat index (the same one the palette, bare-name resolution and
+  // Files-tab search read) replaces this hook's own full-tree fetch.
+  const { files: projectFiles } = useProjectFileIndex(projectId);
+  const fileList = useMemo(
+    () => projectFiles.map((file) => toMentionableFile(file, projectRoot)),
+    [projectFiles, projectRoot],
+  );
 
   useEffect(() => {
     const textBeforeCursor = input.slice(0, cursorPosition);

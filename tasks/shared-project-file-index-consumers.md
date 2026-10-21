@@ -1,7 +1,7 @@
 ---
 id: shared-project-file-index-consumers
 title: 前端共享 projectFileIndex 缓存，迁移 mention/palette/open-resolver/搜索 四个消费者
-status: ready
+status: done
 labels:
   - feature
 parent: null
