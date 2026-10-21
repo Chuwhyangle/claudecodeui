@@ -1,6 +1,5 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { scan } from 'react-scan'
 
 import App from '@/App'
 import '@/index.css'
@@ -14,7 +13,16 @@ import '@/modules/i18n'
 // a few thousand DOM nodes of its own. It is worth all of that while hunting a
 // render bug and worth none of it the rest of the time, so it is opt-in —
 // `localStorage.setItem('react-scan', 'on')` and reload.
-scan({ enabled: import.meta.env.DEV && localStorage.getItem('react-scan') === 'on' })
+//
+// The import is behind that same flag, not just the overlay: react-scan's browser
+// build is ~650 KB and a *static* import put it on every dev first-load's module
+// graph (Vite's transform deoptimised its styling for exceeding 500 KB) even in
+// the overwhelmingly common case where the flag is off. A dynamic import keeps
+// the behaviour identical — flag on: the overlay attaches; flag off: the module is
+// never requested — and keeps it out of that graph.
+if (import.meta.env.DEV && localStorage.getItem('react-scan') === 'on') {
+  void import('react-scan').then(({ scan }) => scan({ enabled: true }))
+}
 
 // Register service worker for PWA + Web Push support
 if ('serviceWorker' in navigator) {
