@@ -3,7 +3,7 @@ id: gap-ac345-run-ceiling-crossed-under-fanin-suite-load
 title: AC-345 判据在 fan-in 全量 suite 同窗载荷下越过 240s 运行看门狗被杀（socket hang up / Channel
   closed，前 7 case 已过）：按红窗重标本文件 360s 运行预算并让 run-ceiling 越过不再误报
   webServer-start，八用例断言一字不动
-status: todo
+status: ready
 labels:
   - gap
   - defect
