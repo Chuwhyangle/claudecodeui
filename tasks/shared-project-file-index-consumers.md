@@ -17,21 +17,31 @@ goal_ac: AC-412
 
 ## AC
 
-- AC-412 criterion 转绿：`npx vitest run src/modules/file-tree/tests/projectFileIndex.test.tsx` 退出 0。
-- `npx oxlint` 通过（barrel 导出，无跨模块深导入）。
+- [x] AC-412 criterion 转绿：`npx vitest run src/modules/file-tree/tests/projectFileIndex.test.tsx` 退出 0。
+- [x] `npx oxlint` 通过（barrel 导出，无跨模块深导入）。
 
 ## DoD
 
 真实落地判据：`projectFileIndex.test.tsx` 断言四个消费者同源（切项目只发一次 files-index 请求、读同一份 {name,path}[]）；mock getFiles 的既有桩全部迁移到新 index 端点后原测试仍绿。⚠️ 新增前端测试文件同样进 Touches 并同步计数。
+
+落地读数：`projectFileIndex.test.tsx` 5/5 pass（四个消费者同项目只发一次 files-index；切项目只再发一次且都读同一份缓存数组；四个消费者源码静态断言均读共享索引且无 `getFiles`；hook 经 file-tree barrel 导出）。迁移后的 `fileOpenResolver` / `voiceTranscriptRepair` / `voiceEditLabelsHook` / `voiceErrorMessages` / `sessionPermissionMode` / `projectIdentifiers` 六个测试文件 30/30 pass。`npx oxlint src/ server/ scripts/ shared/`（`npm run lint` 口径）退出 0，无跨模块深导入；无路径的 `npx oxlint` 会扫 e2e/experiments/plugin 的既有红，与本 delta 无关。`npx tsc --noEmit -p tsconfig.json` 退出 0。
 
 ## Touches
 
 - src/modules/file-tree/hooks/useProjectFileIndex.ts
 - src/modules/file-tree/index.ts
 - src/modules/file-tree/hooks/useFileTreeSearch.ts
+- src/modules/file-tree/FileTree.tsx
 - src/modules/chat/hooks/useFileMentions.tsx
 - src/modules/command-palette/hooks/useFilesSource.ts
 - src/modules/project-workspace/hooks/useFileOpenResolver.ts
 - src/shared/api.ts
+- src/shared/projectIdentifiers.ts
 - src/modules/file-tree/tests/projectFileIndex.test.tsx
+- src/modules/chat/tests/sessionPermissionMode.test.tsx
+- src/modules/chat/tests/voiceEditLabelsHook.test.tsx
+- src/modules/chat/tests/voiceErrorMessages.test.tsx
+- src/modules/chat/tests/voiceTranscriptRepair.test.tsx
+- src/modules/project-workspace/tests/fileOpenResolver.test.tsx
+- src/shared/tests/projectIdentifiers.test.ts
 - tasks/shared-project-file-index-consumers.md
