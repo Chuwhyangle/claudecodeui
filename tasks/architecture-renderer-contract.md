@@ -1,7 +1,7 @@
 ---
 id: architecture-renderer-contract
 title: architecture 渲染器契约解耦：固化 JSON 邻域 schema + 渲染器无关接口，为 plantuml-js 插拔做准备
-status: todo
+status: ready
 labels:
   - feature
 parent: null
