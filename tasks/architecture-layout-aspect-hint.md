@@ -21,9 +21,9 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：窄容器（如 1200×900）产出的画布宽高比落入预期区间（而非 9–15）；aspect 变化 <15% 不触发重排；>15% 触发一次且防抖
-- [ ] 兜底 engine 单测：把 aspectRatio 传给底层布局（可用 spy/mock 断言入参），布局结果与默认路径结构等价（节点/边集合一致，仅几何不同）；engine 的构造收敛在单一工厂函数内，切换首选路径只改该工厂
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（爆炸图/缩放用例不回归）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：窄容器（如 1200×900）产出的画布宽高比落入预期区间（而非 9–15）；aspect 变化 <15% 不触发重排；>15% 触发一次且防抖
+- [x] 兜底 engine 单测：把 aspectRatio 传给底层布局（可用 spy/mock 断言入参），布局结果与默认路径结构等价（节点/边集合一致，仅几何不同）；engine 的构造收敛在单一工厂函数内，切换首选路径只改该工厂
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（爆炸图/缩放用例不回归）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
