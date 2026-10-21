@@ -18,9 +18,9 @@ import { repairIdentifiers } from '@/shared/identifierRepair';
  * previous test's project ids in its cache and quietly answer from them.
  */
 
-const { getFiles } = vi.hoisted(() => ({ getFiles: vi.fn() }));
+const { getFileIndex } = vi.hoisted(() => ({ getFileIndex: vi.fn() }));
 
-vi.mock('@/shared/api', () => ({ api: { getFiles } }));
+vi.mock('@/shared/api', () => ({ api: { getFileIndex } }));
 
 const load = async () => {
   vi.resetModules();
@@ -34,7 +34,7 @@ const okJson = (body: unknown) => ({
   json: async () => body,
 });
 
-/** The tree `GET /api/file-tree/projects/:id/files` answers with, trimmed to the fields that matter. */
+/** The tree the first flattening reading is written against. */
 const TREE = [
   {
     type: 'directory',
@@ -48,9 +48,16 @@ const TREE = [
   { type: 'file', name: 'README.md', path: '/project/README.md' },
 ];
 
+/** The flat index `GET /api/file-tree/projects/:id/files-index` answers with. */
+const INDEX = [
+  { type: 'file', name: 'voice.routes.ts', path: '/project/src/voice.routes.ts' },
+  { type: 'file', name: 'useVoiceInput.tsx', path: '/project/src/useVoiceInput.tsx' },
+  { type: 'file', name: 'README.md', path: '/project/README.md' },
+];
+
 beforeEach(() => {
-  getFiles.mockReset();
-  getFiles.mockResolvedValue(okJson(TREE));
+  getFileIndex.mockReset();
+  getFileIndex.mockResolvedValue(okJson({ files: INDEX, truncated: false }));
 });
 
 test('a file tree is flattened to the two shapes a recogniser breaks', async () => {
@@ -96,38 +103,38 @@ test('one session asks the project for its files once', async () => {
 
   assert.deepEqual(first, second);
   assert.deepEqual(third, first);
-  assert.equal(getFiles.mock.calls.length, 1, 'the file tree is a session-level read, not a per-utterance one');
-  assert.deepEqual(getFiles.mock.calls[0], ['project-1']);
+  assert.equal(getFileIndex.mock.calls.length, 1, 'the file index is a session-level read, not a per-utterance one');
+  assert.deepEqual(getFileIndex.mock.calls[0], ['project-1']);
 
   // A different project is a different question.
   await loadProjectIdentifiers('project-2');
-  assert.equal(getFiles.mock.calls.length, 2);
+  assert.equal(getFileIndex.mock.calls.length, 2);
 });
 
 test('a failed request leaves the transcript something to fall back on', async () => {
   const { loadProjectIdentifiers } = await load();
 
-  getFiles.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
+  getFileIndex.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
   assert.deepEqual(await loadProjectIdentifiers('project-1'), [], 'an error status is no candidates, not a throw');
 
-  getFiles.mockRejectedValue(new Error('offline'));
+  getFileIndex.mockRejectedValue(new Error('offline'));
   assert.deepEqual(await loadProjectIdentifiers('project-2'), [], 'a rejected fetch is no candidates, not a throw');
 
   // The failure is remembered like any other answer, so a project that cannot be listed
   // does not pay a round trip in front of every dictation for the rest of the session.
-  const before = getFiles.mock.calls.length;
+  const before = getFileIndex.mock.calls.length;
   await loadProjectIdentifiers('project-2');
-  assert.equal(getFiles.mock.calls.length, before);
+  assert.equal(getFileIndex.mock.calls.length, before);
 
   assert.deepEqual(await loadProjectIdentifiers(null), [], 'no project open is no candidates');
   assert.deepEqual(await loadProjectIdentifiers(undefined), []);
-  assert.equal(getFiles.mock.calls.length, before, 'and nothing was asked for them');
+  assert.equal(getFileIndex.mock.calls.length, before, 'and nothing was asked for them');
 });
 
 test('no candidates is the utterance unchanged — the degradation is silent', async () => {
   const { flattenProjectIdentifiers, loadProjectIdentifiers } = await load();
 
-  getFiles.mockResolvedValue(okJson([]));
+  getFileIndex.mockResolvedValue(okJson({ files: [], truncated: false }));
   const candidates = await loadProjectIdentifiers('project-1');
   assert.deepEqual(candidates, []);
 

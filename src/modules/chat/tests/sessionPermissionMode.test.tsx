@@ -75,7 +75,7 @@ vi.mock('@/shared/api', () => ({
       execute: () => okJson({ success: true }),
     },
     files: { search: () => okJson({ success: true, files: [] }) },
-    getFiles: () => okJson([]),
+    getFileIndex: () => okJson({ files: [], truncated: false }),
     assets: { uploadFiles: () => okJson({ success: true, attachments: [] }) },
     providers: {
       skills: () => okJson({ success: true, data: { skills: [] } }),

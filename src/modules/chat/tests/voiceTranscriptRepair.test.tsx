@@ -29,15 +29,15 @@ import type * as SharedApi from '@/shared/api';
  * Only both together pin the behaviour: one rewrite, and no rewrite where none is due.
  */
 
-const { transcribeVoice, getFiles } = vi.hoisted(() => ({
+const { transcribeVoice, getFileIndex } = vi.hoisted(() => ({
   transcribeVoice: vi.fn(),
-  getFiles: vi.fn(),
+  getFileIndex: vi.fn(),
 }));
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof SharedApi>();
   return {
-    api: { getFiles },
+    api: { getFileIndex },
     transcribeVoice,
     // The raw-corpus upload the hook fires after a listen. Declared so this whole-module double stays
     // complete; it is never awaited, so its absence would be a crash only if the switch were on, and
@@ -76,24 +76,17 @@ await i18next.use(initReactI18next).init({
 /* ─── Fakes ────────────────────────────────────────────────────────── */
 
 /**
- * The project's file tree, in the shape `GET …/files` answers with.
+ * The project's flat file index, in the shape `GET …/files-index` answers with.
  *
  * The names are the fixture's own, and the reparability reading depends on them: the
  * stem of every entry is offered as a candidate beside its basename, so a sentence
  * that happens to contain one of these words would be rewritten. None of the plain
  * sentences below do — that is the property being read, not an accident.
  */
-const TREE = [
-  {
-    type: 'directory',
-    name: 'src',
-    path: '/project/src',
-    children: [
-      { type: 'file', name: 'voice.routes.ts', path: '/project/src/voice.routes.ts' },
-      { type: 'file', name: 'useVoiceInput.tsx', path: '/project/src/useVoiceInput.tsx' },
-      { type: 'file', name: 'identifierRepair.ts', path: '/project/src/identifierRepair.ts' },
-    ],
-  },
+const FILES = [
+  { type: 'file', name: 'voice.routes.ts', path: '/project/src/voice.routes.ts' },
+  { type: 'file', name: 'useVoiceInput.tsx', path: '/project/src/useVoiceInput.tsx' },
+  { type: 'file', name: 'identifierRepair.ts', path: '/project/src/identifierRepair.ts' },
 ];
 
 const createObjectURL = vi.fn();
@@ -112,8 +105,12 @@ beforeEach(() => {
   URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
   URL.revokeObjectURL = revokeObjectURL as unknown as typeof URL.revokeObjectURL;
 
-  getFiles.mockReset();
-  getFiles.mockResolvedValue({ ok: true, status: 200, json: async () => TREE });
+  getFileIndex.mockReset();
+  getFileIndex.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ files: FILES, truncated: false }),
+  });
   transcribeVoice.mockReset();
 });
 
@@ -135,7 +132,7 @@ const REPAIRED = 'please open voice.routes.ts and fix the proxy';
 /**
  * One full mic press on the real composer, ending with whatever the recogniser answered.
  *
- * The candidate list arrives from `getFiles` through the composer's own effect, so the
+ * The candidate list arrives from `getFileIndex` through the composer's own effect, so the
  * press can only be judged after that promise has been drained — hence the settle before
  * the recording starts: a repair reading taken before the composer has the names would
  * report "nothing repaired" for a reason that has nothing to do with the repair.
@@ -145,7 +142,7 @@ const speakInto = async (
   transcript: string,
   onVoiceTranscript: (text: string, send?: boolean) => void,
 ) => {
-  const fetchesBefore = getFiles.mock.calls.length;
+  const fetchesBefore = getFileIndex.mock.calls.length;
   const capture = createFakeVoiceCapture();
   const view = render(
     React.createElement(ChatComposer, {
@@ -222,9 +219,9 @@ const speakInto = async (
   // composer that has the project's names in hand.
   await act(async () => {});
   assert.deepEqual(
-    getFiles.mock.calls.slice(fetchesBefore),
+    getFileIndex.mock.calls.slice(fetchesBefore),
     [[projectId]],
-    'the composer asks the project for its files, once',
+    'the composer asks the project for its file index, once',
   );
 
   await act(async () => {

@@ -15,10 +15,10 @@ import type { Project } from '@/shared/types';
  * from the right one.
  */
 
-const getFiles = vi.fn();
+const getFileIndex = vi.fn();
 
 vi.mock('@/shared/api', () => ({
-  api: { getFiles: (...args: unknown[]) => getFiles(...args) },
+  api: { getFileIndex: (...args: unknown[]) => getFileIndex(...args) },
 }));
 
 const { useFileOpenResolver } = await import('@/modules/project-workspace/hooks/useFileOpenResolver');
@@ -26,19 +26,14 @@ const { useFileOpenResolver } = await import('@/modules/project-workspace/hooks/
 const ROOT = '/home/odoo/workspace/personal';
 const project: Project = { projectId: 'p1', displayName: 'personal', fullPath: ROOT };
 
-const tree = [
+const index = [
   { type: 'file', name: 'CLAUDE.md', path: `${ROOT}/CLAUDE.md` },
-  {
-    type: 'directory',
-    name: 'src',
-    path: `${ROOT}/src`,
-    children: [{ type: 'file', name: 'foo.ts', path: `${ROOT}/src/foo.ts` }],
-  },
+  { type: 'file', name: 'foo.ts', path: `${ROOT}/src/foo.ts` },
 ];
 
 const setup = () => {
-  getFiles.mockReset();
-  getFiles.mockResolvedValue({ ok: true, json: async () => tree });
+  getFileIndex.mockReset();
+  getFileIndex.mockResolvedValue({ ok: true, json: async () => ({ files: index, truncated: false }) });
   const onFileOpen = vi.fn();
   const { result } = renderHook(() => useFileOpenResolver(project, onFileOpen));
   return { resolve: result.current, onFileOpen };
@@ -49,8 +44,8 @@ test('an absolute path outside the project is passed through untouched', async (
   resolve('/home/odoo/.claude/CLAUDE.md');
   await waitFor(() => assert.equal(onFileOpen.mock.calls.length, 1));
   assert.equal(onFileOpen.mock.calls[0][0], '/home/odoo/.claude/CLAUDE.md');
-  // It does not even need the tree, so no request goes out.
-  assert.equal(getFiles.mock.calls.length, 0);
+  // It does not even need the index, so no request goes out.
+  assert.equal(getFileIndex.mock.calls.length, 0);
 });
 
 test('an absolute path inside the project resolves to itself, as before', async () => {
@@ -60,7 +55,7 @@ test('an absolute path inside the project resolves to itself, as before', async 
   assert.equal(onFileOpen.mock.calls[0][0], `${ROOT}/src/foo.ts`);
 });
 
-test('partial references still match against the tree', async () => {
+test('partial references still match against the file index', async () => {
   const { resolve, onFileOpen } = setup();
   resolve('foo.ts');
   await waitFor(() => assert.equal(onFileOpen.mock.calls.length, 1));
