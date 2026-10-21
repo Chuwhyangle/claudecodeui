@@ -79,3 +79,11 @@ goal_ac: AC-140
 - `git diff --stat scripts/asr-proxy-only-ssrf-check.mjs scripts/asr-proxy-only-ssrf-check.test.mjs` 为空 —— 判据没有被放宽。
 - 取假形态的「必红」在真实运行里被观察到（记录命令与红的 token），不是口述。
 - `npx tsc --noEmit -p tsconfig.json && npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npx oxlint server/modules/voice-realtime/ shared/asr/list/dashscope-omni/` 退出 0。
+
+## Blocker
+
+**2026-10-21T01:07:11.833Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: unresolved internal specifiers=23, over the baseline budget of 19 — the budget may only fall
+- run_id：wk-prod-anchor
+- session_id：79b8211a-9ed5-4b35-9812-5640189cf151
