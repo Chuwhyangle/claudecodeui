@@ -33,11 +33,11 @@ export { ledgerDeliveryByUuid } from './ledger.js';
 export { ledgerTurn } from './ledger.js';
 // consumer: server/modules/providers/list/claude/claude-host-driver.provider.ts
 export { ledgerPendingStart } from './ledger.js';
-// consumer: server/modules/providers/list/claude/claude-host-driver.provider.ts
+// consumer: server/modules/providers/list/claude/claude-resident-outcome-handlers.ts
 export { ledgerForeign } from './ledger.js';
 // consumer: server/modules/providers/list/claude/claude-host-driver.provider.ts
 export { ledgerClosedTurns } from './ledger.js';
-// consumer: server/modules/providers/list/claude/claude-host-driver.provider.ts
+// consumer: server/modules/providers/list/claude/claude-resident-outcome-handlers.ts
 export { ledgerAnomalies } from './ledger.js';
 // consumer: server/modules/providers/list/claude/claude-host-driver.provider.ts
 export { applyLedgerEvent } from './ledger.js';

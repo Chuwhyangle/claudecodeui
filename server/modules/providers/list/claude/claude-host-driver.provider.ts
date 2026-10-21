@@ -83,6 +83,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SpawnOptions as SdkSpawnOptions, SpawnedProcess } from '@anthropic-ai/claude-agent-sdk';
@@ -91,6 +92,12 @@ import {
   ClaudePerRunHostDriver,
   type ClaudeBackgroundWorkEvent,
 } from '@/modules/providers/list/claude/claude-per-run-host-driver.provider.js';
+import {
+  type ClaudeResidentOutcomeContext,
+  type ClaudeResidentOutcomeName,
+  type ClaudeResidentOutcomeRegistry,
+} from '@/modules/providers/list/claude/claude-resident-outcome-registry.js';
+import { createDefaultClaudeResidentOutcomeRegistry } from '@/modules/providers/list/claude/claude-resident-outcome-handlers.js';
 import { createNotificationEvent, notifyUserIfEnabled } from '@/modules/notifications/index.js';
 import {
   TOOLS_REQUIRING_INTERACTION,
@@ -158,11 +165,9 @@ import type {
 import {
   applyLedgerEvent,
   createResidentLedger,
-  ledgerAnomalies,
   ledgerClosedTurns,
   ledgerDeliveries,
   ledgerDeliveryByUuid,
-  ledgerForeign,
   ledgerPendingStart,
   ledgerTurn,
 } from '@/modules/resident-ledger/index.js';
@@ -523,34 +528,15 @@ export type ClaudeQueuedInput = {
 };
 
 /**
- * The UTF-8 bytes of one queued frame's user text — the length unit the voice
- * relay's admission bound (`VOICE_QUEUE_MAX_BYTES`) is written in.
+ * The file this driver was defined in.
  *
- * The frame is an SDK user message: `{ type:'user', message:{ role:'user',
- * content } }` where `content` is either the prompt string or the block array an
- * attachment-carrying turn expands to. Both shapes are read so the byte reading
- * describes the text the CLI is really holding, not the JSON envelope around it
- * — an envelope length would make the relay's budget and its own count disagree
- * by an order of magnitude. A frame with neither shape counts as zero: there are
- * no words to charge.
+ * The mirror of `HANDLERS_SOURCE` in `claude-resident-outcome-handlers.ts`: a
+ * criterion compares a registered handler's `source` with this value to show the
+ * handler came from outside the driver rather than from here. Read off the
+ * module's own URL so both sides survive the compiled layout (where each ends in
+ * `.js`) without either hard-coding a checkout location.
  */
-function claudeQueuedFrameTextBytes(frame: AnyRecord): number {
-  const content = (frame?.message as AnyRecord | undefined)?.content;
-  if (typeof content === 'string') {
-    return Buffer.byteLength(content, 'utf8');
-  }
-  if (Array.isArray(content)) {
-    let bytes = 0;
-    for (const block of content) {
-      const text = (block as AnyRecord | undefined)?.text;
-      if (typeof text === 'string') {
-        bytes += Buffer.byteLength(text, 'utf8');
-      }
-    }
-    return bytes;
-  }
-  return 0;
-}
+export const CLAUDE_RESIDENT_HOST_DRIVER_SOURCE = fileURLToPath(import.meta.url);
 
 /**
  * What a live resident host knows about the messages it pushed while busy, the
@@ -929,6 +915,19 @@ export type ClaudeResidentHostDriverOptions = {
    * Remote Control section above).
    */
   userSettingsPath?: string;
+  /**
+   * The reading registry this driver dispatches through.
+   *
+   * Defaults to {@link createDefaultClaudeResidentOutcomeRegistry} — the shipped
+   * handlers beside this file, which is the production set. It is a seam because
+   * the criterion has to register a probe handler from its own file and observe
+   * the driver call it (handler source path ≠ this file), and because replacing
+   * the registry must not require touching the driver.
+   *
+   * Optional, like every other seam here: a caller that does not name one gets
+   * the shipped registry, so existing constructor call sites are unchanged.
+   */
+  outcomes?: ClaudeResidentOutcomeRegistry;
 };
 
 /**
@@ -2555,8 +2554,13 @@ function readDeliverySource(options: AnyRecord | undefined): ChatRunSource {
  * Per host rather than per driver because all four are per-process facts. The
  * manager's host record stays the manager's; this is what the driver needs to
  * deliver a turn and to answer for the process's lifetime.
+ *
+ * Exported for the reading handlers beside this file
+ * (`claude-resident-outcome-handlers.ts`), which read host state through
+ * `ClaudeResidentOutcomeContext.hosts`. It is a type-only export: nothing outside
+ * this file can construct or mutate one, and the driver remains its one owner.
  */
-type ResidentHostState = {
+export type ResidentHostState = {
   hostId: string;
   appSessionId: string;
   sink: IProviderHostDriverSink;
@@ -3071,6 +3075,21 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   private readonly perRun: ClaudePerRunHostDriver;
   /** The live state per host. */
   private readonly hosts = new Map<string, ResidentHostState>();
+  /**
+   * The reading registry every reading method dispatches through.
+   *
+   * The extension point this file grew so that adding a reading is a handler
+   * beside it rather than another method in it. Defaults to the shipped
+   * registry; see {@link ClaudeResidentHostDriverOptions.outcomes}.
+   */
+  private readonly outcomes: ClaudeResidentOutcomeRegistry;
+  /**
+   * The view of host state a handler sees — the two maps the readings read.
+   *
+   * Built once, holding references to the live `hosts`/`refusals` maps, so a
+   * handler reads current state without the driver copying anything per call.
+   */
+  private readonly outcomeContext: ClaudeResidentOutcomeContext;
   /** What the next `startHost` should adopt, since `openHost` decides the host id. */
   private pending: PendingHost | null = null;
   /** Counted turn ids: one per armed round, so a reading of the lease is repeatable. */
@@ -3093,6 +3112,8 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     this.notifyUser =
       options.notifyUser ?? (({ userId, event }) => notifyUserIfEnabled({ userId, event }));
     this.userSettingsPath = options.userSettingsPath ?? null;
+    this.outcomes = options.outcomes ?? createDefaultClaudeResidentOutcomeRegistry();
+    this.outcomeContext = { hosts: this.hosts, refusals: this.refusals };
     this.perRun = new ClaudePerRunHostDriver({
       host: options.host,
       notify: options.notifyBackgroundWork,
@@ -3755,19 +3776,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * same process that nothing outside it can read.
    */
   unattendedReading(appSessionId: string): ClaudeUnattendedReading | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    const pushedUuids = [...state.pushedUuids];
-    return {
-      pushedUuids,
-      lastPushedUuid: pushedUuids.at(-1) ?? null,
-      unattendedCommandUuid: state.unattended?.commandUuid ?? state.lastUnattendedCommandUuid,
-      initTools: [...state.initTools],
-      backgroundTaskType: state.backgroundTaskType,
-    };
+    return this.dispatchReading<ClaudeUnattendedReading | null>('unattendedReading', appSessionId);
   }
 
   /**
@@ -3781,21 +3790,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * responses that came back to them.
    */
   busyInputReading(appSessionId: string): ClaudeBusyInputReading | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    return {
-      queuedInputs: state.queuedInputs.map((input) => ({ ...input, frame: { ...input.frame } })),
-      lifecycle: [...state.lifecycle],
-      controlFrames: state.controlFrames.map((entry) => ({ ...entry, frame: { ...entry.frame } })),
-      controlResponses: [...state.controlResponses],
-      resultTimes: [...state.resultTimes],
-      sessionStateChanged: state.sessionStateChanged,
-      roundsOpen: state.rounds.length,
-      hostPid: state.process.pid,
-    };
+    return this.dispatchReading<ClaudeBusyInputReading | null>('busyInputReading', appSessionId);
   }
 
   /**
@@ -3820,40 +3815,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * asks it.
    */
   ledgerReading(appSessionId: string): ClaudeResidentLedgerReading | null {
-    const state = this.ledgerStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    const turn = ledgerTurn(state.turnLedger);
-    return {
-      deliveries: ledgerDeliveries(state.turnLedger).map((delivery) => ({
-        deliveryId: delivery.commandUuid,
-        state: delivery.state,
-        reason: delivery.reason,
-        turnId: delivery.turnId,
-        runOpen: delivery.runOpen,
-        owed: delivery.owed,
-        enqueuedAt: delivery.enqueuedAt,
-        startedAt: delivery.startedAt,
-        endedAt: delivery.endedAt,
-        priority: delivery.priority,
-      })),
-      foreign: [...ledgerForeign(state.turnLedger)],
-      turn: turn
-        ? {
-            id: turn.id,
-            kind: turn.kind,
-            open: turn.open,
-            ownerDeliveryId: turn.ownerDeliveryId,
-            interruptRequested: turn.interruptRequested,
-          }
-        : null,
-      closedTurns: ledgerClosedTurns(state.turnLedger).map((closed) => ({ ...closed })),
-      pendingStart: ledgerPendingStart(state.turnLedger).map((delivery) => delivery.commandUuid),
-      anomalies: ledgerAnomalies(state.turnLedger).map((anomaly) => ({ ...anomaly })),
-      openRuns: ledgerDeliveries(state.turnLedger).filter((delivery) => delivery.runOpen).length,
-    };
+    return this.dispatchReading<ClaudeResidentLedgerReading | null>('ledgerReading', appSessionId);
   }
 
   /**
@@ -3878,18 +3840,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * (`chat-control.service.ts`).
    */
   queuedInputUuid(appSessionId: string): string | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state || state.closed) {
-      return null;
-    }
-
-    for (let index = state.queuedInputs.length - 1; index >= 0; index -= 1) {
-      const input = state.queuedInputs[index];
-      if (input.startedAt === null) {
-        return input.uuid;
-      }
-    }
-    return null;
+    return this.dispatchReading<string | null>('queuedInputUuid', appSessionId);
   }
 
   /**
@@ -3919,30 +3870,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * samples to reconcile its reported depth (`voice-realtime-ws-proxy.service.ts`).
    */
   pendingQueuedInputs(appSessionId: string): HostPendingQueuedInputs | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    // The CLI's own account of what has left the queue, by uuid: any of these
-    // states means the message is no longer waiting, whatever `startedAt` says.
-    const departed = new Set<string>();
-    for (const event of state.lifecycle) {
-      if (event.state !== 'queued') {
-        departed.add(event.commandUuid);
-      }
-    }
-
-    let items = 0;
-    let bytes = 0;
-    for (const input of state.queuedInputs) {
-      if (input.startedAt !== null || departed.has(input.uuid)) {
-        continue;
-      }
-      items += 1;
-      bytes += claudeQueuedFrameTextBytes(input.frame);
-    }
-    return { items, bytes };
+    return this.dispatchReading<HostPendingQueuedInputs | null>('pendingQueuedInputs', appSessionId);
   }
 
   /**
@@ -3975,21 +3903,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * (`voice-realtime-ws-proxy.service.ts`, wired in `server/index.ts`).
    */
   startedQueuedCommands(appSessionId: string): readonly string[] | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    const started: string[] = [];
-    const seen = new Set<string>();
-    for (const event of state.lifecycle) {
-      if (event.state !== 'started' || seen.has(event.commandUuid)) {
-        continue;
-      }
-      seen.add(event.commandUuid);
-      started.push(event.commandUuid);
-    }
-    return started;
+    return this.dispatchReading<readonly string[] | null>('startedQueuedCommands', appSessionId);
   }
 
   /**
@@ -4014,11 +3928,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * {@link composeHostRunActivityReading} (`voice-realtime-ws-proxy.service.ts`).
    */
   runInFlight(appSessionId: string): boolean | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-    return state.rounds.length > 0;
+    return this.dispatchReading<boolean | null>('runInFlight', appSessionId);
   }
 
   /**
@@ -4032,19 +3942,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * nothing in production consumes it.
    */
   lifecycleReading(appSessionId: string): ClaudeResidentLifecycleReading | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    return {
-      hostId: state.hostId,
-      crons: state.heldCrons.map((lease) => ({ ...lease })),
-      backgroundTasks: state.heldBackgroundTasks.map((lease) => ({ ...lease })),
-      unhandledSystemSubtypes: [...state.unhandledSystemSubtypes],
-      cronsAuthoritative: state.cronsAuthoritative,
-      tasksAuthoritative: state.tasksAuthoritative,
-    };
+    return this.dispatchReading<ClaudeResidentLifecycleReading | null>('lifecycleReading', appSessionId);
   }
 
   /**
@@ -4059,16 +3957,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * attendance test is a reading rather than an inference from the other half.
    */
   permissionReading(appSessionId: string): ClaudePermissionReading | null {
-    const state = this.liveStateFor(appSessionId);
-    if (!state) {
-      return null;
-    }
-
-    return {
-      permissionMode: state.permissions.mode,
-      decisions: state.permissions.decisions.map((decision) => ({ ...decision })),
-      lastConnectedCount: state.permissions.lastConnectedCount,
-    };
+    return this.dispatchReading<ClaudePermissionReading | null>('permissionReading', appSessionId);
   }
 
   /**
@@ -4088,7 +3977,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * that gets past the gate.
    */
   remoteControlRefusal(appSessionId: string): ClaudeRemoteControlRefusal | null {
-    return this.refusals.get(appSessionId) ?? null;
+    return this.dispatchReading<ClaudeRemoteControlRefusal | null>('remoteControlRefusal', appSessionId);
   }
 
   /**
@@ -5884,14 +5773,23 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     );
   }
 
+  /**
+   * Runs the handler registered for one reading, or answers `null` when none is.
+   *
+   * The whole of what every reading method does now: the registry decides what
+   * answers, and "nothing registered" degrades to the same conservative `null` a
+   * reading already gives for a session this driver is not hosting. The handler
+   * set lives in `claude-resident-outcome-handlers.ts`; this method names no
+   * reading logic of its own.
+   */
+  private dispatchReading<TResult>(name: ClaudeResidentOutcomeName, appSessionId: string): TResult | null {
+    const answer = this.outcomes.dispatch<TResult>(name, this.outcomeContext, appSessionId);
+    return answer ? answer.value : null;
+  }
+
   /** The live resident state for a session, or null when it has no process. */
   private liveStateFor(appSessionId: string): ResidentHostState | null {
-    for (const state of this.hosts.values()) {
-      if (state.appSessionId === appSessionId && !state.closed) {
-        return state;
-      }
-    }
-    return null;
+    return this.dispatchReading<ResidentHostState | null>('liveState', appSessionId);
   }
 
   /**
@@ -5904,14 +5802,13 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
    * driver reports is about a process it is still holding, which is why the live
    * readings refuse a closed host; the ledger is frozen at that point instead,
    * and it is the answer to "did anything stay open when it died?".
+   *
+   * The body is the `ledgerState` handler beside this file; the reading method
+   * that used it ({@link ClaudeResidentHostDriver.ledgerReading}) now delegates to
+   * that same handler directly.
    */
   private ledgerStateFor(appSessionId: string): ResidentHostState | null {
-    for (const state of this.hosts.values()) {
-      if (state.appSessionId === appSessionId) {
-        return state;
-      }
-    }
-    return null;
+    return this.dispatchReading<ResidentHostState | null>('ledgerState', appSessionId);
   }
 
   /**

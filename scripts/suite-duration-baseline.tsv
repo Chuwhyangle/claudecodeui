@@ -530,3 +530,4 @@
 1700	server/modules/architecture/tests/seed-extraction.test.ts
 1448	server/modules/architecture/tests/cache-invalidation.test.ts
 1685	server/modules/architecture/tests/architecture-routes.test.ts
+2327	server/modules/providers/tests/claude-resident-outcome-registry.test.ts
