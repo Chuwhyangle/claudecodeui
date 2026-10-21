@@ -10,6 +10,7 @@ import { fsAvailableBytes, resolveE2eDataDir } from './scripts/e2e-data-dir-sele
 import { prepareServerBundle } from './scripts/e2e-server-bundle.mjs';
 import { reclaimDataDirs } from './scripts/e2e-data-dir-retention.mjs';
 import { resolveClientRoot } from './scripts/e2e-client-root.mjs';
+import { webServerStderrLogs, withStderrLog } from './scripts/e2e-web-server-stderr.mjs';
 import {
   ASSEMBLY_TEMP_ROOT_ENV,
   PROBE_FILE_NAME,
@@ -3026,6 +3027,23 @@ const clientRoot = mcpSettingsOnlySelection
   : resolveClientRoot({ configDir: CONFIG_DIR });
 
 /**
+ * Where this run's two `webServer` children put their stderr, and why it is not the runner's stderr.
+ *
+ * The goal gate records a failed criterion's reason from the run's STDERR, keeping its HEAD inside a
+ * ~500-char budget. Playwright forwards every webServer child's stderr to the runner's stderr, while a
+ * failing CASE's name and assertion go to the runner's STDOUT — so the gate's excerpt was always the
+ * server's boot chatter (`No .env …`, `DEP0190`, Vite's `ws proxy error`) and never the failing test.
+ * Measured on a green run of this checkout's AC-323 selection, 2026-10-21: 13 895 bytes of webServer
+ * stderr against zero bytes the gate could attribute. Redirecting both children's stderr into the
+ * run's own data directory leaves the runner's stderr carrying only Playwright's own failures, and
+ * keeps every diagnostic line in `<dataDir>/server.stderr.log` / `<dataDir>/vite.stderr.log` (the
+ * data directory is announced on stdout as `[e2e] data-dir=<D>`). `scripts/e2e-web-server-stderr.mjs`
+ * owns the construction; the raw-capture and client-clock selections keep their `2>&1 | tee` branches
+ * verbatim, because those forward the child's whole output to stdout for their specs to read.
+ */
+const webServerLogs = webServerStderrLogs(dataDir);
+
+/**
  * The command the server `webServer` starts: this checkout's server graph pre-built into one file.
  *
  * WHY NOT `tsx` ANY MORE. A criterion's ceiling covers the whole `npx playwright test` invocation,
@@ -3103,12 +3121,13 @@ export default defineConfig({
       // already running. The local bin is what npx would have found anyway, and it fails loudly rather than
       // reaching for a registry copy if it is missing.
       // The raw-corpus criterion tees its server's output to a file so the spec can read the capture
-      // rows; every other selection runs the server plain.
+      // rows; every other selection runs the server plain, with its stderr redirected into this run's
+      // data directory so it cannot crowd the failing case out of the gate's reason (`webServerLogs`).
       command: voiceRawCaptureSelection
         ? `${serverLaunchCommand} 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
         : clientClockCaptureSelection
           ? `${serverLaunchCommand} 2>&1 | tee ${JSON.stringify(CLIENT_CLOCK_SERVER_LOG)}`
-          : serverLaunchCommand,
+          : withStderrLog(serverLaunchCommand, webServerLogs.server),
       // The voice criterion's server is started from a root with no `.env`, so its blank
       // `DASHSCOPE_API_KEY` cannot be backfilled from the deployer's file. Every other selection
       // gets `CONFIG_DIR`, which is Playwright's own default — see `envFreeServerRoot`.
@@ -3213,7 +3232,10 @@ export default defineConfig({
       // `--strictPort`: without it vite treats a taken port as a hint and silently serves on the next free one,
       // so the url checked below — the port the browser is sent to — would never answer and the run would sit
       // here until the ceiling instead of reporting the port. Strict, it fails at once and says which port.
-      command: 'node_modules/.bin/vite --host 127.0.0.1 --strictPort',
+      // Its stderr is redirected into this run's data directory for the same reason the server's is
+      // (`webServerLogs`): Vite writes `ws proxy error: write EPIPE` on every page close, and that noise
+      // used to fill the gate's 500-char stderr excerpt on every red.
+      command: withStderrLog('node_modules/.bin/vite --host 127.0.0.1 --strictPort', webServerLogs.vite),
       // The run's own copy of the client tree — not `CONFIG_DIR`, which fan-in's `ff` writes while the gate
       // is running. Without this, one landing into `src/` reloads the page mid-case. See `clientRoot`.
       cwd: clientRoot,
