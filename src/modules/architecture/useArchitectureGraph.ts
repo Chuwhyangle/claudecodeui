@@ -52,9 +52,8 @@ export type ArchitectureGraphStats = {
 /**
  * One node of the server's neighbourhood JSON. `id` is the raw ArchGuard entity
  * id (or a project-relative file key), `label` the display name, and `distance`
- * the shortest hop count from the transcript's seeds — the slider's local
- * `maxHops` filter reads that distance, so it must come from the server rather
- * than from render order.
+ * the shortest hop count from the transcript's seeds — the server supplies it,
+ * so view filters never have to infer depth from render order.
  */
 export type ArchitectureNeighborhoodNode = {
   readonly id: string;
@@ -70,9 +69,9 @@ export type ArchitectureNeighborhoodEdge = {
 };
 
 /**
- * A render-ready subgraph (the cytoscape input). Every edge endpoint is present
- * in `nodes`; the node order is (distance, id), so a local prefix is
- * deterministic.
+ * A render-ready subgraph (the input of the PlantUML bridge). Every edge
+ * endpoint is present in `nodes`; the node order is (distance, id), so a local
+ * prefix is deterministic.
  */
 export type ArchitectureNeighborhood = {
   readonly nodes: readonly ArchitectureNeighborhoodNode[];
@@ -82,7 +81,7 @@ export type ArchitectureNeighborhood = {
 /**
  * The endpoint's full reading: both render-ready subgraphs, both Mermaid
  * documents (the `.mmd` export path), the counters, and provenance. The panel
- * slices `graph` locally for the sliders, so it has to arrive whole.
+ * switches subgraphs locally from `graph`, so it has to arrive whole.
  */
 export type ArchitectureGraphResult = {
   readonly mmd: { readonly file: string; readonly entity: string };

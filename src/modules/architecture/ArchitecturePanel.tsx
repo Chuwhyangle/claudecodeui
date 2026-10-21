@@ -1,15 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CytoscapeGraph } from '@/modules/architecture/CytoscapeGraph';
+import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
 type ArchitectureGranularity = 'file' | 'entity';
-
-/** The view opens at the old product reading (1 hop, 200 nodes) and can be widened locally. */
-const DEFAULT_LOCAL_HOPS = 1;
-const DEFAULT_LOCAL_MAX_NODES = 200;
 
 type ArchitecturePanelProps = {
   /** The selected project's DB id; the endpoint resolves it to a project root. */
@@ -88,22 +84,16 @@ function ArchitectureEmptyState({ message }: { message: string }) {
 
 /**
  * Rendered by WorkspaceMain when the architecture tab is active. It requests the
- * session's neighbourhood on mount (the tab activation) and draws it with
- * cytoscape; the `maxHops`/`maxNodes` sliders and the file/entity switch only
- * slice that already-fetched payload, so none of them may re-enter the fetch.
- * The Mermaid documents stay in hand for the `.mmd` export.
+ * session's neighbourhood on mount (the tab activation) and draws it as a
+ * PlantUML/ELK layered diagram; the file/entity switch only picks one of the two
+ * subgraphs that already arrived in the same payload, so it must never re-enter
+ * the fetch. The Mermaid documents stay in hand for the `.mmd` export.
  */
 export default function ArchitecturePanel({ projectId, sessionId }: ArchitecturePanelProps) {
   const { t } = useTranslation();
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch.
   const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
-  // Local hop budget for the graph view; widening it reveals nodes the server
-  // already sent instead of requesting a deeper neighbourhood.
-  const [maxHops, setMaxHops] = useState(DEFAULT_LOCAL_HOPS);
-  // Local node budget for the graph view; it is a deterministic prefix of the
-  // server's (distance, id) order, not a server-side truncation.
-  const [maxNodes, setMaxNodes] = useState(DEFAULT_LOCAL_MAX_NODES);
   const { view, reload } = useArchitectureGraph(projectId, sessionId);
 
   if (!sessionId) {
@@ -145,16 +135,6 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
   const { stats, mmd } = result;
   const hasSeeds = stats.seedFiles > 0 || stats.seedIdentifiers > 0;
   const neighbourhood = result.graph[granularity];
-
-  // The sliders' ceilings come from the payload: `maxHops` cannot exceed the
-  // deepest distance the server sent, and `maxNodes` cannot exceed what arrived.
-  const hopsCeiling = Math.max(
-    1,
-    neighbourhood.nodes.reduce((deepest, node) => Math.max(deepest, node.distance), 0),
-  );
-  const nodesCeiling = Math.max(1, neighbourhood.nodes.length);
-  const hopsValue = Math.min(maxHops, hopsCeiling);
-  const nodesValue = Math.min(maxNodes, nodesCeiling);
 
   return (
     <div className="flex h-full flex-col overflow-hidden" data-architecture-panel="true">
@@ -202,49 +182,11 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 border-b border-border/60 px-4 py-1.5 text-[11px] text-muted-foreground">
-        <label className="flex items-center gap-2">
-          <span>{t('architecture.controls.maxHops', { defaultValue: 'Hops' })}</span>
-          <input
-            type="range"
-            min={0}
-            max={hopsCeiling}
-            step={1}
-            value={hopsValue}
-            aria-label={t('architecture.controls.maxHops', { defaultValue: 'Hops' })}
-            data-architecture-max-hops="true"
-            onChange={(event) => setMaxHops(Number(event.target.value))}
-            className="h-1 w-24 accent-primary"
-          />
-          <span data-architecture-max-hops-value={hopsValue}>{hopsValue}</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <span>{t('architecture.controls.maxNodes', { defaultValue: 'Max nodes' })}</span>
-          <input
-            type="range"
-            min={1}
-            max={nodesCeiling}
-            step={1}
-            value={nodesValue}
-            aria-label={t('architecture.controls.maxNodes', { defaultValue: 'Max nodes' })}
-            data-architecture-max-nodes="true"
-            onChange={(event) => setMaxNodes(Number(event.target.value))}
-            className="h-1 w-32 accent-primary"
-          />
-          <span data-architecture-max-nodes-value={nodesValue}>{nodesValue}</span>
-        </label>
-      </div>
-
       <ArchitectureHonestyBar result={result} />
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {hasSeeds ? (
-          <CytoscapeGraph
-            key={`${sessionId}:${granularity}`}
-            graph={neighbourhood}
-            maxHops={hopsValue}
-            maxNodes={nodesValue}
-          />
+          <PlantUmlGraph key={`${sessionId}:${granularity}`} graph={neighbourhood} />
         ) : (
           <ArchitectureEmptyState
             message={t('architecture.noSeeds', {

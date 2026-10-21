@@ -50,6 +50,14 @@
       "relations": "{{node}} — relations: {{relations}}"
     },
     "visibleNodes": "{{visible}} of {{total}} nodes",
+    "plantuml": {
+      "hint": "Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.",
+      "overview": "Overview",
+      "group": "Group: {{group}}",
+      "neighborhood": "{{entity}} · {{hops}} hop(s)",
+      "back": "Back to overview",
+      "error": "The diagram could not be rendered: {{message}}"
+    },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {
       "analysis": "Analysis",
