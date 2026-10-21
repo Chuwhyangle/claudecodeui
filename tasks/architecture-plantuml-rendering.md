@@ -37,3 +37,11 @@ depends_on:
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/i18n/locales/en/chat.json
 - tasks/architecture-plantuml-rendering.md
+
+## Blocker
+
+**2026-10-21T16:06:43.434Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：6c8395db-e9b9-4958-a87f-ac7ed39dda13
