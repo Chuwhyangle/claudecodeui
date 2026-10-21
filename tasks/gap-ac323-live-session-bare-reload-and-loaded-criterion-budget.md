@@ -4,7 +4,7 @@ title: 恢复 AC-323 判据绿：live-session-send 的两处历史 reload 仍是
   page.reload（upload-fixture 的 reloadPaneBounded 重放守卫未同步）⇒ reload 后 boot
   请求中断、.chat-messages-pane 30s 不出现（本轮 04:02Z fail 复现：1 failed / 3 did not run）+
   记录 timeoutMs 200000 低于负载下三段实测墙钟
-status: ready
+status: done
 labels:
   - gap
   - defect
