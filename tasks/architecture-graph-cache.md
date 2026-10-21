@@ -17,7 +17,7 @@ goal_ac: AC-417
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/cache-invalidation.test.ts` exit 0（相同键命中且不重读盘；seeds/archJsonHash/params 任一变化 miss）
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/cache-invalidation.test.ts` exit 0（相同键命中且不重读盘；seeds/archJsonHash/params 任一变化 miss）
 
 ## DoD
 
@@ -27,4 +27,6 @@ goal_ac: AC-417
 
 - server/modules/architecture/cache.ts (new)
 - server/modules/architecture/tests/cache-invalidation.test.ts (new)
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 - tasks/architecture-graph-cache.md
