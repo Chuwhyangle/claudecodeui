@@ -443,8 +443,24 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // per queued instruction — the same costs the entries above declare. That cost is spread over eight
   // cases rather than concentrated in one, so each case stays well inside `test.describe`'s own 120 s
   // budget while the FILE does not fit the default 55 s single-file ceiling, which is what this map
-  // overrides. 240_000 is the value the sibling resident/voice entries above declare.
-  'voice-realtime-intent-control.spec.ts': 240_000,
+  // overrides.
+  //
+  // 240_000 was copied from the sibling resident/voice entries above, not measured on THIS file, and it
+  // did not hold. The file has grown from six cases to eight, and its wall clock climbs with host load:
+  // on 2026-10-21 the criterion recorded 10 consecutive passes between 04:29:44Z and 05:24:27Z (trees
+  // 2a6e927a ×5, 56634553 ×2, 568a1212, f96f8cf5, d60fe1d0), with rounds 1186-1190 reporting
+  // 105.8 / 134.6 / 121.3 / 147.9 / 174.1 s; the next run, inside a fan-in full-suite window, crossed
+  // 240_000 and was SIGKILLed mid-case — gate event `ffe23041-b229-41cb-a944-5bdfe3ba3cca`,
+  // 2026-10-21T05:30:43.688Z, tree `34fc0d7b1dcec5430eae37c965f359ef1a0aa6ab`, with `loadavg`
+  // 55.79-71.02 across the suite that covered it and 65.77-129.14 across the overlapping AC-194 one,
+  // on this 128-core host, and seven of the eight cases already passed (`test-results/` held one
+  // failure directory). The red was the watchdog's budget, not an assertion.
+  //
+  // 360_000 is that red window's 240 s crossing × 1.5. It also leaves the record's own gate threshold
+  // (`goals/AC-345-…md`, `timeoutMs: 420000`) ≥ 60 s of headroom for the watchdog to write its state
+  // file, print its line and reclaim its servers before the gate's kill lands — the ordering the boot
+  // ceiling's comment above spells out for the 60 s cap, at this budget's scale.
+  'voice-realtime-intent-control.spec.ts': 360_000,
   // The silence-tail suppression criterion (GOAL-044 / AC-364): one 4.2 s fake-mic timeline — a short
   // spoken run, three seconds of digital silence, a second spoken run — played at the capture's own
   // cadence, because the silence has to be a DURATION the relay can pay a tail across rather than a
@@ -700,7 +716,21 @@ const probePort = (target: string): Promise<'answered' | 'silent' | 'closed'> =>
  * succeeds and whose answer never comes, which is precisely the condition Playwright's pre-spawn probe cannot
  * survive. Naming it turns "the run timed out" into "this process is holding this port and not answering".
  */
-type Stall = { readonly stage: 'webServer-start' | 'browser-launch-or-cases'; readonly detail: string };
+type Stall = {
+  readonly stage: 'webServer-start' | 'browser-launch-or-cases';
+  readonly detail: string;
+  /**
+   * The ports the probe got no HTTP answer from, named without a claimed cause. Absent when the probe itself
+   * failed and so read nothing.
+   *
+   * `detail` below carries a *cause* for the boot-ceiling path ("Playwright's pre-spawn availability probe …
+   * has no deadline"), and that cause is only true of a run that never answered. Once both ports have been
+   * observed answering, a silent sample is a busy server missing the probe's own deadline, not a stuck
+   * pre-spawn probe — so the run-ceiling path re-words the reading from these names instead of reusing that
+   * sentence (`classifyRunCeilingCrossing` in the `isDataDirOwner` block).
+   */
+  readonly unanswered?: readonly string[];
+};
 
 const describeStall = async (): Promise<Stall> => {
   const readings = await Promise.all(
@@ -712,16 +742,18 @@ const describeStall = async (): Promise<Stall> => {
     return {
       stage: 'webServer-start',
       detail: `${named} — Playwright's pre-spawn availability probe for ${silent[0].url} has no deadline, so it cannot return`,
+      unanswered: silent.map((reading) => `port ${reading.port} (${reading.name})`),
     };
   }
   const closed = readings.filter((reading) => reading.state === 'closed');
   if (closed.length > 0) {
     const named = closed.map((reading) => `port ${reading.port} (${reading.name}) is not listening`).join(', ');
-    return { stage: 'webServer-start', detail: named };
+    return { stage: 'webServer-start', detail: named, unanswered: closed.map((reading) => `port ${reading.port} (${reading.name})`) };
   }
   return {
     stage: 'browser-launch-or-cases',
     detail: 'both webServers answered, so this run is past boot and inside browser launch or a test case',
+    unanswered: [],
   };
 };
 
@@ -866,6 +898,35 @@ if (isDataDirOwner) {
   let bootProbeInFlight = false;
 
   /**
+   * How a crossing is reported once this run has been *observed* past boot.
+   *
+   * `describeStall()` is the only instrument at the crossing, and its two-second sample cannot tell a run still
+   * in boot from one that is seven cases into a spec on a server that happened to miss the probe's deadline: both
+   * read `silent`. Reported through `describeStall()`'s boot wording, the second shape is written as
+   * `stage: "webServer-start"` with "Playwright's pre-spawn availability probe … has no deadline, so it cannot
+   * return" — a sentence that is true of a run that never answered and false of this one. That is the reading
+   * defect behind gate event `ffe23041-b229-41cb-a944-5bdfe3ba3cca` (2026-10-21T05:30:43.688Z, tree
+   * `34fc0d7b1dcec5430eae37c965f359ef1a0aa6ab`): a run whose first seven cases passed, killed at the 240 s
+   * ceiling inside a fan-in suite window (`loadavg` 55.8-69.1), recorded as a pre-spawn probe that cannot return.
+   *
+   * The latch above is a fact this run established, so it outranks the sample: once set, the stage is
+   * `browser-launch-or-cases`, and the sample's port names are kept in `detail` as a reading rather than a cause.
+   */
+  const classifyRunCeilingCrossing = (sampled: Stall): Stall => {
+    if (bootCompletedAt === null) return sampled;
+    const reading = sampled.unanswered
+      ? sampled.unanswered.length > 0
+        ? `the ${WATCHDOG_PROBE_MS}ms probe at the crossing got no answer from ${sampled.unanswered.join(', ')} — a loaded server missing the probe's own deadline, not a run stuck in boot`
+        : `both webServers answered the ${WATCHDOG_PROBE_MS}ms probe at the crossing`
+      : 'the crossing probe itself failed, so it read no port state';
+    return {
+      stage: 'browser-launch-or-cases',
+      detail: `observed past boot at ${bootCompletedAt - runStartedAt}ms, so this run was inside browser launch or a case; ${reading}`,
+      unanswered: sampled.unanswered,
+    };
+  };
+
+  /**
    * Arms one ceiling, and at the boot one hands a run that turns out to be past boot to the run ceiling instead
    * of firing. The reading costs the probe below; the run receiving it is still starting up, so the two
    * ceilings stay two independent readings rather than one budget split between them — and a healthy run that
@@ -880,7 +941,10 @@ if (isDataDirOwner) {
       const crossedAt = Date.now() - runStartedAt;
       describeStall()
         .catch(
-          (): Stall => ({ stage: 'webServer-start', detail: 'the port probe itself failed, so the stage could not be read' }),
+          (): Stall => ({
+            stage: 'webServer-start',
+            detail: 'the port probe itself failed, so the stage could not be read',
+          }),
         )
         .then((stall) => {
           // Either reading is enough to say this run is past boot: the latch is a fact the run established once,
@@ -889,7 +953,7 @@ if (isDataDirOwner) {
             arm(RUN_CEILING_MS, 'ceiling', false);
             return;
           }
-          endRun(label, ceiling, crossedAt, stall);
+          endRun(label, ceiling, crossedAt, classifyRunCeilingCrossing(stall));
         });
       // Measured from the run's own start rather than from this call, so the second arming lands on the run
       // ceiling itself and not on the boot ceiling plus it.
