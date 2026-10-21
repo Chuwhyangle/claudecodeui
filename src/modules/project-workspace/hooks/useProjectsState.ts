@@ -80,6 +80,8 @@ type SessionDetailsApiPayload = {
       isStarred?: boolean;
       /** Tier-1 reading carried by the session-details contract (see the server-side `SessionDetails` type). */
       hasQuayConfig?: boolean;
+      /** Tier-1 architecture reading (ADR-005): true when the project carries `.archguard/query/manifest.json`. */
+      hasArchguardCache?: boolean;
     } | null;
   };
 };
@@ -122,6 +124,7 @@ const projectsHaveChanges = (
       nextProject.fullPath !== prevProject.fullPath ||
       Boolean(nextProject.isStarred) !== Boolean(prevProject.isStarred) ||
       Boolean(nextProject.hasQuayConfig) !== Boolean(prevProject.hasQuayConfig) ||
+      Boolean(nextProject.hasArchguardCache) !== Boolean(prevProject.hasArchguardCache) ||
       serialize(nextProject.sessionMeta) !== serialize(prevProject.sessionMeta) ||
       serialize(nextProject.sessions) !== serialize(prevProject.sessions) ||
       serialize(nextProject.taskmaster) !== serialize(prevProject.taskmaster)
@@ -329,6 +332,7 @@ const projectFromRegistration = (project: Project): Project => ({
   displayName: project.displayName,
   isStarred: project.isStarred,
   hasQuayConfig: project.hasQuayConfig,
+  hasArchguardCache: project.hasArchguardCache,
   sessions: project.sessions ?? [],
   sessionMeta: project.sessionMeta ?? { hasMore: false, total: countLoadedProjectSessions(project) },
   taskmaster: project.taskmaster,
@@ -1137,6 +1141,7 @@ export function useProjectsState({
             displayName: details.project?.displayName ?? '',
             isStarred: Boolean(details.project?.isStarred),
             hasQuayConfig: Boolean(details.project?.hasQuayConfig),
+            hasArchguardCache: Boolean(details.project?.hasArchguardCache),
             sessions: [],
             sessionMeta: { hasMore: false, total: 0 },
           };

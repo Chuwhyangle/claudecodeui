@@ -2,7 +2,7 @@ import type { Project } from '@/shared/types';
 
 export type ProjectSelectionMetadata = Pick<
   Project,
-  'projectId' | 'displayName' | 'fullPath' | 'path' | 'isStarred' | 'taskmaster' | 'hasQuayConfig'
+  'projectId' | 'displayName' | 'fullPath' | 'path' | 'isStarred' | 'taskmaster' | 'hasQuayConfig' | 'hasArchguardCache'
 >;
 
 const valuesMatch = (left: unknown, right: unknown): boolean => (
@@ -31,6 +31,9 @@ export function mergeProjectSelectionMetadata(
   // (the `session_upserted` project block omits it) keeps the current value, so
   // that existing caller can never clear a live reading.
   const nextHasQuayConfig = incoming.hasQuayConfig ?? current.hasQuayConfig;
+  // Same `??` semantics as `hasQuayConfig`: an incoming `false` flips the
+  // architecture tab off when the project loses `.archguard/query/manifest.json`.
+  const nextHasArchguardCache = incoming.hasArchguardCache ?? current.hasArchguardCache;
 
   if (
     current.displayName === incoming.displayName
@@ -39,6 +42,7 @@ export function mergeProjectSelectionMetadata(
     && current.isStarred === nextIsStarred
     && valuesMatch(current.taskmaster, nextTaskmaster)
     && current.hasQuayConfig === nextHasQuayConfig
+    && current.hasArchguardCache === nextHasArchguardCache
   ) {
     return current;
   }
@@ -51,5 +55,6 @@ export function mergeProjectSelectionMetadata(
     isStarred: nextIsStarred,
     taskmaster: nextTaskmaster,
     hasQuayConfig: nextHasQuayConfig,
+    hasArchguardCache: nextHasArchguardCache,
   };
 }
