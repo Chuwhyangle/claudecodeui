@@ -53,13 +53,13 @@ goal_ac: AC-345
 
 ## AC
 
-- [ ] AC1 红已定位到运行看门狗而非断言（承重）：完成记录逐字登记 gate event（id `ffe23041…`、`2026-10-21T05:30:43.688Z`、`treeSha 34fc0d7b…`）、`quay-e2e-vo3gdF/watchdog-state.json` 全文、失败 `error-context.md` 的 test name/location 与 `# Error details`、`ls -la` 的 8 个 `voice-realtime-log/*.jsonl`（mtime `05:27:59`→`05:30:39`）、`test-results/` 只有一个目录，以及 04:29→05:24 的 11 拍 pass 与 round 1186-1190 的 duration 序列；另贴 concurrent suite 的 `suite-start`/`suite-end` 两行与两段 `loadavg` 读数。
-- [ ] AC2 预算按实测重标（承重）：`grep -n "'voice-realtime-intent-control.spec.ts':" playwright.config.ts` 读到 `360_000`；改后一次直跑留下 `watchdog-state.json`，逐字含 `"ceilingMs": 360000` 与 `"fired": false`；`git diff <base>..HEAD -- playwright.config.ts` 只含该条目/注释（与 AC3 的 stage 行）。
-- [ ] AC3 run-ceiling 越过不再误报 boot stall：diff 与 `grep -n "bootCompletedAt" playwright.config.ts` 显示 run-ceiling 的 `endRun` 路径在 `bootCompletedAt !== null` 时把 stage 定为 `browser-launch-or-cases`，两秒静默读数只进 `detail`；若用强制越过做行为读数（临时把该条目降到 `20_000`、跑 1 个 case、随后恢复），贴出强制 run 的 `watchdog-state.json` 的 `stage`，并贴恢复后 `git diff -- playwright.config.ts` 只剩 AC2/AC3 的正式改动。
-- [ ] AC4 载荷窗读数：在 ≥4 路兄弟 e2e lane（+ CPU burners）的并发构造下跑出货命令 ≥2 次，逐次登记 exit、墙钟、运行前后 `load1`、data dir；若构造下的最坏墙钟 <180s，如实登记该构造不足以复现红窗，并以红窗的 240s crossing 作为 AC2 的预算基准（⛔ 不得把没发生的红写成已复现）。
-- [ ] AC5 判据为真（承重）：在最终 HEAD 上逐字执行 `f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || { echo "缺判据文件：$f" >&2; exit 1; }; DASHSCOPE_API_KEY= npx playwright test "$f"` 连续 ≥3 次 exit **0**，每次输出 `8 passed`；逐次登记墙钟、data dir，且至少 2 次贴 `"fired": false` 的 `watchdog-state.json`。
-- [ ] AC6 未弱化：`grep -c "^  test(" e2e/voice-realtime-intent-control.spec.ts` = `8`；`git diff <base>..HEAD -- e2e/voice-realtime-intent-control.spec.ts goals/` 为空；无新增 `retries`/`fixme`/`skip`；出货命令逐字未改。
-- [ ] AC7 契约面：`npm run lint` exit **0**；`npm run typecheck` exit **0**；`git diff --name-only $(git merge-base develop HEAD)..HEAD` 全部落在 `## Touches` 内。
+- [x] AC1 红已定位到运行看门狗而非断言（承重）：完成记录逐字登记 gate event（id `ffe23041…`、`2026-10-21T05:30:43.688Z`、`treeSha 34fc0d7b…`）、`quay-e2e-vo3gdF/watchdog-state.json` 全文、失败 `error-context.md` 的 test name/location 与 `# Error details`、`ls -la` 的 8 个 `voice-realtime-log/*.jsonl`（mtime `05:27:59`→`05:30:39`）、`test-results/` 只有一个目录，以及 04:29→05:24 的 11 拍 pass 与 round 1186-1190 的 duration 序列；另贴 concurrent suite 的 `suite-start`/`suite-end` 两行与两段 `loadavg` 读数。
+- [x] AC2 预算按实测重标（承重）：`grep -n "'voice-realtime-intent-control.spec.ts':" playwright.config.ts` 读到 `360_000`；改后一次直跑留下 `watchdog-state.json`，逐字含 `"ceilingMs": 360000` 与 `"fired": false`；`git diff <base>..HEAD -- playwright.config.ts` 只含该条目/注释（与 AC3 的 stage 行）。
+- [x] AC3 run-ceiling 越过不再误报 boot stall：diff 与 `grep -n "bootCompletedAt" playwright.config.ts` 显示 run-ceiling 的 `endRun` 路径在 `bootCompletedAt !== null` 时把 stage 定为 `browser-launch-or-cases`，两秒静默读数只进 `detail`；若用强制越过做行为读数（临时把该条目降到 `20_000`、跑 1 个 case、随后恢复），贴出强制 run 的 `watchdog-state.json` 的 `stage`，并贴恢复后 `git diff -- playwright.config.ts` 只剩 AC2/AC3 的正式改动。
+- [x] AC4 载荷窗读数：在 ≥4 路兄弟 e2e lane（+ CPU burners）的并发构造下跑出货命令 ≥2 次，逐次登记 exit、墙钟、运行前后 `load1`、data dir；若构造下的最坏墙钟 <180s，如实登记该构造不足以复现红窗，并以红窗的 240s crossing 作为 AC2 的预算基准（⛔ 不得把没发生的红写成已复现）。
+- [x] AC5 判据为真（承重）：在最终 HEAD 上逐字执行 `f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || { echo "缺判据文件：$f" >&2; exit 1; }; DASHSCOPE_API_KEY= npx playwright test "$f"` 连续 ≥3 次 exit **0**，每次输出 `8 passed`；逐次登记墙钟、data dir，且至少 2 次贴 `"fired": false` 的 `watchdog-state.json`。
+- [x] AC6 未弱化：`grep -c "^  test(" e2e/voice-realtime-intent-control.spec.ts` = `8`；`git diff <base>..HEAD -- e2e/voice-realtime-intent-control.spec.ts goals/` 为空；无新增 `retries`/`fixme`/`skip`；出货命令逐字未改。
+- [x] AC7 契约面：`npm run lint` exit **0**；`npm run typecheck` exit **0**；`git diff --name-only $(git merge-base develop HEAD)..HEAD` 全部落在 `## Touches` 内。
 
 ## DoD
 
@@ -70,3 +70,107 @@ goal_ac: AC-345
 - `playwright.config.ts`（`SPEC_BUDGET_MS` 本文件条目 `240_000`→`360_000` 与注释；run-ceiling 越过时的 stage 读数）
 - `e2e/voice-realtime-intent-control.spec.ts`（仅在并发窗内某 case 需要本地有界等待时改；8 个 case 与断言不动）
 - `tasks/gap-ac345-run-ceiling-crossed-under-fanin-suite-load.md`（自触）
+
+## Evidence（2026-10-21 实测；读数取自 gate-events / 运行输出 / watchdog-state，不取自叙述）
+
+### AC1 — 红已定位到运行看门狗，而非断言
+
+gate event（`.quay/gate-events.jsonl` 的 `ffe23041…` 行逐字字段）：`id ffe23041-b229-41cb-a944-5bdfe3ba3cca`、`item_id AC-345`、`gate goal`、`actor goal-cli`、`verdict fail`、`timestamp 2026-10-21T05:30:43.688Z`、`payload.treeSha 34fc0d7b1dcec5430eae37c965f359ef1a0aa6ab`。
+
+`$HOME/.cache/quay-e2e-tmp/quay-e2e-vo3gdF/watchdog-state.json` 全文：
+
+```json
+{
+  "armed": true,
+  "fired": true,
+  "ceilingMs": 240000,
+  "detail": "ceiling crossed at 240001ms",
+  "stage": "webServer-start",
+  "stall": "port 7935 (server) accepts TCP but never answers an HTTP request — Playwright's pre-spawn availability probe for http://127.0.0.1:7935/health has no deadline, so it cannot return"
+}
+```
+
+失败 `error-context.md`（`test-results/voice-realtime-intent-cont-72f7a-d-before-the-turn-has-ended/error-context.md`）：
+
+- Name: `voice-realtime-intent-control.spec.ts >> voice realtime intent control >> a sentence spoken while busy is released on the upstream quiet window and started before the turn has ended`
+- Location: `e2e/voice-realtime-intent-control.spec.ts:1787:3`
+- `# Error details`: `Error: apiRequestContext.post: socket hang up`（`POST http://127.0.0.1:1273/api/session-hosts/b32d9a41-4a90-4292-9093-4b1e54fdebd4/start`）与 `Error: Channel closed`。
+
+`test-results/` 除 Playwright 内部的 `.playwright-artifacts-0/` 外只有 1 个失败目录（上面那个）。
+
+`voice-realtime-log/` 8 个会话文件（`stat -c %y`，本地 +0800 ⇒ UTC 减 8）：
+
+```
+05:27:59.889Z 80fcc3bf-c766-46c1-b573-9aaf167a7717.jsonl
+05:28:15.035Z b5f800f0-d62a-4fd9-a579-a9c7b4a2401e.jsonl
+05:28:25.300Z 68902e09-32c6-4f69-8112-53016fef5e76.jsonl
+05:28:44.128Z 607ab40e-53f3-4001-8307-7e40f234bef4.jsonl
+05:29:06.122Z a0f3b74b-6af0-4eb0-a5fa-78657a6960ad.jsonl
+05:29:17.940Z 56e4becf-c96a-4b58-9573-e873b7283cbf.jsonl
+05:30:02.516Z 8ccb9ae5-26aa-44fc-8ec0-2ca34593d2f6.jsonl
+05:30:39.906Z fbe944a3-d54c-4b68-8146-2b1eaddf72da.jsonl
+```
+
+并发 suite（`.quay/fan-in-voice-speaker-tracker-shadow-wk-prod-anchor.log`）：
+
+```
+{"ts":"2026-10-21T05:25:40.644Z","step":"suite-start","exit":0,"wall_ms":0,"ok":true}
+{"ts":"2026-10-21T05:29:54.477Z","step":"suite-end","exit":0,"wall_ms":253824,"ok":true}
+```
+
+两段 `loadavg`（同窗 JSONL）：
+
+- `.quay/suite-load-mfi-voice-speaker-tracker-shadow-1792560325170-b31ad6.jsonl`（50 行）：首行 `05:25:46.391Z loadavg 55.79`（cpu_stall 7.84）→ 峰值 `05:28:16.540Z loadavg 71.02` → 末行 `05:29:51.635Z loadavg 67.03`。
+- `.quay/suite-load-mfi-gap-ac194-inwindow-firstload-fixed-cost-1792560362797-1f1a89.jsonl`（95 行，与红窗重叠）：首行 `05:30:01.394Z loadavg 65.77` → 峰值 `05:33:51.689Z loadavg 129.14` → 末行 `05:37:51.934Z loadavg 48.94`。
+
+历史 pass：`.quay/gate-events.jsonl` 中 AC-345 在 `2026-10-21T04:29:44.939Z` → `05:24:27.263Z` 之间连续 **10** 条 `pass`（trees `2a6e927a` ×5、`56634553` ×2、`568a1212`、`f96f8cf5`、`d60fe1d0`）。**DEVIATION（如实登记）**：立案文本写「11 拍」，逐条数 gate-events 是 10 条；tree 列表与 duration 序列不变。rounds 1186-1190（`.quay/goal-round.jsonl` `04:51:44.751Z`→`05:24:30.192Z`）记录的 duration 序列：`105.8 / 134.6 / 121.3 / 147.9 / 174.1 s`。
+
+### AC2 — 预算按实测重标
+
+- `grep -n "'voice-realtime-intent-control.spec.ts':" playwright.config.ts` → `463:  'voice-realtime-intent-control.spec.ts': 360_000,`
+- 改后直跑（runB / runC / runD，见 AC5）的 `watchdog-state.json` 逐字含 `"ceilingMs": 360000` 与 `"fired": false`。
+- `git diff $(git merge-base develop HEAD)..HEAD -- playwright.config.ts` 只含该条目/注释与 AC3 的 stage 行（无其它常量改动；`SINGLE_SPEC_CEILING_MS` 未动）。
+
+### AC3 — run-ceiling 越过不再误报 boot stall
+
+`grep -n "bootCompletedAt" playwright.config.ts` 的关键行：`:893 let bootCompletedAt: number | null = null;`、`:916 if (bootCompletedAt === null) return sampled;`（`classifyRunCeilingCrossing` 首行）、`:952 if (mayReArm && (bootCompletedAt !== null || stall.stage === 'browser-launch-or-cases'))`、`:974 if (bootCompletedAt !== null) return;` / `:975 bootCompletedAt = Date.now();`。`endRun` 现在收到 `classifyRunCeilingCrossing(stall)`：`bootCompletedAt !== null` 时它把 `stage` 定为 `browser-launch-or-cases`，探针读数只进 `detail`。
+
+强制越过行为读数（临时把该条目降到 `20_000`，跑 1 个 case，随后 `git checkout -- playwright.config.ts` 恢复）：
+
+- runE（探针恰好读到两端口都答）：`"stage": "browser-launch-or-cases"`，`"stall": "observed past boot at 3444ms, so this run was inside browser launch or a case; both webServers answered the 2000ms probe at the crossing"`。
+- runF2（在 t+18s 对本 run 的 server 发 SIGSTOP，使 20s 越过的两秒探针读到 silent）：`"stage": "browser-launch-or-cases"`，`"stall": "observed past boot at 3051ms, so this run was inside browser launch or a case; the 2000ms probe at the crossing got no answer from port 14737 (server) — a loaded server missing the probe's own deadline, not a run stuck in boot"`。这条是判别性读数：同一 silent 采样在旧代码下会写成 `webServer-start` 与「pre-spawn probe 无法返回」。
+- 恢复后 `git diff -- playwright.config.ts` 为空，`grep` 读回 `360_000`。
+
+### AC4 — 载荷窗读数（如实登记：构造未复现红窗时长）
+
+构造：4 路兄弟 e2e lane（`voice-realtime-scripted-scenarios`、`voice-realtime-upload-fixture`、`voice-realtime-continuous-experience`、`live-voice-stream-representation`，每路经 `bash scripts/with-memory-cap.sh` 包裹，`--output` 指向工作区外）+ 16 个 CPU burners；分 load1 / load2 两个窗口各跑一次出货命令：
+
+| run | exit | 墙钟 | load1 前 | load1 峰 | load1 后 | data dir |
+| --- | --- | --- | --- | --- | --- | --- |
+| runB-loaded1 | 0 | 102s | 47.49 | 56.56（05:44:13Z） | 44.69 | `quay-e2e-7fIwN3` |
+| runC-loaded2 | 0 | 98s | 43.15 | 64.77（05:46:57Z） | 75.84 | `quay-e2e-5lqj0U` |
+
+lane 同窗结果（构造为真实并发；lane 自身成败不计入判据）：lane2 `7 passed (59.9s)`、lane3 `11 passed (34.8s)`，lane1 / lane4 各 `1 failed`（load 下的兄弟 flake）。最坏墙钟 102s < 180s ⇒ **该构造不足以复现红窗的 240s crossing**；AC2 的 360_000 仍以红窗的 240s crossing 为基准（×1.5），不把没发生的红写成已复现。
+
+### AC5 — 判据为真（最终 HEAD `358eac650`，逐字出货命令，连续 3 次）
+
+| run | exit | 墙钟 | 输出 | data dir | `watchdog-state.json` |
+| --- | --- | --- | --- | --- | --- |
+| runB-loaded1 | 0 | 102s | `8 passed (1.7m)` | `quay-e2e-7fIwN3` | `"armed": true, "fired": false, "ceilingMs": 360000, "detail": "boot completed at 3414ms, re-armed to 360000ms"` |
+| runC-loaded2 | 0 | 98s | `8 passed (1.6m)` | `quay-e2e-5lqj0U` | `"armed": true, "fired": false, "ceilingMs": 360000, "detail": "boot completed at 3220ms, re-armed to 360000ms"` |
+| runD-final | 0 | 99s | `8 passed (1.6m)` | `quay-e2e-E9g0AT` | `"armed": true, "fired": false, "ceilingMs": 360000, "detail": "boot completed at 4793ms, re-armed to 360000ms"` |
+
+（另有一次 runA-quiet 在最终 HEAD 的前一个提交上 104s / `8 passed (1.7m)` / `fired:false`，不计入连续三次。）
+
+### AC6 — 未弱化
+
+- `grep -c "^  test(" e2e/voice-realtime-intent-control.spec.ts` = `8`
+- `git diff $(git merge-base develop HEAD)..HEAD -- e2e/voice-realtime-intent-control.spec.ts goals/` 为空
+- 该 diff 中无新增 `retries` / `fixme` / `skip`
+- 出货命令逐字未改（运行脚本内以 `bash -c` 执行与判据物同一串）
+
+### AC7 — 契约面
+
+- `npm run lint` exit **0**
+- `npm run typecheck` exit **0**（`tsc --noEmit` × 3：root / server / scripts）
+- `git diff --name-only $(git merge-base develop HEAD)..HEAD` = `playwright.config.ts`（在 `## Touches` 内）
