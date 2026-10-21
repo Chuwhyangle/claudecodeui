@@ -19,9 +19,9 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：平铺 230 个文件的 `scripts/` 折成 1 个组且计数正确；深层路径（claudecodeui 形态）组数 ≤ 上限且比旧固定深度 2 不退化；组数上限被遵守；任一组名都不以文件扩展名结尾（对目录型分组）
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：`group` 视图展开平铺大目录时再次分组、不平铺全部文件；既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：平铺 230 个文件的 `scripts/` 折成 1 个组且计数正确；深层路径（claudecodeui 形态）组数 ≤ 上限且比旧固定深度 2 不退化；组数上限被遵守；任一组名都不以文件扩展名结尾（对目录型分组）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：`group` 视图展开平铺大目录时再次分组、不平铺全部文件；既有 hover/缩放/爆炸/下钻用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -36,3 +36,11 @@ extra: {}
 - src/modules/architecture/tests/adaptiveGrouping.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/architecture-overview-adaptive-directory-grouping.md
+
+## Blocker
+
+**2026-10-21T23:08:15.016Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：f0ee36eb-fc67-4d9f-a1dc-29acf04bf032
