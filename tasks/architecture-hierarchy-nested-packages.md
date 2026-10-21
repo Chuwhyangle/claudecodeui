@@ -29,7 +29,7 @@ entity 的 `data-package-id` 已由 plantuml-js 输出（commit 2e7289a，取自
 ## Touches
 
 - src/modules/architecture/archguardToPlantUml.ts
-- src/modules/architecture/hierarchyIndex.ts
-- src/modules/architecture/tests/archguardToPlantUml.test.ts
-- src/modules/architecture/tests/hierarchyIndex.test.ts
+- src/modules/architecture/hierarchyIndex.ts (new)
+- src/modules/architecture/tests/archguardToPlantUml.test.ts (new)
+- src/modules/architecture/tests/hierarchyIndex.test.ts (new)
 - tasks/architecture-hierarchy-nested-packages.md
