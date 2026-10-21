@@ -2,7 +2,7 @@
 id: architecture-graph-endpoint
 title: /api/architecture/graph 端点 + hasArchguardCache Tier-1 门控，返回
   mmd{file,entity}+stats+provenance
-status: todo
+status: ready
 labels:
   - feature
 parent: null
