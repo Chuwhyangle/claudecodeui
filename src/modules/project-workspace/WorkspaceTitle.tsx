@@ -13,12 +13,15 @@ type WorkspaceTitleProps = {
   shouldShowTasksTab: boolean;
   /** Optional so a caller that only knows about Tasks/Browser keeps compiling; absent means "no Quay tab". */
   shouldShowQuayTab?: boolean;
+  /** Optional, absent means "no architecture tab", the same contract as `shouldShowQuayTab`. */
+  shouldShowArchitectureTab?: boolean;
 };
 
 function getTabTitle(
   activeTab: AppTab,
   shouldShowTasksTab: boolean,
   shouldShowQuayTab: boolean,
+  shouldShowArchitectureTab: boolean,
   t: (key: string) => string,
   pluginDisplayName?: string,
 ) {
@@ -42,6 +45,12 @@ function getTabTitle(
     return t('tabs.quay');
   }
 
+  // The tab's own label already carries this fallback; the title cannot read the
+  // locale bundle either, so it names the same word rather than `Project`.
+  if (activeTab === 'architecture' && shouldShowArchitectureTab) {
+    return 'Architecture';
+  }
+
   if (activeTab === 'browser') {
     return t('tabs.browser');
   }
@@ -56,6 +65,7 @@ export default function WorkspaceTitle({
   selectedSession,
   shouldShowTasksTab,
   shouldShowQuayTab = false,
+  shouldShowArchitectureTab = false,
 }: WorkspaceTitleProps) {
   const { t } = useTranslation();
   const { plugins } = usePlugins();
@@ -98,7 +108,7 @@ export default function WorkspaceTitle({
         ) : (
           <div className="min-w-0">
             <h2 className="text-sm font-semibold leading-tight text-foreground">
-              {getTabTitle(activeTab, shouldShowTasksTab, shouldShowQuayTab, t, pluginDisplayName)}
+              {getTabTitle(activeTab, shouldShowTasksTab, shouldShowQuayTab, shouldShowArchitectureTab, t, pluginDisplayName)}
             </h2>
             <div className="truncate text-[11px] leading-tight text-muted-foreground">{selectedProject.displayName}</div>
           </div>
