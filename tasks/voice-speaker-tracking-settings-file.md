@@ -1,7 +1,7 @@
 ---
 id: voice-speaker-tracking-settings-file
 title: 声纹跟踪改由 voice-realtime 设置文件驱动（env 仅 escape hatch）
-status: ready
+status: done
 labels:
   - feature
 parent: null
