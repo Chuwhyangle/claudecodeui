@@ -19,9 +19,9 @@ function createFakeServices(overrides: Partial<FileTreeServices> = {}): FileTree
     readTextFile: unexpectedOperation,
     openFile: unexpectedOperation,
     saveTextFile: unexpectedOperation,
-    listProjectFiles: unexpectedOperation,
     listProjectDirectory: unexpectedOperation,
     listProjectFileIndex: unexpectedOperation,
+    listProjectSearchIndex: unexpectedOperation,
     createEntry: unexpectedOperation,
     renameEntry: unexpectedOperation,
     deleteEntry: unexpectedOperation,
@@ -58,12 +58,12 @@ async function withFileTreeServer(
   }
 }
 
-test('project files route uses the File Tree API namespace and forwards the project id', async () => {
-  const inputs: Parameters<FileTreeServices['listProjectFiles']>[] = [];
+test('project files route lists the project root when no path is supplied', async () => {
+  const inputs: Parameters<FileTreeServices['listProjectDirectory']>[] = [];
   const services = createFakeServices({
-    listProjectFiles: async (...input) => {
+    listProjectDirectory: async (...input) => {
       inputs.push(input);
-      return [];
+      return { path: '/workspace/project', entries: [], truncated: false };
     },
   });
 
@@ -71,18 +71,24 @@ test('project files route uses the File Tree API namespace and forwards the proj
     const response = await fetch(`${baseUrl}/api/file-tree/projects/project-1/files`);
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), []);
+    assert.deepEqual(await response.json(), {
+      path: '/workspace/project',
+      entries: [],
+      truncated: false,
+    });
   });
 
-  assert.deepEqual(inputs, [['project-1', { respectGitignore: false }]]);
+  // The legacy full-tree shape is gone: every `/files` request is one lazy
+  // directory listing, and the root is the no-path default.
+  assert.deepEqual(inputs, [['project-1', undefined]]);
 });
 
-test('project files route requests gitignore filtering when explicitly enabled', async () => {
-  const inputs: Parameters<FileTreeServices['listProjectFiles']>[] = [];
+test('project files route ignores a legacy respectGitignore parameter', async () => {
+  const inputs: Parameters<FileTreeServices['listProjectDirectory']>[] = [];
   const services = createFakeServices({
-    listProjectFiles: async (...input) => {
+    listProjectDirectory: async (...input) => {
       inputs.push(input);
-      return [];
+      return { path: '/workspace/project', entries: [], truncated: false };
     },
   });
 
@@ -94,7 +100,9 @@ test('project files route requests gitignore filtering when explicitly enabled',
     assert.equal(response.status, 200);
   });
 
-  assert.deepEqual(inputs, [['project-1', { respectGitignore: true }]]);
+  // Display is disk truth by default: the retired query parameter reaches no
+  // option bag, so there is nothing left for it to switch on.
+  assert.deepEqual(inputs, [['project-1', undefined]]);
 });
 
 test('project files route takes the lazy directory listing when a path is supplied', async () => {
@@ -108,7 +116,7 @@ test('project files route takes the lazy directory listing when a path is suppli
 
   await withFileTreeServer(services, async (baseUrl) => {
     const response = await fetch(
-      `${baseUrl}/api/file-tree/projects/project-1/files?path=%2Fworkspace%2Fproject%2Fsrc&respectGitignore=true`,
+      `${baseUrl}/api/file-tree/projects/project-1/files?path=%2Fworkspace%2Fproject%2Fsrc`,
     );
 
     assert.equal(response.status, 200);
@@ -119,7 +127,38 @@ test('project files route takes the lazy directory listing when a path is suppli
     });
   });
 
-  assert.deepEqual(inputs, [['project-1', '/workspace/project/src', { respectGitignore: true }]]);
+  assert.deepEqual(inputs, [['project-1', '/workspace/project/src']]);
+});
+
+test('files-search-index route forwards the project id and returns the unfiltered index', async () => {
+  const inputs: Parameters<FileTreeServices['listProjectSearchIndex']>[] = [];
+  const services = createFakeServices({
+    listProjectSearchIndex: async (...input) => {
+      inputs.push(input);
+      return {
+        files: [{ name: 'package.mmd', path: '/workspace/project/.archguard/output/overview/package.mmd', type: 'file' }],
+        truncated: false,
+      };
+    },
+  });
+
+  await withFileTreeServer(services, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/file-tree/projects/project-1/files-search-index`,
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      files: [{
+        name: 'package.mmd',
+        path: '/workspace/project/.archguard/output/overview/package.mmd',
+        type: 'file',
+      }],
+      truncated: false,
+    });
+  });
+
+  assert.deepEqual(inputs, [['project-1']]);
 });
 
 test('files-index route forwards the project id and returns the flat index', async () => {

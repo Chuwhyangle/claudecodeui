@@ -14,24 +14,21 @@ import type {
 } from '@/shared/types.js';
 import { AppError, FORBIDDEN_WORKSPACE_PATHS, normalizeProjectPath } from '@/shared/utils.js';
 
-// Always-on exclusions for the display tree in BOTH gitignore and fallback
-// modes. Virtual environments and byte-code/cache directories can hold tens of
-// thousands of files that no user browses in a Files tab, and a gitignore-aware
-// walk only reads the root `.gitignore`, so they cannot be left to ignore rules
-// (a project without a `.venv/` rule would otherwise list them).
+// Always-on exclusions for the flat file index's non-git fallback walk.
+// Virtual environments and byte-code/cache directories can hold tens of
+// thousands of files that no filename-resolution surface should offer, and the
+// fallback walk only reads the root `.gitignore`, so they cannot be left to
+// ignore rules (a project without a `.venv/` rule would otherwise index them).
+//
+// The display tree does NOT use this set: the Files tab is a disk browser, so
+// every name on disk — `.git`, `node_modules`, `.venv`, gitignored paths — is
+// shown, and the only entries it skips are the FORBIDDEN_WORKSPACE_PATHS
+// pseudo-filesystems.
 const HARD_EXCLUDED_DIRECTORY_NAMES = new Set([
   'node_modules', '.git', '.svn', '.hg',
   '.venv', 'venv', '__pycache__',
   '.pytest_cache', '.mypy_cache', '.tox', '.cache', '.parcel-cache',
   '.gradle', '.nyc_output', 'coverage', '.idea',
-]);
-
-const IGNORED_DIRECTORY_NAMES = new Set([
-  ...HARD_EXCLUDED_DIRECTORY_NAMES,
-  'dist', 'build', '.next', '.nuxt', '.cache', '.parcel-cache',
-  '__pycache__', '.pytest_cache', '.mypy_cache', '.tox', 'venv', '.venv',
-  'target', 'vendor',
-  '.gradle', '.idea', 'coverage', '.nyc_output',
 ]);
 
 const COMMON_WORKSPACE_DIRECTORY_NAMES = [
@@ -44,10 +41,10 @@ const COMMON_WORKSPACE_DIRECTORY_NAMES = [
   'workspace',
 ];
 
-// Legacy full-tree guard, kept only for `listProjectFiles` until the remaining
-// consumers migrate to the lazy directory endpoint. The Files tab no longer
-// uses it: opening a directory costs one level, not the whole project, so the
-// display path bounds each directory instead of the tree.
+// Bound for the one-level workspace browser (`browseWorkspace`), whose walk is
+// shallow but may still be pointed at a very wide directory. The Files tab
+// itself does not use it: opening a directory costs one level, and each
+// directory is bounded by MAXIMUM_DIRECTORY_LISTING_ENTRIES instead.
 const MAXIMUM_FILE_TREE_ENTRIES = 10_000;
 
 // Per-directory bound for the lazy Files tab listing. A directory with more
@@ -66,9 +63,16 @@ function includeEntryByHardExclusions(entryPath: string, isDirectory: boolean): 
   return !isDirectory || !HARD_EXCLUDED_DIRECTORY_NAMES.has(path.basename(entryPath));
 }
 
-function includeEntryByFallbackDirectoryNames(entryPath: string, isDirectory: boolean): boolean {
-  return includeEntryByHardExclusions(entryPath, isDirectory)
-    && (!isDirectory || !IGNORED_DIRECTORY_NAMES.has(path.basename(entryPath)));
+/**
+ * The display tree's filter: disk truth, minus only the pseudo-filesystems.
+ *
+ * The Files tab is a disk browser, so gitignore rules, conventional directory
+ * names and a `.git` exception are all deliberately absent — an entry that
+ * exists on disk is shown. `FORBIDDEN_WORKSPACE_PATHS` stays because /proc and
+ * friends are never project content and are pathologically large to enumerate.
+ */
+function includeDisplayEntry(entryPath: string): boolean {
+  return !FORBIDDEN_WORKSPACE_PATHS.includes(normalizeProjectPath(entryPath));
 }
 
 function createFileTreeError(message: string, statusCode: number, code: string): AppError {
@@ -239,13 +243,16 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
   }
 
   // Flat indexes are cached per project so a burst of consumers (mentions,
-  // command palette, search, open-file resolution) shares one git listing or
-  // walk. The cached value is the Promise, so concurrent first readers join the
-  // same build; any path mutation clears the entry for that project.
+  // command palette, open-file resolution) shares one git listing, and the
+  // Files-tab search shares one unfiltered walk. The cached value is the
+  // Promise, so concurrent first readers join the same build; any path
+  // mutation clears both entries for that project.
   const fileIndexCache = new Map<string, Promise<FileTreeIndex>>();
+  const searchIndexCache = new Map<string, Promise<FileTreeIndex>>();
 
   function invalidateFileIndex(projectId: string): void {
     fileIndexCache.delete(projectId);
+    searchIndexCache.delete(projectId);
   }
 
   async function readFallbackEntryFilter(projectRoot: string): Promise<FileTreeEntryFilter> {
@@ -300,9 +307,13 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
    * Directories are free; only files are charged against the cap, so a project
    * with a wide directory fan-out is bounded by how many files it actually
    * contains. Hitting the cap marks the result `truncated` rather than failing.
+   * The entry filter is the only difference between the git-aligned fallback
+   * index and the Files-tab search index.
    */
-  async function buildFallbackFileIndex(projectRoot: string): Promise<FileTreeIndex> {
-    const includeEntry = await readFallbackEntryFilter(projectRoot);
+  async function walkFileIndex(
+    projectRoot: string,
+    includeEntry: FileTreeEntryFilter,
+  ): Promise<FileTreeIndex> {
     const files: FileTreeIndexEntry[] = [];
     const pendingDirectories = [projectRoot];
 
@@ -330,6 +341,22 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
     }
 
     return { files, truncated: false };
+  }
+
+  async function buildFallbackFileIndex(projectRoot: string): Promise<FileTreeIndex> {
+    return walkFileIndex(projectRoot, await readFallbackEntryFilter(projectRoot));
+  }
+
+  /**
+   * The Files-tab search index: every file on disk.
+   *
+   * This is the display/search counterpart of the git-aligned flat index. A
+   * search in the Files tab must find what the tree can show — including
+   * gitignored paths, `.git/` and `node_modules/` — so the walk applies no
+   * ignore rules and no conventional-name exclusions at all.
+   */
+  async function buildSearchIndex(projectRoot: string): Promise<FileTreeIndex> {
+    return walkFileIndex(projectRoot, includeDisplayEntry);
   }
 
   async function buildProjectFileIndex(projectId: string): Promise<FileTreeIndex> {
@@ -508,7 +535,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
     directoryPath: string,
     maximumDepth: number,
     currentDepth = 0,
-    includeEntry: FileTreeEntryFilter = includeEntryByFallbackDirectoryNames,
+    includeEntry: FileTreeEntryFilter = includeDisplayEntry,
     remainingEntries = { value: MAXIMUM_FILE_TREE_ENTRIES },
   ): Promise<FileTreeNode[]> {
     const visibleEntries = await collectVisibleEntries(directoryPath, includeEntry, remainingEntries);
@@ -706,30 +733,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       return { success: true, path: resolvedPath, message: 'File saved successfully' };
     },
 
-    async listProjectFiles(projectId, options) {
-      const projectRoot = await resolveProjectRoot(projectId);
-      try {
-        await fileSystem.access(projectRoot);
-      } catch {
-        throw createFileTreeError(`Project path not found: ${projectRoot}`, 404, 'PROJECT_PATH_NOT_FOUND');
-      }
-
-      let includeEntry: FileTreeEntryFilter | undefined;
-      if (options?.respectGitignore) {
-        try {
-          const gitignoreContent = await fileSystem.readTextFile(path.join(projectRoot, '.gitignore'));
-          includeEntry = createGitignoreEntryFilter(projectRoot, gitignoreContent);
-        } catch (error) {
-          if (readErrorCode(error) !== 'ENOENT') {
-            dependencies.logger.error(`Error reading .gitignore in "${projectRoot}"`, error);
-          }
-        }
-      }
-
-      return buildFileTree(projectRoot, 10, 0, includeEntry);
-    },
-
-    async listProjectDirectory(projectId, directoryPath, options) {
+    async listProjectDirectory(projectId, directoryPath) {
       const projectRoot = await resolveProjectRoot(projectId);
       try {
         await fileSystem.access(projectRoot);
@@ -751,19 +755,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
         throw createFileTreeError('Directory not accessible', 404, 'DIRECTORY_NOT_ACCESSIBLE');
       }
 
-      let includeEntry: FileTreeEntryFilter = includeEntryByFallbackDirectoryNames;
-      if (options?.respectGitignore) {
-        try {
-          const gitignoreContent = await fileSystem.readTextFile(path.join(projectRoot, '.gitignore'));
-          includeEntry = createGitignoreEntryFilter(projectRoot, gitignoreContent);
-        } catch (error) {
-          if (readErrorCode(error) !== 'ENOENT') {
-            dependencies.logger.error(`Error reading .gitignore in "${projectRoot}"`, error);
-          }
-        }
-      }
-
-      return buildDirectoryListing(targetPath, includeEntry);
+      return buildDirectoryListing(targetPath, includeDisplayEntry);
     },
 
     async listProjectFileIndex(projectId) {
@@ -779,6 +771,31 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       } catch (error) {
         // A failed build must not pin the failure for the process lifetime.
         fileIndexCache.delete(projectId);
+        throw error;
+      }
+    },
+
+    async listProjectSearchIndex(projectId) {
+      const cachedIndex = searchIndexCache.get(projectId);
+      if (cachedIndex) {
+        return cachedIndex;
+      }
+
+      const indexPromise = (async () => {
+        const projectRoot = await resolveProjectRoot(projectId);
+        try {
+          await fileSystem.access(projectRoot);
+        } catch {
+          throw createFileTreeError(`Project path not found: ${projectRoot}`, 404, 'PROJECT_PATH_NOT_FOUND');
+        }
+        return buildSearchIndex(projectRoot);
+      })();
+      searchIndexCache.set(projectId, indexPromise);
+      try {
+        return await indexPromise;
+      } catch (error) {
+        // A failed build must not pin the failure for the process lifetime.
+        searchIndexCache.delete(projectId);
         throw error;
       }
     },

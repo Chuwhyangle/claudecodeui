@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { useProjectFileIndex } from '@/modules/file-tree/hooks/useProjectFileIndex';
+import { useFileTreeSearchIndex } from '@/modules/file-tree/hooks/useFileTreeSearchIndex';
 import type { FileTreeNode } from '@/shared/types';
 
 type UseFileTreeSearchArgs = {
@@ -20,11 +20,12 @@ export function useFileTreeSearch({
 }: UseFileTreeSearchArgs): UseFileTreeSearchResult {
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Search reads the same shared flat index as @-mentions, the command palette
-  // and bare-name resolution, so it offers the git-aligned file set rather than
-  // whatever the display tree happened to load. The index is only asked for
-  // while a query is active — browsing the tree never pays for it.
-  const { files: indexEntries } = useProjectFileIndex(projectId, searchQuery.trim().length > 0);
+  // Search reads its own disk-truth index: the same unfiltered walk that backs
+  // what the tree shows, so a gitignored file visible in the tree is findable
+  // here too. The reference index (git semantics) backs @-mentions, the command
+  // palette and bare-name resolution instead. The walk is only asked for while
+  // a query is active — browsing the tree never pays for it.
+  const { files: indexEntries } = useFileTreeSearchIndex(projectId, searchQuery.trim().length > 0);
 
   // Derived, not stored: mirroring the filter into state made every keystroke
   // (and every index refresh) cost an extra render, and left `filteredFiles`

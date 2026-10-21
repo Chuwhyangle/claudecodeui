@@ -13,8 +13,8 @@ import type { Project } from '@/shared/types';
  *
  * What this file pins, on the real tree component:
  *
- *  - opening the tree reads the root and nothing else — an eager full-tree
- *    fetch (`getFiles`) is the false form, so it must never be called;
+ *  - opening the tree reads the root and nothing else — the retired full-tree
+ *    fetch has no api entry at all, so the only read is the one-level listing;
  *  - expanding a folder reads exactly that folder's path, once; collapsing and
  *    expanding again reuses the cached listing;
  *  - a reveal request walks a deep path layer by layer, root first, and opens
@@ -40,7 +40,6 @@ const listing = (path: string, entries: Entry[] = []): Listing => ({ path, entri
 
 const state = vi.hoisted(() => ({
   getDirectory: vi.fn(),
-  getFiles: vi.fn(),
   createFile: vi.fn(),
   renameFile: vi.fn(),
   deleteFile: vi.fn(),
@@ -50,7 +49,6 @@ const state = vi.hoisted(() => ({
 vi.mock('@/shared/api', () => ({
   api: {
     getDirectory: state.getDirectory,
-    getFiles: state.getFiles,
     createFile: state.createFile,
     renameFile: state.renameFile,
     deleteFile: state.deleteFile,
@@ -101,7 +99,6 @@ let directoryCalls: string[];
 
 beforeEach(() => {
   state.getDirectory.mockReset();
-  state.getFiles.mockReset();
   state.createFile.mockReset();
   state.renameFile.mockReset();
   state.deleteFile.mockReset();
@@ -122,9 +119,6 @@ beforeEach(() => {
     directoryCalls.push(path);
     return respond(listings[path] ?? listing(path));
   });
-  // The false form this criterion names: any eager full-tree read shows up
-  // here as a call.
-  state.getFiles.mockImplementation(async () => respond([]));
   state.createFile.mockImplementation(okMutation);
   state.renameFile.mockImplementation(okMutation);
   state.deleteFile.mockImplementation(okMutation);
@@ -138,7 +132,6 @@ test('opening the tree reads only the root; unexpanded folders send nothing', as
   await screen.findByText('docs');
 
   assert.deepEqual(directoryCalls, [''], 'one request, for the root listing');
-  assert.equal(state.getFiles.mock.calls.length, 0, 'the full-tree endpoint is not called');
   assert.equal(screen.queryByText('app.ts'), null);
   assert.equal(screen.queryByText('guide.md'), null);
 });

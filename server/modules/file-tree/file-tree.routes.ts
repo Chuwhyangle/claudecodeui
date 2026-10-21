@@ -162,21 +162,17 @@ export function createFileTreeRouter(
   }, logger));
 
   router.get('/projects/:projectId/files', createRouteHandler(async (request, response) => {
-    // `?path=` opts into the lazy one-level listing (an empty value means the
-    // project root). Requests without the parameter keep the legacy full-tree
-    // shape until the remaining consumers migrate, so this endpoint is additive
-    // for old clients rather than a silent response-shape change.
-    const directoryPath = readOptionalString(request.query.path);
-    if (directoryPath !== null) {
-      response.json(await services.listProjectDirectory(readProjectId(request), directoryPath, {
-        respectGitignore: request.query.respectGitignore === 'true',
-      }));
-      return;
-    }
+    // One directory level per request. An absent (or empty) `?path=` lists the
+    // project root; there is no full-tree shape — the display path stopped
+    // paying for a whole-project walk when the lazy listing landed.
+    response.json(await services.listProjectDirectory(
+      readProjectId(request),
+      readOptionalString(request.query.path) ?? undefined,
+    ));
+  }, logger));
 
-    response.json(await services.listProjectFiles(readProjectId(request), {
-      respectGitignore: request.query.respectGitignore === 'true',
-    }));
+  router.get('/projects/:projectId/files-search-index', createRouteHandler(async (request, response) => {
+    response.json(await services.listProjectSearchIndex(readProjectId(request)));
   }, logger));
 
   router.get('/projects/:projectId/files-index', createRouteHandler(async (request, response) => {

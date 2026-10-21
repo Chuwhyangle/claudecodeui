@@ -8,33 +8,34 @@ import { beforeEach, test, vi } from 'vitest';
 /**
  * One flat file index for every filename-reference surface.
  *
- * Four frontend consumers used to ask the project for its whole tree and then
+ * Three frontend consumers used to ask the project for its whole tree and then
  * flatten it themselves: @-mentions (`useFileMentions`), the command palette
- * (`useFilesSource`), bare-filename resolution (`useFileOpenResolver`) and the
- * Files-tab search (`useFileTreeSearch`). They all need the same flat
- * `{name, path}[]`, so the readings are:
+ * (`useFilesSource`) and bare-filename resolution (`useFileOpenResolver`). They
+ * all need the same flat `{name, path}[]`, so the readings are:
  *
  *  - one project asks the endpoint once, no matter how many consumers mount,
  *    and every consumer reads the same cached array;
  *  - a project switch is one new request for all of them, not one per consumer;
- *  - none of the four keeps its own full-tree `getFiles` call.
+ *  - none of the three keeps its own full-tree fetch.
+ *
+ * Files-tab search used to be a fourth consumer; it now reads its own
+ * unfiltered search index (disk truth) and is pinned by
+ * `fileTreeSearchIndex.test.tsx`, so this file also asserts it stays out.
  *
  * The last reading is taken from the shipped sources as text, because the
- * consumers live in four different modules and this test lives in `file-tree`:
- * a cross-module deep import here would itself violate the barrel rule the
+ * consumers live in different modules and this test lives in `file-tree`: a
+ * cross-module deep import here would itself violate the barrel rule the
  * criterion asserts. The request-count readings above are taken on the shared
- * hook the four now read, mounted four times.
+ * hook the three now read, mounted three times.
  */
 
 const state = vi.hoisted(() => ({
   getFileIndex: vi.fn(),
-  getFiles: vi.fn(),
 }));
 
 vi.mock('@/shared/api', () => ({
   api: {
     getFileIndex: state.getFileIndex,
-    getFiles: state.getFiles,
   },
 }));
 
@@ -58,7 +59,6 @@ beforeEach(() => {
   // request per project" true for the wrong reason.
   vi.resetModules();
   state.getFileIndex.mockReset();
-  state.getFiles.mockReset();
   state.getFileIndex.mockImplementation((projectId: string) =>
     okJson({
       files: (projectId === PROJECT_A ? FILES_A : FILES_B).map((entry) => ({
@@ -68,9 +68,6 @@ beforeEach(() => {
       truncated: false,
     }),
   );
-  // The full-tree endpoint still backs the Files-tab *display* tree; what this
-  // file pins is that the reference surfaces no longer reach for it.
-  state.getFiles.mockResolvedValue(okJson([]));
 });
 
 const loadIndexHook = async () => {
@@ -101,9 +98,9 @@ const settleOn = async (consumers: Consumer[], files: IndexEntry[]) => {
   });
 };
 
-test('four consumers on one project join one files-index request and read one list', async () => {
+test('three consumers on one project join one files-index request and read one list', async () => {
   const useProjectFileIndex = await loadIndexHook();
-  const consumers = mountConsumers(useProjectFileIndex, 4);
+  const consumers = mountConsumers(useProjectFileIndex, 3);
 
   await settleOn(consumers, FILES_A);
 
@@ -118,19 +115,11 @@ test('four consumers on one project join one files-index request and read one li
       'every consumer reads the same cached {name,path}[]',
     );
   }
-
-  // The false form this criterion names: a consumer that still keeps its own
-  // full-tree fetch shows up here as a call.
-  assert.equal(
-    state.getFiles.mock.calls.length,
-    0,
-    'the reference surfaces do not call the full-tree endpoint',
-  );
 });
 
 test('switching projects starts one new request for all consumers', async () => {
   const useProjectFileIndex = await loadIndexHook();
-  const consumers = mountConsumers(useProjectFileIndex, 4);
+  const consumers = mountConsumers(useProjectFileIndex, 3);
   await settleOn(consumers, FILES_A);
   assert.equal(state.getFileIndex.mock.calls.length, 1);
 
@@ -190,12 +179,11 @@ test('an unreadable index degrades to an empty list and is not re-asked', async 
   assert.equal(state.getFileIndex.mock.calls.length, 1);
 });
 
-test('the four consumers read the shared index and keep no full-tree fetch', async () => {
+test('the three reference consumers read the shared index and keep no full-tree fetch', async () => {
   const consumers = [
     ['@-mentions', 'src/modules/chat/hooks/useFileMentions.tsx'],
     ['command palette', 'src/modules/command-palette/hooks/useFilesSource.ts'],
     ['bare-name resolution', 'src/modules/project-workspace/hooks/useFileOpenResolver.ts'],
-    ['Files-tab search', 'src/modules/file-tree/hooks/useFileTreeSearch.ts'],
   ] as const;
   const root = process.cwd();
 
@@ -204,15 +192,22 @@ test('the four consumers read the shared index and keep no full-tree fetch', asy
     assert.match(source, /useProjectFileIndex|loadProjectFileIndex/, `${label} reads the shared index`);
     assert.doesNotMatch(source, /\bgetFiles\b/, `${label} keeps no full-tree fetch`);
 
-    if (!relativePath.startsWith('src/modules/file-tree/')) {
-      assert.match(source, /from '@\/modules\/file-tree'/, `${label} reaches the hook through the barrel`);
-      assert.doesNotMatch(
-        source,
-        /from '@\/modules\/file-tree\//,
-        `${label} does not deep-import the file-tree module`,
-      );
-    }
+    assert.match(source, /from '@\/modules\/file-tree'/, `${label} reaches the hook through the barrel`);
+    assert.doesNotMatch(
+      source,
+      /from '@\/modules\/file-tree\//,
+      `${label} does not deep-import the file-tree module`,
+    );
   }
+
+  // Files-tab search is no longer a reference consumer: it reads the
+  // unfiltered search index. Leaving it wired to this one would make the Files
+  // tab offer exactly what git tracks while the tree above it shows more.
+  const searchSource = readFileSync(
+    resolve(root, 'src/modules/file-tree/hooks/useFileTreeSearch.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(searchSource, /useProjectFileIndex|loadProjectFileIndex/);
 
   // Importing the hook in this file happens through `@/modules/file-tree`; the
   // barrel is what makes that legal, so the barrel must really export it.

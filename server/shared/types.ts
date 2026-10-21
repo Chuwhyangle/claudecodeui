@@ -1874,20 +1874,20 @@ export type FileTreeServices = {
     path: string;
     message: string;
   }>;
-  listProjectFiles(
-    projectId: string,
-    options?: { respectGitignore: boolean },
-  ): Promise<FileTreeNode[]>;
   // Lazy Files tab listing: exactly one directory level, bounded per directory.
   // `directoryPath` omitted (or the project root) lists the project root.
   listProjectDirectory(
     projectId: string,
     directoryPath?: string,
-    options?: { respectGitignore: boolean },
   ): Promise<FileTreeDirectoryListing>;
   // Flat file index shared by filename-resolution consumers; a git project is
   // served from `git ls-files`, everything else from a bounded filesystem walk.
   listProjectFileIndex(projectId: string): Promise<FileTreeIndex>;
+  // Files-tab search index: an unfiltered bounded walk of what is on disk
+  // (gitignored paths, `.git/`, `node_modules/` included). Deliberately
+  // separate from `listProjectFileIndex`: display/search read disk truth,
+  // filename references read git semantics.
+  listProjectSearchIndex(projectId: string): Promise<FileTreeIndex>;
   createEntry(input: {
     projectId: string;
     parentPath: string;

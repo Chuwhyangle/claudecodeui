@@ -87,45 +87,38 @@ function createDependencies(
   };
 }
 
-test('listProjectFiles applies gitignore alongside hard directory exclusions', async () => {
+test('listProjectDirectory lists disk truth: gitignored paths, .git and node_modules stay visible', async () => {
   const projectRoot = path.resolve('file-tree-test-project');
-  const documentationDirectory = path.join(projectRoot, 'docs');
-  const buildDocumentationDirectory = path.join(documentationDirectory, 'build');
   const gitDirectory = path.join(projectRoot, '.git');
   const nodeModulesDirectory = path.join(projectRoot, 'node_modules');
+  const cacheDirectory = path.join(projectRoot, 'cache');
   const sourceDirectory = path.join(projectRoot, 'src');
   const readDirectories: string[] = [];
   const fileSystem = createFakeFileSystem({
     access: async () => undefined,
-    readTextFile: async (filePath) => {
-      assert.equal(filePath, path.join(projectRoot, '.gitignore'));
-      return '*.log';
+    stat: async () => createStats(true, 0o755),
+    // A `.gitignore` exists, but the display path must neither read nor apply
+    // it. `readTextFile` is reached only by the index fallback, not here.
+    readTextFile: async () => {
+      throw new Error('the display path must not read .gitignore');
     },
     openDirectory: createDirectoryReader((directoryPath) => {
       readDirectories.push(directoryPath);
       if (directoryPath === projectRoot) {
         return [
           createDirectoryEntry('.git', true),
+          createDirectoryEntry('.gitignore', false),
+          createDirectoryEntry('cache', true),
+          createDirectoryEntry('ignored.log', false),
+          createDirectoryEntry('keep.log', false),
           createDirectoryEntry('node_modules', true),
-          createDirectoryEntry('README.md', false),
-          createDirectoryEntry('docs', true),
           createDirectoryEntry('src', true),
         ];
-      }
-      if (directoryPath === documentationDirectory) {
-        return [createDirectoryEntry('build', true)];
-      }
-      if (directoryPath === buildDocumentationDirectory) {
-        return [createDirectoryEntry('foo.md', false)];
-      }
-      if (directoryPath === sourceDirectory) {
-        return [createDirectoryEntry('index.ts', false)];
       }
       return [];
     }),
     lstat: async (candidatePath) => createStats(
-      candidatePath === documentationDirectory
-        || candidatePath === buildDocumentationDirectory
+      candidatePath === cacheDirectory
         || candidatePath === sourceDirectory
         || candidatePath === gitDirectory
         || candidatePath === nodeModulesDirectory,
@@ -134,193 +127,53 @@ test('listProjectFiles applies gitignore alongside hard directory exclusions', a
   });
   const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
 
-  const tree = await service.listProjectFiles('project-1', { respectGitignore: true });
+  const listing = await service.listProjectDirectory('project-1');
 
-  assert.deepEqual(tree.map((entry) => entry.name), ['docs', 'src', 'README.md']);
-  const documentationEntry = tree[0];
-  assert.deepEqual(documentationEntry?.children?.map((entry) => entry.name), ['build']);
-  assert.deepEqual(documentationEntry?.children?.[0]?.children?.map((entry) => entry.name), ['foo.md']);
-  const sourceEntry = tree[1];
-  assert.ok(sourceEntry);
-  assert.equal(sourceEntry.type, 'directory');
-  assert.equal(sourceEntry.permissions, '754');
-  assert.equal(sourceEntry.permissionsRwx, 'rwxr-xr--');
-  assert.deepEqual(sourceEntry.children?.map((entry) => entry.name), ['index.ts']);
-  assert.equal(readDirectories.includes(gitDirectory), false);
-  assert.equal(readDirectories.includes(nodeModulesDirectory), false);
+  assert.deepEqual(
+    listing.entries.map((entry) => entry.name).sort(),
+    ['.git', '.gitignore', 'cache', 'ignored.log', 'keep.log', 'node_modules', 'src'].sort(),
+    'the Files tab shows what is on disk, not what git would list',
+  );
+  assert.equal(listing.truncated, false);
+  // Directories advertise an expander without peeking; the walk never descends.
+  const sourceEntry = listing.entries.find((entry) => entry.name === 'src');
+  assert.equal(sourceEntry?.type, 'directory');
+  assert.equal(sourceEntry?.hasChildren, true);
+  assert.equal(sourceEntry?.permissions, '754');
+  assert.equal(sourceEntry?.permissionsRwx, 'rwxr-xr--');
+  assert.deepEqual(readDirectories, [projectRoot], 'one directory level, no descendants');
 });
 
-test('listProjectFiles excludes gitignored entries only when requested', async () => {
+test('listProjectDirectory does not read .gitignore even when the query would have filtered it', async () => {
   const projectRoot = path.resolve('file-tree-test-project');
-  const cacheDirectory = path.join(projectRoot, 'cache');
-  const sourceDirectory = path.join(projectRoot, 'src');
-  const readDirectories: string[] = [];
+  const readPaths: string[] = [];
   const fileSystem = createFakeFileSystem({
     access: async () => undefined,
+    stat: async () => createStats(true, 0o755),
     readTextFile: async (filePath) => {
-      assert.equal(filePath, path.join(projectRoot, '.gitignore'));
+      readPaths.push(filePath);
       return ['*.log', '!keep.log', 'cache/', 'src/generated.ts'].join('\n');
     },
-    openDirectory: createDirectoryReader((directoryPath) => {
-      readDirectories.push(directoryPath);
-      if (directoryPath === projectRoot) {
-        return [
+    openDirectory: createDirectoryReader((directoryPath) => directoryPath === projectRoot
+      ? [
           createDirectoryEntry('.gitignore', false),
           createDirectoryEntry('cache', true),
           createDirectoryEntry('ignored.log', false),
           createDirectoryEntry('keep.log', false),
           createDirectoryEntry('src', true),
-        ];
-      }
-      if (directoryPath === cacheDirectory) {
-        return [createDirectoryEntry('cached.txt', false)];
-      }
-      if (directoryPath === sourceDirectory) {
-        return [
-          createDirectoryEntry('generated.ts', false),
-          createDirectoryEntry('index.ts', false),
-        ];
-      }
-      return [];
-    }),
-    lstat: async (candidatePath) => createStats(
-      candidatePath === cacheDirectory || candidatePath === sourceDirectory,
-      0o644,
-    ),
-  });
-  const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
-
-  const tree = await service.listProjectFiles('project-1', { respectGitignore: true });
-
-  assert.deepEqual(tree.map((entry) => entry.name), ['src', '.gitignore', 'keep.log']);
-  assert.deepEqual(tree[0]?.children?.map((entry) => entry.name), ['index.ts']);
-  assert.equal(readDirectories.includes(cacheDirectory), false);
-});
-
-test('listProjectFiles falls back to conventional directory names when no gitignore exists', async () => {
-  const projectRoot = path.resolve('file-tree-test-project');
-  const documentationDirectory = path.join(projectRoot, 'docs');
-  const buildDocumentationDirectory = path.join(documentationDirectory, 'build');
-  const nodeModulesDirectory = path.join(projectRoot, 'node_modules');
-  const readDirectories: string[] = [];
-  const fileSystem = createFakeFileSystem({
-    access: async () => undefined,
-    readTextFile: async () => {
-      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
-    },
-    openDirectory: createDirectoryReader((directoryPath) => {
-      readDirectories.push(directoryPath);
-      if (directoryPath === projectRoot) {
-        return [
-          createDirectoryEntry('debug.log', false),
-          createDirectoryEntry('docs', true),
-          createDirectoryEntry('node_modules', true),
-        ];
-      }
-      if (directoryPath === documentationDirectory) {
-        return [
-          createDirectoryEntry('build', true),
-          createDirectoryEntry('guide.md', false),
-        ];
-      }
-      if (directoryPath === buildDocumentationDirectory) {
-        return [createDirectoryEntry('generated.md', false)];
-      }
-      return [];
-    }),
-    lstat: async (candidatePath) => createStats(candidatePath === documentationDirectory, 0o644),
-  });
-  const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
-
-  const tree = await service.listProjectFiles('project-1', { respectGitignore: true });
-
-  assert.deepEqual(tree.map((entry) => entry.name), ['docs', 'debug.log']);
-  assert.deepEqual(tree[0]?.children?.map((entry) => entry.name), ['guide.md']);
-  assert.equal(readDirectories.includes(nodeModulesDirectory), false);
-  assert.equal(readDirectories.includes(buildDocumentationDirectory), false);
-});
-
-test('listProjectFiles rejects a tree that exceeds the server entry limit', async () => {
-  const projectRoot = path.resolve('file-tree-test-project');
-  const fileSystem = createFakeFileSystem({
-    access: async () => undefined,
-    openDirectory: createDirectoryReader((directoryPath) => directoryPath === projectRoot
-      ? Array.from({ length: 10_001 }, (_, index) => createDirectoryEntry(`file-${index}.txt`, false))
+        ]
       : []),
     lstat: async () => createStats(false, 0o644),
   });
   const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
 
-  await assert.rejects(
-    service.listProjectFiles('project-1'),
-    (error: unknown) => error instanceof AppError
-      && error.code === 'FILE_TREE_TOO_LARGE'
-      && error.statusCode === 413,
+  const listing = await service.listProjectDirectory('project-1');
+
+  assert.deepEqual(
+    listing.entries.map((entry) => entry.name).sort(),
+    ['.gitignore', 'cache', 'ignored.log', 'keep.log', 'src'],
   );
-});
-
-test('listProjectFiles abandons a directory stream as soon as the entry limit is passed', async () => {
-  const projectRoot = path.resolve('file-tree-test-project');
-  let streamedEntries = 0;
-  const fileSystem = createFakeFileSystem({
-    access: async () => undefined,
-    // Endless on purpose: the walk has to stop consuming the stream itself
-    // instead of waiting for the directory listing to be materialized.
-    openDirectory: async function* (directoryPath) {
-      if (directoryPath !== projectRoot) {
-        return;
-      }
-      for (let index = 0; ; index += 1) {
-        streamedEntries += 1;
-        yield createDirectoryEntry(`file-${index}.txt`, false);
-      }
-    },
-    lstat: async () => createStats(false, 0o644),
-  });
-  const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
-
-  await assert.rejects(
-    service.listProjectFiles('project-1'),
-    (error: unknown) => error instanceof AppError
-      && error.code === 'FILE_TREE_TOO_LARGE'
-      && error.statusCode === 413,
-  );
-  // The budget plus the single entry that proves it was exceeded.
-  assert.equal(streamedEntries, 10_001);
-});
-
-test('listProjectFiles shares the entry limit across nested directories', async () => {
-  const projectRoot = path.resolve('file-tree-test-project');
-  const firstDirectory = path.join(projectRoot, 'first');
-  const secondDirectory = path.join(projectRoot, 'second');
-  const directoryPaths = new Set([firstDirectory, secondDirectory]);
-  const fileSystem = createFakeFileSystem({
-    access: async () => undefined,
-    openDirectory: createDirectoryReader((directoryPath) => {
-      if (directoryPath === projectRoot) {
-        return [
-          createDirectoryEntry('first', true),
-          createDirectoryEntry('second', true),
-        ];
-      }
-      if (directoryPaths.has(directoryPath)) {
-        return Array.from(
-          { length: 5_000 },
-          (_, index) => createDirectoryEntry(`${path.basename(directoryPath)}-${index}.txt`, false),
-        );
-      }
-      return [];
-    }),
-    lstat: async (candidatePath) => createStats(directoryPaths.has(candidatePath), 0o644),
-  });
-  const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
-
-  await assert.rejects(
-    service.listProjectFiles('project-1'),
-    (error: unknown) => error instanceof AppError
-      && error.code === 'FILE_TREE_TOO_LARGE'
-      && error.statusCode === 413,
-  );
+  assert.deepEqual(readPaths, [], 'the display path never reads ignore rules');
 });
 
 test('readTextFile rejects traversal before invoking the filesystem adapter', async () => {

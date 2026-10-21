@@ -155,7 +155,11 @@
 #   and the server-composition-startup row by gap-server-provider-websocket-init-cycle-ports,
 #   measured one file at a time on 2026-10-20,
 #   and the file-tree-lazy-listing row by file-tree-lazy-directory-listing, measured one file at a
-#   time on 2026-10-21 (its own new criterion; no green round contains it yet).
+#   time on 2026-10-21 (its own new criterion; no green round contains it yet),
+#   and the file-tree-search-index row by gap-files-tab-unfiltered-decouple-index, measured one
+#   file at a time on 2026-10-21 (its own new criterion; no green round contains it yet — the row
+#   also keeps the 90% coverage floor green now that the tree collects 391 server test files).
+1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
 1614	server/modules/voice-realtime/tests/voice-realtime-model-reply-narrator.test.ts

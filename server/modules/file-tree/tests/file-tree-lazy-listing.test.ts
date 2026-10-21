@@ -43,6 +43,7 @@ type FakeTree = {
   directories: Set<string>;
   openedDirectories: string[];
   gitignore: string | null;
+  gitignoreReads: number;
 };
 
 function createFakeTree(): FakeTree {
@@ -51,6 +52,7 @@ function createFakeTree(): FakeTree {
     directories: new Set(),
     openedDirectories: [],
     gitignore: null,
+    gitignoreReads: 0,
   };
 }
 
@@ -82,6 +84,7 @@ function createFakeFileSystem(tree: FakeTree): FileTreeFileSystem {
     },
     realpath: async (candidatePath) => candidatePath,
     readTextFile: async (filePath) => {
+      tree.gitignoreReads += 1;
       assert.equal(path.basename(filePath), '.gitignore');
       if (tree.gitignore === null) {
         throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
@@ -190,44 +193,34 @@ test('a root listing succeeds when a child directory holds 50,000 entries', asyn
   assert.deepEqual(tree.openedDirectories, [projectRoot, hugeDirectory]);
 });
 
-test('virtualenv and byte-code cache directories are hard-excluded in both modes', async () => {
+test('virtualenv and byte-code cache directories are listed: the display is unfiltered', async () => {
   const projectRoot = path.resolve('file-tree-lazy-project');
   const sourceDirectory = path.join(projectRoot, 'src');
-  const excludedDirectoryNames = ['.venv', 'venv', '__pycache__', '.pytest_cache', '.cache'];
+  const cacheDirectoryNames = ['.venv', 'venv', '__pycache__', '.pytest_cache', '.cache', '.git', 'node_modules'];
   const tree = createFakeTree();
   tree.directories.add(projectRoot);
   tree.directories.add(sourceDirectory);
-  for (const name of excludedDirectoryNames) {
+  for (const name of cacheDirectoryNames) {
     tree.directories.add(path.join(projectRoot, name));
   }
   tree.contents.set(projectRoot, [
-    ...excludedDirectoryNames.map((name) => createDirectoryEntry(name, true)),
+    ...cacheDirectoryNames.map((name) => createDirectoryEntry(name, true)),
     createDirectoryEntry('src', true),
     createDirectoryEntry('keep.ts', false),
   ]);
   tree.contents.set(sourceDirectory, []);
-  // A root .gitignore that says nothing about the excluded names: exclusion has
-  // to come from the always-on hard list, not from ignore rules.
-  tree.gitignore = '*.log\n';
+  // A root .gitignore that names every cache directory: the display path must
+  // still show them, because it does not read or apply ignore rules at all.
+  tree.gitignore = `${cacheDirectoryNames.join('/\n')}/\n`;
   const fileSystem = createFakeFileSystem(tree);
   const service = createFileTreeService(createDependencies(fileSystem, projectRoot));
 
-  const gitignoreListing = await service.listProjectDirectory(
-    'project-1',
-    undefined,
-    { respectGitignore: true },
-  );
-  const fallbackListing = await service.listProjectDirectory(
-    'project-1',
-    undefined,
-    { respectGitignore: false },
-  );
+  const listing = await service.listProjectDirectory('project-1');
 
-  for (const listing of [gitignoreListing, fallbackListing]) {
-    assert.deepEqual(
-      listing.entries.map((entry) => entry.name),
-      ['src', 'keep.ts'],
-      'cache directories must be absent in both gitignore and fallback modes',
-    );
-  }
+  assert.deepEqual(
+    listing.entries.map((entry) => entry.name).sort(),
+    [...cacheDirectoryNames, 'src', 'keep.ts'].sort(),
+    'the Files tab shows what is on disk, not what git would list',
+  );
+  assert.equal(tree.gitignoreReads, 0, 'the display listing never reads .gitignore');
 });
