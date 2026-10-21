@@ -1,0 +1,23 @@
+file,category,expected_label,status,duration_s,note
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-01_8c52b26c.wav,01-extra-target,target,pending,14.22,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-02_e2fda1ad.wav,01-extra-target,target,pending,9.88,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-03_46b164e0.wav,01-extra-target,target,pending,10.6,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-04_e1230f2d.wav,01-extra-target,target,pending,11.0,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-05_7e729db5.wav,01-extra-target,target,pending,4.56,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-06_024ed88e.wav,01-extra-target,target,pending,4.4,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-07_dc6f668f.wav,01-extra-target,target,pending,8.22,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-08_357cb5e9.wav,01-extra-target,target,pending,14.54,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-09_d4c0e88c.wav,01-extra-target,target,pending,6.88,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-10_c7b8ae03.wav,01-extra-target,target,pending,9.44,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-11_ff68ec03.wav,01-extra-target,target,pending,3.3,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/01-extra-target/extra-12_6be904c3.wav,01-extra-target,target,pending,1.8,voice-data high-confidence (>=0.40); user has not listened yet
+/tmp/speaker-gate-audition-2026-10-21/02-session-check/session-01_647944e2_first8s.wav,02-session-check,unknown,pending,8.0,check purity: only the user? TTS echo/bystanders?
+/tmp/speaker-gate-audition-2026-10-21/02-session-check/session-02_2e5c73aa_first8s.wav,02-session-check,unknown,pending,8.0,check purity: only the user? TTS echo/bystanders?
+/tmp/speaker-gate-audition-2026-10-21/02-session-check/session-03_13e2a4a5_first8s.wav,02-session-check,unknown,pending,8.0,check purity: only the user? TTS echo/bystanders?
+/tmp/speaker-gate-audition-2026-10-21/02-session-check/session-04_262537d7_first8s.wav,02-session-check,unknown,pending,8.0,check purity: only the user? TTS echo/bystanders?
+/tmp/speaker-gate-audition-2026-10-21/02-session-check/session-05_112d7097_first8s.wav,02-session-check,unknown,pending,8.0,check purity: only the user? TTS echo/bystanders?
+/tmp/speaker-gate-audition-2026-10-21/02-session-check/session-06_e8df1709_first8s.wav,02-session-check,unknown,pending,8.0,check purity: only the user? TTS echo/bystanders?
+/tmp/speaker-gate-audition-2026-10-21/03-low-confidence/low-01_3b141843.wav,03-low-confidence,unknown,pending,2.02,low score / punctuation-only; confirm speaker
+/tmp/speaker-gate-audition-2026-10-21/03-low-confidence/low-02_e6ddb3ae.wav,03-low-confidence,unknown,pending,1.62,low score / punctuation-only; confirm speaker
+/tmp/speaker-gate-audition-2026-10-21/03-low-confidence/low-03_c4a25459.wav,03-low-confidence,unknown,pending,0.44,low score / punctuation-only; confirm speaker
+/tmp/speaker-gate-audition-2026-10-21/03-low-confidence/low-04_197cf650.wav,03-low-confidence,unknown,pending,0.78,low score / punctuation-only; confirm speaker
