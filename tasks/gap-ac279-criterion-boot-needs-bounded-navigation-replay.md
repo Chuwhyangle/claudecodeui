@@ -75,13 +75,13 @@ AC-279 的 `gate=goal` 尾巴：`10:04:27.206Z` pass、`10:10:00.061Z` pass、`1
 
 ## AC
 
-- [ ] **AC1 守卫已接线，spec 内无裸导航**：`grep -qF 'navigateClientBounded' e2e/session-filter-conversations-live.spec.ts`、`test "$(grep -c 'await page.goto(' e2e/session-filter-conversations-live.spec.ts)" = 0`、`grep -qF "from './support/client-startup-warmup'" e2e/session-filter-conversations-live.spec.ts` 三条合取 exit 0。取假形态：当前树（`:232` 裸 `page.goto`、无共享 import）第一条即红。
-- [ ] **AC2 判据命令 3/3 绿且首跳即落地**：连跑三次 `npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts`，每次 exit 0、输出含 `1 passed` 与 `[e2e] client startup: #username landed after … (attempt 1)`；用 `date +%s%3N` 记墙钟并贴出（静息应 ≈15–20s，< 55 000）。取假形态：守卫接线但落点退化成 shell 时，`(attempt 1)` 不会在 `#username` 上出现。
-- [ ] **AC3 重放臂：一次被打断的启动能自愈**：`SESSION_FILTER_LIVE_ABORT_BOOTS=1 npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts` exit 0，输出含 `1 passed` 与 `(attempt 2)`，且无 `[e2e] watchdog:`。取假形态：保留注入缝但把首个导航改回裸 `page.goto('/')` + `waitFor('#username')`，同一命令 exit ≠ 0（55s 看门狗或超时）、无 `(attempt 2)`，必红。
-- [ ] **AC4 响亮失败臂：重放耗尽按名字红，且不被 55s 看门狗/60s 闸掐断**：`SESSION_FILTER_LIVE_ABORT_BOOTS=9 npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts`（`date +%s%3N` 记墙钟）exit ≠ 0；stderr 含守卫的具名错误（`the client never mounted "#username"` 与每跳摘要，含 `net::` 证据）；输出**不含** `[e2e] watchdog:`；墙钟 < 60 000ms。取假形态：守卫把耗尽误判成功时本条见 exit 0，必红。
-- [ ] **AC5 AC-279 自己的假形态仍可区分**（逐条做完还原，贴红掉的断言）：(a) 临时去掉 `useSidebarController` 插入分支里的过滤判断 ⇒ 本 spec exit ≠ 0；(b) 还原后临时去掉改名分支里的移除 ⇒ 本 spec exit ≠ 0；(c) 还原后 `git diff -- src/` 为空。取假形态：若两条都不红，说明正对照/断言面已真空，必红。
-- [ ] **AC6 预算算术可读且未抬线**：贴出 AC2 的静息墙钟与 AC4 的耗尽墙钟，证明守卫 deadline（`STARTUP_GUARD_DEADLINE_MS = 20_000`）落在「静息 + 20s < 55 000 文件看门狗 < 60 000 闸 kill」之内；`git diff develop..HEAD -- playwright.config.ts goals/` 为空。
-- [ ] **AC7 静态不回归**：`npm run typecheck` exit 0；`npm run lint` exit 0。（如实登记：`typecheck` 的 include 与 `lint` 都不含 `e2e/`，spec 的编译正确性由 AC2–AC4 的实跑转译保证。）
+- [x] **AC1 守卫已接线，spec 内无裸导航**：`grep -qF 'navigateClientBounded' e2e/session-filter-conversations-live.spec.ts`、`test "$(grep -c 'await page.goto(' e2e/session-filter-conversations-live.spec.ts)" = 0`、`grep -qF "from './support/client-startup-warmup'" e2e/session-filter-conversations-live.spec.ts` 三条合取 exit 0。取假形态：当前树（`:232` 裸 `page.goto`、无共享 import）第一条即红。
+- [x] **AC2 判据命令 3/3 绿且首跳即落地**：连跑三次 `npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts`，每次 exit 0、输出含 `1 passed` 与 `[e2e] client startup: #username landed after … (attempt 1)`；用 `date +%s%3N` 记墙钟并贴出（静息应 ≈15–20s，< 55 000）。取假形态：守卫接线但落点退化成 shell 时，`(attempt 1)` 不会在 `#username` 上出现。
+- [x] **AC3 重放臂：一次被打断的启动能自愈**：`SESSION_FILTER_LIVE_ABORT_BOOTS=1 npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts` exit 0，输出含 `1 passed` 与 `(attempt 2)`，且无 `[e2e] watchdog:`。取假形态：保留注入缝但把首个导航改回裸 `page.goto('/')` + `waitFor('#username')`，同一命令 exit ≠ 0（55s 看门狗或超时）、无 `(attempt 2)`，必红。
+- [x] **AC4 响亮失败臂：重放耗尽按名字红，且不被 55s 看门狗/60s 闸掐断**：`SESSION_FILTER_LIVE_ABORT_BOOTS=9 npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts`（`date +%s%3N` 记墙钟）exit ≠ 0；stderr 含守卫的具名错误（`the client never mounted "#username"` 与每跳摘要，含 `net::` 证据）；输出**不含** `[e2e] watchdog:`；墙钟 < 60 000ms。取假形态：守卫把耗尽误判成功时本条见 exit 0，必红。
+- [x] **AC5 AC-279 自己的假形态仍可区分**（逐条做完还原，贴红掉的断言）：(a) 临时去掉 `useSidebarController` 插入分支里的过滤判断 ⇒ 本 spec exit ≠ 0；(b) 还原后临时去掉改名分支里的移除 ⇒ 本 spec exit ≠ 0；(c) 还原后 `git diff -- src/` 为空。取假形态：若两条都不红，说明正对照/断言面已真空，必红。
+- [x] **AC6 预算算术可读且未抬线**：贴出 AC2 的静息墙钟与 AC4 的耗尽墙钟，证明守卫 deadline（`STARTUP_GUARD_DEADLINE_MS = 20_000`）落在「静息 + 20s < 55 000 文件看门狗 < 60 000 闸 kill」之内；`git diff develop..HEAD -- playwright.config.ts goals/` 为空。
+- [x] **AC7 静态不回归**：`npm run typecheck` exit 0；`npm run lint` exit 0。（如实登记：`typecheck` 的 include 与 `lint` 都不含 `e2e/`，spec 的编译正确性由 AC2–AC4 的实跑转译保证。）
 
 ## DoD
 
