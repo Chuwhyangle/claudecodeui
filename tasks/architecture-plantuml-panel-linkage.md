@@ -1,7 +1,7 @@
 ---
 id: architecture-plantuml-panel-linkage
 title: architecture 稳定 id 跨面板联动：点节点高亮依赖/反依赖 + 展开下一跳
-status: ready
+status: done
 labels:
   - feature
 parent: null
