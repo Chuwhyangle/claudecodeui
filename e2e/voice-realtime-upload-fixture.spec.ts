@@ -70,6 +70,8 @@ import path from 'node:path';
 import { expect, request, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { WebSocketServer } from 'ws';
 
+import { reloadPaneBounded } from './support/pane-reload';
+
 /** This run's throwaway data directory, published by playwright.config.ts. */
 const DATA_DIR = process.env.QUAY_E2E_DATA_DIR!;
 
@@ -781,90 +783,6 @@ const barCaptionText = async (page: Page): Promise<string> => {
 };
 
 /**
- * AC-315: the reload path's decision window, bounded — and left with room inside it for a replay.
- *
- * The residual this closes read as an UNREPRODUCIBLE intermittent: `.chat-messages-pane` timing out 30s
- * after a `page.reload()`, `element(s) not found` — the same signature the ledger's reds carry. It is not
- * unreproducible, it is unbounded: the reloaded document's boot requests can be held (the injection this
- * task registers does exactly that) past any window the case is willing to wait. Before this the case had
- * one way to spend its window — wait it out, and red — with no second ask in it.
- */
-/** How long ONE reload hop — the case's own reload and every replay of it alike — is given to return. */
-const PANE_RELOAD_HOP_MS = 5_000;
-/** How long the FIRST hop's landing is given on its own, before the guard starts replaying. */
-const PANE_FIRST_LANDING_MS = 4_000;
-/** How long each REPLAY's landing is given. Shorter: a replay is a re-ask, not a cold boot. */
-const PANE_REPLAY_LANDING_MS = 3_000;
-/**
- * The bound the replay budget is spent out of. A deadline rather than a replay count, because it is the SUM that
- * has to fit — spelled out, because this sum is the whole of why the guard can replay at all:
- *
- *   first hop        PANE_RELOAD_HOP_MS      = 5_000
- * + first landing    PANE_FIRST_LANDING_MS   = 4_000
- * + replay hop       PANE_RELOAD_HOP_MS      = 5_000
- * + replay landing   PANE_REPLAY_LANDING_MS  = 3_000
- *   ───────────────────────────────────────────────
- *   worst case                               = 17_000  ≤  PANE_RELOAD_DEADLINE_MS = 18_000
- *
- * so even a first hop that spends its entire bound still leaves a complete replay inside the deadline, and a
- * run that cannot land ends HERE, by name, with the page's own text — rather than inside the case's own 30s
- * window, where a red says only that a wait ran out.
- */
-const PANE_RELOAD_DEADLINE_MS = 18_000;
-
-/** Whether `locator` showed up within `timeoutMs`. */
-const appears = async (locator: ReturnType<Page['locator']>, timeoutMs: number): Promise<boolean> =>
-  locator.waitFor({ state: 'visible', timeout: timeoutMs }).then(() => true, () => false);
-
-/**
- * What this file does instead of a bare `page.reload()` and then the pane's 30s window: the reload is bounded,
- * the pane it should bring back is probed with a bound of its own, and a probe that does not land has the reload
- * REPLAYED — a fresh document, which is exactly what recovers from a document whose boot requests were held or
- * interrupted once — until the deadline above is spent.
- *
- * One hop's navigation failing is a landing that did not arrive, not an error of its own: a document that never
- * finishes loading and one that loads without ever mounting the session are the same failure from here, and both
- * end at the same named error.
- *
- * Every hop is signed into this run's own output — which hop it is, what it was given, when it returned, and
- * whether the pane came up — because the replay this guard exists to make has to be READABLE in the log as a
- * replay (hop 1 is the case's own reload, every later one is a replay by number), not inferred from the source.
- */
-const reloadPaneBounded = async (page: Page, label: string): Promise<void> => {
-  const startedAt = Date.now();
-  const deadline = startedAt + PANE_RELOAD_DEADLINE_MS;
-  const budgetMs = () => Math.max(1, deadline - Date.now());
-  let navigationFailure: string | null = null;
-  for (let attempt = 1; ; attempt += 1) {
-    const hopKind = attempt === 1 ? 'page.reload' : `page.reload (replay ${attempt - 1})`;
-    const hopBudget = Math.min(PANE_RELOAD_HOP_MS, budgetMs());
-    const hopStartedAt = Date.now();
-    console.log(`[e2e] reload pane: hop ${attempt} (${hopKind}) begins with ${hopBudget}ms of navigation budget`);
-    try {
-      await page.reload({ timeout: hopBudget });
-      navigationFailure = null;
-      console.log(`[e2e] reload pane: hop ${attempt} (${hopKind}) returned after ${Date.now() - hopStartedAt}ms`);
-    } catch (error) {
-      navigationFailure = error instanceof Error ? error.message : String(error);
-      console.log(`[e2e] reload pane: hop ${attempt} (${hopKind}) did not return in ${hopBudget}ms: ${navigationFailure}`);
-    }
-    const landingBudget = Math.min(attempt === 1 ? PANE_FIRST_LANDING_MS : PANE_REPLAY_LANDING_MS, budgetMs());
-    if (await appears(page.locator(PANE), landingBudget)) {
-      console.log(`[e2e] reload pane: ${label} came up after ${Date.now() - startedAt}ms (attempt ${attempt}, ${hopKind})`);
-      return;
-    }
-    if (Date.now() >= deadline) {
-      await explain(
-        page,
-        `${label} did not come up within ${Date.now() - startedAt}ms of the reload, replays included`
-        + `${navigationFailure === null ? '' : ` (the last navigation did not return either: ${navigationFailure})`}`,
-      );
-    }
-    console.log(`[e2e] reload pane: ${label} was not up ${landingBudget}ms after hop ${attempt} (${hopKind}); replaying the reload`);
-  }
-};
-
-/**
  * How many times the page called `navigator.mediaDevices.getUserMedia`.
  *
  * `-1` when the counting seam is absent: a later edit that dropped the init
@@ -1211,7 +1129,7 @@ test.describe('voice realtime upload fixture', () => {
 
     // History, not this page's live state. The reload this reads across is the guarded one: it is the reload
     // whose boot the injection on this task holds past the window (AC-315), and the reading below is unchanged.
-    await reloadPaneBounded(page, 'the transcript pane after the history reload');
+    await reloadPaneBounded(page, 'the transcript pane after the history reload', explain);
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
     expect(await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()).toBeGreaterThanOrEqual(1);
@@ -1275,7 +1193,7 @@ test.describe('voice realtime upload fixture', () => {
 
     // The same guarded reload at 375px: this window is the second of the two the residual was read from, so it
     // is bounded and replayable on the same terms rather than left as the bare `page.reload()` it used to be.
-    await reloadPaneBounded(page, 'the transcript pane after the 375px reload');
+    await reloadPaneBounded(page, 'the transcript pane after the 375px reload', explain);
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })

@@ -48,6 +48,8 @@ import { WebSocketServer } from 'ws';
 // `e2e/` belongs to no typecheck program, so this adds no server code to the run but the function.
 import { resolveVoiceRealtimeMode } from '../server/modules/voice-realtime/voice-realtime-mode';
 
+import { reloadPaneBounded } from './support/pane-reload';
+
 const PANE = '.chat-messages-pane';
 const USER_ROW = '[data-message-style="user"]';
 /** The composer's textarea testid — present exactly while `ChatComposer` is mounted. */
@@ -762,8 +764,10 @@ test.describe('voice realtime live session send', () => {
     await expect(bar).toHaveCount(0);
     await expect(composer).toBeVisible({ timeout: 15_000 });
 
-    // History, not this page's live state: reload and read the pane again.
-    await page.reload();
+    // History, not this page's live state: reload and read the pane again. Bounded and replayable on
+    // the same terms as the upload fixture's history reload (AC-323's own residual: a bare reload whose
+    // boot requests were interrupted once left the pane missing for the case's whole 30s window).
+    await reloadPaneBounded(page, 'the transcript pane after the history reload', explain);
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
     expect(await page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count()).toBeGreaterThanOrEqual(1);
@@ -817,8 +821,9 @@ test.describe('voice realtime live session send', () => {
     await expect(bar).toHaveCount(0);
     await expect(composer).toBeVisible({ timeout: 15_000 });
 
-    // Both legs' turns are on disk: the second connection wrote its own row.
-    await page.reload();
+    // Both legs' turns are on disk: the second connection wrote its own row. The 375px reload is guarded
+    // on the same terms as the PC leg's.
+    await reloadPaneBounded(page, 'the transcript pane after the 375px reload', explain);
     await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => page.locator(USER_ROW).filter({ hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
