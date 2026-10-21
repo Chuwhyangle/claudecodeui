@@ -155,8 +155,8 @@ Received:    43937
 
 ## Blocker
 
-**2026-10-21T03:28:44.270Z — worker 未落地（exited-not-landed）**
+**2026-10-21T03:39:43.260Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - server/shared/tests/resident-legacy-path-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: [ac393-ratchet] supersedeRunning increased: baseline=3 actual=5 cap=3.
+- 未落地原因：step=suite: __PERFILE__ duration_ms=22748 server/modules/debug-agent/tests/debug-agent-gate.test.ts passed=false end_ms=1792553646285
 - run_id：wk-prod-anchor
-- session_id：7c9410a0-10f7-4f01-992d-2b9ff860da18
+- session_id：8a467b8d-b5d8-4b87-a17c-5cdb5ab3bade
