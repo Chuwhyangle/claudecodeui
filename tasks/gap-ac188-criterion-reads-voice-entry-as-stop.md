@@ -2,7 +2,7 @@
 id: gap-ac188-criterion-reads-voice-entry-as-stop
 title: AC-188 判据在 Live Voice 入口并入提交键后把空闲读成 stop：空闲时提交键 aria-label 是 Start Live
   Voice 而非 Send，回合结束后一致性读数恒红
-status: todo
+status: ready
 labels:
   - gap
   - defect
