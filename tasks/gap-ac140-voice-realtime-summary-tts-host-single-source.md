@@ -133,14 +133,3 @@ registry-before-provider 的顺序消解 TDZ；本轮让它
 `export { PUBLIC_HOSTNAME as DASHSCOPE_PUBLIC_HOSTNAME }` 作为 in-server 缝，两个叶子从它拼装。
 结果：主机字面量仍只在规则模块出现（AC2 仍是一行），判据读数不变（AC1 仍 value=1），
 而 AC-394 的读数保持 19。`voice-realtime-dashscope-transport.ts` 因此进入 Touches。
-
-## Blocker
-
-**2026-10-21T01:07:11.833Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: unresolved internal specifiers=23, over the baseline budget of 19 — the budget may only fall
-- run_id：wk-prod-anchor
-- session_id：79b8211a-9ed5-4b35-9812-5640189cf151
-
-**2026-10-21 — 本轮已消化上述原因**：4 条新 specifier 改为经 in-server 传输叶子读取，
-棘轮读数回到 19（见 Evidence 末节）。
