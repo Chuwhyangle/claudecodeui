@@ -65,10 +65,10 @@ goal_ac: AC-415
 
 ## Touches
 
-- server/modules/architecture/generator.ts
-- server/modules/architecture/index.ts
-- server/modules/architecture/tests/generator.test.ts
-- server/modules/architecture/tests/fixtures/arch-index.sample.json
+- server/modules/architecture/generator.ts (new)
+- server/modules/architecture/index.ts (new)
+- server/modules/architecture/tests/generator.test.ts (new)
+- server/modules/architecture/tests/fixtures/arch-index.sample.json (new)
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/gap-architecture-graph-generator-seeded-subgraph.md
