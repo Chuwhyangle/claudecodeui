@@ -506,3 +506,4 @@
 2261	server/shared/tests/bounded-approval-ledger.test.ts
 3605	server/modules/cli/tests/browser-use-mcp-entry.test.ts
 2355	server/modules/file-tree/tests/file-tree-lazy-listing.test.ts
+2023	server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts

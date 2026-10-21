@@ -112,6 +112,15 @@ import {
 } from './voice-realtime-turn-detection.js';
 import { createUpstreamPool, type UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
 import {
+  SPEAKER_WINDOW_MS,
+  SPEAKER_WINDOW_SAMPLE_RATE,
+  createSpeakerWindowAccumulator,
+  describeSpeakerShadowObservation,
+  describeSpeakerShadowSummary,
+  type SpeakerWindowAccumulator,
+  type VoiceSpeakerTrackerSeam,
+} from './voice-realtime-speaker-seam.js';
+import {
   SEGMENTED_RELAY_PROTOCOL,
   VOICE_REALTIME_MODE_ENV,
   applyVoiceRealtimeTransport,
@@ -2105,6 +2114,26 @@ export type VoiceRealtimeProxySeams = {
    */
   uplinkVad?: UplinkVadSeam;
   /**
+   * This connection's SPEAKER TRACKING observer (Phase 1, shadow), or absent for "off".
+   *
+   * PRESENCE IS THE SWITCH, exactly like {@link audioCapture}: `server/index.ts` builds this only when
+   * `VOICE_SPEAKER_TRACKING=shadow` resolved AND the CAM++ model finished loading, so a deployment that
+   * named nothing — or whose model failed to load — gets `speakerTracker === undefined` and the relay is
+   * byte-for-byte the one it was before this seam existed (AC6).
+   *
+   * WHAT IT CAN SEE. The proxy hands it completed 2 s windows decoded from the browser's PCM. It is a
+   * SIDE CHANNEL: the frame is forwarded before, and independently of, the observation. The seam has no
+   * way to drop, rewrite, delay or commit audio, and nothing it returns is sent to the browser — only
+   * `speaker_shadow` log lines. That is what "shadow" means here, and it is structural rather than a
+   * convention.
+   *
+   * IT READS BOTH WIRES. Unlike {@link silenceTail}/{@link uplinkVad} (which rewrite the continuous
+   * uplink and therefore only apply there), the observer takes a copy of every `{type:'audio'}` frame,
+   * segmented or continuous: the default relay is segmented, so a shadow that only looked at the
+   * continuous wire would observe nothing on a stock deployment.
+   */
+  speakerTracker?: VoiceSpeakerTrackerSeam;
+  /**
    * A fresh, read-only sample of the BOUND session's own queue, or `null` when it cannot be taken.
    *
    * THE ONE READING THE RELAY CANNOT PRODUCE. Every other term in {@link queuedDepth} is an event
@@ -2910,6 +2939,17 @@ export function handleVoiceRealtimeConnection(
   // would be state that can never run.
   const silenceTailOptions = seams.silenceTail === undefined || segmentedRelay ? null : seams.silenceTail;
   const silenceTail = silenceTailOptions === null ? null : createSilenceTailGate(silenceTailOptions);
+  // ---- Speaker tracking (Phase 1 SHADOW): the read-only speaker observer ----
+  //
+  // ABSENT IS THE SHIPPED STATE, and it is the only state that matters for byte-neutrality: with no
+  // `speakerTracker` seam the accumulator is `null` and the audio branch below is the branch it was
+  // before this feature existed. When a seam IS present the accumulator sees a decoded COPY of every
+  // audio frame on ARRIVAL — before any gate decides what crosses — and hands completed 2 s windows to
+  // the seam. Nothing here can withhold a frame: the forward calls on every path are untouched.
+  const speakerWindows: SpeakerWindowAccumulator | null =
+    seams.speakerTracker === undefined ? null : createSpeakerWindowAccumulator();
+  /** One line if the shadow reader throws, so a broken embedder cannot flood the connection's log. */
+  let speakerObserveFailureLogged = false;
   // ---- Uplink VAD (scheme §5): the continuous wire's per-frame speech / non-speech gate ----
   //
   // SAME SHAPE AS STS: built once per connection and only when the deployment asked for it, so an
@@ -6236,6 +6276,21 @@ export function handleVoiceRealtimeConnection(
     // that cannot be closed must not keep a dead connection's microphone open (why this is before the
     // socket close, with the rest of the teardown).
     seams.audioCapture?.finalize();
+    // THE SPEAKER TRACKER'S ONE SUMMARY LINE (AC7): windows, accepted, coverage, first-vs-core and the
+    // re-anchor/provisional counts, written on the connection's own way out. Readings only — no audio,
+    // no per-sample PCM. Absent with no seam, so a default connection's log is unchanged.
+    if (speakerWindows !== null && seams.speakerTracker !== undefined) {
+      const speakerSummary = seams.speakerTracker.summary();
+      // ONE line, with the accumulator readings appended rather than logged separately: a partial
+      // window at the end was never observed, and a rate-skipped frame never entered a window, so both
+      // belong beside `windows` where a reader can see what the coverage denominator means.
+      const windowSamples = (SPEAKER_WINDOW_MS / 1000) * SPEAKER_WINDOW_SAMPLE_RATE;
+      seams.log?.(
+        `${describeSpeakerShadowSummary(speakerSummary)} ` +
+          `partialWindowSamples=${speakerWindows.pendingSamples}/${windowSamples} ` +
+          `rateSkippedFrames=${speakerWindows.skippedFrames}`,
+      );
+    }
     // THE UPLINK VAD'S ONE SUMMARY LINE, on the connection's own way out and only when a gate was built
     // (`uplinkVad === null` ⇒ no line, so a default connection's log is unchanged). The frame counts are
     // the gate's own cumulative reading; `browserFrames` is the count of frames the BROWSER sent, which
@@ -6467,6 +6522,32 @@ export function handleVoiceRealtimeConnection(
       // (and for how long) without a line per 20 ms frame.
       if (audioFramesFromBrowser === 1 || audioFramesFromBrowser % 250 === 0) {
         seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
+      }
+      // THE SPEAKER TRACKER'S FEED (Phase 1 SHADOW). It reads a decoded COPY of the frame on ARRIVAL —
+      // before the branch below decides how to forward it — and does nothing else: the frame is still
+      // forwarded on every path, unchanged, and the observation can never reach the browser. `?.` is not
+      // enough here because the accumulator also has to be absent for a default connection, so the
+      // whole block is guarded; when it is absent this is the branch it always was (AC6).
+      if (speakerWindows !== null && seams.speakerTracker !== undefined) {
+        try {
+          const completed = speakerWindows.push(Buffer.from(frame.audio, 'base64'), {
+            ...(frame.sourceRate === undefined ? {} : { sourceRate: frame.sourceRate }),
+            atMs: Date.now(),
+          });
+          for (const window of completed) {
+            seams.log?.(describeSpeakerShadowObservation(seams.speakerTracker.observe(window, Date.now())));
+          }
+        } catch (error) {
+          // A broken shadow reader degrades to NO READINGS, never to a broken relay: this is a side
+          // channel, so its failure is a line, not a throw.
+          if (!speakerObserveFailureLogged) {
+            speakerObserveFailureLogged = true;
+            seams.log?.(
+              `speaker_shadow observe failed: ${error instanceof Error ? error.message : String(error)} ` +
+                `— after ${speakerWindows.windows} window(s); voice is unaffected`,
+            );
+          }
+        }
       }
       if (frame.seq === undefined) {
         // THE UPLINK CAPTURE'S ONE FEED (see `voice-realtime-audio-capture.ts`). The continuous path is
