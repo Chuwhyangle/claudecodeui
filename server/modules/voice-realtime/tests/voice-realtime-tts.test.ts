@@ -39,6 +39,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// The registry is entered BEFORE the rule module: its own table reads this provider module's
+// exports while it evaluates, so importing the provider first is a TDZ. The same side-effect import
+// and the same ordering rule as `voice-realtime-dashscope-transport.test.ts`.
+import '../../../../shared/asr/asrRegistry.js';
+import { PUBLIC_HOSTNAME } from '../../../../shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.js';
 import {
   DEFAULT_VOICE_REALTIME_TTS_BASE_URL,
   DEFAULT_VOICE_REALTIME_TTS_MODEL,
@@ -219,6 +224,21 @@ function capturedBody(requests: readonly CapturedRequest[]): Record<string, unkn
   assert.equal(typeof body, 'string');
   return JSON.parse(body as string) as Record<string, unknown>;
 }
+
+// ── AC-140: the base URL has one source ────────────────────────────────────────────────────────
+
+test('AC-140 the TTS base URL is composed from the endpoint rule module, not spelled here', () => {
+  assert.equal(
+    DEFAULT_VOICE_REALTIME_TTS_BASE_URL,
+    `https://${PUBLIC_HOSTNAME}`,
+    'the host lives once, in the endpoint rule module; this leaf composes its base URL from it',
+  );
+  assert.equal(
+    DEFAULT_VOICE_REALTIME_TTS_BASE_URL,
+    'https://dashscope.aliyuncs.com',
+    'the composed value is byte-for-byte the base URL shipped before the single-source fix',
+  );
+});
 
 // ── AC-405: text → non-empty audio → browser downlink frames ───────────────────────────────────
 
