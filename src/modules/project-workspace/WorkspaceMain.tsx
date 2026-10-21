@@ -11,6 +11,11 @@ import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { usePaletteOpsRegister } from '@/modules/command-palette';
 import { TaskMasterPanel, useTaskMasterProjectSync, useTasksSettings } from '@/modules/task-master';
 import { isQuayTabVisible, QuayPanel, useEnsureQuayTabVisible, useQuayStatus } from '@/modules/quay';
+import {
+  ArchitecturePanel,
+  isArchitectureTabVisible,
+  useEnsureArchitectureTabVisible,
+} from '@/modules/architecture';
 import type { AppTab, DirectoryRevealRequest, Project, ProjectSession, SessionEstablishedContext, SessionNavigationOptions, SettingsMainTab, UiNavigateReveal } from '@/shared/types';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import { useFileOpenResolver } from '@/modules/project-workspace/hooks/useFileOpenResolver';
@@ -94,6 +99,9 @@ function WorkspaceMain({
   // Tier 1 gates the tab exactly like hasTaskmaster/install gates Tasks: only a
   // project whose listing says it has `.quay/config.yml` offers the Quay view.
   const shouldShowQuayTab = isQuayTabVisible(selectedProject);
+  // Owns the `.archguard/query/manifest.json` reading, exactly like the Quay
+  // gate above owns `.quay/config.yml`.
+  const shouldShowArchitectureTab = isArchitectureTabVisible(selectedProject);
 
   const {
     view: quayView,
@@ -143,6 +151,7 @@ function WorkspaceMain({
   }, [shouldShowBrowserTab, activeTab, setActiveTab]);
 
   useEnsureQuayTabVisible(shouldShowQuayTab, activeTab, setActiveTab);
+  useEnsureArchitectureTabVisible(shouldShowArchitectureTab, activeTab, setActiveTab);
 
   // The selected session's stored lifecycle mode. The mode belongs to the session
   // row, not to any process: a resident session whose process was never started has
@@ -284,6 +293,7 @@ function WorkspaceMain({
         selectedSession={selectedSession}
         shouldShowTasksTab={shouldShowTasksTab}
         shouldShowQuayTab={shouldShowQuayTab}
+        shouldShowArchitectureTab={shouldShowArchitectureTab}
         shouldShowBrowserTab={shouldShowBrowserTab}
         isResidentSession={isResidentSession}
         isMobile={isMobile}
@@ -397,6 +407,15 @@ function WorkspaceMain({
                 // the card for the length of the re-read.
                 windowHours={quayWindowHours}
                 ganttRefreshing={quayGanttRefreshing}
+              />
+            </div>
+          )}
+
+          {shouldShowArchitectureTab && activeTab === 'architecture' && (
+            <div className="h-full overflow-hidden" data-workspace-view="architecture">
+              <ArchitecturePanel
+                projectId={selectedProject.projectId}
+                sessionId={selectedSession?.id ?? null}
               />
             </div>
           )}
