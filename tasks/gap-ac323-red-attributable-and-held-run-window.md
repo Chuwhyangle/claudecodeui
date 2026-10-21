@@ -3,7 +3,7 @@ id: gap-ac323-red-attributable-and-held-run-window
 title: AC-323 判据红不可归因：webServer 的 stderr 启动噪声占满 gate 的 500 字符（绿跑实测 13.9 KB，只有
   .env/DEP0190/Vite EPIPE）⇒ 两条 webServer 的 stderr 落盘（绿跑 stderr 归零，红跑 gate 才读
   stdout 尾部拿到失败用例名），并加固 composer-embedded held-run 的 20s 绝对窗口
-status: todo
+status: ready
 labels:
   - gap
   - defect
