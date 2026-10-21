@@ -47,14 +47,14 @@ depends_on:
 
 ## AC
 
-- [ ] AC1：新增 `server/modules/voice-realtime/voice-realtime-speaker-model.ts`：解析 `modelDir`/`modelFile`/`modelPath`，提供 `status()` 与 `download()`。`status` 返回 `missing|downloading|installed|invalid|failed`、解析路径、字节数、期望 sha256、来源 URL、许可；`installed` 必须实际重算 sha256 匹配。
-- [ ] AC2：`download()` 使用固定 URL（不读请求体里的 URL/路径），HTTPS + 重定向跟随、超时（建议 120 s）、大小上限（建议 64 MiB）；写 `<path>.part`，边下边算 sha256，完成后校验再原子 rename；失败删除 `.part` 并记录可读原因；同一路径同时只有一个下载在飞，第二个请求加入/返回当前进度而不是再开一条。
-- [ ] AC3：`GET /api/voice-realtime/speaker-model` 返回 AC1 的状态；`POST /api/voice-realtime/speaker-model/download` 启动或加入下载并返回 202/当前状态。两个路由挂在既有 `createVoiceRealtimeRouter` 下、沿用 `authenticateToken`；路由只解析/调用 service，不做文件 I/O。不新增“删除模型”路由（本任务不做）。
-- [ ] AC4：`server/index.ts` 组装下载 service 与路由依赖；`modelDir` 从每连接设置读取（或从设置文件解析一次），客户端不能通过请求改变目标目录；路径必须落在解析后的 `modelDir`/`modelPath`，拒绝 `..` 越界。
-- [ ] AC5：设置页 Live Voice tab 增加“声纹模型” section：显示状态（未安装/下载中/已安装/校验失败）、解析路径、来源与许可；提供“下载模型”按钮与进度（received/total/rate，复用现有下载进度样式）；错误显示 service 的可读原因；说明“下载完成后下一次 Live Voice 连接生效”。所有文案进 `settings` i18n 的全部 locale。
-- [ ] AC6：`.gitignore` 增加 `/models/`（或精确到 `/models/speaker/`）；确认模型不被 git 跟踪；`npm pack --dry-run` 与 Electron `build.files` 白名单不含 `models/`；Docker 走 npm 安装，不包含该目录。若现有白名单已经排除，记录“无需改 package.json”的证据即可。
-- [ ] AC7：测试：新增 `server/modules/voice-realtime/tests/voice-realtime-speaker-model.test.ts`（service 的 status/download/原子性/校验失败/并发；route 的 200/202/错误），并更新 `server/shared/tests/quay-test-script.test.ts` 的收集数 pin（当前全树 389，新增一个测试文件后按该测试自身口径重测，预计 390 / `unknown=387`/389；以实际重测为准）。客户端用例加进既有 `src/modules/settings/tests/voiceSettingsLiveTabMinimalSurface.test.tsx`，不新增客户端测试文件。
-- [ ] AC8：真机验证：设置页点“下载模型” → `models/speaker/<file>` 出现、sha256 匹配、状态变 `installed`；`git status` 不显示该文件；下一次 shadow 会话日志出现 `CAM++ model loaded path=...` 与 `speaker_shadow` 行；无模型时状态为 `missing` 且不影响普通 Live Voice。
+- [x] AC1：新增 `server/modules/voice-realtime/voice-realtime-speaker-model.ts`：解析 `modelDir`/`modelFile`/`modelPath`，提供 `status()` 与 `download()`。`status` 返回 `missing|downloading|installed|invalid|failed`、解析路径、字节数、期望 sha256、来源 URL、许可；`installed` 必须实际重算 sha256 匹配。
+- [x] AC2：`download()` 使用固定 URL（不读请求体里的 URL/路径），HTTPS + 重定向跟随、超时（建议 120 s）、大小上限（建议 64 MiB）；写 `<path>.part`，边下边算 sha256，完成后校验再原子 rename；失败删除 `.part` 并记录可读原因；同一路径同时只有一个下载在飞，第二个请求加入/返回当前进度而不是再开一条。
+- [x] AC3：`GET /api/voice-realtime/speaker-model` 返回 AC1 的状态；`POST /api/voice-realtime/speaker-model/download` 启动或加入下载并返回 202/当前状态。两个路由挂在既有 `createVoiceRealtimeRouter` 下、沿用 `authenticateToken`；路由只解析/调用 service，不做文件 I/O。不新增“删除模型”路由（本任务不做）。
+- [x] AC4：`server/index.ts` 组装下载 service 与路由依赖；`modelDir` 从每连接设置读取（或从设置文件解析一次），客户端不能通过请求改变目标目录；路径必须落在解析后的 `modelDir`/`modelPath`，拒绝 `..` 越界。
+- [x] AC5：设置页 Live Voice tab 增加“声纹模型” section：显示状态（未安装/下载中/已安装/校验失败）、解析路径、来源与许可；提供“下载模型”按钮与进度（received/total/rate，复用现有下载进度样式）；错误显示 service 的可读原因；说明“下载完成后下一次 Live Voice 连接生效”。所有文案进 `settings` i18n 的全部 locale。
+- [x] AC6：`.gitignore` 增加 `/models/`（或精确到 `/models/speaker/`）；确认模型不被 git 跟踪；`npm pack --dry-run` 与 Electron `build.files` 白名单不含 `models/`；Docker 走 npm 安装，不包含该目录。若现有白名单已经排除，记录“无需改 package.json”的证据即可。
+- [x] AC7：测试：新增 `server/modules/voice-realtime/tests/voice-realtime-speaker-model.test.ts`（service 的 status/download/原子性/校验失败/并发；route 的 200/202/错误），并更新 `server/shared/tests/quay-test-script.test.ts` 的收集数 pin（实测全树 390，`unknown=387`/`389`）。客户端用例加进既有 `src/modules/settings/tests/voiceSettingsLiveTabMinimalSurface.test.tsx`，不新增客户端测试文件。
+- [x] AC8：真机验证：设置页点“下载模型” → `models/speaker/<file>` 出现、sha256 匹配、状态变 `installed`；`git status` 不显示该文件；下一次 shadow 会话日志出现 `CAM++ model loaded path=...` 与 `speaker_shadow` 行；无模型时状态为 `missing` 且不影响普通 Live Voice。
 
 ## DoD
 
