@@ -1,0 +1,68 @@
+{
+  "version": "speaker-profile-v1",
+  "status": "provisional",
+  "createdAt": "2026-10-21",
+  "embedding": {
+    "model": "campplus_sv_zh_en_16k-common_advanced",
+    "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models",
+    "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+    "dim": 192,
+    "sampleRate": 16000
+  },
+  "labels": {
+    "confirmed": "experiments/voice-tse-eval/labels.csv",
+    "confirmedTarget": 20,
+    "confirmedNontarget": 16,
+    "pending": "experiments/voice-tse-eval/labels.pending.csv"
+  },
+  "calibration": {
+    "target": {
+      "n": 15,
+      "min": 0.446,
+      "median": 0.613,
+      "max": 0.845
+    },
+    "negatives": {
+      "n": 462,
+      "eotBench": 400,
+      "librispeech": 16,
+      "tts": 46,
+      "max": 0.332,
+      "p99": 0.301,
+      "ge030": 6,
+      "ge035": 0
+    },
+    "crossDayEer": 0.026,
+    "auc": 0.997
+  },
+  "thresholds": {
+    "track": 0.3,
+    "matchFast": 0.35,
+    "promote": 0.4,
+    "consistencyMin": 0.6,
+    "margin": 0.08,
+    "maxStepSessionDeg": 15,
+    "maxStepBankDeg": 8,
+    "bankSize": 4
+  },
+  "selector": {
+    "bystanderFirst": {
+      "liveSiTargetMedian": -2.26,
+      "coreSiTargetMedian": 15.56,
+      "coreSelected4of4": true
+    },
+    "targetFirst": {
+      "liveSiTargetMedian": 15.53,
+      "coreSiTargetMedian": 15.55
+    },
+    "windowSeconds": 2,
+    "sampleSeconds": 3.5,
+    "speechRatioMin": 0.6
+  },
+  "caveats": [
+    "No real Chinese non-target speakers yet; the negative pool is English/TTS.",
+    "Thresholds are provisional until the pending labels are confirmed and Chinese negatives are recorded.",
+    "VoxLock is session-local only; cross-session enrollment fails (see CONFIRMED-LABELS.md).",
+    "VoxLock must run with threads=4 (default threads=0 used ~58 cores on a 64-core host)."
+  ]
+}
