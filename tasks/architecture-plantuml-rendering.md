@@ -26,6 +26,16 @@ depends_on:
 
 真实大项目会话（archguard 789 节点邻域）在浏览器打开 architecture tab：plantuml-js 渲染出 ELK 分层图，overview 默认 44 节点可读，点组展开、点实体下钻即时（<0.5s），UML 箭头（空心三角/空心菱形/虚线依赖）原样呈现。
 
+## Evidence
+
+- 2026-10-22T00:10Z（worktree `architecture-plantuml-rendering`，HEAD 已 merge develop）：AC1 桥接映射表的唯一来源是 `@yalehwang/plantuml-js/archguard` 的 `ARCHGUARD_RELATION_ARROWS`（`src/modules/architecture/archguardToPlantUml.ts:1`）；composition→`o--`（不升 `*--`）、call→`..>`（非实线）、显示名 relpath 截前不截后均由 `src/modules/architecture/tests/architectureTab.test.tsx` 逐条断言。
+- AC2 同一 spec 覆盖 plantuml-js 渲染 SVG、overview 点组展开、neighborhood 下钻 hops+1、hover 入/出边高亮；实测 `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → `20 passed (20)`，`Test Files 1 passed`，7.54s。
+- AC3 实测 `npm run typecheck` → exit 0（client/server/scripts 三份 tsconfig）；`npm run build` → exit 0（vite build 22.41s + build:server）。懒加载读数：产物 `dist/assets/elk-BHX33hGi.js` 1,467.03 kB 为独立 chunk，主 `index-*.js` 未内联 elk；源码唯一入口是 `await import('@yalehwang/plantuml-js/elk')`（`src/modules/architecture/PlantUmlGraph.tsx:271`），Touches 的 `src/modules/i18n/locales/en/chat.json` 与 panel 接缝已在 develop。
+- 依赖面：`@yalehwang/plantuml-js` 由 `file:vendor/plantuml-js/yalehwang-plantuml-js-0.1.0.tgz` 切到 registry `^0.2.0`；`package-lock.json` 的 resolved 为 `https://registry.npmjs.org/@yalehwang/plantuml-js/-/plantuml-js-0.2.0.tgz`；node_modules 实测 `version: 0.2.0`，exports 含 `.` / `./elk` / `./archguard`。
+- 回归面：上次 suite 红的 `server/shared/tests/quay-test-script.test.ts` 单文件复跑 → `14 pass / 0 fail`（98.6s）。
+- anti-drift Touches 硬门：`ANTI-DRIFT OK — task architecture-plantuml-rendering — 2 actual file(s), all within declared Touches (9 glob(s))`（delta vs develop = `package.json`、`package-lock.json`）。
+- `task_check` → `ok:true, acTotal:3, acChecked:3`。
+
 ## Touches
 
 - package.json
