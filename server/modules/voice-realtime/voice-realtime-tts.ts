@@ -28,14 +28,15 @@
  * a `tts_error` frame. A caller never receives `ok: true` with zero bytes.
  */
 
-// The registry evaluates FIRST, before the rule module: the registry's own table reads the provider
-// module's exports while it evaluates, so importing the provider first is a TDZ. The same
-// side-effect import and ordering rule as `voice-realtime-dashscope-transport.ts`.
-import '../../../shared/asr/asrRegistry.js';
 // The service's address has ONE shipping source: the endpoint rule module. AC-140's
 // `endpoint-rule.single-implementation` reading scans `src/`, `shared/` and `server/` for a second
 // copy of the host, so this leaf composes its base URL from that export instead of spelling it.
-import { PUBLIC_HOSTNAME } from '../../../shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.js';
+//
+// Read through the transport sibling rather than the rule module: the transport already enters the
+// registry before the rule module (the ordering that avoids the provider's TDZ) and already pays
+// the two repo-root `shared/` imports that AC-394's unresolved-internal budget counts. A pair of its
+// own here would push that ratchet reading from 19 to 21.
+import { DASHSCOPE_PUBLIC_HOSTNAME } from './voice-realtime-dashscope-transport.js';
 
 /**
  * The DashScope speech-synthesis model this leaf ships for the placeholder-confirmation /
@@ -57,7 +58,7 @@ export const DEFAULT_VOICE_REALTIME_TTS_MODEL = 'qwen3-tts-flash';
  * byte-for-byte the base URL this leaf shipped with. Consumed by the composition root and by the
  * AC-405 criterion.
  */
-export const DEFAULT_VOICE_REALTIME_TTS_BASE_URL = `https://${PUBLIC_HOSTNAME}`;
+export const DEFAULT_VOICE_REALTIME_TTS_BASE_URL = `https://${DASHSCOPE_PUBLIC_HOSTNAME}`;
 
 /**
  * The environment variable a deployment names its Qwen3-TTS voice id in.
