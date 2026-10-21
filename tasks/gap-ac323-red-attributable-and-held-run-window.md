@@ -13,6 +13,21 @@ extra:
   schema: execution
 goal_ac: AC-323
 ---
+---
+id: gap-ac323-red-attributable-and-held-run-window
+title: AC-323 判据红不可归因：webServer 的 stderr 启动噪声占满 gate 的 500 字符（绿跑实测 13.9 KB，只有
+  .env/DEP0190/Vite EPIPE）⇒ 两条 webServer 的 stderr 落盘（绿跑 stderr 归零，红跑 gate 才读
+  stdout 尾部拿到失败用例名），并加固 composer-embedded held-run 的 20s 绝对窗口
+status: ready
+labels:
+  - gap
+  - defect
+parent: null
+children: []
+extra:
+  schema: execution
+goal_ac: AC-323
+---
 ## Proposal
 
 <!-- dedup-ref --> 立案时 `tasks/` 内无 `status: todo|ready|needs-human` 且 `goal_ac: AC-323` 的任务（`grep -l 'goal_ac: AC-323' tasks/*.md` 命中的 8 个全部 `done`），⇒ 本任务为新案；这 8 个 done 是「上一轮修复没挺住」的证据，不是可复用的在飞任务。`task-granularity-advice --touches playwright.config.ts --touches scripts/e2e-web-server-stderr.mjs --touches e2e/voice-realtime-composer-embedded.spec.ts` 报 `peers: []`、`mentions: []` ⇒ 无合并候选。相关但不同机制：`gap-ac323-live-session-bare-reload-and-loaded-criterion-budget`（done，修的是 live-session-send 的裸 reload 与记录 timeoutMs=480000）、`gap-ac323-composer-embedded-disconnect-draft-carry-hides-entry`（done，修的是断线用例退出前的交付等待）。
@@ -66,14 +81,14 @@ goal_ac: AC-323
 
 ## AC
 
-- [ ] AC1 绿跑 stderr 归零：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts >/tmp/green.out 2>/tmp/green.err` exit 0、`18 passed`，且 `test ! -s /tmp/green.err`（0 字节）。
-- [ ] AC2 诊断未丢：同一次运行的 stdout 里 `[e2e] data-dir=<D>` 所指的 `<D>/server.stderr.log` 含 `No .env file found or error reading it` 与 `DEP0190`，`<D>/vite.stderr.log` 存在（该次运行若有页面关闭，还应含 `ws proxy error`）。
-- [ ] AC3 红跑可归因（控制臂）：`npx playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts >/tmp/red.out 2>/tmp/red.err; echo $?` 为 1、`test ! -s /tmp/red.err`；把 `/tmp/red.out` 按 gate 的规则（`\s+`→单空格、取末 469 字符）截取后同时含 `voice-realtime-silence-tail-suppression.spec.ts` 与 `1 failed`（贴该截取原文）。
-- [ ] AC4 held-run 加固：`grep -c "at: 60_000, op: 'row'" e2e/voice-realtime-composer-embedded.spec.ts` == 1、`grep -c "at: 20_000, op: 'row'" e2e/voice-realtime-composer-embedded.spec.ts` == 0、`grep -c 'timeout: 120_000' e2e/voice-realtime-composer-embedded.spec.ts` ≥ 1；`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts -g "leave control"` exit 0、`1 passed`。
-- [ ] AC5 判据三条命令逐字绿：CMD1 exit 0 / `18 passed`；CMD2 `npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` exit 0（22 files / 215 tests）；CMD3 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` exit 0 / `6 passed`；各贴 `echo $?`、list reporter 摘要与 wall time。
-- [ ] AC6 静态与单测：`npm run typecheck` exit 0（`scripts/tsconfig.json` 的 `checkJs: strict` 覆盖新 `.mjs`）；`npm run test:scripts` exit 0 且输出含 `scripts/e2e-web-server-stderr.test.mjs`。
-- [ ] AC7 不回归兄弟腿：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` exit 0 / `7 passed`；`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（整份 serial）exit 0 / `7 passed`。
-- [ ] AC8 隔离性：`git diff --stat develop HEAD` 恰好只有 `playwright.config.ts`、`scripts/e2e-web-server-stderr.mjs`（新）、`scripts/e2e-web-server-stderr.test.mjs`（新）、`e2e/voice-realtime-composer-embedded.spec.ts`、`tasks/gap-ac323-red-attributable-and-held-run-window.md`；全部控制臂注入已还原、`git status --porcelain` 为空。
+- [x] AC1 绿跑 stderr 归零：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts >/tmp/green.out 2>/tmp/green.err` exit 0、`18 passed`，且 `test ! -s /tmp/green.err`（0 字节）。
+- [x] AC2 诊断未丢：同一次运行的 stdout 里 `[e2e] data-dir=<D>` 所指的 `<D>/server.stderr.log` 含 `No .env file found or error reading it` 与 `DEP0190`，`<D>/vite.stderr.log` 存在（该次运行若有页面关闭，还应含 `ws proxy error`）。
+- [x] AC3 红跑可归因（控制臂）：`npx playwright test e2e/voice-realtime-silence-tail-suppression.spec.ts >/tmp/red.out 2>/tmp/red.err; echo $?` 为 1、`test ! -s /tmp/red.err`；把 `/tmp/red.out` 按 gate 的规则（`\s+`→单空格、取末 469 字符）截取后同时含 `voice-realtime-silence-tail-suppression.spec.ts` 与 `1 failed`（贴该截取原文）。
+- [x] AC4 held-run 加固：`grep -c "at: 60_000, op: 'row'" e2e/voice-realtime-composer-embedded.spec.ts` == 1、`grep -c "at: 20_000, op: 'row'" e2e/voice-realtime-composer-embedded.spec.ts` == 0、`grep -c 'timeout: 120_000' e2e/voice-realtime-composer-embedded.spec.ts` ≥ 1；`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts -g "leave control"` exit 0、`1 passed`。
+- [x] AC5 判据三条命令逐字绿：CMD1 exit 0 / `18 passed`；CMD2 `npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` exit 0（22 files / 215 tests）；CMD3 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` exit 0 / `6 passed`；各贴 `echo $?`、list reporter 摘要与 wall time。
+- [x] AC6 静态与单测：`npm run typecheck` exit 0（`scripts/tsconfig.json` 的 `checkJs: strict` 覆盖新 `.mjs`）；`npm run test:scripts` exit 0 且输出含 `scripts/e2e-web-server-stderr.test.mjs`。
+- [x] AC7 不回归兄弟腿：`npx playwright test e2e/voice-realtime-upload-fixture.spec.ts` exit 0 / `7 passed`；`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（整份 serial）exit 0 / `7 passed`。
+- [x] AC8 隔离性：`git diff --stat develop HEAD` 恰好只有 `playwright.config.ts`、`scripts/e2e-web-server-stderr.mjs`（新）、`scripts/e2e-web-server-stderr.test.mjs`（新）、`e2e/voice-realtime-composer-embedded.spec.ts`、`tasks/gap-ac323-red-attributable-and-held-run-window.md`；全部控制臂注入已还原、`git status --porcelain` 为空。
 
 ## DoD
 
@@ -92,3 +107,86 @@ goal_ac: AC-323
 - scripts/e2e-web-server-stderr.test.mjs
 - e2e/voice-realtime-composer-embedded.spec.ts
 - tasks/gap-ac323-red-attributable-and-held-run-window.md（self）
+
+## Notes
+
+### 执行环境（2026-10-21）
+
+worktree `/data/home/yale/work/claudecodeui-worktrees/gap-ac323-red-attributable-and-held-run-window`，分支 `task/gap-ac323-red-attributable-and-held-run-window`，基于 develop `a0da34720`；全部 e2e 运行时主机 load ≈78（128 核）。所有读数都是本会话内现场跑的，不是转述。
+
+### 修前/修后口径与一条诚实的偏差
+
+- 拦截点在 runner 的 stderr：绿跑（AC1 命令）`/tmp/green.err` = **0 字节**；注入臂（server `command` 还原成裸 `serverLaunchCommand`，Vite 仍落盘）同一命令 = **554 字节**。
+- ⚠️ 任务正文引用的「绿跑 stderr 13 895 字节」中，Vite 的 `ws proxy error: Error: write EPIPE` 部分今天 **5 次 e2e 运行都没有复现**（修前/修后、含整份 composer-embedded 与 silence-tail 控制臂）；每次 `vite.stderr.log` 都存在且为 0 字节。能复现的只有服务端启动噪声 554 字节。归因机制不依赖这个数字：redirect 对凡是写进 stderr 的字节一视同仁，`scripts/e2e-web-server-stderr.test.mjs` 的 `a real shell child has its stderr in the log and none of it on the runner` 用真实子进程钉住机制本身，而不是钉住噪声的字节数。
+
+### AC1 / AC2（同一次运行；data dir = `/data/home/yale/.cache/quay-e2e-tmp/quay-e2e-9cdlVW`）
+
+- AC1：exit 0，`18 passed (3.2m)`，`wc -c /tmp/green.err` = 0。
+- AC2：`server.stderr.log` 519 B，含 `No .env file found or error reading it` ×1、`DEP0190` ×1；`vite.stderr.log` 存在（0 B，该次没有 EPIPE 可捕获；若出现，同一 redirect 会写进同一文件——见上一条诚实偏差）。
+
+### AC3（控制臂，gate 规则：`\s+`→单空格、取末 469 字符）
+
+exit 1，`/tmp/red.err` = 0 B。截取原文：
+
+```
+right show-trace ../../../.cache/quay-e2e-tmp/quay-e2e-1x4xYR/test-results/voice-realtime-silence-tai-db996-hed-the-endpoint-as-appends/trace.zip ──────────────────────────────────────────────────────────────────────────────────────────────── 1 failed e2e/voice-realtime-silence-tail-suppression.spec.ts:481:3 › live voice silence tail suppression (GOAL-044 / AC-364) › the timeline was played through the capture path and reached the endpoint as appends 3 did not run
+```
+
+同时含 spec 文件名与 `1 failed`。
+
+### AC4
+
+- `grep -c "at: 60_000, op: 'row'"` = 1；`grep -c "at: 20_000, op: 'row'"` = 0；`grep -c 'timeout: 120_000'` = 1。
+- `npx playwright test e2e/voice-realtime-composer-embedded.spec.ts -g "leave control"`：exit 0，`1 passed (1.2m)`，stderr 0 B。
+
+### AC5
+
+- CMD1：exit 0，`18 passed (3.2m)`（同 AC1 那次运行）。
+- CMD2：exit 0，`Test Files 22 passed (22)` / `Tests 214 passed (214)`，Duration 4.73s。
+  - **与 AC 括号里 215 的差 1 已核明**：215 是立案时作者树上的读数，当时 `src/modules/chat/voice-realtime/tests/audioSource.warm.test.ts` 带未提交改动（多 1 例）；develop tip 上该文件是 214。文件数 22 与 exit 0 均满足，本任务没有改 `src/` 下任何测试。
+- CMD3：exit 0，`6 passed (22.1s)`，stderr 0 B。
+
+### AC6
+
+- `npm run typecheck` exit 0（root + server + `scripts/tsconfig.json`，新 `.mjs` 在 `checkJs: strict` 下通过）。
+- `npm run test:scripts` exit 0，`pass 497 / fail 0 / duration_ms 114213`；`list-script-tests.mjs` 的清单列出 `scripts/e2e-web-server-stderr.test.mjs`，该文件 5 例全绿。
+
+### AC7
+
+- `npx playwright test e2e/voice-realtime-upload-fixture.spec.ts`：exit 0，`7 passed (1.5m)`，stderr 0 B。
+- `npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（整份 serial）：exit 0，`7 passed (1.9m)`，stderr 0 B。
+
+### DoD (a) 归因假形态（现场注入 → 红 → 还原 → 绿）
+
+注入 diff：
+
+```diff
+-          : withStderrLog(serverLaunchCommand, webServerLogs.server),
++          : serverLaunchCommand,
+```
+
+- 同一 AC1 命令：exit 0，`/tmp/dod_a_green.err` = **554 B**，逐字为 `[WebServer] … No .env file found or error reading it: ENOENT …`、`[WebServer] … [DEP0190] DeprecationWarning …`、`[WebServer] … (Use \`node --trace-deprecation …\`)`。
+- AC3 控制臂：exit 1，stderr 554 B；按 gate 的 **head** 规则截取（前 469 字符）为 `[WebServer] 2026-10-21T08:43:19.835Z No .env file found or error reading it: ENOENT: … [WebServer] 2026-10-21T08:43:27.965Z (node:973885) [DEP0190] DeprecationWarning: … [WebServer] 2026-10-21T08:4` —— **不含** spec 文件名，也不含 `1 failed`。
+- 还原后：AC1 exit 0 / `green.err` 0 B；AC3 exit 1 / `red.err` 0 B，gate 落到 stdout 尾部，含 spec 名与 `1 failed`（原文见 AC3 段）。
+
+### DoD (b) held-run 假形态（现场注入 → 红 → 还原 → 绿）
+
+注入 diff：
+
+```diff
+-        { at: 60_000, op: 'row', role: 'assistant', text: FINAL_TURN_TEXT },
++        { at: 20_000, op: 'row', role: 'assistant', text: FINAL_TURN_TEXT },
++    await page.waitForTimeout(21_000); // DoD fake-form injection: let the 20 s scenario row land before the read
+```
+
+- `-g "leave control"`：exit 1（27.6s），`Error: the held run wrote its closing row before the leave`，`1 failed`；断言原文未改。
+- 还原后 AC4：exit 0，`1 passed (1.2m)`。
+
+### 08:02Z / 08:14Z 为什么不可归因
+
+见 Proposal：两条 gate event（`2026-10-21T08:02:51.967Z` / `08:14:50.535Z`）的 reason 可见部分只有 `.env` ENOENT 与 DEP0190，随后是 `[truncated, 513 chars of stderr omitted]`；失败用例名与断言由 list reporter 写在 stdout，而 `withFailureOutput` 只在 stderr **为空**时才回落到 stdout。同树 08:07Z 的 pass 与 round 1219 的 pass 说明红是概率性的（时序），不是代码面固定红。
+
+### AC8
+
+- 全部控制臂注入已还原（`at: 60_000` / 21 s 等待 / `withStderrLog` 均回到最终形态），`git status --porcelain` 为空。
+- `git diff --stat develop HEAD`（在 ABI 把勾选后的任务文件落到 develop tip 之后）= 恰好 5 项：`playwright.config.ts`、`scripts/e2e-web-server-stderr.mjs`（新）、`scripts/e2e-web-server-stderr.test.mjs`（新）、`e2e/voice-realtime-composer-embedded.spec.ts`、`tasks/gap-ac323-red-attributable-and-held-run-window.md`。
