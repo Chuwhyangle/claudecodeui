@@ -30,3 +30,15 @@ goal_ac: AC-417
 - scripts/suite-duration-baseline.tsv
 - server/shared/tests/quay-test-script.test.ts
 - tasks/architecture-graph-cache.md
+
+## Blocker
+
+**2026-10-21T07:42:16.519Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=merge-develop: Auto-merging scripts/suite-duration-baseline.tsv
+CONFLICT (content): Merge conflict in scripts/suite-duration-baseline.tsv
+Auto-merging server/shared/tests/quay-test-script.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
+Automatic merge failed; fix conflicts and then commit the result.
+- run_id：wk-prod-anchor
+- session_id：d85a854d-427a-400d-972d-85a04c986872
