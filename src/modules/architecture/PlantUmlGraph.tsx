@@ -25,13 +25,25 @@ import {
 } from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import { useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
+import {
+  buildSeedHierarchy,
+  decideReadableZoom,
+  type ReadableZoomDecision,
+  type ReadableZoomHint,
+  type ReadableZoomMode,
+} from '@/modules/architecture/readableZoom';
 import type {
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
 import {
+  centerElementInContainer,
   createSvgTouchGestures,
   createSvgViewport,
+  fitZoomScale,
+  measureViewportSize,
+  MIN_ZOOM_SCALE,
+  readSvgNaturalSize,
   ZOOM_STEP,
   type SvgViewportController,
 } from '@/modules/architecture/svgViewport';
@@ -205,6 +217,52 @@ function drawingKeyOf(view: ArchitectureDiagramView): string {
   }
 }
 
+/** The readable default currently applied: mode, focus target and overview hint. */
+type ReadableView = {
+  readonly mode: ReadableZoomMode;
+  readonly focusPackageId: string | null;
+  readonly hint: ReadableZoomHint | null;
+};
+
+/** Normalise a drawn package id the way the hierarchy index does, for comparison. */
+function normalizeDrawnPackageId(raw: string | null): string {
+  if (raw === null) return '';
+  return raw.trim().split('/').filter(Boolean).join('/');
+}
+
+/**
+ * The element a focus jump should centre. Package frames are the first choice
+ * (explosion/neighbourhood views draw them); the grouped overview instead draws
+ * `grp::<prefix>` nodes, so the deepest drawn prefix that contains the package
+ * is the group the reader should see. `null` when the drawing shows neither.
+ */
+function focusElementFor(host: HTMLElement, packageId: string): Element | null {
+  const wanted = normalizeDrawnPackageId(packageId);
+  if (wanted === '') return null;
+  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
+    if (normalizeDrawnPackageId(frame.getAttribute('data-package-id')) === wanted) return frame;
+  }
+  let best: Element | null = null;
+  let bestLength = -1;
+  for (const node of host.querySelectorAll('[data-entity-id^="grp::"]')) {
+    const prefix = normalizeDrawnPackageId(
+      (node.getAttribute('data-entity-id') ?? '').slice(GROUP_PREFIX.length),
+    );
+    if (prefix === '' || (wanted !== prefix && !wanted.startsWith(`${prefix}/`))) continue;
+    if (prefix.length > bestLength) {
+      best = node;
+      bestLength = prefix.length;
+    }
+  }
+  return best;
+}
+
+/** Centre the package focus mode selected, through the shared viewport entry. */
+function centerOnPackage(host: HTMLElement, packageId: string): void {
+  const target = focusElementFor(host, packageId);
+  if (target !== null) centerElementInContainer(host, target);
+}
+
 /** Remove every highlight class the hover interaction may have added. */
 function clearHighlight(host: HTMLElement): void {
   for (const element of host.querySelectorAll('.arch-dim, .arch-hl-in, .arch-hl-out')) {
@@ -376,6 +434,24 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
     setZoom(next);
   }, []);
 
+  // The readable default applied to the drawing on screen: focus or overview,
+  // the package focus centres, and the overview hint (if any). Rendering reads
+  // it for the toolbar toggle and the two notice lines; the SCALE itself lives
+  // in `zoom`, because it is the same value the +/- controls manipulate.
+  const [readableView, setReadableView] = useState<ReadableView | null>(null);
+  // The user's explicit toolbar choice; `null` means "let the drawing decide"
+  // (focus when the geometric fit is below the readable floor). A new drawing
+  // clears it so each view opens at its own honest default.
+  const [readableMode, setReadableMode] = useState<ReadableZoomMode | null>(null);
+  const readableModeRef = useRef<ReadableZoomMode | null>(null);
+  // The seed hierarchy of the payload on screen, so a resize or a mode switch
+  // can re-decide the focus without rebuilding the tree.
+  const seedHierarchyRef = useRef<ArchitectureHierarchyIndex | null>(null);
+  // Set when a drawing was too wide for its container and was collapsed to the
+  // directory overview; the notice stays until the user asks for the explosion
+  // view again.
+  const [collapsedNotice, setCollapsedNotice] = useState(false);
+
   /**
    * The navigation command, kept separate from the gesture that triggers it:
    * a desktop click runs it immediately, while a touch tap selects first and
@@ -507,6 +583,12 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
     lodSchedulerRef.current?.cancel();
     setFailure(null);
     hoverCallbackRef.current?.(null);
+    // A NEW view gets its own readable default; a re-layout of the same view
+    // (container aspect change) keeps whatever the user chose.
+    if (drawingKeyOf(view) !== drawnKeyRef.current) {
+      readableModeRef.current = null;
+      setReadableMode(null);
+    }
     // A reloaded graph may not contain the previously selected entity.
     if (selectedRef.current !== null && !graph.nodes.some((node) => node.id === selectedRef.current)) {
       selectedRef.current = null;
@@ -546,13 +628,54 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
         // observer keeps following the container only for a fit user.
+        //
+        // The default is not "fit everything" any more: a fit below the
+        // readable floor would draw sub-pixel labels, so the readable policy
+        // focuses the densest seeded package at a legible scale instead. The
+        // overview toggle still offers the explicit whole-graph fit.
         const drawing = host.querySelector('svg');
         const viewport = viewportRef.current;
         let drawnScale = zoomRef.current.scale;
+        let readout: ReadableView | null = null;
+        let matchReading: ReadableZoomDecision | null = null;
         if (drawing !== null && viewport !== null) {
           viewport.attach(drawing);
-          drawnScale = viewport.fit();
+          const seedHierarchy = buildSeedHierarchy(graph);
+          seedHierarchyRef.current = seedHierarchy;
+          const natural = readSvgNaturalSize(drawing);
+          const box = measureViewportSize(host);
+          const fitScale = natural !== null && box !== null
+            ? fitZoomScale(natural, box, MIN_ZOOM_SCALE)
+            : 1;
+          const decision = decideReadableZoom({
+            fitScale,
+            natural: natural ?? { width: 0, height: 0 },
+            viewport: box,
+            hierarchy: seedHierarchy,
+            selectedEntityIds: [
+              selectedRef.current,
+              view.kind === 'neighborhood' ? view.entityId : null,
+            ],
+            mode: readableModeRef.current ?? undefined,
+          });
+          // A canvas several times wider than its container is a band, not a
+          // diagram: collapse it to the directory overview and say so. Only the
+          // explosion view can reach this — the overview IS the fallback.
+          if (view.kind === 'hierarchy' && decision.collapsedForAspect) {
+            setCollapsedNotice(true);
+            setView({ kind: 'overview' });
+          } else if (view.kind === 'hierarchy') {
+            setCollapsedNotice(false);
+          }
+          drawnScale = viewport.zoomTo(decision.scale);
           applyZoom({ scale: drawnScale, mode: zoomRef.current.mode });
+          readout = {
+            mode: decision.mode,
+            focusPackageId: decision.focusPackageId,
+            hint: decision.overviewHint,
+          };
+          setReadableView(readout);
+          matchReading = decision;
         }
         // A fresh SVG has no highlight classes; re-pin the current selection.
         highlightSelection(host, selectedRef.current);
@@ -600,6 +723,12 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
             centerFocus: carriedDepth !== null,
           });
           setLodDepth(depth);
+        }
+        // The readable default's focus jump runs AFTER the LOD application:
+        // the LOD only recentres on a level cross, so this is the one scroll
+        // that places a freshly focused package after a new drawing.
+        if (matchReading !== null && matchReading.mode === 'focus' && readout !== null && readout.focusPackageId !== null) {
+          centerOnPackage(host, readout.focusPackageId);
         }
         setDrawn({
           view,
@@ -798,7 +927,36 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
       if (zoomRef.current.mode !== 'fit') return;
       const viewport = viewportRef.current;
       if (viewport === null) return;
-      const scale = viewport.fit();
+      const drawing = host.querySelector('svg');
+      const natural = drawing === null ? null : readSvgNaturalSize(drawing);
+      const box = measureViewportSize(host);
+      if (natural === null || box === null) return;
+      const currentView = viewRef.current;
+      const decision = decideReadableZoom({
+        fitScale: fitZoomScale(natural, box, MIN_ZOOM_SCALE),
+        natural,
+        viewport: box,
+        hierarchy: seedHierarchyRef.current,
+        selectedEntityIds: [
+          selectedRef.current,
+          currentView.kind === 'neighborhood' ? currentView.entityId : null,
+        ],
+        mode: readableModeRef.current ?? undefined,
+      });
+      // A container that shrinks can cross the readable floor, which must move
+      // the drawing from overview to focus (and back on growth), so the mode is
+      // re-decided here rather than frozen at the drawing's first fit.
+      setReadableView((current) => (
+        current !== null
+          && current.mode === decision.mode
+          && current.focusPackageId === decision.focusPackageId
+          && current.hint?.packageId === decision.overviewHint?.packageId
+          && current.hint?.packageCount === decision.overviewHint?.packageCount
+          && current.hint?.zoomPercent === decision.overviewHint?.zoomPercent
+          ? current
+          : { mode: decision.mode, focusPackageId: decision.focusPackageId, hint: decision.overviewHint }
+      ));
+      const scale = viewport.zoomTo(decision.scale);
       if (Math.abs(scale - zoomRef.current.scale) < 1e-6) return;
       applyZoom({ scale, mode: 'fit' });
     });
@@ -825,9 +983,77 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
     applyZoom({ scale: viewport?.zoomBy(factor) ?? 1, mode: 'custom' });
   };
 
-  const fitDiagram = (): void => {
+  /** Re-apply the readable mode's scale to the drawing already on screen. */
+  const applyReadableMode = useCallback((mode: ReadableZoomMode): void => {
+    readableModeRef.current = mode;
+    setReadableMode(mode);
+    const host = hostRef.current;
     const viewport = viewportRef.current;
-    applyZoom({ scale: viewport?.fit() ?? 1, mode: 'fit' });
+    if (host === null || viewport === null) return;
+    const drawing = host.querySelector('svg');
+    const natural = drawing === null ? null : readSvgNaturalSize(drawing);
+    const box = measureViewportSize(host);
+    if (natural === null || box === null) return;
+    const currentView = viewRef.current;
+    const decision = decideReadableZoom({
+      fitScale: fitZoomScale(natural, box, MIN_ZOOM_SCALE),
+      natural,
+      viewport: box,
+      hierarchy: seedHierarchyRef.current,
+      selectedEntityIds: [
+        selectedRef.current,
+        currentView.kind === 'neighborhood' ? currentView.entityId : null,
+      ],
+      mode,
+    });
+    applyZoom({ scale: viewport.zoomTo(decision.scale), mode: 'fit' });
+    setReadableView({
+      mode: decision.mode,
+      focusPackageId: decision.focusPackageId,
+      hint: decision.overviewHint,
+    });
+    if (decision.mode === 'focus' && decision.focusPackageId !== null) {
+      centerOnPackage(host, decision.focusPackageId);
+    }
+  }, [applyZoom]);
+
+  const fitDiagram = (): void => {
+    const host = hostRef.current;
+    const viewport = viewportRef.current;
+    if (host === null || viewport === null) {
+      applyZoom({ scale: 1, mode: 'fit' });
+      return;
+    }
+    // "Fit to view" follows the readable mode in force: the whole-graph fit in
+    // overview, the readable fit (plus its focus) in focus mode.
+    const drawing = host.querySelector('svg');
+    const natural = drawing === null ? null : readSvgNaturalSize(drawing);
+    const box = measureViewportSize(host);
+    if (natural === null || box === null) {
+      applyZoom({ scale: viewport.fit(), mode: 'fit' });
+      return;
+    }
+    const currentView = viewRef.current;
+    const decision = decideReadableZoom({
+      fitScale: fitZoomScale(natural, box, MIN_ZOOM_SCALE),
+      natural,
+      viewport: box,
+      hierarchy: seedHierarchyRef.current,
+      selectedEntityIds: [
+        selectedRef.current,
+        currentView.kind === 'neighborhood' ? currentView.entityId : null,
+      ],
+      mode: readableModeRef.current ?? undefined,
+    });
+    applyZoom({ scale: viewport.zoomTo(decision.scale), mode: 'fit' });
+    setReadableView({
+      mode: decision.mode,
+      focusPackageId: decision.focusPackageId,
+      hint: decision.overviewHint,
+    });
+    if (decision.mode === 'focus' && decision.focusPackageId !== null) {
+      centerOnPackage(host, decision.focusPackageId);
+    }
   };
 
   const viewLabel = view.kind === 'overview'
@@ -855,6 +1081,68 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
   const canDrill = selectedByTouch && selectedId !== null && !selectionAlreadyOpen;
 
   const zoomGroupLabel = t('architecture.plantuml.zoomGroup', { defaultValue: 'Diagram zoom' });
+  // The toggle's pressed state follows the user's last explicit choice; before
+  // any choice the drawing's own default (readableView) is what is on screen.
+  const activeReadableMode: ReadableZoomMode = readableMode ?? readableView?.mode ?? 'focus';
+
+  /** The 聚焦 / 全貌 switch: focus at the readable floor, or the whole drawing. */
+  const readableModeGroup = (
+    <span
+      role="group"
+      aria-label={t('architecture.plantuml.readable.group', { defaultValue: 'Readable zoom mode' })}
+      className="flex items-center gap-1 rounded border border-border/60 p-0.5"
+    >
+      <button
+        type="button"
+        aria-pressed={activeReadableMode === 'focus'}
+        onClick={() => applyReadableMode('focus')}
+        data-architecture-readable-focus-mode="true"
+        style={touchTargetStyle}
+        className={TOOLBAR_BUTTON_CLASS}
+      >
+        {t('architecture.plantuml.readable.focus', { defaultValue: 'Focus' })}
+      </button>
+      <button
+        type="button"
+        aria-pressed={activeReadableMode === 'overview'}
+        onClick={() => applyReadableMode('overview')}
+        data-architecture-readable-overview-mode="true"
+        style={touchTargetStyle}
+        className={TOOLBAR_BUTTON_CLASS}
+      >
+        {t('architecture.plantuml.readable.overview', { defaultValue: 'Overview' })}
+      </button>
+    </span>
+  );
+
+  /**
+   * The honest reading of the DEFAULT view: either the aspect fallback notice,
+   * the overview's "this is N% — zoom into <package>" hint, or the package the
+   * readable default focused. Only one line is shown at a time.
+   */
+  const readableNotice = collapsedNotice ? (
+    <span data-architecture-readable-collapsed="true" className="text-amber-600 dark:text-amber-400">
+      {t('architecture.plantuml.readable.collapsed', {
+        defaultValue: 'The graph is too wide, so it was collapsed to the directory overview.',
+      })}
+    </span>
+  ) : readableView?.mode === 'overview' && readableView.hint !== null ? (
+    <span data-architecture-readable-hint="true">
+      {t('architecture.plantuml.readable.overviewHint', {
+        defaultValue: 'Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)',
+        zoom: readableView.hint.zoomPercent,
+        package: readableView.hint.packageId,
+        count: readableView.hint.packageCount,
+      })}
+    </span>
+  ) : readableView?.mode === 'focus' && readableView.focusPackageId !== null ? (
+    <span data-architecture-readable-focus="true">
+      {t('architecture.plantuml.readable.focusHint', {
+        defaultValue: 'Focused on {{package}}',
+        package: readableView.focusPackageId,
+      })}
+    </span>
+  ) : null;
 
   /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
   const zoomReadout = (
@@ -884,7 +1172,12 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
     : (
       <button
         type="button"
-        onClick={() => setView({ kind: 'hierarchy' })}
+        onClick={() => {
+          // Asking for the explosion view again re-evaluates the aspect guard;
+          // the notice returns only if the canvas is still a band.
+          setCollapsedNotice(false);
+          setView({ kind: 'hierarchy' });
+        }}
         data-architecture-explosion="true"
         style={touchTargetStyle}
         className={`${TOOLBAR_BUTTON_CLASS} text-left`}
@@ -987,6 +1280,8 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
       data-architecture-zoom-mode={zoom.mode}
       data-architecture-zoom-scale={zoom.scale}
       data-architecture-lod-depth={lodDepth ?? undefined}
+      data-architecture-readable-mode={readableView?.mode}
+      data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
       <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
@@ -994,6 +1289,8 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
           {!compactToolbar && backButton}
           {!compactToolbar && explosionButton}
           <span data-architecture-view-label>{viewLabel}</span>
+          {!compactToolbar && readableModeGroup}
+          {readableNotice}
           {/* The semantic-zoom level currently shown. It is the diagram's own
               reading of the scale, so it changes only after the debounce. */}
           {lodDepth !== null && (
@@ -1045,6 +1342,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
                 >
                   {backButton}
                   {explosionButton}
+                  {readableModeGroup}
                   <span role="group" aria-label={zoomGroupLabel} className="flex flex-col gap-1">
                     {zoomOutButton}
                     {zoomInButton}

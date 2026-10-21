@@ -29,6 +29,7 @@ import {
   ENTITY_MIN_SCALE,
   SUBPACKAGE_MIN_SCALE,
 } from '@/modules/architecture/explosionLod';
+import { MIN_READABLE_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 
 /**
  * The architecture tab's wiring, end to end at the component seam:
@@ -292,10 +293,16 @@ function svgViewBoxSize(svg: Element): { width: number; height: number } {
   return { width: parts[2], height: parts[3] };
 }
 
-/** The width `fit` should write for this host, derived here without calling the module. */
+/**
+ * The width `fit` should write for this host, derived here without calling the
+ * module. The default fit stops at the readable floor: a geometric scale below
+ * it would render the 13px labels under 9px, which the panel replaces with the
+ * readable focus scale instead.
+ */
 function fittedWidthIn(host: HTMLElement, svg: Element): number {
   const natural = svgViewBoxSize(svg);
-  const scale = Math.min(host.clientWidth / natural.width, host.clientHeight / natural.height, 1);
+  const geometric = Math.min(host.clientWidth / natural.width, host.clientHeight / natural.height, 1);
+  const scale = Math.max(geometric, MIN_READABLE_ZOOM_SCALE);
   return Math.round(natural.width * scale * 100) / 100;
 }
 
@@ -533,6 +540,14 @@ test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG',
     Math.abs(Number(root.getAttribute('data-architecture-zoom-scale')) - fitted / natural.width) < 1e-3,
     'the readout states the applied scale',
   );
+  // The geometric fit of this host is far below the readable floor, so the
+  // default is the focused, legible reading of the densest seeded package.
+  assert.equal(
+    root.getAttribute('data-architecture-readable-mode'),
+    'focus',
+    'a fit below the readable floor must open focused, not as a grey smear',
+  );
+  assert.equal(root.getAttribute('data-architecture-readable-package'), 'modules/alpha');
 
   // + / − step by the documented factor and switch to the user's own scale.
   fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
@@ -561,6 +576,62 @@ test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG',
   fireEvent.wheel(host, { deltaY: -120, ctrlKey: true });
   assert.ok(svgWidth(host) > before, 'Ctrl+wheel zooms in');
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+});
+
+test('the readable toggle switches between the focused default and the whole-graph overview', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await screen.findByTestId('plantuml-host');
+  sizeHost(host, 160, 120);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+
+  const root = graphRoot();
+  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
+  const focusedScale = Number(root.getAttribute('data-architecture-zoom-scale'));
+  assert.equal(root.getAttribute('data-architecture-readable-package'), 'modules/alpha');
+
+  // 全貌: the whole drawing at the geometric fit, plus an honest "zoom into …"
+  // hint naming the package and how many others share the drawing.
+  fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview');
+  const overviewScale = Number(root.getAttribute('data-architecture-zoom-scale'));
+  assert.ok(overviewScale < focusedScale, 'overview shrinks the drawing to show the whole graph');
+  const hint = document.querySelector('[data-architecture-readable-hint]');
+  assert.ok(hint !== null, 'overview mode must say what the reader is looking at');
+  assert.match(hint.textContent ?? '', /modules\/alpha/, 'the hint names the densest seeded package');
+  assert.match(hint.textContent ?? '', /0 other package/, 'the hint carries the other-package count');
+  assert.equal(
+    screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed'),
+    'true',
+    'the overview mode is the pressed toggle',
+  );
+
+  // 聚焦: back to the readable floor around the same package.
+  fireEvent.click(screen.getByRole('button', { name: 'Focus' }));
+  assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus');
+  assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), focusedScale);
+  assert.equal(document.querySelector('[data-architecture-readable-hint]'), null);
+});
+
+test('a band-shaped explosion drawing collapses to the overview with a notice', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // A canvas 30px wide but 600px tall: any real drawing's natural aspect ratio
+  // is many times this container's, so the band guard must fire.
+  sizeHost(host, 30, 600);
+  fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
+
+  await waitFor(() => {
+    assert.equal(
+      graphRoot().getAttribute('data-architecture-view'),
+      'overview',
+      'a band-shaped canvas must fall back to the directory overview',
+    );
+  });
+  const notice = document.querySelector('[data-architecture-readable-collapsed]');
+  assert.ok(notice !== null, 'the fallback must tell the reader the graph was collapsed');
+  assert.match(notice.textContent ?? '', /too wide/i);
 });
 
 test('redrawing a view re-derives the scale from the new drawing and keeps the fit mode', async () => {

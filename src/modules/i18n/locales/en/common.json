@@ -70,7 +70,15 @@
       "explosion": "Explosion view",
       "drillIn": "Drill in",
       "moreActions": "More actions",
-      "touchHint": "Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood."
+      "touchHint": "Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.",
+      "readable": {
+        "group": "Readable zoom mode",
+        "focus": "Focus",
+        "overview": "Overview",
+        "focusHint": "Focused on {{package}}",
+        "overviewHint": "Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)",
+        "collapsed": "The graph is too wide, so it was collapsed to the directory overview."
+      }
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {

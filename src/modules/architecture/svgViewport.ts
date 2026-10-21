@@ -14,6 +14,8 @@
  * reviewed and tested without a laid-out browser.
  */
 
+import { READABLE_ZOOM_SCALE } from '@/modules/architecture/readableZoom';
+
 /** A width/height pair, in SVG user units or CSS pixels. */
 export type SvgViewportSize = {
   readonly width: number;
@@ -28,10 +30,22 @@ export type SvgViewportAnchor = {
 
 /**
  * The bounds the proposal fixes: 5% keeps a huge graph navigable while 400%
- * leaves enough headroom to read a dense neighbourhood at detail scale.
+ * leaves enough headroom to read a dense neighbourhood at detail scale. This
+ * is the MANUAL zoom range — the semantic-zoom levels need to be reachable, so
+ * a deliberate zoom-out may go below the readable floor.
  */
 export const MIN_ZOOM_SCALE = 0.05;
 export const MAX_ZOOM_SCALE = 4;
+
+/**
+ * The lowest scale a FIT may apply. Derived from the renderer's label size
+ * (13px) and the smallest readable on-screen size (9px): below this, fitting
+ * the whole drawing produces a grey smear instead of a diagram. A fit that
+ * would need to go lower returns this scale and the caller focuses a package
+ * instead (see `readableZoom.ts`). `fitAll()` remains available for the
+ * explicit whole-graph view.
+ */
+export const MIN_READABLE_ZOOM_SCALE = READABLE_ZOOM_SCALE;
 
 /** The multiplicative step one `+` / `−` press applies. */
 export const ZOOM_STEP = 1.25;
@@ -71,12 +85,28 @@ export function readSvgNaturalSize(svg: SVGSVGElement): SvgViewportSize | null {
 /**
  * The uniform scale that fits `natural` inside `viewport` while preserving its
  * aspect ratio. Never exceeds 100% — a diagram smaller than its container is
- * shown at natural size rather than blown up — and never leaves the 5%–400%
- * range. An unmeasurable viewport (width or height 0) means "natural size".
+ * shown at natural size rather than blown up — and never goes below
+ * `minScale`. The default floor is the READABLE one (`MIN_READABLE_ZOOM_SCALE`)
+ * so a fit that would be illegible stops at the smallest readable scale; pass
+ * `MIN_ZOOM_SCALE` (or call `fitAllZoomScale`) for the explicit whole-graph
+ * view, which is allowed to be unreadable. An unmeasurable viewport (width or
+ * height 0) means "natural size".
  */
-export function fitZoomScale(natural: SvgViewportSize, viewport: SvgViewportSize): number {
+export function fitZoomScale(
+  natural: SvgViewportSize,
+  viewport: SvgViewportSize,
+  minScale: number = MIN_READABLE_ZOOM_SCALE,
+): number {
   if (viewport.width <= 0 || viewport.height <= 0) return 1;
-  return clampZoomScale(Math.min(viewport.width / natural.width, viewport.height / natural.height, 1));
+  return Math.min(
+    MAX_ZOOM_SCALE,
+    Math.max(minScale, Math.min(viewport.width / natural.width, viewport.height / natural.height, 1)),
+  );
+}
+
+/** The explicit whole-graph fit: the geometric fit, down to the manual 5% floor. */
+export function fitAllZoomScale(natural: SvgViewportSize, viewport: SvgViewportSize): number {
+  return fitZoomScale(natural, viewport, MIN_ZOOM_SCALE);
 }
 
 /** The on-screen size of `natural` at `scale`, with the scale clamped first. */
@@ -152,8 +182,12 @@ export function centerElementInContainer(container: HTMLElement, target: Element
   container.scrollTop = offsets.top;
 }
 
-/** The content box a fitted SVG may occupy, or `null` when the browser has not laid it out yet. */
-function measureViewport(container: HTMLElement): SvgViewportSize | null {
+/**
+ * The content box a fitted SVG may occupy, or `null` when the browser has not
+ * laid it out yet. Exported because the readable-zoom decision needs the same
+ * box the fit uses (aspect-band test), not a second measurement path.
+ */
+export function measureViewportSize(container: HTMLElement): SvgViewportSize | null {
   let paddingX = 0;
   let paddingY = 0;
   if (typeof getComputedStyle === 'function') {
@@ -182,8 +216,10 @@ function measureViewport(container: HTMLElement): SvgViewportSize | null {
 export type SvgViewportController = {
   /** Point the controller at the SVG that was just injected, keeping the current scale. */
   attach(svg: SVGSVGElement): number;
-  /** Recompute and apply the fit-to-container scale. */
+  /** Recompute and apply the readable fit-to-container scale. */
   fit(): number;
+  /** Recompute and apply the explicit whole-graph fit, down to the manual 5% floor. */
+  fitAll(): number;
   /** Apply an explicit scale (used by the +/- buttons and the 100% control). */
   zoomTo(scale: number): number;
   /** Multiply the current scale by `factor`, keeping the point under `anchor` fixed. */
@@ -211,10 +247,20 @@ export function createSvgViewport(container: HTMLElement): SvgViewportController
     fit(): number {
       if (svg === null) return scale;
       const natural = readSvgNaturalSize(svg);
-      const viewport = measureViewport(container);
+      const viewport = measureViewportSize(container);
       scale = natural === null || viewport === null
         ? applyZoomScale(svg, 1)
         : applyZoomScale(svg, fitZoomScale(natural, viewport));
+      return scale;
+    },
+
+    fitAll(): number {
+      if (svg === null) return scale;
+      const natural = readSvgNaturalSize(svg);
+      const viewport = measureViewportSize(container);
+      scale = natural === null || viewport === null
+        ? applyZoomScale(svg, 1)
+        : applyZoomScale(svg, fitAllZoomScale(natural, viewport));
       return scale;
     },
 

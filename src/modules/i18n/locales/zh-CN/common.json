@@ -45,7 +45,15 @@
       "explosion": "爆炸图",
       "drillIn": "进入",
       "moreActions": "更多操作",
-      "touchHint": "点按节点即可选中；拖动可平移，双指捏合可缩放。双击或选择“进入”可打开其邻域视图。"
+      "touchHint": "点按节点即可选中；拖动可平移，双指捏合可缩放。双击或选择“进入”可打开其邻域视图。",
+      "readable": {
+        "group": "可读缩放模式",
+        "focus": "聚焦",
+        "overview": "全貌",
+        "focusHint": "已聚焦 {{package}}",
+        "overviewHint": "缩放 {{zoom}}% · 放大查看 {{package}} 等 {{count}} 个包",
+        "collapsed": "图过宽，已折叠为目录全貌。"
+      }
     },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",

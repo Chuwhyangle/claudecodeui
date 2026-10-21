@@ -45,7 +45,15 @@
       "explosion": "Vista de explosión",
       "drillIn": "Abrir",
       "moreActions": "Más acciones",
-      "touchHint": "Toca un nodo para seleccionarlo; arrastra para desplazar y pellizca para ampliar. Toca dos veces o elige «Abrir» para ver su vecindad."
+      "touchHint": "Toca un nodo para seleccionarlo; arrastra para desplazar y pellizca para ampliar. Toca dos veces o elige «Abrir» para ver su vecindad.",
+      "readable": {
+        "group": "Modo de zoom legible",
+        "focus": "Enfocar",
+        "overview": "Vista general",
+        "focusHint": "Enfocado en {{package}}",
+        "overviewHint": "Zoom {{zoom}} % · amplía {{package}} y {{count}} paquete(s) más",
+        "collapsed": "El gráfico es demasiado ancho, así que se plegó a la vista general por directorios."
+      }
     },
     "title": "Arquitectura",
     "noSession": "Selecciona una sesión para ver la arquitectura de los archivos que tocó.",

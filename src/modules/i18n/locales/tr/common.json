@@ -45,7 +45,15 @@
       "explosion": "Patlama görünümü",
       "drillIn": "İçine gir",
       "moreActions": "Diğer işlemler",
-      "touchHint": "Bir düğümü seçmek için dokunun; kaydırmak için sürükleyin ve iki parmakla yakınlaştırın. Komşuluğunu açmak için çift dokunun veya “İçine gir”i seçin."
+      "touchHint": "Bir düğümü seçmek için dokunun; kaydırmak için sürükleyin ve iki parmakla yakınlaştırın. Komşuluğunu açmak için çift dokunun veya “İçine gir”i seçin.",
+      "readable": {
+        "group": "Okunabilir yakınlaştırma modu",
+        "focus": "Odakla",
+        "overview": "Genel görünüm",
+        "focusHint": "{{package}} odaklı",
+        "overviewHint": "Yakınlaştırma %{{zoom}} · {{package}} ve {{count}} diğer paketi yakınlaştır",
+        "collapsed": "Graf çok geniş olduğu için dizin genel görünümüne katlandı."
+      }
     },
     "title": "Mimari",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",

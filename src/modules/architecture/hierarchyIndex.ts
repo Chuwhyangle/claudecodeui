@@ -27,6 +27,13 @@ export const ROOT_PACKAGE_ID = '';
 export type ArchitectureHierarchyEntity = {
   readonly id: string;
   readonly packageId: string;
+  /**
+   * Whether the transcript selected this entity as a seed (its BFS distance is
+   * 0). Optional so a caller that only needs package counts — the explosion LOD
+   * — keeps working unchanged; the readable-zoom default reads it to pick the
+   * package to focus.
+   */
+  readonly seed?: boolean;
 };
 
 /**
@@ -53,6 +60,10 @@ export type ArchitectureHierarchyPackage = {
   readonly directEntityCount: number;
   /** Entities in this package plus every descendant package. */
   readonly descendantEntityCount: number;
+  /** Transcript seeds whose innermost package is this one. */
+  readonly directSeedCount: number;
+  /** Transcript seeds in this package plus every descendant package. */
+  readonly descendantSeedCount: number;
 };
 
 /** The complete entity→package tree read from one drawn diagram. */
@@ -94,6 +105,7 @@ export function buildHierarchyIndex(
 ): ArchitectureHierarchyIndex {
   const entityPackage = new Map<string, string>();
   const directEntities = new Map<string, string[]>([[ROOT_PACKAGE_ID, []]]);
+  const directSeeds = new Map<string, number>([[ROOT_PACKAGE_ID, 0]]);
   const parents = new Map<string, string | null>([[ROOT_PACKAGE_ID, null]]);
 
   const ensurePackage = (packageId: string): void => {
@@ -102,6 +114,7 @@ export function buildHierarchyIndex(
     if (parent !== null) ensurePackage(parent);
     parents.set(packageId, parent);
     directEntities.set(packageId, []);
+    directSeeds.set(packageId, 0);
   };
 
   for (const entity of entities) {
@@ -110,6 +123,7 @@ export function buildHierarchyIndex(
     ensurePackage(packageId);
     entityPackage.set(entity.id, packageId);
     directEntities.get(packageId)?.push(entity.id);
+    if (entity.seed === true) directSeeds.set(packageId, (directSeeds.get(packageId) ?? 0) + 1);
   }
 
   const childPackageIds = new Map<string, string[]>();
@@ -132,8 +146,9 @@ export function buildHierarchyIndex(
   };
 
   // Post-order totals: a package's descendant count is its direct entities plus
-  // every child's descendant count.
+  // every child's descendant count. Seed counts follow the same rule.
   const descendantCounts = new Map<string, number>();
+  const descendantSeedCounts = new Map<string, number>();
   const countDescendants = (packageId: string): number => {
     const known = descendantCounts.get(packageId);
     if (known !== undefined) return known;
@@ -143,6 +158,17 @@ export function buildHierarchyIndex(
       direct,
     );
     descendantCounts.set(packageId, total);
+    return total;
+  };
+  const countDescendantSeeds = (packageId: string): number => {
+    const known = descendantSeedCounts.get(packageId);
+    if (known !== undefined) return known;
+    const direct = directSeeds.get(packageId) ?? 0;
+    const total = (childPackageIds.get(packageId) ?? []).reduce(
+      (sum, childId) => sum + countDescendantSeeds(childId),
+      direct,
+    );
+    descendantSeedCounts.set(packageId, total);
     return total;
   };
 
@@ -159,6 +185,8 @@ export function buildHierarchyIndex(
       entityIds,
       directEntityCount: entityIds.length,
       descendantEntityCount: countDescendants(packageId),
+      directSeedCount: directSeeds.get(packageId) ?? 0,
+      descendantSeedCount: countDescendantSeeds(packageId),
     });
   }
 

@@ -45,7 +45,15 @@
       "explosion": "Explosionsansicht",
       "drillIn": "Öffnen",
       "moreActions": "Weitere Aktionen",
-      "touchHint": "Tippen Sie auf einen Knoten, um ihn auszuwählen; ziehen Sie zum Verschieben und zoomen Sie mit zwei Fingern. Doppeltippen oder „Öffnen“ öffnet die Nachbarschaft."
+      "touchHint": "Tippen Sie auf einen Knoten, um ihn auszuwählen; ziehen Sie zum Verschieben und zoomen Sie mit zwei Fingern. Doppeltippen oder „Öffnen“ öffnet die Nachbarschaft.",
+      "readable": {
+        "group": "Lesbarer Zoommodus",
+        "focus": "Fokussieren",
+        "overview": "Übersicht",
+        "focusHint": "Fokussiert auf {{package}}",
+        "overviewHint": "Zoom {{zoom}} % · zoomen Sie auf {{package}} und {{count}} weitere(s) Paket(e)",
+        "collapsed": "Der Graph ist zu breit und wurde daher auf die Verzeichnisübersicht reduziert."
+      }
     },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",

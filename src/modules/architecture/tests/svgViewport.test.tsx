@@ -6,23 +6,30 @@ import {
   applyZoomScale,
   clampZoomScale,
   createSvgViewport,
+  fitAllZoomScale,
   fitZoomScale,
   MAX_ZOOM_SCALE,
+  MIN_READABLE_ZOOM_SCALE,
   MIN_ZOOM_SCALE,
   readSvgNaturalSize,
   zoomedSvgSize,
 } from '@/modules/architecture/svgViewport';
+import {
+  MIN_READABLE_FONT_PX,
+  READABLE_ZOOM_SCALE,
+  RENDERED_LABEL_FONT_PX,
+} from '@/modules/architecture/readableZoom';
 
 /**
  * The renderer-neutral SVG viewport used by PlantUmlGraph.
  *
  * The renderer emits SVGs at their natural size and has no zoom API, so the
  * panel resizes the SVG by rewriting `width`/`height` from its `viewBox`. These
- * cases pin the arithmetic (aspect ratio, the 100% fit ceiling, the 5%–400%
- * clamp) and the two DOM consequences the panel depends on: the element's laid
- * out size — which is what gives the scroll container its extent — equals the
- * scaled natural size, and an anchored wheel zoom scrolls the container so the
- * point under the cursor does not move.
+ * cases pin the arithmetic (aspect ratio, the 100% fit ceiling, the readable fit
+ * floor and the 5%–400% manual clamp) and the two DOM consequences the panel
+ * depends on: the element's laid out size — which is what gives the scroll
+ * container its extent — equals the scaled natural size, and an anchored wheel
+ * zoom scrolls the container so the point under the cursor does not move.
  */
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -59,10 +66,11 @@ beforeEach(() => {
 test('fit keeps the aspect ratio and never upscales past 100%', () => {
   const natural = { width: 1000, height: 500 };
 
-  // The height is the binding dimension: 400/1000 = 0.4, 400/500 = 0.8.
-  assert.equal(fitZoomScale(natural, { width: 400, height: 400 }), 0.4);
-  const fitted = zoomedSvgSize(natural, 0.4);
-  assert.deepEqual(fitted, { width: 400, height: 200 });
+  // The height is the binding dimension: 900/1000 = 0.9, 400/500 = 0.8. This is
+  // above the readable floor, so the fit is the geometric one.
+  assert.equal(fitZoomScale(natural, { width: 900, height: 400 }), 0.8);
+  const fitted = zoomedSvgSize(natural, 0.8);
+  assert.deepEqual(fitted, { width: 800, height: 400 });
   assert.equal(fitted.width / fitted.height, natural.width / natural.height, 'the drawing keeps its shape');
 
   // A diagram smaller than its container is shown at natural size, not blown up.
@@ -70,6 +78,25 @@ test('fit keeps the aspect ratio and never upscales past 100%', () => {
 
   // An unmeasurable container (hidden tab, jsdom) keeps the natural size.
   assert.equal(fitZoomScale(natural, { width: 0, height: 0 }), 1);
+});
+
+test('the fit floor is derived from the smallest readable label, not the 5% manual clamp', () => {
+  // The lower bound is 9px of on-screen text ÷ the renderer's 13px label.
+  assert.equal(MIN_READABLE_FONT_PX, 9);
+  assert.equal(RENDERED_LABEL_FONT_PX, 13);
+  assert.equal(READABLE_ZOOM_SCALE, MIN_READABLE_FONT_PX / RENDERED_LABEL_FONT_PX);
+  assert.equal(MIN_READABLE_ZOOM_SCALE, READABLE_ZOOM_SCALE);
+
+  // A graph that would need 3.5% to fit a 1151px panel returns the readable
+  // floor from fit(), while the explicit whole-graph fit still reaches 5%.
+  const natural = { width: 32880, height: 9860 };
+  const viewport = { width: 1151, height: 700 };
+  assert.equal(fitZoomScale(natural, viewport), MIN_READABLE_ZOOM_SCALE);
+  assert.equal(fitZoomScale(natural, viewport, MIN_ZOOM_SCALE), MIN_ZOOM_SCALE);
+  assert.equal(fitAllZoomScale(natural, viewport), MIN_ZOOM_SCALE);
+
+  // The readable floor is still bounded by the manual range.
+  assert.ok(MIN_READABLE_ZOOM_SCALE > MIN_ZOOM_SCALE && MIN_READABLE_ZOOM_SCALE < MAX_ZOOM_SCALE);
 });
 
 test('zoom rewrites width/height from the viewBox and leaves the drawing untouched', () => {
@@ -118,14 +145,23 @@ test('the laid-out SVG size — the scroll extent — equals the scaled natural 
   const viewport = createSvgViewport(container);
   viewport.attach(svg);
 
-  const scale = viewport.fit();
+  // The whole-graph fit is min(400/1586, 600/1176, 1) = 0.25220… (below the
+  // readable floor, which is exactly why it is not the default).
+  const fitAll = viewport.fitAll();
   const natural = readSvgNaturalSize(svg);
   assert.ok(natural);
-  const fitted = zoomedSvgSize(natural, scale);
-  // Fit is min(400/1586, 600/1176, 1) = 0.25220…
+  const fitted = zoomedSvgSize(natural, fitAll);
   assert.equal(rounded(fitted.width), 400);
   assert.equal(Number(svg.getAttribute('width')), rounded(fitted.width));
   assert.equal(Number(svg.getAttribute('height')), rounded(fitted.height));
+
+  // The readable `fit()` stops at the legible floor, so the drawing keeps its
+  // scroll extent (it is wider/taller than the box) instead of shrinking into
+  // an unreadable smear.
+  const readable = viewport.fit();
+  assert.equal(readable, MIN_READABLE_ZOOM_SCALE);
+  assert.equal(Number(svg.getAttribute('width')), rounded(natural.width * readable));
+  assert.ok(natural.width * readable > container.clientWidth, 'a readable fit can require scrolling');
 
   // Zooming in grows the element itself, so the container's scroll extent grows
   // with it — no CSS transform and no manual scroll-range bookkeeping.

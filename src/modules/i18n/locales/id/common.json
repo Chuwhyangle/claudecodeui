@@ -45,7 +45,15 @@
       "explosion": "Tampilan ledakan",
       "drillIn": "Buka",
       "moreActions": "Tindakan lainnya",
-      "touchHint": "Ketuk simpul untuk memilihnya; seret untuk menggeser dan cubit untuk memperbesar. Ketuk dua kali atau pilih “Buka” untuk membuka tetangganya."
+      "touchHint": "Ketuk simpul untuk memilihnya; seret untuk menggeser dan cubit untuk memperbesar. Ketuk dua kali atau pilih “Buka” untuk membuka tetangganya.",
+      "readable": {
+        "group": "Mode zoom terbaca",
+        "focus": "Fokus",
+        "overview": "Ikhtisar",
+        "focusHint": "Berfokus pada {{package}}",
+        "overviewHint": "Zoom {{zoom}}% · perbesar {{package}} dan {{count}} paket lainnya",
+        "collapsed": "Graf terlalu lebar, jadi dilipat ke ikhtisar direktori."
+      }
     },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",
