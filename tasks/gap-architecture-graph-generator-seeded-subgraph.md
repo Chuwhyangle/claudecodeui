@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-graph-generator-seeded-subgraph
 title: 架构图生成器：种子解析 → 1 跳双向扩展 → file/entity 两级聚合 → 合法 .mmd（AC-415）
-status: ready
+status: done
 labels:
   - gap
 parent: null
