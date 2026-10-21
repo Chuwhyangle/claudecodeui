@@ -2,7 +2,7 @@
 id: architecture-cytoscape-dynamic-rendering
 title: cytoscape 力导向渲染 + 前端 maxNodes/maxHops 即时调节，服务端返回带 distance/relationType
   的邻域 JSON
-status: ready
+status: done
 labels:
   - feature
 parent: null
