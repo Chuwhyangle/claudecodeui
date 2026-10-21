@@ -8,6 +8,8 @@ parent: null
 children: []
 extra:
   schema: execution
+depends_on:
+  - voice-speaker-tracking-settings-file
 ---
 ## Proposal
 
