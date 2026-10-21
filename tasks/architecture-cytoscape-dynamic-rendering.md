@@ -24,9 +24,9 @@ depends_on:
 
 ## AC
 
-- [ ] 服务端测试 exit 0：JSON 输出含 distance/relationType，宽松上限下不丢边、distance 正确
-- [ ] 前端测试 exit 0：滑条调节不重新 fetch（本地过滤）、cytoscape 渲染节点可 hover/点击展开
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] 服务端测试 exit 0：JSON 输出含 distance/relationType，宽松上限下不丢边、distance 正确
+- [x] 前端测试 exit 0：滑条调节不重新 fetch（本地过滤）、cytoscape 渲染节点可 hover/点击展开
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -38,9 +38,22 @@ depends_on:
 - server/modules/architecture/service.ts
 - server/modules/architecture/routes.ts
 - server/modules/architecture/tests/architecture-routes.test.ts
+- package.json
+- package-lock.json
 - src/modules/architecture/ArchitecturePanel.tsx
 - src/modules/architecture/useArchitectureGraph.ts
 - src/modules/architecture/CytoscapeGraph.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
-- src/modules/i18n/locales/en/chat.json
+- src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/de/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
+- src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-cytoscape-dynamic-rendering.md
