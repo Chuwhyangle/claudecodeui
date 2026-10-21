@@ -9,8 +9,8 @@ parent: null
 children: []
 extra: {}
 depends_on:
-  - architecture-graph-generator
-  - architecture-seed-extraction
+  - gap-architecture-graph-generator-seeded-subgraph
+  - gap-architecture-seed-extraction-from-transcript
   - architecture-graph-cache
 goal_ac: AC-418
 ---
