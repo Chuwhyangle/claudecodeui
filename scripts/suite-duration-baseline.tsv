@@ -153,7 +153,9 @@
 #   and the voice-realtime-summary row by gap-voice-run-end-summary-side-model, measured one file
 #   at a time on 2026-10-20 (its own new criterion; no green round contains it yet).
 #   and the server-composition-startup row by gap-server-provider-websocket-init-cycle-ports,
-#   measured one file at a time on 2026-10-20.
+#   measured one file at a time on 2026-10-20,
+#   and the file-tree-lazy-listing row by file-tree-lazy-directory-listing, measured one file at a
+#   time on 2026-10-21 (its own new criterion; no green round contains it yet).
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
 1614	server/modules/voice-realtime/tests/voice-realtime-model-reply-narrator.test.ts
@@ -503,3 +505,4 @@
 2072	server/modules/providers/tests/claude-transcript-format.test.ts
 2261	server/shared/tests/bounded-approval-ledger.test.ts
 3605	server/modules/cli/tests/browser-use-mcp-entry.test.ts
+2355	server/modules/file-tree/tests/file-tree-lazy-listing.test.ts
