@@ -67,13 +67,13 @@ Received:    41402
 
 ## AC
 
-- [ ] AC1 复现红态并机械入档：在与失败同阶的**持续**负载下运行逐字出货命令，得到 ≥1 次 exit 1 且自印墙钟 >40000；入档该次 `error-context.md` 的 `# Error details` 逐字、落点行号、该 run data dir 的 `watchdog-state.json` 全文、`[e2e] vite-cache seed=` 行（若有）、`[BABEL] … react-scan.js` 行（若有）与 `load1`。若构造跑不出 >40000，逐条入档每次读数与构造参数，并以本轮 driver 的 `quay-e2e-0hZza4` 读数（`Received: 41402` / boot `20987ms`）作为红基准，⛔ 不得把没发生的红写成已复现。
-- [ ] AC2 分段归因：对 AC1 的运行给出 boot latch、首次应用装载（`client warm-up` 结束→`sidebar ready`）、用例体三段各自的毫秒数及其占墙钟比例；点名被选杠杆，并给出该块在复现运行中的实测成本；若 boot 段的膨胀被归到 seed 未命中/冷重优化，给出 `vite-cache seed=` 与 BABEL 行的逐字读数。
-- [ ] AC3 杠杆落地与前后对照：`react-scan` 不再位于首装静态图——`grep -n "import { scan } from 'react-scan'" src/main.tsx` 无命中，且新形态仍以同一 `localStorage` flag 门控；同构造前后对照显示目标块下降，并给出该运行 stderr 中首次导航前不再出现 `[BABEL] … react-scan.js`（或等价的浏览器请求读数：首装未请求 `react-scan`）。
-- [ ] AC4 同构造验收：修复态在 AC1 的同一构造下连续 ≥3 次 exit 0，每次自印 `AC-194 wall clock` ≤40000，且三次中至少两次 ≤38000（余量 ≥2s）；逐次入档墙钟、boot latch、`vite-cache seed=` 与 `load1`。
-- [ ] AC5 静跑与兄弟不回归：无 lane 时 ≥2 次 exit 0 且墙钟 ≤40000；`npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"` 一次 exit 0。
-- [ ] AC6 判据与读数未被弱化：`grep -c "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` 仍为 `2`；`git diff <base>..HEAD -- goals/` 为空；运行输出仍逐字包含 `dock.counts=`、`plan.cancelControls=0`、`settled.cardTaskStates=`、`settled.cardFoldedStates=`、`restored.`、`falseForm2.`；没有新增 retry 或改判据命令。
-- [ ] AC7 失败路径如实：若同构造下仍无法让 ≥3 次 ≤40000，停手置 `needs-human`，附逐字读数、已试杠杆与排除项；⛔ 不得把静跑通过或单次通过写成已修。
+- [x] AC1 复现红态并机械入档：在与失败同阶的**持续**负载下运行逐字出货命令，得到 ≥1 次 exit 1 且自印墙钟 >40000；入档该次 `error-context.md` 的 `# Error details` 逐字、落点行号、该 run data dir 的 `watchdog-state.json` 全文、`[e2e] vite-cache seed=` 行（若有）、`[BABEL] … react-scan.js` 行（若有）与 `load1`。若构造跑不出 >40000，逐条入档每次读数与构造参数，并以本轮 driver 的 `quay-e2e-0hZza4` 读数（`Received: 41402` / boot `20987ms`）作为红基准，⛔ 不得把没发生的红写成已复现。
+- [x] AC2 分段归因：对 AC1 的运行给出 boot latch、首次应用装载（`client warm-up` 结束→`sidebar ready`）、用例体三段各自的毫秒数及其占墙钟比例；点名被选杠杆，并给出该块在复现运行中的实测成本；若 boot 段的膨胀被归到 seed 未命中/冷重优化，给出 `vite-cache seed=` 与 BABEL 行的逐字读数。
+- [x] AC3 杠杆落地与前后对照：`react-scan` 不再位于首装静态图——`grep -n "import { scan } from 'react-scan'" src/main.tsx` 无命中，且新形态仍以同一 `localStorage` flag 门控；同构造前后对照显示目标块下降，并给出该运行 stderr 中首次导航前不再出现 `[BABEL] … react-scan.js`（或等价的浏览器请求读数：首装未请求 `react-scan`）。
+- [x] AC4 同构造验收：修复态在 AC1 的同一构造下连续 ≥3 次 exit 0，每次自印 `AC-194 wall clock` ≤40000，且三次中至少两次 ≤38000（余量 ≥2s）；逐次入档墙钟、boot latch、`vite-cache seed=` 与 `load1`。
+- [x] AC5 静跑与兄弟不回归：无 lane 时 ≥2 次 exit 0 且墙钟 ≤40000；`npx playwright test e2e/activity-dock-background.spec.ts -g "AC-199"` 一次 exit 0。
+- [x] AC6 判据与读数未被弱化：`grep -c "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` 仍为 `2`；`git diff <base>..HEAD -- goals/` 为空；运行输出仍逐字包含 `dock.counts=`、`plan.cancelControls=0`、`settled.cardTaskStates=`、`settled.cardFoldedStates=`、`restored.`、`falseForm2.`；没有新增 retry 或改判据命令。
+- [x] AC7 失败路径如实：若同构造下仍无法让 ≥3 次 ≤40000，停手置 `needs-human`，附逐字读数、已试杠杆与排除项；⛔ 不得把静跑通过或单次通过写成已修。
 
 ## DoD
 
@@ -87,3 +87,107 @@ Received:    41402
 - `e2e/support/client-startup-warmup.ts`（首次装载预热或重叠；仅在归因支持时改）
 - `playwright.config.ts`（仅在归因证明 boot 段有选择域内可削项时改）
 - `tasks/gap-ac194-inwindow-firstload-fixed-cost.md`（自触）
+
+## Evidence
+
+**实现（唯一代码改动，commit `51028cd54`）**：`src/main.tsx` 把 `import { scan } from 'react-scan'` 静态导入改为同一 flag 门控的 `void import('react-scan')`（`:23` `if (import.meta.env.DEV && localStorage.getItem('react-scan') === 'on')`，`:24` `void import('react-scan').then(({ scan }) => scan({ enabled: true }))`）。`grep -n "import { scan } from 'react-scan'" src/main.tsx` → 0 命中。`git diff --stat develop..HEAD` 只有 `src/main.tsx | 12 ++++++++++--`。`npx tsc --noEmit -p tsconfig.json`、`npx oxlint src/main.tsx` 均 exit 0。
+
+**运行形态（所有运行）**：逐字判据命令 `npx playwright test e2e/activity-dock-background.spec.ts -g "AC-194"`，按 AGENTS.md 用 `bash scripts/with-memory-cap.sh` 包裹（只做内存隔离，不改命令本身）；每条 stdout 行带 elapsed 时间戳（perl）。
+
+### AC1 — 红态、构造参数与兜底基准
+
+本 worktree 第一次运行（data dir `quay-e2e-BOjHov`，2026-10-21 13:11:27+08:00；宿主 load1 54.79 / 48 users）：**exit 1，自印 `AC-194 wall clock: 41352ms`**。
+
+`test-results/activity-dock-background-a-aeb25-nd-restores-from-a-snapshot/error-context.md` 的 `# Error details` 逐字：
+
+```
+Error: the criterion must complete within 40s
+
+expect(received).toBeLessThanOrEqual(expected)
+
+Expected: <= 40000
+Received:    41352
+```
+
+落点 `e2e/activity-dock-background.spec.ts:444`（describe 起点 `:295:3`）。
+
+该 run 的 `watchdog-state.json` 全文：
+
+```json
+{
+  "armed": true,
+  "fired": false,
+  "ceilingMs": 55000,
+  "detail": "boot completed at 27525ms, re-armed to 55000ms"
+}
+```
+
+`[e2e] vite-cache seed=none in 2ms (vite must optimize)`
+
+`[WebServer] [BABEL] Note: The code generator has deoptimised the styling of /data/home/yale/.cache/quay-e2e-tmp/quay-e2e-BOjHov/vite-cache/deps/react-scan.js?v=f46cf61f as it exceeds the max of 500KB.`
+
+同 run 其它逐字读数：`[e2e] client warm-up: 925ms`、`[e2e] sidebar ready: 478ms`、`running.cardTaskStates=["running","running"] at +37493ms`。
+
+**持续负载构造本身没有复现 >40000（如实入档）**：3 路兄弟 lane（同一条逐字命令，各自独立 data dir/端口）+ 16 个 CPU burner **覆盖 boot 与用例体全程**，load1 39.64→43.13，pre-fix 三条全绿 `17563 / 17140 / 16974ms`（boot latch `5968 / 5890 / 5896ms`，`seed=BOjHov`）；post-fix 同构造三条全绿 `13659 / 13655 / 13679ms`。⇒ 按 AC1 兜底条款，红基准取本轮 driver 的 `quay-e2e-0hZza4`：`Received: 41402` / `boot completed at 20987ms`。本机唯一一次 >40000 即上面这次（`seed=none`、本 worktree 首跑）；其构造参数已逐条入档，**不**把没发生的持续负载红写成已复现。
+
+### AC2 — 分段归因
+
+红 run（`41352ms`）：boot latch **27525ms（66.6%）**，其余 **13827ms（33.4%）**。boot 段的膨胀归到 **seed 未命中 / 冷重优化**：`seed=none` + 上面那条 `[BABEL] … react-scan.js` 逐字行；同一条命令在缓存命中时只需 13-17s（见 AC3/AC4 表）。红 run 自身 stdout 无行级时间戳，其余两段由同 describe 的 `running... at +37493ms`（到墙钟 3.859s）与下面带时间戳的同构造复刻定位。
+
+同构造复刻（pre-fix，measured lane，`wall 17563ms`，行级时间戳；各段互不重叠）：
+
+| 段 | ms | 占墙钟 |
+| --- | ---: | ---: |
+| config 求值 + seed + Playwright 启动（0→`Running 1 test`） | 3682 | 21.0% |
+| collection 之后→boot latch（`boot completed at 5968ms`） | 1527 | 8.7% |
+| boot latch→warm-up 开始（浏览器启动 + createAccount/armScenario） | 2221 | 12.6% |
+| warm-up（`client warm-up: 490ms`） | 490 | 2.8% |
+| 首次应用装载（warm-up 结束→`sidebar ready` 打印） | 3289 | 18.7% |
+| 用例体（`sidebar ready`→墙钟） | 6354 | 36.2% |
+
+被选杠杆：**把 653KB 的 react-scan 移出首装静态图**。它在复现运行里的实测成本 = 首装前那条 `[BABEL] … react-scan.js … exceeds the max of 500KB` 变换 + 它所占的 boot/首装段；post-fix 同构造 boot `5968→2986ms`、首装 `3289→2854ms`（见 AC3）。
+
+### AC3 — 杠杆落地与前后对照
+
+- `grep -n "import { scan } from 'react-scan'" src/main.tsx` → 无命中（`grep -c` 为 0）。
+- 新形态仍以同一 `localStorage` flag 门控（`src/main.tsx:23-25`）。
+- 同构造（3 lane + 16 burners，覆盖 boot 与用例体）前后对照：
+
+| 段 | pre-fix（load1 39.64→43.13） | post-fix（load1 57.43→53.07） | 差 |
+| --- | ---: | ---: | ---: |
+| boot latch | 5968ms | 2986ms | −2982ms |
+| warm-up | 490ms | 433ms | −57ms |
+| 首次应用装载 | 3289ms | 2854ms | −435ms |
+| 用例体 | 6354ms | 6111ms | −243ms |
+| 墙钟 | 17563ms | 13659ms | −3904ms |
+
+post-fix 是在**更高**的负载下取得上述下降。pre-fix 三条 lane 的 stderr 各有一条 `[BABEL] … deps/react-scan.js … exceeds the max of 500KB`；post-fix 三条 lane **0 条**（首装不再请求/变换该模块）。
+
+### AC4 — 同构造三次（顺序执行，每次 3 lane + 16 burners）
+
+| # | wall clock | boot latch | seed= | load1 before→after | exit |
+| --- | ---: | ---: | --- | --- | --- |
+| 1 | 13658ms | 3195ms | hgThF6 | 23.87→46.45 | 0 |
+| 2 | 14960ms | 3159ms | Ve4QRA | 46.45→56.00 | 0 |
+| 3 | 30731ms | 4746ms | Gd8zwC | 56.00→119.78 | 0 |
+
+三次全部 ≤40000，且三次全部 ≤38000（第 3 次在 load1 119.78 下仍为 30731ms）。
+
+### AC5 — 静跑与兄弟
+
+| 运行 | wall clock | boot latch | seed= | load1 | exit |
+| --- | ---: | ---: | --- | --- | --- |
+| 静跑 1（`quay-e2e-PbQyP6`） | 13445ms | 3076ms | ImIZwF | 27.65→26.88 | 0 |
+| 静跑 2（`quay-e2e-Dtft7G`） | 14154ms | 4687ms | PbQyP6 | 25.85→25.36 | 0 |
+| 兄弟 `-g "AC-199"`（`quay-e2e-hgThF6`） | 9759ms | 3044ms | — | 25.36→24.90 | 0 |
+
+### AC6 — 判据与读数未被弱化
+
+- `grep -c "toBeLessThanOrEqual(40_000)" e2e/activity-dock-background.spec.ts` → `2`。
+- `git diff develop..HEAD -- goals/ e2e/ playwright.config.ts` → 空。
+- post-fix 运行输出逐字仍含 `dock.counts=`、`plan.cancelControls=0`、`settled.cardTaskStates=`、`settled.cardFoldedStates=`、`restored.`、`falseForm2.`（各 ≥1 命中）。
+- 未新增 retry，未改判据命令。
+
+### AC7 — 失败路径
+
+不适用：同构造三次已全部达标，未置 `needs-human`。
