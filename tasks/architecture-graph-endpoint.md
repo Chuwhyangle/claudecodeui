@@ -22,8 +22,8 @@ goal_ac: AC-418
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/architecture-routes.test.ts` exit 0（端点返回 mmd{file,entity}+stats+provenance；无缓存项目 hasArchguardCache=false 端点空/404；空 transcript 空种子不调生成器）
-- [ ] 新增 `server/modules/architecture/` 目录后 `server-import-cycle-budget` 全量过（新目录进 manifest `server-import-cycle-budget.baseline.json` 与 `MANIFEST_PIN`），且 `scripts/test.sh` 的 unknown pin 同步重测（新增 server 测试文件会顶高，重测 360→361/362/363 并把该文件写进 Touches）
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/architecture-routes.test.ts` exit 0（端点返回 mmd{file,entity}+stats+provenance；无缓存项目 hasArchguardCache=false 端点空/404；空 transcript 空种子不调生成器）
+- [x] 新增 `server/modules/architecture/` 目录后 `server-import-cycle-budget` 全量过（新目录进 manifest `server-import-cycle-budget.baseline.json` 与 `MANIFEST_PIN`），且 `scripts/test.sh` 的 unknown pin 同步重测（新增 server 测试文件会顶高，重测 360→361/362/363 并把该文件写进 Touches）
 
 ## DoD
 
@@ -38,8 +38,10 @@ goal_ac: AC-418
 - server/modules/architecture/tests/architecture-routes.test.ts
 - server/index.ts
 - server/modules/mcp-gateway/mcp-overview-tools.ts
+- server/modules/projects/services/projects-with-sessions-fetch.service.ts
 - src/shared/types.ts
 - server/shared/tests/server-import-cycle-budget.baseline.json
 - server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/architecture-graph-endpoint.md
