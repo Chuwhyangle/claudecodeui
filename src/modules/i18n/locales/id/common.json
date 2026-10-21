@@ -42,7 +42,10 @@
         "subpackages": "Subpaket",
         "entities": "Entitas"
       },
-      "explosion": "Tampilan ledakan"
+      "explosion": "Tampilan ledakan",
+      "drillIn": "Buka",
+      "moreActions": "Tindakan lainnya",
+      "touchHint": "Ketuk simpul untuk memilihnya; seret untuk menggeser dan cubit untuk memperbesar. Ketuk dua kali atau pilih “Buka” untuk membuka tetangganya."
     },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",

@@ -42,7 +42,10 @@
         "subpackages": "子包",
         "entities": "实体"
       },
-      "explosion": "爆炸图"
+      "explosion": "爆炸图",
+      "drillIn": "进入",
+      "moreActions": "更多操作",
+      "touchHint": "点按节点即可选中；拖动可平移，双指捏合可缩放。双击或选择“进入”可打开其邻域视图。"
     },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",

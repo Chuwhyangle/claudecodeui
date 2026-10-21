@@ -42,7 +42,10 @@
         "subpackages": "Sottopacchetti",
         "entities": "Entità"
       },
-      "explosion": "Vista esplosa"
+      "explosion": "Vista esplosa",
+      "drillIn": "Apri",
+      "moreActions": "Altre azioni",
+      "touchHint": "Tocca un nodo per selezionarlo; trascina per spostarti e pizzica per zoomare. Tocca due volte o scegli «Apri» per aprire il suo intorno."
     },
     "title": "Architettura",
     "noSession": "Seleziona una sessione per vedere l'architettura dei file che ha toccato.",

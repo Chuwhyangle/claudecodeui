@@ -42,7 +42,10 @@
         "subpackages": "Unterpakete",
         "entities": "Entitäten"
       },
-      "explosion": "Explosionsansicht"
+      "explosion": "Explosionsansicht",
+      "drillIn": "Öffnen",
+      "moreActions": "Weitere Aktionen",
+      "touchHint": "Tippen Sie auf einen Knoten, um ihn auszuwählen; ziehen Sie zum Verschieben und zoomen Sie mit zwei Fingern. Doppeltippen oder „Öffnen“ öffnet die Nachbarschaft."
     },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",

@@ -25,11 +25,13 @@ import {
   type ArchitectureLayoutEngine,
 } from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
+import { useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import type {
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
 import {
+  createSvgTouchGestures,
   createSvgViewport,
   ZOOM_STEP,
   type SvgViewportController,
@@ -62,6 +64,24 @@ type PlantUmlRendererFactory = (options: {
 const GROUP_PREFIX = 'grp::';
 /** Stub nodes in a view (external neighbours) are not real entities; clicks ignore them. */
 const STUB_PREFIX = 'stub::';
+
+/**
+ * How close two taps on the same node must be to count as the explicit drill
+ * gesture. A touch tap cannot double as both "select" and "drill", so the
+ * second tap is the user saying "yes, open this one".
+ */
+const DOUBLE_TAP_MS = 350;
+
+/**
+ * The hit area every toolbar button gets on a coarse pointer. WCAG 2.5.5 asks
+ * for 44×44 CSS pixels; the inline style (rather than a Tailwind class) makes
+ * the reading explicit for a test and independent of the stylesheet.
+ */
+const TOUCH_TARGET_STYLE = { minHeight: '44px', minWidth: '44px' } as const;
+
+/** The shared look of the diagram toolbar's buttons. */
+const TOOLBAR_BUTTON_CLASS =
+  'rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60';
 
 /**
  * The cross-panel linkage channel. The SVG is the shared surface: a click on an
@@ -293,9 +313,13 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
  * nothing here re-enters the fetch. The renderer package is imported
  * dynamically, so elkjs never enters the first-screen bundle.
  */
-export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraphProps) {
+export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
+  // collect the toolbar into one overflow menu (see `useTouchLayout`).
+  const { touchUi, compactToolbar } = useTouchLayout();
+  const touchTargetStyle = touchUi ? TOUCH_TARGET_STYLE : undefined;
   // Which slice of the payload is drawn. Local by construction: the payload is
   // fetched whole, so switching views must never re-request it.
   const [view, setView] = useState<ArchitectureDiagramView>({ kind: 'overview' });
@@ -316,6 +340,21 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
   // dependency/reverse-dependency highlight stays pinned until the selection is
   // replaced or cleared.
   const selectedRef = useRef<string | null>(null);
+  // A state copy of the selection, used only to render the explicit "Drill in"
+  // action. It deliberately does not feed the drawing effect: selecting must
+  // never re-lay the diagram out.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Whether the selection came from a touch tap. A desktop click already
+  // navigated, so only a touch selection needs a separate drill command.
+  const [selectedByTouch, setSelectedByTouch] = useState(false);
+  // The pointer type of the last press on the graph. A click that follows a
+  // touch press keeps the touch semantics (select only); a mouse click keeps
+  // the original click-to-drill behaviour.
+  const lastPointerTypeRef = useRef<string | null>(null);
+  // The previous tap, for the touch double-tap drill gesture.
+  const lastTapRef = useRef<{ id: string; at: number } | null>(null);
+  // Whether the compact toolbar's overflow menu is expanded.
+  const [overflowOpen, setOverflowOpen] = useState(false);
   useEffect(() => {
     viewRef.current = view;
     graphRef.current = graph;
@@ -335,6 +374,29 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     zoomRef.current = next;
     setZoom(next);
   }, []);
+
+  /**
+   * The navigation command, kept separate from the gesture that triggers it:
+   * a desktop click runs it immediately, while a touch tap selects first and
+   * reaches it through a double-tap or the "Drill in" button.
+   */
+  const drillInto = useCallback((id: string): void => {
+    if (id.startsWith(STUB_PREFIX)) return;
+    if (id.startsWith(GROUP_PREFIX)) {
+      setView({ kind: 'group', prefix: id.slice(GROUP_PREFIX.length) });
+      return;
+    }
+    const current = viewRef.current;
+    const hops = current.kind === 'neighborhood' && current.entityId === id
+      ? current.hops + 1
+      : DEFAULT_NEIGHBORHOOD_HOPS;
+    setView({ kind: 'neighborhood', entityId: id, hops });
+  }, []);
+
+  const drillSelected = useCallback((): void => {
+    const id = selectedRef.current;
+    if (id !== null) drillInto(id);
+  }, [drillInto]);
 
   // The hierarchy of the drawing on screen (entities → packages) and the zoom
   // level currently displayed. The level is applied imperatively (display
@@ -381,6 +443,20 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       viewportRef.current = null;
     };
   }, []);
+
+  // Touch gestures ride on the SAME controller the toolbar and Ctrl+wheel use,
+  // so pinch never introduces a second zoom model. The host's `touch-action:
+  // none` (below) is what suppresses the browser's own page pan/zoom; that is
+  // also why the single-finger drag has to pan the container here.
+  useEffect(() => {
+    const host = hostRef.current;
+    const viewport = viewportRef.current;
+    if (host === null || viewport === null) return;
+    const gestures = createSvgTouchGestures(host, viewport, {
+      onZoom: (scale) => applyZoom({ scale, mode: 'custom' }),
+    });
+    return () => gestures.destroy();
+  }, [applyZoom]);
 
   // The LOD debouncer lives for the mount; a drawing change cancels its pending
   // application through the render effect below.
@@ -433,6 +509,8 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     // A reloaded graph may not contain the previously selected entity.
     if (selectedRef.current !== null && !graph.nodes.some((node) => node.id === selectedRef.current)) {
       selectedRef.current = null;
+      setSelectedId(null);
+      setSelectedByTouch(false);
     }
 
     void (async () => {
@@ -567,49 +645,78 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       hoverCallbackRef.current?.(null);
     };
 
+    // Record how the press that produces the next click was made. Mouse clicks
+    // keep the original single-click navigation; a touch tap only selects.
+    const onPointerDown = (event: PointerEvent): void => {
+      lastPointerTypeRef.current = event.pointerType ?? null;
+    };
+
+    /** Pin an entity's highlight and announce it to sibling panels. */
+    const selectEntity = (id: string): void => {
+      selectedRef.current = id;
+      highlightRelations(host, id);
+      const clickedNode = graphRef.current.nodes.find((candidate) => candidate.id === id);
+      if (clickedNode === undefined) return;
+      // The JSON lookup is what sibling panels receive, independent of the
+      // hops the drill gesture expands.
+      announceSelection(graphRef.current, id);
+      clickCallbackRef.current?.(clickedNode);
+    };
+
     const onClick = (event: MouseEvent): void => {
-      const node = nodeFrom(event.target);
-      const id = node?.getAttribute('data-entity-id') ?? null;
+      const isTouchTap = lastPointerTypeRef.current === 'touch';
+      lastPointerTypeRef.current = null;
+      const id = nodeFrom(event.target)?.getAttribute('data-entity-id') ?? null;
       if (id === null) {
         // Clicking the background is the "clear the pinned selection" gesture.
         selectedRef.current = null;
+        setSelectedId(null);
+        setSelectedByTouch(false);
         clearHighlight(host);
         hoverCallbackRef.current?.(null);
         return;
       }
       if (id.startsWith(STUB_PREFIX)) return;
+
       if (id.startsWith(GROUP_PREFIX)) {
-        // Expanding a group is navigation, not entity selection.
-        selectedRef.current = null;
-        clearHighlight(host);
-        setView({ kind: 'group', prefix: id.slice(GROUP_PREFIX.length) });
-        return;
-      }
-      const clickedNode = graphRef.current.nodes.find((candidate) => candidate.id === id);
-      if (clickedNode !== undefined) {
+        // A group is view scaffolding: selecting it marks the node but does not
+        // announce an entity to sibling panels.
         selectedRef.current = id;
         highlightRelations(host, id);
-        // The JSON lookup is what sibling panels receive, independent of the
-        // hops this click expands.
-        announceSelection(graphRef.current, id);
-        clickCallbackRef.current?.(clickedNode);
+      } else {
+        if (!graphRef.current.nodes.some((candidate) => candidate.id === id)) return;
+        selectEntity(id);
       }
-      const current = viewRef.current;
-      const hops = current.kind === 'neighborhood' && current.entityId === id
-        ? current.hops + 1
-        : DEFAULT_NEIGHBORHOOD_HOPS;
-      setView({ kind: 'neighborhood', entityId: id, hops });
+      setSelectedId(id);
+      setSelectedByTouch(isTouchTap);
+
+      if (!isTouchTap) {
+        // Desktop: one click is both the selection and the navigation.
+        drillInto(id);
+        return;
+      }
+      // Touch: the first tap only selects — the drawing must not re-lay out
+      // under the finger. A second tap on the same node inside the double-tap
+      // window is the explicit drill command.
+      const last = lastTapRef.current;
+      lastTapRef.current = { id, at: event.timeStamp };
+      if (last !== null && last.id === id && event.timeStamp - last.at <= DOUBLE_TAP_MS) {
+        lastTapRef.current = null;
+        drillInto(id);
+      }
     };
 
+    host.addEventListener('pointerdown', onPointerDown);
     host.addEventListener('mouseover', onMouseOver);
     host.addEventListener('mouseout', onMouseOut);
     host.addEventListener('click', onClick);
     return () => {
+      host.removeEventListener('pointerdown', onPointerDown);
       host.removeEventListener('mouseover', onMouseOver);
       host.removeEventListener('mouseout', onMouseOut);
       host.removeEventListener('click', onClick);
     };
-  }, []);
+  }, [drillInto]);
 
   // The other direction of the cross-panel linkage: a sibling panel selects an
   // entity by its stable id (e.g. a file referenced in chat). The graph pins the
@@ -624,6 +731,8 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
       if (node === undefined) return;
       selectedRef.current = id;
+      setSelectedId(id);
+      setSelectedByTouch(false);
       const host = hostRef.current;
       if (host !== null) highlightSelection(host, id);
       const current = viewRef.current;
@@ -728,6 +837,140 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
             hops: view.hops,
           });
 
+  // The explicit drill command is offered only for a touch selection that has
+  // not already opened its own view: a desktop click navigated on its own, and
+  // a selection whose neighbourhood is on screen has nothing left to drill.
+  const selectedPrefix = selectedId !== null && selectedId.startsWith(GROUP_PREFIX)
+    ? selectedId.slice(GROUP_PREFIX.length)
+    : null;
+  const selectionAlreadyOpen = selectedId === null
+    || (selectedPrefix !== null
+      ? view.kind === 'group' && view.prefix === selectedPrefix
+      : view.kind === 'neighborhood' && view.entityId === selectedId);
+  const canDrill = selectedByTouch && selectedId !== null && !selectionAlreadyOpen;
+
+  const zoomGroupLabel = t('architecture.plantuml.zoomGroup', { defaultValue: 'Diagram zoom' });
+
+  /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
+  const zoomReadout = (
+    <span data-architecture-zoom-level className="min-w-9 text-center tabular-nums">
+      {Math.round(zoom.scale * 100)}%
+    </span>
+  );
+
+  const backButton = view.kind === 'overview'
+    ? null
+    : (
+      <button
+        type="button"
+        onClick={() => setView({ kind: 'overview' })}
+        data-architecture-back="true"
+        style={touchTargetStyle}
+        className={`${TOOLBAR_BUTTON_CLASS} text-left`}
+      >
+        {t('architecture.plantuml.back', { defaultValue: 'Back to overview' })}
+      </button>
+    );
+
+  // The explosion view draws the whole graph as one nested hierarchy; zooming it
+  // then switches visibility levels instead of re-laying it.
+  const explosionButton = view.kind === 'hierarchy'
+    ? null
+    : (
+      <button
+        type="button"
+        onClick={() => setView({ kind: 'hierarchy' })}
+        data-architecture-explosion="true"
+        style={touchTargetStyle}
+        className={`${TOOLBAR_BUTTON_CLASS} text-left`}
+      >
+        {t('architecture.plantuml.explosion', { defaultValue: 'Explosion view' })}
+      </button>
+    );
+
+  const zoomOutButton = (
+    <button
+      type="button"
+      onClick={() => zoomByStep(1 / ZOOM_STEP)}
+      aria-label={t('architecture.plantuml.zoomOut', { defaultValue: 'Zoom out' })}
+      data-architecture-zoom-out="true"
+      style={touchTargetStyle}
+      className={TOOLBAR_BUTTON_CLASS}
+    >
+      −
+    </button>
+  );
+
+  const zoomInButton = (
+    <button
+      type="button"
+      onClick={() => zoomByStep(ZOOM_STEP)}
+      aria-label={t('architecture.plantuml.zoomIn', { defaultValue: 'Zoom in' })}
+      data-architecture-zoom-in="true"
+      style={touchTargetStyle}
+      className={TOOLBAR_BUTTON_CLASS}
+    >
+      +
+    </button>
+  );
+
+  const fitButton = (
+    <button
+      type="button"
+      onClick={fitDiagram}
+      aria-pressed={zoom.mode === 'fit'}
+      data-architecture-zoom-fit="true"
+      style={touchTargetStyle}
+      className={TOOLBAR_BUTTON_CLASS}
+    >
+      {t('architecture.plantuml.zoomFit', { defaultValue: 'Fit to view' })}
+    </button>
+  );
+
+  const actualSizeButton = (
+    <button
+      type="button"
+      onClick={() => zoomToScale(1)}
+      aria-pressed={zoom.mode === 'custom' && Math.abs(zoom.scale - 1) < 1e-6}
+      data-architecture-zoom-actual="true"
+      style={touchTargetStyle}
+      className={TOOLBAR_BUTTON_CLASS}
+    >
+      {t('architecture.plantuml.zoomActual', { defaultValue: 'Actual size (100%)' })}
+    </button>
+  );
+
+  const drillButton = canDrill
+    ? (
+      <button
+        type="button"
+        onClick={drillSelected}
+        data-architecture-drill-in="true"
+        style={touchTargetStyle}
+        className={TOOLBAR_BUTTON_CLASS}
+      >
+        {t('architecture.plantuml.drillIn', { defaultValue: 'Drill in' })}
+      </button>
+    )
+    : null;
+
+  const exportButton = onExport === undefined
+    ? null
+    : (
+      <button
+        type="button"
+        onClick={() => {
+          setOverflowOpen(false);
+          onExport();
+        }}
+        data-architecture-overflow-export="true"
+        style={touchTargetStyle}
+        className={`${TOOLBAR_BUTTON_CLASS} text-left`}
+      >
+        {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
+      </button>
+    );
+
   return (
     <div
       className="flex h-full min-h-0 flex-col"
@@ -741,30 +984,10 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       data-architecture-lod-depth={lodDepth ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
+      <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-2">
-          {view.kind !== 'overview' && (
-            <button
-              type="button"
-              onClick={() => setView({ kind: 'overview' })}
-              data-architecture-back="true"
-              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              {t('architecture.plantuml.back', { defaultValue: 'Back to overview' })}
-            </button>
-          )}
-          {view.kind !== 'hierarchy' && (
-            // The explosion view draws the whole graph as one nested hierarchy;
-            // zooming it then switches visibility levels instead of re-laying it.
-            <button
-              type="button"
-              onClick={() => setView({ kind: 'hierarchy' })}
-              data-architecture-explosion="true"
-              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              {t('architecture.plantuml.explosion', { defaultValue: 'Explosion view' })}
-            </button>
-          )}
+          {!compactToolbar && backButton}
+          {!compactToolbar && explosionButton}
           <span data-architecture-view-label>{viewLabel}</span>
           {/* The semantic-zoom level currently shown. It is the diagram's own
               reading of the scale, so it changes only after the debounce. */}
@@ -778,61 +1001,64 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
             </span>
           )}
           {/* The hover READOUT is the panel's renderer-neutral bar; this is the
-              view's own gesture hint, so it never repeats that reading. */}
+              view's own gesture hint, so it never repeats that reading. On a
+              finger there is no hover, so the wording follows the input. */}
           <span>
-            {t('architecture.plantuml.hint', {
-              defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
-            })}
+            {touchUi
+              ? t('architecture.plantuml.touchHint', {
+                  defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
+                })
+              : t('architecture.plantuml.hint', {
+                  defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
+                })}
           </span>
         </span>
-        <span className="flex items-center gap-2">
-          <span
-            role="group"
-            aria-label={t('architecture.plantuml.zoomGroup', { defaultValue: 'Diagram zoom' })}
-            className="flex items-center gap-1"
-          >
-            <button
-              type="button"
-              onClick={() => zoomByStep(1 / ZOOM_STEP)}
-              aria-label={t('architecture.plantuml.zoomOut', { defaultValue: 'Zoom out' })}
-              data-architecture-zoom-out="true"
-              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              −
-            </button>
-            {/* The readout is the single place the actual scale is stated, so a
-                fit scale (e.g. 42%) and an explicit 100% are distinguishable. */}
-            <span data-architecture-zoom-level className="min-w-9 text-center tabular-nums">
-              {Math.round(zoom.scale * 100)}%
+        <span className="relative flex items-center gap-2">
+          {drillButton}
+          {compactToolbar ? (
+            <>
+              {zoomReadout}
+              <button
+                type="button"
+                aria-haspopup="true"
+                aria-expanded={overflowOpen}
+                aria-label={t('architecture.plantuml.moreActions', { defaultValue: 'More actions' })}
+                onClick={() => setOverflowOpen((open) => !open)}
+                data-architecture-overflow-toggle="true"
+                style={touchTargetStyle}
+                className={TOOLBAR_BUTTON_CLASS}
+              >
+                ⋯
+              </button>
+              {overflowOpen && (
+                // On a phone the individual buttons would either be too small to
+                // hit or too wide to fit; one menu keeps the toolbar to a single
+                // 44px target and holds every action at that size.
+                <div
+                  data-architecture-overflow-menu="true"
+                  className="absolute right-0 top-full z-20 mt-1 flex w-56 flex-col gap-1 rounded-lg border border-border bg-popover p-1 shadow-lg"
+                >
+                  {backButton}
+                  {explosionButton}
+                  <span role="group" aria-label={zoomGroupLabel} className="flex flex-col gap-1">
+                    {zoomOutButton}
+                    {zoomInButton}
+                    {fitButton}
+                    {actualSizeButton}
+                  </span>
+                  {exportButton}
+                </div>
+              )}
+            </>
+          ) : (
+            <span role="group" aria-label={zoomGroupLabel} className="flex items-center gap-1">
+              {zoomOutButton}
+              {zoomReadout}
+              {zoomInButton}
+              {fitButton}
+              {actualSizeButton}
             </span>
-            <button
-              type="button"
-              onClick={() => zoomByStep(ZOOM_STEP)}
-              aria-label={t('architecture.plantuml.zoomIn', { defaultValue: 'Zoom in' })}
-              data-architecture-zoom-in="true"
-              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              onClick={fitDiagram}
-              aria-pressed={zoom.mode === 'fit'}
-              data-architecture-zoom-fit="true"
-              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              {t('architecture.plantuml.zoomFit', { defaultValue: 'Fit to view' })}
-            </button>
-            <button
-              type="button"
-              onClick={() => zoomToScale(1)}
-              aria-pressed={zoom.mode === 'custom' && Math.abs(zoom.scale - 1) < 1e-6}
-              data-architecture-zoom-actual="true"
-              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              {t('architecture.plantuml.zoomActual', { defaultValue: 'Actual size (100%)' })}
-            </button>
-          </span>
+          )}
           <span data-architecture-visible-summary>
             {t('architecture.visibleNodes', {
               defaultValue: '{{visible}} of {{total}} nodes',
@@ -847,6 +1073,9 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
         role="img"
         aria-label={t('architecture.graphAria', { defaultValue: 'Architecture neighbourhood graph' })}
         className="min-h-0 flex-1 overflow-auto p-3"
+        // The gestures own every touch on the drawing: without this the browser
+        // would pan/zoom the page and the pinch would never reach the controller.
+        style={{ touchAction: 'none' }}
         data-testid="plantuml-host"
         data-architecture-plantuml="true"
       />

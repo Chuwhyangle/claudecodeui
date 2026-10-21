@@ -42,7 +42,10 @@
         "subpackages": "Sous-paquets",
         "entities": "Entités"
       },
-      "explosion": "Vue explosion"
+      "explosion": "Vue explosion",
+      "drillIn": "Ouvrir",
+      "moreActions": "Plus d’actions",
+      "touchHint": "Touchez un nœud pour le sélectionner ; faites glisser pour déplacer et pincez pour zoomer. Double-touchez ou choisissez « Ouvrir » pour afficher son voisinage."
     },
     "title": "Architecture",
     "noSession": "Sélectionnez une session pour voir l'architecture des fichiers qu'elle a touchés.",

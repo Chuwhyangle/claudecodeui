@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
+import { useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import type {
   ArchitectureGraphRenderer,
   ArchitectureRendererHover,
@@ -212,6 +213,13 @@ export default function ArchitecturePanel({
   renderer: Renderer = PlantUmlGraph,
 }: ArchitecturePanelProps) {
   const { t } = useTranslation();
+  // The pointer/size tier. On a narrow screen the export action moves into the
+  // graph's overflow menu (one menu, not two), and on a coarse pointer every
+  // header control grows to a 44px target.
+  const { coarsePointer, compactToolbar } = useTouchLayout();
+  const headerButtonClass = coarsePointer
+    ? 'min-h-11 min-w-11 rounded-md px-3 text-sm font-medium'
+    : 'rounded-md px-2 py-0.5 text-xs font-medium';
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch.
   const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
@@ -291,7 +299,7 @@ export default function ArchitecturePanel({
             type="button"
             aria-pressed={granularity === 'file'}
             onClick={() => setGranularity('file')}
-            className={`rounded-md px-2 py-0.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+            className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
               granularity === 'file' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -301,7 +309,7 @@ export default function ArchitecturePanel({
             type="button"
             aria-pressed={granularity === 'entity'}
             onClick={() => setGranularity('entity')}
-            className={`rounded-md px-2 py-0.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+            className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
               granularity === 'entity' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -323,7 +331,7 @@ export default function ArchitecturePanel({
               aria-pressed={hops === option}
               data-architecture-hops-option={option}
               onClick={() => setHops(option)}
-              className={`rounded-md px-2 py-0.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+              className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
                 hops === option ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -331,17 +339,24 @@ export default function ArchitecturePanel({
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => downloadMermaid(
-            granularity === 'file' ? mmd.file : mmd.entity,
-            `architecture-${granularity}.mmd`,
-          )}
-          data-architecture-export="true"
-          className="rounded-lg border border-border px-2 py-0.5 text-xs font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-        >
-          {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
-        </button>
+        {/* On a narrow screen the export action lives in the graph's overflow
+            menu instead (a second tiny button here would defeat the touch
+            target work). */}
+        {!compactToolbar && (
+          <button
+            type="button"
+            onClick={() => downloadMermaid(
+              granularity === 'file' ? mmd.file : mmd.entity,
+              `architecture-${granularity}.mmd`,
+            )}
+            data-architecture-export="true"
+            className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+              coarsePointer ? 'min-h-11 min-w-11 px-3 text-sm' : 'px-2 py-0.5 text-xs'
+            }`}
+          >
+            {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
+          </button>
+        )}
       </div>
 
       <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} />
@@ -355,6 +370,10 @@ export default function ArchitecturePanel({
                 key={`${sessionId}:${granularity}:${hops}`}
                 graph={neighbourhood}
                 onNodeHover={handleNodeHover}
+                onExport={() => downloadMermaid(
+                  granularity === 'file' ? mmd.file : mmd.entity,
+                  `architecture-${granularity}.mmd`,
+                )}
               />
             </div>
           </>

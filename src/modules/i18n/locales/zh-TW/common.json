@@ -42,7 +42,10 @@
         "subpackages": "子套件",
         "entities": "實體"
       },
-      "explosion": "爆炸圖"
+      "explosion": "爆炸圖",
+      "drillIn": "進入",
+      "moreActions": "更多操作",
+      "touchHint": "點按節點即可選取；拖曳可平移，雙指捏合可縮放。連點兩下或選擇「進入」可開啟其鄰域檢視。"
     },
     "title": "架構",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",

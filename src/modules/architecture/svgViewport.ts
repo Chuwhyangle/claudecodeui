@@ -245,3 +245,167 @@ export function createSvgViewport(container: HTMLElement): SvgViewportController
     },
   };
 }
+
+/** One touch pointer's position, in client coordinates. */
+export type SvgTouchPoint = { readonly clientX: number; readonly clientY: number };
+
+/** What a two-finger pinch reads: the span between the fingers and its midpoint. */
+export type PinchReading = {
+  readonly distance: number;
+  readonly midpoint: SvgViewportAnchor;
+};
+
+/**
+ * Read a pinch from two finger positions. The distance is what a scale factor
+ * is derived from; the midpoint is the anchor the zoom keeps fixed, so the
+ * drawing grows/shrinks around where the fingers actually are.
+ */
+export function pinchReading(a: SvgTouchPoint, b: SvgTouchPoint): PinchReading {
+  const dx = b.clientX - a.clientX;
+  const dy = b.clientY - a.clientY;
+  return {
+    distance: Math.hypot(dx, dy),
+    midpoint: { clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 },
+  };
+}
+
+/** The callbacks a touch gesture session reports to its owner. */
+export type SvgTouchGestureOptions = {
+  /** Called with the scale actually applied after a pinch; never for a pure drag. */
+  readonly onZoom: (scale: number) => void;
+};
+
+/** The handle a caller keeps to tear the gesture listeners down on unmount. */
+export type SvgTouchGestures = {
+  destroy(): void;
+};
+
+/**
+ * Add touch gestures to a scroll container that already owns an
+ * `SvgViewportController`:
+ *
+ *  · one finger drags the drawing by scrolling the container (the SVG is
+ *    larger than its box, so native scrolling is exactly the pan);
+ *  · two fingers pinch-zoom around their midpoint through the SAME controller
+ *    the toolbar and Ctrl+wheel use, so there is one zoom model, not two.
+ *
+ * The container must carry `touch-action: none` (PlantUmlGraph sets it): that
+ * is what stops the browser from panning/zooming the page itself, and it is
+ * also why the drag has to be implemented here rather than left to the
+ * browser. Mouse and pen input are deliberately ignored — the desktop
+ * wheel/scroll behaviour stays exactly as it was.
+ *
+ * A drag that turned into a pan or a pinch swallows the click the browser
+ * would otherwise fire on release, so panning never selects a node.
+ */
+export function createSvgTouchGestures(
+  container: HTMLElement,
+  controller: SvgViewportController,
+  options: SvgTouchGestureOptions,
+): SvgTouchGestures {
+  /** The fingers currently down, keyed by pointer id. */
+  const pointers = new Map<number, SvgTouchPoint>();
+  /** The previous pinch frame, `null` while fewer than two fingers are down. */
+  let pinchFrom: PinchReading | null = null;
+  /** The previous single-finger frame, `null` unless exactly one finger is down. */
+  let panFrom: SvgTouchPoint | null = null;
+  /** Set once a gesture moves enough to be a drag; the release click is then swallowed. */
+  let dragged = false;
+
+  const pointOf = (event: PointerEvent): SvgTouchPoint => ({
+    clientX: event.clientX,
+    clientY: event.clientY,
+  });
+
+  /** A pinch frame is read from the first two fingers in registration order. */
+  const currentPinch = (): PinchReading | null => {
+    const fingers = [...pointers.values()];
+    if (fingers.length < 2) return null;
+    return pinchReading(fingers[0], fingers[1]);
+  };
+
+  const onPointerDown = (event: PointerEvent): void => {
+    // Desktop mouse/pen input keeps its existing behaviour.
+    if (event.pointerType !== 'touch') return;
+    // Only the FIRST finger of a gesture resets the drag flag: putting a second
+    // finger down mid-drag must not turn the release into a click.
+    if (pointers.size === 0) dragged = false;
+    pointers.set(event.pointerId, pointOf(event));
+    if (pointers.size === 1) {
+      panFrom = pointOf(event);
+      pinchFrom = null;
+    } else {
+      pinchFrom = currentPinch();
+      panFrom = null;
+    }
+  };
+
+  const onPointerMove = (event: PointerEvent): void => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, pointOf(event));
+
+    if (pointers.size >= 2) {
+      // The browser's own gesture is suppressed by touch-action; this keeps the
+      // JS-side contract explicit (and is what a test can read as "not a page zoom").
+      event.preventDefault();
+      const previous = pinchFrom;
+      const reading = currentPinch();
+      pinchFrom = reading;
+      if (previous === null || reading === null) return;
+      if (reading.distance > 0 && previous.distance > 0) {
+        const factor = reading.distance / previous.distance;
+        if (Math.abs(factor - 1) > 1e-4) {
+          options.onZoom(controller.zoomBy(factor, reading.midpoint));
+        }
+      }
+      // Fingers moving together pan the drawing with them; the zoom above
+      // already kept the midpoint's content fixed, so this is pure translation.
+      container.scrollLeft += previous.midpoint.clientX - reading.midpoint.clientX;
+      container.scrollTop += previous.midpoint.clientY - reading.midpoint.clientY;
+      dragged = true;
+      return;
+    }
+
+    const previous = panFrom;
+    panFrom = pointOf(event);
+    if (previous === null) return;
+    const dx = previous.clientX - event.clientX;
+    const dy = previous.clientY - event.clientY;
+    if (dx !== 0 || dy !== 0) dragged = true;
+    container.scrollLeft += dx;
+    container.scrollTop += dy;
+  };
+
+  const onPointerEnd = (event: PointerEvent): void => {
+    if (!pointers.delete(event.pointerId)) return;
+    pinchFrom = currentPinch();
+    const remaining = [...pointers.values()];
+    panFrom = remaining.length === 1 ? remaining[0] : null;
+  };
+
+  const onClickCapture = (event: MouseEvent): void => {
+    if (!dragged) return;
+    dragged = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  container.addEventListener('pointerdown', onPointerDown);
+  // Move/release are watched on the window so a finger that leaves the box
+  // still pans and still ends the gesture.
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerEnd);
+  window.addEventListener('pointercancel', onPointerEnd);
+  container.addEventListener('click', onClickCapture, true);
+
+  return {
+    destroy(): void {
+      container.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerEnd);
+      window.removeEventListener('pointercancel', onPointerEnd);
+      container.removeEventListener('click', onClickCapture, true);
+      pointers.clear();
+    },
+  };
+}

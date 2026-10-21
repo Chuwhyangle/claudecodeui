@@ -67,7 +67,10 @@
         "subpackages": "Subpackages",
         "entities": "Entities"
       },
-      "explosion": "Explosion view"
+      "explosion": "Explosion view",
+      "drillIn": "Drill in",
+      "moreActions": "More actions",
+      "touchHint": "Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood."
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {

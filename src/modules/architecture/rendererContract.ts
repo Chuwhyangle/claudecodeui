@@ -72,6 +72,11 @@ export type ArchitectureRendererHover = {
  * for every renderer. `onNodeClick` reports a clicked node to whichever consumer
  * needs selection; a renderer may additionally expand the clicked node's next
  * hop locally, which is why the click never re-enters the fetch.
+ *
+ * `onExport` is optional: a renderer that collects its controls into an
+ * overflow menu on narrow screens (PlantUmlGraph does) can offer the panel's
+ * export action there too, instead of leaving a second, tiny button in the
+ * header. A renderer that does not render it simply ignores it.
  */
 export type ArchitectureRendererProps = {
   readonly graph: ArchitectureRendererGraph;
@@ -79,6 +84,7 @@ export type ArchitectureRendererProps = {
   readonly maxNodes?: number;
   readonly onNodeClick?: (node: ArchitectureRendererNode) => void;
   readonly onNodeHover?: (hover: ArchitectureRendererHover | null) => void;
+  readonly onExport?: () => void;
 };
 
 /**
