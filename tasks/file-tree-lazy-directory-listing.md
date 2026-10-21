@@ -1,7 +1,7 @@
 ---
 id: file-tree-lazy-directory-listing
 title: Files tab 懒加载：单层目录列表端点 + per-directory 截断 + .venv 提升进硬排除
-status: ready
+status: done
 labels:
   - feature
 parent: null
