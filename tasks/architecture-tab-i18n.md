@@ -1,7 +1,7 @@
 ---
 id: architecture-tab-i18n
 title: architecture tab 的 i18n 完整性：所有 locale 补 tabs.architecture 与面板文案
-status: todo
+status: ready
 labels:
   - feature
 parent: null
