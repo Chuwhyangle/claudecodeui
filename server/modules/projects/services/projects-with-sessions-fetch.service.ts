@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { hasArchguardCache } from '@/modules/architecture/index.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { quayService } from '@/modules/quay/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/index.js';
@@ -47,6 +48,12 @@ export type ProjectListItem = {
   isStarred: boolean;
   /** Tier-1 quay reading: whether the project directory carries a `.quay/config.yml`. */
   hasQuayConfig: boolean;
+  /**
+   * Tier-1 architecture reading (ADR-005 decision 1): whether the project
+   * carries `.archguard/query/manifest.json`. Mirrors {@link hasQuayConfig} — a
+   * pure path check, never a parse — and gates the architecture tab.
+   */
+  hasArchguardCache: boolean;
   sessions: SessionSummary[];
   sessionMeta: {
     hasMore: boolean;
@@ -288,6 +295,7 @@ export async function getProjectsWithSessions(
       fullPath: projectPath,
       isStarred: Boolean(row.isStarred),
       hasQuayConfig: quayService.detectQuayConfig(projectPath),
+      hasArchguardCache: hasArchguardCache(projectPath),
       sessions: sessionsPage.sessions,
       sessionMeta: {
         hasMore: sessionsPage.hasMore,
@@ -343,6 +351,7 @@ export async function getArchivedProjectsWithSessions(
       fullPath: row.project_path,
       isStarred: Boolean(row.isStarred),
       hasQuayConfig: quayService.detectQuayConfig(row.project_path),
+      hasArchguardCache: hasArchguardCache(row.project_path),
       isArchived: true,
       sessions: sessionsPage.sessions,
       sessionMeta: {

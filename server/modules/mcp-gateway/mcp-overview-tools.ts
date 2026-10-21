@@ -40,6 +40,7 @@
 
 import { z } from 'zod';
 
+import { hasArchguardCache } from '@/modules/architecture/index.js';
 import type { QuaySnapshot } from '@/modules/quay/index.js';
 
 import { MCP_ERROR_CODES, McpToolError } from './mcp-error-envelope.js';
@@ -201,6 +202,18 @@ export type McpOverviewQuayEntry =
       suite: { state: string } | null;
     });
 
+/**
+ * One project's Tier-1 architecture reading inside `overview` (AC-418 /
+ * ADR-005 decision 1). It is the same pure path check the project listing
+ * carries, reported per project so a caller can tell which projects the
+ * architecture tab can open without asking each one.
+ */
+export type McpOverviewArchguardEntry = {
+  projectId: string;
+  project: string;
+  hasArchguardCache: boolean;
+};
+
 /** The whole `overview` reading. */
 export type OverviewPayload = {
   running: McpOverviewRunning[];
@@ -208,11 +221,12 @@ export type OverviewPayload = {
   aborted: McpOverviewAborted[];
   hosts: McpOverviewHost[];
   quay: McpOverviewQuayEntry[];
+  archguard: McpOverviewArchguardEntry[];
 };
 
 /**
  * The declared output shape of `overview`: the ONE description of the reading
- * {@link buildOverview} returns, written as the same five top-level keys, so
+ * {@link buildOverview} returns, written as the same six top-level keys, so
  * `tools/list` advertises exactly what a caller reads back.
  *
  * It replaces AC-247's `{ overview: z.unknown().optional() }` placeholder, which
@@ -290,6 +304,9 @@ export const overviewOutputSchema: z.ZodRawShape = {
         suite: z.object({ state: z.string() }).nullable(),
       }),
     ]),
+  ),
+  archguard: z.array(
+    z.object({ projectId: z.string(), project: z.string(), hasArchguardCache: z.boolean() }),
   ),
 };
 
@@ -481,7 +498,16 @@ export async function buildOverview(
       : summarizeCachedQuay(cached, scopeRef);
   });
 
-  return { running, awaitingPermission, aborted, hosts, quay };
+  // The architecture tab's Tier-1 gate, read the same way `hasQuayConfig` is: a
+  // pure path check over each in-scope project's directory, never a parse and
+  // never a subprocess.
+  const archguard: McpOverviewArchguardEntry[] = scopedProjects.map((project) => ({
+    projectId: project.projectId,
+    project: project.displayName,
+    hasArchguardCache: hasArchguardCache(project.path),
+  }));
+
+  return { running, awaitingPermission, aborted, hosts, quay, archguard };
 }
 
 // --------------------------- quay_snapshot ---------------------------

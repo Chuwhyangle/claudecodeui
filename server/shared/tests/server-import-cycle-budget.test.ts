@@ -49,8 +49,9 @@
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
  *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
- *   node count = 50            (the committed `directoryManifest`, incl. `shared/ports`,
- *                               `shared/mcp-contract` and `modules/database/core`)
+ *   node count = 51            (the committed `directoryManifest`, incl. `shared/ports`,
+ *                               `shared/mcp-contract`, `modules/database/core` and
+ *                               `modules/architecture`)
  *
  * ONE READING DIVERGES FROM THE立案 NOTE, and the divergence is itself pinned (see the `(b)`
  * case). The note expects the static-only and the static+literal-dynamic readings to agree
@@ -147,9 +148,18 @@ const CYCLE_GROUPS: readonly string[][] = [
  * itself, and sits in no SCC). Its inbound edges from `modules/mcp-gateway` and
  * `modules/oauth` are the intended shape of the extraction, so the directory is
  * registered as known rather than left to red the leaf rule's inbound arm.
+ * A FOURTH ENTRY WAS ADDED, by `architecture-graph-endpoint` (2026-10-21), under
+ * the same escape hatch: `modules/architecture` holds AC-415/416/417's pure
+ * helpers plus AC-418's route/service/module wiring. The directory imports only
+ * `server/shared/**` and itself — `server/index.ts` injects the project and
+ * transcript readers, so the module reaches no sibling — and it sits in no SCC.
+ * Its mandated inbound edges (`modules/projects/services`' Tier-1 listing field
+ * and `modules/mcp-gateway`'s overview reading) are the leaf rule's sanctioned
+ * shape; without the entry they would red the inbound arm.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
+  'modules/architecture',
   'modules/assets',
   'modules/assets/services',
   'modules/auth',

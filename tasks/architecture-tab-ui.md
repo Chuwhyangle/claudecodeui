@@ -2,7 +2,7 @@
 id: architecture-tab-ui
 title: 前端 architecture tab：门控 + snap-back + 激活即 fetch + MermaidDiagram 渲染 +
   file/entity 本地切换 + provenance 诚实栏
-status: todo
+status: ready
 labels:
   - feature
 parent: null
@@ -20,8 +20,8 @@ goal_ac: AC-419
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（hasArchguardCache=true 出 `data-workspace-tab="architecture"` 且在 Quay 右；false 隐藏且 active snap 回 chat；激活即 fetch 渲染 MermaidDiagram；file/entity toggle 本地切不重新 fetch；诚实栏 generatedAt/unresolved/truncated；空种子空态）
-- [ ] `MermaidDiagram` 经 `src/modules/code-editor/index.ts` barrel 导出被 panel 引用（repo lint 深导入会红 boundaries）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（hasArchguardCache=true 出 `data-workspace-tab="architecture"` 且在 Quay 右；false 隐藏且 active snap 回 chat；激活即 fetch 渲染 MermaidDiagram；file/entity toggle 本地切不重新 fetch；诚实栏 generatedAt/unresolved/truncated；空种子空态）
+- [x] `MermaidDiagram` 经 `src/modules/code-editor/index.ts` barrel 导出被 panel 引用（repo lint 深导入会红 boundaries）
 
 ## DoD
 
@@ -37,5 +37,11 @@ goal_ac: AC-419
 - src/modules/project-workspace/WorkspaceTabs.tsx
 - src/modules/project-workspace/WorkspaceHeader.tsx
 - src/modules/project-workspace/WorkspaceMain.tsx
+- src/modules/project-workspace/WorkspaceTitle.tsx
+- src/modules/project-workspace/index.ts
+- src/modules/project-workspace/hooks/useProjectsState.ts
 - src/modules/code-editor/index.ts
+- src/modules/code-editor/markdown/MermaidDiagram.tsx
+- src/shared/api.ts
+- src/shared/types.ts
 - tasks/architecture-tab-ui.md
