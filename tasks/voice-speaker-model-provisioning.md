@@ -1,7 +1,7 @@
 ---
 id: voice-speaker-model-provisioning
 title: 声纹模型按需安装：项目内 models/speaker、不入库、不随交付物、设置页触发服务端下载
-status: todo
+status: ready
 labels:
   - feature
 parent: null
