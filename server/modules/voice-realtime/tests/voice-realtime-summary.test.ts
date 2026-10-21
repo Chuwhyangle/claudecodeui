@@ -21,6 +21,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+// The registry is entered BEFORE the rule module: its own table reads this provider module's
+// exports while it evaluates, so importing the provider first is a TDZ. The same side-effect import
+// and the same ordering rule as `voice-realtime-dashscope-transport.test.ts`.
+import '../../../../shared/asr/asrRegistry.js';
+import { PUBLIC_HOSTNAME } from '../../../../shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.js';
 import {
   DEFAULT_VOICE_REALTIME_SUMMARY_MODEL,
   createVoiceRealtimeRunEndSummarizer,
@@ -68,7 +73,17 @@ test('a 200 answer is trimmed, and the request is the B-1 voice ask', async () =
   assert.equal(requests.length, 1, 'exactly one request per run end');
 
   const request = requests[0]!;
-  assert.equal(request.url, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions');
+  // AC-140: the endpoint is COMPOSED from the rule module's export, so the host has one source.
+  assert.equal(
+    request.url,
+    `https://${PUBLIC_HOSTNAME}/compatible-mode/v1/chat/completions`,
+    'the default endpoint is built from the endpoint rule module, not from a local host literal',
+  );
+  assert.equal(
+    request.url,
+    'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    'the composed value is byte-for-byte the endpoint shipped before the single-source fix',
+  );
   assert.equal(request.init.method, 'POST');
   const headers = request.init.headers as Record<string, string>;
   assert.equal(headers.Authorization, 'Bearer sk-live-voice', 'the deployment key is the bearer');

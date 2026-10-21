@@ -28,6 +28,16 @@
  * "there is nothing to say" is the correct and unremarkable answer.
  */
 
+// The service's address has ONE shipping source: the endpoint rule module. AC-140's
+// `endpoint-rule.single-implementation` reading scans `src/`, `shared/` and `server/` for a second
+// copy of the host, so this leaf composes its endpoint from that export instead of spelling it.
+//
+// Read through the transport sibling rather than the rule module: the transport already enters the
+// registry before the rule module (the ordering that avoids the provider's TDZ) and already pays
+// the two repo-root `shared/` imports that AC-394's unresolved-internal budget counts. A pair of its
+// own here would push that ratchet reading from 19 to 21.
+import { DASHSCOPE_PUBLIC_HOSTNAME } from './voice-realtime-dashscope-transport.js';
+
 /** The environment variable that arms the side text model. Read by `server/index.ts`. */
 export const VOICE_REALTIME_SUMMARY_MODEL_ENV = 'VOICE_REALTIME_SUMMARY_MODEL';
 
@@ -38,8 +48,15 @@ export const VOICE_REALTIME_SUMMARY_MODEL_ENV = 'VOICE_REALTIME_SUMMARY_MODEL';
  */
 export const DEFAULT_VOICE_REALTIME_SUMMARY_MODEL = 'qwen-flash';
 
-/** The DashScope compatible-mode endpoint that serves the side text model. */
-const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+/**
+ * The DashScope compatible-mode endpoint that serves the side text model.
+ *
+ * Composed from the endpoint rule module's `PUBLIC_HOSTNAME` rather than spelling the host again:
+ * AC-140's `endpoint-rule.single-implementation` reading holds that the addresses this service is
+ * reached at live in exactly one shipping file (the rule module), and this leaf used to be a second
+ * one. The composed value is byte-for-byte the endpoint this leaf shipped with.
+ */
+const DEFAULT_BASE_URL = `https://${DASHSCOPE_PUBLIC_HOSTNAME}/compatible-mode/v1/chat/completions`;
 
 /**
  * The summary prompt. The old "不超过 40 字" bound was dropped with the gate it mirrored: the model

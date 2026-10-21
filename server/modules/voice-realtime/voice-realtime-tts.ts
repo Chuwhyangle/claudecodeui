@@ -28,6 +28,16 @@
  * a `tts_error` frame. A caller never receives `ok: true` with zero bytes.
  */
 
+// The service's address has ONE shipping source: the endpoint rule module. AC-140's
+// `endpoint-rule.single-implementation` reading scans `src/`, `shared/` and `server/` for a second
+// copy of the host, so this leaf composes its base URL from that export instead of spelling it.
+//
+// Read through the transport sibling rather than the rule module: the transport already enters the
+// registry before the rule module (the ordering that avoids the provider's TDZ) and already pays
+// the two repo-root `shared/` imports that AC-394's unresolved-internal budget counts. A pair of its
+// own here would push that ratchet reading from 19 to 21.
+import { DASHSCOPE_PUBLIC_HOSTNAME } from './voice-realtime-dashscope-transport.js';
+
 /**
  * The DashScope speech-synthesis model this leaf ships for the placeholder-confirmation /
  * run-end-summary text.
@@ -39,8 +49,16 @@
  */
 export const DEFAULT_VOICE_REALTIME_TTS_MODEL = 'qwen3-tts-flash';
 
-/** The DashScope host the documented HTTP TTS endpoint hangs off. Consumed by the composition root. */
-export const DEFAULT_VOICE_REALTIME_TTS_BASE_URL = 'https://dashscope.aliyuncs.com';
+/**
+ * The DashScope host the documented HTTP TTS endpoint hangs off.
+ *
+ * Composed from the endpoint rule module's `PUBLIC_HOSTNAME`, never spelled here: AC-140's
+ * `endpoint-rule.single-implementation` reading holds that the addresses this service is reached at
+ * live in exactly one shipping file, and this leaf used to be a second one. The composed value is
+ * byte-for-byte the base URL this leaf shipped with. Consumed by the composition root and by the
+ * AC-405 criterion.
+ */
+export const DEFAULT_VOICE_REALTIME_TTS_BASE_URL = `https://${DASHSCOPE_PUBLIC_HOSTNAME}`;
 
 /**
  * The environment variable a deployment names its Qwen3-TTS voice id in.

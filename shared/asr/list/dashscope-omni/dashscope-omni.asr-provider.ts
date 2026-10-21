@@ -235,6 +235,11 @@ const WORKSPACE_HOSTNAME = /^[a-z0-9-]+\.[a-z0-9-]+\.maas\.aliyuncs\.com$/;
  * service over a WebSocket (`wss://<host>/api-ws/v1/realtime`) and used to spell this hostname
  * itself — that second literal broke AC-140's `endpoint-rule.single-implementation` reading, which
  * holds that the addresses this service is reached at are spelled in one shipping file (this one).
+ * The two voice-realtime leaves added later consumers and are named here for the same reason:
+ * `server/modules/voice-realtime/voice-realtime-summary.ts` composes its compatible-mode
+ * `chat/completions` URL from this export, and
+ * `server/modules/voice-realtime/voice-realtime-tts.ts` composes its multimodal-generation base URL
+ * from it. Each used to spell the hostname itself, and each second literal reds the same reading.
  * A consumer composes its URL from THIS export; typing the hostname again anywhere under `src/`,
  * `shared/` or `server/` re-introduces the second copy and reds that reading.
  */
