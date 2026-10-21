@@ -963,16 +963,20 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page, 1280, upstream);
     const framesOnHealthy = upstream.audioFrameCount();
+    const proposedRowsOnHealthy = await page.locator(`${PANE} ${USER_ROW}`, { hasText: PROPOSED_TEXT }).count();
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesOnHealthy + 1);
-    // Wait for the delivery before leaving — the same wait the two geometry cases make above.
-    // `handleVoiceExit` hands every final caption no delivery claims to the composer as a draft
-    // (`collectUndeliveredUtterances` → `setInput`). Exiting while the confirmation is still in
-    // flight therefore puts `SEED_USER_TEXT` into the textarea, and `submitIsVoice` — which needs
-    // an EMPTY draft — goes false, so the Live Voice entry testid is not rendered at all and the
-    // click below cannot resolve. The transcript holding the proposed row is what says the
-    // caption was claimed, which is what keeps the draft empty.
-    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
+    // Wait for THIS case's delivery before leaving. `handleVoiceExit` hands every final caption no
+    // delivery claims to the composer as a draft (`collectUndeliveredUtterances` → `setInput`).
+    // Exiting while the confirmation is still in flight therefore puts `SEED_USER_TEXT` into the
+    // textarea, and `submitIsVoice` — which needs an EMPTY draft — goes false, so the Live Voice
+    // entry testid is not rendered at all and the click below cannot resolve.
+    //
+    // The row count, not the pane's text: an earlier case already put `PROPOSED_TEXT` in the
+    // transcript, so "the pane contains it" is true before this case speaks and would be vacuous.
+    await expect
+      .poll(() => page.locator(`${PANE} ${USER_ROW}`, { hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
+      .toBe(proposedRowsOnHealthy + 1);
     await leaveLiveVoice(page);
 
     // The endpoint goes unreachable: the app server's dial fails, its connect budget is
