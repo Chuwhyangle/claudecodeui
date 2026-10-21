@@ -6,6 +6,7 @@ import mime from 'mime-types';
 import multer from 'multer';
 
 import { projectsDb } from '@/modules/database/index.js';
+import { createGitFileTreePorts } from '@/modules/file-tree/file-tree.git.js';
 import { createFileTreeRouter } from '@/modules/file-tree/file-tree.routes.js';
 import { createFileTreeService } from '@/modules/file-tree/file-tree.service.js';
 import type {
@@ -33,6 +34,10 @@ function readFileSystemConcurrency(): number {
  * import Node's mutable filesystem APIs themselves.
  */
 const fileTreeFileSystem: FileTreeFileSystem = {
+  // Git-backed repository probes for the flat file index. Kept in the composition
+  // root so the service sees them as injected capabilities, never as subprocesses
+  // it spawns itself.
+  ...createGitFileTreePorts(),
   access: (candidatePath) => fsPromises.access(candidatePath),
   stat: (candidatePath) => fsPromises.stat(candidatePath),
   lstat: (candidatePath) => fsPromises.lstat(candidatePath),

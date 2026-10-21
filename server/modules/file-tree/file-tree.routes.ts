@@ -167,6 +167,10 @@ export function createFileTreeRouter(
     }));
   }, logger));
 
+  router.get('/projects/:projectId/files-index', createRouteHandler(async (request, response) => {
+    response.json(await services.listProjectFileIndex(readProjectId(request)));
+  }, logger));
+
   router.post('/projects/:projectId/files/create', createRouteHandler(async (request, response) => {
     const body = readBody(request);
     if (!body.name || !body.type) {
