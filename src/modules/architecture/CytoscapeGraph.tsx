@@ -36,50 +36,112 @@ type CytoscapeGraphProps = {
   createRenderer?: CytoscapeRendererFactory;
 };
 
-/** The stylesheet: a force-layout look plus one arrow colour per relation kind. */
+/**
+ * UML stereotype shown on an edge's label, keyed by archguard relation type.
+ *
+ * `inheritance`/`implementation` are absent: their hollow-triangle arrowhead is
+ * itself the UML marker, so a label would only repeat it. `dependency`/`call`
+ * share the same dashed open arrow (`..>`) and are told apart by these
+ * stereotypes; `composition`/`aggregation` share the hollow diamond (`o--`) and
+ * are told apart the same way.
+ */
+const RELATION_STEREOTYPE: Readonly<Record<string, string>> = {
+  dependency: '<<uses>>',
+  call: '<<call>>',
+  composition: '<<field>>',
+  aggregation: '<<inject>>',
+};
+
+/**
+ * The stylesheet: UML class-diagram semantics on a force layout.
+ *
+ * Node = a class box (round-rectangle, name inside). Edge arrows follow UML:
+ *   · dependency / call → dashed open arrow (`..>`) + stereotype;
+ *   · composition / aggregation → hollow diamond at the SOURCE, solid line
+ *     (`o--`): archguard's "field holds a reference" is aggregation, never UML
+ *     composition (`*--`), per the archguard alignment;
+ *   · inheritance → hollow triangle, solid line (`--|>`);
+ *   · implementation → hollow triangle, dashed line (`..|>`).
+ */
 const GRAPH_STYLE: NonNullable<CytoscapeOptions['style']> = [
   {
     selector: 'node',
     style: {
-      'background-color': '#64748b',
+      shape: 'roundrectangle',
+      width: 'label',
+      height: 'label',
+      padding: '6px',
       label: 'data(label)',
       color: '#e2e8f0',
       'font-size': 10,
-      'text-valign': 'bottom',
-      'text-margin-y': 4,
-      'text-outline-width': 2,
+      'text-valign': 'center',
+      'text-halign': 'center',
+      'text-outline-width': 1,
       'text-outline-color': '#0f172a',
-      width: 18,
-      height: 18,
+      'background-color': '#334155',
+      'border-width': 1,
+      'border-color': '#64748b',
     },
   },
   {
     selector: 'node:selected',
-    style: { 'background-color': '#38bdf8', 'border-width': 2, 'border-color': '#0ea5e9' },
+    style: { 'background-color': '#0c4a6e', 'border-width': 2, 'border-color': '#38bdf8' },
   },
   {
+    // Dependency (`..>`): the default relation — dashed open arrow.
     selector: 'edge',
     style: {
       width: 1.5,
       'line-color': '#64748b',
       'target-arrow-color': '#64748b',
       'target-arrow-shape': 'triangle',
+      'target-arrow-fill': 'filled',
+      'line-style': 'dashed',
       'curve-style': 'bezier',
-      'arrow-scale': 0.8,
+      'arrow-scale': 0.9,
+      label: 'data(stereotype)',
+      'font-size': 8,
+      'text-rotation': 'autorotate',
+      'text-background-color': '#0f172a',
+      'text-background-opacity': 0.8,
+      'text-background-padding': '2px',
     },
   },
   { selector: 'edge[relationType = "call"]', style: { 'line-color': '#3b82f6', 'target-arrow-color': '#3b82f6' } },
   {
-    selector: 'edge[relationType = "composition"]',
-    style: { 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b' },
+    // Aggregation (`o--`): hollow diamond at the source; solid line. archguard's
+    // "composition" is field-holding, so it shares this arm with `aggregation`.
+    selector: 'edge[relationType = "composition"], edge[relationType = "aggregation"]',
+    style: {
+      'line-style': 'solid',
+      'line-color': '#f59e0b',
+      'target-arrow-shape': 'none',
+      'source-arrow-shape': 'diamond',
+      'source-arrow-fill': 'hollow',
+      'source-arrow-color': '#f59e0b',
+    },
   },
   {
+    // Generalization (`--|>`): hollow triangle, solid line.
     selector: 'edge[relationType = "inheritance"]',
-    style: { 'line-color': '#a855f7', 'target-arrow-color': '#a855f7' },
+    style: {
+      'line-style': 'solid',
+      'line-color': '#a855f7',
+      'target-arrow-color': '#a855f7',
+      'target-arrow-shape': 'triangle',
+      'target-arrow-fill': 'hollow',
+    },
   },
   {
+    // Realization (`..|>`): hollow triangle, dashed line.
     selector: 'edge[relationType = "implementation"]',
-    style: { 'line-color': '#10b981', 'target-arrow-color': '#10b981' },
+    style: {
+      'line-style': 'dashed',
+      'line-color': '#10b981',
+      'target-arrow-color': '#10b981',
+      'target-arrow-shape': 'triangle',
+      'target-arrow-fill': 'hollow',
+    },
   },
 ];
 
@@ -168,6 +230,7 @@ export function CytoscapeGraph({
           source: edge.from,
           target: edge.to,
           relationType: edge.relationType,
+          stereotype: RELATION_STEREOTYPE[edge.relationType] ?? '',
         },
       })),
     ];
