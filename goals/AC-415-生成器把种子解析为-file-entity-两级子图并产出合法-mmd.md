@@ -1,7 +1,7 @@
 ---
 id: AC-415
 title: 生成器把种子解析为 file/entity 两级子图并产出合法 .mmd
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-049
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -31,6 +31,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-21T07:57:48.507Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
