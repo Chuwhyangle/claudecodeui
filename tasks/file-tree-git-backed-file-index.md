@@ -1,0 +1,32 @@
+---
+id: file-tree-git-backed-file-index
+title: git 对齐的文件索引端点：git ls-files + 非 git 回退 + 服务端缓存
+status: todo
+labels:
+  - feature
+parent: null
+children: []
+extra: {}
+goal_ac: AC-411
+---
+## Proposal
+
+新增 `listProjectFileIndex(projectId)` 返回扁平 `{name, path, type}[]`。git 项目用 `git ls-files --cached --others --exclude-standard`（相对→绝对映射；本仓库实测 9ms、正确排除嵌套 `.gitignore` 的 `.venv/` 与 `data/`）；非 git 项目回退现有全树 walk（硬排除 + 根 `.gitignore` + 有界上限，超界带 `truncated`）。`FileTreeFileSystem` 增两个端口 `isGitRepository` / `listGitFiles`（生产实现用 `git`，测试用假），服务端按 projectId 缓存索引。路由 `GET /api/file-tree/projects/:id/files-index`。
+
+## AC
+
+- AC-411 criterion 转绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/file-tree/tests/file-tree-index.test.ts` 退出 0。
+- 既有 `server/modules/file-tree/tests/file-tree.routes.test.ts` 仍绿。
+
+## DoD
+
+真实落地判据：`file-tree-index.test.ts` 用真实 git 临时仓库 fixture 断言索引与 `git ls-files` 路径集一致（嵌套 `.gitignore` 的 `.venv/` 缺席、根 `.gitignore` 用 `!` 捞回的 tracked 文件在场）；非 git fixture 断言回退 floor + 根 gitignore + 上限。索引端点对真实项目返回不含 `.venv` 的路径。⚠️ 新增 server 测试文件同样要同步 `scripts/test.sh` 的 unknown pin 与覆盖率地板。
+
+## Touches
+
+- server/modules/file-tree/file-tree.service.ts
+- server/modules/file-tree/file-tree.routes.ts
+- server/modules/file-tree/file-tree.module.ts
+- server/shared/types.ts
+- server/modules/file-tree/tests/file-tree-index.test.ts
+- tasks/file-tree-git-backed-file-index.md
