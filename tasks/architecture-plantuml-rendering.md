@@ -38,6 +38,7 @@ depends_on:
 - src/modules/architecture/CytoscapeGraph.tsx
 - src/modules/architecture/PlantUmlGraph.tsx
 - src/modules/architecture/archguardToPlantUml.ts
+- src/modules/architecture/rendererContract.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/i18n/locales/en/common.json
 - tasks/architecture-plantuml-rendering.md
@@ -45,7 +46,8 @@ depends_on:
 ## Evidence
 
 - 2026-10-21 续做轮：上轮 fan-in suite 的两条红（`quay-test-script.test.ts` 与 `e2e/session-lifecycle-scenario.spec.ts`）真因都在本 delta：新依赖 `elkjs` 的裸 `import 'elkjs'` 解析到 Node 入口 `lib/main.js`，其中 `require('web-worker')`（elkjs 的可选 Node 依赖，本仓库未装）被 Vite dep optimizer 静态解析后预打包失败 → dev server 起不来 → e2e 页面的 `/src/...` 动态 import 全败；`quay-test-script` 的 AC5 又嵌套跑该 e2e，于是同一根因红成两条。修法：`vite.config.js` 把 `elkjs` alias 到浏览器构建 `elkjs/lib/elk.bundled.js`（上游 `scripts/build-demo.mjs` 对同一裸 specifier 做同一 alias）；dev 与 build 共用这条 alias，首屏 chunk 不受影响（elk 仍是独立懒加载 chunk）。
-- 验证读数：`npm run typecheck` 通过；`npm run build` 通过（`dist/assets/elk-C5ILLN9r.js` 1,467.03 kB 独立 chunk）；`vitest run src/modules/architecture/tests/architectureTab.test.tsx` 16/16 pass；`playwright test e2e/session-lifecycle-scenario.spec.ts` 3 passed；`node --test server/shared/tests/quay-test-script.test.ts` 14/14 pass。
+- 合并 develop（父任务 architecture-renderer-contract 已 done）的语义并集：保留其渲染器契约（`rendererContract.ts`、面板 `renderer` prop、renderer-neutral hover bar、契约测试）；`PlantUmlGraph` 实现同一契约（`graph` + `onNodeHover`/`onNodeClick`），并作为面板默认渲染器；`CytoscapeGraph` 按本任务移除。契约里的 `maxHops`/`maxNodes` 改为可选——本渲染器用 overview/group/neighbourhood 视图取代截断，面板不再渲染截断滑杆，但契约不因此收窄。
+- 验证读数（合并后重测）：`npm run typecheck` 通过；`npm run build` 通过（`dist/assets/elk-*.js` ~1.47 MB 独立 chunk）；`vitest run src/modules/architecture/tests/architectureTab.test.tsx` 17/17 pass；`node --test server/modules/architecture/tests/architecture-routes.test.ts` 7/7 pass；`playwright test e2e/session-lifecycle-scenario.spec.ts` 3 passed；`node --test server/shared/tests/quay-test-script.test.ts` 14/14 pass。
 
 ## Blocker
 
