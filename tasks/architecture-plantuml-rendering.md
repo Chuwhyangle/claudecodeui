@@ -1,7 +1,7 @@
 ---
 id: architecture-plantuml-rendering
 title: architecture tab 换 plantuml-js 渲染：ELK 分层 + UML 原生语法 + overview/neighborhood 视图
-status: ready
+status: done
 labels:
   - feature
 parent: null
