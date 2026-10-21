@@ -417,6 +417,15 @@ export const api = {
     put(`/api/file-tree/projects/${projectId}/file`, { filePath, content }),
   getFiles: (projectId: string, options: ApiRequestOptions = {}) =>
     get(`/api/file-tree/projects/${projectId}/files${query({ respectGitignore: true })}`, options),
+  // One directory for the lazy Files-tab tree. `directoryPath` is absolute;
+  // an empty string asks for the project root. The `path` parameter is what
+  // opts the endpoint into the one-level listing, so it is always sent — a
+  // request without it gets the legacy full tree.
+  getDirectory: (projectId: string, directoryPath: string, options: ApiRequestOptions = {}) =>
+    get(
+      `/api/file-tree/projects/${projectId}/files?path=${encodeURIComponent(directoryPath)}&respectGitignore=true`,
+      options,
+    ),
   // Flat `{name, path}[]` index shared by every filename-reference surface. A git
   // project is served from `git ls-files`, everything else from a bounded walk.
   getFileIndex: (projectId: string, options: ApiRequestOptions = {}) =>

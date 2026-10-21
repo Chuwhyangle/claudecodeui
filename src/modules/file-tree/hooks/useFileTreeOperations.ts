@@ -9,6 +9,14 @@ import type { FileTreeNode,Project } from '@/shared/types';
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/;
 const RESERVED_NAMES = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
 
+// The lazy tree caches listings per directory, so a mutation must name the
+// directory it changed rather than ask for the whole tree again.
+function parentDirectoryPath(itemPath: string): string {
+  const segments = itemPath.split(/[\\/]/);
+  segments.pop();
+  return segments.join('/');
+}
+
 export type ToastMessage = {
   message: string;
   type: 'success' | 'error';
@@ -21,7 +29,8 @@ export type DeleteConfirmation = {
 
 export type UseFileTreeOperationsOptions = {
   selectedProject: Project | null;
-  onRefresh: () => void;
+  /** Called with the directory a mutation changed; no argument means "reload everything". */
+  onRefresh: (affectedPath?: string) => void;
   showToast: (message: string, type: 'success' | 'error') => void;
 };
 
@@ -136,7 +145,7 @@ export function useFileTreeOperations({
       }
 
       showToast(t('fileTree.toast.renamed', 'Renamed successfully'), 'success');
-      onRefresh();
+      onRefresh(parentDirectoryPath(renamingItem.path));
       handleCancelRename();
     } catch (err) {
       showToast((err as Error).message, 'error');
@@ -176,7 +185,7 @@ export function useFileTreeOperations({
           : t('fileTree.toast.fileDeleted', 'File deleted'),
         'success'
       );
-      onRefresh();
+      onRefresh(parentDirectoryPath(item.path));
       handleCancelDelete();
     } catch (err) {
       showToast((err as Error).message, 'error');
@@ -228,7 +237,7 @@ export function useFileTreeOperations({
           : t('fileTree.toast.folderCreated', 'Folder created successfully'),
         'success'
       );
-      onRefresh();
+      onRefresh(newItemParent);
       handleCancelCreate();
     } catch (err) {
       showToast((err as Error).message, 'error');

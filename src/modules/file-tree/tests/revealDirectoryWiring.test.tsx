@@ -14,18 +14,30 @@ import type { Project } from '@/shared/types';
 
 const ROOT = '/home/odoo/workspace/personal';
 
-const tree = [
-  {
-    type: 'directory',
-    name: 'decisions',
-    path: `${ROOT}/decisions`,
-    children: [{ type: 'file', name: '0001-first.md', path: `${ROOT}/decisions/0001-first.md` }],
+// The Files tab reads one directory at a time: the root listing carries the
+// folder (marked expandable), and the folder's own listing is a second request
+// made only because the reveal asks for it.
+const listings: Record<string, unknown> = {
+  '': {
+    path: ROOT,
+    entries: [
+      { type: 'directory', name: 'decisions', path: `${ROOT}/decisions`, hasChildren: true },
+    ],
+    truncated: false,
   },
-];
+  [`${ROOT}/decisions`]: {
+    path: `${ROOT}/decisions`,
+    entries: [{ type: 'file', name: '0001-first.md', path: `${ROOT}/decisions/0001-first.md` }],
+    truncated: false,
+  },
+};
 
 vi.mock('@/shared/api', () => ({
   api: {
-    getFiles: async () => ({ ok: true, json: async () => tree }),
+    getDirectory: async (_projectId: string, directoryPath: string) => ({
+      ok: true,
+      json: async () => listings[directoryPath] ?? { path: directoryPath, entries: [], truncated: false },
+    }),
   },
 }));
 
