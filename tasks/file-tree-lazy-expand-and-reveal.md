@@ -1,7 +1,7 @@
 ---
 id: file-tree-lazy-expand-and-reveal
 title: 前端懒加载 FileTree 数据流：展开按 path 拉取 + reveal 逐层载入 + 按 path 失效缓存
-status: ready
+status: done
 labels:
   - feature
   - ux

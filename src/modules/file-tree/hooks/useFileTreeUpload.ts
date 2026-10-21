@@ -9,7 +9,8 @@ import { MAX_FILE_UPLOAD_SIZE_BYTES, MAX_FILE_UPLOAD_SIZE_LABEL } from '@/shared
 
 type UseFileTreeUploadOptions = {
   selectedProject: Project | null;
-  onRefresh: () => void;
+  /** Called with the directory the upload landed in; no argument means "reload everything". */
+  onRefresh: (affectedPath?: string) => void;
   showToast: (message: string, type: 'success' | 'error') => void;
 };
 
@@ -347,7 +348,7 @@ export const useFileTreeUpload = ({
 
         showToast(formatUploadSuccessMessage(uploadedCount, requestedFileCount), 'success');
         scheduleProgressClear(COMPLETE_PROGRESS_CLEAR_DELAY_MS);
-        onRefresh();
+        onRefresh(targetPath);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Upload failed';
         console.error('Upload error:', err);

@@ -1,6 +1,6 @@
 import type { DragEvent, ReactNode, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, Folder, FolderOpen, Upload } from 'lucide-react';
+import { ChevronRight, Folder, FolderOpen, Loader2, Upload } from 'lucide-react';
 
 import { cn } from '@/shared/utils';
 import type { FileTreeNode as FileTreeNodeType, FileTreeViewMode } from '@/shared/types';
@@ -12,6 +12,8 @@ type FileTreeNodeProps = {
   level: number;
   viewMode: FileTreeViewMode;
   expandedDirs: Set<string>;
+  /** Directories whose lazy listing is in flight; an open one shows a placeholder. */
+  loadingPaths?: Set<string>;
   onItemClick: (item: FileTreeNodeType) => void;
   renderFileIcon: (filename: string) => ReactNode;
   formatFileSize: (bytes?: number) => string;
@@ -40,6 +42,8 @@ type FileTreeNodeProps = {
 type TreeItemIconProps = {
   item: FileTreeNodeType;
   isOpen: boolean;
+  canExpand: boolean;
+  isLoading: boolean;
   renderFileIcon: (filename: string) => ReactNode;
 };
 
@@ -50,17 +54,23 @@ function getParentDirectoryPath(itemPath: string) {
   return segments.join('/');
 }
 
-function TreeItemIcon({ item, isOpen, renderFileIcon }: TreeItemIconProps) {
+function TreeItemIcon({ item, isOpen, canExpand, isLoading, renderFileIcon }: TreeItemIconProps) {
   if (item.type === 'directory') {
     return (
       <span className="flex flex-shrink-0 items-center gap-0.5">
-        <ChevronRight
-          className={cn(
-            'w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-150',
-            isOpen && 'rotate-90',
-          )}
-        />
-        {isOpen ? (
+        {canExpand ? (
+          <ChevronRight
+            className={cn(
+              'w-3.5 h-3.5 text-muted-foreground/70 transition-transform duration-150',
+              isOpen && 'rotate-90',
+            )}
+          />
+        ) : (
+          <span className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-muted-foreground" />
+        ) : isOpen ? (
           <FolderOpen className="h-4 w-4 flex-shrink-0 text-blue-500" />
         ) : (
           <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
@@ -78,6 +88,7 @@ export default function FileTreeNode({
   level,
   viewMode,
   expandedDirs,
+  loadingPaths,
   onItemClick,
   renderFileIcon,
   formatFileSize,
@@ -103,7 +114,12 @@ export default function FileTreeNode({
   const { t } = useTranslation();
   const isDirectory = item.type === 'directory';
   const isOpen = isDirectory && expandedDirs.has(item.path);
-  const hasChildren = Boolean(isDirectory && item.children && item.children.length > 0);
+  // `children` is present only once this directory's listing has been read.
+  // Until then the server's optimistic `hasChildren` is what draws the arrow.
+  const childrenLoaded = isDirectory && Array.isArray(item.children);
+  const hasChildren = Boolean(childrenLoaded && item.children && item.children.length > 0);
+  const canExpand = Boolean(isDirectory && (item.hasChildren === true || hasChildren));
+  const isLoading = isDirectory && isOpen && !childrenLoaded && Boolean(loadingPaths?.has(item.path));
   const isRenaming = renamingItem?.path === item.path;
   const dragTargetPath = isDirectory ? item.path : getParentDirectoryPath(item.path);
   const isDropTarget = isDirectory && dropTarget === item.path;
@@ -134,7 +150,13 @@ export default function FileTreeNode({
         style={{ paddingLeft: `${level * 16 + 4}px` }}
         onClick={(e) => e.stopPropagation()}
       >
-        <TreeItemIcon item={item} isOpen={isOpen} renderFileIcon={renderFileIcon} />
+        <TreeItemIcon
+          item={item}
+          isOpen={isOpen}
+          canExpand={canExpand}
+          isLoading={isLoading}
+          renderFileIcon={renderFileIcon}
+        />
         <Input
           ref={renameInputRef}
           type="text"
@@ -186,7 +208,13 @@ export default function FileTreeNode({
       {viewMode === 'detailed' ? (
         <>
           <div className="col-span-5 flex min-w-0 items-center gap-1.5">
-            <TreeItemIcon item={item} isOpen={isOpen} renderFileIcon={renderFileIcon} />
+            <TreeItemIcon
+              item={item}
+              isOpen={isOpen}
+              canExpand={canExpand}
+              isLoading={isLoading}
+              renderFileIcon={renderFileIcon}
+            />
             <span className={nameClassName}>{item.name}</span>
           </div>
           <div className="col-span-2 text-sm tabular-nums text-muted-foreground">
@@ -198,7 +226,13 @@ export default function FileTreeNode({
       ) : viewMode === 'compact' ? (
         <>
           <div className="flex min-w-0 items-center gap-1.5">
-            <TreeItemIcon item={item} isOpen={isOpen} renderFileIcon={renderFileIcon} />
+            <TreeItemIcon
+              item={item}
+              isOpen={isOpen}
+              canExpand={canExpand}
+              isLoading={isLoading}
+              renderFileIcon={renderFileIcon}
+            />
             <span className={nameClassName}>{item.name}</span>
           </div>
           <div className="ml-2 flex flex-shrink-0 items-center gap-3 text-sm text-muted-foreground">
@@ -212,7 +246,13 @@ export default function FileTreeNode({
         </>
       ) : (
         <>
-          <TreeItemIcon item={item} isOpen={isOpen} renderFileIcon={renderFileIcon} />
+          <TreeItemIcon
+            item={item}
+            isOpen={isOpen}
+            canExpand={canExpand}
+            isLoading={isLoading}
+            renderFileIcon={renderFileIcon}
+          />
           <span className={nameClassName}>{item.name}</span>
         </>
       )}
@@ -243,7 +283,17 @@ export default function FileTreeNode({
         rowContent
       )}
 
-      {isDirectory && isOpen && hasChildren && (
+      {isDirectory && isOpen && isLoading && (
+        <div
+          className="flex items-center gap-1.5 py-[3px] pr-2 text-[13px] text-muted-foreground"
+          style={{ paddingLeft: `${(level + 1) * 16 + 4}px` }}
+        >
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          <span>{t('fileTree.loading', 'Loading…')}</span>
+        </div>
+      )}
+
+      {isDirectory && isOpen && !isLoading && hasChildren && (
         <div className="relative">
           <span
             className="absolute bottom-0 top-0 border-l border-border/40"
@@ -257,6 +307,7 @@ export default function FileTreeNode({
               level={level + 1}
               viewMode={viewMode}
               expandedDirs={expandedDirs}
+              loadingPaths={loadingPaths}
               onItemClick={onItemClick}
               renderFileIcon={renderFileIcon}
               formatFileSize={formatFileSize}

@@ -13,7 +13,6 @@ import { useFileTreeViewMode } from '@/modules/file-tree/hooks/useFileTreeViewMo
 import { useFileTreeUpload } from '@/modules/file-tree/hooks/useFileTreeUpload';
 import type { DirectoryRevealRequest, FileTreeImageSelection, FileTreeNode,Project } from '@/shared/types';
 import { formatFileSize, formatRelativeTime, isImageFile } from '@/modules/file-tree/utils/fileTreeUtils';
-import { directoryRevealPaths } from '@/modules/file-tree/utils/revealDirectory';
 import { ScrollArea, Input } from '@/shared/ui';
 import FileTreeBody from '@/modules/file-tree/FileTreeBody';
 import FileTreeDetailedColumns from '@/modules/file-tree/FileTreeDetailedColumns';
@@ -52,7 +51,16 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
     }
   }, [toast]);
 
-  const { files, loading, error, refreshFiles } = useFileTreeData(selectedProject);
+  const {
+    files,
+    loading,
+    error,
+    loadingPaths,
+    loadDirectory,
+    revealAncestors,
+    invalidateDirectory,
+    refreshFiles,
+  } = useFileTreeData(selectedProject);
   const { viewMode, changeViewMode } = useFileTreeViewMode();
   const { expandedDirs, toggleDirectory, expandDirectories, collapseAll } = useExpandedDirectories();
   const { searchQuery, setSearchQuery, filteredFiles } = useFileTreeSearch({
@@ -64,26 +72,50 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
   // the folders open again over a collapse the user has since made.
   const revealedRef = useRef<DirectoryRevealRequest | null>(null);
 
+  // A request served for one project must not suppress the same request in
+  // another: the paths it expanded belong to the previous tree.
+  useEffect(() => {
+    revealedRef.current = null;
+  }, [selectedProject?.projectId]);
+
   // Expand every ancestor between the project root and the requested folder.
-  // A request that arrives before the tree finds nothing to expand and is
-  // retried when `files` lands.
+  // The lazy tree only holds what it was asked for, so the missing layers are
+  // loaded one at a time, root first, before the folders are opened.
   useEffect(() => {
     const projectRoot = selectedProject?.path || selectedProject?.fullPath;
     if (!revealDirectory || !projectRoot || revealedRef.current === revealDirectory) {
       return;
     }
-    const paths = directoryRevealPaths(files, projectRoot, revealDirectory.path);
-    if (paths.length === 0) {
-      return;
-    }
     revealedRef.current = revealDirectory;
-    expandDirectories(paths);
-  }, [revealDirectory, selectedProject?.path, selectedProject?.fullPath, expandDirectories, files]);
+
+    let cancelled = false;
+    void revealAncestors(revealDirectory.path).then((paths) => {
+      if (cancelled || paths.length === 0) return;
+      expandDirectories(paths);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [revealDirectory, selectedProject?.path, selectedProject?.fullPath, expandDirectories, revealAncestors]);
+
+  // A mutation invalidates the directory it happened in, not the whole tree:
+  // the rest of the cached listings are still accurate.
+  const refreshDirectory = useCallback(
+    (affectedPath?: string) => {
+      if (affectedPath === undefined) {
+        refreshFiles();
+        return;
+      }
+      invalidateDirectory(affectedPath);
+    },
+    [invalidateDirectory, refreshFiles],
+  );
 
   // File operations
   const operations = useFileTreeOperations({
     selectedProject,
-    onRefresh: refreshFiles,
+    onRefresh: refreshDirectory,
     showToast,
   });
 
@@ -91,7 +123,7 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
   // so the remaining plain values are not treated as render-time ref reads.
   const { treeRef, ...upload } = useFileTreeUpload({
     selectedProject,
-    onRefresh: refreshFiles,
+    onRefresh: refreshDirectory,
     showToast,
   });
   const operationLoading = operations.operationLoading || upload.operationLoading;
@@ -143,7 +175,10 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
   const handleItemClick = useCallback(
     (item: FileTreeNode) => {
       if (item.type === 'directory') {
+        const isExpanding = !expandedDirs.has(item.path);
         toggleDirectory(item.path);
+        // Expanding is what asks for the listing; a collapse keeps the cache.
+        if (isExpanding) void loadDirectory(item.path);
         return;
       }
 
@@ -161,7 +196,7 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
 
       onFileOpen?.(item.path);
     },
-    [onFileOpen, selectedProject, toggleDirectory],
+    [expandedDirs, loadDirectory, onFileOpen, selectedProject, toggleDirectory],
   );
 
   const formatRelativeTimeLabel = useCallback(
@@ -269,6 +304,7 @@ export default function FileTree({ selectedProject, onFileOpen, revealDirectory 
           searchQuery={searchQuery}
           viewMode={viewMode}
           expandedDirs={expandedDirs}
+          loadingPaths={loadingPaths}
           onItemClick={handleItemClick}
           renderFileIcon={renderFileIcon}
           formatFileSize={formatFileSize}
