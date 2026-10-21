@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-seed-extraction-from-transcript
 title: 架构图种子提取：transcript → 文件种子 + 标识符种子（AC-416）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
