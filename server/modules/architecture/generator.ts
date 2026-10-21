@@ -35,6 +35,15 @@
  * `idToFile` is not a node this index can place, so it is dropped rather than
  * emitted with a made-up file.
  */
+/** The relation types ArchGuard records for a scope. */
+export type RelationType = 'dependency' | 'call' | 'composition' | 'inheritance' | 'implementation';
+
+/** Type guard for a string key read from a scope index's `relationsByType`. */
+export function isRelationType(value: string): value is RelationType {
+  return value === 'dependency' || value === 'call' || value === 'composition'
+    || value === 'inheritance' || value === 'implementation';
+}
+
 export type ArchIndex = {
   readonly fileToIds: Readonly<Record<string, readonly string[]>>;
   readonly nameToIds: Readonly<Record<string, readonly string[]>>;
@@ -42,6 +51,16 @@ export type ArchIndex = {
   readonly dependents: Readonly<Record<string, readonly string[]>>;
   readonly idToFile: Readonly<Record<string, string>>;
   readonly idToName: Readonly<Record<string, string>>;
+  /**
+   * Typed internal edges as `[from, to]` pairs, keyed by relation type.
+   *
+   * ArchGuard keeps here only edges whose BOTH endpoints resolve to project
+   * entities — an inheritance edge to an external base class (e.g.
+   * `ProcessorBase`) is dropped — so the key set is NOT the full type set of
+   * `arch.json`, and `inheritance`/`implementation` are often absent. Optional:
+   * a scope index may omit the field entirely.
+   */
+  readonly relationsByType?: Readonly<Partial<Record<RelationType, readonly (readonly [string, string])[]>>>;
 };
 
 /**
@@ -118,10 +137,11 @@ function compareIds(a: string, b: string): number {
   return 0;
 }
 
-/** A directed edge between two raw (uncleaned) entity or file ids. */
+/** A directed, relation-typed edge between two raw (uncleaned) entity or file ids. */
 type RenderEdge = {
   from: string;
   to: string;
+  type: RelationType;
 };
 
 /**
@@ -164,6 +184,20 @@ function mermaidLabel(text: string): string {
 }
 
 /**
+ * The Mermaid arrow for a relation type.
+ *
+ * `dependency` is the default solid arrow; `call` is dashed, `composition` is
+ * thick. `inheritance`/`implementation` fall back to the solid arrow for now —
+ * flowchart has no UML-generalisation arrow, and these two types do not reach
+ * `relationsByType` until ArchGuard exposes external targets.
+ */
+function edgeArrow(type: RelationType): string {
+  if (type === 'call') return '-.->';
+  if (type === 'composition') return '==>';
+  return '-->';
+}
+
+/**
  * Emit one Mermaid flowchart document.
  *
  * `nodes` and `edges` are already budgeted and filtered by the caller; this
@@ -172,7 +206,7 @@ function mermaidLabel(text: string): string {
  * Every edge's endpoints are guaranteed to be defined because the caller passes
  * only edges whose two ends survived the budget.
  */
-function emitMermaid(nodes: readonly { rawId: string; label: string }[], edges: readonly { from: string; to: string }[]): string {
+function emitMermaid(nodes: readonly { rawId: string; label: string }[], edges: readonly RenderEdge[]): string {
   const used = new Set<string>();
   const idByRaw = new Map<string, string>();
   const lines: string[] = [INIT_DIRECTIVE, FLOWCHART_DECLARATION];
@@ -187,7 +221,7 @@ function emitMermaid(nodes: readonly { rawId: string; label: string }[], edges: 
     const to = idByRaw.get(edge.to);
     // The caller filters edges to retained nodes; this is a defensive no-op.
     if (from === undefined || to === undefined) continue;
-    lines.push(`  ${from} --> ${to}`);
+    lines.push(`  ${from} ${edgeArrow(edge.type)} ${to}`);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -301,16 +335,38 @@ function collectEntityEdges(index: ArchIndex, retained: readonly string[]): Rend
   const nodeSet = new Set(retained);
   const seen = new Set<string>();
   const edges: RenderEdge[] = [];
-  for (const from of retained) {
-    for (const to of index.dependencies[from] ?? []) {
-      if (!nodeSet.has(to)) continue;
-      const key = `${from}\u0000${to}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      edges.push({ from, to });
+
+  if (index.relationsByType === undefined || Object.keys(index.relationsByType).length === 0) {
+    // A scope index that predates `relationsByType` (or carries no typed
+    // edges): derive the edge set from the merged adjacency and type every
+    // edge `dependency` (the old behaviour).
+    for (const from of retained) {
+      for (const to of index.dependencies[from] ?? []) {
+        if (!nodeSet.has(to) || from === to) continue;
+        const key = `${from}\u0000${to}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        edges.push({ from, to, type: 'dependency' });
+      }
+    }
+  } else {
+    for (const [rawType, pairs] of Object.entries(index.relationsByType)) {
+      if (!isRelationType(rawType)) continue;
+      for (const [from, to] of pairs) {
+        if (!nodeSet.has(from) || !nodeSet.has(to)) continue;
+        // A self-loop is an intra-entity method call, not a graph edge worth a
+        // class-level arrow; it would only add noise (most `call` edges are
+        // `X -> X`).
+        if (from === to) continue;
+        const key = `${from}\u0000${to}\u0000${rawType}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        edges.push({ from, to, type: rawType });
+      }
     }
   }
-  return edges.sort((a, b) => compareIds(a.from, b.from) || compareIds(a.to, b.to));
+
+  return edges.sort((a, b) => compareIds(a.from, b.from) || compareIds(a.to, b.to) || compareIds(a.type, b.type));
 }
 
 /**
@@ -327,12 +383,14 @@ function collectFileEdges(index: ArchIndex, entityEdges: readonly RenderEdge[]):
     const from = index.idToFile[edge.from];
     const to = index.idToFile[edge.to];
     if (from === undefined || to === undefined || from === to) continue;
-    const key = `${from}\u0000${to}`;
+    // Keyed by (from, to, type): one file pair may be linked by more than one
+    // relation type, and each deserves its own arrow.
+    const key = `${from}\u0000${to}\u0000${edge.type}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    edges.push({ from, to });
+    edges.push({ from, to, type: edge.type });
   }
-  return edges.sort((a, b) => compareIds(a.from, b.from) || compareIds(a.to, b.to));
+  return edges.sort((a, b) => compareIds(a.from, b.from) || compareIds(a.to, b.to) || compareIds(a.type, b.type));
 }
 
 /** Render an entity label: the identifier it indexes, falling back to the raw id. */
@@ -453,7 +511,7 @@ export function validateMermaid(mmd: string): string[] {
       continue;
     }
 
-    const edge = /^([A-Za-z0-9_]+)\s*-->\s*([A-Za-z0-9_]+)$/.exec(line);
+    const edge = /^([A-Za-z0-9_]+)\s*(?:-->|-\.->|==>)\s*([A-Za-z0-9_]+)$/.exec(line);
     if (edge !== null) {
       edges.push({ from: edge[1], to: edge[2], line: index + 1 });
       continue;

@@ -392,3 +392,31 @@ test('AC-415 假形态 B：边引用未定义节点 ⇒ 合法性断言红', () 
     `the problem list must name the undefined node ${targetNode.id}`,
   );
 });
+
+test('AC-415 带类型边：call/composition 选不同箭头，自环被丢弃', () => {
+  const index: ArchIndex = {
+    fileToIds: { 'a.ts': ['a.ts.A', 'a.ts.B'], 'b.ts': ['b.ts.C'] },
+    nameToIds: { A: ['a.ts.A'], B: ['a.ts.B'], C: ['b.ts.C'] },
+    dependencies: { 'a.ts.A': ['b.ts.C'], 'a.ts.B': ['b.ts.C'], 'b.ts.C': [] },
+    dependents: { 'b.ts.C': ['a.ts.A', 'a.ts.B'], 'a.ts.A': [], 'a.ts.B': [] },
+    idToFile: { 'a.ts.A': 'a.ts', 'a.ts.B': 'a.ts', 'b.ts.C': 'b.ts' },
+    idToName: { 'a.ts.A': 'A', 'a.ts.B': 'B', 'b.ts.C': 'C' },
+    relationsByType: {
+      dependency: [['a.ts.A', 'b.ts.C']],
+      // The second `call` pair is an entity self-loop: an intra-entity method
+      // call, which the generator drops rather than drawing `A -.-> A`.
+      call: [['a.ts.B', 'b.ts.C'], ['a.ts.A', 'a.ts.A']],
+      composition: [['a.ts.B', 'b.ts.C']],
+    },
+  };
+
+  const result = generateGraph(index, { files: [], identifiers: ['A', 'B', 'C'] }, { hops: 0, maxNodes: 50 });
+  const entity = result.mmd.entity;
+
+  assert.ok(entity.includes('a_ts_A --> b_ts_C'), 'dependency edge must use -->');
+  assert.ok(entity.includes('a_ts_B -.-> b_ts_C'), 'call edge must use -.->');
+  assert.ok(entity.includes('a_ts_B ==> b_ts_C'), 'composition edge must use ==>');
+  assert.ok(!entity.includes('a_ts_A -.-> a_ts_A'), 'an entity self-loop must be dropped');
+  assert.deepEqual(validateMermaid(entity), [], 'the typed document must validate cleanly');
+  assert.strictEqual(result.stats.entityEdges, 3, 'dependency + call + composition = 3 edges, self-loop dropped');
+});

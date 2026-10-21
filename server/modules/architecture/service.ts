@@ -36,9 +36,11 @@ import {
 } from './cache.js';
 import {
   generateGraph,
+  isRelationType,
   type ArchIndex,
   type GenerateGraphResult,
   type GraphStats,
+  type RelationType,
   type UnresolvedSeeds,
 } from './generator.js';
 import { extractSeeds } from './seed-extraction.js';
@@ -301,11 +303,35 @@ type ParsedScopeIndex = ArchIndex & {
 };
 
 /**
+ * Parse the typed-edge map a scope index may carry.
+ *
+ * Tolerant by design: an absent field, a non-record value, an unknown type key
+ * or a malformed pair are all dropped. The generator treats `relationsByType`
+ * as optional provenance for edge styling, never as the adjacency — BFS still
+ * runs on `dependencies`/`dependents`.
+ */
+function parseRelationsByType(
+  value: unknown,
+): Readonly<Partial<Record<RelationType, readonly (readonly [string, string])[]>>> {
+  if (!isRecord(value)) return {};
+  const out: Partial<Record<RelationType, readonly (readonly [string, string])[]>> = {};
+  for (const [key, pairs] of Object.entries(value)) {
+    if (!isRelationType(key) || !Array.isArray(pairs)) continue;
+    const typed = pairs.filter(
+      (pair): pair is [string, string] =>
+        Array.isArray(pair) && pair.length === 2 && typeof pair[0] === 'string' && typeof pair[1] === 'string',
+    );
+    if (typed.length > 0) out[key] = typed;
+  }
+  return out;
+}
+
+/**
  * Parse one `.archguard/query/<scope>/arch-index.json`.
  *
- * Only the six fields the AC-415 generator reads are validated. Anything else
- * in the file (`relationsByType`, `cycles`, ...) is irrelevant here and is
- * dropped, which is also what keeps the merge shape small for the generator.
+ * Only the seven fields the AC-415 generator reads are validated. Anything
+ * else in the file (`cycles`, ...) is irrelevant here and is dropped, which is
+ * also what keeps the merge shape small for the generator.
  */
 async function readScopeIndex(
   projectPath: string,
@@ -347,6 +373,7 @@ async function readScopeIndex(
     dependents: requireField(isStringArrayRecord(parsed.dependents) ? parsed.dependents : undefined, 'dependents', scopeKey),
     idToFile: requireField(isStringRecord(parsed.idToFile) ? parsed.idToFile : undefined, 'idToFile', scopeKey),
     idToName: requireField(isStringRecord(parsed.idToName) ? parsed.idToName : undefined, 'idToName', scopeKey),
+    relationsByType: parseRelationsByType(parsed.relationsByType),
   };
 }
 
@@ -388,6 +415,7 @@ function mergeScopeIndexes(indexes: readonly ParsedScopeIndex[]): ArchIndex {
   const dependents: Record<string, string[]> = {};
   const idToFile: Record<string, string> = {};
   const idToName: Record<string, string> = {};
+  const relationsByType: Partial<Record<RelationType, [string, string][]>> = {};
 
   for (const index of indexes) {
     const mapFile = (file: string): string => mergeFileKey(index.sourcePrefix, file);
@@ -410,9 +438,14 @@ function mergeScopeIndexes(indexes: readonly ParsedScopeIndex[]): ArchIndex {
     for (const [to, neighbours] of Object.entries(index.dependents)) {
       dependents[mapId(to)] = neighbours.map(mapId);
     }
+    for (const [type, pairs] of Object.entries(index.relationsByType ?? {})) {
+      if (!isRelationType(type)) continue;
+      const bucket = (relationsByType[type] ??= []);
+      for (const [from, to] of pairs) bucket.push([mapId(from), mapId(to)]);
+    }
   }
 
-  return { fileToIds, nameToIds, dependencies, dependents, idToFile, idToName };
+  return { fileToIds, nameToIds, dependencies, dependents, idToFile, idToName, relationsByType };
 }
 
 /**
