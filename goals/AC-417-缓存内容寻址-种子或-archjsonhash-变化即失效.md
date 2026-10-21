@@ -1,7 +1,7 @@
 ---
 id: AC-417
 title: 缓存内容寻址，种子或 archJsonHash 变化即失效
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-049
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -19,6 +19,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-21T08:09:45.895Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
