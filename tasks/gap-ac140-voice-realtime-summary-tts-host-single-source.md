@@ -66,11 +66,11 @@ goal_ac: AC-140
 
 ## AC
 
-- [ ] AC1 判据回绿：`node scripts/asr-proxy-only-ssrf-check.mjs` 退出 **0**，输出同时含 `reading=endpoint-rule.host-bearers value=1` 与 `reading=endpoint-rule.single-implementation verdict=ok`，且无 `FAIL ` 行。
-- [ ] AC2 单一来源（与判据 `findHostBearers` 同口径）：`grep -rln "dashscope\.aliyuncs\.com" src/ shared/ server/ | grep -vE '/tests/|\.test\.tsx?$'` 恰好输出一行且等于 `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`；`grep -c "dashscope\.aliyuncs\.com" server/modules/voice-realtime/voice-realtime-summary.ts server/modules/voice-realtime/voice-realtime-tts.ts` 对两个文件均为 0。
-- [ ] AC3 回归守卫可执行：`server/modules/voice-realtime/tests/voice-realtime-tts.test.ts` 断言 `DEFAULT_VOICE_REALTIME_TTS_BASE_URL` 等于 `` `https://${PUBLIC_HOSTNAME}` ``；`server/modules/voice-realtime/tests/voice-realtime-summary.test.ts` 断言默认请求 URL 等于 `` `https://${PUBLIC_HOSTNAME}/compatible-mode/v1/chat/completions` ``（两处 `PUBLIC_HOSTNAME` 均从规则模块 import）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts.test.ts server/modules/voice-realtime/tests/voice-realtime-summary.test.ts` 退出 0。
-- [ ] AC4 对外行为不变：两个模块拼出的 URL 逐字等于修复前的值 —— TTS 基址 `https://dashscope.aliyuncs.com`，summary 端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`；tts 测试既有的 `requests[0]!.url` 断言与 summary 测试既有的默认请求断言保持绿。
-- [ ] AC5 取假形态：在临时树里把 `voice-realtime-summary.ts`（或 `voice-realtime-tts.ts`）改回主机字面量后，`node scripts/asr-proxy-only-ssrf-check.mjs` 退出 **1**、`reading=endpoint-rule.host-bearers value=3`、`reading=endpoint-rule.single-implementation verdict=FAIL`；未变异的对照先绿。记录命令与红 token。
+- [x] AC1 判据回绿：`node scripts/asr-proxy-only-ssrf-check.mjs` 退出 **0**，输出同时含 `reading=endpoint-rule.host-bearers value=1` 与 `reading=endpoint-rule.single-implementation verdict=ok`，且无 `FAIL ` 行。
+- [x] AC2 单一来源（与判据 `findHostBearers` 同口径）：`grep -rln "dashscope\.aliyuncs\.com" src/ shared/ server/ | grep -vE '/tests/|\.test\.tsx?$'` 恰好输出一行且等于 `shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts`；`grep -c "dashscope\.aliyuncs\.com" server/modules/voice-realtime/voice-realtime-summary.ts server/modules/voice-realtime/voice-realtime-tts.ts` 对两个文件均为 0。
+- [x] AC3 回归守卫可执行：`server/modules/voice-realtime/tests/voice-realtime-tts.test.ts` 断言 `DEFAULT_VOICE_REALTIME_TTS_BASE_URL` 等于 `` `https://${PUBLIC_HOSTNAME}` ``；`server/modules/voice-realtime/tests/voice-realtime-summary.test.ts` 断言默认请求 URL 等于 `` `https://${PUBLIC_HOSTNAME}/compatible-mode/v1/chat/completions` ``（两处 `PUBLIC_HOSTNAME` 均从规则模块 import）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-tts.test.ts server/modules/voice-realtime/tests/voice-realtime-summary.test.ts` 退出 0。
+- [x] AC4 对外行为不变：两个模块拼出的 URL 逐字等于修复前的值 —— TTS 基址 `https://dashscope.aliyuncs.com`，summary 端点 `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`；tts 测试既有的 `requests[0]!.url` 断言与 summary 测试既有的默认请求断言保持绿。
+- [x] AC5 取假形态：在临时树里把 `voice-realtime-summary.ts`（或 `voice-realtime-tts.ts`）改回主机字面量后，`node scripts/asr-proxy-only-ssrf-check.mjs` 退出 **1**、`reading=endpoint-rule.host-bearers value=3`、`reading=endpoint-rule.single-implementation verdict=FAIL`；未变异的对照先绿。记录命令与红 token。
 
 ## DoD
 
