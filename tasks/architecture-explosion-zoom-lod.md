@@ -1,7 +1,7 @@
 ---
 id: architecture-explosion-zoom-lod
 title: 爆炸图语义缩放：档位显隐 + 焦点保持 + 包级聚合边 + 折叠计数（C+D）
-status: ready
+status: done
 labels:
   - feature
 parent: null
