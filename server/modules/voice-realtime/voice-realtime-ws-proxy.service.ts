@@ -2567,6 +2567,25 @@ export function handleVoiceRealtimeConnection(
   }
   /** The narrator's own utterance-id counter, so the announce remark's `narrator_speak` id is unique. */
   let announceNarrationSeq = 0;
+  /** The EARLY announce's own id family, spoken when the endpoint says the person stopped. */
+  let earlyAnnounceSeq = 0;
+  /**
+   * Whether this turn still owes an early announce.
+   *
+   * The endpoint reports the close TWICE — `speech_stopped` and then `committed` — so a naive hook
+   * would say "好的" twice for one utterance. Armed at `speech_started`, spent at the first close.
+   */
+  let earlyAnnounceArmed = false;
+  /** When the last early announce was spoken, so the model's closing turn does not repeat it. */
+  let lastEarlyAnnounceAt: number | null = null;
+  /**
+   * How long after an early announce the model's closing-turn remark is suppressed.
+   *
+   * The two say the same thing ("I'm starting"). The live 2026-10-21 reading put the closing turn
+   * about 0.9 s after `speech_stopped`; the early announce lands there instead, so within this
+   * window the closing turn would be a second "好的" for the same utterance.
+   */
+  const EARLY_ANNOUNCE_SUPPRESS_MS = 3_000;
   /** The counter for a MODEL TEXT REPLY's narration, kept separate so its ids never collide with an announce's. */
   let modelReplyNarrationSeq = 0;
   /** The duplex rule's switch. Omitted means enabled — the shipped behaviour. */
@@ -5741,7 +5760,32 @@ export function handleVoiceRealtimeConnection(
         if (!open) {
           upstreamTurnCloseCount += 1;
           lastUpstreamSilenceAt = Date.now();
+          // THE EARLY ANNOUNCE (2026-10-21). The endpoint says the person just stopped, and this is
+          // the earliest honest moment to acknowledge: transcription has not run yet, the model has
+          // not seen the words, and the closing turn is still ~0.9 s away. The queue is free here —
+          // user speech cleared it at `speech_started`. One remark per closed turn, from the same
+          // settings table the closing turn uses (so the TTS cache already holds the clip).
+          //
+          // NOT fired on the local energy gate: ambient noise opened it over narrations five times
+          // in the 2026-10-19 live connection (see the duplex note below), and an announce for noise
+          // is worse than a late one.
+          if (
+            earlyAnnounceArmed &&
+            (seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN) === 'announce' &&
+            narratorQueue !== null
+          ) {
+            earlyAnnounceArmed = false;
+            const earlySeq = earlyAnnounceSeq;
+            earlyAnnounceSeq += 1;
+            lastEarlyAnnounceAt = Date.now();
+            narratorQueue.enqueue({
+              utteranceId: `announce-early-${earlySeq}`,
+              text: pickAnnouncePhraseFrom(settings.announcePhrases, earlySeq),
+            });
+          }
         } else {
+          // A new turn is open: it owes one early announce when it closes (see the close branch).
+          earlyAnnounceArmed = true;
           // A NEW turn starting retires any pending forced-commit snapshot: whatever the next
           // `committed` answers, it no longer answers the turn this relay closed itself.
           forcedCommitCloseSnapshot = null;
@@ -6084,6 +6128,14 @@ export function handleVoiceRealtimeConnection(
       onFollowUpText: () => {
         if ((seams.closingTurn ?? DEFAULT_VOICE_REALTIME_CLOSING_TURN) !== 'announce') return;
         if (narratorQueue === null) return;
+        // The early announce already said this turn's "I'm starting" at `speech_stopped`; a second
+        // utterance of the same phrase for the same turn is noise, not acknowledgment.
+        if (
+          lastEarlyAnnounceAt !== null &&
+          Date.now() - lastEarlyAnnounceAt < EARLY_ANNOUNCE_SUPPRESS_MS
+        ) {
+          return;
+        }
         const seq = announceNarrationSeq;
         narratorQueue.enqueue({ utteranceId: `announce-${seq}`, text: pickAnnouncePhraseFrom(settings.announcePhrases, seq) });
         announceNarrationSeq += 1;

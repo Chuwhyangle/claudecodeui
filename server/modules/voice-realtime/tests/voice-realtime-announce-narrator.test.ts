@@ -139,3 +139,51 @@ test('silent: the same follow-up remark is swallowed, not spoken', async () => {
 
   assert.deepEqual(speakFrames(h.socket), [], 'silent must not turn a follow-up remark into a narration');
 });
+
+/** The endpoint's own turn boundary, as the bridge dispatches it. */
+function speechStarted(transport: FakeTransport): void {
+  transport.peerSend({ type: 'input_audio_buffer.speech_started' } as RealtimeServerMessage);
+}
+
+function speechStopped(transport: FakeTransport): void {
+  transport.peerSend({ type: 'input_audio_buffer.speech_stopped' } as RealtimeServerMessage);
+}
+
+test('announce: an early announce is spoken at speech_stopped, before any transcript', async () => {
+  const h = wire('announce');
+  await open(h.socket, h.transport);
+
+  speechStarted(h.transport);
+  speechStopped(h.transport);
+  await waitFor(() => speakFrames(h.socket).length === 1);
+
+  const spoken = speakFrames(h.socket)[0]!;
+  assert.match(spoken.utteranceId, /^announce-early-\d+$/, 'the early remark has its own id family');
+  assert.ok(ANNOUNCE_PHRASES.includes(spoken.text), `${spoken.text} must be one of the fixed phrases`);
+});
+
+test('announce: the closing turn right after the early announce is suppressed', async () => {
+  const h = wire('announce');
+  await open(h.socket, h.transport);
+
+  speechStarted(h.transport);
+  speechStopped(h.transport);
+  await waitFor(() => speakFrames(h.socket).length === 1);
+
+  // The model's own closing turn arrives moments later; it must not say "好的" a second time.
+  followUpText(h.transport, '好的，我来查一下这个报错。');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(speakFrames(h.socket).length, 1, 'one remark per turn, not two');
+});
+
+test('silent: speech_stopped speaks no early announce', async () => {
+  const h = wire('silent');
+  await open(h.socket, h.transport);
+
+  speechStarted(h.transport);
+  speechStopped(h.transport);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.deepEqual(speakFrames(h.socket), [], 'silent has no early remark either');
+});
