@@ -1,7 +1,7 @@
 ---
 id: architecture-seed-extraction
 title: 种子提取：按 sessionId 复用 fetchHistory 读全量 transcript，提取文件与标识符种子
-status: todo
+status: superseded
 labels:
   - feature
 parent: null
