@@ -21,6 +21,13 @@ import type {
  * `(distance, id)` order) because a PlantUML identifier cannot contain `/`,
  * `.` or spaces. Aliases survive filtering, so a group's subgraph keeps the
  * ids the full diagram used.
+ *
+ * Classes are emitted inside nested `package "path" { … }` blocks taken from
+ * each node's directory path (scope prefix stripped). The structure is what
+ * lets the diagram carry hierarchy into the SVG: the renderer stamps each
+ * entity with its innermost package id, and `hierarchyIndex.ts` turns that
+ * into the entity → package → ancestor tree the zoom levels use. Aliasing is
+ * independent of the grouping, so the same graph yields the same `aliasOf`.
  */
 
 /**
@@ -121,6 +128,71 @@ function sanitizeName(name: string): string {
   return name.replace(/["\r\n\t\\]/g, "'").replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * The package path (directory chain) of a node, from the scope-stripped path:
+ * `scope/src/modules/chat/hooks/useX.ts.useX` → `src/modules/chat/hooks`.
+ * An id with no directory (a top-level file) has no package (`''`).
+ *
+ * The full path is used, not the front-truncated display name: the hierarchy
+ * index's ancestor chain must reach the root, and two files whose truncated
+ * labels collide must still land in different packages.
+ */
+function packagePathOf(id: string): string {
+  const rel = pathName(id);
+  const lastSlash = rel.lastIndexOf('/');
+  return lastSlash === -1 ? '' : rel.slice(0, lastSlash);
+}
+
+/** One node of the package tree the bridge emits, plus the class lines it owns. */
+type PackageTreeNode = {
+  /** Full package path, which is also the quoted `package` name. */
+  readonly id: string;
+  readonly children: Map<string, PackageTreeNode>;
+  readonly entityLines: string[];
+};
+
+/**
+ * Insert an entity's class line into the nested package tree, creating every
+ * ancestor package it needs (`a`, `a/b`, `a/b/c` for `a/b/c`). A path-less
+ * entity stays on the root node and is emitted unwrapped.
+ */
+function insertIntoPackageTree(
+  root: PackageTreeNode,
+  packagePath: string,
+  line: string,
+): void {
+  let node = root;
+  const segments = packagePath.split('/').filter(Boolean);
+  let prefix = '';
+  for (const segment of segments) {
+    prefix = prefix === '' ? segment : `${prefix}/${segment}`;
+    let child = node.children.get(prefix);
+    if (child === undefined) {
+      child = { id: prefix, children: new Map(), entityLines: [] };
+      node.children.set(prefix, child);
+    }
+    node = child;
+  }
+  node.entityLines.push(line);
+}
+
+/**
+ * Emit the package tree as nested `package "full/path" { … }` blocks. Child
+ * packages are sorted so the document is deterministic for a given node set;
+ * classes keep the neighbourhood's own order within their package.
+ */
+function emitPackageTree(node: PackageTreeNode, depth: number, lines: string[]): void {
+  const indent = '  '.repeat(depth);
+  for (const line of node.entityLines) lines.push(`${indent}${line}`);
+  for (const childId of [...node.children.keys()].sort()) {
+    const child = node.children.get(childId);
+    if (child === undefined) continue;
+    lines.push(`${indent}package "${sanitizeName(child.id)}" {`);
+    emitPackageTree(child, depth + 1, lines);
+    lines.push(`${indent}}`);
+  }
+}
+
 /** True when the node's display name sits in the path group `prefix`. */
 function inGroup(node: ArchitectureNeighborhoodNode, prefix: string): boolean {
   const name = displayName(node.id);
@@ -152,12 +224,23 @@ export function archguardToPlantUml(
   const aliasOf = options.aliasOf ?? archguardAliasMap(graph.nodes);
   const drawn = view.kind === 'group' ? groupSubgraph(graph, view.prefix) : graph;
 
-  const lines = ['@startuml'];
+  // The class lines are grouped into the nested package tree by directory path:
+  // the renderer parses the blocks into package frames and stamps every entity
+  // with its innermost package (`data-package-id`), which is what the frontend
+  // hierarchy index reads instead of inferring containment from geometry.
+  const packageRoot: PackageTreeNode = { id: '', children: new Map(), entityLines: [] };
   for (const node of drawn.nodes) {
     const alias = aliasOf.get(node.id);
     if (alias === undefined) continue;
-    lines.push(`class "${sanitizeName(displayName(node.id))}" as ${alias}`);
+    insertIntoPackageTree(
+      packageRoot,
+      packagePathOf(node.id),
+      `class "${sanitizeName(displayName(node.id))}" as ${alias}`,
+    );
   }
+
+  const lines = ['@startuml'];
+  emitPackageTree(packageRoot, 0, lines);
   for (const edge of drawn.edges) {
     const source = aliasOf.get(edge.from);
     const target = aliasOf.get(edge.to);
