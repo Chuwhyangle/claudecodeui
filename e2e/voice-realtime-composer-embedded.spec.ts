@@ -965,11 +965,23 @@ test.describe('voice realtime composer embedded bar', () => {
     const framesOnHealthy = upstream.audioFrameCount();
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesOnHealthy + 1);
+    // Wait for the delivery before leaving — the same wait the two geometry cases make above.
+    // `handleVoiceExit` hands every final caption no delivery claims to the composer as a draft
+    // (`collectUndeliveredUtterances` → `setInput`). Exiting while the confirmation is still in
+    // flight therefore puts `SEED_USER_TEXT` into the textarea, and `submitIsVoice` — which needs
+    // an EMPTY draft — goes false, so the Live Voice entry testid is not rendered at all and the
+    // click below cannot resolve. The transcript holding the proposed row is what says the
+    // caption was claimed, which is what keeps the draft empty.
+    await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
     await leaveLiveVoice(page);
 
     // The endpoint goes unreachable: the app server's dial fails, its connect budget is
     // spent, and it closes the browser's socket — the server-side close the criterion names.
     upstream.setRefusing(true);
+    // Read the entry as a precondition instead of discovering its absence inside `click`, where
+    // it only shows up as a 60s actionability timeout. See the `handleVoiceExit` / `submitIsVoice`
+    // note above for what removes the testid.
+    await expect(page.getByTestId('live-voice-button')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('live-voice-button').click();
     await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
 
