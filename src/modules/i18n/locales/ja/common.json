@@ -64,10 +64,12 @@
     "entityGraph": "エンティティグラフ",
     "controls": {
       "maxHops": "ホップ数",
+      "hopOption": "ホップ数 {{count}}",
       "maxNodes": "最大ノード数"
     },
     "exportMmd": ".mmd をエクスポート",
     "expandHint": "ノードにホバーすると関係タイプを表示します。ノードをクリックすると次のホップを展開します。",
+    "dismissHint": "ヒントを閉じる",
     "graphAria": "アーキテクチャ近傍グラフ",
     "hover": {
       "none": "入出力の関係なし",

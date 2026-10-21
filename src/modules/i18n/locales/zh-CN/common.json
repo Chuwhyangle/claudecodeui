@@ -64,10 +64,12 @@
     "entityGraph": "实体图",
     "controls": {
       "maxHops": "跳数",
+      "hopOption": "跳数 {{count}}",
       "maxNodes": "最大节点数"
     },
     "exportMmd": "导出 .mmd",
     "expandHint": "悬停节点查看关系类型；点击节点展开下一跳。",
+    "dismissHint": "关闭提示",
     "graphAria": "架构邻域图",
     "hover": {
       "none": "无出/入边关系",

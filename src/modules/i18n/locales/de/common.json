@@ -64,10 +64,12 @@
     "entityGraph": "Entitätsdiagramm",
     "controls": {
       "maxHops": "Hops",
+      "hopOption": "Hops {{count}}",
       "maxNodes": "Max. Knoten"
     },
     "exportMmd": ".mmd exportieren",
     "expandHint": "Knoten überfahren zeigt Beziehungstypen; Klick auf einen Knoten erweitert den nächsten Hop.",
+    "dismissHint": "Hinweis schließen",
     "graphAria": "Architektur-Nachbarschaftsgraph",
     "hover": {
       "none": "keine ausgehende/eingehende Beziehung",

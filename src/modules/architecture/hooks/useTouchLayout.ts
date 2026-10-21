@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 
 import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 
@@ -9,6 +9,38 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
  * still needs the touch target size and the touch click semantics.
  */
 const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+/**
+ * The hit area every toolbar control gets on a coarse pointer. WCAG 2.5.5 asks
+ * for 44×44 CSS pixels; the inline style (rather than a Tailwind class) makes
+ * the reading explicit for a test and independent of the stylesheet.
+ *
+ * It lives here, beside the tier reading that turns it on, because BOTH toolbar
+ * owners use it: the panel's compact row (granularity, the "…" toggle, hops,
+ * export) and the graph's own controls that the panel hosts in its menu.
+ */
+export const TOUCH_TARGET_STYLE = { minHeight: '44px', minWidth: '44px' } as const;
+
+/**
+ * Where the compact toolbar's renderer-owned controls are drawn.
+ *
+ * `ArchitecturePanel` draws ONE compact toolbar row (title, granularity, "…")
+ * and offers the opened overflow menu as a DOM slot; `PlantUmlGraph` portals its
+ * own control cluster (view navigation, readable mode, zoom, drill, readouts)
+ * into that slot. That is what keeps a phone's chrome to a single row instead
+ * of the panel row plus a second diagram row.
+ *
+ * `null` means no slot is on screen (the menu is closed, or this is the desktop
+ * tier). A renderer that does not read this context — every substituted
+ * renderer — is unaffected, which is why the channel lives here rather than in
+ * the renderer contract.
+ */
+export const CompactToolbarSlotContext = createContext<HTMLElement | null>(null);
+
+/** The renderer's read of {@link CompactToolbarSlotContext}; null when it must draw nothing. */
+export function useCompactToolbarSlot(): HTMLElement | null {
+  return useContext(CompactToolbarSlotContext);
+}
 
 const getIsCoarsePointer = (): boolean => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;

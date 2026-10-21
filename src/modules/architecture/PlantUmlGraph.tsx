@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -24,7 +25,11 @@ import {
   type ArchitectureLayoutEngine,
 } from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
-import { useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
+import {
+  TOUCH_TARGET_STYLE,
+  useCompactToolbarSlot,
+  useTouchLayout,
+} from '@/modules/architecture/hooks/useTouchLayout';
 import {
   buildSeedHierarchy,
   decideReadableZoom,
@@ -80,13 +85,6 @@ const STUB_PREFIX = 'stub::';
  * second tap is the user saying "yes, open this one".
  */
 const DOUBLE_TAP_MS = 350;
-
-/**
- * The hit area every toolbar button gets on a coarse pointer. WCAG 2.5.5 asks
- * for 44×44 CSS pixels; the inline style (rather than a Tailwind class) makes
- * the reading explicit for a test and independent of the stylesheet.
- */
-const TOUCH_TARGET_STYLE = { minHeight: '44px', minWidth: '44px' } as const;
 
 /** The shared look of the diagram toolbar's buttons. */
 const TOOLBAR_BUTTON_CLASS =
@@ -378,6 +376,10 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
   // collect the toolbar into one overflow menu (see `useTouchLayout`).
   const { touchUi, compactToolbar } = useTouchLayout();
+  // On the compact tier the panel owns the single toolbar row and lends its
+  // overflow menu as the slot these controls are drawn into; `null` (menu shut)
+  // means this renderer has no chrome on screen at all.
+  const compactToolbarSlot = useCompactToolbarSlot();
   const touchTargetStyle = touchUi ? TOUCH_TARGET_STYLE : undefined;
   // Which slice of the payload is drawn. Local by construction: the payload is
   // fetched whole, so switching views must never re-request it.
@@ -412,8 +414,6 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
   const lastPointerTypeRef = useRef<string | null>(null);
   // The previous tap, for the touch double-tap drill gesture.
   const lastTapRef = useRef<{ id: string; at: number } | null>(null);
-  // Whether the compact toolbar's overflow menu is expanded.
-  const [overflowOpen, setOverflowOpen] = useState(false);
   useEffect(() => {
     viewRef.current = view;
     graphRef.current = graph;
@@ -1257,10 +1257,9 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
     : (
       <button
         type="button"
-        onClick={() => {
-          setOverflowOpen(false);
-          onExport();
-        }}
+        // The panel owns the menu this button is drawn into, so closing it is
+        // the panel's job too (its `onExport` closes the menu after writing).
+        onClick={() => onExport()}
         data-architecture-overflow-export="true"
         style={touchTargetStyle}
         className={`${TOOLBAR_BUTTON_CLASS} text-left`}
@@ -1284,76 +1283,87 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
       data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
-      <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-2">
-          {!compactToolbar && backButton}
-          {!compactToolbar && explosionButton}
-          <span data-architecture-view-label>{viewLabel}</span>
-          {!compactToolbar && readableModeGroup}
-          {readableNotice}
-          {/* The semantic-zoom level currently shown. It is the diagram's own
-              reading of the scale, so it changes only after the debounce. */}
-          {lodDepth !== null && (
-            <span data-architecture-lod-label className="tabular-nums">
-              {lodDepth === 0
-                ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
-                : lodDepth === 1
-                  ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
-                  : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
-            </span>
-          )}
-          {/* The hover READOUT is the panel's renderer-neutral bar; this is the
-              view's own gesture hint, so it never repeats that reading. On a
-              finger there is no hover, so the wording follows the input. */}
-          <span>
-            {touchUi
-              ? t('architecture.plantuml.touchHint', {
-                  defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
-                })
-              : t('architecture.plantuml.hint', {
-                  defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
-                })}
-          </span>
-        </span>
-        <span className="relative flex items-center gap-2">
-          {drillButton}
-          {compactToolbar ? (
-            <>
-              {zoomReadout}
-              <button
-                type="button"
-                aria-haspopup="true"
-                aria-expanded={overflowOpen}
-                aria-label={t('architecture.plantuml.moreActions', { defaultValue: 'More actions' })}
-                onClick={() => setOverflowOpen((open) => !open)}
-                data-architecture-overflow-toggle="true"
-                style={touchTargetStyle}
-                className={TOOLBAR_BUTTON_CLASS}
-              >
-                ⋯
-              </button>
-              {overflowOpen && (
-                // On a phone the individual buttons would either be too small to
-                // hit or too wide to fit; one menu keeps the toolbar to a single
-                // 44px target and holds every action at that size.
-                <div
-                  data-architecture-overflow-menu="true"
-                  className="absolute right-0 top-full z-20 mt-1 flex w-56 flex-col gap-1 rounded-lg border border-border bg-popover p-1 shadow-lg"
-                >
-                  {backButton}
-                  {explosionButton}
-                  {readableModeGroup}
-                  <span role="group" aria-label={zoomGroupLabel} className="flex flex-col gap-1">
-                    {zoomOutButton}
-                    {zoomInButton}
-                    {fitButton}
-                    {actualSizeButton}
-                  </span>
-                  {exportButton}
-                </div>
+      {compactToolbar ? (
+        // On the compact tier the panel already spends the one row it has on
+        // the title, granularity and "…"; everything this renderer owns is
+        // drawn inside that menu, at the same 44px targets. With the menu shut
+        // there is no slot, and drawing no chrome is the point.
+        compactToolbarSlot !== null && createPortal(
+          <span data-architecture-compact-controls="true" className="flex flex-col gap-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span data-architecture-view-label>{viewLabel}</span>
+              {readableNotice}
+              {/* The semantic-zoom level currently shown. It is the diagram's own
+                  reading of the scale, so it changes only after the debounce. */}
+              {lodDepth !== null && (
+                <span data-architecture-lod-label className="tabular-nums">
+                  {lodDepth === 0
+                    ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
+                    : lodDepth === 1
+                      ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
+                      : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
+                </span>
               )}
-            </>
-          ) : (
+            </span>
+            {backButton}
+            {explosionButton}
+            {readableModeGroup}
+            {drillButton}
+            <span role="group" aria-label={zoomGroupLabel} className="flex flex-col gap-1">
+              {zoomOutButton}
+              {zoomInButton}
+              {fitButton}
+              {actualSizeButton}
+            </span>
+            {zoomReadout}
+            {exportButton}
+            <span data-architecture-visible-summary>
+              {t('architecture.visibleNodes', {
+                defaultValue: '{{visible}} of {{total}} nodes',
+                visible: drawn?.view === view ? drawn.nodes : 0,
+                total: graph.nodes.length,
+              })}
+            </span>
+          </span>,
+          compactToolbarSlot,
+        )
+      ) : (
+        <div
+          data-architecture-toolbar="true"
+          className="relative flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground"
+        >
+          <span className="flex items-center gap-2">
+            {backButton}
+            {explosionButton}
+            <span data-architecture-view-label>{viewLabel}</span>
+            {readableModeGroup}
+            {readableNotice}
+            {/* The semantic-zoom level currently shown. It is the diagram's own
+                reading of the scale, so it changes only after the debounce. */}
+            {lodDepth !== null && (
+              <span data-architecture-lod-label className="tabular-nums">
+                {lodDepth === 0
+                  ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
+                  : lodDepth === 1
+                    ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
+                    : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
+              </span>
+            )}
+            {/* The hover READOUT is the panel's renderer-neutral bar; this is the
+                view's own gesture hint, so it never repeats that reading. On a
+                finger there is no hover, so the wording follows the input. */}
+            <span>
+              {touchUi
+                ? t('architecture.plantuml.touchHint', {
+                    defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
+                  })
+                : t('architecture.plantuml.hint', {
+                    defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
+                  })}
+            </span>
+          </span>
+          <span className="relative flex items-center gap-2">
+            {drillButton}
             <span role="group" aria-label={zoomGroupLabel} className="flex items-center gap-1">
               {zoomOutButton}
               {zoomReadout}
@@ -1361,16 +1371,16 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
               {fitButton}
               {actualSizeButton}
             </span>
-          )}
-          <span data-architecture-visible-summary>
-            {t('architecture.visibleNodes', {
-              defaultValue: '{{visible}} of {{total}} nodes',
-              visible: drawn?.view === view ? drawn.nodes : 0,
-              total: graph.nodes.length,
-            })}
+            <span data-architecture-visible-summary>
+              {t('architecture.visibleNodes', {
+                defaultValue: '{{visible}} of {{total}} nodes',
+                visible: drawn?.view === view ? drawn.nodes : 0,
+                total: graph.nodes.length,
+              })}
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      )}
       <div
         ref={hostRef}
         role="img"

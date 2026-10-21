@@ -64,10 +64,12 @@
     "entityGraph": "Graf entitas",
     "controls": {
       "maxHops": "Lompatan",
+      "hopOption": "Lompatan {{count}}",
       "maxNodes": "Maks. node"
     },
     "exportMmd": "Ekspor .mmd",
     "expandHint": "Arahkan kursor ke node untuk melihat jenis relasinya; klik node untuk memperluas lompatan berikutnya.",
+    "dismissHint": "Tutup petunjuk",
     "graphAria": "Grafik ketetanggaan arsitektur",
     "hover": {
       "none": "tidak ada relasi masuk/keluar",

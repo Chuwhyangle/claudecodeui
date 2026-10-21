@@ -64,10 +64,12 @@
     "entityGraph": "Varlık grafiği",
     "controls": {
       "maxHops": "Atlamalar",
+      "hopOption": "Atlama {{count}}",
       "maxNodes": "Maks. düğüm"
     },
     "exportMmd": ".mmd dışa aktar",
     "expandHint": "İlişki türleri için bir düğümün üzerine gelin; sonraki atlamayı genişletmek için düğüme tıklayın.",
+    "dismissHint": "İpucunu kapat",
     "graphAria": "Mimari komşuluk grafiği",
     "hover": {
       "none": "gelen/giden ilişki yok",

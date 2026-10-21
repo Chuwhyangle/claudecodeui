@@ -40,10 +40,12 @@
     "entityGraph": "Entity graph",
     "controls": {
       "maxHops": "Hops",
+      "hopOption": "Hops {{count}}",
       "maxNodes": "Max nodes"
     },
     "exportMmd": "Export .mmd",
     "expandHint": "Hover a node for its relation types; click a node to expand its next hop.",
+    "dismissHint": "Dismiss hint",
     "graphAria": "Architecture neighbourhood graph",
     "hover": {
       "none": "no outgoing/incoming relation",

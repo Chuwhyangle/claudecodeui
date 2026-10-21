@@ -64,10 +64,12 @@
     "entityGraph": "엔티티 그래프",
     "controls": {
       "maxHops": "홉",
+      "hopOption": "홉 {{count}}",
       "maxNodes": "최대 노드"
     },
     "exportMmd": ".mmd 내보내기",
     "expandHint": "노드에 마우스를 올리면 관계 유형이 표시됩니다. 노드를 클릭하면 다음 홉이 확장됩니다.",
+    "dismissHint": "힌트 닫기",
     "graphAria": "아키텍처 이웃 그래프",
     "hover": {
       "none": "들어오거나 나가는 관계 없음",

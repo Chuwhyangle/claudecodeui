@@ -205,6 +205,18 @@ function graphRoot(): HTMLElement {
   return root;
 }
 
+/**
+ * The compact tier has ONE toolbar row on the panel; the graph's own controls
+ * (drill, zoom, back) are portaled into that row's "…" menu. Open it only when
+ * it is shut, so a sequence that leaves it open does not toggle it closed.
+ */
+function openCompactMenu(): void {
+  if (document.querySelector('[data-architecture-overflow-menu]') === null) {
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  }
+  assert.ok(document.querySelector('[data-architecture-overflow-menu]'), 'the compact menu must be open');
+}
+
 function drawnNodeIds(host: HTMLElement): string[] {
   return [...host.querySelectorAll('[data-entity-id]')]
     .map((node) => node.getAttribute('data-entity-id') ?? '')
@@ -341,6 +353,9 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
   tap(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
   assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview', 'a tap must not navigate');
   assert.equal(host.querySelector('svg'), drawing, 'selecting must not replace the drawing');
+  // The explicit drill action lives in the single compact toolbar's "…" menu
+  // (there is no second graph toolbar row to hold it).
+  openCompactMenu();
   const drillIn = document.querySelector('[data-architecture-drill-in]');
   assert.ok(drillIn instanceof HTMLButtonElement, 'a touch selection must offer the explicit drill action');
 
@@ -360,6 +375,7 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
   tap(entity);
   assert.equal(graphRoot().getAttribute('data-architecture-view'), 'group', 'tapping an entity must not drill');
 
+  openCompactMenu();
   const drillEntity = document.querySelector('[data-architecture-drill-in]');
   assert.ok(drillEntity instanceof HTMLButtonElement);
   fireEvent.click(drillEntity);
@@ -379,7 +395,7 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
   // A double-tap is the other explicit gesture: select, then tap the same node
   // again within the double-tap window. (On a phone "Back to overview" lives
   // in the overflow menu, together with the other toolbar actions.)
-  fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  openCompactMenu();
   fireEvent.click(screen.getByRole('button', { name: 'Back to overview' }));
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview'));
   const groupNode = await waitFor(() => {
@@ -402,7 +418,11 @@ test('a coarse pointer gives every toolbar button a 44×44 hit area', async () =
   const menu = document.querySelector('[data-architecture-overflow-menu]');
   assert.ok(menu !== null, 'the compact toolbar must expand');
 
-  const buttons = [...graphRoot().querySelectorAll('button')];
+  // Every control the compact tier can reach, INCLUDING the ones the renderer
+  // portals into the menu — the panel is where the whole toolbar lives now.
+  const panel = document.querySelector('[data-architecture-panel]');
+  assert.ok(panel instanceof HTMLElement);
+  const buttons = [...panel.querySelectorAll('button')];
   assert.ok(buttons.length >= 5, `the toolbar must expose its actions; got ${buttons.length}`);
   for (const button of buttons) {
     const style = getComputedStyle(button);

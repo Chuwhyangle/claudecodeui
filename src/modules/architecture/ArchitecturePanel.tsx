@@ -2,7 +2,11 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
-import { useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
+import {
+  CompactToolbarSlotContext,
+  TOUCH_TARGET_STYLE,
+  useTouchLayout,
+} from '@/modules/architecture/hooks/useTouchLayout';
 import type {
   ArchitectureGraphRenderer,
   ArchitectureRendererHover,
@@ -89,10 +93,18 @@ function ArchitectureHonestyBar({
   result,
   granularity,
   hops,
+  compact = false,
 }: {
   result: ArchitectureGraphResult;
   granularity: ArchitectureGranularity;
   hops: number;
+  /**
+   * The compact tier draws this bar inside the overflow menu instead of under
+   * the toolbar, so it stacks in a narrow column and drops the full-width rule.
+   * The truncation badge in the toolbar row is what keeps a real cut visible
+   * while the menu is shut.
+   */
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const { stats, provenance } = result;
@@ -102,7 +114,11 @@ function ArchitectureHonestyBar({
   return (
     <div
       data-architecture-honesty="true"
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/60 bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground"
+      className={
+        compact
+          ? 'flex flex-col items-start gap-1 text-[11px] text-muted-foreground'
+          : 'flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/60 bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground'
+      }
     >
       <span>
         {t('architecture.honesty.analysis', { defaultValue: 'Analysis' })}:{' '}
@@ -218,8 +234,11 @@ export default function ArchitecturePanel({
   // header control grows to a 44px target.
   const { coarsePointer, compactToolbar } = useTouchLayout();
   const headerButtonClass = coarsePointer
-    ? 'min-h-11 min-w-11 rounded-md px-3 text-sm font-medium'
+    ? 'rounded-md px-3 text-sm font-medium'
     : 'rounded-md px-2 py-0.5 text-xs font-medium';
+  // The explicit 44px box on every compact-row control; on a coarse pointer the
+  // reading must not depend on the stylesheet (see TOUCH_TARGET_STYLE).
+  const compactTargetStyle = coarsePointer ? TOUCH_TARGET_STYLE : undefined;
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch.
   const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
@@ -240,6 +259,17 @@ export default function ArchitecturePanel({
     [hoverKey],
   );
   const { view, reload } = useArchitectureGraph(projectId, sessionId, hops);
+  // Whether the compact tier's single "…" menu is open. On that tier the panel
+  // draws one toolbar row and every other control lives behind this toggle.
+  const [compactMenuOpen, setCompactMenuOpen] = useState(false);
+  // The menu's DOM node while it is open. It is handed to the renderer through
+  // `CompactToolbarSlotContext` so the graph's own controls are drawn inside the
+  // same menu instead of in a second toolbar row.
+  const [compactMenuHost, setCompactMenuHost] = useState<HTMLElement | null>(null);
+  // A coarse pointer has no hover, so the touch instruction is shown once and
+  // then dismissed — either by its close button or by the first node selection.
+  // It never becomes a permanent row the way the old gesture line was.
+  const [touchHintDismissed, setTouchHintDismissed] = useState(false);
 
   if (!sessionId) {
     return (
@@ -283,98 +313,226 @@ export default function ArchitecturePanel({
   // A reading from the previous graph is not shown against this one.
   const visibleHover = hovered !== null && hovered.key === hoverKey ? hovered.hover : null;
 
+  const exportMmd = (): void => {
+    downloadMermaid(
+      granularity === 'file' ? mmd.file : mmd.entity,
+      `architecture-${granularity}.mmd`,
+    );
+  };
+  // The graph's overflow menu is the panel's menu: exporting from it must also
+  // close it, so the panel owns that one extra step.
+  const exportFromMenu = (): void => {
+    setCompactMenuOpen(false);
+    exportMmd();
+  };
+
+  const truncation = truncationReading(result, granularity);
+
+  // Both subgraphs are in hand; toggling only picks one, so it must not refetch.
+  const granularityGroup = (
+    <div
+      role="group"
+      aria-label={t('architecture.granularity', { defaultValue: 'Graph granularity' })}
+      className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+    >
+      <button
+        type="button"
+        aria-pressed={granularity === 'file'}
+        onClick={() => setGranularity('file')}
+        style={compactTargetStyle}
+        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          granularity === 'file' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        {t('architecture.fileGraph', { defaultValue: 'File graph' })}
+      </button>
+      <button
+        type="button"
+        aria-pressed={granularity === 'entity'}
+        onClick={() => setGranularity('entity')}
+        style={compactTargetStyle}
+        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          granularity === 'entity' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        {t('architecture.entityGraph', { defaultValue: 'Entity graph' })}
+      </button>
+    </div>
+  );
+
+  // The depth is a server-side generation parameter, so this control re-enters
+  // the fetch (unlike the granularity toggle above). Every option now names
+  // itself in words as well as carrying the same words as its accessible name:
+  // a bare "1 2 3" gave no hint what was being counted.
+  const hopsGroup = (
+    <div
+      role="group"
+      aria-label={t('architecture.controls.maxHops', { defaultValue: 'Hops' })}
+      data-architecture-hops-control="true"
+      className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+    >
+      {HOP_OPTIONS.map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={hops === option}
+          aria-label={t('architecture.controls.hopOption', {
+            defaultValue: 'Hops {{count}}',
+            count: option,
+          })}
+          data-architecture-hops-option={option}
+          onClick={() => setHops(option)}
+          style={compactTargetStyle}
+          className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+            hops === option ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t('architecture.controls.hopOption', {
+            defaultValue: 'Hops {{count}}',
+            count: option,
+          })}
+        </button>
+      ))}
+    </div>
+  );
+
+  const exportButton = (
+    <button
+      type="button"
+      onClick={exportMmd}
+      data-architecture-export="true"
+      style={compactTargetStyle}
+      className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+        coarsePointer ? 'px-3 text-sm' : 'px-2 py-0.5 text-xs'
+      }`}
+    >
+      {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
+    </button>
+  );
+
   return (
-    <div className="flex h-full flex-col overflow-hidden" data-architecture-panel="true">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-4 py-2">
-        <h3 className="text-sm font-semibold text-foreground">
-          {t('architecture.title', { defaultValue: 'Architecture' })}
-        </h3>
-        {/* Both subgraphs are in hand; toggling only picks one, so it must not refetch. */}
+    <div className="relative flex h-full flex-col overflow-hidden" data-architecture-panel="true">
+      {compactToolbar ? (
+        // ONE row. A phone has no room for a header row plus a diagram toolbar
+        // row: the title, the granularity switch and the "…" toggle are all the
+        // chrome that stays; hops, the honesty readings, export and every zoom
+        // action live in the menu below. A real truncation still surfaces as a
+        // compact badge here, so a cut is never hidden behind a closed menu.
         <div
-          role="group"
-          aria-label={t('architecture.granularity', { defaultValue: 'Graph granularity' })}
-          className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+          data-architecture-toolbar="true"
+          className="flex items-center gap-2 border-b border-border/60 px-2 py-1"
         >
-          <button
-            type="button"
-            aria-pressed={granularity === 'file'}
-            onClick={() => setGranularity('file')}
-            className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-              granularity === 'file' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t('architecture.fileGraph', { defaultValue: 'File graph' })}
-          </button>
-          <button
-            type="button"
-            aria-pressed={granularity === 'entity'}
-            onClick={() => setGranularity('entity')}
-            className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-              granularity === 'entity' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {t('architecture.entityGraph', { defaultValue: 'Entity graph' })}
-          </button>
-        </div>
-        {/* The depth is a server-side generation parameter, so this control
-            re-enters the fetch (unlike the granularity toggle above). */}
-        <div
-          role="group"
-          aria-label={t('architecture.controls.maxHops', { defaultValue: 'Hops' })}
-          data-architecture-hops-control="true"
-          className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
-        >
-          {HOP_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={hops === option}
-              data-architecture-hops-option={option}
-              onClick={() => setHops(option)}
-              className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-                hops === option ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
-              }`}
+          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+            {t('architecture.title', { defaultValue: 'Architecture' })}
+          </h3>
+          {granularityGroup}
+          {truncation.truncated && (
+            <span
+              data-architecture-truncated-badge="true"
+              data-architecture-truncated-granularity={granularity}
+              data-architecture-truncated-shown={truncation.shown}
+              data-architecture-truncated-total={truncation.total}
+              title={t('architecture.honesty.truncated', {
+                defaultValue: 'Node budget reached — this graph is truncated.',
+              })}
+              className="whitespace-nowrap text-[11px] font-medium text-amber-600 dark:text-amber-400"
             >
-              {option}
-            </button>
-          ))}
-        </div>
-        {/* On a narrow screen the export action lives in the graph's overflow
-            menu instead (a second tiny button here would defeat the touch
-            target work). */}
-        {!compactToolbar && (
+              ⚠ {truncation.shown}/{truncation.total}
+            </span>
+          )}
           <button
             type="button"
-            onClick={() => downloadMermaid(
-              granularity === 'file' ? mmd.file : mmd.entity,
-              `architecture-${granularity}.mmd`,
-            )}
-            data-architecture-export="true"
-            className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
-              coarsePointer ? 'min-h-11 min-w-11 px-3 text-sm' : 'px-2 py-0.5 text-xs'
-            }`}
+            aria-haspopup="true"
+            aria-expanded={compactMenuOpen}
+            aria-label={t('architecture.plantuml.moreActions', { defaultValue: 'More actions' })}
+            onClick={() => setCompactMenuOpen((open) => !open)}
+            data-architecture-overflow-toggle="true"
+            style={compactTargetStyle}
+            className="rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
           >
-            {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
+            ⋯
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          <div
+            data-architecture-toolbar="true"
+            className="flex flex-wrap items-center gap-3 border-b border-border/60 px-4 py-2"
+          >
+            <h3 className="text-sm font-semibold text-foreground">
+              {t('architecture.title', { defaultValue: 'Architecture' })}
+            </h3>
+            {granularityGroup}
+            {hopsGroup}
+            {/* On the compact tier the export action lives in the overflow menu
+                instead (a second tiny button here would defeat the touch target
+                work). */}
+            {exportButton}
+          </div>
 
-      <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} />
+          <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} />
+        </>
+      )}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {compactToolbar && compactMenuOpen && (
+        <div
+          data-architecture-overflow-menu="true"
+          className="absolute right-2 top-12 z-30 flex max-h-[70%] w-72 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-lg"
+        >
+          <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} compact />
+          {hopsGroup}
+          {/* The renderer's own controls (view navigation, readable mode, drill,
+              zoom, export) are portaled in here — they belong to the drawing,
+              not to the panel, and the slot keeps them at this menu's target
+              size rather than in a second toolbar row. */}
+          <div
+            ref={setCompactMenuHost}
+            data-architecture-compact-graph-controls="true"
+            className="flex flex-col gap-1 border-t border-border/60 pt-1"
+          />
+        </div>
+      )}
+
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
           <>
-            <ArchitectureHoverBar hover={visibleHover} />
-            <div className="min-h-0 flex-1">
-              <Renderer
-                key={`${sessionId}:${granularity}:${hops}`}
-                graph={neighbourhood}
-                onNodeHover={handleNodeHover}
-                onExport={() => downloadMermaid(
-                  granularity === 'file' ? mmd.file : mmd.entity,
-                  `architecture-${granularity}.mmd`,
-                )}
-              />
+            {/* A coarse pointer cannot hover, so the hover readout is not
+                rendered at all on that tier — the touch instruction below is
+                the only input guidance, and it is a dismissible overlay. */}
+            {!coarsePointer && <ArchitectureHoverBar hover={visibleHover} />}
+            <div className="relative min-h-0 flex-1">
+              {coarsePointer && !touchHintDismissed && (
+                <div
+                  data-architecture-touch-hint="true"
+                  className="absolute inset-x-2 top-2 z-10 flex items-start gap-2 rounded-lg border border-border bg-background/95 px-2 py-1 text-[11px] text-muted-foreground shadow"
+                >
+                  <span className="min-w-0 flex-1">
+                    {t('architecture.plantuml.touchHint', {
+                      defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('architecture.dismissHint', { defaultValue: 'Dismiss hint' })}
+                    onClick={() => setTouchHintDismissed(true)}
+                    style={compactTargetStyle}
+                    className="rounded border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              <CompactToolbarSlotContext.Provider value={compactMenuHost}>
+                <Renderer
+                  key={`${sessionId}:${granularity}:${hops}`}
+                  graph={neighbourhood}
+                  onNodeHover={handleNodeHover}
+                  // Selecting a node is the reader working the drawing; the
+                  // one-off touch instruction has done its job by then.
+                  onNodeClick={() => setTouchHintDismissed(true)}
+                  onExport={exportFromMenu}
+                />
+              </CompactToolbarSlotContext.Provider>
             </div>
           </>
         ) : (

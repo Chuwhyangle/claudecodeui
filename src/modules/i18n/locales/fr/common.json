@@ -64,10 +64,12 @@
     "entityGraph": "Graphe des entités",
     "controls": {
       "maxHops": "Sauts",
+      "hopOption": "Sauts {{count}}",
       "maxNodes": "Nœuds max"
     },
     "exportMmd": "Exporter .mmd",
     "expandHint": "Survolez un nœud pour voir ses types de relation ; cliquez sur un nœud pour étendre son saut suivant.",
+    "dismissHint": "Fermer l’astuce",
     "graphAria": "Graphe de voisinage d'architecture",
     "hover": {
       "none": "aucune relation entrante/sortante",
