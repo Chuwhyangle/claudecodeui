@@ -14,6 +14,9 @@ dist-server.old/
 dist-ssr/
 build/
 out/
+# The e2e webServer's content-hashed server bundles (scripts/e2e-server-bundle.mjs). One file per
+# source key: build output, never a source of truth.
+/server/.quay-e2e-build/
 
 # Environment variables
 .env
