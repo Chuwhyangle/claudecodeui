@@ -74,12 +74,12 @@ Error: element(s) not found
 
 ## AC
 
-- [ ] AC1 复现读数入档：并发构造下 ≥2 次出货命令运行，每次记 lane 数、load1、data dir、首个红用例与逐字 error-context；至少一次红是用例 4，且其连接日志含 `"reason":"fill"` 的 `omission_fill` 与该句的 `session_send delivered`。
-- [ ] AC2 用例 4 的修复有判别力：`grep -n "waitForTurnAfter" e2e/voice-realtime-intent-control.spec.ts` 显示屏障调用出现在 `hearUtterance(page, upstream, 'drop-heard-phrase', PHRASE)` 之前，或（走 fixture 臂时）贴出 fixture 路径、`VOICE_REALTIME_SETTINGS_PATH` 接线 diff 与窗口值；同一并发构造下用例 4 单独 ≥3 次绿（`npx playwright test e2e/voice-realtime-intent-control.spec.ts -g "re-homes into the composer"`）；取假形态一次并贴出红（把屏障放回 PHRASE 之后，或把补发窗口恢复 3000 ms）。
-- [ ] AC3 用例 5 的页面就绪：`openSession` 的有界 reload diff 入档；同一并发构造下用例 5 单独 ≥3 次绿（`-g "cannot be confirmed as enqueued"`）；`git diff` 证明 PANE 可见性断言未放宽、未加 retry、未加 `test.fixme/skip`。
-- [ ] AC4 预算与本轮实测同源：`grep -n "timeoutMs" goals/AC-345-*.md` 读数 ≥ 2× 修复态实测绿跑墙钟且 ≥240000，同一次运行贴出该墙钟；`git diff <base>..HEAD -- goals/` 只有 `timeoutMs` 一行变化，`criterion:` 与 `expect:` 逐字不变。
-- [ ] AC5 判据为真：出货命令 `f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f"` 逐字 ≥3 次 exit 0，其中 ≥2 次在同一并发构造下，贴出每次墙钟与 data dir。
-- [ ] AC6 未弱化：`grep -c "PHRASE" e2e/voice-realtime-intent-control.spec.ts` 与基线相同；`expect(order.some((text) => text.includes(PHRASE))` 与 `expect(draft, ...).toContain(PHRASE)` 仍在；无 `retries`、无 `-g` 收窄出货命令、无 `fixme/skip`。
+- [x] AC1 复现读数入档：并发构造下 ≥2 次出货命令运行，每次记 lane 数、load1、data dir、首个红用例与逐字 error-context；至少一次红是用例 4，且其连接日志含 `"reason":"fill"` 的 `omission_fill` 与该句的 `session_send delivered`。
+- [x] AC2 用例 4 的修复有判别力：`grep -n "waitForTurnAfter" e2e/voice-realtime-intent-control.spec.ts` 显示屏障调用出现在 `hearUtterance(page, upstream, 'drop-heard-phrase', PHRASE)` 之前，或（走 fixture 臂时）贴出 fixture 路径、`VOICE_REALTIME_SETTINGS_PATH` 接线 diff 与窗口值；同一并发构造下用例 4 单独 ≥3 次绿（`npx playwright test e2e/voice-realtime-intent-control.spec.ts -g "re-homes into the composer"`）；取假形态一次并贴出红（把屏障放回 PHRASE 之后，或把补发窗口恢复 3000 ms）。
+- [x] AC3 用例 5 的页面就绪：`openSession` 的有界 reload diff 入档；同一并发构造下用例 5 单独 ≥3 次绿（`-g "cannot be confirmed as enqueued"`）；`git diff` 证明 PANE 可见性断言未放宽、未加 retry、未加 `test.fixme/skip`。
+- [x] AC4 预算与本轮实测同源：`grep -n "timeoutMs" goals/AC-345-*.md` 读数 ≥ 2× 修复态实测绿跑墙钟且 ≥240000，同一次运行贴出该墙钟；`git diff <base>..HEAD -- goals/` 只有 `timeoutMs` 一行变化，`criterion:` 与 `expect:` 逐字不变。
+- [x] AC5 判据为真：出货命令 `f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f"` 逐字 ≥3 次 exit 0，其中 ≥2 次在同一并发构造下，贴出每次墙钟与 data dir。
+- [x] AC6 未弱化：`grep -c "PHRASE" e2e/voice-realtime-intent-control.spec.ts` 与基线相同；`expect(order.some((text) => text.includes(PHRASE))` 与 `expect(draft, ...).toContain(PHRASE)` 仍在；无 `retries`、无 `-g` 收窄出货命令、无 `fixme/skip`。
 
 ## DoD
 
@@ -92,3 +92,69 @@ Error: element(s) not found
 - playwright.config.ts（仅当走 settings fixture 臂、需要给本选择接 `VOICE_REALTIME_SETTINGS_PATH` 时）
 - config/voice-realtime.e2e-intent-control.settings.json（仅当走 fixture 臂；新文件）
 - tasks/gap-ac345-omission-fill-race-and-loaded-criterion-budget.md
+
+## Notes
+
+### 落点
+
+- `e2e/voice-realtime-intent-control.spec.ts`：
+  - 用例 4：`waitForTurnAfter` 屏障移到 `hearUtterance(page, upstream, 'drop-heard-phrase', PHRASE)` 之前（屏障只依赖开场 push 释放的槽位，与该句无关）。
+  - `openSession`：PANE 的 30 s 等待加一次有界 `page.reload()`；随后仍是同一条 `expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 })`。
+- `goals/AC-345-…md`：`timeoutMs: 118000 → 420000`；`criterion:` / `expect:` 一字未改。未走 settings fixture 臂，`playwright.config.ts` 与 `config/` 未改。
+
+### AC1 复现读数
+
+本轮未修复树（`02190002a`）4 路并发出货命令：meta start `2026-10-21T03:59:39Z` load1=52.17，结束 `04:02:12Z` load1=90.48。
+
+| lane | data dir | 结果 |
+|---|---|---|
+| 1 | `quay-e2e-BauRk3` | exit 1 @04:00:49Z（load1 41.51）；首个红 = 用例 3，error-context 逐字 `Locator: locator('.chat-messages-pane') / Error: element(s) not found`，落点 `openSession` :511；`2 passed (1.1m)` |
+| 2 | `quay-e2e-RbNo1K` | exit 0，`8 passed (2.5m)` @04:02:12Z |
+| 3 | `quay-e2e-t1qNlh` | exit 0，`8 passed (2.4m)` @04:02:11Z |
+| 4 | `quay-e2e-Gghdta` | exit 0，`8 passed (2.4m)` @04:02:12Z |
+
+用例 4 的 fill 红（判据记录的同一 checkout 出货命令跑，data dir `quay-e2e-kIKT3J`，connection `0b39a881-5469-4568-9300-179744a020fc`）逐字：
+
+```
+03:45:12.504 << transcription.completed "and this phrase is never relayed to the session"
+03:45:20.066 omission_fill {"i":1,"dueAt":1792554315504,"coverage":0,"reason":"fill"}
+03:45:21.018 session_send delivered in 1 ms … message "and this phrase is never relayed to the session"
+```
+
+同次 error-context（`test-results/voice-realtime-intent-cont-ba06e--re-homes-into-the-composer/error-context.md`）：`Error: the composer draft was ""`。本条也在本轮用假形态复现了同一条腿（见 AC2），避免只靠上一轮读数。
+
+### AC2 用例 4
+
+- `grep -n`：`1459: await waitForTurnAfter(...)` 在 `1463: await hearUtterance(... 'drop-heard-phrase', PHRASE)` 之前。
+- 同构造下用例 4 单独 3 次：6 路并发（3× 用例 4 + 3× 用例 5），load1 102–106，全部 exit 0；test 8.3 / 8.7 / 9.3 s，墙钟 21.9 / 21.1 / 21.8 s，data dir `quay-e2e-PuphlM` / `quay-e2e-vncq7g` / `quay-e2e-EL5MDL`。
+- 假形态（把屏障放回该句之后；openSession reload 保留）：4 路 + 96 burners（load1 119–121）仍全绿；加压到 8 路 `--repeat-each=3` + 128 burners（load1 149–211）后 lane8 repeat 1 红，data dir `quay-e2e-XWTTwh`，error-context 同为 `the composer draft was ""`，连接日志逐字：
+  ```
+  04:09:15.387 << transcription.completed "and this phrase is never relayed to the session"
+  04:09:20.096 omission_fill {"i":1,"dueAt":1792555758388,"coverage":0,"reason":"fill"}
+  04:09:20.797 session_send delivered in 6 ms … message "and this phrase is never relayed to the session"
+  ```
+  同一 lane 的 repeat 2（同一构造）：`04:10:09.158` 听到该句、`04:10:10.226` 投递更正，draft 回填 ⇒ 绿。假形态已回退，工作树干净。
+
+### AC3 用例 5
+
+- `openSession` 有界 reload 的 diff 入档（见上）；`git diff develop..HEAD -- e2e/…` 显示 PANE 的 `toBeVisible({ timeout: 30_000 })` 未改，无 retry 配置、无 `test.fixme/skip`。
+- 同构造下用例 5 单独 3 次：同一 6 路并发，load1 102–106，全部 exit 0；test 6.8 / 7.0 / 8.5 s，墙钟 19.6 / 19.8 / 21.6 s，data dir `quay-e2e-dLrvqf` / `quay-e2e-t35NUC` / `quay-e2e-mONOfL`。
+
+### AC4 预算
+
+- 修复态、合并 develop 后、4 路并发出货命令：4/4 exit 0，墙钟 **170 / 166 / 165 / 205 s**（load1 105–151），Playwright 自报 `2.8m / 2.8m / 2.7m / 3.4m`，data dir `quay-e2e-37GNXc` / `quay-e2e-21jIX9` / `quay-e2e-YG8bYP` / `quay-e2e-jsyXCm`。
+- `timeoutMs: 420000` = 2.05 × 205 s ≥ 240000。`git diff develop..HEAD -- goals/` 只有 `timeoutMs` 一行（1 insertion / 1 deletion），`criterion:` 与 `expect:` 逐字不变。
+
+### AC5 判据为真
+
+出货命令逐字（`f=e2e/voice-realtime-intent-control.spec.ts; [ -f "$f" ] || exit 1; DASHSCOPE_API_KEY= npx playwright test "$f"`）在同一 4 路构造下 4 次 exit 0（墙钟与 data dir 见 AC4 表）。另在修复态、未合并 develop 的 4 路并发中同样 4 次 exit 0（97 / 98 / 97 / 101 s，data dir `quay-e2e-ocF3De` / `quay-e2e-jhlbje` / `quay-e2e-fwI0tl` / `quay-e2e-H1pRBk`）。
+
+### AC6 未弱化
+
+- `grep -c PHRASE` = 4（与基线相同）。
+- `expect(order.some((text) => text.includes(PHRASE)), …).toBe(false)` 与 `expect(draft, …).toContain(PHRASE)` 仍在（:1493 / :1501）。
+- 出货命令无 `-g`；spec 与 config 无 `fixme/skip`，spec 无 `retries` 记号。
+
+### 反漂移与类型
+
+`anti-drift-touches-check … --merge-target develop` → `ANTI-DRIFT OK … 2 actual file(s), all within declared Touches (5 glob(s))`，exit 0；`npx tsc --noEmit -p tsconfig.json` exit 0。
