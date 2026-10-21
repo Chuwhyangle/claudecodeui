@@ -666,7 +666,10 @@ async function transcriptClearance(page: Page) {
   return { paneBottom: paneBox ? paneBox.y + paneBox.height : Number.NaN, paneTop: paneBox?.y ?? Number.NaN, lastBottom: lastBox ? lastBox.y + lastBox.height : null, rowCount: count, barTop: bar.top };
 }
 
-test.describe.configure({ mode: 'serial' });
+// The held-run case below waits on a row its scenario writes 60 s in; the runner's default 60 s
+// per-test budget would expire on the same clock as that row. 120 s keeps the case's own waits — not
+// the runner — the thing that decides it, without loosening any assertion.
+test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
 test.describe('voice realtime composer embedded bar', () => {
   let page: Page;
@@ -1216,7 +1219,16 @@ test.describe('voice realtime composer embedded bar', () => {
         // The walk sleeps to this offset (the engine's clock is absolute), so the run is RUNNING for
         // the whole window below. The row is written only after the sleep, which is what makes "it is
         // absent before the leave and present after" a reading rather than a coincidence.
-        { at: 20_000, op: 'row', role: 'assistant', text: FINAL_TURN_TEXT },
+        //
+        // 60 s, not 20 s: this is the file's only ABSOLUTE clock assertion, and the window has to
+        // cover more than the leave click. Before the leave the case still enters Live Voice, speaks
+        // a real utterance, waits for the upstream call, then for the client's own 5 s running-sessions
+        // poll to draw the Stop, and reads two SVG classes — measured at 24.6 s and 27.1 s under load
+        // on 2026-10-21, leaving single-digit seconds of margin on the old 20 s offset. Any step that
+        // slowed past it made the "row not written before the leave" reading fail for a reason none of
+        // its assertions could name. The assertion itself is unchanged: the row must still be absent
+        // at the instant of the leave.
+        { at: 60_000, op: 'row', role: 'assistant', text: FINAL_TURN_TEXT },
       ],
       expect: { rows: { delta: 1 }, content: { mustContain: [SEED_USER_TEXT, FINAL_TURN_TEXT] } },
     };
@@ -1259,7 +1271,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await leave.click();
     await expect(page.locator(BAR)).toHaveCount(0, { timeout: 15_000 });
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
-    await expect.poll(() => paneText(page), { timeout: 30_000 }).toContain(FINAL_TURN_TEXT);
+    await expect.poll(() => paneText(page), { timeout: 90_000 }).toContain(FINAL_TURN_TEXT);
   });
 
   /**
