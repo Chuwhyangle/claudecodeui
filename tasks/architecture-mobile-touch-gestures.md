@@ -1,7 +1,7 @@
 ---
 id: architecture-mobile-touch-gestures
 title: 移动端手势与触摸目标：双指捏合 + 单指拖拽 + ≥44px 按钮 + 点击语义拆分
-status: todo
+status: ready
 labels:
   - feature
 parent: null
