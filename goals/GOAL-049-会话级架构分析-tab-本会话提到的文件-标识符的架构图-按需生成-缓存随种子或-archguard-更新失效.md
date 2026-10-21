@@ -1,10 +1,16 @@
 ---
 id: GOAL-049
 title: 会话级架构分析 tab：本会话提到的文件/标识符的架构图，按需生成、缓存随种子或 .archguard 更新失效
-status: active
+status: achieved
 kind: goal
 origin: 本会话（2026-10-21）关于会话级架构分析 tab 的设计讨论，人 yale 指令收敛为 ADR-005 并落成 quay goal
 activatedAt: 2026-10-21T07:02:11.826Z
+statusLog:
+  - at: 2026-10-21T09:12:34.262Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: all ACs achieved + sufficiency covered"
 ---
 ## 背景
 
