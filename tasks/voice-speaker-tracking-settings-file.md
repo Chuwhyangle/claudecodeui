@@ -57,7 +57,7 @@ Phase 1 的 shadow 声纹跟踪（`voice-speaker-tracker-shadow`，已 done）�
 - [ ] AC3：`server/index.ts` 改为按连接读取设置：`loadVoiceRealtimeSettings` 在构造 seam 前调用一次，`speakerTracking` 决定 mode/路径/阈值；模型按解析后的 `modelPath` 缓存（每个路径只加载一次，失败 memoize 成一行日志 + null embedder）；`mode=off`、模型缺失、加载失败都不建 seam、不阻塞连接。
 - [ ] AC4：Phase 1 的只读行为不变：无 `speakerTracker` seam 时 relay 逐字节不变；shadow 只写 `speaker_shadow`，不丢帧/不改帧/不发客户端帧/不写 DB。
 - [ ] AC5：`config/voice-realtime.settings.example.json` 增加带注释的 `speakerTracking` 示例；`.env.example` 把 `VOICE_SPEAKER_*` 标注为 escape hatch，把 `VOICE_REALTIME_SETTINGS_PATH` 写成正常入口；`voice-realtime-settings.ts` 顶部“八个 key”的说明更新为九个。
-- [ ] AC6：测试只用既有 server 测试文件（`voice-realtime-context-and-settings.test.ts`、`voice-realtime-speaker-tracker.test.ts`），不新增 server 测试文件；`quay-test-script` 的 389 / `unknown=386`/388 pin 不动。`npm run typecheck` 与相关测试退出 0。
+- [ ] AC6：测试只用既有 server 测试文件（`voice-realtime-context-and-settings.test.ts`、`voice-realtime-speaker-tracker.test.ts`），不新增 server 测试文件；`quay-test-script` 的收集数 pin 不因本任务改变（当前 389 / `unknown=386`/388；若其他任务已改变，以实际重测为准，本任务不新增测试文件即可）。`npm run typecheck` 与相关测试退出 0。
 - [ ] AC7：真机 shadow 只设 `VOICE_REALTIME_SETTINGS_PATH`（不设 `VOICE_SPEAKER_*`），完成一次 Live Voice 会话，日志出现 `speaker_shadow` 逐窗口行与连接汇总；音频行为与 Phase 1 一致。
 - [ ] AC8：env-only 兼容：只设 `VOICE_SPEAKER_TRACKING=shadow` + `VOICE_SPEAKER_MODEL_PATH` 仍可启用，且日志写明 `environment` 覆盖了文件/default。
 
@@ -65,7 +65,7 @@ Phase 1 的 shadow 声纹跟踪（`voice-speaker-tracker-shadow`，已 done）�
 
 - `voice-realtime-context-and-settings.test.ts` 与 `voice-realtime-speaker-tracker.test.ts` 全绿；`npm run typecheck` 退出 0。
 - 真机 shadow 用设置文件完成一次会话（AC7），日志含 source；env-only 回退也验证一次（AC8）。
-- 不新增 server 测试文件，`quay-test-script` pin 保持 389 / `unknown=386`/388。
+- 不新增 server 测试文件；`quay-test-script` 的收集数 pin 不因本任务改变（以实际重测为准）。
 - `.env.example` 与示例 settings 文件可直接照着配置；文档明确“文件是正常入口，env 是 escape hatch”。
 
 ## Touches
