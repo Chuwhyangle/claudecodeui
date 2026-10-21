@@ -25,9 +25,9 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：紧凑模式下工具栏只有一行（标题/粒度/「…」）；hops、honesty、导出、缩放控件可在「…」菜单里找到；粗指针下无 hover 提示栏；hops 控件带可读文字与 `aria-label`
-- [ ] 触摸目标不回归：粗指针下所有可点控件命中区 ≥44×44（沿用 `mobileGestures.test.tsx` 既有断言）；截断提示在真正截断时仍可见
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（桌面用例不回归）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：紧凑模式下工具栏只有一行（标题/粒度/「…」）；hops、honesty、导出、缩放控件可在「…」菜单里找到；粗指针下无 hover 提示栏；hops 控件带可读文字与 `aria-label`
+- [x] 触摸目标不回归：粗指针下所有可点控件命中区 ≥44×44（沿用 `mobileGestures.test.tsx` 既有断言）；截断提示在真正截断时仍可见
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（桌面用例不回归）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
