@@ -167,6 +167,39 @@ const settledDensity = async (page: Page): Promise<Density> => {
   throw new Error('the transcript density never settled');
 };
 
+/**
+ * The fixture's oldest row: the one user prompt, and the only row that lives exclusively in the older page.
+ * See {@link awaitWholeFixtureWindow} for why that makes it the witness for "the pane holds the whole turn".
+ */
+const FIXTURE_FIRST_ROW = 'Show me the release notes for the work segment browser.';
+
+/**
+ * Establishes, on the document the readings below are taken from, that the pane holds the WHOLE fixture turn
+ * — not only the newest page of it.
+ *
+ * The client opens a session on its newest `SESSION_MESSAGES_PAGE_SIZE` rows (20) and reads the older page
+ * (`offset=20`) only after the first paint has written a scroll offset. The fixture is 24 rows, so between
+ * those two moments the pane is a strict prefix of the transcript: the first run is missing three of its
+ * seven members and the collapsed drawing is 6 rows / 329px instead of 7 / ~410px. That shorter window
+ * passes the "under half the unmerged density" thresholds for the wrong reason — the pane is short because
+ * the window is partial, not because the merging withheld rows — and the run then reds one reading later,
+ * on a header count. The readings are about the app's merging, so they must be taken on a pane that holds
+ * the whole turn.
+ *
+ * The witness is the fixture's first row, the user prompt. It lives exclusively in the older page (the
+ * newest-20 window starts three members into the first run), so its presence in the measured pane's DOM
+ * means that page has landed and the window is the whole 24-row turn. It is a DOM reading of the same
+ * document the density and header readings are taken from — a restart that remounts the pane between this
+ * wait and those readings is caught by their own settled/re-read discipline, and this wait is repeated
+ * beside each density reading. Unlike a member count or a density, no partial window can satisfy it.
+ */
+const awaitWholeFixtureWindow = (page: Page) =>
+  expect(
+    page.locator(`${PANE} ${ROW}`, { hasText: FIXTURE_FIRST_ROW }).first(),
+    'the pane never showed the fixture’s first row: the older page had not landed, so the transcript held '
+      + 'only its newest 20 rows and would be measured as a short (but not merged) turn',
+  ).toBeVisible({ timeout: 30_000 });
+
 type SegmentState = {
   key: string | null;
   /** The member rows actually in the DOM — zero for a collapsed segment. */
@@ -229,6 +262,9 @@ test.describe('work segment density and search expand', () => {
     await page.locator(`${PANE} ${ROW}`).first().waitFor({ state: 'visible', timeout: 30_000 });
 
     // ── Reading (i): the default, nothing expanded. ──────────────────────────────────────────────────────
+    // Take the reading only once the pane holds the whole fixture turn; a pane still on its newest page is
+    // shorter than the transcript, and would read as "merged" while merely being partial (see the helper).
+    await awaitWholeFixtureWindow(page);
     const collapsed = await settledDensity(page);
     expect(
       collapsed.rows,
@@ -304,6 +340,7 @@ test.describe('work segment density and search expand', () => {
         if (!(states.length === headerCount && states.every((state) => state === target))) {
           // A restart replaced the document mid-pass; let the fresh one settle and re-apply there.
           await page.locator(`${PANE} ${ROW}`).first().waitFor({ state: 'visible', timeout: 30_000 });
+          await awaitWholeFixtureWindow(page);
           continue;
         }
         const density = await settledDensity(page);
@@ -314,6 +351,7 @@ test.describe('work segment density and search expand', () => {
           return density;
         }
         await page.locator(`${PANE} ${ROW}`).first().waitFor({ state: 'visible', timeout: 30_000 });
+        await awaitWholeFixtureWindow(page);
       }
       throw new Error(
         `the transcript never held every segment ${open ? 'open' : 'collapsed'} through a density reading; `
