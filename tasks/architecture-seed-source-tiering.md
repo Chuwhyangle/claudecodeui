@@ -1,7 +1,7 @@
 ---
 id: architecture-seed-source-tiering
 title: 种子治理：按来源可见性分层——user/assistant 文本核心、tool file_path 严格 cap、tool_result 不提取
-status: ready
+status: done
 labels:
   - feature
 parent: null
