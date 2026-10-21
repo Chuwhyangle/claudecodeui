@@ -11,29 +11,37 @@
   },
   "labels": {
     "confirmed": "experiments/voice-tse-eval/labels.csv",
-    "confirmedTarget": 20,
-    "confirmedNontarget": 16,
+    "confirmedTarget": 39,
+    "confirmedNontarget": 21,
     "pending": "experiments/voice-tse-eval/labels.pending.csv"
   },
   "calibration": {
     "target": {
-      "n": 15,
-      "min": 0.446,
-      "median": 0.613,
+      "n": 34,
+      "min": 0.2712,
+      "median": 0.6614,
       "max": 0.845
     },
     "negatives": {
-      "n": 462,
+      "n": 467,
       "eotBench": 400,
       "librispeech": 16,
       "tts": 46,
-      "max": 0.332,
-      "p99": 0.301,
+      "confirmedNewNontarget": 5,
+      "max": 0.3318,
+      "p99": 0.3003,
       "ge030": 6,
-      "ge035": 0
+      "ge035": 0,
+      "newNontargetMax": 0.2989
     },
     "crossDayEer": 0.026,
-    "auc": 0.997
+    "auc": 0.997,
+    "targetGe2s": {
+      "n": 32,
+      "min": 0.4459,
+      "median": 0.6614,
+      "max": 0.845
+    }
   },
   "thresholds": {
     "track": 0.3,
@@ -60,9 +68,13 @@
     "speechRatioMin": 0.6
   },
   "caveats": [
-    "No real Chinese non-target speakers yet; the negative pool is English/TTS.",
-    "Thresholds are provisional until the pending labels are confirmed and Chinese negatives are recorded.",
+    "The 5 newly confirmed real in-session non-targets are likely TTS echo/other; there are still no dedicated Chinese colleague negatives.",
+    "The only target below 0.35 is a 0.78 s clip (0.271); core scoring requires >=2 s, so short utterances use the session attractor/latch.",
     "VoxLock is session-local only; cross-session enrollment fails (see CONFIRMED-LABELS.md).",
     "VoxLock must run with threads=4 (default threads=0 used ~58 cores on a 64-core host)."
-  ]
+  ],
+  "quality": {
+    "minCoreSeconds": 2.0,
+    "shortUtterancePolicy": "use the session attractor/latch; do not update the core with <2 s clips"
+  }
 }
