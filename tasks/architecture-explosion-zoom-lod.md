@@ -25,9 +25,9 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` exit 0：档位计算（缩放因子 → 层级深度，含死区与防抖）、跨档只切显隐不触发重渲染、焦点包保持居中、折叠标签显示 `(N)` 计数
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：既有 hover/click/下钻/缩放用例不回归；新增用例覆盖远档显示包级聚合边、近档显示实体 UML 边
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` exit 0：档位计算（缩放因子 → 层级深度，含死区与防抖）、跨档只切显隐不触发重渲染、焦点包保持居中、折叠标签显示 `(N)` 计数
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：既有 hover/click/下钻/缩放用例不回归；新增用例覆盖远档显示包级聚合边、近档显示实体 UML 边
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -36,6 +36,7 @@ depends_on:
 ## Touches
 
 - src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/archguardToPlantUml.ts
 - src/modules/architecture/svgViewport.ts
 - src/modules/architecture/hierarchyIndex.ts
 - src/modules/architecture/explosionLod.ts
