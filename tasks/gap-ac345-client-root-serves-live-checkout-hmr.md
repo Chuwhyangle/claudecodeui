@@ -2,7 +2,7 @@
 id: gap-ac345-client-root-serves-live-checkout-hmr
 title: AC-345 判据红：client webServer 无 cwd、Vite 直接服务主检出，fan-in ff 写
   src/shared/api.ts 即触发 HMR 整页重载打断在跑的 case——把 client 源码根换成 run-scoped 真拷贝快照
-status: ready
+status: done
 labels:
   - gap
   - defect

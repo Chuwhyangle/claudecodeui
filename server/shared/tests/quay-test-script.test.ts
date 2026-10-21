@@ -159,11 +159,13 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 393 server test files (a moving target, so the pin is re-measured, never
+    // the tree collects 394 server test files (a moving target, so the pin is re-measured, never
     // derived); re-measured 2026-10-21 after architecture-graph-cache added
     // server/modules/architecture/tests/cache-invalidation.test.ts (391 + 1 = 392), then
     // gap-architecture-seed-extraction-from-transcript added
-    // server/modules/architecture/tests/seed-extraction.test.ts (392 + 1 = 393).
+    // server/modules/architecture/tests/seed-extraction.test.ts (392 + 1 = 393), then
+    // gap-architecture-graph-generator-seeded-subgraph added
+    // server/modules/architecture/tests/generator.test.ts (393 + 1 = 394).
     // Before that, re-measured 2026-10-21 after gap-files-tab-unfiltered-decouple-index added
     // server/modules/file-tree/tests/file-tree-search-index.test.ts (390 + 1 = 391).
     // Before that, re-measured 2026-10-21 after voice-speaker-model-provisioning added
@@ -241,8 +243,8 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // server/modules/voice-realtime/tests/voice-realtime-api-key-resolution.test.ts (374 + 1 = 375).
     // Then gap-narrator-local-gate-no-interrupt added its criterion
     // server/modules/voice-realtime/tests/voice-realtime-narrator-local-gate.test.ts (375 + 1 = 376).
-    // This fixture names 3 known files, so 393 - 3 = 390.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=390$/);
+    // This fixture names 3 known files, so 394 - 3 = 391.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=391$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -291,9 +293,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 393 files on this tree — but this fixture names ONE known file,
-    // so 393 - 1 = 392 (AC2 reads 390 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=392$/);
+    // same collection as AC2 — 394 files on this tree — but this fixture names ONE known file,
+    // so 394 - 1 = 393 (AC2 reads 391 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=393$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
