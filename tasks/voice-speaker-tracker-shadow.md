@@ -31,7 +31,7 @@ Live Voice 需要“只由目标用户触发”的能力。离线实验（`exper
 - [ ] AC5：`server/index.ts` 只在 `shadow` 且模型路径存在时加载一次 CAM++；加载失败只写一行日志并让 seam 为 `undefined`，**不得让连接失败**。`sherpa-onnx-node` 已在依赖内，不新增包。
 - [ ] AC6：`voice-realtime-ws-proxy.service.ts` 增加可选 seam `speakerTracker?:`；`undefined` 时路径与现在逐字节一致。shadow 时从浏览器 16k PCM 帧累积 2 秒窗口，调用注入的 `observe(window) -> {score, track, authorizeTse}`，只写 `speaker_shadow` 行（score、decision、accepted count、first_vs_core、provisional）；**不丢帧、不改帧、不提交、不发客户端帧**。
 - [ ] AC7：shadow 读数包含每连接汇总：windows、accepted、coverage、first_vs_core、reanchor/provisional；不含原始音频、不含逐样本 PCM。连接结束时写一行汇总。
-- [ ] AC8：新增唯一一个测试文件 `server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts`，覆盖 AC1–AC4 与 seam 的“undefined 路径不变/shadow 只观测”。不新增其他 server 测试文件；新增后重测并更新 `server/shared/tests/quay-test-script.test.ts` 的两处收集数 pin（当前 `unknown=343`/`unknown=345`，按该测试自身口径改为 `344`/`346`，注释里的全树文件数同步 +1）。
+- [ ] AC8：新增唯一一个测试文件 `server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts`，覆盖 AC1–AC4 与 seam 的“undefined 路径不变/shadow 只观测”。不新增其他 server 测试文件；新增后重测并更新 `server/shared/tests/quay-test-script.test.ts` 的两处收集数 pin（当前全树 388 个 server test 文件、`unknown=385`/`unknown=387`；新增一个测试文件后重测，按该测试自身口径改为 `unknown=386`/`unknown=388`，注释里的全树文件数 388→389）。
 - [ ] AC9：不新建 `server/modules/<new>/` 目录；新文件全部是 `server/modules/voice-realtime/` 下的叶子文件，只经既有 `index.ts` barrel 暴露必要符号；不 deep-import 其他模块。
 
 ## DoD
