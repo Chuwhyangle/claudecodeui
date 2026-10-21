@@ -1,7 +1,7 @@
 ---
 id: AC-420
 title: architecture tab 的 i18n 完整性
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-049
 criterion: npx vitest run
@@ -16,6 +16,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-21T09:11:37.138Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
