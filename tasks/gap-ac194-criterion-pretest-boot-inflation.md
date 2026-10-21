@@ -138,12 +138,30 @@ Received:    43937
 - 成因：bundle 是**编译后的源码**，含整张图的所有标识符；它原先发布在 `server/` 下，
   被两个语法树扫描器当作活源码读入（它们遍历磁盘上的非测试 `.mjs`）。机械 delta 判定说
   UNRELATED，但失败行点名的正是本任务的产物 ⇒ 按真实成因处理。
-- 修正：发布目录改为 `server/node_modules/.cache/quay-e2e-build/`。两个扫描器都 prune
-  `node_modules/`，bundle 自身的 source-hash 遍历也 prune 它；路径仍含 `server` 段，
+- 修正：发布目录改为 `server/node_modules/.cache/quay-e2e-build/`。ratchet 与 single-reader
+  两个扫描器 prune `node_modules/`（debug-agent-gate 的扫描器当时**不** prune，见下条续轮），
+  bundle 自身的 source-hash 遍历也 prune 它；路径仍含 `server` 段，
   `getBootstrapApplicationRoot` / `findApplicationRoot` 解析不变。
 - 修正后读数（同一 worktree，产物重新生成后）：AC-194 e2e 一次 exit 0，自印
   `AC-194 wall clock: 20174ms`；ratchet 4/4 pass；single-reader 4/4 pass。
   `.gitignore` 同步指向新目录。
+
+### 第三次续轮：debug-agent-gate 扫描器（2026-10-21）
+- 第二次续轮只修好了 prune `node_modules/` 的两个扫描器；`server/modules/debug-agent/tests/debug-agent-gate.test.ts`
+  的 `sourceFiles()` **不** prune，仍把 bundle 读成活源码。fan-in suite 因此红在
+  `the gate has exactly one read point under server/`，actual 三行全部指向 bundle。
+- 本轮先单文件复现（同一 worktree）：`debug-agent-gate.test.ts` 6 项中 1 红，actual 为
+  `server/node_modules/.cache/quay-e2e-build/server-index.<hash>.mjs:4920/4935/4954` 三行。
+  失败与机械 delta 提示的「UNRELATED」相反——命中的正是本任务的产物。
+- 修正（按真实成因，不是挪路径躲扫描）：`sourceFiles()` 目录遍历 prune `node_modules/`。依赖树与本任务
+  自己的编译产物都不是「有人写下的读点」；bundle 是同一棵树的编译副本，计入等于把 gate 模块自己的读
+  回读成第二个决策——恰是这条判据要排除的东西。`.gitignore` 注释里「`server/`-tree 扫描器都 prune
+  `node_modules/`」此前对本扫描器为假，修正后为真。
+- 判别力未失：临时在 `server/.quay-probe-direct-read.ts` 植入一行 `process.env.DEBUG_AGENT`，
+  扫描器仍红并逐字点名 `server/.quay-probe-direct-read.ts:1`；探针文件随后删除（`ls` 确认不存在）。
+- 修正后读数（同 worktree）：`debug-agent-gate.test.ts` 6/6 pass；ratchet + single-reader 8/8 pass。
+- 判据面未动：`git diff develop..HEAD -- goals/ e2e/` 仍为空；`toBeLessThanOrEqual(40_000)` 仍两处
+  （`:444`、`:922`）。
 
 ## Touches
 
@@ -151,6 +169,7 @@ Received:    43937
 - `scripts/e2e-server-bundle.mjs`（bundle 生成、内容 hash 缓存与原子发布）
 - `.gitignore`（忽略 `/server/node_modules/.cache/quay-e2e-build/` 构建产物）
 - `e2e/activity-dock-background.spec.ts`（判据本体；只在确有必要时改读侧，读数与上限不动）
+- `server/modules/debug-agent/tests/debug-agent-gate.test.ts`（源扫描器 prune `node_modules/`：本任务的编译产物不是活源码读点）
 - `tasks/gap-ac194-criterion-pretest-boot-inflation.md`（自触）
 
 ## Blocker
