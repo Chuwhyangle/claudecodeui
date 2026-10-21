@@ -8,10 +8,7 @@ import {
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
-import type {
-  ArchitectureRendererNode,
-  ArchitectureRendererProps,
-} from '@/modules/architecture/rendererContract';
+import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
 
 /**
  * The renderer options this component drives. Structural subsets of the
