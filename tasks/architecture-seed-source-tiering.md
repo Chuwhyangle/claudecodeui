@@ -14,8 +14,8 @@ extra: {}
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/seed-extraction.test.ts` exit 0，新增用例覆盖：user text 的 Entity（反引号 + camelCase 精确命中）进种子；user text 粘贴的项目内文件路径进文件种子；tool_result 与 Bash 命令文本不进任何种子；文件种子 cap（20）；标识符种子 cap（40）
-- [ ] 既有 AC-416 用例仍 exit 0（assistant text Entity 提取、Read/Edit file_path 提取、文件去重不回归）
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/seed-extraction.test.ts` exit 0，新增用例覆盖：user text 的 Entity（反引号 + camelCase 精确命中）进种子；user text 粘贴的项目内文件路径进文件种子；tool_result 与 Bash 命令文本不进任何种子；文件种子 cap（20）；标识符种子 cap（40）
+- [x] 既有 AC-416 用例仍 exit 0（assistant text Entity 提取、Read/Edit file_path 提取、文件去重不回归）
 
 ## DoD
 
