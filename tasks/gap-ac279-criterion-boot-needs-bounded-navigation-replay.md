@@ -3,7 +3,7 @@ id: gap-ac279-criterion-boot-needs-bounded-navigation-replay
 title: AC-279 判据的首个导航是裸 page.goto：宿主 net::ERR_NETWORK_CHANGED 在登录页 mount 前打断 76
   个请求 ⇒ 文档白屏、fill 等到 55s 看门狗被杀（同树 3 pass 后 1 fail；本轮直跑 exit
   0）——把首个导航换成有界重放并加确定性控制臂
-status: ready
+status: done
 labels:
   - gap
   - defect
