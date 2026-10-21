@@ -9,6 +9,38 @@ const normalizePath = (value: string): string =>
 const isAbsolutePath = (value: string): boolean => /^(\/|[A-Za-z]:\/)/.test(value);
 
 /**
+ * The absolute directories a reveal reference passes through, root first.
+ *
+ * The lazy tree only holds the directories it has been asked for, so this
+ * chain is composed from the reference instead of looked up in what happens to
+ * be loaded; the caller loads these in order and then expands them. Empty when
+ * the reference is outside the project or names the project root itself.
+ */
+export function directoryRevealChain(projectPath: string, reference: string): string[] {
+  const root = normalizePath(projectPath);
+  const target = normalizePath(reference);
+
+  let relative = target;
+  if (isAbsolutePath(target)) {
+    if (!target.startsWith(`${root}/`)) {
+      // Either the project root itself (nothing to expand) or a path outside
+      // it — `/workspace/apple` is not a child of `/workspace/app`.
+      return [];
+    }
+    relative = target.slice(root.length + 1);
+  }
+
+  const paths: string[] = [];
+  let current = root;
+  for (const segment of relative.split('/').filter(Boolean)) {
+    current = `${current}/${segment}`;
+    paths.push(current);
+  }
+
+  return paths;
+}
+
+/**
  * The paths to expand, root first, so `reference` becomes visible in the file
  * tree; empty when the reference is not inside the loaded tree.
  *

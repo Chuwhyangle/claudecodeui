@@ -2,7 +2,7 @@
 id: gap-ac194-criterion-pretest-boot-inflation
 title: AC-194 判据在并发 e2e 突发下红（Received 43937ms）：≈21.5s 花在 test runner 之前的 boot（静跑
   4.25s），vite 种子已生效、剩余是 tsx server 启动的 CPU 工作——削减 boot 并在同突发下复测 ≤40s
-status: ready
+status: done
 labels:
   - gap
   - defect

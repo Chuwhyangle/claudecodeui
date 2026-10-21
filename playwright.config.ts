@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { defineConfig } from '@playwright/test';
 
 import { fsAvailableBytes, resolveE2eDataDir } from './scripts/e2e-data-dir-selection.mjs';
+import { prepareServerBundle } from './scripts/e2e-server-bundle.mjs';
 import { reclaimDataDirs } from './scripts/e2e-data-dir-retention.mjs';
 import {
   ASSEMBLY_TEMP_ROOT_ENV,
@@ -2933,6 +2934,32 @@ const envFreeServerRoot = ((): string => {
 })();
 
 /**
+ * The command the server `webServer` starts: this checkout's server graph pre-built into one file.
+ *
+ * WHY NOT `tsx` ANY MORE. A criterion's ceiling covers the whole `npx playwright test` invocation,
+ * so every second the test runner spends before it prints `Running 1 test` is spent inside the wall
+ * clock the criterion asserts on. `tsx` transforms each module it loads; measured on this checkout,
+ * `tsx server/index.ts` reached `/health` in ~2.9s warm / 7.1s under load, while the same graph
+ * bundled into one file reached it in ~0.75s. Under the burst AC-194 was red in, ~21.5s of the
+ * criterion's 43.9s was pre-test boot, and the server's boot was the largest CPU block inside it.
+ *
+ * The fresh-source guarantee lives in the builder, not here: the bundle is named after a content
+ * hash of the servers' sources, so editing `server/` selects a different file and a stale bundle is
+ * unreachable (`scripts/e2e-server-bundle.mjs`). The build runs at config evaluation — ~9ms to hash
+ * the sources, ~60ms for a first build per key, nothing on a hit — which is inside the measured
+ * window too, and still two orders of magnitude below the boot it removes.
+ *
+ * `envFreeServerRoot` (not `CONFIG_DIR`) is the root the bundle is built under: the server resolves
+ * its application root by walking up from its own module URL, so the bundle has to sit under the
+ * same `server/` anchor the entry point would have resolved — including the env-free shadow the
+ * voice selections run from, where the copy keeps `.env` out of the process exactly as before.
+ */
+const serverLaunchCommand = (() => {
+  const bundlePath = prepareServerBundle(envFreeServerRoot);
+  return `node ${JSON.stringify(path.relative(envFreeServerRoot, bundlePath))}`;
+})();
+
+/**
  * The server-side EGRESS GUARD, for the voice realtime selection only.
  *
  * `envFreeServerRoot` (above) makes the replay's cloud credential blank; the guard makes the ABSENCE of a
@@ -2986,10 +3013,10 @@ export default defineConfig({
       // The raw-corpus criterion tees its server's output to a file so the spec can read the capture
       // rows; every other selection runs the server plain.
       command: voiceRawCaptureSelection
-        ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
+        ? `${serverLaunchCommand} 2>&1 | tee ${JSON.stringify(VOICE_RAW_SERVER_LOG)}`
         : clientClockCaptureSelection
-          ? `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts 2>&1 | tee ${JSON.stringify(CLIENT_CLOCK_SERVER_LOG)}`
-          : 'node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts',
+          ? `${serverLaunchCommand} 2>&1 | tee ${JSON.stringify(CLIENT_CLOCK_SERVER_LOG)}`
+          : serverLaunchCommand,
       // The voice criterion's server is started from a root with no `.env`, so its blank
       // `DASHSCOPE_API_KEY` cannot be backfilled from the deployer's file. Every other selection
       // gets `CONFIG_DIR`, which is Playwright's own default — see `envFreeServerRoot`.

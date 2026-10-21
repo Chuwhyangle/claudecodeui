@@ -338,11 +338,21 @@ function describe(reading: ProbeReading): string {
 // for; the scan itself is what defines the target.
 const ENV_READ_PATTERN = new RegExp(`process\\.env\\.(${GATE_VAR}|${GATE_HOME_VAR})\\b`);
 
+/**
+ * Every authored source file under `dir`.
+ *
+ * `node_modules/` is pruned: it holds vendored packages and this project's own
+ * compiled e2e server bundle (`server/node_modules/.cache/quay-e2e-build/`),
+ * neither of which is a read point somebody wrote. The bundle is compiled FROM
+ * this tree, so counting it would report the gate module's own read back as a
+ * second, independent decision — the exact thing this scan exists to rule out.
+ */
 function sourceFiles(dir: string): string[] {
   const found: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const absolute = path.join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name === 'node_modules') continue;
       found.push(...sourceFiles(absolute));
     } else if (/\.(ts|js|mts|cts|mjs|cjs)$/.test(entry.name)) {
       found.push(absolute);

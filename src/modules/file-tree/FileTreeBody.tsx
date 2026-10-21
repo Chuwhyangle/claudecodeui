@@ -13,6 +13,8 @@ type FileTreeBodyProps = {
   searchQuery: string;
   viewMode: FileTreeViewMode;
   expandedDirs: Set<string>;
+  /** Directories whose lazy listing is in flight; their open rows show a placeholder. */
+  loadingPaths?: Set<string>;
   onItemClick: (item: FileTreeNode) => void;
   renderFileIcon: (filename: string) => ReactNode;
   formatFileSize: (bytes?: number) => string;
@@ -46,6 +48,7 @@ export default function FileTreeBody({
   searchQuery,
   viewMode,
   expandedDirs,
+  loadingPaths,
   onItemClick,
   renderFileIcon,
   formatFileSize,
@@ -95,6 +98,7 @@ export default function FileTreeBody({
           items={filteredFiles}
           viewMode={viewMode}
           expandedDirs={expandedDirs}
+          loadingPaths={loadingPaths}
           onItemClick={onItemClick}
           renderFileIcon={renderFileIcon}
           formatFileSize={formatFileSize}
