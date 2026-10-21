@@ -52,16 +52,16 @@ goal_ac: AC-416
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0（整份 criterion 绿）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 文件种子：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：Read/Edit/Write/NotebookEdit 的 `toolInput.file_path` 全部进入 `files`，重复路径只保留一次，顺序为首次出现顺序。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 标识符种子：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：反引号 span 内 token（含全小写名）与全文 PascalCase/camelCase 词中，精确命中 `knownIdentifiers` 的名字全部进入 `identifiers`，且去重。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 普通词与外部符号：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：不在 `knownIdentifiers` 的普通词/外部符号不出现在 `identifiers`。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 文件种子 cap：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：喂 101 个不同路径时 `files.length === 100`，保留的是前 100 个，第 101 个缺席，重复项不占 cap 名额。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 假形态 A：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：Edit 独有路径在全量输入中存在、在去掉 Edit tool_use 的输入中缺席，差集非空。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 假形态 B：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：普通词在真实 `knownIdentifiers` 下缺席，在把该词加入的镜像集合下出现。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（collected 计数已按实测更新，AC2/AC3 pin 与注释一致）。
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出码 0（新目录作为 leaf 通过，未改 baseline/manifest）。
-- [ ] `npm run typecheck` 退出码 0；`npm run lint` 退出码 0。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0（整份 criterion 绿）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 文件种子：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：Read/Edit/Write/NotebookEdit 的 `toolInput.file_path` 全部进入 `files`，重复路径只保留一次，顺序为首次出现顺序。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 标识符种子：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：反引号 span 内 token（含全小写名）与全文 PascalCase/camelCase 词中，精确命中 `knownIdentifiers` 的名字全部进入 `identifiers`，且去重。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 普通词与外部符号：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：不在 `knownIdentifiers` 的普通词/外部符号不出现在 `identifiers`。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 文件种子 cap：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：喂 101 个不同路径时 `files.length === 100`，保留的是前 100 个，第 101 个缺席，重复项不占 cap 名额。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 假形态 A：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：Edit 独有路径在全量输入中存在、在去掉 Edit tool_use 的输入中缺席，差集非空。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test --test-name-pattern "AC-416 假形态 B：" server/modules/architecture/tests/seed-extraction.test.ts` 退出码 0：普通词在真实 `knownIdentifiers` 下缺席，在把该词加入的镜像集合下出现。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0（collected 计数已按实测更新，AC2/AC3 pin 与注释一致）。
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出码 0（新目录作为 leaf 通过，未改 baseline/manifest）。
+- [x] `npm run typecheck` 退出码 0；`npm run lint` 退出码 0。
 
 ## DoD
 
@@ -71,6 +71,18 @@ goal_ac: AC-416
 - `knownIdentifiers` fixture 来自真实 `.archguard/query` 快照并注明 scope key 与 `archJsonHash`；消息 fixture 是真实 `NormalizedMessage` 形状（`kind`/`role`/`content`/`toolName`/`toolInput`），不是手编的假形状。
 - 上列 AC 命令在落地的分支上全绿；`server-import-cycle-budget` 与 `quay-test-script` 也绿，且没有改 baseline/manifest 去「祝福」新目录。
 - 任务记录/提交说明里贴出实际测试输出摘要（文件种子数、标识符种子列表、cap 读数、两条假形态的差集），供 driver 复核。
+
+### AC-416 实测读数（2026-10-21，task 分支 c4d909948 + develop 合并后复跑）
+
+- 整份 criterion：`tests 6 / pass 6 / fail 0`；六条 `--test-name-pattern` 单腿各自 `tests 1 / pass 1 / fail 0`。
+- file 种子：`files.length=5` → `["src/App.tsx","src/auth/useAuth.ts","src/components/MermaidDiagram.tsx","notebooks/probe.ipynb","src/codex/json-string-input.ts"]`（Read/Edit/Write/NotebookEdit 四类齐、重复 `src/App.tsx` 只留一次、Codex JSON 字符串 `toolInput` 解析成功、坏 JSON 不加种子）。
+- identifier 种子：`["reassemble","createNormalizedMessage","App","useAuth","MermaidDiagram","ChatInterface"]`（`reassemble` 全小写、只经反引号规则命中；其余 PascalCase/camelCase；无重复）。
+- 排除读数：`["Whenever","The","JSON","Promise","LoginForm","SetupForm","ProtectedRoute"]` 均不在 `identifiers`——前四个是候选但不在 `nameToIds` 切片，后三个只出现在 `thinking`/`tool_result`/user 行。
+- cap 读数：unique=101 → kept=100、discarded=1，`first=src/cap/file-000.ts`、`last=src/cap/file-099.ts`，第 101 个 `file-100.ts` 缺席，提前插入的重复 `file-000.ts` 未占名额。
+- 假形态 A 差集：full ∖ withoutEdit = `["src/auth/useAuth.ts"]`（Edit 独占路径）。
+- 假形态 B：`realHas=false`、`mirrorHas=true`，且镜像集合去掉该词后与真实集合逐项相等。
+- pin：collected 392（391 + 新 criterion）；`quay-test-script` AC2 `known=3 unknown=389`、AC3 `known=1 unknown=391`，注释同步；`server-import-cycle-budget` 11/11 绿（`modules/architecture` 未进 manifest，作为新 leaf 通过，未改 baseline/MANIFEST_PIN）。
+- `npm run typecheck` exit 0；`npm run lint` exit 0（本任务文件无 warning）。
 
 ## Touches
 
