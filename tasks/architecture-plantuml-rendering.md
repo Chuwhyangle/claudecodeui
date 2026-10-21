@@ -18,9 +18,9 @@ depends_on:
 
 ## AC
 
-- [ ] 前端桥接函数 exit 0：JSON 邻域 → .puml，映射表正确（composition→o-- 不升 *--；call→..> 非实线；显示名 relpath.EntityName 前截不截后）
-- [ ] 前端测试 exit 0：plantuml-js 渲染 SVG、overview 视图点组展开、neighborhood 点实体下钻 hops+1、hover 高亮入/出边
-- [ ] `npm run typecheck` 与 `npm run build` 通过；plantuml-js 走 dynamic import 懒加载（不增大首屏主 chunk）
+- [x] 前端桥接函数 exit 0：JSON 邻域 → .puml，映射表正确（composition→o-- 不升 *--；call→..> 非实线；显示名 relpath.EntityName 前截不截后）
+- [x] 前端测试 exit 0：plantuml-js 渲染 SVG、overview 视图点组展开、neighborhood 点实体下钻 hops+1、hover 高亮入/出边
+- [x] `npm run typecheck` 与 `npm run build` 通过；plantuml-js 走 dynamic import 懒加载（不增大首屏主 chunk）
 
 ## DoD
 
@@ -37,3 +37,11 @@ depends_on:
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/i18n/locales/en/chat.json
 - tasks/architecture-plantuml-rendering.md
+
+## Blocker
+
+**2026-10-21T16:06:43.434Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：6c8395db-e9b9-4958-a87f-ac7ed39dda13
