@@ -1,7 +1,7 @@
 ---
 id: gap-ac207-partial-message-window-read
 title: AC-207 判据在转写分页窗口载满前读数：collapsed 读成 6 行/329px（真空绿）、首段成员数读成 4（[4,5,8]）
-status: todo
+status: ready
 labels:
   - gap
   - defect
