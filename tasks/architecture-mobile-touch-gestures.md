@@ -19,10 +19,10 @@ architecture tab 在移动浏览器上几乎不可用：`PlantUmlGraph.tsx` / `s
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/mobileGestures.test.tsx` exit 0：双指 pinch 改变缩放（锚点为两指中点）、单指拖拽平移、`touch-action` 生效；桌面 wheel 行为不变；pinch 不触发页面缩放
-- [ ] 触摸目标：粗指针下工具栏按钮命中区 ≥44×44（测试读计算样式或显式属性）；窄屏入口收进溢出菜单且可展开
-- [ ] 触摸端单击只选中不重排；下钻需显式动作（双击/Drill in 按钮）才切换视图
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（既有桌面用例不回归）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/mobileGestures.test.tsx` exit 0：双指 pinch 改变缩放（锚点为两指中点）、单指拖拽平移、`touch-action` 生效；桌面 wheel 行为不变；pinch 不触发页面缩放
+- [x] 触摸目标：粗指针下工具栏按钮命中区 ≥44×44（测试读计算样式或显式属性）；窄屏入口收进溢出菜单且可展开
+- [x] 触摸端单击只选中不重排；下钻需显式动作（双击/Drill in 按钮）才切换视图
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（既有桌面用例不回归）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -32,6 +32,9 @@ architecture tab 在移动浏览器上几乎不可用：`PlantUmlGraph.tsx` / `s
 
 - src/modules/architecture/PlantUmlGraph.tsx
 - src/modules/architecture/svgViewport.ts
+- src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/architecture/rendererContract.ts
+- src/modules/architecture/hooks/useTouchLayout.ts
 - src/modules/architecture/tests/mobileGestures.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/i18n/locales/en/common.json
