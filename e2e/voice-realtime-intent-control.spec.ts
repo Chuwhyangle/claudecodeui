@@ -514,8 +514,8 @@ async function leaveLiveVoice(page: Page): Promise<void> {
  * 2026-10-21 under four concurrent sibling lanes, a case died on the 30 s wait with
  * `element(s) not found` for `.chat-messages-pane`. The reload re-runs the SAME navigation once;
  * the assertion below is unchanged, so a page that is genuinely broken still fails — this is a
- * bounded retry of the navigation, not a longer patience with a missing pane, and it adds no
- * Playwright-level `retries`.
+ * bounded retry of the navigation, not a longer patience with a missing pane, and it changes no
+ * Playwright-level retry budget.
  */
 async function openSession(page: Page, sessionId: string): Promise<void> {
   await page.goto(`/session/${sessionId}`);
