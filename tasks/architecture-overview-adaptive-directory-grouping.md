@@ -19,9 +19,9 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：平铺 230 个文件的 `scripts/` 折成 1 个组且计数正确；深层路径（claudecodeui 形态）组数 ≤ 上限且比旧固定深度 2 不退化；组数上限被遵守；任一组名都不以文件扩展名结尾（对目录型分组）
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：`group` 视图展开平铺大目录时再次分组、不平铺全部文件；既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：平铺 230 个文件的 `scripts/` 折成 1 个组且计数正确；深层路径（claudecodeui 形态）组数 ≤ 上限且比旧固定深度 2 不退化；组数上限被遵守；任一组名都不以文件扩展名结尾（对目录型分组）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：`group` 视图展开平铺大目录时再次分组、不平铺全部文件；既有 hover/缩放/爆炸/下钻用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
