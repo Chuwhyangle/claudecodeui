@@ -36,7 +36,13 @@
       "zoomIn": "Perbesar",
       "zoomOut": "Perkecil",
       "zoomFit": "Sesuaikan dengan tampilan",
-      "zoomActual": "Ukuran asli (100%)"
+      "zoomActual": "Ukuran asli (100%)",
+      "lod": {
+        "packages": "Paket",
+        "subpackages": "Subpaket",
+        "entities": "Entitas"
+      },
+      "explosion": "Tampilan ledakan"
     },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",

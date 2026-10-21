@@ -36,7 +36,13 @@
       "zoomIn": "Yakınlaştır",
       "zoomOut": "Uzaklaştır",
       "zoomFit": "Görünüme sığdır",
-      "zoomActual": "Gerçek boyut (%100)"
+      "zoomActual": "Gerçek boyut (%100)",
+      "lod": {
+        "packages": "Paketler",
+        "subpackages": "Alt paketler",
+        "entities": "Varlıklar"
+      },
+      "explosion": "Patlama görünümü"
     },
     "title": "Mimari",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",

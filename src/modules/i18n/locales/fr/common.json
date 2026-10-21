@@ -36,7 +36,13 @@
       "zoomIn": "Zoom avant",
       "zoomOut": "Zoom arrière",
       "zoomFit": "Ajuster à la vue",
-      "zoomActual": "Taille réelle (100 %)"
+      "zoomActual": "Taille réelle (100 %)",
+      "lod": {
+        "packages": "Paquets",
+        "subpackages": "Sous-paquets",
+        "entities": "Entités"
+      },
+      "explosion": "Vue explosion"
     },
     "title": "Architecture",
     "noSession": "Sélectionnez une session pour voir l'architecture des fichiers qu'elle a touchés.",

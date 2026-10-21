@@ -36,7 +36,13 @@
       "zoomIn": "放大",
       "zoomOut": "縮小",
       "zoomFit": "配合檢視",
-      "zoomActual": "實際大小（100%）"
+      "zoomActual": "實際大小（100%）",
+      "lod": {
+        "packages": "套件",
+        "subpackages": "子套件",
+        "entities": "實體"
+      },
+      "explosion": "爆炸圖"
     },
     "title": "架構",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",

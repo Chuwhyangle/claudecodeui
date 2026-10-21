@@ -106,6 +106,52 @@ export function applyZoomScale(svg: SVGSVGElement, scale: number): number {
   return applied;
 }
 
+/** A client-coordinate rectangle: the subset of `DOMRect` the centring math reads. */
+export type ViewportRect = {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+/**
+ * The scroll offsets that put `target`'s centre at `viewport`'s centre, given
+ * the container's current scroll position. Pure so the focus-recentre gesture
+ * of the explosion LOD can be tested without a laid-out browser.
+ */
+export function centeredScrollOffsets(
+  viewport: ViewportRect,
+  target: ViewportRect,
+  current: { readonly left: number; readonly top: number },
+): { left: number; top: number } {
+  return {
+    left: current.left + (target.left + target.width / 2) - (viewport.left + viewport.width / 2),
+    top: current.top + (target.top + target.height / 2) - (viewport.top + viewport.height / 2),
+  };
+}
+
+/**
+ * Scroll `container` so `target`'s centre sits in the middle of the visible
+ * box. Used by the architecture explosion LOD when a zoom crosses a detail
+ * level, so the package the user is focused on cannot run off-screen.
+ *
+ * `clientWidth`/`clientHeight` exclude scrollbars and are what the browser
+ * centres within; a not-laid-out container (jsdom) falls back to its rect.
+ */
+export function centerElementInContainer(container: HTMLElement, target: Element): void {
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const width = container.clientWidth > 0 ? container.clientWidth : containerRect.width;
+  const height = container.clientHeight > 0 ? container.clientHeight : containerRect.height;
+  const offsets = centeredScrollOffsets(
+    { left: containerRect.left, top: containerRect.top, width, height },
+    { left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height },
+    { left: container.scrollLeft, top: container.scrollTop },
+  );
+  container.scrollLeft = offsets.left;
+  container.scrollTop = offsets.top;
+}
+
 /** The content box a fitted SVG may occupy, or `null` when the browser has not laid it out yet. */
 function measureViewport(container: HTMLElement): SvgViewportSize | null {
   let paddingX = 0;

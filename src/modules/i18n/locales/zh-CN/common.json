@@ -36,7 +36,13 @@
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "zoomFit": "适应视图",
-      "zoomActual": "实际大小（100%）"
+      "zoomActual": "实际大小（100%）",
+      "lod": {
+        "packages": "包",
+        "subpackages": "子包",
+        "entities": "实体"
+      },
+      "explosion": "爆炸图"
     },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",

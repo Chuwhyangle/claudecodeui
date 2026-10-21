@@ -8,6 +8,16 @@ import {
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
+import {
+  applyExplosionLod,
+  buildExplosionHierarchy,
+  createExplosionLodScheduler,
+  focusPackageOf,
+  resolveLodDepth,
+  type ExplosionLodDepth,
+  type ExplosionLodScheduler,
+} from '@/modules/architecture/explosionLod';
+import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import type {
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
@@ -282,6 +292,41 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     setZoom(next);
   }, []);
 
+  // The hierarchy of the drawing on screen (entities → packages) and the zoom
+  // level currently displayed. The level is applied imperatively (display
+  // toggles, label rewrites, edge overlay) so crossing it never replaces the
+  // SVG; the state copy exists only for the toolbar readout.
+  const lodRef = useRef<{
+    hierarchy: ArchitectureHierarchyIndex;
+    edges: ArchitectureRendererGraph['edges'];
+  } | null>(null);
+  const lodDepthRef = useRef<ExplosionLodDepth | null>(null);
+  const lodSchedulerRef = useRef<ExplosionLodScheduler | null>(null);
+  // The neighbourhood centre, kept outside the render so a level cross can
+  // recentre the package it belongs to even when nothing is clicked.
+  const centerEntityRef = useRef<string | null>(null);
+  const [lodDepth, setLodDepth] = useState<ExplosionLodDepth | null>(null);
+
+  // Re-evaluate the level after the zoom settles; the focus package is scrolled
+  // back only when the level actually changes, not on every wheel tick.
+  const applyLod = useCallback((scale: number): void => {
+    const host = hostRef.current;
+    const drawing = lodRef.current;
+    if (host === null || drawing === null) return;
+    const depth = resolveLodDepth(scale, lodDepthRef.current);
+    const crossed = depth !== lodDepthRef.current;
+    lodDepthRef.current = depth;
+    applyExplosionLod({
+      host,
+      hierarchy: drawing.hierarchy,
+      edges: drawing.edges,
+      depth,
+      focusPackageId: focusPackageOf(drawing.hierarchy, [selectedRef.current, centerEntityRef.current]),
+      centerFocus: crossed,
+    });
+    setLodDepth(depth);
+  }, []);
+
   // One controller per mount: it survives the renderer replacing the SVG (each
   // render re-attaches), so the mode and scale outlive a single drawing.
   useEffect(() => {
@@ -293,11 +338,25 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     };
   }, []);
 
+  // The LOD debouncer lives for the mount; a drawing change cancels its pending
+  // application through the render effect below.
+  useEffect(() => {
+    const scheduler = createExplosionLodScheduler();
+    lodSchedulerRef.current = scheduler;
+    return () => {
+      scheduler.cancel();
+      lodSchedulerRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
 
     let cancelled = false;
+    // A pending application belongs to the drawing being replaced; the new one
+    // is applied synchronously below.
+    lodSchedulerRef.current?.cancel();
     setFailure(null);
     hoverCallbackRef.current?.(null);
     // A reloaded graph may not contain the previously selected entity.
@@ -326,18 +385,48 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
         // observer keeps following the container only for a fit user.
         const drawing = host.querySelector('svg');
         const viewport = viewportRef.current;
+        let drawnScale = zoomRef.current.scale;
         if (drawing !== null && viewport !== null) {
           viewport.attach(drawing);
-          applyZoom({ scale: viewport.fit(), mode: zoomRef.current.mode });
+          drawnScale = viewport.fit();
+          applyZoom({ scale: drawnScale, mode: zoomRef.current.mode });
         }
         // A fresh SVG has no highlight classes; re-pin the current selection.
         highlightSelection(host, selectedRef.current);
+        centerEntityRef.current = null;
         if (view.kind === 'neighborhood') {
           const center = diagram.rendererEntity;
           if (center !== null) {
             const id = reverseAliases(diagram.aliasOf).get(center);
-            if (id !== undefined) nodeElement(host, id)?.classList.add('arch-center');
+            if (id !== undefined) {
+              centerEntityRef.current = id;
+              nodeElement(host, id)?.classList.add('arch-center');
+            }
           }
+        }
+        // A new drawing gets its LOD applied synchronously, so it never flashes
+        // at the wrong detail before the debouncer fires. The overview has no
+        // entities or package frames to collapse, so it stays out of the LOD.
+        if (view.kind === 'overview') {
+          lodRef.current = null;
+          lodDepthRef.current = null;
+          setLodDepth(null);
+        } else {
+          const hierarchy = buildExplosionHierarchy(host, graph);
+          lodRef.current = { hierarchy, edges: graph.edges };
+          const depth = resolveLodDepth(drawnScale, null);
+          lodDepthRef.current = depth;
+          applyExplosionLod({
+            host,
+            hierarchy,
+            edges: graph.edges,
+            depth,
+            focusPackageId: focusPackageOf(hierarchy, [selectedRef.current, centerEntityRef.current]),
+            // A fresh drawing was just fitted; scrolling it would fight the
+            // fit rather than preserve a focus across a level cross.
+            centerFocus: false,
+          });
+          setLodDepth(depth);
         }
         setDrawn({
           view,
@@ -503,6 +592,15 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     return () => observer.disconnect();
   }, [applyZoom]);
 
+  // The zoom is read through `zoomRef` when the debounced application runs, so
+  // a burst of wheel/resize updates coalesces into one visibility toggle rather
+  // than walking every intermediate level.
+  useEffect(() => {
+    const scheduler = lodSchedulerRef.current;
+    if (scheduler === null) return;
+    scheduler.request(() => applyLod(zoomRef.current.scale));
+  }, [applyLod, zoom.scale]);
+
   const zoomToScale = (scale: number): void => {
     const viewport = viewportRef.current;
     applyZoom({ scale: viewport?.zoomTo(scale) ?? scale, mode: 'custom' });
@@ -522,11 +620,13 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
     ? t('architecture.plantuml.overview', { defaultValue: 'Overview' })
     : view.kind === 'group'
       ? t('architecture.plantuml.group', { defaultValue: 'Group: {{group}}', group: view.prefix })
-      : t('architecture.plantuml.neighborhood', {
-          defaultValue: '{{entity}} · {{hops}} hop(s)',
-          entity: view.entityId,
-          hops: view.hops,
-        });
+      : view.kind === 'hierarchy'
+        ? t('architecture.plantuml.explosion', { defaultValue: 'Explosion view' })
+        : t('architecture.plantuml.neighborhood', {
+            defaultValue: '{{entity}} · {{hops}} hop(s)',
+            entity: view.entityId,
+            hops: view.hops,
+          });
 
   return (
     <div
@@ -538,6 +638,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
       data-architecture-visible-edges={drawn?.view === view ? drawn.edges : 0}
       data-architecture-zoom-mode={zoom.mode}
       data-architecture-zoom-scale={zoom.scale}
+      data-architecture-lod-depth={lodDepth ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
@@ -552,7 +653,30 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraph
               {t('architecture.plantuml.back', { defaultValue: 'Back to overview' })}
             </button>
           )}
+          {view.kind !== 'hierarchy' && (
+            // The explosion view draws the whole graph as one nested hierarchy;
+            // zooming it then switches visibility levels instead of re-laying it.
+            <button
+              type="button"
+              onClick={() => setView({ kind: 'hierarchy' })}
+              data-architecture-explosion="true"
+              className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.plantuml.explosion', { defaultValue: 'Explosion view' })}
+            </button>
+          )}
           <span data-architecture-view-label>{viewLabel}</span>
+          {/* The semantic-zoom level currently shown. It is the diagram's own
+              reading of the scale, so it changes only after the debounce. */}
+          {lodDepth !== null && (
+            <span data-architecture-lod-label className="tabular-nums">
+              {lodDepth === 0
+                ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
+                : lodDepth === 1
+                  ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
+                  : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
+            </span>
+          )}
           {/* The hover READOUT is the panel's renderer-neutral bar; this is the
               view's own gesture hint, so it never repeats that reading. */}
           <span>

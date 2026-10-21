@@ -25,6 +25,10 @@ import {
   displayName,
   MAX_DISPLAY_DIR_SEGMENTS,
 } from '@/modules/architecture/archguardToPlantUml';
+import {
+  ENTITY_MIN_SCALE,
+  SUBPACKAGE_MIN_SCALE,
+} from '@/modules/architecture/explosionLod';
 
 /**
  * The architecture tab's wiring, end to end at the component seam:
@@ -522,6 +526,159 @@ test('redrawing a view re-derives the scale from the new drawing and keeps the f
   });
   assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'fit');
   await waitForFit(host);
+});
+
+test('semantic zoom toggles the drawn hierarchy without re-laying it out', async () => {
+  // AC: the far level shows package frames with (N) counts and aggregated
+  // package edges; the near level shows the entity UML edges again. Both come
+  // from ONE layout — the SVG element the renderer emitted must never be
+  // replaced while zooming across levels.
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // Drill to a neighbourhood that spans two packages, so it has a real
+  // package-level edge once the entities collapse.
+  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
+  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  await waitFor(() => {
+    assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
+    assert.deepEqual(drawnNodeIds(host), [
+      'src/modules/alpha/a.ts',
+      'src/modules/alpha/a2.ts',
+      'src/modules/beta/b.ts',
+    ]);
+  });
+
+  // The near level is the initial fit: entities and their UML edges are shown.
+  await waitFor(() => {
+    assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2');
+  });
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+  svg.setAttribute('data-lod-sentinel', 'kept');
+  const entityEdges = [...host.querySelectorAll('.uml-edge')];
+  assert.ok(entityEdges.length >= 2);
+  for (const edge of entityEdges) {
+    assert.equal((edge as HTMLElement).style.display, '', 'entity edges are drawn at the near level');
+  }
+
+  // Zoom out until the package level is crossed; the readout follows the
+  // debounced level, not every wheel tick.
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+  }
+  const scale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.ok(scale < SUBPACKAGE_MIN_SCALE, `the scale must reach the far band; got ${scale}`);
+  await waitFor(() => {
+    assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0');
+  });
+
+  for (const node of host.querySelectorAll('.uml-node')) {
+    assert.equal((node as HTMLElement).style.display, 'none', 'entities collapse at the package level');
+  }
+  for (const edge of host.querySelectorAll('.uml-edge')) {
+    assert.equal((edge as HTMLElement).style.display, 'none', 'entity UML edges are hidden at the package level');
+  }
+  const alphaLabel = [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+    .map((label) => label.textContent)
+    .join('');
+  assert.match(alphaLabel, /\(2\)$/, 'a collapsed package frame states its entity count');
+  const overlayEdges = [...host.querySelectorAll('[data-architecture-lod-edges] line')];
+  assert.equal(overlayEdges.length, 1, 'the beta → alpha entity edge aggregates into one package edge');
+  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-source'), 'modules/beta');
+  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-target'), 'modules/alpha');
+  assert.equal(
+    host.querySelector('svg'),
+    svg,
+    'crossing the level must only toggle display — never re-render the drawing',
+  );
+  assert.equal(svg.getAttribute('data-lod-sentinel'), 'kept');
+
+  // Zoom back in past the dead band: the same SVG expands back to entities.
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  }
+  assert.ok(Number(graphRoot().getAttribute('data-architecture-zoom-scale')) >= ENTITY_MIN_SCALE);
+  await waitFor(() => {
+    assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2');
+  });
+  assert.equal(host.querySelector('[data-architecture-lod-edges]'), null, 'the package overlay is removed');
+  for (const node of host.querySelectorAll('.uml-node')) {
+    assert.equal((node as HTMLElement).style.display, '', 'entities are visible again');
+  }
+  for (const edge of host.querySelectorAll('.uml-edge')) {
+    assert.equal((edge as HTMLElement).style.display, '', 'entity UML edges are visible again');
+  }
+  assert.equal(
+    [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+      .map((label) => label.textContent)
+      .join(''),
+    'modules/alpha',
+    'the collapsed count is restored',
+  );
+  assert.equal(host.querySelector('svg'), svg, 'still the same drawing after the round trip');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'zooming never refetches');
+});
+
+test('the explosion view lays the whole hierarchy out once and zoom reveals its levels', async () => {
+  // The DoD gesture: one full-graph layout, then zoom alone moves from the
+  // package level to subpackages and entities — no re-layout in between.
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
+  await waitFor(() => {
+    assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy');
+    assert.deepEqual(drawnNodeIds(host), [
+      'src/modules/alpha/a.ts',
+      'src/modules/alpha/a2.ts',
+      'src/modules/beta/b.ts',
+      'src/modules/gamma/c.ts',
+    ], 'the explosion view draws the whole graph, not one group');
+  });
+
+  // The initial fit is the near level: entities and their UML edges are drawn,
+  // inside the package frames the same layout emitted.
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
+  for (const packageId of ['modules/alpha', 'modules/beta', 'modules/gamma']) {
+    assert.ok(host.querySelector(`.uml-package[data-package-id="${packageId}"]`), `frame ${packageId} is drawn`);
+  }
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+  svg.setAttribute('data-lod-sentinel', 'kept');
+
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+  }
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
+
+  // The three packages now show their counts and the two cross-package edges;
+  // the intra-alpha edge is not a package boundary.
+  const labels = [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+    .map((label) => label.textContent)
+    .join('');
+  assert.match(labels, /\(2\)$/, 'the alpha frame states its two entities');
+  const packageEdges = [...host.querySelectorAll('[data-architecture-lod-edges] line')]
+    .map((line) => `${line.getAttribute('data-lod-edge-source')}->${line.getAttribute('data-lod-edge-target')}`)
+    .sort();
+  assert.deepEqual(packageEdges, ['modules/beta->modules/alpha', 'modules/gamma->modules/beta']);
+  assert.equal(host.querySelector('svg'), svg, 'the explosion layout survives the level change');
+  assert.equal(svg.getAttribute('data-lod-sentinel'), 'kept');
+
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  }
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
+  assert.equal(host.querySelector('[data-architecture-lod-edges]'), null);
+  assert.deepEqual(drawnNodeIds(host), [
+    'src/modules/alpha/a.ts',
+    'src/modules/alpha/a2.ts',
+    'src/modules/beta/b.ts',
+    'src/modules/gamma/c.ts',
+  ]);
+  assert.equal(host.querySelector('svg'), svg, 'zooming back in still uses the same drawing');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the explosion view never refetches');
 });
 
 test('overview folds the graph into path groups; clicking a group expands it locally', async () => {

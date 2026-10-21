@@ -65,11 +65,15 @@ export const DEFAULT_NEIGHBORHOOD_HOPS = 1;
  * Which slice of the already-fetched neighbourhood is on screen.
  *  · `overview` folds the whole graph into path groups;
  *  · `group` expands one path group into its own entities;
+ *  · `hierarchy` lays the WHOLE graph out once as nested packages, so the
+ *    explosion zoom can reveal package → subpackage → entity levels by
+ *    toggling visibility instead of re-laying the drawing;
  *  · `neighborhood` shows one entity plus everything within `hops` of it.
  */
 export type ArchitectureDiagramView =
   | { kind: 'overview' }
   | { kind: 'group'; prefix: string }
+  | { kind: 'hierarchy' }
   | { kind: 'neighborhood'; entityId: string; hops: number };
 
 /** What `archguardToPlantUml` produces for one view. */

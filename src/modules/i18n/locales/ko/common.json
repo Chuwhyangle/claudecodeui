@@ -36,7 +36,13 @@
       "zoomIn": "확대",
       "zoomOut": "축소",
       "zoomFit": "화면에 맞추기",
-      "zoomActual": "실제 크기 (100%)"
+      "zoomActual": "실제 크기 (100%)",
+      "lod": {
+        "packages": "패키지",
+        "subpackages": "하위 패키지",
+        "entities": "엔티티"
+      },
+      "explosion": "폭발 뷰"
     },
     "title": "아키텍처",
     "noSession": "세션을 선택하면 해당 세션이 건드린 파일의 아키텍처를 볼 수 있습니다.",

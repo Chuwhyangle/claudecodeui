@@ -36,7 +36,13 @@
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern",
       "zoomFit": "An Ansicht anpassen",
-      "zoomActual": "Originalgröße (100%)"
+      "zoomActual": "Originalgröße (100%)",
+      "lod": {
+        "packages": "Pakete",
+        "subpackages": "Unterpakete",
+        "entities": "Entitäten"
+      },
+      "explosion": "Explosionsansicht"
     },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",

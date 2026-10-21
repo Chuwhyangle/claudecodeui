@@ -61,7 +61,13 @@
       "group": "Group: {{group}}",
       "neighborhood": "{{entity}} · {{hops}} hop(s)",
       "back": "Back to overview",
-      "error": "The diagram could not be rendered: {{message}}"
+      "error": "The diagram could not be rendered: {{message}}",
+      "lod": {
+        "packages": "Packages",
+        "subpackages": "Subpackages",
+        "entities": "Entities"
+      },
+      "explosion": "Explosion view"
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {

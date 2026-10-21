@@ -36,7 +36,13 @@
       "zoomIn": "拡大",
       "zoomOut": "縮小",
       "zoomFit": "表示に合わせる",
-      "zoomActual": "実際のサイズ (100%)"
+      "zoomActual": "実際のサイズ (100%)",
+      "lod": {
+        "packages": "パッケージ",
+        "subpackages": "サブパッケージ",
+        "entities": "エンティティ"
+      },
+      "explosion": "爆発ビュー"
     },
     "title": "アーキテクチャ",
     "noSession": "セッションを選択すると、そのセッションが触れたファイルのアーキテクチャが表示されます。",
