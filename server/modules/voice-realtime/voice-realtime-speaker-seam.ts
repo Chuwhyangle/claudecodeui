@@ -132,13 +132,25 @@ export function createSpeakerWindowAccumulator(
       }
       const completed: SpeakerWindow[] = [];
       const sampleCount = Math.floor(pcm.length / 2);
+      // The frame's own first sample, on the connection clock. A 20 ms frame puts it 20 ms back from
+      // `atMs`; a multi-second SEGMENT frame (the segmented wire sends one frame per segment) puts it
+      // as far back as the frame is long, which is what keeps the windows' `startMs` honest and
+      // strictly increasing instead of all naming the same instant.
+      const frameStartMs = pushOptions.atMs - (sampleCount / sampleRate) * 1000;
+      const filledAtFrameStart = filled;
       for (let index = 0; index < sampleCount; index += 1) {
         buffer[filled] = pcm.readInt16LE(index * 2);
         filled += 1;
         if (filled === windowSamples) {
+          // The window began `filledAtFrameStart` samples before this frame did; each further window
+          // completed inside the SAME frame begins one window-length after the previous one.
+          const startMs = Math.max(
+            0,
+            frameStartMs - (filledAtFrameStart / sampleRate) * 1000 + completed.length * windowMs,
+          );
           completed.push({
             samples: buffer,
-            startMs: Math.max(0, pushOptions.atMs - windowMs),
+            startMs,
             durationMs: windowMs,
             speechRatio: voicedFraction(buffer, subframeSamples, speechRms),
           });
