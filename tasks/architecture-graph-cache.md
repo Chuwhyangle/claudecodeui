@@ -25,6 +25,6 @@ goal_ac: AC-417
 
 ## Touches
 
-- server/modules/architecture/cache.ts
-- server/modules/architecture/tests/cache-invalidation.test.ts
+- server/modules/architecture/cache.ts (new)
+- server/modules/architecture/tests/cache-invalidation.test.ts (new)
 - tasks/architecture-graph-cache.md
