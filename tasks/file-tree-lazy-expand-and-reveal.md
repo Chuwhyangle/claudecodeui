@@ -19,8 +19,8 @@ goal_ac: AC-413
 
 ## AC
 
-- AC-413 criterion 转绿：`npx vitest run src/modules/file-tree/tests/fileTreeLazy.test.tsx` 退出 0。
-- `npx oxlint` 通过。
+- [x] AC-413 criterion 转绿：`npx vitest run src/modules/file-tree/tests/fileTreeLazy.test.tsx` 退出 0。
+- [x] `npx oxlint` 通过。
 
 ## DoD
 
@@ -32,7 +32,11 @@ goal_ac: AC-413
 - src/modules/file-tree/FileTree.tsx
 - src/modules/file-tree/FileTreeNode.tsx
 - src/modules/file-tree/FileTreeList.tsx
+- src/modules/file-tree/FileTreeBody.tsx
+- src/modules/file-tree/hooks/useFileTreeOperations.ts
+- src/modules/file-tree/hooks/useFileTreeUpload.ts
 - src/modules/file-tree/utils/revealDirectory.ts
-- src/shared/api.ts
 - src/modules/file-tree/tests/fileTreeLazy.test.tsx
+- src/modules/file-tree/tests/revealDirectoryWiring.test.tsx
+- src/shared/api.ts
 - tasks/file-tree-lazy-expand-and-reveal.md
