@@ -47,3 +47,23 @@
 1. 试听 `/tmp/speaker-gate-audition-2026-10-21/` 的 22 条，确认/修正 `labels.pending.csv`。
 2. 录 2–3 位中文同事，每人 2–3 条、共约 2 分钟（需同意），补真实中文负样本。
 3. 决定 Phase 3 的默认门控模式（软/硬）与 Phase 4 是否以 ASR WER 为 go/no-go。
+
+
+## Phase 1.1 / 1.2（2026-10-21 签入）
+
+用户裁定：设置文件是正常入口，环境变量只是 escape hatch；precedence 跟现有代码一致，为 **`env > file > default`**（选项 A）。
+
+| 任务 | 状态 | 依赖 | 内容 |
+|---|---|---|---|
+| `voice-speaker-tracking-settings-file` | todo | — | `speakerTracking`（mode/modelDir/modelFile/modelPath/thresholds/quality）进 `voice-realtime.settings.json`；按连接读取；模型按路径缓存；env 仅 escape hatch |
+| `voice-speaker-model-provisioning` | todo | `voice-speaker-tracking-settings-file` | 模型默认 `models/speaker/`，`.gitignore` 不入库；npm/Electron/Docker 不带；设置页触发服务端下载，固定 URL + sha256 校验 + 原子落盘 |
+
+模型：`3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx`，28,281,164 bytes，sha256 `aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2`，来源 k2-fsa/sherpa-onnx `speaker-recongition-models` release；3D-Speaker / Apache-2.0。
+
+正常启动形态（Phase 1.1 落地后）：
+
+```bash
+VOICE_REALTIME_SETTINGS_PATH=/path/to/voice-realtime.settings.json npm run server
+```
+
+`VOICE_SPEAKER_TRACKING` / `VOICE_SPEAKER_MODEL_PATH` 只作为测试/运维 escape hatch，不再是对外文档的入口。
