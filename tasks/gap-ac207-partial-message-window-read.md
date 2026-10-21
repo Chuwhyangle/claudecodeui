@@ -13,7 +13,7 @@ goal_ac: AC-207
 ---
 ## Proposal
 
-<!-- dedup-ref --> 机制去重读数（本轮立案时实测，2026-10-21）：`grep -l "^goal_ac: AC-207" tasks/*.md` 只命中两份 **done** 任务——`gap-work-segment-browser-density-and-search-expand`（判据本体）与 `gap-ac207-expand-all-first-segment-recollapse`（上一次的间歇红修复）。按规则 done 不是重复，而是「上一次的修法没能让判据现在为真」的证据；在飞（todo/ready/needs-human）任务里没有一份携带 `goal_ac: AC-207`。`task-granularity-advice.js --touches e2e/transcript-work-segments.spec.ts` 的 `peers[]` 与 `mentions[]` 均为空（没有在飞任务认领同一文件），故单独立案、不并入他条。
+<!-- dedup-ref --> 机制去重读数（本轮立案时实测，2026-10-21）：`grep -l "^goal_ac: AC-207" tasks/*.md` 只命中两份 **done** 任务——`gap-work-segment-browser-density-and-search-expand`（判据本体）与`gap-ac207-expand-all-first-segment-recollapse`（上一次的间歇红修复）。按规则 done 不是重复，而是「上一次的修法没能让判据现在为真」的证据；在飞（todo/ready/needs-human）任务里没有一份携带 `goal_ac: AC-207`。`task-granularity-advice.js --touches e2e/transcript-work-segments.spec.ts` 的 `peers[]` 与 `mentions[]` 均为空（没有在飞任务认领同一文件），故单独立案、不并入他条。
 
 **现状（直接测量，不是台账尾巴）。** AC-207 的 acceptance 是 `npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"`。`.quay/gate-events.jsonl` 最近四次：2026-10-21T13:37:30Z pass、13:40:38Z pass、13:44:26Z pass、13:48:11Z **fail**，四次的 `treeSha` 全是 `519ec5997329b8ad356f342952760613685f4ce0`。同一棵树四分钟内先绿后红 ⇒ 不是代码 delta 造成的回归，而是判据自身的间歇读数。
 
@@ -48,12 +48,12 @@ expect(received).toEqual(expected) // deep equality
 
 ## AC
 
-- [ ] AC1 确定性复现（承重）：在 e2e 层用 `page.route` 延迟（或阻断）`**/providers/sessions/e2e-work-segment/messages*offset=20*` 这条 older 页，使读数发生在它落地之前；逐字记录现行判据的读数与失败：`collapsed {"rows":6,"heightPx":329}` 通过、`each header count is its run’s member count (7, 8 and 5 in the fixture)` 收到 `[4,5,8]`。同形复现 ≥3 次。命令与逐字输出入 Evidence。
-- [ ] AC2 判据修到根上（承重）：在 `collapsed` 与 `readSegmentTitles` 之前，于同一份被测量的文档上建立「夹具会话已完整」的读数（见 Proposal 的 (a)/(b)/(c)），并写明选哪一条、为什么它不会被部分窗口骗过。`git diff` 只含这段起点逻辑；`PRE_MERGE_BASELINE_ROWS/PX`、`ROW_LIMIT`、`PX_LIMIT` 与两条腿的断言逐字未变（`git diff` 可核对）。
-- [ ] AC3 新条件有判别力（承重）：保持 older 页延迟/阻断，修后的判据必须**红在那条完整性读数上**（逐字失败行，例如等待超时或明确的「窗口未载满」）；解除阻断后同一命令复绿。红在别的腿不算满足。
-- [ ] AC4 稳定绿（承重）：安静态 `npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"` 连续 ≥5 次 exit 0；每次落盘 `collapsed` 与 `expanded` 读数，collapsed 每次为 7 行/≈410px（6/329 的形态不再出现），expanded 每次 ≥24 行。5 次读数逐条入 Evidence。
-- [ ] AC5 两条假形态仍红（承重）：(a) `groupWorkSegments` 首行 `return messages;`（一行一块）⇒ 读数 (i) 红；(b) 关掉 `ChatMessagesPane.tsx` 的搜索命中自动展开 ⇒ 读数 (ii) 红。逐条记录变异 diff、逐字失败行，`git checkout -- <file>` 恢复后判据复绿。
-- [ ] AC6 静态门：`npm run typecheck` 与 `npm run lint` 均 exit 0（只改 spec 也要跑）。
+- [x] AC1 确定性复现（承重）：在 e2e 层用 `page.route` 延迟（或阻断）`**/providers/sessions/e2e-work-segment/messages*offset=20*` 这条 older 页，使读数发生在它落地之前；逐字记录现行判据的读数与失败：`collapsed {"rows":6,"heightPx":329}` 通过、`each header count is its run’s member count (7, 8 and 5 in the fixture)` 收到 `[4,5,8]`。同形复现 ≥3 次。命令与逐字输出入 Evidence。
+- [x] AC2 判据修到根上（承重）：在 `collapsed` 与 `readSegmentTitles` 之前，于同一份被测量的文档上建立「夹具会话已完整」的读数（见 Proposal 的 (a)/(b)/(c)），并写明选哪一条、为什么它不会被部分窗口骗过。`git diff` 只含这段起点逻辑；`PRE_MERGE_BASELINE_ROWS/PX`、`ROW_LIMIT`、`PX_LIMIT` 与两条腿的断言逐字未变（`git diff` 可核对）。
+- [x] AC3 新条件有判别力（承重）：保持 older 页延迟/阻断，修后的判据必须**红在那条完整性读数上**（逐字失败行，例如等待超时或明确的「窗口未载满」）；解除阻断后同一命令复绿。红在别的腿不算满足。
+- [x] AC4 稳定绿（承重）：安静态 `npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"` 连续 ≥5 次 exit 0；每次落盘 `collapsed` 与 `expanded` 读数，collapsed 每次为 7 行/≈410px（6/329 的形态不再出现），expanded 每次 ≥24 行。5 次读数逐条入 Evidence。
+- [x] AC5 两条假形态仍红（承重）：(a) `groupWorkSegments` 首行 `return messages;`（一行一块）⇒ 读数 (i) 红；(b) 关掉 `ChatMessagesPane.tsx` 的搜索命中自动展开 ⇒ 读数 (ii) 红。逐条记录变异 diff、逐字失败行，`git checkout -- <file>` 恢复后判据复绿。
+- [x] AC6 静态门：`npm run typecheck` 与 `npm run lint` 均 exit 0（只改 spec 也要跑）。
 - [ ] AC7 台账翻转：合入 develop 后由驱动重跑判据，AC-207 的 goal acceptance 连续 ≥2 轮 pass，台账尾不再是 fail（待外部）
 
 ## DoD
@@ -68,3 +68,28 @@ expect(received).toEqual(expected) // deep equality
 
 - e2e/transcript-work-segments.spec.ts
 - tasks/gap-ac207-partial-message-window-read.md
+
+## Evidence
+
+**AC1 确定性复现（同一注入，4 次同形）。** 在 spec 内临时加 `page.route('**/providers/sessions/e2e-work-segment/messages*offset=20*', …)`，把 older 页（逐字 URL `…/messages?limit=50&offset=20`）挂起 20s，使读数落在它落地之前（探针只在本工作树，提交前已移除）。命令：`AC207_OLDER_PAGE_DELAY_MS=20000 npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"`。逐字：`[AC-207][probe] holding older page http://127.0.0.1:8767/api/providers/sessions/e2e-work-segment/messages?limit=50&offset=20`、`[AC-207][probe] collapsed {"rows":6,"heightPx":329}`（两条上界断言都通过），随后 `Error: each header count is its run’s member count (7, 8 and 5 in the fixture)` / `+   4,` / `-   7,`（收到 `[4,5,8]`）。另外三次独立运行（端口 26979 / 30411 / 15441）同一失败行逐字相同。
+
+**AC2 起点逻辑（diff：38 insertions / 0 deletions，只加不删）。** 选 Proposal 的 (a) 腿：在 `.chat-messages-pane .chat-message` 里等 fixture 最早的 user prompt 行（`Show me the release notes for the work segment browser.`）出现。为什么它不会被部分窗口骗过：该行只存在于 older 页（最新 20 条从第一段第 4 个成员开始），所以它在同一份被测 DOM 里出现 ⇔ older 页已落地、窗口 = 完整 24 行；密度或成员计数都能被「窗口短」伪造，这一条不能。helper 同时在国际展开正控制每次重读数前调用（文档被 Vite 重载替换后的新 pane 也从最新 20 条开始）。`git diff` 核对：`PRE_MERGE_BASELINE_ROWS/PX`、`ROW_LIMIT`、`PX_LIMIT` 与 (i)(ii) 两条腿的断言逐字未变。
+
+**AC3 判别力。** 保持注入（`AC207_OLDER_PAGE_DELAY_MS=120000`）跑修后判据，红在新增完整性读数上：`Error: the pane never showed the fixture’s first row: the older page had not landed, so the transcript held only its newest 20 rows and would be measured as a short (but not merged) turn`（`expect(locator).toBeVisible() failed` / `element(s) not found`，30s 等待超时）。解除注入（同一命令、无 env）复绿：`[AC-207] collapsed {"rows":7,"heightPx":413} expanded-positive-control {"rows":27,"heightPx":1290}` / `1 passed`。
+
+**AC4 五连绿（逐次落盘）。** `npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"`：
+- RUN1 exit 0 `collapsed {"rows":7,"heightPx":413}` `expanded-positive-control {"rows":27,"heightPx":1290}` 12.7s
+- RUN2 exit 0 同读数 12.4s
+- RUN3 exit 0 同读数 13.2s
+- RUN4 exit 0 同读数 14.1s
+- RUN5 exit 0 同读数 12.6s
+
+collapsed 每次 7 行 / 413px（6/329 形态不再出现），expanded 每次 27 行 ≥ 24。
+
+**AC5 两条假形态（先提交实现再变异，跑完 `git checkout --` 恢复）。**
+- (a) `src/modules/chat/utils/transcript/workSegments.ts` 的 `groupWorkSegments` 首行插入 `return messages;`（+1 行）：逐字 `Error: the collapsed transcript drew 24 rows at height 1161px`（读数 (i) 红）。恢复后 `git status --porcelain` 干净、复绿 `collapsed {"rows":7,"heightPx":413}`。
+- (b) `src/modules/chat/transcript/ChatMessagesPane.tsx` 搜索命中自动展开 effect 首行插入 `return;`（+1 行）：逐字 `Error: the segment holding the search hit never opened` / `Timeout 20000ms exceeded while waiting on the predicate`（读数 (ii) 红；同次 collapsed/expanded 读数仍通过，红在这条腿）。恢复后复绿 `1 passed`。
+
+**AC6 静态门。** `npm run typecheck` exit 0（tsconfig + server/tsconfig + scripts/tsconfig 三段全过）；`npm run lint` exit 0（仅仓库既有 warning，无新增）。
+
+**写面。** 实现提交后 `git status --porcelain` 仅 `M e2e/transcript-work-segments.spec.ts`；两处变异均以 `git checkout --` 复原。
