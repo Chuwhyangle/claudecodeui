@@ -1,7 +1,7 @@
 ---
 id: architecture-mobile-compact-toolbar
 title: 移动端精简布局：工具栏合并为一行、去掉 hover 提示、hops 带文字，图区占满剩余高度
-status: todo
+status: ready
 labels:
   - feature
 parent: null
