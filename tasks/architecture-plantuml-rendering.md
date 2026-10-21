@@ -40,3 +40,11 @@ depends_on:
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/i18n/locales/en/common.json
 - tasks/architecture-plantuml-rendering.md
+
+## Blocker
+
+**2026-10-21T15:14:55.341Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=114339 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792595224969
+- run_id：wk-prod-anchor
+- session_id：6fd7d04b-c841-42ac-a9fa-4ac001115f22
