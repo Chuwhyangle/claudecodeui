@@ -177,10 +177,9 @@ lane 同窗结果（构造为真实并发；lane 自身成败不计入判据）�
 
 ## Blocker
 
-**2026-10-21T05:58:06.956Z — worker 未落地（exited-not-landed）**
+**2026-10-21T06:03:26.051Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/gap-ac345-run-ceiling-crossed-under-fanin-suite-load.md）⇒ 判惰性，⛔ 未调分类器
-fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
+- 未落地原因：step=ff: fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
 fan-in-ff-merge: measure ff_only_locked=false
 - run_id：wk-prod-anchor
-- session_id：853ec641-ec32-494b-bcf2-c9a2595ada54
+- session_id：547a5477-5939-4e10-b940-60f51d5bd52f
