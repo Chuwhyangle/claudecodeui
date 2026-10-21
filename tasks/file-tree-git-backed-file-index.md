@@ -1,7 +1,7 @@
 ---
 id: file-tree-git-backed-file-index
 title: git 对齐的文件索引端点：git ls-files + 非 git 回退 + 服务端缓存
-status: todo
+status: ready
 labels:
   - feature
 parent: null
