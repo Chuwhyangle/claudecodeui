@@ -194,8 +194,10 @@ post-fix 是在**更高**的负载下取得上述下降。pre-fix 三条 lane �
 
 ## Blocker
 
-**2026-10-21T05:18:34.815Z — worker 未落地（exited-not-landed）**
+**2026-10-21T05:25:02.677Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 0/7，剩余未勾 7）——续做只需验证并勾选 AC
+- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/gap-ac194-inwindow-firstload-fixed-cost.md）⇒ 判惰性，⛔ 未调分类器
+fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
+fan-in-ff-merge: measure ff_only_locked=false
 - run_id：wk-prod-anchor
-- session_id：23a1f3b9-93fe-4c41-8f35-ed8d2082a8ba
+- session_id：3e03d9c9-bcc5-425d-adb9-6218b9ee242d
