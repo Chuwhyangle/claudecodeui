@@ -13,5 +13,28 @@
   "omissionFill": {},
   "_omissionFill": "A partial override of the omission-fill producer's parameters, in the snake_case spelling of server/modules/voice-realtime/omission-fill-params.json. An empty object keeps the shipped values.",
   "announcePhrases": "好的|收到|明白|在办",
-  "_announcePhrases": "The announce closing turn's sentence table, '|'-separated. Needs at least 3 phrases; each at most 15 characters. Invalid values are refused whole and the shipped table is used."
+  "_announcePhrases": "The announce closing turn's sentence table, '|'-separated. Needs at least 3 phrases; each at most 15 characters. Invalid values are refused whole and the shipped table is used.",
+  "speakerTracking": {
+    "mode": "shadow",
+    "modelDir": "models/speaker",
+    "modelFile": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "thresholds": {
+      "track": 0.3,
+      "matchFast": 0.35,
+      "promote": 0.4,
+      "consistencyMin": 0.6,
+      "margin": 0.08,
+      "maxStepSessionDeg": 15,
+      "maxStepBankDeg": 8,
+      "bankSize": 4
+    },
+    "quality": {
+      "windowSeconds": 2,
+      "sampleSeconds": 3.5,
+      "speechRatioMin": 0.6,
+      "minCoreSeconds": 2
+    }
+  },
+  "_speakerTracking": "Phase 1 speaker tracking (shadow only). 'mode' is off or shadow; modelPath, when non-empty, wins over join(modelDir, modelFile). Every threshold/quality value left out keeps the frozen thresholds.v1.json default. An invalid block refuses the WHOLE file, so the connection runs with defaults and the reason is logged.",
+  "_speakerTracking_escapeHatch": "VOICE_SPEAKER_TRACKING / VOICE_SPEAKER_MODEL_PATH still work for a test or an operator, but only as escape hatches: they override this block (environment > settings file > default)."
 }

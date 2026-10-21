@@ -15,7 +15,7 @@
  * it, because the Realtime model's behaviour is the thing being tuned and a mid-session swap makes
  * the change unattributable.
  *
- * THE KEY SET. Eight top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly
+ * THE KEY SET. NINE top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly
  * as it always has been, rather than refused:
  *
  *   · `version`         — a non-empty string, logged beside every injection so an edit is visible.
@@ -57,6 +57,17 @@
  *                         point falls through to `VOICE_REALTIME_SUMMARY_MODEL` and then to no real
  *                         producer (the stand-in arm). A blank or non-string value is a shape error
  *                         and puts the reason in `problems`.
+ *   · `speakerTracking` — Phase 1's speaker observer, as one object
+ *                         (`{ "mode": "shadow", "modelDir": "models/speaker", "modelFile": …,
+ *                            "thresholds": { … }, "quality": { … } }`). This key is the NORMAL entry
+ *                         for the feature: the environment variables are escape hatches. `mode`
+ *                         defaults to `off`; `modelPath` wins when non-empty, otherwise
+ *                         `join(modelDir, modelFile)`. Every threshold/quality value left out keeps
+ *                         the frozen `thresholds.v1.json` default. Unknown sub-keys are ignored; a
+ *                         non-object block, an unknown `mode`, a `shadow` mode with no resolvable
+ *                         model path, or an out-of-range/non-finite number refuses the WHOLE block
+ *                         (and, like every other shape error here, the whole reading), so a
+ *                         half-valid observer can never run.
  *
  * FAIL OPEN ON I/O, FAIL CLOSED ON SHAPE. A missing, unreadable or unparseable file falls back to
  * the shipped defaults with the reason in {@link VoiceRealtimeSettings.problems}; a file that
@@ -69,6 +80,7 @@
  * tests. Nothing outside the module reads it, so it stays off the barrel.
  */
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   ANNOUNCE_PHRASES,
@@ -80,6 +92,15 @@ import {
   type OmissionFillNumeralMode,
   type OmissionFillParams,
 } from './voice-realtime-omission-fill.js';
+import {
+  SPEAKER_TRACKING_MODEL_DIR_DEFAULT,
+  SPEAKER_TRACKING_MODEL_FILE_DEFAULT,
+  SPEAKER_TRACKING_QUALITY_DEFAULTS,
+  SPEAKER_TRACKING_THRESHOLD_DEFAULTS,
+  type SpeakerTrackingQualitySettings,
+  type SpeakerTrackingSettingsBlock,
+  type SpeakerTrackingThresholdSettings,
+} from './voice-speaker-tracking-arm.js';
 import {
   validateTurnDetection,
   type TurnDetectionValues,
@@ -195,6 +216,15 @@ export type VoiceRealtimeSettings = {
    * no real producer) on `null`, so the file never silently turns a real summary into a stand-in.
    */
   summaryModel: string | null;
+  /**
+   * Phase 1's speaker observer, VALIDATED and default-filled, or `null` when the file said nothing.
+   *
+   * `server/index.ts` hands it to {@link resolveSpeakerTrackingSettings}, which applies the
+   * environment escape hatch over it (`environment > settings file > default`) and decides whether a
+   * seam is built. `null` is what keeps the shipped state (off) distinguishable from a file that
+   * configured an observer.
+   */
+  speakerTracking: SpeakerTrackingSettingsBlock | null;
   /** The compiled-in values, or the file's. */
   source: VoiceRealtimeSettingsSource;
   /** The file's own `version`, logged beside every injection so an edit is visible in the log. */
@@ -218,6 +248,7 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
   announcePhrases: readonly string[];
   runEndAck: readonly string[];
   summaryModel: string | null;
+  speakerTracking: SpeakerTrackingSettingsBlock | null;
 } {
   return {
     instructions: baseInstructions,
@@ -234,6 +265,8 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
     runEndAck: [],
     // No file, no model: the assembly point falls through to the environment, then to no producer.
     summaryModel: null,
+    // No file, no observer: speaker tracking stays off unless the environment escape hatch asks.
+    speakerTracking: null,
   };
 }
 
@@ -338,6 +371,228 @@ function validateOmissionFill(value: unknown, filePath: string): {
   }
 
   return { values: problems.length > 0 ? null : values, problems };
+}
+
+/**
+ * The sanity bounds a `speakerTracking.thresholds` field must stay inside.
+ *
+ * Cosine scores live in `[-1, 1]`; `margin` is a score difference; the rotation ceilings are angles
+ * in degrees; `bankSize` is a positive integer cap. The shipped defaults (see
+ * `voice-speaker-tracking-arm.ts`) sit well inside every bound, so the bounds only catch typos —
+ * a score of `30` instead of `0.30`, a bank of `400` — rather than re-tuning the feature here.
+ */
+const SPEAKER_TRACKING_THRESHOLD_BOUNDS = {
+  track: [-1, 1],
+  matchFast: [-1, 1],
+  promote: [-1, 1],
+  consistencyMin: [-1, 1],
+  margin: [0, 1],
+  maxStepSessionDeg: [0, 180],
+  maxStepBankDeg: [0, 180],
+  bankSize: [1, 64],
+} as const satisfies Readonly<Record<keyof SpeakerTrackingThresholdSettings, readonly [number, number]>>;
+
+/** The sanity bounds a `speakerTracking.quality` field must stay inside (seconds and fractions). */
+const SPEAKER_TRACKING_QUALITY_BOUNDS = {
+  windowSeconds: [0.1, 10],
+  sampleSeconds: [0.1, 60],
+  speechRatioMin: [0, 1],
+  minCoreSeconds: [0, 60],
+} as const satisfies Readonly<Record<keyof SpeakerTrackingQualitySettings, readonly [number, number]>>;
+
+/**
+ * Reads one numeric settings field, recording a problem instead of guessing.
+ *
+ * `integer` is only set for `bankSize`: a fractional cluster cap has no meaning, and accepting one
+ * would leave the bank's cap comparison comparing against an impossible count.
+ */
+function speakerTrackingNumber(
+  value: unknown,
+  label: string,
+  minimum: number,
+  maximum: number,
+  problems: string[],
+  integer = false,
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    problems.push(`\`${label}\` must be a finite number`);
+    return undefined;
+  }
+  if (integer && !Number.isInteger(value)) {
+    problems.push(`\`${label}\` must be an integer`);
+    return undefined;
+  }
+  if (value < minimum || value > maximum) {
+    problems.push(`\`${label}\` must be between ${minimum} and ${maximum}`);
+    return undefined;
+  }
+  return value;
+}
+
+/** Reads one string settings field, recording a problem when it is not a non-empty string. */
+function speakerTrackingString(
+  value: unknown,
+  label: string,
+  problems: string[],
+): string | undefined {
+  if (typeof value !== 'string' || value.trim() === '') {
+    problems.push(`\`${label}\` must be a non-empty string`);
+    return undefined;
+  }
+  return value.trim();
+}
+
+/**
+ * Validates a settings file's `speakerTracking` object into the block `server/index.ts` resolves.
+ *
+ * The block is ALL-OR-NOTHING. Unknown sub-keys are IGNORED (the same way this file ignores unknown
+ * top-level keys), and every known value the file leaves out keeps its frozen default — but one
+ * shape error (a non-object, an unknown `mode`, a blank model path component, a non-finite or
+ * out-of-range number) refuses the WHOLE block. A half-applied observer would be worse than none:
+ * the log would name a mode and thresholds that are not the ones the file asked for.
+ *
+ * `modelPath` is resolved here: an explicit non-empty `modelPath` wins, otherwise
+ * `join(modelDir, modelFile)` (relative to the process's working directory, which `npm run server`
+ * sets to the repository root). `named` records which keys the file actually spelled, so the
+ * resolver can log `settings file` versus `default` per value.
+ *
+ * Consumers: {@link loadVoiceRealtimeSettings} only.
+ */
+function validateSpeakerTracking(value: unknown): {
+  block: SpeakerTrackingSettingsBlock | null;
+  problems: string[];
+} {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { block: null, problems: ['`speakerTracking` must be a JSON object'] };
+  }
+  const record = value as Record<string, unknown>;
+  const problems: string[] = [];
+
+  let mode: 'off' | 'shadow' = 'off';
+  let modeNamed = false;
+  if (record.mode !== undefined) {
+    modeNamed = true;
+    if (record.mode === 'off' || record.mode === 'shadow') {
+      mode = record.mode;
+    } else {
+      problems.push('`speakerTracking.mode` must be one of off/shadow (Phase 1 is shadow-only)');
+    }
+  }
+
+  let modelDir = SPEAKER_TRACKING_MODEL_DIR_DEFAULT;
+  let modelFile = SPEAKER_TRACKING_MODEL_FILE_DEFAULT;
+  let explicitModelPath = '';
+  let modelDirNamed = false;
+  let modelFileNamed = false;
+  if (record.modelDir !== undefined) {
+    modelDirNamed = true;
+    const parsed = speakerTrackingString(record.modelDir, 'speakerTracking.modelDir', problems);
+    if (parsed !== undefined) modelDir = parsed;
+  }
+  if (record.modelFile !== undefined) {
+    modelFileNamed = true;
+    const parsed = speakerTrackingString(record.modelFile, 'speakerTracking.modelFile', problems);
+    if (parsed !== undefined) modelFile = parsed;
+  }
+  if (record.modelPath !== undefined) {
+    // A blank `modelPath` is "no explicit path", not a shape error: it is exactly how a file says
+    // "use modelDir/modelFile" without deleting the key it may later fill in.
+    if (typeof record.modelPath !== 'string') {
+      problems.push('`speakerTracking.modelPath` must be a string');
+    } else {
+      explicitModelPath = record.modelPath.trim();
+    }
+  }
+  const modelPath = explicitModelPath !== '' ? explicitModelPath : join(modelDir, modelFile);
+  if (mode === 'shadow' && modelPath.trim() === '') {
+    problems.push(
+      '`speakerTracking` mode "shadow" needs a model path: set `modelPath` or a non-empty `modelDir`/`modelFile`',
+    );
+  }
+
+  const thresholds: { -readonly [K in keyof SpeakerTrackingThresholdSettings]: SpeakerTrackingThresholdSettings[K] } = {
+    ...SPEAKER_TRACKING_THRESHOLD_DEFAULTS,
+  };
+  const namedThresholds: Array<keyof SpeakerTrackingThresholdSettings> = [];
+  if (record.thresholds !== undefined) {
+    if (typeof record.thresholds !== 'object' || record.thresholds === null || Array.isArray(record.thresholds)) {
+      problems.push('`speakerTracking.thresholds` must be a JSON object');
+    } else {
+      const given = record.thresholds as Record<string, unknown>;
+      for (const key of Object.keys(SPEAKER_TRACKING_THRESHOLD_BOUNDS) as Array<
+        keyof SpeakerTrackingThresholdSettings
+      >) {
+        if (given[key] === undefined) {
+          continue;
+        }
+        namedThresholds.push(key);
+        const [minimum, maximum] = SPEAKER_TRACKING_THRESHOLD_BOUNDS[key];
+        const parsed = speakerTrackingNumber(
+          given[key],
+          `speakerTracking.thresholds.${key}`,
+          minimum,
+          maximum,
+          problems,
+          key === 'bankSize',
+        );
+        if (parsed !== undefined) {
+          thresholds[key] = parsed;
+        }
+      }
+    }
+  }
+
+  const quality: { -readonly [K in keyof SpeakerTrackingQualitySettings]: SpeakerTrackingQualitySettings[K] } = {
+    ...SPEAKER_TRACKING_QUALITY_DEFAULTS,
+  };
+  const namedQuality: Array<keyof SpeakerTrackingQualitySettings> = [];
+  if (record.quality !== undefined) {
+    if (typeof record.quality !== 'object' || record.quality === null || Array.isArray(record.quality)) {
+      problems.push('`speakerTracking.quality` must be a JSON object');
+    } else {
+      const given = record.quality as Record<string, unknown>;
+      for (const key of Object.keys(SPEAKER_TRACKING_QUALITY_BOUNDS) as Array<
+        keyof SpeakerTrackingQualitySettings
+      >) {
+        if (given[key] === undefined) {
+          continue;
+        }
+        namedQuality.push(key);
+        const [minimum, maximum] = SPEAKER_TRACKING_QUALITY_BOUNDS[key];
+        const parsed = speakerTrackingNumber(
+          given[key],
+          `speakerTracking.quality.${key}`,
+          minimum,
+          maximum,
+          problems,
+        );
+        if (parsed !== undefined) {
+          quality[key] = parsed;
+        }
+      }
+    }
+  }
+
+  if (problems.length > 0) {
+    return { block: null, problems };
+  }
+  return {
+    block: {
+      mode,
+      modelDir,
+      modelFile,
+      modelPath,
+      thresholds,
+      quality,
+      named: {
+        mode: modeNamed,
+        modelPath: modelDirNamed || modelFileNamed || explicitModelPath !== '',
+        thresholds: namedThresholds,
+        quality: namedQuality,
+      },
+    },
+    problems: [],
+  };
 }
 
 /**
@@ -472,6 +727,18 @@ export function loadVoiceRealtimeSettings(options: {
     }
   }
 
+  // Phase 1's speaker observer. The file block is the NORMAL entry; the environment variables are
+  // escape hatches applied per connection by `resolveSpeakerTrackingSettings` in
+  // `voice-speaker-tracking-arm.ts`. A refused block contributes to `problems`, which refuses the
+  // whole reading below — the same all-or-nothing rule every other key here follows, so the
+  // connection falls back to the shipped off state rather than running a half-valid observer.
+  let speakerTracking: SpeakerTrackingSettingsBlock | null = defaults.speakerTracking;
+  if (record.speakerTracking !== undefined) {
+    const validated = validateSpeakerTracking(record.speakerTracking);
+    speakerTracking = validated.block;
+    problems.push(...validated.problems);
+  }
+
   // The shape of the block is a contract, not a preference: the pack has to reach the model, and a
   // template that never mentions the variable — or mentions one nobody defined — would either drop
   // the pack or send the model a literal `{{something}}`.
@@ -487,7 +754,7 @@ export function loadVoiceRealtimeSettings(options: {
   if (problems.length > 0) {
     return { ...defaults, source: 'default', version, path: filePath, problems };
   }
-  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, runEndAck, summaryModel, source: 'file', version, path: filePath, problems: [] };
+  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, runEndAck, summaryModel, speakerTracking, source: 'file', version, path: filePath, problems: [] };
 }
 
 /**

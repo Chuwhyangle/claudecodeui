@@ -21,6 +21,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { WebSocket as WS } from 'ws';
 
@@ -39,6 +40,14 @@ import {
 } from '../voice-realtime-ws-proxy.service.js';
 import { ANNOUNCE_PHRASES } from '../voice-realtime-announce-phrases.js';
 import { VOICE_REALTIME_CONTEXT_HEADER, loadVoiceRealtimeSettings } from '../voice-realtime-settings.js';
+import {
+  SPEAKER_TRACKING_MODEL_DIR_DEFAULT,
+  SPEAKER_TRACKING_MODEL_FILE_DEFAULT,
+  SPEAKER_TRACKING_QUALITY_DEFAULTS,
+  SPEAKER_TRACKING_THRESHOLD_DEFAULTS,
+  resolveSpeakerTrackingSettings,
+  type SpeakerTrackingSettingsBlock,
+} from '../voice-speaker-tracking-arm.js';
 import {
   DEFAULT_TURN_DETECTION,
   VOICE_REALTIME_TURN_DETECTION_SILENCE_MS_ENV,
@@ -490,4 +499,210 @@ test('wire: the upstream session.update carries the settings file\'s silence win
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── the settings file's `speakerTracking`: Phase 1's observer as a deployment knob (AC1) ──────────
+//
+// The block is the NORMAL entry for speaker tracking; the two `VOICE_SPEAKER_*` variables are escape
+// hatches resolved per connection by `resolveSpeakerTrackingSettings` (see the AC2/AC8 legs in
+// `voice-realtime-speaker-tracker.test.ts`). These readings are taken through the REAL loader, so a
+// block that would half-apply is caught here rather than at the seam.
+
+test('speakerTracking: a valid block is validated, default-filled and model path resolved', () => {
+  const loaded = readSettings(
+    {
+      speakerTracking: {
+        mode: 'shadow',
+        modelDir: 'models/custom',
+        modelFile: 'campplus.onnx',
+        thresholds: { track: 0.31, bankSize: 3 },
+        quality: { windowSeconds: 2.5 },
+      },
+    },
+    (settings) => settings,
+  );
+  assert.deepEqual(loaded.problems, [], 'a valid block must not be refused');
+  assert.equal(loaded.source, 'file');
+  const block = loaded.speakerTracking;
+  assert.ok(block !== null, 'the file named a block, so the reading carries one');
+  assert.equal(block.mode, 'shadow');
+  assert.equal(block.modelPath, join('models/custom', 'campplus.onnx'), 'join(modelDir, modelFile)');
+  assert.equal(block.thresholds.track, 0.31, 'the file value wins over the default');
+  assert.equal(block.thresholds.bankSize, 3);
+  assert.equal(block.thresholds.matchFast, SPEAKER_TRACKING_THRESHOLD_DEFAULTS.matchFast, 'unset keeps the default');
+  assert.equal(block.quality.windowSeconds, 2.5);
+  assert.equal(block.quality.sampleSeconds, SPEAKER_TRACKING_QUALITY_DEFAULTS.sampleSeconds);
+  assert.deepEqual([...block.named.thresholds].sort(), ['bankSize', 'track'], 'only the named keys are marked');
+  assert.deepEqual(block.named.quality, ['windowSeconds']);
+  assert.equal(block.named.mode, true);
+  assert.equal(block.named.modelPath, true);
+});
+
+test('speakerTracking: an explicit modelPath wins over modelDir/modelFile', () => {
+  const loaded = readSettings(
+    {
+      speakerTracking: {
+        modelDir: 'models/ignored',
+        modelFile: 'ignored.onnx',
+        modelPath: ' /abs/campplus.onnx ',
+      },
+    },
+    (settings) => settings,
+  );
+  assert.deepEqual(loaded.problems, []);
+  assert.equal(loaded.speakerTracking?.modelPath, '/abs/campplus.onnx', 'surrounding whitespace is trimmed');
+});
+
+test('speakerTracking: a shadow block with no model keys resolves the default models/speaker file', () => {
+  const loaded = readSettings({ speakerTracking: { mode: 'shadow' } }, (settings) => settings);
+  assert.deepEqual(loaded.problems, []);
+  assert.equal(
+    loaded.speakerTracking?.modelPath,
+    join(SPEAKER_TRACKING_MODEL_DIR_DEFAULT, SPEAKER_TRACKING_MODEL_FILE_DEFAULT),
+    'the shipped model location is the default, not a missing path',
+  );
+});
+
+test('speakerTracking: no key means null — the file said nothing', () => {
+  const loaded = readSettings({}, (settings) => settings);
+  assert.deepEqual(loaded.problems, []);
+  assert.equal(loaded.speakerTracking, null, 'null is what lets the environment escape hatch decide');
+});
+
+test('speakerTracking: unknown sub-keys are ignored, not refused', () => {
+  const loaded = readSettings(
+    {
+      speakerTracking: {
+        mode: 'off',
+        futureKnob: true,
+        thresholds: { track: 0.32, unknownThreshold: 9 },
+        quality: { speechRatioMin: 0.65, unknownQuality: 'x' },
+      },
+    },
+    (settings) => settings,
+  );
+  assert.deepEqual(loaded.problems, [], 'an unknown sub-key is the forward-compatibility surface');
+  assert.equal(loaded.speakerTracking?.thresholds.track, 0.32);
+  assert.equal(loaded.speakerTracking?.quality.speechRatioMin, 0.65);
+});
+
+test('speakerTracking: every invalid shape refuses the WHOLE block and falls back to defaults', () => {
+  const invalidBlocks: unknown[] = [
+    42,
+    [],
+    'shadow',
+    { mode: 'gate' },
+    { mode: 'shadow', modelDir: '' },
+    { thresholds: { track: 2 } },
+    { thresholds: { bankSize: 4.5 } },
+    { quality: { speechRatioMin: 1.5 } },
+    { quality: { windowSeconds: '2' } },
+    { thresholds: 3 },
+    { quality: null },
+  ];
+  for (const speakerTracking of invalidBlocks) {
+    const loaded = readSettings({ speakerTracking }, (settings) => settings);
+    assert.equal(
+      loaded.speakerTracking,
+      null,
+      `${JSON.stringify(speakerTracking)} must not half-apply`,
+    );
+    assert.equal(loaded.source, 'default', 'a refused block refuses the reading, as every shape error here does');
+    assert.equal(loaded.problems.length > 0, true, 'the refusal must reach the deployment through `problems`');
+    assert.match(
+      loaded.problems.join('; '),
+      /speakerTracking/,
+      `the reason must NAME the block it refused: ${loaded.problems.join('; ')}`,
+    );
+  }
+});
+
+test('speakerTracking: an out-of-range value names the exact nested key', () => {
+  const loaded = readSettings({ speakerTracking: { thresholds: { track: 2 } } }, (settings) => settings);
+  assert.match(loaded.problems.join('; '), /speakerTracking\.thresholds\.track/);
+});
+
+test('AC5: the shipped example settings file parses and configures speakerTracking', () => {
+  // The DoD says the example must be usable as-is. Reading it through the REAL loader pins that:
+  // an example that refuses itself (an unknown template variable, a bad threshold) would be a trap
+  // for the operator the file exists for.
+  const examplePath = fileURLToPath(
+    new URL('../../../../config/voice-realtime.settings.example.json', import.meta.url),
+  );
+  const loaded = loadVoiceRealtimeSettings({ baseInstructions: BASE, settingsPath: examplePath });
+  assert.deepEqual(loaded.problems, [], 'the shipped example must load cleanly');
+  assert.equal(loaded.source, 'file');
+  const block: SpeakerTrackingSettingsBlock | null = loaded.speakerTracking;
+  assert.ok(block !== null, 'the example documents the speakerTracking block');
+  assert.equal(block.mode, 'shadow');
+  assert.match(block.modelPath, /campplus/, 'the example names the frozen CAM++ weights');
+});
+
+test('AC2: the environment escape hatch over the file is reported per effective value', () => {
+  const block: SpeakerTrackingSettingsBlock = {
+    mode: 'off',
+    modelDir: 'models/file',
+    modelFile: 'file.onnx',
+    modelPath: join('models/file', 'file.onnx'),
+    thresholds: { ...SPEAKER_TRACKING_THRESHOLD_DEFAULTS, track: 0.4 },
+    quality: SPEAKER_TRACKING_QUALITY_DEFAULTS,
+    named: {
+      mode: true,
+      modelPath: true,
+      thresholds: ['track'],
+      quality: [],
+    },
+  };
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({
+    env: { VOICE_SPEAKER_TRACKING: 'shadow', VOICE_SPEAKER_MODEL_PATH: '/env/campplus.onnx' },
+    settings: block,
+    log: (line) => lines.push(line),
+  });
+  assert.equal(resolution.mode, 'shadow', 'the environment mode wins over the file');
+  assert.equal(resolution.modelPath, '/env/campplus.onnx', 'the environment path wins over the file');
+  assert.equal(resolution.sources.mode, 'environment');
+  assert.equal(resolution.sources.modelPath, 'environment');
+  assert.equal(resolution.sources.thresholds.track, 'settings file', 'the file named this threshold');
+  assert.equal(resolution.sources.thresholds.matchFast, 'default', 'the file left this one alone');
+  assert.ok(
+    lines.some((line) => line.includes('mode=shadow') && line.includes('source=environment')),
+    `the mode line must name its source: ${JSON.stringify(lines)}`,
+  );
+  assert.ok(
+    lines.some((line) => line.includes('thresholds.track=0.4') && line.includes('source=settings file')),
+    `a file-named threshold must say so: ${JSON.stringify(lines)}`,
+  );
+  assert.ok(
+    lines.some((line) => line.includes('thresholds.matchFast=0.35') && line.includes('source=default')),
+    `an unset threshold must say default: ${JSON.stringify(lines)}`,
+  );
+  assert.ok(
+    lines.some((line) => line.includes('quality.sampleSeconds=3.5') && line.includes('source=default')),
+    `the quality block is logged too: ${JSON.stringify(lines)}`,
+  );
+});
+
+test('AC2: a file with no environment override runs at the file values, and says so', () => {
+  const block: SpeakerTrackingSettingsBlock = {
+    mode: 'shadow',
+    modelDir: 'models/file',
+    modelFile: 'file.onnx',
+    modelPath: join('models/file', 'file.onnx'),
+    thresholds: SPEAKER_TRACKING_THRESHOLD_DEFAULTS,
+    quality: SPEAKER_TRACKING_QUALITY_DEFAULTS,
+    named: { mode: true, modelPath: true, thresholds: [], quality: [] },
+  };
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({
+    env: {},
+    settings: block,
+    log: (line) => lines.push(line),
+  });
+  assert.equal(resolution.mode, 'shadow');
+  assert.equal(resolution.modelPath, block.modelPath);
+  assert.equal(resolution.sources.mode, 'settings file');
+  assert.equal(resolution.sources.modelPath, 'settings file');
+  assert.equal(resolution.sources.thresholds.track, 'default');
+  assert.ok(lines.some((line) => line.includes('source=settings file')));
 });
