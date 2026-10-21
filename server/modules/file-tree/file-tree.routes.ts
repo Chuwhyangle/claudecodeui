@@ -162,6 +162,18 @@ export function createFileTreeRouter(
   }, logger));
 
   router.get('/projects/:projectId/files', createRouteHandler(async (request, response) => {
+    // `?path=` opts into the lazy one-level listing (an empty value means the
+    // project root). Requests without the parameter keep the legacy full-tree
+    // shape until the remaining consumers migrate, so this endpoint is additive
+    // for old clients rather than a silent response-shape change.
+    const directoryPath = readOptionalString(request.query.path);
+    if (directoryPath !== null) {
+      response.json(await services.listProjectDirectory(readProjectId(request), directoryPath, {
+        respectGitignore: request.query.respectGitignore === 'true',
+      }));
+      return;
+    }
+
     response.json(await services.listProjectFiles(readProjectId(request), {
       respectGitignore: request.query.respectGitignore === 'true',
     }));

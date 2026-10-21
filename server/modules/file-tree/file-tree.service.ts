@@ -4,6 +4,7 @@ import ignore from 'ignore';
 
 import type {
   FileTreeDirectoryEntry,
+  FileTreeDirectoryListing,
   FileTreeIndex,
   FileTreeIndexEntry,
   FileTreeNode,
@@ -13,8 +14,16 @@ import type {
 } from '@/shared/types.js';
 import { AppError, FORBIDDEN_WORKSPACE_PATHS, normalizeProjectPath } from '@/shared/utils.js';
 
+// Always-on exclusions for the display tree in BOTH gitignore and fallback
+// modes. Virtual environments and byte-code/cache directories can hold tens of
+// thousands of files that no user browses in a Files tab, and a gitignore-aware
+// walk only reads the root `.gitignore`, so they cannot be left to ignore rules
+// (a project without a `.venv/` rule would otherwise list them).
 const HARD_EXCLUDED_DIRECTORY_NAMES = new Set([
   'node_modules', '.git', '.svn', '.hg',
+  '.venv', 'venv', '__pycache__',
+  '.pytest_cache', '.mypy_cache', '.tox', '.cache', '.parcel-cache',
+  '.gradle', '.nyc_output', 'coverage', '.idea',
 ]);
 
 const IGNORED_DIRECTORY_NAMES = new Set([
@@ -35,10 +44,16 @@ const COMMON_WORKSPACE_DIRECTORY_NAMES = [
   'workspace',
 ];
 
-// File Tree consumes this guard when recursively listing a project so a very
-// broad workspace (for example, a user's home directory) cannot exhaust the
-// server heap before the browser has a chance to switch to a narrower project.
+// Legacy full-tree guard, kept only for `listProjectFiles` until the remaining
+// consumers migrate to the lazy directory endpoint. The Files tab no longer
+// uses it: opening a directory costs one level, not the whole project, so the
+// display path bounds each directory instead of the tree.
 const MAXIMUM_FILE_TREE_ENTRIES = 10_000;
+
+// Per-directory bound for the lazy Files tab listing. A directory with more
+// visible entries than this is returned truncated (first N + `truncated: true`)
+// rather than failing the request; other directories are unaffected.
+const MAXIMUM_DIRECTORY_LISTING_ENTRIES = 2_000;
 
 // The non-git fallback for the flat index walks the whole project, so it stops
 // at this many files and reports `truncated` instead of failing the request. A
@@ -106,6 +121,34 @@ function resolvePathInsideProject(projectRoot: string, targetPath: string): stri
   }
 
   return resolvedPath;
+}
+
+/**
+ * Resolves a directory request that may name the project root itself.
+ *
+ * `resolvePathInsideProject` requires a descendant of the root, which is right
+ * for file paths but rejects the root directory. The lazy listing needs the
+ * root as its default, so equality is allowed here while `..` escapes stay
+ * forbidden.
+ */
+function resolveDirectoryInsideProject(projectRoot: string, targetPath: string): string {
+  const resolvedRoot = path.resolve(projectRoot);
+  const resolvedPath = path.isAbsolute(targetPath)
+    ? path.resolve(targetPath)
+    : path.resolve(resolvedRoot, targetPath);
+
+  if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(resolvedRoot + path.sep)) {
+    throw createFileTreeError('Path must be under project root', 403, 'PATH_OUTSIDE_PROJECT');
+  }
+
+  return resolvedPath;
+}
+
+function compareFileTreeNodes(left: FileTreeNode, right: FileTreeNode): number {
+  if (left.type !== right.type) {
+    return left.type === 'directory' ? -1 : 1;
+  }
+  return left.name.localeCompare(right.name);
 }
 
 function expandWorkspacePath(workspaceRoot: string, inputPath: string): string {
@@ -374,6 +417,93 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
     return visibleEntries;
   }
 
+  /**
+   * Streams ONE directory for the lazy Files tab listing.
+   *
+   * The per-directory cap is charged only for visible entries and stopping is
+   * local: reading the (cap + 1)-th visible entry marks `truncated` and closes
+   * the stream, so a directory with hundreds of thousands of children costs
+   * the cap, never the whole directory. No child directory is opened here.
+   */
+  async function collectDirectoryListingEntries(
+    directoryPath: string,
+    includeEntry: FileTreeEntryFilter,
+  ): Promise<{ entries: FileTreeDirectoryEntry[]; truncated: boolean }> {
+    const visibleEntries: FileTreeDirectoryEntry[] = [];
+
+    await acquire();
+    try {
+      for await (const entry of fileSystem.openDirectory(directoryPath)) {
+        if (!includeEntry(path.join(directoryPath, entry.name), entry.isDirectory())) {
+          continue;
+        }
+
+        if (visibleEntries.length >= MAXIMUM_DIRECTORY_LISTING_ENTRIES) {
+          return { entries: visibleEntries, truncated: true };
+        }
+        visibleEntries.push(entry);
+      }
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      const errorCode = readErrorCode(error);
+      if (errorCode !== 'EACCES' && errorCode !== 'EPERM') {
+        dependencies.logger.error(`Error reading directory "${directoryPath}"`, error);
+      }
+      return { entries: [], truncated: false };
+    } finally {
+      release();
+    }
+
+    return { entries: visibleEntries, truncated: false };
+  }
+
+  /**
+   * Builds the node metadata for one directory entry without traversing it.
+   */
+  async function createFileTreeNode(
+    directoryPath: string,
+    entry: FileTreeDirectoryEntry,
+  ): Promise<FileTreeNode> {
+    const itemPath = path.join(directoryPath, entry.name);
+    const item: FileTreeNode = {
+      name: entry.name,
+      path: itemPath,
+      type: entry.isDirectory() ? 'directory' : 'file',
+      size: 0,
+      modified: null,
+      permissions: '000',
+      permissionsRwx: '---------',
+    };
+
+    try {
+      await acquire();
+      try {
+        const stats = await fileSystem.lstat(itemPath);
+        const ownerPermissions = (stats.mode >> 6) & 7;
+        const groupPermissions = (stats.mode >> 3) & 7;
+        const otherPermissions = stats.mode & 7;
+
+        item.size = stats.size;
+        item.modified = stats.mtime.toISOString();
+        item.permissions = `${ownerPermissions}${groupPermissions}${otherPermissions}`;
+        item.permissionsRwx = permissionBitsToRwx(ownerPermissions)
+          + permissionBitsToRwx(groupPermissions)
+          + permissionBitsToRwx(otherPermissions);
+        if (stats.isSymbolicLink()) {
+          item.isSymlink = true;
+        }
+      } finally {
+        release();
+      }
+    } catch {
+      // Metadata failures should not hide an otherwise readable tree entry.
+    }
+
+    return item;
+  }
+
   async function buildFileTree(
     directoryPath: string,
     maximumDepth: number,
@@ -384,50 +514,17 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
     const visibleEntries = await collectVisibleEntries(directoryPath, includeEntry, remainingEntries);
 
     const items = await Promise.all(visibleEntries.map(async (entry): Promise<FileTreeNode> => {
-      const itemPath = path.join(directoryPath, entry.name);
-      const item: FileTreeNode = {
-        name: entry.name,
-        path: itemPath,
-        type: entry.isDirectory() ? 'directory' : 'file',
-        size: 0,
-        modified: null,
-        permissions: '000',
-        permissionsRwx: '---------',
-      };
-
-      try {
-        await acquire();
-        try {
-          const stats = await fileSystem.lstat(itemPath);
-          const ownerPermissions = (stats.mode >> 6) & 7;
-          const groupPermissions = (stats.mode >> 3) & 7;
-          const otherPermissions = stats.mode & 7;
-
-          item.size = stats.size;
-          item.modified = stats.mtime.toISOString();
-          item.permissions = `${ownerPermissions}${groupPermissions}${otherPermissions}`;
-          item.permissionsRwx = permissionBitsToRwx(ownerPermissions)
-            + permissionBitsToRwx(groupPermissions)
-            + permissionBitsToRwx(otherPermissions);
-          if (stats.isSymbolicLink()) {
-            item.isSymlink = true;
-          }
-        } finally {
-          release();
-        }
-      } catch {
-        // Metadata failures should not hide an otherwise readable tree entry.
-      }
+      const item = await createFileTreeNode(directoryPath, entry);
 
       // Skip recursing into pseudo-filesystems and other system-critical
       // directories (e.g. /proc, /sys) — they're never valid project roots,
       // and /proc in particular can contain thousands of virtual entries
       // that make traversal from a broad root (e.g. "/") pathologically slow.
-      const isForbiddenSystemDir = FORBIDDEN_WORKSPACE_PATHS.includes(normalizeProjectPath(itemPath));
+      const isForbiddenSystemDir = FORBIDDEN_WORKSPACE_PATHS.includes(normalizeProjectPath(item.path));
 
       if (entry.isDirectory() && currentDepth < maximumDepth && !isForbiddenSystemDir) {
         item.children = await buildFileTree(
-          itemPath,
+          item.path,
           maximumDepth,
           currentDepth + 1,
           includeEntry,
@@ -438,12 +535,35 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       return item;
     }));
 
-    return items.sort((left, right) => {
-      if (left.type !== right.type) {
-        return left.type === 'directory' ? -1 : 1;
+    return items.sort(compareFileTreeNodes);
+  }
+
+  /**
+   * Builds the response for one directory of the lazy Files tab tree.
+   *
+   * Only `directoryPath` is opened. Directories are marked expandable
+   * optimistically (`hasChildren: true`) so the client draws an expander
+   * without a peek request; expanding an empty directory simply shows its
+   * empty state. `truncated` is a property of this directory alone.
+   */
+  async function buildDirectoryListing(
+    directoryPath: string,
+    includeEntry: FileTreeEntryFilter,
+  ): Promise<FileTreeDirectoryListing> {
+    const { entries, truncated } = await collectDirectoryListingEntries(directoryPath, includeEntry);
+    const items = await Promise.all(entries.map(async (entry) => {
+      const item = await createFileTreeNode(directoryPath, entry);
+      if (item.type === 'directory') {
+        item.hasChildren = true;
       }
-      return left.name.localeCompare(right.name);
-    });
+      return item;
+    }));
+
+    return {
+      path: directoryPath,
+      entries: items.sort(compareFileTreeNodes),
+      truncated,
+    };
   }
 
   async function cleanupTemporaryFiles(files: FileTreeUploadedFile[]): Promise<void> {
@@ -607,6 +727,43 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       }
 
       return buildFileTree(projectRoot, 10, 0, includeEntry);
+    },
+
+    async listProjectDirectory(projectId, directoryPath, options) {
+      const projectRoot = await resolveProjectRoot(projectId);
+      try {
+        await fileSystem.access(projectRoot);
+      } catch {
+        throw createFileTreeError(`Project path not found: ${projectRoot}`, 404, 'PROJECT_PATH_NOT_FOUND');
+      }
+
+      const targetPath = directoryPath
+        ? resolveDirectoryInsideProject(projectRoot, directoryPath)
+        : path.resolve(projectRoot);
+
+      try {
+        const stats = await fileSystem.stat(targetPath);
+        if (!stats.isDirectory()) {
+          throw createFileTreeError('Path is not a directory', 400, 'NOT_A_DIRECTORY');
+        }
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        throw createFileTreeError('Directory not accessible', 404, 'DIRECTORY_NOT_ACCESSIBLE');
+      }
+
+      let includeEntry: FileTreeEntryFilter = includeEntryByFallbackDirectoryNames;
+      if (options?.respectGitignore) {
+        try {
+          const gitignoreContent = await fileSystem.readTextFile(path.join(projectRoot, '.gitignore'));
+          includeEntry = createGitignoreEntryFilter(projectRoot, gitignoreContent);
+        } catch (error) {
+          if (readErrorCode(error) !== 'ENOENT') {
+            dependencies.logger.error(`Error reading .gitignore in "${projectRoot}"`, error);
+          }
+        }
+      }
+
+      return buildDirectoryListing(targetPath, includeEntry);
     },
 
     async listProjectFileIndex(projectId) {

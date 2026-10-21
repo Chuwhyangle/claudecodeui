@@ -1685,6 +1685,24 @@ export type FileTreeNode = {
   permissionsRwx: string;
   isSymlink?: boolean;
   children?: FileTreeNode[];
+  // Lazy directory listings never open child directories, so a directory entry
+  // reports whether it may have children optimistically (always true today) and
+  // the frontend draws an expander without a peek request.
+  hasChildren?: boolean;
+};
+
+/**
+ * One lazily-listed directory level for the Files tab.
+ *
+ * The listing contains exactly the visible entries of `path` (no recursion).
+ * `truncated` is true when the directory has more visible entries than the
+ * per-directory cap, in which case `entries` holds the first `cap` of them and
+ * the request still succeeds instead of failing the whole tree.
+ */
+export type FileTreeDirectoryListing = {
+  path: string;
+  entries: FileTreeNode[];
+  truncated: boolean;
 };
 
 /**
@@ -1860,6 +1878,13 @@ export type FileTreeServices = {
     projectId: string,
     options?: { respectGitignore: boolean },
   ): Promise<FileTreeNode[]>;
+  // Lazy Files tab listing: exactly one directory level, bounded per directory.
+  // `directoryPath` omitted (or the project root) lists the project root.
+  listProjectDirectory(
+    projectId: string,
+    directoryPath?: string,
+    options?: { respectGitignore: boolean },
+  ): Promise<FileTreeDirectoryListing>;
   // Flat file index shared by filename-resolution consumers; a git project is
   // served from `git ls-files`, everything else from a bounded filesystem walk.
   listProjectFileIndex(projectId: string): Promise<FileTreeIndex>;
