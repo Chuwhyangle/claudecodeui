@@ -7,7 +7,7 @@
 | Phase | 目标 | 状态 | 退出条件 |
 |---|---|---|---|
 | 0 | 数据/模型/阈值冻结 | **接近完成**：`thresholds.v1.json`（provisional）；labels 已扩到 39 目标 / 21 非目标；467 负样本；0.35 在 ≥2s 目标上 0 FAR/0 FRR；仍缺专职中文同事负样本 | ≥100 真实中文负样本；EER ≤5%；阈值在 FAR≤1% 时 FRR≤5% |
-| 1 | Shadow tracker（只读） | 已签任务 `voice-speaker-tracker-shadow` | coverage ≥70%；已知负样本 0 误接受；新增延迟 <20ms；音频行为不变 |
+| 1 | Shadow tracker（只读） | **已落地**：`voice-speaker-tracker-shadow` status `done`（driver 机械 fan-in）；单文件 32 tests pass、pin 14 pass、typecheck 0 | coverage ≥70%；已知负样本 0 误接受；新增延迟 <20ms；音频行为不变 |
 | 2 | 软跟踪 + UI 状态 | 未开始 | 20 会话状态与日志一致；restart/re-anchor 正常 |
 | 3 | Gate（先软后硬） | 未开始 | 目标 turn 不丢；bystander-first 不误锁；上游 turn detection 不受影响 |
 | 4 | VoxLock TSE | 未开始 | session-local SI-SDRi ≥+6dB；ASR WER 相对改善 ≥10%；延迟 <100ms；单会话 CPU <25% |
@@ -30,7 +30,7 @@
 - `labels.csv`：60 行（39 目标 / 21 非目标），含 12 条追加目标、1 条低分目标、3 条低分非目标、6 条会话目标切片、2 条会话非目标切片。
 - 标定：目标 15 条 min 0.446 / median 0.613；462 条负样本 max 0.332；0.35 时 0 FAR / 0 FRR。
 
-## Phase 1 任务边界
+## Phase 1 任务边界（已落地）
 
 任务 `voice-speaker-tracker-shadow`：
 
@@ -39,6 +39,8 @@
 - 观测缝：`voice-speaker-tracking-arm.ts`、`voice-realtime-speaker-seam.ts`、proxy 可选 seam。
 - 测试：唯一新增 `server/modules/voice-realtime/tests/voice-realtime-speaker-tracker.test.ts`；同步更新 `server/shared/tests/quay-test-script.test.ts` 的收集数 pin。
 - 不新建 `server/modules/<new>/` 目录（AC-394 棘轮）。
+
+落地后的核对（2026-10-21）：`voice-speaker-attractor.ts`、`voice-speaker-bank.ts`、`voice-speaker-selector.ts`、`voice-speaker-tracking-arm.ts`、`voice-realtime-speaker-seam.ts` 与唯一新增测试文件均在；`voice-realtime-speaker-tracker.test.ts` 32/32 绿，`quay-test-script.test.ts` 14/14 绿（389 文件 / `unknown=386`/388），`npm run typecheck` exit 0。任务 Proposal 写于第一轮 20/16 标签；当前行为以 `thresholds.v1.json` 与 `labels.csv` 为准，第二轮 39/21 读数见 `CONFIRMED-LABELS.md` §10。
 
 ## 需要人类完成
 

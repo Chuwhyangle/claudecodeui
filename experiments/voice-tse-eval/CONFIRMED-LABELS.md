@@ -201,3 +201,14 @@ authorize_tse   = 该 cluster 已由 core 确认（cluster 的得分 >= MATCH_FA
 | WeSpeaker zh CN-Celeb r34 | 29.5% | 9.2% | 0.807 |
 
 **结论不变**：CAM++ zh_en advanced 仍是首选；两条真实会话非目标都被 core 拒绝；剩余缺口是“专职中文同事”的负样本，而不是已知会话里的 TTS/旁人。
+
+
+## 11. Phase 1 shadow 落地核对
+
+`voice-speaker-tracker-shadow` 已由 driver 机械 fan-in 落地（status `done`）。核对：
+
+- 新增 `voice-speaker-attractor.ts`、`voice-speaker-bank.ts`、`voice-speaker-selector.ts`、`voice-speaker-tracking-arm.ts`、`voice-realtime-speaker-seam.ts` 与唯一测试文件。
+- `voice-realtime-speaker-tracker.test.ts`：32/32 pass；含 dual-key（旁人先说话 track 但不 authorize）、bank candidate/promote/merge/evict、seam“无采样器时逐字节不变”。
+- `quay-test-script.test.ts`：14/14 pass；全树 389 个 server test 文件，`unknown=386`/`388`。
+- `npm run typecheck` exit 0。
+- 任务 Proposal 仍写第一轮 20/16 标签与 2.6% EER（终态记录未改写）；当前阈值/标签以 `thresholds.v1.json` 和 `labels.csv` 为准；第二轮读数见 §10。
