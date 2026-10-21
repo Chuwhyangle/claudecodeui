@@ -1,7 +1,7 @@
 ---
 id: AC-415
 title: 生成器把种子解析为 file/entity 两级子图并产出合法 .mmd
-status: draft
+status: active
 kind: criterion
 goal: GOAL-049
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -24,4 +24,15 @@ expect: >-
 
   取假形态：fileToIds 命中漏一条 ⇒ 节点集断言红；边引用未定义节点 ⇒ mermaid 合法性断言红。
 origin: ADR-005 决策 4/5；GOAL-049 退出条件
+activatedAt: 2026-10-21T07:01:54.997Z
+statusLog:
+  - at: 2026-10-21T07:01:54.997Z
+    from: draft
+    to: active
+    actor: goal-cli
+    reason: ""
+fidelity:
+  verdict: not-evaluated
+  reason: no judge configured
+  at: 2026-10-21T07:01:54.997Z
 ---
