@@ -12,6 +12,13 @@
  * `voice-realtime-log.ts`) and answers how many connection records were removed. The
  * store is injected, so the route itself knows only the shape of the answer.
  *
+ * `GET /api/voice-realtime/speaker-model` and `POST …/speaker-model/download` — the
+ * speaker tracker's CAM++ weights: what the resolved path holds, and the one action that
+ * installs them from the fixed source. Neither verb reads a request field: the path comes
+ * from the deployment's settings and the source is the service's constant, so a client
+ * cannot point a download anywhere. The work is the service's
+ * (`voice-realtime-speaker-model.ts`); these routes only call it and format the answer.
+ *
  * Body (JSON):
  *   sessionId   string   required — the session the run is bound to
  *   audioBase64 string   required — a mono 16 kHz PCM16 WAV, or raw PCM16 with format "pcm16"
@@ -37,6 +44,10 @@ import {
   type VoiceRealtimeDiagnosisInput,
   type VoiceRealtimeDiagnosisReport,
 } from './voice-realtime-diagnose.service.js';
+import type {
+  VoiceSpeakerModelDownloadResult,
+  VoiceSpeakerModelStatus,
+} from './voice-realtime-speaker-model.js';
 import type { TurnDetectionOverride } from './voice-realtime-turn-detection.js';
 
 /** What the route needs from the composition root. */
@@ -60,6 +71,21 @@ export type VoiceRealtimeRoutesDeps = {
    * delete the operator's audio, and vice versa.
    */
   clearCapture?(): { deleted: number };
+  /**
+   * The speaker tracker's model reading, for `GET /speaker-model`.
+   *
+   * OPTIONAL like the two maintenance verbs: a deployment (or a leaf test) that wired no model
+   * service answers `503`, which is the honest reading — there is nothing to report on — rather
+   * than a `missing` status that would invite a download no service could perform.
+   */
+  speakerModelStatus?(): Promise<VoiceSpeakerModelStatus>;
+  /**
+   * Starts or joins the model download, for `POST /speaker-model/download`.
+   *
+   * It takes NO arguments on purpose: the source URL and the destination path are the service's,
+   * and accepting either from a request would let a client choose what the server writes to disk.
+   */
+  speakerModelDownload?(): Promise<VoiceSpeakerModelDownloadResult>;
 };
 
 const clampNumber = (value: unknown, fallback: number, min: number, max: number): number => {
@@ -200,6 +226,38 @@ export function createVoiceRealtimeRouter(deps: VoiceRealtimeRoutesDeps): Router
   // serves a capture back over HTTP, which is what keeps the store local-only.
   router.delete('/capture', (_request, response) => {
     response.json(deps.clearCapture?.() ?? { deleted: 0 });
+  });
+
+  // THE SPEAKER MODEL, AS THE SERVER SEES IT: the resolved path, whether the bytes there hash to
+  // the pinned checkpoint, and — while a download runs — its progress. The route reads no request
+  // field; the path it reports is the one the deployment's settings file names.
+  router.get('/speaker-model', async (_request, response) => {
+    if (deps.speakerModelStatus === undefined) {
+      response.status(503).json({ error: 'speaker model service is not configured' });
+      return;
+    }
+    try {
+      response.json(await deps.speakerModelStatus());
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // THE ONE ACTION. `202` means a download is now running (this call started it, or joined the one
+  // already in flight); `200` means there was nothing to do because the checkpoint is already
+  // installed. Both bodies are the CURRENT READING, so the caller needs no second request to show
+  // the state it just caused.
+  router.post('/speaker-model/download', async (_request, response) => {
+    if (deps.speakerModelDownload === undefined) {
+      response.status(503).json({ error: 'speaker model service is not configured' });
+      return;
+    }
+    try {
+      const result = await deps.speakerModelDownload();
+      response.status(result.started || result.joined ? 202 : 200).json(result.status);
+    } catch (error) {
+      response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    }
   });
 
   return router;

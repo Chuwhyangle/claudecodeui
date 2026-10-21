@@ -642,5 +642,24 @@
       "disableButton": "Отключить",
       "disableConfirm": "Отключить этого клиента? Все его авторизации и токены будут немедленно отклонены. Действие необратимо."
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "Модель говорящего",
+    "speakerModelDescription": "Модель CAM++ для отслеживания говорящих устанавливается на сервере по запросу. Она не входит в пакет приложения.",
+    "speakerModelLoading": "Чтение состояния модели…",
+    "speakerModelStateMissing": "Не установлена",
+    "speakerModelStateDownloading": "Загрузка",
+    "speakerModelStateInstalled": "Установлена и проверена",
+    "speakerModelStateInvalid": "Проверка не удалась",
+    "speakerModelStateFailed": "Загрузка не удалась",
+    "speakerModelPath": "Путь: {{path}}",
+    "speakerModelSource": "Источник: {{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "Загружено {{received}} МБ из {{total}} МБ",
+    "speakerModelRate": "{{rate}} КБ/с",
+    "speakerModelError": "Причина: {{reason}}",
+    "speakerModelDownload": "Загрузить модель",
+    "speakerModelDownloading": "Загрузка…",
+    "speakerModelNote": "Вступит в силу при следующем подключении Live Voice после завершения загрузки."
   }
 }

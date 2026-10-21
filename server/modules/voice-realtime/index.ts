@@ -238,6 +238,26 @@ export {
   type SpeakerTrackerModel,
   type VoiceSpeakerTrackerSeam,
 } from './voice-realtime-speaker-seam.js';
+// THE SPEAKER MODEL'S PROVISIONING SERVICE (2026-10-21): the CAM++ weights are a runtime artifact,
+// not a release file. `server/index.ts` builds this service from the settings file's
+// `speakerTracking` block and hands its two verbs to the routes; the settings page reads the state
+// and asks for the one fixed-source download. The browser never names a URL, a directory or a file.
+export {
+  VOICE_SPEAKER_MODEL_ATTRIBUTION,
+  VOICE_SPEAKER_MODEL_BYTES,
+  VOICE_SPEAKER_MODEL_DOWNLOAD_TIMEOUT_MS,
+  VOICE_SPEAKER_MODEL_FILE_NAME,
+  VOICE_SPEAKER_MODEL_LICENSE,
+  VOICE_SPEAKER_MODEL_MAX_BYTES,
+  VOICE_SPEAKER_MODEL_SHA256,
+  VOICE_SPEAKER_MODEL_SOURCE_URL,
+  createVoiceSpeakerModelService,
+  resolveVoiceSpeakerModelTarget,
+  type VoiceSpeakerModelDownloadResult,
+  type VoiceSpeakerModelService,
+  type VoiceSpeakerModelState,
+  type VoiceSpeakerModelStatus,
+} from './voice-realtime-speaker-model.js';
 // The P4 rollout switch (GOAL-034 / AC-322): which relay a deployment offers a browser, resolved as a
 // pure function of the environment. `server/index.ts` calls it at the assembly point; the ws proxy
 // calls it when a caller passes no `segmentedRelay` seam; the criterion reads the default from it.

@@ -18,6 +18,7 @@
     "mode": "shadow",
     "modelDir": "models/speaker",
     "modelFile": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "modelPath": "",
     "thresholds": {
       "track": 0.3,
       "matchFast": 0.35,
@@ -36,5 +37,6 @@
     }
   },
   "_speakerTracking": "Phase 1 speaker tracking (shadow only). 'mode' is off or shadow; modelPath, when non-empty, wins over join(modelDir, modelFile). Every threshold/quality value left out keeps the frozen thresholds.v1.json default. An invalid block refuses the WHOLE file, so the connection runs with defaults and the reason is logged.",
+  "_speakerModel": "The CAM++ checkpoint is NOT shipped: models/ is git-ignored and excluded from the npm/Electron bundles. Install it from Settings -> Voice -> Live Voice -> Speaker model, which asks the server to download it from the fixed sherpa-onnx release URL, verifies the pinned sha256 and renames the file into modelDir/modelFile (or modelPath) atomically. The path shown there is the directory the next Live Voice connection will load.",
   "_speakerTracking_escapeHatch": "VOICE_SPEAKER_TRACKING / VOICE_SPEAKER_MODEL_PATH still work for a test or an operator, but only as escape hatches: they override this block (environment > settings file > default)."
 }

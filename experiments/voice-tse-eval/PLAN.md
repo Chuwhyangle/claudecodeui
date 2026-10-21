@@ -56,7 +56,7 @@
 | 任务 | 状态 | 依赖 | 内容 |
 |---|---|---|---|
 | `voice-speaker-tracking-settings-file` | **已落地**（2026-10-21） | — | `speakerTracking`（mode/modelDir/modelFile/modelPath/thresholds/quality）进 `voice-realtime.settings.json`；按连接读取；模型按路径缓存；env 仅 escape hatch |
-| `voice-speaker-model-provisioning` | todo | `voice-speaker-tracking-settings-file` | 模型默认 `models/speaker/`，`.gitignore` 不入库；npm/Electron/Docker 不带；设置页触发服务端下载，固定 URL + sha256 校验 + 原子落盘 |
+| `voice-speaker-model-provisioning` | **已落地**（2026-10-21） | `voice-speaker-tracking-settings-file` | 模型默认 `models/speaker/`，`.gitignore` 不入库；npm/Electron/Docker 不带（`npm pack --dry-run` 908 文件、0 条 `models/`）；`GET/POST /api/voice-realtime/speaker-model` 由设置页触发服务端下载，固定 URL + sha256 校验 + `.part` 原子 rename；同一路径单飞 |
 
 落地形状（`voice-speaker-tracking-settings-file`）：
 

@@ -38,7 +38,59 @@ const voice = vi.hoisted(() => ({
   saveConfig: vi.fn(),
 }));
 
-vi.mock('@/shared/api', () => ({ api: { voice }, authenticatedFetch: vi.fn() }));
+/**
+ * The speaker model's two verbs, doubled.
+ *
+ * The Live Voice tab reads the model's state on mount and polls only while a download runs, so the
+ * default answers below are the still states; the cases that exercise a download replace them. The
+ * panel is the SERVER's reading verbatim — nothing here is a claim the client computes.
+ */
+const voiceRealtime = vi.hoisted(() => ({
+  speakerModelStatus: vi.fn(),
+  speakerModelDownload: vi.fn(),
+}));
+
+vi.mock('@/shared/api', () => ({ api: { voice, voiceRealtime }, authenticatedFetch: vi.fn() }));
+
+/** The four readings the speaker-model section can render. */
+const SPEAKER_MODEL_MISSING = {
+  state: 'missing' as const,
+  path: '/srv/cloudcli/models/speaker/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  fileName: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  expectedBytes: 28_281_164,
+  sha256: 'aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2',
+  sourceUrl:
+    'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  license: 'Apache-2.0',
+  attribution: '3D-Speaker CAM++ (sherpa-onnx release)',
+  bytes: null,
+  receivedBytes: null,
+  totalBytes: null,
+  bytesPerSec: null,
+  startedAt: null,
+  error: null,
+};
+
+const SPEAKER_MODEL_DOWNLOADING = {
+  ...SPEAKER_MODEL_MISSING,
+  state: 'downloading' as const,
+  receivedBytes: 10_485_760,
+  totalBytes: 28_281_164,
+  bytesPerSec: 102_400,
+  startedAt: 1_792_000_000_000,
+};
+
+const SPEAKER_MODEL_INSTALLED = {
+  ...SPEAKER_MODEL_MISSING,
+  state: 'installed' as const,
+  bytes: 28_281_164,
+};
+
+const SPEAKER_MODEL_FAILED = {
+  ...SPEAKER_MODEL_MISSING,
+  state: 'failed' as const,
+  error: 'the model source answered HTTP 404',
+};
 
 /**
  * The on-device recogniser's reading, as the settings panel consumes it.
@@ -161,6 +213,10 @@ beforeEach(() => {
   voice.health.mockReset();
   voice.config.mockReset();
   voice.saveConfig.mockReset();
+  voiceRealtime.speakerModelStatus.mockReset();
+  voiceRealtime.speakerModelDownload.mockReset();
+  voiceRealtime.speakerModelStatus.mockImplementation(() => ok({ ...SPEAKER_MODEL_MISSING }));
+  voiceRealtime.speakerModelDownload.mockImplementation(() => ok({ ...SPEAKER_MODEL_DOWNLOADING }));
   clientAsrPanel.engine = null;
   clientAsrPanel.progress = null;
   clientAsrPanel.fallback = null;
@@ -315,4 +371,94 @@ test('a stored key reads back masked, a typed key saves in the clear, and an unt
     `[settings] live voice: shared-tabs=2 liveFields=${renderedInputNames(second).length}`
       + ` readbackMasked=${liveKeyInput(second).value === MASK} storedAfterUntouchedSave="${String(server.stored().liveVoiceDashscopeApiKey)}"`,
   );
+});
+
+// ── the speaker tracker's CAM++ model (voice-speaker-model-provisioning) ───────────────────────
+
+/** The Live Voice tab's speaker-model section. */
+const speakerModelSection = (view: View): HTMLElement => view.getByTestId('voice-speaker-model');
+
+test('the speaker model section shows the server reading and downloads it from the server', async () => {
+  let reading: typeof SPEAKER_MODEL_MISSING | typeof SPEAKER_MODEL_DOWNLOADING = SPEAKER_MODEL_MISSING;
+  voiceRealtime.speakerModelStatus.mockImplementation(() => ok({ ...reading }));
+  voiceRealtime.speakerModelDownload.mockImplementation(() => {
+    reading = SPEAKER_MODEL_DOWNLOADING;
+    return ok({ ...reading });
+  });
+
+  const view = render(<VoiceSettingsTab />);
+  await openLiveTab(view);
+
+  // THE SERVER'S STATE, THE SERVER'S PATH. The section renders the path the server resolved from
+  // the settings file, the fixed source and the licence — there is no input through which this
+  // client could name any of them.
+  await waitFor(() => assert.match(
+    view.getByTestId('voice-speaker-model-state').textContent ?? '',
+    /speakerModelStateMissing/,
+  ));
+  assert.ok(
+    (view.getByTestId('voice-speaker-model-path').textContent ?? '').includes(SPEAKER_MODEL_MISSING.path),
+    'the section does not show the resolved path',
+  );
+  const sectionText = speakerModelSection(view).textContent ?? '';
+  assert.ok(sectionText.includes(SPEAKER_MODEL_MISSING.sourceUrl), 'the section does not show the fixed source');
+  assert.ok(sectionText.includes('Apache-2.0'), 'the section does not show the licence');
+  assert.ok(sectionText.includes('speakerModelNote'), 'the section does not say when the model takes effect');
+  assert.equal(renderedInputNames(view).length, 1, 'the speaker model adds no client-editable field');
+
+  // THE ONE ACTION. The click asks the SERVER; the progress it renders is the reading the POST
+  // answered with (received/total/rate are the server's counters, not a browser estimate).
+  fireEvent.click(view.getByTestId('voice-speaker-model-download'));
+  await waitFor(() => assert.match(
+    view.getByTestId('voice-speaker-model-state').textContent ?? '',
+    /speakerModelStateDownloading/,
+  ));
+  assert.equal(voiceRealtime.speakerModelDownload.mock.calls.length, 1);
+  const progress = view.getByTestId('voice-speaker-model-progress').textContent ?? '';
+  assert.match(progress, /received=10\.0/, 'the progress line does not carry the server received bytes in MB');
+  assert.match(progress, /total=27\.0/, 'the progress line does not carry the server total in MB');
+  assert.match(
+    view.getByTestId('voice-speaker-model-rate').textContent ?? '',
+    /rate=100/,
+    'the rate line does not carry the server bytes per second in KB/s',
+  );
+  const button = view.getByTestId('voice-speaker-model-download');
+  assert.ok(button instanceof HTMLButtonElement && button.disabled, 'a running download must not be startable twice');
+});
+
+test('an installed speaker model shows the verified state and offers no download', async () => {
+  voiceRealtime.speakerModelStatus.mockImplementation(() => ok({ ...SPEAKER_MODEL_INSTALLED }));
+
+  const view = render(<VoiceSettingsTab />);
+  await openLiveTab(view);
+
+  await waitFor(() => assert.match(
+    view.getByTestId('voice-speaker-model-state').textContent ?? '',
+    /speakerModelStateInstalled/,
+  ));
+  assert.equal(
+    view.queryByTestId('voice-speaker-model-download'),
+    null,
+    'an installed model must not offer a download',
+  );
+  assert.ok((view.getByTestId('voice-speaker-model-path').textContent ?? '').includes(SPEAKER_MODEL_MISSING.path));
+});
+
+test('a failed speaker model shows the service reason verbatim', async () => {
+  voiceRealtime.speakerModelStatus.mockImplementation(() => ok({ ...SPEAKER_MODEL_FAILED }));
+
+  const view = render(<VoiceSettingsTab />);
+  await openLiveTab(view);
+
+  await waitFor(() => assert.match(
+    view.getByTestId('voice-speaker-model-state').textContent ?? '',
+    /speakerModelStateFailed/,
+  ));
+  const error = view.getByTestId('voice-speaker-model-error').textContent ?? '';
+  assert.match(
+    error,
+    /reason=the model source answered HTTP 404/,
+    'the panel does not render the service\'s own failure sentence',
+  );
+  assert.ok(view.getByTestId('voice-speaker-model-download'), 'a failed download must remain retryable');
 });

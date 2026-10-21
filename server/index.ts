@@ -135,7 +135,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, createSpeakerTrackerModel, createSpeakerTrackerSeam, resolveSpeakerTrackingSettings, type SpeakerTrackerModel, type SpeakerTrackingSettingsBlock, type VoiceSpeakerTrackerSeam, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, createSpeakerTrackerModel, createSpeakerTrackerSeam, resolveSpeakerTrackingSettings, type SpeakerTrackerModel, type SpeakerTrackingSettingsBlock, type VoiceSpeakerTrackerSeam, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams, createVoiceSpeakerModelService } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -1633,6 +1633,18 @@ app.use('/api/sessions', authenticateToken, createActivityRouter({ activityStore
 
 app.use('/api/voice', authenticateToken, voiceRoutes);
 
+// THE SPEAKER MODEL'S PROVISIONING SERVICE, resolved ONCE from the same settings file the tracker
+// reads. It owns the fixed source URL, the pinned digest and the destination path; the routes below
+// hand it no request input at all, which is what keeps a client from choosing what the server
+// downloads or where it writes. `loadVoiceRealtimeSettings` is called with the shipped instructions
+// because this reading only needs the `speakerTracking` block — the prompt itself is not used here.
+const voiceSpeakerModelService = createVoiceSpeakerModelService({
+    settings: loadVoiceRealtimeSettings({
+        baseInstructions: voiceRealtimeInstructionsFor(resolveVoiceRealtimeClosingTurn(process.env).closingTurn),
+    }).speakerTracking,
+    rootDir: process.cwd(),
+});
+
 // HTTP-layer Live Voice diagnosis: an audio file in, the upstream's transcription and the
 // model's action out — the same proxy path the microphone uses, minus the browser.
 app.use(
@@ -1656,6 +1668,11 @@ app.use(
         // knows how many connection captures were on disk. Answers `{ deleted: 0 }` when the capture
         // was never on — the address a clear with nothing to do reports, not an error.
         clearCapture: () => clearVoiceRealtimeCaptureDir(voiceRealtimeCaptureDirectory),
+        // THE SPEAKER MODEL'S TWO VERBS. The service resolves the path from the settings file and
+        // owns the fixed source; the routes only relay its reading, so neither request can name a
+        // URL or a directory.
+        speakerModelStatus: () => voiceSpeakerModelService.status(),
+        speakerModelDownload: () => voiceSpeakerModelService.download(),
     }),
 );
 

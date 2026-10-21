@@ -643,5 +643,24 @@
       "disableButton": "停用",
       "disableConfirm": "確定要停用此用戶端嗎？其名下所有授權與權杖會立即被拒絕，且無法復原。"
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "聲紋模型",
+    "speakerModelDescription": "CAM++ 聲紋追蹤模型由伺服器按需安裝，不隨應用程式套件分發。",
+    "speakerModelLoading": "正在讀取模型狀態…",
+    "speakerModelStateMissing": "未安裝",
+    "speakerModelStateDownloading": "下載中",
+    "speakerModelStateInstalled": "已安裝並驗證通過",
+    "speakerModelStateInvalid": "驗證失敗",
+    "speakerModelStateFailed": "下載失敗",
+    "speakerModelPath": "路徑：{{path}}",
+    "speakerModelSource": "來源：{{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "已下載 {{received}} MB / {{total}} MB",
+    "speakerModelRate": "{{rate}} KB/s",
+    "speakerModelError": "原因：{{reason}}",
+    "speakerModelDownload": "下載模型",
+    "speakerModelDownloading": "下載中…",
+    "speakerModelNote": "下載完成後，下一次 Live Voice 連線生效。"
   }
 }

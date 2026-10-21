@@ -211,6 +211,14 @@ playwright-report/
 # quay's per-goal gate locks (runtime state, siblings of the *.pid.lock rule above)
 /goals/*.lock
 
+# Runtime model weights. The CAM++ speaker-tracking checkpoint is downloaded on demand from the
+# settings page (`POST /api/voice-realtime/speaker-model/download`) and verified against a pinned
+# sha256; it is a runtime artifact, never a source file, and it must never travel with the npm
+# package, the Electron bundle or a Docker image. The default destination is `models/speaker/`
+# (`speakerTracking.modelDir`), but a deployment may point the settings file anywhere, so the whole
+# directory stays out of git.
+/models/
+
 # The voice relay's LOCAL settings file: a deployment's own prompt / detector / announce phrases.
 # `config/voice-realtime.settings.example.json` is the TRACKED template; copy it here (or point
 # VOICE_REALTIME_SETTINGS_PATH at it) and edit. The local copy must never be committed — it is a

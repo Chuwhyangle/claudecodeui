@@ -12,6 +12,7 @@ import { cn } from '@/shared/utils';
 import { useUiPreferences, useSetUiPreference } from '@/shared/context/UiPreferencesContext';
 import { useVoiceConfig } from '@/modules/settings/hooks/useVoiceConfig';
 import { useVoiceProviderOptions } from '@/modules/settings/hooks/useVoiceProviderOptions';
+import { useSpeakerModelStatus, type SpeakerModelStatus } from '@/modules/settings/hooks/useSpeakerModelStatus';
 import {
   isVoiceConfigField,
   readVoiceConfigField,
@@ -39,6 +40,15 @@ const clearButtonClass =
   'rounded-md border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50';
 const subtleButtonClass =
   'rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted';
+
+/** The sentence for each server reading, as an i18n key. */
+const SPEAKER_MODEL_STATE_KEYS: Record<SpeakerModelStatus['state'], string> = {
+  missing: 'voiceSettings.speakerModelStateMissing',
+  downloading: 'voiceSettings.speakerModelStateDownloading',
+  installed: 'voiceSettings.speakerModelStateInstalled',
+  invalid: 'voiceSettings.speakerModelStateInvalid',
+  failed: 'voiceSettings.speakerModelStateFailed',
+};
 
 function Field({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
   return (
@@ -93,6 +103,19 @@ export default function VoiceSettingsTab() {
   // whose progress was reported.
   const clientAsr = useVoiceClientAsrStatus();
   const { preload } = clientAsr;
+
+  // THE SPEAKER TRACKER'S CAM++ MODEL. The reading is the SERVER's — whether the bytes at the
+  // settings-file path hash to the pinned checkpoint — and the hook polls it only while a download
+  // runs. Asked for here rather than inside the Live Voice section so the subscription outlives the
+  // section's re-renders and a finished download is observed even if the user tabs away.
+  const speakerModel = useSpeakerModelStatus();
+  const modelStatus = speakerModel.status;
+  const modelDownloading = modelStatus?.state === 'downloading';
+  const modelTotal = modelStatus?.totalBytes ?? modelStatus?.expectedBytes ?? 0;
+  const modelReceived = modelStatus?.receivedBytes ?? 0;
+  const modelProgressPercent = modelDownloading && modelTotal > 0
+    ? Math.min(100, Math.round((modelReceived / modelTotal) * 100))
+    : 0;
 
   // WHICH RECOGNISER TAKES A CLIP THIS DEVICE CANNOT, as this browser's own preference. It is not part
   // of the stored config document on purpose: the fallback is chosen for THIS browser — the one whose
@@ -462,21 +485,106 @@ export default function VoiceSettingsTab() {
       )}
 
       {voiceEnabled && voiceTab === 'live' && (
-        // Live Voice 的独立设置：realtime relay 用自己的 DashScope key，不复用上面 voice-input
-        // 的 `dashscopeApiKey`。两者是不同的服务（一个是识别器，一个是实时语音对话模型）。
-        <SettingsSection title={t('voiceSettings.liveVoiceTitle')} description={t('voiceSettings.liveVoiceDescription')}>
-          <div className="space-y-4">
-            <Field
-              name="liveVoiceDashscopeApiKey"
-              label={t('voiceSettings.liveVoiceApiKey')}
-              type="password"
-              autoComplete="off"
-              placeholder="sk-…"
-              value={config.liveVoiceDashscopeApiKey}
-              onChange={(e) => update({ liveVoiceDashscopeApiKey: e.target.value })}
-            />
-          </div>
-        </SettingsSection>
+        <>
+          {/* Live Voice 的独立设置：realtime relay 用自己的 DashScope key，不复用上面 voice-input
+              的 `dashscopeApiKey`。两者是不同的服务（一个是识别器，一个是实时语音对话模型）。 */}
+          <SettingsSection title={t('voiceSettings.liveVoiceTitle')} description={t('voiceSettings.liveVoiceDescription')}>
+            <div className="space-y-4">
+              <Field
+                name="liveVoiceDashscopeApiKey"
+                label={t('voiceSettings.liveVoiceApiKey')}
+                type="password"
+                autoComplete="off"
+                placeholder="sk-…"
+                value={config.liveVoiceDashscopeApiKey}
+                onChange={(e) => update({ liveVoiceDashscopeApiKey: e.target.value })}
+              />
+            </div>
+          </SettingsSection>
+
+          {/* THE SPEAKER TRACKER'S MODEL. The weights are a runtime artifact the SERVER installs
+              from one fixed source: this panel shows the resolved path and the verified state, and
+              the one button asks the server to fetch it. The browser names neither the URL nor the
+              directory, which is what keeps the download from becoming a client-controlled write.
+              The progress bar reuses the on-device recogniser's shape above. */}
+          <SettingsSection
+            title={t('voiceSettings.speakerModelTitle')}
+            description={t('voiceSettings.speakerModelDescription')}
+          >
+            <div className="space-y-3 rounded-lg border border-border p-3" data-testid="voice-speaker-model">
+              <div className="text-sm font-medium text-foreground" data-testid="voice-speaker-model-state">
+                {modelStatus === null
+                  ? t('voiceSettings.speakerModelLoading')
+                  : t(SPEAKER_MODEL_STATE_KEYS[modelStatus.state])}
+              </div>
+
+              {modelStatus !== null && (
+                <>
+                  <p className="break-all text-xs text-muted-foreground" data-testid="voice-speaker-model-path">
+                    {t('voiceSettings.speakerModelPath', { path: modelStatus.path ?? '—' })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceSettings.speakerModelSource', { url: modelStatus.sourceUrl })}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('voiceSettings.speakerModelLicense', {
+                      license: modelStatus.license,
+                      attribution: modelStatus.attribution,
+                    })}
+                  </p>
+                </>
+              )}
+
+              {/* THE DOWNLOAD, AS IT HAPPENS. Rendered only while the server reports one, so a
+                  page that never started one shows no empty bar; received/total/rate are the
+                  server's own counters, not a browser estimate. */}
+              {modelDownloading && (
+                <div className="space-y-1" data-testid="voice-speaker-model-progress">
+                  <div className="text-xs text-muted-foreground">
+                    {t('voiceSettings.speakerModelProgress', {
+                      received: megabytes(modelReceived),
+                      total: megabytes(modelTotal),
+                    })}
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-full bg-primary" style={{ width: `${modelProgressPercent}%` }} />
+                  </div>
+                  <div className="text-xs text-muted-foreground" data-testid="voice-speaker-model-rate">
+                    {t('voiceSettings.speakerModelRate', {
+                      rate: kilobytesPerSecond(modelStatus?.bytesPerSec ?? 0),
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* THE SERVICE'S OWN SENTENCE, when a path was refused or a download failed. It is
+                  what an operator needs to fix the cause; the state label above only names it. */}
+              {(speakerModel.error ?? modelStatus?.error ?? null) !== null && (
+                <p className="text-xs text-destructive" data-testid="voice-speaker-model-error">
+                  {t('voiceSettings.speakerModelError', {
+                    reason: speakerModel.error ?? modelStatus?.error ?? '',
+                  })}
+                </p>
+              )}
+
+              {modelStatus?.state !== 'installed' && (
+                <button
+                  type="button"
+                  className={subtleButtonClass}
+                  data-testid="voice-speaker-model-download"
+                  onClick={() => void speakerModel.download()}
+                  disabled={modelDownloading || speakerModel.loading}
+                >
+                  {modelDownloading
+                    ? t('voiceSettings.speakerModelDownloading')
+                    : t('voiceSettings.speakerModelDownload')}
+                </button>
+              )}
+
+              <p className="text-xs text-muted-foreground">{t('voiceSettings.speakerModelNote')}</p>
+            </div>
+          </SettingsSection>
+        </>
       )}
 
       {voiceEnabled && voiceTab === 'input' && (

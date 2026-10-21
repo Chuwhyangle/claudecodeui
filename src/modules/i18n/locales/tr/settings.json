@@ -649,5 +649,24 @@
       "disableButton": "Devre dışı bırak",
       "disableConfirm": "Bu istemciyi devre dışı bırakmak istediğinize emin misiniz? Altındaki tüm yetkiler ve jetonlar anında reddedilir. Bu işlem geri alınamaz."
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "Konuşmacı modeli",
+    "speakerModelDescription": "CAM++ konuşmacı izleme modeli gerektiğinde sunucuya kurulur. Uygulama paketinin parçası değildir.",
+    "speakerModelLoading": "Model durumu okunuyor…",
+    "speakerModelStateMissing": "Kurulu değil",
+    "speakerModelStateDownloading": "İndiriliyor",
+    "speakerModelStateInstalled": "Kuruldu ve doğrulandı",
+    "speakerModelStateInvalid": "Doğrulama başarısız",
+    "speakerModelStateFailed": "İndirme başarısız",
+    "speakerModelPath": "Yol: {{path}}",
+    "speakerModelSource": "Kaynak: {{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "{{total}} MB’ın {{received}} MB’ı indirildi",
+    "speakerModelRate": "{{rate}} KB/sn",
+    "speakerModelError": "Neden: {{reason}}",
+    "speakerModelDownload": "Modeli indir",
+    "speakerModelDownloading": "İndiriliyor…",
+    "speakerModelNote": "İndirme tamamlandıktan sonraki Live Voice bağlantısında etkili olur."
   }
 }

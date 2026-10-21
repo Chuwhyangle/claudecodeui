@@ -648,5 +648,24 @@
       "disableButton": "Disabilita",
       "disableConfirm": "Vuoi davvero disabilitare questo client? Ogni autorizzazione e token sotto di esso viene rifiutato immediatamente. L'operazione non è reversibile."
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "Modello del parlante",
+    "speakerModelDescription": "Il modello CAM++ per il tracciamento dei parlanti viene installato sul server su richiesta. Non fa parte del pacchetto dell’app.",
+    "speakerModelLoading": "Lettura dello stato del modello…",
+    "speakerModelStateMissing": "Non installato",
+    "speakerModelStateDownloading": "Download in corso",
+    "speakerModelStateInstalled": "Installato e verificato",
+    "speakerModelStateInvalid": "Verifica non riuscita",
+    "speakerModelStateFailed": "Download non riuscito",
+    "speakerModelPath": "Percorso: {{path}}",
+    "speakerModelSource": "Origine: {{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "{{received}} MB di {{total}} MB scaricati",
+    "speakerModelRate": "{{rate}} KB/s",
+    "speakerModelError": "Motivo: {{reason}}",
+    "speakerModelDownload": "Scarica il modello",
+    "speakerModelDownloading": "Download in corso…",
+    "speakerModelNote": "Ha effetto alla prossima connessione Live Voice al termine del download."
   }
 }

@@ -790,6 +790,20 @@ export const api = {
     installRuntime: () => post('/api/browser-use/runtime/install'),
   },
 
+  // Live Voice's speaker tracker (Phase 1, shadow). The model is a runtime artifact the SERVER
+  // installs from one fixed source: the client reads the resolved path/state and asks for the
+  // download by its own verb. Neither call carries a URL, a directory or a file name — the server's
+  // settings file owns those, and a request field that named one would be a client choosing what
+  // the server writes to disk.
+  voiceRealtime: {
+    // The reading the settings page renders: state, resolved path, pinned digest, source, licence,
+    // and — while a download runs — received/total/rate.
+    speakerModelStatus: () => get('/api/voice-realtime/speaker-model'),
+    // Start the download, or join the one already in flight for the same resolved path. `202` and
+    // `200` both answer with the current reading.
+    speakerModelDownload: () => post('/api/voice-realtime/speaker-model/download', {}),
+  },
+
   voice: {
     health: () => get('/api/voice/health'),
     // The server's reading of the browser recogniser's own deployment: whether a model directory is

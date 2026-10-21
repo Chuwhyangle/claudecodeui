@@ -700,5 +700,24 @@
       "disableButton": "Désactiver",
       "disableConfirm": "Voulez-vous vraiment désactiver ce client ? Toutes ses autorisations et tous ses jetons sont rejetés immédiatement. Cette action est irréversible."
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "Modèle de locuteur",
+    "speakerModelDescription": "Le modèle CAM++ de suivi des locuteurs est installé sur le serveur à la demande. Il ne fait pas partie du paquet de l’application.",
+    "speakerModelLoading": "Lecture de l’état du modèle…",
+    "speakerModelStateMissing": "Non installé",
+    "speakerModelStateDownloading": "Téléchargement en cours",
+    "speakerModelStateInstalled": "Installé et vérifié",
+    "speakerModelStateInvalid": "Échec de la vérification",
+    "speakerModelStateFailed": "Échec du téléchargement",
+    "speakerModelPath": "Chemin : {{path}}",
+    "speakerModelSource": "Source : {{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "{{received}} Mo sur {{total}} Mo téléchargés",
+    "speakerModelRate": "{{rate}} Ko/s",
+    "speakerModelError": "Raison : {{reason}}",
+    "speakerModelDownload": "Télécharger le modèle",
+    "speakerModelDownloading": "Téléchargement…",
+    "speakerModelNote": "Prend effet à la prochaine connexion Live Voice une fois le téléchargement terminé."
   }
 }

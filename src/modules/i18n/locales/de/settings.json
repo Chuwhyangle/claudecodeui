@@ -642,5 +642,24 @@
       "disableButton": "Deaktivieren",
       "disableConfirm": "Möchtest du diesen Client wirklich deaktivieren? Jede Autorisierung und jeder Token darunter wird sofort abgelehnt. Das kann nicht rückgängig gemacht werden."
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "Sprechermodell",
+    "speakerModelDescription": "Das CAM++-Modell zur Sprecherverfolgung wird bei Bedarf auf dem Server installiert. Es ist nicht Teil des App-Pakets.",
+    "speakerModelLoading": "Modellstatus wird gelesen…",
+    "speakerModelStateMissing": "Nicht installiert",
+    "speakerModelStateDownloading": "Wird heruntergeladen",
+    "speakerModelStateInstalled": "Installiert und verifiziert",
+    "speakerModelStateInvalid": "Überprüfung fehlgeschlagen",
+    "speakerModelStateFailed": "Download fehlgeschlagen",
+    "speakerModelPath": "Pfad: {{path}}",
+    "speakerModelSource": "Quelle: {{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "{{received}} MB von {{total}} MB heruntergeladen",
+    "speakerModelRate": "{{rate}} KB/s",
+    "speakerModelError": "Grund: {{reason}}",
+    "speakerModelDownload": "Modell herunterladen",
+    "speakerModelDownloading": "Wird heruntergeladen…",
+    "speakerModelNote": "Wird mit der nächsten Live-Voice-Verbindung nach Abschluss des Downloads wirksam."
   }
 }

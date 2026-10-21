@@ -642,5 +642,24 @@
       "disableButton": "無効化",
       "disableConfirm": "このクライアントを無効化しますか？その下のすべての認可とトークンが即座に拒否されます。この操作は元に戻せません。"
     }
+  },
+  "voiceSettings": {
+    "speakerModelTitle": "話者モデル",
+    "speakerModelDescription": "CAM++ 話者追跡モデルは必要に応じてサーバーにインストールされます。アプリのバンドルには含まれません。",
+    "speakerModelLoading": "モデルの状態を読み取り中…",
+    "speakerModelStateMissing": "未インストール",
+    "speakerModelStateDownloading": "ダウンロード中",
+    "speakerModelStateInstalled": "インストール済み・検証済み",
+    "speakerModelStateInvalid": "検証に失敗しました",
+    "speakerModelStateFailed": "ダウンロードに失敗しました",
+    "speakerModelPath": "パス: {{path}}",
+    "speakerModelSource": "取得元: {{url}}",
+    "speakerModelLicense": "{{attribution}} · {{license}}",
+    "speakerModelProgress": "{{total}} MB 中 {{received}} MB をダウンロード済み",
+    "speakerModelRate": "{{rate}} KB/s",
+    "speakerModelError": "理由: {{reason}}",
+    "speakerModelDownload": "モデルをダウンロード",
+    "speakerModelDownloading": "ダウンロード中…",
+    "speakerModelNote": "ダウンロード完了後の次回 Live Voice 接続から有効になります。"
   }
 }
