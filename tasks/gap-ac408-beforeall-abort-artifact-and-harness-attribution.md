@@ -65,13 +65,13 @@ goal_ac: AC-408
 
 ## AC
 
-- [ ] **AC1 判据当前为真且可重复**：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 连续 3 次，每次 exit 0、Playwright 汇总含 `9 passed`、日志含 `[voice-e2e] RESULT: PASS (exit 0)`，且不得出现 `did not run`。贴三次的起止时刻与 `narrator speaks` 读数。
-- [ ] **AC2 失败原因进 stderr 且全量落盘（控制臂）**：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85 --dump /tmp/ac408-ac2/run.json -- --grep 'zzz-no-such-test-name' >/tmp/ac408-ac2.out 2>/tmp/ac408-ac2.err; echo $?` 为 1；`/tmp/ac408-ac2.err` 含 `No tests found`；`/tmp/ac408-ac2/playwright.log` 存在且含 `Running` 或 `No tests found`。取假形态：把 `run.mjs` 的 `stdio` 改回 `'inherit'` 时 `/tmp/ac408-ac2.err` 只有 `.env` 一行、必红（本立案日已实测该假形态）。
-- [ ] **AC3 beforeAll 中止写部分 dump（控制臂）**：占住一个 loopback 端口 P 后，用
+- [x] **AC1 判据当前为真且可重复**：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85` 连续 3 次，每次 exit 0、Playwright 汇总含 `9 passed`、日志含 `[voice-e2e] RESULT: PASS (exit 0)`，且不得出现 `did not run`。贴三次的起止时刻与 `narrator speaks` 读数。
+- [x] **AC2 失败原因进 stderr 且全量落盘（控制臂）**：`node experiments/voice-e2e-harness/run.mjs --sample 402fad85 --dump /tmp/ac408-ac2/run.json -- --grep 'zzz-no-such-test-name' >/tmp/ac408-ac2.out 2>/tmp/ac408-ac2.err; echo $?` 为 1；`/tmp/ac408-ac2.err` 含 `No tests found`；`/tmp/ac408-ac2/playwright.log` 存在且含 `Running` 或 `No tests found`。取假形态：把 `run.mjs` 的 `stdio` 改回 `'inherit'` 时 `/tmp/ac408-ac2.err` 只有 `.env` 一行、必红（本立案日已实测该假形态）。
+- [x] **AC3 beforeAll 中止写部分 dump（控制臂）**：占住一个 loopback 端口 P 后，用
   `PLAN=$(node experiments/voice-e2e-harness/run.mjs --sample 402fad85 --plan-only | sed -n 's/^\[voice-e2e\] plan=//p')`，
   `VOICE_E2E_PLAN=$PLAN VOICE_E2E_DUMP=/tmp/ac408-ac3/run.json VOICE_E2E_TTS_PORT=$P VOICE_REALTIME_TTS_VOICE=voice-e2e-standin VOICE_E2E_ANNOUNCE_TEXT='好的，我来查一下。' VOICE_E2E_SUMMARY_TEXT='本轮任务已结束，全部检查通过。' npx playwright test e2e/voice-output-e2e-harness.spec.ts` 为 exit 1；且 `/tmp/ac408-ac3/run.json` 存在、`failure.phase === 'tts-standin'`、`failure.message` 含 `EADDRINUSE`。取假形态：当前实现（本立案日已实测）该文件不存在、必红。
-- [ ] **AC4 成功路径不写 failure、既有读数字段不丢**：正常跑一次并 `--dump /tmp/ac408-ac4/run.json`（exit 0）后，`node -e` 读该 dump 断言：`failure` 键不存在，且 `plan`、`detector.speechStopped`、`relay.messages`、`narrator.speaks`、`narrator.tts` 均存在（与 AC-408 既有判据同源读数）。
-- [ ] **AC5 静态不回归**：`npm run typecheck` exit 0；`npm run lint` exit 0。
+- [x] **AC4 成功路径不写 failure、既有读数字段不丢**：正常跑一次并 `--dump /tmp/ac408-ac4/run.json`（exit 0）后，`node -e` 读该 dump 断言：`failure` 键不存在，且 `plan`、`detector.speechStopped`、`relay.messages`、`narrator.speaks`、`narrator.tts` 均存在（与 AC-408 既有判据同源读数）。
+- [x] **AC5 静态不回归**：`npm run typecheck` exit 0；`npm run lint` exit 0。
 
 ## DoD
 
