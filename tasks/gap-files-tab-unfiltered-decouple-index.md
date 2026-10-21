@@ -1,7 +1,7 @@
 ---
 id: gap-files-tab-unfiltered-decouple-index
 title: Files tab 去过滤并与 files-index 解耦：显示树/搜索列磁盘真相，退役 legacy 全树路径
-status: todo
+status: ready
 labels:
   - gap
 parent: null
