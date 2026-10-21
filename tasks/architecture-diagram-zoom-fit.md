@@ -18,9 +18,9 @@ architecture tab 的图尺寸通常仍很大（plantuml-js 按自然尺寸输出
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：fit 计算正确（等比、不放大超 100%）、zoom in/out 按 viewBox 换算 width/height、范围钳制 5%–400%、缩放后 SVG 自然尺寸与滚动 extent 一致
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（含新增用例：渲染后默认 fit、点 `+`/`−`/`适应`/`100%` 改变 SVG 尺寸、Ctrl+滚轮缩放、普通滚轮不缩放；既有 hover/click/下钻用例不回归）
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：fit 计算正确（等比、不放大超 100%）、zoom in/out 按 viewBox 换算 width/height、范围钳制 5%–400%、缩放后 SVG 自然尺寸与滚动 extent 一致
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（含新增用例：渲染后默认 fit、点 `+`/`−`/`适应`/`100%` 改变 SVG 尺寸、Ctrl+滚轮缩放、普通滚轮不缩放；既有 hover/click/下钻用例不回归）
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
