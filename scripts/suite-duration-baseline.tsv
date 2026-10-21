@@ -168,7 +168,12 @@
 #   also keeps the 90% coverage floor green now that the tree collects 393 server test files),
 #   and the generator row by gap-architecture-graph-generator-seeded-subgraph, measured one file
 #   at a time on 2026-10-21 (its own new criterion; no green round contains it yet — the row also
-#   keeps the 90% coverage floor green now that the tree collects 394 server test files).
+#   keeps the 90% coverage floor green now that the tree collects 394 server test files),
+#   and the architecture-routes row by architecture-graph-endpoint (AC-418), measured one file at
+#   a time on 2026-10-21 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/architecture-routes.test.ts`
+#   (its own new criterion; no green round contains it yet — the row also keeps the 90% coverage
+#   floor green now that the tree collects 395 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -524,3 +529,4 @@
 2100	server/modules/architecture/tests/generator.test.ts
 1700	server/modules/architecture/tests/seed-extraction.test.ts
 1448	server/modules/architecture/tests/cache-invalidation.test.ts
+1685	server/modules/architecture/tests/architecture-routes.test.ts

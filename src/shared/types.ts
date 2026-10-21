@@ -489,6 +489,13 @@ export type Project = {
   taskmaster?: ProjectTaskmasterInfo;
   /** Tier-1 quay reading attached by the projects listing; drives the sidebar badge and the Quay tab. */
   hasQuayConfig?: boolean;
+  /**
+   * Tier-1 architecture reading attached by the projects listing (ADR-005
+   * decision 1): whether the project carries `.archguard/query/manifest.json`.
+   * It gates the architecture tab; absent on realtime snapshots that predate it,
+   * exactly like {@link hasQuayConfig}.
+   */
+  hasArchguardCache?: boolean;
   [key: string]: unknown;
 };
 

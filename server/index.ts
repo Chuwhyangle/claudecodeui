@@ -86,6 +86,7 @@ import {
 } from './modules/scheduled-messages/index.js';
 import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
 import { assetsRoutes } from './modules/assets/index.js';
+import { createArchitectureModule } from './modules/architecture/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
@@ -1560,6 +1561,21 @@ app.use('/api/browser-use', authenticateToken, browserUseRoutes);
 
 // Unified provider MCP routes (protected)
 app.use('/api/providers', authenticateToken, providerRoutes);
+
+// Session architecture graph (GOAL-049 / ADR-005). The module imports no sibling
+// feature module, so the composition root binds its two readers here: the
+// projects repository's indexed path lookup and the providers module's FULL
+// history reader (the same one `/api/providers/sessions/:id/messages` uses with
+// no limit), which is what lets seed extraction see the whole transcript.
+app.use(
+    '/api/architecture',
+    authenticateToken,
+    createArchitectureModule({
+        resolveProjectPath: (projectId: string) => projectsDb.getProjectPathById(projectId),
+        readSessionHistory: async (sessionId: string) =>
+            (await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 })).messages,
+    }),
+);
 app.use('/api/scheduled-messages', authenticateToken, scheduledMessagesRoutes);
 
 // Session host listing (protected). Mounted unconditionally — unlike the debug
