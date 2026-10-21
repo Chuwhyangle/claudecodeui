@@ -55,8 +55,33 @@
 
 | 任务 | 状态 | 依赖 | 内容 |
 |---|---|---|---|
-| `voice-speaker-tracking-settings-file` | todo | — | `speakerTracking`（mode/modelDir/modelFile/modelPath/thresholds/quality）进 `voice-realtime.settings.json`；按连接读取；模型按路径缓存；env 仅 escape hatch |
+| `voice-speaker-tracking-settings-file` | **已落地**（2026-10-21） | — | `speakerTracking`（mode/modelDir/modelFile/modelPath/thresholds/quality）进 `voice-realtime.settings.json`；按连接读取；模型按路径缓存；env 仅 escape hatch |
 | `voice-speaker-model-provisioning` | todo | `voice-speaker-tracking-settings-file` | 模型默认 `models/speaker/`，`.gitignore` 不入库；npm/Electron/Docker 不带；设置页触发服务端下载，固定 URL + sha256 校验 + 原子落盘 |
+
+落地形状（`voice-speaker-tracking-settings-file`）：
+
+```json
+{
+  "speakerTracking": {
+    "mode": "shadow",
+    "modelDir": "models/speaker",
+    "modelFile": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    "modelPath": "",
+    "thresholds": { "track": 0.3, "matchFast": 0.35, "promote": 0.4,
+                    "consistencyMin": 0.6, "margin": 0.08,
+                    "maxStepSessionDeg": 15, "maxStepBankDeg": 8, "bankSize": 4 },
+    "quality": { "windowSeconds": 2, "sampleSeconds": 3.5,
+                 "speechRatioMin": 0.6, "minCoreSeconds": 2 }
+  }
+}
+```
+
+解析顺序：`modelPath` 非空则用它，否则 `join(modelDir, modelFile)`；缺省值等于
+`thresholds.v1.json`。`VOICE_SPEAKER_TRACKING` / `VOICE_SPEAKER_MODEL_PATH` 只在非空时覆盖
+文件（`environment > settings file > default`），每个生效值在连接日志里带一行 `source=`。
+未知子键忽略；非法 mode、shadow 却解析不出路径、阈值/质量门越界或非有限数 ⇒ 整块拒绝
+（原因进 `problems`），连接回退到 off/默认值。模型按解析后的路径缓存，加载失败只写一行日志
+并保持 seam 缺席，不阻塞连接。
 
 模型：`3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx`，28,281,164 bytes，sha256 `aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2`，来源 k2-fsa/sherpa-onnx `speaker-recongition-models` release；3D-Speaker / Apache-2.0。
 

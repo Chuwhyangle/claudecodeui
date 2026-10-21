@@ -55,6 +55,8 @@ import {
   SPEAKER_TRACKING_THRESHOLDS,
   describeSpeakerTracking,
   resolveSpeakerTracking,
+  resolveSpeakerTrackingSettings,
+  type SpeakerTrackingSettingsBlock,
 } from '../voice-speaker-tracking-arm.js';
 import {
   createSpeakerTrackerModel,
@@ -418,6 +420,115 @@ test('AC4: shadow with a model path resolves the mode, the path and the frozen t
   assert.equal(lines.length, 1);
   assert.match(lines[0], /shadow requested/);
   assert.match(lines[0], /read-only/);
+});
+
+// ── AC2/AC8: the settings-file resolver and the environment escape hatch ─────────────────────────
+//
+// `resolveSpeakerTrackingSettings` is the per-connection call `server/index.ts` makes after it has
+// read `voice-realtime.settings.json`. These legs pin the precedence the task's AC2 states
+// (`environment > settings file > default`), the per-effective-value source log, and the env-only
+// shape AC8 requires to keep working after the file became the normal entry.
+
+/** A validated-looking block, as `voice-realtime-settings.ts` would hand it over. */
+function fileBlock(overrides: Partial<SpeakerTrackingSettingsBlock> = {}): SpeakerTrackingSettingsBlock {
+  return {
+    mode: 'off',
+    modelDir: 'models/file',
+    modelFile: 'file.onnx',
+    modelPath: 'models/file/file.onnx',
+    thresholds: SPEAKER_TRACKING_THRESHOLDS,
+    quality: {
+      windowSeconds: SPEAKER_TRACKING_THRESHOLDS.windowSeconds,
+      sampleSeconds: SPEAKER_TRACKING_THRESHOLDS.sampleSeconds,
+      speechRatioMin: SPEAKER_TRACKING_THRESHOLDS.speechRatioMin,
+      minCoreSeconds: 2,
+    },
+    named: { mode: true, modelPath: true, thresholds: [], quality: [] },
+    ...overrides,
+  };
+}
+
+test('AC2: with no environment and no file, tracking is off and the source says default', () => {
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({ env: {}, settings: null, log: (line) => lines.push(line) });
+  assert.equal(resolution.mode, 'off');
+  assert.equal(resolution.invalid, null);
+  assert.equal(resolution.sources.mode, 'default');
+  assert.deepEqual(lines, ['speaker_tracking: off source=default']);
+});
+
+test('AC2: the file mode and model path are used when the environment names nothing', () => {
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({
+    env: {},
+    settings: fileBlock({ mode: 'shadow', named: { mode: true, modelPath: true, thresholds: ['track'], quality: [] } }),
+    log: (line) => lines.push(line),
+  });
+  assert.equal(resolution.mode, 'shadow');
+  assert.equal(resolution.modelPath, 'models/file/file.onnx');
+  assert.equal(resolution.sources.mode, 'settings file');
+  assert.equal(resolution.sources.modelPath, 'settings file');
+  assert.equal(resolution.sources.thresholds.track, 'settings file', 'the file named this one');
+  assert.equal(resolution.sources.thresholds.matchFast, 'default', 'the file left this one alone');
+  assert.ok(lines.some((line) => line.includes('mode=shadow') && line.includes('source=settings file')));
+  assert.ok(lines.some((line) => line.includes('thresholds.track=0.3') && line.includes('source=settings file')));
+  assert.ok(lines.some((line) => line.includes('thresholds.matchFast=0.35') && line.includes('source=default')));
+  assert.match(lines.at(-1) ?? '', /shadow requested/, 'the human-readable summary still closes the block');
+});
+
+test('AC8: env-only shadow still enables, and the log says the environment overrode the file/default', () => {
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({
+    env: { VOICE_SPEAKER_TRACKING: ' shadow ', VOICE_SPEAKER_MODEL_PATH: ' /models/env.onnx ' },
+    settings: null,
+    log: (line) => lines.push(line),
+  });
+  assert.equal(resolution.mode, 'shadow', 'the Phase 1 env-only shape keeps working');
+  assert.equal(resolution.modelPath, '/models/env.onnx');
+  assert.equal(resolution.sources.mode, 'environment');
+  assert.equal(resolution.sources.modelPath, 'environment');
+  assert.equal(resolution.sources.thresholds.track, 'default');
+  assert.ok(
+    lines.some((line) => line.includes('mode=shadow') && line.includes('source=environment')),
+    `the override must be visible in the log: ${JSON.stringify(lines)}`,
+  );
+  assert.ok(lines.some((line) => line.includes('modelPath=/models/env.onnx') && line.includes('source=environment')));
+});
+
+test('AC8: env-only shadow without a model path degrades to off, out loud', () => {
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({
+    env: { VOICE_SPEAKER_TRACKING: 'shadow' },
+    settings: null,
+    log: (line) => lines.push(line),
+  });
+  assert.equal(resolution.mode, 'off');
+  assert.equal(resolution.degraded, 'model-path-missing');
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /VOICE_SPEAKER_MODEL_PATH/);
+});
+
+test('AC2: an invalid environment mode is refused and named, and nothing is enabled', () => {
+  const lines: string[] = [];
+  const resolution = resolveSpeakerTrackingSettings({
+    env: { VOICE_SPEAKER_TRACKING: 'gate' },
+    settings: fileBlock({ mode: 'shadow' }),
+    log: (line) => lines.push(line),
+  });
+  assert.equal(resolution.mode, 'off');
+  assert.equal(resolution.invalid, 'gate');
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /not one of off\/shadow/);
+});
+
+test('AC2: the environment only overrides when non-empty — an empty variable is "said nothing"', () => {
+  const resolution = resolveSpeakerTrackingSettings({
+    env: { VOICE_SPEAKER_TRACKING: '', VOICE_SPEAKER_MODEL_PATH: '   ' },
+    settings: fileBlock({ mode: 'shadow' }),
+  });
+  assert.equal(resolution.mode, 'shadow', 'the file wins when the escape hatch is blank');
+  assert.equal(resolution.modelPath, 'models/file/file.onnx');
+  assert.equal(resolution.sources.mode, 'settings file');
 });
 
 // ── the model leaf (AC5's failure posture, driven without the native addon) ─────────────────────

@@ -135,7 +135,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, createSpeakerTrackerModel, createSpeakerTrackerSeam, resolveSpeakerTracking, describeSpeakerTracking, type SpeakerTrackerModel, type VoiceSpeakerTrackerSeam, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, createSpeakerTrackerModel, createSpeakerTrackerSeam, resolveSpeakerTrackingSettings, type SpeakerTrackerModel, type SpeakerTrackingSettingsBlock, type VoiceSpeakerTrackerSeam, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -567,39 +567,59 @@ if (voiceRealtimeCaptureMode.warning !== null) {
 }
 console.log(voiceRealtimeCaptureStartupLine(voiceRealtimeCaptureDirectory, voiceRealtimeCaptureMode.enabled));
 
-// THE SPEAKER TRACKER (Phase 1, SHADOW), assembled ONCE for the process. The environment switch is
-// resolved here and logged in every one of its four states (unset, unknown, shadow-without-path,
-// shadow-with-path), so "was the observer even considered?" is answerable from the log alone.
+// THE SPEAKER TRACKER (Phase 1, SHADOW), resolved PER CONNECTION from the settings file. The
+// `speakerTracking` block of `voice-realtime.settings.json` is the normal entry; `VOICE_SPEAKER_*`
+// remain the escape hatches and win when set (`environment > settings file > default`). Because the
+// settings file is read once per connection, an edit reaches the NEXT connection only — exactly the
+// contract the rest of the file's keys follow.
 //
-// THE MODEL IS LOADED ONCE, not per connection: a CAM++ ONNX session is expensive and shared read-only
-// by every connection (`createSpeakerTrackerModel` starts the load in the background). A load failure
-// writes ONE line and leaves `embedder()` null, which is what keeps the proxy's `speakerTracker` seam
-// undefined for every connection — a broken speaker model must never take a voice connection down.
+// THE MODEL IS CACHED PER RESOLVED PATH, not per process and not per connection. A CAM++ ONNX
+// session is expensive, so `createSpeakerTrackerModel` starts the load in the background the first
+// time a path is seen and the SAME model is reused by every later connection that resolves to that
+// path. A load failure is memoized inside the model: ONE log line and a null embedder, which is what
+// keeps the proxy's `speakerTracker` seam undefined — a broken speaker model must never take a voice
+// connection down.
 //
-// ABSENT IS THE SHIPPED STATE: with `VOICE_SPEAKER_TRACKING` unset there is no model, no seam, and the
-// relay is byte-for-byte the one it was before this feature existed.
-const speakerTracking = resolveSpeakerTracking(process.env, (line) => console.log(line));
-const speakerTrackerModel: SpeakerTrackerModel | null =
-    speakerTracking.mode === 'shadow'
-        ? createSpeakerTrackerModel({
-              modelPath: speakerTracking.modelPath,
-              log: (line) => console.log(line),
-          })
-        : null;
+// ABSENT IS THE SHIPPED STATE: with no `speakerTracking` block and no `VOICE_SPEAKER_TRACKING`, there
+// is no model, no seam, and the relay is byte-for-byte the one it was before this feature existed.
+const speakerTrackerModels = new Map<string, SpeakerTrackerModel>();
+
+/** The process-wide model for `modelPath`, loading it once on first use. */
+function speakerTrackerModelFor(modelPath: string): SpeakerTrackerModel {
+    const existing = speakerTrackerModels.get(modelPath);
+    if (existing !== undefined) {
+        return existing;
+    }
+    const model = createSpeakerTrackerModel({
+        modelPath,
+        log: (line) => console.log(line),
+    });
+    speakerTrackerModels.set(modelPath, model);
+    return model;
+}
 
 /**
  * THIS connection's shadow seam, or `undefined` for "off".
  *
- * `undefined` covers three states on purpose — the deployment did not ask for shadow, the model is
- * still loading, or its load failed — because all three must leave the proxy's seam absent and the
- * relay unchanged. A connection that starts before the model is ready simply gets no readings; it is
- * never delayed or refused.
+ * `undefined` covers four states on purpose — the deployment did not ask for shadow, the settings
+ * block was refused, the model is still loading, or its load failed — because all of them must leave
+ * the proxy's seam absent and the relay unchanged. A connection that starts before the model is
+ * ready simply gets no readings; it is never delayed or refused.
+ *
+ * The settings-file block and the environment are resolved HERE, once per connection, so the mode,
+ * path and thresholds a connection runs at are the ones that were on disk when it opened. The
+ * resolver writes one `source=` line per effective value to the connection's log.
  */
-const buildSpeakerTrackerSeam = (): VoiceSpeakerTrackerSeam | undefined => {
-    if (speakerTrackerModel === null) {
+function buildSpeakerTrackerSeam(
+    settings: SpeakerTrackingSettingsBlock | null,
+    log: (line: string) => void,
+): VoiceSpeakerTrackerSeam | undefined {
+    const resolution = resolveSpeakerTrackingSettings({ env: process.env, settings, log });
+    if (resolution.mode !== 'shadow') {
         return undefined;
     }
-    const embedder = speakerTrackerModel.embedder();
+    const model = speakerTrackerModelFor(resolution.modelPath);
+    const embedder = model.embedder();
     if (embedder === null) {
         return undefined;
     }
@@ -608,9 +628,9 @@ const buildSpeakerTrackerSeam = (): VoiceSpeakerTrackerSeam | undefined => {
     // tracking coverage first, and authorization waits for a persisted, user-confirmed core.
     return createSpeakerTrackerSeam({
         embed: (samples) => embedder.embed(samples),
-        thresholds: speakerTracking.thresholds,
+        thresholds: resolution.thresholds,
     });
-};
+}
 
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
@@ -624,11 +644,15 @@ const buildVoiceRealtimeSeams = (input: {
      */
     audioCapture?: VoiceRealtimeAudioCapture;
     /**
-     * THIS connection's speaker tracking shadow seam, or absent. Built by the browser path from the
-     * process-wide model; the HTTP diagnosis route passes none, because a scripted clip is not a live
-     * speaker session.
+     * Whether this connection may observe speakers (the browser path) or must not (a scripted
+     * diagnosis clip).
+     *
+     * The live browser path passes `true`; the HTTP diagnosis route passes nothing, because a
+     * scripted clip is not a live speaker session. Even when `true`, the seam is built only if the
+     * resolved mode is `shadow` AND the model for the resolved path has finished loading — absent
+     * is the shipped state and every degraded state.
      */
-    speakerTracker?: VoiceSpeakerTrackerSeam;
+    observeSpeakers?: boolean;
     /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
     spendWindowLimitCny?: number;
     /**
@@ -756,6 +780,16 @@ const buildVoiceRealtimeSeams = (input: {
     const voiceRealtimeSettings = loadVoiceRealtimeSettings({
         baseInstructions: voiceRealtimeInstructionsFor(closingTurn.closingTurn),
     });
+    // THE SPEAKER OBSERVER, decided from THIS connection's reading. `observeSpeakers` is the
+    // browser path's opt-in; the diagnosis route never sets it, because a scripted clip is not a
+    // live speaker session. The resolution (env escape hatch > file > default) writes a `source=`
+    // line per effective value to the connection's log, and `undefined` keeps the relay byte-for-byte
+    // unchanged in every off/degraded state.
+    const connectionLog = input.log ?? ((line: string) => console.log(line));
+    const speakerTracker =
+        input.observeSpeakers === true
+            ? buildSpeakerTrackerSeam(voiceRealtimeSettings.speakerTracking, connectionLog)
+            : undefined;
     // THE NARRATOR (GOAL-047). The announce closing turn's remark and the run-end summary are spoken
     // through one per-connection queue; `buildVoiceRealtimeNarratorWiring` hands the proxy the `attach`
     // seam and, when a producer is named, the summary producer. `null` means this deployment has no
@@ -1150,9 +1184,10 @@ const buildVoiceRealtimeSeams = (input: {
         // the proxy's every capture call is `?.`-guarded — the branch is byte-identical to before.
         ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
         // The speaker tracker's read-only observer, or absent. Absent is the shipped state AND every
-        // degraded state (no shadow request, model still loading, model load failed): the proxy then
-        // never allocates an accumulator and the audio branch is the one it always was (AC6).
-        ...(input.speakerTracker === undefined ? {} : { speakerTracker: input.speakerTracker }),
+        // degraded state (no shadow request, a refused settings block, model still loading, model
+        // load failed): the proxy then never allocates an accumulator and the audio branch is the
+        // one it always was (AC6).
+        ...(speakerTracker === undefined ? {} : { speakerTracker }),
         // The uplink VAD's per-frame speech gate, or absent. ABSENT is the shipped state and the one that
         // matters: `uplinkVad === undefined` leaves the proxy's continuous branch on its pre-feature
         // `=== null` fast path, so a deployment that named no backend forwards every captured frame
@@ -1284,10 +1319,11 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
                 captureRecorder.observe(observation);
             },
             audioCapture: captureRecorder,
-            // THE SHADOW SPEAKER OBSERVER, per connection. `undefined` in every state except
-            // "shadow requested AND the process-wide model is ready", which is exactly the condition
-            // under which the proxy's read-only branch exists at all.
-            speakerTracker: buildSpeakerTrackerSeam(),
+            // THE SHADOW SPEAKER OBSERVER, per connection. This is the live browser path, so it
+            // opts in; the seam is `undefined` in every state except "shadow resolved AND the model
+            // for that path is ready", which is exactly the condition under which the proxy's
+            // read-only branch exists at all.
+            observeSpeakers: true,
         }),
     );
 };
