@@ -1,7 +1,7 @@
 ---
 id: architecture-graph-cache
 title: 内容寻址缓存：解析层按 archJsonHash memoize、结果层按全 key memoize，种子/指纹/参数变即失效
-status: todo
+status: ready
 labels:
   - feature
 parent: null
