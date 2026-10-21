@@ -26,8 +26,24 @@
     "browser": "Browser",
     "computer": "Computer",
     "quay": "Quay",
+    "architecture": "아키텍처",
     "shellResidentDisabled": "상주 세션에서는 Shell을 사용할 수 없습니다. 상주 모드를 종료하면 사용할 수 있습니다.",
     "shellResidentDisabledLabel": "상주 세션에서는 Shell을 사용할 수 없습니다"
+  },
+  "architecture": {
+    "title": "아키텍처",
+    "noSession": "세션을 선택하면 해당 세션이 건드린 파일의 아키텍처를 볼 수 있습니다.",
+    "loading": "아키텍처 그래프를 생성하는 중…",
+    "retry": "다시 시도",
+    "granularity": "그래프 세분성",
+    "fileGraph": "파일 그래프",
+    "entityGraph": "엔티티 그래프",
+    "noSeeds": "이 세션은 분석이 배치할 수 있는 파일이나 식별자를 참조하지 않았습니다.",
+    "honesty": {
+      "analysis": "분석",
+      "unresolved": "해결되지 않은 시드 {{count}}개",
+      "truncated": "노드 예산에 도달했습니다 — 이 그래프는 잘렸습니다."
+    }
   },
   "status": {
     "loading": "로딩 중...",

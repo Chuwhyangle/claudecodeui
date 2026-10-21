@@ -26,8 +26,24 @@
     "browser": "浏览器",
     "computer": "计算机",
     "quay": "Quay",
+    "architecture": "架构",
     "shellResidentDisabled": "常驻会话不支持 Shell，关闭常驻模式后可用",
     "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
+  },
+  "architecture": {
+    "title": "架构",
+    "noSession": "选择一个会话，查看它触及的文件的架构。",
+    "loading": "正在生成架构图…",
+    "retry": "重试",
+    "granularity": "图粒度",
+    "fileGraph": "文件图",
+    "entityGraph": "实体图",
+    "noSeeds": "该会话未引用分析可定位的任何文件或标识符。",
+    "honesty": {
+      "analysis": "分析",
+      "unresolved": "{{count}} 个未解析的种子",
+      "truncated": "已达节点预算 — 此图已被截断。"
+    }
   },
   "status": {
     "loading": "加载中...",

@@ -26,8 +26,24 @@
     "browser": "Browser",
     "computer": "Computer",
     "quay": "Quay",
+    "architecture": "Architektur",
     "shellResidentDisabled": "Shell ist für dauerhafte Sitzungen nicht verfügbar. Beenden Sie den dauerhaften Modus, um es zu nutzen.",
     "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar"
+  },
+  "architecture": {
+    "title": "Architektur",
+    "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",
+    "loading": "Architekturdiagramm wird erzeugt…",
+    "retry": "Erneut versuchen",
+    "granularity": "Diagramm-Detailgrad",
+    "fileGraph": "Dateidiagramm",
+    "entityGraph": "Entitätsdiagramm",
+    "noSeeds": "Diese Sitzung hat keine Datei und keinen Bezeichner referenziert, den die Analyse einordnen kann.",
+    "honesty": {
+      "analysis": "Analyse",
+      "unresolved": "{{count}} nicht aufgelöste(r) Ausgangspunkt(e)",
+      "truncated": "Knotenbudget erreicht — dieses Diagramm ist abgeschnitten."
+    }
   },
   "status": {
     "loading": "Lädt...",

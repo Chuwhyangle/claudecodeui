@@ -26,8 +26,24 @@
     "browser": "Browser",
     "computer": "Computer",
     "quay": "Quay",
+    "architecture": "アーキテクチャ",
     "shellResidentDisabled": "常駐セッションでは Shell を利用できません。常駐モードを解除すると利用できます。",
     "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
+  },
+  "architecture": {
+    "title": "アーキテクチャ",
+    "noSession": "セッションを選択すると、そのセッションが触れたファイルのアーキテクチャが表示されます。",
+    "loading": "アーキテクチャグラフを生成しています…",
+    "retry": "再試行",
+    "granularity": "グラフの粒度",
+    "fileGraph": "ファイルグラフ",
+    "entityGraph": "エンティティグラフ",
+    "noSeeds": "このセッションには、分析で配置できるファイルや識別子への参照がありません。",
+    "honesty": {
+      "analysis": "分析",
+      "unresolved": "未解決のシード {{count}} 件",
+      "truncated": "ノード予算に達しました — このグラフは切り詰められています。"
+    }
   },
   "status": {
     "loading": "読み込み中...",

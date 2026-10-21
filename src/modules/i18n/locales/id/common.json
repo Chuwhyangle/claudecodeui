@@ -26,8 +26,24 @@
     "browser": "Browser",
     "computer": "Komputer",
     "quay": "Quay",
+    "architecture": "Arsitektur",
     "shellResidentDisabled": "Shell tidak tersedia untuk sesi residen. Tutup mode residen untuk menggunakannya.",
     "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen"
+  },
+  "architecture": {
+    "title": "Arsitektur",
+    "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",
+    "loading": "Membuat graf arsitektur…",
+    "retry": "Coba lagi",
+    "granularity": "Granularitas graf",
+    "fileGraph": "Graf berkas",
+    "entityGraph": "Graf entitas",
+    "noSeeds": "Sesi ini belum merujuk berkas atau pengenal yang dapat ditempatkan oleh analisis.",
+    "honesty": {
+      "analysis": "Analisis",
+      "unresolved": "{{count}} benih tidak terselesaikan",
+      "truncated": "Anggaran node tercapai — graf ini terpotong."
+    }
   },
   "status": {
     "loading": "Memuat...",

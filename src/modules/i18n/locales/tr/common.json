@@ -26,8 +26,24 @@
     "browser": "Browser",
     "computer": "Bilgisayar",
     "quay": "Quay",
+    "architecture": "Mimari",
     "shellResidentDisabled": "Shell kalıcı oturumlarda kullanılamaz. Kullanmak için kalıcı modu kapatın.",
     "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
+  },
+  "architecture": {
+    "title": "Mimari",
+    "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",
+    "loading": "Mimari grafiği oluşturuluyor…",
+    "retry": "Yeniden dene",
+    "granularity": "Graf ayrıntı düzeyi",
+    "fileGraph": "Dosya grafiği",
+    "entityGraph": "Varlık grafiği",
+    "noSeeds": "Bu oturum, analizin yerleştirebileceği hiçbir dosya veya tanımlayıcıya başvurmadı.",
+    "honesty": {
+      "analysis": "Analiz",
+      "unresolved": "{{count}} çözümlenmemiş tohum",
+      "truncated": "Düğüm bütçesine ulaşıldı — bu graf kısaltıldı."
+    }
   },
   "status": {
     "loading": "Yükleniyor...",

@@ -26,8 +26,24 @@
     "browser": "Browser",
     "computer": "Computer",
     "quay": "Quay",
+    "architecture": "Architecture",
     "shellResidentDisabled": "Shell is unavailable for resident sessions. Close resident mode to use it.",
     "shellResidentDisabledLabel": "Shell unavailable for resident sessions"
+  },
+  "architecture": {
+    "title": "Architecture",
+    "noSession": "Select a session to see the architecture of the files it touched.",
+    "loading": "Generating the architecture graph…",
+    "retry": "Retry",
+    "granularity": "Graph granularity",
+    "fileGraph": "File graph",
+    "entityGraph": "Entity graph",
+    "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
+    "honesty": {
+      "analysis": "Analysis",
+      "unresolved": "{{count}} unresolved seed(s)",
+      "truncated": "Node budget reached — this graph is truncated."
+    }
   },
   "status": {
     "loading": "Loading...",

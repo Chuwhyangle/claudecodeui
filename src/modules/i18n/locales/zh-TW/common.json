@@ -26,8 +26,24 @@
     "browser": "瀏覽器",
     "computer": "電腦",
     "quay": "Quay",
+    "architecture": "架構",
     "shellResidentDisabled": "常駐工作階段不支援 Shell，關閉常駐模式後即可使用",
     "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用"
+  },
+  "architecture": {
+    "title": "架構",
+    "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",
+    "loading": "正在產生架構圖…",
+    "retry": "重試",
+    "granularity": "圖表粒度",
+    "fileGraph": "檔案圖",
+    "entityGraph": "實體圖",
+    "noSeeds": "此工作階段未參照分析可定位的任何檔案或識別碼。",
+    "honesty": {
+      "analysis": "分析",
+      "unresolved": "{{count}} 個未解析的種子",
+      "truncated": "已達節點預算 — 此圖已被截斷。"
+    }
   },
   "status": {
     "loading": "載入中...",

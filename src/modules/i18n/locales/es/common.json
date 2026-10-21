@@ -26,8 +26,24 @@
     "browser": "Navegador",
     "computer": "Equipo",
     "quay": "Quay",
+    "architecture": "Arquitectura",
     "shellResidentDisabled": "Shell no está disponible para las sesiones residentes. Cierra el modo residente para usarlo.",
     "shellResidentDisabledLabel": "Shell no disponible para sesiones residentes"
+  },
+  "architecture": {
+    "title": "Arquitectura",
+    "noSession": "Selecciona una sesión para ver la arquitectura de los archivos que tocó.",
+    "loading": "Generando el gráfico de arquitectura…",
+    "retry": "Reintentar",
+    "granularity": "Granularidad del gráfico",
+    "fileGraph": "Gráfico de archivos",
+    "entityGraph": "Gráfico de entidades",
+    "noSeeds": "Esta sesión no ha referenciado ningún archivo ni identificador que el análisis pueda ubicar.",
+    "honesty": {
+      "analysis": "Análisis",
+      "unresolved": "{{count}} semilla(s) sin resolver",
+      "truncated": "Se alcanzó el presupuesto de nodos: este gráfico está truncado."
+    }
   },
   "status": {
     "loading": "Cargando...",
