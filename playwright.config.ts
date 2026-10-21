@@ -473,6 +473,17 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // therefore floor-bound by the recording itself, not by a fixture of a few seconds; 240_000 is the
   // sibling voice entries' value and clears the ~40 s the run was measured at.
   'voice-output-e2e-harness.spec.ts': 240_000,
+  // The composer-embedded bar criterion (GOAL-035 / AC-323): seven serial cases against ONE shared debug
+  // agent and one shared scripted upstream, each entering and leaving Live Voice at least once. Two of them
+  // wait on a REAL delivery round trip (the transcript row the session writes back) and one holds a
+  // disconnected bar for 6 s of wall clock to read that no auto-reconnect happens, so the file is
+  // floor-bound by round trips rather than by fixture lengths. It shipped without a budget entry because
+  // its single-file run then measured 17.6–25.5 s; it has since grown to seven cases and
+  // now crosses the 55 s default mid-case, where the watchdog ends the run with a red that says nothing
+  // about what it was measuring (measured 2026-10-21: killed at 55 006 ms with three of seven cases done).
+  // With this entry the same invocation reports `7 passed (56.6s)`, 57.4 s wall clock — 240_000 is the
+  // sibling voice entries' value and clears that measurement ~4.2x.
+  'voice-realtime-composer-embedded.spec.ts': 240_000,
 };
 
 /**

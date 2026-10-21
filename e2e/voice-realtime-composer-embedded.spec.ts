@@ -501,6 +501,17 @@ const waitForPhase = (page: Page, wanted: string) =>
 /** The transcript's own text, read straight off the pane. */
 const paneText = (page: Page): Promise<string> => page.locator(PANE).innerText();
 
+/**
+ * How many transcript rows carry `text` — the reading a "THIS case's delivery landed" wait counts.
+ *
+ * A `paneText(...).toContain(...)` poll cannot make that claim after the first case that speaks: the
+ * text stays in the transcript, so the poll is satisfied before the later case says a word and waits
+ * for nothing. The count only moves when another row carrying the text lands, which is this case's
+ * own delivery.
+ */
+const rowsCarrying = (page: Page, text: string): Promise<number> =>
+  page.locator(`${PANE} ${USER_ROW}`, { hasText: text }).count();
+
 /** One spoken burst — the fake microphone's only action. */
 const speak = (page: Page, seconds: number): Promise<void> =>
   page.evaluate((value: number) => {
@@ -963,7 +974,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
     await enterLiveVoice(page, 1280, upstream);
     const framesOnHealthy = upstream.audioFrameCount();
-    const proposedRowsOnHealthy = await page.locator(`${PANE} ${USER_ROW}`, { hasText: PROPOSED_TEXT }).count();
+    const proposedRowsOnHealthy = await rowsCarrying(page, PROPOSED_TEXT);
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesOnHealthy + 1);
     // Wait for THIS case's delivery before leaving. `handleVoiceExit` hands every final caption no
@@ -975,7 +986,7 @@ test.describe('voice realtime composer embedded bar', () => {
     // The row count, not the pane's text: an earlier case already put `PROPOSED_TEXT` in the
     // transcript, so "the pane contains it" is true before this case speaks and would be vacuous.
     await expect
-      .poll(() => page.locator(`${PANE} ${USER_ROW}`, { hasText: PROPOSED_TEXT }).count(), { timeout: 25_000 })
+      .poll(() => rowsCarrying(page, PROPOSED_TEXT), { timeout: 25_000 })
       .toBe(proposedRowsOnHealthy + 1);
     await leaveLiveVoice(page);
 
@@ -1060,6 +1071,7 @@ test.describe('voice realtime composer embedded bar', () => {
     await page.getByTestId('voice-realtime-mute').click();
     await waitForPhase(page, 'listening');
 
+    const proposedRowsBefore = await rowsCarrying(page, PROPOSED_TEXT);
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.callCount(), { timeout: 25_000 }).toBeGreaterThanOrEqual(1);
     const executing = await barBox(page);
@@ -1070,6 +1082,13 @@ test.describe('voice realtime composer embedded bar', () => {
       expect(Math.abs(state.top - listening.top), `the bar's top edge moved while ${name} at 375px`).toBeLessThanOrEqual(2);
     }
 
+    // The delivery wait has to count rows for the same reason as the disconnect case's: the case above
+    // put `PROPOSED_TEXT` in the transcript, so the `paneText` poll below is already satisfied here and
+    // would let the leave run while this case's caption is still unclaimed — which hands that caption
+    // to the composer as a draft and takes the Live Voice entry away from the case that follows.
+    await expect
+      .poll(() => rowsCarrying(page, PROPOSED_TEXT), { timeout: 25_000 })
+      .toBe(proposedRowsBefore + 1);
     await expect.poll(() => paneText(page), { timeout: 25_000 }).toContain(PROPOSED_TEXT);
     const clearance = await transcriptClearance(page);
     expect(clearance.rowCount).toBeGreaterThanOrEqual(1);
