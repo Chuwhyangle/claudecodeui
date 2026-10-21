@@ -2,7 +2,7 @@
 id: architecture-graph-generator
 title: 架构图生成器：种子经 fileToIds/nameToIds 解析、dependencies/dependents 双向扩展、产出
   file/entity 两级合法 .mmd
-status: todo
+status: superseded
 labels:
   - feature
 parent: null
