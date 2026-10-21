@@ -18,9 +18,9 @@ entity 的 `data-package-id` 已由 plantuml-js 输出（commit 2e7289a，取自
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：嵌套输入产出嵌套 `package` 块（顶层无 package 的实体不包）；别名映射与改动前逐字一致（同一 graph 同一 aliasOf）；`group`/`neighborhood` 视图仍正确
-- [ ] `npx vitest run src/modules/architecture/tests/hierarchyIndex.test.ts` exit 0：实体 → 最内层包、包的祖先链、包内计数（直接子实体数与后代总数）正确；无 `data-package-id` 的顶层实体归入根
-- [ ] `npm run typecheck` 通过
+- [x] `npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：嵌套输入产出嵌套 `package` 块（顶层无 package 的实体不包）；别名映射与改动前逐字一致（同一 graph 同一 aliasOf）；`group`/`neighborhood` 视图仍正确
+- [x] `npx vitest run src/modules/architecture/tests/hierarchyIndex.test.ts` exit 0：实体 → 最内层包、包的祖先链、包内计数（直接子实体数与后代总数）正确；无 `data-package-id` 的顶层实体归入根
+- [x] `npm run typecheck` 通过
 
 ## DoD
 
