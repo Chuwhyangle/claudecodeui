@@ -92,7 +92,7 @@ Received:    43937
 ### AC3 杠杆：esbuild 单文件 bundle
 - 选中杠杆：`scripts/e2e-server-bundle.mjs` 把 `server/index.ts` 的整图（`--packages=external`）打成
   单文件，webServer 命令由 `node_modules/.bin/tsx --tsconfig server/tsconfig.json server/index.ts`
-  改为 `node server/.quay-e2e-build/server-index.<contenthash>.mjs`。
+  改为 `node server/node_modules/.cache/quay-e2e-build/server-index.<contenthash>.mjs`。
 - 直接对照（同宿主同时刻，load1≈45）：tsx 到 `/health` **7083ms**；bundle 到 `/health` **751ms**（9.4×）。
 - 同构造前后（8 lanes + 128 burners，load1 130-149）：server 就绪 **8.9-12.1s → 4.0-5.0s**；
   `Running 1 test` 之前 **9.4-13.3s → 4.9-6.6s**；自印墙钟 30.1-33.4s → 28.3-29.9s（用例体占主导，
@@ -101,7 +101,7 @@ Received:    43937
   （不启动 esbuild）。判据：key = sha256(esbuild 版本 + node major + `server/`、`shared/` 下全部非测试
   `.ts/.tsx/.js/.mjs/.json` 的相对路径与**内容**)。源码一变即换文件名，过期产物不可达（不是 mtime 窗口）。
   发布走「私有 temp 文件 + rename」，多 lane 并发构建同一 key 不会读到半成品。
-- server-root 解析保持：bundle 发布在 `<serverRoot>/server/.quay-e2e-build/`，比 `server/load-env.ts` 与
+- server-root 解析保持：bundle 发布在 `<serverRoot>/server/node_modules/.cache/quay-e2e-build/`，比 `server/load-env.ts` 与
   `server/index.ts` 向上找的 `server` 锚点**低一层**，所以 `getBootstrapApplicationRoot` /
   `findApplicationRoot` 解析到与源码入口相同的应用根（原先放到 repo 根会以 `Could not resolve server root`
   退出的坑已避开）。voice 选择在 env-free shadow 根内构建，`.env` 隔离不变；
@@ -130,10 +130,33 @@ Received:    43937
 ### AC7 失败路径
 - 条件未触发：同突发下修复态 8/8 exit 0 且 ≤40000，无需置 `needs-human`。
 
+### fan-in suite 红因与修正（续轮 2026-10-21）
+- 上一轮 fan-in 全量 suite 红两条，均落在本任务的构建产物而非产品代码：
+  `resident-legacy-path-ratchet.test.ts` 的 `supersedeRunning 3→5`，与
+  `resident-run-is-turn-single-reader.test.ts` 的「found 2」（第二处为
+  `server/.quay-e2e-build/server-index.<hash>.mjs:55`）。
+- 成因：bundle 是**编译后的源码**，含整张图的所有标识符；它原先发布在 `server/` 下，
+  被两个语法树扫描器当作活源码读入（它们遍历磁盘上的非测试 `.mjs`）。机械 delta 判定说
+  UNRELATED，但失败行点名的正是本任务的产物 ⇒ 按真实成因处理。
+- 修正：发布目录改为 `server/node_modules/.cache/quay-e2e-build/`。两个扫描器都 prune
+  `node_modules/`，bundle 自身的 source-hash 遍历也 prune 它；路径仍含 `server` 段，
+  `getBootstrapApplicationRoot` / `findApplicationRoot` 解析不变。
+- 修正后读数（同一 worktree，产物重新生成后）：AC-194 e2e 一次 exit 0，自印
+  `AC-194 wall clock: 20174ms`；ratchet 4/4 pass；single-reader 4/4 pass。
+  `.gitignore` 同步指向新目录。
+
 ## Touches
 
 - `playwright.config.ts`（webServer 启动命令 / test runner 之前的 boot 侧杠杆与缓存）
 - `scripts/e2e-server-bundle.mjs`（bundle 生成、内容 hash 缓存与原子发布）
-- `.gitignore`（忽略 `/server/.quay-e2e-build/` 构建产物）
+- `.gitignore`（忽略 `/server/node_modules/.cache/quay-e2e-build/` 构建产物）
 - `e2e/activity-dock-background.spec.ts`（判据本体；只在确有必要时改读侧，读数与上限不动）
 - `tasks/gap-ac194-criterion-pretest-boot-inflation.md`（自触）
+
+## Blocker
+
+**2026-10-21T03:28:44.270Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/resident-legacy-path-ratchet.test.ts:   AssertionError [ERR_ASSERTION]: [ac393-ratchet] supersedeRunning increased: baseline=3 actual=5 cap=3.
+- run_id：wk-prod-anchor
+- session_id：7c9410a0-10f7-4f01-992d-2b9ff860da18
