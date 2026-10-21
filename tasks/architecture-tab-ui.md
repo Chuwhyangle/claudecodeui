@@ -2,7 +2,7 @@
 id: architecture-tab-ui
 title: 前端 architecture tab：门控 + snap-back + 激活即 fetch + MermaidDiagram 渲染 +
   file/entity 本地切换 + provenance 诚实栏
-status: todo
+status: ready
 labels:
   - feature
 parent: null
