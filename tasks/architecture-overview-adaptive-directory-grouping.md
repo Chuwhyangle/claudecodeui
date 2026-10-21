@@ -36,3 +36,11 @@ extra: {}
 - src/modules/architecture/tests/adaptiveGrouping.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/architecture-overview-adaptive-directory-grouping.md
+
+## Blocker
+
+**2026-10-21T23:08:15.016Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：f0ee36eb-fc67-4d9f-a1dc-29acf04bf032
