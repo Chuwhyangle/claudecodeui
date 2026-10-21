@@ -1,7 +1,7 @@
 ---
 id: voice-speaker-tracker-shadow
 title: Live Voice 声纹跟踪 shadow：CAM++ 会话吸引子 + core 授权（只读）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
