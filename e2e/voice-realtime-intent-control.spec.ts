@@ -505,9 +505,28 @@ async function leaveLiveVoice(page: Page): Promise<void> {
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 15_000 });
 }
 
-/** Navigates to a session and waits for its pane and composer. */
+/**
+ * Navigates to a session and waits for its pane and composer.
+ *
+ * THE NAVIGATION IS BOUNDED-RELOADED, the same fallback shape `beforeAll` uses for its project row.
+ * Under the load this file runs in, the first navigation can land before the client bundle (or the
+ * dev server's dependency optimizer) is ready and the session pane then never mounts: measured
+ * 2026-10-21 under four concurrent sibling lanes, a case died on the 30 s wait with
+ * `element(s) not found` for `.chat-messages-pane`. The reload re-runs the SAME navigation once;
+ * the assertion below is unchanged, so a page that is genuinely broken still fails — this is a
+ * bounded retry of the navigation, not a longer patience with a missing pane, and it adds no
+ * Playwright-level `retries`.
+ */
 async function openSession(page: Page, sessionId: string): Promise<void> {
   await page.goto(`/session/${sessionId}`);
+  if (
+    !(await page
+      .locator(PANE)
+      .waitFor({ state: 'visible', timeout: 30_000 })
+      .then(() => true, () => false))
+  ) {
+    await page.reload();
+  }
   await expect(page.locator(PANE)).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
 }
@@ -1417,11 +1436,6 @@ test.describe('voice realtime intent control', () => {
     await waitForQueued(page, frames, 1, 20_000);
     await expect(page.getByTestId('running-turn-stop')).toBeVisible({ timeout: 30_000 });
 
-    // The phrase the model recognises and never forwards — the leave's backlog. The interrupt below
-    // carries a correction, so that segment's response is the correction and nothing else is spliced
-    // into it (2026-10-16; see the case comment), which leaves the phrase unclaimed for the composer.
-    await hearUtterance(page, upstream, 'drop-heard-phrase', PHRASE);
-
     // The interrupt, and then the line goes down WHILE it is still settling: the correction's enqueue
     // is in flight against the control plane, not against the upstream this socket speaks to.
     //
@@ -1430,8 +1444,23 @@ test.describe('voice realtime intent control', () => {
     // correction spoken into the slot the opening push just freed would find an idle session, be
     // answered `queued: false`, and be refused rather than delivered (which is case 5's fault, not
     // this one's).
+    //
+    // ⛔ THE BARRIER STANDS BEFORE THE SPOKEN SENTENCE, NOT BETWEEN IT AND THE INTERRUPT. Rule v2's
+    // omission fill pays an unforwarded sentence forward `silence_ms` (3 s) after the
+    // `transcription.completed` that heard it unless an interrupt closes the candidate first. The
+    // barrier below depends only on the opening push having freed a slot — not on the phrase — but
+    // standing between the phrase and the interrupt it put its own wait inside that 3 s window:
+    // measured 2026-10-21 under load, that wait was ~8.4 s, the phrase was delivered by
+    // `omission_fill {"reason":"fill"}` before the interrupt arrived, and there was nothing left to
+    // re-home in the composer. Taken first, the phrase and the correction follow back-to-back inside
+    // the window, so the interrupt closes the candidate and the phrase is still unclaimed when the
+    // mode ends.
     const vacancy = Date.now();
     await waitForTurnAfter(armed.transcriptPath, vacancy, 20_000);
+    // The phrase the model recognises and never forwards — the leave's backlog. The interrupt below
+    // carries a correction, so that segment's response is the correction and nothing else is spliced
+    // into it (2026-10-16; see the case comment), which leaves the phrase unclaimed for the composer.
+    await hearUtterance(page, upstream, 'drop-heard-phrase', PHRASE);
     await hearUtterance(page, upstream, 'drop-heard-correction', CORRECTION);
     upstream.emit(
       functionCall(
