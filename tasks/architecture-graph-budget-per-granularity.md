@@ -1,7 +1,7 @@
 ---
 id: architecture-graph-budget-per-granularity
 title: 图预算按粒度独立：file 图不被实体截断连带 + 逐粒度截断提示 + hops 旋钮
-status: ready
+status: done
 labels:
   - feature
 parent: null
