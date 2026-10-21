@@ -108,6 +108,22 @@ class FakeBrowserSocket extends EventEmitter {
 type InjectedSummary = { text: string; runId: string | null };
 
 /**
+ * Makes the fake page ANSWER `run_output_request` with `text` (one turn's output), scheduled one
+ * tick later so the proxy's own `send` returns first. `text: null` models a page that never
+ * answers — the wait leg's only silence.
+ */
+function answerRunOutputRequests(socket: FakeBrowserSocket, text: string | null): void {
+  const original = socket.send.bind(socket);
+  socket.send = (data: string): void => {
+    original(data);
+    const parsed = JSON.parse(data) as { type?: string; requestId?: string };
+    if (parsed.type === 'run_output_request' && typeof parsed.requestId === 'string' && text !== null) {
+      setTimeout(() => socket.receive({ type: 'run_output', requestId: parsed.requestId, text }), 0);
+    }
+  };
+}
+
+/**
  * Wires one proxy connection over the fake browser socket and the fake upstream transport.
  *
  * The host's `busy` reading is a mutable closure. A scenario starts the run with the session IDLE
@@ -117,9 +133,13 @@ type InjectedSummary = { text: string; runId: string | null };
  */
 function wire(options: {
   injected: InjectedSummary[];
-  asked: Array<{ context: string; runId: string | null }>;
-  summarize?: (input: { context: string; runId: string | null }) => Promise<string | null>;
+  asked: Array<{ output: string; runId: string | null }>;
+  summarize?: (input: { output: string; runId: string | null }) => Promise<string | null>;
   settleMs?: number;
+  /** The answer the fake page returns to `run_output_request`; `null` leaves it unanswered. */
+  runOutput?: string | null;
+  /** Defaults to 0 so most legs do not pay the reply wait; the timeout leg sets it. */
+  outputWaitMs?: number;
   pollMs?: number;
   logs?: string[];
   /**
@@ -133,6 +153,7 @@ function wire(options: {
 }): Harness {
   const socket = new FakeBrowserSocket();
   const transport = createFakeTransport();
+  answerRunOutputRequests(socket, options.runOutput === undefined ? CONTEXT_AFTER_RUN : options.runOutput);
   // A delivery into an IDLE session starts a run. Starting `busy: true` would route the delivery
   // into the busy hold instead (and the run would never start), which is a different feature.
   let busy = false;
@@ -160,6 +181,7 @@ function wire(options: {
       },
       inject: (text, meta) => options.injected.push({ text, runId: meta.runId }),
       settleMs: options.settleMs ?? 100,
+      outputWaitMs: options.outputWaitMs ?? 0,
       pollMs: options.pollMs ?? 50,
     },
   };
@@ -220,7 +242,7 @@ type NarratedHarness = Harness & {
   /** Utterance ids the TTS leaf was asked to synthesize, in order. */
   ttsCalls(): string[];
   /** Every text the summarizer was asked to summarize. */
-  asked: Array<{ context: string; runId: string | null }>;
+  asked: Array<{ output: string; runId: string | null }>;
   /** Every journal line the proxy wrote. */
   logs: string[];
 };
@@ -237,16 +259,21 @@ type NarratedHarness = Harness & {
 function wireNarrated(options: {
   ack?: readonly string[];
   random?: () => number;
-  summarize?: (input: { context: string; runId: string | null }) => Promise<string | null>;
+  summarize?: (input: { output: string; runId: string | null }) => Promise<string | null>;
   settleMs?: number;
+  /** The answer the fake page returns to `run_output_request`; `null` leaves it unanswered. */
+  runOutput?: string | null;
+  /** Defaults to 0 so most legs do not pay the reply wait; the timeout leg sets it. */
+  outputWaitMs?: number;
   pollMs?: number;
   runIds?: readonly string[];
 }): NarratedHarness {
   const socket = new FakeBrowserSocket();
   const transport = createFakeTransport();
+  answerRunOutputRequests(socket, options.runOutput === undefined ? CONTEXT_AFTER_RUN : options.runOutput);
   let busy = false;
   let sends = 0;
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const logs: string[] = [];
   const ttsCalls: string[] = [];
   const executor: RealtimeToolExecutor = {
@@ -286,6 +313,7 @@ function wireNarrated(options: {
     runEndSummary: {
       ...summarySeam,
       settleMs: options.settleMs ?? 100,
+      outputWaitMs: options.outputWaitMs ?? 0,
       pollMs: options.pollMs ?? 50,
     },
   };
@@ -342,7 +370,7 @@ test('running → idle injects ONE summary, asked after the settle wait with the
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const { socket, transport, setBusy } = wire({ injected, asked, settleMs: 100, pollMs: 50 });
   await flush();
   assert.ok(transport.openCalls >= 1, 'the upstream must be dialled before events are delivered');
@@ -378,7 +406,7 @@ test('running → idle injects ONE summary, asked after the settle wait with the
   await flush();
 
   assert.equal(asked.length, 1, 'the transition asks the side model exactly once');
-  assert.equal(asked[0]?.context, CONTEXT_AFTER_RUN, 'the summarizer reads the pack standing at settle time');
+  assert.equal(asked[0]?.output, CONTEXT_AFTER_RUN, 'the summarizer reads the pack standing at settle time');
   assert.equal(asked[0]?.runId, 'run-1', 'the ask names the run that just ended');
   assert.equal(injected.length, 1, 'exactly one summary is injected');
   assert.equal(injected[0]?.text, SUMMARY);
@@ -405,7 +433,7 @@ test('an initial idle connection never asks the narrator, however long the clock
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const { socket, transport } = wire({ injected, asked, settleMs: 100, pollMs: 50 });
   await flush();
   assert.ok(transport.openCalls >= 1);
@@ -424,7 +452,7 @@ test('a run that never ends (the host keeps saying busy) injects nothing — the
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const { socket, transport, setBusy } = wire({ injected, asked, settleMs: 100, pollMs: 50 });
   await flush();
   assert.ok(transport.openCalls >= 1);
@@ -448,7 +476,7 @@ test('a narrator answer that breaks the readings is refused, not voiced', async 
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   // 41 chars, Markdown glyphs and the output's own tail: every reading at once.
   const { socket, transport, setBusy } = wire({
     injected,
@@ -484,7 +512,7 @@ test('a 45-character plain summary that does not read the output back is injecte
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const logs: string[] = [];
   const { socket, transport, setBusy } = wire({
     injected,
@@ -529,7 +557,7 @@ test('a Markdown violation alone is still refused, and the log says why', async 
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const logs: string[] = [];
   const { socket, transport, setBusy } = wire({
     injected,
@@ -575,7 +603,7 @@ test('a verbatim-tail violation alone is still refused, and the log says why', a
   t.mock.timers.setTime(B);
 
   const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
+  const asked: Array<{ output: string; runId: string | null }> = [];
   const logs: string[] = [];
   const { socket, transport, setBusy } = wire({
     injected,
@@ -669,7 +697,7 @@ test('the ack speaks at the transition and the summary queues behind it', async 
   t.mock.timers.tick(1);
   await flush();
   assert.equal(h.asked.length, 1, 'the settle window elapses and the summarizer is asked once');
-  assert.equal(h.asked[0]?.context, CONTEXT_AFTER_RUN);
+  assert.equal(h.asked[0]?.output, CONTEXT_AFTER_RUN);
   assert.equal(h.spoken().length, 1, 'the summary is QUEUED behind the playing ack — pacing holds');
   assert.deepEqual(h.ttsCalls(), ['run-end-ack-0']);
 
@@ -707,7 +735,7 @@ test('with VOICE_REALTIME_RUN_END_ACK unset or empty the transition speaks no ac
 
 // ── AC4: the ack is independent of the summary ───────────────────────────────────────────────────
 
-test('an empty context pack still speaks the ack (the summary has nothing to ask about)', async (t) => {
+test('no context pack still summarizes: the summary reads the run output, not the pack', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   t.mock.timers.setTime(B);
 
@@ -715,11 +743,14 @@ test('an empty context pack still speaks the ack (the summary has nothing to ask
   await driveToRunEnd(h, t.mock.timers, null);
   assert.deepEqual(h.spoken(), [{ utteranceId: 'run-end-ack-0', text: '处理完了。' }]);
 
+  t.mock.timers.tick(100); // the settle wait: the output request goes out
+  await flush();
+  t.mock.timers.tick(10); // the fake page's answer
+  await flush();
   t.mock.timers.tick(100);
   await flush();
-  assert.equal(h.asked.length, 0, 'no pack means no summarizer call');
-  assert.deepEqual(h.ttsCalls(), ['run-end-ack-0'], 'the ack alone reached TTS');
-  assert.ok(h.logs.includes('run-end summary skipped: no context pack to summarize'));
+  assert.equal(h.asked.length, 1, 'the run output is summarized even with no context pack');
+  assert.equal(h.asked[0]?.output, CONTEXT_AFTER_RUN, "the ask carries the page's answer");
   h.socket.close();
 });
 
@@ -811,17 +842,15 @@ const CONTEXT_AFTER_SECOND_RUN =
 /** The pack standing before any of the runs below: what a stale summary would describe. */
 const CONTEXT_BEFORE_ANY_RUN = CONTEXT_BEFORE_RUN;
 
-test('stale gate (a): a pack that arrived BEFORE the run started is not summarized, but the ack still speaks', async (t) => {
+test('per-run output (a): the summary is built from the page\'s answer, not from a stored pack', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   t.mock.timers.setTime(B);
 
   const h = wireNarrated({ ack: ACK_CANDIDATES, random: () => 0, settleMs: 100, pollMs: 50 });
   await flush();
 
-  // The pack arrives, then TIME MOVES, then the run starts. Its arrival stamp is strictly older
-  // than the run's start stamp: nothing this run does can be in it.
-  sendContext(h.socket, CONTEXT_BEFORE_ANY_RUN);
-  t.mock.timers.tick(50);
+  // No context pack is sent at all: the output comes from the `run_output` answer the fake page
+  // returns when the proxy asks for it.
   deliverSessionSend(h.transport, 'call-1');
   await flush();
   h.setBusy(true);
@@ -830,146 +859,170 @@ test('stale gate (a): a pack that arrived BEFORE the run started is not summariz
   h.setBusy(false);
   t.mock.timers.tick(50); // the transition: the ack speaks here
   await flush();
-  t.mock.timers.tick(100); // the settle wait elapses and the gate runs
+  t.mock.timers.tick(100); // the settle wait elapses and the request goes out
+  await flush();
+  t.mock.timers.tick(10); // the fake page's answer lands
+  await flush();
+  t.mock.timers.tick(100);
   await flush();
 
-  assert.equal(h.asked.length, 0, 'the summarizer is not asked about a pack older than the run');
-  assert.deepEqual(
-    h.spoken(),
-    [{ utteranceId: 'run-end-ack-0', text: '处理完了。' }],
-    'the ack is independent of the summary and still speaks',
-  );
-  assert.deepEqual(h.ttsCalls(), ['run-end-ack-0'], 'only the ack entered TTS');
+  assert.equal(h.asked.length, 1, 'the run end is summarized exactly once');
+  assert.equal(h.asked[0]?.output, CONTEXT_AFTER_RUN, "the ask carries the page's own answer");
+
+  // The narrator queue paces on the page's playback ack.
+  h.socket.receive({ type: 'narrator_done', utteranceId: 'run-end-ack-0' });
+  await flush();
+  t.mock.timers.tick(50);
+  await flush();
   assert.ok(
-    h.logs.some((line) => line.startsWith('run-end summary skipped: stale context pack')),
-    `the skip is attributable: ${h.logs.join(' | ')}`,
-  );
-  assert.ok(
-    !h.logs.some((line) => line.includes('narrator_speak utterance=run-end-summary')),
-    'no run-end summary utterance was ever sent',
+    h.spoken().some((entry) => entry.utteranceId === 'run-end-summary-0'),
+    `the summary is spoken: ${JSON.stringify(h.spoken())}`,
   );
   h.socket.close();
 });
 
-test('stale gate (b): the same pack as the last spoken summary is not summarized again', async (t) => {
+test('per-run output (b): two run ends ask twice and speak two summaries', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   t.mock.timers.setTime(B);
 
-  const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
-  const logs: string[] = [];
-  const { socket, transport, setBusy } = wire({
-    injected,
-    asked,
-    logs,
+  const h = wireNarrated({
+    ack: ACK_CANDIDATES,
+    random: () => 0,
     settleMs: 100,
     pollMs: 50,
     runIds: ['run-1', 'run-2'],
   });
   await flush();
 
-  // Run 1: the pack arrives AFTER the run started, so it is fresh enough to summarize.
-  deliverSessionSend(transport, 'call-1');
-  await flush();
-  sendContext(socket, CONTEXT_AFTER_RUN);
-  setBusy(true);
-  t.mock.timers.tick(50);
-  await flush();
-  setBusy(false);
-  t.mock.timers.tick(50);
-  await flush();
-  t.mock.timers.tick(100);
-  await flush();
-  assert.equal(asked.length, 1, 'run 1 summarizes its own fresh pack');
-  assert.equal(injected.length, 1);
-
-  // Run 2 starts, and the browser re-sends the SAME pack (the transcript did not move). The
-  // arrival stamp is new — only the text gate can explain the skip.
-  deliverSessionSend(transport, 'call-2', '再补一个空密码的用例。');
-  await flush();
-  sendContext(socket, CONTEXT_AFTER_RUN);
-  setBusy(true);
-  t.mock.timers.tick(50);
-  await flush();
-  setBusy(false);
-  t.mock.timers.tick(50);
-  await flush();
-  t.mock.timers.tick(100);
-  await flush();
-
-  assert.equal(asked.length, 1, 'the identical pack is not summarized a second time');
-  assert.equal(injected.length, 1, 'so exactly one summary was voiced');
-  assert.ok(
-    logs.some((line) => line.startsWith('run-end summary skipped: stale context pack')),
-    `the duplicate is attributable: ${logs.join(' | ')}`,
-  );
-  socket.close();
-});
-
-test('stale gate (c): a pack updated AFTER the run started is summarized and spoken', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
-  t.mock.timers.setTime(B);
-
-  const injected: InjectedSummary[] = [];
-  const asked: Array<{ context: string; runId: string | null }> = [];
-  const logs: string[] = [];
-  const { socket, transport, setBusy } = wire({
-    injected,
-    asked,
-    logs,
-    settleMs: 100,
-    pollMs: 50,
-    runIds: ['run-1', 'run-2'],
-  });
-  await flush();
-
-  const driveToEnd = async (): Promise<void> => {
-    setBusy(true);
+  const drive = async (callId: string, message: string): Promise<void> => {
+    deliverSessionSend(h.transport, callId, message);
+    await flush();
+    h.setBusy(true);
     t.mock.timers.tick(50);
     await flush();
-    setBusy(false);
+    h.setBusy(false);
     t.mock.timers.tick(50);
     await flush();
     t.mock.timers.tick(100);
     await flush();
+    t.mock.timers.tick(10);
+    await flush();
+    t.mock.timers.tick(100);
+    await flush();
+    // Release whatever the narrator queued, so the next run's narration is not paced behind it.
+    for (let round = 0; round < 6; round += 1) {
+      const spoken = h.spoken();
+      if (spoken.length === 0) break;
+      h.socket.receive({ type: 'narrator_done', utteranceId: spoken[spoken.length - 1]!.utteranceId });
+      await flush();
+    }
   };
 
-  // Run 1 over the first pack.
-  deliverSessionSend(transport, 'call-1');
-  await flush();
-  sendContext(socket, CONTEXT_AFTER_RUN);
-  await driveToEnd();
+  await drive('call-1', '把登录页改一下。');
+  await drive('call-2', '再补一个空密码的用例。');
 
-  // Run 2: the output lands while the run is live and the browser resends the GROWN pack. Both
-  // gates pass — it arrived after this run started, and it is not the pack the last summary used.
-  deliverSessionSend(transport, 'call-2', '再补一个空密码的用例。');
-  await flush();
-  sendContext(socket, CONTEXT_AFTER_SECOND_RUN);
-  await driveToEnd();
-
-  assert.equal(asked.length, 2, 'each run with a fresh pack is summarized');
-  assert.equal(asked[1]?.context, CONTEXT_AFTER_SECOND_RUN, 'the second ask reads the new pack');
-  assert.equal(asked[1]?.runId, 'run-2');
-  assert.equal(injected.length, 2, 'and the second summary is injected');
-  assert.equal(injected[1]?.text, SUMMARY);
-  assert.ok(
-    logs.some((line) => line.startsWith('run-end summary injected') && line.includes('run=run-2')),
-    'the injection names the second run',
+  assert.equal(h.asked.length, 2, `each run end asks for its own output: ${h.logs.join(' | ')}`);
+  assert.equal(h.asked[0]?.runId, 'run-1');
+  assert.equal(h.asked[1]?.runId, 'run-2');
+  assert.equal(
+    h.spoken().filter((entry) => entry.utteranceId.startsWith('run-end-summary')).length,
+    2,
+    'both summaries reach the wire',
   );
-  socket.close();
+  h.socket.close();
+});
+
+test('per-run output (c): an empty answer is skipped with its own line, and the ack still speaks', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  t.mock.timers.setTime(B);
+
+  const h = wireNarrated({
+    ack: ACK_CANDIDATES,
+    random: () => 0,
+    settleMs: 100,
+    pollMs: 50,
+    runOutput: '',
+  });
+  await flush();
+
+  deliverSessionSend(h.transport, 'call-1');
+  await flush();
+  h.setBusy(true);
+  t.mock.timers.tick(50);
+  await flush();
+  h.setBusy(false);
+  t.mock.timers.tick(50);
+  await flush();
+  t.mock.timers.tick(100);
+  await flush();
+  t.mock.timers.tick(10);
+  await flush();
+  t.mock.timers.tick(100);
+  await flush();
+
+  assert.equal(h.asked.length, 0, 'nothing is summarized from an empty run output');
+  assert.ok(
+    h.logs.some((line) => line.startsWith('run-end summary skipped: the run produced no visible output')),
+    `the empty output is attributable: ${h.logs.join(' | ')}`,
+  );
+  assert.ok(
+    h.spoken().some((entry) => entry.utteranceId === 'run-end-ack-0'),
+    'the ack is independent of the summary',
+  );
+  h.socket.close();
+});
+
+test('per-run output (d): a page that never answers is skipped after the wait, and the ack still speaks', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  t.mock.timers.setTime(B);
+
+  const h = wireNarrated({
+    ack: ACK_CANDIDATES,
+    random: () => 0,
+    settleMs: 100,
+    pollMs: 50,
+    runOutput: null,
+    outputWaitMs: 500,
+  });
+  await flush();
+
+  deliverSessionSend(h.transport, 'call-1');
+  await flush();
+  h.setBusy(true);
+  t.mock.timers.tick(50);
+  await flush();
+  h.setBusy(false);
+  t.mock.timers.tick(50);
+  await flush();
+  t.mock.timers.tick(100); // the settle wait: the request goes out
+  await flush();
+  assert.equal(h.asked.length, 0, 'nothing is asked before the page answers');
+  t.mock.timers.tick(500); // the wait expires
+  await flush();
+
+  assert.equal(h.asked.length, 0, 'a page that never answers produces no summary');
+  assert.ok(
+    h.logs.some((line) => line.startsWith('run-end summary skipped: the page did not answer')),
+    `the unanswered request is attributable: ${h.logs.join(' | ')}`,
+  );
+  assert.ok(
+    h.spoken().some((entry) => entry.utteranceId === 'run-end-ack-0'),
+    'the ack is independent of the answer',
+  );
+  h.socket.close();
 });
 
 /**
  * THE REAL PATH'S OWN READING (AC3). One connection, three runs, over the same
  * `handleVoiceRealtimeConnection` wire a browser uses: the log shows TWO DISTINCT
- * `context injected chars=` values as the conversation moves, the narrated summaries that follow,
- * and then a run whose pack never caught up — gated with the attributable line and no summary
- * utterance on the wire.
+ * `context injected chars=` values as the conversation moves, and EVERY run end speaks a summary —
+ * including the third, whose pack never caught up; that one is summarized from the standing pack
+ * and says so in its own readable line.
  *
  * The lines are printed as well as asserted, because the task's DoD asks for the observed journal
  * text, not only a green assertion.
  */
-test('real proxy WS path: two distinct context injections, and a stale run that speaks no summary', async (t) => {
+test('real proxy WS path: two distinct context injections, and every run end speaks a summary', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   t.mock.timers.setTime(B);
 
@@ -1019,17 +1072,17 @@ test('real proxy WS path: two distinct context injections, and a stale run that 
   const chars = injectedLines.map((line) => Number(/chars=(\d+)/.exec(line)?.[1] ?? -1));
   assert.ok(injectedLines.length >= 2, `at least two injections: ${injectedLines.join(' | ')}`);
   assert.equal(new Set(chars).size, 2, `the two packs inject two DIFFERENT sizes: ${chars.join(', ')}`);
-  assert.equal(h.asked.length, 2, 'runs 1 and 2 summarized their own fresh packs; run 3 did not');
+  assert.equal(h.asked.length, 3, 'every run end asks for its own output');
+  assert.ok(
+    h.asked.every((ask) => ask.output === CONTEXT_AFTER_RUN),
+    'each ask carries the page\'s rendered answer',
+  );
   assert.ok(
     h.logs.some((line) => line.includes('narrator_speak utterance=run-end-summary')),
-    'the mechanism does speak summaries on this connection — the absence below is not vacuous',
-  );
-  assert.ok(
-    h.logs.some((line) => line.startsWith('run-end summary skipped: stale context pack')),
-    'the stale run is gated with its own readable line',
+    'the mechanism speaks summaries on this connection',
   );
   const summarySpeaks = h.spoken().filter((frame) => frame.utteranceId.startsWith('run-end-summary'));
-  assert.equal(summarySpeaks.length, 2, 'exactly the two fresh runs produced a summary utterance');
+  assert.equal(summarySpeaks.length, 3, 'all three run ends produced a summary utterance');
 
   // The observed journal (DoD): the proxy's own lines, verbatim.
   for (const line of h.logs.filter((entry) =>

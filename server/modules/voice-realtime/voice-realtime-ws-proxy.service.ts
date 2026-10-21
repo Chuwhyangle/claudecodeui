@@ -997,6 +997,13 @@ export type VoiceRealtimeInboundFrame =
    * utterance standing now can end normally). See {@link VoiceRealtimeNarratorQueue}.
    */
   | { type: 'narrator_done'; utteranceId: string }
+  /**
+   * The page's answer to `run_output_request`: the output THIS run produced, rendered from the
+   * page's own transcript when the request arrives. The server summarizes exactly this text and
+   * keeps none of it — there is no pack to go stale. `requestId` correlates the reply with the one
+   * request it answers (a late reply to a superseded run is ignored).
+   */
+  | { type: 'run_output'; requestId: string; text: string }
   | { type: 'close' };
 
 /** One outbound server frame. */
@@ -1224,6 +1231,16 @@ export type VoiceRealtimeOutboundFrame =
    * never follows it — the queue drops what the person has moved past.
    */
   | { type: 'narrator_speak'; utteranceId: string; text: string }
+  /**
+   * A request for the output of the run that just ended — the run-end summary's ONLY source.
+   *
+   * Deliberately a REQUEST: the summary must describe one run, not a stored conversation
+   * snapshot. The page renders that turn from its own transcript at request time and answers with
+   * `run_output` carrying the same `requestId`; the server summarizes and discards it. Nothing is
+   * cached on either side, so there is no "current pack" and no staleness to reason about — only a
+   * page that may fail to answer (bounded by `outputWaitMs`).
+   */
+  | { type: 'run_output_request'; requestId: string }
   /**
    * Stop playing this utterance: the person spoke, and a narration is not worth talking over them.
    *
@@ -1741,6 +1758,16 @@ export const UPLINK_VAD_EXIT_WAIT_MS = 1_500;
 /** How long after a run ends the summarizer is asked, so the last output has landed in the context pack. */
 export const DEFAULT_RUN_END_SUMMARY_SETTLE_MS = 400;
 
+/**
+ * How long the run-end summary waits for the page's `run_output` reply.
+ *
+ * The summary source is the RUN'S OWN OUTPUT, fetched on demand: the server sends
+ * `run_output_request` and the page renders that turn from its transcript. Nothing is cached, so
+ * there is no staleness to reason about; the only failure left is a page that does not answer.
+ * Two seconds covers a busy render without making the driver wait on a dead socket.
+ */
+export const DEFAULT_RUN_OUTPUT_WAIT_MS = 2_000;
+
 /** How often the host's run-activity reading is sampled while a run is believed live. */
 export const DEFAULT_RUN_END_SUMMARY_POLL_MS = 250;
 
@@ -1804,12 +1831,17 @@ export function readVoiceRealtimeSummaryQuality(
  * passes {@link readVoiceRealtimeSummaryQuality}.
  */
 export type VoiceRealtimeRunEndSummarySeams = {
-  /** Ask the bypass text model for one spoken summary of `context` (the latest context pack). */
-  summarize(input: { context: string; runId: string | null }): Promise<string | null>;
+  /** Ask the bypass text model for one spoken summary of the run's OWN output. */
+  summarize(input: { output: string; runId: string | null }): Promise<string | null>;
   /** Inject the accepted summary text into the narrator's queue. */
   inject(text: string, meta: { runId: string | null }): void;
   /** The settle wait; see {@link DEFAULT_RUN_END_SUMMARY_SETTLE_MS}. */
   settleMs?: number;
+  /**
+   * How long to wait for the page's `run_output` reply; see
+   * {@link DEFAULT_RUN_OUTPUT_WAIT_MS}.
+   */
+  outputWaitMs?: number;
   /** The host poll cadence; see {@link DEFAULT_RUN_END_SUMMARY_POLL_MS}. */
   pollMs?: number;
   /** Overrides {@link RUN_END_SUMMARY_MAX_VERBATIM_TAIL} (a criterion may tighten it). */
@@ -2434,6 +2466,13 @@ export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboun
     return { type: 'narrator_done', utteranceId: frame.utteranceId };
   }
 
+  // The answer to one `run_output_request`. The id and the text are both required: a reply that
+  // cannot name its request cannot be matched to a run, and an empty text is the page saying this
+  // turn produced nothing visible (a real reading, not a malformed frame).
+  if (frame.type === 'run_output' && typeof frame.requestId === 'string' && typeof frame.text === 'string') {
+    return { type: 'run_output', requestId: frame.requestId, text: frame.text };
+  }
+
   if (frame.type === 'close') {
     return { type: 'close' };
   }
@@ -2654,22 +2693,6 @@ export function handleVoiceRealtimeConnection(
   let contextText = '';
   let contextChars = 0;
   let contextRows = 0;
-  /**
-   * Epoch ms the current pack arrived, or `null` before the first one.
-   *
-   * The run-end summary's staleness gate asks whether the pack standing at settle time can possibly
-   * contain THIS run's output. A pack that arrived before the run started cannot — it is the
-   * conversation as it stood earlier — and summarizing it is exactly the defect this task fixes.
-   */
-  let contextReceivedAt: number | null = null;
-  /**
-   * The pack text of the last summary that was actually injected (spoken), or `null`.
-   *
-   * The second half of the same gate: when the conversation has not moved since the last spoken
-   * summary, summarizing the identical pack again would voice the same conclusion twice, once per
-   * run, however little happened in between.
-   */
-  let lastSummarizedContextText: string | null = null;
   /** The (context, status) pair already advertised, so a repeated compose is not a second `session.update`. */
   let advertisedKey: string | null = null;
 
@@ -2721,6 +2744,9 @@ export function handleVoiceRealtimeConnection(
       // also voids a summarizer call that is already in flight.
       runEndGeneration += 1;
       clearRunEndSettle();
+      // The request (if any) belonged to the run that just got superseded: its answer must not be
+      // summarized as if it described the new run.
+      clearRunOutputRequest();
       statusInjectionsThisRun = 0;
       statusChangesThisRun = 0;
       statusCapReached = false;
@@ -4048,12 +4074,19 @@ export function handleVoiceRealtimeConnection(
   const runEndSummary = seams.runEndSummary;
   const runEndAck = seams.runEndAck;
   const runEndSettleMs = runEndSummary?.settleMs ?? DEFAULT_RUN_END_SUMMARY_SETTLE_MS;
+  const runEndOutputWaitMs = runEndSummary?.outputWaitMs ?? DEFAULT_RUN_OUTPUT_WAIT_MS;
   const runEndPollMs = runEndSummary?.pollMs ?? DEFAULT_RUN_END_SUMMARY_POLL_MS;
   const runEndVerbatimTailMax = runEndSummary?.verbatimTailMax ?? RUN_END_SUMMARY_MAX_VERBATIM_TAIL;
   /** The open run-end watcher, or `null`. Armed only while the status says a run is live. */
   let runEndWatchTimer: ReturnType<typeof setTimeout> | null = null;
-  /** The open settle wait between a transition and the summarizer call, or `null`. */
+  /** The open settle wait between a transition and the output request, or `null`. */
   let runEndSettleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The one `run_output` request outstanding for this connection, or `null`. */
+  let runOutputPending: { requestId: string; generation: number; runId: string | null } | null = null;
+  /** The wait for that request's answer, or `null`. */
+  let runOutputTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Monotonic per connection: every request is named, so a late reply cannot answer a newer ask. */
+  let runOutputSeq = 0;
   /**
    * Bumped by every transition and by teardown, so an ASYNC summarizer that resolves after a newer
    * run ended (or after the connection died) cannot inject a stale summary. `null` of the two is
@@ -4083,46 +4116,58 @@ export function handleVoiceRealtimeConnection(
     seams.log?.(`run-end ack run=${runId ?? '-'}`);
   };
 
+  /** Drops an outstanding output request and its wait. Idempotent. */
+  const clearRunOutputRequest = (): void => {
+    if (runOutputTimer !== null) {
+      clearTimeout(runOutputTimer);
+      runOutputTimer = null;
+    }
+    runOutputPending = null;
+  };
+
   /**
-   * Asks the narrator, judges its answer, and injects it — the settle timer's body.
+   * Asks the PAGE for the output THIS run produced — the summary's only source.
    *
-   * The context pack is read HERE, not at the transition: that is the whole point of the settle
-   * wait (the browser's pack may already carry the run's last output by now). A summary that breaks
-   * the narrator's readings (Markdown glyphs, or the output's own tail read back) is NOT injected —
-   * a violation is logged rather than voiced. LENGTH is a reading, not a refusal: `qwen-flash`
-   * answers run 42–44 chars and are still plain speech.
+   * The turn is rendered by the page at request time from its own transcript, so nothing is
+   * cached here and no pack can go stale. `requestId` names the ask; a reply for an older id is
+   * ignored, and a page that never answers costs one logged silence.
    */
-  const summarizeRunEnd = async (
+  const requestRunOutput = (generation: number, runId: string | null): void => {
+    if (runEndSummary === undefined || closed) return;
+    clearRunOutputRequest();
+    const requestId = `run-output-${(runOutputSeq += 1)}`;
+    runOutputPending = { requestId, generation, runId };
+    send({ type: 'run_output_request', requestId });
+    runOutputTimer = setTimeout(() => {
+      runOutputTimer = null;
+      if (runOutputPending?.requestId !== requestId) return;
+      runOutputPending = null;
+      seams.log?.(`run-end summary skipped: the page did not answer ${requestId}`);
+    }, runEndOutputWaitMs);
+    runOutputTimer.unref?.();
+  };
+
+  /**
+   * Summarizes exactly the text the page returned for one run, judges the answer, and injects it.
+   *
+   * A summary that breaks the narrator's readings (Markdown glyphs, or the output's own tail read
+   * back) is NOT injected — a violation is logged rather than voiced. LENGTH is a reading, not a
+   * refusal: `qwen-flash` answers run 42–44 chars and are still plain speech.
+   */
+  const summarizeRunOutput = async (
     generation: number,
     runId: string | null,
-    runStartedAt: number,
+    output: string,
   ): Promise<void> => {
     if (runEndSummary === undefined || closed) return;
-    const context = contextText.trim();
-    if (context === '') {
-      seams.log?.('run-end summary skipped: no context pack to summarize');
-      return;
-    }
-    // THE STALENESS GATE (this task). The pack is read at settle time so a resend that landed
-    // during the window IS summarized; what it must not do is summarize a pack that could not
-    // contain what this run produced. Two shapes are that pack, and both are silence rather than
-    // a confident sentence about work the person has moved past:
-    //   · it arrived BEFORE the run started — nothing this run did can be in it;
-    //   · it is byte-for-byte the pack the last spoken summary already described — the
-    //     conversation did not move, so neither may the narration.
-    // The ACK is deliberately outside this gate: it says "the turn ended", not "here is what
-    // happened", and `speakRunEndAck` has already run at the transition.
-    if (contextReceivedAt !== null && contextReceivedAt < runStartedAt) {
-      seams.log?.('run-end summary skipped: stale context pack (it arrived before this run started)');
-      return;
-    }
-    if (lastSummarizedContextText !== null && lastSummarizedContextText === context) {
-      seams.log?.('run-end summary skipped: stale context pack (the last spoken summary used this pack)');
+    const source = output.trim();
+    if (source === '') {
+      seams.log?.('run-end summary skipped: the run produced no visible output');
       return;
     }
     let raw: string | null;
     try {
-      raw = await runEndSummary.summarize({ context, runId });
+      raw = await runEndSummary.summarize({ output: source, runId });
     } catch (error) {
       seams.log?.(
         `run-end summary failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -4138,7 +4183,7 @@ export function handleVoiceRealtimeConnection(
       seams.log?.('run-end summary skipped: the narrator returned nothing');
       return;
     }
-    const quality = readVoiceRealtimeSummaryQuality(text, context);
+    const quality = readVoiceRealtimeSummaryQuality(text, source);
     if (quality.markdown.length > 0 || quality.verbatimTail > runEndVerbatimTailMax) {
       seams.log?.(
         `run-end summary refused: chars=${quality.chars} ` +
@@ -4147,9 +4192,6 @@ export function handleVoiceRealtimeConnection(
       return;
     }
     runEndSummary.inject(text, { runId });
-    // Remembered only for a summary that was really queued: a refused or empty answer described
-    // nothing, so the next run is free to summarize the same pack again.
-    lastSummarizedContextText = context;
     seams.log?.(
       `run-end summary injected chars=${quality.chars} verbatimTail=${quality.verbatimTail} run=${runId ?? '-'}`,
     );
@@ -4164,17 +4206,11 @@ export function handleVoiceRealtimeConnection(
   const scheduleRunEndSummary = (): void => {
     if (runEndSummary === undefined || closed) return;
     const generation = (runEndGeneration += 1);
-    const reading = execStatus.reading();
-    const runId = reading.runId;
-    // WHEN THIS RUN STARTED, read off the same aggregator the transition was detected from:
-    // `elapsedMs` is measured from the run's own start stamp, so the subtraction is exactly the
-    // moment `noteStatus` first saw this run id. Captured HERE rather than at settle time because
-    // the aggregator may fold a newer observation (or a new run) inside the settle window.
-    const runStartedAt = Date.now() - reading.elapsedMs;
+    const runId = execStatus.reading().runId;
     clearRunEndSettle();
     runEndSettleTimer = setTimeout(() => {
       runEndSettleTimer = null;
-      void summarizeRunEnd(generation, runId, runStartedAt);
+      requestRunOutput(generation, runId);
     }, runEndSettleMs);
     runEndSettleTimer.unref?.();
   };
@@ -6121,6 +6157,7 @@ export function handleVoiceRealtimeConnection(
       runEndWatchTimer = null;
     }
     clearRunEndSettle();
+    clearRunOutputRequest();
     runEndGeneration += 1;
     // A due omission fill has nowhere to go once the connection is gone: `evaluateOmissionFill`
     // guards on `closed` too, but dropping the timer is the cheaper half of the same rule.
@@ -6333,10 +6370,6 @@ export function handleVoiceRealtimeConnection(
       contextText = frame.text;
       contextChars = frame.chars;
       contextRows = frame.rows;
-      // The arrival stamp the run-end staleness gate reads. Stamped on EVERY accepted frame, not
-      // only the first: that is what lets a resend during a run make the pack fresh enough to
-      // summarize, and what keeps an unchanged, connection-opening pack from being read as news.
-      contextReceivedAt = Date.now();
       seams.log?.(`context received chars=${contextChars} rows=${contextRows}`);
       advertiseInstructions();
       return;
@@ -6347,6 +6380,16 @@ export function handleVoiceRealtimeConnection(
     // like a new utterance, and a stale one is ignored by the queue itself).
     if (frame.type === 'narrator_done') {
       narratorQueue?.completed(frame.utteranceId);
+      return;
+    }
+
+    // The page's answer to the run-end output request. Only the ONE outstanding request may be
+    // answered: a late reply for a superseded run is dropped by the id check, not summarized late.
+    if (frame.type === 'run_output') {
+      const pending = runOutputPending;
+      if (pending === null || pending.requestId !== frame.requestId) return;
+      clearRunOutputRequest();
+      void summarizeRunOutput(pending.generation, pending.runId, frame.text);
       return;
     }
 

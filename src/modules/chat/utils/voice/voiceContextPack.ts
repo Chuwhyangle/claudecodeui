@@ -26,6 +26,9 @@ import type { ChatMessage } from '@/shared/types';
 /** The SPEC's hard cap on a pack's length, in UTF-16 code units (`String.length`). */
 export const VOICE_CONTEXT_BUDGET_CHARS = 2000;
 
+/** The budget for one run's own output — the run-end summary's source. */
+export const VOICE_RUN_OUTPUT_BUDGET_CHARS = 2000;
+
 /** The SPEC's cap on one row, before elision. The elision keeps the row within it. */
 export const VOICE_CONTEXT_ROW_CAP_CHARS = 600;
 
@@ -151,12 +154,56 @@ export function buildVoiceContextPack(
   };
 }
 
+/**
+ * One run's OWN output, rendered on demand as the run-end summary's source.
+ *
+ * NOT a conversation pack and NOT stored anywhere: the proxy asks for the turn that just ended,
+ * this function walks the transcript at that moment, and the result is summarized and discarded.
+ * The walk starts at the NEWEST visible assistant row and stops at the first user row, so a
+ * message the person has already started in the meantime cannot pull the summary forward into the
+ * next turn. Work rows (thinking, tools, subagents) are skipped by the same visibility rule the
+ * transcript uses; an empty result means the run produced nothing the person could read.
+ */
+export function buildVoiceRunOutput(
+  messages: readonly ChatMessage[],
+  options: VoiceContextPackOptions = {},
+): string {
+  const budgetChars = options.budgetChars ?? VOICE_RUN_OUTPUT_BUDGET_CHARS;
+  const rowCapChars = options.rowCapChars ?? VOICE_CONTEXT_ROW_CAP_CHARS;
+  const codeHeadLines = options.codeHeadLines ?? VOICE_CONTEXT_CODE_HEAD_LINES;
+
+  let start = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.type !== 'assistant' || !isVoiceContextRow(message)) continue;
+    if (rowText(message, codeHeadLines) === '') continue;
+    start = index;
+    break;
+  }
+  if (start < 0) return '';
+
+  const taken: string[] = [];
+  let chars = 0;
+  for (let index = start; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.type === 'user') break;
+    if (!isVoiceContextRow(message)) continue;
+    const body = rowText(message, codeHeadLines);
+    if (body === '') continue;
+    const line = elide(body, rowCapChars);
+    const added = line.length + (taken.length === 0 ? 0 : 2);
+    if (chars + added > budgetChars) break;
+    taken.push(line);
+    chars += added;
+  }
+  taken.reverse();
+  return taken.join('\n\n');
+}
+
 /** The row's label: the two roles the SPEC renders (user, assistant). */
 function label(message: ChatMessage): string {
   return message.type === 'user' ? '用户' : '助手';
-}
-
-/**
+}/**
  * The row's text: its body, plus one placeholder per attachment.
  *
  * Attachments are placeholders because the pack is TEXT the model reads and the

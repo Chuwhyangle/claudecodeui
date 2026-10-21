@@ -26,7 +26,7 @@ import {
   segmentedRelayOffer,
   type VoiceRealtimeSegmentAck,
 } from '@/modules/chat/voice-realtime/voiceRealtimeProtocol';
-import { buildVoiceContextPack } from '@/modules/chat/utils/voice/voiceContextPack';
+import { buildVoiceContextPack, buildVoiceRunOutput } from '@/modules/chat/utils/voice/voiceContextPack';
 import { createLiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 import type { LiveSegment, LiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 
@@ -140,6 +140,12 @@ type ServerFrame =
    */
   | { type: 'narrator_speak'; utteranceId: string; text: string }
   | { type: 'narrator_stop'; utteranceId: string; reason?: string }
+  /**
+   * The server asks for the output of the run that just ended — the run-end summary's only source.
+   * Answer with a `run_output` frame carrying the same `requestId` and the text rendered NOW from
+   * the transcript. Nothing is cached: the request names one run, the reply carries one turn.
+   */
+  | { type: 'run_output_request'; requestId: string }
   /**
    * The narrator's synthesized audio, produced by the server's TTS leaf (the `voice-realtime-tts`
    * frame contract). `tts_audio` carries a bounded base64 slice with a zero-based `seq`;
@@ -2674,6 +2680,16 @@ export function useVoiceRealtimeSession({
         // summary would otherwise fail the whole voice session the first time the narrator spoke.
         if (frame.type === 'narrator_speak') {
           voiceLog(`narrator speak ${frame.utteranceId} chars=${frame.text.length}`);
+          return;
+        }
+        if (frame.type === 'run_output_request') {
+          // The run-end summary's source: this run's OWN output, rendered at request time. The
+          // reply is the only thing that crosses the wire — no pack, no cached snapshot.
+          const text = buildVoiceRunOutput(contextMessagesRef.current);
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'run_output', requestId: frame.requestId, text }));
+            voiceLog(`run_output ${frame.requestId} chars=${text.length}`);
+          }
           return;
         }
         if (frame.type === 'tts_audio') {

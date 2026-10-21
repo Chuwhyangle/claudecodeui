@@ -49,9 +49,9 @@ const DEFAULT_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat
 const RUN_END_SUMMARY_PROMPT =
   '你是语音播报助手。下面是一段 Claude Code 的工作输出。请用一句简短、口语化的中文说出它完成了什么、结论是什么。要精简，讲结果不讲过程，不设硬性字数；不要念原文，不要用 Markdown，不要列举，不要复述细节。';
 
-/** The context a run-end ask carries: the latest context pack, and the run it belongs to. */
+/** The one run's OWN output a run-end ask carries, and the run it belongs to. */
 export type VoiceRealtimeRunEndSummarizerInput = {
-  context: string;
+  output: string;
   /** The run that just ended, when the host reported one. Not sent upstream — it only labels the ask. */
   runId: string | null;
 };
@@ -72,7 +72,7 @@ export type VoiceRealtimeRunEndSummarizerOptions = {
 
 /** The one method the narrator wiring consumes. */
 export type VoiceRealtimeRunEndSummarizer = {
-  /** Ask the side model for one spoken summary of `context`; `null` means "say nothing". */
+  /** Ask the side model for one spoken summary of the run's `output`; `null` means "say nothing". */
   summarize(input: VoiceRealtimeRunEndSummarizerInput): Promise<string | null>;
 };
 
@@ -112,7 +112,7 @@ export function createVoiceRealtimeRunEndSummarizer(
             content: [
               {
                 type: 'text',
-                text: `${RUN_END_SUMMARY_PROMPT}\n\n<输出>\n${input.context}\n</输出>`,
+                text: `${RUN_END_SUMMARY_PROMPT}\n\n<输出>\n${input.output}\n</输出>`,
               },
             ],
           },
