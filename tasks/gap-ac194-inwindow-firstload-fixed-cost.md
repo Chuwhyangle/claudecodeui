@@ -2,7 +2,7 @@
 id: gap-ac194-inwindow-firstload-fixed-cost
 title: AC-194 判据在 fleet 持续负载下再次红（Received 41402ms）：bundle 只削了 server
   启动，窗口内首次装载与固定等待在负载下膨胀——移出 653KB react-scan 首装并给同构造 ≥3 次 ≤40000 读数
-status: ready
+status: done
 labels:
   - gap
   - defect
