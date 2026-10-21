@@ -1,6 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type {
+  ArchitectureRendererEdge,
+  ArchitectureRendererGraph,
+  ArchitectureRendererNode,
+} from '@/modules/architecture/rendererContract';
 import { api, readApiJson } from '@/shared/api';
+
+/**
+ * The neighbourhood's domain names for the renderer contract's graph shapes.
+ *
+ * The PlantUML bridge and renderer read a "neighbourhood" (nodes with a hop
+ * distance, edges with an archguard relation kind); they are the SAME types the
+ * contract hands every renderer, aliased here rather than restated so a second
+ * definition cannot drift from the interface the panel passes props through.
+ */
+export type ArchitectureNeighborhoodNode = ArchitectureRendererNode;
+export type ArchitectureNeighborhoodEdge = ArchitectureRendererEdge;
+export type ArchitectureNeighborhood = ArchitectureRendererGraph;
 
 /** One `.archguard` scope fingerprint the reading was generated from. */
 export type ArchitectureProvenanceFingerprint = {
@@ -50,42 +67,19 @@ export type ArchitectureGraphStats = {
 };
 
 /**
- * One node of the server's neighbourhood JSON. `id` is the raw ArchGuard entity
- * id (or a project-relative file key), `label` the display name, and `distance`
- * the shortest hop count from the transcript's seeds — the server supplies it,
- * so view filters never have to infer depth from render order.
- */
-export type ArchitectureNeighborhoodNode = {
-  readonly id: string;
-  readonly label: string;
-  readonly distance: number;
-};
-
-/** One directed edge of the neighbourhood JSON, carrying ArchGuard's relation kind. */
-export type ArchitectureNeighborhoodEdge = {
-  readonly from: string;
-  readonly to: string;
-  readonly relationType: string;
-};
-
-/**
- * A render-ready subgraph (the input of the PlantUML bridge). Every edge
- * endpoint is present in `nodes`; the node order is (distance, id), so a local
- * prefix is deterministic.
- */
-export type ArchitectureNeighborhood = {
-  readonly nodes: readonly ArchitectureNeighborhoodNode[];
-  readonly edges: readonly ArchitectureNeighborhoodEdge[];
-};
-
-/**
  * The endpoint's full reading: both render-ready subgraphs, both Mermaid
  * documents (the `.mmd` export path), the counters, and provenance. The panel
- * switches subgraphs locally from `graph`, so it has to arrive whole.
+ * switches subgraphs locally and the renderer slices its view out of one
+ * subgraph, so `graph` has to arrive whole.
+ *
+ * Each subgraph is typed as the renderer contract's graph shape: the server's
+ * neighbourhood JSON IS the renderer input (node `id`/`label`/`distance` with a
+ * reserved optional `type`, edge `from`/`to`/`relationType`), so a renderer
+ * consumes the payload directly.
  */
 export type ArchitectureGraphResult = {
   readonly mmd: { readonly file: string; readonly entity: string };
-  readonly graph: { readonly file: ArchitectureNeighborhood; readonly entity: ArchitectureNeighborhood };
+  readonly graph: { readonly file: ArchitectureRendererGraph; readonly entity: ArchitectureRendererGraph };
   readonly stats: ArchitectureGraphStats;
   readonly provenance: ArchitectureProvenance;
 };

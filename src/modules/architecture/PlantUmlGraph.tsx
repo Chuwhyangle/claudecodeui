@@ -8,7 +8,10 @@ import {
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
-import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
+import type {
+  ArchitectureRendererNode,
+  ArchitectureRendererProps,
+} from '@/modules/architecture/rendererContract';
 
 /**
  * The renderer options this component drives. Structural subsets of the
@@ -43,10 +46,13 @@ const HIGHLIGHT_STYLE = `
   [data-architecture-plantuml] svg { display: block; margin: 0 auto; }
 `;
 
-type PlantUmlGraphProps = {
-  /** The server's neighbourhood JSON for the selected granularity, already fetched whole. */
-  graph: ArchitectureNeighborhood;
-};
+/**
+ * The renderer-local budget hints are accepted (the contract carries them) but
+ * deliberately unused: the overview/group/neighbourhood views below derive what
+ * is visible from the graph itself, which is this renderer's replacement for
+ * the old maxHops/maxNodes truncation.
+ */
+type PlantUmlGraphProps = ArchitectureRendererProps;
 
 /** The alias → original id direction of the bridge's map. */
 function reverseAliases(aliasOf: ReadonlyMap<string, string>): Map<string, string> {
@@ -155,7 +161,7 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
  * local: nothing here re-enters the fetch. The renderer package is imported
  * dynamically, so elkjs never enters the first-screen bundle.
  */
-export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
+export function PlantUmlGraph({ graph, onNodeClick, onNodeHover }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
   // Which slice of the payload is drawn. Local by construction: the payload is
@@ -164,16 +170,21 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
   // What the last render actually drew; drives the visible-count readout and
   // lets a test tell a stale SVG from the new view's SVG.
   const [drawn, setDrawn] = useState<{ view: ArchitectureDiagramView; nodes: number; edges: number } | null>(null);
-  // The node under the cursor and the relation kinds on its edges. Separate
-  // from the render so hovering never re-runs the layout.
-  const [hovered, setHovered] = useState<{ nodeId: string; relations: string[] } | null>(null);
   // A failed render is shown instead of the previous (now stale) diagram.
   const [failure, setFailure] = useState<string | null>(null);
-  // Read inside the delegated DOM listeners without re-registering them.
+  // Read inside the delegated DOM listeners without re-registering them: the
+  // listeners are registered once per mount, while these values change as the
+  // parent re-renders (hover key, graph swap).
   const viewRef = useRef(view);
+  const graphRef = useRef(graph);
+  const hoverCallbackRef = useRef(onNodeHover);
+  const clickCallbackRef = useRef(onNodeClick);
   useEffect(() => {
     viewRef.current = view;
-  }, [view]);
+    graphRef.current = graph;
+    hoverCallbackRef.current = onNodeHover;
+    clickCallbackRef.current = onNodeClick;
+  }, [view, graph, onNodeHover, onNodeClick]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -181,7 +192,7 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
 
     let cancelled = false;
     setFailure(null);
-    setHovered(null);
+    hoverCallbackRef.current?.(null);
 
     void (async () => {
       try {
@@ -236,7 +247,13 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
       const id = node?.getAttribute('data-entity-id') ?? null;
       if (id === null) return;
       highlightRelations(host, id);
-      setHovered({ nodeId: id, relations: relationsOf(host, id) });
+      // The contract's hovered node is the one the panel handed over. Group and
+      // stub nodes are view scaffolding, not entities, so they have none and
+      // report no hover (their highlight still works).
+      const hoveredNode = graphRef.current.nodes.find((candidate) => candidate.id === id);
+      if (hoveredNode !== undefined) {
+        hoverCallbackRef.current?.({ node: hoveredNode, relations: relationsOf(host, id) });
+      }
     };
 
     const onMouseOut = (event: MouseEvent): void => {
@@ -245,7 +262,7 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
       const next = event.relatedTarget;
       if (next instanceof Node && node.contains(next)) return;
       clearHighlight(host);
-      setHovered(null);
+      hoverCallbackRef.current?.(null);
     };
 
     const onClick = (event: MouseEvent): void => {
@@ -256,6 +273,8 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
         setView({ kind: 'group', prefix: id.slice(GROUP_PREFIX.length) });
         return;
       }
+      const clickedNode = graphRef.current.nodes.find((candidate) => candidate.id === id);
+      if (clickedNode !== undefined) clickCallbackRef.current?.(clickedNode);
       const current = viewRef.current;
       const hops = current.kind === 'neighborhood' && current.entityId === id
         ? current.hops + 1
@@ -272,10 +291,6 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
       host.removeEventListener('click', onClick);
     };
   }, []);
-
-  const relationsText = hovered === null || hovered.relations.length === 0
-    ? t('architecture.hover.none', { defaultValue: 'no outgoing/incoming relation' })
-    : hovered.relations.join(', ');
 
   const viewLabel = view.kind === 'overview'
     ? t('architecture.plantuml.overview', { defaultValue: 'Overview' })
@@ -310,19 +325,12 @@ export function PlantUmlGraph({ graph }: PlantUmlGraphProps) {
             </button>
           )}
           <span data-architecture-view-label>{viewLabel}</span>
-          <span
-            data-architecture-hover={hovered?.nodeId}
-            data-architecture-hover-relations={hovered?.relations.join(',')}
-          >
-            {hovered === null
-              ? t('architecture.plantuml.hint', {
-                  defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
-                })
-              : t('architecture.hover.relations', {
-                  defaultValue: '{{node}} — relations: {{relations}}',
-                  node: hovered.nodeId,
-                  relations: relationsText,
-                })}
+          {/* The hover READOUT is the panel's renderer-neutral bar; this is the
+              view's own gesture hint, so it never repeats that reading. */}
+          <span>
+            {t('architecture.plantuml.hint', {
+              defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
+            })}
           </span>
         </span>
         <span data-architecture-visible-summary>

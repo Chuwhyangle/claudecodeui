@@ -37,7 +37,13 @@ import express, {
 import type { NormalizedMessage } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
 
-import { validateMermaid, type GenerateGraphResult, type GraphSeeds } from '../generator.js';
+import {
+  validateMermaid,
+  type GenerateGraphResult,
+  type GraphSeeds,
+  type NeighborhoodEdge,
+  type NeighborhoodNode,
+} from '../generator.js';
 import { createArchitectureRoutes } from '../routes.js';
 import { createArchitectureService, hasArchguardCache } from '../service.js';
 
@@ -448,6 +454,62 @@ test('the neighbourhood JSON carries true hop distances and each edge relationTy
       { from: 'src/n1.ts', to: 'src/n2.ts', relationType: 'call' },
     ],
   );
+});
+
+test('the neighbourhood JSON schema is pinned to the renderer contract fields', async (t) => {
+  // The frontend renderer contract is written against these exact fields, so the
+  // schema is pinned from both sides: at runtime each emitted object carries ONLY
+  // the contract keys (the reserved `type` is never emitted, leaving old payloads
+  // byte-identical), and at compile time the optional `type` admits a future node
+  // kind while the three required node fields stay required.
+  const { root } = createIndexProject(t, {
+    fileToIds: { 'a.ts': ['A'], 'b.ts': ['B'] },
+    nameToIds: { Alpha: ['A'], Beta: ['B'] },
+    idToFile: { A: 'a.ts', B: 'b.ts' },
+    idToName: { A: 'Alpha', B: 'Beta' },
+    dependencies: { A: ['B'], B: [] },
+    dependents: { A: [], B: ['A'] },
+    relationsByType: { dependency: [['A', 'B']] },
+  });
+
+  const body = await readGraphBody(root, [
+    message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Start at `Alpha`.' }),
+  ], { hops: 1 });
+
+  // Every node is id/label/distance — and nothing else, so `type` stays reserved
+  // (an emitted value would change what old clients read).
+  for (const node of [...body.graph.entity.nodes, ...body.graph.file.nodes]) {
+    assert.deepEqual(
+      Object.keys(node).sort(),
+      ['distance', 'id', 'label'],
+      `a node must carry exactly id/label/distance; got ${JSON.stringify(node)}`,
+    );
+  }
+  // Every edge is from/to/relationType.
+  for (const edge of [...body.graph.entity.edges, ...body.graph.file.edges]) {
+    assert.deepEqual(
+      Object.keys(edge).sort(),
+      ['from', 'relationType', 'to'],
+      `an edge must carry exactly from/to/relationType; got ${JSON.stringify(edge)}`,
+    );
+  }
+
+  // Compile-time pins, checked by the server typecheck (`tsc -p server/tsconfig.json`):
+  // a payload written before the reserved field existed still satisfies the schema…
+  const legacyNode: NeighborhoodNode = { id: 'A', label: 'Alpha', distance: 0 };
+  // …a future producer may add a node kind without a breaking change…
+  const kindedNode: NeighborhoodNode = { id: 'B', label: 'Beta', distance: 1, type: 'class' };
+  // …and `distance` remains required: dropping it must not typecheck.
+  // @ts-expect-error — a node without `distance` must not satisfy NeighborhoodNode.
+  const incompleteNode: NeighborhoodNode = { id: 'C', label: 'Gamma' };
+  const edge: NeighborhoodEdge = { from: 'A', to: 'B', relationType: 'dependency' };
+
+  assert.deepEqual(
+    [legacyNode, kindedNode].map((node) => Object.keys(node).sort()),
+    [['distance', 'id', 'label'], ['distance', 'id', 'label', 'type']],
+  );
+  assert.equal('distance' in incompleteNode, false);
+  assert.deepEqual(Object.keys(edge).sort(), ['from', 'relationType', 'to']);
 });
 
 test('the loose default budget (2 hops / 2000 nodes) keeps all 300 edges instead of the old 200 cut', async (t) => {

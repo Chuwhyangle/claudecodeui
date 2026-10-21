@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -18,6 +18,7 @@ import {
   useEnsureArchitectureTabVisible,
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
+import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
 import {
   archguardToPlantUml,
@@ -278,6 +279,49 @@ test('a visible architecture tab is left untouched, and an unrelated tab never m
   const otherTabSetter = vi.fn();
   renderHook(() => useEnsureArchitectureTabVisible(false, 'chat', otherTabSetter));
   assert.equal(otherTabSetter.mock.calls.length, 0);
+});
+
+test('the panel draws through the renderer contract, with no library dependency', async () => {
+  // A stand-in implementation of the same contract: if the panel needed
+  // PlantUML/ELK types or props, this render could not supply them, and the
+  // PlantUML host would still appear.
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" data-stand-in-nodes={props.graph.nodes.length} />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+
+  await waitFor(() => assert.ok(document.querySelector('[data-stand-in-renderer]')));
+  assert.equal(
+    document.querySelector('[data-architecture-plantuml-graph]'),
+    null,
+    'a substituted renderer must be the only thing drawing the graph',
+  );
+
+  const props = seen.at(-1);
+  if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+  assert.deepEqual(
+    props.graph.nodes.map((node) => node.id),
+    [
+      'src/modules/alpha/a.ts',
+      'src/modules/alpha/a2.ts',
+      'src/modules/beta/b.ts',
+      'src/modules/gamma/c.ts',
+    ],
+    'the whole neighbourhood is handed over; the renderer slices its own view from it',
+  );
+
+  // The panel consumes the contract's hover callback, so the readout is the same
+  // for every renderer implementation.
+  act(() => props.onNodeHover?.({ node: props.graph.nodes[0], relations: ['dependency'] }));
+  const hover = document.querySelector('[data-architecture-hover]');
+  assert.equal(hover?.getAttribute('data-architecture-hover'), 'src/modules/alpha/a.ts');
+  assert.equal(hover?.getAttribute('data-architecture-hover-relations'), 'dependency');
+
+  act(() => props.onNodeHover?.(null));
+  assert.equal(document.querySelector('[data-architecture-hover]'), null);
 });
 
 test('the bridge maps every ArchGuard relation kind onto its UML arrow and stereotype', () => {
