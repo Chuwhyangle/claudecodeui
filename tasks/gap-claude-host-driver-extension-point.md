@@ -2,7 +2,7 @@
 id: gap-claude-host-driver-extension-point
 title: ClaudeResidentHostDriver 扩展点重构：读数/结局处理改成同目录可注册分派（registry + 兄弟文件 +
   负对照判据），driver 只留薄委托
-status: ready
+status: done
 labels:
   - gap
 parent: null
