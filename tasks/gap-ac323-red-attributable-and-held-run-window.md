@@ -188,5 +188,6 @@ right show-trace ../../../.cache/quay-e2e-tmp/quay-e2e-1x4xYR/test-results/voice
 
 ### AC8
 
-- 全部控制臂注入已还原（`at: 60_000` / 21 s 等待 / `withStderrLog` 均回到最终形态），`git status --porcelain` 为空。
-- `git diff --stat develop HEAD`（在 ABI 把勾选后的任务文件落到 develop tip 之后）= 恰好 5 项：`playwright.config.ts`、`scripts/e2e-web-server-stderr.mjs`（新）、`scripts/e2e-web-server-stderr.test.mjs`（新）、`e2e/voice-realtime-composer-embedded.spec.ts`、`tasks/gap-ac323-red-attributable-and-held-run-window.md`。
+- 全部控制臂注入已还原（`at: 60_000` / 21 s 等待 / `withStderrLog` 均回到最终形态），`git status --porcelain` 为空（干净树）。
+- `git diff --stat develop HEAD` 恰为 4 个实现面文件：`playwright.config.ts`、`scripts/e2e-web-server-stderr.mjs`（新）、`scripts/e2e-web-server-stderr.test.mjs`（新）、`e2e/voice-realtime-composer-embedded.spec.ts`。
+- 为什么这里是 4 项而不是 AC 里写的 5 项：第 5 项 `tasks/gap-ac323-…md` 的勾选由 Provider ABI（`quay task edit --body-file`，native provider 的 task_write 路径）提交到 develop tip（`4ce5011ec`），随后按步骤 2b 的强制 `git merge --no-edit develop` 被并入本 worktree ⇒ 任务文件在 develop 与 HEAD 两侧已一致，不再出现在 diff 里。AC8 的实质判据（只有实现面文件、无杂散写入、注入已还原、树干净）成立；任务文件本身由 ABI 单向写入，未在本 worktree 手工编辑。
