@@ -23,10 +23,18 @@
  * by walking up from `import.meta.url` to the nearest directory named `server`, and a bundle
  * written anywhere else makes that walk fail (`Could not resolve server root`) or, worse, resolve
  * a different root. The bundle is therefore published at
- * `<serverRoot>/server/.quay-e2e-build/server-index.<key>.mjs` — one level *below* the anchor the
- * walk looks for, so it resolves to exactly the `<serverRoot>` the source entry point resolved to.
- * The other `import.meta.url` consumers in the shipping server (`findApplicationRoot` /
- * `getModuleDirectory` callers, `createRequire`) are relative to that same anchor and keep working.
+ * `<serverRoot>/server/node_modules/.cache/quay-e2e-build/server-index.<key>.mjs` — below the
+ * anchor the walk looks for, so it resolves to exactly the `<serverRoot>` the source entry point
+ * resolved to. The other `import.meta.url` consumers in the shipping server (`findApplicationRoot`
+ * / `getModuleDirectory` callers, `createRequire`) are relative to that same anchor and keep working.
+ *
+ * WHY UNDER `node_modules/.cache`. The bundle is COMPILED SOURCE: it contains every identifier the
+ * source graph contains. Criteria that read the live `server/` tree with a syntax tree — AC-393's
+ * `supersedeRunning` ratchet and AC-392's single-flag-reader check — walk non-test `.mjs` files on
+ * disk, so a bundle published directly under `server/` counts every symbol twice and turns those
+ * criteria red on the artifact rather than on the code (observed: ratchet `3 -> 5`). Both those
+ * scanners prune `node_modules/`, and the source-hash walk above does too, so a cache directory
+ * under it is invisible to every reader while keeping the `server` anchor above the module.
  *
  * RUNTIME FILE READS. `voice-realtime-ws-proxy.service.ts` reads `./omission-fill-params.json`
  * beside its own module at evaluation, which in a bundle is the bundle's directory; the build
@@ -47,8 +55,11 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Directory (under `<serverRoot>/server/`) the bundles are published into; git-ignored. */
-const BUILD_DIRECTORY = '.quay-e2e-build';
+/**
+ * Directory (under `<serverRoot>/server/node_modules/.cache/`) the bundles are published into;
+ * git-ignored, and pruned by the `server/`-tree syntax scanners — see the module comment.
+ */
+const CACHE_DIRECTORY = path.join('server', 'node_modules', '.cache', 'quay-e2e-build');
 /** Base name of every published bundle; the content key is the suffix. */
 const BUNDLE_BASENAME = 'server-index';
 /** Source extensions that can reach the bundle. Everything else is irrelevant to its contents. */
@@ -83,7 +94,8 @@ function collectSourceFiles(serverRoot) {
       const absolute = path.join(directory, entry.name);
       const relative = path.relative(serverRoot, absolute);
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === BUILD_DIRECTORY) continue;
+        // `node_modules` holds the published cache (see CACHE_DIRECTORY) as well as packages.
+        if (entry.name === 'node_modules') continue;
         if (isTestSource(relative)) continue;
         walk(absolute);
       } else if (SOURCE_EXTENSION.test(entry.name) && !isTestSource(relative)) {
@@ -170,7 +182,7 @@ function publishAtomically(target, writeTemp) {
  * @returns {string}
  */
 export function prepareServerBundle(serverRoot) {
-  const buildDirectory = path.join(serverRoot, 'server', BUILD_DIRECTORY);
+  const buildDirectory = path.join(serverRoot, CACHE_DIRECTORY);
   const esbuildBinary = path.join(serverRoot, 'node_modules', '.bin', 'esbuild');
   if (!fs.existsSync(esbuildBinary)) {
     throw new Error(
