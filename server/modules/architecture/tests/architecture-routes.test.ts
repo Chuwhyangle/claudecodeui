@@ -370,7 +370,17 @@ type NeighborhoodBody = {
     file: { nodes: { id: string; label: string; distance: number }[]; edges: { from: string; to: string; relationType: string }[] };
     entity: { nodes: { id: string; label: string; distance: number }[]; edges: { from: string; to: string; relationType: string }[] };
   };
-  stats: Record<string, unknown> & { truncated: boolean; entityNodes: number; entityEdges: number };
+  stats: Record<string, unknown> & {
+    truncated: boolean;
+    entityNodes: number;
+    entityEdges: number;
+    fileNodes: number;
+    fileEdges: number;
+    entityTruncated?: boolean;
+    fileTruncated?: boolean;
+    entityTotal?: number;
+    fileTotal?: number;
+  };
   provenance: { cacheHit: boolean };
 };
 
@@ -560,6 +570,68 @@ test('the loose default budget (2 hops / 2000 nodes) keeps all 300 edges instead
     WIDTH,
     'each dependent sits exactly one hop from the seed',
   );
+});
+
+test('the file graph has its own budget: an entity cut does not shorten the file view', async (t) => {
+  // A seed with five direct dependents, each in its own file. `maxNodes: 2`
+  // keeps the seed plus one dependent, but the file graph is projected from the
+  // FULL reachable set and budgeted separately, so it keeps all six files.
+  const WIDTH = 5;
+  const fileToIds: Record<string, string[]> = { 'f0.ts': ['F0'] };
+  const nameToIds: Record<string, string[]> = { Seed: ['F0'] };
+  const idToFile: Record<string, string> = { F0: 'f0.ts' };
+  const idToName: Record<string, string> = { F0: 'Seed' };
+  const dependencies: Record<string, string[]> = { F0: [] };
+  const dependents: Record<string, string[]> = { F0: [] };
+  const pairs: [string, string][] = [];
+  for (let index = 1; index <= WIDTH; index += 1) {
+    const id = `F${index}`;
+    fileToIds[`f${index}.ts`] = [id];
+    idToFile[id] = `f${index}.ts`;
+    idToName[id] = `Fan ${index}`;
+    dependencies[id] = ['F0'];
+    dependents[id] = [];
+    dependents.F0.push(id);
+    pairs.push([id, 'F0']);
+  }
+
+  const { root } = createIndexProject(t, {
+    fileToIds,
+    nameToIds,
+    idToFile,
+    idToName,
+    dependencies,
+    dependents,
+    relationsByType: { dependency: pairs },
+  });
+
+  const body = await readGraphBody(root, [
+    message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Start at `Seed`.' }),
+  ], { hops: 1, maxNodes: 2 });
+
+  // The entity graph was cut at the requested budget…
+  assert.equal(body.stats.entityTruncated, true, 'the entity set exceeded maxNodes');
+  assert.equal(body.stats.entityNodes, 2, 'the entity graph keeps exactly the budget');
+  assert.equal(body.stats.entityTotal, WIDTH + 1, 'the entity total is the pre-budget reachable count');
+  assert.equal(body.graph.entity.nodes.length, 2);
+  assert.equal(body.graph.entity.edges.length, 1, 'only the retained pair keeps its edge');
+
+  // …but the file graph is complete: every reachable file and edge survives,
+  // because its budget is its own and the projection runs on the full set.
+  assert.equal(body.stats.fileTruncated, false, 'the entity cut must not truncate the file graph');
+  assert.equal(body.stats.fileNodes, WIDTH + 1);
+  assert.equal(body.stats.fileTotal, WIDTH + 1);
+  assert.equal(body.graph.file.nodes.length, WIDTH + 1);
+  assert.equal(body.graph.file.edges.length, WIDTH);
+  assert.deepEqual(
+    body.graph.file.nodes.map((node) => node.id).sort(),
+    ['f0.ts', 'f1.ts', 'f2.ts', 'f3.ts', 'f4.ts', 'f5.ts'].map((file) => `src/${file}`),
+    'every reachable file is in the file graph',
+  );
+
+  // The legacy boolean stays the OR of the two granularities, so pre-existing
+  // `truncated` consumers still see "something was cut".
+  assert.equal(body.stats.truncated, true);
 });
 
 test('a missing project or a malformed body is refused with the transport code, not a 500', async (t) => {

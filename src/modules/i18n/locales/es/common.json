@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "Análisis",
       "unresolved": "{{count}} semilla(s) sin resolver",
-      "truncated": "Se alcanzó el presupuesto de nodos: este gráfico está truncado."
+      "truncated": "Se alcanzó el presupuesto de nodos: este gráfico está truncado.",
+      "entityTruncated": "Gráfico de entidades truncado — mostrando {{shown}} de {{total}} entidades (presupuesto de nodos {{limit}}).",
+      "fileTruncated": "Gráfico de archivos truncado — mostrando {{shown}} de {{total}} archivos (presupuesto de nodos {{limit}}).",
+      "lowerHops": "{{hops}} saltos superan el presupuesto de nodos — reduce los saltos para ver toda la vecindad."
     }
   },
   "status": {

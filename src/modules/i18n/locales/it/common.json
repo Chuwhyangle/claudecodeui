@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "Analisi",
       "unresolved": "{{count}} seme/i non risolto/i",
-      "truncated": "Budget dei nodi raggiunto — questo grafo è troncato."
+      "truncated": "Budget dei nodi raggiunto — questo grafo è troncato.",
+      "entityTruncated": "Grafo delle entità troncato — visualizzate {{shown}} di {{total}} entità (budget nodi {{limit}}).",
+      "fileTruncated": "Grafo dei file troncato — visualizzati {{shown}} di {{total}} file (budget nodi {{limit}}).",
+      "lowerHops": "{{hops}} salti superano il budget dei nodi — riduci i salti per vedere l'intero vicinato."
     }
   },
   "status": {

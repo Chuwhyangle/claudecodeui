@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "分析",
       "unresolved": "{{count}} 個未解析的種子",
-      "truncated": "已達節點預算 — 此圖已被截斷。"
+      "truncated": "已達節點預算 — 此圖已被截斷。",
+      "entityTruncated": "實體圖已被截斷 — 顯示 {{shown}} / {{total}} 個實體（節點預算 {{limit}}）。",
+      "fileTruncated": "檔案圖已被截斷 — 顯示 {{shown}} / {{total}} 個檔案（節點預算 {{limit}}）。",
+      "lowerHops": "{{hops}} 跳超出節點預算 — 降低跳數即可檢視完整鄰域。"
     }
   },
   "status": {

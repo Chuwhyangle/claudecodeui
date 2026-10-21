@@ -354,9 +354,17 @@ export const api = {
    * both Mermaid documents, the counters and the provenance, generated server-
    * side from the project's `.archguard` cache. The response body is the result
    * itself, not a `{ success, data }` envelope.
+   *
+   * `hops` is the server-side BFS depth and therefore a REQUEST parameter (it
+   * changes the payload and its content-addressed cache key), unlike the local
+   * `maxNodes` view filter: the panel's hops control re-enters this request.
    */
-  architectureGraph: (projectId: string, sessionId: string) =>
-    post('/api/architecture/graph', { projectId, sessionId }),
+  architectureGraph: (projectId: string, sessionId: string, hops?: number) =>
+    post('/api/architecture/graph', {
+      projectId,
+      sessionId,
+      ...(hops === undefined ? {} : { hops }),
+    }),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),
   restoreProject: (projectId: string) =>

@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "分析",
       "unresolved": "{{count}} 个未解析的种子",
-      "truncated": "已达节点预算 — 此图已被截断。"
+      "truncated": "已达节点预算 — 此图已被截断。",
+      "entityTruncated": "实体图已被截断 — 显示 {{shown}} / {{total}} 个实体（节点预算 {{limit}}）。",
+      "fileTruncated": "文件图已被截断 — 显示 {{shown}} / {{total}} 个文件（节点预算 {{limit}}）。",
+      "lowerHops": "{{hops}} 跳超出节点预算 — 降低跳数即可查看完整邻域。"
     }
   },
   "status": {

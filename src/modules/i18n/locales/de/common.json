@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "Analyse",
       "unresolved": "{{count}} nicht aufgelöste(r) Ausgangspunkt(e)",
-      "truncated": "Knotenbudget erreicht — dieses Diagramm ist abgeschnitten."
+      "truncated": "Knotenbudget erreicht — dieses Diagramm ist abgeschnitten.",
+      "entityTruncated": "Entitätsdiagramm abgeschnitten — {{shown}} von {{total}} Entitäten werden angezeigt (Knotenbudget {{limit}}).",
+      "fileTruncated": "Dateidiagramm abgeschnitten — {{shown}} von {{total}} Dateien werden angezeigt (Knotenbudget {{limit}}).",
+      "lowerHops": "{{hops}} Hops überschreiten das Knotenbudget — verringern Sie die Hops, um die gesamte Nachbarschaft zu sehen."
     }
   },
   "status": {

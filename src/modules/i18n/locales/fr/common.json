@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "Analyse",
       "unresolved": "{{count}} graine(s) non résolue(s)",
-      "truncated": "Budget de nœuds atteint — ce graphe est tronqué."
+      "truncated": "Budget de nœuds atteint — ce graphe est tronqué.",
+      "entityTruncated": "Graphe des entités tronqué — {{shown}} entités affichées sur {{total}} (budget de nœuds {{limit}}).",
+      "fileTruncated": "Graphe des fichiers tronqué — {{shown}} fichiers affichés sur {{total}} (budget de nœuds {{limit}}).",
+      "lowerHops": "{{hops}} sauts dépassent le budget de nœuds — réduisez les sauts pour voir tout le voisinage."
     }
   },
   "status": {

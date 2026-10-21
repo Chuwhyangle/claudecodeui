@@ -47,8 +47,11 @@ export type ArchitectureSeedStats = {
 /**
  * The reading's counters, mirroring `POST /api/architecture/graph`: the
  * generator's per-granularity node/edge counts, the seed counts, the seeds that
- * matched nothing, and the totals. `truncated` reports that the node budget cut
- * the neighbourhood short.
+ * matched nothing, and the totals. `truncated` reports that a node budget cut
+ * the neighbourhood short; the optional per-granularity flags say WHICH graph
+ * was cut, and the matching `…Total` fields are the pre-budget denominators the
+ * panel turns into a "showing X of Y" readout. They stay optional so a payload
+ * written before they existed still satisfies this type.
  */
 export type ArchitectureGraphStats = {
   readonly entityNodes: number;
@@ -56,6 +59,14 @@ export type ArchitectureGraphStats = {
   readonly entityEdges: number;
   readonly fileEdges: number;
   readonly truncated: boolean;
+  /** True when the entity set exceeded its budget; absent on older payloads. */
+  readonly entityTruncated?: boolean;
+  /** True when the file set exceeded its own (independent) budget. */
+  readonly fileTruncated?: boolean;
+  /** Reachable entity nodes before the entity budget. */
+  readonly entityTotal?: number;
+  /** Distinct file nodes before the file budget. */
+  readonly fileTotal?: number;
   readonly seedFiles: number;
   readonly seedIdentifiers: number;
   readonly nodeCount: number;
@@ -108,10 +119,15 @@ type UseArchitectureGraphResult = {
  * what POSTs `/api/architecture/graph`. Nothing here depends on which
  * granularity (file/entity) is on screen — the server returns both documents in
  * one response, and the panel's toggle is local by construction.
+ *
+ * `hops` IS part of the request: it is the server-side BFS depth and therefore
+ * a generation knob (it participates in the result cache's content key), so a
+ * depth change re-enters the fetch rather than filtering an arrived payload.
  */
 export function useArchitectureGraph(
   projectId: string | null,
   sessionId: string | null,
+  hops: number,
 ): UseArchitectureGraphResult {
   const [view, setView] = useState<ArchitectureView>({ status: 'idle' });
   // Bumped by `reload`; it is the only way to re-enter the fetch effect without
@@ -132,7 +148,7 @@ export function useArchitectureGraph(
 
     void (async () => {
       try {
-        const response = await api.architectureGraph(projectId, sessionId);
+        const response = await api.architectureGraph(projectId, sessionId, hops);
         const result = await readApiJson<ArchitectureGraphResult>(response);
         if (requestIdRef.current !== requestId) return;
         setView({ status: 'loaded', result });
@@ -146,7 +162,7 @@ export function useArchitectureGraph(
         });
       }
     })();
-  }, [projectId, sessionId, reloadToken]);
+  }, [projectId, sessionId, hops, reloadToken]);
 
   const reload = useCallback(() => {
     setReloadToken((token) => token + 1);

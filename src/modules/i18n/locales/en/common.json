@@ -73,7 +73,10 @@
     "honesty": {
       "analysis": "Analysis",
       "unresolved": "{{count}} unresolved seed(s)",
-      "truncated": "Node budget reached — this graph is truncated."
+      "truncated": "Node budget reached — this graph is truncated.",
+      "entityTruncated": "Entity graph truncated — showing {{shown}} of {{total}} entities (node budget {{limit}}).",
+      "fileTruncated": "File graph truncated — showing {{shown}} of {{total}} files (node budget {{limit}}).",
+      "lowerHops": "{{hops}} hops exceed the node budget — lower the hops to see the whole neighbourhood."
     }
   },
   "status": {

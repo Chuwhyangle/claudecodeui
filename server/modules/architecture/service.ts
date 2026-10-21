@@ -53,14 +53,25 @@ const MANIFEST_RELATIVE_PATH = path.join('.archguard', 'query', 'manifest.json')
 const QUERY_RELATIVE_DIRECTORY = path.join('.archguard', 'query');
 
 /**
- * Default node budget. It is deliberately LOOSE: the neighbourhood is shipped
- * whole (distance-annotated) so the frontend can filter it locally without a
- * network round-trip, and 2000 only bounds a pathological 2-hop explosion. A
- * caller may lower or raise it per request; the client's `maxNodes` slider is a
- * local view filter, not a request parameter. `generateGraph` deliberately ships
- * no default, so the product constant has to live on the route-side caller.
+ * Default node budget for the ENTITY graph. It is deliberately LOOSE: the
+ * neighbourhood is shipped whole (distance-annotated) so the frontend can
+ * filter it locally without a network round-trip, and 2000 only bounds a
+ * pathological 2-hop explosion. A caller may lower or raise it per request; the
+ * client's `maxNodes` slider is a local view filter, not a request parameter.
+ * `generateGraph` deliberately ships no default, so the product constant has to
+ * live on the route-side caller.
  */
 export const DEFAULT_MAX_NODES = 2000;
+
+/**
+ * Default node budget for the FILE graph, independent of {@link DEFAULT_MAX_NODES}.
+ * A session's entity neighbourhood projects onto roughly a tenth as many files,
+ * so this bound is effectively "whole" for the neighbourhoods the tab opens
+ * (quay's two-hop readings are a few hundred files) while still bounding a
+ * pathological scope. The file graph is projected from the FULL reachable entity
+ * set, so an entity-budget cut never shortens it.
+ */
+export const DEFAULT_MAX_FILES = 2000;
 
 /**
  * Default BFS depth. Two hops is the 2026-10-21 reading's "loose" neighbourhood:
@@ -118,6 +129,7 @@ export type ArchitectureGraphInput = {
 export type ArchitectureGraphParams = {
   readonly hops: number;
   readonly maxNodes: number;
+  readonly maxFiles: number;
 };
 
 /** How many seeds the transcript yielded, before any were resolved. */
@@ -488,7 +500,17 @@ function emptyReading(): GenerateGraphResult {
       file: { nodes: [], edges: [] },
       entity: { nodes: [], edges: [] },
     },
-    stats: { entityNodes: 0, fileNodes: 0, entityEdges: 0, fileEdges: 0, truncated: false },
+    stats: {
+      entityNodes: 0,
+      fileNodes: 0,
+      entityEdges: 0,
+      fileEdges: 0,
+      truncated: false,
+      entityTruncated: false,
+      fileTruncated: false,
+      entityTotal: 0,
+      fileTotal: 0,
+    },
     unresolved: { files: [], identifiers: [] },
   };
 }
@@ -630,6 +652,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
       const params: ArchitectureGraphParams = {
         hops: input.hops ?? DEFAULT_HOPS,
         maxNodes: input.maxNodes ?? DEFAULT_MAX_NODES,
+        maxFiles: DEFAULT_MAX_FILES,
       };
       const fingerprints = refs.map((ref, index) => ({
         scope: scopeKeys[index],

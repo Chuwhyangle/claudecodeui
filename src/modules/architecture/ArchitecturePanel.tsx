@@ -11,6 +11,41 @@ import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/ar
 /** The two subgraphs the endpoint returns together; switching between them is local. */
 type ArchitectureGranularity = 'file' | 'entity';
 
+/**
+ * The server-side BFS depth the panel asks for on first activation. Two hops is
+ * the server's loose default (`DEFAULT_HOPS` in `architecture/service.ts`); the
+ * knob below is a REQUEST parameter, so unlike the granularity toggle it
+ * re-enters the fetch.
+ */
+const DEFAULT_HOPS = 2;
+
+/** The depths the hops knob offers. Kept small: three hops explodes most neighbourhoods. */
+const HOP_OPTIONS = [1, 2, 3] as const;
+
+/**
+ * One granularity's truncation reading, taken from the response alone.
+ *
+ * The per-granularity flags are optional on the wire (a payload from an older
+ * server has only the legacy `truncated` boolean), so an absent flag falls back
+ * to `truncated`. When a granularity was cut, the retained count IS the budget
+ * the generator applied, so it stands in for the limit.
+ */
+function truncationReading(result: ArchitectureGraphResult, granularity: ArchitectureGranularity) {
+  const { stats } = result;
+  if (granularity === 'file') {
+    return {
+      truncated: stats.fileTruncated ?? stats.truncated,
+      shown: stats.fileNodes,
+      total: stats.fileTotal ?? stats.fileNodes,
+    };
+  }
+  return {
+    truncated: stats.entityTruncated ?? stats.truncated,
+    shown: stats.entityNodes,
+    total: stats.entityTotal ?? stats.entityNodes,
+  };
+}
+
 type ArchitecturePanelProps = {
   /** The selected project's DB id; the endpoint resolves it to a project root. */
   projectId: string | null;
@@ -43,14 +78,25 @@ function downloadMermaid(contents: string, filename: string): void {
 
 /**
  * The honesty bar (ADR-005 decision 7): the analysis time, how many seeds could
- * not be placed in the ArchGuard index, and whether the server's loose node
- * budget cut the neighbourhood short. Rendered from the response alone, so it
- * can never claim a fresher reading than the one the graph came from.
+ * not be placed in the ArchGuard index, and whether the CURRENT granularity was
+ * cut by its node budget. The notice is deliberately per-granularity: the file
+ * graph has its own budget, so an entity cut must not claim the file view is
+ * truncated. It carries the shown/total counts so the reader can see what was
+ * cut, and suggests lowering the hops when the depth is the cause.
  */
-function ArchitectureHonestyBar({ result }: { result: ArchitectureGraphResult }) {
+function ArchitectureHonestyBar({
+  result,
+  granularity,
+  hops,
+}: {
+  result: ArchitectureGraphResult;
+  granularity: ArchitectureGranularity;
+  hops: number;
+}) {
   const { t } = useTranslation();
   const { stats, provenance } = result;
   const unresolvedCount = stats.unresolved.files.length + stats.unresolved.identifiers.length;
+  const cut = truncationReading(result, granularity);
 
   return (
     <div
@@ -73,10 +119,34 @@ function ArchitectureHonestyBar({ result }: { result: ArchitectureGraphResult })
           count: unresolvedCount,
         })}
       </span>
-      {stats.truncated && (
-        <span data-architecture-truncated className="text-amber-600 dark:text-amber-400">
-          {t('architecture.honesty.truncated', {
-            defaultValue: 'Node budget reached — this graph is truncated.',
+      {cut.truncated && (
+        <span
+          data-architecture-truncated
+          data-architecture-truncated-granularity={granularity}
+          data-architecture-truncated-shown={cut.shown}
+          data-architecture-truncated-total={cut.total}
+          className="text-amber-600 dark:text-amber-400"
+        >
+          {granularity === 'file'
+            ? t('architecture.honesty.fileTruncated', {
+                defaultValue: 'File graph truncated — showing {{shown}} of {{total}} files (node budget {{limit}}).',
+                shown: cut.shown,
+                total: cut.total,
+                limit: cut.shown,
+              })
+            : t('architecture.honesty.entityTruncated', {
+                defaultValue: 'Entity graph truncated — showing {{shown}} of {{total}} entities (node budget {{limit}}).',
+                shown: cut.shown,
+                total: cut.total,
+                limit: cut.shown,
+              })}
+        </span>
+      )}
+      {cut.truncated && hops > 1 && (
+        <span data-architecture-hops-advice className="text-amber-600 dark:text-amber-400">
+          {t('architecture.honesty.lowerHops', {
+            defaultValue: '{{hops}} hops exceed the node budget — lower the hops to see the whole neighbourhood.',
+            hops,
           })}
         </span>
       )}
@@ -131,8 +201,10 @@ function ArchitectureHoverBar({ hover }: { hover: ArchitectureRendererHover | nu
  * configured renderer through the renderer contract (`rendererContract.ts`) —
  * PlantUML/ELK by default, any other implementation when one is passed. The
  * file/entity switch only picks one of the two subgraphs that already arrived in
- * the same payload, so it must never re-enter the fetch. The Mermaid documents
- * stay in hand for the `.mmd` export.
+ * the same payload, so it must never re-enter the fetch. The hops knob is the
+ * opposite: it is a server-side generation parameter (and part of the result
+ * cache's content key), so changing it re-requests the neighbourhood. The
+ * Mermaid documents stay in hand for the `.mmd` export.
  */
 export default function ArchitecturePanel({
   projectId,
@@ -143,19 +215,23 @@ export default function ArchitecturePanel({
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch.
   const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
+  // The requested BFS depth. This one IS a request parameter: it changes the
+  // server's neighbourhood and its cache key, so `useArchitectureGraph` refetches.
+  const [hops, setHops] = useState<number>(DEFAULT_HOPS);
   // The node under the pointer and its visible relation kinds, as reported by
   // the mounted renderer. Kept here so the readout is renderer-neutral; the key
-  // names the graph the reading came from (session + granularity), so switching
-  // either discards the reading during render instead of via a reset effect.
+  // names the graph the reading came from (session + granularity + depth), so
+  // changing any of them discards the reading during render instead of via a
+  // reset effect.
   const [hovered, setHovered] = useState<{ key: string; hover: ArchitectureRendererHover | null } | null>(null);
-  const hoverKey = `${sessionId ?? ''}:${granularity}`;
+  const hoverKey = `${sessionId ?? ''}:${granularity}:${hops}`;
   // Stable while the same graph is on screen, so hovering never tears down the
   // renderer's effect; it only changes when the graph itself changes.
   const handleNodeHover = useCallback(
     (hover: ArchitectureRendererHover | null) => setHovered({ key: hoverKey, hover }),
     [hoverKey],
   );
-  const { view, reload } = useArchitectureGraph(projectId, sessionId);
+  const { view, reload } = useArchitectureGraph(projectId, sessionId, hops);
 
   if (!sessionId) {
     return (
@@ -232,6 +308,29 @@ export default function ArchitecturePanel({
             {t('architecture.entityGraph', { defaultValue: 'Entity graph' })}
           </button>
         </div>
+        {/* The depth is a server-side generation parameter, so this control
+            re-enters the fetch (unlike the granularity toggle above). */}
+        <div
+          role="group"
+          aria-label={t('architecture.controls.maxHops', { defaultValue: 'Hops' })}
+          data-architecture-hops-control="true"
+          className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+        >
+          {HOP_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={hops === option}
+              data-architecture-hops-option={option}
+              onClick={() => setHops(option)}
+              className={`rounded-md px-2 py-0.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                hops === option ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => downloadMermaid(
@@ -245,7 +344,7 @@ export default function ArchitecturePanel({
         </button>
       </div>
 
-      <ArchitectureHonestyBar result={result} />
+      <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
@@ -253,7 +352,7 @@ export default function ArchitecturePanel({
             <ArchitectureHoverBar hover={visibleHover} />
             <div className="min-h-0 flex-1">
               <Renderer
-                key={`${sessionId}:${granularity}`}
+                key={`${sessionId}:${granularity}:${hops}`}
                 graph={neighbourhood}
                 onNodeHover={handleNodeHover}
               />

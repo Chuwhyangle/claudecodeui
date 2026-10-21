@@ -166,7 +166,13 @@ const RESULT: ArchitectureGraphResult = {
     fileNodes: 4,
     entityEdges: 3,
     fileEdges: 3,
+    // The entity set was cut (9 reachable, 4 kept) while the file graph is
+    // whole. The per-granularity flags are what the panel's notice reads.
     truncated: true,
+    entityTruncated: true,
+    fileTruncated: false,
+    entityTotal: 9,
+    fileTotal: 4,
     seedFiles: 1,
     seedIdentifiers: 1,
     nodeCount: 8,
@@ -932,8 +938,8 @@ test('activating the panel fetches once and the file/entity toggle never refetch
 
   assert.deepEqual(
     apiMock.architectureGraph.mock.calls,
-    [['project-1', 'session-1']],
-    'activation must POST exactly once for the selected project/session',
+    [['project-1', 'session-1', 2]],
+    'activation must POST exactly once for the selected project/session at the default depth',
   );
   assert.ok(host.querySelector('[data-entity-id="grp::modules/alpha"]'), 'the file graph is drawn first');
 
@@ -999,7 +1005,7 @@ test('the renderer is reached through a dynamic import, never the first-screen c
   );
 });
 
-test('the honesty bar shows generatedAt, unresolved seeds and the truncation notice', async () => {
+test('the truncation notice follows the current granularity and carries the shown/total numbers', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
 
@@ -1013,9 +1019,71 @@ test('the honesty bar shows generatedAt, unresolved seeds and the truncation not
     `both unresolved seeds (1 file + 1 identifier) must be counted; got ${unresolved?.textContent}`,
   );
 
+  // The default view is the file graph, which has its own budget and was NOT
+  // truncated: the entity cut must not leak a notice onto it.
+  assert.equal(
+    document.querySelector('[data-architecture-truncated]'),
+    null,
+    'a complete file graph must not claim to be truncated',
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+  await waitForDiagram();
   const truncated = document.querySelector('[data-architecture-truncated]');
-  assert.ok(truncated, 'a truncated reading must say so');
+  assert.ok(truncated, 'the truncated entity reading must say so');
+  assert.equal(truncated.getAttribute('data-architecture-truncated-granularity'), 'entity');
+  assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '4');
+  assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
   assert.match(truncated.textContent ?? '', /truncated/i);
+  assert.match(
+    truncated.textContent ?? '',
+    /4 of 9/,
+    `the notice must state the actual and total counts; got ${truncated.textContent}`,
+  );
+  // At the default 2 hops the notice also says how to recover the full view.
+  assert.ok(
+    document.querySelector('[data-architecture-hops-advice]'),
+    'a truncation caused by the depth must point at the hops control',
+  );
+});
+
+test('the hops control re-requests the graph with the selected server-side depth', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  assert.deepEqual(
+    apiMock.architectureGraph.mock.calls,
+    [['project-1', 'session-1', 2]],
+    'the first request asks for the default depth',
+  );
+
+  const oneHop = document.querySelector('[data-architecture-hops-option="1"]');
+  assert.ok(oneHop instanceof HTMLButtonElement, 'the hops control must offer one hop');
+  assert.equal(oneHop.getAttribute('aria-pressed'), 'false');
+  fireEvent.click(oneHop);
+  await waitForDiagram();
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
+  assert.deepEqual(
+    apiMock.architectureGraph.mock.calls[1],
+    ['project-1', 'session-1', 1],
+    'lowering the depth must refetch with hops=1',
+  );
+  assert.equal(
+    document.querySelector('[data-architecture-hops-option="1"]')?.getAttribute('aria-pressed'),
+    'true',
+    'the selected depth is the pressed option',
+  );
+
+  const threeHops = document.querySelector('[data-architecture-hops-option="3"]');
+  assert.ok(threeHops instanceof HTMLButtonElement, 'the hops control must offer three hops');
+  fireEvent.click(threeHops);
+  await waitForDiagram();
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3));
+  assert.deepEqual(
+    apiMock.architectureGraph.mock.calls[2],
+    ['project-1', 'session-1', 3],
+    'raising the depth must refetch with hops=3',
+  );
 });
 
 test('the export button writes the server-returned .mmd document', async () => {

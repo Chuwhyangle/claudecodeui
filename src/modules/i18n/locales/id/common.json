@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "Analisis",
       "unresolved": "{{count}} benih tidak terselesaikan",
-      "truncated": "Anggaran node tercapai — graf ini terpotong."
+      "truncated": "Anggaran node tercapai — graf ini terpotong.",
+      "entityTruncated": "Graf entitas terpotong — menampilkan {{shown}} dari {{total}} entitas (anggaran node {{limit}}).",
+      "fileTruncated": "Graf berkas terpotong — menampilkan {{shown}} dari {{total}} berkas (anggaran node {{limit}}).",
+      "lowerHops": "{{hops}} lompatan melebihi anggaran node — kurangi lompatan untuk melihat seluruh ketetanggaan."
     }
   },
   "status": {

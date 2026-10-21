@@ -13,6 +13,13 @@
  *   entity/file aggregation → two Mermaid flowcharts (the export path) and the
  *   same two subgraphs as render-ready JSON with hop distances and typed edges.
  *
+ * The two budgets are INDEPENDENT. The entity graph is the budgeted prefix of
+ * the reachable entity set; the file graph is projected from the FULL reachable
+ * set and then bounded by its own `maxFiles`, so cutting entities can never
+ * shorten the file view (a file graph is roughly a tenth the size of its entity
+ * graph, so the same loose bound leaves it whole). Each granularity reports its
+ * own truncation flag alongside the retained and pre-budget totals.
+ *
  * Keeping it pure is what makes the output reproducible for a fixed
  * (index, seeds, params) triple, which is the property the content-addressed
  * cache keys on.
@@ -82,21 +89,45 @@ export type GraphSeeds = {
  * the caller passes the budget (AC-418 derives it from the request), so this
  * module never bakes a product constant into the graph shape.
  *
+ * The entity and file graphs are budgeted independently: `maxNodes` bounds the
+ * entity set, while `maxFiles` bounds the file set projected from the FULL
+ * reachable entities (not from the entity-budget prefix). When `maxFiles` is
+ * omitted the two budgets are equal, which preserves the pre-independent-budget
+ * contract for callers that only know about `maxNodes`.
+ *
  * `hops` defaults to 1 — the seed's neighbours in BOTH directions.
  */
 export type GenerateGraphParams = {
   readonly hops?: number;
   readonly maxNodes: number;
+  /** Independent file-node budget. Defaults to `maxNodes` when omitted. */
+  readonly maxFiles?: number;
 };
 
-/** Counts of what the two emitted graphs actually contain, for the route's stats readout. */
+/**
+ * Counts of what the two emitted graphs actually contain, for the route's stats readout.
+ *
+ * `truncated` is the OR of the two granularities, kept for consumers written
+ * before the per-granularity flags existed. New consumers read
+ * `entityTruncated`/`fileTruncated` and can therefore tell WHICH graph was cut;
+ * `entityTotal`/`fileTotal` are the pre-budget denominators so a UI can say
+ * "showing 2000 of 6169" instead of only "truncated".
+ */
 export type GraphStats = {
   readonly entityNodes: number;
   readonly fileNodes: number;
   readonly entityEdges: number;
   readonly fileEdges: number;
-  /** True when the candidate set exceeded `maxNodes` and was cut deterministically. */
+  /** True when EITHER graph was cut; see `entityTruncated`/`fileTruncated` for which. */
   readonly truncated: boolean;
+  /** True when the reachable entity set exceeded `maxNodes`. Optional on older payloads. */
+  readonly entityTruncated?: boolean;
+  /** True when the projected file set exceeded `maxFiles`. Optional on older payloads. */
+  readonly fileTruncated?: boolean;
+  /** Reachable entity nodes before the entity budget. Optional on older payloads. */
+  readonly entityTotal?: number;
+  /** Distinct file nodes before the file budget. Optional on older payloads. */
+  readonly fileTotal?: number;
 };
 
 /** Seeds that matched nothing in this index, in first-occurrence order (deduplicated). */
@@ -360,17 +391,23 @@ function resolveSeeds(
 }
 
 /**
- * Keep the budgeted prefix of the candidate set.
- *
- * The order is "hop distance from the seeds ascending, then entity id
- * lexicographically ascending" — both halves are deterministic, so the same
- * index and seeds always truncate to the same nodes on every machine.
+ * Order a distance map's keys: hop distance from the seeds ascending, then id
+ * lexicographically ascending. Both halves are deterministic, so the same index
+ * and seeds always truncate to the same nodes on every machine.
  */
-function applyBudget(distance: ReadonlyMap<string, number>, maxNodes: number): { retained: string[]; truncated: boolean } {
-  const candidates = [...distance.keys()].sort((a, b) => {
+function candidatesByDistance(distance: ReadonlyMap<string, number>): string[] {
+  return [...distance.keys()].sort((a, b) => {
     const byDistance = (distance.get(a) ?? 0) - (distance.get(b) ?? 0);
     return byDistance !== 0 ? byDistance : compareIds(a, b);
   });
+}
+
+/**
+ * Keep the budgeted prefix of the candidate set. The candidates are ordered by
+ * {@link candidatesByDistance}, so the retained prefix is stable across runs.
+ */
+function applyBudget(distance: ReadonlyMap<string, number>, maxNodes: number): { retained: string[]; truncated: boolean } {
+  const candidates = candidatesByDistance(distance);
   return {
     retained: candidates.slice(0, maxNodes),
     truncated: candidates.length > maxNodes,
@@ -480,26 +517,59 @@ export function generateGraph(
   params: GenerateGraphParams,
 ): GenerateGraphResult {
   const hops = params.hops ?? 1;
+  const maxFiles = params.maxFiles ?? params.maxNodes;
   if (!Number.isInteger(hops) || hops < 0) {
     throw new RangeError(`generateGraph: hops must be a non-negative integer, received ${String(hops)}`);
   }
   if (!Number.isInteger(params.maxNodes) || params.maxNodes < 0) {
     throw new RangeError(`generateGraph: maxNodes must be a non-negative integer, received ${String(params.maxNodes)}`);
   }
+  if (!Number.isInteger(maxFiles) || maxFiles < 0) {
+    throw new RangeError(`generateGraph: maxFiles must be a non-negative integer, received ${String(maxFiles)}`);
+  }
 
   const { resolved, unresolved } = resolveSeeds(index, seeds);
   const distance = expandSeeds(index, resolved, hops);
-  const { retained, truncated } = applyBudget(distance, params.maxNodes);
+
+  // The entity graph is the budgeted prefix. The file graph is projected from
+  // the FULL reachable set below, so its completeness does not depend on how
+  // many entities this budget kept.
+  const allEntityIds = candidatesByDistance(distance);
+  const { retained, truncated: entityTruncated } = applyBudget(distance, params.maxNodes);
   const entityEdges = collectEntityEdges(index, retained);
-  const fileEdges = collectFileEdges(index, entityEdges);
-  const fileNodes = [...new Set(retained.map((id) => index.idToFile[id]))].sort(compareIds);
+
+  // Project every reachable entity onto its file before budgeting the file
+  // graph. A file inherits the closest hop of the entities it contains, which
+  // is the hop at which the file first enters the neighbourhood.
+  const fileDistance = new Map<string, number>();
+  for (const id of allEntityIds) {
+    const file = index.idToFile[id];
+    if (file === undefined) continue;
+    const hop = distance.get(id) ?? 0;
+    const current = fileDistance.get(file);
+    if (current === undefined || hop < current) fileDistance.set(file, hop);
+  }
+  const { retained: fileNodes, truncated: fileTruncated } = applyBudget(fileDistance, maxFiles);
+
+  // The file edges come from the FULL entity edge set, filtered to the file
+  // nodes the file budget kept. Using the full set (rather than the retained
+  // entity prefix) is what keeps the file view whole when entities were cut.
+  const allEntityEdges = collectEntityEdges(index, allEntityIds);
+  const fileNodeSet = new Set(fileNodes);
+  const fileEdges = collectFileEdges(index, allEntityEdges)
+    .filter((edge) => fileNodeSet.has(edge.from) && fileNodeSet.has(edge.to));
+
+  // Mermaid node ids are assigned in lexicographic order so collisions resolve
+  // the same way regardless of hop distance; the JSON below keeps the
+  // (distance, id) order a client-side prefix can slice.
+  const fileNodesForMmd = [...fileNodes].sort(compareIds);
 
   const entityMmd = emitMermaid(
     retained.map((id) => ({ rawId: id, label: entityLabel(index, id) })),
     entityEdges,
   );
   const fileMmd = emitMermaid(
-    fileNodes.map((file) => ({ rawId: file, label: file })),
+    fileNodesForMmd.map((file) => ({ rawId: file, label: file })),
     fileEdges,
   );
 
@@ -512,16 +582,6 @@ export function generateGraph(
     distance: distance.get(id) ?? 0,
   }));
 
-  // A file node aggregates several entities; its distance is the closest of
-  // them, which is the hop at which the file first enters the neighbourhood.
-  const fileDistance = new Map<string, number>();
-  for (const id of retained) {
-    const file = index.idToFile[id];
-    if (file === undefined) continue;
-    const hop = distance.get(id) ?? 0;
-    const current = fileDistance.get(file);
-    if (current === undefined || hop < current) fileDistance.set(file, hop);
-  }
   const fileNodeList: NeighborhoodNode[] = fileNodes.map((file) => ({
     id: file,
     label: file,
@@ -540,7 +600,11 @@ export function generateGraph(
       fileNodes: fileNodes.length,
       entityEdges: entityEdges.length,
       fileEdges: fileEdges.length,
-      truncated,
+      truncated: entityTruncated || fileTruncated,
+      entityTruncated,
+      fileTruncated,
+      entityTotal: allEntityIds.length,
+      fileTotal: fileDistance.size,
     },
     unresolved,
   };

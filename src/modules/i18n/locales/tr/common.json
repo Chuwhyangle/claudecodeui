@@ -67,7 +67,10 @@
     "honesty": {
       "analysis": "Analiz",
       "unresolved": "{{count}} çözümlenmemiş tohum",
-      "truncated": "Düğüm bütçesine ulaşıldı — bu graf kısaltıldı."
+      "truncated": "Düğüm bütçesine ulaşıldı — bu graf kısaltıldı.",
+      "entityTruncated": "Varlık grafiği kısaltıldı — {{total}} varlığın {{shown}} tanesi gösteriliyor (düğüm bütçesi {{limit}}).",
+      "fileTruncated": "Dosya grafiği kısaltıldı — {{total}} dosyanın {{shown}} tanesi gösteriliyor (düğüm bütçesi {{limit}}).",
+      "lowerHops": "{{hops}} atlama düğüm bütçesini aşıyor — tüm komşuluğu görmek için atlamaları azaltın."
     }
   },
   "status": {
