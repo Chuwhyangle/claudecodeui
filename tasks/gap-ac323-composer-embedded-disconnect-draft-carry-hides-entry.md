@@ -3,7 +3,7 @@ id: gap-ac323-composer-embedded-disconnect-draft-carry-hides-entry
 title: 恢复 AC-323 判据绿：composer-embedded 断线用例在退出 Live Voice 前没等交付，handleVoiceExit
   把未交付字幕交接成草稿，submitIsVoice 为假 ⇒ live-voice-button 消失、click 等 60s 超时（默认
   segmented 下确定红）
-status: ready
+status: done
 labels:
   - gap
   - defect
