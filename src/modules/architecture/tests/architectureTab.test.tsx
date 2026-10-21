@@ -16,6 +16,7 @@ import {
   useEnsureArchitectureTabVisible,
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
+import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
 
 /**
  * The architecture tab's wiring, end to end at the component seam:
@@ -292,6 +293,50 @@ test('activating the panel fetches once and the file/entity toggle never refetch
   fireEvent.click(screen.getByRole('button', { name: 'File graph' }));
   assert.deepEqual(visibleLabels(), ['src/a.ts', 'src/a2.ts']);
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
+});
+
+test('the panel draws through the renderer contract, with no cytoscape dependency', async () => {
+  // A stand-in implementation of the same contract: if the panel needed cytoscape
+  // types or props, this render could not supply them, and the cytoscape host
+  // would still appear.
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" data-stand-in-nodes={props.graph.nodes.length} />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+
+  await waitFor(() => assert.ok(document.querySelector('[data-stand-in-renderer]')));
+  assert.equal(
+    document.querySelector('[data-architecture-cytoscape]'),
+    null,
+    'a substituted renderer must be the only thing drawing the graph',
+  );
+
+  const props = seen.at(-1);
+  if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+  assert.equal(props.maxHops, 1, 'the contract carries the current hop budget');
+  assert.equal(
+    props.maxNodes,
+    3,
+    'the contract carries the current node budget, clamped to the payload the server sent',
+  );
+  assert.deepEqual(
+    props.graph.nodes.map((node) => node.id),
+    ['src/a.ts', 'src/a2.ts', 'src/a3.ts'],
+    'the whole neighbourhood is handed over; the renderer applies the local budgets',
+  );
+
+  // The panel consumes the contract's hover callback, so the readout is the same
+  // for every renderer implementation.
+  act(() => props.onNodeHover?.({ node: props.graph.nodes[0], relations: ['dependency'] }));
+  const hover = document.querySelector('[data-architecture-hover]');
+  assert.equal(hover?.getAttribute('data-architecture-hover'), 'src/a.ts');
+  assert.equal(hover?.getAttribute('data-architecture-hover-relations'), 'dependency');
+
+  act(() => props.onNodeHover?.(null));
+  assert.equal(document.querySelector('[data-architecture-hover]'), null);
 });
 
 test('the maxHops slider filters locally: the visible node set grows without a new request', async () => {

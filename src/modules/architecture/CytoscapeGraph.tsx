@@ -3,9 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type {
-  ArchitectureNeighborhood,
-  ArchitectureNeighborhoodNode,
-} from '@/modules/architecture/useArchitectureGraph';
+  ArchitectureRendererNode,
+  ArchitectureRendererProps,
+} from '@/modules/architecture/rendererContract';
 
 /**
  * Cytoscape's own option/instance types. The package declares itself with
@@ -15,26 +15,6 @@ import type {
  */
 type CytoscapeOptions = cytoscape.CytoscapeOptions;
 type CytoscapeCore = cytoscape.Core;
-
-/** Builds the renderer; injectable so a jsdom test can run the real engine headless. */
-type CytoscapeRendererFactory = (options: CytoscapeOptions) => CytoscapeCore;
-
-type CytoscapeGraphProps = {
-  /** The server's neighbourhood JSON for the selected granularity, already fetched whole. */
-  graph: ArchitectureNeighborhood;
-  /**
-   * Local node budget (the `maxNodes` slider). Applied as a deterministic
-   * (distance, id) prefix here — it never re-enters the network.
-   */
-  maxNodes: number;
-  /**
-   * Local hop budget (the `maxHops` slider). Nodes farther than this are hidden
-   * until the user clicks a node to expand its next hop.
-   */
-  maxHops: number;
-  /** Test seam: architectureTab.test.tsx substitutes a headless renderer of the same engine. */
-  createRenderer?: CytoscapeRendererFactory;
-};
 
 /**
  * UML stereotype shown on an edge's label, keyed by archguard relation type.
@@ -151,7 +131,7 @@ function createCytoscape(options: CytoscapeOptions): CytoscapeCore {
 }
 
 /** Deterministic (distance, id) ordering; `localeCompare` would vary by machine. */
-function compareNodes(a: ArchitectureNeighborhoodNode, b: ArchitectureNeighborhoodNode): number {
+function compareNodes(a: ArchitectureRendererNode, b: ArchitectureRendererNode): number {
   if (a.distance !== b.distance) return a.distance - b.distance;
   if (a.id < b.id) return -1;
   if (a.id > b.id) return 1;
@@ -161,24 +141,24 @@ function compareNodes(a: ArchitectureNeighborhoodNode, b: ArchitectureNeighborho
 /**
  * Renders one architecture neighbourhood as a force-directed cytoscape graph.
  *
- * Used by ArchitecturePanel. All filtering is local: `maxHops` keeps nodes
- * within that many hops of the seeds, `maxNodes` takes a deterministic
- * (distance, id) prefix, and clicking a visible node reveals its immediate
- * neighbours from the SAME payload — none of these re-enter the fetch. Hovering
- * a node reports the relation types of its visible edges; the graph keeps
- * cytoscape's built-in drag, pan and wheel-zoom interactions.
+ * Used by ArchitecturePanel as one implementation of the renderer contract
+ * (`rendererContract.ts`). All filtering is local: `maxHops` keeps nodes within
+ * that many hops of the seeds, `maxNodes` takes a deterministic (distance, id)
+ * prefix, and clicking a visible node reveals its immediate neighbours from the
+ * SAME payload — none of these re-enter the fetch. Hovering a node reports its
+ * visible relation kinds through `onNodeHover`; the panel owns the readout so
+ * every renderer shows it. The graph keeps cytoscape's built-in drag, pan and
+ * wheel-zoom interactions.
  */
 export function CytoscapeGraph({
   graph,
   maxNodes,
   maxHops,
-  createRenderer = createCytoscape,
-}: CytoscapeGraphProps) {
+  onNodeClick,
+  onNodeHover,
+}: ArchitectureRendererProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  // The node under the cursor and the relation kinds on its visible edges. Kept
-  // apart from the graph itself so hovering never re-creates the renderer.
-  const [hovered, setHovered] = useState<{ nodeId: string; relations: string[] } | null>(null);
   // Nodes the user clicked. Each click reveals that node's immediate neighbours
   // from the already-fetched payload; expansion is per-node and additive. The
   // panel keys this component by session+granularity, so a new payload remounts
@@ -208,7 +188,7 @@ export function CytoscapeGraph({
 
     const nodes = [...candidateIds]
       .map((id) => nodeById.get(id))
-      .filter((node): node is ArchitectureNeighborhoodNode => node !== undefined)
+      .filter((node): node is ArchitectureRendererNode => node !== undefined)
       .sort(compareNodes)
       .slice(0, Math.max(0, maxNodes));
     const visibleIds = new Set(nodes.map((node) => node.id));
@@ -235,7 +215,7 @@ export function CytoscapeGraph({
       })),
     ];
 
-    const cy = createRenderer({
+    const cy = createCytoscape({
       container,
       elements,
       style: GRAPH_STYLE,
@@ -252,25 +232,27 @@ export function CytoscapeGraph({
       }
       return [...relations].sort();
     };
+    const nodeOf = (nodeId: string): ArchitectureRendererNode | undefined =>
+      visible.nodes.find((node) => node.id === nodeId);
 
     cy.on('mouseover', 'node', (event) => {
       const nodeId = String(event.target.id());
-      setHovered({ nodeId, relations: relationsOf(nodeId) });
+      const node = nodeOf(nodeId);
+      if (node === undefined) return;
+      onNodeHover?.({ node, relations: relationsOf(nodeId) });
     });
-    cy.on('mouseout', 'node', () => setHovered(null));
+    cy.on('mouseout', 'node', () => onNodeHover?.(null));
     cy.on('tap', 'node', (event) => {
       const nodeId = String(event.target.id());
       setExpanded((previous) => (previous.includes(nodeId) ? previous : [...previous, nodeId]));
+      const node = nodeOf(nodeId);
+      if (node !== undefined) onNodeClick?.(node);
     });
 
     return () => {
       cy.destroy();
     };
-  }, [visible, createRenderer]);
-
-  const relationsText = hovered === null || hovered.relations.length === 0
-    ? t('architecture.hover.none', { defaultValue: 'no outgoing/incoming relation' })
-    : hovered.relations.join(', ');
+  }, [visible, onNodeClick, onNodeHover]);
 
   return (
     <div
@@ -279,18 +261,7 @@ export function CytoscapeGraph({
       data-architecture-visible-nodes={visible.nodes.length}
       data-architecture-visible-edges={visible.edges.length}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
-        <span data-architecture-hover={hovered?.nodeId} data-architecture-hover-relations={hovered?.relations.join(',')}>
-          {hovered === null
-            ? t('architecture.expandHint', {
-                defaultValue: 'Hover a node for its relation types; click a node to expand its next hop.',
-              })
-            : t('architecture.hover.relations', {
-                defaultValue: '{{node}} — relations: {{relations}}',
-                node: hovered.nodeId,
-                relations: relationsText,
-              })}
-        </span>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
         <span data-architecture-visible-summary>
           {t('architecture.visibleNodes', {
             defaultValue: '{{visible}} of {{total}} nodes',

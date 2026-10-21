@@ -113,11 +113,18 @@ export type UnresolvedSeeds = {
  * BOTH adjacency directions (seeds are distance 0). The frontend slices this
  * list locally by `distance`, so the distance has to be the true BFS reading,
  * not an emission-order artefact.
+ *
+ * `type` is RESERVED for a future node-kind discriminator (the kind of thing a
+ * renderer would style differently, e.g. a class or a package). The generator
+ * never emits it today, and it is optional, so a payload written before it
+ * existed — or read by a client that knows nothing about it — still satisfies
+ * this contract unchanged.
  */
 export type NeighborhoodNode = {
   readonly id: string;
   readonly label: string;
   readonly distance: number;
+  readonly type?: string;
 };
 
 /** One directed edge of the neighbourhood JSON, typed by ArchGuard's relation kind. */
@@ -128,7 +135,11 @@ export type NeighborhoodEdge = {
 };
 
 /**
- * A render-ready subgraph: the cytoscape input the architecture panel consumes.
+ * A render-ready subgraph: the renderer-agnostic input of the architecture tab.
+ *
+ * This is the JSON schema the frontend renderer contract is written against —
+ * it names no rendering library, so a new renderer is a new implementation of
+ * the frontend contract, not a generator change.
  *
  * Every edge endpoint is guaranteed present in `nodes` (truncation can only
  * remove whole edges, never leave a dangling endpoint), and the node order is

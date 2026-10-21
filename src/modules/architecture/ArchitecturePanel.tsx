@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CytoscapeGraph } from '@/modules/architecture/CytoscapeGraph';
+import type {
+  ArchitectureGraphRenderer,
+  ArchitectureRendererHover,
+} from '@/modules/architecture/rendererContract';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
@@ -16,6 +20,13 @@ type ArchitecturePanelProps = {
   projectId: string | null;
   /** The selected session whose transcript supplies the graph's seeds. */
   sessionId: string | null;
+  /**
+   * The graph renderer implementation, defaulting to the cytoscape renderer.
+   * Any component implementing the renderer contract can be swapped in here
+   * without the panel knowing which library draws the graph; tests pass a
+   * stand-in to prove exactly that.
+   */
+  renderer?: ArchitectureGraphRenderer;
 };
 
 /**
@@ -87,13 +98,51 @@ function ArchitectureEmptyState({ message }: { message: string }) {
 }
 
 /**
- * Rendered by WorkspaceMain when the architecture tab is active. It requests the
- * session's neighbourhood on mount (the tab activation) and draws it with
- * cytoscape; the `maxHops`/`maxNodes` sliders and the file/entity switch only
- * slice that already-fetched payload, so none of them may re-enter the fetch.
- * The Mermaid documents stay in hand for the `.mmd` export.
+ * The renderer-neutral hover readout. Every renderer reports the hovered node
+ * and its visible relation kinds through `onNodeHover`, so this bar looks the
+ * same whichever library draws the graph; `data-architecture-hover` is present
+ * only while a node is under the pointer.
  */
-export default function ArchitecturePanel({ projectId, sessionId }: ArchitecturePanelProps) {
+function ArchitectureHoverBar({ hover }: { hover: ArchitectureRendererHover | null }) {
+  const { t } = useTranslation();
+  const relationsText = hover === null || hover.relations.length === 0
+    ? t('architecture.hover.none', { defaultValue: 'no outgoing/incoming relation' })
+    : hover.relations.join(', ');
+
+  return (
+    <div className="flex flex-wrap items-center border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
+      <span
+        data-architecture-hover={hover?.node.id}
+        data-architecture-hover-relations={hover?.relations.join(',')}
+      >
+        {hover === null
+          ? t('architecture.expandHint', {
+              defaultValue: 'Hover a node for its relation types; click a node to expand its next hop.',
+            })
+          : t('architecture.hover.relations', {
+              defaultValue: '{{node}} — relations: {{relations}}',
+              node: hover.node.id,
+              relations: relationsText,
+            })}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Rendered by WorkspaceMain when the architecture tab is active. It requests the
+ * session's neighbourhood on mount (the tab activation) and hands it to the
+ * configured renderer through the renderer contract (`rendererContract.ts`) —
+ * cytoscape by default, any other implementation when one is passed. The
+ * `maxHops`/`maxNodes` sliders and the file/entity switch only slice that
+ * already-fetched payload, so none of them may re-enter the fetch. The Mermaid
+ * documents stay in hand for the `.mmd` export.
+ */
+export default function ArchitecturePanel({
+  projectId,
+  sessionId,
+  renderer: Renderer = CytoscapeGraph,
+}: ArchitecturePanelProps) {
   const { t } = useTranslation();
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch.
@@ -104,6 +153,18 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
   // Local node budget for the graph view; it is a deterministic prefix of the
   // server's (distance, id) order, not a server-side truncation.
   const [maxNodes, setMaxNodes] = useState(DEFAULT_LOCAL_MAX_NODES);
+  // The node under the pointer and its visible relation kinds, as reported by
+  // the mounted renderer. Kept here so the readout is renderer-neutral; the key
+  // names the graph the reading came from (session + granularity), so switching
+  // either discards the reading during render instead of via a reset effect.
+  const [hovered, setHovered] = useState<{ key: string; hover: ArchitectureRendererHover | null } | null>(null);
+  const hoverKey = `${sessionId ?? ''}:${granularity}`;
+  // Stable while the same graph is on screen, so hovering never tears down the
+  // renderer's effect; it only changes when the graph itself changes.
+  const handleNodeHover = useCallback(
+    (hover: ArchitectureRendererHover | null) => setHovered({ key: hoverKey, hover }),
+    [hoverKey],
+  );
   const { view, reload } = useArchitectureGraph(projectId, sessionId);
 
   if (!sessionId) {
@@ -145,6 +206,8 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
   const { stats, mmd } = result;
   const hasSeeds = stats.seedFiles > 0 || stats.seedIdentifiers > 0;
   const neighbourhood = result.graph[granularity];
+  // A reading from the previous graph is not shown against this one.
+  const visibleHover = hovered !== null && hovered.key === hoverKey ? hovered.hover : null;
 
   // The sliders' ceilings come from the payload: `maxHops` cannot exceed the
   // deepest distance the server sent, and `maxNodes` cannot exceed what arrived.
@@ -237,14 +300,20 @@ export default function ArchitecturePanel({ projectId, sessionId }: Architecture
 
       <ArchitectureHonestyBar result={result} />
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
-          <CytoscapeGraph
-            key={`${sessionId}:${granularity}`}
-            graph={neighbourhood}
-            maxHops={hopsValue}
-            maxNodes={nodesValue}
-          />
+          <>
+            <ArchitectureHoverBar hover={visibleHover} />
+            <div className="min-h-0 flex-1">
+              <Renderer
+                key={`${sessionId}:${granularity}`}
+                graph={neighbourhood}
+                maxHops={hopsValue}
+                maxNodes={nodesValue}
+                onNodeHover={handleNodeHover}
+              />
+            </div>
+          </>
         ) : (
           <ArchitectureEmptyState
             message={t('architecture.noSeeds', {
