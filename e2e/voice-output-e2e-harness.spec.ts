@@ -47,8 +47,15 @@
  *   node experiments/voice-e2e-harness/run.mjs [--sample <prefix>]
  *   # or directly, with a plan the runner wrote:
  *   VOICE_E2E_PLAN=/path/plan.json node_modules/.bin/playwright test e2e/voice-output-e2e-harness.spec.ts
+ *
+ * A `beforeAll` ABORT IS ITSELF AN ARTIFACT. Almost every interaction lives in the one `beforeAll`
+ * below, and Playwright reports an error there as a 0 ms failure on the first test — with no
+ * per-test dump to read. The body is therefore wrapped in `try/catch` with a `currentPhase` marker:
+ * the catch writes `{ plan, failure: { phase, message, stack } }` to `VOICE_E2E_DUMP` and re-throws,
+ * so the next red run names its own stage instead of leaving guesswork (`tts-standin`,
+ * `mounted`, …).
  */
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
 
@@ -612,57 +619,105 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(180_000);
-    const clientUrl = test.info().project.use.baseURL;
-    if (!clientUrl) throw new Error('playwright.config.ts must give this project a baseURL');
+    /**
+     * The stage this body has reached.
+     *
+     * Playwright reports an abort inside `beforeAll` as a 0 ms failure on the FIRST test and then
+     * "did not run" for the rest — with no error text in any per-test artifact. This marker is what
+     * turns that into a nameable stage: the catch below writes it, beside the error, to
+     * `VOICE_E2E_DUMP` (and to stderr) before re-throwing.
+     */
+    let currentPhase = 'prerequisites';
+    // Resource handles live OUTSIDE the try so `finally` can close whatever was created before an
+    // abort: an EADDRINUSE at `tts-standin` must still close the upstream stand-in.
+    let upstreamHandle: ScriptedUpstreamServer | undefined;
+    let scriptedTtsHandle: ScriptedTtsServer | undefined;
+    let apiHandle: APIRequestContext | undefined;
 
-    const mode = (process.env.QUAY_E2E_VOICE_REALTIME_MODE ?? '').trim();
-    if (mode !== 'continuous') {
-      throw new Error(
-        'this spec replays a wav through the continuous wire, so it must be the ONLY selection: run ' +
-          `\`node experiments/voice-e2e-harness/run.mjs\`. QUAY_E2E_VOICE_REALTIME_MODE was "${mode || '(unset)'}".`,
-      );
-    }
-    const fixtureHome = process.env.QUAY_E2E_DEBUG_AGENT_HOME;
-    if (!fixtureHome) throw new Error('playwright.config.ts must publish QUAY_E2E_DEBUG_AGENT_HOME');
-    const upstreamPort = Number(process.env.QUAY_E2E_VOICE_REALTIME_PORT);
-    if (!Number.isInteger(upstreamPort) || upstreamPort <= 0) {
-      throw new Error('playwright.config.ts must publish QUAY_E2E_VOICE_REALTIME_PORT for this selection');
-    }
-
-    const dataDir = path.dirname(fixtureHome);
-    const journalDir = path.join(dataDir, 'voice-realtime-log');
-    const egressLog = path.join(dataDir, 'egress.jsonl');
-
-    const upstream = await startScriptedUpstream(upstreamPort);
-    // The CosyVoice HTTP stand-in the app server's TTS leaf dials. Started here, before any page
-    // connects, so the first announce remark's synthesis never races a missing listener.
-    const scriptedTts = await startScriptedTts(TTS_PORT);
-    // The model's closing-turn follow-up on a delivered `session_send`. Since `a2c2e8139` this
-    // sentence is a TRIGGER the proxy suppresses: the announce was already spoken at the endpoint's
-    // `speech_stopped` (`announce-early-<seq>`), and the closing turn lands inside the 3 s window,
-    // so this text must never reach the page or the TTS leaf (asserted below). It is still armed
-    // because a suppression that stopped being exercised would pass by silence.
-    upstream.armFollowUpText(MODEL_FOLLOW_UP);
-    upstream.armVad({
-      timeBase: PLAN.vad.timeBase,
-      threshold: PLAN.vad.threshold,
-      silenceDurationMs: PLAN.vad.silenceDurationMs,
-      sampleRate: PLAN.vad.sampleRate,
-      // One turn per frozen transcript, in spoken order. Every turn is FORWARDED: the assertion
-      // this spec exists for is that the relay carries the recording's own words.
-      turns: PLAN.expectedTranscripts.map((text) => ({ text, policy: 'forward' as const })),
-    });
-
-    const workspacePath = path.join(fixtureHome, 'voice-e2e-workspace');
-    const bootstrap = await request.newContext({ baseURL: clientUrl });
-    const token = await createAccount(bootstrap);
-    await bootstrap.dispose();
-    const api = await request.newContext({
-      baseURL: clientUrl,
-      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
-    });
+    /**
+     * Writes `{ plan, failure }` — the PARTIAL dump — and says the same thing on stderr.
+     *
+     * Written only on abort: a green run's dump is the full `HarnessRun` and carries no `failure`
+     * key, so "the dump has a failure" is itself the reading that the run died early.
+     */
+    const writePartialDump = (error: unknown): void => {
+      const dumpPath = process.env.VOICE_E2E_DUMP;
+      const failure = {
+        phase: currentPhase,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? (error.stack ?? '') : '',
+      };
+      process.stderr.write(`[voice-e2e] beforeAll aborted at phase=${failure.phase}: ${failure.message}\n`);
+      if (!dumpPath) return;
+      try {
+        mkdirSync(path.dirname(dumpPath), { recursive: true });
+        writeFileSync(dumpPath, `${JSON.stringify({ plan: PLAN, failure }, null, 2)}\n`, 'utf8');
+      } catch (writeError) {
+        process.stderr.write(
+          `[voice-e2e] could not write the partial dump to ${dumpPath}: ` +
+            `${writeError instanceof Error ? writeError.message : String(writeError)}\n`,
+        );
+      }
+    };
 
     try {
+      const clientUrl = test.info().project.use.baseURL;
+      if (!clientUrl) throw new Error('playwright.config.ts must give this project a baseURL');
+
+      const mode = (process.env.QUAY_E2E_VOICE_REALTIME_MODE ?? '').trim();
+      if (mode !== 'continuous') {
+        throw new Error(
+          'this spec replays a wav through the continuous wire, so it must be the ONLY selection: run ' +
+            `\`node experiments/voice-e2e-harness/run.mjs\`. QUAY_E2E_VOICE_REALTIME_MODE was "${mode || '(unset)'}".`,
+        );
+      }
+      const fixtureHome = process.env.QUAY_E2E_DEBUG_AGENT_HOME;
+      if (!fixtureHome) throw new Error('playwright.config.ts must publish QUAY_E2E_DEBUG_AGENT_HOME');
+      const upstreamPort = Number(process.env.QUAY_E2E_VOICE_REALTIME_PORT);
+      if (!Number.isInteger(upstreamPort) || upstreamPort <= 0) {
+        throw new Error('playwright.config.ts must publish QUAY_E2E_VOICE_REALTIME_PORT for this selection');
+      }
+
+      const dataDir = path.dirname(fixtureHome);
+      const journalDir = path.join(dataDir, 'voice-realtime-log');
+      const egressLog = path.join(dataDir, 'egress.jsonl');
+
+      currentPhase = 'upstream-standin';
+      const upstream = await startScriptedUpstream(upstreamPort);
+      upstreamHandle = upstream;
+      // The CosyVoice HTTP stand-in the app server's TTS leaf dials. Started here, before any page
+      // connects, so the first announce remark's synthesis never races a missing listener.
+      currentPhase = 'tts-standin';
+      const scriptedTts = await startScriptedTts(TTS_PORT);
+      scriptedTtsHandle = scriptedTts;
+      // The model's closing-turn follow-up on a delivered `session_send`. Since `a2c2e8139` this
+      // sentence is a TRIGGER the proxy suppresses: the announce was already spoken at the endpoint's
+      // `speech_stopped` (`announce-early-<seq>`), and the closing turn lands inside the 3 s window,
+      // so this text must never reach the page or the TTS leaf (asserted below). It is still armed
+      // because a suppression that stopped being exercised would pass by silence.
+      upstream.armFollowUpText(MODEL_FOLLOW_UP);
+      upstream.armVad({
+        timeBase: PLAN.vad.timeBase,
+        threshold: PLAN.vad.threshold,
+        silenceDurationMs: PLAN.vad.silenceDurationMs,
+        sampleRate: PLAN.vad.sampleRate,
+        // One turn per frozen transcript, in spoken order. Every turn is FORWARDED: the assertion
+        // this spec exists for is that the relay carries the recording's own words.
+        turns: PLAN.expectedTranscripts.map((text) => ({ text, policy: 'forward' as const })),
+      });
+
+      const workspacePath = path.join(fixtureHome, 'voice-e2e-workspace');
+      currentPhase = 'account';
+      const bootstrap = await request.newContext({ baseURL: clientUrl });
+      const token = await createAccount(bootstrap);
+      await bootstrap.dispose();
+      const api = await request.newContext({
+        baseURL: clientUrl,
+        extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+      });
+      apiHandle = api;
+
+      currentPhase = 'scenario-armed';
       const sessionId = await armScenario(api, workspacePath, {
         version: 1,
         dialect: 'claude',
@@ -683,9 +738,11 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         ],
         expect: { rows: { delta: 1 }, content: { mustContain: [SEED_USER_TEXT] } },
       });
+      currentPhase = 'resident-started';
       await startResidentProcess(api, sessionId);
 
       let warmup: ClientWarmupReading | null = null;
+      currentPhase = 'client-warm';
       try {
         warmup = await warmClientStartup(clientUrl, dataDir);
       } catch (error) {
@@ -694,6 +751,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         );
       }
 
+      currentPhase = 'mounted';
       const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
       await context.route('**', (route) => {
         const url = route.request().url();
@@ -881,9 +939,12 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       await expect(page.locator(PANE)).toContainText(OUTPUT_TEXT, { timeout: 30_000 });
 
       // ── enter Live Voice and play the recording ─────────────────────────────────────────────
+      currentPhase = 'live-voice-entered';
       await page.getByTestId('live-voice-button').click();
       await expect(page.locator(BAR)).toBeVisible({ timeout: 30_000 });
+      currentPhase = 'upstream-connected';
       await expect.poll(() => upstream.liveConnectionCount(), { timeout: 25_000 }).toBe(1);
+      currentPhase = 'played';
       const playBeganAtMs = Date.now();
       await playWavMic(page);
       const playEndedAtMs = Date.now();
@@ -894,10 +955,12 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         )
         .toBe('listening');
 
+      currentPhase = 'utterances-heard';
       await upstream.waitForUtterances(PLAN.vad.expectedUtterances, 45_000);
 
       // A delivery is a round trip (proxy → coalescing window → session host → journal). Wait for
       // the journal's joined messages to cover the frozen transcripts rather than for a sleep.
+      currentPhase = 'relayed';
       const expectedJoined = normalize(PLAN.expectedTranscripts.join(''));
       const relayDeadline = Date.now() + DELIVERY_TIMEOUT_MS;
       let entries: JournalEntry[] = [];
@@ -910,6 +973,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       }
 
       // ── the voice-output leg: text → TTS → audio bytes → the browser's own player ───────────
+      currentPhase = 'tts-observed';
       const speakRow = page.locator('[data-message-style="assistant"]').filter({ hasText: OUTPUT_TEXT }).first();
       const speakButton = speakRow.locator('button[aria-label="Read aloud"]');
       await expect(speakButton).toBeVisible({ timeout: 15_000 });
@@ -940,6 +1004,7 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       // `narrator_done`, because the queue is PACED. Only SOME announces are acked: user speech
       // clears the queue between turns (AC-406 duplex), which is intent, not a defect — so the ack
       // requirement is "at least one announce and the summary", never "each announce".
+      currentPhase = 'narrator-observed';
       let narratorFrames: VoiceFrameEntry[] = [];
       let narratorSentFrames: VoiceFrameEntry[] = [];
       let narratorSpeaks = await readNarratorSpeaks(page);
@@ -1051,6 +1116,9 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       };
 
       if (process.env.VOICE_E2E_DUMP) {
+        // The SUCCESS dump: the full run, and deliberately no `failure` key (a dump that names a
+        // phase is the reading that says the run died in `beforeAll`).
+        mkdirSync(path.dirname(process.env.VOICE_E2E_DUMP), { recursive: true });
         writeFileSync(
           process.env.VOICE_E2E_DUMP,
           `${JSON.stringify({ plan: PLAN, playBeganAtMs, playEndedAtMs, ...run }, null, 2)}\n`,
@@ -1061,10 +1129,16 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
       await page.getByTestId('voice-realtime-end').click().catch(() => undefined);
       await api.post('/api/debug-agent/release', { data: { sessionId } }).catch(() => undefined);
       await context.close().catch(() => undefined);
+    } catch (error) {
+      // An abort here is reported by Playwright as a 0 ms failure on the FIRST test and "did not
+      // run" for the rest, with the error on stdout. The partial dump below is the artifact that
+      // makes the next red run name its own stage; the re-throw keeps the failure a failure.
+      writePartialDump(error);
+      throw error;
     } finally {
-      await api.dispose();
-      await upstream.close();
-      await scriptedTts.close();
+      await apiHandle?.dispose();
+      await upstreamHandle?.close();
+      await scriptedTtsHandle?.close();
     }
   });
 

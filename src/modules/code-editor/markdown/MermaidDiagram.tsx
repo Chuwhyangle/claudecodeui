@@ -20,8 +20,9 @@ type MermaidDiagramProps = {
 /**
  * Renders a ```mermaid code block as an SVG diagram, GitHub-preview style.
  *
- * Used by the chat module to render mermaid blocks in assistant messages, and
- * by MarkdownCodeBlock inside code-editor for markdown previews.
+ * Used by the chat module to render mermaid blocks in assistant messages, by
+ * MarkdownCodeBlock inside code-editor for markdown previews, and by the
+ * architecture module (through the code-editor barrel) for its graph documents.
  *
  * While mermaid is loading — or when the source doesn't parse (e.g. a block
  * that is still streaming in) — the raw source is shown instead, so the

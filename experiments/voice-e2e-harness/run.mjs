@@ -37,11 +37,18 @@
  *   node experiments/voice-e2e-harness/run.mjs --plan-only      # derive + calibrate, launch nothing
  *   node experiments/voice-e2e-harness/run.mjs --dump /tmp/run.json
  *
+ * FAILURE ATTRIBUTION. The child's stdout and stderr are captured instead of inherited, forwarded
+ * unchanged (a green run's output, verbatim, and its exit code are unchanged), and written in full
+ * to `playwright.log` beside the dump (`--dump /x/run.json` ⇒ `/x/playwright.log`). A non-zero exit
+ * additionally gets a short failure summary — the lines naming an error or a failed test — on
+ * stderr BEFORE the verdict, because the acceptance gate quotes stderr's head and Playwright
+ * reports test/`beforeAll` failures on stdout.
+ *
  * ENV
  *   VOICE_E2E_CORPUS_DIR  override the corpus root (default ~/.cloudcli/voice-realtime-closing-turn-corpus)
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -414,7 +421,14 @@ if (doubleDash >= 0) passthrough.push(...process.argv.slice(doubleDash + 1));
 
 const result = spawnSync(playwright, ['test', SPEC, ...passthrough], {
   cwd: REPO_ROOT,
-  stdio: 'inherit',
+  // CAPTURED, not inherited. Playwright prints the failing test (and a `beforeAll` abort) on
+  // stdout, while the app server's boot noise lands on stderr; inheriting both gives this script
+  // no text to re-state and nothing to persist, so a red gate could only quote `.env` noise.
+  stdio: ['ignore', 'pipe', 'pipe'],
+  encoding: 'utf8',
+  // The full transcript is kept — Playwright's list reporter for a serial spec is well under this,
+  // and the cap only exists so a runaway child cannot exhaust memory before we write the log.
+  maxBuffer: 64 * 1024 * 1024,
   env: {
     ...process.env,
     VOICE_E2E_PLAN: planPath,
@@ -441,6 +455,45 @@ const result = spawnSync(playwright, ['test', SPEC, ...passthrough], {
     VOICE_E2E_SUMMARY_TEXT: SUMMARY_TEXT,
   },
 });
+
+// ── the child's own output: summarised on failure, persisted, and forwarded verbatim ─────────
+const childStdout = result.stdout ?? '';
+const childStderr = result.stderr ?? '';
+
+/**
+ * The lines of the child's transcript that name the failure.
+ *
+ * Playwright puts the useful sentence on STDOUT (`Error: …`, `1 failed`, `8 did not run`, `✘`); the
+ * app server's `.env`/Vite noise is on stderr. Both are scanned; the result is capped because this
+ * is a summary — the full text lives in `playwright.log`.
+ */
+function failureSummary(stdout, stderr) {
+  const lines = `${stdout}\n${stderr}`
+    .split('\n')
+    .filter((line) => /Error:|failed|did not run|✘/.test(line));
+  return lines.join('\n').slice(0, 4096);
+}
+
+if (result.status !== 0) {
+  const summary = failureSummary(childStdout, childStderr);
+  // WRITTEN FIRST, on purpose: the acceptance gate quotes stderr's HEAD, and the child's own
+  // stderr (app-server boot noise) is exactly what used to fill that quote while the real failure
+  // sat unread on stdout.
+  if (summary !== '') process.stderr.write(`[voice-e2e] failure summary:\n${summary}\n`);
+}
+// Forward both streams verbatim: on a green run this is the same text `stdio: 'inherit'` printed.
+process.stdout.write(childStdout);
+process.stderr.write(childStderr);
+
+/**
+ * The full child transcript, written beside the dump (`--dump /x/run.json` ⇒ `/x/playwright.log`).
+ *
+ * Playwright's numbered failure block and every line the app server printed are here, so
+ * attributing a red run needs neither the gate's ~460-character stderr quote nor a re-run.
+ */
+const playwrightLogPath = path.join(path.dirname(dumpPath), 'playwright.log');
+mkdirSync(path.dirname(playwrightLogPath), { recursive: true });
+writeFileSync(playwrightLogPath, `# stdout\n${childStdout}\n# stderr\n${childStderr}\n`, 'utf8');
 
 // ── the verdict, in one line, from the run's own artifact when it exists ─────────────────────
 if (existsSync(dumpPath)) {

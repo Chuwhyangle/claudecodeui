@@ -349,6 +349,14 @@ export const api = {
         refresh: refresh ? '1' : undefined,
       })}`,
     ),
+  /**
+   * The on-demand architecture reading for one session (ADR-005 decision 2):
+   * both Mermaid documents, the counters and the provenance, generated server-
+   * side from the project's `.archguard` cache. The response body is the result
+   * itself, not a `{ success, data }` envelope.
+   */
+  architectureGraph: (projectId: string, sessionId: string) =>
+    post('/api/architecture/graph', { projectId, sessionId }),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),
   restoreProject: (projectId: string) =>
