@@ -2,7 +2,7 @@
 id: gap-ac140-voice-realtime-summary-tts-host-single-source
 title: AC-140 的端点主机单一来源被 voice-realtime 的 summary/TTS
   两个出货叶子各写一份打破：从规则模块导出的主机拼装，判据回绿（AC-140）
-status: ready
+status: done
 labels:
   - gap
   - defect
