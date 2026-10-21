@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
-  OVERVIEW_DEPTH,
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
@@ -42,9 +41,7 @@ import {
  * package's `RendererOptions` / `ViewSpec`, so the lazily imported module is
  * typed without importing its types into the first-screen chunk.
  */
-type PlantUmlView =
-  | { kind: 'overview'; depth: number }
-  | { kind: 'neighborhood'; entity: string; hops: number };
+type PlantUmlView = { kind: 'neighborhood'; entity: string; hops: number };
 
 type PlantUmlRenderer = {
   render: (puml: string) => Promise<{ svg: string }>;
@@ -111,6 +108,9 @@ const HIGHLIGHT_STYLE = `
   [data-architecture-plantuml] .arch-hl-in .uml-arrow,
   [data-architecture-plantuml] .arch-hl-out .uml-arrow { fill: #2563eb; stroke: #2563eb; }
   [data-architecture-plantuml] .arch-center rect { fill: #dbeafe; stroke: #1d4ed8; }
+  /* Directory groups are scaffolding, not entities: same dashed, grey frame the
+     renderer's own overview stubs use, so a collapsed overview reads as a map. */
+  [data-architecture-plantuml] [data-entity-id^="grp::"] rect { fill: #f6f8fa; stroke-dasharray: 5,3; }
   [data-architecture-plantuml] svg { display: block; margin: 0 auto; }
 `;
 
@@ -160,15 +160,16 @@ function restoreEntityIds(host: HTMLElement, aliasOf: ReadonlyMap<string, string
   for (const edge of host.querySelectorAll('[data-edge-target]')) rename(edge, 'data-edge-target');
 }
 
-/** The renderer options for one view; a group view renders its filtered subgraph whole. */
+/**
+ * The renderer options for one view. The overview and group views are already
+ * collapsed by the bridge (directory-only adaptive grouping), so only the
+ * neighbourhood view asks the renderer to slice the model.
+ */
 function rendererOptionsFor(
   view: ArchitectureDiagramView,
   diagram: ArchitecturePlantUml,
   layout: ArchitectureLayoutEngine,
 ): { layout: ArchitectureLayoutEngine; view?: PlantUmlView } {
-  if (view.kind === 'overview') {
-    return { layout, view: { kind: 'overview', depth: OVERVIEW_DEPTH } };
-  }
   if (view.kind === 'neighborhood' && diagram.rendererEntity !== null) {
     return {
       layout,
@@ -531,7 +532,10 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
           aspectRatio: drawnAspect,
           engine: new ElkLayoutEngine(),
         });
-        const diagram = archguardToPlantUml(graph, { view });
+        // The panel is the adaptive consumer: the bridge collapses directory
+        // layers itself (the renderer's `groupByPathPrefix` would count a file
+        // name as a layer, which is the bug this view exists to avoid).
+        const diagram = archguardToPlantUml(graph, { view, grouping: 'adaptive' });
         const renderer = createRenderer(rendererOptionsFor(view, diagram, engine));
         const { svg } = await renderer.render(diagram.puml);
         if (cancelled) return;
@@ -564,8 +568,9 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
           }
         }
         // A new drawing gets its LOD applied synchronously, so it never flashes
-        // at the wrong detail before the debouncer fires. The overview has no
-        // entities or package frames to collapse, so it stays out of the LOD.
+        // at the wrong detail before the debouncer fires. The overview — and a
+        // group view that still shows directory groups — has no entities or
+        // package frames to collapse, so it stays out of the LOD.
         //
         // A re-layout of the SAME view (the container's shape changed) is not a
         // new drawing in the user's eyes: keep the level they were reading and
@@ -574,7 +579,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
         const drawingKey = drawingKeyOf(view);
         const carriedDepth = drawingKey === drawnKeyRef.current ? lodDepthRef.current : null;
         drawnKeyRef.current = drawingKey;
-        if (view.kind === 'overview') {
+        if (view.kind === 'overview' || diagram.grouped) {
           lodRef.current = null;
           lodDepthRef.current = null;
           setLodDepth(null);

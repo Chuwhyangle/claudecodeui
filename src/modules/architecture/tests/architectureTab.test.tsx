@@ -186,6 +186,53 @@ const RESULT: ArchitectureGraphResult = {
   },
 };
 
+/**
+ * A tree deeper than the overview can show: 12 packages × 4 units × 5 files.
+ * Depth 3 would be 48 groups (over the bound), so the overview stops at the
+ * package layer. Expanding one package therefore still contains 20 files that
+ * the group view must re-group into its four unit directories — the fixed-depth
+ * view used to flatten them into 20 `grp::…/file-N.ts` groups instead.
+ */
+const DEEP_TREE_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: {
+      nodes: Array.from({ length: 12 }, (_unused, moduleIndex) => moduleIndex).flatMap((moduleIndex) =>
+        Array.from({ length: 4 }, (_unused, unitIndex) => unitIndex).flatMap((unitIndex) =>
+          Array.from({ length: 5 }, (_unused, fileIndex) => ({
+            id: `src/packages/mod-${String(moduleIndex)}/unit-${String(unitIndex)}/file-${String(fileIndex)}.ts`,
+            label: `file-${String(fileIndex)}.ts`,
+            distance: fileIndex,
+          })),
+        ),
+      ),
+      edges: [
+        {
+          from: 'src/packages/mod-0/unit-0/file-0.ts',
+          to: 'src/packages/mod-0/unit-1/file-1.ts',
+          relationType: 'dependency',
+        },
+        {
+          from: 'src/packages/mod-1/unit-0/file-0.ts',
+          to: 'src/packages/mod-0/unit-0/file-0.ts',
+          relationType: 'call',
+        },
+      ],
+    },
+    entity: { nodes: [], edges: [] },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 0,
+    entityEdges: 0,
+    fileNodes: 240,
+    fileEdges: 2,
+    nodeCount: 240,
+    edgeCount: 2,
+  },
+  provenance: RESULT.provenance,
+};
+
 const EMPTY_RESULT: ArchitectureGraphResult = {
   mmd: { file: '@startuml\n@enduml', entity: '@startuml\n@enduml' },
   graph: {
@@ -695,7 +742,7 @@ test('overview folds the graph into path groups; clicking a group expands it loc
   assert.deepEqual(
     drawnNodeIds(host),
     ['grp::modules/alpha', 'grp::modules/beta', 'grp::modules/gamma'],
-    'depth-2 overview groups each directory',
+    'the overview groups by directory layer, never by file name',
   );
 
   fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
@@ -712,6 +759,56 @@ test('overview folds the graph into path groups; clicking a group expands it loc
     );
   });
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'expanding a group is local — it must not refetch');
+});
+
+test('expanding a deep group re-groups its subtree by directory instead of flattening its files', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(DEEP_TREE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // Overview: the group bound stops the fold at the package layer (12 groups,
+  // depth 3 would be 48). No group is named after a file.
+  assert.equal(drawnNodeIds(host).length, 12, 'the overview stops at the package layer');
+  assert.ok(drawnNodeIds(host).every((id) => /^grp::packages\/mod-\d+$/.test(id)));
+  assert.match(host.innerHTML, /packages\/mod-0 \(20\)/, 'each group label carries its entity count');
+
+  // Expanding one package must apply the SAME directory rule to its subtree:
+  // four unit groups, not the 20 file nodes inside it.
+  fireEvent.click(host.querySelector('[data-entity-id="grp::packages/mod-0"]') as Element);
+  await waitFor(() => {
+    assert.equal(
+      document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'),
+      'group',
+    );
+    assert.deepEqual(drawnNodeIds(host), [
+      'grp::packages/mod-0/unit-0',
+      'grp::packages/mod-0/unit-1',
+      'grp::packages/mod-0/unit-2',
+      'grp::packages/mod-0/unit-3',
+    ], 'the group view groups the subtree by directory instead of listing every file');
+  });
+  assert.ok(
+    !drawnNodeIds(host).some((id) => id.endsWith('.ts')),
+    'no file of the expanded directory is drawn as its own node',
+  );
+  assert.match(host.innerHTML, /packages\/mod-0\/unit-0 \(5\)/, 'unit groups carry their own counts');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 're-grouping is local — never a refetch');
+});
+
+test('a flat directory larger than the group limit stays one counted group when expanded', () => {
+  const nodes = Array.from({ length: 45 }, (_unused, index) => ({
+    id: `src/scripts/tool-${String(index).padStart(2, '0')}.ts`,
+    label: `tool-${String(index).padStart(2, '0')}.ts`,
+    distance: 0,
+  }));
+  const { grouped, nodeIds, puml } = archguardToPlantUml(
+    { nodes, edges: [] },
+    { view: { kind: 'group', prefix: 'scripts' }, grouping: 'adaptive' },
+  );
+
+  assert.equal(grouped, true, 'the drawing is directory scaffolding, not 45 entity boxes');
+  assert.deepEqual(nodeIds, ['grp::scripts'], 'the flat directory re-groups to itself instead of flattening');
+  assert.match(puml, /class "scripts \(45\)" as g0/, 'the group keeps its count');
 });
 
 test('clicking an entity drills into its neighbourhood, and the centre click adds a hop', async () => {
