@@ -173,7 +173,7 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
-    "@yalehwang/plantuml-js": "file:vendor/plantuml-js/yalehwang-plantuml-js-0.1.0.tgz",
+    "@yalehwang/plantuml-js": "^0.2.0",
     "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.6.2",
     "chokidar": "^4.0.3",
