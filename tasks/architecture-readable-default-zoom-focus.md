@@ -26,9 +26,9 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：缩放下限由最小可读字号推导；低于下限时 `fit` 返回可读缩放而非 0.05；既有 zoom in/out/clamp 用例按新下限更新且不回归
-- [ ] `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` exit 0：fit 低于可读缩放时进入聚焦模式并选中种子密度最高的包；全貌/聚焦切换；宽高比 > 阈值时回退折叠并出现提示；提示文案含包名与计数
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（爆炸 LOD、焦点保持、移动手势用例不回归）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：缩放下限由最小可读字号推导；低于下限时 `fit` 返回可读缩放而非 0.05；既有 zoom in/out/clamp 用例按新下限更新且不回归
+- [x] `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` exit 0：fit 低于可读缩放时进入聚焦模式并选中种子密度最高的包；全貌/聚焦切换；宽高比 > 阈值时回退折叠并出现提示；提示文案含包名与计数
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（爆炸 LOD、焦点保持、移动手势用例不回归）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
