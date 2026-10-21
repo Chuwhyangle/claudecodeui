@@ -13,7 +13,7 @@ goal_ac: AC-207
 ---
 ## Proposal
 
-<!-- dedup-ref --> 机制去重读数（本轮立案时实测，2026-10-21）：`grep -l "^goal_ac: AC-207" tasks/*.md` 只命中两份 **done** 任务——`gap-work-segment-browser-density-and-search-expand`（判据本体）与`gap-ac207-expand-all-first-segment-recollapse`（上一次的间歇红修复）。按规则 done 不是重复，而是「上一次的修法没能让判据现在为真」的证据；在飞（todo/ready/needs-human）任务里没有一份携带 `goal_ac: AC-207`。`task-granularity-advice.js --touches e2e/transcript-work-segments.spec.ts` 的 `peers[]` 与 `mentions[]` 均为空（没有在飞任务认领同一文件），故单独立案、不并入他条。
+<!-- dedup-ref --> 机制去重读数（本轮立案时实测，2026-10-21）：`grep -l "^goal_ac: AC-207" tasks/*.md` 只命中两份 **done** 任务——`gap-work-segment-browser-density-and-search-expand`（判据本体）与 `gap-ac207-expand-all-first-segment-recollapse`（上一次的间歇红修复）。按规则 done 不是重复，而是「上一次的修法没能让判据现在为真」的证据；在飞（todo/ready/needs-human）任务里没有一份携带 `goal_ac: AC-207`。`task-granularity-advice.js --touches e2e/transcript-work-segments.spec.ts` 的 `peers[]` 与 `mentions[]` 均为空（没有在飞任务认领同一文件），故单独立案、不并入他条。
 
 **现状（直接测量，不是台账尾巴）。** AC-207 的 acceptance 是 `npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"`。`.quay/gate-events.jsonl` 最近四次：2026-10-21T13:37:30Z pass、13:40:38Z pass、13:44:26Z pass、13:48:11Z **fail**，四次的 `treeSha` 全是 `519ec5997329b8ad356f342952760613685f4ce0`。同一棵树四分钟内先绿后红 ⇒ 不是代码 delta 造成的回归，而是判据自身的间歇读数。
 
@@ -73,7 +73,7 @@ expect(received).toEqual(expected) // deep equality
 
 **AC1 确定性复现（同一注入，4 次同形）。** 在 spec 内临时加 `page.route('**/providers/sessions/e2e-work-segment/messages*offset=20*', …)`，把 older 页（逐字 URL `…/messages?limit=50&offset=20`）挂起 20s，使读数落在它落地之前（探针只在本工作树，提交前已移除）。命令：`AC207_OLDER_PAGE_DELAY_MS=20000 npx playwright test e2e/transcript-work-segments.spec.ts -g "AC-207"`。逐字：`[AC-207][probe] holding older page http://127.0.0.1:8767/api/providers/sessions/e2e-work-segment/messages?limit=50&offset=20`、`[AC-207][probe] collapsed {"rows":6,"heightPx":329}`（两条上界断言都通过），随后 `Error: each header count is its run’s member count (7, 8 and 5 in the fixture)` / `+   4,` / `-   7,`（收到 `[4,5,8]`）。另外三次独立运行（端口 26979 / 30411 / 15441）同一失败行逐字相同。
 
-**AC2 起点逻辑（diff：38 insertions / 0 deletions，只加不删）。** 选 Proposal 的 (a) 腿：在 `.chat-messages-pane .chat-message` 里等 fixture 最早的 user prompt 行（`Show me the release notes for the work segment browser.`）出现。为什么它不会被部分窗口骗过：该行只存在于 older 页（最新 20 条从第一段第 4 个成员开始），所以它在同一份被测 DOM 里出现 ⇔ older 页已落地、窗口 = 完整 24 行；密度或成员计数都能被「窗口短」伪造，这一条不能。helper 同时在国际展开正控制每次重读数前调用（文档被 Vite 重载替换后的新 pane 也从最新 20 条开始）。`git diff` 核对：`PRE_MERGE_BASELINE_ROWS/PX`、`ROW_LIMIT`、`PX_LIMIT` 与 (i)(ii) 两条腿的断言逐字未变。
+**AC2 起点逻辑（diff：38 insertions / 0 deletions，只加不删）。** 选 Proposal 的 (a) 腿：在 `.chat-messages-pane .chat-message` 里等 fixture 最早的 user prompt 行（`Show me the release notes for the work segment browser.`）出现。为什么它不会被部分窗口骗过：该行只存在于 older 页（最新 20 条从第一段第 4 个成员开始），所以它在同一份被测 DOM 里出现 ⇔ older 页已落地、窗口 = 完整 24 行；密度或成员计数都能被「窗口短」伪造，这一条不能。helper 同时在全展开正控制每次重读数前调用（文档被 Vite 重载替换后的新 pane 也从最新 20 条开始）。`git diff` 核对：`PRE_MERGE_BASELINE_ROWS/PX`、`ROW_LIMIT`、`PX_LIMIT` 与 (i)(ii) 两条腿的断言逐字未变。
 
 **AC3 判别力。** 保持注入（`AC207_OLDER_PAGE_DELAY_MS=120000`）跑修后判据，红在新增完整性读数上：`Error: the pane never showed the fixture’s first row: the older page had not landed, so the transcript held only its newest 20 rows and would be measured as a short (but not merged) turn`（`expect(locator).toBeVisible() failed` / `element(s) not found`，30s 等待超时）。解除注入（同一命令、无 env）复绿：`[AC-207] collapsed {"rows":7,"heightPx":413} expanded-positive-control {"rows":27,"heightPx":1290}` / `1 passed`。
 
