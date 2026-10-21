@@ -206,6 +206,28 @@ export {
   type UplinkVadArmResolution,
   type UplinkVadConnectionState,
 } from './voice-realtime-uplink-vad-arm-point.js';
+// THE SPEAKER TRACKING ARM (Phase 1, shadow): the environment switch that decides whether this
+// deployment observes speakers at all, the calibrated thresholds it observes at, the one process-wide
+// CAM++ model and the per-connection seam the proxy reads. `server/index.ts` resolves the switch at the
+// composition root, loads the model ONCE and builds one seam per browser connection; the proxy logs the
+// seam's `speaker_shadow` readings and nothing else ever sees them. Shadow is READ-ONLY: no frame, no
+// client message, no commit, no audio change.
+export {
+  SPEAKER_TRACKING_THRESHOLDS,
+  VOICE_SPEAKER_MODEL_PATH_ENV,
+  VOICE_SPEAKER_TRACKING_ENV,
+  describeSpeakerTracking,
+  resolveSpeakerTracking,
+  type SpeakerTrackingResolution,
+  type SpeakerTrackingThresholds,
+} from './voice-speaker-tracking-arm.js';
+export {
+  createSpeakerTrackerModel,
+  createSpeakerTrackerSeam,
+  type SpeakerEmbedder,
+  type SpeakerTrackerModel,
+  type VoiceSpeakerTrackerSeam,
+} from './voice-realtime-speaker-seam.js';
 // The P4 rollout switch (GOAL-034 / AC-322): which relay a deployment offers a browser, resolved as a
 // pure function of the environment. `server/index.ts` calls it at the assembly point; the ws proxy
 // calls it when a caller passes no `segmentedRelay` seam; the criterion reads the default from it.

@@ -135,7 +135,7 @@ import {
 // Includes the relay's on-disk journal (its own store, its own directory): resolved and built once,
 // here, at the composition root — the pure resolvers take the environment readings as arguments, so
 // this file is the only place `VOICE_REALTIME_LOG_DIR` / `VOICE_REALTIME_LOG_MAX_BYTES` are read.
-import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
+import { DEFAULT_DASHSCOPE_REALTIME_VOICE, DEFAULT_SESSION_DEFAULTS, isVoiceSessionActive, rulesFor, VOICE_REALTIME_CAPTURE_DIR_ENV, VOICE_REALTIME_CAPTURE_ENV, VOICE_REALTIME_CAPTURE_MAX_BYTES_ENV, VOICE_REALTIME_IDLE_ROTATE_MS_ENV, VOICE_REALTIME_LOG_DIR_ENV, VOICE_REALTIME_LOG_MAX_BYTES_ENV, VOICE_REALTIME_TRANSPORT_PARAM, applyVoiceRealtimeTransport, clearVoiceRealtimeCaptureDir, composeHostRunActivityReading, createDashscopeTransport, createUplinkVadArmPoint, createVoiceRealtimeCaptureRecorder, createVoiceRealtimeCaptureStore, createVoiceRealtimeLiveExecutor, createVoiceRealtimeLogStore, createVoiceRealtimeRecorder, createVoiceRealtimeRouter, handleVoiceRealtimeConnection, parseVoiceRealtimeTransport, runVoiceRealtimeDiagnosis, describeTurnDetection, describeUplinkVad, describeVoiceRealtimeMode, resolveTurnDetection, resolveSpendWindowLimit, describeSpendWindowLimit, resolveRealtimeApiKey, isMaskedDashscopeApiKey, resolveSilenceTail, describeSilenceTail, resolveUplinkVad, resolveVoiceRealtimeCaptureDir, resolveVoiceRealtimeCaptureMaxBytes, resolveVoiceRealtimeCaptureMode, resolveVoiceRealtimeLogDir, resolveVoiceRealtimeLogMaxBytes, resolveVoiceRealtimeMode, voiceRealtimeCaptureStartupLine, voiceRealtimeLogDirStartupLine, VOICE_REALTIME_CALLER_SCOPES, describeVoiceRealtimeClosingTurn, describeVoiceRealtimeSlimSendTool, resolveVoiceRealtimeClosingTurn, resolveVoiceRealtimeSlimSendTool, buildVoiceRealtimeNarratorWiring, describeVoiceRealtimeSummaryStandin, resolveVoiceRealtimeSummaryStandin, VOICE_REALTIME_SUMMARY_MODEL_ENV, VOICE_REALTIME_RUN_END_ACK_ENV, resolveVoiceRealtimeRunEndAckCandidates, createVoiceRealtimeRunEndSummarizer, type VoiceRealtimeRunEndSummarizer, createVoiceRealtimeTtsCache, loadVoiceRealtimeSettings, DEFAULT_VOICE_REALTIME_TTS_VOICE, VOICE_REALTIME_TTS_ENDPOINT_ENV, VOICE_REALTIME_TTS_VOICE_ENV, VOICE_REALTIME_TTS_LOCAL_ENV, VOICE_REALTIME_TTS_LOCAL_DIR_ENV, VOICE_REALTIME_TTS_LOCAL_SID_ENV, VOICE_REALTIME_TTS_LOCAL_DEFAULT_SID, createLocalVoiceRealtimeTtsSeam, type VoiceRealtimeNarratorTtsSeam, voiceRealtimeInstructionsFor, createSpeakerTrackerModel, createSpeakerTrackerSeam, resolveSpeakerTracking, describeSpeakerTracking, type SpeakerTrackerModel, type VoiceSpeakerTrackerSeam, type DashscopeSocket, type DashscopeWireObserver, type TurnDetectionOverride, type VoiceRealtimeAudioCapture, type VoiceRealtimeProxySeams } from './modules/voice-realtime/index.js';
 import type { OAuthProvider } from './modules/oauth/index.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { initializeDatabase, oauthClientsDb, oauthGrantsDb, projectsDb, sessionDraftsDb, sessionsDb } from './modules/database/index.js';
@@ -567,6 +567,51 @@ if (voiceRealtimeCaptureMode.warning !== null) {
 }
 console.log(voiceRealtimeCaptureStartupLine(voiceRealtimeCaptureDirectory, voiceRealtimeCaptureMode.enabled));
 
+// THE SPEAKER TRACKER (Phase 1, SHADOW), assembled ONCE for the process. The environment switch is
+// resolved here and logged in every one of its four states (unset, unknown, shadow-without-path,
+// shadow-with-path), so "was the observer even considered?" is answerable from the log alone.
+//
+// THE MODEL IS LOADED ONCE, not per connection: a CAM++ ONNX session is expensive and shared read-only
+// by every connection (`createSpeakerTrackerModel` starts the load in the background). A load failure
+// writes ONE line and leaves `embedder()` null, which is what keeps the proxy's `speakerTracker` seam
+// undefined for every connection — a broken speaker model must never take a voice connection down.
+//
+// ABSENT IS THE SHIPPED STATE: with `VOICE_SPEAKER_TRACKING` unset there is no model, no seam, and the
+// relay is byte-for-byte the one it was before this feature existed.
+const speakerTracking = resolveSpeakerTracking(process.env, (line) => console.log(line));
+const speakerTrackerModel: SpeakerTrackerModel | null =
+    speakerTracking.mode === 'shadow'
+        ? createSpeakerTrackerModel({
+              modelPath: speakerTracking.modelPath,
+              log: (line) => console.log(line),
+          })
+        : null;
+
+/**
+ * THIS connection's shadow seam, or `undefined` for "off".
+ *
+ * `undefined` covers three states on purpose — the deployment did not ask for shadow, the model is
+ * still loading, or its load failed — because all three must leave the proxy's seam absent and the
+ * relay unchanged. A connection that starts before the model is ready simply gets no readings; it is
+ * never delayed or refused.
+ */
+const buildSpeakerTrackerSeam = (): VoiceSpeakerTrackerSeam | undefined => {
+    if (speakerTrackerModel === null) {
+        return undefined;
+    }
+    const embedder = speakerTrackerModel.embedder();
+    if (embedder === null) {
+        return undefined;
+    }
+    // No core is supplied in Phase 1: there is no profile store yet, so every session cluster is
+    // provisional and `authorizeTse` stays false. That is the SAFE posture — the probe measures
+    // tracking coverage first, and authorization waits for a persisted, user-confirmed core.
+    return createSpeakerTrackerSeam({
+        embed: (samples) => embedder.embed(samples),
+        thresholds: speakerTracking.thresholds,
+    });
+};
+
 const buildVoiceRealtimeSeams = (input: {
     userId: number;
     observe: DashscopeWireObserver;
@@ -578,6 +623,12 @@ const buildVoiceRealtimeSeams = (input: {
      * route passes none, because a diagnosis is a scripted clip, not a microphone.
      */
     audioCapture?: VoiceRealtimeAudioCapture;
+    /**
+     * THIS connection's speaker tracking shadow seam, or absent. Built by the browser path from the
+     * process-wide model; the HTTP diagnosis route passes none, because a scripted clip is not a live
+     * speaker session.
+     */
+    speakerTracker?: VoiceSpeakerTrackerSeam;
     /** Overrides the per-window spend limit (CNY). The browser path uses the configured default. */
     spendWindowLimitCny?: number;
     /**
@@ -1098,6 +1149,10 @@ const buildVoiceRealtimeSeams = (input: {
         // Absent (the diagnosis route, a capture that is off) leaves `seams.audioCapture` undefined, and
         // the proxy's every capture call is `?.`-guarded — the branch is byte-identical to before.
         ...(input.audioCapture === undefined ? {} : { audioCapture: input.audioCapture }),
+        // The speaker tracker's read-only observer, or absent. Absent is the shipped state AND every
+        // degraded state (no shadow request, model still loading, model load failed): the proxy then
+        // never allocates an accumulator and the audio branch is the one it always was (AC6).
+        ...(input.speakerTracker === undefined ? {} : { speakerTracker: input.speakerTracker }),
         // The uplink VAD's per-frame speech gate, or absent. ABSENT is the shipped state and the one that
         // matters: `uplinkVad === undefined` leaves the proxy's continuous branch on its pre-feature
         // `=== null` fast path, so a deployment that named no backend forwards every captured frame
@@ -1229,6 +1284,10 @@ const voiceRealtime = (ws: WebSocket, request: AuthenticatedWebSocketRequest): v
                 captureRecorder.observe(observation);
             },
             audioCapture: captureRecorder,
+            // THE SHADOW SPEAKER OBSERVER, per connection. `undefined` in every state except
+            // "shadow requested AND the process-wide model is ready", which is exactly the condition
+            // under which the proxy's read-only branch exists at all.
+            speakerTracker: buildSpeakerTrackerSeam(),
         }),
     );
 };
