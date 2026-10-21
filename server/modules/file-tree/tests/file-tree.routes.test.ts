@@ -20,6 +20,7 @@ function createFakeServices(overrides: Partial<FileTreeServices> = {}): FileTree
     openFile: unexpectedOperation,
     saveTextFile: unexpectedOperation,
     listProjectFiles: unexpectedOperation,
+    listProjectFileIndex: unexpectedOperation,
     createEntry: unexpectedOperation,
     renameEntry: unexpectedOperation,
     deleteEntry: unexpectedOperation,
@@ -93,6 +94,31 @@ test('project files route requests gitignore filtering when explicitly enabled',
   });
 
   assert.deepEqual(inputs, [['project-1', { respectGitignore: true }]]);
+});
+
+test('files-index route forwards the project id and returns the flat index', async () => {
+  const inputs: Parameters<FileTreeServices['listProjectFileIndex']>[] = [];
+  const services = createFakeServices({
+    listProjectFileIndex: async (...input) => {
+      inputs.push(input);
+      return {
+        files: [{ name: 'index.ts', path: '/workspace/project/src/index.ts', type: 'file' }],
+        truncated: false,
+      };
+    },
+  });
+
+  await withFileTreeServer(services, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/file-tree/projects/project-1/files-index`);
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      files: [{ name: 'index.ts', path: '/workspace/project/src/index.ts', type: 'file' }],
+      truncated: false,
+    });
+  });
+
+  assert.deepEqual(inputs, [['project-1']]);
 });
 
 test('create route parses the transport payload before invoking the service', async () => {

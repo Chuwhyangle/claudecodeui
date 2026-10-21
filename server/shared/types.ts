@@ -1688,6 +1688,36 @@ export type FileTreeNode = {
 };
 
 /**
+ * One flat entry in a project's file index.
+ *
+ * The index exists so filename-resolution consumers (chat @-mentions, the command
+ * palette, the open-file resolver, Files-tab search) can share one bounded list
+ * instead of each walking the project tree. `path` is absolute and `name` is its
+ * basename, so a consumer can match on either without re-deriving the parent.
+ *
+ * Entries describe files only: a git-backed index is exactly the path set from
+ * `git ls-files`, which lists no directories, and the non-git fallback matches
+ * that shape. `type` stays a union so a later directory-index reader can widen
+ * the contract without a second entry type.
+ */
+export type FileTreeIndexEntry = {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+};
+
+/**
+ * A project's bounded flat file index.
+ *
+ * `truncated` is true only when the non-git filesystem fallback stopped at the
+ * entry cap. A git-backed index is exact and therefore never truncated.
+ */
+export type FileTreeIndex = {
+  files: FileTreeIndexEntry[];
+  truncated: boolean;
+};
+
+/**
  * Minimal directory-entry shape required during File Tree traversal.
  *
  * Production adapts Node `Dirent` objects to this structural contract. Tests
@@ -1736,6 +1766,13 @@ export type FileTreeFileSystem = {
   unlink(filePath: string): Promise<void>;
   copyFile(sourcePath: string, destinationPath: string): Promise<void>;
   createReadStream(filePath: string): Readable;
+  // Optional repository probes for the flat file index. Production supplies both
+  // (a git-backed index); a filesystem-only fake may omit them, and the service
+  // then takes the bounded walk fallback. They are optional so adding this
+  // reading seam does not force every existing test fake to grow two members.
+  isGitRepository?(projectRoot: string): Promise<boolean>;
+  // Project-root-relative POSIX paths, exactly as `git ls-files` reports them.
+  listGitFiles?(projectRoot: string): Promise<string[]>;
 };
 
 /**
@@ -1823,6 +1860,9 @@ export type FileTreeServices = {
     projectId: string,
     options?: { respectGitignore: boolean },
   ): Promise<FileTreeNode[]>;
+  // Flat file index shared by filename-resolution consumers; a git project is
+  // served from `git ls-files`, everything else from a bounded filesystem walk.
+  listProjectFileIndex(projectId: string): Promise<FileTreeIndex>;
   createEntry(input: {
     projectId: string;
     parentPath: string;

@@ -4,6 +4,8 @@ import ignore from 'ignore';
 
 import type {
   FileTreeDirectoryEntry,
+  FileTreeIndex,
+  FileTreeIndexEntry,
   FileTreeNode,
   FileTreeServiceDependencies,
   FileTreeServices,
@@ -37,6 +39,11 @@ const COMMON_WORKSPACE_DIRECTORY_NAMES = [
 // broad workspace (for example, a user's home directory) cannot exhaust the
 // server heap before the browser has a chance to switch to a narrower project.
 const MAXIMUM_FILE_TREE_ENTRIES = 10_000;
+
+// The non-git fallback for the flat index walks the whole project, so it stops
+// at this many files and reports `truncated` instead of failing the request. A
+// git-backed index is exact and never uses this bound.
+const MAXIMUM_FILE_INDEX_ENTRIES = 10_000;
 
 type FileTreeEntryFilter = (entryPath: string, isDirectory: boolean) => boolean;
 
@@ -186,6 +193,133 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       throw createFileTreeError('Project not found', 404, 'PROJECT_NOT_FOUND');
     }
     return projectRoot;
+  }
+
+  // Flat indexes are cached per project so a burst of consumers (mentions,
+  // command palette, search, open-file resolution) shares one git listing or
+  // walk. The cached value is the Promise, so concurrent first readers join the
+  // same build; any path mutation clears the entry for that project.
+  const fileIndexCache = new Map<string, Promise<FileTreeIndex>>();
+
+  function invalidateFileIndex(projectId: string): void {
+    fileIndexCache.delete(projectId);
+  }
+
+  async function readFallbackEntryFilter(projectRoot: string): Promise<FileTreeEntryFilter> {
+    try {
+      const gitignoreContent = await fileSystem.readTextFile(path.join(projectRoot, '.gitignore'));
+      return createGitignoreEntryFilter(projectRoot, gitignoreContent);
+    } catch (error) {
+      if (readErrorCode(error) !== 'ENOENT') {
+        dependencies.logger.error(`Error reading .gitignore in "${projectRoot}"`, error);
+      }
+      return includeEntryByHardExclusions;
+    }
+  }
+
+  /**
+   * Streams one directory for the fallback index walk, applying the same hard
+   * exclusions and root-gitignore filter as the display tree.
+   *
+   * Unlike `collectVisibleEntries`, this does not charge a shared entry budget:
+   * directories are not index entries, so only the caller's file count decides
+   * when to stop and report `truncated`.
+   */
+  async function listIndexDirectoryEntries(
+    directoryPath: string,
+    includeEntry: FileTreeEntryFilter,
+  ): Promise<FileTreeDirectoryEntry[]> {
+    const visibleEntries: FileTreeDirectoryEntry[] = [];
+
+    await acquire();
+    try {
+      for await (const entry of fileSystem.openDirectory(directoryPath)) {
+        if (includeEntry(path.join(directoryPath, entry.name), entry.isDirectory())) {
+          visibleEntries.push(entry);
+        }
+      }
+    } catch (error) {
+      const errorCode = readErrorCode(error);
+      if (errorCode !== 'EACCES' && errorCode !== 'EPERM') {
+        dependencies.logger.error(`Error reading directory "${directoryPath}"`, error);
+      }
+      return [];
+    } finally {
+      release();
+    }
+
+    return visibleEntries;
+  }
+
+  /**
+   * Builds the non-git index by walking the project tree breadth-first.
+   *
+   * Directories are free; only files are charged against the cap, so a project
+   * with a wide directory fan-out is bounded by how many files it actually
+   * contains. Hitting the cap marks the result `truncated` rather than failing.
+   */
+  async function buildFallbackFileIndex(projectRoot: string): Promise<FileTreeIndex> {
+    const includeEntry = await readFallbackEntryFilter(projectRoot);
+    const files: FileTreeIndexEntry[] = [];
+    const pendingDirectories = [projectRoot];
+
+    while (pendingDirectories.length > 0) {
+      const directoryPath = pendingDirectories.shift() as string;
+      const entries = await listIndexDirectoryEntries(directoryPath, includeEntry);
+
+      for (const entry of entries) {
+        const entryPath = path.join(directoryPath, entry.name);
+        if (entry.isDirectory()) {
+          // The same system-directory guard the display walk uses: /proc and
+          // friends are never valid project content and can be pathologically
+          // large to enumerate.
+          if (!FORBIDDEN_WORKSPACE_PATHS.includes(normalizeProjectPath(entryPath))) {
+            pendingDirectories.push(entryPath);
+          }
+          continue;
+        }
+
+        if (files.length >= MAXIMUM_FILE_INDEX_ENTRIES) {
+          return { files, truncated: true };
+        }
+        files.push({ name: entry.name, path: entryPath, type: 'file' });
+      }
+    }
+
+    return { files, truncated: false };
+  }
+
+  async function buildProjectFileIndex(projectId: string): Promise<FileTreeIndex> {
+    const projectRoot = await resolveProjectRoot(projectId);
+    try {
+      await fileSystem.access(projectRoot);
+    } catch {
+      throw createFileTreeError(`Project path not found: ${projectRoot}`, 404, 'PROJECT_PATH_NOT_FOUND');
+    }
+
+    const { isGitRepository, listGitFiles } = fileSystem;
+    if (isGitRepository && listGitFiles) {
+      try {
+        if (await isGitRepository(projectRoot)) {
+          const relativePaths = await listGitFiles(projectRoot);
+          return {
+            files: relativePaths
+              .filter((relativePath) => relativePath.length > 0)
+              .map((relativePath) => ({
+                name: path.basename(relativePath),
+                path: path.resolve(projectRoot, relativePath),
+                type: 'file' as const,
+              })),
+            truncated: false,
+          };
+        }
+      } catch (error) {
+        // A failed git probe must not hide the project: degrade to the walk.
+        dependencies.logger.error(`Error reading git file index in "${projectRoot}"`, error);
+      }
+    }
+
+    return buildFallbackFileIndex(projectRoot);
   }
 
   /**
@@ -475,6 +609,23 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       return buildFileTree(projectRoot, 10, 0, includeEntry);
     },
 
+    async listProjectFileIndex(projectId) {
+      const cachedIndex = fileIndexCache.get(projectId);
+      if (cachedIndex) {
+        return cachedIndex;
+      }
+
+      const indexPromise = buildProjectFileIndex(projectId);
+      fileIndexCache.set(projectId, indexPromise);
+      try {
+        return await indexPromise;
+      } catch (error) {
+        // A failed build must not pin the failure for the process lifetime.
+        fileIndexCache.delete(projectId);
+        throw error;
+      }
+    },
+
     async createEntry(input) {
       validateFilename(input.name);
       const projectRoot = await resolveProjectRoot(input.projectId);
@@ -512,6 +663,8 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
           ENOENT: { message: 'Parent directory not found', statusCode: 404 },
         });
       }
+
+      invalidateFileIndex(input.projectId);
 
       return {
         success: true,
@@ -556,6 +709,8 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
         });
       }
 
+      invalidateFileIndex(input.projectId);
+
       return {
         success: true,
         oldPath: resolvedOldPath,
@@ -594,6 +749,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       }
 
       const entryType = stats.isDirectory() ? 'directory' as const : 'file' as const;
+      invalidateFileIndex(input.projectId);
       return {
         success: true,
         path: resolvedPath,
@@ -654,6 +810,8 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
           });
         }
 
+        invalidateFileIndex(input.projectId);
+
         return {
           success: true,
           files: uploadedFiles,
@@ -661,8 +819,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
           requestedFileCount: input.requestedFileCount,
           targetPath: resolvedTargetDirectory,
           message: `Uploaded ${uploadedFiles.length} ${uploadedFiles.length === 1 ? 'file' : 'files'} successfully`,
-        };
-      } catch (error) {
+        };      } catch (error) {
         await cleanupTemporaryFiles(input.files);
         if (readErrorCode(error) === 'EACCES') {
           throw createFileTreeError('Permission denied', 403, 'EACCES');
