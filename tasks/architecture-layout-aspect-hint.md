@@ -1,7 +1,7 @@
 ---
 id: architecture-layout-aspect-hint
 title: 布局应用容器宽高比：向 ELK 传 aspectRatio（兜底自实现 LayoutEngine，单点工厂便于切回 layoutOptions）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
