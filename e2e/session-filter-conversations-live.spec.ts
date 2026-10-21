@@ -4,6 +4,13 @@ import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 
+import {
+  navigateClientBounded,
+  warmClientStartup,
+  type ClientStartupEvidence,
+  type RequestFailure,
+} from './support/client-startup-warmup';
+
 // Real Chromium against the real backend + Vite client started by playwright.config.ts (isolated data dir).
 //
 // The subject is the Conversations feed — the sidebar's recents list, `GET /api/providers/sessions/recent` —
@@ -112,56 +119,30 @@ const appendTranscript = (filePath: string, record: TranscriptRecord): void => {
 const WATCHER_SETTLE_MS = 30_000;
 
 /**
- * A bounded client warm-up: the shell, the app entry, and one optimized dependency.
+ * The shared startup warm-up, and the bounded navigation guard that answers what it cannot.
  *
- * Why the dependency is the point, and not just "warm the cache": a transformed module's imports carry
- * `/@fs/<cache>/deps/<dep>.js?v=<hash>` urls, and a url whose hash belongs to a superseded run answers
- * `504 Outdated Optimize Dep`. Vite answers a re-optimization committed while it is serving by pushing
- * `full-reload` to every client, which replaces the document whole — the other way this run can lose a page
- * mid-case. A 200 here means the optimizer has committed and the page below will not race it.
+ * `warmClientStartup` proves only that this run's Vite dependency optimizer is quiet: a dependency url
+ * answering 200 is the entrance, and the returned reading is the proof that the committed `browserHash`
+ * held still, so the document below will not be replaced by a late optimizer commit. It cannot stop a
+ * HOST-level network change (`net::ERR_NETWORK_CHANGED`) from cutting the in-flight module requests of
+ * the first document: ES modules do not retry, so that boot leaves a white page forever and the login
+ * form never mounts. `navigateClientBounded` responds to that: it treats "the document did not mount" as
+ * a landing that did not arrive, replaces the document with a bounded `page.reload`, and fails by name
+ * (with every hop's own evidence) when its 20s deadline is spent — never as a silent success.
  *
- * Taken from e2e/session-filter.spec.ts, where it exists for the same measured reason. Every step is bounded:
- * a client that accepts a connection and then never answers ends the run by name, with the url and the status,
- * instead of waiting out a timeout inside a case.
+ * This spec used to carry a private copy of the warm-up taken from e2e/session-filter.spec.ts. The copy
+ * proved the same thing, but it left the first navigation a bare `page.goto('/')`, so the one failure
+ * this run actually paid — the login form never appearing because the host cut the first document's
+ * module graph — waited out the file watchdog instead of being answered. It now uses the shared module.
+ *
+ * The two deterministic control arms (default inert; both exit 0 except the second, which ends red):
+ *
+ *   SESSION_FILTER_LIVE_ABORT_BOOTS=1 npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts
+ *     — one interrupted boot; the replay lands, the run stays green and the log says `(attempt 2)`.
+ *   SESSION_FILTER_LIVE_ABORT_BOOTS=9 npm run test:e2e -- e2e/session-filter-conversations-live.spec.ts
+ *     — every boot the guard can make is interrupted; the run ends red at `#username`, by name, with
+ *       the abort's `net::` evidence and the replay-hop count — not the 55s file watchdog.
  */
-const CLIENT_WARM_DEADLINE_MS = 20_000;
-const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+)["']/;
-
-const warmClientStartup = async (clientUrl: string): Promise<void> => {
-  const deadline = Date.now() + CLIENT_WARM_DEADLINE_MS;
-  const fetchWithin = async (url: string): Promise<Response> => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), Math.max(1, deadline - Date.now()));
-    try {
-      return await fetch(url, { signal: controller.signal });
-    } catch (error) {
-      throw new Error(
-        `the client did not answer ${url} inside the ${CLIENT_WARM_DEADLINE_MS}ms startup budget `
-        + `(${error instanceof Error ? error.message : String(error)})`,
-      );
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  const shellUrl = new URL('/', clientUrl).href;
-  const shell = await fetchWithin(shellUrl);
-  if (!shell.ok) throw new Error(`the client's shell did not load: ${shellUrl} answered HTTP ${shell.status}`);
-  await shell.text();
-
-  const entryUrl = new URL('/src/main.tsx', clientUrl).href;
-  const entry = await fetchWithin(entryUrl);
-  if (!entry.ok) throw new Error(`the app entry did not transform: ${entryUrl} answered HTTP ${entry.status}`);
-  const entryText = await entry.text();
-
-  const specifier = OPTIMIZED_DEP_IN_TEXT.exec(entryText)?.[1];
-  if (!specifier) return;
-  const dep = await fetchWithin(new URL(specifier, clientUrl).href);
-  if (!dep.ok) {
-    throw new Error(`this run's dependency pre-bundle is not current: it answered HTTP ${dep.status}, not 200`);
-  }
-  await dep.text();
-};
 
 test.describe.configure({ mode: 'serial', timeout: 120_000 });
 
@@ -224,12 +205,65 @@ test.describe('the Conversations feed under a saved session-name rule', () => {
     if (!clientUrl) {
       throw new Error('playwright.config.ts must give this project a baseURL for the startup warm-up to address');
     }
-    await warmClientStartup(clientUrl);
+    const warmup = await warmClientStartup(clientUrl, dataDir);
 
     page = await browser.newPage();
 
+    /**
+     * The run's own startup evidence, filled by the page listeners below and read by the guard when the
+     * document does not mount. `warmup` is the optimizer reading of THIS run, so a startup failure can
+     * report whether the optimizer was quiet rather than leaving that question to the next investigation.
+     */
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    const requestFailures: RequestFailure[] = [];
+    const evidence: ClientStartupEvidence = { pageErrors, consoleErrors, requestFailures, warmup };
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('requestfailed', (request) => {
+      requestFailures.push({ url: request.url(), failureText: request.failure()?.errorText ?? 'no failure text' });
+    });
+
+    /**
+     * THE CONTROL SEAM (deterministic, default inert).
+     *
+     * The failure `navigateClientBounded` responds to — a host-level network change cutting every in-flight
+     * module request of one document — is not producible from inside the repository. This seam produces the
+     * SAME failure on demand: with `SESSION_FILTER_LIVE_ABORT_BOOTS=<n>` the first `<n>` document boots have
+     * their app entry (`/src/main.tsx`) aborted, so the module graph never executes and `#username` never
+     * appears. Everything else is untouched.
+     *
+     *   SESSION_FILTER_LIVE_ABORT_BOOTS=1  ⇒ the replay lands; the run must stay green, log `(attempt 2)`.
+     *   SESSION_FILTER_LIVE_ABORT_BOOTS=9  ⇒ no boot inside the guard's deadline lands; the run must end
+     *                                       red at `#username`, with `net::` evidence and the replay count.
+     *
+     * Unset (or ≤ 0) ⇒ this branch never runs: no effect on a normal run. Counted on the ENTRY request,
+     * not on navigation events: each document boot asks for `/src/main.tsx` exactly once, while a
+     * navigation event is not observable for every reload through the route seam (the document callback
+     * fires for the first `goto` only). The route lives on `page.context()` because `browser.newPage()`
+     * gives this page its own implicit context.
+     */
+    const parsedAbortBoots = Number.parseInt(process.env.SESSION_FILTER_LIVE_ABORT_BOOTS ?? '', 10);
+    const abortBoots = Number.isInteger(parsedAbortBoots) && parsedAbortBoots > 0 ? parsedAbortBoots : 0;
+    let entryBoots = 0;
+    await page.context().route('**', (route) => {
+      const url = route.request().url();
+      if (!/^(wss?|https?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url)) return route.abort();
+      if (/\/src\/main\.tsx(\?|$)/.test(url) && entryBoots < abortBoots) {
+        entryBoots += 1;
+        console.log(
+          `[e2e] abort-boots: aborting the app entry for document boot ${entryBoots}/${abortBoots} `
+          + '(deterministic interrupted-boot control arm)',
+        );
+        return route.abort();
+      }
+      return route.continue();
+    });
+
     // Fresh database: create the single account, then finish onboarding.
-    await page.goto('/');
+    await navigateClientBounded(page, '/', '#username', evidence);
     await page.locator('#username').fill('e2euser');
     await page.locator('input[type=password]').nth(0).fill('e2epassword');
     await page.locator('input[type=password]').nth(1).fill('e2epassword');
