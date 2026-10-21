@@ -14,9 +14,9 @@ extra: {}
 
 ## AC
 
-- [ ] 后端 JSON 邻域 schema 有导出类型 + 测试钉住字段（node 的 id/label/distance、edge 的 from/to/relationType；type 字段预留可选不破坏旧数据）
-- [ ] 前端渲染器契约类型定义（渲染器无关 props），ArchitecturePanel 只依赖契约、不再 import cytoscape 具体类型
-- [ ] 前端测试 exit 0：现有 cytoscape 渲染测试在适配层下不回归；`npm run typecheck` 通过
+- [x] 后端 JSON 邻域 schema 有导出类型 + 测试钉住字段（node 的 id/label/distance、edge 的 from/to/relationType；type 字段预留可选不破坏旧数据）
+- [x] 前端渲染器契约类型定义（渲染器无关 props），ArchitecturePanel 只依赖契约、不再 import cytoscape 具体类型
+- [x] 前端测试 exit 0：现有 cytoscape 渲染测试在适配层下不回归；`npm run typecheck` 通过
 
 ## DoD
 
