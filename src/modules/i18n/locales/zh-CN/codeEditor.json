@@ -24,7 +24,9 @@
     "fullscreen": "全屏",
     "close": "关闭",
     "previewMarkdown": "预览 Markdown",
-    "editMarkdown": "编辑 Markdown"
+    "editMarkdown": "编辑 Markdown",
+    "previewMermaid": "预览 Mermaid 图表",
+    "editMermaid": "编辑 Mermaid 源码"
   },
   "footer": {
     "lines": "行数：",

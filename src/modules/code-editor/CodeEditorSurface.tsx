@@ -7,12 +7,15 @@ import type { Extension } from '@codemirror/state';
 import type { CodeEditorGotoTarget } from '@/shared/types';
 
 import MarkdownPreview from '@/modules/code-editor/markdown/MarkdownPreview';
+import MermaidDiagram from '@/modules/code-editor/markdown/MermaidDiagram';
 
 type CodeEditorSurfaceProps = {
   content: string;
   onChange: (value: string) => void;
   markdownPreview: boolean;
   isMarkdownFile: boolean;
+  mermaidPreview?: boolean;
+  isMermaidFile?: boolean;
   isDarkMode: boolean;
   fontSize: number;
   showLineNumbers: boolean;
@@ -21,12 +24,14 @@ type CodeEditorSurfaceProps = {
   gotoTarget?: CodeEditorGotoTarget | null;
 };
 
-/** Rendered by CodeEditor inside the code-editor module to show either the CodeMirror editing surface or the markdown preview. */
+/** Rendered by CodeEditor inside the code-editor module to show the CodeMirror editing surface, the markdown preview, or the mermaid preview. */
 export default function CodeEditorSurface({
   content,
   onChange,
   markdownPreview,
   isMarkdownFile,
+  mermaidPreview = false,
+  isMermaidFile = false,
   isDarkMode,
   fontSize,
   showLineNumbers,
@@ -62,6 +67,18 @@ export default function CodeEditorSurface({
       <div className="h-full overflow-y-auto bg-white dark:bg-gray-900">
         <div className="prose prose-sm mx-auto max-w-4xl px-8 py-6 dark:prose-invert prose-headings:font-semibold prose-a:text-blue-600 prose-code:text-sm prose-pre:bg-gray-900 prose-img:rounded-lg dark:prose-a:text-blue-400">
           <MarkdownPreview content={content} />
+        </div>
+      </div>
+    );
+  }
+
+  // A .mmd/.mermaid file is diagram source, not prose. It gets the same
+  // editor/preview split as markdown, with the diagram shown on its own.
+  if (mermaidPreview && isMermaidFile) {
+    return (
+      <div className="h-full overflow-y-auto bg-white dark:bg-gray-900">
+        <div className="mx-auto max-w-4xl px-8 py-6">
+          <MermaidDiagram code={content} />
         </div>
       </div>
     );

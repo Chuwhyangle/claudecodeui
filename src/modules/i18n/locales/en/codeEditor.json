@@ -24,7 +24,9 @@
     "fullscreen": "Fullscreen",
     "close": "Close",
     "previewMarkdown": "Preview markdown",
-    "editMarkdown": "Edit markdown"
+    "editMarkdown": "Edit markdown",
+    "previewMermaid": "Preview mermaid diagram",
+    "editMermaid": "Edit mermaid source"
   },
   "footer": {
     "lines": "Lines:",

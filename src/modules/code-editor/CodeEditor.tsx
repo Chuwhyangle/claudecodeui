@@ -45,6 +45,9 @@ export default function CodeEditor({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDiff, setShowDiff] = useState(Boolean(file.diffInfo));
   const [markdownPreview, setMarkdownPreview] = useState(false);
+  // Mermaid files have their own editor/preview toggle; sharing the markdown
+  // flag would let a markdown preview state leak into a .mmd file and back.
+  const [mermaidPreview, setMermaidPreview] = useState(false);
 
   // The code editor follows the app-wide theme; it has no theme of its own.
   const { isDarkMode } = useTheme();
@@ -84,6 +87,11 @@ export default function CodeEditor({
   const isMarkdownFile = useMemo(() => {
     const extension = file.name.split('.').pop()?.toLowerCase();
     return extension === 'md' || extension === 'markdown';
+  }, [file.name]);
+
+  const isMermaidFile = useMemo(() => {
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    return extension === 'mmd' || extension === 'mermaid';
   }, [file.name]);
 
   const isHtmlPreviewFile = useMemo(() => {
@@ -260,11 +268,14 @@ export default function CodeEditor({
             isSidebar={isSidebar}
             isFullscreen={isFullscreen}
             isMarkdownFile={isMarkdownFile}
+            isMermaidFile={isMermaidFile}
             isHtmlPreviewFile={isHtmlPreviewFile}
             markdownPreview={markdownPreview}
+            mermaidPreview={mermaidPreview}
             saving={saving}
             saveSuccess={saveSuccess}
             onToggleMarkdownPreview={() => setMarkdownPreview((previous) => !previous)}
+            onToggleMermaidPreview={() => setMermaidPreview((previous) => !previous)}
             onOpenHtmlPreview={openHtmlPreview}
             onOpenSettings={() => paletteOps.openSettings('appearance')}
             onDownload={handleDownload}
@@ -277,6 +288,8 @@ export default function CodeEditor({
               pathCopied: t('actions.pathCopied', 'File path copied'),
               editMarkdown: t('actions.editMarkdown'),
               previewMarkdown: t('actions.previewMarkdown'),
+              editMermaid: t('actions.editMermaid', 'Edit mermaid source'),
+              previewMermaid: t('actions.previewMermaid', 'Preview mermaid diagram'),
               previewHtml: t('actions.previewHtml', 'Open HTML preview in new tab'),
               settings: t('toolbar.settings'),
               download: t('actions.download'),
@@ -301,6 +314,8 @@ export default function CodeEditor({
               onChange={setContent}
               markdownPreview={markdownPreview}
               isMarkdownFile={isMarkdownFile}
+              mermaidPreview={mermaidPreview}
+              isMermaidFile={isMermaidFile}
               isDarkMode={isDarkMode}
               fontSize={fontSize}
               showLineNumbers={showLineNumbers}

@@ -9,11 +9,14 @@ type CodeEditorHeaderProps = {
   isSidebar: boolean;
   isFullscreen: boolean;
   isMarkdownFile: boolean;
+  isMermaidFile: boolean;
   isHtmlPreviewFile: boolean;
   markdownPreview: boolean;
+  mermaidPreview: boolean;
   saving: boolean;
   saveSuccess: boolean;
   onToggleMarkdownPreview: () => void;
+  onToggleMermaidPreview: () => void;
   onOpenHtmlPreview: () => void;
   onOpenSettings: () => void;
   onDownload: () => void;
@@ -26,6 +29,8 @@ type CodeEditorHeaderProps = {
     pathCopied: string;
     editMarkdown: string;
     previewMarkdown: string;
+    editMermaid: string;
+    previewMermaid: string;
     previewHtml: string;
     settings: string;
     download: string;
@@ -44,11 +49,14 @@ export default function CodeEditorHeader({
   isSidebar,
   isFullscreen,
   isMarkdownFile,
+  isMermaidFile,
   isHtmlPreviewFile,
   markdownPreview,
+  mermaidPreview,
   saving,
   saveSuccess,
   onToggleMarkdownPreview,
+  onToggleMermaidPreview,
   onOpenHtmlPreview,
   onOpenSettings,
   onDownload,
@@ -125,6 +133,21 @@ export default function CodeEditorHeader({
             title={markdownPreview ? labels.editMarkdown : labels.previewMarkdown}
           >
             {markdownPreview ? <Code2 className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        )}
+
+        {isMermaidFile && (
+          <button
+            type="button"
+            onClick={onToggleMermaidPreview}
+            className={`flex items-center justify-center rounded-md p-1.5 transition-colors ${
+              mermaidPreview
+                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white'
+            }`}
+            title={mermaidPreview ? labels.editMermaid : labels.previewMermaid}
+          >
+            {mermaidPreview ? <Code2 className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         )}
 
