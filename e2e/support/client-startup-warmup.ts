@@ -22,6 +22,24 @@
  * below keeps the same wall-clock budget but fails with the evidence the spec already collects —
  * the page's text, its uncaught errors, its console errors, and every failed request with its
  * `failureText` — plus the warm-up readings of the run that failed.
+ *
+ * WHY A BOUNDED REPLAY. The warm-up proves the dependency optimizer is quiet; it cannot stop a
+ * HOST-level network change from interrupting the module requests of the document that is loading.
+ * A `net::ERR_NETWORK_CHANGED` burst does exactly that with no server fault at all: ES modules do not
+ * retry, so a boot whose module graph was cut in flight leaves a white page forever. `navigateClientBounded`
+ * therefore treats "the document did not mount" as a landing that did not arrive and REPLACES the
+ * document — a bounded `page.reload` — until its deadline is spent. This is NOT a retry that hides a
+ * red: a boot that never lands still ends the run here, by name, carrying every attempt's own
+ * evidence, inside a budget short enough to finish before a criterion's own timeout.
+ *
+ * THE TWO DETERMINISTIC CONTROL ARMS. The spec's `context.route('**')` handler honours
+ * `VOICE_E2E_ABORT_BOOTS=<n>` by aborting the app entry (`/src/main.tsx`) for the first `<n>` boots:
+ *
+ *   VOICE_E2E_ABORT_BOOTS=1 node experiments/voice-e2e-harness/run.mjs --sample 402fad85
+ *     — one interrupted boot; the replay lands, the run is green and the log says `(attempt 2)`.
+ *   VOICE_E2E_ABORT_BOOTS=9 node experiments/voice-e2e-harness/run.mjs --sample 402fad85
+ *     — every boot the guard can make is interrupted; the run ends red at `phase=mounted`, by name,
+ *       with the abort's `net::` evidence and the replay-hop count in the failure message.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -34,6 +52,36 @@ export const CLIENT_WARM_DEADLINE_MS = 30_000;
 export const OPTIMIZER_QUIET_WINDOW_MS = 1_000;
 /** How often the private cache's commit marker is re-read while proving that quiet. */
 export const OPTIMIZER_POLL_MS = 250;
+
+/**
+ * The bounded-navigation guard's five named budgets.
+ *
+ * A DEADLINE rather than a replay count, because it is the SUM that has to fit — spelled out here
+ * because forgetting this sum is exactly how a sibling criterion shipped a `page.reload` that could
+ * never run (`gap-ac228-criterion-startup-guard-cannot-afford-a-replay`):
+ *
+ *   first hop            NAVIGATION_PROBE_MS   = 5_000
+ * + first landing        FIRST_LANDING_MS      = 7_000
+ * + replay hop           REPLAY_NAVIGATION_MS  = 4_000
+ * + replay landing       REPLAY_LANDING_MS     = 3_000
+ *   ─────────────────────────────────────────────────
+ *   worst case                                = 19_000  ≤  STARTUP_GUARD_DEADLINE_MS = 20_000
+ *
+ * so even a first hop that spends its entire bound still leaves a complete replay inside the
+ * deadline. The deadline itself is ≤ 20s on purpose: the acceptance gate gives a criterion 60s
+ * (`DEFAULT_ACCEPTANCE_TIMEOUT_MS`), and a startup that never lands must fail HERE, by name, with
+ * evidence — not be turned into a bare `not-evaluated (timeout)` by the gate.
+ */
+/** How long the first `page.goto` hop may take to return a document. */
+export const NAVIGATION_PROBE_MS = 5_000;
+/** How long the first document's own mount point is given to become visible. */
+export const FIRST_LANDING_MS = 7_000;
+/** How long a replay's `page.reload` hop may take to return a document. */
+export const REPLAY_NAVIGATION_MS = 4_000;
+/** How long a replay's document is given to mount. Shorter: a replay is a re-ask, not a cold boot. */
+export const REPLAY_LANDING_MS = 3_000;
+/** The total budget the guard may spend on all hops, replays included. */
+export const STARTUP_GUARD_DEADLINE_MS = 20_000;
 
 /** A dependency url the optimizer serves out of this run's private cache, as the entry writes it. */
 const OPTIMIZED_DEP_IN_TEXT = /["'](\/@fs\/[^"']*\/deps\/[^"']+\.js\?v=[0-9a-f]+)["']/;
@@ -92,6 +140,29 @@ export type ClientStartupEvidence = {
   requestFailures: readonly RequestFailure[];
   /** The optimizer reading for this run, or `null` when the warm-up never returned one. */
   warmup: ClientWarmupReading | null;
+};
+
+/**
+ * One hop of a guarded navigation, with the evidence THAT HOP added.
+ *
+ * The spec's page-level listeners are deliberately never reset — they are the run's whole history —
+ * so the guard snapshots each array at the start of a hop and keeps only the entries that arrived
+ * during it. Without this split a replay's failure report would mix the first document's 58 aborted
+ * module requests into the reading of the document that replaced it, and nobody could tell which
+ * boot actually failed.
+ */
+export type ClientStartupHop = {
+  /** 1 is the criterion's own first navigation; every later value is a replay. */
+  attempt: number;
+  kind: 'page.goto' | 'page.reload';
+  navigationMs: number;
+  /** Why the navigation call itself did not return, or `null` when it did. */
+  navigationFailure: string | null;
+  landingMs: number;
+  landed: boolean;
+  pageErrors: readonly string[];
+  consoleErrors: readonly string[];
+  requestFailures: readonly RequestFailure[];
 };
 
 /**
@@ -230,6 +301,38 @@ const warmupLine = (warmup: ClientWarmupReading | null): string => {
 };
 
 /**
+ * The one formatted evidence block both startup failures share — the single copy of the wording, so
+ * the single-shot primitive and the replay guard cannot drift into two different readings of the
+ * same arrays.
+ */
+const startupEvidenceLines = (
+  evidence: Pick<ClientStartupEvidence, 'pageErrors' | 'consoleErrors' | 'requestFailures' | 'warmup'>,
+): string =>
+  `${listOrNone('pageerror', evidence.pageErrors)}\n`
+  + `${listOrNone('console error', evidence.consoleErrors)}\n`
+  + `${listOrNone(
+    'requestfailed',
+    evidence.requestFailures.map((failure) => `${failure.url} — ${failure.failureText}`),
+  )}\n`
+  + warmupLine(evidence.warmup);
+
+/** One hop's own slice of the run's listeners, indented under its attempt number. */
+const hopEvidenceLine = (hop: ClientStartupHop): string => {
+  const headline =
+    `  attempt ${hop.attempt} (${hop.kind}): navigation ${hop.navigationMs}ms`
+    + `${hop.navigationFailure === null ? '' : ` did not return (${hop.navigationFailure})`}`
+    + `, landing ${hop.landingMs}ms, landed=${hop.landed}`;
+  const added = [
+    ...hop.pageErrors.map((value) => `pageerror: ${value}`),
+    ...hop.consoleErrors.map((value) => `console error: ${value}`),
+    ...hop.requestFailures.map((failure) => `requestfailed: ${failure.url} — ${failure.failureText}`),
+  ];
+  return added.length === 0
+    ? `${headline} — no new page/console/request failures`
+    : `${headline}\n${added.map((value) => `    · ${value}`).join('\n')}`;
+};
+
+/**
  * Waits for the client's own mount point, and fails with this run's startup evidence instead of a
  * bare locator timeout.
  *
@@ -237,6 +340,9 @@ const warmupLine = (warmup: ClientWarmupReading | null): string => {
  * a document that never mounted, a document whose scripts threw, and a document whose module graph was
  * torn out from under it all report the page's text, its pageerrors, its console errors, its failed
  * requests (url + failureText) and the optimizer reading of the run that produced them.
+ *
+ * This is the SINGLE-SHOT primitive. A criterion whose boot can be interrupted by a host-level
+ * network change should use `navigateClientBounded`, which replays the document and reports per hop.
  */
 export const awaitClientMounted = async (
   page: Page,
@@ -258,12 +364,122 @@ export const awaitClientMounted = async (
     `the client never mounted "${selector}" inside the ${timeoutMs}ms startup budget. `
     + 'The run\'s own startup evidence follows.\n'
     + `document.body.innerText:\n${pageText}\n`
-    + `${listOrNone('pageerror', evidence.pageErrors)}\n`
-    + `${listOrNone('console error', evidence.consoleErrors)}\n`
-    + `${listOrNone(
-      'requestfailed',
-      evidence.requestFailures.map((failure) => `${failure.url} — ${failure.failureText}`),
-    )}\n`
-    + warmupLine(evidence.warmup),
+    + startupEvidenceLines(evidence),
+  );
+};
+
+/**
+ * The bounded navigation guard: navigate, probe the landing, and REPLAY the document when the landing
+ * did not arrive — until `STARTUP_GUARD_DEADLINE_MS` is spent.
+ *
+ * WHY A REPLAY AND NOT A LONGER WAIT. The failure this responds to is a host-level network change
+ * (`net::ERR_NETWORK_CHANGED`) that aborts the in-flight requests of one document's module graph.
+ * ES modules do not retry, so waiting longer on the SAME document can never recover; only a fresh
+ * document can. One replay is normally enough (the flap lasts milliseconds), and the budget is sized
+ * so a fully-spent first hop still leaves a complete replay inside the deadline — see the constant
+ * arithmetic above. The guard never returns success on a document that did not land: when the
+ * deadline is spent it throws with the page's text, the run's evidence, and a per-hop breakdown that
+ * says exactly which boots were interrupted.
+ *
+ * A navigation call that times out is a landing that did not arrive, not an error of its own: a
+ * document that never finishes loading and one that loads without ever mounting are the same failure
+ * from here, and both end at the same named error.
+ *
+ * Every hop is signed into this run's output — `[e2e] client startup: <selector> landed after <ms>ms
+ * (attempt N)` — because the replay this guard exists to make has to be READABLE as a replay, not
+ * inferred from the source.
+ */
+export const navigateClientBounded = async (
+  page: Page,
+  url: string,
+  selector: string,
+  evidence: ClientStartupEvidence,
+): Promise<void> => {
+  const startedAt = Date.now();
+  const deadline = startedAt + STARTUP_GUARD_DEADLINE_MS;
+  const budgetMs = (): number => Math.max(1, deadline - Date.now());
+  const hops: ClientStartupHop[] = [];
+
+  for (let attempt = 1; ; attempt += 1) {
+    // Snapshot the run's listeners BEFORE this hop: what arrives from here on is this document's
+    // evidence, and the earlier boots' entries must never be reported as the replay's readings.
+    const marks = {
+      pageErrors: evidence.pageErrors.length,
+      consoleErrors: evidence.consoleErrors.length,
+      requestFailures: evidence.requestFailures.length,
+    };
+    const first = attempt === 1;
+    const kind: ClientStartupHop['kind'] = first ? 'page.goto' : 'page.reload';
+
+    const navigationStartedAt = Date.now();
+    const navigationBudget = Math.min(first ? NAVIGATION_PROBE_MS : REPLAY_NAVIGATION_MS, budgetMs());
+    let navigationFailure: string | null = null;
+    try {
+      if (first) {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: navigationBudget });
+      } else {
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: navigationBudget });
+      }
+    } catch (error) {
+      navigationFailure = error instanceof Error ? error.message : String(error);
+    }
+    const navigationMs = Date.now() - navigationStartedAt;
+
+    const landingStartedAt = Date.now();
+    const landingBudget = Math.min(first ? FIRST_LANDING_MS : REPLAY_LANDING_MS, budgetMs());
+    let landed = false;
+    try {
+      await page.locator(selector).waitFor({ state: 'visible', timeout: landingBudget });
+      landed = true;
+    } catch {
+      // Not landed: this hop's failure is the replay's trigger, and the deadline decides whether a
+      // replay is still affordable. The locator's own timeout text is not carried into the report.
+    }
+    const landingMs = Date.now() - landingStartedAt;
+
+    const hop: ClientStartupHop = {
+      attempt,
+      kind,
+      navigationMs,
+      navigationFailure,
+      landingMs,
+      landed,
+      pageErrors: evidence.pageErrors.slice(marks.pageErrors),
+      consoleErrors: evidence.consoleErrors.slice(marks.consoleErrors),
+      requestFailures: evidence.requestFailures.slice(marks.requestFailures),
+    };
+    hops.push(hop);
+
+    if (landed) {
+      console.log(
+        `[e2e] client startup: ${selector} landed after ${Date.now() - startedAt}ms (attempt ${attempt})`,
+      );
+      return;
+    }
+
+    const replays = attempt - 1;
+    const spent = Date.now() >= deadline;
+    console.log(
+      `[e2e] client startup: ${selector} NOT landed after ${Date.now() - startedAt}ms `
+      + `(attempt ${attempt}, ${kind}, ${navigationMs}ms navigation`
+      + `${navigationFailure === null ? '' : ' did not return'}, ${landingMs}ms landing, `
+      + `${hop.requestFailures.length} requestfailed in this hop, ${replays} replay(s) so far)`
+      + (spent ? ' — startup guard deadline spent' : ' — replaying the navigation'),
+    );
+    if (spent) break;
+  }
+
+  const pageText = await readPageText(page);
+  const replays = hops.length - 1;
+  throw new Error(
+    `the client never mounted "${selector}" and the startup guard spent its `
+    + `${STARTUP_GUARD_DEADLINE_MS}ms budget after ${hops.length} attempt(s) `
+    + `(${replays} replay hop(s); the first hop was bounded by ${NAVIGATION_PROBE_MS}ms navigation plus `
+    + `${FIRST_LANDING_MS}ms landing, each replay by ${REPLAY_NAVIGATION_MS}ms plus ${REPLAY_LANDING_MS}ms). `
+    + 'The run\'s own startup evidence follows.\n'
+    + `document.body.innerText:\n${pageText}\n`
+    + startupEvidenceLines(evidence)
+    + '\nper-hop evidence (each hop\'s own entries only, so a replay is never read as the first boot):\n'
+    + hops.map(hopEvidenceLine).join('\n'),
   );
 };

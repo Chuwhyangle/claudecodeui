@@ -54,6 +54,20 @@
  * the catch writes `{ plan, failure: { phase, message, stack } }` to `VOICE_E2E_DUMP` and re-throws,
  * so the next red run names its own stage instead of leaving guesswork (`tts-standin`,
  * `mounted`, …).
+ *
+ * THE STARTUP IS GUARDED, NOT JUST WARMED. `warmClientStartup` proves only that this run's
+ * dependency optimizer is quiet; it cannot stop a HOST-level network change (`net::ERR_NETWORK_CHANGED`)
+ * from aborting the in-flight module requests of the document that is loading. ES modules do not
+ * retry, so that one flap leaves a white page forever. `navigateClientBounded` therefore replaces the
+ * document (a bounded `page.reload`) when the mount point does not appear, until its own deadline is
+ * spent — a bounded REPLAY, not a retry that masks a red: a boot that never lands still ends the run
+ * at `phase=mounted`, by name and with evidence. The deterministic control arms live in this file's
+ * `context.route` seam (`VOICE_E2E_ABORT_BOOTS`) and are run through the same criterion command:
+ *
+ *   VOICE_E2E_ABORT_BOOTS=1 node experiments/voice-e2e-harness/run.mjs --sample 402fad85
+ *     ⇒ green, log says `(attempt 2)` (one interrupted boot, one replay)
+ *   VOICE_E2E_ABORT_BOOTS=9 node experiments/voice-e2e-harness/run.mjs --sample 402fad85
+ *     ⇒ red at `[voice-e2e] beforeAll aborted at phase=mounted:` with the abort's `net::` evidence
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -71,7 +85,7 @@ import { ANNOUNCE_PHRASES } from '../server/modules/voice-realtime/voice-realtim
 import { installWavMic, playWavMic, wavMicReading } from '../experiments/voice-e2e-harness/wavMic';
 import { startScriptedUpstream, type ScriptedUpstreamServer } from './voiceRealtimeScriptedUpstream';
 import {
-  awaitClientMounted,
+  navigateClientBounded,
   warmClientStartup,
   type ClientWarmupReading,
   type RequestFailure,
@@ -753,10 +767,42 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
 
       currentPhase = 'mounted';
       const context = await browser.newContext({ baseURL: clientUrl, viewport: { width: 1280, height: 800 } });
+      /**
+       * THE CONTROL SEAM (deterministic, default inert).
+       *
+       * The failure `navigateClientBounded` responds to — a host-level network change cutting every
+       * in-flight module request of one document — is not producible from inside the repository. This
+       * seam produces the SAME failure on demand: with `VOICE_E2E_ABORT_BOOTS=<n>` the first `<n>`
+       * document boots have their app entry (`/src/main.tsx`) aborted, so the module graph never
+       * executes and the mount point never appears. Everything else is untouched.
+       *
+       *   VOICE_E2E_ABORT_BOOTS=1  ⇒ the replay lands; the run must stay green, log `(attempt 2)`.
+       *   VOICE_E2E_ABORT_BOOTS=9  ⇒ no boot inside the guard's deadline lands; the run must end red
+       *                              at `phase=mounted`, with `net::` evidence and the replay count.
+       *
+       * `run.mjs` spawns Playwright with `env: { ...process.env, … }`, so the variable passes through
+       * without touching the runner. Unset (or ≤ 0) ⇒ this branch never runs: no effect on a normal run.
+       */
+      const parsedAbortBoots = Number.parseInt(process.env.VOICE_E2E_ABORT_BOOTS ?? '', 10);
+      const abortBoots = Number.isInteger(parsedAbortBoots) && parsedAbortBoots > 0 ? parsedAbortBoots : 0;
+      // Counted on the ENTRY request, not on the navigation request: each document boot asks for
+      // `/src/main.tsx` exactly once, while a navigation event is not observable for every reload
+      // through the route seam (measured: the document callback fires for the first `goto` only).
+      let entryBoots = 0;
       await context.route('**', (route) => {
-        const url = route.request().url();
-        if (/^(wss?|https?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url)) return route.continue();
-        return route.abort();
+        const request = route.request();
+        const url = request.url();
+        if (!/^(wss?|https?):\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/|$)/.test(url)) return route.abort();
+        const isAppEntry = /\/src\/main\.tsx(\?|$)/.test(url);
+        if (isAppEntry && entryBoots < abortBoots) {
+          entryBoots += 1;
+          console.log(
+            `[e2e] abort-boots: aborting the app entry for document boot ${entryBoots}/${abortBoots} `
+            + '(deterministic interrupted-boot control arm)',
+          );
+          return route.abort();
+        }
+        return route.continue();
       });
       await context.addInitScript(
         ({ authToken }: { authToken: string }) => {
@@ -919,8 +965,11 @@ test.describe('the frozen wav sample through the real Live Voice chain', () => {
         await route.fulfill({ status: 200, contentType: 'audio/wav', body: STANDIN_TTS_WAV });
       });
 
-      await page.goto(`/session/${sessionId}`);
-      await awaitClientMounted(page, PANE, 12_000, {
+      // THE STARTUP GUARD. Not a bare `page.goto` + single mount probe: a host-level network change
+      // can interrupt this document's module requests once, and ES modules never retry, so the guard
+      // replays the document (bounded) until it lands — or ends the run here, by name, with every
+      // attempt's evidence, inside its own deadline. See `client-startup-warmup.ts`.
+      await navigateClientBounded(page, `/session/${sessionId}`, PANE, {
         pageErrors,
         consoleErrors,
         requestFailures,
