@@ -15,12 +15,14 @@ goal_ac: AC-410
 
 ## AC
 
-- AC-410 criterion 转绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/file-tree/tests/file-tree-lazy-listing.test.ts` 退出 0。
-- 既有 `server/modules/file-tree/tests/file-tree.service.test.ts` 仍绿（其中「gitignore 模式下 `build` 仍显示」的断言不改动）。
+- [x] AC-410 criterion 转绿：`npx tsx --tsconfig server/tsconfig.json --test server/modules/file-tree/tests/file-tree-lazy-listing.test.ts` 退出 0。
+- [x] 既有 `server/modules/file-tree/tests/file-tree.service.test.ts` 仍绿（其中「gitignore 模式下 `build` 仍显示」的断言不改动）。
 
 ## DoD
 
 真实落地判据：新测试 `file-tree-lazy-listing.test.ts` 用 path-keyed 假 FS 记录 `openDirectory` 的调用路径，断言列根层只读根目录、不读任何子孙；含 5 万条目子目录的根层列表成功返回该子目录条目且不抛 413；单独列该子目录返回截断列表 + truncated 标记；`.venv` 在两种模式都被硬排除。⚠️ 新增 server 测试文件会顶高 `scripts/test.sh` 的 unknown pin：重新测量并把新文件写进 Touches；同文件涉及 duration-baseline 覆盖率地板，跑 `bash scripts/test.sh` 确认不破。
+
+落地读数：`file-tree-lazy-listing.test.ts` 3/3 pass（列根层 `openDirectory` 仅 [项目根]；5 万条目子目录根层列表 truncated=false 且未读取该子目录；单独列该子目录 entries=2000、truncated=true、只多读 1 条即停；`.venv`/`venv`/`__pycache__`/`.pytest_cache`/`.cache` 在 respectGitignore true/false 两模式均缺席）。`file-tree.service.test.ts` 9/9 + `file-tree.routes.test.ts` 6/6 pass。`npx tsc --noEmit -p server/tsconfig.json` 退出 0。新增 server 测试文件后 unknown pin 重测 387→388（unknown 384→385 / 386→387），`quay-test-script.test.ts` 14/14 pass；baseline 覆盖率地板 349/388 跌破 90%，已把新文件按单文件实测 2355ms 写入 `scripts/suite-duration-baseline.tsv`（349/388 → 350/388，恢复 ≥90%），未在会话内跑全量 suite（worker 约束；fan-in 跑）。
 
 ## Touches
 
@@ -28,4 +30,7 @@ goal_ac: AC-410
 - server/modules/file-tree/file-tree.routes.ts
 - server/shared/types.ts
 - server/modules/file-tree/tests/file-tree-lazy-listing.test.ts
+- server/modules/file-tree/tests/file-tree.routes.test.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/file-tree-lazy-directory-listing.md
