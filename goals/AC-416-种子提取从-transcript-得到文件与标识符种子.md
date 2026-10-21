@@ -1,7 +1,7 @@
 ---
 id: AC-416
 title: 种子提取从 transcript 得到文件与标识符种子
-status: active
+status: achieved
 kind: criterion
 goal: GOAL-049
 criterion: npx tsx --tsconfig server/tsconfig.json --test
@@ -23,6 +23,11 @@ statusLog:
     to: active
     actor: goal-cli
     reason: ""
+  - at: 2026-10-21T07:42:25.920Z
+    from: active
+    to: achieved
+    actor: goal-driver
+    reason: "I2: criterion pass"
 fidelity:
   verdict: not-evaluated
   reason: no judge configured
