@@ -9,6 +9,7 @@ import { defineConfig } from '@playwright/test';
 import { fsAvailableBytes, resolveE2eDataDir } from './scripts/e2e-data-dir-selection.mjs';
 import { prepareServerBundle } from './scripts/e2e-server-bundle.mjs';
 import { reclaimDataDirs } from './scripts/e2e-data-dir-retention.mjs';
+import { resolveClientRoot } from './scripts/e2e-client-root.mjs';
 import {
   ASSEMBLY_TEMP_ROOT_ENV,
   PROBE_FILE_NAME,
@@ -2998,6 +2999,33 @@ const envFreeServerRoot = ((): string => {
 })();
 
 /**
+ * The root the CLIENT `webServer` serves: a run-scoped copy of this checkout's client tree.
+ *
+ * WHY THE CLIENT NEEDS ONE. The client entry below used to declare no `cwd`, so Playwright started
+ * Vite in `CONFIG_DIR` — the checkout the config file lives in. That is the same checkout the goal
+ * gate evaluates criteria in (`evaluationRoot`), and it is the same checkout fan-in's `ff` step lands
+ * commits into. A landing that writes `src/` mid-run reaches Vite's watcher; for a module without
+ * `import.meta.hot.accept` (e.g. `src/shared/api.ts`) the update bubbles to the entry and the page
+ * fully reloads, and a case a few assertions in loses its page and fails on a reason none of its own
+ * assertions can name. Recorded on AC-345: the discriminator wrote one comment line into the served
+ * checkout's `src/shared/api.ts` during case 6 and the criterion went red at 41.0s with Vite's
+ * `ws proxy error: write EPIPE` in the same second, while the untouched control run passed.
+ *
+ * The copy is REAL, not `cp -al`: a hardlink shares the inode, so fan-in's in-place write would
+ * change the bytes Vite reads exactly as before. `node_modules` is the one symlink. The module
+ * (`scripts/e2e-client-root.mjs`) owns the tree declaration, the first-writer-wins publication to
+ * workers, and the cleanup on every exit path; `QUAY_E2E_CLIENT_ROOT=off` is the control arm that
+ * degrades the root back to the checkout.
+ *
+ * SKIPPED WHERE THERE IS NO CLIENT SERVER. The one-file MCP-settings selection starts no webServer
+ * pair (`mcpSettingsOnlySelection`) — its spec boots its own Vite — so a snapshot here would be
+ * copied and never served. Every other selection, full-tree runs included, gets its own copy.
+ */
+const clientRoot = mcpSettingsOnlySelection
+  ? CONFIG_DIR
+  : resolveClientRoot({ configDir: CONFIG_DIR });
+
+/**
  * The command the server `webServer` starts: this checkout's server graph pre-built into one file.
  *
  * WHY NOT `tsx` ANY MORE. A criterion's ceiling covers the whole `npx playwright test` invocation,
@@ -3186,6 +3214,9 @@ export default defineConfig({
       // so the url checked below — the port the browser is sent to — would never answer and the run would sit
       // here until the ceiling instead of reporting the port. Strict, it fails at once and says which port.
       command: 'node_modules/.bin/vite --host 127.0.0.1 --strictPort',
+      // The run's own copy of the client tree — not `CONFIG_DIR`, which fan-in's `ff` writes while the gate
+      // is running. Without this, one landing into `src/` reloads the page mid-case. See `clientRoot`.
+      cwd: clientRoot,
       url: CLIENT_URL,
       reuseExistingServer: false,
       timeout: WEB_SERVER_TIMEOUT_MS,
