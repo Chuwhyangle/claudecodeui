@@ -24,9 +24,9 @@ quay 项目会话打开 architecture tab 仍显示「Node budget reached — thi
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/architecture-routes.test.ts` exit 0：file 图独立预算（实体截断时 file 图仍完整，或按 file 自身上限截断）；响应含 `entityTruncated`/`fileTruncated` 且与各自粒度一致；既有的 `truncated` 消费者不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：提示只在当前粒度被截断时出现且含实际/上限数字；hops 控件切换触发重新请求并带正确参数；既有 hover/缩放/爆炸用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/architecture-routes.test.ts` exit 0：file 图独立预算（实体截断时 file 图仍完整，或按 file 自身上限截断）；响应含 `entityTruncated`/`fileTruncated` 且与各自粒度一致；既有的 `truncated` 消费者不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：提示只在当前粒度被截断时出现且含实际/上限数字；hops 控件切换触发重新请求并带正确参数；既有 hover/缩放/爆炸用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -40,6 +40,7 @@ quay 项目会话打开 architecture tab 仍显示「Node budget reached — thi
 - src/modules/architecture/ArchitecturePanel.tsx
 - src/modules/architecture/useArchitectureGraph.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/shared/api.ts
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json
