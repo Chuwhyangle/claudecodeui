@@ -1,7 +1,7 @@
 ---
 id: architecture-canvas-wheel-zoom-and-drag-pan
 title: 画布交互：滚轮直接缩放、左键/中键拖动平移、键盘平移缩放、缩放簇移进画布右下角
-status: ready
+status: done
 labels:
   - feature
 parent: null
@@ -21,10 +21,10 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：无修饰键的 wheel 事件在画布上改变缩放且 `defaultPrevented === true`；deltaY 方向对应放大/缩小；以光标为锚点（锚点下的 viewBox 坐标缩放前后不变）；Ctrl+wheel 行为不回归；画布外的 wheel 不被拦截
-- [ ] 同上命令新增用例：左键在空白处拖动超过阈值后滚动偏移变化；中键（`button === 1`）拖动同样平移；在节点上按下不平移且单击/双击下钻不回归；拖动小于 4px 视为点击；`pointercancel` 后不残留拖动状态
-- [ ] 同上命令新增用例：画布聚焦后方向键/`+`/`-`/`0` 生效，Escape 不被消费；缩放簇在画布内（DOM 上位于画布容器之内）且工具栏里不再有缩放按钮；簇按钮命中区 PC ≥ 32px、触摸 ≥ 44px
-- [ ] `npx vitest run src/modules/architecture/tests/mobileGestures.test.tsx` exit 0（触摸手势与新路径共用控制器，既有用例不回归）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：无修饰键的 wheel 事件在画布上改变缩放且 `defaultPrevented === true`；deltaY 方向对应放大/缩小；以光标为锚点（锚点下的 viewBox 坐标缩放前后不变）；Ctrl+wheel 行为不回归；画布外的 wheel 不被拦截
+- [x] 同上命令新增用例：左键在空白处拖动超过阈值后滚动偏移变化；中键（`button === 1`）拖动同样平移；在节点上按下不平移且单击/双击下钻不回归；拖动小于 4px 视为点击；`pointercancel` 后不残留拖动状态
+- [x] 同上命令新增用例：画布聚焦后方向键/`+`/`-`/`0` 生效，Escape 不被消费；缩放簇在画布内（DOM 上位于画布容器之内）且工具栏里不再有缩放按钮；簇按钮命中区 PC ≥ 32px、触摸 ≥ 44px
+- [x] `npx vitest run src/modules/architecture/tests/mobileGestures.test.tsx` exit 0（触摸手势与新路径共用控制器，既有用例不回归）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -39,6 +39,7 @@ extra: {}
 - src/modules/architecture/tests/svgViewport.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/mobileGestures.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json

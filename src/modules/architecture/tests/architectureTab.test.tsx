@@ -120,6 +120,25 @@ class RecordingResizeObserver {
 }
 globalThis.ResizeObserver = RecordingResizeObserver as unknown as typeof ResizeObserver;
 
+/**
+ * jsdom implements neither `PointerEvent` nor pointer capture. This minimal
+ * PointerEvent extends MouseEvent (so `clientX`/`clientY`/`button` are real)
+ * and adds the two fields the pan reads: `pointerId` for following one gesture
+ * and `pointerType` for the mouse/finger split.
+ */
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number;
+  readonly pointerType: string;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? '';
+  }
+}
+(window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent =
+  TestPointerEvent as unknown as typeof PointerEvent;
+
 /** Deliver one resize notification to every mounted observer, inside act(). */
 function triggerResize(): void {
   act(() => {
@@ -328,6 +347,20 @@ function graphRoot(): HTMLElement {
   const root = document.querySelector('[data-architecture-plantuml-graph]');
   assert.ok(root instanceof HTMLElement);
   return root;
+}
+
+/** The canvas container the drawing and its floating zoom cluster live in. */
+function canvasOf(host: HTMLElement): HTMLElement {
+  const canvas = host.closest('[data-architecture-canvas]');
+  assert.ok(canvas instanceof HTMLElement, 'the drawing host must sit in the canvas container');
+  return canvas;
+}
+
+/** The on-canvas zoom cluster. */
+function zoomCluster(): HTMLElement {
+  const cluster = document.querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(cluster instanceof HTMLElement, 'the zoom controls must be drawn on the canvas');
+  return cluster;
 }
 
 /** jsdom performs no layout, so the scroll container's content box is pinned by hand. */
@@ -647,7 +680,7 @@ test('the renderer draws the neighbourhood as an SVG (PlantUML/ELK, not a fake)'
   );
 });
 
-test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG', async () => {
+test('the diagram opens fitted, and the canvas cluster plus Ctrl+wheel resize the SVG', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await screen.findByTestId('plantuml-host');
   // Pin the content box a laid-out browser would report, then deliver the resize
@@ -682,8 +715,10 @@ test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG',
   fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
   assert.ok(Math.abs(svgWidth(host) - fitted) < 0.05, 'zoom out takes the same step back');
 
-  // 100% is natural size, i.e. the viewBox extent — not the fit size.
-  fireEvent.click(screen.getByRole('button', { name: 'Actual size (100%)' }));
+  // 100% is natural size, i.e. the viewBox extent — not the fit size. It is a
+  // keyboard command on the focused canvas ('1'), not a toolbar button.
+  host.focus();
+  fireEvent.keyDown(host, { key: '1' });
   assert.equal(svgWidth(host), natural.width);
   assert.equal(Number(host.querySelector('svg')?.getAttribute('height')), natural.height);
 
@@ -694,16 +729,284 @@ test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG',
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
   assert.equal(await waitForFit(host), fitted);
 
-  // A plain wheel stays the container's scroll gesture: no zoom, no mode change.
+  // Ctrl+wheel (the form a trackpad pinch produces) still zooms around the pointer.
   const before = svgWidth(host);
-  fireEvent.wheel(host, { deltaY: -120 });
-  assert.equal(svgWidth(host), before, 'a plain wheel must not zoom');
-  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
-
-  // Ctrl+wheel is the zoom gesture; it switches to the user's own scale.
-  fireEvent.wheel(host, { deltaY: -120, ctrlKey: true });
+  assert.equal(fireEvent.wheel(host, { deltaY: -120, clientX: 40, clientY: 40, ctrlKey: true }), false);
   assert.ok(svgWidth(host) > before, 'Ctrl+wheel zooms in');
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+});
+
+test('a plain wheel zooms around the cursor and never reaches the page', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const root = graphRoot();
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+  const natural = svgViewBoxSize(svg);
+
+  host.scrollLeft = 0;
+  host.scrollTop = 0;
+  // A scroll-aware box: the SVG's client origin moves with the container's
+  // scroll, which is how a laid-out browser reports it. Without it the
+  // "point under the cursor" reading would be a constant.
+  svg.getBoundingClientRect = () => {
+    const width = Number(svg.getAttribute('width'));
+    const height = Number(svg.getAttribute('height'));
+    return {
+      x: -host.scrollLeft,
+      y: -host.scrollTop,
+      left: -host.scrollLeft,
+      top: -host.scrollTop,
+      width,
+      height,
+      right: width - host.scrollLeft,
+      bottom: height - host.scrollTop,
+      toJSON: () => ({}),
+    } as DOMRect;
+  };
+  /** The viewBox coordinate under a client point, read from the SVG's real box. */
+  const userUnder = (clientX: number, clientY: number): { x: number; y: number } => {
+    const rect = svg.getBoundingClientRect();
+    const scaleNow = rect.width > 0 ? rect.width / natural.width : 1;
+    return { x: (clientX - rect.left) / scaleNow, y: (clientY - rect.top) / scaleNow };
+  };
+
+  const anchorBefore = userUnder(180, 120);
+  const scaleBefore = Number(root.getAttribute('data-architecture-zoom-scale'));
+  assert.equal(
+    fireEvent.wheel(host, { deltaY: -120, clientX: 180, clientY: 120 }),
+    false,
+    'the canvas must preventDefault its wheel — it is the wheel\'s only consumer',
+  );
+  await waitFor(() => {
+    assert.ok(
+      Number(root.getAttribute('data-architecture-zoom-scale')) > scaleBefore,
+      'wheel up (negative deltaY) zooms in',
+    );
+  });
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+  const anchorAfter = userUnder(180, 120);
+  // The SVG's width/height are written rounded to hundredths, so the scale read
+  // back from the attribute differs from the controller's by <1e-4; sub-hundredth
+  // user units is still "the point did not move".
+  assert.ok(
+    Math.abs(anchorAfter.x - anchorBefore.x) < 1e-2 && Math.abs(anchorAfter.y - anchorBefore.y) < 1e-2,
+    `the viewBox point under the cursor must not move: ${JSON.stringify(anchorBefore)} → ${JSON.stringify(anchorAfter)}`,
+  );
+
+  // Wheel down is the opposite direction.
+  const zoomedIn = Number(root.getAttribute('data-architecture-zoom-scale'));
+  fireEvent.wheel(host, { deltaY: 120, clientX: 180, clientY: 120 });
+  await waitFor(() => assert.ok(Number(root.getAttribute('data-architecture-zoom-scale')) < zoomedIn));
+
+  // A wheel that is not on the canvas is not the canvas's to consume: the
+  // toolbar keeps the browser's default and nothing zooms.
+  const toolbar = document.querySelector('[data-architecture-toolbar]');
+  assert.ok(toolbar instanceof HTMLElement);
+  const outsideScale = Number(root.getAttribute('data-architecture-zoom-scale'));
+  assert.equal(
+    fireEvent.wheel(toolbar, { deltaY: -120 }),
+    true,
+    'a wheel outside the canvas must not be intercepted',
+  );
+  assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), outsideScale);
+});
+
+test('a left drag on the blank canvas pans, while a press on a node never does', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const root = graphRoot();
+  const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
+  assert.ok(groupNode !== null, 'the overview group stands in for a drawn node');
+
+  // Blank canvas (the scroll container itself): a drag pans it.
+  fireEvent.pointerDown(host, { pointerId: 21, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 });
+  fireEvent.pointerMove(host, { pointerId: 21, pointerType: 'mouse', clientX: 250, clientY: 280 });
+  assert.equal(host.scrollLeft, 50, 'the drawing follows the drag horizontally');
+  assert.equal(host.scrollTop, 20, 'and vertically');
+  assert.equal(host.style.cursor, 'grabbing', 'the cursor says the canvas is being dragged');
+
+  // Release over a node: the pan must not turn into a selection or a drill.
+  fireEvent.pointerUp(groupNode, { pointerId: 21, pointerType: 'mouse', clientX: 250, clientY: 280 });
+  fireEvent.click(groupNode);
+  assert.equal(
+    root.getAttribute('data-architecture-view'),
+    'overview',
+    'a pan must not act on the node it was released over',
+  );
+  assert.equal(host.style.cursor, 'grab', 'the drag state ends with the release');
+
+  // A press ON a node is a click, not the start of a pan — and it still drills.
+  const scrolledLeft = host.scrollLeft;
+  fireEvent.pointerDown(groupNode, { pointerId: 22, pointerType: 'mouse', button: 0, clientX: 250, clientY: 280 });
+  fireEvent.pointerMove(groupNode, { pointerId: 22, pointerType: 'mouse', clientX: 180, clientY: 200 });
+  assert.equal(host.scrollLeft, scrolledLeft, 'a press on a node stays a click');
+  fireEvent.pointerUp(groupNode, { pointerId: 22, pointerType: 'mouse', clientX: 180, clientY: 200 });
+  fireEvent.click(groupNode);
+  await waitFor(() => assert.equal(root.getAttribute('data-architecture-view'), 'group'));
+});
+
+test('a middle-button drag pans too, and a sub-4px press is still a click', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const root = graphRoot();
+
+  // Middle button (button === 1) pans from the blank canvas.
+  fireEvent.pointerDown(host, { pointerId: 23, pointerType: 'mouse', button: 1, clientX: 300, clientY: 300 });
+  fireEvent.pointerMove(host, { pointerId: 23, pointerType: 'mouse', clientX: 240, clientY: 300 });
+  assert.equal(host.scrollLeft, 60, 'the middle-button drag pans the drawing');
+  fireEvent.pointerUp(host, { pointerId: 23, pointerType: 'mouse', clientX: 240, clientY: 300 });
+
+  host.scrollLeft = 0;
+  host.scrollTop = 0;
+  // A 3px wobble is below the 4px threshold: it is a click, so the release
+  // click still reaches the drawing.
+  fireEvent.pointerDown(host, { pointerId: 24, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 });
+  fireEvent.pointerMove(host, { pointerId: 24, pointerType: 'mouse', clientX: 303, clientY: 300 });
+  assert.equal(host.scrollLeft, 0, 'less than 4px is not a drag');
+  fireEvent.pointerUp(host, { pointerId: 24, pointerType: 'mouse', clientX: 303, clientY: 300 });
+
+  const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
+  assert.ok(groupNode !== null);
+  fireEvent.click(groupNode);
+  await waitFor(
+    () => assert.equal(root.getAttribute('data-architecture-view'), 'group'),
+    { timeout: 2000 },
+  );
+});
+
+test('a cancelled drag leaves no drag state behind', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const root = graphRoot();
+
+  fireEvent.pointerDown(host, { pointerId: 25, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 });
+  fireEvent.pointerMove(host, { pointerId: 25, pointerType: 'mouse', clientX: 200, clientY: 300 });
+  assert.equal(host.scrollLeft, 100);
+
+  fireEvent.pointerCancel(host, { pointerId: 25, pointerType: 'mouse', clientX: 200, clientY: 300 });
+  assert.equal(host.style.cursor, 'grab', 'cancel ends the pan');
+  fireEvent.pointerMove(host, { pointerId: 25, pointerType: 'mouse', clientX: 100, clientY: 100 });
+  assert.equal(host.scrollLeft, 100, 'a cancelled pointer must not keep panning');
+
+  // The next click is a click again: a released selection gesture drills.
+  const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
+  assert.ok(groupNode !== null);
+  fireEvent.click(groupNode);
+  await waitFor(() => assert.equal(root.getAttribute('data-architecture-view'), 'group'));
+});
+
+test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const root = graphRoot();
+
+  host.focus();
+  assert.equal(document.activeElement, host, 'the canvas must be a keyboard focus target');
+
+  const left = host.scrollLeft;
+  const top = host.scrollTop;
+  assert.equal(fireEvent.keyDown(host, { key: 'ArrowRight' }), false, 'the canvas consumes its pan keys');
+  assert.equal(host.scrollLeft, left + 40, 'ArrowRight pans by one step');
+  fireEvent.keyDown(host, { key: 'ArrowDown' });
+  assert.equal(host.scrollTop, top + 40, 'ArrowDown pans by one step');
+  fireEvent.keyDown(host, { key: 'ArrowLeft' });
+  assert.equal(host.scrollLeft, left);
+  fireEvent.keyDown(host, { key: 'ArrowUp' });
+  assert.equal(host.scrollTop, top);
+
+  const scaleBefore = Number(root.getAttribute('data-architecture-zoom-scale'));
+  assert.equal(fireEvent.keyDown(host, { key: '+' }), false);
+  assert.ok(Number(root.getAttribute('data-architecture-zoom-scale')) > scaleBefore, "'+' zooms in");
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+  fireEvent.keyDown(host, { key: '-' });
+  assert.ok(Math.abs(Number(root.getAttribute('data-architecture-zoom-scale')) - scaleBefore) < 1e-9, "'-' zooms out");
+
+  assert.equal(fireEvent.keyDown(host, { key: '0' }), false);
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit', "'0' fits");
+  assert.equal(fireEvent.keyDown(host, { key: '1' }), false);
+  assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), 1, "'1' is actual size");
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'custom');
+
+  // Escape is not bound here: it must stay available to the global handler
+  // (the chat page aborts a running turn on it).
+  assert.equal(fireEvent.keyDown(host, { key: 'Escape' }), true, 'Escape must not be consumed by the canvas');
+});
+
+test('the zoom cluster lives on the canvas, not in the toolbar, with 32px targets', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  const canvas = canvasOf(host);
+  const cluster = zoomCluster();
+  assert.ok(canvas.contains(cluster), 'the cluster must be inside the canvas container');
+  assert.equal(cluster.getAttribute('role'), 'group');
+  assert.equal(cluster.getAttribute('aria-label'), 'Diagram zoom', 'the cluster carries an accessible name');
+  assert.ok(cluster.querySelector('[data-architecture-zoom-level]'), 'the percentage readout belongs to the cluster');
+  for (const control of ['zoom-in', 'zoom-out', 'zoom-fit']) {
+    assert.ok(cluster.querySelector(`[data-architecture-${control}]`), `${control} must be in the cluster`);
+  }
+
+  // A fine pointer gets 32px targets (the WCAG 2.5.8 minimum is 24px; 32 stays
+  // comfortably clickable without hiding the drawing).
+  const buttons = [...cluster.querySelectorAll('button')];
+  assert.ok(buttons.length >= 3, `zoom in, zoom out and fit; got ${buttons.length}`);
+  for (const button of buttons) {
+    const style = getComputedStyle(button);
+    assert.ok(
+      Number.parseFloat(style.minHeight) >= 32,
+      `a cluster target must be at least 32px tall; got ${style.minHeight}`,
+    );
+    assert.ok(
+      Number.parseFloat(style.minWidth) >= 32,
+      `a cluster target must be at least 32px wide; got ${style.minWidth}`,
+    );
+  }
+
+  // The toolbar no longer owns any zoom control.
+  const toolbar = document.querySelector('[data-architecture-toolbar]');
+  assert.ok(toolbar instanceof HTMLElement);
+  for (const control of ['zoom-in', 'zoom-out', 'zoom-fit']) {
+    assert.equal(
+      toolbar.querySelector(`[data-architecture-${control}]`),
+      null,
+      `the toolbar must not keep the ${control} control`,
+    );
+  }
+});
+
+test('the zoom cluster grows to 44px targets on a coarse pointer', async () => {
+  const originalMatchMedia = window.matchMedia;
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === '(pointer: coarse)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    await waitForDiagram();
+    const cluster = zoomCluster();
+    for (const button of cluster.querySelectorAll('button')) {
+      const style = getComputedStyle(button);
+      assert.equal(style.minHeight, '44px', 'a coarse pointer gets the 44px target');
+      assert.equal(style.minWidth, '44px', 'a coarse pointer gets the 44px target');
+    }
+  } finally {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
+  }
 });
 
 test('the readable toggle switches between the focused default and the whole-graph overview', async () => {
