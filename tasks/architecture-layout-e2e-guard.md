@@ -43,10 +43,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0，`0 failed`、`0 skipped`；贴 `N passed (时间)` 摘要与整个调用的墙钟，墙钟小于 55 秒（或已在 `SPEC_BUDGET_MS` 为该文件加条目并写明实测读数）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：两条控制臂各自证明守卫在注入缺陷后判红（贴每条臂的读数与阈值）；去掉注入的样式后同一读取函数在主臂上判绿（两个方向的读数各贴一次）
-- [ ] 在提交 `f7488b693` 的临时 worktree 里对同一份 spec 跑主臂：「画布占满」与「浮层不盖图」至少两项判红，贴原文失败行（含读到的画布高度与可用高度、SVG 首行顶端与读数行底端）
-- [ ] `npm run typecheck` 通过；`npm run lint` 无 `: error `
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0，`0 failed`、`0 skipped`；贴 `N passed (时间)` 摘要与整个调用的墙钟，墙钟小于 55 秒（或已在 `SPEC_BUDGET_MS` 为该文件加条目并写明实测读数）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：两条控制臂各自证明守卫在注入缺陷后判红（贴每条臂的读数与阈值）；去掉注入的样式后同一读取函数在主臂上判绿（两个方向的读数各贴一次）
+- [x] 在提交 `f7488b693` 的临时 worktree 里对同一份 spec 跑主臂：「画布占满」与「浮层不盖图」至少两项判红，贴原文失败行（含读到的画布高度与可用高度、SVG 首行顶端与读数行底端）
+- [x] `npm run typecheck` 通过；`npm run lint` 无 `: error `
 
 ## DoD
 
@@ -58,3 +58,23 @@ depends_on:
 - e2e/support/architectureFixture.ts (new)
 - playwright.config.ts
 - tasks/architecture-layout-e2e-guard.md
+
+## Notes
+
+实施记录（2026-10-22，worker 会话；merge develop 后测得）。
+
+**主臂**（`npx playwright test e2e/architecture-canvas-layout.spec.ts`）：exit 0，`4 passed (24.9s)`，整个调用墙钟 25542ms。PC 视口：host 1151×622 / available 621.5 → fill ratio 1；读数行底边 144 ≤ SVG 首行顶端 219.5；缩略图/缩放簇与 6 个 node 无交。手机视口：fill ratio 1；读数行底边 299 ≤ drawing top 379.25；44px 命中区全绿（13 个可见按钮）。两视口的读数一致项在 explosion 视图读：N=120、M=120、drawn=120。
+
+`SPEC_BUDGET_MS['architecture-canvas-layout.spec.ts'] = 120_000` 已加（注释里写明 35.2s / 24.9s 两次实测），使 fan-in 负载下不会被 55s 看门狗中途掐断。
+
+**控制臂**（`--grep "control arm"`）：exit 0，`2 passed (15.6s)`。
+- 臂 A：注入前 fill ratio 1（host 615 / available 615）→ 注入 `display:block` 后 0.644（host 396 / available 615，阈值 0.95）→ 移除后回到 1。
+- 臂 B：注入前读数行底边 150 ≤ drawing top 162 → 注入 `position:absolute; top:12px` 后 176 > 133 → 移除后回到 150 ≤ 162。
+
+**缺陷提交 f7488b693**（临时 worktree，已删除）：主臂两视口都红，原文失败行：
+`pc.fitted: the canvas must fill the panel — host height 396px vs available 669px = 0.592 must be >= 0.95`
+`pc.fitted: the readout row must not be drawn over the drawing — readout row bottom 134.5 vs SVG first row top 108`
+`phone.fitted: the canvas must fill the panel — host height 354px vs available 683px = 0.518 must be >= 0.95`
+`phone.fitted: the readout row must not be drawn over the drawing — readout row bottom 227 vs SVG first row top 173`
+
+**夹具形状**：五组嵌套目录、120 实体、五条 seed。目录组数刻意压低（overview 每个目录一个盒子），使整图在手机画布内完整可见——corner-chrome 的避让 fitting 按「左对齐」建模而画布水平居中，充满画布的图会压到右下角缩放簇下方（本机 390 宽实测 23px），故 chrome 判据读「整图可见」这一状态；实体数（120）在 explosion 视图读，那里每个实体各自成盒。
