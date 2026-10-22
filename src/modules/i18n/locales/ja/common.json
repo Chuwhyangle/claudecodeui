@@ -107,7 +107,19 @@
       "body": "実線: 関連または呼び出し。破線: 依存または実装。矢印: △ 継承 · △ 実装 · ◆ コンポジション · ◇ 集約 · → 依存。«ステレオタイプ» はエンティティ種別を示します。● シード: このセッションで言及。+N 折りたたみ: 現在の詳細レベルで非表示。"
     },
     "export": {
-      "menu": "エクスポート ▾"
+      "menu": "エクスポート ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "PlantUML をコピー",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd、旧形式)",
+      "copied": "PlantUML をクリップボードにコピーしました",
+      "copyFallbackTitle": "PlantUML を手動でコピー",
+      "copyFallbackHint": "クリップボードにアクセスできません。下のテキストを選択してコピーしてください。",
+      "close": "閉じる",
+      "notReady": "図はまだエクスポートできません。",
+      "pngScaled": "PNG は長辺が {{edge}} px になるよう縮小されました。",
+      "pngFailed": "PNG を作成できませんでした。"
     },
     "search": {
       "label": "エンティティまたはファイルを検索",

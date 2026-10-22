@@ -107,7 +107,19 @@
       "body": "實線：關聯或呼叫。虛線：依賴或實作。箭頭：△ 繼承 · △ 實作 · ◆ 組合 · ◇ 聚合 · → 依賴。«構造型» 標記實體種類。● 種子：本次工作階段中提到的。+N 已摺疊：被目前詳細層級隱藏。"
     },
     "export": {
-      "menu": "匯出 ▾"
+      "menu": "匯出 ▾",
+      "plantUml": "PlantUML（.puml）",
+      "copy": "複製 PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid（.mmd，舊格式）",
+      "copied": "PlantUML 已複製到剪貼簿",
+      "copyFallbackTitle": "手動複製 PlantUML",
+      "copyFallbackHint": "剪貼簿無法使用。請選取並複製下方文字。",
+      "close": "關閉",
+      "notReady": "圖表尚未準備好匯出。",
+      "pngScaled": "PNG 已等比縮小，最長邊為 {{edge}} px。",
+      "pngFailed": "無法建立 PNG。"
     },
     "search": {
       "label": "搜尋實體或檔案",

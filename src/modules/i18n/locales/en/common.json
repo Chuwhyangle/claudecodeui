@@ -113,7 +113,19 @@
       "body": "Solid line: association or call. Dashed line: dependency or implementation. Arrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency. «stereotype» marks the entity kind. ● seed: named in this session. +N folded: hidden by the current detail level."
     },
     "export": {
-      "menu": "Export ▾"
+      "menu": "Export ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "Copy PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, legacy)",
+      "copied": "PlantUML copied to the clipboard",
+      "copyFallbackTitle": "Copy PlantUML manually",
+      "copyFallbackHint": "Clipboard access is unavailable. Select and copy the text below.",
+      "close": "Close",
+      "notReady": "The diagram is not ready to export yet.",
+      "pngScaled": "The PNG was scaled down so its longest side is {{edge}} px.",
+      "pngFailed": "The PNG could not be created."
     },
     "search": {
       "label": "Search entities or files",

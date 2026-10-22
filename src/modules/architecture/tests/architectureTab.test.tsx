@@ -2329,7 +2329,7 @@ test('both knobs are remembered per project across sessions and remounts', async
   assert.deepEqual(apiMock.architectureGraph.mock.calls.at(-1), ['project-2', 'session-3', 2]);
 });
 
-test('the export button writes the server-returned .mmd document', async () => {
+test('the export menu writes the server-returned .mmd document; there is no standalone Export .mmd button', async () => {
   const downloads: string[] = [];
   const createObjectUrl = vi.fn(() => 'blob:architecture');
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectUrl });
@@ -2341,11 +2341,49 @@ test('the export button writes the server-returned .mmd document', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
+  // The old one-click `Export .mmd` control is gone: the header offers the
+  // disclosure and the legacy format is one item inside it.
+  assert.equal(screen.queryByRole('button', { name: 'Export .mmd' }), null);
+  assert.equal(document.querySelector('[data-architecture-overflow-export]'), null);
+
   fireEvent.click(screen.getByRole('button', { name: 'Export ▾' }));
+  fireEvent.click(document.querySelector('[data-architecture-export-item="mmd"]') as Element);
 
   assert.deepEqual(downloads, ['architecture-file.mmd'], 'the file-granularity document must be exported');
   assert.equal(createObjectUrl.mock.calls.length, 1);
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'export must not re-enter the fetch');
+});
+
+test('Escape closes only the export menu and does not reach the page abort handler', async () => {
+  // The chat page aborts a running turn from a document-level Escape listener.
+  // The open menu must stop that key at itself (role="menu" + stopPropagation),
+  // so this recording listener stands in for the page's abort call.
+  const aborts: string[] = [];
+  const recordEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') aborts.push('chat.abort');
+  };
+  document.addEventListener('keydown', recordEscape);
+
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+    await waitForDiagram();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export ▾' }));
+    const menu = document.querySelector('[data-architecture-export-menu]');
+    assert.ok(menu instanceof HTMLElement, 'the menu must be open before Escape');
+
+    fireEvent.keyDown(menu, { key: 'Escape' });
+
+    assert.equal(document.querySelector('[data-architecture-export-menu]'), null, 'Escape closes the menu');
+    assert.equal(
+      document.querySelector('[data-architecture-panel]')?.contains(document.activeElement),
+      true,
+      'focus returns to the disclosure',
+    );
+    assert.equal(aborts.length, 0, `Escape inside the menu must not abort the turn (chat.abort calls: ${String(aborts.length)})`);
+  } finally {
+    document.removeEventListener('keydown', recordEscape);
+  }
 });
 
 test('an empty seed set renders the empty state, not a blank graph', async () => {
