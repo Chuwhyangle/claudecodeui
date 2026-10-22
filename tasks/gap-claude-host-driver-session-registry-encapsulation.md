@@ -2,7 +2,7 @@
 id: gap-claude-host-driver-session-registry-encapsulation
 title: ClaudeResidentSessionRegistries 封装：driver 的 5 个模块级 const
   Map（sessionDeliveryReadings/Signatures/TurnRunReadings/Lookups/ProcessingReadings）收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null

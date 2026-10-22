@@ -107,7 +107,19 @@
       "body": "Ligne continue : association ou appel. Ligne pointillée : dépendance ou implémentation. Flèches : △ héritage · △ implémentation · ◆ composition · ◇ agrégation · → dépendance. «stéréotype» indique le type d’entité. ● graine : mentionnée dans cette session. +N repliés : masqués par le niveau de détail actuel."
     },
     "export": {
-      "menu": "Exporter ▾"
+      "menu": "Exporter ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "Copier PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, ancien format)",
+      "copied": "PlantUML copié dans le presse-papiers",
+      "copyFallbackTitle": "Copier PlantUML manuellement",
+      "copyFallbackHint": "Le presse-papiers est indisponible. Sélectionnez et copiez le texte ci-dessous.",
+      "close": "Fermer",
+      "notReady": "Le diagramme n'est pas encore prêt à être exporté.",
+      "pngScaled": "Le PNG a été réduit pour que son côté le plus long fasse {{edge}} px.",
+      "pngFailed": "Le PNG n'a pas pu être créé."
     },
     "search": {
       "label": "Rechercher des entités ou des fichiers",

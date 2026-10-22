@@ -285,7 +285,7 @@ test('the "…" menu holds the two knobs and export — the readout and zoom liv
     3,
     'the detail radiogroup offers 核心/常用/全部',
   );
-  assert.ok(menu.querySelector('[data-architecture-overflow-export]'), 'export is reachable from the menu');
+  assert.ok(menu.querySelector('[data-architecture-export]'), 'export is reachable from the menu');
 
   // The zoom controls are the drawing's own chrome now: they float on the
   // canvas, so the menu must not repeat them.

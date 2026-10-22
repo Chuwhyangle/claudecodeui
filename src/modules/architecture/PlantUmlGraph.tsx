@@ -161,6 +161,12 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
   readonly focusNodeId?: string | null;
   /** Bumped on every request, so asking for the same node twice re-centres it. */
   readonly focusToken?: number;
+  /**
+   * Reports the view currently drawn (overview/group/neighbourhood/hierarchy)
+   * so the panel's export menu can rebuild the document that is on screen.
+   * Optional: a renderer embedded without a panel has no menu to feed.
+   */
+  readonly onViewChange?: (view: ArchitectureDiagramView) => void;
 };
 
 /**
@@ -470,6 +476,7 @@ export function PlantUmlGraph({
   onExport,
   focusNodeId = null,
   focusToken,
+  onViewChange,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -524,6 +531,13 @@ export function PlantUmlGraph({
     hoverCallbackRef.current = onNodeHover;
     clickCallbackRef.current = onNodeClick;
   }, [view, graph, onNodeHover, onNodeClick]);
+
+  // Tell the panel which slice is on screen. The export menu rebuilds exactly
+  // this view; a remount (session/scope change resets `view`) reports the
+  // overview again, so the panel never exports a stale drill-down.
+  useEffect(() => {
+    onViewChange?.(view);
+  }, [onViewChange, view]);
 
   // The viewed scale and its mode (see DiagramZoom). Rendering reads it for the
   // toolbar readout and the next attach; the SVG itself is resized imperatively

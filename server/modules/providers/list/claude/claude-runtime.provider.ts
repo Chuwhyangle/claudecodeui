@@ -113,13 +113,95 @@ type ToolApprovalResolver = ((decision: AnyRecord | null) => void) & {
   _receivedAt?: Date;
 };
 
-const activeSessions = new Map<string, ActiveClaudeSession>();
-const pendingToolApprovals = new Map<string, ToolApprovalResolver>();
+/**
+ * The process-wide mutable state of the Claude runtime: which runs are live,
+ * which tool approvals are waiting, and which session ids were aborted.
+ *
+ * All three containers were module-level bindings; they live here as private
+ * fields so the class is their only owner and every read/write goes through a
+ * named method, while the add/delete/lookup semantics stay identical. One
+ * instance is created at module scope ({@link runtimeState}) because the server
+ * is a single process whose Claude runtime is shared by every provider caller;
+ * tests that need a clean slate import the module fresh.
+ */
+class ClaudeRuntimeState {
+  /** Live runs by app session id; the only handle for interrupting them. */
+  private readonly activeSessions = new Map<string, ActiveClaudeSession>();
+
+  /** Tool-approval waits keyed by request id, awaiting a client decision. */
+  private readonly pendingToolApprovals = new Map<string, ToolApprovalResolver>();
+
+  /**
+   * Session ids whose current run the abort handler already terminated: it
+   * already sent the terminal `complete` (aborted: true), so the run loop must
+   * not emit a second one when its generator winds down. Entries are consumed
+   * (read-and-clear) by the run that ends.
+   */
+  private readonly abortedSessionIds = new Set<string>();
+
+  getActiveSession(sessionId: string): ActiveClaudeSession | undefined {
+    return this.activeSessions.get(sessionId);
+  }
+
+  setActiveSession(sessionId: string, session: ActiveClaudeSession): void {
+    this.activeSessions.set(sessionId, session);
+  }
+
+  deleteActiveSession(sessionId: string): void {
+    this.activeSessions.delete(sessionId);
+  }
+
+  listActiveSessionIds(): string[] {
+    return Array.from(this.activeSessions.keys());
+  }
+
+  setPendingToolApproval(requestId: string, resolver: ToolApprovalResolver): void {
+    this.pendingToolApprovals.set(requestId, resolver);
+  }
+
+  getPendingToolApproval(requestId: string): ToolApprovalResolver | undefined {
+    return this.pendingToolApprovals.get(requestId);
+  }
+
+  deletePendingToolApproval(requestId: string): void {
+    this.pendingToolApprovals.delete(requestId);
+  }
+
+  /** Snapshot iterator for the per-session replay of waiting prompts. */
+  entriesPendingToolApprovals(): IterableIterator<[string, ToolApprovalResolver]> {
+    return this.pendingToolApprovals.entries();
+  }
+
+  markSessionAborted(sessionId: string): void {
+    this.abortedSessionIds.add(sessionId);
+  }
+
+  isSessionAborted(sessionId: string): boolean {
+    return this.abortedSessionIds.has(sessionId);
+  }
+
+  /**
+   * Reads and clears the aborted flag in one step: the run loop that consumes
+   * it is the run that ends, so the id must not outlive that reading.
+   */
+  consumeSessionAborted(sessionId: string): boolean {
+    return this.abortedSessionIds.delete(sessionId);
+  }
+
+  /** Clears a flag whose abort attempt failed and whose run keeps going. */
+  clearSessionAborted(sessionId: string): void {
+    this.abortedSessionIds.delete(sessionId);
+  }
+}
+
+/** The single Claude runtime state instance every function in this module uses. */
+const runtimeState = new ClaudeRuntimeState();
 
 /**
  * The bounded ledger of approval request ids this process has HELD.
  *
- * `pendingToolApprovals` is emptied by `cleanup()` the instant a request
+ * The pending-approval registry in {@link ClaudeRuntimeState} is emptied by
+ * `cleanup()` the instant a request
  * settles, so the live map alone cannot tell an id that was here and timed out
  * from one that was never minted — both simply read as absent. AC-287 requires
  * the MCP `approval_answer` surface to report those two apart, so the id is
@@ -155,7 +237,7 @@ function classifyMissingApproval(requestId: string): MissingApprovalReason {
 /**
  * The bounded ledger of approval request ids this process has DECIDED.
  *
- * `pendingToolApprovals` is deleted the instant a request settles, so a second
+ * The pending-approval registry is emptied the instant a request settles, so a second
  * `approval_answer` for the same id finds nothing and cannot tell "another
  * caller just decided this" from "nothing ever held it" — both read as absent
  * and both collapse to `APPROVAL_EXPIRED_OR_NOT_FOUND`. The MCP surface needs
@@ -202,10 +284,6 @@ function readApprovalDecision(requestId: string): ApprovalDecisionRecord | null 
  * by `claude-per-run-occupied-session.test.ts`.
  */
 export const claudeQueryFactory: { current: typeof query } = { current: query };
-// Sessions cancelled via abort-session. The abort handler already sent the
-// terminal `complete` (aborted: true) to the client, so the run loop must not
-// emit a second one when its generator winds down.
-const abortedSessionIds = new Set<string>();
 // Query instances interrupted because a newer run took over their session id
 // (see addSession). Their run loops must stay silent on wind-down: the map
 // entry, the abort flag, and all client-facing events belong to the new run.
@@ -361,7 +439,7 @@ function waitForToolApproval(
     let timeout: ReturnType<typeof setTimeout> | undefined;
 
     const cleanup = () => {
-      pendingToolApprovals.delete(requestId);
+      runtimeState.deletePendingToolApproval(requestId);
       if (timeout) clearTimeout(timeout);
       if (signal && abortHandler) {
         signal.removeEventListener('abort', abortHandler);
@@ -397,7 +475,7 @@ function waitForToolApproval(
     if (metadata) {
       Object.assign(resolver, metadata);
     }
-    pendingToolApprovals.set(requestId, resolver);
+    runtimeState.setPendingToolApproval(requestId, resolver);
   });
 }
 
@@ -406,7 +484,7 @@ function resolveToolApproval(
   decision: AnyRecord | null,
   decidedBy: string | null = null,
 ): void {
-  const resolver = pendingToolApprovals.get(requestId);
+  const resolver = runtimeState.getPendingToolApproval(requestId);
   if (!resolver) {
     // No live wait means nothing was decided — a decision for an id this
     // process is not holding must not enter the ledger, or a later caller would
@@ -823,7 +901,7 @@ function addSession(
   writer: ClaudeRunWriter | null = null,
   releaseInput: (() => void) | null = null,
 ): void {
-  const existing = activeSessions.get(sessionId as string);
+  const existing = runtimeState.getActiveSession(sessionId as string);
   // A different live instance under the same key means an earlier run was
   // superseded without being stopped (e.g. an abort that raced run setup and
   // found nothing to interrupt). Overwriting it here would strand its
@@ -844,7 +922,7 @@ function addSession(
     existing!.releaseInput?.();
   }
   const carried = superseding ? null : existing;
-  activeSessions.set(sessionId as string, {
+  runtimeState.setActiveSession(sessionId as string, {
     instance: queryInstance,
     startTime: carried?.startTime || Date.now(),
     status: 'active',
@@ -859,7 +937,7 @@ function addSession(
  * @param {string} sessionId - Session identifier
  */
 function removeSession(sessionId: string): void {
-  activeSessions.delete(sessionId);
+  runtimeState.deleteActiveSession(sessionId);
 }
 
 /**
@@ -868,7 +946,7 @@ function removeSession(sessionId: string): void {
  * @returns {Object|undefined} Session data or undefined
  */
 function getSession(sessionId: string): ActiveClaudeSession | undefined {
-  return activeSessions.get(sessionId);
+  return runtimeState.getActiveSession(sessionId);
 }
 
 /**
@@ -876,7 +954,7 @@ function getSession(sessionId: string): ActiveClaudeSession | undefined {
  * @returns {Array<string>} Array of active session IDs
  */
 function getAllSessions(): string[] {
-  return Array.from(activeSessions.keys());
+  return runtimeState.listActiveSessionIds();
 }
 
 /**
@@ -2036,7 +2114,7 @@ async function queryClaudeSDK(
 
       if (message.type === 'result') {
         // The turn is done as far as the client is concerned.
-        const abortPending = sessionKey() ? abortedSessionIds.has(sessionKey()) : false;
+        const abortPending = sessionKey() ? runtimeState.isSessionAborted(sessionKey()) : false;
         if (!turnCompleteSent && !abortPending) {
           turnCompleteSent = true;
           ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 0 }));
@@ -2090,7 +2168,7 @@ async function queryClaudeSDK(
     // Send the terminal completion event — skipped for aborted runs, whose
     // terminal `complete` (aborted: true) was already sent by abort-session, and
     // for runs that already reported completion when their `result` arrived.
-    const wasAborted = !superseded && sessionKey() ? abortedSessionIds.delete(sessionKey()) : false;
+    const wasAborted = !superseded && sessionKey() ? runtimeState.consumeSessionAborted(sessionKey()) : false;
     if (!turnCompleteSent && !superseded) {
       turnCompleteSent = true;
       if (!wasAborted) {
@@ -2121,7 +2199,7 @@ async function queryClaudeSDK(
       return;
     }
 
-    const wasAborted = sessionKey() ? abortedSessionIds.delete(sessionKey()) : false;
+    const wasAborted = sessionKey() ? runtimeState.consumeSessionAborted(sessionKey()) : false;
     if (wasAborted) {
       // The abort already produced the terminal complete; a generator throw
       // caused by interrupt() is expected noise, not a user-facing error.
@@ -2177,7 +2255,7 @@ async function abortClaudeSDKSession(sessionId: string): Promise<boolean> {
 
     // Mark before interrupting so the run loop knows not to emit its own
     // terminal complete (the abort handler sends the aborted one).
-    abortedSessionIds.add(sessionId);
+    runtimeState.markSessionAborted(sessionId);
 
     // Call interrupt() on the query instance
     await session.instance.interrupt();
@@ -2196,7 +2274,7 @@ async function abortClaudeSDKSession(sessionId: string): Promise<boolean> {
   } catch (error) {
     console.error(`Error aborting session ${sessionId}:`, error);
     // The run keeps going; let it emit its own terminal complete.
-    abortedSessionIds.delete(sessionId);
+    runtimeState.clearSessionAborted(sessionId);
     return false;
   }
 }
@@ -2289,7 +2367,7 @@ function getActiveClaudeSDKSessions(): string[] {
  */
 function getPendingApprovalsForSession(sessionId: string): AnyRecord[] {
   const pending: AnyRecord[] = [];
-  for (const [requestId, resolver] of pendingToolApprovals.entries()) {
+  for (const [requestId, resolver] of runtimeState.entriesPendingToolApprovals()) {
     if (resolver._sessionId === sessionId) {
       pending.push({
         requestId,

@@ -107,7 +107,19 @@
       "body": "Línea continua: asociación o llamada. Línea discontinua: dependencia o implementación. Flechas: △ herencia · △ implementación · ◆ composición · ◇ agregación · → dependencia. «estereotipo» indica el tipo de entidad. ● semilla: mencionada en esta sesión. +N plegados: ocultos por el nivel de detalle actual."
     },
     "export": {
-      "menu": "Exportar ▾"
+      "menu": "Exportar ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "Copiar PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, formato antiguo)",
+      "copied": "PlantUML copiado al portapapeles",
+      "copyFallbackTitle": "Copiar PlantUML manualmente",
+      "copyFallbackHint": "El portapapeles no está disponible. Selecciona y copia el texto de abajo.",
+      "close": "Cerrar",
+      "notReady": "El diagrama aún no se puede exportar.",
+      "pngScaled": "El PNG se redujo para que su lado más largo sea {{edge}} px.",
+      "pngFailed": "No se pudo crear el PNG."
     },
     "search": {
       "label": "Buscar entidades o archivos",

@@ -107,7 +107,19 @@
       "body": "Düz çizgi: ilişkilendirme veya çağrı. Kesikli çizgi: bağımlılık veya gerçekleme. Oklar: △ kalıtım · △ gerçekleme · ◆ kompozisyon · ◇ toplama · → bağımlılık. «stereotype» varlık türünü belirtir. ● seed: bu oturumda adı geçti. +N katlandı: geçerli ayrıntı düzeyince gizlendi."
     },
     "export": {
-      "menu": "Dışa aktar ▾"
+      "menu": "Dışa aktar ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "PlantUML'i Kopyala",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, eski biçim)",
+      "copied": "PlantUML panoya kopyalandı",
+      "copyFallbackTitle": "PlantUML'i elle kopyala",
+      "copyFallbackHint": "Pano erişimi kullanılamıyor. Aşağıdaki metni seçip kopyalayın.",
+      "close": "Kapat",
+      "notReady": "Diyagram henüz dışa aktarılmaya hazır değil.",
+      "pngScaled": "PNG, en uzun kenarı {{edge}} px olacak şekilde küçültüldü.",
+      "pngFailed": "PNG oluşturulamadı."
     },
     "search": {
       "label": "Varlık veya dosya ara",

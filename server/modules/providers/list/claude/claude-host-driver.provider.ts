@@ -2140,39 +2140,145 @@ export const DEFAULT_DELIVERY_RETENTION_MS = 5 * 60 * 1000;
 export const DELIVERY_TERMINAL_LIMIT = 50;
 
 /**
- * The live delivery reading per app session, as the activity channel reads it.
+ * Owns the per-app-session readings the resident driver publishes and the rest
+ * of the process reads (SPEC §7.1, §8.2, §4.3 I6).
  *
- * Module-level and keyed by session for the same reason the task and schedule
- * reducers are: the readings belong to the *server* rather than to one host, and
- * the frames that consume them outlive any single host's call stack. The driver
- * installs each session's reader when its ledger first changes and the reader
- * closes over the live state, so a read always answers what the ledger holds
- * *now* — which is what makes an upsert frame and the REST snapshot at the same
- * revision agree by construction.
+ * Every entry is a *closure over live host state*, keyed by app session, so
+ * these five maps are the driver's registry rather than a cache any caller
+ * fills: `publishDeliveries` installs or replaces them, and the activity
+ * channel, the by-id delivery lookup, the turn-run reading and the `processing`
+ * predicate read them back. Keeping them as private fields of one object gives
+ * the registrations a single owner; the exported readers below and every driver
+ * share the process's instance, which is what lets a reader in another module
+ * see what a driver published.
+ *
+ * Process-wide rather than per-driver for the same reason the task and schedule
+ * reducers are: the readings belong to the *server* rather than to one host,
+ * and the frames that consume them outlive any single host's call stack. Each
+ * session's reader closes over the live state, so a read always answers what
+ * the ledger holds *now* — which is what makes an upsert frame and the REST
+ * snapshot at the same revision agree by construction.
+ *
+ * Nothing here is cleared when a host closes. A process that exits leaves its
+ * deliveries settled rather than deleted, and the retention window is precisely
+ * the promise that a client which was away can still read how they ended; a
+ * session whose process is long gone ages out to an empty list rather than a
+ * stale ending.
  */
-const sessionDeliveryReadings = new Map<string, () => DeliveryEntry[]>();
+class ClaudeResidentSessionRegistries {
+  private readonly deliveryReadings = new Map<string, () => DeliveryEntry[]>();
+  private readonly deliverySignatures = new Map<string, string>();
+  private readonly turnRunReadings = new Map<string, () => { runId: string | null; startedAt: number | null }>();
+  private readonly deliveryLookups = new Map<string, () => ResidentDeliveryLookup[]>();
+  private readonly processingReadings = new Map<string, () => ClaudeResidentProcessingReading>();
+
+  /**
+   * Installs one session's delivery reading and reports whether the signature
+   * it was announced for is new.
+   *
+   * The reading is always replaced — it closes over the live ledger, so the
+   * latest closure is the current one. The returned boolean is the tick's
+   * decision: a delivery change announces exactly once per signature, and the
+   * comparison makes "the projection changed" the thing that decides — not the
+   * number of call sites. The signature is deliberately computed from the
+   * ledger's facts rather than from the reading: the reading is time-filtered,
+   * and an entry silently ageing out of the retention window is not a change
+   * anybody made.
+   */
+  registerDeliveries(sessionId: string, reading: () => DeliveryEntry[], signature: string): boolean {
+    this.deliveryReadings.set(sessionId, reading);
+    if (this.deliverySignatures.get(sessionId) === signature) {
+      return false;
+    }
+    this.deliverySignatures.set(sessionId, signature);
+    return true;
+  }
+
+  /** One session's live deliveries, or an empty list for a session never hosted here. */
+  readDeliveries(sessionId: string): DeliveryEntry[] {
+    const reading = this.deliveryReadings.get(sessionId);
+    return reading ? reading() : [];
+  }
+
+  /** Installs one session's live turn-run reading. */
+  registerTurnRun(
+    sessionId: string,
+    reading: () => { runId: string | null; startedAt: number | null },
+  ): void {
+    this.turnRunReadings.set(sessionId, reading);
+  }
+
+  /** The run the session's open turn is executing as, or two `null`s when there is none. */
+  readTurnRun(sessionId: string): { runId: string | null; startedAt: number | null } {
+    const reading = this.turnRunReadings.get(sessionId);
+    return reading ? reading() : { runId: null, startedAt: null };
+  }
+
+  /** Installs one session's by-id delivery lookup. */
+  registerDeliveryLookup(sessionId: string, reading: () => ResidentDeliveryLookup[]): void {
+    this.deliveryLookups.set(sessionId, reading);
+  }
+
+  /**
+   * The delivery with this id, across every session this process has hosted, or
+   * `null` for an id no live ledger holds.
+   *
+   * `null` is "this process has no such delivery": the ledger is the authority
+   * on ids it minted (SPEC §4.1 — `deliveryId` has one production surface, the
+   * host), so an id it does not hold is an id that names nothing here. The scan
+   * is linear in the number of resident sessions, which is the number of
+   * processes a machine is running rather than the number of deliveries.
+   */
+  lookupDeliveryById(deliveryId: string): ResidentDeliveryLookup | null {
+    for (const read of this.deliveryLookups.values()) {
+      const found = read().find((entry) => entry.deliveryId === deliveryId);
+      if (found) {
+        return found;
+      }
+    }
+    return null;
+  }
+
+  /** Installs one session's ledger-derived `processing` reading. */
+  registerProcessing(sessionId: string, reading: () => ClaudeResidentProcessingReading): void {
+    this.processingReadings.set(sessionId, reading);
+  }
+
+  /** One session's ledger-derived `processing`, or `null` when it was never published. */
+  readProcessing(sessionId: string): ClaudeResidentProcessingReading | null {
+    const reading = this.processingReadings.get(sessionId);
+    return reading ? reading() : null;
+  }
+
+  /** Every session whose published ledger currently reads `processing`. */
+  listProcessing(): Array<ClaudeResidentProcessingReading & { sessionId: string }> {
+    const rows: Array<ClaudeResidentProcessingReading & { sessionId: string }> = [];
+    for (const [sessionId, read] of this.processingReadings) {
+      const reading = read();
+      if (reading.processing) {
+        rows.push({ sessionId, ...reading });
+      }
+    }
+    return rows;
+  }
+}
 
 /**
- * The signature each session's last announcement was made for.
+ * The registry the exported readers and every driver instance share.
  *
- * The tick's own memory, and the reason a delivery change announces exactly once:
- * the driver calls {@link ClaudeResidentHostDriver} → `publishDeliveries` from
- * several places (a send, a lifecycle frame, a turn binding, a process exit), and
- * the comparison here makes "the projection changed" the thing that decides — not
- * the number of call sites. It is deliberately computed from the ledger's facts
- * rather than from the reading: the reading is time-filtered, and an entry
- * silently ageing out of the retention window is not a change anybody made.
+ * Process-wide by design: the readings belong to the *server* rather than to
+ * one host, and modules that import `readSessionDeliveries` /
+ * `lookupResidentDeliveryById` cannot be handed a per-driver object, so there
+ * is one instance. The driver holds it and registers through it; the exported
+ * readers below read it back.
  */
-const sessionDeliverySignatures = new Map<string, string>();
-
-/** The live turn-run reading per app session, as {@link readSessionTurnRun} answers it. */
-const sessionTurnRunReadings = new Map<string, () => { runId: string | null; startedAt: number | null }>();
+const residentSessionRegistries = new ClaudeResidentSessionRegistries();
 
 /**
  * The session's deliveries, as the activity protocol's snapshot carries them.
  *
  * The default `readDeliveries` of `createActivityStore`, and the same shape as
- * `readSessionTasks` / `readSessionSchedules`: a plain read of a module-level
+ * `readSessionTasks` / `readSessionSchedules`: a plain read of a process-wide
  * projection, so the protocol module can carry it without knowing what produced
  * it. A session this process has never seen answers an empty list — the honest
  * reading of "no driver here has accepted anything for it", and the reason the
@@ -2186,15 +2292,14 @@ const sessionTurnRunReadings = new Map<string, () => { runId: string | null; sta
  * process is long gone answers an empty list rather than a stale ending.
  */
 export function readSessionDeliveries(sessionId: string): DeliveryEntry[] {
-  const reading = sessionDeliveryReadings.get(sessionId);
-  return reading ? reading() : [];
+  return residentSessionRegistries.readDeliveries(sessionId);
 }
 
 /**
  * The by-id delivery readings per app session (SPEC §8.2).
  *
- * The deliberate twin of {@link sessionDeliveryReadings}, installed by the same
- * `publishDeliveries` call: where that one answers "every delivery of one
+ * The deliberate twin of {@link ClaudeResidentSessionRegistries.readDeliveries},
+ * installed by the same `publishDeliveries` call: where that one answers "every delivery of one
  * session, as the snapshot states it", this one answers "one delivery, found by
  * its id alone" — which is the question a caller that holds only a `deliveryId`
  * has, and has no session to look it up under. `run_get`'s delivery arm is its
@@ -2206,26 +2311,8 @@ export function readSessionDeliveries(sessionId: string): DeliveryEntry[] {
  * moment a filtered list would have dropped it or an older terminal would have
  * pushed it out. The ledger is the authority and this reads it whole.
  */
-const sessionDeliveryLookups = new Map<string, () => ResidentDeliveryLookup[]>();
-
-/**
- * The delivery with this id, across every session this process has hosted, or
- * `null` for an id no live ledger holds.
- *
- * `null` is "this process has no such delivery": the ledger is the authority on
- * ids it minted (SPEC §4.1 — `deliveryId` has one production surface, the host),
- * so an id it does not hold is an id that names nothing here. The scan is linear
- * in the number of resident sessions, which is the number of processes a machine
- * is running rather than the number of deliveries.
- */
 export function lookupResidentDeliveryById(deliveryId: string): ResidentDeliveryLookup | null {
-  for (const read of sessionDeliveryLookups.values()) {
-    const found = read().find((entry) => entry.deliveryId === deliveryId);
-    if (found) {
-      return found;
-    }
-  }
-  return null;
+  return residentSessionRegistries.lookupDeliveryById(deliveryId);
 }
 
 /**
@@ -2234,8 +2321,7 @@ export function lookupResidentDeliveryById(deliveryId: string): ResidentDelivery
  * own turn binding.
  */
 export function readSessionTurnRun(sessionId: string): { runId: string | null; startedAt: number | null } {
-  const reading = sessionTurnRunReadings.get(sessionId);
-  return reading ? reading() : { runId: null, startedAt: null };
+  return residentSessionRegistries.readTurnRun(sessionId);
 }
 
 /**
@@ -2264,9 +2350,6 @@ export type ClaudeResidentProcessingReading = {
   deliveryIds: string[];
 };
 
-/** The live `processing` projection per app session, as the run registry reads it. */
-const sessionProcessingReadings = new Map<string, () => ClaudeResidentProcessingReading>();
-
 /**
  * The session's ledger-derived `processing`, or `null` when no resident host of
  * this process has ever recorded a delivery for it.
@@ -2279,8 +2362,7 @@ const sessionProcessingReadings = new Map<string, () => ClaudeResidentProcessing
  * honest reading of "this host ended its work".
  */
 export function readSessionProcessing(sessionId: string): ClaudeResidentProcessingReading | null {
-  const reading = sessionProcessingReadings.get(sessionId);
-  return reading ? reading() : null;
+  return residentSessionRegistries.readProcessing(sessionId);
 }
 
 /**
@@ -2292,22 +2374,15 @@ export function readSessionProcessing(sessionId: string): ClaudeResidentProcessi
  * the registry's own maps, so the ledger states the whole set here.
  */
 export function listProcessingSessions(): Array<ClaudeResidentProcessingReading & { sessionId: string }> {
-  const rows: Array<ClaudeResidentProcessingReading & { sessionId: string }> = [];
-  for (const [sessionId, read] of sessionProcessingReadings) {
-    const reading = read();
-    if (reading.processing) {
-      rows.push({ sessionId, ...reading });
-    }
-  }
-  return rows;
+  return residentSessionRegistries.listProcessing();
 }
 
 /**
  * Publishes one session's delivery reading and announces a real change.
  *
  * Called from the driver's own ledger-mutating sites through
- * `ClaudeResidentHostDriver.publishDeliveries`; it is a module-level function
- * because the readings are module-level (see {@link sessionDeliveryReadings}).
+ * `ClaudeResidentHostDriver.publishDeliveries`; it registers into the
+ * process-wide {@link residentSessionRegistries} instance the driver also holds.
  * The tick is `notifyActivityChange`, which is the *existing*
  * `setActivityChangeNotifier` seam the composition root installs — the same one a
  * task or schedule change already uses — so there is one announcement path, not a
@@ -2318,12 +2393,9 @@ export function publishSessionDeliveries(
   reading: () => DeliveryEntry[],
   signature: string,
 ): void {
-  sessionDeliveryReadings.set(sessionId, reading);
-  if (sessionDeliverySignatures.get(sessionId) === signature) {
-    return;
+  if (residentSessionRegistries.registerDeliveries(sessionId, reading, signature)) {
+    notifyActivityChange(sessionId);
   }
-  sessionDeliverySignatures.set(sessionId, signature);
-  notifyActivityChange(sessionId);
 }
 
 /** Whether the delivery's state is one the snapshot calls live. */
@@ -2975,6 +3047,16 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
   /** The live state per host. */
   private readonly hosts = new Map<string, ResidentHostState>();
   /**
+   * The per-session readings this driver publishes through.
+   *
+   * The process-wide instance ({@link residentSessionRegistries}) the exported
+   * readers in this module share — the readings belong to the server rather
+   * than to one host, so this is ownership of the same object, not a cache per
+   * driver. `publishDeliveries` installs the session's delivery, turn-run,
+   * by-id and `processing` readings here.
+   */
+  private readonly registries: ClaudeResidentSessionRegistries;
+  /**
    * The reading registry every reading method dispatches through.
    *
    * The extension point this file grew so that adding a reading is a handler
@@ -3027,6 +3109,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     this.notifyUser =
       options.notifyUser ?? (({ userId, event }) => notifyUserIfEnabled({ userId, event }));
     this.userSettingsPath = options.userSettingsPath ?? null;
+    this.registries = residentSessionRegistries;
     this.outcomes = options.outcomes ?? createDefaultClaudeResidentOutcomeRegistry();
     this.outcomeContext = { hosts: this.hosts, refusals: this.refusals };
     this.lifecycle = options.lifecycleOutcomes ?? createDefaultClaudeResidentLifecycleOutcomeRegistry();
@@ -4492,20 +4575,22 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
       return;
     }
     const sessionId = state.appSessionId;
-    sessionTurnRunReadings.set(sessionId, () => {
+    this.registries.registerTurnRun(sessionId, () => {
       const turnRun = state.turnRun;
       return turnRun
         ? { runId: turnRun.runId, startedAt: turnRun.startedAt }
         : { runId: null, startedAt: null };
     });
-    publishSessionDeliveries(
+    if (this.registries.registerDeliveries(
       sessionId,
       () => projectDeliveries(state, this.now()),
       deliveryChannelSignature(state),
-    );
+    )) {
+      notifyActivityChange(sessionId);
+    }
     // The by-id face of the same ledger: what a caller holding only a
     // `deliveryId` reads, which no session-keyed projection can answer.
-    sessionDeliveryLookups.set(sessionId, () =>
+    this.registries.registerDeliveryLookup(sessionId, () =>
       ledgerDeliveries(state.turnLedger).map((delivery) => lookupDelivery(state, delivery)));
     // The single writer's own publication (I6): the `processing` predicate the
     // run registry, the running-sessions API, the heartbeat, the MCP overview and
@@ -4513,7 +4598,7 @@ export class ClaudeResidentHostDriver implements IProviderHostDriver {
     // the two above, so a read always answers the ledger as it stands *now* —
     // which is what makes those readers agree by construction rather than by
     // every consumer re-deriving the rule.
-    sessionProcessingReadings.set(sessionId, () => this.processingReadingOf(state));
+    this.registries.registerProcessing(sessionId, () => this.processingReadingOf(state));
   }
 
   /**
