@@ -2,7 +2,7 @@
 id: gap-debug-agent-engine-state-encapsulation
 title: DebugAgentReleaseRegistry 封装：debug-agent.engine 的 releaseStates Map（含
   waiters）收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
