@@ -2,7 +2,7 @@
 id: gap-speaker-tracker-registry-encapsulation
 title: SpeakerTrackerRegistry 封装：组合根 server/index.ts 的 speakerTrackerModels Map
   收进 voice-realtime speaker 模块
-status: ready
+status: done
 labels:
   - gap
 parent: null
