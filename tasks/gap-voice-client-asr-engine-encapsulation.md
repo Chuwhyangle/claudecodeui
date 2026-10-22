@@ -2,7 +2,7 @@
 id: gap-voice-client-asr-engine-encapsulation
 title: VoiceClientAsrEngine 封装：voiceClientAsrWorker 的 4 个模块级
   let（installedEngine/preloadPromise/readinessRequest/lastProgress）收进带生命周期的类
-status: todo
+status: ready
 labels:
   - gap
 parent: null
