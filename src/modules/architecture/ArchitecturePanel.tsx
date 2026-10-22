@@ -1,13 +1,23 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
+import {
+  ARCHITECTURE_DETAIL_TIERS,
+  ARCHITECTURE_SCOPE_MAX,
+  ARCHITECTURE_SCOPE_MIN,
+  clampArchitectureScope,
+  DEFAULT_ARCHITECTURE_SCOPE,
+  rankArchitectureDetail,
+  type ArchitectureDetailTier,
+} from '@/modules/architecture/detailRanking';
 import {
   CompactToolbarSlotContext,
   TOUCH_TARGET_STYLE,
   useTouchLayout,
 } from '@/modules/architecture/hooks/useTouchLayout';
 import type {
+  ArchitectureDetailReading,
   ArchitectureGraphRenderer,
   ArchitectureNodeIdShape,
   ArchitectureRendererHover,
@@ -28,15 +38,75 @@ function nodeIdShapeOf(granularity: ArchitectureGranularity): ArchitectureNodeId
 }
 
 /**
- * The server-side BFS depth the panel asks for on first activation. Two hops is
- * the server's loose default (`DEFAULT_HOPS` in `architecture/service.ts`); the
- * knob below is a REQUEST parameter, so unlike the granularity toggle it
- * re-enters the fetch.
+ * The server-side BFS depth the panel asks for on its first activation when the
+ * project has no remembered scope. Two hops is the server's loose default
+ * (`DEFAULT_HOPS` in `architecture/service.ts`); the scope stepper below is a
+ * REQUEST parameter, so unlike the granularity toggle it re-enters the fetch.
  */
-const DEFAULT_HOPS = 2;
+const DEFAULT_SCOPE = DEFAULT_ARCHITECTURE_SCOPE;
 
-/** The depths the hops knob offers. Kept small: three hops explodes most neighbourhoods. */
-const HOP_OPTIONS = [1, 2, 3] as const;
+/**
+ * Where one project's two display knobs are remembered. They are deliberately
+ * separate keys: the sibling element/relation-filter task reuses this storage,
+ * and a reader changing only the scope must not rewrite the detail choice.
+ */
+const SCOPE_STORAGE_PREFIX = 'architecture.scope.';
+const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
+
+/** The remembered knobs for one project; `projectId` keys the loaded pair. */
+type ArchitectureDisplaySettings = {
+  readonly projectId: string | null;
+  readonly scope: number;
+  readonly detail: ArchitectureDetailTier;
+};
+
+/** Read one project's remembered scope, clamped into the stepper's range. */
+function readStoredScope(projectId: string | null): number {
+  if (projectId === null || typeof window === 'undefined') return DEFAULT_SCOPE;
+  try {
+    const stored = window.localStorage.getItem(`${SCOPE_STORAGE_PREFIX}${projectId}`);
+    if (stored === null) return DEFAULT_SCOPE;
+    const parsed = Number(stored);
+    return Number.isFinite(parsed) ? clampArchitectureScope(parsed) : DEFAULT_SCOPE;
+  } catch {
+    // Storage can be unavailable (private mode, embedded webview); the knob
+    // still works for this visit, it just is not remembered.
+    return DEFAULT_SCOPE;
+  }
+}
+
+/** Read one project's remembered detail tier, falling back to the identity tier. */
+function readStoredDetail(projectId: string | null): ArchitectureDetailTier {
+  if (projectId === null || typeof window === 'undefined') return 'all';
+  try {
+    const stored = window.localStorage.getItem(`${DETAIL_STORAGE_PREFIX}${projectId}`);
+    return stored !== null && (ARCHITECTURE_DETAIL_TIERS as readonly string[]).includes(stored)
+      ? (stored as ArchitectureDetailTier)
+      : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+/** Remember one project's scope choice; a failed write must not break the knob. */
+function writeStoredScope(projectId: string | null, scope: number): void {
+  if (projectId === null) return;
+  try {
+    window.localStorage.setItem(`${SCOPE_STORAGE_PREFIX}${projectId}`, String(scope));
+  } catch {
+    // See readStoredScope: remembering is best-effort, the knob is not.
+  }
+}
+
+/** Remember one project's detail choice; a failed write must not break the knob. */
+function writeStoredDetail(projectId: string | null, detail: ArchitectureDetailTier): void {
+  if (projectId === null) return;
+  try {
+    window.localStorage.setItem(`${DETAIL_STORAGE_PREFIX}${projectId}`, detail);
+  } catch {
+    // See readStoredScope: remembering is best-effort, the knob is not.
+  }
+}
 
 /**
  * One granularity's truncation reading, taken from the response alone.
@@ -229,10 +299,12 @@ function ArchitectureHoverBar({ hover }: { hover: ArchitectureRendererHover | nu
  * configured renderer through the renderer contract (`rendererContract.ts`) —
  * PlantUML/ELK by default, any other implementation when one is passed. The
  * file/entity switch only picks one of the two subgraphs that already arrived in
- * the same payload, so it must never re-enter the fetch. The hops knob is the
- * opposite: it is a server-side generation parameter (and part of the result
- * cache's content key), so changing it re-requests the neighbourhood. The
- * Mermaid documents stay in hand for the `.mmd` export.
+ * the same payload, so it must never re-enter the fetch. The scope stepper is
+ * the opposite: it is a server-side generation parameter (and part of the
+ * result cache's content key), so changing it re-requests the neighbourhood. The
+ * detail presets rank the arrived payload locally instead, so they cut the
+ * drawing without ever re-entering the fetch. The Mermaid documents stay in hand
+ * for the `.mmd` export.
  */
 export default function ArchitecturePanel({
   projectId,
@@ -253,23 +325,58 @@ export default function ArchitecturePanel({
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch.
   const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
-  // The requested BFS depth. This one IS a request parameter: it changes the
-  // server's neighbourhood and its cache key, so `useArchitectureGraph` refetches.
-  const [hops, setHops] = useState<number>(DEFAULT_HOPS);
+  // The two display knobs, remembered per project (localStorage). `scope` is
+  // the requested BFS depth — a server generation parameter and part of the
+  // result cache's key, so changing it refetches; `detail` only ranks the
+  // arrived payload, so changing it must never refetch. The pair is one state
+  // object because a project switch reloads both together.
+  const [displaySettings, setDisplaySettings] = useState<ArchitectureDisplaySettings>(() => ({
+    projectId,
+    scope: readStoredScope(projectId),
+    detail: readStoredDetail(projectId),
+  }));
+  // React's "adjust state when a prop changes" pattern: a project switch swaps
+  // the remembered pair in the same render, so the graph is never requested
+  // with the previous project's depth.
+  if (displaySettings.projectId !== projectId) {
+    setDisplaySettings({
+      projectId,
+      scope: readStoredScope(projectId),
+      detail: readStoredDetail(projectId),
+    });
+  }
+  const { scope, detail } = displaySettings;
   // The node under the pointer and its visible relation kinds, as reported by
   // the mounted renderer. Kept here so the readout is renderer-neutral; the key
-  // names the graph the reading came from (session + granularity + depth), so
+  // names the graph the reading came from (session + granularity + scope), so
   // changing any of them discards the reading during render instead of via a
   // reset effect.
   const [hovered, setHovered] = useState<{ key: string; hover: ArchitectureRendererHover | null } | null>(null);
-  const hoverKey = `${sessionId ?? ''}:${granularity}:${hops}`;
+  const hoverKey = `${sessionId ?? ''}:${granularity}:${scope}`;
   // Stable while the same graph is on screen, so hovering never tears down the
   // renderer's effect; it only changes when the graph itself changes.
   const handleNodeHover = useCallback(
     (hover: ArchitectureRendererHover | null) => setHovered({ key: hoverKey, hover }),
     [hoverKey],
   );
-  const { view, reload } = useArchitectureGraph(projectId, sessionId, hops);
+  const { view, reload } = useArchitectureGraph(projectId, sessionId, scope);
+  // The detail tier's cut of the current subgraph. Memoised on the payload and
+  // the tier: the renderer redraws whenever its `graph` prop changes identity,
+  // so a fresh object on every panel render (a hover!) would re-lay the diagram.
+  const activeNeighbourhood = view.status === 'loaded' ? view.result.graph[granularity] : null;
+  const detailRanking = useMemo(
+    () => (activeNeighbourhood === null
+      ? null
+      : rankArchitectureDetail(activeNeighbourhood.nodes, activeNeighbourhood.edges, detail)),
+    [activeNeighbourhood, detail],
+  );
+  // The two numbers the detail knob reports: retained vs. in-scope (pre-cut).
+  const detailReading = useMemo<ArchitectureDetailReading | undefined>(
+    () => (detailRanking === null || activeNeighbourhood === null
+      ? undefined
+      : { shown: detailRanking.retainedNodeIds.size, totalInScope: activeNeighbourhood.nodes.length }),
+    [detailRanking, activeNeighbourhood],
+  );
   // Whether the compact tier's single "…" menu is open. On that tier the panel
   // draws one toolbar row and every other control lives behind this toggle.
   const [compactMenuOpen, setCompactMenuOpen] = useState(false);
@@ -324,6 +431,16 @@ export default function ArchitecturePanel({
   // A reading from the previous graph is not shown against this one.
   const visibleHover = hovered !== null && hovered.key === hoverKey ? hovered.hover : null;
 
+  const changeScope = (next: number): void => {
+    const clamped = clampArchitectureScope(next);
+    setDisplaySettings((current) => ({ ...current, scope: clamped }));
+    writeStoredScope(projectId, clamped);
+  };
+  const changeDetail = (next: ArchitectureDetailTier): void => {
+    setDisplaySettings((current) => ({ ...current, detail: next }));
+    writeStoredDetail(projectId, next);
+  };
+
   const exportMmd = (): void => {
     downloadMermaid(
       granularity === 'file' ? mmd.file : mmd.entity,
@@ -371,39 +488,123 @@ export default function ArchitecturePanel({
     </div>
   );
 
-  // The depth is a server-side generation parameter, so this control re-enters
-  // the fetch (unlike the granularity toggle above). Every option now names
-  // itself in words as well as carrying the same words as its accessible name:
-  // a bare "1 2 3" gave no hint what was being counted.
-  const hopsGroup = (
+  // Scope is the server-side generation parameter (the old Hops 1/2/3), so this
+  // control re-enters the fetch like the toggle it replaces. The readout is a
+  // real spinbutton: `＋2` is the value, and the arrow keys (or the two step
+  // buttons) move it, with the range clamped to 0..3 at both ends.
+  const scopeGroup = (
     <div
       role="group"
-      aria-label={t('architecture.controls.maxHops', { defaultValue: 'Hops' })}
-      data-architecture-hops-control="true"
+      aria-label={t('architecture.controls.scope', { defaultValue: 'Scope' })}
+      data-architecture-scope-control="true"
       className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
     >
-      {HOP_OPTIONS.map((option) => (
-        <button
-          key={option}
-          type="button"
-          aria-pressed={hops === option}
-          aria-label={t('architecture.controls.hopOption', {
-            defaultValue: 'Hops {{count}}',
-            count: option,
-          })}
-          data-architecture-hops-option={option}
-          onClick={() => setHops(option)}
-          style={compactTargetStyle}
-          className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-            hops === option ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {t('architecture.controls.hopOption', {
-            defaultValue: 'Hops {{count}}',
-            count: option,
-          })}
-        </button>
-      ))}
+      <button
+        type="button"
+        aria-label={t('architecture.controls.scopeDecrease', { defaultValue: 'Decrease scope' })}
+        data-architecture-scope-decrease="true"
+        onClick={() => changeScope(scope - 1)}
+        disabled={scope <= ARCHITECTURE_SCOPE_MIN}
+        style={compactTargetStyle}
+        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        −
+      </button>
+      <span
+        role="spinbutton"
+        tabIndex={0}
+        aria-label={t('architecture.controls.scope', { defaultValue: 'Scope' })}
+        aria-valuenow={scope}
+        aria-valuemin={ARCHITECTURE_SCOPE_MIN}
+        aria-valuemax={ARCHITECTURE_SCOPE_MAX}
+        aria-valuetext={`+${scope}`}
+        data-architecture-scope-value={scope}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            changeScope(scope + 1);
+          } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
+            event.preventDefault();
+            changeScope(scope - 1);
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            changeScope(ARCHITECTURE_SCOPE_MIN);
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            changeScope(ARCHITECTURE_SCOPE_MAX);
+          }
+        }}
+        className={`min-w-8 rounded px-1 text-center tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          coarsePointer ? 'text-sm' : 'text-xs'
+        }`}
+      >
+        +{scope}
+      </span>
+      <button
+        type="button"
+        aria-label={t('architecture.controls.scopeIncrease', { defaultValue: 'Increase scope' })}
+        data-architecture-scope-increase="true"
+        onClick={() => changeScope(scope + 1)}
+        disabled={scope >= ARCHITECTURE_SCOPE_MAX}
+        style={compactTargetStyle}
+        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        +
+      </button>
+    </div>
+  );
+
+  // Detail only re-ranks the payload already in hand: switching it must never
+  // re-enter the fetch. The three presets trade completeness for readability;
+  // the transcript's seeds survive every one of them. Each `t()` call names its
+  // key literally so the locale-completeness test extracts it from this source.
+  const detailButtonClass = (tier: ArchitectureDetailTier): string =>
+    `${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+      detail === tier ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+    }`;
+  const detailGroup = (
+    <div
+      role="radiogroup"
+      aria-label={t('architecture.controls.detail', { defaultValue: 'Detail' })}
+      data-architecture-detail-control="true"
+      className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={detail === 'core'}
+        aria-label={t('architecture.controls.detailCore', { defaultValue: 'Core' })}
+        data-architecture-detail-option="core"
+        onClick={() => changeDetail('core')}
+        style={compactTargetStyle}
+        className={detailButtonClass('core')}
+      >
+        {t('architecture.controls.detailCore', { defaultValue: 'Core' })}
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={detail === 'common'}
+        aria-label={t('architecture.controls.detailCommon', { defaultValue: 'Common' })}
+        data-architecture-detail-option="common"
+        onClick={() => changeDetail('common')}
+        style={compactTargetStyle}
+        className={detailButtonClass('common')}
+      >
+        {t('architecture.controls.detailCommon', { defaultValue: 'Common' })}
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={detail === 'all'}
+        aria-label={t('architecture.controls.detailAll', { defaultValue: 'All' })}
+        data-architecture-detail-option="all"
+        onClick={() => changeDetail('all')}
+        style={compactTargetStyle}
+        className={detailButtonClass('all')}
+      >
+        {t('architecture.controls.detailAll', { defaultValue: 'All' })}
+      </button>
     </div>
   );
 
@@ -426,7 +627,7 @@ export default function ArchitecturePanel({
       {compactToolbar ? (
         // ONE row. A phone has no room for a header row plus a diagram toolbar
         // row: the title, the granularity switch and the "…" toggle are all the
-        // chrome that stays; hops, the honesty readings, export and every zoom
+        // chrome that stays; scope, detail, the honesty readings, export and every zoom
         // action live in the menu below. A real truncation still surfaces as a
         // compact badge here, so a cut is never hidden behind a closed menu.
         <div
@@ -474,14 +675,15 @@ export default function ArchitecturePanel({
               {t('architecture.title', { defaultValue: 'Architecture' })}
             </h3>
             {granularityGroup}
-            {hopsGroup}
+            {scopeGroup}
+            {detailGroup}
             {/* On the compact tier the export action lives in the overflow menu
                 instead (a second tiny button here would defeat the touch target
                 work). */}
             {exportButton}
           </div>
 
-          <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} />
+          <ArchitectureHonestyBar result={result} granularity={granularity} hops={scope} />
         </>
       )}
 
@@ -490,8 +692,9 @@ export default function ArchitecturePanel({
           data-architecture-overflow-menu="true"
           className="absolute right-2 top-12 z-30 flex max-h-[70%] w-72 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-lg"
         >
-          <ArchitectureHonestyBar result={result} granularity={granularity} hops={hops} compact />
-          {hopsGroup}
+          <ArchitectureHonestyBar result={result} granularity={granularity} hops={scope} compact />
+          {scopeGroup}
+          {detailGroup}
           {/* The renderer's own controls (view navigation, readable mode, drill,
               zoom, export) are portaled in here — they belong to the drawing,
               not to the panel, and the slot keeps them at this menu's target
@@ -540,8 +743,12 @@ export default function ArchitecturePanel({
             <div className="relative min-h-0 flex-1">
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
                 <Renderer
-                  key={`${sessionId}:${granularity}:${hops}`}
-                  graph={neighbourhood}
+                  key={`${sessionId}:${granularity}:${scope}`}
+                  graph={detailRanking?.graph ?? neighbourhood}
+                  // The detail knob's two numbers, so the renderer's
+                  // visible-summary slot reports shown/in-scope rather than its
+                  // own drawn/total reading.
+                  detailReading={detailReading}
                   // Which subgraph this is decides how ids are read (label and
                   // group prefixes). The renderer must not have to guess: see
                   // `nodeIdShapeOf`.

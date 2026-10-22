@@ -446,7 +446,7 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
  * nothing here re-enters the fetch. The renderer package is imported
  * dynamically, so elkjs never enters the first-screen bundle.
  */
-export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeClick, onNodeHover, onExport }: PlantUmlGraphProps) {
+export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailReading, onNodeClick, onNodeHover, onExport }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
@@ -1425,6 +1425,24 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
       </button>
     );
 
+  // When the panel has a detail knob above this renderer it hands over the two
+  // numbers the reader asked about (retained vs. in-scope). Without one — this
+  // component rendered directly — the summary stays the local drawn/total
+  // reading it always was.
+  const visibleSummary = detailReading === undefined ? (
+    t('architecture.visibleNodes', {
+      defaultValue: '{{visible}} of {{total}} nodes',
+      visible: drawn?.view === view ? drawn.nodes : 0,
+      total: graph.nodes.length,
+    })
+  ) : (
+    t('architecture.controls.detailReading', {
+      defaultValue: 'Showing {{shown}} of {{total}} related nodes',
+      shown: detailReading.shown,
+      total: detailReading.totalInScope,
+    })
+  );
+
   return (
     <div
       className="flex h-full min-h-0 flex-col"
@@ -1457,12 +1475,12 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
             {readableModeGroup}
             {drillButton}
             {exportButton}
-            <span data-architecture-visible-summary>
-              {t('architecture.visibleNodes', {
-                defaultValue: '{{visible}} of {{total}} nodes',
-                visible: drawn?.view === view ? drawn.nodes : 0,
-                total: graph.nodes.length,
-              })}
+            <span
+              data-architecture-visible-summary
+              data-architecture-detail-shown={detailReading?.shown}
+              data-architecture-detail-total={detailReading?.totalInScope}
+            >
+              {visibleSummary}
             </span>
           </span>,
           compactToolbarSlot,
@@ -1494,12 +1512,12 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
           </span>
           <span className="relative flex items-center gap-2">
             {drillButton}
-            <span data-architecture-visible-summary>
-              {t('architecture.visibleNodes', {
-                defaultValue: '{{visible}} of {{total}} nodes',
-                visible: drawn?.view === view ? drawn.nodes : 0,
-                total: graph.nodes.length,
-              })}
+            <span
+              data-architecture-visible-summary
+              data-architecture-detail-shown={detailReading?.shown}
+              data-architecture-detail-total={detailReading?.totalInScope}
+            >
+              {visibleSummary}
             </span>
           </span>
         </div>

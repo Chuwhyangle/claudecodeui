@@ -97,6 +97,20 @@ export type ArchitectureRendererGraph = {
  */
 export type ArchitectureNodeIdShape = 'project-relative' | 'scope-prefixed';
 
+/**
+ * The panel's detail-knob reading, handed to the renderer so the visible-summary
+ * slot reports the two numbers the reader actually asked about: `shown` is how
+ * many nodes the current detail tier retained, and `totalInScope` is how many
+ * were in the graph BEFORE that tier cut it (the scope's total).
+ *
+ * Optional because a renderer rendered directly (tests, a future embed) has no
+ * detail knob above it and must keep reporting its own drawn/total counts.
+ */
+export type ArchitectureDetailReading = {
+  readonly shown: number;
+  readonly totalInScope: number;
+};
+
 /** What a renderer reports while the pointer is over a node. */
 export type ArchitectureRendererHover = {
   /** The hovered node, as it was handed to the renderer. */
@@ -132,12 +146,18 @@ export type ArchitectureRendererHover = {
  * paths out of ids must apply it, while one that draws ids verbatim ignores it.
  * The panel always supplies it, so a file graph is never misread as
  * scope-prefixed.
+ *
+ * `detailReading` is optional: when the panel has a detail knob above the
+ * renderer it states the shown/in-scope numbers so the renderer's visible-summary
+ * slot can report them instead of its own drawn/total reading. A renderer that
+ * ignores it simply keeps the local reading.
  */
 export type ArchitectureRendererProps = {
   readonly graph: ArchitectureRendererGraph;
   readonly idShape?: ArchitectureNodeIdShape;
   readonly maxHops?: number;
   readonly maxNodes?: number;
+  readonly detailReading?: ArchitectureDetailReading;
   readonly onNodeClick?: (node: ArchitectureRendererNode) => void;
   readonly onNodeHover?: (hover: ArchitectureRendererHover | null) => void;
   readonly onExport?: () => void;

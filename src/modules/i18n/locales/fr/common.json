@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "Sauts",
       "hopOption": "Sauts {{count}}",
-      "maxNodes": "Nœuds max"
+      "maxNodes": "Nœuds max",
+      "scope": "Portée",
+      "scopeDecrease": "Réduire la portée",
+      "scopeIncrease": "Augmenter la portée",
+      "detail": "Détail",
+      "detailCore": "Essentiel",
+      "detailCommon": "Courant",
+      "detailAll": "Tout",
+      "detailReading": "Affichage de {{shown}} sur {{total}} nœuds liés"
     },
     "exportMmd": "Exporter .mmd",
     "expandHint": "Survolez un nœud pour voir ses types de relation ; cliquez sur un nœud pour étendre son saut suivant.",

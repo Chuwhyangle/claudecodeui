@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "Atlamalar",
       "hopOption": "Atlama {{count}}",
-      "maxNodes": "Maks. düğüm"
+      "maxNodes": "Maks. düğüm",
+      "scope": "Kapsam",
+      "scopeDecrease": "Kapsamı azalt",
+      "scopeIncrease": "Kapsamı artır",
+      "detail": "Ayrıntı",
+      "detailCore": "Çekirdek",
+      "detailCommon": "Yaygın",
+      "detailAll": "Tümü",
+      "detailReading": "İlgili {{total}} düğümden {{shown}} tanesi gösteriliyor"
     },
     "exportMmd": ".mmd dışa aktar",
     "expandHint": "İlişki türleri için bir düğümün üzerine gelin; sonraki atlamayı genişletmek için düğüme tıklayın.",

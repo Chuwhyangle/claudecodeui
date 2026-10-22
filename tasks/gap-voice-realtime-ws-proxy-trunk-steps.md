@@ -2,7 +2,7 @@
 id: gap-voice-realtime-ws-proxy-trunk-steps
 title: voice-realtime-ws-proxy
   主干步骤注册：连接生命周期的横切步骤（握手后/每帧前后/中断决策/状态注入）做成可注册有序步骤表，中心只遍历（第三刀主干形态）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -121,11 +121,3 @@ extra:
 `anti-drift-touches-check --train` 对 develop：`ANTI-DRIFT OK — 5 actual file(s), all within declared Touches (7 glob(s))`；实际 5 个文件 = 4 个实现/判据文件 + quay-test-script.test.ts。
 
 不重启 :3001、不发布。
-
-## Blocker
-
-**2026-10-22T08:35:03.324Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=19532 typecheck passed=false end_ms=1792657875674
-- run_id：wk-prod-anchor
-- session_id：723bbdce-3390-4318-9e9d-bd7465a5081d

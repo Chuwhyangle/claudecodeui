@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "Прыжки",
       "hopOption": "Прыжки {{count}}",
-      "maxNodes": "Макс. узлов"
+      "maxNodes": "Макс. узлов",
+      "scope": "Область",
+      "scopeDecrease": "Уменьшить область",
+      "scopeIncrease": "Увеличить область",
+      "detail": "Подробность",
+      "detailCore": "Основное",
+      "detailCommon": "Обычное",
+      "detailAll": "Всё",
+      "detailReading": "Показано {{shown}} из {{total}} связанных узлов"
     },
     "exportMmd": "Экспорт .mmd",
     "expandHint": "Наведите курсор на узел, чтобы увидеть типы связей; щёлкните узел, чтобы раскрыть следующий переход.",

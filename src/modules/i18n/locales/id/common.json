@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "Lompatan",
       "hopOption": "Lompatan {{count}}",
-      "maxNodes": "Maks. node"
+      "maxNodes": "Maks. node",
+      "scope": "Cakupan",
+      "scopeDecrease": "Kurangi cakupan",
+      "scopeIncrease": "Tambah cakupan",
+      "detail": "Detail",
+      "detailCore": "Inti",
+      "detailCommon": "Umum",
+      "detailAll": "Semua",
+      "detailReading": "Menampilkan {{shown}} dari {{total}} node terkait"
     },
     "exportMmd": "Ekspor .mmd",
     "expandHint": "Arahkan kursor ke node untuk melihat jenis relasinya; klik node untuk memperluas lompatan berikutnya.",
