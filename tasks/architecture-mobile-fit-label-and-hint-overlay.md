@@ -1,7 +1,7 @@
 ---
 id: architecture-mobile-fit-label-and-hint-overlay
 title: 移动端小修：「适应」文案与真实行为一致，触摸提示不再遮挡图
-status: ready
+status: done
 labels:
   - feature
 parent: null
