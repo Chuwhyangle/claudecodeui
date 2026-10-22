@@ -45,6 +45,9 @@ extra: {}
 - src/modules/architecture/tests/explosionLod.test.tsx
 - src/modules/architecture/tests/readableZoom.test.tsx
 - src/modules/architecture/tests/exportMenu.test.tsx
+- src/modules/architecture/svgViewport.ts
+- src/modules/architecture/tests/svgViewport.test.tsx
+- e2e/architecture-canvas-layout.spec.ts
 - tasks/architecture-class-view-draws-classes-not-groups.md
 
 ## Implementation record
@@ -62,4 +65,8 @@ extra: {}
 
 **改动**。`PlantUmlGraph.tsx`：entity 图（`idShape === 'scope-prefixed'`）默认 `hierarchy`、传 `grouping: 'raw'`；LOD 对 entity 的每个视图都生效（其 overview 是同一份实体文档）；band-aspect 折叠只留给文件图（类图没有更粗的图可退回）；“Back”回到该图的默认视图。`ArchitecturePanel.tsx`：类图导出按 raw 重建，导出仍等于画面。`archguardToPlantUml.ts` / `explosionLod.ts` / `readableZoom.ts` 无需改动（既有 package 发射、LOD 与可读缩放规则直接复用）。兄弟夹具 `tests/exportMenu.test.tsx` 的类图导出期望随之更新（自适应分组 → raw 文档），故列入 Touches。
 
-**验证**：`npx vitest run src/modules/architecture/tests`（18 files / 232 tests）通过；`npm run typecheck`、`npm run build` 通过；`oxlint` 对改动文件仅剩既有 warning。
+**兄弟 e2e 守卫**。`e2e/architecture-canvas-layout.spec.ts`（并发落地的 `architecture-layout-e2e-guard`）里 `showExplosionView` 要求点得到 “Explosion view” 按钮——类图默认就是 hierarchy 后该按钮不存在，故改为「已经在 hierarchy 就直接读」；该 spec 的布局读数改在**文件图 Overview** 上取（它仍是整图适应时画满 box 的那种图；类图的整图适应按设计把实体框折成包计数，没有 box 可量）。4/4 arms 通过。
+
+**顺带修好的居中几何**。上述 e2e 的 phone arm 暴露了一个既有缺陷：`svgViewport.ts` 的 `scaleAvoidingCorner` 把画布当成左对齐，水平极限用了 `corner.left / natural.width`；实际 SVG 是水平居中（`margin: 0 auto`，浏览器实测 390 宽容器里 256 宽 SVG 左缘 67px）。右缘应为 `(host.width + width) / 2`，故极限是 `(2·corner.left − host.width) / natural.width`。不修则 phone 上会有 group box 被右下角 zoom cluster 盖住 11px；修正后 phone/desktop 的 `chrome.over.nodes` 都是 0，e2e 4/4 绿。`svgViewport.test.tsx` 的 `fittedDrawingRect` 同步改成水平居中的真实几何，loose-corner 期望由 0.7 改为 0.64（垂直让路更省：bottom ≤ 460 ⇒ 0.64）。
+
+**验证**：`npx vitest run src/modules/architecture/tests`（18 files / 232 tests）通过；`npm run typecheck`、`npm run build` 通过；`npx playwright test e2e/architecture-canvas-layout.spec.ts`（4 arms）通过；`oxlint` 对改动文件仅剩既有 warning。
