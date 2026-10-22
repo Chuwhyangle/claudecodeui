@@ -11,7 +11,7 @@ import type { LayoutEngine } from '@yalehwang/plantuml-js/elk';
  * layout call, so the drawing is laid out FOR the container instead of scaled
  * into it afterwards.
  *
- * The package's ELK engine (0.1.0) exposes no `layoutOptions` of its own, so
+ * The package's ELK engine (0.2.x) exposes no `layoutOptions` of its own, so
  * the hint is injected at the one seam that exists: the graph object each
  * engine hands to its elkjs client. `createLayoutEngine` is the SINGLE place
  * that seam is touched, which is also why switching to the upstream
@@ -29,7 +29,7 @@ export type ArchitectureLayoutEngine = LayoutEngine;
 
 /**
  * The ratio the ELK engine applies when nothing measures the container. It is
- * the package's own built-in default (`elk.aspectRatio: '1.6'` in 0.1.0), so a
+ * the package's own built-in default (`elk.aspectRatio: '1.6'` in 0.2.x), so a
  * drawing made without a hint is compared against the ratio it actually used
  * rather than against a number invented here.
  */
@@ -113,6 +113,38 @@ const WRAPPING_LAYOUT_OPTIONS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * The layering strategy that caps how many nodes one layer may hold. It is the
+ * only lever that folds a WIDE, single-component graph: measured on the real
+ * overview (18 group boxes, 17 edges, labels `modules/... (N)`), every
+ * `elk.aspectRatio` from 0.4 to 2.5 drew the very same 1789.96×548 canvas
+ * (aspect 3.27). With `layerBound=2` the same graph is 535×904 (aspect 0.59).
+ */
+const LEAF_LAYER_BOUND_STRATEGY = 'COFFMAN_GRAHAM';
+
+/**
+ * How many nodes a flat leaf layer may put in one row, derived from the
+ * container ratio and the number of leaves in that layer.
+ *
+ * The starting point was `round(sqrt(ratio * N * 0.25))`; calibrating it on the
+ * real overview above (N = 18) showed the rounding has to go UP: at ratio 0.4
+ * `round` yields 1, which drew 351×1612 and *lengthened* total edge length
+ * (17886 vs the 17494 baseline), while `ceil` yields 2 — 535×904 with
+ * crossings unchanged (0) and a shorter edge total (10725). The bound is
+ * therefore `ceil(sqrt(ratio * N * 0.25))`, clamped to the layer's own size.
+ */
+function leafLayerBound(ratio: number, leafCount: number): number {
+  const derived = Math.ceil(Math.sqrt(ratio * leafCount * 0.25));
+  return Math.min(leafCount, Math.max(1, derived));
+}
+
+/** Whether every child of `graph` is an entity leaf — the flat layer ELK draws as one wide strip. */
+function isLeafLayer(graph: ElkGraph): graph is ElkGraph & { readonly children: readonly ElkGraph[] } {
+  return graph.children !== undefined
+    && graph.children.length > 0
+    && graph.children.every((child) => child.children === undefined);
+}
+
+/**
  * The same graph with the container ratio (and the wrapping that makes it bite)
  * applied — at EVERY hierarchical level, not just the root.
  *
@@ -121,18 +153,42 @@ const WRAPPING_LAYOUT_OPTIONS: Readonly<Record<string, string>> = {
  * runs inside each container. Measured: setting the option on the root alone
  * left a 26-package chain at aspect 0.06 whatever ratio was asked for, while
  * the same option on the containers moved it to 1.64 for a 1.33 container.
+ *
+ * The layer bound is the exception to "every level": it is applied ONLY to the
+ * top layer when that layer consists solely of leaves — the flat overview
+ * (directory group boxes or entities) that `aspectRatio` cannot fold at all.
+ * Nested/composite layers keep the ratio hint alone: `COFFMAN_GRAHAM` +
+ * `layerBound` inside packages regressed a 26-package hierarchy from 670 ms to
+ * 2389 ms of layout time and, combined with `INCLUDE_CHILDREN`, once threw
+ * `TypeError: Cannot read properties of undefined (reading 'c')`.
  */
 function withAspectHint(graph: ElkGraph, ratio: number): ElkGraph {
-  const layoutOptions = {
+  return hintGraphLevel(graph, ratio, true);
+}
+
+/**
+ * One level of {@link withAspectHint}. `isTop` keeps the leaf-layer bound on
+ * the root only: a nested package whose children are leaves is still a nested
+ * layer, and gets the ratio hint alone (see the note above).
+ */
+function hintGraphLevel(graph: ElkGraph, ratio: number, isTop: boolean): ElkGraph {
+  const bound = isTop && ratio < DEFAULT_LAYOUT_ASPECT_RATIO && isLeafLayer(graph)
+    ? leafLayerBound(ratio, graph.children.length)
+    : null;
+  const layoutOptions: Record<string, string> = {
     ...graph.layoutOptions,
     ...WRAPPING_LAYOUT_OPTIONS,
     'elk.aspectRatio': String(ratio),
   };
+  if (bound !== null) {
+    layoutOptions['elk.layered.layering.strategy'] = LEAF_LAYER_BOUND_STRATEGY;
+    layoutOptions['elk.layered.layering.coffmanGraham.layerBound'] = String(bound);
+  }
   if (graph.children === undefined) return { ...graph, layoutOptions };
   return {
     ...graph,
     layoutOptions,
-    children: graph.children.map((child) => withAspectHint(child, ratio)),
+    children: graph.children.map((child) => hintGraphLevel(child, ratio, false)),
   };
 }
 

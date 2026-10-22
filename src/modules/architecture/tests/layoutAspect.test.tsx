@@ -146,9 +146,118 @@ function chainResult(): ArchitectureGraphResult {
   };
 }
 
-/** A Response stand-in: only `ok` and `json` are read by `readApiJson`. */
-function jsonResponse(result: ArchitectureGraphResult): Response {
+/**
+ * The overview the real quay client graph collapses to: 18 directory group
+ * boxes and 17 aggregated edges (the `App.tsx` singleton the real grouping
+ * leaves out is dropped here, so the fixture is exactly the shape the layout
+ * bug was measured on). Labels keep their real entity counts, and the graph is
+ * one connected component — the case `elk.aspectRatio` cannot fold.
+ */
+const EIGHTEEN_GROUP_OVERVIEW = `@startuml
+class "modules/architecture (12)" as g0
+class "modules/auth (8)" as g1
+class "modules/browser-use (2)" as g2
+class "modules/chat (140)" as g3
+class "modules/code-editor (20)" as g4
+class "modules/command-palette (9)" as g5
+class "modules/file-tree (22)" as g6
+class "modules/git-panel (26)" as g7
+class "modules/i18n (2)" as g8
+class "modules/mcp (5)" as g9
+class "modules/oauth-consent (2)" as g10
+class "modules/onboarding (5)" as g11
+class "modules/plugins (4)" as g12
+class "modules/prd-editor (13)" as g13
+class "modules/project-creation-wizard (12)" as g14
+class "modules/project-workspace (23)" as g15
+class "modules/provider-auth (2)" as g16
+class "modules/quay (2)" as g17
+g1 ..> g11 : <<uses>>
+g3 ..> g6 : <<uses>>
+g3 ..> g1 : <<uses>>
+g4 ..> g5 : <<uses>>
+g5 ..> g6 : <<uses>>
+g10 ..> g1 : <<uses>>
+g11 ..> g16 : <<uses>>
+g13 ..> g4 : <<uses>>
+g15 ..> g5 : <<uses>>
+g15 ..> g0 : <<uses>>
+g15 ..> g2 : <<uses>>
+g15 ..> g3 : <<uses>>
+g15 ..> g4 : <<uses>>
+g15 ..> g6 : <<uses>>
+g15 ..> g7 : <<uses>>
+g15 ..> g12 : <<uses>>
+g15 ..> g17 : <<uses>>
+@enduml`;
+
+/** The pre-change drawing of that fixture: the canvas the bug was reported on. */
+const PRE_CHANGE_OVERVIEW_VIEWBOX = '0 0 1789.96 548';
+
+/** The viewBox the renderer emitted, or `null` when the SVG carried none. */
+function viewBoxOf(svg: string): string | null {
+  return /viewBox="([^"]+)"/.exec(svg)?.[1] ?? null;
+}
+
+/** The width/height reading of a `viewBox` string. */
+function viewBoxAspect(viewBox: string): number {
+  const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+  assert.equal(parts.length, 4, `a viewBox must have four numbers; got ${viewBox}`);
+  return parts[2] / parts[3];
+}
+
+/** The elkjs graph shape the wrapper hands its client; only what the assertions read. */
+type CapturedElkGraph = {
+  readonly id?: string;
+  readonly layoutOptions?: Readonly<Record<string, string>>;
+  readonly children?: readonly CapturedElkGraph[];
+};
+
+/** An engine stand-in whose ELK client records every graph it is handed. */
+function recordingEngine(graph: CapturedElkGraph): {
+  readonly engine: ArchitectureLayoutEngine;
+  readonly captured: CapturedElkGraph[];
+} {
+  const captured: CapturedElkGraph[] = [];
+  const client = {
+    layout: async (input: CapturedElkGraph): Promise<unknown> => {
+      captured.push(input);
+      return { children: [] };
+    },
+  };
+  const engine = {
+    elk: client,
+    layout: async (): Promise<unknown> => client.layout(graph),
+  } as unknown as ArchitectureLayoutEngine;
+  return { engine, captured };
+}
+
+/** Every level of a captured drawing, root first. */
+function levelsOf(graph: CapturedElkGraph): CapturedElkGraph[] {
+  return [graph, ...(graph.children ?? []).flatMap(levelsOf)];
+}
+
+/** A flat graph: the root's children are all entity leaves, the shape a wide overview draws. */
+function flatLeafGraph(count: number): CapturedElkGraph {
   return {
+    id: 'root',
+    children: Array.from({ length: count }, (_, index) => ({ id: `leaf-${index}` })),
+  };
+}
+
+/** A composite graph: the root arranges packages, and one package nests deeper. */
+function nestedPackageGraph(): CapturedElkGraph {
+  return {
+    id: 'root',
+    children: [
+      { id: 'package', children: [{ id: 'a' }, { id: 'b' }] },
+      { id: 'outer', children: [{ id: 'inner', children: [{ id: 'x' }] }] },
+    ],
+  };
+}
+
+/** A Response stand-in: only `ok` and `json` are read by `readApiJson`. */
+function jsonResponse(result: ArchitectureGraphResult): Response {  return {
     ok: true,
     status: 200,
     json: async () => result,
@@ -399,6 +508,183 @@ test('the aspect-wrapped layout is the same drawing — same nodes and edges, di
       < aspectFactor(defaultLayout.width / defaultLayout.height, 0.6),
     `the hinted layout must be proportionally closer to 0.6 than the default; got ${(aspectLayout.width / aspectLayout.height).toFixed(3)} vs ${(defaultLayout.width / defaultLayout.height).toFixed(3)}`,
   );
+});
+
+test('a flat leaf layer gets a ratio-derived COFFMAN_GRAHAM bound; composite layers never do', async () => {
+  // The formula, calibrated on the 18-group overview below: N leaves and a
+  // ratio r ask for ceil(sqrt(r * N * 0.25)) nodes per row.
+  const narrow = recordingEngine(flatLeafGraph(18));
+  createLayoutEngine({ aspectRatio: 0.4, engine: narrow.engine });
+  await narrow.engine.layout({} as never);
+  assert.equal(
+    narrow.captured[0].layoutOptions?.['elk.layered.layering.strategy'],
+    'COFFMAN_GRAHAM',
+    'a portrait container must fold the flat leaf layer',
+  );
+  assert.equal(
+    narrow.captured[0].layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound'],
+    '2',
+    'ceil(sqrt(0.4 * 18 * 0.25)) = 2 nodes per row',
+  );
+
+  // A less narrow container asks for a wider row, so the bound is proportional
+  // to the ratio rather than a constant.
+  const wide = recordingEngine(flatLeafGraph(18));
+  createLayoutEngine({ aspectRatio: 1200 / 900, engine: wide.engine });
+  await wide.engine.layout({} as never);
+  assert.equal(
+    wide.captured[0].layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound'],
+    '3',
+    'ceil(sqrt(1.333 * 18 * 0.25)) = 3 nodes per row',
+  );
+  assert.ok(
+    Number(narrow.captured[0].layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound'])
+      < Number(wide.captured[0].layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound']),
+    'a narrower container must not be allowed a wider first row',
+  );
+
+  // A composition of packages keeps only the ratio hint: the bound is excluded
+  // from every level, because CG inside packages regressed a 26-package
+  // hierarchy from 670 ms to 2389 ms and once threw on INCLUDE_CHILDREN.
+  const composite = recordingEngine(nestedPackageGraph());
+  createLayoutEngine({ aspectRatio: 0.4, engine: composite.engine });
+  await composite.engine.layout({} as never);
+  const levels = levelsOf(composite.captured[0]);
+  assert.ok(levels.length > 2, 'the composite fixture must actually nest');
+  for (const level of levels) {
+    assert.equal(
+      level.layoutOptions?.['elk.layered.layering.strategy'],
+      undefined,
+      'no level of a nested drawing may switch the layering strategy',
+    );
+    assert.equal(
+      level.layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound'],
+      undefined,
+      'no level of a nested drawing may carry a layer bound',
+    );
+  }
+  assert.equal(
+    levels[0].layoutOptions?.['elk.aspectRatio'],
+    '0.4',
+    'the ratio itself still reaches the layout',
+  );
+});
+
+test('the real 18-group overview folds to a narrow canvas without worsening its metrics', async () => {
+  const { ElkLayoutEngine, createRenderer, parsePlantUml, computeLayoutMetrics } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+    ElkLayoutEngine: new () => ArchitectureLayoutEngine;
+    createRenderer: (options: { layout: ArchitectureLayoutEngine }) => { render: (puml: string) => Promise<{ svg: string }> };
+    parsePlantUml: (puml: string) => unknown;
+    computeLayoutMetrics: (model: unknown, layout: unknown) => { edgeCrossings: number; totalEdgeLength: number };
+  };
+  const model = parsePlantUml(EIGHTEEN_GROUP_OVERVIEW);
+
+  /** Render the fixture at one ratio through the same factory the diagram uses. */
+  const draw = async (aspectRatio: number | null) => {
+    const layout = await createLayoutEngine({ aspectRatio, engine: new ElkLayoutEngine() }).layout(model as never);
+    const { svg } = await createRenderer({
+      layout: createLayoutEngine({ aspectRatio, engine: new ElkLayoutEngine() }),
+    }).render(EIGHTEEN_GROUP_OVERVIEW);
+    return { layout, viewBox: viewBoxOf(svg) };
+  };
+
+  // Control arm: no measurement keeps the drawing exactly as it was before the
+  // layer bound existed (measured on 2026-10-22 before this change).
+  const before = await draw(null);
+  assert.equal(
+    before.viewBox,
+    PRE_CHANGE_OVERVIEW_VIEWBOX,
+    `ratio=null must keep the pre-change ${PRE_CHANGE_OVERVIEW_VIEWBOX} drawing byte-for-byte; got ${String(before.viewBox)}`,
+  );
+  const baselineMetrics = computeLayoutMetrics(model, before.layout);
+
+  // A desktop container (2.5) is wider than ELK's own 1.6 default, so it keeps
+  // the pre-change drawing too — the DoD's "PC unchanged" reading.
+  const desktop = await draw(2.5);
+  assert.equal(
+    desktop.viewBox,
+    PRE_CHANGE_OVERVIEW_VIEWBOX,
+    `ratio=2.5 must keep the pre-change ${PRE_CHANGE_OVERVIEW_VIEWBOX} drawing; got ${String(desktop.viewBox)}`,
+  );
+
+  // The arm under test: a phone-portrait container (390×844 ≈ 0.46) folds the
+  // same graph into a portrait canvas.
+  const after = await draw(0.4);
+  assert.ok(after.viewBox !== null, 'the narrow arm must draw a viewBox');
+  const aspect = viewBoxAspect(after.viewBox);
+  assert.ok(
+    aspect < 0.9,
+    `ratio=0.4 must draw a portrait canvas, not the 3.27 wide strip; got ${aspect.toFixed(3)} (${after.viewBox})`,
+  );
+  const narrowMetrics = computeLayoutMetrics(model, after.layout);
+  assert.ok(
+    narrowMetrics.edgeCrossings <= baselineMetrics.edgeCrossings,
+    `the fold must not add crossings; got ${narrowMetrics.edgeCrossings} vs ${baselineMetrics.edgeCrossings}`,
+  );
+  assert.ok(
+    narrowMetrics.totalEdgeLength <= baselineMetrics.totalEdgeLength,
+    `the fold must not lengthen the edges; got ${narrowMetrics.totalEdgeLength.toFixed(0)} vs ${baselineMetrics.totalEdgeLength.toFixed(0)}`,
+  );
+});
+
+test('a landscape container keeps ELK’s own proportions — no layer bound on the desktop path', async () => {
+  const wide = recordingEngine(flatLeafGraph(18));
+  createLayoutEngine({ aspectRatio: 2.5, engine: wide.engine });
+  await wide.engine.layout({} as never);
+  assert.equal(
+    wide.captured[0].layoutOptions?.['elk.layered.layering.strategy'],
+    undefined,
+    'a 2.5 container must keep the existing layout path',
+  );
+  assert.equal(
+    wide.captured[0].layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound'],
+    undefined,
+    'a 2.5 container must not be handed a layer bound',
+  );
+  assert.equal(wide.captured[0].layoutOptions?.['elk.aspectRatio'], '2.5');
+});
+
+test('the hierarchy view keeps aspectRatio only and still renders without throwing', async () => {
+  const { ElkLayoutEngine, createRenderer } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+    ElkLayoutEngine: new () => ArchitectureLayoutEngine;
+    createRenderer: (options: { layout: ArchitectureLayoutEngine }) => { render: (puml: string) => Promise<{ svg: string }> };
+  };
+  const { puml } = archguardToPlantUml(chainResult().graph.file, { view: { kind: 'hierarchy' } });
+
+  // Capture what reaches the elkjs client while the real engine renders the
+  // nested document, so the assertion reads the real hierarchy's options.
+  type EngineWithElk = {
+    elk: { layout: (graph: CapturedElkGraph, options?: unknown) => Promise<unknown> };
+  };
+  const engine = new ElkLayoutEngine();
+  const carrier = engine as unknown as EngineWithElk;
+  const captured: CapturedElkGraph[] = [];
+  const elkLayout = carrier.elk.layout.bind(carrier.elk);
+  carrier.elk.layout = (graph, options) => {
+    captured.push(graph);
+    return elkLayout(graph, options);
+  };
+
+  const renderer = createRenderer({ layout: createLayoutEngine({ aspectRatio: 0.4, engine }) });
+  const { svg } = await renderer.render(puml);
+  assert.ok(svg.length > 0, 'the nested hierarchy must render');
+  assert.equal(captured.length, 1, 'the hierarchy is laid out in exactly one ELK call');
+
+  const levels = levelsOf(captured[0]);
+  assert.ok(levels.length > 2, `the hierarchy fixture must nest packages; got ${String(levels.length)} levels`);
+  for (const level of levels) {
+    assert.equal(
+      level.layoutOptions?.['elk.layered.layering.strategy'],
+      undefined,
+      'a nested hierarchy must not switch to COFFMAN_GRAHAM',
+    );
+    assert.equal(
+      level.layoutOptions?.['elk.layered.layering.coffmanGraham.layerBound'],
+      undefined,
+      'a nested hierarchy must not carry a layer bound',
+    );
+    assert.equal(level.layoutOptions?.['elk.aspectRatio'], '0.4', 'the ratio still reaches every level');
+  }
 });
 
 test('the ratio policy is a pure reading: threshold, null handling, and the clamp band', () => {
