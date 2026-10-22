@@ -653,6 +653,25 @@ function zoomCluster(): HTMLElement {
   return cluster;
 }
 
+/**
+ * The `user-select` policy an element actually reads: the nearest inline
+ * declaration on it or an ancestor.
+ *
+ * jsdom's computed style drops properties its cssstyle table does not know, so
+ * `getComputedStyle` would answer `''` for both a selectable and an
+ * unselectable element and could not tell the two sides of this criterion
+ * apart. The inline declarations are what a browser honours anyway.
+ */
+function inlineSelectionPolicy(element: Element): string {
+  let current: Element | null = element;
+  while (current !== null) {
+    const policy = (current as HTMLElement).style?.userSelect ?? '';
+    if (policy !== '') return policy;
+    current = current.parentElement;
+  }
+  return 'auto';
+}
+
 /** jsdom performs no layout, so the scroll container's content box is pinned by hand. */
 function sizeHost(host: HTMLElement, width: number, height: number): void {
   Object.defineProperty(host, 'clientWidth', { configurable: true, value: width });
@@ -1300,6 +1319,78 @@ test('a cancelled drag leaves no drag state behind', async () => {
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-view'), 'group'));
 });
 
+test('the drawing refuses text selection while the inspector and Text page stay copyable', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+
+  // The canvas and everything a drag crosses: the host, the injected SVG and
+  // every label the renderer drew (badges included — they are appended after
+  // the drawing, so this also proves the marking runs last).
+  assert.equal(host.style.userSelect, 'none', 'the drawing host must refuse a selection');
+  assert.equal((svg as SVGElement & { style: CSSStyleDeclaration }).style.userSelect, 'none');
+  const labels = [...svg.querySelectorAll('text, tspan')];
+  assert.ok(labels.length > 0, 'the drawing must carry labels for this reading to mean anything');
+  for (const label of labels) {
+    assert.equal(
+      (label as SVGElement & { style: CSSStyleDeclaration }).style.userSelect,
+      'none',
+      `a drawn label must not be selectable: ${label.textContent}`,
+    );
+  }
+  // The container the panel draws the canvas into refuses too, so a drag that
+  // starts on the padding selects nothing.
+  const region = document.querySelector('[data-architecture-canvas-region]');
+  assert.ok(region instanceof HTMLElement);
+  assert.equal(region.style.userSelect, 'none');
+
+  // The injected rule is what a real browser applies to the labels; jsdom's
+  // computed style drops the vendor properties, so read the rule itself.
+  const rule = document.querySelector('[data-architecture-canvas-selection-style]');
+  assert.ok(rule !== null, 'the canvas must inject its selection policy');
+  const css = rule.textContent ?? '';
+  for (const declaration of ['user-select: none', '-webkit-user-select: none', '-webkit-touch-callout: none']) {
+    assert.ok(css.includes(declaration), `the canvas rule must declare "${declaration}"`);
+  }
+  for (const selector of ['svg', 'text', 'tspan']) {
+    assert.ok(css.includes(selector), `the canvas rule must cover ${selector}`);
+  }
+
+  // The dock — the inspector and the Text page — is NOT the canvas. Selecting
+  // a node opens it; its prose (session hits, the PlantUML text) must stay
+  // selectable and copyable. Drilled first, because a file/entity node is what
+  // the inspector has a page for.
+  rememberShowAllFilter();
+  drillNode(host, 'grp::src/modules/alpha');
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
+  const entityNode = host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]');
+  assert.ok(entityNode !== null, 'the drilled group must draw its files');
+  fireEvent.click(entityNode);
+  const dock = await waitFor(() => {
+    const element = document.querySelector('[role="complementary"]');
+    assert.ok(element !== null, 'selecting a node must open the inspector dock');
+    return element;
+  });
+  assert.equal(inlineSelectionPolicy(dock), 'auto', 'the dock must keep the browser default selection');
+  assert.equal(
+    dock.querySelectorAll('[style*="user-select"]').length,
+    0,
+    'nothing inside the dock may declare user-select, so the inspector stays copyable',
+  );
+
+  // The Text page is the same dock, the other tab: still selectable.
+  const dockTabs = within(dock as HTMLElement);
+  const textTab = dockTabs.queryByRole('tab', { name: 'Text' });
+  assert.ok(textTab !== null, 'the dock must offer the Text page');
+  fireEvent.click(textTab);
+  await waitFor(() => {
+    assert.ok(document.querySelector('[data-architecture-dock-panel="text"]'), 'the Text page must open');
+  });
+  assert.equal(inlineSelectionPolicy(dock), 'auto');
+  assert.equal(dock.querySelectorAll('[style*="user-select"]').length, 0);
+});
+
 test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
@@ -1431,6 +1522,9 @@ test('the minimap sits in the canvas beside the zoom cluster and remembers being
 
   // Containment: the map is chrome OF the canvas, so it lives inside it.
   assert.ok(canvas.contains(minimap), 'the minimap belongs to the canvas container');
+  // …and chrome is not text: dragging the frame moves the view, never paints a
+  // selection across the corner.
+  assert.equal(minimap.style.userSelect, 'none', 'the minimap must not offer a selectable string');
   const overlays = minimap.closest('[data-architecture-canvas-overlays]');
   assert.ok(overlays instanceof HTMLElement, 'the map is drawn in the canvas overlay column');
   assert.equal(

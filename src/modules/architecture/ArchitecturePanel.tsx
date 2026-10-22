@@ -3332,6 +3332,15 @@ export default function ArchitecturePanel({
               aria-busy={refreshing}
               data-architecture-refreshing={refreshing ? 'true' : undefined}
               data-architecture-canvas-region="true"
+              // The canvas region is an instrument, not prose: dragging it pans
+              // and double-clicking drills, so neither gesture may paint a text
+              // selection. Scoped to THIS region — the dock beside it (the
+              // inspector and the Text page) stays fully selectable.
+              style={{
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                WebkitTouchCallout: 'none',
+              }}
               className={`relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`}
             >
               {/* One-off, in-canvas instruction. It is an overlay bubble (not a
