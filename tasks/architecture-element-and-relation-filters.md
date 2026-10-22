@@ -123,8 +123,10 @@ same rule the other scope-stepper cases already follow). Verified individually:
 
 ## Blocker
 
-**2026-10-22T11:23:31.984Z — worker 未落地（exited-not-landed）**
+**2026-10-22T11:33:45.189Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/exportMenu.test.tsx: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/architecture-element-and-relation-filters.md）⇒ 判惰性，⛔ 未调分类器
+fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
+fan-in-ff-merge: measure ff_only_locked=false
 - run_id：wk-prod-anchor
-- session_id：bd8b33b6-f7d2-4dca-9131-0bf2624b996c
+- session_id：20cc0df6-703c-4498-ad26-c0f2633112dd
