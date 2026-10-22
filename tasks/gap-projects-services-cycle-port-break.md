@@ -2,7 +2,7 @@
 id: gap-projects-services-cycle-port-break
 title: 把 projects 组拉出 7 成员依赖环：projects-with-sessions-fetch 的两条跨组
   import（sessionSynchronizerService、connectedClients）改经端口注入，projects 出环、环缩为 5
-status: todo
+status: ready
 labels:
   - gap
 parent: null
