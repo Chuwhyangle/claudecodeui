@@ -1,8 +1,7 @@
 ---
 id: gap-browser-use-runtime-encapsulation
 title: BrowserUseRuntime 封装：browser-use 的 3 个模块级
-  let（installPromise/lastInstallMessage/runtimeProbeCache）+ 2 个 const
-  Map（sessions/handles）收进带生命周期的类
+  let（installPromise/lastInstallMessage/runtimeProbeCache）收进带生命周期的类
 status: done
 labels:
   - gap
