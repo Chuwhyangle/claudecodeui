@@ -30,11 +30,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **模块级可变容器归零**：`grep -nE "^const activeCodexSessions = new Map" server/modules/providers/list/codex/codex-runtime.provider.ts` 计数 = **0**。
-- [ ] (b) **类/实例持有状态**：`grep -nE "class CodexRuntimeState|activeCodexSessions" server/modules/providers/list/codex/codex-runtime.provider.ts` 命中（状态已进类字段）。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 codex-runtime 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **模块级可变容器归零**：`grep -nE "^const activeCodexSessions = new Map" server/modules/providers/list/codex/codex-runtime.provider.ts` 计数 = **0**。
+- [x] (b) **类/实例持有状态**：`grep -nE "class CodexRuntimeState|activeCodexSessions" server/modules/providers/list/codex/codex-runtime.provider.ts` 命中（状态已进类字段）。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 codex-runtime 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
