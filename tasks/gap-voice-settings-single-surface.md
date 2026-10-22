@@ -55,6 +55,8 @@ extra:
 
 > 实测补记（执行者，2026-10-22）：①(a) `test -f shared/voice/voiceSettingsRegistry.ts` ⇒ 0；`grep -q voiceSettingsRegistry <两个消费端>` ⇒ 0（两端均 `import ... from '@shared/voice/voiceSettingsRegistry.js'`）。②(b) `node scripts/voice-settings-single-surface-check.mjs` ⇒ `settingsKeys=13 registryKeys=13 duplicatedKeys=[]`；13 个 key：baseUrl / apiKey / sttModel / ttsModel / ttsVoice / ttsFormat / providerId / dashscopeEndpoint / dashscopeApiKey / dashscopeModel / liveVoiceDashscopeApiKey / voiceDataRecording / voiceDataMaxBytes。③(c) 命中 `server/index.ts:21,172`、`server/modules/voice-realtime/index.ts:24,26,37,53`、`server/shared/ports/voice-rules.port.ts:43`——前两处是装配点（注册规则、安装 port），最后一处是注册表的 re-export 面。④(d) vitest 两文件 25/25 绿；server 侧逐文件单跑（按 AGENTS.md 不整目录 fan-out）：voice-realtime-context-and-settings 31/31、status-injection 8/8、context-injection 6/6、voice-settings.db.integration 7/7、voice-dashscope-settings 32/32、voice-config.routes 6/6、claude-resident-dispatch-hook 4/4，均退出 0。⑤(e) `npm run typecheck` 0、`npm run lint` 0（仅既有 warning）。⑥纯位移：默认值表、max-length 表、空文档、规则三臂文本逐字未变，判据 (d) 覆盖；`server/tsconfig.json` 新增 `@shared/*` 别名（镜像前端既有别名），使服务端与浏览器指向同一个模块文件。**无法收敛/未收敛**：`server/modules/voice-realtime/mode.ts`（实际文件名为 `voice-realtime-mode.ts`）里的 `SEGMENTED_RELAY_PROTOCOL` 与浏览器端同名常量重复，但既有判据 `server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts` 要求浏览器模块以单引号字面量导出该词并将两侧逐字比对——收敛会红掉该判据，故按现状保留，不改。
 
+> 续做补记（执行者，2026-10-22 第二轮）：上一轮 suite 的唯一红是 `server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts` 的正控制（`the unmutated temp tree must pass the criterion`）。根因是本任务给 `voice.service.ts` 新增的 `@shared/voice/voiceSettingsRegistry.js` **值**导入：该判据用 `cpSync` 复制 shipping 文件搭临时树（原先只有 `shared/asr` + 两个 service sibling），树里没有 `shared/voice`，子进程解析失败 `Cannot find package '@shared/voice'`，正控制 1≠0。修复＝在 `buildTree` 里一并复制 `shared/voice`（判据语义不变：仍是 shipping 文件的拷贝，不是第二份实现；该契约自身零 import，树不需要 node_modules/网络），并把这棵树的 runtime-graph 注释同步更新。单跑该判据：`control=exit-0 mutations=2`，两条 mutation 均按各自原因 red，exit 0。
+
 ## Touches
 
 - `shared/voice/voiceSettingsRegistry.ts` (new: VoiceSettings contract, defaults, realtime file keys, rules registry, port)
@@ -68,6 +70,7 @@ extra:
 - `server/shared/ports/voice-rules.port.ts` (port storage re-exported from the contract)
 - `server/tsconfig.json` (the @shared alias the browser already has)
 - `scripts/voice-settings-single-surface-check.mjs` (new: AC b and c criterion, prints duplicatedKeys=[])
+- `server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts` (existing falsification criterion; its temp tree now carries the `shared/voice` runtime edge the service's value import added)
 - `src/shared/tests/voiceConfig.test.ts` (existing criterion, unchanged, behaviour coverage)
 - `src/shared/tests/voiceConfigHydration.test.ts` (existing criterion, unchanged, behaviour coverage)
 - `tasks/gap-voice-settings-single-surface.md` (self-touch)
