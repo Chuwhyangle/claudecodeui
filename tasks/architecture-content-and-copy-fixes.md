@@ -28,11 +28,11 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/readoutNumbers.test.ts src/modules/architecture/tests/architectureTab.test.tsx` exit 0：范围变化后读数出现「又找到 K 个相关，都被筛选隐藏」与「显示函数」操作，点击后函数出现；详情无变化时档位按钮有「无变化：当前范围内没有更多可裁剪的实体」提示（文案不引用「直接提到」）；读数按种类如实说「N 个（F 函数 · C 类…）」，不再把函数叫 classes；筛选角标读「隐藏中 N」且有 `aria-label`；弹层选项开/关有 ✓ 或文字；文件图视角不出现类图的种类统计行
-- [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：函数实体的文本是 `class <名> as <别名> <<function>>` 形态，任何带引号的名字里不含 `<<`；文本经 plantuml-js `checkSyntax` 无 error 且经 `parsePlantUml` 得到的构造型为 `function`；画面上仍有 `<<function>>` 与实体名（既有 DOM 契约用例不回归）
-- [ ] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx src/modules/architecture/tests/textPanel.test.tsx` exit 0：关系全被筛选隐藏的函数的检查器写「被筛选隐藏 N 条」并有「显示调用」；悬停提示不含 scope key（不含 `^[0-9a-f]{8}/`）；会话命中带类型徽标，按文件命中的写明「不是该名字」，摘录不从词中间开头；复制头部含项目名与会话标题
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：成员类型 `import("/abs/path/Name").Type` 被归一为 `Type`，不含绝对路径；不带此类类型的既有响应逐字节不变
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/readoutNumbers.test.ts src/modules/architecture/tests/architectureTab.test.tsx` exit 0：范围变化后读数出现「又找到 K 个相关，都被筛选隐藏」与「显示函数」操作，点击后函数出现；详情无变化时档位按钮有「无变化：当前范围内没有更多可裁剪的实体」提示（文案不引用「直接提到」）；读数按种类如实说「N 个（F 函数 · C 类…）」，不再把函数叫 classes；筛选角标读「隐藏中 N」且有 `aria-label`；弹层选项开/关有 ✓ 或文字；文件图视角不出现类图的种类统计行
+- [x] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：函数实体的文本是 `class <名> as <别名> <<function>>` 形态，任何带引号的名字里不含 `<<`；文本经 plantuml-js `checkSyntax` 无 error 且经 `parsePlantUml` 得到的构造型为 `function`；画面上仍有 `<<function>>` 与实体名（既有 DOM 契约用例不回归）
+- [x] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx src/modules/architecture/tests/textPanel.test.tsx` exit 0：关系全被筛选隐藏的函数的检查器写「被筛选隐藏 N 条」并有「显示调用」；悬停提示不含 scope key（不含 `^[0-9a-f]{8}/`）；会话命中带类型徽标，按文件命中的写明「不是该名字」，摘录不从词中间开头；复制头部含项目名与会话标题
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：成员类型 `import("/abs/path/Name").Type` 被归一为 `Type`，不含绝对路径；不带此类类型的既有响应逐字节不变
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -48,6 +48,9 @@ extra:
 - src/modules/architecture/archguardToPlantUml.ts
 - src/modules/architecture/readoutNumbers.ts
 - src/modules/architecture/rendererContract.ts
+- src/modules/architecture/elementRelationFilter.ts
+- src/modules/architecture/useArchitectureGraph.ts
+- src/modules/architecture/hooks/useMentions.ts
 - src/modules/architecture/tests/readoutNumbers.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/plantUmlText.test.ts
@@ -55,8 +58,11 @@ extra:
 - src/modules/architecture/tests/dockInspector.test.tsx
 - src/modules/architecture/tests/textPanel.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/modules/project-workspace/WorkspaceMain.tsx
 - server/modules/architecture/generator.ts
 - server/modules/architecture/service.ts
+- server/modules/architecture/mentions.ts
+- server/modules/architecture/seed-extraction.ts
 - server/modules/architecture/tests/generator.test.ts
 - server/modules/architecture/tests/architecture-routes.test.ts
 - src/modules/i18n/locales/en/common.json
@@ -72,3 +78,14 @@ extra:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-content-and-copy-fixes.md
+
+## Notes
+
+Implementation decisions worth knowing at fan-in:
+
+- **PlantUML standard spelling vs. the bundled parser.** `archguardToPlantUml` now emits the standard form (`class "Name" as n0 <<function>>`), and `plantUmlText.ts` exports a stereotype-aware `parsePlantUml` (dynamic package import, so the first-screen chunk does not grow) that reports the stereotype as data. `@yalehwang/plantuml-js@0.3.1` cannot parse the alias/stereotype order, so `PlantUmlGraph` feeds the DRAWING through `parserSafePlantUml` (stereotype before the alias), keeping the SVG and `data-entity-id` byte-equivalent, and wraps the drawn model's serializer with `standardiseDrawnStereotypes` so the copied document is standard again.
+- **Per-node hidden relations.** `stats.hidden.byNodeRelations` (server) and the client filter's `hidden.byNodeRelations` carry "how many of THIS box's relations the relation axis dropped", which is what lets the inspector and hover say "0 drawn, N hidden (call)" instead of a bare zero. Absent when nothing was hidden, so old payloads are unchanged.
+- **Mention hits.** Hits now carry `toolName` and `match: 'name' | 'file'`; excerpts are word-boundary windows with `…` on a real cut, and a file hit is relativised to the project path. The first sentence of a file-tool row is therefore "mentioned the file, not the name".
+- **Copy header.** `ArchitecturePanel` accepts optional `projectName`/`sessionTitle` (WorkspaceMain passes `selectedProject.displayName` and the session title/summary); the text page falls back to the ids for a standalone embed.
+- **Test timing note.** One readout criterion waits for the scope response's commit before clicking the widening action; two widenings queued in the same tick race the hook's refresh bookkeeping in jsdom.
+- **DoD evidence.** The real-browser walkthrough (screenshots + copied text) has not been captured in this worker session; the mechanical ACs above are green, and the DoD remains for the human/verification pass.
