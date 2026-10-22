@@ -54,11 +54,3 @@ extra:
 - anti-drift-touches-check: 7 actual files, all inside the 8 declared Touches globs.
 
 The DoD's real-browser screenshots at 1440×765 / 390×844 (19 %, 32 %) remain a human visual review step; the rectangle-intersection readings it asks for are asserted mechanically by the e2e geometry guard.
-
-## Blocker
-
-**2026-10-22T23:17:35.201Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：c72dfdf5-b00a-4803-994b-6aa29fac354a
