@@ -61,14 +61,14 @@ failure=reading: the reader produced no reading (exit 1): } |  | Node.js v24.21.
 
 ## AC
 
-- [ ] AC1 主判据绿：`node scripts/asr-config-resolution-check.mjs` 退出码 0，stdout 含 `client-capability-table=none` 与 `verdict=pass`，且不再出现任何 `failure=` 行；同时 `health-user-configured=true`、`health-empty-configured=false`、`health-providers-match-registry=yes`、`health-unknown-provider=refused-503`、`proxy-unknown-provider=refused-400-no-fetch`、`proxy-registered-provider=sent-1`、`configured-field-present=yes`、`client-read-points=voiceProviderProfile,setVoiceProviderProfile` 逐行仍在。
-- [ ] AC2 既有控制恢复绿：`node --test scripts/asr-health-provider-check.test.mjs` 退出码 0，`# fail 0`，且输出中不出现 `behavioural-reading=unavailable`；四条既有用例（AC7/AC1/AC3/AC4）每条都重新走「未变异夹具绿 → 单点变异红」。
-- [ ] AC3 夹具闭包有据：`grep -n "shared/voice/voiceSettingsRegistry.ts" scripts/asr-health-provider-check.mjs` 命中 1 行；取假形态——把它从 `FIXTURE_FILES` 删掉后 `node --test scripts/asr-health-provider-check.test.mjs` 必红且判词含 `voiceSettingsRegistry` 或 `behavioural-reading=unavailable`，加回后复绿。
-- [ ] AC4 AC6 的「真实声明必红」控制：新增用例先对未变异夹具断言退出 0；在同一夹具的 `src/shared/api.ts` 插入一行真实声明（如 `export const probeCaps = { pauseCues: 'neutral' };`，`patchFixtureFile` 的 `from` 命中数 `=== 1`）⇒ 探针退出码非零且 stdout 含 `client-capability-table=declared-in-1-file(s)` 与指名 `src/shared/api.ts` 的 AC6 判词；还原后退出 0。
-- [ ] AC5 AC6 的「注释不算声明」控制：把 `src/shared/voiceTrim.ts:327` 那句 JSDoc 逐字插入同一夹具的 `src/shared/api.ts`（命中数 `=== 1`）⇒ 探针仍退出 0 且 `client-capability-table=none`；随后在同一位置把同一句改成代码形态 `export const probeRelayCaps = { pauseCues: 'neutral' };`（删掉注释定界符，命中数 `=== 1`）⇒ 退出码非零。两支只差「是否为注释」。
-- [ ] AC6 AC6 另外两条腿仍有控制：(a) 把夹具 `src/shared/api.ts` 里全部 3 处 `tryResolve` 改名为 `resolveProvider` ⇒ 退出码非零且判词含 `does not ask the registry`；(b) 把夹具 `src/shared/api.ts` 里全部 7 处 `voiceProviderProfile` 改名为 `voiceProfile` ⇒ 退出码非零且判词含 `read points`（hook 侧 `setVoiceProviderProfile(` 保持不动）；两支还原后均退出 0。
-- [ ] AC7 不碰行为面：`git diff --name-only $(git merge-base HEAD develop) HEAD -- server shared src` 输出为空；改动只落在 `scripts/asr-health-provider-check.mjs`、`scripts/asr-health-provider-check.test.mjs`，不新增生产文件。
-- [ ] AC8 语法门：`node --check scripts/asr-health-provider-check.mjs` 与 `node --check scripts/asr-health-provider-check.test.mjs` 均退出 0。
+- [x] AC1 主判据绿：`node scripts/asr-config-resolution-check.mjs` 退出码 0，stdout 含 `client-capability-table=none` 与 `verdict=pass`，且不再出现任何 `failure=` 行；同时 `health-user-configured=true`、`health-empty-configured=false`、`health-providers-match-registry=yes`、`health-unknown-provider=refused-503`、`proxy-unknown-provider=refused-400-no-fetch`、`proxy-registered-provider=sent-1`、`configured-field-present=yes`、`client-read-points=voiceProviderProfile,setVoiceProviderProfile` 逐行仍在。
+- [x] AC2 既有控制恢复绿：`node --test scripts/asr-health-provider-check.test.mjs` 退出码 0，`# fail 0`，且输出中不出现 `behavioural-reading=unavailable`；四条既有用例（AC7/AC1/AC3/AC4）每条都重新走「未变异夹具绿 → 单点变异红」。
+- [x] AC3 夹具闭包有据：`grep -n "shared/voice/voiceSettingsRegistry.ts" scripts/asr-health-provider-check.mjs` 命中 1 行；取假形态——把它从 `FIXTURE_FILES` 删掉后 `node --test scripts/asr-health-provider-check.test.mjs` 必红且判词含 `voiceSettingsRegistry` 或 `behavioural-reading=unavailable`，加回后复绿。
+- [x] AC4 AC6 的「真实声明必红」控制：新增用例先对未变异夹具断言退出 0；在同一夹具的 `src/shared/api.ts` 插入一行真实声明（如 `export const probeCaps = { pauseCues: 'neutral' };`，`patchFixtureFile` 的 `from` 命中数 `=== 1`）⇒ 探针退出码非零且 stdout 含 `client-capability-table=declared-in-1-file(s)` 与指名 `src/shared/api.ts` 的 AC6 判词；还原后退出 0。
+- [x] AC5 AC6 的「注释不算声明」控制：把 `src/shared/voiceTrim.ts:327` 那句 JSDoc 逐字插入同一夹具的 `src/shared/api.ts`（命中数 `=== 1`）⇒ 探针仍退出 0 且 `client-capability-table=none`；随后在同一位置把同一句改成代码形态 `export const probeRelayCaps = { pauseCues: 'neutral' };`（删掉注释定界符，命中数 `=== 1`）⇒ 退出码非零。两支只差「是否为注释」。
+- [x] AC6 AC6 另外两条腿仍有控制：(a) 把夹具 `src/shared/api.ts` 里全部 3 处 `tryResolve` 改名为 `resolveProvider` ⇒ 退出码非零且判词含 `does not ask the registry`；(b) 把夹具 `src/shared/api.ts` 里全部 7 处 `voiceProviderProfile` 改名为 `voiceProfile` ⇒ 退出码非零且判词含 `read points`（hook 侧 `setVoiceProviderProfile(` 保持不动）；两支还原后均退出 0。
+- [x] AC7 不碰行为面：`git diff --name-only $(git merge-base HEAD develop) HEAD -- server shared src` 输出为空；改动只落在 `scripts/asr-health-provider-check.mjs`、`scripts/asr-health-provider-check.test.mjs`，不新增生产文件。
+- [x] AC8 语法门：`node --check scripts/asr-health-provider-check.mjs` 与 `node --check scripts/asr-health-provider-check.test.mjs` 均退出 0。
 
 ## DoD
 
@@ -85,3 +85,45 @@ failure=reading: the reader produced no reading (exit 1): } |  | Node.js v24.21.
 - scripts/asr-health-provider-check.mjs
 - scripts/asr-health-provider-check.test.mjs
 - tasks/gap-asr-health-ac6-scan-and-fixture-staleness.md
+
+## Evidence
+
+主判据在出货树上逐字变绿（`node scripts/asr-config-resolution-check.mjs`，exit 0）：
+
+```
+landing=shared/asr
+landing-candidate=a
+server-compiles-landing=yes
+registry-providers=openai-compatible,multimodal,dashscope-omni,sensevoice-local,sensevoice-wasm,dashscope-omni-relay
+health-user-configured=true
+health-empty-configured=false
+health-providers-match-registry=yes
+health-unknown-provider=refused-503
+proxy-unknown-provider=refused-400-no-fetch
+proxy-registered-provider=sent-1
+configured-field-present=yes
+client-capability-table=none
+client-read-points=voiceProviderProfile,setVoiceProviderProfile
+verdict=pass
+```
+
+控制面恢复可运行（`node --test scripts/asr-health-provider-check.test.mjs`，exit 0，`fail 0`）：
+
+```
+✔ AC7/AC8: the landing reading is candidate (a), and a frontend-tree landing is refused
+✔ AC1/AC8: a health reading that only looks at the server environment is reported
+✔ AC3/AC8: an unregistered provider id that silently falls back is reported
+✔ AC4/AC8: a renamed `configured` field is reported, not merely un-flagged
+✔ AC6/AC8: a second capability declaration in the client is reported
+✔ AC6/AC8: a capability name in a comment is prose, but the same text as code is a declaration
+✔ AC6/AC8: a client that no longer asks the registry is reported
+✔ AC6/AC8: a client whose capability read points moved is reported
+ℹ tests 8
+ℹ pass 8
+ℹ fail 0
+```
+
+AC3 假形态：从 `FIXTURE_FILES` 删掉 `shared/voice/voiceSettingsRegistry.ts` ⇒ 未变异夹具基线红（`behavioural-reading=unavailable`，exit 1）；加回后复绿（8/8）。
+
+AC7：`git diff --name-only $(git merge-base HEAD develop) HEAD -- server shared src` 输出为空；改动只落在 `scripts/asr-health-provider-check.mjs` 与 `scripts/asr-health-provider-check.test.mjs`，无新增生产文件。
+AC8：`node --check` 两个文件均 exit 0。
