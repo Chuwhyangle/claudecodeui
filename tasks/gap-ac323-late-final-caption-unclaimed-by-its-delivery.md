@@ -2,7 +2,7 @@
 id: gap-ac323-late-final-caption-unclaimed-by-its-delivery
 title: 恢复 AC-323 判据绿：final caption 在其投递的 sent 之后才到 ⇒
   归属落空，退出把已交付的话交回草稿、live-voice-button 消失（同树 01:39/01:44 绿、01:48 红）
-status: todo
+status: ready
 labels:
   - gap
   - defect
