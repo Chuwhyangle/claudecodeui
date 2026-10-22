@@ -39,14 +39,14 @@ extra:
 
 ## AC
 
-- [ ] (a) **voice 不再 import providers**：`grep -rn "@/modules/providers" server/modules/voice --include='*.ts'` 计数 = **0**（含动态 `import('@/modules/providers…')` 字面量）；`grep -n "voice-lexicon" server/index.ts` 命中（assembly 安装端口）。
-- [ ] (b) **端口存在**：`test -f server/shared/ports/voice-lexicon.port.ts` 退出 0；`grep -q "voice-lexicon" server/index.ts` 退出 0。
-- [ ] (c) **判据存在且跑通（voice 出环）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice/tests/voice-provider-cycle.test.ts` 退出 0；其 import AC-394 的 `strongComponents` / `collectServerSources`（`server/shared/import-graph.ts`），打印 `voiceInAnyScc=false`（并打印每段非平凡 SCC 成员，`modules/voice` 不在其中）。
-- [ ] (d) **AC-394 棘轮仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0（其 G1/G2/G3 逐成员仍包含于基线；若 `modules/voice` 出环使 G1 缩小，属允许的缩小，不属红）。
-- [ ] (e) **既有行为判据不改一字仍绿**：`server/modules/voice/tests/voice-lexicon.test.ts` 与 `server/modules/websocket/tests/` 下既有判据单跑、各自退出 0（若 `voice-lexicon.test.ts` 不存在则用等价 voice 判据替换并在完成记录写明）。
-- [ ] (f) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (g) **collateral**：新增一个 `server/**/*.test.ts` ⇒ 先复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（执行时以实测为准），按 `server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1 并改写其上方注释算术；`scripts/suite-duration-baseline.tsv` 仅当 AC7 覆盖率地板跌破 90% 才追加一行；单文件复跑 quay-test-script.test.ts 退出 0。
-- [ ] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
+- [x] (a) **voice 不再 import providers**：`grep -rn "@/modules/providers" server/modules/voice --include='*.ts'` 计数 = **0**（含动态 `import('@/modules/providers…')` 字面量）；`grep -n "voice-lexicon" server/index.ts` 命中（assembly 安装端口）。
+- [x] (b) **端口存在**：`test -f server/shared/ports/voice-lexicon.port.ts` 退出 0；`grep -q "voice-lexicon" server/index.ts` 退出 0。
+- [x] (c) **判据存在且跑通（voice 出环）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice/tests/voice-provider-cycle.test.ts` 退出 0；其 import AC-394 的 `strongComponents` / `collectServerSources`（`server/shared/import-graph.ts`），打印 `voiceInAnyScc=false`（并打印每段非平凡 SCC 成员，`modules/voice` 不在其中）。
+- [x] (d) **AC-394 棘轮仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0（其 G1/G2/G3 逐成员仍包含于基线；若 `modules/voice` 出环使 G1 缩小，属允许的缩小，不属红）。
+- [x] (e) **既有行为判据不改一字仍绿**：`server/modules/voice/tests/voice-lexicon.test.ts` 与 `server/modules/websocket/tests/` 下既有判据单跑、各自退出 0（若 `voice-lexicon.test.ts` 不存在则用等价 voice 判据替换并在完成记录写明）。
+- [x] (f) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (g) **collateral**：新增一个 `server/**/*.test.ts` ⇒ 先复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（执行时以实测为准），按 `server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1 并改写其上方注释算术；`scripts/suite-duration-baseline.tsv` 仅当 AC7 覆盖率地板跌破 90% 才追加一行；单文件复跑 quay-test-script.test.ts 退出 0。
+- [x] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
 
 ## DoD
 
@@ -59,5 +59,7 @@ extra:
 - `server/index.ts`（assembly 处安装 voice-lexicon 端口）
 - `server/modules/voice/tests/voice-provider-cycle.test.ts` (new)（判据：复用 AC-394 扫描器断言 voice 出环）
 - `server/shared/tests/quay-test-script.test.ts`（collateral：两条计数 pin 各 +1 及注释算术）
+- `server/shared/tests/server-import-cycle-budget.test.ts`（棘轮：G1 8→7 成员并同步注释/读数，属允许的缩小）
+- `server/shared/tests/server-import-cycle-budget.baseline.json`（棘轮：G1 去掉 modules/voice、dynamic 4→3）
 - `scripts/suite-duration-baseline.tsv`（collateral：仅当覆盖率地板跌破 90%）
 - `tasks/gap-voice-provider-cycle-port-break.md`（自触）
