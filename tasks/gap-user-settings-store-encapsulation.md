@@ -45,3 +45,11 @@ extra:
 
 - `src/shared/userSettings.ts`（4 个 let → UserSettingsStore 私有字段 + 生命周期）
 - `tasks/gap-user-settings-store-encapsulation.md`（自触）
+
+## Blocker
+
+**2026-10-22T09:55:22.088Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=8516 e2e/session-lifecycle-scenario.spec.ts passed=false end_ms=1792662856237
+- run_id：wk-prod-anchor
+- session_id：81d2f93c-1f2c-4c07-bb03-05b305a788d1

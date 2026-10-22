@@ -2,7 +2,7 @@
 id: gap-voice-config-store-encapsulation
 title: VoiceConfigStore 封装：voiceConfig 的 8 个模块级
   let（config/hasHydrated/hydrationRequest/pendingWriteTimer/rawCapture*）收进带生命周期的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -47,11 +47,3 @@ extra:
 - `src/shared/tests/voiceConfig.test.ts`（既有判据，不改一字，作行为覆盖）
 - `src/shared/tests/voiceConfigHydration.test.ts`（既有判据，不改一字，作行为覆盖）
 - `tasks/gap-voice-config-store-encapsulation.md`（自触）
-
-## Blocker
-
-**2026-10-22T09:43:55.177Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：783a45fd-0a99-4ce5-a599-3e6b75236082

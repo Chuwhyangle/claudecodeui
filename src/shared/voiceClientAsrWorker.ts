@@ -197,13 +197,8 @@ function voiceClientUnavailableReason(reading: VoiceClientReadiness | null): str
  * names the directory variable and the documentation.
  */
 export function voiceClientAsrReadiness(): Promise<VoiceClientReadiness | null> {
-  if (readinessRequest === null) {
-    readinessRequest = readClientAssetReading();
-  }
-  return readinessRequest;
+  return voiceClientAsrEngineInstance.ready();
 }
-
-let readinessRequest: Promise<VoiceClientReadiness | null> | null = null;
 
 /** The probe the engine uses when a caller injects none: the shared, memoised server reading. */
 const defaultReadinessProbe: () => Promise<VoiceClientReadiness | null> = voiceClientAsrReadiness;
@@ -920,15 +915,14 @@ type Observers = {
  * sentence that tells a user why their speech took the server path, and a policy that could only say
  * "it is not ready" would leave the one fact they can act on (wait for it) out of the answer.
  *
- * Module-level because the worker port is a singleton per tab, exactly like `installedEngine` below.
- * It is a mirror of what the worker last posted, never an independent opinion, and `null` before any
+ * Held by the per-tab `VoiceClientAsrEngine` singleton below, exactly like the installed port: it is
+ * a mirror of what the worker last posted, never an independent opinion, and `null` before any
  * reading has arrived.
  */
-let lastProgress: VoiceModelProgress | null = null;
 
 /** The last model-download reading the engine received, or `null` before the first one. */
 export function voiceClientAsrProgress(): VoiceModelProgress | null {
-  return lastProgress;
+  return voiceClientAsrEngineInstance.progress();
 }
 
 /** What the main thread's port needs, injected so the whole proxy is testable without a worker. */
@@ -1014,7 +1008,7 @@ export function createVoiceClientAsrEngine(
     spawned.addEventListener('message', (event) => {
       const reply = event.data;
       if (reply.kind === 'progress') {
-        lastProgress = reply.progress;
+        voiceClientAsrEngineInstance.noteProgress(reply.progress);
         observers.onProgress?.(reply.progress);
         return;
       }
@@ -1122,88 +1116,176 @@ export function createVoiceClientAsrEngine(
 // ── the composition root ─────────────────────────────────────────────────────────────────────
 
 /**
+ * This tab's client-recogniser engine: the four pieces of per-tab state this module keeps, behind one
+ * explicit lifecycle.
+ *
+ * WHY A CLASS. Installing the port, starting the model download, asking the server for its asset
+ * reading, and mirroring download progress are four moments in ONE object's life, not four unrelated
+ * memos. As loose module-level bindings they could not be read, reset or reasoned about as a unit —
+ * a test could install a fake port but had no way to unhook the module's own, and `dispose()` had
+ * nowhere to live. The fields are private so the only writes are the methods below: `ready()` owns
+ * the readiness memo, `install()` owns the installed port, `preload()` owns the download memo,
+ * `noteProgress()` owns the progress mirror. Behaviour is unchanged, field for field.
+ *
+ * INSTALL AND PRELOAD ARE MEMOISED AND IDEMPOTENT because their callers are React hooks: a hook body
+ * runs on every render, and installing a fresh engine each time would leak a worker per render. The
+ * adapter reads the port through `installWasmEngine`, so `install()` is the one write that makes
+ * `sensevoice-wasm` answerable at all. Nothing happens at import: a page that never selects this
+ * provider never spawns a worker, and a test that installs its own fake engine is not fighting a real
+ * one installed behind its back.
+ */
+export class VoiceClientAsrEngine {
+  /** The server's client-asset reading, one ask per page; see `ready()`. */
+  private readinessRequest: Promise<VoiceClientReadiness | null> | null = null;
+
+  /** The last download reading the installed engine posted; see `noteProgress()`. */
+  private lastProgress: VoiceModelProgress | null = null;
+
+  /** The port installed on the adapter, or `null` before `install()`. */
+  private installed: (WasmEnginePort & { observers: Observers }) | null = null;
+
+  /** The in-flight (or settled) model load; see `preload()`. */
+  private preloadPromise: Promise<AsrRuntimeStatus> | null = null;
+
+  /**
+   * The server's client-asset reading, asked at most once per page.
+   *
+   * Shared by `useVoiceAvailable` (which reads `ready` to decide whether to offer the microphone) and
+   * by the installed engine (which reads it to refuse BEFORE downloading). A failure to ask is
+   * `null`, not a throw: the caller's answer is the same fail-closed one either way.
+   */
+  ready(): Promise<VoiceClientReadiness | null> {
+    if (this.readinessRequest === null) {
+      this.readinessRequest = readClientAssetReading();
+    }
+    return this.readinessRequest;
+  }
+
+  /** Installs this tab's engine on the adapter, once, and returns it. */
+  install(options: VoiceClientEngineOptions = {}): WasmEnginePort & { observers: Observers } {
+    if (this.installed === null) {
+      this.installed = createVoiceClientAsrEngine(options);
+      installWasmEngine(this.installed);
+    }
+    return this.installed;
+  }
+
+  /** The installed engine, or null, so a caller can read its status without installing one. */
+  engine(): (WasmEnginePort & { observers: Observers }) | null {
+    return this.installed;
+  }
+
+  /**
+   * Starts the model download NOW, at a moment the user chose, and answers when it has finished.
+   *
+   * WHY A SELECTION IS A REASON TO SPEND 239 MB. The first recognition is the wrong place to pay for
+   * the model: the user has already spoken, the segment is already waiting, and the download is
+   * longer than any per-segment deadline can cover — so the first thing the client path does on a
+   * fresh browser is fall back. Asking for the load when the recogniser is CHOSEN moves that cost to
+   * where the user can see it (the settings panel, whose progress line this call feeds).
+   *
+   * MEMOISED PER ATTEMPT, AND RETRIABLE ON FAILURE. Two effects selecting the same recogniser must
+   * not each spawn a load — hence one promise — but a load that came back unusable clears the memo,
+   * so re-selecting the recogniser is a retry rather than a no-op. It never rejects: `ensureReady`
+   * answers with the engine's own reading, whose `reason` is the sentence a panel shows.
+   */
+  preload(): Promise<AsrRuntimeStatus> {
+    if (this.preloadPromise !== null) return this.preloadPromise;
+
+    this.preloadPromise = (async () => {
+      const engine = this.install();
+      try {
+        const status = await engine.ensureReady();
+        if (!status.available) this.preloadPromise = null;
+        return status;
+      } catch (error) {
+        this.preloadPromise = null;
+        return {
+          available: false,
+          state: 'unavailable',
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })();
+
+    return this.preloadPromise;
+  }
+
+  /** The last model-download reading the engine received, or `null` before the first one. */
+  progress(): VoiceModelProgress | null {
+    return this.lastProgress;
+  }
+
+  /** Records the worker's latest download reading; the single write path for the mirror. */
+  noteProgress(progress: VoiceModelProgress): void {
+    this.lastProgress = progress;
+  }
+
+  /**
+   * Points the installed engine's progress and notice reporting at a caller, whenever one shows up.
+   *
+   * SEPARATE FROM `install()` BECAUSE THE TWO HAPPEN AT DIFFERENT TIMES. The engine is installed by
+   * the first consumer that needs the recogniser to answer (the availability hook, on page load); the
+   * consumer that can SHOW a download moving is the settings panel, which mounts later and may not be
+   * open at all. Making the sinks addressable afterwards is what lets a first download be visible to
+   * whoever is in a position to show it, instead of being lost to whichever caller installed first.
+   */
+  observe(observers: {
+    onProgress?: (progress: VoiceModelProgress) => void;
+    onNotice?: (message: string) => void;
+  }): void {
+    if (this.installed === null) return;
+    if (observers.onProgress !== undefined) this.installed.observers.onProgress = observers.onProgress;
+    if (observers.onNotice !== undefined) this.installed.observers.onNotice = observers.onNotice;
+  }
+
+  /**
+   * Drops every piece of per-tab state and unhooks the port from the adapter.
+   *
+   * The lifecycle's other end: after `dispose()` the adapter fails closed again (`NO_ENGINE_REASON`)
+   * until `install()` is next called, and a later `ready()`/`preload()` starts over rather than
+   * answering from the previous tab life. Nothing in the shipping composition calls it — the tab's
+   * engine lives as long as the page — but it is what makes the class a lifecycle rather than a bag
+   * of statics, and what lets a test put the module back exactly as it found it.
+   */
+  dispose(): void {
+    installWasmEngine(null);
+    this.installed = null;
+    this.preloadPromise = null;
+    this.lastProgress = null;
+    this.readinessRequest = null;
+  }
+}
+
+/** The one per-tab instance; every exported door below is a thin delegate onto it. */
+export const voiceClientAsrEngineInstance = new VoiceClientAsrEngine();
+
+/**
  * Installs this tab's engine on the adapter, once.
  *
- * MEMOISED AND IDEMPOTENT because its caller is a React hook: a hook body runs on every render, and
- * installing a fresh engine each time would leak a worker per render. The adapter reads the port
- * through a module-level slot, so this is the one write that makes `sensevoice-wasm` answerable at all.
- *
- * It is called by the hook that first needs the client path rather than at import: a page that never
- * selects this provider never spawns a worker, and a test that installs its own fake engine is not
- * fighting a real one installed behind its back.
+ * The adapter reads the port through a module-level slot, so this is the one write that makes
+ * `sensevoice-wasm` answerable at all. Memoised and idempotent; see `VoiceClientAsrEngine.install`.
  */
-let installedEngine: (WasmEnginePort & { observers: Observers }) | null = null;
-
 export function installVoiceClientAsrEngine(options: VoiceClientEngineOptions = {}): WasmEnginePort {
-  if (installedEngine === null) {
-    installedEngine = createVoiceClientAsrEngine(options);
-    installWasmEngine(installedEngine);
-  }
-  return installedEngine;
+  return voiceClientAsrEngineInstance.install(options);
 }
 
 /** The installed engine, or null. Exported so a caller can read its status without installing one. */
 export function voiceClientAsrEngine(): WasmEnginePort | null {
-  return installedEngine;
+  return voiceClientAsrEngineInstance.engine();
 }
 
-/**
- * Starts the model download NOW, at a moment the user chose, and answers when it has finished.
- *
- * WHY A SELECTION IS A REASON TO SPEND 239 MB. The first recognition is the wrong place to pay for
- * the model: the user has already spoken, the segment is already waiting, and the download is longer
- * than any per-segment deadline can cover — so the first thing the client path does on a fresh
- * browser is fall back. Asking for the load when the recogniser is CHOSEN moves that cost to where
- * the user can see it (the settings panel, whose progress line this call feeds) and where waiting
- * costs nothing.
- *
- * MEMOISED PER ATTEMPT, AND RETRIABLE ON FAILURE. Two effects selecting the same recogniser must not
- * each spawn a load — hence one promise — but a load that came back unusable clears the memo, so
- * re-selecting the recogniser is a retry rather than a no-op. It never rejects: `ensureReady`
- * answers with the engine's own reading, whose `reason` is the sentence a panel shows.
- */
-let preloadPromise: Promise<AsrRuntimeStatus> | null = null;
-
+/** Starts the model download now; see `VoiceClientAsrEngine.preload`. */
 export function preloadVoiceClientAsrEngine(): Promise<AsrRuntimeStatus> {
-  if (preloadPromise !== null) return preloadPromise;
-
-  preloadPromise = (async () => {
-    const engine = installVoiceClientAsrEngine();
-    try {
-      const status = await engine.ensureReady();
-      if (!status.available) preloadPromise = null;
-      return status;
-    } catch (error) {
-      preloadPromise = null;
-      return {
-        available: false,
-        state: 'unavailable',
-        reason: error instanceof Error ? error.message : String(error),
-      };
-    }
-  })();
-
-  return preloadPromise;
+  return voiceClientAsrEngineInstance.preload();
 }
 
-/**
- * Points the installed engine's progress and notice reporting at a caller, whenever that caller shows
- * up.
- *
- * SEPARATE FROM `installVoiceClientAsrEngine` BECAUSE THE TWO HAPPEN AT DIFFERENT TIMES. The engine is
- * installed by the first consumer that needs the recogniser to answer (the availability hook, on page
- * load); the consumer that can SHOW a download moving is the settings panel, which mounts later and
- * may not be open at all. Making the sinks addressable afterwards is what lets the requirement that a
- * first download be visible be met by whoever is in a position to meet it, instead of being lost to
- * whichever caller happened to install first.
- */
+/** Points the installed engine's progress and notice reporting at a caller; see `observe`. */
 export function observeVoiceClientAsrEngine(observers: {
   onProgress?: (progress: VoiceModelProgress) => void;
   onNotice?: (message: string) => void;
 }): void {
-  if (installedEngine === null) return;
-  if (observers.onProgress !== undefined) installedEngine.observers.onProgress = observers.onProgress;
-  if (observers.onNotice !== undefined) installedEngine.observers.onNotice = observers.onNotice;
+  voiceClientAsrEngineInstance.observe(observers);
 }
 
 // ── the routing policy ───────────────────────────────────────────────────────────────────────
