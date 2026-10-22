@@ -367,14 +367,18 @@ const RUN_SERVERS = [
 const SINGLE_SPEC_CEILING_MS = 55_000;
 /** Per-spec budgets that differ from `SINGLE_SPEC_CEILING_MS`. Keyed by basename so the rule holds from any cwd. */
 const SPEC_BUDGET_MS: Record<string, number> = {
-  // The architecture tab's geometry criterion: four cases in one worker, each
-  // driving a real page (two viewports of the main arm, two control arms that
-  // inject a defect style and re-read). Measured 2026-10-22 on this worktree:
-  // `4 passed (35.2s)` for the whole invocation — boot, both servers and the
-  // browser launch included — against the 55 s single-file default. 120_000 is
-  // what the sibling interaction-heavy entries below declare, and it keeps a
-  // load-slowed fan-in run from being killed mid-case by the watchdog while
-  // still landing the line inside the goal gate's 60 s kill for a healthy run.
+  // The architecture tab's geometry criterion: cases in one worker, each
+  // driving a real page (two viewports of the main arm, the semantic-zoom
+  // readings, and control arms that inject a defect style and re-read).
+  // Measured 2026-10-22 on this worktree: `4 passed (35.2s)` for the whole
+  // invocation — boot, both servers and the browser launch included — against
+  // the 55 s single-file default. Re-measured 2026-10-23 with the text-selection
+  // legs (three canvas gestures + the dock leg in the PC main arm, and control
+  // arm E's inject/restore round trip): `8 passed (54.2s)`, still inside the
+  // entry below. 120_000 is what the sibling interaction-heavy entries below
+  // declare, and it keeps a load-slowed fan-in run from being killed mid-case by
+  // the watchdog while still landing the line inside the goal gate's 60 s kill
+  // for a healthy run.
   'architecture-canvas-layout.spec.ts': 120_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s

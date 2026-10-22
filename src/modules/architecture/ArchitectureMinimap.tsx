@@ -752,6 +752,11 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
     <div
       data-architecture-minimap="true"
       className="pointer-events-auto flex flex-col items-end"
+      // A thumbnail of the drawing is a control, not text: a click/drag on the
+      // frame must move the view without painting a selection across the
+      // corner chrome. The labels are symbols (+, −, ▣), so nothing here is
+      // worth copying.
+      style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       // The map is not the drawing: a wheel here must not zoom the diagram
       // (the canvas's wheel listener is on the scroll host, which this is not
       // a descendant of, but the contract is stated explicitly).
@@ -799,7 +804,14 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
             tabIndex={0}
             width={Math.round(mapWidth * ratio)}
             height={Math.round(mapHeight * ratio)}
-            style={{ width: `${mapWidth}px`, height: `${mapHeight}px`, touchAction: 'none' }}
+            style={{
+              width: `${mapWidth}px`,
+              height: `${mapHeight}px`,
+              touchAction: 'none',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              WebkitTouchCallout: 'none',
+            }}
             className="block cursor-crosshair rounded outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}

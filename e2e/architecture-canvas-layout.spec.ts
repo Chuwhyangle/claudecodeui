@@ -1109,6 +1109,275 @@ async function settle(page: Page, ms = 400): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
+/* ── the text-selection reading ──────────────────────────────────────────────────────────── */
+
+/** What the page's live selection holds. The ONE reading both arms compare. */
+type SelectionReading = { length: number; text: string };
+
+const readTextSelection = (page: Page): Promise<SelectionReading> => page.evaluate(() => {
+  const text = window.getSelection()?.toString() ?? '';
+  return { length: text.length, text: text.slice(0, 120) };
+});
+
+/** Drop any range the previous gesture left, so a reading names this gesture only. */
+async function clearTextSelection(page: Page): Promise<void> {
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+}
+
+type GesturePoint = { x: number; y: number };
+
+/**
+ * Two press points inside the drawing: a genuinely blank spot of canvas and a
+ * node label.
+ *
+ * The blank point is found by hit-testing, not by assuming a corner: the
+ * drawing's corner chrome (minimap, zoom cluster, header) and every drawn node
+ * refuse the press, and their placement moves with the fit. The label point is
+ * the centre of a drawn `text` inside a node box — the element a reader drags
+ * from when they select a label by accident.
+ */
+async function findGesturePoints(page: Page): Promise<{ blank: GesturePoint | null; label: GesturePoint | null }> {
+  return page.evaluate((sel) => {
+    const host = document.querySelector(sel.host) as HTMLElement | null;
+    if (host === null) return { blank: null, label: null };
+    const hostRect = host.getBoundingClientRect();
+    const inside = (x: number, y: number): boolean =>
+      x > hostRect.left + 6 && x < hostRect.right - 6 && y > hostRect.top + 6 && y < hostRect.bottom - 6;
+    const isBlankCanvas = (x: number, y: number): boolean => {
+      const hit = document.elementFromPoint(x, y);
+      if (hit === null) return false;
+      if (hit.closest('[data-entity-id]') !== null) return false;
+      if (hit.closest('[data-architecture-canvas-overlays]') !== null) return false;
+      if (hit.closest('[data-architecture-canvas-header]') !== null) return false;
+      return hit === host || host.contains(hit);
+    };
+
+    let blank: { x: number; y: number } | null = null;
+    const columns = 16;
+    const rows = 12;
+    outer: for (let row = 1; row < rows; row += 1) {
+      for (let column = 1; column < columns; column += 1) {
+        const x = Math.round(hostRect.left + (hostRect.width * column) / columns);
+        const y = Math.round(hostRect.top + (hostRect.height * row) / rows);
+        if (inside(x, y) && isBlankCanvas(x, y)) {
+          blank = { x, y };
+          break outer;
+        }
+      }
+    }
+
+    let label: { x: number; y: number } | null = null;
+    for (const node of host.querySelectorAll('.uml-node')) {
+      const text = node.querySelector('text');
+      if (text === null) continue;
+      const rect = text.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 6) continue;
+      const point = {
+        x: Math.round(rect.left + Math.min(rect.width / 2, 30)),
+        y: Math.round(rect.top + rect.height / 2),
+      };
+      if (!inside(point.x, point.y)) continue;
+      const hit = document.elementFromPoint(point.x, point.y);
+      if (hit === null || hit.closest('[data-entity-id]') === null) continue;
+      label = point;
+      break;
+    }
+
+    return { blank, label };
+  }, SEL);
+}
+
+/**
+ * A real primary-button drag: press, travel in frames, release. Small moves in
+ * several steps, because a single jump can land as one `mousemove` and the
+ * browser's own selection extension is what this criterion is measuring.
+ */
+async function dragAcross(page: Page, from: GesturePoint, to: GesturePoint): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  const steps = 6;
+  for (let step = 1; step <= steps; step += 1) {
+    await page.mouse.move(
+      Math.round(from.x + ((to.x - from.x) * step) / steps),
+      Math.round(from.y + ((to.y - from.y) * step) / steps),
+    );
+  }
+  await page.mouse.up();
+}
+
+/**
+ * The canvas selection legs: blank drag, label drag, double-clicked label.
+ *
+ * Each gesture starts from a clean selection and its own reading; a leg that
+ * leaves a range behind names itself in the console line and in the red.
+ */
+async function assertCanvasSelectsNothing(
+  page: Page,
+  points: { blank: GesturePoint | null; label: GesturePoint | null },
+  label: string,
+): Promise<void> {
+  expect(points.blank, `${label}: the drawing must offer a blank spot to drag from`).not.toBeNull();
+  expect(points.label, `${label}: the drawing must offer a node label to drag from`).not.toBeNull();
+  const blank = points.blank as GesturePoint;
+  const nodeLabel = points.label as GesturePoint;
+
+  const gestures: Array<{ name: string; run: () => Promise<void> }> = [
+    {
+      name: 'blank-drag',
+      run: () => dragAcross(page, blank, { x: Math.max(blank.x - 160, 10), y: Math.max(blank.y - 110, 10) }),
+    },
+    {
+      name: 'label-drag',
+      run: () => dragAcross(page, nodeLabel, { x: nodeLabel.x + 120, y: nodeLabel.y + 60 }),
+    },
+    {
+      name: 'label-double-click',
+      run: () => page.mouse.dblclick(nodeLabel.x, nodeLabel.y),
+    },
+  ];
+
+  for (const gesture of gestures) {
+    await clearTextSelection(page);
+    await gesture.run();
+    await settle(page, 200);
+    const reading = await readTextSelection(page);
+    // The DoD's screenshot: the drawing right after the gesture, with no
+    // selection highlight on it.
+    await page.screenshot({ path: test.info().outputPath(`selection-${label}-${gesture.name}.png`) });
+    console.log(`[architecture-layout] selection.${label}.${gesture.name}=${JSON.stringify(reading)}`);
+    expect(
+      reading.length,
+      `${label}: ${gesture.name} must not select the drawing; it selected ${reading.length} characters: `
+        + `${JSON.stringify(reading.text)}`,
+    ).toBe(0);
+  }
+  await clearTextSelection(page);
+}
+
+/**
+ * The dock leg: the same drag over the inspector's own prose MUST select text.
+ *
+ * The dock is the copyable side of the panel (session hits, the PlantUML text),
+ * and it sits beside — never inside — the canvas region, so this is the
+ * "did the fix spill over?" reading. The longest visible text block in the dock
+ * is the target; if the inspector is showing only short labels, the Text tab
+ * provides the document the reader is meant to copy from.
+ */
+async function assertDockSelectsText(page: Page, label: string): Promise<void> {
+  const dock = page.locator('[role="complementary"]');
+  if ((await dock.count()) === 0) {
+    // Open it the way a reader does: a single click on a drawn node.
+    const points = await findGesturePoints(page);
+    expect(points.label, `${label}: the drawing must offer a node to select`).not.toBeNull();
+    await page.mouse.click((points.label as GesturePoint).x, (points.label as GesturePoint).y);
+  }
+  await expect(dock, `${label}: the inspector dock must open for a selection`).toBeVisible({ timeout: 10_000 });
+
+  // The dock slides in over 160ms. Its rect is what the drag targets, so wait
+  // for the slide to land: a rect taken mid-animation points where the dock no
+  // longer is, and the drag would land on the canvas instead of the prose.
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    const element = document.querySelector('[role="complementary"]');
+    if (element === null) {
+      resolve();
+      return;
+    }
+    let previous = element.getBoundingClientRect().left;
+    let stable = 0;
+    const tick = (): void => {
+      const current = element.getBoundingClientRect().left;
+      stable = Math.abs(current - previous) < 0.5 ? stable + 1 : 0;
+      previous = current;
+      if (stable >= 3) resolve();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+
+  const readTextBlock = () => page.evaluate(() => {
+    const root = document.querySelector('[role="complementary"]');
+    if (root === null) return null;
+    let best: { x: number; x2: number; y: number; text: string } | null = null;
+    for (const element of root.querySelectorAll('p, dd, li, pre, code, span')) {
+      // Buttons are unselectable by the app's global stylesheet — a label that
+      // happens to be a control is not prose, so it is not a valid target.
+      if (element.closest('button, [role="button"], a, [role="menuitem"]') !== null) continue;
+      if (element.querySelector('button') !== null) continue;
+      const text = (element.textContent ?? '').trim();
+      if (text.length < 8) continue;
+      const rect = element.getBoundingClientRect();
+      // Only the part of the block that is actually ON SCREEN can be dragged:
+      // a mouse move past the viewport edge selects nothing, and a partially
+      // clipped block would otherwise turn this leg into a vacuous 0.
+      const left = Math.max(rect.left + 3, 4);
+      const right = Math.min(rect.right - 3, window.innerWidth - 4);
+      const y = Math.round(rect.top + rect.height / 2);
+      if (right - left < 20) continue;
+      if (y < 6 || y > window.innerHeight - 6) continue;
+      if (best === null || text.length > best.text.length) {
+        const x = Math.round(left);
+        const x2 = Math.round(right);
+        const hit = document.elementFromPoint(x, y);
+        best = {
+          x,
+          x2,
+          y,
+          text: text.slice(0, 60),
+          policy: window.getComputedStyle(element).userSelect,
+          hit: hit === null ? 'none' : `${hit.tagName.toLowerCase()}${hit.className ? `.${String(hit.className).split(' ')[0]}` : ''}`,
+        };
+      }
+    }
+    return best;
+  });
+
+  let block = await readTextBlock();
+  if (block === null) {
+    const textTab = page.getByRole('tab', { name: 'Text' });
+    if ((await textTab.count()) > 0) {
+      await textTab.first().click();
+      await expect(page.locator('[data-architecture-text-preview]')).toBeVisible({ timeout: 10_000 });
+      await settle(page, 300);
+      block = await readTextBlock();
+    }
+  }
+  expect(block, `${label}: the dock must show text a reader can copy`).not.toBeNull();
+  const target = block as {
+    x: number;
+    x2: number;
+    y: number;
+    text: string;
+    policy: string;
+    hit: string;
+  };
+  const geometry = await page.evaluate(() => {
+    const dock = document.querySelector('[role="complementary"]');
+    const rect = dock?.getBoundingClientRect();
+    return {
+      innerWidth: window.innerWidth,
+      scrollX: window.scrollX,
+      dock: rect === undefined ? null : { left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width) },
+    };
+  });
+  console.log(`[architecture-layout] selection.${label}.dock-geometry=${JSON.stringify(geometry)}`);
+  console.log(`[architecture-layout] selection.${label}.dock-target=${JSON.stringify(target)}`);
+
+  await clearTextSelection(page);
+  await dragAcross(page, { x: target.x, y: target.y }, { x: target.x2, y: target.y });
+  await settle(page, 200);
+  const reading = await readTextSelection(page);
+  // The DoD's screenshot, the other direction: the dock's text under a live
+  // browser selection.
+  await page.screenshot({ path: test.info().outputPath(`selection-${label}-dock-drag.png`) });
+  console.log(`[architecture-layout] selection.${label}.dock-drag=${JSON.stringify(reading)}`);
+  expect(
+    reading.length,
+    `${label}: dragging over the dock's text MUST select it (the fix must not reach the dock); `
+      + `selected ${reading.length} characters over ${JSON.stringify(target.text)}`,
+  ).toBeGreaterThan(0);
+  await clearTextSelection(page);
+}
+
 /**
  * Open the phone tier's bottom sheet, where the renderer's view controls live.
  *
@@ -1339,6 +1608,15 @@ test('main arm — the canvas fills the panel and the readout names the drawing 
     assertChromeClearOfNodes(fitted, 'pc.fitted');
     assertFooterInFlow(fitted, 'pc.fitted');
     assertFitNearTheoretical(fitted, 'pc.fitted');
+
+    // The drawing is an instrument, not text: dragging from the blank canvas,
+    // dragging from a node label and double-clicking a label (the drill
+    // gesture) must all leave `window.getSelection()` empty. The dock beside it
+    // is the copyable side and must still select — both legs read through the
+    // same `readTextSelection`, so a green here is a comparison, not a claim.
+    const points = await findGesturePoints(page);
+    await assertCanvasSelectsNothing(page, points, 'pc');
+    await assertDockSelectsText(page, 'pc');
 
     // Reading 3 is taken on the view that draws every entity as its own box.
     await showExplosionView(page);
@@ -1763,6 +2041,100 @@ test('control arm C — a scrolling toolbar clips the search result list', async
     const restored = await readSearch(page);
     console.log(`[architecture-layout] controlC.restored=${JSON.stringify(restored)}`);
     assertSearchUsable(restored, 'controlC.restored');
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * Control arm E: the selection guard's own false.
+ *
+ * The main arm reads 0 characters after a drag. A reading that can only ever
+ * report 0 proves nothing, so this arm switches the drawing's policy back to
+ * `user-select: auto` on the SAME page and repeats the SAME drag through the
+ * SAME {@link readTextSelection}: the reading must land above 0. The policy is
+ * restored afterwards and the drag must return to 0 — the three readings differ
+ * only in the injected style.
+ *
+ * The press guard reads the pressed element's computed policy, so it stands
+ * down for a canvas declared selectable; that is what lets this arm see the
+ * browser select text instead of a second layer refusing it.
+ */
+test('control arm E — a canvas switched back to user-select: auto selects text', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+
+    const points = await findGesturePoints(page);
+    const label = points.label as GesturePoint | null;
+    expect(label, 'control arm E: the drawing must offer a node label to drag from').not.toBeNull();
+    const from = label as GesturePoint;
+    const to = { x: from.x + 140, y: from.y + 70 };
+
+    // The baseline: the shipped policy leaves no selection.
+    await clearTextSelection(page);
+    await dragAcross(page, from, to);
+    await settle(page, 200);
+    const before = await readTextSelection(page);
+    console.log(`[architecture-layout] controlE.before=${JSON.stringify(before)}`);
+    expect(before.length, 'control arm E baseline: the shipped drawing must not select').toBe(0);
+
+    // The shipped defect, injected: the canvas — the region, the host, the SVG
+    // and every label in it — is declared selectable. The REGION is included
+    // because `user-select: auto` resolves to the parent's used value, so a
+    // child left auto under a still-`none` ancestor would still be unselectable
+    // and the arm would prove nothing.
+    const injected = await page.evaluate((sel) => {
+      const host = document.querySelector(sel.host) as HTMLElement | null;
+      if (host === null) return null;
+      const region = host.closest('[data-architecture-canvas-region]') ?? host;
+      const targets: Element[] = [region, ...region.querySelectorAll('*')];
+      for (const element of targets) {
+        (element as SVGElement | HTMLElement).style.setProperty('user-select', 'auto', 'important');
+        (element as SVGElement | HTMLElement).style.setProperty('-webkit-user-select', 'auto', 'important');
+      }
+      return { count: targets.length };
+    }, SEL);
+    console.log(`[architecture-layout] controlE.injected=${JSON.stringify(injected?.count ?? null)}`);
+    expect(injected, 'the drawing host must be on screen').not.toBeNull();
+    await settle(page, 200);
+
+    await clearTextSelection(page);
+    await dragAcross(page, from, to);
+    await settle(page, 200);
+    const selected = await readTextSelection(page);
+    console.log(`[architecture-layout] controlE.injected-reading=${JSON.stringify(selected)}`);
+    expect(
+      selected.length,
+      `control arm E: a canvas declared user-select: auto must select text; `
+        + `the same drag selected ${selected.length} characters`,
+    ).toBeGreaterThan(0);
+
+    // Restore the shipped policy exactly, then the same drag reads 0 again.
+    await page.evaluate((sel) => {
+      const host = document.querySelector(sel.host) as HTMLElement | null;
+      if (host === null) return;
+      const region = host.closest('[data-architecture-canvas-region]') ?? host;
+      for (const element of [region, ...region.querySelectorAll('*')]) {
+        const style = (element as SVGElement | HTMLElement).style;
+        style.removeProperty('user-select');
+        style.removeProperty('-webkit-user-select');
+      }
+      // Re-state the shipped declarations the injection overwrote.
+      for (const element of [region, host, ...host.querySelectorAll('svg, text, tspan')]) {
+        (element as SVGElement | HTMLElement).style.userSelect = 'none';
+      }
+    }, SEL);
+    await clearTextSelection(page);
+    await dragAcross(page, from, to);
+    await settle(page, 200);
+    const restored = await readTextSelection(page);
+    console.log(`[architecture-layout] controlE.restored=${JSON.stringify(restored)}`);
+    expect(restored.length, 'control arm E: the restored canvas must not select').toBe(0);
   } finally {
     await context.close();
   }

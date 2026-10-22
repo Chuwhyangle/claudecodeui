@@ -370,6 +370,33 @@ test('the canvas owns the wheel — a plain wheel zooms too — and Ctrl+wheel k
   );
 });
 
+test('the phone canvas refuses selection and the long-press callout', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+
+  // A finger that lands on the drawing pans/zooms/drills; it must never start
+  // a text selection, and a long press must not open the platform's select or
+  // share bubble over the drawing. jsdom drops the vendor properties from
+  // inline styles, so the rule the browser actually applies is read from the
+  // injected stylesheet: it names the drawing host and declares the callout
+  // suppression the touch tier needs.
+  assert.equal(host.style.userSelect, 'none', 'the phone drawing host must refuse a selection');
+  const policy = document.querySelector('[data-architecture-canvas-selection-style]');
+  assert.ok(policy !== null, 'the canvas must inject its selection policy');
+  const css = policy.textContent ?? '';
+  assert.match(
+    css,
+    /\[data-architecture-plantuml\][^{]*\{[^}]*-webkit-touch-callout:\s*none/,
+    'the drawing host must suppress the long-press callout on the touch tier',
+  );
+  assert.match(
+    css,
+    /\[data-architecture-plantuml\][^{]*\{[^}]*-webkit-user-select:\s*none/,
+    'the drawing host must refuse a touch selection',
+  );
+});
+
 test('a touch tap selects without re-laying out; drilling needs Drill in or a double-tap', async () => {
   usePhone();
   rememberShowAllFilter();

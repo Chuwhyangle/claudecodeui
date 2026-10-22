@@ -203,6 +203,30 @@ const HIGHLIGHT_STYLE = `
   [data-architecture-plantuml] svg { display: block; margin: 0 auto; }
 `;
 
+/**
+ * The drawing is something to LOOK AT and OPERATE, not text to copy (copying a
+ * diagram goes through the Text page and the export menu). Every element a
+ * drag can cross — the scroll host, the injected `svg` and its `text`/`tspan`
+ * labels — is declared unselectable, and `-webkit-touch-callout` keeps a phone
+ * long-press from opening the select/share bubble over the drawing.
+ *
+ * The rule and the inline declarations written by `markDrawingUnselectable`
+ * say the same thing on purpose: the rule covers every label the renderer adds
+ * later, the inline marks are readable without a laid-out browser (the
+ * component tests read them), and a browser that ignores the rule on SVG text
+ * still honours the inline declaration.
+ */
+const CANVAS_UNSELECTABLE_STYLE = `
+  [data-architecture-plantuml],
+  [data-architecture-plantuml] svg,
+  [data-architecture-plantuml] text,
+  [data-architecture-plantuml] tspan {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+`;
+
 /** The real browser store, or `null` where accessing it throws (private mode). */
 function localReadableStorage(): {
   getItem(key: string): string | null;
@@ -678,6 +702,27 @@ function addEdgeHitTargets(host: HTMLElement, coarsePointer: boolean): void {
     hit.setAttribute('vector-effect', 'non-scaling-stroke');
     hit.setAttribute('pointer-events', 'stroke');
     edge.appendChild(hit);
+  }
+}
+
+/**
+ * Mark the freshly injected drawing unselectable, inline.
+ *
+ * The injected {@link CANVAS_UNSELECTABLE_STYLE} rule already covers the host,
+ * the `svg` and every label, but two things need the inline declaration too: a
+ * browser that only honours `user-select` on HTML (not on SVG text) would still
+ * start a drag-selection on a node label, and the component tests read the
+ * inline value because jsdom's computed style drops properties it does not
+ * know. Called after EVERY DOM addition on the drawing (labels, badges, hit
+ * bands), so no node the renderer appends later is left selectable.
+ */
+function markDrawingUnselectable(host: HTMLElement): void {
+  host.style.userSelect = 'none';
+  const drawing = host.querySelector('svg');
+  if (drawing === null) return;
+  drawing.style.userSelect = 'none';
+  for (const label of drawing.querySelectorAll('text, tspan')) {
+    if (label instanceof SVGElement) label.style.userSelect = 'none';
   }
 }
 
@@ -1204,6 +1249,41 @@ export function PlantUmlGraph({
     return () => pan.destroy();
   }, []);
 
+  // A press inside the drawing never starts the browser's own text selection.
+  // The `user-select` rules already refuse it, but a drag can begin on a label
+  // the browser treats as selectable content (and a selection that started
+  // OUTSIDE the canvas survives a drag over it), so the primary-button default
+  // is cancelled too — `mousedown`'s default action IS "begin a selection".
+  // Cancelling it does not cancel the `click` the drawing's own select/drill
+  // handlers ride on, and the wheel is a different event family entirely.
+  //
+  // The refusal is read from the PRESS TARGET's computed policy rather than
+  // assumed: only an element declared `user-select: none` has a selection worth
+  // refusing. A canvas whose policy is switched back to `auto` (the e2e control
+  // arm, or a future selectable-drawing mode) keeps the browser's own
+  // behaviour, which is what makes the criterion able to read a false.
+  //
+  // `preventDefault` also suppresses the focus a press would give the scroll
+  // host, so the host is focused explicitly: click-then-arrow-keys keeps
+  // panning the way it did before this guard existed.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || typeof window === 'undefined') return;
+    const onMouseDown = (event: MouseEvent): void => {
+      // Right/middle presses have their own browser meanings (context menu,
+      // autoscroll) and never start a selection.
+      if (event.button !== 0) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target === null || window.getComputedStyle(target).userSelect !== 'none') return;
+      event.preventDefault();
+      const selection = window.getSelection();
+      if (selection !== null && selection.rangeCount > 0) selection.removeAllRanges();
+      if (document.activeElement !== host) host.focus({ preventScroll: true });
+    };
+    host.addEventListener('mousedown', onMouseDown);
+    return () => host.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
   // Whether Shift is held, kept fresh by a window CAPTURE listener: the capture
   // phase runs before the canvas's own bubble listeners, so the drag-pan
   // predicate reads the modifier of the very press that starts the gesture.
@@ -1590,6 +1670,9 @@ export function PlantUmlGraph({
           nodes: host.querySelectorAll('[data-entity-id]').length,
           edges: host.querySelectorAll('[data-edge-source]').length,
         });
+        // LAST DOM write of the drawing: every label, badge and hit band is in
+        // place, so the unselectable declaration covers the finished drawing.
+        markDrawingUnselectable(host);
       } catch (error) {
         if (cancelled) return;
         host.innerHTML = '';
@@ -2560,6 +2643,7 @@ export function PlantUmlGraph({
       data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
+      <style data-architecture-canvas-selection-style="true">{CANVAS_UNSELECTABLE_STYLE}</style>
       {canvasHeaderSlot !== null ? (
         createPortal(headerControls, canvasHeaderSlot)
       ) : compactToolbar ? null : (
@@ -2612,7 +2696,18 @@ export function PlantUmlGraph({
           // The flex column is the vertical-centring mechanism: the injected SVG
           // gets `margin-block: auto` (set where it is inserted), so a drawing
           // shorter than the canvas sits in the middle instead of hugging the top.
-          style={{ touchAction: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
+          // The selection declarations are stated inline as well as in the
+          // injected rule above: this host is where a drag starts, and
+          // `markDrawingUnselectable` repeats them on the drawing itself.
+          style={{
+            touchAction: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+          }}
           onKeyDown={onCanvasKeyDown}
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
