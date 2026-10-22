@@ -466,6 +466,38 @@ export type VoiceRealtimeDelivery = {
    * part of the delivery record.
    */
   queuePending?: boolean;
+  /**
+   * The conversation boundary this delivery answered through — the `sent` frame's
+   * `coveredThroughItemId`, when the proxy reported one.
+   *
+   * WHY IT IS KEPT. The transcription of the item the model answered is a SEPARATE, slower upstream
+   * event: a delivery can be confirmed while the caption for the sentence it carries is still being
+   * recognised (observed on 2026-10-22, tree `9b141d3f`: the delivery rows landed while one final
+   * caption was still on its way). At the `sent` the caption was not on screen, so nothing was
+   * claimed, and by the time it arrived no later delivery existed to claim it — leaving the mode
+   * handed a sentence the model had already received back to the composer as a draft. The boundary
+   * is what the client can still check afterwards: a caption that becomes final for THIS item is one
+   * this delivery answered, so it joins `itemIds` late (see the `caption` handler).
+   *
+   * Optional because a relay that reports no boundary (an older proxy, a stand-in) leaves it absent;
+   * there the delivery is judged by its message and window alone, exactly as before.
+   */
+  coveredThroughItemId?: string;
+  /**
+   * A delivery the proxy has ACCEPTED (`queued`, its coalescing window opened) whose `sent` has not
+   * arrived — its `message` is empty because the proxy has not reported the words yet.
+   *
+   * WHY THE CLIENT RECORDS IT BEFORE THE CONFIRMATION. Leaving Live Voice closes the browser socket
+   * at once, and the `sent` frame is emitted only after `session_send` resolves — which can take
+   * seconds (the coalescing window plus the session's own queue). Exit could therefore beat the
+   * frame for a delivery the proxy had already accepted; the proxy still finishes it on teardown
+   * (`flushCoalesced`), so the words DO reach the session while the page treated them as unheard and
+   * put them back in the composer's draft (2026-10-22 01:48, AC-323). The window is the same one the
+   * `sent` handler would claim — the finished utterances no delivery has yet taken — recorded early
+   * so a leave in the gap keeps them out of the backlog. A refusal or an error withdraws it (the
+   * words were never accepted and must be offered back).
+   */
+  inFlight?: true;
 };
 
 /**
@@ -1173,6 +1205,42 @@ export function useVoiceRealtimeSession({
   // `deliveries` closure: the close trace asks which of them ever became visible, and that question
   // is answered against the connection's own record, not the render that happens to be current.
   const deliveriesRef = useRef<VoiceRealtimeDelivery[]>([]);
+  /**
+   * The deliveries still owed a caption whose FINAL transcription had not arrived when their `sent`
+   * landed — `itemId` (the delivery's `coveredThroughItemId`) → its index in `deliveriesRef`.
+   *
+   * The ordering upstream is not fixed: the endpoint's transcription of the item the model answered
+   * can land after the delivery that answered it. Such a caption is claimed when it finally becomes
+   * final (see the `caption` handler), by ITEM ID — never by "everything still unclaimed", which is
+   * the swallow defect `gap-live-voice-caption-attribution-swallows-undelivered` closed. Cleared per
+   * connection, because an item id and a delivery index are facts about one socket's conversation.
+   */
+  const lateClaimRef = useRef<Map<string, number>>(new Map());
+
+  /**
+   * Takes back the claim a `queued` delivery made before its confirmation.
+   *
+   * The early claim exists because a leave can beat the `sent` of a message the proxy has already
+   * accepted (see `VoiceRealtimeDelivery.inFlight`). It is only true while the proxy really carries
+   * it: a refusal or a fatal error says the words never left, and they must be offered back to the
+   * composer as the backlog they are. Called from those two frames only — a connection close leaves
+   * the claim standing, because the proxy's teardown flushes an accepted instruction.
+   */
+  const releaseInFlightDelivery = useCallback(() => {
+    const remaining = deliveriesRef.current.filter((delivery) => delivery.inFlight !== true);
+    if (remaining.length === deliveriesRef.current.length) {
+      return;
+    }
+    const stillClaimed = new Set(remaining.flatMap((delivery) => delivery.itemIds));
+    for (const delivery of deliveriesRef.current) {
+      if (delivery.inFlight !== true) continue;
+      for (const itemId of delivery.itemIds) {
+        if (!stillClaimed.has(itemId)) attributedRef.current.delete(itemId);
+      }
+    }
+    deliveriesRef.current = remaining;
+    setDeliveries(deliveriesRef.current);
+  }, []);
   // The host's last reconcile reading, as a set of the person's command uuids its queue STILL holds
   // (`queue_reconcile`). `null` until the first such frame: no reading yet, so nothing may be
   // cleared on this field alone. Held as a ref so a delivery committed in the same tick can be
@@ -1846,6 +1914,7 @@ export function useVoiceRealtimeSession({
       attributedRef.current = new Set();
       priorDeliveryWindowRef.current = new Set();
       deliveriesRef.current = [];
+      lateClaimRef.current.clear();
       setCaptions([]);
       setDeliveries([]);
       setDelivering(false);
@@ -2410,6 +2479,26 @@ export function useVoiceRealtimeSession({
           next = sortCaptionsInSpokenOrder(next);
           captionsRef.current = next;
           setCaptions(next);
+          // A FINAL caption the delivery on the wire already named (see `coveredThroughItemId` and
+          // `lateClaimRef`): the transcription was slower than the `sent`, so nothing claimed it then.
+          // It joins the delivery that answered its item NOW, by item id — never by "everything still
+          // unclaimed", which would swallow words the model never relayed.
+          if (frame.final) {
+            const claimIndex = lateClaimRef.current.get(frame.itemId);
+            const claimedDelivery = claimIndex === undefined ? undefined : deliveriesRef.current[claimIndex];
+            if (claimIndex !== undefined && claimedDelivery !== undefined && !claimedDelivery.itemIds.includes(frame.itemId)) {
+              lateClaimRef.current.delete(frame.itemId);
+              attributedRef.current.add(frame.itemId);
+              deliveriesRef.current = deliveriesRef.current.map((entry, position) =>
+                position === claimIndex
+                  ? { ...entry, itemIds: [...entry.itemIds, frame.itemId], heard: [...entry.heard, text] }
+                  : entry,
+              );
+              setDeliveries(deliveriesRef.current);
+              // A refusal had marked it undelivered when it was still nobody's; now it is delivered.
+              setUndelivered((previous) => previous.filter((itemId) => itemId !== frame.itemId));
+            }
+          }
           return;
         }
         if (frame.type === 'queued') {
@@ -2422,6 +2511,31 @@ export function useVoiceRealtimeSession({
           // the messages the session's own queue took are invisible to the page.
           setQueuedDepth(typeof frame.depth === 'number' ? frame.depth : 0);
           setQueuedBytes(typeof frame.bytes === 'number' ? frame.bytes : 0);
+          // THE WINDOW THIS ACCEPTED DELIVERY ANSWERS, recorded BEFORE the `sent` (see
+          // `VoiceRealtimeDelivery.inFlight`). Leaving the mode closes the socket at once while the
+          // proxy is still holding this message; the `sent` that would claim it then has nowhere to
+          // land, and the leave handed delivered words back to the composer. The window is the one
+          // the `sent` handler would claim — the finished utterances no delivery has taken — so the
+          // record is the same claim, made early enough to survive a leave in the gap. A `refused`
+          // or an `error` withdraws it (those words never left).
+          const accepted = captionsRef.current.filter(
+            (caption) => caption.final && !attributedRef.current.has(caption.itemId),
+          );
+          if (accepted.length > 0 && !deliveriesRef.current.some((delivery) => delivery.inFlight === true)) {
+            for (const caption of accepted) attributedRef.current.add(caption.itemId);
+            deliveriesRef.current = [
+              ...deliveriesRef.current,
+              {
+                message: '',
+                at: Date.now(),
+                heard: accepted.map((caption) => caption.text),
+                itemIds: accepted.map((caption) => caption.itemId),
+                queuedMessageUuid: null,
+                inFlight: true,
+              },
+            ];
+            setDeliveries(deliveriesRef.current);
+          }
           return;
         }
         if (frame.type === 'queue_depth') {
@@ -2449,6 +2563,10 @@ export function useVoiceRealtimeSession({
           setQueuedDepth(depth);
           setQueuedBytes(bytes);
           setRefusal({ reason: frame.reason, depth, bytes });
+          // The instruction was NOT accepted, so the early claim its opening `queued` frame made is
+          // withdrawn FIRST: the words must read as nobody's again, and the per-utterance rows below
+          // (which skip attributed captions) have to see them that way.
+          releaseInFlightDelivery();
           // AC6: the utterances the model just tried to relay and had refused are exactly the
           // finished ones no delivery has claimed yet. Mark them so the pane can leave a row of its
           // own per refused utterance — a refusal is per-utterance, and each must stay countable.
@@ -2562,6 +2680,7 @@ export function useVoiceRealtimeSession({
             const deliveredItems = new Set(carried.map((caption) => caption.itemId));
             setUndelivered((previous) => previous.filter((itemId) => !deliveredItems.has(itemId)));
           }
+          let deliveryIndex = -1;
           if (typeof frame.message === 'string' && frame.message !== '') {
             const delivery: VoiceRealtimeDelivery = {
               message: frame.message,
@@ -2573,11 +2692,44 @@ export function useVoiceRealtimeSession({
               // delivery is not withdrawable, and saying so by absence is what keeps a button from
               // being drawn for a command the CLI is not holding.
               queuedMessageUuid: readQueuedMessageUuid(frame.result),
+              ...(coveredThroughItemId === null ? {} : { coveredThroughItemId }),
             };
+            // THE `queued` WINDOW THIS CONFIRMS. The proxy told the page it had accepted an instruction
+            // before it resolved the send; that early record is THIS delivery, so it is replaced rather
+            // than duplicated, keeping the utterances it claimed — the claim was made from the same
+            // pending window this frame's `carried` reads, and the frame adds whatever landed since.
+            const inFlightIndex = deliveriesRef.current.findIndex((entry) => entry.inFlight === true);
+            const confirmed =
+              inFlightIndex === -1
+                ? delivery
+                : {
+                    ...delivery,
+                    itemIds: [...new Set([...deliveriesRef.current[inFlightIndex]!.itemIds, ...delivery.itemIds])],
+                    heard: [...deliveriesRef.current[inFlightIndex]!.heard, ...delivery.heard],
+                  };
             // Synchronous, so a close in the same tick as this `sent` still sees the delivery it just
             // recorded: `onclose` reads this ref, and a state update alone would not have landed yet.
-            deliveriesRef.current = [...deliveriesRef.current, delivery];
+            if (inFlightIndex === -1) {
+              deliveriesRef.current = [...deliveriesRef.current, confirmed];
+              deliveryIndex = deliveriesRef.current.length - 1;
+            } else {
+              deliveriesRef.current = deliveriesRef.current.map((entry, position) =>
+                position === inFlightIndex ? confirmed : entry,
+              );
+              deliveryIndex = inFlightIndex;
+            }
             setDeliveries(deliveriesRef.current);
+            // THE ITEM THIS DELIVERY ANSWERED, WHOSE TRANSCRIPTION MAY STILL BE COMING. The endpoint
+            // transcribes on its own, slower clock, so the caption for the boundary item can become
+            // final AFTER this `sent` — the one case `carried` cannot reach (nothing was pending). The
+            // item id is recorded here and the `caption` handler claims it when it arrives; a caption
+            // that is already final on screen was carried above and needs no late claim.
+            if (coveredThroughItemId !== null) {
+              const onScreen = captionsRef.current.find((caption) => caption.itemId === coveredThroughItemId);
+              if (onScreen === undefined || !onScreen.final) {
+                lateClaimRef.current.set(coveredThroughItemId, deliveryIndex);
+              }
+            }
           }
           // This delivery closes the current speech window: every caption on screen NOW is the NEXT
           // delivery's "earlier window", so a later rewrite cannot reach back past this `sent`.
@@ -2753,6 +2905,9 @@ export function useVoiceRealtimeSession({
           return;
         }
         serverEndedRef.current = true;
+        // A fatal error ends the connection that was holding an accepted instruction, so the early
+        // claim goes with it: nothing will deliver those words now, and the leave must offer them back.
+        releaseInFlightDelivery();
         fail(frame.message, frame.code);
         setPhase('failed');
         // This is a connection-ending failure (a recoverable one returned above), so the person is
@@ -2885,6 +3040,7 @@ export function useVoiceRealtimeSession({
       markSegmentUnrecognized,
       recordSegmentOutcome,
       releaseCapture,
+      releaseInFlightDelivery,
       resetSegmentVerdicts,
       resetSegmentation,
       ringAttentionCueOnce,

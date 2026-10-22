@@ -27,13 +27,18 @@
  */
 import assert from 'node:assert/strict';
 
-import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, waitFor } from '@testing-library/react';
 import i18next from 'i18next';
 import React from 'react';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 
 import ChatInterface from '@/modules/chat/ChatInterface';
+import {
+  collectUndeliveredUtterances,
+  countUnshownUtterances,
+  useVoiceRealtimeSession,
+} from '@/modules/chat/voice-realtime';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import type { VoiceRealtimeAudioFrame, VoiceRealtimeAudioSource } from '@/modules/chat/voice-realtime/audioSource';
 import type { ChatMessage, Project, SessionActivity } from '@/shared/types';
@@ -674,3 +679,144 @@ test('a delivery claims only the utterances its own message carries, so the rest
 
   view.unmount();
 });
+
+// ── AC (this task): the caption that becomes FINAL after the delivery that answered it ──────────
+//
+// THE SHAPE (2026-10-22 01:48, tree `9b141d3f`, AC-323). The endpoint transcribes the item the model
+// answered on its OWN, slower clock, so a delivery can be confirmed while the caption for the
+// sentence it carries is still interim — or not on screen at all. The `sent` handler claims what is
+// PENDING at that moment; nothing pending means nothing claimed, and if no later delivery comes the
+// sentence stays nobody's. Leaving the mode then hands the words back to the composer as a draft,
+// and `submitIsVoice` — which needs an empty draft — takes the Live Voice entry away.
+//
+// THE RULE under test: the `sent` frame names the conversation boundary it answered
+// (`coveredThroughItemId`), so a caption that becomes final for THAT item afterwards is claimed by
+// that delivery — by item id, never by "everything still unclaimed" (the swallow defect the case
+// above closes).
+
+/** What the person said, and what the model relayed — deliberately different strings. */
+const LATE_SAID = '把刚才那个超时改成五十秒';
+const LATE_RELAYED = '把超时改成五十秒';
+/** A sentence spoken AFTER the delivery: nothing names it, so it stays the backlog. */
+const AFTER_SAID = '再把重试次数调成两次';
+
+/** Opens the real hook on the fake wire, the harness the delivery-state files use. */
+const openHook = () => {
+  const hook = renderHook(() => useVoiceRealtimeSession({ sessionId: SESSION_ID }));
+  act(() => hook.result.current.start());
+  act(() => socket().receive({ type: 'state', state: 'open' }));
+  return hook;
+};
+
+/** The real transcript row the relayed message becomes — what makes the delivery SHOWN. */
+const relayedRow: ChatMessage = { type: 'user', content: LATE_RELAYED, timestamp: Date.now() };
+
+test('a final caption that lands after its own delivery is claimed: no draft, and the close counts nothing lost', () => {
+  const hook = openHook();
+
+  // The delivery is confirmed with nothing pending: the caption for the item the model answered has
+  // not been transcribed yet, which is the whole shape.
+  act(() =>
+    socket().receive({
+      type: 'sent',
+      sessionId: SESSION_ID,
+      result: {},
+      message: LATE_RELAYED,
+      coveredThroughItemId: 'late',
+    }),
+  );
+  assert.equal(hook.result.current.captions.length, 0, 'premise: the delivery landed before its caption');
+
+  // The transcription arrives afterwards, final.
+  act(() => socket().receive({ type: 'caption', itemId: 'late', text: LATE_SAID, final: true }));
+
+  const { captions, deliveries } = hook.result.current;
+  assert.deepEqual(
+    deliveries.flatMap((delivery) => delivery.itemIds),
+    ['late'],
+    'the delivery must take over the caption its boundary item names',
+  );
+  assert.equal(
+    collectUndeliveredUtterances(captions, deliveries),
+    '',
+    'the words the model already received must not come back as a draft',
+  );
+  assert.equal(
+    countUnshownUtterances(captions, deliveries, [relayedRow]),
+    0,
+    'nothing is lost at the close: the shown delivery accounts for the late caption',
+  );
+
+  hook.unmount();
+});
+
+test('a final caption NO delivery names is still the leave backlog', () => {
+  const hook = openHook();
+
+  act(() =>
+    socket().receive({
+      type: 'sent',
+      sessionId: SESSION_ID,
+      result: {},
+      message: LATE_RELAYED,
+      coveredThroughItemId: 'late',
+    }),
+  );
+  act(() => socket().receive({ type: 'caption', itemId: 'late', text: LATE_SAID, final: true }));
+  // Spoken after the delivery, and never answered: the delivery's boundary does not name it.
+  act(() => socket().receive({ type: 'caption', itemId: 'after', text: AFTER_SAID, final: true }));
+
+  const { captions, deliveries } = hook.result.current;
+  assert.equal(
+    collectUndeliveredUtterances(captions, deliveries),
+    AFTER_SAID,
+    'an utterance outside the delivery window must still be offered back',
+  );
+  assert.equal(
+    countUnshownUtterances(captions, deliveries, [relayedRow]),
+    1,
+    'and it is read as the one utterance the close did not deliver',
+  );
+
+  hook.unmount();
+});
+
+test('a delivery the proxy accepted before its `sent` survives a leave in the gap', () => {
+  const hook = openHook();
+
+  // The person spoke; the proxy accepted the instruction and opened its coalescing window. The
+  // `sent` that would confirm it is still seconds away — a leave now closes the socket first.
+  act(() => socket().receive({ type: 'caption', itemId: 'accepted', text: LATE_SAID, final: true }));
+  act(() => socket().receive({ type: 'queued', depth: 1, bytes: 48 }));
+
+  assert.equal(
+    collectUndeliveredUtterances(hook.result.current.captions, hook.result.current.deliveries),
+    '',
+    'words the proxy already accepted must not be offered back: its teardown delivers them',
+  );
+
+  hook.unmount();
+});
+
+test('a refused instruction takes the early claim back — those words never left', () => {
+  const hook = openHook();
+
+  act(() => socket().receive({ type: 'caption', itemId: 'refused', text: LATE_SAID, final: true }));
+  act(() => socket().receive({ type: 'queued', depth: 1, bytes: 48 }));
+  act(() => socket().receive({ type: 'refused', reason: 'queue-full', depth: 3, bytes: 1012 }));
+
+  const { captions, deliveries } = hook.result.current;
+  assert.deepEqual(
+    deliveries.flatMap((delivery) => delivery.itemIds),
+    [],
+    'a refusal withdraws the early claim: no delivery carries the words',
+  );
+  assert.equal(
+    collectUndeliveredUtterances(captions, deliveries),
+    LATE_SAID,
+    'and the refusal leaves them as the backlog the composer is offered',
+  );
+
+  hook.unmount();
+});
+
