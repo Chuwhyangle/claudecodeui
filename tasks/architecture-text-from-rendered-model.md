@@ -2,7 +2,7 @@
 id: architecture-text-from-rendered-model
 title: 文本页改用上游：渲染走 renderDetailed，文本取 toPlantUml(被画出的 model)，子图范围用
   applyView/过滤后的 model 序列化
-status: todo
+status: ready
 labels:
   - feature
 parent: null
