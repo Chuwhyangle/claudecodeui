@@ -1,7 +1,7 @@
 ---
 id: architecture-layout-e2e-guard
 title: Playwright 几何守卫：真实浏览器里断言画布占满、浮层不盖图、读数与实际一致，并带两条能取假的控制臂
-status: ready
+status: done
 labels:
   - feature
 parent: null
