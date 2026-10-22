@@ -32,15 +32,27 @@ extra:
 
 ## AC
 
-- [ ] (a) **状态私有化 + 生命周期显式**：`grep -nE "^(let|var) " src/shared/hooks/useSessionHosts.ts` 计数 = **0**；`grep -nE "class SessionHostsStore|start\(\)|stop\(\)" src/shared/hooks/useSessionHosts.ts` 命中。
-- [ ] (b) **显式单例/可注入**：`grep -nE "new SessionHostsStore|sessionHostsStore" src/shared/hooks/useSessionHosts.ts` 命中（导出命名类 + 显式单例，不是散 let）。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 useSessionHosts 的既有 vitest 判据窄跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (d) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **状态私有化 + 生命周期显式**：`grep -nE "^(let|var) " src/shared/hooks/useSessionHosts.ts` 计数 = **0**；`grep -nE "class SessionHostsStore|start\\(\\)|stop\\(\\)" src/shared/hooks/useSessionHosts.ts` 命中。
+- [x] (b) **显式单例/可注入**：`grep -nE "new SessionHostsStore|sessionHostsStore" src/shared/hooks/useSessionHosts.ts` 命中（导出命名类 + 显式单例，不是散 let）。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 useSessionHosts 的既有 vitest 判据窄跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (d) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
 真实落地的标准是「6 个模块级 `let` 收进了 `SessionHostsStore` 的私有字段、生命周期由类显式表达、hook 只是订阅者」，不是「多了个类」。必须贴出：①(a)(b) 的 grep 读数与类定义/单例导出行；②(c) 既有判据退出码；③(d) typecheck/lint/build 退出码；④纯位移核对（轮询/合并/刷新语义未变；无法收进类的状态逐条列出原因）；⑤`git diff` 只含 Touches。运行结束不重启 :3001、不发布。
+
+## Evidence
+
+① (a) `grep -cE "^(let|var) " src/shared/hooks/useSessionHosts.ts` = **0**；`grep -nE "class SessionHostsStore|start\\(\\)|stop\\(\\)"` 命中 `87:export class SessionHostsStore {`、`126:  start(): void {`、`135:  stop(): void {`。 (b) `316:export const sessionHostsStore = new SessionHostsStore();`，且模块内 `sessionHostsStore.invalidate/setConnection/refresh/subscribe/readState` 委托。
+
+② (c) `npx vitest run src/modules/chat/tests/hostSnapshotFailure.test.ts` → **4 passed / exit 0**（真实 store，非 mock）；相邻消费者 `occupiedSessionReadOnly + activityDockConsolidation + busySessionIds` → **8 passed / exit 0**。
+
+③ (d) `npm run typecheck` **exit 0**；`npm run lint` **exit 0**（仅既有 warning）；`npm run build:client` **exit 0**。
+
+④ 纯位移：`state`/`listeners`/`pollTimer`/`inFlight`/`coalesceTimer`/`appliedRev`/`connected` 全部成为 `SessionHostsStore` 私有字段；`emit`/`readSnapshot`/`refresh`/`startFallbackPoll`/`stopFallbackPoll`/`scheduleCoalescedRefresh`/`clearCoalescedRefresh`/`invalidate`/`setConnection` 逻辑逐字迁入（含 30s/2s fallback、250ms 合并、revision 游标在 reconnect 复位、listeners.size===0 早退）。无法收进类的状态：无——没有状态留在模块顶层。对外导出（`invalidateSessionHosts`、`setSessionHostsConnection`、`findLiveHost`、`findSessionHost`、`classifyRunningSessions`、`findBinding`、`countLeases`、`findSessionHostState`、`findSessionOccupancy`、`readResidentProcessState`、`RESIDENT_MARK_SHAPES`、`useSessionHosts`）签名不变。
+
+⑤ `git diff --name-only develop...HEAD` = `src/shared/hooks/useSessionHosts.ts`（唯一），在 `## Touches` 内；anti-drift-touches-check **OK**。未重启 :3001、未发布。
 
 ## Touches
 
