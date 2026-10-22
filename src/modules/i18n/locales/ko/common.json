@@ -107,7 +107,19 @@
       "body": "실선: 연관 또는 호출. 점선: 의존 또는 구현. 화살표: △ 상속 · △ 구현 · ◆ 컴포지션 · ◇ 집합 · → 의존. «스테레오타입»은 엔티티 종류를 나타냅니다. ● 시드: 이 세션에서 언급됨. +N 접힘: 현재 상세 수준에서 숨겨짐."
     },
     "export": {
-      "menu": "내보내기 ▾"
+      "menu": "내보내기 ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "PlantUML 복사",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, 이전 형식)",
+      "copied": "PlantUML을 클립보드에 복사했습니다",
+      "copyFallbackTitle": "PlantUML 수동 복사",
+      "copyFallbackHint": "클립보드에 접근할 수 없습니다. 아래 텍스트를 선택하여 복사하세요.",
+      "close": "닫기",
+      "notReady": "다이어그램을 아직 내보낼 수 없습니다.",
+      "pngScaled": "PNG가 가장 긴 변이 {{edge}} px가 되도록 축소되었습니다.",
+      "pngFailed": "PNG를 만들 수 없습니다."
     },
     "search": {
       "label": "엔티티 또는 파일 검색",

@@ -107,7 +107,19 @@
       "body": "Garis penuh: asosiasi atau pemanggilan. Garis putus-putus: dependensi atau implementasi. Panah: △ pewarisan · △ implementasi · ◆ komposisi · ◇ agregasi · → dependensi. «stereotype» menandai jenis entitas. ● seed: disebut dalam sesi ini. +N dilipat: disembunyikan oleh tingkat detail saat ini."
     },
     "export": {
-      "menu": "Ekspor ▾"
+      "menu": "Ekspor ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "Salin PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, format lama)",
+      "copied": "PlantUML disalin ke papan klip",
+      "copyFallbackTitle": "Salin PlantUML secara manual",
+      "copyFallbackHint": "Akses papan klip tidak tersedia. Pilih dan salin teks di bawah ini.",
+      "close": "Tutup",
+      "notReady": "Diagram belum siap untuk diekspor.",
+      "pngScaled": "PNG diperkecil agar sisi terpanjangnya {{edge}} px.",
+      "pngFailed": "PNG tidak dapat dibuat."
     },
     "search": {
       "label": "Cari entitas atau file",

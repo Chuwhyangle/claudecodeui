@@ -2,7 +2,7 @@
 id: gap-debug-agent-engine-state-encapsulation
 title: DebugAgentReleaseRegistry 封装：debug-agent.engine 的 releaseStates Map（含
   waiters）收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -53,11 +53,3 @@ extra:
 ③ (d) `npx tsc --noEmit -p server/tsconfig.json` ⇒ **退出 0**；`npm run lint` ⇒ **退出 0**（仅既有 warning）。
 ④ 纯位移核对：`releaseDebugAgentRun` 的三序语义（已释放 ⇒ 0；等待中 ⇒ 唤醒并返回 waiter 数；之后 ⇒ 0）逐字搬入 `DebugAgentReleaseRegistry.release`；`awaitRelease` 的「超时先从 waiters 摘除自己再以 `DEBUG_AGENT_RELEASE_TIMEOUT` 拒绝」逐字搬入；run 开始时 carry-over `released` 标志、run 结束时 delete 逐字搬入 `register` / `discard`。未改任何分支、定时数值、错误码或注释语义。无法收进类的状态：无（唯一可变 Map 已成私有字段；只读常量 `DEBUG_AGENT_RELEASE_CEILING_MS` 留在模块级）。
 ⑤ (e) `git diff --name-only $(git merge-base HEAD develop) HEAD` ⇒ 仅 `server/modules/debug-agent/debug-agent.engine.ts`（实现提交 e3588c7a0），均在 Touches 内；`anti-drift-touches-check.js --merge-target develop` ⇒ **退出 0**（1 actual file(s)，all within declared Touches）。
-
-## Blocker
-
-**2026-10-22T10:23:15.924Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/layoutAspect.test.tsx: AssertionError [ERR_ASSERTION]: aspectRatio 0.53 must fold the flat overview into a portrait canvas; got 3.266 (0 0 1789.96 548) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/layoutAspect.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：aac6c121-b5ab-433c-8eeb-6e29d6809e2b

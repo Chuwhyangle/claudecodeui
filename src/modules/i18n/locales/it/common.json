@@ -107,7 +107,19 @@
       "body": "Linea continua: associazione o chiamata. Linea tratteggiata: dipendenza o implementazione. Frecce: △ ereditarietà · △ implementazione · ◆ composizione · ◇ aggregazione · → dipendenza. «stereotipo» indica il tipo di entità. ● seed: menzionato in questa sessione. +N compressi: nascosti dal livello di dettaglio corrente."
     },
     "export": {
-      "menu": "Esporta ▾"
+      "menu": "Esporta ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "Copia PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, formato legacy)",
+      "copied": "PlantUML copiato negli appunti",
+      "copyFallbackTitle": "Copia PlantUML manualmente",
+      "copyFallbackHint": "Accesso agli appunti non disponibile. Seleziona e copia il testo qui sotto.",
+      "close": "Chiudi",
+      "notReady": "Il diagramma non è ancora pronto per l'esportazione.",
+      "pngScaled": "Il PNG è stato ridotto in modo che il lato più lungo sia {{edge}} px.",
+      "pngFailed": "Impossibile creare il PNG."
     },
     "search": {
       "label": "Cerca entità o file",

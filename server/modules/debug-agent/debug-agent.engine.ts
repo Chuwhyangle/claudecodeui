@@ -322,80 +322,141 @@ function asPeerMessageRow(row: AnyRecord, text: string, origin: MessageOrigin): 
 export const DEBUG_AGENT_RELEASE_CEILING_MS = 20_000;
 
 /**
- * The release state of each run this process is walking, keyed by app session id.
+ * One run's release state: whether the release has been stated, and the barriers
+ * currently parked on it.
  *
- * Module state for the same reason the armed-scenario registry is: a run is
- * process-local, and the control verb that releases it has to reach the run the
- * same process is walking. A run registers itself when it starts and drops the
- * entry when it ends, so a release can be stated at any point around the barrier
- * — before it is reached, while it is being waited on, or after the run is over.
+ * `waiters` is emptied by whoever flips `released`, so a state never carries a
+ * wake that already ran; a wait that times out removes itself before rejecting,
+ * which is what keeps a late release from waking a run that has already failed.
  */
-const releaseStates = new Map<string, { released: boolean; waiters: Array<() => void> }>();
+type DebugAgentReleaseState = {
+  released: boolean;
+  waiters: Array<() => void>;
+};
+
+/**
+ * The release state of every run this process is walking, keyed by app session id.
+ *
+ * Module-scoped for the same reason the armed-scenario registry is: a run is
+ * process-local, and the control verb that releases it has to reach the run the
+ * same process is walking. The map is private and its four methods are the only
+ * way in or out of it — `register` when a run starts, `awaitRelease` at a
+ * barrier, `release` from the control plane, and `discard` when the run ends —
+ * so a caller cannot park on a state object the registry never recorded.
+ * Between them those orderings let a release be stated at any point around the
+ * barrier: before it is reached, while it is being waited on, or after the run
+ * is over.
+ */
+class DebugAgentReleaseRegistry {
+  private readonly states = new Map<string, DebugAgentReleaseState>();
+
+  /**
+   * Takes (or creates) this session's entry for a run that is starting and keeps
+   * a release already stated for it.
+   *
+   * The flag is carried over rather than reset: a release that arrived while the
+   * clock request was still travelling is a release of this same run, and resetting
+   * would lose it. The waiters are always fresh — they belong to the barriers of
+   * the run that is starting, never to the one that ended.
+   */
+  register(appSessionId: string): void {
+    this.states.set(appSessionId, {
+      released: this.states.get(appSessionId)?.released ?? false,
+      waiters: [],
+    });
+  }
+
+  /**
+   * Releases the run walking `appSessionId` and returns how many waiters it woke.
+   *
+   * The three call orderings all have to mean something, because a criterion states
+   * the release from a browser and cannot know which side of the barrier it is on:
+   * a release that arrives first is recorded and the barrier passes on arrival, one
+   * that arrives while the barrier is waiting wakes it, and one that arrives after
+   * both reports zero. What it never does is fail — "released twice" and "released
+   * after the walk moved on" are the same fact, and the caller reads the count.
+   */
+  release(appSessionId: string): number {
+    const state = this.states.get(appSessionId) ?? { released: false, waiters: [] };
+    this.states.set(appSessionId, state);
+
+    if (state.released) {
+      return 0;
+    }
+
+    state.released = true;
+    const waiters = state.waiters.splice(0, state.waiters.length);
+    for (const wake of waiters) {
+      wake();
+    }
+
+    return waiters.length;
+  }
+
+  /**
+   * Blocks until some other party releases the run walking `appSessionId`.
+   *
+   * The wait is registered against the session's own state rather than a channel
+   * of its own so the "released before the barrier was reached" ordering needs no
+   * second mechanism: the flag is read first, and `release` flips it under the
+   * same entry this registers on.
+   */
+  async awaitRelease(appSessionId: string): Promise<void> {
+    const state = this.states.get(appSessionId) ?? { released: false, waiters: [] };
+    this.states.set(appSessionId, state);
+
+    if (state.released) {
+      return;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      let wake: () => void = () => undefined;
+      const timer = setTimeout(() => {
+        const index = state.waiters.indexOf(wake);
+        if (index >= 0) {
+          state.waiters.splice(index, 1);
+        }
+        reject(
+          new AppError(
+            `The run for session "${appSessionId}" reached an "await-release" step and nothing released it within ${DEBUG_AGENT_RELEASE_CEILING_MS}ms. The debug agent control plane's release action is what states it — see POST /api/debug-agent/release.`,
+            { code: 'DEBUG_AGENT_RELEASE_TIMEOUT', statusCode: 500 },
+          ),
+        );
+      }, DEBUG_AGENT_RELEASE_CEILING_MS);
+
+      wake = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      state.waiters.push(wake);
+    });
+  }
+
+  /**
+   * Drops a run's entry once its walk is over.
+   *
+   * Nothing may wake a waiter past this point, and a leftover entry would let a
+   * later run under a reused id inherit a release it never received. A run that
+   * throws is left behind on purpose: its transcript is already half-written, and
+   * the id is minted per arming, so the entry is inert.
+   */
+  discard(appSessionId: string): void {
+    this.states.delete(appSessionId);
+  }
+}
+
+/** The process's release registry — one per process, because a run is process-local. */
+const releaseRegistry = new DebugAgentReleaseRegistry();
 
 /**
  * Releases the run walking `appSessionId` and returns how many waiters it woke.
  *
- * The three call orderings all have to mean something, because a criterion states
- * the release from a browser and cannot know which side of the barrier it is on:
- * a release that arrives first is recorded and the barrier passes on arrival, one
- * that arrives while the barrier is waiting wakes it, and one that arrives after
- * both reports zero. What it never does is fail — "released twice" and "released
- * after the walk moved on" are the same fact, and the caller reads the count.
+ * The control route (`debug-agent.routes.ts`) and the criteria call this verb; the
+ * state it acts on lives in `releaseRegistry`. The ordering semantics are the
+ * registry method's, unchanged.
  */
 export function releaseDebugAgentRun(appSessionId: string): number {
-  const state = releaseStates.get(appSessionId) ?? { released: false, waiters: [] };
-  releaseStates.set(appSessionId, state);
-
-  if (state.released) {
-    return 0;
-  }
-
-  state.released = true;
-  const waiters = state.waiters.splice(0, state.waiters.length);
-  for (const wake of waiters) {
-    wake();
-  }
-
-  return waiters.length;
-}
-
-/**
- * Blocks until some other party releases the run walking `appSessionId`.
- *
- * The wait is registered against the session's own state rather than a channel of
- * its own so the "released before the barrier was reached" ordering needs no
- * second mechanism: the flag is read first, and `releaseDebugAgentRun` flips it
- * under the same entry this registers on.
- */
-async function awaitDebugAgentRelease(appSessionId: string): Promise<void> {
-  const state = releaseStates.get(appSessionId) ?? { released: false, waiters: [] };
-  releaseStates.set(appSessionId, state);
-
-  if (state.released) {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    let wake: () => void = () => undefined;
-    const timer = setTimeout(() => {
-      const index = state.waiters.indexOf(wake);
-      if (index >= 0) {
-        state.waiters.splice(index, 1);
-      }
-      reject(
-        new AppError(
-          `The run for session "${appSessionId}" reached an "await-release" step and nothing released it within ${DEBUG_AGENT_RELEASE_CEILING_MS}ms. The debug agent control plane's release action is what states it — see POST /api/debug-agent/release.`,
-          { code: 'DEBUG_AGENT_RELEASE_TIMEOUT', statusCode: 500 },
-        ),
-      );
-    }, DEBUG_AGENT_RELEASE_CEILING_MS);
-
-    wake = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    state.waiters.push(wake);
-  });
+  return releaseRegistry.release(appSessionId);
 }
 
 /**
@@ -449,12 +510,9 @@ export async function runDebugAgentScenario(input: DebugAgentRunInput): Promise<
   const startedAt = Date.now();
 
   // This run's release state, registered before the first step so a release that
-  // arrived while the clock request was still travelling reaches it. The flag is
-  // carried over rather than reset: it is the same run the caller released.
-  releaseStates.set(appSessionId, {
-    released: releaseStates.get(appSessionId)?.released ?? false,
-    waiters: [],
-  });
+  // arrived while the clock request was still travelling reaches it. The registry
+  // carries the flag over rather than resetting it: it is the same run.
+  releaseRegistry.register(appSessionId);
 
   // Which writer this run's frames go to. It starts as the caller's own and is
   // replaced by the run's writer when an unattended turn opens one: the turn
@@ -833,7 +891,7 @@ export async function runDebugAgentScenario(input: DebugAgentRunInput): Promise<
         // fixed offset that a loaded host can outrun: with the barrier, the
         // events behind it fire when the criterion says its reading window has
         // closed, and not one moment before.
-        await awaitDebugAgentRelease(appSessionId);
+        await releaseRegistry.awaitRelease(appSessionId);
         break;
       }
 
@@ -849,7 +907,7 @@ export async function runDebugAgentScenario(input: DebugAgentRunInput): Promise<
   // release it never received. A run that throws is left behind on purpose: its
   // transcript is already half-written, and the id is minted per arming, so the
   // entry is inert.
-  releaseStates.delete(appSessionId);
+  releaseRegistry.discard(appSessionId);
 
   return { before, steps };
 }
