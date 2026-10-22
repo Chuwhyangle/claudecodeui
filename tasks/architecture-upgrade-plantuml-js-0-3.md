@@ -1,7 +1,7 @@
 ---
 id: architecture-upgrade-plantuml-js-0-3
 title: 升级 @yalehwang/plantuml-js 到 ^0.3.0：布局接缝改用公开 layoutOptions，并加布局节点预算防止大图卡死主线程
-status: todo
+status: ready
 labels:
   - feature
 parent: null
