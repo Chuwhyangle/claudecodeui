@@ -24,10 +24,10 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：新增用例——约 150 个实体（含 class/interface/function、嵌套目录、若干单成员目录）的 entity 粒度图在默认视图下产出的 puml **不含任何 `grp::` 行**、每个实体有一条自己的声明、实体被放进嵌套 `package` 块里（单成员目录里的实体也在它的包框里）；file 粒度的 Overview 用例（组数 ≤ `OVERVIEW_GROUP_LIMIT`、单成员折叠、`scripts` 折成带计数的组）逐字不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/explosionLod.test.tsx src/modules/architecture/tests/hierarchyIndex.test.ts src/modules/architecture/tests/readableZoom.test.tsx` exit 0：类图视角默认不渲染 `data-entity-id^="grp::"` 的节点、渲染的实体框数等于被布局的实体数；缩小到低档位时实体框被隐藏、包框上出现计数（既有 LOD 用例不回归）；文件图视角仍渲染组框；默认缩放不低于可读下限或聚焦到可读区域（两者之一，由所选方案决定并在测试里写明）
-- [ ] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0（文件图的分组规则不动，用例逐字不变）
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：新增用例——约 150 个实体（含 class/interface/function、嵌套目录、若干单成员目录）的 entity 粒度图在默认视图下产出的 puml **不含任何 `grp::` 行**、每个实体有一条自己的声明、实体被放进嵌套 `package` 块里（单成员目录里的实体也在它的包框里）；file 粒度的 Overview 用例（组数 ≤ `OVERVIEW_GROUP_LIMIT`、单成员折叠、`scripts` 折成带计数的组）逐字不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/explosionLod.test.tsx src/modules/architecture/tests/hierarchyIndex.test.ts src/modules/architecture/tests/readableZoom.test.tsx` exit 0：类图视角默认不渲染 `data-entity-id^="grp::"` 的节点、渲染的实体框数等于被布局的实体数；缩小到低档位时实体框被隐藏、包框上出现计数（既有 LOD 用例不回归）；文件图视角仍渲染组框；默认缩放不低于可读下限或聚焦到可读区域（两者之一，由所选方案决定并在测试里写明）
+- [x] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0（文件图的分组规则不动，用例逐字不变）
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -44,4 +44,22 @@ extra: {}
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/explosionLod.test.tsx
 - src/modules/architecture/tests/readableZoom.test.tsx
+- src/modules/architecture/tests/exportMenu.test.tsx
 - tasks/architecture-class-view-draws-classes-not-groups.md
+
+## Implementation record
+
+**候选比较（先比较再选）**。两个候选在桥接层是**同一份文档**：`archguardToPlantUml(graph, { view: { kind: 'hierarchy' }, grouping: 'raw' })` 与 `{ view: { kind: 'overview' }, grouping: 'raw' }` 产出的 puml 逐字节相同（新增用例 “the two class-view candidates build the same first-screen document” 钉住），因为二者都走 `emitEntityDocument`：实体画进嵌套 `package`，不发任何 `grp::`。所以首屏截图对两个候选是同一张；差别只在渲染侧的外围策略。选 `hierarchy` 作为类图默认视图，因为它保留语义缩放（`explosionLod.ts`）——这正是 AC2 要求的「缩小到低档位时实体框被隐藏、包框上出现计数」；选 `overview` 会让 `view.kind === 'overview'` 关掉 LOD，类图就没有折叠档位了。真实首屏（下述 archguard 读数）因此同时是两个候选的首屏。
+
+**真实浏览器读数**（本 worktree 的 `dist` + `dist-server`，`SERVER_PORT=3107`，独立 `DATABASE_PATH`；1440×765，Chromium/Playwright）。任务点名的 archguard 会话 `f3a974c3-510c-4761-ba48-96dff3d5220c` 在本机 `~/.claude/projects` 里已不存在（全目录 grep 只在该会话被其他 transcript 引用的文本里命中，没有同名 `.jsonl`），故用 archguard 项目最新且有真实规模的会话 `b0a316ca-217d-4e5c-bc0d-8aaef52855be` 复现同一读数：
+
+- 类图默认：`data-architecture-view="hierarchy"`，被布局实体数 **299**（布局预算 600 以内），`data-architecture-layout-ms` **4752–4910 ms**（数秒内）；`data-entity-id^="grp::"` **0 个**；43 个目录包框（`src`、`src/analysis`、`src/cli` …）；`data-architecture-readable-mode="focus"`、zoom **69.2%**、节点文字实测 **10 px**（可读下限 9 px）；读出一行 “Showing 299 classes · 303 related”。截图中类框带 `<<interface>>` 等构造型与成员分栏；没有 `src (100)`/`data (159)` 一类计数组框，也没有悬在一侧的单函数框（单成员目录的实体同样在它自己的包框里）。
+- 缩小到低档位：`data-architecture-lod-depth="0"`，实体框 `display:none`，包框标签变成 `src (290)`、`src/analysis (14)`、`src/cli (24)`、`src/core (54)` …；放大回 **69.2%** 后同一 SVG 的实体框恢复。
+- 文件图 Overview（同一会话）：`data-architecture-view="overview"`，**27 个 `grp::` 组 + 8 个未分组实体**（35 节点），组标签如 `grp::src/analysis`；分组规则未动。
+- claudecodeui 项目复测（会话 `d71979a9-f9d0-435f-a63c-9fc134ce6fb8`）：类图默认 5 个实体、0 个 `grp::`、7 个包框（`modules`、`modules/chat` …）、`layout-ms` 51 ms、文字 10 px；缩小后 `modules (4)`、`chat/audio (1)` … 并隐藏实体；文件图 Overview 5 组 + 3 未分组实体。
+
+截图与原始读数在本次会话的 `/tmp/arch-visual/*.png`（不入库，避免 Touches 之外的写入）；数值已抄录于上。
+
+**改动**。`PlantUmlGraph.tsx`：entity 图（`idShape === 'scope-prefixed'`）默认 `hierarchy`、传 `grouping: 'raw'`；LOD 对 entity 的每个视图都生效（其 overview 是同一份实体文档）；band-aspect 折叠只留给文件图（类图没有更粗的图可退回）；“Back”回到该图的默认视图。`ArchitecturePanel.tsx`：类图导出按 raw 重建，导出仍等于画面。`archguardToPlantUml.ts` / `explosionLod.ts` / `readableZoom.ts` 无需改动（既有 package 发射、LOD 与可读缩放规则直接复用）。兄弟夹具 `tests/exportMenu.test.tsx` 的类图导出期望随之更新（自适应分组 → raw 文档），故列入 Touches。
+
+**验证**：`npx vitest run src/modules/architecture/tests`（18 files / 232 tests）通过；`npm run typecheck`、`npm run build` 通过；`oxlint` 对改动文件仅剩既有 warning。
