@@ -74,78 +74,248 @@ const PREFERENCE_KEYS = Object.keys(LEGACY_STORAGE_KEYS) as UserPreferenceKey[];
 
 type PreferenceRecord = Partial<Record<UserPreferenceKey, unknown>>;
 
-const listeners = new Set<() => void>();
-
-let preferences: PreferenceRecord = {};
-let pendingServerWrites: PreferenceRecord = {};
-let serverWriteTimer: ReturnType<typeof setTimeout> | null = null;
-let hasHydrated = false;
-
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
 
-function readMirror(): PreferenceRecord {
-  try {
-    const raw = localStorage.getItem(MIRROR_STORAGE_KEY);
-    if (!raw) {
+/**
+ * Owns the user-preferences store: the in-memory copy that reads run against,
+ * the localStorage mirror, and the debounced server-write queue.
+ *
+ * Each piece of mutable state is a private field, so its lifetime is explicit
+ * rather than a set of module-level variables: `restoreFromMirror` seeds it at
+ * load, `read`/`write`/`subscribe` operate on it, `hydrate` adopts the server's
+ * copy, and `dispose` drops everything on sign-out.
+ */
+class UserSettingsStore {
+  /** The last known preference values, read synchronously by callers. */
+  private preferences: PreferenceRecord = {};
+
+  /** Values queued for the next debounced server write, keyed by preference. */
+  private pendingServerWrites: PreferenceRecord = {};
+
+  /** The pending debounce timer; null when no write is scheduled. */
+  private serverWriteTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** True once the server's copy has been read at least once this session. */
+  private hasHydrated = false;
+
+  /** Listeners notified after every local write and hydrate. */
+  private readonly listeners = new Set<() => void>();
+
+  /**
+   * Seeds the in-memory copy from the localStorage mirror. Runs at module load
+   * rather than on first use because the theme and language readers run during
+   * module initialization, before any component has mounted.
+   */
+  restoreFromMirror(): void {
+    this.preferences = this.readMirror();
+  }
+
+  private readMirror(): PreferenceRecord {
+    try {
+      const raw = localStorage.getItem(MIRROR_STORAGE_KEY);
+      if (!raw) {
+        return {};
+      }
+
+      const parsed: unknown = JSON.parse(raw);
+      return isRecord(parsed) ? (parsed as PreferenceRecord) : {};
+    } catch {
       return {};
     }
-
-    const parsed: unknown = JSON.parse(raw);
-    return isRecord(parsed) ? (parsed as PreferenceRecord) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeMirror(): void {
-  try {
-    localStorage.setItem(MIRROR_STORAGE_KEY, JSON.stringify(preferences));
-  } catch {
-    // A full or unavailable localStorage costs the first-paint optimization,
-    // not the setting itself — the server copy is authoritative.
-  }
-}
-
-function notifyListeners(): void {
-  for (const listener of listeners) {
-    listener();
-  }
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(USER_PREFERENCES_CHANGED_EVENT));
-  }
-}
-
-function flushServerWrites(): void {
-  serverWriteTimer = null;
-  const updates = pendingServerWrites;
-  pendingServerWrites = {};
-
-  if (Object.keys(updates).length === 0) {
-    return;
   }
 
-  // A save that fails must never surface as an unhandled rejection out of a
-  // timer callback: the mirror already holds the value, and the next write
-  // re-sends it.
-  try {
-    void api.user.savePreferences(updates as Record<string, unknown>).catch((error: unknown) => {
+  private writeMirror(): void {
+    try {
+      localStorage.setItem(MIRROR_STORAGE_KEY, JSON.stringify(this.preferences));
+    } catch {
+      // A full or unavailable localStorage costs the first-paint optimization,
+      // not the setting itself — the server copy is authoritative.
+    }
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(USER_PREFERENCES_CHANGED_EVENT));
+    }
+  }
+
+  private flushServerWrites(): void {
+    this.serverWriteTimer = null;
+    const updates = this.pendingServerWrites;
+    this.pendingServerWrites = {};
+
+    if (Object.keys(updates).length === 0) {
+      return;
+    }
+
+    // A save that fails must never surface as an unhandled rejection out of a
+    // timer callback: the mirror already holds the value, and the next write
+    // re-sends it.
+    try {
+      void api.user.savePreferences(updates as Record<string, unknown>).catch((error: unknown) => {
+        console.error('Failed to save user preferences:', error);
+      });
+    } catch (error) {
       console.error('Failed to save user preferences:', error);
-    });
-  } catch (error) {
-    console.error('Failed to save user preferences:', error);
+    }
+  }
+
+  private queueServerWrite(updates: PreferenceRecord): void {
+    this.pendingServerWrites = { ...this.pendingServerWrites, ...updates };
+
+    if (this.serverWriteTimer !== null) {
+      clearTimeout(this.serverWriteTimer);
+    }
+    this.serverWriteTimer = setTimeout(() => this.flushServerWrites(), SERVER_WRITE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Reads one preference, or `fallback` when the user has never set it.
+   *
+   * Synchronous by design: callers include module-level initializers and
+   * `useState` initial values that run before any fetch could resolve.
+   */
+  read<T>(key: UserPreferenceKey, fallback: T): T {
+    const value = this.preferences[key];
+    return value === undefined || value === null ? fallback : (value as T);
+  }
+
+  /** Writes one preference through to the mirror, the listeners and the server. */
+  write(key: UserPreferenceKey, value: unknown): void {
+    if (JSON.stringify(this.preferences[key]) === JSON.stringify(value)) {
+      return;
+    }
+
+    this.preferences = { ...this.preferences, [key]: value };
+    this.writeMirror();
+    this.queueServerWrite({ [key]: value });
+    this.notifyListeners();
+  }
+
+  /** Writes several preferences as one change, so listeners re-render once. */
+  writeMany(updates: PreferenceRecord): void {
+    const changed: PreferenceRecord = {};
+    for (const [key, value] of Object.entries(updates) as Array<[UserPreferenceKey, unknown]>) {
+      if (JSON.stringify(this.preferences[key]) !== JSON.stringify(value)) {
+        changed[key] = value;
+      }
+    }
+
+    if (Object.keys(changed).length === 0) {
+      return;
+    }
+
+    this.preferences = { ...this.preferences, ...changed };
+    this.writeMirror();
+    this.queueServerWrite(changed);
+    this.notifyListeners();
+  }
+
+  /** Subscribes to any preference change; returns the unsubscribe function. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Loads the server's copy and adopts it as the source of truth.
+   *
+   * Called once the user is authenticated. Any key the server has never seen is
+   * seeded from wherever it used to live in localStorage and pushed up, so the
+   * settings an existing install already had survive the move.
+   */
+  async hydrate(): Promise<void> {
+    let serverPreferences: PreferenceRecord = {};
+
+    try {
+      const response = await api.user.preferences();
+      if (response.ok) {
+        const payload = (await response.json()) as { preferences?: unknown };
+        if (isRecord(payload.preferences)) {
+          serverPreferences = payload.preferences as PreferenceRecord;
+        }
+      }
+    } catch (error) {
+      // Keep whatever the mirror holds; an offline load must still render the
+      // user's own theme and language rather than snapping back to defaults.
+      console.error('Failed to load user preferences:', error);
+      return;
+    }
+
+    const migrated: PreferenceRecord = {};
+    for (const key of PREFERENCE_KEYS) {
+      if (serverPreferences[key] !== undefined) {
+        continue;
+      }
+
+      const legacyValue = key === 'codeEditorSettings'
+        ? readLegacyCodeEditorSettings()
+        : readLegacyPreference(key);
+
+      if (legacyValue !== undefined) {
+        migrated[key] = legacyValue;
+      }
+    }
+
+    // Anything still queued for a key the server just answered for was computed
+    // from pre-hydrate state and is now stale. Letting it flush would push this
+    // device's start-up value over the one that was just fetched — the exact
+    // shape of a preference silently resetting itself on a second device.
+    for (const key of Object.keys(serverPreferences) as UserPreferenceKey[]) {
+      delete this.pendingServerWrites[key];
+    }
+
+    this.preferences = { ...serverPreferences, ...migrated };
+    this.hasHydrated = true;
+    this.writeMirror();
+
+    if (Object.keys(migrated).length > 0) {
+      this.queueServerWrite(migrated);
+    }
+
+    this.notifyListeners();
+  }
+
+  /** True once the server's copy has been read at least one time this session. */
+  isHydrated(): boolean {
+    return this.hasHydrated;
+  }
+
+  /**
+   * Drops the in-memory and mirrored copies on sign-out, so the next user on
+   * this device does not start out looking at the previous user's settings.
+   */
+  dispose(): void {
+    this.preferences = {};
+    this.pendingServerWrites = {};
+    this.hasHydrated = false;
+    if (this.serverWriteTimer !== null) {
+      clearTimeout(this.serverWriteTimer);
+      this.serverWriteTimer = null;
+    }
+    try {
+      localStorage.removeItem(MIRROR_STORAGE_KEY);
+    } catch {
+      // Nothing to do: the in-memory copy is already cleared.
+    }
+    this.notifyListeners();
   }
 }
 
-function queueServerWrite(updates: PreferenceRecord): void {
-  pendingServerWrites = { ...pendingServerWrites, ...updates };
-
-  if (serverWriteTimer !== null) {
-    clearTimeout(serverWriteTimer);
-  }
-  serverWriteTimer = setTimeout(flushServerWrites, SERVER_WRITE_DEBOUNCE_MS);
-}
+/**
+ * The single user-preferences store for this browser tab.
+ *
+ * Consumers hold this instance explicitly; the exported functions below are
+ * thin delegations kept so the module's public API does not change.
+ */
+export const userSettingsStore = new UserSettingsStore();
 
 /**
  * Reads one preference, or `fallback` when the user has never set it.
@@ -154,47 +324,22 @@ function queueServerWrite(updates: PreferenceRecord): void {
  * `useState` initial values that run before any fetch could resolve.
  */
 export function readUserPreference<T>(key: UserPreferenceKey, fallback: T): T {
-  const value = preferences[key];
-  return value === undefined || value === null ? fallback : (value as T);
+  return userSettingsStore.read(key, fallback);
 }
 
 /** Writes one preference through to the mirror, the listeners and the server. */
 export function writeUserPreference(key: UserPreferenceKey, value: unknown): void {
-  if (JSON.stringify(preferences[key]) === JSON.stringify(value)) {
-    return;
-  }
-
-  preferences = { ...preferences, [key]: value };
-  writeMirror();
-  queueServerWrite({ [key]: value });
-  notifyListeners();
+  userSettingsStore.write(key, value);
 }
 
 /** Writes several preferences as one change, so listeners re-render once. */
 export function writeUserPreferences(updates: PreferenceRecord): void {
-  const changed: PreferenceRecord = {};
-  for (const [key, value] of Object.entries(updates) as Array<[UserPreferenceKey, unknown]>) {
-    if (JSON.stringify(preferences[key]) !== JSON.stringify(value)) {
-      changed[key] = value;
-    }
-  }
-
-  if (Object.keys(changed).length === 0) {
-    return;
-  }
-
-  preferences = { ...preferences, ...changed };
-  writeMirror();
-  queueServerWrite(changed);
-  notifyListeners();
+  userSettingsStore.writeMany(updates);
 }
 
 /** Subscribes to any preference change; returns the unsubscribe function. */
 export function subscribeToUserPreferences(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  return userSettingsStore.subscribe(listener);
 }
 
 /**
@@ -271,68 +416,14 @@ function readLegacyCodeEditorSettings(): unknown {
   }
 }
 
-/**
- * Loads the server's copy and adopts it as the source of truth.
- *
- * Called once the user is authenticated. Any key the server has never seen is
- * seeded from wherever it used to live in localStorage and pushed up, so the
- * settings an existing install already had survive the move.
- */
+/** Loads the server's copy and adopts it as the source of truth. */
 export async function hydrateUserPreferences(): Promise<void> {
-  let serverPreferences: PreferenceRecord = {};
-
-  try {
-    const response = await api.user.preferences();
-    if (response.ok) {
-      const payload = (await response.json()) as { preferences?: unknown };
-      if (isRecord(payload.preferences)) {
-        serverPreferences = payload.preferences as PreferenceRecord;
-      }
-    }
-  } catch (error) {
-    // Keep whatever the mirror holds; an offline load must still render the
-    // user's own theme and language rather than snapping back to defaults.
-    console.error('Failed to load user preferences:', error);
-    return;
-  }
-
-  const migrated: PreferenceRecord = {};
-  for (const key of PREFERENCE_KEYS) {
-    if (serverPreferences[key] !== undefined) {
-      continue;
-    }
-
-    const legacyValue = key === 'codeEditorSettings'
-      ? readLegacyCodeEditorSettings()
-      : readLegacyPreference(key);
-
-    if (legacyValue !== undefined) {
-      migrated[key] = legacyValue;
-    }
-  }
-
-  // Anything still queued for a key the server just answered for was computed
-  // from pre-hydrate state and is now stale. Letting it flush would push this
-  // device's start-up value over the one that was just fetched — the exact
-  // shape of a preference silently resetting itself on a second device.
-  for (const key of Object.keys(serverPreferences) as UserPreferenceKey[]) {
-    delete pendingServerWrites[key];
-  }
-
-  preferences = { ...serverPreferences, ...migrated };
-  hasHydrated = true;
-  writeMirror();
-
-  if (Object.keys(migrated).length > 0) {
-    queueServerWrite(migrated);
-  }
-
-  notifyListeners();
+  await userSettingsStore.hydrate();
 }
 
 /** True once the server's copy has been read at least one time this session. */
 export function hasHydratedUserPreferences(): boolean {
-  return hasHydrated;
+  return userSettingsStore.isHydrated();
 }
 
 /**
@@ -340,26 +431,14 @@ export function hasHydratedUserPreferences(): boolean {
  * this device does not start out looking at the previous user's settings.
  */
 export function resetUserPreferences(): void {
-  preferences = {};
-  pendingServerWrites = {};
-  hasHydrated = false;
-  if (serverWriteTimer !== null) {
-    clearTimeout(serverWriteTimer);
-    serverWriteTimer = null;
-  }
-  try {
-    localStorage.removeItem(MIRROR_STORAGE_KEY);
-  } catch {
-    // Nothing to do: the in-memory copy is already cleared.
-  }
-  notifyListeners();
+  userSettingsStore.dispose();
 }
 
 // The mirror is read at module load rather than on first use because the theme
 // and language readers run during module initialization, before any component
 // has mounted.
 if (typeof localStorage !== 'undefined') {
-  preferences = readMirror();
+  userSettingsStore.restoreFromMirror();
 }
 
 // ----------------------------- this device's name ----------------------------
