@@ -1,7 +1,7 @@
 ---
 id: architecture-element-and-relation-filters
 title: 元素/关系筛选：默认隐藏函数与调用边（关系三档 结构/+依赖/+调用），服务端按过滤后的图算 BFS 与预算，客户端收窄即时、放宽重取
-status: done
+status: ready
 labels:
   - feature
 parent: null
