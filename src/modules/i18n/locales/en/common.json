@@ -149,6 +149,28 @@
     "source": {
       "unresolved": "{{count}} names mentioned in this session were not found in the analysis cache",
       "listLabel": "Unresolved names"
+    },
+    "filter": {
+      "menu": "Filter ▾",
+      "badge": "{{count}} on",
+      "elements": "Elements",
+      "relations": "Relations",
+      "isolated": "Hide isolated nodes",
+      "showAll": "▸ Show all",
+      "hiddenPrefix": "Hidden {{parts}}",
+      "relationPart": "{{count}} {{kind}} relations",
+      "isolatedPart": "{{count}} isolated nodes",
+      "relDependency": "dependency",
+      "relCall": "call",
+      "relationStructural": "Structural",
+      "relationDependency": "+Dependencies",
+      "relationCall": "+Calls",
+      "kindClass": "classes",
+      "kindInterface": "interfaces",
+      "kindEnum": "enums",
+      "kindAbstract": "abstract classes",
+      "kindFunction": "functions",
+      "kindOther": "others"
     }
   },
   "status": {

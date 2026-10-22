@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   ArchitectureEntityKind,
@@ -67,6 +67,31 @@ export type ArchitectureSeedStats = {
 };
 
 /**
+ * The filter a request carries, mirroring the route's optional `kinds`/
+ * `relations` body fields.
+ *
+ * Both are OPTIONAL and absent means "no filter" — the server's old, unfiltered
+ * reading. The panel sends `kinds` only for the class (entity) view, because
+ * the file graph has no element kind; it sends `relations` for both views,
+ * because a file edge carries a relation type too.
+ */
+export type ArchitectureGraphQuery = {
+  readonly kinds?: readonly ArchitectureEntityKind[];
+  readonly relations?: readonly string[];
+};
+
+/**
+ * What a filter removed, mirroring the server's `stats.hidden`. The readout's
+ * second line is this reading (plus whatever a narrower client-side selection
+ * removes on top of the arrived payload).
+ */
+export type ArchitectureFilterHiddenStats = {
+  readonly byKind: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
+  readonly byRelation: Readonly<Record<string, number>>;
+  readonly isolated: number;
+};
+
+/**
  * The reading's counters, mirroring `POST /api/architecture/graph`: the
  * generator's per-granularity node/edge counts, the seed counts, the seeds that
  * matched nothing, and the totals. `truncated` reports that a node budget cut
@@ -105,6 +130,14 @@ export type ArchitectureGraphStats = {
    * server's stats keeps the payload contract honest for consumers that do.
    */
   readonly seedTiers?: Readonly<Record<ArchitectureMentionTier, number>>;
+  /**
+   * Unfiltered counts by relation type over the current scope. Present only
+   * when the request carried a filter; the relation filter's readout names the
+   * relations it hid against this denominator.
+   */
+  readonly relationCounts?: Readonly<Record<string, number>>;
+  /** What the requested filter removed. Present only when it carried a filter. */
+  readonly hidden?: ArchitectureFilterHiddenStats;
   readonly seedFiles: number;
   readonly seedIdentifiers: number;
   readonly nodeCount: number;
@@ -145,6 +178,13 @@ export type ArchitectureView =
 
 type UseArchitectureGraphResult = {
   view: ArchitectureView;
+  /**
+   * True while a request is in flight OVER an already-loaded reading. The panel
+   * keeps the old graph on screen (dimmed, `aria-busy`) instead of flashing the
+   * loading placeholder: widening a filter or switching the view must not blank
+   * the drawing the reader is looking at.
+   */
+  refreshing: boolean;
   /** Re-runs the request; the panel's error branch offers it as a retry. */
   reload: () => void;
 };
@@ -154,44 +194,80 @@ type UseArchitectureGraphResult = {
  *
  * The fetch is the tab activation itself (ADR-005 decision 2): the panel is
  * only mounted while the architecture tab is active, so mounting this hook is
- * what POSTs `/api/architecture/graph`. Nothing here depends on which
- * granularity (file/entity) is on screen — the server returns both documents in
- * one response, and the panel's toggle is local by construction.
+ * what POSTs `/api/architecture/graph`. The granularity (file/entity) toggle is
+ * NOT a fetch trigger by itself — both documents arrive in one response — but
+ * the ELEMENT filter only applies to the entity graph, so the caller's `query`
+ * differs per view and a view switch may move it.
  *
  * `hops` IS part of the request: it is the server-side BFS depth and therefore
  * a generation knob (it participates in the result cache's content key), so a
  * depth change re-enters the fetch rather than filtering an arrived payload.
+ * The element/relation filter is a generation knob for the same reason: the
+ * server runs the BFS and the node budget on the filtered graph, so hiding a
+ * kind frees budget instead of merely hiding finished nodes.
+ *
+ * A refetch over an already-loaded reading keeps that reading visible
+ * (`refreshing: true`) rather than returning to `status: 'loading'`.
  */
 export function useArchitectureGraph(
   projectId: string | null,
   sessionId: string | null,
   hops: number,
+  query?: ArchitectureGraphQuery,
 ): UseArchitectureGraphResult {
   const [view, setView] = useState<ArchitectureView>({ status: 'idle' });
+  const [refreshing, setRefreshing] = useState(false);
   // Bumped by `reload`; it is the only way to re-enter the fetch effect without
   // also changing the selection, which is what a failed read needs.
   const [reloadToken, setReloadToken] = useState(0);
   // Tags each request so a reply for a previously selected project/session can
   // never overwrite the current selection's view.
   const requestIdRef = useRef(0);
+  // The last reading that arrived, with the project/session it belongs to. It is
+  // what makes a refetch "refresh the drawing" instead of "blank the drawing".
+  const previousRef = useRef<{ identity: string; result: ArchitectureGraphResult } | null>(null);
+
+  // The query object is rebuilt on every panel render; the request must re-enter
+  // only when its CONTENT changes, so the effect depends on this digest. Parsing
+  // the digest (rather than memoising the caller's object) gives the async body a
+  // stable value without an object identity that changes on every render.
+  const queryKey = JSON.stringify(query ?? null);
+  const stableQuery = useMemo<ArchitectureGraphQuery | undefined>(() => {
+    const parsed = JSON.parse(queryKey) as ArchitectureGraphQuery | null;
+    return parsed === null ? undefined : parsed;
+  }, [queryKey]);
 
   useEffect(() => {
     if (!projectId || !sessionId) {
       setView({ status: 'idle' });
+      setRefreshing(false);
+      previousRef.current = null;
       return;
     }
 
     const requestId = (requestIdRef.current += 1);
-    setView({ status: 'loading' });
+    const identity = `${projectId}\u0000${sessionId}`;
+    const previous = previousRef.current;
+    if (previous !== null && previous.identity === identity) {
+      // Keep the drawing on screen while the new reading is computed.
+      setView({ status: 'loaded', result: previous.result });
+      setRefreshing(true);
+    } else {
+      setView({ status: 'loading' });
+      setRefreshing(false);
+    }
 
     void (async () => {
       try {
-        const response = await api.architectureGraph(projectId, sessionId, hops);
+        const response = await api.architectureGraph(projectId, sessionId, hops, stableQuery);
         const result = await readApiJson<ArchitectureGraphResult>(response);
         if (requestIdRef.current !== requestId) return;
+        previousRef.current = { identity, result };
         setView({ status: 'loaded', result });
+        setRefreshing(false);
       } catch (error) {
         if (requestIdRef.current !== requestId) return;
+        setRefreshing(false);
         setView({
           status: 'error',
           message: error instanceof Error
@@ -200,11 +276,11 @@ export function useArchitectureGraph(
         });
       }
     })();
-  }, [projectId, sessionId, hops, reloadToken]);
+  }, [projectId, sessionId, hops, queryKey, stableQuery, reloadToken]);
 
   const reload = useCallback(() => {
     setReloadToken((token) => token + 1);
   }, []);
 
-  return { view, reload };
+  return { view, refreshing, reload };
 }

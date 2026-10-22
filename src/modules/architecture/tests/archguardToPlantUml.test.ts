@@ -7,6 +7,10 @@ import {
   archguardToPlantUml,
   displayName,
 } from '@/modules/architecture/archguardToPlantUml';
+import {
+  applyFilter,
+  ARCHITECTURE_DEFAULT_FILTER,
+} from '@/modules/architecture/elementRelationFilter';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
 
 /**
@@ -378,4 +382,52 @@ test('mention tiers are renderer metadata: they never change the bridge document
   };
 
   assert.equal(archguardToPlantUml(tiered).puml, archguardToPlantUml(legacy).puml);
+});
+
+test('a package whose every child the filter hid does not appear in the document', () => {
+  // Two directories: `modules/kept` holds structural entities, and
+  // `modules/noise` holds nothing but functions (one direct seed aside, so the
+  // filtered graph still has no node in that directory). The bridge builds its
+  // package tree from the NEIGHBOURHOOD it is handed, so a package with no
+  // drawn child has no opening line to emit — this pins that the filter's
+  // removal reaches the document instead of leaving an empty box.
+  const graph: ArchitectureNeighborhood = {
+    nodes: [
+      { id: 'src/modules/kept/Service.ts.Service', label: 'Service', distance: 0, kind: 'class' },
+      { id: 'src/modules/kept/Port.ts.Port', label: 'Port', distance: 1, kind: 'interface' },
+      { id: 'src/modules/noise/helpers.ts.helperA', label: 'helperA', distance: 1, kind: 'function' },
+      { id: 'src/modules/noise/helpers.ts.helperB', label: 'helperB', distance: 1, kind: 'function' },
+    ],
+    edges: [
+      { from: 'src/modules/kept/Port.ts.Port', to: 'src/modules/kept/Service.ts.Service', relationType: 'dependency' },
+      { from: 'src/modules/kept/Service.ts.Service', to: 'src/modules/noise/helpers.ts.helperA', relationType: 'call' },
+    ],
+  };
+
+  const unfiltered = archguardToPlantUml(graph);
+  assert.match(unfiltered.puml, /package "modules\/noise" \{/, 'the unfiltered document still has the noise package');
+
+  const filtered = applyFilter(graph, { ...ARCHITECTURE_DEFAULT_FILTER, hideIsolated: false });
+  const { puml, nodeIds } = archguardToPlantUml({
+    nodes: filtered.nodes,
+    edges: filtered.edges,
+  });
+
+  assert.deepEqual(
+    nodeIds,
+    ['src/modules/kept/Service.ts.Service', 'src/modules/kept/Port.ts.Port'],
+    'only the structural directory is drawn',
+  );
+  assert.doesNotMatch(puml, /package "modules\/noise"/, 'a package with no surviving child is not emitted');
+  assert.doesNotMatch(puml, /helpers\.ts/, 'no hidden entity survives into the document');
+  assert.match(puml, /package "modules\/kept" \{/, 'the surviving package is still drawn');
+  assert.match(puml, /n1 \.\.> n0 : <<uses>>/, 'the surviving edge is still drawn');
+
+  // The same document (minus the noise package) is what the filtered graph
+  // yields through the panel's adaptive grouping path.
+  const adaptive = archguardToPlantUml(
+    { nodes: filtered.nodes, edges: filtered.edges },
+    { view: { kind: 'group', prefix: 'modules' }, grouping: 'adaptive' },
+  );
+  assert.doesNotMatch(adaptive.puml, /noise/, 'the grouped path drops it too');
 });

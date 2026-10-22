@@ -658,3 +658,229 @@ test('mention tiers：没有 provenance 的旧调用逐字节保持旧节点与�
   }
   assert.equal('seedTiers' in result.stats, false, 'no provenance ⇒ no seedTiers key');
 });
+
+// ------------------- element / relation filters -------------------
+
+/**
+ * A real-shape filter fixture: three structural entities, one function, and a
+ * class (`D`) that is reachable ONLY through the function.
+ *
+ *  · `A` (class) — the seed; imports `Fn` and `C`, and CALLS `Fn`.
+ *  · `Fn` (function) — imports `D`; the kind the default filter hides.
+ *  · `C` (class) — imports `B` (composition); reachable directly from `A`.
+ *  · `B` (interface) — reachable from `C` by a composition edge, never directly.
+ *  · `D` (class) — reachable only through `Fn`, so it disappears when a hidden
+ *    kind is not traversed through.
+ *
+ * `dependencies`/`dependents` are the full adjacency (`A` imports its callees),
+ * `relationsByType` carries the typed edges of a REAL index (call + dependency +
+ * composition), and `entityDetails` carries the kinds an `arch.json` supplies.
+ */
+const FILTER_INDEX: ArchIndex = {
+  fileToIds: {
+    'a.ts': ['a.ts.A'],
+    'fn.ts': ['fn.ts.Fn'],
+    'b.ts': ['b.ts.B'],
+    'c.ts': ['c.ts.C'],
+    'd.ts': ['d.ts.D'],
+  },
+  nameToIds: { A: ['a.ts.A'], Fn: ['fn.ts.Fn'], B: ['b.ts.B'], C: ['c.ts.C'], D: ['d.ts.D'] },
+  idToFile: { 'a.ts.A': 'a.ts', 'fn.ts.Fn': 'fn.ts', 'b.ts.B': 'b.ts', 'c.ts.C': 'c.ts', 'd.ts.D': 'd.ts' },
+  idToName: { 'a.ts.A': 'A', 'fn.ts.Fn': 'Fn', 'b.ts.B': 'B', 'c.ts.C': 'C', 'd.ts.D': 'D' },
+  dependencies: {
+    'a.ts.A': ['fn.ts.Fn', 'c.ts.C'],
+    'fn.ts.Fn': ['d.ts.D'],
+    'c.ts.C': ['b.ts.B'],
+    'b.ts.B': [],
+    'd.ts.D': [],
+  },
+  dependents: {
+    'a.ts.A': [],
+    'fn.ts.Fn': ['a.ts.A'],
+    'c.ts.C': ['a.ts.A'],
+    'b.ts.B': ['c.ts.C'],
+    'd.ts.D': ['fn.ts.Fn'],
+  },
+  relationsByType: {
+    call: [['a.ts.A', 'fn.ts.Fn']],
+    dependency: [['a.ts.A', 'c.ts.C'], ['fn.ts.Fn', 'd.ts.D']],
+    composition: [['c.ts.C', 'b.ts.B']],
+  },
+  entityDetails: {
+    'a.ts.A': { kind: 'class', members: [] },
+    'fn.ts.Fn': { kind: 'function', members: [] },
+    'b.ts.B': { kind: 'interface', members: [] },
+    'c.ts.C': { kind: 'class', members: [] },
+    'd.ts.D': { kind: 'class', members: [] },
+  },
+};
+
+const STRUCTURAL_KINDS = ['class', 'interface', 'enum', 'abstract'] as const;
+const FILTER_SEED: GraphSeeds = { files: [], identifiers: ['A'] };
+
+test('元素筛选：被隐藏种类的节点不穿过（其后代不可达），direct 种子仍保留', () => {
+  // Kinds only: the adjacency is the index's own (dependencies/dependents), so
+  // this leg isolates the ELEMENT axis. `Fn` is hidden and must not be used as
+  // a stepping stone to `D`.
+  const kindsOnly = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 2,
+    maxNodes: 100,
+    kinds: [...STRUCTURAL_KINDS],
+  });
+  const kindLabels = entityLabels(kindsOnly);
+  console.log(
+    `filter reading: kinds-only nodes=${JSON.stringify(kindLabels)} edges=${JSON.stringify(
+      kindsOnly.graph.entity.edges.map((edge) => `${edge.from}->${edge.to}:${edge.relationType}`),
+    )} hidden=${JSON.stringify(kindsOnly.stats.hidden)}`,
+  );
+  assert.deepEqual(kindLabels, ['A', 'B', 'C'], 'the hidden function is not a node and D is not reachable through it');
+  assert.equal(kindLabels.includes('D'), false, 'a node only reachable THROUGH a hidden kind is unreachable');
+  assert.deepEqual(
+    kindsOnly.graph.entity.edges.map((edge) => `${edge.from}->${edge.to}:${edge.relationType}`),
+    ['a.ts.A->c.ts.C:dependency', 'c.ts.C->b.ts.B:composition'],
+    'the emitted edges are between retained nodes, typed',
+  );
+
+  // A direct mention is exempt even when its kind is hidden: `Fn` is seeded by
+  // its unique name (a direct tier), so a kinds-only filter still keeps it.
+  const directSeed = generateGraph(FILTER_INDEX, { files: [], identifiers: ['A', 'Fn'] }, {
+    hops: 0,
+    maxNodes: 100,
+    kinds: [...STRUCTURAL_KINDS],
+  });
+  assert.deepEqual(entityLabels(directSeed), ['A', 'Fn'], 'the direct function seed survives the element filter');
+});
+
+test('关系筛选：只沿允许的关系类型扩展，未允许类型的边不发射', () => {
+  // Relations only: every kind is admissible, so this leg isolates the RELATION
+  // axis. From `A`, only the dependency to `C` may be followed — the `call` to
+  // `Fn` and `C`'s `composition` to `B` are not traversed.
+  const dependencyOnly = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 2,
+    maxNodes: 100,
+    relations: ['dependency'],
+  });
+  console.log(
+    `filter reading: dependency-only nodes=${JSON.stringify(entityLabels(dependencyOnly))} ` +
+      `edges=${JSON.stringify(dependencyOnly.graph.entity.edges.map((edge) => `${edge.from}->${edge.to}:${edge.relationType}`))}`,
+  );
+  assert.deepEqual(entityLabels(dependencyOnly), ['A', 'C'], 'only dependency edges were traversed');
+  assert.deepEqual(
+    dependencyOnly.graph.entity.edges.map((edge) => `${edge.from}->${edge.to}:${edge.relationType}`),
+    ['a.ts.A->c.ts.C:dependency'],
+  );
+
+  // Structural-only reaches `C` (dependency is excluded, so actually nothing
+  // beside the seed here): the fixture's only structural edge from A is the
+  // composition from C, which A cannot reach without the dependency to C.
+  const structuralOnly = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 2,
+    maxNodes: 100,
+    relations: ['composition', 'inheritance', 'implementation'],
+  });
+  assert.deepEqual(entityLabels(structuralOnly), ['A'], 'no structural edge leaves the seed');
+  assert.deepEqual(structuralOnly.graph.entity.edges, []);
+});
+
+test('筛选后的预算：隐藏函数腾出的名额被结构性实体填补（entityTruncated 由 true 变 false）', () => {
+  // One class seed, six function neighbours and three class neighbours — all
+  // through dependency edges, so only the ELEMENT filter can change the set.
+  const files: Record<string, string[]> = { 'seed.ts': ['seed.ts.Seed'] };
+  const names: Record<string, string[]> = { Seed: ['seed.ts.Seed'] };
+  const idToFile: Record<string, string> = { 'seed.ts.Seed': 'seed.ts' };
+  const idToName: Record<string, string> = { 'seed.ts.Seed': 'Seed' };
+  const dependencies: Record<string, string[]> = { 'seed.ts.Seed': [] };
+  const dependents: Record<string, string[]> = { 'seed.ts.Seed': [] };
+  const details: Record<string, { kind: 'class' | 'function'; members: never[] }> = {
+    'seed.ts.Seed': { kind: 'class', members: [] },
+  };
+  const pairs: [string, string][] = [];
+  for (let index = 0; index < 9; index += 1) {
+    const kind = index < 6 ? 'function' : 'class';
+    const id = `seed.ts.${kind === 'function' ? 'fn' : 'Klass'}${String(index)}`;
+    files[`seed.ts`].push(id);
+    idToFile[id] = 'seed.ts';
+    idToName[id] = id.slice(id.lastIndexOf('.') + 1);
+    dependencies['seed.ts.Seed'].push(id);
+    dependencies[id] = [];
+    dependents[id] = ['seed.ts.Seed'];
+    details[id] = { kind, members: [] };
+    pairs.push(['seed.ts.Seed', id]);
+  }
+
+  const index: ArchIndex = {
+    fileToIds: files,
+    nameToIds: names,
+    idToFile,
+    idToName,
+    dependencies,
+    dependents,
+    relationsByType: { dependency: pairs },
+    entityDetails: details,
+  };
+
+  const unfiltered = generateGraph(index, { files: [], identifiers: ['Seed'] }, { hops: 1, maxNodes: 4 });
+  const filtered = generateGraph(index, { files: [], identifiers: ['Seed'] }, {
+    hops: 1,
+    maxNodes: 4,
+    kinds: [...STRUCTURAL_KINDS],
+  });
+  console.log(
+    `filter reading: budget unfiltered nodes=${unfiltered.stats.entityNodes} truncated=${String(unfiltered.stats.entityTruncated)} ` +
+      `filtered nodes=${filtered.stats.entityNodes} truncated=${String(filtered.stats.entityTruncated)} ` +
+      `labels=${JSON.stringify(entityLabels(filtered))} hidden=${JSON.stringify(filtered.stats.hidden)}`,
+  );
+
+  assert.equal(unfiltered.stats.entityTruncated, true, 'without the filter the 10-node set exceeds the budget');
+  assert.equal(unfiltered.stats.entityNodes, 4);
+  assert.equal(unfiltered.stats.entityTotal, 10);
+
+  assert.equal(filtered.stats.entityTruncated, false, 'hiding the six functions frees the budget');
+  assert.equal(filtered.stats.entityNodes, 4, 'the four structural entities fill the budget exactly');
+  assert.equal(filtered.stats.entityTotal, 4, 'the filtered total is the post-filter reachable count');
+  assert.deepEqual(
+    filtered.graph.entity.nodes.map((node) => node.kind),
+    ['class', 'class', 'class', 'class'],
+    'only structural entities survive',
+  );
+  assert.deepEqual(filtered.stats.hidden, {
+    byKind: { function: 6 },
+    byRelation: {},
+    isolated: 0,
+  });
+});
+
+test('stats.hidden / relationCounts 是未过滤的读数；不带筛选时两个键都不存在', () => {
+  const filtered = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 2,
+    maxNodes: 100,
+    kinds: [...STRUCTURAL_KINDS],
+    relations: ['dependency'],
+  });
+  console.log(
+    `filter reading: stats relationCounts=${JSON.stringify(filtered.stats.relationCounts)} ` +
+      `hidden=${JSON.stringify(filtered.stats.hidden)} kindCounts=${JSON.stringify(filtered.stats.kindCounts)}`,
+  );
+
+  // The unfiltered traversal reaches A, Fn, C, B and D; the relation tally is
+  // over the edges between THOSE nodes, before either axis removes anything.
+  assert.deepEqual(filtered.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
+  // `Fn` is the one non-direct entity whose kind the filter hides; `D` was never
+  // reachable from the seed, so it is not a hidden-by-kind node.
+  assert.deepEqual(filtered.stats.hidden, {
+    byKind: { function: 1 },
+    byRelation: { call: 1, composition: 1 },
+    isolated: 0,
+  });
+  // The element popover's counts stay unfiltered: functions can be shown (and
+  // re-enabled) even while they are hidden.
+  assert.deepEqual(filtered.stats.kindCounts, { class: 3, function: 1, interface: 1 });
+
+  // No filter requested ⇒ the two filter-only readouts are absent entirely, so
+  // the payload keeps its pre-filter shape.
+  const unfiltered = generateGraph(FILTER_INDEX, FILTER_SEED, { hops: 2, maxNodes: 100 });
+  assert.equal('hidden' in unfiltered.stats, false);
+  assert.equal('relationCounts' in unfiltered.stats, false);
+  assert.equal(unfiltered.stats.entityTotal, 5, 'the unfiltered scope is the whole two-hop set');
+  assert.deepEqual(entityLabels(unfiltered), ['A', 'B', 'C', 'D', 'Fn']);
+});

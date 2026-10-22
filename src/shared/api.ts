@@ -358,12 +358,25 @@ export const api = {
    * `hops` is the server-side BFS depth and therefore a REQUEST parameter (it
    * changes the payload and its content-addressed cache key), unlike the local
    * `maxNodes` view filter: the panel's hops control re-enters this request.
+   *
+   * `filter` is the optional element/relation selection. It is a REQUEST
+   * parameter for the same reason as `hops`: the server computes the BFS and
+   * the node budget on the filtered graph. Both fields are optional and an
+   * ABSENT field is "no filter" (the old reading), so an older client is
+   * unaffected; the element axis is only sent for the entity graph.
    */
-  architectureGraph: (projectId: string, sessionId: string, hops?: number) =>
+  architectureGraph: (
+    projectId: string,
+    sessionId: string,
+    hops?: number,
+    filter?: { readonly kinds?: readonly string[]; readonly relations?: readonly string[] },
+  ) =>
     post('/api/architecture/graph', {
       projectId,
       sessionId,
       ...(hops === undefined ? {} : { hops }),
+      ...(filter?.kinds === undefined ? {} : { kinds: filter.kinds }),
+      ...(filter?.relations === undefined ? {} : { relations: filter.relations }),
     }),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),

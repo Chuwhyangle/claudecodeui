@@ -24,6 +24,21 @@ import {
   type ArchitectureDetailTier,
 } from '@/modules/architecture/detailRanking';
 import {
+  activeFilterCount,
+  applyFilter,
+  ARCHITECTURE_DEFAULT_FILTER,
+  ARCHITECTURE_ELEMENT_KINDS,
+  ARCHITECTURE_RELATION_PRESETS,
+  ARCHITECTURE_SHOW_ALL_FILTER,
+  filtersEqual,
+  hiddenTotal,
+  isFilterNarrower,
+  relationsForPreset,
+  type ArchitectureElementRelationFilter,
+  type ArchitectureFilterHidden,
+  type ArchitectureRelationPreset,
+} from '@/modules/architecture/elementRelationFilter';
+import {
   architectureExportFilename,
   downloadBlob,
   downloadTextFile,
@@ -70,12 +85,22 @@ function nodeIdShapeOf(granularity: ArchitectureGranularity): ArchitectureNodeId
 const DEFAULT_SCOPE = DEFAULT_ARCHITECTURE_SCOPE;
 
 /**
+ * How long a filter/view change waits before it becomes a request.
+ *
+ * Walking the relation presets (structural → dependency → call) is one gesture;
+ * without the debounce each step would POST its own reading. Narrowing never
+ * waits at all — it is answered from the payload in hand.
+ */
+const FILTER_REQUEST_DEBOUNCE_MS = 250;
+
+/**
  * Where one project's two display knobs are remembered. They are deliberately
  * separate keys: the sibling element/relation-filter task reuses this storage,
  * and a reader changing only the scope must not rewrite the detail choice.
  */
 const SCOPE_STORAGE_PREFIX = 'architecture.scope.';
 const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
+const FILTER_STORAGE_PREFIX = 'architecture.filter.';
 
 /** The remembered knobs for one project; `projectId` keys the loaded pair. */
 type ArchitectureDisplaySettings = {
@@ -138,6 +163,77 @@ function writeStoredDetail(projectId: string | null, detail: ArchitectureDetailT
     // See readStoredScope: remembering is best-effort, the knob is not.
   }
 }
+
+/** True when `value` is one of the element axis' kinds. */
+function isElementKind(value: unknown): value is (typeof ARCHITECTURE_ELEMENT_KINDS)[number] {
+  return typeof value === 'string' && (ARCHITECTURE_ELEMENT_KINDS as readonly string[]).includes(value);
+}
+
+/** True when `value` is one of the relation axis' presets. */
+function isRelationPreset(value: unknown): value is ArchitectureRelationPreset {
+  return typeof value === 'string' && (ARCHITECTURE_RELATION_PRESETS as readonly string[]).includes(value);
+}
+
+/**
+ * Read one project's remembered element/relation filter.
+ *
+ * The stored value is a JSON object written by this panel; a hand-edited or
+ * older entry (or storage being unavailable) falls back to the shipped default
+ * rather than throwing. Validation is per FIELD, so one unknown kind does not
+ * discard the other two selections.
+ */
+function readStoredFilter(projectId: string | null): ArchitectureElementRelationFilter {
+  if (projectId === null || typeof window === 'undefined') return ARCHITECTURE_DEFAULT_FILTER;
+  try {
+    const stored = window.localStorage.getItem(`${FILTER_STORAGE_PREFIX}${projectId}`);
+    if (stored === null) return ARCHITECTURE_DEFAULT_FILTER;
+    const parsed: unknown = JSON.parse(stored);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return ARCHITECTURE_DEFAULT_FILTER;
+    }
+    const record = parsed as Record<string, unknown>;
+    const kinds = Array.isArray(record.kinds)
+      ? record.kinds.filter(isElementKind)
+      : ARCHITECTURE_DEFAULT_FILTER.kinds;
+    return {
+      kinds,
+      relations: isRelationPreset(record.relations)
+        ? record.relations
+        : ARCHITECTURE_DEFAULT_FILTER.relations,
+      hideIsolated: typeof record.hideIsolated === 'boolean'
+        ? record.hideIsolated
+        : ARCHITECTURE_DEFAULT_FILTER.hideIsolated,
+    };
+  } catch {
+    return ARCHITECTURE_DEFAULT_FILTER;
+  }
+}
+
+/** Remember one project's filter; a failed write must not break the popover. */
+function writeStoredFilter(projectId: string | null, filter: ArchitectureElementRelationFilter): void {
+  if (projectId === null) return;
+  try {
+    window.localStorage.setItem(`${FILTER_STORAGE_PREFIX}${projectId}`, JSON.stringify(filter));
+  } catch {
+    // See readStoredScope: remembering is best-effort, the knob is not.
+  }
+}
+
+/** Add two `hidden` readings; the narrow path composes the local cut onto the server's. */
+function addHidden(base: ArchitectureFilterHidden, extra: ArchitectureFilterHidden): ArchitectureFilterHidden {
+  const byKind: Partial<Record<string, number>> = { ...base.byKind };
+  for (const [kind, count] of Object.entries(extra.byKind)) {
+    byKind[kind] = (byKind[kind] ?? 0) + (count ?? 0);
+  }
+  const byRelation: Record<string, number> = { ...base.byRelation };
+  for (const [type, count] of Object.entries(extra.byRelation)) {
+    byRelation[type] = (byRelation[type] ?? 0) + count;
+  }
+  return { byKind, byRelation, isolated: base.isolated + extra.isolated };
+}
+
+/** An empty `hidden` reading, for a payload whose server carried no filter stats. */
+const EMPTY_HIDDEN: ArchitectureFilterHidden = { byKind: {}, byRelation: {}, isolated: 0 };
 
 /**
  * One granularity's truncation reading, taken from the response alone.
@@ -487,6 +583,47 @@ export default function ArchitecturePanel({
   initialGranularity = 'entity',
 }: ArchitecturePanelProps) {
   const { t } = useTranslation();
+
+  // The element filter's labels. Each `t()` names its key literally (not a
+  // template) so the locale-completeness test extracts every one of them from
+  // this source; the noun is lowercase so `{count} {label}` reads correctly and
+  // the same string serves the hidden-count line.
+  const kindLabel = (kind: (typeof ARCHITECTURE_ELEMENT_KINDS)[number]): string => {
+    switch (kind) {
+      case 'class':
+        return t('architecture.filter.kindClass', { defaultValue: 'classes' });
+      case 'interface':
+        return t('architecture.filter.kindInterface', { defaultValue: 'interfaces' });
+      case 'enum':
+        return t('architecture.filter.kindEnum', { defaultValue: 'enums' });
+      case 'abstract':
+        return t('architecture.filter.kindAbstract', { defaultValue: 'abstract classes' });
+      case 'function':
+        return t('architecture.filter.kindFunction', { defaultValue: 'functions' });
+      default:
+        return t('architecture.filter.kindOther', { defaultValue: 'others' });
+    }
+  };
+
+  const relationPresetLabel = (preset: ArchitectureRelationPreset): string => {
+    switch (preset) {
+      case 'structural':
+        return t('architecture.filter.relationStructural', { defaultValue: 'Structural' });
+      case 'dependency':
+        return t('architecture.filter.relationDependency', { defaultValue: '+Dependencies' });
+      default:
+        return t('architecture.filter.relationCall', { defaultValue: '+Calls' });
+    }
+  };
+
+  const relationTypeLabel = (relationType: string): string => {
+    if (relationType === 'dependency') {
+      return t('architecture.filter.relDependency', { defaultValue: 'dependency' });
+    }
+    if (relationType === 'call') return t('architecture.filter.relCall', { defaultValue: 'call' });
+    // A type nobody named: print it rather than inventing a category.
+    return relationType;
+  };
   // The pointer/size tier. On a narrow screen the export action moves into the
   // graph's overflow menu (one menu, not two), and on a coarse pointer every
   // header control grows to a 44px target.
@@ -523,6 +660,40 @@ export default function ArchitecturePanel({
     });
   }
   const { scope, detail } = displaySettings;
+  // The element/relation filter pair. `filter` is what the reader selected and
+  // what the drawing obeys; `requestFilter` is the selection the last SERVER
+  // request was made with, which is what decides whether a change can be
+  // filtered locally (narrowing) or must ask the server (widening). Both are
+  // per project, like the scope/detail pair above.
+  const [filterSettings, setFilterSettings] = useState<{
+    projectId: string | null;
+    filter: ArchitectureElementRelationFilter;
+    requestFilter: ArchitectureElementRelationFilter;
+  }>(() => {
+    const stored = readStoredFilter(projectId);
+    return { projectId, filter: stored, requestFilter: stored };
+  });
+  if (filterSettings.projectId !== projectId) {
+    const stored = readStoredFilter(projectId);
+    setFilterSettings({ projectId, filter: stored, requestFilter: stored });
+  }
+  const { filter, requestFilter } = filterSettings;
+  // The granularity the last REQUEST was made for. The element axis does not
+  // apply to the file graph, so switching views moves the request too — but the
+  // drawing switches immediately (both subgraphs arrive in one response).
+  const [requestGranularity, setRequestGranularity] = useState<ArchitectureGranularity>(initialGranularity);
+  // The filter popover; local like the legend and the export menu.
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  // The popover is drawn `position: fixed` on the desktop tier because the
+  // toolbar scrolls horizontally and would clip an absolutely positioned panel.
+  const filterButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [filterPosition, setFilterPosition] = useState<{ left: number; top: number } | null>(null);
+  // Widening (or a view switch) is debounced: a reader walking the relation
+  // presets should produce one request, not one per step.
+  const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (filterDebounceRef.current !== null) clearTimeout(filterDebounceRef.current);
+  }, []);
   // The node under the pointer and its visible relation kinds, as reported by
   // the mounted renderer. Kept here so the readout is renderer-neutral; the key
   // names the graph the reading came from (session + granularity + scope), so
@@ -536,11 +707,57 @@ export default function ArchitecturePanel({
     (hover: ArchitectureRendererHover | null) => setHovered({ key: hoverKey, hover }),
     [hoverKey],
   );
-  const { view, reload } = useArchitectureGraph(projectId, sessionId, scope);
-  // The detail tier's cut of the current subgraph. Memoised on the payload and
-  // the tier: the renderer redraws whenever its `graph` prop changes identity,
-  // so a fresh object on every panel render (a hover!) would re-lay the diagram.
-  const activeNeighbourhood = view.status === 'loaded' ? view.result.graph[granularity] : null;
+  // The request the server is asked for. `kinds` rides only on the entity view
+  // (a file has no element kind); `relations` rides on both views.
+  const graphQuery = useMemo(
+    () => ({
+      ...(requestGranularity === 'entity' ? { kinds: requestFilter.kinds } : {}),
+      relations: relationsForPreset(requestFilter.relations),
+    }),
+    [requestFilter, requestGranularity],
+  );
+  const { view, refreshing, reload } = useArchitectureGraph(projectId, sessionId, scope, graphQuery);
+  // The payload as it arrived for the current subgraph.
+  const rawNeighbourhood = view.status === 'loaded' ? view.result.graph[granularity] : null;
+  // The direct-seed exemptions the filter honours. Stated from the same rule
+  // the pure function applies so the reading never depends on call order: a
+  // distance-0 node with no tier is the legacy direct mention.
+  const directSeedIds = useMemo(
+    () => new Set(
+      (rawNeighbourhood?.nodes ?? [])
+        .filter((node) => node.distance === 0 && (node.mentionTier === undefined || node.mentionTier === 'direct'))
+        .map((node) => node.id),
+    ),
+    [rawNeighbourhood],
+  );
+  // The element axis is the class view's alone; the file view keeps every kind
+  // (file nodes carry none) while still honouring the relation/isolated axes.
+  const effectiveKinds = granularity === 'entity' ? filter.kinds : ARCHITECTURE_ELEMENT_KINDS;
+  const displayFilter = useMemo(
+    () => ({ kinds: effectiveKinds, relations: filter.relations, hideIsolated: filter.hideIsolated }),
+    [effectiveKinds, filter.relations, filter.hideIsolated],
+  );
+  // The filter over the arrived payload. Narrowing is answered here (no
+  // round-trip); widening has already been requested by `changeFilter`, which
+  // keeps this old drawing on screen until the new reading lands.
+  const filteredGraph = useMemo(
+    () => (rawNeighbourhood === null ? null : applyFilter(rawNeighbourhood, displayFilter, directSeedIds)),
+    [rawNeighbourhood, displayFilter, directSeedIds],
+  );
+  // The filtered subgraph, with a stable identity so the detail ranking (and the
+  // renderer below it) only redo work when the graph itself changes — a hover
+  // must never re-lay the diagram.
+  const activeNeighbourhood = useMemo(
+    () => (filteredGraph === null ? null : { nodes: filteredGraph.nodes, edges: filteredGraph.edges }),
+    [filteredGraph],
+  );
+  // What to say was hidden: the server counted the request's filter against the
+  // UNFILTERED scope; a narrower local selection adds its own extra cut on top.
+  const serverHidden = view.status === 'loaded' ? view.result.stats.hidden : undefined;
+  const hiddenReading = useMemo(
+    () => addHidden(serverHidden ?? EMPTY_HIDDEN, filteredGraph?.hidden ?? EMPTY_HIDDEN),
+    [serverHidden, filteredGraph],
+  );
   const detailRanking = useMemo(
     () => (activeNeighbourhood === null
       ? null
@@ -637,6 +854,64 @@ export default function ArchitecturePanel({
   const changeDetail = (next: ArchitectureDetailTier): void => {
     setDisplaySettings((current) => ({ ...current, detail: next }));
     writeStoredDetail(projectId, next);
+  };
+
+  /**
+   * Queue a request for a filter/view change, collapsing a walk through the
+   * presets into one round-trip.
+   */
+  const scheduleRequest = (
+    nextFilter: ArchitectureElementRelationFilter,
+    nextGranularity: ArchitectureGranularity,
+  ): void => {
+    if (filterDebounceRef.current !== null) clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = setTimeout(() => {
+      filterDebounceRef.current = null;
+      setFilterSettings((current) => ({ ...current, requestFilter: nextFilter }));
+      setRequestGranularity(nextGranularity);
+    }, FILTER_REQUEST_DEBOUNCE_MS);
+  };
+
+  const cancelScheduledRequest = (): void => {
+    if (filterDebounceRef.current === null) return;
+    clearTimeout(filterDebounceRef.current);
+    filterDebounceRef.current = null;
+  };
+
+  /**
+   * Apply a new selection.
+   *
+   * A NARROWER selection is answered from the payload in hand — that is the
+   * whole "收窄即时" half of the design — with one exception: if the arrived
+   * reading was truncated, the freed budget may have exposed more nodes than
+   * this payload carries, so it asks the server in the background. A WIDER (or
+   * incomparable) selection cannot be reconstructed from a payload that already
+   * had it cut away, so it always re-requests; the old drawing stays on screen
+   * (`refreshing`) until the answer arrives.
+   */
+  const changeFilter = (next: ArchitectureElementRelationFilter): void => {
+    setFilterSettings((current) => ({ ...current, filter: next }));
+    writeStoredFilter(projectId, next);
+    if (filtersEqual(next, requestFilter)) {
+      cancelScheduledRequest();
+      return;
+    }
+    if (isFilterNarrower(next, requestFilter)) {
+      const truncated = view.status === 'loaded'
+        && (granularity === 'file'
+          ? (view.result.stats.fileTruncated ?? view.result.stats.truncated)
+          : (view.result.stats.entityTruncated ?? view.result.stats.truncated));
+      if (truncated) scheduleRequest(next, requestGranularity);
+      return;
+    }
+    scheduleRequest(next, requestGranularity);
+  };
+
+  const changeGranularity = (next: ArchitectureGranularity): void => {
+    setGranularity(next);
+    // Both subgraphs are in hand, so the drawing switches now; the request only
+    // follows because the element axis does not apply to the file graph.
+    if (next !== requestGranularity) scheduleRequest(requestFilter, next);
   };
 
   // Search the CURRENT subgraph before the detail cut, so a node the tier
@@ -818,7 +1093,7 @@ export default function ArchitecturePanel({
         type="button"
         role="radio"
         aria-checked={granularity === 'entity'}
-        onClick={() => setGranularity('entity')}
+        onClick={() => changeGranularity('entity')}
         data-architecture-view-option="entity"
         style={compactTargetStyle}
         className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
@@ -831,7 +1106,7 @@ export default function ArchitecturePanel({
         type="button"
         role="radio"
         aria-checked={granularity === 'file'}
-        onClick={() => setGranularity('file')}
+        onClick={() => changeGranularity('file')}
         data-architecture-view-option="file"
         style={compactTargetStyle}
         className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
@@ -960,6 +1235,168 @@ export default function ArchitecturePanel({
       >
         {t('architecture.controls.detailAll', { defaultValue: 'All' })}
       </button>
+    </div>
+  );
+
+  /**
+   * The filter popover's CONTENT, independent of the container that hosts it.
+   * The desktop tier draws it under the `Filter ▾` disclosure; the compact tier
+   * draws the same fragment inside the panel's overflow sheet (the mobile
+   * bottom-drawer container is a later task's business, and this content must
+   * not know about it).
+   */
+  const toggleKind = (kind: (typeof ARCHITECTURE_ELEMENT_KINDS)[number]): void => {
+    const kinds = filter.kinds.includes(kind)
+      ? filter.kinds.filter((entry) => entry !== kind)
+      : [...filter.kinds, kind];
+    changeFilter({ ...filter, kinds });
+  };
+  const filterContent = (
+    <div data-architecture-filter-panel="true" className="flex flex-col gap-2 text-xs">
+      {/* The element axis does not exist on the file graph: a file has no
+          kind, so the section is not drawn there (rather than drawn disabled). */}
+      {granularity === 'entity' && (
+        <fieldset data-architecture-filter-elements="true" className="flex flex-col gap-1">
+          <legend className="mb-1 text-[11px] font-medium text-muted-foreground">
+            {t('architecture.filter.elements', { defaultValue: 'Elements' })}
+          </legend>
+          <div className="flex flex-wrap gap-1">
+            {ARCHITECTURE_ELEMENT_KINDS.map((kind) => {
+              const count = stats.kindCounts?.[kind];
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={filter.kinds.includes(kind)}
+                  data-architecture-filter-kind={kind}
+                  data-architecture-filter-kind-count={count === undefined ? '' : String(count)}
+                  onClick={() => toggleKind(kind)}
+                  style={compactTargetStyle}
+                  className={`rounded border px-2 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                    filter.kinds.includes(kind)
+                      ? 'border-primary/60 bg-accent text-foreground'
+                      : 'border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {count === undefined ? kindLabel(kind) : `${String(count)} ${kindLabel(kind)}`}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+
+      <div
+        role="radiogroup"
+        aria-label={t('architecture.filter.relations', { defaultValue: 'Relations' })}
+        data-architecture-filter-relations="true"
+        className="flex flex-col gap-1"
+      >
+        <span className="text-[11px] font-medium text-muted-foreground">
+          {t('architecture.filter.relations', { defaultValue: 'Relations' })}
+        </span>
+        <div className="flex flex-wrap gap-1">
+          {ARCHITECTURE_RELATION_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              role="radio"
+              aria-checked={filter.relations === preset}
+              data-architecture-filter-relation={preset}
+              onClick={() => changeFilter({
+                ...filter,
+                relations: preset,
+                // The isolated toggle follows the preset's own default: a
+                // narrowed relation set makes isolated nodes an artefact of the
+                // filter, while "every relation" makes isolation a real fact.
+                hideIsolated: preset !== 'call',
+              })}
+              style={compactTargetStyle}
+              className={`rounded border px-2 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                filter.relations === preset
+                  ? 'border-primary/60 bg-accent text-foreground'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {relationPresetLabel(preset)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={filter.hideIsolated}
+        data-architecture-filter-isolated="true"
+        onClick={() => changeFilter({ ...filter, hideIsolated: !filter.hideIsolated })}
+        style={compactTargetStyle}
+        className="flex items-center gap-1 text-left text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        <span aria-hidden="true">{filter.hideIsolated ? '☑' : '☐'}</span>
+        {t('architecture.filter.isolated', { defaultValue: 'Hide isolated nodes' })}
+      </button>
+    </div>
+  );
+
+  const filterTriggerLabel = t('architecture.filter.menu', { defaultValue: 'Filter ▾' });
+  const filterBadge = activeFilterCount(filter);
+  const openFilterMenu = (): void => {
+    if (!compactToolbar) {
+      const rect = filterButtonRef.current?.getBoundingClientRect();
+      if (rect !== undefined) setFilterPosition({ left: Math.max(8, rect.left), top: rect.bottom + 4 });
+    }
+    setFilterMenuOpen(true);
+  };
+  const filterDisclosure = (
+    <div className={compactToolbar ? 'flex flex-col gap-1' : 'relative'} data-architecture-filter-root="true">
+      <button
+        ref={filterButtonRef}
+        type="button"
+        aria-haspopup="true"
+        aria-expanded={filterMenuOpen}
+        onClick={() => {
+          if (filterMenuOpen) setFilterMenuOpen(false);
+          else openFilterMenu();
+        }}
+        data-architecture-filter-toggle="true"
+        style={compactTargetStyle}
+        className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          compactToolbar ? 'px-3 py-2 text-left text-sm' : 'px-2 py-0.5 text-xs'
+        }`}
+      >
+        {filterTriggerLabel}
+        <span
+          data-architecture-filter-badge={filterBadge}
+          className="ml-1 rounded-full bg-accent px-1.5 text-[10px] tabular-nums text-foreground"
+        >
+          {t('architecture.filter.badge', { defaultValue: '{{count}} on', count: filterBadge })}
+        </span>
+      </button>
+      {filterMenuOpen && (
+        <div
+          role="group"
+          aria-label={filterTriggerLabel}
+          data-architecture-filter-menu="true"
+          style={compactToolbar ? undefined : (filterPosition ?? { left: 8, top: 56 })}
+          onKeyDown={(event) => {
+            // Escape belongs to this panel while it is open; stopping it keeps
+            // the chat page's document-level abort out of the interaction.
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            setFilterMenuOpen(false);
+          }}
+          className={
+            compactToolbar
+              ? 'flex flex-col gap-1 rounded-lg border border-border bg-popover p-2'
+              : 'fixed z-50 flex w-80 flex-col gap-1 rounded-lg border border-border bg-popover p-2 shadow-lg'
+          }
+        >
+          {filterContent}
+        </div>
+      )}
     </div>
   );
 
@@ -1092,6 +1529,31 @@ export default function ArchitecturePanel({
         total: inScopeCount,
       });
 
+  // The filter's own reading, the readout's second line. The parts reuse the
+  // SAME labels the popover's checkboxes show, so the number and the control
+  // can never disagree, and `total` above is the FILTERED in-scope count.
+  const hiddenKindParts = Object.entries(hiddenReading.byKind)
+    .filter(([, count]) => (count ?? 0) > 0)
+    .map(([kind, count]) => `${String(count)} ${kindLabel(kind as (typeof ARCHITECTURE_ELEMENT_KINDS)[number])}`);
+  const hiddenRelationParts = Object.entries(hiddenReading.byRelation)
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => t('architecture.filter.relationPart', {
+      defaultValue: '{{count}} {{kind}} relations',
+      count,
+      kind: relationTypeLabel(type),
+    }));
+  const hiddenParts = [
+    ...hiddenKindParts,
+    ...hiddenRelationParts,
+    ...(hiddenReading.isolated > 0
+      ? [t('architecture.filter.isolatedPart', {
+          defaultValue: '{{count}} isolated nodes',
+          count: hiddenReading.isolated,
+        })]
+      : []),
+  ];
+  const hiddenCount = hiddenTotal(hiddenReading);
+
   const raiseDetail = (): void => {
     const index = ARCHITECTURE_DETAIL_TIERS.indexOf(detail);
     changeDetail(ARCHITECTURE_DETAIL_TIERS[Math.min(index + 1, ARCHITECTURE_DETAIL_TIERS.length - 1)]);
@@ -1201,6 +1663,7 @@ export default function ArchitecturePanel({
             {granularityGroup}
             {scopeGroup}
             {detailGroup}
+            {filterDisclosure}
             {searchBox}
             <span className="flex-1" />
             {exportMenu}
@@ -1259,6 +1722,7 @@ export default function ArchitecturePanel({
         >
           {scopeGroup}
           {detailGroup}
+          {filterDisclosure}
           {/* Export is here on the compact tier: the sheet is the panel's one
               menu, so the format list is drawn inside it rather than adding a
               second header control that would not fit. */}
@@ -1300,7 +1764,12 @@ export default function ArchitecturePanel({
                 </button>
               </div>
             )}
-            <div ref={graphAreaRef} className="relative min-h-0 flex-1">
+            <div
+              ref={graphAreaRef}
+              aria-busy={refreshing}
+              data-architecture-refreshing={refreshing ? 'true' : undefined}
+              className={`relative min-h-0 flex-1 transition-opacity ${refreshing ? 'opacity-60' : ''}`}
+            >
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
                 <Renderer
                   key={`${sessionId}:${granularity}:${scope}`}
@@ -1383,6 +1852,35 @@ export default function ArchitecturePanel({
                     )}
                     <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
                   </button>
+                  {/* The filter's second line: what the element/relation
+                      selection is hiding, and the one-click reset. It is
+                      deliberately separate from the detail sentence above —
+                      the two knobs must not share a number. */}
+                  {hiddenCount > 0 && (
+                    <div
+                      data-architecture-filter-hidden={hiddenCount}
+                      data-architecture-filter-hidden-kinds={JSON.stringify(hiddenReading.byKind)}
+                      data-architecture-filter-hidden-relations={JSON.stringify(hiddenReading.byRelation)}
+                      data-architecture-filter-hidden-isolated={hiddenReading.isolated}
+                      className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5"
+                    >
+                      <span>
+                        {t('architecture.filter.hiddenPrefix', {
+                          defaultValue: 'Hidden {{parts}}',
+                          parts: hiddenParts.join(' · '),
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        data-architecture-filter-show-all="true"
+                        onClick={() => changeFilter(ARCHITECTURE_SHOW_ALL_FILTER)}
+                        style={compactTargetStyle}
+                        className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+                      >
+                        {t('architecture.filter.showAll', { defaultValue: '▸ Show all' })}
+                      </button>
+                    </div>
+                  )}
                   {readoutOpen && (
                     <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
                       <p>

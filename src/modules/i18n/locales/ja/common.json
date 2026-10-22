@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "このセッションで言及された {{count}} 個の名前は分析キャッシュに見つかりませんでした",
       "listLabel": "未解決の名前"
+    },
+    "filter": {
+      "menu": "フィルター ▾",
+      "badge": "{{count}} 件有効",
+      "elements": "要素",
+      "relations": "関係",
+      "isolated": "孤立ノードを隠す",
+      "showAll": "▸ すべて表示",
+      "hiddenPrefix": "{{parts}} を非表示",
+      "relationPart": "{{count}} 件の{{kind}}関係",
+      "isolatedPart": "{{count}} 個の孤立ノード",
+      "relDependency": "依存",
+      "relCall": "呼び出し",
+      "relationStructural": "構造",
+      "relationDependency": "+依存",
+      "relationCall": "+呼び出し",
+      "kindClass": "クラス",
+      "kindInterface": "インターフェース",
+      "kindEnum": "列挙型",
+      "kindAbstract": "抽象クラス",
+      "kindFunction": "関数",
+      "kindOther": "その他"
     }
   },
   "status": {

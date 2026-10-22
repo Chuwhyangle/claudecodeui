@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "Bu oturumda adı geçen {{count}} ad analiz önbelleğinde bulunamadı",
       "listLabel": "Çözülemeyen adlar"
+    },
+    "filter": {
+      "menu": "Filtre ▾",
+      "badge": "{{count}} etkin",
+      "elements": "Öğeler",
+      "relations": "İlişkiler",
+      "isolated": "Yalıtılmış düğümleri gizle",
+      "showAll": "▸ Tümünü göster",
+      "hiddenPrefix": "Gizlenen {{parts}}",
+      "relationPart": "{{count}} {{kind}} ilişkisi",
+      "isolatedPart": "{{count}} yalıtılmış düğüm",
+      "relDependency": "bağımlılık",
+      "relCall": "çağrı",
+      "relationStructural": "Yapısal",
+      "relationDependency": "+Bağımlılıklar",
+      "relationCall": "+Çağrılar",
+      "kindClass": "sınıflar",
+      "kindInterface": "arayüzler",
+      "kindEnum": "numaralandırmalar",
+      "kindAbstract": "soyut sınıflar",
+      "kindFunction": "fonksiyonlar",
+      "kindOther": "diğerleri"
     }
   },
   "status": {

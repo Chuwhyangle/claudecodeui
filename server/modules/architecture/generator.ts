@@ -90,10 +90,25 @@ export type EntityDetail = {
 /** The relation types ArchGuard records for a scope. */
 export type RelationType = 'dependency' | 'call' | 'composition' | 'inheritance' | 'implementation';
 
+/**
+ * The runtime kind vocabulary, in the order the client's element filter lists
+ * it. Kept beside {@link EntityKind} so the route can validate a request's
+ * `kinds` array without restating the type as a hand-copied string list.
+ */
+export const ENTITY_KINDS: readonly EntityKind[] = ['class', 'interface', 'enum', 'abstract', 'function', 'other'];
+
+/** The runtime relation vocabulary, for the same validation reason. */
+export const RELATION_TYPES: readonly RelationType[] = [
+  'dependency',
+  'call',
+  'composition',
+  'inheritance',
+  'implementation',
+];
+
 /** Type guard for a string key read from a scope index's `relationsByType`. */
 export function isRelationType(value: string): value is RelationType {
-  return value === 'dependency' || value === 'call' || value === 'composition'
-    || value === 'inheritance' || value === 'implementation';
+  return (RELATION_TYPES as readonly string[]).includes(value);
 }
 
 export type ArchIndex = {
@@ -218,6 +233,30 @@ export type GenerateGraphParams = {
    * shape. The route-side caller passes the shipped default.
    */
   readonly maxMembers?: number;
+  /**
+   * Entity kinds to keep, the element filter's request half.
+   *
+   * Omitted means "no element filter" — the exact pre-filter behaviour, which
+   * is why an old client (or a hand-written stub) that never heard of kinds
+   * gets a byte-identical reading. When present, entities of a kind outside the
+   * list are removed BEFORE the BFS (the traversal does not pass THROUGH them),
+   * and they are not counted against the node budget.
+   *
+   * An entity whose `arch.json` detail is missing has no known kind and is
+   * therefore never hidden by this axis: "unknown" is not "other".
+   */
+  readonly kinds?: readonly EntityKind[];
+  /**
+   * Relation types to keep, the relation filter's request half.
+   *
+   * Omitted means "no relation filter" (the old adjacency over
+   * `dependencies`/`dependents`). When present, expansion follows ONLY edges of
+   * these types, and the emitted graphs carry only those relations. When the
+   * index carries no `relationsByType`, every adjacency edge is a `dependency`
+   * (the module's long-standing typing of a legacy index), so a structural-only
+   * filter legitimately leaves just the seeds.
+   */
+  readonly relations?: readonly RelationType[];
 };
 
 /**
@@ -265,6 +304,38 @@ export type GraphStats = {
    * the three counts always sum to the number of tiered nodes in `graph`.
    */
   readonly seedTiers?: Readonly<Record<MentionTier, number>>;
+  /**
+   * Unfiltered counts by relation type over the current scope (the pre-budget
+   * reachable entity set). "Unfiltered" is the point: the relation filter's
+   * readout has to name the relations it HID, so the denominator cannot be the
+   * filtered edge set. Present only when a filter was requested, which keeps a
+   * no-filter reading byte-identical to the pre-filter shape.
+   */
+  readonly relationCounts?: Readonly<Partial<Record<RelationType, number>>>;
+  /**
+   * What the requested element/relation filter removed, counted only (the
+   * hidden nodes are never emitted). Present only when a filter was requested.
+   *
+   *  · `byKind`     — reachable entities whose known kind the element filter
+   *                   excluded (an entity with no `arch.json` detail has no
+   *                   known kind and is never counted here, and a `direct`
+   *                   seed is exempt);
+   *  · `byRelation` — edges of a relation type the relation filter excluded,
+   *                   over the same unfiltered scope;
+   *  · `isolated`   — non-exempt nodes in the FILTERED, pre-budget node set
+   *                   that have no incident edge after the relation filter.
+   *                   This is the count the client's "hide isolated nodes"
+   *                   toggle would remove; the budget's own cut is reported
+   *                   separately by `entityTruncated`.
+   */
+  readonly hidden?: ArchitectureFilterHidden;
+};
+
+/** The `stats.hidden` reading: what the filter removed, by axis. */
+export type ArchitectureFilterHidden = {
+  readonly byKind: Readonly<Partial<Record<EntityKind, number>>>;
+  readonly byRelation: Readonly<Partial<Record<RelationType, number>>>;
+  readonly isolated: number;
 };
 
 /** Seeds that matched nothing in this index, in first-occurrence order (deduplicated). */
@@ -501,6 +572,125 @@ function expandSeeds(
 /** Strength order used when one entity is reachable from several seeds. */
 const TIER_STRENGTH: Readonly<Record<MentionTier, number>> = { direct: 3, name: 2, file: 1 };
 
+/** True when a filter axis was requested at all. */
+function filterRequested(params: GenerateGraphParams): boolean {
+  return params.kinds !== undefined || params.relations !== undefined;
+}
+
+/**
+ * Whether an entity survives the element axis.
+ *
+ * An entity with no readable `arch.json` detail has NO KNOWN KIND; it is kept
+ * rather than folded into `other`, mirroring `countEntityKinds` (which also
+ * never invents an `other` for missing data). The route-side caller can only
+ * filter on information the analysis actually carries.
+ */
+function kindAllowed(index: ArchIndex, id: string, kinds: readonly EntityKind[] | undefined): boolean {
+  if (kinds === undefined) return true;
+  const kind = index.entityDetails?.[id]?.kind;
+  return kind === undefined || kinds.includes(kind);
+}
+
+/** Whether an edge's relation type survives the relation axis. */
+function relationAllowed(
+  relations: readonly RelationType[] | undefined,
+  type: RelationType,
+): boolean {
+  return relations === undefined || relations.includes(type);
+}
+
+/** One adjacency step, typed with the relation kind that produced it. */
+type TypedNeighbour = { readonly id: string; readonly type: RelationType };
+
+/**
+ * The BIDIRECTIONAL typed adjacency of a scope index.
+ *
+ * BFS has always run over both directions (`dependencies` and `dependents`), so
+ * each typed pair contributes an entry in both directions. A legacy index with
+ * no `relationsByType` types every adjacency edge `dependency` — the same
+ * reading `collectEntityEdges` has always applied to such an index.
+ */
+function typedNeighbours(index: ArchIndex): Map<string, TypedNeighbour[]> {
+  const map = new Map<string, TypedNeighbour[]>();
+  const add = (from: string, to: string, type: RelationType): void => {
+    const list = map.get(from) ?? [];
+    list.push({ id: to, type });
+    map.set(from, list);
+  };
+
+  if (index.relationsByType === undefined || Object.keys(index.relationsByType).length === 0) {
+    for (const [from, targets] of Object.entries(index.dependencies)) {
+      for (const to of targets) add(from, to, 'dependency');
+    }
+    return map;
+  }
+
+  for (const [rawType, pairs] of Object.entries(index.relationsByType)) {
+    if (!isRelationType(rawType)) continue;
+    for (const [from, to] of pairs) {
+      add(from, to, rawType);
+      add(to, from, rawType);
+    }
+  }
+  return map;
+}
+
+/**
+ * Expand the seed set by `hops` levels over the FILTERED graph.
+ *
+ * Two removals happen before traversal, not after: an entity of a hidden kind
+ * is never admitted as a neighbour (the traversal does not pass THROUGH it),
+ * and an edge of a disallowed relation is not followed at all. `direct` seeds
+ * are roots regardless of their kind — they are what the transcript actually
+ * named. A `name`/`file` tier seed is an ordinary node: if its kind is hidden
+ * it is removed with everything that only it could have reached.
+ *
+ * Non-direct seeds are filtered exactly like any other node; there is no second
+ * exemption. `isDirectSeed` reads the tier map (`undefined` tier = legacy
+ * payload, treated as direct, the documented old behaviour).
+ */
+function expandSeedsFiltered(
+  index: ArchIndex,
+  resolved: ReadonlySet<string>,
+  hops: number,
+  kinds: readonly EntityKind[] | undefined,
+  relations: readonly RelationType[] | undefined,
+  isDirectSeed: (id: string) => boolean,
+): Map<string, number> {
+  const distance = new Map<string, number>();
+  const roots: string[] = [];
+  for (const id of resolved) {
+    if (!isDirectSeed(id) && !kindAllowed(index, id, kinds)) continue;
+    distance.set(id, 0);
+    roots.push(id);
+  }
+
+  const adjacency = relations === undefined ? undefined : typedNeighbours(index);
+  const neighboursOf = (id: string): readonly TypedNeighbour[] => {
+    if (adjacency !== undefined) return adjacency.get(id) ?? [];
+    return [
+      ...(index.dependencies[id] ?? []).map((to): TypedNeighbour => ({ id: to, type: 'dependency' })),
+      ...(index.dependents[id] ?? []).map((to): TypedNeighbour => ({ id: to, type: 'dependency' })),
+    ];
+  };
+
+  let frontier = roots;
+  for (let hop = 1; hop <= hops && frontier.length > 0; hop += 1) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const neighbour of neighboursOf(id)) {
+        if (!relationAllowed(relations, neighbour.type)) continue;
+        if (distance.has(neighbour.id) || !Object.hasOwn(index.idToFile, neighbour.id)) continue;
+        if (!kindAllowed(index, neighbour.id, kinds)) continue;
+        distance.set(neighbour.id, hop);
+        next.push(neighbour.id);
+      }
+    }
+    frontier = next;
+  }
+  return distance;
+}
+
 /**
  * Resolve the two seed lists against a single index.
  *
@@ -627,8 +817,14 @@ function applyBudget(distance: ReadonlyMap<string, number>, maxNodes: number): {
  *
  * An edge survives only when BOTH endpoints were retained, which is what lets
  * the same node set produce a self-contained Mermaid document after truncation.
+ * When `relations` is supplied, only those relation types are emitted; every
+ * other edge is dropped (it is counted by `filterReading`, never emitted).
  */
-function collectEntityEdges(index: ArchIndex, retained: readonly string[]): RenderEdge[] {
+function collectEntityEdges(
+  index: ArchIndex,
+  retained: readonly string[],
+  relations?: readonly RelationType[],
+): RenderEdge[] {
   const nodeSet = new Set(retained);
   const seen = new Set<string>();
   const edges: RenderEdge[] = [];
@@ -640,6 +836,7 @@ function collectEntityEdges(index: ArchIndex, retained: readonly string[]): Rend
     for (const from of retained) {
       for (const to of index.dependencies[from] ?? []) {
         if (!nodeSet.has(to) || from === to) continue;
+        if (!relationAllowed(relations, 'dependency')) continue;
         const key = `${from}\u0000${to}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -649,6 +846,7 @@ function collectEntityEdges(index: ArchIndex, retained: readonly string[]): Rend
   } else {
     for (const [rawType, pairs] of Object.entries(index.relationsByType)) {
       if (!isRelationType(rawType)) continue;
+      if (!relationAllowed(relations, rawType)) continue;
       for (const [from, to] of pairs) {
         if (!nodeSet.has(from) || !nodeSet.has(to)) continue;
         // A self-loop is an intra-entity method call, not a graph edge worth a
@@ -721,6 +919,55 @@ function countEntityKinds(
     counts[detail.kind] = (counts[detail.kind] ?? 0) + 1;
   }
   return counts;
+}
+
+/**
+ * The filter's own readout: what it removed, and the relation tally it removed
+ * it from.
+ *
+ * Everything here is counted on the UNFILTERED traversal — the request's BFS
+ * runs on the filtered graph, so the filtered node set cannot say how many
+ * functions or call edges the scope contained. `relationCounts` is the
+ * unfiltered denominator; `hidden.byRelation` is the part of it the filter cut;
+ * `hidden.isolated` is read from the FILTERED pre-budget set (the budget's own
+ * cut is a different reading, reported by `entityTruncated`).
+ */
+function filterReading(
+  index: ArchIndex,
+  unfilteredIds: readonly string[],
+  filteredIds: readonly string[],
+  kinds: readonly EntityKind[] | undefined,
+  relations: readonly RelationType[] | undefined,
+  isDirectSeed: (id: string) => boolean,
+): { relationCounts: Partial<Record<RelationType, number>>; hidden: ArchitectureFilterHidden } {
+  const relationCounts: Partial<Record<RelationType, number>> = {};
+  const byRelation: Partial<Record<RelationType, number>> = {};
+  for (const edge of collectEntityEdges(index, unfilteredIds)) {
+    relationCounts[edge.type] = (relationCounts[edge.type] ?? 0) + 1;
+    if (!relationAllowed(relations, edge.type)) {
+      byRelation[edge.type] = (byRelation[edge.type] ?? 0) + 1;
+    }
+  }
+
+  const byKind: Partial<Record<EntityKind, number>> = {};
+  for (const id of unfilteredIds) {
+    if (isDirectSeed(id)) continue;
+    const kind = index.entityDetails?.[id]?.kind;
+    if (kind === undefined || kinds === undefined || kinds.includes(kind)) continue;
+    byKind[kind] = (byKind[kind] ?? 0) + 1;
+  }
+
+  const degree = new Map<string, number>();
+  for (const edge of collectEntityEdges(index, filteredIds, relations)) {
+    degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1);
+    degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1);
+  }
+  let isolated = 0;
+  for (const id of filteredIds) {
+    if ((degree.get(id) ?? 0) === 0 && !isDirectSeed(id)) isolated += 1;
+  }
+
+  return { relationCounts, hidden: { byKind, byRelation, isolated } };
 }
 
 /**
@@ -804,14 +1051,27 @@ export function generateGraph(
   }
 
   const { resolved, unresolved, tiers, mentionCounts } = resolveSeeds(index, seeds);
-  const distance = expandSeeds(index, resolved, hops);
+  // A SEED with no tier (no provenance supplied, or an old payload) is the
+  // documented legacy direct mention: `direct` is the exemption the filters
+  // honour, so that reading has to be stated once, here. Resolved-set
+  // membership matters: "no tier" on a NON-seed is just "not a seed", never an
+  // exemption.
+  const isDirectSeed = (id: string): boolean => {
+    if (!resolved.has(id)) return false;
+    const tier = tiers?.get(id);
+    return tier === undefined || tier === 'direct';
+  };
+  const filtering = filterRequested(params);
+  const distance = filtering
+    ? expandSeedsFiltered(index, resolved, hops, params.kinds, params.relations, isDirectSeed)
+    : expandSeeds(index, resolved, hops);
 
   // The entity graph is the budgeted prefix. The file graph is projected from
   // the FULL reachable set below, so its completeness does not depend on how
   // many entities this budget kept.
   const allEntityIds = candidatesByDistance(distance);
   const { retained, truncated: entityTruncated } = applyBudget(distance, params.maxNodes);
-  const entityEdges = collectEntityEdges(index, retained);
+  const entityEdges = collectEntityEdges(index, retained, params.relations);
 
   // Project every reachable entity onto its file before budgeting the file
   // graph. A file inherits the closest hop of the entities it contains, which
@@ -829,7 +1089,7 @@ export function generateGraph(
   // The file edges come from the FULL entity edge set, filtered to the file
   // nodes the file budget kept. Using the full set (rather than the retained
   // entity prefix) is what keeps the file view whole when entities were cut.
-  const allEntityEdges = collectEntityEdges(index, allEntityIds);
+  const allEntityEdges = collectEntityEdges(index, allEntityIds, params.relations);
   const fileNodeSet = new Set(fileNodes);
   const fileEdges = collectFileEdges(index, allEntityEdges)
     .filter((edge) => fileNodeSet.has(edge.from) && fileNodeSet.has(edge.to));
@@ -883,8 +1143,16 @@ export function generateGraph(
 
   // Kind counts describe the FULL reachable set (`allEntityIds`), i.e. before
   // the node budget — deliberately not `retained`, so cutting the preview never
-  // rewrites the analysis readout.
-  const kindCounts = countEntityKinds(index, allEntityIds);
+  // rewrites the analysis readout. With a filter requested this stays the
+  // UNFILTERED reachable set: the element filter's own UI has to be able to say
+  // "805 functions" for the functions it is currently hiding.
+  const unfilteredIds = filtering
+    ? candidatesByDistance(expandSeeds(index, resolved, hops))
+    : allEntityIds;
+  const kindCounts = countEntityKinds(index, unfilteredIds);
+  const filterStats = filtering
+    ? filterReading(index, unfilteredIds, allEntityIds, params.kinds, params.relations, isDirectSeed)
+    : undefined;
 
   return {
     mmd: { file: fileMmd, entity: entityMmd },
@@ -910,6 +1178,12 @@ export function generateGraph(
         ? { membersPerEntity: maxMembers, membersTruncated: membersTruncated.value }
         : {}),
       ...(seedTiers !== undefined ? { seedTiers } : {}),
+      // The two filter readouts are one reading and are emitted together: a
+      // relation count without what was hidden, or vice versa, would be half
+      // a sentence. Both are absent when no filter was requested.
+      ...(filterStats === undefined
+        ? {}
+        : { relationCounts: filterStats.relationCounts, hidden: filterStats.hidden }),
     },
     unresolved,
   };

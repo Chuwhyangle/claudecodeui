@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "{{count}} noms mentionnés dans cette session n’ont pas été trouvés dans le cache d’analyse",
       "listLabel": "Noms non résolus"
+    },
+    "filter": {
+      "menu": "Filtre ▾",
+      "badge": "{{count}} actifs",
+      "elements": "Éléments",
+      "relations": "Relations",
+      "isolated": "Masquer les nœuds isolés",
+      "showAll": "▸ Tout afficher",
+      "hiddenPrefix": "Masqué {{parts}}",
+      "relationPart": "{{count}} relations de {{kind}}",
+      "isolatedPart": "{{count}} nœuds isolés",
+      "relDependency": "dépendance",
+      "relCall": "appel",
+      "relationStructural": "Structurel",
+      "relationDependency": "+Dépendances",
+      "relationCall": "+Appels",
+      "kindClass": "classes",
+      "kindInterface": "interfaces",
+      "kindEnum": "énumérations",
+      "kindAbstract": "classes abstraites",
+      "kindFunction": "fonctions",
+      "kindOther": "autres"
     }
   },
   "status": {

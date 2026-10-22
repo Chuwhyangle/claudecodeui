@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "{{count}} nama yang disebut dalam sesi ini tidak ditemukan di cache analisis",
       "listLabel": "Nama belum terselesaikan"
+    },
+    "filter": {
+      "menu": "Filter ▾",
+      "badge": "{{count}} aktif",
+      "elements": "Elemen",
+      "relations": "Relasi",
+      "isolated": "Sembunyikan node terisolasi",
+      "showAll": "▸ Tampilkan semua",
+      "hiddenPrefix": "Disembunyikan {{parts}}",
+      "relationPart": "{{count}} relasi {{kind}}",
+      "isolatedPart": "{{count}} node terisolasi",
+      "relDependency": "dependensi",
+      "relCall": "panggilan",
+      "relationStructural": "Struktural",
+      "relationDependency": "+Dependensi",
+      "relationCall": "+Panggilan",
+      "kindClass": "kelas",
+      "kindInterface": "antarmuka",
+      "kindEnum": "enum",
+      "kindAbstract": "kelas abstrak",
+      "kindFunction": "fungsi",
+      "kindOther": "lainnya"
     }
   },
   "status": {

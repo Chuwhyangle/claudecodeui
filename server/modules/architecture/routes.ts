@@ -21,6 +21,7 @@ import express, { type Router } from 'express';
 
 import { AppError, asyncHandler } from '@/shared/utils.js';
 
+import { ENTITY_KINDS, RELATION_TYPES, type EntityKind, type RelationType } from './generator.js';
 import type {
   ArchitectureGraphInput,
   ArchitectureMentionsInput,
@@ -51,20 +52,54 @@ function optionalCountField(body: Record<string, unknown>, name: string): number
 }
 
 /**
+ * Read an optional array of vocabulary values (the element/relation filters).
+ *
+ * An ABSENT field is "no filter" and is the only way to ask for the old
+ * reading. An EMPTY array is legal and means "show none of this axis" (every
+ * non-exempt entity, or every edge, is hidden). A value outside the vocabulary
+ * is a client bug, not something to silently drop: it answers 400 naming the
+ * field, so a typo cannot quietly produce a narrower graph than was asked for.
+ */
+function optionalVocabularyField<T extends string>(
+  body: Record<string, unknown>,
+  name: string,
+  vocabulary: readonly T[],
+): readonly T[] | undefined {
+  const value = body[name];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+    throw invalidRequest(`"${name}" must be an array of strings`);
+  }
+  const unknown = (value as string[]).find((entry) => !(vocabulary as readonly string[]).includes(entry));
+  if (unknown !== undefined) {
+    throw invalidRequest(
+      `"${name}" contains an unknown value "${unknown}" (expected one of ${vocabulary.join(', ')})`,
+    );
+  }
+  return value as T[];
+}
+
+/**
  * Parse and validate the request body. `hops`/`maxNodes` are optional: the
  * service supplies the ADR defaults, and an explicit zero is legal (a zero-hop
- * graph is the seeds themselves; a zero budget is an empty graph).
+ * graph is the seeds themselves; a zero budget is an empty graph). `kinds` and
+ * `relations` are the optional element/relation filters; leaving both out is
+ * the old, unfiltered reading.
  */
 function readGraphInput(body: unknown): ArchitectureGraphInput {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     throw invalidRequest('request body must be a JSON object');
   }
   const record = body as Record<string, unknown>;
+  const kinds = optionalVocabularyField<EntityKind>(record, 'kinds', ENTITY_KINDS);
+  const relations = optionalVocabularyField<RelationType>(record, 'relations', RELATION_TYPES);
   return {
     projectId: requireStringField(record, 'projectId'),
     sessionId: requireStringField(record, 'sessionId'),
     hops: optionalCountField(record, 'hops'),
     maxNodes: optionalCountField(record, 'maxNodes'),
+    ...(kinds === undefined ? {} : { kinds }),
+    ...(relations === undefined ? {} : { relations }),
   };
 }
 

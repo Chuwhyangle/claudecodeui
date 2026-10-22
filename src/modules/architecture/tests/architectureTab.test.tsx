@@ -579,17 +579,38 @@ function drawnEdge(host: HTMLElement, from: string, to: string): Element {
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
-  // The two display knobs are remembered per project in localStorage; a case
+  // The three display knobs are remembered per project in localStorage; a case
   // that moves them must not decide the next case's starting value.
   for (const projectId of ['project-1', 'project-2']) {
     window.localStorage.removeItem(`architecture.scope.${projectId}`);
     window.localStorage.removeItem(`architecture.detail.${projectId}`);
+    window.localStorage.removeItem(`architecture.filter.${projectId}`);
   }
   // jsdom has no canvas: an un-stubbed `getContext('2d')` answers null AND logs
   // a "Not implemented" error on every paint. The minimap paints on a frame, so
   // answer null directly — it is the component's documented "cannot draw" path.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 });
+
+/**
+ * Explicitly remember the "show everything" filter for a project.
+ *
+ * The shipped default hides functions and `call` edges, so a case written
+ * before that default existed — one that draws or asserts a function box or a
+ * call arrow — states its own filter instead of inheriting the default. This is
+ * the per-case rewrite the task requires; it is never a weakened assertion:
+ * the graph under test is exactly the one the old data described.
+ */
+function rememberShowAllFilter(projectId = 'project-1'): void {
+  window.localStorage.setItem(
+    `architecture.filter.${projectId}`,
+    JSON.stringify({
+      kinds: ['class', 'interface', 'enum', 'abstract', 'function', 'other'],
+      relations: 'call',
+      hideIsolated: false,
+    }),
+  );
+}
 
 const projectWithArchguard = (hasArchguardCache: boolean): Project => ({
   projectId: 'project-1',
@@ -705,6 +726,7 @@ test('the panel draws through the renderer contract, with no library dependency'
 });
 
 test('the entity detail fields pass through the renderer contract unchanged', async () => {
+  rememberShowAllFilter();
   // The contract only GROWS optional data: a payload with kinds/members and the
   // extra stats/provenance readings must reach the renderer exactly as sent, so
   // a later renderer can use it without any panel-side mapping.
@@ -828,6 +850,7 @@ test('the display name keeps relpath.EntityName and truncates the FRONT, not the
 });
 
 test('the renderer draws the neighbourhood as an SVG (PlantUML/ELK, not a fake)', async () => {
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1347,6 +1370,7 @@ test('redrawing a view re-derives the scale from the new drawing and keeps the f
 });
 
 test('semantic zoom toggles the drawn hierarchy without re-laying it out', async () => {
+  rememberShowAllFilter();
   // AC: the far level shows package frames with (N) counts and aggregated
   // package edges; the near level shows the entity UML edges again. Both come
   // from ONE layout — the SVG element the renderer emitted must never be
@@ -1440,6 +1464,7 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
 });
 
 test('the explosion view lays the whole hierarchy out once and zoom reveals its levels', async () => {
+  rememberShowAllFilter();
   // The DoD gesture: one full-graph layout, then zoom alone moves from the
   // package level to subpackages and entities — no re-layout in between.
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
@@ -1527,6 +1552,7 @@ test('overview folds the graph into path groups; clicking a group expands it loc
 });
 
 test('expanding a deep group re-groups its subtree by directory instead of flattening its files', async () => {
+  rememberShowAllFilter();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(DEEP_TREE_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
@@ -1561,6 +1587,7 @@ test('expanding a deep group re-groups its subtree by directory instead of flatt
 });
 
 test('expanding a flat directory larger than the group limit draws its files, not the same box again', async () => {
+  rememberShowAllFilter();
   // File-graph ids: project-relative, so `scripts/` is a real directory. 45
   // files is over `OVERVIEW_GROUP_LIMIT`, which used to keep the expansion a
   // single `scripts (45)` box — clicking it navigated to itself forever.
@@ -1617,6 +1644,7 @@ test('expanding a flat directory larger than the group limit draws its files, no
 });
 
 test('the overview never draws a (1) group and names an isolated file by its directory', async () => {
+  rememberShowAllFilter();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(ISOLATED_FILE_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
@@ -1671,6 +1699,7 @@ test('the display name keeps a file graph\'s first directory and strips only an 
 });
 
 test('clicking an entity drills into its neighbourhood, and the centre click adds a hop', async () => {
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1728,6 +1757,7 @@ function visibleEdgeLabels(host: HTMLElement): Element[] {
 }
 
 test('edge relation labels stay hidden until a node is hovered, then leave with the pointer', async () => {
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1796,6 +1826,7 @@ test('entity boxes are UML class shapes, and a session seed carries the seed mar
 });
 
 test('only a direct mention carries the seed marker; name/file tiers and old payloads are read correctly', async () => {
+  rememberShowAllFilter();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(MENTION_TIER_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
@@ -1822,6 +1853,7 @@ test('only a direct mention carries the seed marker; name/file tiers and old pay
 });
 
 test('hovering a node highlights its in/out edges and dims the rest', async () => {
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1869,6 +1901,7 @@ test('hovering a node highlights its in/out edges and dims the rest', async () =
 });
 
 test('the drawn SVG carries the stable ids sibling panels query', async () => {
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1896,6 +1929,7 @@ test('the drawn SVG carries the stable ids sibling panels query', async () => {
 });
 
 test('clicking an entity pins its in/out highlight and announces it to sibling panels', async () => {
+  rememberShowAllFilter();
   const selections: Array<{ id: string; incoming: string[]; outgoing: string[] }> = [];
   const listener = (event: Event): void => {
     const detail = (event as CustomEvent<{ id: string; incoming: string[]; outgoing: string[] }>).detail;
@@ -1957,6 +1991,7 @@ test('clicking an entity pins its in/out highlight and announces it to sibling p
 });
 
 test('a sibling panel selects an entity by its stable id and the graph drills to it', async () => {
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1988,15 +2023,17 @@ test('a sibling panel selects an entity by its stable id and the graph drills to
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'an external selection never re-enters the fetch');
 });
 
-test('activating the panel fetches once and the file/entity toggle never refetches', async () => {
+test('activation fetches once; a view switch re-requests because the element axis is class-only', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
-  assert.deepEqual(
-    apiMock.architectureGraph.mock.calls,
-    [['project-1', 'session-1', 2]],
-    'activation must POST exactly once for the selected project/session at the default depth',
-  );
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'activation must POST exactly once');
+  const first = apiMock.architectureGraph.mock.calls[0] as unknown[];
+  assert.deepEqual(first.slice(0, 3), ['project-1', 'session-1', 2], 'the default depth is the remembered one');
+  // The file view has no element kind, so its request carries the relation axis
+  // alone; the class view below adds `kinds`.
+  assert.deepEqual(first[3], { relations: ['inheritance', 'implementation', 'composition', 'dependency'] });
+
   // The two subgraphs are read with DIFFERENT id shapes from the same payload:
   // the entity ids carry the opaque scope key (`src` here) as their first
   // segment, while the file ids are already project-relative, so `src/` IS a
@@ -2004,31 +2041,41 @@ test('activating the panel fetches once and the file/entity toggle never refetch
   assert.ok(host.querySelector('[data-entity-id="grp::src/modules/alpha"]'), 'the file graph is drawn first');
 
   fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
-  // Changing granularity remounts the graph (the panel keys it by session+granularity),
-  // so re-acquire the host rather than reusing the file graph's detached element.
+  // The drawing switches at once (both subgraphs arrived in the payload); the
+  // request follows after the debounce because the element axis now applies.
   const entityHost = await waitForDiagram();
   await waitFor(() => {
     assert.ok(entityHost.querySelector('[data-entity-id="grp::modules/alpha"]'), 'the entity graph opens at the overview');
   });
+  await waitFor(() => {
+    // The drawing switched immediately; the request follows the debounce.
+    assert.equal(apiMock.architectureGraph.mock.calls.length, 2);
+  });
+  assert.deepEqual((apiMock.architectureGraph.mock.calls[1] as unknown[])[3], {
+    kinds: ['class', 'interface', 'enum', 'abstract'],
+    relations: ['inheritance', 'implementation', 'composition', 'dependency'],
+  });
+
   // Expanding a group proves the entity payload is the one being drawn: its
   // entity ids are `<scope>/<relpath>.<EntityName>`, unlike the file keys.
   fireEvent.click(entityHost.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
   await waitFor(() => {
     assert.ok(
       entityHost.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]'),
-      'the entity graph is drawn from the same payload',
+      'the entity graph is drawn from the arrived payload',
     );
   });
-  assert.equal(
-    apiMock.architectureGraph.mock.calls.length,
-    1,
-    'the entity toggle selects a subgraph that is already in hand — it must not refetch',
-  );
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'expanding a group is local');
 
   fireEvent.click(screen.getByRole('radio', { name: 'File graph' }));
   const fileHost = await waitForDiagram();
   await waitFor(() => assert.ok(fileHost.querySelector('[data-entity-id="grp::src/modules/alpha"]')));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3));
+  assert.equal(
+    'kinds' in ((apiMock.architectureGraph.mock.calls[2] as unknown[])[3] as Record<string, unknown>),
+    false,
+    'the file view never sends the element axis',
+  );
 });
 
 test('the renderer is reached through a dynamic import, never the first-screen chunk', () => {
@@ -2120,10 +2167,10 @@ test('the scope stepper re-requests the selected depth and clamps to 0..3', asyn
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the first request asks for the remembered default depth');
   assert.deepEqual(
-    apiMock.architectureGraph.mock.calls,
-    [['project-1', 'session-1', 2]],
-    'the first request asks for the remembered default depth',
+    (apiMock.architectureGraph.mock.calls[0] as unknown[]).slice(0, 3),
+    ['project-1', 'session-1', 2],
   );
 
   const readout = (): HTMLElement | null => document.querySelector('[role="spinbutton"]');
@@ -2140,9 +2187,9 @@ test('the scope stepper re-requests the selected depth and clamps to 0..3', asyn
 
   fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
-  assert.deepEqual(
-    apiMock.architectureGraph.mock.calls[1],
-    ['project-1', 'session-1', 1],
+  assert.equal(
+    (apiMock.architectureGraph.mock.calls[1] as unknown[])[2],
+    1,
     'lowering the scope must refetch with hops=1',
   );
   assert.equal(readout()?.getAttribute('aria-valuenow'), '1', 'aria-valuenow follows the displayed value');
@@ -2152,7 +2199,7 @@ test('the scope stepper re-requests the selected depth and clamps to 0..3', asyn
   // below it (the clamp also holds if a stale stored value or key event tries).
   fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3));
-  assert.deepEqual(apiMock.architectureGraph.mock.calls[2], ['project-1', 'session-1', 0]);
+  assert.equal((apiMock.architectureGraph.mock.calls[2] as unknown[])[2], 0);
   const decrease = document.querySelector('[data-architecture-scope-decrease]');
   assert.ok(decrease instanceof HTMLButtonElement);
   assert.equal(decrease.disabled, true, 'the stepper disables − at scope 0');
@@ -2250,6 +2297,7 @@ test('the one-line readout reports the shown and in-scope numbers from the detai
 });
 
 test('an over-budget graph is capped before layout, and the readout says so with no render-all escape', async () => {
+  rememberShowAllFilter();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(OVER_BUDGET_RESULT));
   const seen: ArchitectureRendererProps[] = [];
   function StandInRenderer(props: ArchitectureRendererProps) {
@@ -2315,7 +2363,7 @@ test('both knobs are remembered per project across sessions and remounts', async
   assert.equal(document.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'), '1');
   assert.equal(document.querySelector('[data-architecture-detail-option="core"]')?.getAttribute('aria-checked'), 'true');
   assert.deepEqual(
-    apiMock.architectureGraph.mock.calls.at(-1),
+    (apiMock.architectureGraph.mock.calls.at(-1) as unknown[]).slice(0, 3),
     ['project-1', 'session-2', 1],
     'the remembered scope must drive the request for a sibling session too',
   );
@@ -2326,7 +2374,7 @@ test('both knobs are remembered per project across sessions and remounts', async
   await waitForDiagram();
   assert.equal(document.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'), '2');
   assert.equal(document.querySelector('[data-architecture-detail-option="all"]')?.getAttribute('aria-checked'), 'true');
-  assert.deepEqual(apiMock.architectureGraph.mock.calls.at(-1), ['project-2', 'session-3', 2]);
+  assert.deepEqual((apiMock.architectureGraph.mock.calls.at(-1) as unknown[]).slice(0, 3), ['project-2', 'session-3', 2]);
 });
 
 test('the export menu writes the server-returned .mmd document; there is no standalone Export .mmd button', async () => {
@@ -2678,6 +2726,343 @@ test('searching the class diagram reveals and centres the node; a folded hit rep
   } finally {
     Element.prototype.getBoundingClientRect = originalRect;
   }
+});
+
+/**
+ * A class-view payload in the shape the SERVER returns once the default filter
+ * has run: three structural entities, no functions, no `call` edges, and the
+ * filter's own counts (`stats.hidden` / `stats.relationCounts`) describing the
+ * unfiltered scope it was cut from.
+ */
+const FILTER_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        {
+          id: 'src/modules/filter/Seed.ts.Seed',
+          label: 'Seed',
+          distance: 0,
+          kind: 'class',
+          mentionTier: 'direct',
+        },
+        { id: 'src/modules/filter/Svc.ts.Svc', label: 'Svc', distance: 1, kind: 'class' },
+        { id: 'src/modules/filter/Api.ts.Api', label: 'Api', distance: 2, kind: 'interface' },
+      ],
+      edges: [
+        { from: 'src/modules/filter/Svc.ts.Svc', to: 'src/modules/filter/Seed.ts.Seed', relationType: 'dependency' },
+        { from: 'src/modules/filter/Svc.ts.Svc', to: 'src/modules/filter/Api.ts.Api', relationType: 'composition' },
+      ],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 3,
+    entityEdges: 2,
+    entityTotal: 3,
+    entityTruncated: false,
+    truncated: false,
+    kindCounts: { class: 2, interface: 1, function: 4, other: 1 },
+    relationCounts: { dependency: 1, composition: 1, call: 5 },
+    hidden: { byKind: { function: 4, other: 1 }, byRelation: { call: 5 }, isolated: 0 },
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
+ * An UNFILTERED entity payload that contains both noise classes, so a case can
+ * prove the CLIENT half of the filter (narrowing is answered locally) without
+ * a server that already cut the graph.
+ */
+const UNFILTERED_FILTER_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        { id: 'src/modules/filter/Seed.ts.Seed', label: 'Seed', distance: 0, kind: 'class' },
+        { id: 'src/modules/filter/Svc.ts.Svc', label: 'Svc', distance: 1, kind: 'class' },
+        { id: 'src/modules/filter/Fn.ts.Fn', label: 'Fn', distance: 1, kind: 'function' },
+        { id: 'src/modules/filter/Api.ts.Api', label: 'Api', distance: 2, kind: 'interface' },
+      ],
+      edges: [
+        { from: 'src/modules/filter/Svc.ts.Svc', to: 'src/modules/filter/Seed.ts.Seed', relationType: 'dependency' },
+        { from: 'src/modules/filter/Svc.ts.Svc', to: 'src/modules/filter/Fn.ts.Fn', relationType: 'call' },
+        // A call between two STRUCTURAL nodes: the relation axis must count it
+        // even though the other call disappears with its function endpoint.
+        { from: 'src/modules/filter/Seed.ts.Seed', to: 'src/modules/filter/Api.ts.Api', relationType: 'call' },
+        { from: 'src/modules/filter/Svc.ts.Svc', to: 'src/modules/filter/Api.ts.Api', relationType: 'composition' },
+      ],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 4,
+    entityEdges: 4,
+    entityTotal: 4,
+    entityTruncated: false,
+    truncated: false,
+    kindCounts: { class: 2, interface: 1, function: 1 },
+    seedFiles: 1,
+    seedIdentifiers: 0,
+    unresolved: { files: [], identifiers: [] },
+  },
+  provenance: RESULT.provenance,
+};
+
+/** Open the filter disclosure and return its menu. */
+async function openFilterMenu(): Promise<HTMLElement> {
+  fireEvent.click(screen.getByRole('button', { name: /Filter ▾/ }));
+  const menu = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-filter-menu]');
+    assert.ok(node instanceof HTMLElement, 'the filter disclosure must open a menu');
+    return node;
+  });
+  return menu;
+}
+
+test('the default filter draws no function box and no call edge, and the readout states what it hid', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(UNFILTERED_FILTER_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+
+  // ① The client default: functions and `call` edges are gone before drawing.
+  assert.deepEqual(
+    latest().graph.nodes.map((node) => node.id),
+    ['src/modules/filter/Seed.ts.Seed', 'src/modules/filter/Svc.ts.Svc', 'src/modules/filter/Api.ts.Api'],
+    'the function is not handed to the renderer',
+  );
+  assert.deepEqual(
+    latest().graph.edges.map((edge) => `${edge.from}->${edge.to}:${edge.relationType}`),
+    [
+      'src/modules/filter/Svc.ts.Svc->src/modules/filter/Seed.ts.Seed:dependency',
+      'src/modules/filter/Svc.ts.Svc->src/modules/filter/Api.ts.Api:composition',
+    ],
+    'the call edge is not handed to the renderer',
+  );
+
+  // ② The readout's SECOND line states what was hidden (the payload carried no
+  //    server counts, so the reading is the client's own cut).
+  const hidden = document.querySelector('[data-architecture-filter-hidden]');
+  assert.ok(hidden instanceof HTMLElement, 'the readout must carry the hidden reading');
+  assert.equal(hidden.getAttribute('data-architecture-filter-hidden'), '2', 'one function + one call edge');
+  assert.equal(hidden.getAttribute('data-architecture-filter-hidden-kinds'), JSON.stringify({ function: 1 }));
+  assert.equal(hidden.getAttribute('data-architecture-filter-hidden-relations'), JSON.stringify({ call: 1 }));
+  assert.match(hidden.textContent ?? '', /1 functions/, 'the function count is named');
+  assert.match(hidden.textContent ?? '', /1 call relations/, 'the call count is named');
+  assert.ok(hidden.querySelector('[data-architecture-filter-show-all]'), 'the line offers the one-click reset');
+
+  // ③ The toolbar badge counts the active decisions (2 hidden kinds + preset +
+  //    isolated), so the disclosure says how much it is doing.
+  assert.equal(
+    document.querySelector('[data-architecture-filter-badge]')?.getAttribute('data-architecture-filter-badge'),
+    '4',
+  );
+});
+
+test('the filter popover carries element counts, the three relation presets and the isolated toggle', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const menu = await openFilterMenu();
+
+  // The element axis: all six kinds, each with the scope's count.
+  const elements = menu.querySelector('[data-architecture-filter-elements]');
+  assert.ok(elements instanceof HTMLElement, 'the class view offers the element axis');
+  const kinds = [...menu.querySelectorAll('[data-architecture-filter-kind]')];
+  assert.deepEqual(
+    kinds.map((node) => node.getAttribute('data-architecture-filter-kind')),
+    ['class', 'interface', 'enum', 'abstract', 'function', 'other'],
+  );
+  assert.equal(
+    menu.querySelector('[data-architecture-filter-kind="function"]')?.getAttribute('aria-checked'),
+    'false',
+    'functions are hidden by default',
+  );
+  assert.equal(
+    menu.querySelector('[data-architecture-filter-kind="class"]')?.getAttribute('aria-checked'),
+    'true',
+  );
+  assert.match(
+    menu.querySelector('[data-architecture-filter-kind="function"]')?.textContent ?? '',
+    /4 functions/,
+    'the count comes from the payload’s kindCounts',
+  );
+
+  // The relation axis: exactly three presets, with the shipped one selected.
+  const presets = [...menu.querySelectorAll('[data-architecture-filter-relation]')];
+  assert.deepEqual(
+    presets.map((node) => node.getAttribute('data-architecture-filter-relation')),
+    ['structural', 'dependency', 'call'],
+  );
+  assert.equal(
+    menu.querySelector('[data-architecture-filter-relation="dependency"]')?.getAttribute('aria-checked'),
+    'true',
+  );
+
+  // The isolated toggle, on because the relation set is narrowed.
+  assert.equal(
+    menu.querySelector('[data-architecture-filter-isolated]')?.getAttribute('aria-checked'),
+    'true',
+  );
+});
+
+test('narrowing filters the payload in hand; widening re-requests and keeps the old drawing busy', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+
+  // Narrowing: the relation preset moves to `structural`, which keeps only the
+  // composition edge. No request may follow.
+  await openFilterMenu();
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
+  await waitFor(() => assert.equal(latest().graph.edges.length, 1));
+  assert.equal(latest().graph.edges[0]?.relationType, 'composition');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'narrowing is answered from the payload in hand');
+
+  // Give the debounce more than its window: a narrowing must not schedule one.
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no deferred request either');
+
+  // Widening: "Show all" restores every kind and relation. The request is
+  // deferred, and the OLD drawing stays on screen (and busy) until it lands.
+  // The response arrives well after the debounce, so the in-flight window is
+  // observable; it always settles, so a failed assertion cannot leave the run
+  // waiting on a promise nobody resolves.
+  apiMock.architectureGraph.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+    setTimeout(() => resolve(jsonResponse(FILTER_RESULT)), 1200);
+  }));
+  fireEvent.click(document.querySelector('[data-architecture-filter-show-all]') as Element);
+
+  // A sleep, not `waitFor`: the in-flight window is exactly the state a polling
+  // `act` wrapper handles badly, and these readings are about the window's
+  // CONTENT, not about whether polling can observe it.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the widened selection was requested');
+  const busy = document.querySelector('[data-architecture-refreshing="true"]');
+  assert.ok(busy instanceof HTMLElement, 'the drawing is marked busy while the widened reading is computed');
+  assert.equal(busy.getAttribute('aria-busy'), 'true');
+  assert.equal(
+    latest().graph.nodes.length,
+    3,
+    'the old drawing is still the one on screen (not blanked, not emptied)',
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(document.querySelector('[data-architecture-refreshing="true"]'), null, 'the busy state clears');
+  assert.equal(latest().graph.edges.length, 2, 'the new reading replaces the old one');
+});
+
+test('a truncated reading makes a narrowing re-fetch in the background (budget may have freed up)', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse({
+    ...FILTER_RESULT,
+    stats: { ...FILTER_RESULT.stats, entityTruncated: true, truncated: true, entityTotal: 9 },
+  }));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
+
+  await openFilterMenu();
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
+
+  // Narrowing still renders from the payload at once. A sleep rather than
+  // `waitFor`: the request it also schedules puts the drawing in the in-flight
+  // state, which a polling `act` wrapper handles badly.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2);
+  // …and asks the server because the arrived reading was cut.
+  assert.ok(
+    (apiMock.architectureGraph.mock.calls[1] as unknown[])[3],
+    'a truncated narrowing sends its filter to the server',
+  );
+});
+
+test('the filter is remembered per project, and another project starts from the default', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  await openFilterMenu();
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
+  await waitFor(() =>
+    assert.equal(
+      document.querySelector('[data-architecture-filter-relation="structural"]')?.getAttribute('aria-checked'),
+      'true',
+    ),
+  );
+  first.unmount();
+
+  // The same project, a different session: the selection comes back, and the
+  // first request already carries it.
+  const second = render(<ArchitecturePanel projectId="project-1" sessionId="session-2" />);
+  await waitForDiagram();
+  await openFilterMenu();
+  assert.equal(
+    document.querySelector('[data-architecture-filter-relation="structural"]')?.getAttribute('aria-checked'),
+    'true',
+    'the remembered preset drives the reopened popover',
+  );
+  assert.deepEqual(
+    ((apiMock.architectureGraph.mock.calls.at(-1) as unknown[])[3] as { relations: string[] }).relations,
+    ['inheritance', 'implementation', 'composition'],
+    'the remembered preset drives the first request too',
+  );
+  second.unmount();
+
+  // Another project is isolated: the shipped default, not project-1's preset.
+  render(<ArchitecturePanel projectId="project-2" sessionId="session-3" />);
+  await waitForDiagram();
+  await openFilterMenu();
+  assert.equal(
+    document.querySelector('[data-architecture-filter-relation="dependency"]')?.getAttribute('aria-checked'),
+    'true',
+    'another project starts from the default',
+  );
+});
+
+test('the file view has no element section (a file has no kind); the class view does', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  await openFilterMenu();
+  assert.equal(
+    document.querySelector('[data-architecture-filter-elements]'),
+    null,
+    'the file view does not draw an element section',
+  );
+  assert.ok(
+    document.querySelector('[data-architecture-filter-relations]'),
+    'the relation axis applies to files too',
+  );
+
+  fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-filter-elements]')));
 });
 
 test('every reviewed locale carries both fit labels and the focused-fit escape', () => {

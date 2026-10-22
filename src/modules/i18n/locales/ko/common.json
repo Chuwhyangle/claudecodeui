@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "이 세션에서 언급된 이름 {{count}}개를 분석 캐시에서 찾지 못했습니다",
       "listLabel": "미해결 이름"
+    },
+    "filter": {
+      "menu": "필터 ▾",
+      "badge": "{{count}}개 사용",
+      "elements": "요소",
+      "relations": "관계",
+      "isolated": "고립된 노드 숨기기",
+      "showAll": "▸ 모두 표시",
+      "hiddenPrefix": "{{parts}} 숨김",
+      "relationPart": "{{count}}개의 {{kind}} 관계",
+      "isolatedPart": "{{count}}개의 고립된 노드",
+      "relDependency": "의존",
+      "relCall": "호출",
+      "relationStructural": "구조",
+      "relationDependency": "+의존",
+      "relationCall": "+호출",
+      "kindClass": "클래스",
+      "kindInterface": "인터페이스",
+      "kindEnum": "열거형",
+      "kindAbstract": "추상 클래스",
+      "kindFunction": "함수",
+      "kindOther": "기타"
     }
   },
   "status": {

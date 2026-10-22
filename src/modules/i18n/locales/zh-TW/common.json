@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "本次工作階段中提到的 {{count}} 個名稱未在分析快取中找到",
       "listLabel": "未解析的名稱"
+    },
+    "filter": {
+      "menu": "篩選 ▾",
+      "badge": "已啟用 {{count}} 項",
+      "elements": "元素",
+      "relations": "關係",
+      "isolated": "隱藏孤立節點",
+      "showAll": "▸ 全部顯示",
+      "hiddenPrefix": "已隱藏 {{parts}}",
+      "relationPart": "{{count}} 條{{kind}}關係",
+      "isolatedPart": "{{count}} 個孤立節點",
+      "relDependency": "依賴",
+      "relCall": "呼叫",
+      "relationStructural": "結構",
+      "relationDependency": "+依賴",
+      "relationCall": "+呼叫",
+      "kindClass": "類別",
+      "kindInterface": "介面",
+      "kindEnum": "列舉",
+      "kindAbstract": "抽象類別",
+      "kindFunction": "函式",
+      "kindOther": "其他"
     }
   },
   "status": {

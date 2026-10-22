@@ -38,6 +38,7 @@ import type { NormalizedMessage } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
 
 import {
+  generateGraph,
   validateMermaid,
   type GenerateGraphResult,
   type GraphSeeds,
@@ -1143,6 +1144,276 @@ test('mentions 索引缓存：同一历史上第二次相同请求不重建倒�
  * token) so the transport criteria are read here too. The token value itself is
  * irrelevant — the middleware stops at its absence.
  */
+/*
+ * The element/relation filter, read through the real request path.
+ *
+ * One scope with three structural entities, one function and one class that is
+ * reachable ONLY through the function. The archive supplies the kinds, the index
+ * supplies typed relations (call + dependency + composition), and the transcript
+ * names `Seed` — a unique name, so a `direct` tier seed.
+ */
+const FILTER_PROJECT_INDEX: ScopeIndexFixture = {
+  fileToIds: {
+    'a.ts': ['Seed'],
+    'fn.ts': ['Fn'],
+    'svc.ts': ['Svc'],
+    'api.ts': ['Api'],
+    'deep.ts': ['Deep'],
+  },
+  nameToIds: { Seed: ['Seed'], Fn: ['Fn'], Svc: ['Svc'], Api: ['Api'], Deep: ['Deep'] },
+  idToFile: { Seed: 'a.ts', Fn: 'fn.ts', Svc: 'svc.ts', Api: 'api.ts', Deep: 'deep.ts' },
+  idToName: { Seed: 'Seed', Fn: 'Fn', Svc: 'Svc', Api: 'Api', Deep: 'Deep' },
+  dependencies: {
+    Seed: ['Fn', 'Svc'],
+    Fn: ['Deep'],
+    Svc: ['Api'],
+    Api: [],
+    Deep: [],
+  },
+  dependents: {
+    Seed: [],
+    Fn: ['Seed'],
+    Svc: ['Seed'],
+    Api: ['Svc'],
+    Deep: ['Fn'],
+  },
+  relationsByType: {
+    call: [['Seed', 'Fn']],
+    dependency: [['Seed', 'Svc'], ['Fn', 'Deep']],
+    composition: [['Svc', 'Api']],
+  },
+};
+
+const FILTER_ARCHIVE = archiveWith([
+  { id: 'Seed', name: 'Seed', type: 'class', members: [] },
+  { id: 'Fn', name: 'Fn', type: 'function', members: [] },
+  { id: 'Svc', name: 'Svc', type: 'class', members: [] },
+  { id: 'Api', name: 'Api', type: 'interface', members: [] },
+  { id: 'Deep', name: 'Deep', type: 'class', members: [] },
+]);
+
+const STRUCTURAL_KIND_VALUES = ['class', 'interface', 'enum', 'abstract'];
+const SEED_TRANSCRIPT = [
+  message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Start at `Seed`.' }),
+];
+
+const entityIdSet = (body: NeighborhoodBody): string[] => body.graph.entity.nodes.map((node) => node.id).sort();
+const edgeKeySet = (body: NeighborhoodBody): string[] =>
+  body.graph.entity.edges.map((edge) => `${edge.from}->${edge.to}:${edge.relationType}`).sort();
+
+type FilterBody = NeighborhoodBody & {
+  mmd: { file: string; entity: string };
+  stats: NeighborhoodBody['stats'] & {
+    relationCounts?: Record<string, number>;
+    hidden?: { byKind: Record<string, number>; byRelation: Record<string, number>; isolated: number };
+  };
+};
+
+test('no filter request keeps the pre-filter payload shape; the same reading is byte-identical', async (t) => {
+  const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
+
+  const unfiltered = (await readGraphBody(root, SEED_TRANSCRIPT, { hops: 2 })) as FilterBody;
+  console.log(
+    `filter reading: unfiltered nodes=${JSON.stringify(entityIdSet(unfiltered))} ` +
+      `statsKeys=${JSON.stringify(Object.keys(unfiltered.stats).sort())}`,
+  );
+
+  // ① Neither filter-only readout exists when the request carried no filter:
+  //    the payload keeps its exact pre-filter key set, so an old client cannot
+  //    tell the feature shipped.
+  assert.equal('hidden' in unfiltered.stats, false, 'no filter ⇒ no hidden readout');
+  assert.equal('relationCounts' in unfiltered.stats, false, 'no filter ⇒ no relation tally');
+  assert.equal(unfiltered.stats.entityTotal, 5, 'the unfiltered two-hop scope is the whole chain');
+  assert.deepEqual(entityIdSet(unfiltered), [
+    'scope-src/Api',
+    'scope-src/Deep',
+    'scope-src/Fn',
+    'scope-src/Seed',
+    'scope-src/Svc',
+  ]);
+
+  // ② Explicitly asking for every kind and every relation is the SAME reading:
+  //    same nodes, same edges, same Mermaid documents. That is what makes the
+  //    absent-parameter path "the old behaviour" rather than a different mode.
+  const explicitlyAll = (await readGraphBody(root, SEED_TRANSCRIPT, {
+    hops: 2,
+    kinds: ['class', 'interface', 'enum', 'abstract', 'function', 'other'],
+    relations: ['dependency', 'call', 'composition', 'inheritance', 'implementation'],
+  })) as FilterBody;
+  assert.deepEqual(entityIdSet(explicitlyAll), entityIdSet(unfiltered));
+  assert.deepEqual(edgeKeySet(explicitlyAll), edgeKeySet(unfiltered));
+  assert.deepEqual(explicitlyAll.mmd, unfiltered.mmd, 'the export documents are identical too');
+  assert.deepEqual(explicitlyAll.stats.hidden, { byKind: {}, byRelation: {}, isolated: 0 });
+  assert.deepEqual(explicitlyAll.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
+});
+
+test('a kinds filter removes the kind before the BFS: its descendants are unreachable, its seeds survive', async (t) => {
+  const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
+
+  const filtered = (await readGraphBody(root, SEED_TRANSCRIPT, {
+    hops: 2,
+    kinds: STRUCTURAL_KIND_VALUES,
+  })) as FilterBody;
+  console.log(
+    `filter reading: kinds-only nodes=${JSON.stringify(entityIdSet(filtered))} ` +
+      `edges=${JSON.stringify(edgeKeySet(filtered))} hidden=${JSON.stringify(filtered.stats.hidden)} ` +
+      `relationCounts=${JSON.stringify(filtered.stats.relationCounts)}`,
+  );
+
+  assert.deepEqual(entityIdSet(filtered), ['scope-src/Api', 'scope-src/Seed', 'scope-src/Svc']);
+  assert.equal(entityIdSet(filtered).includes('scope-src/Fn'), false, 'the function is hidden');
+  assert.equal(
+    entityIdSet(filtered).includes('scope-src/Deep'),
+    false,
+    'a class reachable ONLY through the hidden function is unreachable',
+  );
+  assert.deepEqual(edgeKeySet(filtered), [
+    'scope-src/Seed->scope-src/Svc:dependency',
+    'scope-src/Svc->scope-src/Api:composition',
+  ]);
+  assert.equal(filtered.stats.entityTotal, 3, 'the in-scope total the readout shows is the filtered one');
+
+  // The hidden counts are UNFILTERED readings: one function, and every edge of
+  // the unfiltered scope by type.
+  assert.deepEqual(filtered.stats.hidden, { byKind: { function: 1 }, byRelation: {}, isolated: 0 });
+  assert.deepEqual(filtered.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
+  // The element popover can still say "1 function" while hiding it.
+  assert.deepEqual(filtered.stats.kindCounts, { class: 3, function: 1, interface: 1 });
+
+  // A seed the transcript names DIRECTLY survives its hidden kind: adding `Fn`
+  // to the transcript makes it a direct seed, which is the one exemption.
+  const directSeed = (await readGraphBody(
+    root,
+    [
+      ...SEED_TRANSCRIPT,
+      message({ id: 'text-2', kind: 'text', role: 'assistant', content: 'It calls `Fn` directly.' }),
+    ],
+    { hops: 2, kinds: STRUCTURAL_KIND_VALUES },
+  )) as FilterBody;
+  assert.ok(
+    entityIdSet(directSeed).includes('scope-src/Fn'),
+    'a directly mentioned function is never hidden by the element filter',
+  );
+  assert.deepEqual(directSeed.stats.hidden?.byKind, {}, 'the direct function is not counted as hidden');
+});
+
+test('a relations filter expands only along the allowed types and emits only them', async (t) => {
+  const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
+
+  const dependencyOnly = (await readGraphBody(root, SEED_TRANSCRIPT, {
+    hops: 2,
+    relations: ['dependency'],
+  })) as FilterBody;
+  console.log(
+    `filter reading: dependency-only nodes=${JSON.stringify(entityIdSet(dependencyOnly))} ` +
+      `edges=${JSON.stringify(edgeKeySet(dependencyOnly))} hidden=${JSON.stringify(dependencyOnly.stats.hidden)}`,
+  );
+
+  // Seed →(call) Fn is not followed, and Svc →(composition) Api is not either.
+  assert.deepEqual(entityIdSet(dependencyOnly), ['scope-src/Seed', 'scope-src/Svc']);
+  assert.deepEqual(edgeKeySet(dependencyOnly), ['scope-src/Seed->scope-src/Svc:dependency']);
+  assert.deepEqual(dependencyOnly.stats.hidden?.byRelation, { call: 1, composition: 1 });
+  assert.deepEqual(dependencyOnly.stats.hidden?.byKind, {}, 'the element axis was not requested');
+  assert.deepEqual(dependencyOnly.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
+});
+
+test('the filter participates in the content-addressed cache key (and a repeat is a hit)', async (t) => {
+  const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
+  const generatorCalls: Array<{ kinds?: readonly string[]; relations?: readonly string[] }> = [];
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => SEED_TRANSCRIPT,
+        // The real generator, counted: the call count IS the reading of "did the
+        // cache recompute this combination".
+        generateGraph: (...args) => {
+          generatorCalls.push({
+            ...(args[2].kinds === undefined ? {} : { kinds: args[2].kinds }),
+            ...(args[2].relations === undefined ? {} : { relations: args[2].relations }),
+          });
+          return generateGraph(...args);
+        },
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  await withServer(app, async (baseUrl) => {
+    const base = { projectId: 'project-1', sessionId: SESSION_ID, hops: 2 };
+    const structural = await postGraph(baseUrl, { ...base, kinds: STRUCTURAL_KIND_VALUES });
+    assert.equal(structural.status, 200);
+    let body = (await structural.json()) as FilterBody;
+    assert.equal(body.provenance.cacheHit, false, 'the first filtered request is a miss');
+    assert.equal(generatorCalls.length, 1);
+
+    const dependencyOnly = await postGraph(baseUrl, {
+      ...base,
+      kinds: STRUCTURAL_KIND_VALUES,
+      relations: ['dependency'],
+    });
+    assert.equal(dependencyOnly.status, 200);
+    body = (await dependencyOnly.json()) as FilterBody;
+    assert.equal(body.provenance.cacheHit, false, 'a different filter is a different key');
+    assert.equal(generatorCalls.length, 2);
+
+    const repeat = await postGraph(baseUrl, { ...base, kinds: STRUCTURAL_KIND_VALUES });
+    assert.equal(repeat.status, 200);
+    body = (await repeat.json()) as FilterBody;
+    assert.equal(body.provenance.cacheHit, true, 'the same combination must not be recomputed');
+    assert.equal(generatorCalls.length, 2, 'the repeated combination performed no second generation');
+
+    // The unfiltered reading is yet another key.
+    assert.equal((await postGraph(baseUrl, base)).status, 200);
+    assert.equal(generatorCalls.length, 3);
+    assert.equal(generatorCalls[2]?.kinds, undefined, 'the unfiltered request carries no filtered params');
+    assert.equal(generatorCalls[2]?.relations, undefined);
+  });
+  console.log(`filter reading: generator calls=${JSON.stringify(generatorCalls)}`);
+});
+
+test('an unknown kind or relation type is refused with 400 rather than silently dropped', async (t) => {
+  const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => SEED_TRANSCRIPT,
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  await withServer(app, async (baseUrl) => {
+    const base = { projectId: 'project-1', sessionId: SESSION_ID };
+    for (const request of [
+      { ...base, kinds: ['class', 'rocket'] },
+      { ...base, relations: ['dependency', 'handshake'] },
+      { ...base, kinds: 'class' },
+      { ...base, relations: [1] },
+    ]) {
+      const response = await postGraph(baseUrl, request);
+      assert.equal(response.status, 400, `expected 400 for ${JSON.stringify(request)}`);
+      const body = (await response.json()) as { error: { code: string } };
+      assert.equal(body.error.code, 'INVALID_REQUEST');
+    }
+
+    // An EMPTY array is legal and means "show none of that axis" — every
+    // non-exempt entity goes, and only the direct seed is left.
+    const empty = await postGraph(baseUrl, { ...base, kinds: [], hops: 0 });
+    assert.equal(empty.status, 200);
+    const body = (await empty.json()) as FilterBody;
+    assert.deepEqual(entityIdSet(body), ['scope-src/Seed'], 'kinds: [] hides every non-exempt entity');
+    assert.deepEqual(body.stats.hidden?.byKind, {}, 'a distance-0 direct seed keeps its hidden kind intact');
+  });
+});
+
 test('mentions 未登录 401，缺参数 400', async (t) => {
   const { root } = createIndexProject(t, MENTION_INDEX);
   const app = express();

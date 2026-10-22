@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "{{count}} имён, упомянутых в этой сессии, не найдено в кэше анализа",
       "listLabel": "Нераспознанные имена"
+    },
+    "filter": {
+      "menu": "Фильтр ▾",
+      "badge": "{{count}} вкл.",
+      "elements": "Элементы",
+      "relations": "Связи",
+      "isolated": "Скрыть изолированные узлы",
+      "showAll": "▸ Показать всё",
+      "hiddenPrefix": "Скрыто {{parts}}",
+      "relationPart": "{{count}} связей {{kind}}",
+      "isolatedPart": "{{count}} изолированных узлов",
+      "relDependency": "зависимость",
+      "relCall": "вызов",
+      "relationStructural": "Структурные",
+      "relationDependency": "+Зависимости",
+      "relationCall": "+Вызовы",
+      "kindClass": "классы",
+      "kindInterface": "интерфейсы",
+      "kindEnum": "перечисления",
+      "kindAbstract": "абстрактные классы",
+      "kindFunction": "функции",
+      "kindOther": "прочие"
     }
   },
   "status": {

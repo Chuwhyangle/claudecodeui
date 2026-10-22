@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "本次会话中提到的 {{count}} 个名字未在分析缓存中找到",
       "listLabel": "未解析的名字"
+    },
+    "filter": {
+      "menu": "筛选 ▾",
+      "badge": "已启用 {{count}} 项",
+      "elements": "元素",
+      "relations": "关系",
+      "isolated": "隐藏孤立节点",
+      "showAll": "▸ 全部显示",
+      "hiddenPrefix": "已隐藏 {{parts}}",
+      "relationPart": "{{count}} 条{{kind}}关系",
+      "isolatedPart": "{{count}} 个孤立节点",
+      "relDependency": "依赖",
+      "relCall": "调用",
+      "relationStructural": "结构",
+      "relationDependency": "+依赖",
+      "relationCall": "+调用",
+      "kindClass": "类",
+      "kindInterface": "接口",
+      "kindEnum": "枚举",
+      "kindAbstract": "抽象类",
+      "kindFunction": "函数",
+      "kindOther": "其他"
     }
   },
   "status": {

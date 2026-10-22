@@ -143,6 +143,28 @@
     "source": {
       "unresolved": "{{count}} nomi menzionati in questa sessione non sono stati trovati nella cache di analisi",
       "listLabel": "Nomi non risolti"
+    },
+    "filter": {
+      "menu": "Filtro ▾",
+      "badge": "{{count}} attivi",
+      "elements": "Elementi",
+      "relations": "Relazioni",
+      "isolated": "Nascondi nodi isolati",
+      "showAll": "▸ Mostra tutto",
+      "hiddenPrefix": "Nascosti {{parts}}",
+      "relationPart": "{{count}} relazioni {{kind}}",
+      "isolatedPart": "{{count}} nodi isolati",
+      "relDependency": "dipendenza",
+      "relCall": "chiamata",
+      "relationStructural": "Strutturale",
+      "relationDependency": "+Dipendenze",
+      "relationCall": "+Chiamate",
+      "kindClass": "classi",
+      "kindInterface": "interfacce",
+      "kindEnum": "enum",
+      "kindAbstract": "classi astratte",
+      "kindFunction": "funzioni",
+      "kindOther": "altri"
     }
   },
   "status": {

@@ -158,6 +158,10 @@ export type ArchitectureGraphInput = {
   readonly sessionId: string;
   readonly hops?: number;
   readonly maxNodes?: number;
+  /** Entity kinds to keep; omitted means no element filter (the old reading). */
+  readonly kinds?: readonly EntityKind[];
+  /** Relation types to keep; omitted means no relation filter (the old reading). */
+  readonly relations?: readonly RelationType[];
 };
 
 /** The generation knobs that participate in the content-addressed cache key. */
@@ -167,6 +171,16 @@ export type ArchitectureGraphParams = {
   readonly maxFiles: number;
   /** Per-entity member cap; part of the key because it changes the payload. */
   readonly maxMembers: number;
+  /**
+   * The element filter, present only when the request asked for one. It is part
+   * of the content key because it changes the graph itself (the BFS and the
+   * budget run on the filtered graph), so two filters can never share a cached
+   * reading. Omitted — not `undefined` — keeps the no-filter key byte-identical
+   * to the pre-filter one.
+   */
+  readonly kinds?: readonly EntityKind[];
+  /** The relation filter, same presence rule as {@link kinds}. */
+  readonly relations?: readonly RelationType[];
 };
 
 /** How many seeds the transcript yielded, before any were resolved. */
@@ -1046,6 +1060,11 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         maxNodes: input.maxNodes ?? DEFAULT_MAX_NODES,
         maxFiles: DEFAULT_MAX_FILES,
         maxMembers: DEFAULT_MAX_MEMBERS,
+        // Spread rather than assign: an absent filter must not put a `kinds:
+        // undefined` key into the content-addressed params, or the same reading
+        // would hash differently from the pre-filter one.
+        ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+        ...(input.relations === undefined ? {} : { relations: input.relations }),
       };
       const fingerprints = refs.map((ref, index) => ({
         scope: scopeKeys[index],

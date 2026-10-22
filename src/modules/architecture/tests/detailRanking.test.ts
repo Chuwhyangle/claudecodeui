@@ -9,6 +9,10 @@ import {
   rankArchitectureDetail,
   type ArchitectureDetailTier,
 } from '@/modules/architecture/detailRanking';
+import {
+  applyFilter,
+  ARCHITECTURE_DEFAULT_FILTER,
+} from '@/modules/architecture/elementRelationFilter';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererNode,
@@ -161,3 +165,46 @@ describe('clampArchitectureScope', () => {
 /** Compile-time guard: the tiers the panel offers are exactly these three. */
 const TIERS: readonly ArchitectureDetailTier[] = ['core', 'common', 'all'];
 void TIERS;
+
+describe('the element/relation filter feeding the detail ranking', () => {
+  /**
+   * The SAME nodes and edges read two ways: the unfiltered graph gives `a` its
+   * only in-edge through a `call`, so importance puts `a` first; the filtered
+   * graph drops that call, so the edge into `b` (a dependency) decides instead.
+   * Nothing but the in-degree over the FILTERED edges can flip the answer.
+   */
+  const filterNodes: ArchitectureRendererNode[] = [
+    { id: 'seed', label: 'seed', distance: 0, kind: 'class' },
+    { id: 'a', label: 'a', distance: 1, kind: 'class' },
+    { id: 'b', label: 'b', distance: 1, kind: 'class' },
+    { id: 'c', label: 'c', distance: 2, kind: 'class' },
+  ];
+  const filterEdges: ArchitectureRendererEdge[] = [
+    { from: 'c', to: 'a', relationType: 'call' },
+    { from: 'c', to: 'b', relationType: 'dependency' },
+  ];
+
+  it('ranks by in-degree over the filtered edges, so the filter changes which node survives', () => {
+    // `core` keeps the seed plus ceil(3 × 0.15) = 1 non-seed node.
+    const unfiltered = rankArchitectureDetail(filterNodes, filterEdges, 'core');
+    assert.deepEqual(sortedIds(unfiltered.retainedNodeIds), ['a', 'seed'], 'the call gives a the higher in-degree');
+
+    const filtered = applyFilter(
+      { nodes: filterNodes, edges: filterEdges },
+      { ...ARCHITECTURE_DEFAULT_FILTER, hideIsolated: false },
+    );
+    assert.deepEqual(
+      filtered.edges.map((entry) => `${entry.from}->${entry.to}:${entry.relationType}`),
+      ['c->b:dependency'],
+      'the call edge was dropped before the ranking saw the graph',
+    );
+
+    const ranked = rankArchitectureDetail(filtered.nodes, filtered.edges, 'core');
+    assert.deepEqual(sortedIds(ranked.retainedNodeIds), ['b', 'seed'], 'b now carries the only in-edge');
+    assert.notDeepEqual(sortedIds(ranked.retainedNodeIds), sortedIds(unfiltered.retainedNodeIds));
+    console.log(
+      `detail-filter reading: unfiltered=${JSON.stringify(sortedIds(unfiltered.retainedNodeIds))} ` +
+        `filtered=${JSON.stringify(sortedIds(ranked.retainedNodeIds))}`,
+    );
+  });
+});
