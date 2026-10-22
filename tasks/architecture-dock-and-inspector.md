@@ -45,12 +45,12 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/selectionModel.test.ts` exit 0（新文件）：选中实体/关系/清空；换视图与换会话清空；`]`/`[` 在节点顺序上循环；选中状态不在模块内残留
-- [ ] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：新增用例——停靠区开合（容器宽高比变化超过 15%）在锁生效时**不**触发重排、只 fit；锁释放后同一宽高比不再触发；锁未生效时既有的 15% 阈值与 250ms 防抖用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx` exit 0（新文件）：默认不渲染停靠区；单击节点打开停靠区并显示名字/种类/路径，双击下钻（邻域视图），触摸档位点按选中、双击下钻；`Escape` 先关停靠区再清选择且 `chat.abort` 调用计数为 0；概览页的关联列表点击后选中并居中目标；会话页五个状态（加载/无命中/出错/截断/同名提示）各一条用例；「包含工具输出」默认关且切换后请求带 `includeToolResults: true`；点击命中项调用 `requestLocateMessage(messageId)` 并触发 `onOpenChat`；关系检查器显示两端、类型与 `coMentions`
-- [ ] `npx vitest run src/modules/chat/tests` 中新增/既有用例 exit 0（`--test-name-pattern` 限定到新增的定位用例即可）：Chat 不可见（`isActive` 为假）时收到定位请求不调用 `jumpToMessage`、变为可见后才调用；`jumpToMessage` 返回 false 时出现「没有找到这条消息」提示；`src/shared/chatMessageLocator.ts` 的订阅/取消订阅用例
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：既有用例里「单击下钻」的断言已逐处改为双击（列在实施记录）；粗指针档位下检查器渲染进底部抽屉且有三个吸附高度
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/selectionModel.test.ts` exit 0（新文件）：选中实体/关系/清空；换视图与换会话清空；`]`/`[` 在节点顺序上循环；选中状态不在模块内残留
+- [x] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：新增用例——停靠区开合（容器宽高比变化超过 15%）在锁生效时**不**触发重排、只 fit；锁释放后同一宽高比不再触发；锁未生效时既有的 15% 阈值与 250ms 防抖用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx` exit 0（新文件）：默认不渲染停靠区；单击节点打开停靠区并显示名字/种类/路径，双击下钻（邻域视图），触摸档位点按选中、双击下钻；`Escape` 先关停靠区再清选择且 `chat.abort` 调用计数为 0；概览页的关联列表点击后选中并居中目标；会话页五个状态（加载/无命中/出错/截断/同名提示）各一条用例；「包含工具输出」默认关且切换后请求带 `includeToolResults: true`；点击命中项调用 `requestLocateMessage(messageId)` 并触发 `onOpenChat`；关系检查器显示两端、类型与 `coMentions`
+- [x] `npx vitest run src/modules/chat/tests` 中新增/既有用例 exit 0（`--test-name-pattern` 限定到新增的定位用例即可）：Chat 不可见（`isActive` 为假）时收到定位请求不调用 `jumpToMessage`、变为可见后才调用；`jumpToMessage` 返回 false 时出现「没有找到这条消息」提示；`src/shared/chatMessageLocator.ts` 的订阅/取消订阅用例
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：既有用例里「单击下钻」的断言已逐处改为双击（列在实施记录）；粗指针档位下检查器渲染进底部抽屉且有三个吸附高度
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -77,6 +77,8 @@ depends_on:
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
 - src/shared/chatMessageLocator.ts (new)
 - src/shared/tests/chatMessageLocator.test.ts (new)
+- src/shared/api.ts
+- src/shared/utils.ts
 - src/modules/chat/ChatInterface.tsx
 - src/modules/chat/tests/chatMessageLocate.test.tsx (new)
 - src/modules/project-workspace/WorkspaceMain.tsx
@@ -92,4 +94,38 @@ depends_on:
 - src/modules/i18n/locales/tr/common.json
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
+- src/modules/i18n/locales/en/chat.json
+- src/modules/i18n/locales/de/chat.json
+- src/modules/i18n/locales/es/chat.json
+- src/modules/i18n/locales/fr/chat.json
+- src/modules/i18n/locales/id/chat.json
+- src/modules/i18n/locales/it/chat.json
+- src/modules/i18n/locales/ja/chat.json
+- src/modules/i18n/locales/ko/chat.json
+- src/modules/i18n/locales/ru/chat.json
+- src/modules/i18n/locales/tr/chat.json
+- src/modules/i18n/locales/zh-CN/chat.json
+- src/modules/i18n/locales/zh-TW/chat.json
 - tasks/architecture-dock-and-inspector.md
+
+## Implementation record
+
+**手势**。PC 单击 = 选中并打开停靠区，双击 = 下钻；触摸维持单击选中、双击下钻（`DOUBLE_TAP_MS` 窗口不变）。键盘仅在画布聚焦时生效：`[` / `]` 按 payload 节点顺序循环移动焦点、`Enter` 选中、`Alt+Enter` 下钻；`Escape` 只在存在选择时拦截（`preventDefault` + `stopPropagation`），先关停靠区、第二次清选择；无选择时不拦截，聊天页的全局 abort 不受影响。
+
+**「单击下钻」断言的逐处改动**（`src/modules/architecture/tests/architectureTab.test.tsx`）。新增 `drillNode(host, id)` 帮助函数：先 `click`（保留选中与 `architecture:entity-selected` 断言），再 `doubleClick`（触发下钻）。原先依赖单击下钻的 17 处断言改为该帮助函数：left-drag 的 press-on-node、middle-button/3px 抖动、cancelled-drag 三处；redrawing-view；semantic-zoom；三个 group 展开用例（overview / deep re-group / flat-over-limit）；neighbourhood drill + centre hop；hover highlight 与 stable-ids 的前置下钻；pinned announce 用例的两级下钻。相关用例标题/注释同步改为「double-click」。触摸用例（`mobileGestures.test.tsx`）无需改动。
+
+**自动打开的正确性**。停靠区自动打开效应只依赖 `selection`（不依赖 `dockOpen`），否则 Escape 关闭后会被「仍有选择」立刻重开——本实现第一版出现过该环并导致测试 worker 崩溃，现在由 Escape 用例（先关后再清、document 级 keydown 计数 0）钉住。
+
+**重排锁**。`shouldRelayoutForAspect(drawn, measured, { locked })` 的锁是纯函数入参；`ArchitecturePanel` 在停靠区开合时置 `relayoutLocked` 200ms（160ms 动画 + 余量），渲染器锁内只 fit；锁释放时把当前测量写回 `drawnAspectRef`（不重排），因此开合本身永不计为形状变化；真正后续的形状变化仍重排一次。`layoutAspect.test.tsx` 新增该整链用例（1.333 → 0.978 锁内 0 次重排、解锁后同一比例仍 0 次、再变到 0.667 才 1 次）。
+
+**共享接缝与 API**。`src/shared/chatMessageLocator.ts` 记录「最新一条待消费请求」并通知订阅者；`ChatInterface` 订阅后只在 `isActive` 时消费，`jumpToMessage` 返回 false 时渲染 `[data-chat-locate-notice]` 提示。`POST /api/architecture/mentions` 的调用统一收进 `src/shared/api.ts` 的 `architectureMentions`（`limit: 20`），`useMentions` 按选择内容做请求键并丢弃过期回复。时间格式化的既有实现从 Panel 提到 `src/shared/utils.ts`（Panel 与 Inspector 共用，输出不变）。
+
+**i18n**。Dock/Inspector 的新键与关系类型名加入 12 个 `common.json`；聊天提示加入 12 个 `chat.json`。`i18nArchitectureTabCompleteness.test.ts` 的键提取范围扩到 Dock/Inspector 两个新源文件，避免新文件里的文案逃过完整性检查。
+
+**验证（本 worktree，逐文件运行）**：
+- `selectionModel.test.ts` 4/4；`layoutAspect.test.tsx` 8/8；`dockInspector.test.tsx` 9/9
+- `chatMessageLocate.test.tsx` 3/3；`src/shared/tests/chatMessageLocator.test.ts` 3/3
+- `architectureTab.test.tsx` 65/65；`mobileGestures.test.tsx` 7/7；`mobileCompactToolbar.test.tsx` 9/9
+- `i18nArchitectureTabCompleteness.test.ts` 6/6；`npm run typecheck` 与 `npm run build` 通过
+
+**DoD（真实浏览器）**：本 worker 会话未启动/重启本机 server（重启会杀掉承载会话的进程），浏览器读数与截图留给 fan-in 后的人工复核。
