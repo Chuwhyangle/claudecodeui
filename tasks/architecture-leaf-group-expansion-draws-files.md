@@ -28,10 +28,10 @@ extra: {}
 
 ## AC
 
-- [ ] 新增用例（真实形态 fixture：file 图 id 为项目相对路径）钉住：叶目录 229 个文件、prefix 等于该目录时，group 视图产出 229 条 `class` 行、0 条 `grp::` 行、`grouped === false`，且边数不被折叠吞掉；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0
-- [ ] 反向用例：目录**既有子目录又有 50+ 个直接文件**时，子目录仍是组框，而视图前缀对应的组框消失（产物中不存在 `grp::<视图前缀>` 行、也不存在文本等于 `<前缀> (N)` 的 class 行），直接文件以实体出现；单成员组折叠规则（`adaptiveGrouping.ts` 的 `count < 2` 分支）不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：overview 点击组框进入 group 视图后，组框不再与来源相同（读数：group 视图里 `class` 数 > 1 且没有任何 class 文本等于来源组标签），既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] 新增用例（真实形态 fixture：file 图 id 为项目相对路径）钉住：叶目录 229 个文件、prefix 等于该目录时，group 视图产出 229 条 `class` 行、0 条 `grp::` 行、`grouped === false`，且边数不被折叠吞掉；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0
+- [x] 反向用例：目录**既有子目录又有 50+ 个直接文件**时，子目录仍是组框，而视图前缀对应的组框消失（产物中不存在 `grp::<视图前缀>` 行、也不存在文本等于 `<前缀> (N)` 的 class 行），直接文件以实体出现；单成员组折叠规则（`adaptiveGrouping.ts` 的 `count < 2` 分支）不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：overview 点击组框进入 group 视图后，组框不再与来源相同（读数：group 视图里 `class` 数 > 1 且没有任何 class 文本等于来源组标签），既有 hover/缩放/爆炸/下钻用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
