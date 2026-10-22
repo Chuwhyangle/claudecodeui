@@ -1,7 +1,7 @@
 ---
 id: gap-asr-health-ac6-scan-and-fixture-staleness
 title: AC-134 判据读数失准：AC6 把 JSDoc 散文当能力声明、夹具缺 voiceSettingsRegistry 使全部反证控制红
-status: ready
+status: done
 labels:
   - gap
   - defect
