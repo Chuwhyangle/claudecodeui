@@ -133,10 +133,11 @@ const ENTITY_MMD = '@startuml\nX --> Y\n@enduml';
 const FILE_MMD = '@startuml\nA --> B\n@enduml';
 
 /**
- * Three files across two directories: the overview folds them into
- * `modules/alpha` (two entities) and `modules/beta` (one), which is enough to
- * exercise selecting a group, drilling into it, and then drilling into an
- * entity inside it.
+ * Three files across two directories: the overview folds them into the
+ * `src/modules/alpha` group (two files) and draws `src/modules/beta/b.ts` as
+ * itself (a one-file directory is not a group), which is enough to exercise
+ * selecting a group, drilling into it, and then drilling into an entity inside
+ * it.
  */
 const RESULT: ArchitectureGraphResult = {
   mmd: { file: FILE_MMD, entity: ENTITY_MMD },
@@ -308,7 +309,7 @@ test('one finger drags the drawing by panning the scroll container', async () =>
   assert.equal(host.scrollTop, 20, 'the drawing follows the finger vertically');
 
   // The browser emits a click after a drag too; panning must not select.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   assert.equal(
     graphRoot().getAttribute('data-architecture-view'),
     'overview',
@@ -350,7 +351,7 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
 
   // First tap on the group node: selection only. The drawing must be the very
   // same SVG element — no re-layout, no new view.
-  tap(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  tap(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview', 'a tap must not navigate');
   assert.equal(host.querySelector('svg'), drawing, 'selecting must not replace the drawing');
   // The explicit drill action lives in the single compact toolbar's "…" menu
@@ -399,7 +400,7 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
   fireEvent.click(screen.getByRole('button', { name: 'Back to overview' }));
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview'));
   const groupNode = await waitFor(() => {
-    const node = host.querySelector('[data-entity-id="grp::modules/alpha"]');
+    const node = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
     assert.ok(node !== null);
     return node;
   });

@@ -1,10 +1,10 @@
-import { directoryPathOf } from '@/modules/architecture/adaptiveGrouping';
+import { DEFAULT_NODE_ID_SHAPE, directoryPathOf } from '@/modules/architecture/adaptiveGrouping';
 import {
   buildHierarchyIndex,
   ROOT_PACKAGE_ID,
   type ArchitectureHierarchyIndex,
 } from '@/modules/architecture/hierarchyIndex';
-import type { ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
+import type { ArchitectureNodeIdShape, ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
 import type { SvgViewportSize } from '@/modules/architecture/svgViewport';
 
 /**
@@ -121,14 +121,18 @@ export type ReadableZoomInput = {
  * Build the package hierarchy straight from the neighbourhood JSON, marking
  * every distance-0 node as a seed. This is the payload's own tree, so a
  * decision made BEFORE the SVG is measured and one made from the drawn SVG
- * agree; no geometry is consulted. Consumers: `PlantUmlGraph.tsx` and the
- * readable-zoom tests.
+ * agree; no geometry is consulted. `idShape` must match the one the drawing
+ * used, or the packages here would not name the packages in the SVG.
+ * Consumers: `PlantUmlGraph.tsx` and the readable-zoom tests.
  */
-export function buildSeedHierarchy(graph: ArchitectureRendererGraph): ArchitectureHierarchyIndex {
+export function buildSeedHierarchy(
+  graph: ArchitectureRendererGraph,
+  idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE,
+): ArchitectureHierarchyIndex {
   return buildHierarchyIndex(
     graph.nodes.map((node) => ({
       id: node.id,
-      packageId: directoryPathOf(node.id),
+      packageId: directoryPathOf(node.id, idShape),
       seed: node.distance === 0,
     })),
   );

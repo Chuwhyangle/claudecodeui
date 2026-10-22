@@ -2,11 +2,13 @@ import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 
 import {
   computeAdaptiveGrouping,
+  DEFAULT_NODE_ID_SHAPE,
   directoryPathOf,
   OVERVIEW_GROUP_LIMIT,
   scopeRelativePath,
   type AdaptiveGrouping,
 } from '@/modules/architecture/adaptiveGrouping';
+import type { ArchitectureNodeIdShape } from '@/modules/architecture/rendererContract';
 import type {
   ArchitectureNeighborhood,
   ArchitectureNeighborhoodEdge,
@@ -111,24 +113,37 @@ type ArchguardBridgeOptions = {
    * which is what the bridge's own mapping criteria pin.
    */
   readonly grouping?: 'raw' | 'adaptive';
+  /**
+   * How the graph's node ids are shaped (see `ArchitectureNodeIdShape`).
+   * Defaults to `scope-prefixed`, the entity scheme. A file graph must pass
+   * `'project-relative'`: its first segment is a real directory, so peeling it
+   * would drop `src/`, `scripts/`, … from every group label and every
+   * ungrouped node's display name.
+   */
+  readonly idShape?: ArchitectureNodeIdShape;
 };
 
 /**
- * Strip the leading `<scopeKey>/` from an ArchGuard id, keeping the
- * project-relative path (`src/modules/a.ts.Entity` → `modules/a.ts.Entity`).
+ * The path a display name is built from: the id minus its scope key when the
+ * graph is `scope-prefixed`, unchanged when it is already project-relative.
  */
-export function pathName(id: string): string {
-  return scopeRelativePath(id);
+export function pathName(id: string, idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE): string {
+  return scopeRelativePath(id, idShape);
 }
 
 /**
  * Display name `relpath.EntityName`, front-truncated to the last
  * `maxDirSegments` directory segments. The tail after the last `/` (the file
  * name and, for entity nodes, the `.EntityName` suffix) is never shortened —
- * that tail is what tells two same-named files apart.
+ * that tail is what tells two same-named files apart. `idShape` decides whether
+ * a leading scope key exists to strip at all.
  */
-export function displayName(id: string, maxDirSegments: number = MAX_DISPLAY_DIR_SEGMENTS): string {
-  const rel = pathName(id);
+export function displayName(
+  id: string,
+  maxDirSegments: number = MAX_DISPLAY_DIR_SEGMENTS,
+  idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE,
+): string {
+  const rel = pathName(id, idShape);
   const lastSlash = rel.lastIndexOf('/');
   if (lastSlash === -1) return rel;
   const directories = rel.slice(0, lastSlash).split('/').filter(Boolean);
@@ -158,8 +173,8 @@ function sanitizeName(name: string): string {
  * index's ancestor chain must reach the root, and two files whose truncated
  * labels collide must still land in different packages.
  */
-function packagePathOf(id: string): string {
-  return directoryPathOf(id);
+function packagePathOf(id: string, idShape: ArchitectureNodeIdShape): string {
+  return directoryPathOf(id, idShape);
 }
 
 /** One node of the package tree the bridge emits, plus the class lines it owns. */
@@ -213,8 +228,8 @@ function emitPackageTree(node: PackageTreeNode, depth: number, lines: string[]):
 }
 
 /** True when the node's DIRECTORY is `prefix` or a descendant of it. */
-function inDirectoryGroup(id: string, prefix: string): boolean {
-  const directory = directoryPathOf(id);
+function inDirectoryGroup(id: string, prefix: string, idShape: ArchitectureNodeIdShape): boolean {
+  const directory = directoryPathOf(id, idShape);
   return directory === prefix || directory.startsWith(`${prefix}/`);
 }
 
@@ -222,8 +237,9 @@ function inDirectoryGroup(id: string, prefix: string): boolean {
 function groupSubgraph(
   graph: ArchitectureNeighborhood,
   prefix: string,
+  idShape: ArchitectureNodeIdShape,
 ): { nodes: readonly ArchitectureNeighborhoodNode[]; edges: readonly ArchitectureNeighborhoodEdge[] } {
-  const nodes = graph.nodes.filter((node) => inDirectoryGroup(node.id, prefix));
+  const nodes = graph.nodes.filter((node) => inDirectoryGroup(node.id, prefix, idShape));
   const kept = new Set(nodes.map((node) => node.id));
   const edges = graph.edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to));
   return { nodes, edges };
@@ -233,6 +249,7 @@ function groupSubgraph(
 function emitEntityDocument(
   drawn: { readonly nodes: readonly ArchitectureNeighborhoodNode[]; readonly edges: readonly ArchitectureNeighborhoodEdge[] },
   aliasOf: ReadonlyMap<string, string>,
+  idShape: ArchitectureNodeIdShape,
 ): { puml: string; nodeIds: readonly string[] } {
   // The class lines are grouped into the nested package tree by directory path:
   // the renderer parses the blocks into package frames and stamps every entity
@@ -244,8 +261,8 @@ function emitEntityDocument(
     if (alias === undefined) continue;
     insertIntoPackageTree(
       packageRoot,
-      packagePathOf(node.id),
-      `class "${sanitizeName(displayName(node.id))}" as ${alias}`,
+      packagePathOf(node.id, idShape),
+      `class "${sanitizeName(displayName(node.id, MAX_DISPLAY_DIR_SEGMENTS, idShape))}" as ${alias}`,
     );
   }
 
@@ -271,17 +288,21 @@ function groupLabel(prefix: string, count: number): string {
 
 /**
  * Emit an adaptive-grouped document: one class per directory group (labelled
- * with its count) plus the overview's ungrouped scope-root entities, with the
- * graph's edges aggregated onto the drawn nodes.
+ * with its count) plus the entities the grouping left outside a group
+ * (scope-root files, and the sole member of every single-member directory),
+ * with the graph's edges aggregated onto the drawn nodes.
  *
  * Aggregation keys on the drawn pair only and keeps the first relation kind,
  * mirroring the renderer's own overview aggregation — a group edge is a
- * summary, not a promise that every underlying relation had that kind.
+ * summary, not a promise that every underlying relation had that kind. A node
+ * outside a group aggregates as itself, so folding a `(1)` group never loses
+ * its edges.
  */
 function emitGroupedDocument(
   drawn: { readonly nodes: readonly ArchitectureNeighborhoodNode[]; readonly edges: readonly ArchitectureNeighborhoodEdge[] },
   grouping: AdaptiveGrouping,
   aliasOf: ReadonlyMap<string, string>,
+  idShape: ArchitectureNodeIdShape,
 ): ArchitecturePlantUml {
   const lines = ['@startuml'];
   const mergedAliases = new Map(aliasOf);
@@ -302,7 +323,7 @@ function emitGroupedDocument(
   for (const id of grouping.ungroupedNodeIds) {
     const alias = aliasOf.get(id);
     if (alias === undefined) continue;
-    lines.push(`class "${sanitizeName(displayName(id))}" as ${alias}`);
+    lines.push(`class "${sanitizeName(displayName(id, MAX_DISPLAY_DIR_SEGMENTS, idShape))}" as ${alias}`);
   }
 
   const aliasFor = (id: string): string | undefined => {
@@ -346,15 +367,17 @@ function emitGroupedDocument(
 function adaptiveOverviewDocument(
   graph: ArchitectureNeighborhood,
   aliasOf: ReadonlyMap<string, string>,
+  idShape: ArchitectureNodeIdShape,
 ): ArchitecturePlantUml {
   const grouping = computeAdaptiveGrouping(graph.nodes.map((node) => node.id), {
     maxGroups: OVERVIEW_GROUP_LIMIT,
+    idShape,
   });
   if (grouping.groups.length === 0) {
-    const raw = emitEntityDocument(graph, aliasOf);
+    const raw = emitEntityDocument(graph, aliasOf, idShape);
     return { ...raw, aliasOf, rendererEntity: null, grouped: false };
   }
-  return emitGroupedDocument(graph, grouping, aliasOf);
+  return emitGroupedDocument(graph, grouping, aliasOf, idShape);
 }
 
 /**
@@ -368,23 +391,25 @@ function adaptiveGroupViewDocument(
   graph: ArchitectureNeighborhood,
   prefix: string,
   aliasOf: ReadonlyMap<string, string>,
+  idShape: ArchitectureNodeIdShape,
 ): ArchitecturePlantUml {
-  const drawn = groupSubgraph(graph, prefix);
+  const drawn = groupSubgraph(graph, prefix, idShape);
   const grouping = computeAdaptiveGrouping(drawn.nodes.map((node) => node.id), {
     prefix,
     groupDirectNodes: true,
     maxGroups: OVERVIEW_GROUP_LIMIT,
+    idShape,
   });
   const onlyGroup = grouping.groups.length === 1 ? grouping.groups[0] : undefined;
   if (onlyGroup !== undefined && onlyGroup.prefix === prefix && onlyGroup.count <= OVERVIEW_GROUP_LIMIT) {
-    const raw = emitEntityDocument(drawn, aliasOf);
+    const raw = emitEntityDocument(drawn, aliasOf, idShape);
     return { ...raw, aliasOf, rendererEntity: null, grouped: false };
   }
   if (grouping.groups.length === 0) {
-    const raw = emitEntityDocument(drawn, aliasOf);
+    const raw = emitEntityDocument(drawn, aliasOf, idShape);
     return { ...raw, aliasOf, rendererEntity: null, grouped: false };
   }
-  return emitGroupedDocument(drawn, grouping, aliasOf);
+  return emitGroupedDocument(drawn, grouping, aliasOf, idShape);
 }
 
 /**
@@ -399,16 +424,17 @@ export function archguardToPlantUml(
 ): ArchitecturePlantUml {
   const view = options.view ?? { kind: 'overview' };
   const aliasOf = options.aliasOf ?? archguardAliasMap(graph.nodes);
+  const idShape = options.idShape ?? DEFAULT_NODE_ID_SHAPE;
 
   // The adaptive path is the panel's; the raw path is the bridge's own mapping
   // contract (and the default), which emits exactly the entities it is given.
   if (options.grouping === 'adaptive') {
-    if (view.kind === 'overview') return adaptiveOverviewDocument(graph, aliasOf);
-    if (view.kind === 'group') return adaptiveGroupViewDocument(graph, view.prefix, aliasOf);
+    if (view.kind === 'overview') return adaptiveOverviewDocument(graph, aliasOf, idShape);
+    if (view.kind === 'group') return adaptiveGroupViewDocument(graph, view.prefix, aliasOf, idShape);
   }
 
-  const drawn = view.kind === 'group' ? groupSubgraph(graph, view.prefix) : graph;
-  const raw = emitEntityDocument(drawn, aliasOf);
+  const drawn = view.kind === 'group' ? groupSubgraph(graph, view.prefix, idShape) : graph;
+  const raw = emitEntityDocument(drawn, aliasOf, idShape);
   return {
     ...raw,
     aliasOf,

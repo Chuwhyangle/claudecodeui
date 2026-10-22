@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/adaptiveGrouping';
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
@@ -370,7 +371,7 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
  * nothing here re-enters the fetch. The renderer package is imported
  * dynamically, so elkjs never enters the first-screen bundle.
  */
-export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: PlantUmlGraphProps) {
+export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeClick, onNodeHover, onExport }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
@@ -616,8 +617,10 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
         });
         // The panel is the adaptive consumer: the bridge collapses directory
         // layers itself (the renderer's `groupByPathPrefix` would count a file
-        // name as a layer, which is the bug this view exists to avoid).
-        const diagram = archguardToPlantUml(graph, { view, grouping: 'adaptive' });
+        // name as a layer, which is the bug this view exists to avoid). The
+        // panel also states how this subgraph's ids are shaped, so a file graph
+        // keeps its top directory in every group prefix and label.
+        const diagram = archguardToPlantUml(graph, { view, grouping: 'adaptive', idShape });
         const renderer = createRenderer(rendererOptionsFor(view, diagram, engine));
         const { svg } = await renderer.render(diagram.puml);
         if (cancelled) return;
@@ -640,7 +643,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
         let matchReading: ReadableZoomDecision | null = null;
         if (drawing !== null && viewport !== null) {
           viewport.attach(drawing);
-          const seedHierarchy = buildSeedHierarchy(graph);
+          const seedHierarchy = buildSeedHierarchy(graph, idShape);
           seedHierarchyRef.current = seedHierarchy;
           const natural = readSvgNaturalSize(drawing);
           const box = measureViewportSize(host);
@@ -707,7 +710,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
           lodDepthRef.current = null;
           setLodDepth(null);
         } else {
-          const hierarchy = buildExplosionHierarchy(host, graph);
+          const hierarchy = buildExplosionHierarchy(host, graph, idShape);
           lodRef.current = { hierarchy, edges: graph.edges };
           const depth = carriedDepth ?? resolveLodDepth(drawnScale, null);
           lodDepthRef.current = depth;
@@ -746,7 +749,7 @@ export function PlantUmlGraph({ graph, onNodeClick, onNodeHover, onExport }: Pla
     return () => {
       cancelled = true;
     };
-  }, [applyZoom, graph, layoutAspect, view]);
+  }, [applyZoom, graph, idShape, layoutAspect, view]);
 
   useEffect(() => {
     const host = hostRef.current;

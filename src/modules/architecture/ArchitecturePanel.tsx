@@ -9,12 +9,23 @@ import {
 } from '@/modules/architecture/hooks/useTouchLayout';
 import type {
   ArchitectureGraphRenderer,
+  ArchitectureNodeIdShape,
   ArchitectureRendererHover,
 } from '@/modules/architecture/rendererContract';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
 type ArchitectureGranularity = 'file' | 'entity';
+
+/**
+ * The id scheme the server used for a subgraph. File ids ARE project-relative
+ * paths; entity ids are `<scopeKey>/<scope-relative path>.<Entity>`. The panel
+ * is the only layer that knows which subgraph it is handing over, so it states
+ * the shape for the renderer instead of letting the renderer guess.
+ */
+function nodeIdShapeOf(granularity: ArchitectureGranularity): ArchitectureNodeIdShape {
+  return granularity === 'file' ? 'project-relative' : 'scope-prefixed';
+}
 
 /**
  * The server-side BFS depth the panel asks for on first activation. Two hops is
@@ -526,6 +537,10 @@ export default function ArchitecturePanel({
                 <Renderer
                   key={`${sessionId}:${granularity}:${hops}`}
                   graph={neighbourhood}
+                  // Which subgraph this is decides how ids are read (label and
+                  // group prefixes). The renderer must not have to guess: see
+                  // `nodeIdShapeOf`.
+                  idShape={nodeIdShapeOf(granularity)}
                   onNodeHover={handleNodeHover}
                   // Selecting a node is the reader working the drawing; the
                   // one-off touch instruction has done its job by then.

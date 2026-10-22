@@ -48,6 +48,23 @@ export type ArchitectureRendererGraph = {
   readonly edges: readonly ArchitectureRendererEdge[];
 };
 
+/**
+ * How the server shapes a graph's node ids. The panel reads BOTH subgraphs from
+ * one payload and knows which one it is handing over; the two are produced by
+ * different id schemes, so a renderer that derives labels or package paths from
+ * ids has to be told which one it got:
+ *  · `project-relative` (file graph): the id IS the project-relative file path
+ *    (`scripts/stamp-version.ts`, `packages/quay/src/cli/action.ts`), so its
+ *    first segment is a REAL directory;
+ *  · `scope-prefixed` (entity graph): the id is
+ *    `<scopeKey>/<scope-relative path>.<Entity>` (`26b300e9/cli/action.ts.run`),
+ *    where the opaque ArchGuard scope key is not part of the path and is the
+ *    only segment safe to strip.
+ * Consumers: `ArchitecturePanel.tsx` (the producer of this fact) and
+ * `PlantUmlGraph.tsx` (the consumer).
+ */
+export type ArchitectureNodeIdShape = 'project-relative' | 'scope-prefixed';
+
 /** What a renderer reports while the pointer is over a node. */
 export type ArchitectureRendererHover = {
   /** The hovered node, as it was handed to the renderer. */
@@ -77,9 +94,16 @@ export type ArchitectureRendererHover = {
  * overflow menu on narrow screens (PlantUmlGraph does) can offer the panel's
  * export action there too, instead of leaving a second, tiny button in the
  * header. A renderer that does not render it simply ignores it.
+ *
+ * `idShape` is optional and defaults to `scope-prefixed` (the entity scheme,
+ * which the bridge's raw contract was written against): a renderer that reads
+ * paths out of ids must apply it, while one that draws ids verbatim ignores it.
+ * The panel always supplies it, so a file graph is never misread as
+ * scope-prefixed.
  */
 export type ArchitectureRendererProps = {
   readonly graph: ArchitectureRendererGraph;
+  readonly idShape?: ArchitectureNodeIdShape;
   readonly maxHops?: number;
   readonly maxNodes?: number;
   readonly onNodeClick?: (node: ArchitectureRendererNode) => void;
