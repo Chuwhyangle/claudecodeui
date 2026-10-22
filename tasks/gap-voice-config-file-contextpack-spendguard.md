@@ -76,15 +76,15 @@ extra:
 
 ## AC
 
-- [ ] AC1 配置 loader：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0；逐条打印 `defaults maxRows=4 budgetChars=1200 rowCapChars=600 spend=0.05`、`file maxRows=2 budgetChars=400 rowCapChars=300 spend=0.1`、`invalid maxRows=0 budgetChars=99999 spend=abc -> default + problem`，且未知 key 被忽略。
-- [ ] AC2 spend 优先级：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-spend-guard.test.ts` 退出 0；逐条打印 `file=0.1`、`env=0.02 压过 file=0.1`、`override=0.07 压过 env/file`、`invalid file -> 0.05 + invalid report`、`windowMs` 来自文件。
-- [ ] AC3 运行时端点：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice/tests/voice-config.routes.test.ts` 退出 0；`GET /api/voice/runtime-config` 返回生效 `contextPack`（临时文件 `2/400/300`），缺文件/坏文件返回默认 `4/1200/600` + warning，且 provider 未知时仍返回 200（不绑 health）。
-- [ ] AC4 浏览器 builder：`npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts src/modules/chat/voice-realtime/tests/contextPack.test.ts` 退出 0；运行时 `2/400` 产出 `rows<=2 && chars<=400`，缺省为 `4/1200`，配置 `99/99999` 被拒/夹到上限 12/4000 并打印读数。
-- [ ] AC5 服务端截断：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0；6 行/2,000 字符的已渲染 context + `2/400` 产出 `rows<=2 && chars<=400` 且保留最新行；one-shot 的 fetch recorder 看到截断后的 `context`；日志逐字含 `context truncated from=`。
-- [ ] AC6 热更新/下一连接：同一测试文件退出 0；连接 A 以 `4/1200` 启动，编辑临时文件为 `2/400`，连接 B 读到 `2/400`，A 的 reading 在连接生命周期内不变（无中途替换）。
-- [ ] AC7 配置文件与文档：`grep -q '"contextPack"' config/voice-realtime.settings.json && grep -q '"spendGuard"' config/voice-realtime.settings.json && grep -q '"contextPack"' config/voice-realtime.settings.example.json && grep -q 'contextPack' docs/operations/voice-realtime-test-stages.md` 退出 0；示例文件写明范围与 `env > file > default`。
-- [ ] AC8 不新增 server 测试文件：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0；`git status --porcelain 'server/**/tests/*.test.ts'` 无新增文件。
-- [ ] AC9 类型/构建/静态检查：`npx tsc --noEmit -p server/tsconfig.json && npx tsc --noEmit -p tsconfig.json && npm run build:client && npx oxlint <changed ts files>` 退出 0。
+- [x] AC1 配置 loader：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0；逐条打印 `defaults maxRows=4 budgetChars=1200 rowCapChars=600 spend=0.05`、`file maxRows=2 budgetChars=400 rowCapChars=300 spend=0.1`、`invalid maxRows=0 budgetChars=99999 spend=abc -> default + problem`，且未知 key 被忽略。
+- [x] AC2 spend 优先级：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-spend-guard.test.ts` 退出 0；逐条打印 `file=0.1`、`env=0.02 压过 file=0.1`、`override=0.07 压过 env/file`、`invalid file -> 0.05 + invalid report`、`windowMs` 来自文件。
+- [x] AC3 运行时端点：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice/tests/voice-config.routes.test.ts` 退出 0；`GET /api/voice/runtime-config` 返回生效 `contextPack`（临时文件 `2/400/300`），缺文件/坏文件返回默认 `4/1200/600` + warning，且 provider 未知时仍返回 200（不绑 health）。
+- [x] AC4 浏览器 builder：`npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts src/modules/chat/voice-realtime/tests/contextPack.test.ts` 退出 0；运行时 `2/400` 产出 `rows<=2 && chars<=400`，缺省为 `4/1200`，配置 `99/99999` 被拒/夹到上限 12/4000 并打印读数。
+- [x] AC5 服务端截断：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-context-and-settings.test.ts` 退出 0；6 行/2,000 字符的已渲染 context + `2/400` 产出 `rows<=2 && chars<=400` 且保留最新行；one-shot 的 fetch recorder 看到截断后的 `context`；日志逐字含 `context truncated from=`。
+- [x] AC6 热更新/下一连接：同一测试文件退出 0；连接 A 以 `4/1200` 启动，编辑临时文件为 `2/400`，连接 B 读到 `2/400`，A 的 reading 在连接生命周期内不变（无中途替换）。
+- [x] AC7 配置文件与文档：`grep -q '"contextPack"' config/voice-realtime.settings.json && grep -q '"spendGuard"' config/voice-realtime.settings.json && grep -q '"contextPack"' config/voice-realtime.settings.example.json && grep -q 'contextPack' docs/operations/voice-realtime-test-stages.md` 退出 0；示例文件写明范围与 `env > file > default`。
+- [x] AC8 不新增 server 测试文件：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0；`git status --porcelain 'server/**/tests/*.test.ts'` 无新增文件。
+- [x] AC9 类型/构建/静态检查：`npx tsc --noEmit -p server/tsconfig.json && npx tsc --noEmit -p tsconfig.json && npm run build:client && npx oxlint <changed ts files>` 退出 0。
 
 ## DoD
 
@@ -122,4 +122,7 @@ extra:
 - server/modules/voice/tests/voice-config.routes.test.ts
 - src/modules/chat/utils/tests/voiceContextPack.test.ts
 - src/modules/chat/voice-realtime/tests/contextPack.test.ts
+- server/modules/voice-realtime/voice-realtime-contract.ts
+- server/modules/voice/index.ts
+- server/modules/voice-realtime/tests/voice-realtime-context-injection.test.ts
 - tasks/gap-voice-config-file-contextpack-spendguard.md
