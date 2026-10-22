@@ -46,10 +46,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/curationStore.test.ts` exit 0（新文件）：钉住/移除互斥且后做的覆盖先做的；撤销栈深 20 与顺序；上限与超出提示；存储键按 `<projectId>:<sessionId>` 隔离、换会话不串；没有 `sessionId` 时拒绝写入；读到损坏的 JSON 时回落为空并不抛错；`(file, name)` 重新对应：给定 `resolve` 的返回，失效项被更新为新 id，仍找不到的保持「已失效」
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts server/modules/architecture/tests/cache-invalidation.test.ts` exit 0：`excludeIds` 的节点不被遍历穿过、其边消失；`extraSeeds` 作为根且 `mentionTier === 'pinned'`、在 `kinds/relations` 筛选下仍保留；缓存键因这两个参数不同而不同、相同组合第二次不重算；解析不到的 `extraSeeds` 出现在 `unresolved.ids`；不带这两个参数时响应与改前逐字节相同；超上限返回 400；`/search` 的前缀/子串排序、`truncated`、不足 2 字符返回 400、`resolve` 形态按 `(file, name)` 精确返回当前 id、未登录 401
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：搜索「项目其它」组出现并可钉住，钉住后图重新请求且该节点带图钉角标；移除自动实体后图里不再出现它及其边，Toast 带「撤销」，点撤销后恢复；`Delete` 键移除所选且 `chat.abort` 调用计数为 0；取消钉住但仍相连时的提示文案；隐藏关系只改显示（无网络请求）并写明「不改代码」；`已调整 N 项` 弹层三页各行「还原」与「全部还原」；已失效项显示徽标与「清除」；没有会话时功能禁用并说明；换会话后调整集不串
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/curationStore.test.ts` exit 0（新文件）：钉住/移除互斥且后做的覆盖先做的；撤销栈深 20 与顺序；上限与超出提示；存储键按 `<projectId>:<sessionId>` 隔离、换会话不串；没有 `sessionId` 时拒绝写入；读到损坏的 JSON 时回落为空并不抛错；`(file, name)` 重新对应：给定 `resolve` 的返回，失效项被更新为新 id，仍找不到的保持「已失效」
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts server/modules/architecture/tests/cache-invalidation.test.ts` exit 0：`excludeIds` 的节点不被遍历穿过、其边消失；`extraSeeds` 作为根且 `mentionTier === 'pinned'`、在 `kinds/relations` 筛选下仍保留；缓存键因这两个参数不同而不同、相同组合第二次不重算；解析不到的 `extraSeeds` 出现在 `unresolved.ids`；不带这两个参数时响应与改前逐字节相同；超上限返回 400；`/search` 的前缀/子串排序、`truncated`、不足 2 字符返回 400、`resolve` 形态按 `(file, name)` 精确返回当前 id、未登录 401
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：搜索「项目其它」组出现并可钉住，钉住后图重新请求且该节点带图钉角标；移除自动实体后图里不再出现它及其边，Toast 带「撤销」，点撤销后恢复；`Delete` 键移除所选且 `chat.abort` 调用计数为 0；取消钉住但仍相连时的提示文案；隐藏关系只改显示（无网络请求）并写明「不改代码」；`已调整 N 项` 弹层三页各行「还原」与「全部还原」；已失效项显示徽标与「清除」；没有会话时功能禁用并说明；换会话后调整集不串
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -78,6 +78,7 @@ depends_on:
 - src/modules/architecture/tests/curationStore.test.ts (new)
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/shared/api.ts
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json
