@@ -1,7 +1,7 @@
 ---
 id: architecture-text-panel
 title: 停靠区「文本」页：显示当前可见图的 PlantUML，范围选择 + 字符/token 体量读数 + 复制/复制为会话上下文/下载（PlantUML 优先）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
