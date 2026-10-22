@@ -467,7 +467,7 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   fireEvent.click(toggle);
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.ok(document.querySelector('[data-architecture-overflow-menu]'), 'the menu must expand');
-  assert.ok(document.querySelector('[data-architecture-overflow-export]'), 'export must be reachable from the menu');
+  assert.ok(document.querySelector('[data-architecture-export]'), 'export must be reachable from the menu');
 
   const zoomIn = screen.getByRole('button', { name: 'Zoom in' });
   assert.ok(cluster.contains(zoomIn), 'the zoom control read by name is the cluster one');
@@ -476,7 +476,7 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   assert.ok(Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > 1);
 });
 
-test('the menu closes and the export action still writes the .mmd document', async () => {
+test('the menu closes and the legacy Mermaid item still writes the .mmd document', async () => {
   setViewport(375, 812);
   stubMatchMedia(() => false);
   const downloads: string[] = [];
@@ -491,9 +491,12 @@ test('the menu closes and the export action still writes the .mmd document', asy
 
   fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
   act(() => {
-    fireEvent.click(document.querySelector('[data-architecture-overflow-export]') as Element);
+    fireEvent.click(document.querySelector('[data-architecture-export]') as Element);
+  });
+  act(() => {
+    fireEvent.click(document.querySelector('[data-architecture-export-item="mmd"]') as Element);
   });
 
-  assert.deepEqual(downloads, ['architecture-file.mmd'], 'the menu export must write the same document the header did');
+  assert.deepEqual(downloads, ['architecture-file.mmd'], 'the legacy item must write the same document the header used to');
   assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'the menu closes after exporting');
 });

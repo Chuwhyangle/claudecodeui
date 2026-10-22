@@ -1,7 +1,19 @@
-import { type ComponentType, useCallback, useMemo, useState } from 'react';
+import {
+  type ComponentType,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
+import {
+  archguardToPlantUml,
+  type ArchitectureDiagramView,
+} from '@/modules/architecture/archguardToPlantUml';
 import {
   ARCHITECTURE_DETAIL_TIERS,
   ARCHITECTURE_SCOPE_MAX,
@@ -12,6 +24,15 @@ import {
   type ArchitectureDetailTier,
 } from '@/modules/architecture/detailRanking';
 import {
+  architectureExportFilename,
+  downloadBlob,
+  downloadTextFile,
+  EXPORT_PNG_MAX_EDGE,
+  pngTargetSize,
+  rasterizeSvgToPng,
+  serializeSvgForExport,
+} from '@/modules/architecture/exportArtifacts';
+import {
   CompactToolbarSlotContext,
   TOUCH_TARGET_STYLE,
   useTouchLayout,
@@ -20,9 +41,11 @@ import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/la
 import type {
   ArchitectureDetailReading,
   ArchitectureNodeIdShape,
+  ArchitectureRendererGraph,
   ArchitectureRendererHover,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
+import { readSvgNaturalSize } from '@/modules/architecture/svgViewport';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
@@ -206,23 +229,226 @@ type ArchitecturePanelRenderer = ComponentType<
   ArchitectureRendererProps & {
     readonly focusNodeId?: string | null;
     readonly focusToken?: number;
+    /** Reports the drawn view so the export menu can rebuild that document. */
+    readonly onViewChange?: (view: ArchitectureDiagramView) => void;
   }
 >;
 
+/** The five formats the export menu offers; `mmd` is the legacy Mermaid pair. */
+type ArchitectureExportItemId = 'puml' | 'copy' | 'svg' | 'png' | 'mmd';
+
+type ArchitectureExportMenuProps = {
+  /** Whether the menu is drawn inside the compact toolbar's overflow panel. */
+  readonly compact?: boolean;
+  readonly onExportPlantUml: () => void;
+  readonly onCopyPlantUml: () => void;
+  readonly onExportSvg: () => void;
+  readonly onExportPng: () => void;
+  readonly onExportMermaid: () => void;
+  /** Runs after an item is chosen, so the compact overflow panel can close. */
+  readonly onAction: () => void;
+};
+
 /**
- * Save a Mermaid document as a `.mmd` file.
+ * The `Export ▾` disclosure.
  *
- * The `.mmd` pair is no longer the default render path (the panel draws the
- * neighbourhood JSON), but ADR-005 keeps it as the export format: the server
- * still generates both documents, so exporting is a Blob write with no request.
+ * Standard menu semantics: the trigger advertises `aria-haspopup="menu"`, the
+ * list is a `role="menu"` of `menuitem` buttons, arrow keys move between them,
+ * and Escape closes ONLY this menu — it calls `stopPropagation` so the chat
+ * page's document-level Escape (abort the running turn) never sees the key.
+ * The five formats are ordered PlantUML first and the legacy Mermaid pair last;
+ * the item list is the same on every layout, only its position differs (the
+ * compact tier draws it inside the panel's overflow sheet).
+ *
+ * Used by `ArchitecturePanel` only.
  */
-function downloadMermaid(contents: string, filename: string): void {
-  const url = URL.createObjectURL(new Blob([contents], { type: 'text/plain;charset=utf-8' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
+function ArchitectureExportMenu({
+  compact = false,
+  onExportPlantUml,
+  onCopyPlantUml,
+  onExportSvg,
+  onExportPng,
+  onExportMermaid,
+  onAction,
+}: ArchitectureExportMenuProps) {
+  const { t } = useTranslation();
+  // A coarse pointer needs a real 44px hit area on the disclosure AND on each
+  // item; the size is inline so the reading does not depend on a stylesheet.
+  const { coarsePointer } = useTouchLayout();
+  const targetStyle = coarsePointer ? TOUCH_TARGET_STYLE : undefined;
+  // Whether the list is expanded. Local to the disclosure: the panel does not
+  // need to know (it only learns about the chosen format through the callbacks).
+  const [open, setOpen] = useState(false);
+  // Which item owns the roving tab stop while the menu is open.
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const items: readonly {
+    readonly id: ArchitectureExportItemId;
+    readonly label: string;
+    readonly legacy: boolean;
+    readonly run: () => void;
+  }[] = [
+    {
+      id: 'puml',
+      label: t('architecture.export.plantUml', { defaultValue: 'PlantUML (.puml)' }),
+      legacy: false,
+      run: onExportPlantUml,
+    },
+    {
+      id: 'copy',
+      label: t('architecture.export.copy', { defaultValue: 'Copy PlantUML' }),
+      legacy: false,
+      run: onCopyPlantUml,
+    },
+    { id: 'svg', label: t('architecture.export.svg', { defaultValue: 'SVG' }), legacy: false, run: onExportSvg },
+    { id: 'png', label: t('architecture.export.png', { defaultValue: 'PNG' }), legacy: false, run: onExportPng },
+    {
+      id: 'mmd',
+      label: t('architecture.export.mermaid', { defaultValue: 'Mermaid (.mmd, legacy)' }),
+      legacy: true,
+      run: onExportMermaid,
+    },
+  ];
+
+  const itemCount = items.length;
+  const focusItem = (index: number): void => {
+    const next = ((index % itemCount) + itemCount) % itemCount;
+    setActiveIndex(next);
+    itemRefs.current[next]?.focus();
+  };
+  const close = (restoreFocus: boolean): void => {
+    setOpen(false);
+    if (restoreFocus) toggleRef.current?.focus();
+  };
+  // The toolbar scrolls horizontally, which would clip an absolutely positioned
+  // dropdown. On the desktop tier the list is therefore `position: fixed`,
+  // anchored under the trigger; the compact tier draws it inline in the sheet.
+  const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number } | null>(null);
+  const openMenu = (): void => {
+    if (!compact) {
+      const rect = toggleRef.current?.getBoundingClientRect();
+      if (rect !== undefined) {
+        setPopoverPosition({ left: Math.max(8, rect.right - 224), top: rect.bottom + 4 });
+      }
+    }
+    setOpen(true);
+  };
+
+  // Opening moves focus into the list, the way a disclosure menu does.
+  useEffect(() => {
+    if (open) itemRefs.current[0]?.focus();
+  }, [open]);
+
+  // A press outside the disclosure closes it without stealing the press.
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent): void => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [open]);
+
+  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    switch (event.key) {
+      case 'Escape':
+        // Escape belongs to this menu while it is open. Stopping propagation
+        // is what keeps the chat page's global abort from also firing.
+        event.preventDefault();
+        event.stopPropagation();
+        close(true);
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        focusItem(activeIndex + 1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        focusItem(activeIndex - 1);
+        break;
+      case 'Home':
+        event.preventDefault();
+        focusItem(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        focusItem(itemCount - 1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  return (
+    <div ref={containerRef} className={compact ? 'flex flex-col gap-1' : 'relative'} data-architecture-export-menu-root="true">
+      <button
+        ref={toggleRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          if (open) close(false);
+          else openMenu();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            openMenu();
+          }
+        }}
+        data-architecture-export="true"
+        style={targetStyle}
+        className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          compact ? 'px-3 py-2 text-sm text-left' : 'px-2 py-0.5 text-xs'
+        }`}
+      >
+        {t('architecture.export.menu', { defaultValue: 'Export ▾' })}
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={t('architecture.export.menu', { defaultValue: 'Export ▾' })}
+          data-architecture-export-menu="true"
+          onKeyDown={handleMenuKeyDown}
+          style={compact ? undefined : popoverPosition ?? { left: 8, top: 56 }}
+          className={
+            compact
+              ? 'flex flex-col gap-1'
+              : 'fixed z-50 flex w-56 flex-col rounded-lg border border-border bg-popover p-1 shadow-lg'
+          }
+        >
+          {items.map((item, index) => (
+            <button
+              key={item.id}
+              ref={(node) => {
+                itemRefs.current[index] = node;
+              }}
+              type="button"
+              role="menuitem"
+              tabIndex={index === activeIndex ? 0 : -1}
+              data-architecture-export-item={item.id}
+              data-architecture-export-legacy={item.legacy ? 'true' : undefined}
+              style={targetStyle}
+              onFocus={() => setActiveIndex(index)}
+              onClick={() => {
+                close(false);
+                onAction();
+                item.run();
+              }}
+              className={`rounded px-2 py-1 text-left text-xs text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                compact ? 'py-2 text-sm' : ''
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** The panel's empty state, for both "no session selected" and "no seeds found". */
@@ -381,6 +607,27 @@ export default function ArchitecturePanel({
   // trigger (a click on a result would blur the input first); selecting a
   // result, pressing Escape, or clearing the box closes it.
   const [searchOpen, setSearchOpen] = useState(false);
+  // The slice the mounted renderer is drawing. The renderer owns its view, so
+  // it reports every navigation here; the export menu rebuilds exactly this
+  // view instead of guessing from the last click.
+  const [diagramView, setDiagramView] = useState<ArchitectureDiagramView>({ kind: 'overview' });
+  // The aria-live reading of the last export (copied / downscaled / failed).
+  // It is panel state, not menu state: the message must survive the menu closing.
+  const [exportStatus, setExportStatus] = useState('');
+  // The PlantUML text offered in the manual-copy dialog when the Clipboard API
+  // is unavailable. `null` keeps the dialog shut.
+  const [copyFallbackText, setCopyFallbackText] = useState<string | null>(null);
+  // The rendered drawing's container, so the export actions can read the live
+  // SVG without the renderer having to hand its host ref up the tree.
+  const graphAreaRef = useRef<HTMLDivElement | null>(null);
+  const copyFallbackRef = useRef<HTMLTextAreaElement | null>(null);
+  // A fallback dialog opens with its text already selected, so the documented
+  // "select and copy" path is one keystroke rather than a drag.
+  useEffect(() => {
+    if (copyFallbackText === null) return;
+    copyFallbackRef.current?.focus();
+    copyFallbackRef.current?.select();
+  }, [copyFallbackText]);
 
   const changeScope = (next: number): void => {
     const clamped = clampArchitectureScope(next);
@@ -456,18 +703,99 @@ export default function ArchitecturePanel({
   // A reading from the previous graph is not shown against this one.
   const visibleHover = hovered !== null && hovered.key === hoverKey ? hovered.hover : null;
 
-  const exportMmd = (): void => {
-    downloadMermaid(
-      granularity === 'file' ? mmd.file : mmd.entity,
-      `architecture-${granularity}.mmd`,
-    );
+  // The graph the renderer was last handed: the detail tier's cut, then the
+  // layout budget's. The export rebuilds from the SAME graph, so the file is
+  // the drawing on screen rather than a re-derivation from the payload.
+  const drawnGraph: ArchitectureRendererGraph = layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood;
+
+  /** The PlantUML document for the view on screen, exactly as the bridge builds it. */
+  const currentPlantUml = (): string =>
+    archguardToPlantUml(drawnGraph, {
+      view: diagramView,
+      grouping: 'adaptive',
+      idShape: nodeIdShapeOf(granularity),
+    }).puml;
+
+  /** The live drawing, read from the panel's own subtree at export time. */
+  const renderedSvg = (): SVGSVGElement | null =>
+    graphAreaRef.current?.querySelector<SVGSVGElement>('[data-architecture-plantuml] svg') ?? null;
+
+  const artifactFilename = (extension: string): string =>
+    architectureExportFilename(granularity, projectId, new Date(), extension);
+
+  const exportPlantUml = (): void => {
+    setExportStatus('');
+    downloadTextFile(currentPlantUml(), artifactFilename('puml'));
   };
-  // The graph's overflow menu is the panel's menu: exporting from it must also
-  // close it, so the panel owns that one extra step.
-  const exportFromMenu = (): void => {
-    setCompactMenuOpen(false);
-    exportMmd();
+
+  const copyPlantUml = async (): Promise<void> => {
+    const text = currentPlantUml();
+    try {
+      if (navigator.clipboard?.writeText === undefined) throw new Error('clipboard-unavailable');
+      await navigator.clipboard.writeText(text);
+      setExportStatus(t('architecture.export.copied', { defaultValue: 'PlantUML copied to the clipboard' }));
+    } catch {
+      // Documented fallback: when the clipboard is unavailable, show the same
+      // text selected in a dialog the reader can copy by hand.
+      setCopyFallbackText(text);
+    }
   };
+
+  const exportSvg = (): void => {
+    const svg = renderedSvg();
+    if (svg === null) {
+      setExportStatus(t('architecture.export.notReady', { defaultValue: 'The diagram is not ready to export yet.' }));
+      return;
+    }
+    setExportStatus('');
+    downloadTextFile(serializeSvgForExport(svg), artifactFilename('svg'), 'image/svg+xml;charset=utf-8');
+  };
+
+  const exportPng = async (): Promise<void> => {
+    const svg = renderedSvg();
+    const natural = svg === null ? null : readSvgNaturalSize(svg);
+    if (svg === null || natural === null) {
+      setExportStatus(t('architecture.export.notReady', { defaultValue: 'The diagram is not ready to export yet.' }));
+      return;
+    }
+    setExportStatus('');
+    const target = pngTargetSize(natural);
+    try {
+      const blob = await rasterizeSvgToPng(serializeSvgForExport(svg), target);
+      downloadBlob(blob, artifactFilename('png'));
+      if (target.downscaled) {
+        setExportStatus(t('architecture.export.pngScaled', {
+          defaultValue: 'The PNG was scaled down so its longest side is {{edge}} px.',
+          edge: EXPORT_PNG_MAX_EDGE,
+        }));
+      }
+    } catch {
+      setExportStatus(t('architecture.export.pngFailed', { defaultValue: 'The PNG could not be created.' }));
+    }
+  };
+
+  // The Mermaid pair is the LEGACY export and deliberately unchanged: the same
+  // server-returned document under the same pre-menu filename.
+  const exportMermaid = (): void => {
+    setExportStatus('');
+    downloadTextFile(granularity === 'file' ? mmd.file : mmd.entity, `architecture-${granularity}.mmd`);
+  };
+
+  const exportMenu = (
+    <ArchitectureExportMenu
+      compact={compactToolbar}
+      onExportPlantUml={exportPlantUml}
+      onCopyPlantUml={() => {
+        void copyPlantUml();
+      }}
+      onExportSvg={exportSvg}
+      onExportPng={() => {
+        void exportPng();
+      }}
+      onExportMermaid={exportMermaid}
+      onAction={() => setCompactMenuOpen(false)}
+    />
+  );
 
   const truncation = truncationReading(result, granularity);
   // How many nodes the server's node budget left out of this subgraph. The
@@ -633,22 +961,6 @@ export default function ArchitecturePanel({
         {t('architecture.controls.detailAll', { defaultValue: 'All' })}
       </button>
     </div>
-  );
-
-  // The export slot is a menu-shaped button (`Export ▾`); the menu itself is a
-  // sibling task's scope, so for now it writes the current subgraph's `.mmd`.
-  const exportButton = (
-    <button
-      type="button"
-      onClick={exportMmd}
-      data-architecture-export="true"
-      style={compactTargetStyle}
-      className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
-        coarsePointer ? 'px-3 text-sm' : 'px-2 py-0.5 text-xs'
-      }`}
-    >
-      {t('architecture.export.menu', { defaultValue: 'Export ▾' })}
-    </button>
   );
 
   // The search box. Its matches are drawn in a listbox under the input; an
@@ -891,11 +1203,54 @@ export default function ArchitecturePanel({
             {detailGroup}
             {searchBox}
             <span className="flex-1" />
-            {exportButton}
+            {exportMenu}
             {legendButton}
           </>
         )}
       </div>
+
+      {/* The export reading lives outside the menu so it survives the menu
+          closing: success, a downscale notice, or a failure is announced to
+          screen readers without moving focus. */}
+      <span role="status" aria-live="polite" data-architecture-export-status="true" className="sr-only">
+        {exportStatus}
+      </span>
+
+      {copyFallbackText !== null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('architecture.export.copyFallbackTitle', { defaultValue: 'Copy PlantUML manually' })}
+          data-architecture-export-fallback="true"
+          className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
+        >
+          <div className="w-full max-w-lg rounded-lg border border-border bg-popover p-4 shadow-xl">
+            <p className="text-sm text-foreground">
+              {t('architecture.export.copyFallbackHint', {
+                defaultValue: 'Clipboard access is unavailable. Select and copy the text below.',
+              })}
+            </p>
+            <textarea
+              ref={copyFallbackRef}
+              readOnly
+              value={copyFallbackText}
+              aria-label={t('architecture.export.plantUml', { defaultValue: 'PlantUML (.puml)' })}
+              data-architecture-export-fallback-text="true"
+              className="mt-2 h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-[11px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCopyFallbackText(null)}
+                data-architecture-export-fallback-close="true"
+                className="rounded-lg border border-border px-3 py-1 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+              >
+                {t('architecture.export.close', { defaultValue: 'Close' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {compactToolbar && compactMenuOpen && (
         <div
@@ -904,6 +1259,10 @@ export default function ArchitecturePanel({
         >
           {scopeGroup}
           {detailGroup}
+          {/* Export is here on the compact tier: the sheet is the panel's one
+              menu, so the format list is drawn inside it rather than adding a
+              second header control that would not fit. */}
+          {exportMenu}
           {/* The renderer's own controls (view navigation, readable mode, drill,
               zoom, export) are portaled in here — they belong to the drawing,
               not to the panel, and the slot keeps them at this menu's target
@@ -941,7 +1300,7 @@ export default function ArchitecturePanel({
                 </button>
               </div>
             )}
-            <div className="relative min-h-0 flex-1">
+            <div ref={graphAreaRef} className="relative min-h-0 flex-1">
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
                 <Renderer
                   key={`${sessionId}:${granularity}:${scope}`}
@@ -958,7 +1317,9 @@ export default function ArchitecturePanel({
                   // Selecting a node is the reader working the drawing; the
                   // one-off touch instruction has done its job by then.
                   onNodeClick={() => setTouchHintDismissed(true)}
-                  onExport={exportFromMenu}
+                  // The renderer owns the drill-down view; reporting it keeps
+                  // the export menu's PlantUML identical to the drawing.
+                  onViewChange={setDiagramView}
                   focusNodeId={focusTarget?.id ?? null}
                   focusToken={focusTarget?.token}
                 />

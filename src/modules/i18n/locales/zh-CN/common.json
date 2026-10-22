@@ -107,7 +107,19 @@
       "body": "实线：关联或调用。虚线：依赖或实现。箭头：△ 继承 · △ 实现 · ◆ 组合 · ◇ 聚合 · → 依赖。«构造型» 标记实体种类。● 种子：本次会话中提到的。+N 已折叠：被当前详情档位隐藏。"
     },
     "export": {
-      "menu": "导出 ▾"
+      "menu": "导出 ▾",
+      "plantUml": "PlantUML（.puml）",
+      "copy": "复制 PlantUML",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid（.mmd，旧格式）",
+      "copied": "PlantUML 已复制到剪贴板",
+      "copyFallbackTitle": "手动复制 PlantUML",
+      "copyFallbackHint": "剪贴板不可用。请选中并复制下方文本。",
+      "close": "关闭",
+      "notReady": "图表尚未准备好导出。",
+      "pngScaled": "PNG 已等比缩小，最长边为 {{edge}} px。",
+      "pngFailed": "无法生成 PNG。"
     },
     "search": {
       "label": "搜索实体或文件",
