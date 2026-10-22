@@ -23,10 +23,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/minimap.test.tsx` exit 0（新文件）：给定节点矩形集合与视口，范围框的位置/大小换算正确（含缩放、偏移、letterbox）；点击缩略图后主视口中心移到对应点；拖动范围框改变偏移且被钳制在图范围内；图一屏装得下时不渲染
-- [ ] 同文件：1000 个节点矩形的绘制只发生一次读取与一轮 `fillRect`（以注入的 canvas 上下文 mock 计数），缩放/平移只重画范围框而不重画节点（计数不变）
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩略图在画布容器之内、不与缩放簇重叠（bounding box 不相交）；收起后再展开状态被记忆；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/minimap.test.tsx` exit 0（新文件）：给定节点矩形集合与视口，范围框的位置/大小换算正确（含缩放、偏移、letterbox）；点击缩略图后主视口中心移到对应点；拖动范围框改变偏移且被钳制在图范围内；图一屏装得下时不渲染
+- [x] 同文件：1000 个节点矩形的绘制只发生一次读取与一轮 `fillRect`（以注入的 canvas 上下文 mock 计数），缩放/平移只重画范围框而不重画节点（计数不变）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩略图在画布容器之内、不与缩放簇重叠（bounding box 不相交）；收起后再展开状态被记忆；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
