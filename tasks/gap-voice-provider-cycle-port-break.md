@@ -2,7 +2,7 @@
 id: gap-voice-provider-cycle-port-break
 title: 把 modules/voice 拉出 8 成员依赖环：voice-lexicon.ts 对 providers 的动态 import
   改经端口注入（ports 手法 + 复用 AC-394 扫描器判据），voice 出环、环缩为 7
-status: todo
+status: ready
 labels:
   - gap
 parent: null
