@@ -54,11 +54,11 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/selectionModel.test.ts` exit 0：选择集合的加选/取消/清空；框选命中规则（节点与边）；换视图与换会话清空；既有单选用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/selectionTray.test.tsx` exit 0（新文件）：`Shift`/`Ctrl` 点击加选、`Shift`+拖动框选（普通拖动不框选而是平移）、长按进入多选模式（触摸）；标签与 × 取消；超过 20 项折叠为「…另 N 项」；> 300 实体时附带 PlantUML 禁用并有说明；`Escape` 先收托盘再清选择且 `chat.abort` 调用计数为 0
-- [ ] 同文件：点主按钮后 `writeDraftText` 被调用，scope 与 `selectedSession?.id`（无会话时为 `project:<id>`）一致；**追加**而不是覆盖（原草稿非空时新内容在其后且中间有空行）；内容符合固定格式（实体行、关系行、用户输入、可选 ` ```plantuml ` 围栏）；`onOpenChat` 被调用；Toast 文案随原草稿是否为空区分；没有会话时按钮禁用
-- [ ] `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx` exit 0（外部写入草稿后 composer 通过订阅恢复该文本，既有用例不回归；如需新增用例就在该文件内加）
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx` exit 0（既有用例不回归）；`npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/selectionModel.test.ts` exit 0：选择集合的加选/取消/清空；框选命中规则（节点与边）；换视图与换会话清空；既有单选用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/selectionTray.test.tsx` exit 0（新文件）：`Shift`/`Ctrl` 点击加选、`Shift`+拖动框选（普通拖动不框选而是平移）、长按进入多选模式（触摸）；标签与 × 取消；超过 20 项折叠为「…另 N 项」；> 300 实体时附带 PlantUML 禁用并有说明；`Escape` 先收托盘再清选择且 `chat.abort` 调用计数为 0
+- [x] 同文件：点主按钮后 `writeDraftText` 被调用，scope 与 `selectedSession?.id`（无会话时为 `project:<id>`）一致；**追加**而不是覆盖（原草稿非空时新内容在其后且中间有空行）；内容符合固定格式（实体行、关系行、用户输入、可选 ` ```plantuml ` 围栏）；`onOpenChat` 被调用；Toast 文案随原草稿是否为空区分；没有会话时按钮禁用
+- [x] `npx vitest run src/modules/chat/tests/composerDraftScoping.test.tsx` exit 0（外部写入草稿后 composer 通过订阅恢复该文本，既有用例不回归；如需新增用例就在该文件内加）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx` exit 0（既有用例不回归）；`npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
