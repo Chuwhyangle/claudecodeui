@@ -63,3 +63,11 @@ extra:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-mobile-default-fit-and-density.md
+
+## Blocker
+
+**2026-10-22T23:50:23.420Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/6，剩余未勾 6）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：e1157bb9-bb5d-4258-879f-347f3daeb1c7
