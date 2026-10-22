@@ -1,7 +1,7 @@
 ---
 id: architecture-default-fit-and-readable-lod
 title: 默认缩放到看全图不用拖动；低缩放下 package 标题反向缩放保持可读；package 级关系线沿原有正交折线裁剪而不是画中心直线
-status: todo
+status: ready
 labels:
   - feature
 parent: null
