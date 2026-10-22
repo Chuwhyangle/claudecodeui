@@ -48,8 +48,8 @@ extra:
 
 ## Blocker
 
-**2026-10-22T10:12:05.340Z — worker 未落地（exited-not-landed）**
+**2026-10-22T10:33:52.864Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/layoutAspect.test.tsx: AssertionError [ERR_ASSERTION]: aspectRatio 0.53 must fold the flat overview into a portrait canvas; got 3.266 (0 0 1789.96 548) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/layoutAspect.test.tsx]
 - run_id：wk-prod-anchor
-- session_id：6da9f738-d171-49cb-9439-8b47b5f05fd6
+- session_id：57d820f9-9555-47da-8ee8-592cc09411a5
