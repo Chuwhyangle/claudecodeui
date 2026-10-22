@@ -117,6 +117,7 @@ const SEL = {
   zoomCluster: '[data-architecture-zoom-cluster]',
   node: '.uml-node',
   zoomIn: '[data-architecture-zoom-in]',
+  zoomOut: '[data-architecture-zoom-out]',
   overviewMode: '[data-architecture-readable-overview-mode]',
   explosion: '[data-architecture-explosion]',
   // The provenance/cleanup row: a FOOTER under the canvas on every tier.
@@ -211,6 +212,8 @@ type LayoutReading = {
   panel: Box | null;
   /** The drawing host (`[data-architecture-plantuml]`). */
   host: Box | null;
+  /** The canvas region that holds the drawing host. */
+  canvas: Box | null;
   /** Height the panel leaves below its in-flow chrome — the space the drawing is given. */
   availableHeight: number | null;
   /** Host height ÷ available height. Reading 1. */
@@ -391,6 +394,7 @@ const readLayout = (page: Page): Promise<LayoutReading> =>
       viewport: { width: window.innerWidth, height: window.innerHeight },
       panel: panelBox,
       host: hostBox,
+      canvas: canvasBox,
       availableHeight,
       fillRatio: hostBox !== null && availableHeight !== null && availableHeight > 0
         ? hostBox.h / availableHeight
@@ -545,6 +549,7 @@ const printReading = (label: string, reading: LayoutReading): void => {
   console.log(`[architecture-layout] ${label}.viewport=${reading.viewport.width}x${reading.viewport.height}`);
   console.log(`[architecture-layout] ${label}.panel.box=${formatBox(reading.panel)}`);
   console.log(`[architecture-layout] ${label}.canvas.host.box=${formatBox(reading.host)}`);
+  console.log(`[architecture-layout] ${label}.canvas.region.box=${formatBox(reading.canvas)}`);
   console.log(`[architecture-layout] ${label}.canvas.available.height=${formatNumber(reading.availableHeight)}`);
   console.log(`[architecture-layout] ${label}.canvas.fill.ratio=${formatNumber(reading.fillRatio)}`);
   console.log(`[architecture-layout] ${label}.readout.row.box=${formatBox(reading.readoutRow)}`);
@@ -630,6 +635,40 @@ const assertFitNearTheoretical = (reading: LayoutReading, label: string): void =
         + `tier=${JSON.stringify(reading.zoomLevelText)} hint=${formatNumber(reading.readableHintPercent)}%`,
     ).toBe(`${reading.readableHintPercent}%`);
   }
+};
+
+/* ── the guard's own legs ─────────────────────────────────────────────────────────────────── */
+
+/**
+ * Reading 0: the DEFAULT view is the whole drawing inside the canvas.
+ *
+ * This is the defect the task is filed against: on four measured sessions the
+ * panel opened at 69% (a readable crop) instead of the drawing's real fit (as
+ * low as 15%), so the reader had to drag to see the diagram they had just
+ * opened. The leg reads the SVG's own box against the canvas region's box, so
+ * "the whole drawing is on screen" is a relation between two boxes rather than
+ * a mode name. It is read on the DRAWING THE TAB OPENS WITH, before any control
+ * is pressed, on both viewports.
+ */
+const assertDefaultWholeGraph = (reading: LayoutReading, label: string): void => {
+  expect.soft(reading.canvas, `${label}: the canvas region must exist`).not.toBeNull();
+  expect.soft(reading.svg, `${label}: the drawing must be measurable`).not.toBeNull();
+  expect.soft(
+    reading.readableMode,
+    `${label}: the default readable mode must be the whole-graph overview`,
+  ).toBe('overview');
+  const tolerance = 1;
+  const inside = reading.svg !== null
+    && reading.canvas !== null
+    && reading.svg.x >= reading.canvas.x - tolerance
+    && reading.svg.y >= reading.canvas.y - tolerance
+    && reading.svg.x2 <= reading.canvas.x2 + tolerance
+    && reading.svg.y2 <= reading.canvas.y2 + tolerance;
+  expect.soft(
+    inside,
+    `${label}: the whole drawing must lie inside the canvas on open — `
+      + `svg=${formatBox(reading.svg)} canvas=${formatBox(reading.canvas)}`,
+  ).toBe(true);
 };
 
 /* ── the guard's own legs ─────────────────────────────────────────────────────────────────── */
@@ -761,6 +800,136 @@ const assertReadoutAgreesWithLayout = (reading: LayoutReading, label: string): v
     `${label}: the collapsed row must not stack two budget sentences — `
       + `${reading.readoutBudgetWords} budget word(s) in ${JSON.stringify(reading.readoutText)}`,
   ).toBeLessThanOrEqual(1);
+};
+
+/* ── semantic zoom: readable titles + orthogonal package edges ───────────────────────────── */
+
+/** The package-level state the LOD criterion reads. */
+type LodReading = {
+  /** The level on screen: `'0'` is the package level. */
+  depth: string;
+  /** The applied zoom scale, so a red says how far out the drawing was. */
+  zoomScale: number | null;
+  /** The reading the title overlay publishes per package. */
+  titles: {
+    packageId: string;
+    text: string;
+    /** On-screen font height derived from the REAL rendering transform, in CSS px. */
+    screenFontPx: number;
+    /** The text's painted box height, reported beside it as evidence. */
+    rectHeight: number;
+  }[];
+  /** Every package-level relation path and whether all its segments are orthogonal. */
+  edges: { source: string | null; target: string | null; orthogonal: boolean; segments: number }[];
+  /** `arch-lod-package-edge` `<line>` elements. The shipped defect drew these. */
+  lineCount: number;
+};
+
+/** The renderer's package-title font size, in SVG user units. */
+const LOD_TITLE_FONT_PX = 12;
+/** The smallest on-screen title height the criterion accepts. */
+const LOD_TITLE_MIN_PX = 11;
+
+/**
+ * Read the semantic-zoom state in ONE round trip.
+ *
+ * The title height is derived from the rendering transform
+ * (`getScreenCTM()`), not from a self-reported attribute: that is the same
+ * number the browser uses to paint, and it is what makes the control arm —
+ * which removes the inverse scaling — read a genuinely smaller value. The
+ * package relation lines are parsed from their own `d` and every consecutive
+ * pair must differ on one axis only.
+ */
+const readLod = (page: Page): Promise<LodReading> =>
+  page.evaluate(({ sel, titleFontPx }) => {
+    const root = document.querySelector(sel.graphRoot);
+    const number = (value: string | null): number | null => {
+      if (value === null) return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const titles = [...document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')]
+      .map((group) => {
+        const text = group.querySelector('text') as SVGGraphicsElement | null;
+        const matrix = text?.getScreenCTM() ?? (group as SVGGraphicsElement).getScreenCTM();
+        // `c`/`d` are the y-basis of the element→screen matrix, so their length
+        // is exactly the CSS-px scale applied to a user-unit font size.
+        const scaleY = matrix === null ? 0 : Math.hypot(matrix.c, matrix.d);
+        return {
+          packageId: group.getAttribute('data-lod-label-package') ?? '',
+          text: text?.textContent ?? '',
+          screenFontPx: titleFontPx * scaleY,
+          rectHeight: text?.getBoundingClientRect().height ?? 0,
+        };
+      })
+      .sort((a, b) => a.packageId.localeCompare(b.packageId));
+    const edges = [...document.querySelectorAll('path.arch-lod-package-edge')].map((path) => {
+      const points: { x: number; y: number }[] = [];
+      for (const command of (path.getAttribute('d') ?? '').match(/[ML][^MLQZz]*/g) ?? []) {
+        const values = (command.slice(1).match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? []).map(Number);
+        if (values.length >= 2) points.push({ x: values[0], y: values[1] });
+      }
+      const orthogonal = points.every((point, index) => index === 0
+        || Math.abs(point.x - points[index - 1].x) < 1e-6
+        || Math.abs(point.y - points[index - 1].y) < 1e-6);
+      return {
+        source: path.getAttribute('data-lod-edge-source'),
+        target: path.getAttribute('data-lod-edge-target'),
+        orthogonal,
+        segments: Math.max(0, points.length - 1),
+      };
+    });
+    return {
+      depth: root?.getAttribute('data-architecture-lod-depth') ?? '<none>',
+      zoomScale: number(root?.getAttribute('data-architecture-zoom-scale') ?? null),
+      titles,
+      edges,
+      lineCount: document.querySelectorAll('line.arch-lod-package-edge').length,
+    };
+  }, { sel: SEL, titleFontPx: LOD_TITLE_FONT_PX });
+
+/** Print the LOD reading, so every assertion below can be read against it. */
+const printLod = (label: string, reading: LodReading): void => {
+  console.log(`[architecture-lod] ${label}.depth=${reading.depth} zoom=${formatNumber(reading.zoomScale)}`);
+  console.log(`[architecture-lod] ${label}.titles=${JSON.stringify(reading.titles)}`);
+  console.log(`[architecture-lod] ${label}.edges=${JSON.stringify(reading.edges)}`);
+  console.log(`[architecture-lod] ${label}.line.count=${reading.lineCount}`);
+};
+
+/**
+ * The criterion: at the package level the visible titles are readable and every
+ * relation line is the orthogonal family line, never a centre-to-centre
+ * diagonal.
+ */
+const assertLodReadable = (reading: LodReading, label: string): void => {
+  expect.soft(reading.depth, `${label}: the package level must be on screen`).toBe('0');
+  expect.soft(
+    reading.titles.length,
+    `${label}: the package level must draw visible titles to read`,
+  ).toBeGreaterThan(0);
+  for (const title of reading.titles) {
+    expect.soft(
+      title.screenFontPx,
+      `${label}: package title "${title.packageId}" must be at least ${LOD_TITLE_MIN_PX}px on screen — `
+        + `screen font ${formatNumber(title.screenFontPx)}px, painted box ${formatNumber(title.rectHeight)}px, `
+        + `text ${JSON.stringify(title.text)}`,
+    ).toBeGreaterThanOrEqual(LOD_TITLE_MIN_PX);
+  }
+  expect.soft(
+    reading.lineCount,
+    `${label}: no arch-lod-package-edge <line> may be drawn — the relation is a clipped path`,
+  ).toBe(0);
+  expect.soft(
+    reading.edges.length,
+    `${label}: the package level must draw its cross-package relations`,
+  ).toBeGreaterThan(0);
+  for (const edge of reading.edges) {
+    expect.soft(
+      edge.orthogonal,
+      `${label}: relation ${edge.source} → ${edge.target} must be orthogonal `
+        + `(every segment horizontal or vertical); ${edge.segments} segment(s)`,
+    ).toBe(true);
+  }
 };
 
 /* ── page setup ───────────────────────────────────────────────────────────────────────────── */
@@ -1046,6 +1215,30 @@ async function showExplosionView(page: Page): Promise<void> {
   await settle(page);
 }
 
+/**
+ * Zoom out until the package level is the level on screen.
+ *
+ * The LOD applies on a 200ms debounce, so the clicks are paced and the final
+ * wait is on the component's own published depth rather than a fixed sleep.
+ * Only the desktop tier is read this way (the phone tier keeps the zoom
+ * controls inside its bottom sheet).
+ */
+async function zoomOutToPackageLevel(page: Page): Promise<void> {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const depth = await page.locator(SEL.graphRoot).getAttribute('data-architecture-lod-depth');
+    if (depth === '0') break;
+    await page.locator(SEL.zoomOut).first().click();
+    await page.waitForTimeout(180);
+  }
+  await page.waitForFunction(
+    (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-lod-depth') === '0',
+    SEL,
+    { timeout: 15_000 },
+  );
+  // One debounce window plus the overlay rebuild.
+  await settle(page, 500);
+}
+
 /* ── the fixture, built once per worker ──────────────────────────────────────────────────── */
 
 let baseURL = '';
@@ -1104,6 +1297,14 @@ test('main arm — the canvas fills the panel and the readout names the drawing 
 
   try {
     await openArchitectureTab(page, sessionId);
+
+    // Reading 0, on the drawing the tab OPENS WITH: the whole graph is inside
+    // the canvas before any control is pressed. The shipped default cropped it
+    // to a readable 69% and left the reader dragging.
+    const opened = await readLayout(page);
+    printReading('pc.default', opened);
+    assertDefaultWholeGraph(opened, 'pc.default');
+    assertFitNearTheoretical(opened, 'pc.default');
 
     // The search combobox: typing a seed name must open a list that is fully
     // usable — the shipped layout clipped it to a 3px line under the toolbar.
@@ -1168,6 +1369,14 @@ test('main arm — the phone canvas fills the panel and every control is a 44px 
 
   try {
     await openArchitectureTab(page, sessionId);
+
+    // Reading 0 on the phone viewport: the whole drawing must be inside the
+    // canvas on open, without the reader panning the drawing they just opened.
+    const opened = await readLayout(page);
+    printReading('phone.default', opened);
+    assertDefaultWholeGraph(opened, 'phone.default');
+    assertFitNearTheoretical(opened, 'phone.default');
+
     await showWholeGraph(page);
 
     const fitted = await readLayout(page);
@@ -1258,7 +1467,95 @@ test('main arm — the phone canvas fills the panel and every control is a 44px 
   }
 });
 
+/* ── semantic-zoom main arm ─────────────────────────────────────────────────────────────── */
+
+/**
+ * The package level in a real browser: the titles the reader sees while the
+ * drawing is folded are readable, and the package relations keep the entity
+ * edges' orthogonal shape instead of becoming centre-to-centre diagonals.
+ */
+test('main arm — package titles stay readable and package relation lines are orthogonal', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showExplosionView(page);
+    await zoomOutToPackageLevel(page);
+
+    const lod = await readLod(page);
+    printLod('pc.package', lod);
+    assertLodReadable(lod, 'pc.package');
+  } finally {
+    await context.close();
+  }
+});
+
 /* ── the control arms (see the file header) ─────────────────────────────────────────────── */
+
+/**
+ * Control arm D: the title overlay's inverse scaling removed.
+ *
+ * The main arm reads each title's on-screen font from `getScreenCTM()` on the
+ * element. This arm sets the SAME elements' `transform` to `scale(1)` — the
+ * counter-scaling the fix exists for — and re-reads through the same function:
+ * the reading must fall under 11px, proving the guard can see the defect it
+ * names. The original transform is restored and the passing reading asserted
+ * again, so both sides of the injection are measured in one state.
+ */
+test('control arm D — a non-counter-scaled title overlay reads below the 11px floor', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showExplosionView(page);
+    await zoomOutToPackageLevel(page);
+
+    const before = await readLod(page);
+    printLod('controlD.before', before);
+    assertLodReadable(before, 'controlD.before');
+
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
+        group.setAttribute('data-control-d-transform', group.getAttribute('transform') ?? '');
+        group.setAttribute('transform', 'scale(1)');
+      }
+    });
+
+    const injected = await readLod(page);
+    printLod('controlD.injected', injected);
+    expect.soft(injected.titles.length, 'controlD.injected: the titles must still be readable').toBeGreaterThan(0);
+    const largest = injected.titles.length === 0
+      ? 0
+      : Math.max(...injected.titles.map((title) => title.screenFontPx));
+    expect.soft(
+      largest,
+      `controlD.injected: removing the inverse scaling must drop the reading below ${LOD_TITLE_MIN_PX}px — `
+        + `largest screen font ${formatNumber(largest)}px at zoom ${formatNumber(injected.zoomScale)}`,
+    ).toBeLessThan(LOD_TITLE_MIN_PX);
+
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
+        const original = group.getAttribute('data-control-d-transform');
+        if (original !== null) group.setAttribute('transform', original);
+        group.removeAttribute('data-control-d-transform');
+      }
+    });
+
+    const restored = await readLod(page);
+    printLod('controlD.restored', restored);
+    assertLodReadable(restored, 'controlD.restored');
+  } finally {
+    await context.close();
+  }
+});
+
+/* ── the control arms, continued ─────────────────────────────────────────────────────────── */
 
 /**
  * Control arm A: the shipped collapse, injected.

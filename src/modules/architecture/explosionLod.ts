@@ -76,8 +76,37 @@ export const PACKAGE_LEVEL_MAX_DEPTH = 3;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** Marks the client-computed package-edge overlay so it can be replaced wholesale. */
 const LOD_EDGE_LAYER_ATTRIBUTE = 'data-architecture-lod-edges';
+/** Marks the counter-scaled package-title overlay so it can be replaced wholesale. */
+export const LOD_LABELS_LAYER_ATTRIBUTE = 'data-architecture-lod-labels';
 /** Preserves a package label's original text across far/middle rewrites. */
 const LOD_LABEL_BASE_ATTRIBUTE = 'data-lod-base-label';
+
+/**
+ * The smallest on-screen height a counter-scaled package title may draw at.
+ * Matches the readable-zoom policy's floor (9px) plus headroom, because these
+ * titles sit on top of a drawing the reader is already looking at from afar.
+ */
+export const LOD_LABEL_MIN_SCREEN_PX = 11;
+/** The largest a counter-scaled title may be enlarged to on screen. */
+export const LOD_LABEL_MAX_SCREEN_PX = 16;
+/**
+ * Headroom added to the floor when planning a title. The SVG's rendered width
+ * is rounded to hundredths of a pixel, so a plan that targets exactly 11px can
+ * paint at 10.9997px; the margin keeps the FLOOR a floor under real
+ * measurement rather than a float artefact.
+ */
+const LOD_LABEL_TARGET_HEADROOM_PX = 0.5;
+/** The renderer's package-label font size, in SVG user units at 100% zoom. */
+export const LOD_LABEL_BASE_FONT_PX = 12;
+/**
+ * A frame narrower than this on screen gets no title: an ellipsis is not a
+ * name. The proposal fixes the threshold at about 60 CSS px.
+ */
+export const LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX = 60;
+/** Approximate glyph advance as a fraction of the font size (path-like ids). */
+const LOD_LABEL_CHAR_WIDTH_RATIO = 0.6;
+/** Inset of a title from its frame's top-left corner. */
+const LOD_LABEL_INSET_PX = 3;
 
 /**
  * The level-of-detail depth for a zoom scale, ignoring any history. Non-finite
@@ -281,7 +310,10 @@ function frameLabel(frame: Element): Element | null {
   return null;
 }
 
-type FrameBox = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+export type FrameBox = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+
+/** One point of an orthogonal polyline, in SVG user units. */
+export type PolyPoint = { readonly x: number; readonly y: number };
 
 /** A package frame's outer geometry, read from its first `<rect>` in user units. */
 function frameBox(frame: Element): FrameBox | null {
@@ -296,6 +328,314 @@ function frameBox(frame: Element): FrameBox | null {
     return width > 0 && height > 0 ? { x, y, width, height } : null;
   }
   return null;
+}
+
+/* ── counter-scaled package titles ─────────────────────────────────────────────────────────── */
+
+/** Normalise a zoom reading; a not-yet-measured scale means natural size. */
+function zoomOf(scale: number | undefined): number {
+  return typeof scale === 'number' && Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/**
+ * The on-screen height a package title draws at for a given zoom.
+ *
+ * Below 100% the title overlay is counter-scaled so the text never falls under
+ * {@link LOD_LABEL_MIN_SCREEN_PX}; it is capped at {@link LOD_LABEL_MAX_SCREEN_PX}
+ * so the enlargement never turns the corner of a package into a headline. At
+ * 100% and above nothing is enlarged: the renderer's own size already grows
+ * with the zoom, and the title must not get smaller than the original font.
+ */
+export function lodLabelScreenFontPx(
+  scale: number,
+  baseFontPx: number = LOD_LABEL_BASE_FONT_PX,
+): number {
+  const zoom = zoomOf(scale);
+  const natural = baseFontPx * zoom;
+  if (zoom >= 1) return natural;
+  const floor = Math.max(LOD_LABEL_MIN_SCREEN_PX, natural) + LOD_LABEL_TARGET_HEADROOM_PX;
+  return Math.min(LOD_LABEL_MAX_SCREEN_PX, floor);
+}
+
+/** The inverse-scale factor a title `<g>` carries to reach its screen font height. */
+export function lodLabelTransformScale(
+  scale: number,
+  baseFontPx: number = LOD_LABEL_BASE_FONT_PX,
+): number {
+  const zoom = zoomOf(scale);
+  return lodLabelScreenFontPx(zoom, baseFontPx) / (baseFontPx * zoom);
+}
+
+function approximateTextWidthPx(text: string, screenFontPx: number): number {
+  return text.length * screenFontPx * LOD_LABEL_CHAR_WIDTH_RATIO;
+}
+
+/**
+ * Fit a package title into the on-screen width available to it, or `null` when
+ * not even one character plus the ellipsis fits.
+ */
+export function truncatePackageTitle(
+  text: string,
+  availableScreenPx: number,
+  screenFontPx: number,
+): string | null {
+  if (text.length === 0 || !(availableScreenPx > 0) || !(screenFontPx > 0)) return null;
+  if (approximateTextWidthPx(text, screenFontPx) <= availableScreenPx) return text;
+  const maxChars = Math.floor(availableScreenPx / (screenFontPx * LOD_LABEL_CHAR_WIDTH_RATIO));
+  if (maxChars < 2) return null;
+  return `${text.slice(0, maxChars - 1)}…`;
+}
+
+/** One frame that may carry a counter-scaled title. */
+export type PackageTitleFrame = {
+  readonly packageId: string;
+  readonly text: string;
+  readonly box: FrameBox;
+};
+
+/** A title to draw, with its user-space anchor and inverse-scale factor. */
+export type PackageTitlePlan = {
+  readonly packageId: string;
+  readonly text: string;
+  /** The on-screen font height the plan targets, in CSS px. */
+  readonly screenFontPx: number;
+  /** The `scale()` the title's `<g>` carries inside the SVG. */
+  readonly transformScale: number;
+  /** User-space anchor of the title's top-left. */
+  readonly x: number;
+  readonly y: number;
+};
+
+type ScreenRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+
+function intersects(a: ScreenRect, b: ScreenRect): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+/**
+ * Plan the counter-scaled package titles for one zoom level.
+ *
+ * Pure geometry: it takes the frames' user-unit boxes and returns the titles
+ * that fit. Outer frames (larger area) are placed first, and an inner title
+ * that would overlap one already placed is dropped — the outer package is the
+ * one that tells the reader where they are. A frame narrower than
+ * {@link LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX} on screen gets no title.
+ */
+export function planPackageTitles(
+  frames: readonly PackageTitleFrame[],
+  scale: number,
+  baseFontPx: number = LOD_LABEL_BASE_FONT_PX,
+): PackageTitlePlan[] {
+  const zoom = zoomOf(scale);
+  const screenFontPx = lodLabelScreenFontPx(zoom, baseFontPx);
+  const transformScale = lodLabelTransformScale(zoom, baseFontPx);
+  const ordered = frames
+    .map((frame) => ({
+      ...frame,
+      screenWidth: frame.box.width * zoom,
+      area: frame.box.width * frame.box.height,
+    }))
+    .filter((frame) => frame.text.trim().length > 0
+      && frame.screenWidth >= LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX)
+    .sort((a, b) => b.area - a.area || a.packageId.localeCompare(b.packageId));
+
+  const placed: ScreenRect[] = [];
+  const plans: PackageTitlePlan[] = [];
+  for (const frame of ordered) {
+    const available = frame.screenWidth - LOD_LABEL_INSET_PX * 2;
+    const text = truncatePackageTitle(frame.text, available, screenFontPx);
+    if (text === null) continue;
+    const screenX = frame.box.x * zoom + LOD_LABEL_INSET_PX;
+    const screenY = frame.box.y * zoom + LOD_LABEL_INSET_PX;
+    const rect: ScreenRect = {
+      x: screenX,
+      y: screenY,
+      width: approximateTextWidthPx(text, screenFontPx),
+      height: screenFontPx * 1.25,
+    };
+    if (placed.some((other) => intersects(rect, other))) continue;
+    placed.push(rect);
+    plans.push({
+      packageId: frame.packageId,
+      text,
+      screenFontPx,
+      transformScale,
+      x: rect.x / zoom,
+      y: rect.y / zoom,
+    });
+  }
+  return plans.sort((a, b) => a.packageId.localeCompare(b.packageId));
+}
+
+/* ── orthogonal package edges ─────────────────────────────────────────────────────────────── */
+
+function samePoint(a: PolyPoint, b: PolyPoint): boolean {
+  return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+}
+
+function dedupePoints(points: readonly PolyPoint[]): PolyPoint[] {
+  const out: PolyPoint[] = [];
+  for (const point of points) {
+    if (out.length === 0 || !samePoint(out[out.length - 1], point)) out.push(point);
+  }
+  return out;
+}
+
+/**
+ * Parse the renderer's orthogonal `d` into its corner points.
+ *
+ * The published renderer emits `M`/`L`/`Q` only (a quadratic rounds each
+ * corner). Its control point IS the original corner, so including it keeps
+ * every consecutive pair axis-aligned — which is what lets the caller clip the
+ * route and still claim orthogonality.
+ */
+export function polylineFromPathData(d: string): PolyPoint[] {
+  const points: PolyPoint[] = [];
+  for (const command of d.match(/[MLQ][^MLQZz]*/g) ?? []) {
+    const numbers = (command.slice(1).match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? []).map(Number);
+    for (let i = 0; i + 1 < numbers.length; i += 2) {
+      if (!Number.isFinite(numbers[i]) || !Number.isFinite(numbers[i + 1])) continue;
+      points.push({ x: numbers[i], y: numbers[i + 1] });
+    }
+  }
+  return dedupePoints(points);
+}
+
+/** The orthogonal polyline of one drawn `.uml-edge` group, or `null`. */
+export function polylineFromEdgeElement(edge: Element): PolyPoint[] | null {
+  const path = edge.tagName.toLowerCase() === 'path'
+    ? edge
+    : edge.querySelector('path[d]');
+  const d = path?.getAttribute('d') ?? null;
+  if (d === null) return null;
+  const points = polylineFromPathData(d);
+  return points.length >= 2 ? points : null;
+}
+
+function pointInsideBox(point: PolyPoint, box: FrameBox, eps = 1e-3): boolean {
+  return point.x >= box.x - eps
+    && point.x <= box.x + box.width + eps
+    && point.y >= box.y - eps
+    && point.y <= box.y + box.height + eps;
+}
+
+function pointOnBoxBoundary(point: PolyPoint, box: FrameBox, eps = 1e-3): boolean {
+  if (!pointInsideBox(point, box, eps)) return false;
+  return Math.abs(point.x - box.x) <= eps
+    || Math.abs(point.x - (box.x + box.width)) <= eps
+    || Math.abs(point.y - box.y) <= eps
+    || Math.abs(point.y - (box.y + box.height)) <= eps;
+}
+
+/** The point where the segment `a → b` leaves/enters `box` (a inside, b outside). */
+function segmentBoxBoundaryPoint(a: PolyPoint, b: PolyPoint, box: FrameBox): PolyPoint | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  let bestT = Number.POSITIVE_INFINITY;
+  let best: PolyPoint | null = null;
+  const consider = (t: number): void => {
+    if (!(t > 1e-9) || t > 1 + 1e-9 || t >= bestT) return;
+    const point = { x: a.x + t * dx, y: a.y + t * dy };
+    if (!pointOnBoxBoundary(point, box)) return;
+    bestT = t;
+    best = point;
+  };
+  if (Math.abs(dx) > 1e-9) {
+    consider((box.x - a.x) / dx);
+    consider((box.x + box.width - a.x) / dx);
+  }
+  if (Math.abs(dy) > 1e-9) {
+    consider((box.y - a.y) / dy);
+    consider((box.y + box.height - a.y) / dy);
+  }
+  return best;
+}
+
+/** First point outside `box`, from a polyline whose start is inside it. */
+function exitPointFromBox(points: readonly PolyPoint[], box: FrameBox): { point: PolyPoint; index: number } | null {
+  for (let i = 0; i + 1 < points.length; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (!pointInsideBox(a, box, 1e-3) || pointInsideBox(b, box, 1e-3)) continue;
+    const point = segmentBoxBoundaryPoint(a, b, box);
+    if (point !== null) return { point, index: i + 1 };
+  }
+  return null;
+}
+
+/** Last point outside `box`, from a polyline whose end is inside it. */
+function entryPointToBox(points: readonly PolyPoint[], box: FrameBox): { point: PolyPoint; index: number } | null {
+  for (let i = points.length - 1; i >= 1; i -= 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (pointInsideBox(a, box, 1e-3) || !pointInsideBox(b, box, 1e-3)) continue;
+    const point = segmentBoxBoundaryPoint(a, b, box);
+    if (point !== null) return { point, index: i - 1 };
+  }
+  return null;
+}
+
+/**
+ * Clip an entity-edge polyline to two package frames: start where the route
+ * leaves `fromBox` and end where it enters `toBox`. The route's own shape is
+ * preserved, so every clipped segment is still horizontal or vertical and the
+ * two endpoints sit on the respective frame boundary. `null` when the route
+ * never leaves the source frame or never reaches the target frame.
+ */
+export function clipPolylineToFrames(
+  points: readonly PolyPoint[],
+  fromBox: FrameBox,
+  toBox: FrameBox,
+): PolyPoint[] | null {
+  if (points.length < 2) return null;
+  let clipped = points.map((point) => ({ ...point }));
+
+  if (pointInsideBox(clipped[0], fromBox, 1e-3)) {
+    const exit = exitPointFromBox(clipped, fromBox);
+    if (exit === null) return null;
+    clipped = [exit.point, ...clipped.slice(exit.index)];
+  }
+
+  if (clipped.length >= 2 && pointInsideBox(clipped[clipped.length - 1], toBox, 1e-3)) {
+    const entry = entryPointToBox(clipped, toBox);
+    if (entry === null) return null;
+    clipped = [...clipped.slice(0, entry.index + 1), entry.point];
+  }
+
+  const cleaned = dedupePoints(clipped);
+  return cleaned.length >= 2 ? cleaned : null;
+}
+
+/**
+ * The degenerate connector used when no drawn polyline can be found: an
+ * orthogonal L between the two frames' facing sides. It never draws a diagonal.
+ */
+export function orthogonalConnector(fromBox: FrameBox, toBox: FrameBox): PolyPoint[] {
+  const fromCx = fromBox.x + fromBox.width / 2;
+  const fromCy = fromBox.y + fromBox.height / 2;
+  const toCx = toBox.x + toBox.width / 2;
+  const toCy = toBox.y + toBox.height / 2;
+  if (Math.abs(toCx - fromCx) >= Math.abs(toCy - fromCy)) {
+    const startX = toCx >= fromCx ? fromBox.x + fromBox.width : fromBox.x;
+    const endX = toCx >= fromCx ? toBox.x : toBox.x + toBox.width;
+    return dedupePoints([
+      { x: startX, y: fromCy },
+      { x: endX, y: fromCy },
+      { x: endX, y: toCy },
+    ]);
+  }
+  const startY = toCy >= fromCy ? fromBox.y + fromBox.height : fromBox.y;
+  const endY = toCy >= fromCy ? toBox.y : toBox.y + toBox.height;
+  return dedupePoints([
+    { x: fromCx, y: startY },
+    { x: fromCx, y: endY },
+    { x: toCx, y: endY },
+  ]);
+}
+
+function pathDataOf(points: readonly PolyPoint[]): string {
+  const [first, ...rest] = points;
+  return `M${first.x} ${first.y}${rest.map((point) => `L${point.x} ${point.y}`).join('')}`;
 }
 
 /** The bounding box of two frame boxes, used to synthesise a missing ancestor. */
@@ -368,16 +708,109 @@ function removePackageEdgeLayer(host: ParentNode): void {
   for (const layer of host.querySelectorAll(`[${LOD_EDGE_LAYER_ATTRIBUTE}]`)) layer.remove();
 }
 
+/** Drop the previous counter-scaled title overlay, if any. */
+function removeLodLabelLayer(host: ParentNode): void {
+  for (const layer of host.querySelectorAll(`[${LOD_LABELS_LAYER_ATTRIBUTE}]`)) layer.remove();
+}
+
+/** The drawn entity edge polyline for one package pair, with its own styling. */
+type EdgeRoute = {
+  readonly points: PolyPoint[];
+  readonly stroke: string;
+  readonly dash: string | null;
+};
+
 /**
- * Draw the package-level edge overlay for a collapsed level. Coordinates come
- * from the frames' own `rect` attributes (SVG user units), so the overlay stays
- * attached to the frames at every zoom scale without measuring the browser.
+ * The original entity edge to reuse for a package pair: the first graph edge
+ * whose endpoints collapse onto that pair AND whose drawn `.uml-edge` group
+ * still carries a usable polyline. The renderer's own stroke and dash are
+ * copied so the package-level line stays the family's line, not a new one.
+ */
+function edgeRouteFor(
+  host: ParentNode,
+  hierarchy: ArchitectureHierarchyIndex,
+  edges: readonly ArchitectureRendererEdge[],
+  from: string,
+  to: string,
+  maxDepth: number | null,
+): EdgeRoute | null {
+  let fallback: EdgeRoute | null = null;
+  for (const edge of edges) {
+    const fromPackage = hierarchy.entityPackage.get(edge.from);
+    const toPackage = hierarchy.entityPackage.get(edge.to);
+    if (fromPackage === undefined || toPackage === undefined) continue;
+    if (visiblePackage(fromPackage, maxDepth) !== from) continue;
+    if (visiblePackage(toPackage, maxDepth) !== to) continue;
+    for (const element of host.querySelectorAll('.uml-edge')) {
+      if (element.getAttribute('data-edge-source') !== edge.from) continue;
+      if (element.getAttribute('data-edge-target') !== edge.to) continue;
+      const path = element.querySelector('path[d]');
+      const points = polylineFromEdgeElement(element);
+      const route: EdgeRoute = {
+        points: points ?? [],
+        stroke: path?.getAttribute('stroke') ?? '#2563eb',
+        dash: path?.getAttribute('stroke-dasharray') ?? null,
+      };
+      if (points !== null && points.length >= 2) return route;
+      fallback ??= route;
+      break;
+    }
+  }
+  return fallback !== null && fallback.points.length >= 2 ? fallback : null;
+}
+
+/** The middle of the longest segment, where the ×N weight label reads best. */
+function longestSegmentMidpoint(points: readonly PolyPoint[]): PolyPoint {
+  let best = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+  let bestLength = -1;
+  for (let i = 0; i + 1 < points.length; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    const length = Math.abs(b.x - a.x) + Math.abs(b.y - a.y);
+    if (length > bestLength) {
+      bestLength = length;
+      best = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+  }
+  return best;
+}
+
+/** A small filled arrowhead on the target end of an orthogonal route. */
+function arrowHeadPath(points: readonly PolyPoint[], zoom: number): string | null {
+  if (points.length < 2) return null;
+  const tip = points[points.length - 1];
+  const previous = points[points.length - 2];
+  const dx = tip.x - previous.x;
+  const dy = tip.y - previous.y;
+  const length = Math.hypot(dx, dy);
+  if (!(length > 0)) return null;
+  // Keep the head roughly constant on screen, like the line itself.
+  const size = 8 / zoom;
+  const ux = dx / length;
+  const uy = dy / length;
+  const back = { x: tip.x - ux * size, y: tip.y - uy * size };
+  const left = { x: back.x - uy * size * 0.45, y: back.y + ux * size * 0.45 };
+  const right = { x: back.x + uy * size * 0.45, y: back.y - ux * size * 0.45 };
+  return `M${tip.x} ${tip.y}L${left.x} ${left.y}L${right.x} ${right.y}Z`;
+}
+
+/**
+ * Draw the package-level edge overlay for a collapsed level.
+ *
+ * The line is NOT a centre-to-centre straight segment: it reuses the drawn
+ * entity edge between the two packages, clipped to the frames' boundaries, so
+ * its orthogonal corners, dash pattern and relation colour survive the
+ * collapse. When no drawn route is available it degrades to an orthogonal L —
+ * never a diagonal. Coordinates come from the frames' own `rect` attributes
+ * (SVG user units), so the overlay stays attached to the frames at every zoom
+ * scale without measuring the browser.
  */
 function renderPackageEdgeLayer(
   host: ParentNode,
   hierarchy: ArchitectureHierarchyIndex,
   edges: readonly ArchitectureRendererEdge[],
   depth: ExplosionLodDepth,
+  zoom: number,
 ): void {
   const svg = host.querySelector('svg');
   if (svg === null) return;
@@ -391,35 +824,99 @@ function renderPackageEdgeLayer(
     const to = frameBoxFor(host, packageEdge.to);
     if (from === null || to === null) continue;
 
-    const x1 = from.x + from.width / 2;
-    const y1 = from.y + from.height / 2;
-    const x2 = to.x + to.width / 2;
-    const y2 = to.y + to.height / 2;
+    const route = edgeRouteFor(host, hierarchy, edges, packageEdge.from, packageEdge.to, maxDepth);
+    const points = (route === null ? null : clipPolylineToFrames(route.points, from, to))
+      ?? orthogonalConnector(from, to);
+    if (points.length < 2) continue;
 
-    const line = svg.ownerDocument.createElementNS(SVG_NS, 'line');
-    line.setAttribute('class', 'arch-lod-package-edge');
-    line.setAttribute('x1', String(x1));
-    line.setAttribute('y1', String(y1));
-    line.setAttribute('x2', String(x2));
-    line.setAttribute('y2', String(y2));
-    line.setAttribute('stroke', '#2563eb');
-    line.setAttribute('stroke-width', String(Math.min(1 + (packageEdge.weight - 1) * 0.5, 4)));
-    line.setAttribute('data-lod-edge-source', packageEdge.from);
-    line.setAttribute('data-lod-edge-target', packageEdge.to);
-    line.setAttribute('data-lod-edge-weight', String(packageEdge.weight));
-    layer.append(line);
+    const stroke = route?.stroke ?? '#2563eb';
+    const path = svg.ownerDocument.createElementNS(SVG_NS, 'path');
+    path.setAttribute('class', 'arch-lod-package-edge');
+    path.setAttribute('d', pathDataOf(points));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', stroke);
+    if (route?.dash !== null && route?.dash !== undefined) path.setAttribute('stroke-dasharray', route.dash);
+    path.setAttribute('stroke-width', String(Math.min(1 + (packageEdge.weight - 1) * 0.5, 4)));
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('vector-effect', 'non-scaling-stroke');
+    path.setAttribute('data-lod-edge-source', packageEdge.from);
+    path.setAttribute('data-lod-edge-target', packageEdge.to);
+    path.setAttribute('data-lod-edge-weight', String(packageEdge.weight));
+    layer.append(path);
+
+    const arrow = arrowHeadPath(points, zoom);
+    if (arrow !== null) {
+      const head = svg.ownerDocument.createElementNS(SVG_NS, 'path');
+      head.setAttribute('class', 'arch-lod-package-arrowhead');
+      head.setAttribute('d', arrow);
+      head.setAttribute('fill', stroke);
+      head.setAttribute('data-lod-edge-source', packageEdge.from);
+      head.setAttribute('data-lod-edge-target', packageEdge.to);
+      layer.append(head);
+    }
 
     if (packageEdge.weight > 1) {
+      const midpoint = longestSegmentMidpoint(points);
       const weight = svg.ownerDocument.createElementNS(SVG_NS, 'text');
       weight.setAttribute('class', 'arch-lod-package-weight');
-      weight.setAttribute('x', String((x1 + x2) / 2));
-      weight.setAttribute('y', String((y1 + y2) / 2 - 6));
+      weight.setAttribute('x', String(midpoint.x));
+      weight.setAttribute('y', String(midpoint.y - 6 / zoom));
       weight.setAttribute('text-anchor', 'middle');
-      weight.setAttribute('font-size', '11');
-      weight.setAttribute('fill', '#2563eb');
+      weight.setAttribute('font-size', String(LOD_LABEL_MIN_SCREEN_PX / zoom));
+      weight.setAttribute('fill', stroke);
       weight.textContent = `×${packageEdge.weight}`;
       layer.append(weight);
     }
+  }
+
+  svg.append(layer);
+}
+
+/**
+ * Draw the counter-scaled title overlay for the visible package frames.
+ *
+ * The renderer's own label stays where it is (a 12px text at natural size);
+ * this layer is the readable copy, anchored at the same top-left corner but
+ * inverse-scaled so its screen height is at least {@link LOD_LABEL_MIN_SCREEN_PX}.
+ * The entity level draws no overlay: its labels are the entity boxes' own.
+ */
+function renderLodLabelLayer(
+  host: ParentNode,
+  depth: ExplosionLodDepth,
+  zoom: number,
+): void {
+  const svg = host.querySelector('svg');
+  if (svg === null) return;
+
+  const frames: PackageTitleFrame[] = [];
+  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
+    const packageId = normalizePackageId(frame.getAttribute('data-package-id'));
+    if (depth === PACKAGE_LOD_DEPTH && packageDepth(packageId) > PACKAGE_LEVEL_MAX_DEPTH) continue;
+    const box = frameBox(frame);
+    const label = frameLabel(frame);
+    if (box === null || label === null) continue;
+    const text = (label.textContent ?? '').trim();
+    if (text.length === 0) continue;
+    frames.push({ packageId, text, box });
+  }
+
+  const layer = svg.ownerDocument.createElementNS(SVG_NS, 'g');
+  layer.setAttribute(LOD_LABELS_LAYER_ATTRIBUTE, 'true');
+  for (const plan of planPackageTitles(frames, zoom)) {
+    const group = svg.ownerDocument.createElementNS(SVG_NS, 'g');
+    group.setAttribute('class', 'arch-lod-package-label');
+    group.setAttribute('data-lod-label-package', plan.packageId);
+    group.setAttribute('data-lod-label-screen-px', plan.screenFontPx.toFixed(2));
+    group.setAttribute('transform', `translate(${plan.x} ${plan.y}) scale(${plan.transformScale})`);
+    const text = svg.ownerDocument.createElementNS(SVG_NS, 'text');
+    text.setAttribute('class', 'arch-lod-package-title');
+    text.setAttribute('font-size', String(LOD_LABEL_BASE_FONT_PX));
+    text.setAttribute('dominant-baseline', 'text-before-edge');
+    text.setAttribute('fill', '#111827');
+    text.setAttribute('pointer-events', 'none');
+    text.textContent = plan.text;
+    group.append(text);
+    layer.append(group);
   }
 
   svg.append(layer);
@@ -449,6 +946,12 @@ export type ExplosionLodOptions = {
   readonly focusPackageId?: string | null;
   /** Scroll the focus package back to the container centre; only on a real level cross. */
   readonly centerFocus?: boolean;
+  /**
+   * The settled zoom scale the drawing is displayed at. Used by the
+   * counter-scaled title overlay and the screen-constant edge furniture; a
+   * missing/unmeasured scale is treated as natural size (100%).
+   */
+  readonly scale?: number;
 };
 
 /**
@@ -465,6 +968,7 @@ export type ExplosionLodOptions = {
 export function applyExplosionLod(options: ExplosionLodOptions): void {
   const { host, hierarchy, edges, depth } = options;
   const entityLevel = depth === ENTITY_LOD_DEPTH;
+  const zoom = zoomOf(options.scale);
 
   for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
     setShown(node, entityLevel);
@@ -481,7 +985,11 @@ export function applyExplosionLod(options: ExplosionLodOptions): void {
   }
 
   removePackageEdgeLayer(host);
-  if (!entityLevel) renderPackageEdgeLayer(host, hierarchy, edges, depth);
+  removeLodLabelLayer(host);
+  if (!entityLevel) {
+    renderPackageEdgeLayer(host, hierarchy, edges, depth, zoom);
+    renderLodLabelLayer(host, depth, zoom);
+  }
 
   const focus = options.focusPackageId ?? null;
   if (options.centerFocus === true && focus !== null) {

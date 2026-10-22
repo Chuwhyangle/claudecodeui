@@ -444,6 +444,11 @@ type ArchitecturePanelRenderer = ComponentType<
     readonly onBoxSelect?: (selections: readonly ArchitectureSelection[]) => void;
     readonly onMultiSelectStart?: (node: ArchitectureRendererNode) => void;
     readonly multiSelectMode?: boolean;
+    /**
+     * The project whose graph is drawn; the renderer remembers the reader's
+     * explicit readable mode per project under it.
+     */
+    readonly projectId?: string | null;
     readonly selectedNodeIds?: readonly string[];
     readonly selectedRelations?: readonly {
       readonly from: string;
@@ -3343,6 +3348,9 @@ export default function ArchitecturePanel({
                   <Renderer
                     key={`${sessionId}:${granularity}:${scope}`}
                     graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
+                    // Which project the drawing belongs to; the renderer uses it
+                    // to remember the reader's explicit readable mode.
+                    projectId={projectId}
                     // The detail knob's two numbers, so a renderer that has a
                     // visible-summary slot can report shown/in-scope rather than
                     // its own drawn/total reading.

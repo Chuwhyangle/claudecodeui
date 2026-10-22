@@ -42,7 +42,9 @@ import {
   buildSeedHierarchy,
   decideReadableZoom,
   fitControlReading,
+  readStoredReadableMode,
   shortPackageName,
+  writeStoredReadableMode,
   type ReadableZoomDecision,
   type ReadableZoomHint,
   type ReadableZoomMode,
@@ -193,6 +195,19 @@ const HIGHLIGHT_STYLE = `
   [data-architecture-plantuml] svg { display: block; margin: 0 auto; }
 `;
 
+/** The real browser store, or `null` where accessing it throws (private mode). */
+function localReadableStorage(): {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+} | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The renderer-local budget hints are accepted (the contract carries them) but
  * deliberately unused: the overview/group/neighbourhood views below derive what
@@ -259,6 +274,12 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
    * embedded without a tray wants.
    */
   readonly onBoxSelect?: (selections: readonly ArchitectureSelection[]) => void;
+  /**
+   * The project whose graph is drawn. The reader's explicit readable mode is
+   * remembered per project under this id; absent (an embedded renderer with no
+   * panel) means the choice is kept for this visit only.
+   */
+  readonly projectId?: string | null;
 };
 
 /**
@@ -772,6 +793,7 @@ export function PlantUmlGraph({
   multiSelectMode = false,
   onMultiSelectStart,
   onBoxSelect,
+  projectId = null,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1016,11 +1038,22 @@ export function PlantUmlGraph({
   // it for the toolbar toggle and the two notice lines; the SCALE itself lives
   // in `zoom`, because it is the same value the +/- controls manipulate.
   const [readableView, setReadableView] = useState<ReadableView | null>(null);
-  // The user's explicit toolbar choice; `null` means "let the drawing decide"
-  // (focus when the geometric fit is below the readable floor). A new drawing
-  // clears it so each view opens at its own honest default.
-  const [readableMode, setReadableMode] = useState<ReadableZoomMode | null>(null);
-  const readableModeRef = useRef<ReadableZoomMode | null>(null);
+  // The user's EXPLICIT toolbar choice, remembered per project. `null` means
+  // "nothing chosen yet": the drawing then opens at the whole-graph overview.
+  // A new view/drawing does not invent a choice — it re-reads this project's
+  // remembered one, so the reader's Focus survives a reload and never leaks
+  // into another project.
+  const [readableMode, setReadableMode] = useState<ReadableZoomMode | null>(
+    () => readStoredReadableMode(localReadableStorage(), projectId),
+  );
+  const readableModeRef = useRef<ReadableZoomMode | null>(readableMode);
+  // Switching projects switches which remembered choice applies. The effect is
+  // keyed on the project id only: an in-visit choice is already in state.
+  useEffect(() => {
+    const remembered = readStoredReadableMode(localReadableStorage(), projectId);
+    readableModeRef.current = remembered;
+    setReadableMode(remembered);
+  }, [projectId]);
   // The seed hierarchy of the payload on screen, so a resize or a mode switch
   // can re-decide the focus without rebuilding the tree.
   const seedHierarchyRef = useRef<ArchitectureHierarchyIndex | null>(null);
@@ -1098,6 +1131,9 @@ export function PlantUmlGraph({
       depth,
       focusPackageId: focusPackageOf(drawing.hierarchy, [selectedRef.current, centerEntityRef.current]),
       centerFocus: crossed,
+      // The settled scale drives the counter-scaled title overlay and the
+      // screen-constant edge furniture; re-applied only on the debounced tick.
+      scale,
     });
     setLodDepth(depth);
   }, []);
@@ -1306,11 +1342,13 @@ export function PlantUmlGraph({
     lodSchedulerRef.current?.cancel();
     setFailure(null);
     hoverCallbackRef.current?.(null);
-    // A NEW view gets its own readable default; a re-layout of the same view
-    // (container aspect change) keeps whatever the user chose.
+    // A NEW view keeps the reader's remembered choice: it is an explicit
+    // preference for this project, not a property of one drawing. Re-read it so
+    // a change made in another tab (or another project) is honoured.
     if (drawingKeyOf(view) !== drawnKeyRef.current) {
-      readableModeRef.current = null;
-      setReadableMode(null);
+      const remembered = readStoredReadableMode(localReadableStorage(), projectId);
+      readableModeRef.current = remembered;
+      setReadableMode(remembered);
     }
     // A reloaded graph may not contain the previously selected entity.
     if (selectedRef.current !== null && !graph.nodes.some((node) => node.id === selectedRef.current)) {
@@ -1501,6 +1539,7 @@ export function PlantUmlGraph({
             // fit rather than preserve a focus across a level cross. A carried
             // level is exactly the case where the focus should be restored.
             centerFocus: carriedDepth !== null,
+            scale: drawnScale,
           });
           setLodDepth(depth);
         }
@@ -1547,7 +1586,7 @@ export function PlantUmlGraph({
       drawnLayoutRef.current = null;
       drawnCallbackRef.current?.(null);
     };
-  }, [applyPlacement, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, placementForDecision, view]);
+  }, [applyPlacement, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, placementForDecision, projectId, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1939,6 +1978,9 @@ export function PlantUmlGraph({
   const applyReadableMode = useCallback((mode: ReadableZoomMode): void => {
     readableModeRef.current = mode;
     setReadableMode(mode);
+    // The toolbar click is the EXPLICIT choice this project remembers; an
+    // automatic default is never written here.
+    writeStoredReadableMode(localReadableStorage(), projectId, mode);
     const host = hostRef.current;
     const viewport = viewportRef.current;
     if (host === null || viewport === null) return;
@@ -1969,7 +2011,7 @@ export function PlantUmlGraph({
     if (decision.mode === 'focus' && decision.focusPackageId !== null) {
       centerOnPackage(host, decision.focusPackageId);
     }
-  }, [applyPlacement, applyZoom, placementForDecision]);
+  }, [applyPlacement, applyZoom, placementForDecision, projectId]);
 
   const fitDiagram = (): void => {
     const host = hostRef.current;
@@ -2193,7 +2235,7 @@ export function PlantUmlGraph({
   const zoomGroupLabel = t('architecture.plantuml.zoomGroup', { defaultValue: 'Diagram zoom' });
   // The toggle's pressed state follows the user's last explicit choice; before
   // any choice the drawing's own default (readableView) is what is on screen.
-  const activeReadableMode: ReadableZoomMode = readableMode ?? readableView?.mode ?? 'focus';
+  const activeReadableMode: ReadableZoomMode = readableMode ?? readableView?.mode ?? 'overview';
   // What the fit control really does right now. The readable floor raises a
   // geometric fit that would smear the labels, and in that state the control
   // must not claim the whole drawing is on screen (see `fitControlReading`).

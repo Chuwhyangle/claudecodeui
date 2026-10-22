@@ -13,12 +13,17 @@ import {
   FIT_CONTROL_WHOLE_KEY,
   fitControlReading,
   MIN_READABLE_FONT_PX,
+  READABLE_MODE_STORAGE_PREFIX,
   READABLE_ZOOM_SCALE,
   readableFocusPackage,
+  readableModeStorageKey,
+  readStoredReadableMode,
   RENDERED_LABEL_FONT_PX,
   seedPackageCount,
   shortPackageName,
   WIDE_CANVAS_ASPECT_RATIO,
+  writeStoredReadableMode,
+  type ReadableModeStorageLike,
 } from '@/modules/architecture/readableZoom';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
@@ -71,7 +76,7 @@ test('the readable scale is derived from the smallest readable label', () => {
   assert.ok(READABLE_ZOOM_SCALE > MIN_ZOOM_SCALE, 'readable is stricter than the manual zoom floor');
 });
 
-test('a fit below the readable scale opens in focus mode on the densest seeded package', () => {
+test('a fit below the readable scale still opens as the whole-graph overview', () => {
   const decision = decideReadableZoom({
     fitScale: HUGE_FIT,
     natural: HUGE_NATURAL,
@@ -79,13 +84,35 @@ test('a fit below the readable scale opens in focus mode on the densest seeded p
     hierarchy: HIERARCHY,
   });
 
-  assert.equal(decision.defaultMode, 'focus', 'an unreadable fit must not be the default');
-  assert.equal(decision.mode, 'focus');
-  assert.equal(decision.scale, READABLE_ZOOM_SCALE, 'focus renders at the readable floor');
-  // Alpha is 1 seed / 2 entities = 0.5, beta is 1/3; modules is their 0.4 ancestor.
+  // The reader asked to see the drawing, so the default is its true geometric
+  // fit — not `max(fit, 0.69)`, which showed only a crop of it.
+  assert.equal(decision.defaultMode, 'overview');
+  assert.equal(decision.mode, 'overview');
+  assert.equal(decision.scale, HUGE_FIT, 'the default applies the geometric fit unchanged');
+  assert.ok(
+    decision.scale >= HUGE_FIT * 0.95,
+    'the whole drawing must stay inside the canvas (>= 95% of the theoretical fit)',
+  );
+  // The hint still says where the readable detail is, without cropping to it.
   assert.equal(decision.focusPackageId, 'modules/alpha');
-  assert.equal(decision.overviewHint, null, 'focus mode carries no "zoom in" hint');
+  assert.equal(decision.overviewHint?.packageId, 'modules/alpha');
+  assert.equal(decision.overviewHint?.zoomPercent, Math.round(HUGE_FIT * 100));
   assert.equal(decision.collapsedForAspect, false);
+});
+
+test('the explicit focus arm keeps its readable floor, unchanged by the new default', () => {
+  const focused = decideReadableZoom({
+    fitScale: HUGE_FIT,
+    natural: HUGE_NATURAL,
+    viewport: DESKTOP_VIEWPORT,
+    hierarchy: HIERARCHY,
+    mode: 'focus',
+  });
+
+  assert.equal(focused.mode, 'focus');
+  assert.equal(focused.scale, READABLE_ZOOM_SCALE, 'focus renders at the readable floor');
+  assert.equal(focused.focusPackageId, 'modules/alpha');
+  assert.equal(focused.overviewHint, null, 'focus mode carries no "zoom in" hint');
 });
 
 test('a fit at or above the readable scale stays in the whole-graph overview', () => {
@@ -193,20 +220,35 @@ test('an empty or package-less graph yields no focus target without throwing', (
     hierarchy: empty,
   });
 
-  assert.equal(decision.mode, 'focus');
-  assert.equal(decision.scale, READABLE_ZOOM_SCALE);
+  assert.equal(decision.mode, 'overview');
+  assert.equal(decision.scale, 0.01);
   assert.equal(decision.focusPackageId, null);
   assert.equal(decision.overviewHint, null);
+
+  // The explicit focus arm still maps to the readable floor with no package to
+  // centre; it must not throw.
+  const focused = decideReadableZoom({
+    fitScale: 0.01,
+    natural: { width: 1000, height: 500 },
+    viewport: DESKTOP_VIEWPORT,
+    hierarchy: empty,
+    mode: 'focus',
+  });
+  assert.equal(focused.mode, 'focus');
+  assert.equal(focused.scale, READABLE_ZOOM_SCALE);
+  assert.equal(focused.focusPackageId, null);
 });
 
 test('the fit control is only called "Fit to view" when the fit really contains the graph', () => {
-  // The 390×844 phone case: the geometric fit is far below the readable floor,
-  // so pressing fit lands on the focus view and must be labelled as one.
+  // The 390×844 phone case: the geometric fit is far below the readable floor.
+  // The whole-graph default keeps the fit; the explicit Focus arm lands on the
+  // readable view and must be labelled as one.
   const focusedDecision = decideReadableZoom({
     fitScale: HUGE_FIT,
     natural: HUGE_NATURAL,
     viewport: { width: 390, height: 700 },
     hierarchy: HIERARCHY,
+    mode: 'focus',
   });
   assert.equal(focusedDecision.mode, 'focus');
 
@@ -275,4 +317,52 @@ test('both fit labels ship in every reviewed bundle, and the focused one names O
   assert.match(ENGLISH.focusedFitHint, /Overview/);
   assert.match(ENGLISH.focusedFitHint, /whole graph/i);
   assert.match(CHINESE_PLANTUML.readable.focusedFitHint, /全貌/);
+});
+
+/** An in-memory stand-in for `localStorage`, one map per instance. */
+function memoryStorage(): ReadableModeStorageLike & { readonly map: Map<string, string> } {
+  const map = new Map<string, string>();
+  return {
+    map,
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => { map.set(key, value); },
+    removeItem: (key) => { map.delete(key); },
+  };
+}
+
+test('the explicit Focus choice is remembered per project and never leaks between projects', () => {
+  const storage = memoryStorage();
+  assert.equal(readStoredReadableMode(storage, 'project-1'), null, 'nothing chosen yet');
+  assert.equal(
+    readableModeStorageKey('project-1'),
+    `${READABLE_MODE_STORAGE_PREFIX}:project-1`,
+    'the key is project-scoped',
+  );
+
+  // The user presses Focus once; reopening the project restores it.
+  writeStoredReadableMode(storage, 'project-1', 'focus');
+  assert.equal(readStoredReadableMode(storage, 'project-1'), 'focus');
+  assert.equal(storage.map.get(`${READABLE_MODE_STORAGE_PREFIX}:project-1`), 'focus');
+
+  // Another project starts at the whole-graph default — the choice does not
+  // leak, which is what "按项目隔离、换项目不串" requires.
+  assert.equal(readStoredReadableMode(storage, 'project-2'), null);
+  writeStoredReadableMode(storage, 'project-2', 'overview');
+  assert.equal(readStoredReadableMode(storage, 'project-1'), 'focus', 'project-1 is untouched');
+  assert.equal(readStoredReadableMode(storage, 'project-2'), 'overview');
+
+  // An explicit Overview is a choice too (it persists as such), and clearing
+  // returns the project to the un-chosen default.
+  writeStoredReadableMode(storage, 'project-1', null);
+  assert.equal(readStoredReadableMode(storage, 'project-1'), null);
+
+  // A stale/hand-edited value is ignored rather than trusted.
+  storage.setItem(`${READABLE_MODE_STORAGE_PREFIX}:project-3`, 'sideways');
+  assert.equal(readStoredReadableMode(storage, 'project-3'), null);
+
+  // No project id means no storage key: the choice is visit-only.
+  assert.equal(readableModeStorageKey(null), null);
+  writeStoredReadableMode(storage, null, 'focus');
+  assert.equal(storage.map.size, 2, 'no key was invented for an unknown project');
+  assert.equal(readStoredReadableMode(storage, null), null);
 });

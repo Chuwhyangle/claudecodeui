@@ -12,14 +12,18 @@ import type { SvgViewportSize } from '@/modules/architecture/svgViewport';
  *
  * Fitting a whole graph into a panel is not the same as making it legible: a
  * 32880×9860 drawing fitted into 1151px needs ~3.5%, at which the renderer's
- * 13px labels draw under half a pixel tall. This module decides between two
- * honest readings of the same drawing:
+ * 13px labels draw under half a pixel tall. The policy therefore offers two
+ * readings of the same drawing:
  *
- *  · focus — stop trying to show everything; render at the scale where a label
- *    is at least readable and centre the package carrying the densest share of
- *    the transcript's seeds;
- *  · overview — keep the whole graph in view, but say plainly that it is too
- *    small to read and name the package worth zooming into.
+ *  · overview — the DEFAULT: keep the whole graph in view at the true geometric
+ *    fit (the reader asked to see the diagram, not a crop of it). The context
+ *    that the drawing is too small to read is offered as a "zoom into …" hint,
+ *    and the package-level titles are counter-scaled by the LOD layer so they
+ *    stay legible (see `explosionLod.ts`);
+ *  · focus — an EXPLICIT choice: stop trying to show everything and render at
+ *    the scale where a label is at least readable, centred on the package
+ *    carrying the densest share of the transcript's seeds. The user's choice is
+ *    remembered per project, never inferred from a previous automatic default.
  *
  * It also flags a drawing whose natural width/height is far wider than the
  * container: such a canvas becomes a thin band, so the caller collapses it to
@@ -27,8 +31,8 @@ import type { SvgViewportSize } from '@/modules/architecture/svgViewport';
  *
  * Everything here is pure arithmetic over the graph payload and the two sizes,
  * so the policy can be pinned without a laid-out browser. Consumers:
- * `PlantUmlGraph.tsx` (the default scale and the focus target) and
- * `tests/readableZoom.test.tsx`.
+ * `PlantUmlGraph.tsx` (the default scale, the focus target, and the remembered
+ * mode) and `tests/readableZoom.test.tsx`.
  */
 
 /** The renderer's node-label font size, in SVG user units at 100% zoom. */
@@ -82,9 +86,9 @@ export type ReadableZoomHint = {
 
 /** What the default view should do with one drawing. */
 export type ReadableZoomDecision = {
-  /** The mode to apply: the user's choice when given, else the default. */
+  /** The mode to apply: the user's explicit choice, else the whole-graph default. */
   readonly mode: ReadableZoomMode;
-  /** The mode this drawing would choose on its own. */
+  /** The mode this drawing chooses on its own — always the whole-graph overview. */
   readonly defaultMode: ReadableZoomMode;
   /** The uniform scale for `mode`: readable in focus, geometric in overview. */
   readonly scale: number;
@@ -101,8 +105,8 @@ export type ReadableZoomInput = {
   /**
    * The geometric fit scale (the drawing's natural size fitted into the
    * viewport, clamped by the viewport's own floor). Pass the fit-ALL value, not
-   * one already lifted to the readable floor, or the default can never choose
-   * focus.
+   * one already lifted to the readable floor, or the explicit focus scale can
+   * never be distinguished from the whole-graph fit.
    */
   readonly fitScale: number;
   /** The drawing's natural size, for the aspect-band test. */
@@ -113,9 +117,69 @@ export type ReadableZoomInput = {
   readonly hierarchy: ArchitectureHierarchyIndex | null;
   /** Selected/centre entity ids, preferred over the density winner. */
   readonly selectedEntityIds?: readonly (string | null | undefined)[];
-  /** The user's explicit toolbar choice; omitted means "use the default". */
+  /** The user's explicit toolbar choice; omitted means "use the whole-graph default". */
   readonly mode?: ReadableZoomMode;
 };
+
+/**
+ * The `localStorage` key prefix; the full key adds `:<projectId>`.
+ *
+ * The remembered value is the reader's EXPLICIT toolbar choice, not the mode a
+ * previous drawing happened to open in. A project with no stored value opens at
+ * the whole-graph default, so a new project can never inherit another one's
+ * focus — which is why the project id is part of the key rather than a global
+ * switch. Mirrors the curation store's key shape.
+ */
+export const READABLE_MODE_STORAGE_PREFIX = 'architecture.readableMode.v1';
+
+/** The narrow storage seam (real `localStorage`, or a test double). */
+export type ReadableModeStorageLike = {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
+};
+
+/** The storage key for one project, or `null` when the project is unknown. */
+export function readableModeStorageKey(projectId: string | null): string | null {
+  if (projectId === null || projectId.trim().length === 0) return null;
+  return `${READABLE_MODE_STORAGE_PREFIX}:${projectId}`;
+}
+
+/**
+ * The mode the reader explicitly chose for `projectId`, or `null` when they
+ * have not chosen (or storage is unreachable, or the stored value is stale).
+ */
+export function readStoredReadableMode(
+  storage: ReadableModeStorageLike | null | undefined,
+  projectId: string | null,
+): ReadableZoomMode | null {
+  const key = readableModeStorageKey(projectId);
+  if (key === null || storage === null || storage === undefined) return null;
+  try {
+    const stored = storage.getItem(key);
+    return stored === 'focus' || stored === 'overview' ? stored : null;
+  } catch {
+    // Private mode / embedded webview: the visit still works, it is just not
+    // remembered.
+    return null;
+  }
+}
+
+/** Remember (or clear, with `null`) one project's explicit readable mode. */
+export function writeStoredReadableMode(
+  storage: ReadableModeStorageLike | null | undefined,
+  projectId: string | null,
+  mode: ReadableZoomMode | null,
+): void {
+  const key = readableModeStorageKey(projectId);
+  if (key === null || storage === null || storage === undefined) return;
+  try {
+    if (mode === null) storage.removeItem?.(key);
+    else storage.setItem(key, mode);
+  } catch {
+    // Same as the read: an unavailable store is not an error the reader sees.
+  }
+}
 
 /**
  * Build the package hierarchy straight from the neighbourhood JSON, marking
@@ -227,16 +291,19 @@ export function canvasIsTooWide(
 /**
  * Decide the default view for one drawing.
  *
- * The default is focus exactly when the geometric fit falls under the readable
- * scale. An explicit `mode` overrides that choice but never changes the scale
- * it maps to: focus always renders at or above the readable floor, overview
- * always shows the whole drawing. The overview hint only exists in overview
- * mode, where the reader is looking at an unreadable whole.
+ * The default is ALWAYS overview: the whole graph at its true geometric fit.
+ * A geometric fit under the readable scale does not silently crop the drawing
+ * any more — the reader asked to see the diagram, and the LOD layer keeps the
+ * package titles legible at that scale while the overview hint names the
+ * package worth zooming into. Focus is entered only by an explicit `mode`
+ * (the toolbar's remembered choice), and the scale it maps to is unchanged:
+ * focus renders at or above the readable floor, overview always shows the
+ * whole drawing.
  */
 export function decideReadableZoom(input: ReadableZoomInput): ReadableZoomDecision {
   const { fitScale, natural, viewport, hierarchy } = input;
   const measuredFit = Number.isFinite(fitScale) && fitScale > 0 ? Math.min(fitScale, 1) : 1;
-  const defaultMode: ReadableZoomMode = measuredFit < READABLE_ZOOM_SCALE ? 'focus' : 'overview';
+  const defaultMode: ReadableZoomMode = 'overview';
   const mode = input.mode ?? defaultMode;
   const scale = mode === 'focus' ? Math.max(measuredFit, READABLE_ZOOM_SCALE) : measuredFit;
 
