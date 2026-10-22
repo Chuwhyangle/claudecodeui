@@ -20,11 +20,11 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` exit 0：`planLodLabels` 纯函数用例——两个相交的候选里面积大的保留、小的省略；与权重标签相交的候选被省略；截断时显示最后一段加计数；外边距 4px 的边界用例（恰好相邻不算相交）；同输入同输出（确定性）；既有 LOD 用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：package 档位下覆盖标题生效的 package，其原小标题 `.uml-package > text` 不可见（`visibility: hidden` 或 `opacity: 0`），切回实体档位后恢复可见；LOD 边的线宽计算函数用例（权重 1、4、16、1000 的屏幕线宽落在 1–2.5px 且单调不减）；LOD 边带 `vector-effect: non-scaling-stroke`；权重标签带描边光晕；内部无可见实体的叶子包框带 `arch-lod-empty-frame` 且只含子包的包框不带；切档后类被移除
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：低缩放档位下所有可见覆盖标题的屏幕矩形两两不相交，且与可见权重标签不相交；没有任何 package 同时存在可见的覆盖标题与可见的原小标题；LOD 边的屏幕线宽 ≤ 2.5px
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——关闭标题避让后同一读数里出现相交的标题对（证明守卫能取假），主臂与控制臂用同一读取函数
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` exit 0：`planLodLabels` 纯函数用例——两个相交的候选里面积大的保留、小的省略；与权重标签相交的候选被省略；截断时显示最后一段加计数；外边距 4px 的边界用例（恰好相邻不算相交）；同输入同输出（确定性）；既有 LOD 用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：package 档位下覆盖标题生效的 package，其原小标题 `.uml-package > text` 不可见（`visibility: hidden` 或 `opacity: 0`），切回实体档位后恢复可见；LOD 边的线宽计算函数用例（权重 1、4、16、1000 的屏幕线宽落在 1–2.5px 且单调不减）；LOD 边带 `vector-effect: non-scaling-stroke`；权重标签带描边光晕；内部无可见实体的叶子包框带 `arch-lod-empty-frame` 且只含子包的包框不带；切档后类被移除
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：低缩放档位下所有可见覆盖标题的屏幕矩形两两不相交，且与可见权重标签不相交；没有任何 package 同时存在可见的覆盖标题与可见的原小标题；LOD 边的屏幕线宽 ≤ 2.5px
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——关闭标题避让后同一读数里出现相交的标题对（证明守卫能取假），主臂与控制臂用同一读取函数
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -40,3 +40,11 @@ extra:
 - e2e/support/architectureFixture.ts
 - playwright.config.ts
 - tasks/architecture-lod-labels-and-edges-polish.md
+
+## Blocker
+
+**2026-10-22T23:17:35.201Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：c72dfdf5-b00a-4803-994b-6aa29fac354a
