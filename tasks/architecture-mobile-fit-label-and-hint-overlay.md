@@ -22,9 +22,9 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` exit 0：可读缩放下限生效时模式读数为聚焦且文案/`aria-pressed` 同步；整图装得下时仍为「适应」；既有可读缩放用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：触摸提示不与图区重叠（提示的 bounding box 不覆盖 `[data-architecture-plantuml]` 的上缘，或首次出现后自动淡出并保持可手动关闭）；图区高度占比 ≥70% 的既有断言不回归；关闭按钮命中区 ≥44×44
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（桌面用例不回归）；12 个 locale 的新文案键齐全；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` exit 0：可读缩放下限生效时模式读数为聚焦且文案/`aria-pressed` 同步；整图装得下时仍为「适应」；既有可读缩放用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：触摸提示不与图区重叠（提示的 bounding box 不覆盖 `[data-architecture-plantuml]` 的上缘，或首次出现后自动淡出并保持可手动关闭）；图区高度占比 ≥70% 的既有断言不回归；关闭按钮命中区 ≥44×44
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（桌面用例不回归）；12 个 locale 的新文案键齐全；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
