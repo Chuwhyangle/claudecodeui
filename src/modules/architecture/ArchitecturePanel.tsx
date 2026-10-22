@@ -2195,11 +2195,16 @@ export default function ArchitecturePanel({
         </ArchitectureSheet>
       )}
 
-      {/* The canvas and the dock share one flex ROW: opening the dock takes
-          width from the drawing (320px) instead of covering it, which is why
-          its open/close has to freeze aspect re-layout. On a coarse pointer the
-          dock renders itself as an absolutely positioned bottom drawer inside
-          this relative parent. */}
+      {/* The panel's remaining height is one flex COLUMN whose single child is
+          the row below it: every `flex-1` and `h-full` further down resolves
+          against a flex parent with a definite height only while that direct
+          child stays a column (the canvas layout contract walks this chain). */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* Inside it, the canvas and the dock share one flex ROW: opening the dock
+          takes width from the drawing (320px) instead of covering it, which is
+          why its open/close has to freeze aspect re-layout. On a coarse pointer
+          the dock renders itself as an absolutely positioned bottom drawer
+          inside this relative parent. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
@@ -2395,6 +2400,7 @@ export default function ArchitecturePanel({
           }}
         />
       )}
+      </div>
       </div>
     </div>
   );

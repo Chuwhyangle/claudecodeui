@@ -338,10 +338,11 @@ test('drilled group and neighbourhood views export their own document, not the o
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
-  // A click on the directory group is the reader opening that group view.
+  // A double-click on the directory group is the reader opening that group
+  // view (a single click only selects the node and opens the inspector).
   const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
   assert.ok(groupNode !== null, 'the overview must draw the alpha directory as a group');
-  fireEvent.click(groupNode);
+  fireEvent.doubleClick(groupNode);
   await waitFor(() => assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'group'));
 
   openExportMenu();
@@ -357,13 +358,13 @@ test('drilled group and neighbourhood views export their own document, not the o
   assert.notEqual(groupPuml, expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
   assertSyntaxOk(groupPuml);
 
-  // A click on an entity opens its neighbourhood; the export follows it. The
-  // group's entities arrive through the lazily built drawing, so wait for the
-  // node itself rather than only the view attribute.
+  // An entity's double-click opens its neighbourhood; the export follows it.
+  // The group's entities arrive through the lazily built drawing, so wait for
+  // the node itself rather than only the view attribute.
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
   const entityNode = host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]');
   assert.ok(entityNode !== null, 'the group view must draw a2.ts');
-  fireEvent.click(entityNode);
+  fireEvent.doubleClick(entityNode);
   await waitFor(() =>
     assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'neighborhood'),
   );
