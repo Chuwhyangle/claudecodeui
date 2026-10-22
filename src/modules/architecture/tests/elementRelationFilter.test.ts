@@ -87,7 +87,7 @@ describe('applyFilter — the shipped default', () => {
 
     assert.deepEqual(idsOf(result.nodes), ['A', 'B', 'C', 'DF', 'L']);
     assert.deepEqual(edgeKeys(result.edges), ['B->A:dependency', 'B->DF:dependency', 'C->B:dependency'].sort());
-    console.error(
+    console.log(
       `element-filter reading: default nodes=${JSON.stringify(idsOf(result.nodes))} ` +
         `edges=${JSON.stringify(edgeKeys(result.edges))} hidden=${JSON.stringify(result.hidden)}`,
     );
