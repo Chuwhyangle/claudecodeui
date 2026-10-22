@@ -79,6 +79,8 @@
       "zoomFit": "Görünüme sığdır",
       "zoomFocus": "Odak",
       "zoomActual": "Gerçek boyut (%100)",
+      "classDiagram": "Sınıf diyagramı",
+      "backTo": "{{view}} görünümüne dön",
       "lod": {
         "packages": "Paketler",
         "subpackages": "Alt paketler",
@@ -95,7 +97,9 @@
         "focusHint": "{{package}} odaklı",
         "overviewHint": "Yakınlaştırma %{{zoom}} · {{package}} ve {{count}} diğer paketi yakınlaştır",
         "collapsed": "Graf çok geniş olduğu için dizin genel görünümüne katlandı.",
-        "focusedFitHint": "Okunabilir yakınlaştırma açık olduğundan bu görünüm odaklıdır — tüm grafiği görmek için “Genel görünüm”ü seçin."
+        "focusedFitHint": "Okunabilir yakınlaştırma açık olduğundan bu görünüm odaklıdır — tüm grafiği görmek için “Genel görünüm”ü seçin.",
+        "focusSummary": "Okunabilir yakınlaştırma açık: {{package}} odakta, %{{zoom}} — tüm grafiği görmek için Genel görünüm’ü seçin ({{count}} diğer paket).",
+        "focusOnly": "Okunabilir yakınlaştırma açık — tüm grafiği görmek için Genel görünüm’ü seçin."
       },
       "minimap": {
         "label": "Diyagram genel görünümü, çizimin %{{percent}} kadarı görünür",
@@ -169,6 +173,11 @@
       "placeholder": "Varlık veya dosya ara…",
       "noMatches": "Eşleşme yok",
       "outOfRange": "Geçerli aralığın dışında",
+      "hiddenByFilter": "Geçerli filtre tarafından gizlendi",
+      "viewNeighbourhood": "{{name}} komşuluğunu görüntüle",
+      "viewNeighbourhoodShort": "Komşuluk",
+      "showIt": "Göster",
+      "notInGraph": "Geçerli grafikte değil",
       "inGraph": "Grafikte",
       "other": "Projenin başka yerinde",
       "retry": "Yeniden dene",

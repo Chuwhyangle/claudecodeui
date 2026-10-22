@@ -79,6 +79,8 @@
       "zoomFit": "适应视图",
       "zoomFocus": "聚焦",
       "zoomActual": "实际大小（100%）",
+      "classDiagram": "类图",
+      "backTo": "返回{{view}}",
       "lod": {
         "packages": "包",
         "subpackages": "子包",
@@ -95,7 +97,9 @@
         "focusHint": "已聚焦 {{package}}",
         "overviewHint": "缩放 {{zoom}}% · 放大查看 {{package}} 等 {{count}} 个包",
         "collapsed": "图过宽，已折叠为目录全貌。",
-        "focusedFitHint": "已按可读缩放聚焦，点“全貌”查看整图。"
+        "focusedFitHint": "已按可读缩放聚焦，点“全貌”查看整图。",
+        "focusSummary": "可读缩放已开启：聚焦 {{package}}，当前 {{zoom}}% — 选“全貌”查看整图（另有 {{count}} 个包）。",
+        "focusOnly": "可读缩放已开启 — 选“全貌”查看整图。"
       },
       "minimap": {
         "label": "图概览，当前视野占 {{percent}}%",
@@ -169,6 +173,11 @@
       "placeholder": "搜索实体或文件…",
       "noMatches": "无匹配项",
       "outOfRange": "不在当前范围",
+      "hiddenByFilter": "被当前筛选隐藏",
+      "viewNeighbourhood": "查看 {{name}} 的邻域",
+      "viewNeighbourhoodShort": "邻域",
+      "showIt": "显示它",
+      "notInGraph": "不在当前图中",
       "inGraph": "图中",
       "other": "项目其它",
       "retry": "重试",

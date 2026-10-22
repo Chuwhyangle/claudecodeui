@@ -450,10 +450,11 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
   });
 
   // A double-tap is the other explicit gesture: select, then tap the same node
-  // again within the double-tap window. (On a phone "Back to overview" lives
-  // in the overflow menu, together with the other toolbar actions.)
+  // again within the double-tap window. (On a phone the breadcrumb lives in
+  // the overflow menu, together with the other toolbar actions; it names the
+  // view it returns to, so the file graph reads "Back to Overview".)
   openCompactMenu();
-  fireEvent.click(screen.getByRole('button', { name: 'Back to overview' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to Overview' }));
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview'));
   const groupNode = await waitFor(() => {
     const node = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');

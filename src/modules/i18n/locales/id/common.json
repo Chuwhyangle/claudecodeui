@@ -79,6 +79,8 @@
       "zoomFit": "Sesuaikan dengan tampilan",
       "zoomFocus": "Fokus",
       "zoomActual": "Ukuran asli (100%)",
+      "classDiagram": "Diagram kelas",
+      "backTo": "Kembali ke {{view}}",
       "lod": {
         "packages": "Paket",
         "subpackages": "Subpaket",
@@ -95,7 +97,9 @@
         "focusHint": "Berfokus pada {{package}}",
         "overviewHint": "Zoom {{zoom}}% · perbesar {{package}} dan {{count}} paket lainnya",
         "collapsed": "Graf terlalu lebar, jadi dilipat ke ikhtisar direktori.",
-        "focusedFitHint": "Zoom terbaca aktif, jadi tampilan ini terfokus — pilih “Ikhtisar” untuk melihat seluruh graf."
+        "focusedFitHint": "Zoom terbaca aktif, jadi tampilan ini terfokus — pilih “Ikhtisar” untuk melihat seluruh graf.",
+        "focusSummary": "Zoom terbaca aktif: fokus pada {{package}} di {{zoom}}% — pilih Ikhtisar untuk melihat seluruh grafik ({{count}} paket lain).",
+        "focusOnly": "Zoom terbaca aktif — pilih Ikhtisar untuk melihat seluruh grafik."
       },
       "minimap": {
         "label": "Ringkasan diagram, menampilkan {{percent}}% gambar",
@@ -169,6 +173,11 @@
       "placeholder": "Cari entitas atau file…",
       "noMatches": "Tidak ada kecocokan",
       "outOfRange": "Di luar rentang saat ini",
+      "hiddenByFilter": "Disembunyikan oleh filter saat ini",
+      "viewNeighbourhood": "Lihat lingkungan {{name}}",
+      "viewNeighbourhoodShort": "Lingkungan",
+      "showIt": "Tampilkan",
+      "notInGraph": "Tidak ada di grafik saat ini",
       "inGraph": "Di grafik",
       "other": "Di bagian lain proyek",
       "retry": "Coba lagi",

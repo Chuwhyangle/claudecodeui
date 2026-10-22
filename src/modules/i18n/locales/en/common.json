@@ -109,6 +109,8 @@
       "zoomFit": "Fit to view",
       "zoomFocus": "Focus",
       "zoomActual": "Actual size (100%)",
+      "classDiagram": "Class diagram",
+      "backTo": "Back to {{view}}",
       "hint": "Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.",
       "overview": "Overview",
       "group": "Group: {{group}}",
@@ -131,7 +133,9 @@
         "focusHint": "Focused on {{package}}",
         "overviewHint": "Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)",
         "collapsed": "The graph is too wide, so it was collapsed to the directory overview.",
-        "focusedFitHint": "Readable zoom is on, so this is a focus view — choose Overview to see the whole graph."
+        "focusedFitHint": "Readable zoom is on, so this is a focus view — choose Overview to see the whole graph.",
+        "focusSummary": "Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).",
+        "focusOnly": "Readable zoom is on — choose Overview to see the whole graph."
       },
       "minimap": {
         "label": "Graph overview, showing {{percent}}% of the drawing",
@@ -175,6 +179,11 @@
       "placeholder": "Search entities or files…",
       "noMatches": "No matches",
       "outOfRange": "Not in current range",
+      "hiddenByFilter": "Hidden by the current filter",
+      "viewNeighbourhood": "View neighbourhood of {{name}}",
+      "viewNeighbourhoodShort": "Neighbourhood",
+      "showIt": "Show it",
+      "notInGraph": "Not in the current graph",
       "inGraph": "In the graph",
       "other": "Elsewhere in the project",
       "retry": "Retry",

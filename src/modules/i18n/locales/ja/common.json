@@ -79,6 +79,8 @@
       "zoomFit": "表示に合わせる",
       "zoomFocus": "フォーカス",
       "zoomActual": "実際のサイズ (100%)",
+      "classDiagram": "クラス図",
+      "backTo": "{{view}} に戻る",
       "lod": {
         "packages": "パッケージ",
         "subpackages": "サブパッケージ",
@@ -95,7 +97,9 @@
         "focusHint": "{{package}} にフォーカス中",
         "overviewHint": "ズーム {{zoom}}% · {{package}} と他 {{count}} 個のパッケージを拡大表示",
         "collapsed": "グラフが横に広すぎるため、ディレクトリ概要に折りたたみました。",
-        "focusedFitHint": "読みやすいズームが有効なため、この表示はフォーカスです。全体を見るには「全体表示」を選んでください。"
+        "focusedFitHint": "読みやすいズームが有効なため、この表示はフォーカスです。全体を見るには「全体表示」を選んでください。",
+        "focusSummary": "読みやすいズームが有効です: {{package}} にフォーカス中（{{zoom}}%）— 「全体」を選ぶとグラフ全体を表示します（他 {{count}} パッケージ）。",
+        "focusOnly": "読みやすいズームが有効です — 「全体」を選ぶとグラフ全体を表示します。"
       },
       "minimap": {
         "label": "図の全体像（表示範囲 {{percent}}%）",
@@ -169,6 +173,11 @@
       "placeholder": "エンティティまたはファイルを検索…",
       "noMatches": "一致なし",
       "outOfRange": "現在の範囲外",
+      "hiddenByFilter": "現在のフィルターで非表示",
+      "viewNeighbourhood": "{{name}} の近傍を表示",
+      "viewNeighbourhoodShort": "近傍",
+      "showIt": "表示",
+      "notInGraph": "現在のグラフにありません",
       "inGraph": "グラフ内",
       "other": "プロジェクト内のその他",
       "retry": "再試行",

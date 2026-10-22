@@ -1650,7 +1650,7 @@ test('an explicit Focus choice is remembered for its project across mounts and d
   other.unmount();
 });
 
-test('the readable toggle opens whole-graph and switches to the explicit focus view', async () => {
+test('the readable toggle shows one merged focus summary only in Focus, and one scale reading', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
@@ -1658,35 +1658,33 @@ test('the readable toggle opens whole-graph and switches to the explicit focus v
   triggerResize();
 
   const root = graphRoot();
-  // The DEFAULT is the whole drawing at the geometric fit, plus an honest
-  // "zoom into …" hint naming the package worth reading next.
+  // The DEFAULT is the whole drawing at the geometric fit. Overview IS the
+  // whole graph, so it needs no explanatory sentence: the review merged the
+  // old "zoom into <package>" hint into the Focus-tier line.
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview'));
   const overviewScale = Number(root.getAttribute('data-architecture-zoom-scale'));
-  const hint = document.querySelector('[data-architecture-readable-hint]');
-  assert.ok(hint !== null, 'overview mode must say what the reader is looking at');
-  assert.match(hint.textContent ?? '', /modules\/alpha/, 'the hint names the densest seeded package');
-  assert.match(hint.textContent ?? '', /0 other package/, 'the hint carries the other-package count');
-  // The tier's "Zoom N%" and the zoom cluster's own scale reading are ONE
-  // value: both derive from the applied zoom state, never from a second
-  // constrained-fit computation.
+  assert.equal(
+    document.querySelector('[data-architecture-readable-focus-summary]'),
+    null,
+    'Overview shows no explanatory sentence',
+  );
+
+  // One tier control set: exactly one Focus and one Overview button, and no
+  // separate label-style tier text.
+  const tier = document.querySelector('[data-architecture-zoom-tier]');
+  assert.ok(tier instanceof HTMLElement, 'the zoom tier lives on the canvas');
+  assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null, 'no label-style tier text');
+  assert.equal(tier.querySelectorAll('[data-architecture-readable-focus-mode]').length, 1);
+  assert.equal(tier.querySelectorAll('[data-architecture-readable-overview-mode]').length, 1);
+
+  // The tier's reading and the zoom cluster's reading are ONE value: both
+  // derive from the applied zoom state.
   const tierReadout = document.querySelector('[data-architecture-zoom-level]');
+  const clusterReadout = document.querySelector('[data-architecture-zoom-cluster-level]');
   assert.ok(tierReadout instanceof HTMLElement);
-  assert.equal(
-    /Zoom (\d+)%/.exec(hint.textContent ?? '')?.[1] + '%',
-    tierReadout.textContent,
-    'the readable hint and the scale readout must print the same percentage',
-  );
-  // The strip shows only the last two path segments; the full id is the title.
-  assert.equal(
-    hint.getAttribute('title'),
-    'src/modules/alpha',
-    'the full package id stays available as the title',
-  );
-  assert.doesNotMatch(
-    hint.textContent ?? '',
-    /src\/modules\/alpha/,
-    'the strip must not print the whole path',
-  );
+  assert.ok(clusterReadout instanceof HTMLElement, 'the zoom cluster states the same scale');
+  assert.equal(tierReadout.textContent, clusterReadout.textContent, 'tier and cluster print the same number');
+  assert.equal(tierReadout.textContent, `${Math.round(overviewScale * 100)}%`);
   assert.equal(
     screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed'),
     'true',
@@ -1694,20 +1692,35 @@ test('the readable toggle opens whole-graph and switches to the explicit focus v
   );
 
   // 聚焦: the EXPLICIT choice renders at the readable floor around the densest
-  // package and carries no overview hint.
+  // package and carries the ONE merged sentence.
   const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
   fireEvent.click(within(readableGroup).getByRole('button', { name: 'Focus' }));
   assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus');
   const focusedScale = Number(root.getAttribute('data-architecture-zoom-scale'));
   assert.ok(focusedScale > overviewScale, 'focus renders larger than the whole-graph fit');
   assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
-  assert.equal(document.querySelector('[data-architecture-readable-hint]'), null);
+  const summary = document.querySelector('[data-architecture-readable-focus-summary]');
+  assert.ok(summary instanceof HTMLElement, 'the Focus tier states the focus reading');
+  assert.match(summary.textContent ?? '', /modules\/alpha/, 'the summary names the densest seeded package');
+  assert.match(summary.textContent ?? '', /0 other package/, 'and the other-package count');
+  assert.doesNotMatch(summary.textContent ?? '', /src\/modules\/alpha/, 'the strip must not print the whole path');
+  assert.equal(summary.getAttribute('title'), 'src/modules/alpha', 'the full package id stays available as the title');
+  // The summary's percentage is the same reading both scale controls print.
+  const tierReadout2 = document.querySelector('[data-architecture-zoom-level]');
+  const clusterReadout2 = document.querySelector('[data-architecture-zoom-cluster-level]');
+  assert.equal(
+    /at (\d+)%/.exec(summary.textContent ?? '')?.[1] + '%',
+    tierReadout2?.textContent,
+    'the focus sentence and the scale readout print the same percentage',
+  );
+  assert.equal(tierReadout2?.textContent, clusterReadout2?.textContent);
+  assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null);
 
-  // 全貌 returns to the geometric fit; the hint comes back.
+  // 全貌 returns to the geometric fit; the Focus sentence is gone again.
   fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
   assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview');
   assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), overviewScale);
-  assert.ok(document.querySelector('[data-architecture-readable-hint]') !== null);
+  assert.equal(document.querySelector('[data-architecture-readable-focus-summary]'), null);
 });
 
 test('a band-shaped explosion drawing collapses to the overview with a notice', async () => {
@@ -3023,7 +3036,7 @@ test('the fetch effect tears down cleanly when the panel unmounts mid-request', 
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 1));
 });
 
-test('the explicit Focus choice is named after the action, while the zoom tier states Focus', async () => {
+test('the fit control is named after what it does, and the Focus tier carries the one summary', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
@@ -3037,15 +3050,11 @@ test('the explicit Focus choice is named after the action, while the zoom tier s
   fireEvent.click(within(readableGroup).getByRole('button', { name: 'Focus' }));
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
 
-  // The zoom tier is stated ONCE, by the on-canvas tier group. The fit button
-  // names what it DOES ("Fit to view"), not the tier it happens to land on.
+  // The tier no longer prints a label-style tier text: the segmented control's
+  // pressed state is the one place the tier is stated.
   const tier = document.querySelector('[data-architecture-zoom-tier]');
   assert.ok(tier instanceof HTMLElement, 'the zoom tier lives on the canvas');
-  assert.equal(
-    tier.querySelector('[data-architecture-zoom-tier-label]')?.textContent,
-    'Focus',
-    'the tier label is the one place the Focus state is stated',
-  );
+  assert.equal(tier.querySelector('[data-architecture-zoom-tier-label]'), null, 'no label-style tier text');
   const fit = root.querySelector('[data-architecture-zoom-fit]');
   assert.ok(fit instanceof HTMLElement);
   assert.equal(fit.getAttribute('data-architecture-zoom-fit-mode'), 'focus', 'the fit lands on a focus view');
@@ -3054,13 +3063,16 @@ test('the explicit Focus choice is named after the action, while the zoom tier s
   // `data-architecture-zoom-mode` keeps its existing fit/custom vocabulary.
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
 
-  const notice = document.querySelector('[data-architecture-readable-fit-notice]');
-  assert.ok(notice instanceof HTMLElement, 'a focused fit must say the whole graph is one choice away');
-  assert.match(notice.textContent ?? '', /Overview/, 'the notice names the control that shows everything');
-  assert.match(notice.textContent ?? '', /whole graph/i);
+  // One merged sentence in the Focus tier: it states the focus AND the escape
+  // to the whole graph. The old separate "fit notice" is gone.
+  const summary = document.querySelector('[data-architecture-readable-focus-summary]');
+  assert.ok(summary instanceof HTMLElement, 'the Focus tier states what the reader is looking at');
+  assert.match(summary.textContent ?? '', /Overview/, 'the sentence names the control that shows everything');
+  assert.match(summary.textContent ?? '', /whole graph/i);
+  assert.equal(document.querySelector('[data-architecture-readable-fit-notice]'), null);
 
   // Choosing Overview really fits the whole drawing; the fit control goes back
-  // to saying so, and the notice has nothing left to explain.
+  // to saying so, and the Focus sentence disappears with the tier.
   fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview'));
   const wholeFit = root.querySelector('[data-architecture-zoom-fit]');
@@ -3068,7 +3080,8 @@ test('the explicit Focus choice is named after the action, while the zoom tier s
   assert.equal(wholeFit.getAttribute('data-architecture-zoom-fit-mode'), 'overview');
   assert.equal(wholeFit.textContent, 'Fit to view');
   assert.equal(wholeFit.getAttribute('aria-pressed'), 'true');
-  assert.equal(document.querySelector('[data-architecture-readable-fit-notice]'), null);
+  assert.equal(document.querySelector('[data-architecture-readable-focus-summary]'), null);
+  assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null);
 });
 
 /**
@@ -3328,7 +3341,7 @@ test('the analysis time follows the interface language, not the browser language
   }
 });
 
-test('searching the class diagram reveals and centres the node; a folded hit reports the range', async () => {
+test('search centres and selects in the current drawing, and only the explicit neighbourhood action drills', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
   const originalRect = Element.prototype.getBoundingClientRect;
   // A laid-out box for the searched node, so the centring scroll has real
@@ -3348,6 +3361,7 @@ test('searching the class diagram reveals and centres the node; a folded hit rep
     sizeHost(host, 400, 300);
     host.scrollLeft = 0;
     host.scrollTop = 0;
+    assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy', 'the class view opens on the hierarchy');
 
     const search = document.querySelector('[data-architecture-search]') as HTMLInputElement;
     fireEvent.change(search, { target: { value: 'Reader' } });
@@ -3359,10 +3373,12 @@ test('searching the class diagram reveals and centres the node; a folded hit rep
     assert.equal(hit.getAttribute('data-architecture-search-in-range'), 'true');
     fireEvent.click(hit);
 
-    await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+    // The reviewed defect: choosing a result replaced the whole drawing with the
+    // entity's neighbourhood. Enter/click must instead centre and select the
+    // node IN the drawing on screen.
     await waitFor(() =>
-      assert.ok(drawnNodeIds(screen.getByTestId('plantuml-host')).includes('src/modules/alpha/reader.ts.Reader')),
-    );
+      assert.ok(drawnNodeIds(host).includes('src/modules/alpha/reader.ts.Reader')));
+    assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy', 'the view must not change');
     const focused = await waitFor(() => {
       const node = document.querySelector('[data-architecture-focus-target="src/modules/alpha/reader.ts.Reader"]');
       assert.ok(node instanceof Element, 'the chosen node is revealed and marked');
@@ -3370,7 +3386,24 @@ test('searching the class diagram reveals and centres the node; a folded hit rep
     });
     assert.ok(focused.classList.contains('arch-focus'));
     assert.ok(host.scrollLeft > 0, `the node must be centred; got scrollLeft=${host.scrollLeft}`);
+    await waitFor(() =>
+      assert.ok(document.querySelector('[data-architecture-inspector]') !== null, 'the chosen entity is selected and inspected'));
     assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'search works on the payload in hand');
+
+    // The result row's secondary action is the explicit drill command.
+    const reSearch = document.querySelector('[data-architecture-search]') as HTMLInputElement;
+    fireEvent.focus(reSearch);
+    fireEvent.change(reSearch, { target: { value: 'Reader' } });
+    const neighbourhood = await waitFor(() => {
+      const node = document.querySelector('[data-architecture-search-neighbourhood="src/modules/alpha/reader.ts.Reader"]');
+      assert.ok(
+        node instanceof HTMLElement,
+        `each in-graph result offers the neighbourhood action: ${document.querySelector('[data-architecture-search-results]')?.innerHTML ?? 'no list'}`,
+      );
+      return node;
+    });
+    fireEvent.click(neighbourhood);
+    await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
 
     // A node the detail tier folded away is labelled out of range; choosing it
     // raises the detail tier and reveals it.
@@ -3483,8 +3516,211 @@ test('the search is a combobox and its results are not inside a clipping ancesto
   fireEvent.keyDown(reopenedInput, { key: 'ArrowDown' });
   assert.equal(reopenedInput.getAttribute('aria-activedescendant'), option.id);
   assert.equal(option.getAttribute('aria-selected'), 'true', 'the active option is announced');
+  // Enter centres and selects IN the drawing on screen — the reviewed defect
+  // was that Enter replaced the drawing with the entity's neighbourhood.
   fireEvent.keyDown(reopenedInput, { key: 'Enter' });
+  await waitFor(() =>
+    assert.ok(
+      document.querySelector('[data-architecture-focus-target="src/modules/alpha/reader.ts.Reader"]'),
+      'Enter reveals/centres the chosen entity',
+    ));
+  assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy', 'plain Enter keeps the view');
+
+  // Shift+Enter is the explicit "open its neighbourhood" command.
+  fireEvent.focus(reopenedInput);
+  fireEvent.change(reopenedInput, { target: { value: 'Reader' } });
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-search-results]')));
+  fireEvent.keyDown(reopenedInput, { key: 'Enter', shiftKey: true });
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+});
+
+/**
+ * The interaction-consistency task's view/navigation half:
+ *  · the breadcrumb exists ONLY from a real drill-down (neighbourhood/group);
+ *  · switching the class/file subgraph resets the drawing to its default view.
+ */
+test('the breadcrumb appears only from a drill-down, and switching the subgraph resets the view', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+  assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview', 'the file graph opens on the overview');
+  assert.equal(document.querySelector('[data-architecture-back]'), null, 'the default view has no breadcrumb');
+
+  // The explosion view is NOT a drill-down: the old `!atDefaultView` rule drew
+  // a "Back to overview" button here even though nothing had been drilled.
+  fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  assert.equal(document.querySelector('[data-architecture-back]'), null, 'explosion leaves no breadcrumb');
+
+  // Switching to the class graph resets to ITS default (the hierarchy)…
+  fireEvent.click(document.querySelector('[data-architecture-view-option="entity"]') as Element);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  // …and switching back resets to the file graph's overview instead of
+  // restoring the explosion view.
+  fireEvent.click(document.querySelector('[data-architecture-view-option="file"]') as Element);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview'));
+
+  // Expanding a group IS a drill-down, so the breadcrumb appears and names
+  // where it returns to. The renderer is keyed by granularity, so the drawing
+  // host is a fresh element after the switches above.
+  const fileHost = await waitForDiagram();
+  const group = await waitFor(() => {
+    const node = fileHost.querySelector('[data-entity-id="grp::src/modules/alpha"]');
+    assert.ok(node instanceof Element, 'the overview draws the directory group');
+    return node;
+  });
+  fireEvent.click(group);
+  fireEvent.doubleClick(group);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'group'));
+  const back = document.querySelector('[data-architecture-back]');
+  assert.ok(back instanceof HTMLElement, 'a drill-down shows the breadcrumb');
+  assert.match(back.textContent ?? '', /Back to Overview/, 'the breadcrumb names the default view');
+  fireEvent.click(back);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview'));
+  assert.equal(document.querySelector('[data-architecture-back]'), null, 'and it disappears again at the default');
+});
+
+test('a drilled class graph resets to the hierarchy when the subgraph is switched away and back', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy', 'the class graph opens on the hierarchy');
+
+  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]') as Element);
+  fireEvent.doubleClick(host.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]') as Element);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+
+  fireEvent.click(document.querySelector('[data-architecture-view-option="file"]') as Element);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'overview'));
+  fireEvent.click(document.querySelector('[data-architecture-view-option="entity"]') as Element);
+  // The old neighbourhood must not come back with the class graph.
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  assert.equal(document.querySelector('[data-architecture-hops]'), null);
+  assert.equal(document.querySelector('[data-architecture-back]'), null);
+});
+
+/**
+ * Selecting an entity is a request to inspect it, whichever dock page the
+ * reader last used: the Text page remains reachable only through its own door
+ * or a tab press.
+ */
+test('selecting a node lands on the Inspector page even after the Text page was used', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.click(document.querySelector('[data-architecture-text-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-text-panel]'), 'the Text page is open'));
+  assert.equal(
+    document.querySelector('[data-architecture-dock-tab="text"]')?.getAttribute('aria-selected'),
+    'true',
+  );
+
+  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]') as Element);
+  await waitFor(() =>
+    assert.ok(document.querySelector('[data-architecture-inspector]') !== null, 'the selection opens the inspector'));
+  assert.equal(
+    document.querySelector('[data-architecture-dock-tab="inspector"]')?.getAttribute('aria-selected'),
+    'true',
+    'the selection lands on the Inspector tab, not the remembered Text page',
+  );
+});
+
+/**
+ * The element filter can remove an entity from the drawing entirely. Search
+ * must still find it (from the payload), say why it is absent, and offer the
+ * one-click "Show it" — a silent empty result was the reviewed defect.
+ */
+test('a search hit the filter hid states why and offers "Show it", which draws it', async () => {
+  // The server answers a pin by marking the node `mentionTier: 'pinned'` and
+  // returning it in the subgraph (the real `curatedResult` shape); a pinned
+  // node is exempt from the element switch that hid it.
+  const PINNED_MENTION_RESULT: ArchitectureGraphResult = {
+    ...KEPT_MENTION_RESULT,
+    graph: {
+      file: KEPT_MENTION_RESULT.graph.file,
+      entity: {
+        nodes: KEPT_MENTION_RESULT.graph.entity.nodes.map((node) => (
+          node.id === MENTION_IDS.fn
+            ? { ...node, mentionTier: 'pinned' as const, distance: 0 }
+            : node
+        )),
+        edges: KEPT_MENTION_RESULT.graph.entity.edges,
+      },
+    },
+  };
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(HIDDEN_MENTION_RESULT));
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(PINNED_MENTION_RESULT));
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    results: [{ id: MENTION_IDS.fn, name: 'MFn', file: 'src/modules/mention/MFn.ts', kind: 'function' }],
+    truncated: false,
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  assert.equal(host.querySelector(`[data-entity-id="${MENTION_IDS.fn}"]`), null, 'the function starts hidden');
+
+  fireEvent.change(screen.getByLabelText('Search entities or files'), { target: { value: 'MFn' } });
+  const row = await waitFor(() => {
+    const node = document.querySelector(`[data-architecture-search-project-result="${MENTION_IDS.fn}"]`);
+    assert.ok(node instanceof HTMLElement, 'the project search lists the hidden entity');
+    return node;
+  });
+  assert.equal(row.getAttribute('data-architecture-search-project-in-graph'), 'false');
+  assert.ok(
+    row.querySelector('[data-architecture-search-project-missing]'),
+    'the row states that the entity is not in the current graph',
+  );
+  const showIt = row.querySelector('[data-architecture-search-show]');
+  assert.ok(showIt instanceof HTMLElement, 'and offers the one-click "Show it" action');
+  assert.match(showIt.textContent ?? '', /Show it/);
+
+  fireEvent.click(showIt);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'pinning re-requests the reading'));
+  await waitFor(() =>
+    assert.ok(host.querySelector(`[data-entity-id="${MENTION_IDS.fn}"]`), 'the entity is drawn after "Show it"'));
+});
+
+/**
+ * Dimming is a reading, so it only exists when there is something highlighted.
+ * A selected node whose relations were all filtered away used to dim the whole
+ * drawing to 15% with no highlight at all; the dim is now skipped AND its
+ * strength is at least 35% when it does apply.
+ */
+test('selecting a relation-less node dims nothing, and the dim strength stays readable', async () => {
+  // The isolated node must survive the filter for this case to be about dimming
+  // rather than about the element filter.
+  rememberShowAllFilter();
+  const LONELY = 's1/src/modules/alpha/Lonely.ts.Lonely';
+  const CONNECTED = 's1/src/modules/alpha/Alpha.ts.Alpha';
+  const OTHER = 's1/src/modules/alpha/Beta.ts.Beta';
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse({
+    ...RESULT,
+    graph: {
+      file: RESULT.graph.file,
+      entity: {
+        nodes: [
+          { id: CONNECTED, label: 'Alpha', distance: 0, kind: 'class' },
+          { id: OTHER, label: 'Beta', distance: 1, kind: 'class' },
+          { id: LONELY, label: 'Lonely', distance: 1, kind: 'class' },
+        ],
+        edges: [{ from: OTHER, to: CONNECTED, relationType: 'dependency' }],
+      },
+    },
+    stats: { ...RESULT.stats, entityNodes: 3, entityEdges: 1, entityTotal: 3, entityTruncated: false },
+  }));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector(`[data-entity-id="${LONELY}"]`)));
+
+  fireEvent.click(host.querySelector(`[data-entity-id="${LONELY}"]`) as Element);
+  await waitFor(() =>
+    assert.ok(document.querySelector('[data-architecture-inspector]') !== null, 'the node is inspected'));
+  assert.equal(host.querySelectorAll('.arch-dim').length, 0, 'nothing to highlight: nothing is dimmed');
+
+  fireEvent.click(host.querySelector(`[data-entity-id="${CONNECTED}"]`) as Element);
+  await waitFor(() => assert.ok(host.querySelector('.arch-dim') !== null, 'a related node DOES produce a highlight'));
+  const styles = [...document.querySelectorAll('style')].map((node) => node.textContent ?? '').join('\n');
+  const dimOpacity = /\.arch-dim\s*\{\s*opacity:\s*([0-9.]+)/.exec(styles);
+  assert.ok(dimOpacity !== null, 'the dim rule is stated');
+  assert.ok(Number(dimOpacity[1]) >= 0.35, `dimming must leave the drawing readable (got ${dimOpacity[1]})`);
 });
 
 test('the filter, legend and Adjusted popovers close on an outside press and on Escape', async () => {

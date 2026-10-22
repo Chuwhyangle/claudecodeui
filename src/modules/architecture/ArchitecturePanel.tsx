@@ -184,6 +184,12 @@ type ArchitectureFocusTarget = {
   readonly id: string;
   /** Bumped on every request so choosing the same node twice re-centres it. */
   readonly token: number;
+  /**
+   * Whether the request also opens the node's neighbourhood. A plain search
+   * Enter only centres and selects IN the current drawing; only Shift+Enter or
+   * the result row's "view neighbourhood" action drills.
+   */
+  readonly drill: boolean;
 };
 
 /** Read one project's remembered scope, clamped into the stepper's range. */
@@ -406,6 +412,8 @@ type ArchitecturePanelRenderer = ComponentType<
   ArchitectureRendererProps & {
     readonly focusNodeId?: string | null;
     readonly focusToken?: number;
+    /** Whether the focus request also opens the node's neighbourhood. */
+    readonly focusDrill?: boolean;
     /** Reports the drawn view so the export menu can rebuild that document. */
     readonly onViewChange?: (view: ArchitectureDiagramView) => void;
     /** Manual curation, all optional so a stand-in renderer can ignore them. */
@@ -1350,26 +1358,64 @@ export default function ArchitecturePanel({
   };
 
   // Search the CURRENT subgraph before the detail cut, so a node the tier
-  // folded away is still findable and can be reported as out of range.
+  // folded away is still findable and can be reported as out of range. The
+  // search reads the payload BEFORE the element/relation filter: a node the
+  // filter removed must still be listed (with the reason and a "Show it"
+  // action) instead of the search silently returning nothing.
+  const activeNodeIds = useMemo(
+    () => new Set((activeNeighbourhood?.nodes ?? []).map((node) => node.id)),
+    [activeNeighbourhood],
+  );
   const searchMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (query.length === 0 || activeNeighbourhood === null) return [];
-    return activeNeighbourhood.nodes
+    if (query.length === 0 || rawNeighbourhood === null) return [];
+    return rawNeighbourhood.nodes
       .filter((node) => node.id.toLowerCase().includes(query) || node.label.toLowerCase().includes(query))
       .slice(0, 8)
-      .map((node) => ({
-        node,
-        inRange: detailRanking?.retainedNodeIds.has(node.id) ?? false,
-      }));
-  }, [activeNeighbourhood, detailRanking, searchQuery]);
+      .map((node) => {
+        const inGraph = activeNodeIds.has(node.id);
+        return {
+          node,
+          inGraph,
+          // A node the detail tier folded away is "out of range"; a node the
+          // filter removed is not even in the drawing (`inGraph` false).
+          inRange: inGraph && (detailRanking?.retainedNodeIds.has(node.id) ?? false),
+        };
+      });
+  }, [rawNeighbourhood, activeNodeIds, detailRanking, searchQuery]);
 
-  const revealNode = (nodeId: string, outOfRange: boolean): void => {
+  /**
+   * Reveal a node the filter hid: release the element switch that removed its
+   * kind, or — when no switch explains it — pin it so the server includes it in
+   * the next reading. Then centre/select it like any other match. The action is
+   * never silent: it is the search row's "Show it".
+   */
+  const showHiddenSearchMatch = (match: { readonly node: ArchitectureRendererNode }): void => {
+    const kind = match.node.kind;
+    if (kind !== undefined && !filter.kinds.includes(kind)) {
+      changeFilter({
+        ...filter,
+        kinds: [...filter.kinds, kind as (typeof ARCHITECTURE_ELEMENT_KINDS)[number]],
+      });
+      revealNode(match.node.id, false, false);
+      return;
+    }
+    pinNode(match.node);
+    revealNode(match.node.id, false, false);
+  };
+
+  const revealNode = (nodeId: string, outOfRange: boolean, drill = false): void => {
     // A folded node is only out of range because of the detail tier: raise it
     // to the identity tier before asking the renderer to show the node.
     if (outOfRange) changeDetail('all');
     // Revealing a node is a request to leave the "only show this pin" slice.
     setSoloNodeId(null);
-    setFocusTarget((current) => ({ id: nodeId, token: (current?.token ?? 0) + 1 }));
+    // "Reveal" includes SELECTING it: the search/inspector command must open
+    // the inspector page and paint the node, not only scroll to it.
+    dispatchSelection({ type: 'select-entity', nodeId });
+    // `drill` is the ONLY thing that replaces the drawing with the entity's
+    // neighbourhood; a plain reveal centres it in the drawing on screen.
+    setFocusTarget((current) => ({ id: nodeId, token: (current?.token ?? 0) + 1, drill }));
     setSearchOpen(false);
   };
 
@@ -1534,20 +1580,37 @@ export default function ArchitecturePanel({
       setDockLayoutLocked(false);
     }, DOCK_LAYOUT_LOCK_MS);
   }, []);
+
+  /**
+   * The reader's close gesture for the dock (×, Escape, the Text door toggling
+   * itself shut). Closing the dock also clears the selection: the review found
+   * that closing the inspector left the selection's dimming and highlight on
+   * the drawing with no inspector open to explain it, and only a press on the
+   * empty canvas cleared it.
+   */
+  const closeDock = useCallback((): void => {
+    setMultiSelectMode(false);
+    dispatchSelection({ type: 'clear' });
+    changeDockOpen(false);
+  }, [changeDockOpen]);
   useEffect(() => () => {
     if (dockLockTimerRef.current !== null) clearTimeout(dockLockTimerRef.current);
   }, []);
 
   // Selecting anything is a request to inspect it: a NEW selection opens the
-  // dock. Keyed on the selection alone — closing the dock must keep the
-  // selection without the effect immediately reopening it (Escape's first press
-  // closes the dock, its second clears the selection).
+  // dock AND lands on the Inspector page, whatever page the reader last used.
+  // The review found a selection opening the remembered "Text" page, so the
+  // inspector they asked for never appeared. Keyed on the selection alone:
+  // closing the dock clears the selection in the same gesture, so this effect
+  // can never immediately reopen it.
   const dockOpenRef = useRef(dockOpen);
   useEffect(() => {
     dockOpenRef.current = dockOpen;
   }, [dockOpen]);
   useEffect(() => {
-    if (selection !== null && !dockOpenRef.current) changeDockOpen(true);
+    if (selection === null) return;
+    setDockTab('inspector');
+    if (!dockOpenRef.current) changeDockOpen(true);
   }, [selection, changeDockOpen]);
 
   // A different session (or project) is a different reading, and the dock's
@@ -1608,7 +1671,8 @@ export default function ArchitecturePanel({
   }, []);
   /**
    * Escape, while the canvas owns the key: an expanded tray collapses first
-   * (the selection survives), then the dock closes, then the selection clears.
+   * (the selection survives), then the dock closes — and, like the × button,
+   * that close also clears the selection, so no dim/highlight is left behind.
    * `stopPropagation` happens in the renderer, so the chat page's global abort
    * never fires.
    */
@@ -1618,12 +1682,12 @@ export default function ArchitecturePanel({
       return;
     }
     if (dockOpen) {
-      changeDockOpen(false);
+      closeDock();
       return;
     }
     setMultiSelectMode(false);
     dispatchSelection({ type: 'clear' });
-  }, [dockOpen, changeDockOpen, trayExpanded]);
+  }, [closeDock, dockOpen, trayExpanded]);
   /** A click on the empty canvas clears the selection AND closes the dock. */
   const clearSelectionOnCanvas = useCallback((): void => {
     dispatchSelection({ type: 'clear' });
@@ -1639,7 +1703,6 @@ export default function ArchitecturePanel({
   }, [selections.length]);
   /** Selecting a related node from the inspector also centres it in the drawing. */
   const inspectRelatedNode = (nodeId: string): void => {
-    dispatchSelection({ type: 'select-entity', nodeId });
     revealNode(nodeId, false);
   };
 
@@ -1898,7 +1961,7 @@ export default function ArchitecturePanel({
       aria-expanded={dockOpen && dockTab === 'text'}
       onClick={() => {
         if (dockOpen && dockTab === 'text') {
-          changeDockOpen(false);
+          closeDock();
           return;
         }
         setDockTab('text');
@@ -2385,10 +2448,14 @@ export default function ArchitecturePanel({
       return (current + delta + searchOptionCount) % searchOptionCount;
     });
   };
-  const chooseSearchOption = (index: number): void => {
+  const chooseSearchOption = (index: number, drill: boolean): void => {
     if (index < searchMatches.length) {
       const match = searchMatches[index];
-      revealNode(match.node.id, !match.inRange);
+      // A match the filter removed is not drawn yet: "Show it" first, then
+      // centre/select it. A drawn match is centred in place; only `drill` (the
+      // explicit "view neighbourhood" command) replaces the drawing.
+      if (!match.inGraph) showHiddenSearchMatch(match);
+      else revealNode(match.node.id, !match.inRange, drill);
     } else {
       const hit = projectHits[index - searchMatches.length];
       if (hit !== undefined) pinItem(hit);
@@ -2445,26 +2512,16 @@ export default function ArchitecturePanel({
             return;
           }
           if (event.key !== 'Enter') return;
-          // Shift+Enter pins the first project-wide hit (the second group's
-          // keyboard equivalent of `＋`).
-          if (
-            event.shiftKey
-            && canCurate
-            && projectSearch.search.status === 'ready'
-            && projectSearch.search.results.length > 0
-          ) {
-            event.preventDefault();
-            pinItem(projectSearch.search.results[0]);
-            return;
-          }
+          // Enter centres and selects the match IN the drawing on screen;
+          // Shift+Enter is the explicit "open its neighbourhood" command.
           if (activeSearchIndex >= 0) {
             event.preventDefault();
-            chooseSearchOption(activeSearchIndex);
+            chooseSearchOption(activeSearchIndex, event.shiftKey);
             return;
           }
           if (searchMatches.length > 0) {
-            const first = searchMatches[0];
-            revealNode(first.node.id, !first.inRange);
+            event.preventDefault();
+            chooseSearchOption(0, event.shiftKey);
           }
         }}
         className={`rounded-md border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
@@ -2498,25 +2555,68 @@ export default function ArchitecturePanel({
             </p>
           ) : (
             searchMatches.map((match, index) => (
-              <button
+              <div
                 key={match.node.id}
                 id={searchOptionId(index)}
-                type="button"
                 role="option"
                 aria-selected={activeSearchIndex === index}
                 data-architecture-search-option-index={index}
-                data-architecture-search-result={match.node.id}
-                data-architecture-search-in-range={match.inRange}
-                onClick={() => revealNode(match.node.id, !match.inRange)}
-                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                data-architecture-search-in-graph={match.inGraph}
+                className="flex w-full items-center justify-between gap-1 rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
               >
-                <span className="min-w-0 truncate">{match.node.label}</span>
-                {!match.inRange && (
-                  <span className="shrink-0 text-amber-600 dark:text-amber-400">
-                    {t('architecture.search.outOfRange', { defaultValue: 'Not in current range' })}
-                  </span>
+                <button
+                  type="button"
+                  data-architecture-search-result={match.node.id}
+                  data-architecture-search-in-range={match.inRange}
+                  onClick={() => {
+                    if (!match.inGraph) {
+                      showHiddenSearchMatch(match);
+                      return;
+                    }
+                    // A plain choose centres/selects in the drawing on screen;
+                    // the secondary button below is the drill command.
+                    revealNode(match.node.id, !match.inRange, false);
+                  }}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                >
+                  <span className="min-w-0 truncate">{match.node.label}</span>
+                  {!match.inGraph ? (
+                    <span
+                      data-architecture-search-hidden-reason="true"
+                      className="shrink-0 text-amber-600 dark:text-amber-400"
+                    >
+                      {t('architecture.search.hiddenByFilter', { defaultValue: 'Hidden by the current filter' })}
+                    </span>
+                  ) : !match.inRange ? (
+                    <span className="shrink-0 text-amber-600 dark:text-amber-400">
+                      {t('architecture.search.outOfRange', { defaultValue: 'Not in current range' })}
+                    </span>
+                  ) : null}
+                </button>
+                {match.inGraph ? (
+                  <button
+                    type="button"
+                    aria-label={t('architecture.search.viewNeighbourhood', {
+                      defaultValue: 'View neighbourhood of {{name}}',
+                      name: match.node.label,
+                    })}
+                    data-architecture-search-neighbourhood={match.node.id}
+                    onClick={() => revealNode(match.node.id, !match.inRange, true)}
+                    className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    {t('architecture.search.viewNeighbourhoodShort', { defaultValue: 'Neighbourhood' })}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    data-architecture-search-show={match.node.id}
+                    onClick={() => showHiddenSearchMatch(match)}
+                    className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    {t('architecture.search.showIt', { defaultValue: 'Show it' })}
+                  </button>
                 )}
-              </button>
+              </div>
             ))
           )}
 
@@ -2547,33 +2647,57 @@ export default function ArchitecturePanel({
                       {t('architecture.search.noMatches', { defaultValue: 'No matches' })}
                     </p>
                   ) : (
-                    projectSearch.search.results.map((hit, projectIndex) => (
-                      <div
-                        key={hit.id}
-                        id={searchOptionId(searchMatches.length + projectIndex)}
-                        role="option"
-                        aria-selected={activeSearchIndex === searchMatches.length + projectIndex}
-                        data-architecture-search-project-result={hit.id}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
-                      >
-                        <span aria-hidden="true" className="w-3 shrink-0 text-center text-muted-foreground">
-                          {searchKindGlyph(hit.kind)}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">
-                          <span className="font-medium">{hit.name}</span>
-                          <span className="ml-1 text-muted-foreground">{hit.file}</span>
-                        </span>
-                        <button
-                          type="button"
-                          aria-label={t('architecture.curation.pinNamed', { defaultValue: 'Pin {{name}}', name: hit.name })}
-                          data-architecture-search-pin={hit.id}
-                          onClick={() => pinItem(hit)}
-                          className="shrink-0 rounded border border-border px-1.5 py-0.5 font-semibold text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                    projectSearch.search.results.map((hit, projectIndex) => {
+                      const inCurrentGraph = activeNodeIds.has(hit.id);
+                      return (
+                        <div
+                          key={hit.id}
+                          id={searchOptionId(searchMatches.length + projectIndex)}
+                          role="option"
+                          aria-selected={activeSearchIndex === searchMatches.length + projectIndex}
+                          data-architecture-search-project-result={hit.id}
+                          data-architecture-search-project-in-graph={inCurrentGraph}
+                          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
                         >
-                          ＋
-                        </button>
-                      </div>
-                    ))
+                          <span aria-hidden="true" className="w-3 shrink-0 text-center text-muted-foreground">
+                            {searchKindGlyph(hit.kind)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">
+                            <span className="font-medium">{hit.name}</span>
+                            <span className="ml-1 text-muted-foreground">{hit.file}</span>
+                          </span>
+                          {!inCurrentGraph && (
+                            <span
+                              data-architecture-search-project-missing="true"
+                              className="shrink-0 text-amber-600 dark:text-amber-400"
+                            >
+                              {t('architecture.search.notInGraph', { defaultValue: 'Not in the current graph' })}
+                            </span>
+                          )}
+                          {!inCurrentGraph && (
+                            <button
+                              type="button"
+                              data-architecture-search-show={hit.id}
+                              // Pinning is what "show it" means for a server-side
+                              // hidden entity: the next reading carries it.
+                              onClick={() => pinItem(hit)}
+                              className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                            >
+                              {t('architecture.search.showIt', { defaultValue: 'Show it' })}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            aria-label={t('architecture.curation.pinNamed', { defaultValue: 'Pin {{name}}', name: hit.name })}
+                            data-architecture-search-pin={hit.id}
+                            onClick={() => pinItem(hit)}
+                            className="shrink-0 rounded border border-border px-1.5 py-0.5 font-semibold text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                          >
+                            ＋
+                          </button>
+                        </div>
+                      );
+                    })
                   )}
                   {projectSearch.search.truncated && (
                     <p data-architecture-search-truncated="true" className="px-2 py-1 text-[10px] text-muted-foreground">
@@ -3424,6 +3548,7 @@ export default function ArchitecturePanel({
                     onDrawnPlantUmlChange={setDrawnPlantUml}
                     focusNodeId={focusTarget?.id ?? null}
                     focusToken={focusTarget?.token}
+                    focusDrill={focusTarget?.drill ?? false}
                     // Manual curation: the drawing owns right-click/long-press
                     // and Delete/Backspace, and reports the result through the
                     // same store the inspector and the manager use.
@@ -3577,7 +3702,7 @@ export default function ArchitecturePanel({
           ]}
           activeTabId={dockTab}
           onTabChange={(tabId) => setDockTab(tabId === 'text' ? 'text' : 'inspector')}
-          onClose={() => changeDockOpen(false)}
+          onClose={closeDock}
           collapsedSummary={dockSummary}
           snapLabels={{
             collapsed: t('architecture.dock.snapCollapsed', { defaultValue: 'Collapsed' }),

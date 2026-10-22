@@ -431,7 +431,7 @@ test('a mention hit asks the shared locator for its message and opens the chat t
   consumePendingLocateRequest();
 });
 
-test('Escape closes the dock first, then clears the selection, and never reaches the global handler', async () => {
+test('Escape closes the dock, clears the selection with it, and never reaches the global handler', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
   fireEvent.click(host.querySelector(`[data-entity-id="${ALPHA}"]`) as Element);
@@ -441,23 +441,37 @@ test('Escape closes the dock first, then clears the selection, and never reaches
   const globalKeys = vi.fn();
   document.addEventListener('keydown', globalKeys);
 
+  // The rewritten contract (was: "the selection survives the dock closing"):
+  // closing the inspector also clears the selection, so the dimming and the
+  // highlight cannot outlive the page that explained them.
   fireEvent.keyDown(host, { key: 'Escape' });
-  await waitFor(() => assert.equal(dock(), null, 'the first Escape closes the dock'));
-  assert.ok(
-    host.querySelector(`[data-entity-id="${ALPHA}"]`)?.classList.contains('arch-selected'),
-    'the selection survives the dock closing',
-  );
-
-  fireEvent.keyDown(host, { key: 'Escape' });
+  await waitFor(() => assert.equal(dock(), null, 'Escape closes the dock'));
   await waitFor(() =>
     assert.equal(
       host.querySelector(`[data-entity-id="${ALPHA}"]`)?.classList.contains('arch-selected'),
       false,
-      'the second Escape clears the selection',
+      'the selection is cleared with the dock',
     ));
-
+  assert.equal(host.querySelectorAll('.arch-dim').length, 0, 'and no dim is left behind');
   assert.equal(globalKeys.mock.calls.length, 0, 'the canvas-owned Escape must be stopped before the document');
   document.removeEventListener('keydown', globalKeys);
+});
+
+test('the × close button clears the selection with the dock, leaving no dim', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  fireEvent.click(host.querySelector(`[data-entity-id="${ALPHA}"]`) as Element);
+  await waitFor(() => assert.ok(dock() !== null));
+
+  fireEvent.click(document.querySelector('[data-architecture-dock-close]') as Element);
+  await waitFor(() => assert.equal(dock(), null, 'the × press closes the dock'));
+  await waitFor(() =>
+    assert.equal(
+      host.querySelector(`[data-entity-id="${ALPHA}"]`)?.classList.contains('arch-selected'),
+      false,
+      'closing the inspector also clears the selection',
+    ));
+  assert.equal(host.querySelectorAll('.arch-dim').length, 0, 'and the drawing is no longer dimmed');
 });
 
 test('a relation click opens the relation inspector with both ends, type and co-mentions', async () => {

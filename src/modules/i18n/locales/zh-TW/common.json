@@ -79,6 +79,8 @@
       "zoomFit": "配合檢視",
       "zoomFocus": "聚焦",
       "zoomActual": "實際大小（100%）",
+      "classDiagram": "類別圖",
+      "backTo": "返回{{view}}",
       "lod": {
         "packages": "套件",
         "subpackages": "子套件",
@@ -95,7 +97,9 @@
         "focusHint": "已聚焦 {{package}}",
         "overviewHint": "縮放 {{zoom}}% · 放大查看 {{package}} 等 {{count}} 個套件",
         "collapsed": "圖過寬，已摺疊為目錄全貌。",
-        "focusedFitHint": "已按可讀縮放聚焦，點「全貌」查看整圖。"
+        "focusedFitHint": "已按可讀縮放聚焦，點「全貌」查看整圖。",
+        "focusSummary": "可讀縮放已開啟：聚焦 {{package}}，目前 {{zoom}}% — 選「全貌」檢視整張圖（另有 {{count}} 個套件）。",
+        "focusOnly": "可讀縮放已開啟 — 選「全貌」檢視整張圖。"
       },
       "minimap": {
         "label": "圖概覽，目前視野佔 {{percent}}%",
@@ -169,6 +173,11 @@
       "placeholder": "搜尋實體或檔案…",
       "noMatches": "沒有相符項目",
       "outOfRange": "不在目前範圍",
+      "hiddenByFilter": "被目前篩選隱藏",
+      "viewNeighbourhood": "檢視 {{name}} 的鄰域",
+      "viewNeighbourhoodShort": "鄰域",
+      "showIt": "顯示它",
+      "notInGraph": "不在目前圖中",
       "inGraph": "圖中",
       "other": "專案其他",
       "retry": "重試",

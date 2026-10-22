@@ -395,8 +395,10 @@ test('Escape collapses the expanded tray first, then clears the selection, and n
   const globalKeys = vi.fn();
   document.addEventListener('keydown', globalKeys);
   try {
-    // The dock opens with the first selection, so Escape's documented order is
-    // tray-expanded → dock → selection.
+    // The rewritten contract (was: "the selection survives the dock closing"):
+    // closing the dock also clears the selection, so the dimming and highlight
+    // cannot outlive the inspector that explained them. Escape's order stays
+    // tray-expanded → dock, and it never reaches the page abort.
     fireEvent.keyDown(host, { key: 'Escape' });
     await waitFor(() => assert.equal(
       document.querySelector('[data-architecture-tray-expanded-panel]'),
@@ -411,15 +413,12 @@ test('Escape collapses the expanded tray first, then clears the selection, and n
       null,
       'the next Escape closes the dock',
     ));
-    assert.equal(selectedCount(), 2, 'the selection survives the dock closing');
-
-    fireEvent.keyDown(host, { key: 'Escape' });
-    await waitFor(() => assert.equal(
+    await waitFor(() => assert.equal(selectedCount(), 0, 'and closing the dock clears the selection with it'));
+    assert.equal(
       document.querySelector('[data-architecture-tray-pill]'),
       null,
-      'the last Escape clears the selection',
-    ));
-    assert.equal(selectedCount(), 0);
+      'so no selection tray is left behind',
+    );
     assert.equal(globalKeys.mock.calls.length, 0, `Escape must not reach the chat abort (calls: ${String(globalKeys.mock.calls.length)})`);
   } finally {
     document.removeEventListener('keydown', globalKeys);
