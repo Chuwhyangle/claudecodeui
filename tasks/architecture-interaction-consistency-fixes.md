@@ -1,7 +1,7 @@
 ---
 id: architecture-interaction-consistency-fixes
 title: 交互一致性：缩放档位条去重并修状态残留、关闭停靠区清选择、选中节点打开检查器、搜索回车定位而不是下钻、无关系时不整图压暗
-status: ready
+status: done
 labels:
   - feature
 parent: null
