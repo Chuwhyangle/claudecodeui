@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';

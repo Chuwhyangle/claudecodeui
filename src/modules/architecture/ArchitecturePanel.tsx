@@ -1086,10 +1086,10 @@ export default function ArchitecturePanel({
     if (dockOpen) changeDockOpen(false);
   }, [dockOpen, changeDockOpen]);
   /** Selecting a related node from the inspector also centres it in the drawing. */
-  const inspectRelatedNode = useCallback((nodeId: string): void => {
+  const inspectRelatedNode = (nodeId: string): void => {
     dispatchSelection({ type: 'select-entity', nodeId });
     revealNode(nodeId, false);
-  }, []);
+  };
 
   if (!sessionId) {
     return (
