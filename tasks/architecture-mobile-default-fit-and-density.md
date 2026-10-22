@@ -1,7 +1,7 @@
 ---
 id: architecture-mobile-default-fit-and-density
 title: 手机默认整图可用：读数卡与缩放簇压缩、Fit 不再为避让缩略图按钮多缩、整图太小时提示并支持点 package 放大
-status: todo
+status: ready
 labels:
   - feature
 parent: null
