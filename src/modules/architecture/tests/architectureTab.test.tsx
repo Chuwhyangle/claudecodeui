@@ -2000,6 +2000,10 @@ test('the scope stepper re-requests the selected depth and clamps to 0..3', asyn
 
   const readout = (): HTMLElement | null => document.querySelector('[role="spinbutton"]');
   assert.ok(readout() instanceof HTMLElement, 'the scope control is a spinbutton, not three pressed buttons');
+  // The old three-button vocabulary is gone in every form it could survive in.
+  assert.equal(document.querySelector('[data-architecture-hops-option]'), null);
+  assert.equal(document.querySelector('[data-architecture-hops-control]'), null);
+  assert.equal(screen.queryByRole('button', { name: /Hops/ }), null, 'no control may still be called Hops');
   assert.equal(readout()?.getAttribute('aria-valuenow'), '2');
   assert.equal(readout()?.getAttribute('aria-valuemin'), '0');
   assert.equal(readout()?.getAttribute('aria-valuemax'), '3');
