@@ -1,7 +1,7 @@
 ---
 id: gap-voice-config-file-contextpack-spendguard
 title: voice 配置化：contextPack（K/budgetChars）+ spendGuard 阈值进同一个配置文件，Phase 1→2
-status: todo
+status: ready
 labels:
   - gap
 parent: null
