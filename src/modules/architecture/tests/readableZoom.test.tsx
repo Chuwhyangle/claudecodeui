@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import enCommon from '@/modules/i18n/locales/en/common.json';
+import zhCNCommon from '@/modules/i18n/locales/zh-CN/common.json';
 import {
   buildSeedHierarchy,
   canvasIsTooWide,
   decideReadableZoom,
   densestSeedPackage,
+  FIT_CONTROL_FOCUS_KEY,
+  FIT_CONTROL_WHOLE_KEY,
+  fitControlReading,
   MIN_READABLE_FONT_PX,
   READABLE_ZOOM_SCALE,
   readableFocusPackage,
@@ -50,9 +54,14 @@ const DESKTOP_VIEWPORT = { width: 1151, height: 700 };
 const HUGE_FIT = MIN_ZOOM_SCALE;
 
 /** The English copy, read the way the component reads it. */
-const ENGLISH = (enCommon as unknown as {
-  architecture: { plantuml: { readable: Record<string, string> } };
-}).architecture.plantuml.readable;
+const ENGLISH_PLANTUML = (enCommon as unknown as {
+  architecture: { plantuml: Record<string, string> & { readable: Record<string, string> } };
+}).architecture.plantuml;
+const ENGLISH = ENGLISH_PLANTUML.readable;
+/** The Chinese bundle is the wording the mobile review asked for. */
+const CHINESE_PLANTUML = (zhCNCommon as unknown as {
+  architecture: { plantuml: Record<string, string> & { readable: Record<string, string> } };
+}).architecture.plantuml;
 
 test('the readable scale is derived from the smallest readable label', () => {
   assert.equal(RENDERED_LABEL_FONT_PX, 13);
@@ -187,4 +196,66 @@ test('an empty or package-less graph yields no focus target without throwing', (
   assert.equal(decision.scale, READABLE_ZOOM_SCALE);
   assert.equal(decision.focusPackageId, null);
   assert.equal(decision.overviewHint, null);
+});
+
+test('the fit control is only called "Fit to view" when the fit really contains the graph', () => {
+  // The 390×844 phone case: the geometric fit is far below the readable floor,
+  // so pressing fit lands on the focus view and must be labelled as one.
+  const focusedDecision = decideReadableZoom({
+    fitScale: HUGE_FIT,
+    natural: HUGE_NATURAL,
+    viewport: { width: 390, height: 700 },
+    hierarchy: HIERARCHY,
+  });
+  assert.equal(focusedDecision.mode, 'focus');
+
+  const focusedControl = fitControlReading(focusedDecision, 'fit');
+  assert.equal(focusedControl.mode, 'focus', 'the mode reading says what the fit applies');
+  assert.equal(focusedControl.labelKey, FIT_CONTROL_FOCUS_KEY);
+  assert.equal(focusedControl.labelFallback, 'Focus');
+  assert.equal(focusedControl.pressed, true, 'aria-pressed follows the applied fit, not the old label');
+  assert.equal(focusedControl.focusNotice, true, 'a focused fit must say the whole graph is one choice away');
+
+  // A fit that truly contains the drawing keeps the whole-graph wording.
+  const wholeDecision = decideReadableZoom({
+    fitScale: 0.9,
+    natural: { width: 1000, height: 500 },
+    viewport: DESKTOP_VIEWPORT,
+    hierarchy: HIERARCHY,
+  });
+  assert.equal(wholeDecision.mode, 'overview');
+
+  const wholeControl = fitControlReading(wholeDecision, 'fit');
+  assert.equal(wholeControl.mode, 'overview');
+  assert.equal(wholeControl.labelKey, FIT_CONTROL_WHOLE_KEY);
+  assert.equal(wholeControl.labelFallback, 'Fit to view');
+  assert.equal(wholeControl.pressed, true);
+  assert.equal(wholeControl.focusNotice, false, 'a real fit has nothing to explain');
+
+  // After a manual zoom the control is no longer the pressed one, but it still
+  // names the view pressing it would restore.
+  const manual = fitControlReading(focusedDecision, 'custom');
+  assert.equal(manual.pressed, false);
+  assert.equal(manual.focusNotice, false);
+  assert.equal(manual.labelKey, FIT_CONTROL_FOCUS_KEY);
+
+  // Before the first measurement there is no decision; the honest default is
+  // the plain whole-graph label rather than a guess at focus.
+  const unmeasured = fitControlReading(null, 'fit');
+  assert.equal(unmeasured.mode, 'overview');
+  assert.equal(unmeasured.labelKey, FIT_CONTROL_WHOLE_KEY);
+  assert.equal(unmeasured.pressed, true);
+});
+
+test('both fit labels ship in every reviewed bundle, and the focused one names Overview', () => {
+  assert.equal(ENGLISH_PLANTUML.zoomFit, 'Fit to view');
+  assert.equal(ENGLISH_PLANTUML.zoomFocus, 'Focus');
+  assert.equal(CHINESE_PLANTUML.zoomFit, '适应视图');
+  assert.equal(CHINESE_PLANTUML.zoomFocus, '聚焦');
+
+  // The notice tells the reader where the whole drawing is, by the name of the
+  // control that shows it.
+  assert.match(ENGLISH.focusedFitHint, /Overview/);
+  assert.match(ENGLISH.focusedFitHint, /whole graph/i);
+  assert.match(CHINESE_PLANTUML.readable.focusedFitHint, /全貌/);
 });

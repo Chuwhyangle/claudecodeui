@@ -264,3 +264,60 @@ export function decideReadableZoom(input: ReadableZoomInput): ReadableZoomDecisi
     overviewHint,
   };
 }
+
+/** The locale key of the fit control while it really contains the whole drawing. */
+export const FIT_CONTROL_WHOLE_KEY = 'architecture.plantuml.zoomFit';
+
+/** The locale key of the fit control while the readable floor replaced the fit. */
+export const FIT_CONTROL_FOCUS_KEY = 'architecture.plantuml.zoomFocus';
+
+/** How the toolbar's fit control must read for the view on screen. */
+export type FitControlReading = {
+  /** The view the fit control applies: `focus` when the readable floor raised it. */
+  readonly mode: ReadableZoomMode;
+  /** The locale key the control's visible label comes from. */
+  readonly labelKey: typeof FIT_CONTROL_WHOLE_KEY | typeof FIT_CONTROL_FOCUS_KEY;
+  /** The English fallback paired with `labelKey`, for bundles that lack the key. */
+  readonly labelFallback: string;
+  /** Whether the control is pressed: the zoom on screen is a fit, not a user scale. */
+  readonly pressed: boolean;
+  /** True while a readable focus — not the whole graph — is what the fit produced. */
+  readonly focusNotice: boolean;
+};
+
+/** The only thing the fit control needs from a decision or an applied readout. */
+export type FitControlSource = {
+  readonly mode: ReadableZoomMode;
+};
+
+/**
+ * Read the fit control off a decision. The object used to say "fit" whenever the
+ * zoom mode was a fit, even when the readable floor had raised the scale past
+ * the drawing's own extent — the 882px drawing on a 390px phone was labelled
+ * "Fit to view" while only its left 44% was on screen. Naming a control after
+ * what pressing it actually does is the fix: focus when the fit stops at the
+ * readable floor, "fit" only when it truly contains the drawing. An unmeasured
+ * drawing has no decision yet, so it keeps the plain whole-graph label.
+ */
+export function fitControlReading(
+  decision: FitControlSource | null,
+  zoomMode: 'fit' | 'custom',
+): FitControlReading {
+  if (decision === null) {
+    return {
+      mode: 'overview',
+      labelKey: FIT_CONTROL_WHOLE_KEY,
+      labelFallback: 'Fit to view',
+      pressed: zoomMode === 'fit',
+      focusNotice: false,
+    };
+  }
+  const focused = decision.mode === 'focus';
+  return {
+    mode: decision.mode,
+    labelKey: focused ? FIT_CONTROL_FOCUS_KEY : FIT_CONTROL_WHOLE_KEY,
+    labelFallback: focused ? 'Focus' : 'Fit to view',
+    pressed: zoomMode === 'fit',
+    focusNotice: focused && zoomMode === 'fit',
+  };
+}

@@ -509,30 +509,35 @@ export default function ArchitecturePanel({
           <>
             {/* A coarse pointer cannot hover, so the hover readout is not
                 rendered at all on that tier — the touch instruction below is
-                the only input guidance, and it is a dismissible overlay. */}
+                the only input guidance. It is a normal-flow row ABOVE the
+                drawing, not an overlay: an absolutely placed hint covered the
+                top row of nodes on a phone, which is the content the reader
+                opened the tab for. It still costs only its own height and the
+                drawing keeps `flex-1` of the rest. */}
             {!coarsePointer && <ArchitectureHoverBar hover={visibleHover} />}
-            <div className="relative min-h-0 flex-1">
-              {coarsePointer && !touchHintDismissed && (
-                <div
-                  data-architecture-touch-hint="true"
-                  className="absolute inset-x-2 top-2 z-10 flex items-start gap-2 rounded-lg border border-border bg-background/95 px-2 py-1 text-[11px] text-muted-foreground shadow"
+            {coarsePointer && !touchHintDismissed && (
+              <div
+                data-architecture-touch-hint="true"
+                role="status"
+                className="flex items-start gap-2 border-b border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground"
+              >
+                <span className="min-w-0 flex-1">
+                  {t('architecture.plantuml.touchHint', {
+                    defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
+                  })}
+                </span>
+                <button
+                  type="button"
+                  aria-label={t('architecture.dismissHint', { defaultValue: 'Dismiss hint' })}
+                  onClick={() => setTouchHintDismissed(true)}
+                  style={compactTargetStyle}
+                  className="rounded border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
                 >
-                  <span className="min-w-0 flex-1">
-                    {t('architecture.plantuml.touchHint', {
-                      defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
-                    })}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t('architecture.dismissHint', { defaultValue: 'Dismiss hint' })}
-                    onClick={() => setTouchHintDismissed(true)}
-                    style={compactTargetStyle}
-                    className="rounded border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
+                  ×
+                </button>
+              </div>
+            )}
+            <div className="relative min-h-0 flex-1">
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
                 <Renderer
                   key={`${sessionId}:${granularity}:${hops}`}

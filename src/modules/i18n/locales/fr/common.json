@@ -36,6 +36,7 @@
       "zoomIn": "Zoom avant",
       "zoomOut": "Zoom arrière",
       "zoomFit": "Ajuster à la vue",
+      "zoomFocus": "Focus",
       "zoomActual": "Taille réelle (100 %)",
       "lod": {
         "packages": "Paquets",
@@ -52,7 +53,8 @@
         "overview": "Vue d'ensemble",
         "focusHint": "Focalisé sur {{package}}",
         "overviewHint": "Zoom {{zoom}} % · zoomez sur {{package}} et {{count}} autre(s) paquet(s)",
-        "collapsed": "Le graphe est trop large ; il a donc été replié sur la vue d'ensemble par répertoires."
+        "collapsed": "Le graphe est trop large ; il a donc été replié sur la vue d'ensemble par répertoires.",
+        "focusedFitHint": "Le zoom lisible est actif : cette vue est focalisée, pas le graphe entier — choisissez « Vue d'ensemble » pour tout voir."
       }
     },
     "title": "Architecture",

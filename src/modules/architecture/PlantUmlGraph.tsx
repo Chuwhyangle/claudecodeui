@@ -34,6 +34,7 @@ import {
 import {
   buildSeedHierarchy,
   decideReadableZoom,
+  fitControlReading,
   type ReadableZoomDecision,
   type ReadableZoomHint,
   type ReadableZoomMode,
@@ -1087,6 +1088,10 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
   // The toggle's pressed state follows the user's last explicit choice; before
   // any choice the drawing's own default (readableView) is what is on screen.
   const activeReadableMode: ReadableZoomMode = readableMode ?? readableView?.mode ?? 'focus';
+  // What the fit control really does right now. The readable floor raises a
+  // geometric fit that would smear the labels, and in that state the control
+  // must not claim the whole drawing is on screen (see `fitControlReading`).
+  const fitReading = fitControlReading(readableView, zoom.mode);
 
   /** The 聚焦 / 全貌 switch: focus at the readable floor, or the whole drawing. */
   const readableModeGroup = (
@@ -1143,6 +1148,20 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
       {t('architecture.plantuml.readable.focusHint', {
         defaultValue: 'Focused on {{package}}',
         package: readableView.focusPackageId,
+      })}
+    </span>
+  ) : null;
+
+  /**
+   * The readable focus is not the whole drawing, and the fit control no longer
+   * says otherwise — so say where the whole drawing is. It sits beside the
+   * focus reading rather than replacing it: the package and the escape are two
+   * different facts.
+   */
+  const fitFocusNotice = fitReading.focusNotice ? (
+    <span data-architecture-readable-fit-notice="true">
+      {t('architecture.plantuml.readable.focusedFitHint', {
+        defaultValue: 'Readable zoom is on, so this is a focus view — choose Overview to see the whole graph.',
       })}
     </span>
   ) : null;
@@ -1219,12 +1238,15 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
     <button
       type="button"
       onClick={fitDiagram}
-      aria-pressed={zoom.mode === 'fit'}
+      aria-pressed={fitReading.pressed}
       data-architecture-zoom-fit="true"
+      // The honest reading of what this control applies. `zoom-mode` above keeps
+      // its existing fit/custom vocabulary; this is the view the fit lands on.
+      data-architecture-zoom-fit-mode={fitReading.mode}
       style={touchTargetStyle}
       className={TOOLBAR_BUTTON_CLASS}
     >
-      {t('architecture.plantuml.zoomFit', { defaultValue: 'Fit to view' })}
+      {t(fitReading.labelKey, { defaultValue: fitReading.labelFallback })}
     </button>
   );
 
@@ -1296,6 +1318,7 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
             <span className="flex flex-wrap items-center gap-2">
               <span data-architecture-view-label>{viewLabel}</span>
               {readableNotice}
+              {fitFocusNotice}
               {/* The semantic-zoom level currently shown. It is the diagram's own
                   reading of the scale, so it changes only after the debounce. */}
               {lodDepth !== null && (
@@ -1341,6 +1364,7 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
             <span data-architecture-view-label>{viewLabel}</span>
             {readableModeGroup}
             {readableNotice}
+            {fitFocusNotice}
             {/* The semantic-zoom level currently shown. It is the diagram's own
                 reading of the scale, so it changes only after the debounce. */}
             {lodDepth !== null && (
