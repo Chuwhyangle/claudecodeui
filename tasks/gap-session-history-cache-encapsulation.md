@@ -1,7 +1,7 @@
 ---
 id: gap-session-history-cache-encapsulation
 title: SessionHistoryCache 封装：session-history-cache 的 loadContexts Map 收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
