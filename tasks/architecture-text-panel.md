@@ -42,10 +42,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0（新文件）：三种范围产出的 puml 节点集合正确（全图 = 过滤后的全部；视野内 = 与视口相交的节点及其间的边；选中 +1 = 选中项与一跳邻居）；选中为空时 +1 范围抛出明确的「无选中」状态而不是空文本；`buildPlantUmlText` 对同一输入确定性输出；产出的文本经 plantuml-js `checkSyntax` 无 error 级诊断；字符数/行数/token 估算（3.5 字符/token）与分级边界（8k、30k）的用例
-- [ ] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx` exit 0（新文件）：停靠区出现第二个页签「文本」；切换范围会改变文本与读数；超过 300 行时只渲染 300 行而 DOM 中没有完整文本，复制拿到的是完整文本；8k–30k 显示提示、> 30k 点「复制为会话上下文」弹对话框；复制头部包含项目、会话、分析时间、范围、视角、筛选信息且正文被 ` ```plantuml ` 围栏包住；剪贴板拒绝时走回落路径；空图时复制禁用；「语法通过」徽标与错误行号两条用例
-- [ ] `npx vitest run src/modules/architecture/tests/exportMenu.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0（导出菜单的下载与既有用例不回归；文本页与导出菜单共用同一份文件名与下载逻辑，断言只存在一份实现）
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0（新文件）：三种范围产出的 puml 节点集合正确（全图 = 过滤后的全部；视野内 = 与视口相交的节点及其间的边；选中 +1 = 选中项与一跳邻居）；选中为空时 +1 范围抛出明确的「无选中」状态而不是空文本；`buildPlantUmlText` 对同一输入确定性输出；产出的文本经 plantuml-js `checkSyntax` 无 error 级诊断；字符数/行数/token 估算（3.5 字符/token）与分级边界（8k、30k）的用例
+- [x] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx` exit 0（新文件）：停靠区出现第二个页签「文本」；切换范围会改变文本与读数；超过 300 行时只渲染 300 行而 DOM 中没有完整文本，复制拿到的是完整文本；8k–30k 显示提示、> 30k 点「复制为会话上下文」弹对话框；复制头部包含项目、会话、分析时间、范围、视角、筛选信息且正文被 ` ```plantuml ` 围栏包住；剪贴板拒绝时走回落路径；空图时复制禁用；「语法通过」徽标与错误行号两条用例
+- [x] `npx vitest run src/modules/architecture/tests/exportMenu.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0（导出菜单的下载与既有用例不回归；文本页与导出菜单共用同一份文件名与下载逻辑，断言只存在一份实现）
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
