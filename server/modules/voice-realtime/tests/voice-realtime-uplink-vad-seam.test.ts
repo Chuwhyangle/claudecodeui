@@ -388,18 +388,53 @@ type FalseForm = { file: string; label: string; anchor: string; replacement: str
  * overlapping this suite must never collect a file that is about to be removed. The copy goes as soon as
  * the import resolves. The anchor is asserted to occur exactly once, so a mutation that silently stopped
  * matching is a red here rather than a form that quietly exercises the shipping code twice.
+ *
+ * WHEN THE ANCHOR LIVES IN THE FRAME-HANDLER FILE, this writes TWO copies: the mutated handlers beside
+ * it, and a proxy copy whose single import of the handler set is retargeted at that mutant. The
+ * `audio`/`close` branches moved to `voice-realtime-frame-handlers.ts`, so a form that mutates one of
+ * them must drive the mutant THROUGH the proxy (`handleVoiceRealtimeConnection`), not import the handler
+ * module directly. Forms anchored in the proxy or the gate module keep the single-copy shape.
  */
 async function loadFalseForm<T>(form: FalseForm): Promise<T> {
   const shipping = path.join(MODULE_DIR, form.file);
   const source = readFileSync(shipping, 'utf8');
   const occurrences = source.split(form.anchor).length - 1;
   assert.equal(occurrences, 1, `the "${form.label}" false form's anchor is not in ${form.file} exactly once`);
-  const target = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-${process.pid}.ts`);
-  writeFileSync(target, source.replace(form.anchor, form.replacement), 'utf8');
+
+  if (form.file !== 'voice-realtime-frame-handlers.ts') {
+    const target = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-${process.pid}.ts`);
+    writeFileSync(target, source.replace(form.anchor, form.replacement), 'utf8');
+    try {
+      return (await import(pathToFileURL(target).href)) as T;
+    } finally {
+      rmSync(target, { force: true });
+    }
+  }
+
+  const proxyShipping = path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts');
+  const proxySource = readFileSync(proxyShipping, 'utf8');
+  assert.equal(
+    proxySource.split(HANDLERS_IMPORT_SPECIFIER).length - 1,
+    1,
+    'the proxy must import the handler set exactly once, so the mutation copy can retarget it',
+  );
+
+  const handlersTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-handlers-${process.pid}.ts`);
+  const proxyTarget = path.join(MODULE_DIR, `__criterion-falsify-${form.label}-${process.pid}.ts`);
+  writeFileSync(handlersTarget, source.replace(form.anchor, form.replacement), 'utf8');
+  writeFileSync(
+    proxyTarget,
+    proxySource.replace(
+      HANDLERS_IMPORT_SPECIFIER,
+      `'./${path.basename(handlersTarget, '.ts')}.js'`,
+    ),
+    'utf8',
+  );
   try {
-    return (await import(pathToFileURL(target).href)) as T;
+    return (await import(pathToFileURL(proxyTarget).href)) as T;
   } finally {
-    rmSync(target, { force: true });
+    rmSync(handlersTarget, { force: true });
+    rmSync(proxyTarget, { force: true });
   }
 }
 
@@ -447,6 +482,18 @@ function wireWith(module: ProxyModule, options: Parameters<typeof wire>[0] = {})
 // ── the source, read for the code-path evidence AC2 asks for ───────────────────────────────────────
 
 const PROXY_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-ws-proxy.service.ts'), 'utf8');
+/**
+ * The inbound-frame handler set, read for the same code-path evidence.
+ *
+ * The `audio` and `close` branches moved out of the proxy into
+ * `voice-realtime-frame-handlers.ts` (`gap-voice-realtime-ws-proxy-frame-extension-point`),
+ * so the branches this criterion mutates and asserts on now live there. The proxy keeps
+ * the gate CONSTRUCTION (`uplinkVadRequested`, `createUplinkVadGate`), which the AC2
+ * reading below still finds in {@link PROXY_SOURCE}.
+ */
+const HANDLERS_SOURCE = readFileSync(path.join(MODULE_DIR, 'voice-realtime-frame-handlers.ts'), 'utf8');
+/** The proxy's single import of the handler set, retargeted so a proxy copy drives the mutant handlers. */
+const HANDLERS_IMPORT_SPECIFIER = "'./voice-realtime-frame-handlers.js'";
 
 // ── the gate, read over a timeline (AC9's four classes) ────────────────────────────────────────────
 
@@ -801,8 +848,10 @@ test('AC1 — with the switch off the continuous wire is the identity relay it w
 test('AC2 — with the switch off NO gate is built and NO classifier is consulted (the `=== null` fast path)', () => {
   // The code-path evidence: the fast path is keyed on BOTH gates being null, so a connection with no
   // seam never reaches the gate construction or the per-frame enqueue. Exactly one such line exists.
-  const fastPath = 'if (silenceTail === null && uplinkVad === null) {';
-  assert.equal(PROXY_SOURCE.split(fastPath).length - 1, 1, 'the gate-neutral fast path must exist exactly once');
+  // It lives in the audio frame handler (the bodies moved out of the proxy); the gate CONSTRUCTION
+  // below is still in the proxy, which is where the seam is resolved.
+  const fastPath = 'if (context.silenceTail === null && context.uplinkVad === null) {';
+  assert.equal(HANDLERS_SOURCE.split(fastPath).length - 1, 1, 'the gate-neutral fast path must exist exactly once');
   assert.match(
     PROXY_SOURCE,
     /const uplinkVadRequested = seams\.uplinkVad !== undefined && !segmentedRelay;/,
@@ -820,15 +869,19 @@ test('AC2 — with the switch off NO gate is built and NO classifier is consulte
 
 test('AC1 false form — a default connection that stops relaying byte-for-byte goes red', async () => {
   const form: FalseForm = {
-    file: 'voice-realtime-ws-proxy.service.ts',
+    file: 'voice-realtime-frame-handlers.ts',
     label: 'fast-path-withholds',
     anchor: [
-      '        if (silenceTail === null && uplinkVad === null) {',
-      '          bridge.sendAudioFrame(frame.audio);',
-      '          return;',
-      '        }',
+      '    if (context.silenceTail === null && context.uplinkVad === null) {',
+      '      context.bridge.sendAudioFrame(frame.audio);',
+      '      return;',
+      '    }',
     ].join('\n'),
-    replacement: ['        if (silenceTail === null && uplinkVad === null) {', '          return;', '        }'].join('\n'),
+    replacement: [
+      '    if (context.silenceTail === null && context.uplinkVad === null) {',
+      '      return;',
+      '    }',
+    ].join('\n'),
     why: 'the gate-neutral fast path stops forwarding, so the DEFAULT connection is no longer the identity relay',
   };
   const mutated = await loadFalseForm<ProxyModule>(form);
@@ -876,10 +929,10 @@ test('AC4 — a stretch the VAD drops still holds the pool’s activity clock (n
 
 test('AC4 false form — dropping the per-frame activity call makes the same stretch rotate the pool, so the reading goes red', async () => {
   const form: FalseForm = {
-    file: 'voice-realtime-ws-proxy.service.ts',
+    file: 'voice-realtime-frame-handlers.ts',
     label: 'no-activity-clock',
-    anchor: '        bridge.noteLocalActivity?.();',
-    replacement: '        void 0;',
+    anchor: '    context.bridge.noteLocalActivity?.();',
+    replacement: '    void 0;',
     why: 'the per-frame activity clock is not fed, so a VAD-dropped stretch reads as an idle connection',
   };
   const mutated = await loadFalseForm<ProxyModule>(form);
@@ -954,13 +1007,13 @@ test('AC3 — the same corpus with the gate OFF produces the same watchdog readi
 
 test('AC3 false form — feeding the local gate only on the gate-neutral fast path loses the boundary, so the reading goes red', async () => {
   const form: FalseForm = {
-    file: 'voice-realtime-ws-proxy.service.ts',
+    file: 'voice-realtime-frame-handlers.ts',
     label: 'local-gate-only-when-forwarded',
-    anchor: '        reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));',
+    anchor: '    context.reportLocalSpeechBoundary(context.localSpeechGate.observe(frame.audio));',
     replacement: [
-      '        if (silenceTail === null && uplinkVad === null) {',
-      '          reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));',
-      '        }',
+      '    if (context.silenceTail === null && context.uplinkVad === null) {',
+      '      context.reportLocalSpeechBoundary(context.localSpeechGate.observe(frame.audio));',
+      '    }',
     ].join('\n'),
     why: 'the local speech gate is fed only on the no-gate fast path, so a withheld frame never reaches it',
   };
@@ -1119,10 +1172,10 @@ test('AC7 — the exit steps are the ones §6.3 names, and the false form (a bar
 
 test('AC7 false form — a close frame that tears down directly skips the commit pair, so the wire order goes red', async () => {
   const form: FalseForm = {
-    file: 'voice-realtime-ws-proxy.service.ts',
+    file: 'voice-realtime-frame-handlers.ts',
     label: 'exit-no-commit-pair',
-    anchor: '    void exitUplinkVad();',
-    replacement: '    teardown();',
+    anchor: '  void context.exitUplinkVad();',
+    replacement: '  context.teardown();',
     why: 'the close frame tears the connection down directly, dropping the commit + response.create pair',
   };
   const mutated = await loadFalseForm<ProxyModule>(form);

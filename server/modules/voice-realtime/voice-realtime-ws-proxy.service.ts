@@ -128,6 +128,12 @@ import {
   resolveVoiceRealtimeMode,
   type VoiceRealtimeTransport,
 } from './voice-realtime-mode.js';
+import { createDefaultVoiceRealtimeFrameRegistry } from './voice-realtime-frame-handlers.js';
+import type {
+  VoiceRealtimeFrameConnectionState,
+  VoiceRealtimeFrameContext,
+  VoiceRealtimeFrameRegistry,
+} from './voice-realtime-frame-registry.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
 export const VOICE_REALTIME_PATH = '/voice-realtime';
@@ -2133,6 +2139,16 @@ export type VoiceRealtimeProxySeams = {
    * continuous wire would observe nothing on a stock deployment.
    */
   speakerTracker?: VoiceSpeakerTrackerSeam;
+  /**
+   * The inbound-frame dispatch seam: the registry this connection routes parsed frames through.
+   *
+   * Optional, and absent is the shipped set — {@link createDefaultVoiceRealtimeFrameRegistry},
+   * whose handlers live in `voice-realtime-frame-handlers.ts`. A criterion hands in its own
+   * registry so a probe registered from the test file is what a real connection dispatches on
+   * (and so unregistering that probe proves the dispatch really consults the registry). The
+   * handlers never see this object; it is the connection's routing table, not a handler input.
+   */
+  frameRegistry?: VoiceRealtimeFrameRegistry;
   /**
    * A fresh, read-only sample of the BOUND session's own queue, or `null` when it cannot be taken.
    *
@@ -6427,6 +6443,79 @@ export function handleVoiceRealtimeConnection(
     advertiseInstructions();
   });
 
+  // ---- the inbound-frame dispatch seam --------------------------------------------------------
+  //
+  // Every parsed frame is routed through a registry instead of an inline `if (frame.type === …)`
+  // chain. The shipped handlers live in `voice-realtime-frame-handlers.ts`, a sibling file, and are
+  // registered there; this connection only assembles the two arguments a handler may see and
+  // dispatches. The state view below is accessor-backed on purpose: the rest of this function keeps
+  // reading and writing the same locals (`contextText` also feeds `advertiseInstructions`; the
+  // audio-frame counter also feeds the teardown/keepalive log lines), so the split changes no
+  // variable's lifetime or meaning. `dispatch` returning `null` means "no handler for this kind" —
+  // the same silent drop the reader gives an unknown frame.
+  const frameRegistry = seams.frameRegistry ?? createDefaultVoiceRealtimeFrameRegistry();
+  const frameState: VoiceRealtimeFrameConnectionState = {
+    get contextText() {
+      return contextText;
+    },
+    set contextText(value: string) {
+      contextText = value;
+    },
+    get contextChars() {
+      return contextChars;
+    },
+    set contextChars(value: number) {
+      contextChars = value;
+    },
+    get contextRows() {
+      return contextRows;
+    },
+    set contextRows(value: number) {
+      contextRows = value;
+    },
+    get audioFramesFromBrowser() {
+      return audioFramesFromBrowser;
+    },
+    set audioFramesFromBrowser(value: number) {
+      audioFramesFromBrowser = value;
+    },
+    get speakerObserveFailureLogged() {
+      return speakerObserveFailureLogged;
+    },
+    set speakerObserveFailureLogged(value: boolean) {
+      speakerObserveFailureLogged = value;
+    },
+    get runOutputPending() {
+      return runOutputPending;
+    },
+    set runOutputPending(value) {
+      runOutputPending = value;
+    },
+  };
+  const frameContext: VoiceRealtimeFrameContext = {
+    seams,
+    send,
+    segmentedRelay,
+    contextMaxChars: VOICE_REALTIME_CONTEXT_MAX_CHARS,
+    bridge,
+    narratorQueue,
+    advertiseInstructions,
+    clearRunOutputRequest,
+    summarizeRunOutput,
+    segmentFrameCounts,
+    endedSegmentSeqs,
+    noteUserSpokeForNarrator,
+    speakerWindows,
+    localSpeechGate,
+    reportLocalSpeechBoundary,
+    silenceTail,
+    silenceTailOptions,
+    uplinkVad,
+    enqueueUplinkVad,
+    teardown,
+    exitUplinkVad,
+  };
+
   socket.on('message', (raw: unknown) => {
     const frame = readVoiceRealtimeInboundFrame(
       Buffer.isBuffer(raw) ? raw.toString('utf8') : typeof raw === 'string' ? raw : String(raw),
@@ -6434,238 +6523,7 @@ export function handleVoiceRealtimeConnection(
     if (!frame) {
       return;
     }
-
-    if (frame.type === 'hello') {
-      // THE WHOLE PROTOCOL SWITCH, one branch (P4 / AC-322). The browser offered a token; answering
-      // with the same token is what lets it start cutting speech into segments. Anything else —
-      // the mode turned off, or an offer this proxy does not speak — is answered with silence, and
-      // silence is a MEANINGFUL answer here: the page keeps sending the continuous frames it always
-      // did, so a rollback needs no browser release. Only the exact token is echoed: a page offering
-      // a protocol this proxy does not implement is told nothing rather than told the wrong thing.
-      if (segmentedRelay && frame.protocol === SEGMENTED_RELAY_PROTOCOL) {
-        send({ type: 'ready', protocol: SEGMENTED_RELAY_PROTOCOL });
-        seams.log?.(`hello: declaring ${SEGMENTED_RELAY_PROTOCOL}`);
-      } else {
-        // WHY the relay stayed silent, named: the log must tell "the deployment turned it off" apart
-        // from "this connection asked for the continuous transport" (the per-connection opt-in), so an
-        // operator reading one connection's journal is not sent looking at a variable that is fine.
-        const relayOffBecause =
-          seams.transport === 'continuous'
-            ? 'continuous transport requested for this connection'
-            : `relay off via ${VOICE_REALTIME_MODE_ENV}`;
-        seams.log?.(
-          `hello: not declaring (offered ${JSON.stringify(frame.protocol)}${
-            segmentedRelay ? '' : `, ${relayOffBecause}`
-          })`,
-        );
-      }
-      return;
-    }
-
-    if (frame.type === 'context') {
-      // The browser built this from its own transcript's visibility rules; what the proxy owns is
-      // the size it is willing to hand upstream. Refusing the WHOLE frame rather than trimming it is
-      // deliberate: a pack cut anywhere but its own oldest-row boundary is a conversation with a
-      // hole in it, and the injection would then be evidence of nothing. The builder already holds a
-      // 2000-char budget, so this only fires on a client that ignored it — and it says so.
-      if (frame.text.length > VOICE_REALTIME_CONTEXT_MAX_CHARS) {
-        seams.log?.(
-          `context refused: ${frame.text.length} chars exceeds the ${VOICE_REALTIME_CONTEXT_MAX_CHARS}-char cap (rows=${frame.rows})`,
-        );
-        return;
-      }
-      contextText = frame.text;
-      contextChars = frame.chars;
-      contextRows = frame.rows;
-      seams.log?.(`context received chars=${contextChars} rows=${contextRows}`);
-      advertiseInstructions();
-      return;
-    }
-
-    // The narrator queue's pacing ack. Handled before the speech branches: it is a statement about
-    // PLAYBACK, never about the person having spoken (an ack arriving while they talk must not look
-    // like a new utterance, and a stale one is ignored by the queue itself).
-    if (frame.type === 'narrator_done') {
-      narratorQueue?.completed(frame.utteranceId);
-      return;
-    }
-
-    // The page's answer to the run-end output request. Only the ONE outstanding request may be
-    // answered: a late reply for a superseded run is dropped by the id check, not summarized late.
-    if (frame.type === 'run_output') {
-      const pending = runOutputPending;
-      if (pending === null || pending.requestId !== frame.requestId) return;
-      clearRunOutputRequest();
-      void summarizeRunOutput(pending.generation, pending.runId, frame.text);
-      return;
-    }
-
-    if (frame.type === 'segment_start') {
-      segmentFrameCounts.set(frame.seq, 0);
-      // THE SEGMENTED PATH'S READING of "they started talking" — the browser's own boundary. On this
-      // wire there is no endpoint `speech_started` to clear the narrator (the relay runs
-      // `turn_detection: null`), so this is the only early signal, and clearing here is what keeps
-      // a narration from talking over the first segment.
-      noteUserSpokeForNarrator();
-      bridge.startSegment(frame.seq);
-      // The SEGMENTED path's own boundary, handed to the same watchdog the continuous path feeds.
-      // It needs its own: this wire runs `turn_detection: null`, so the endpoint never sends the
-      // `speech_started` the watchdog's timer is otherwise armed from — a committed segment nobody
-      // answered was silently unanswered, which is exactly this path's stall to report.
-      bridge.noteLocalUtteranceStart();
-      return;
-    }
-
-    if (frame.type === 'audio') {
-      audioFramesFromBrowser += 1;
-      // A sparse heartbeat, so the log can say whether the page is sending audio at all
-      // (and for how long) without a line per 20 ms frame.
-      if (audioFramesFromBrowser === 1 || audioFramesFromBrowser % 250 === 0) {
-        seams.log?.(`from-browser audio frames=${audioFramesFromBrowser}`);
-      }
-      // THE SPEAKER TRACKER'S FEED (Phase 1 SHADOW). It reads a decoded COPY of the frame on ARRIVAL —
-      // before the branch below decides how to forward it — and does nothing else: the frame is still
-      // forwarded on every path, unchanged, and the observation can never reach the browser. `?.` is not
-      // enough here because the accumulator also has to be absent for a default connection, so the
-      // whole block is guarded; when it is absent this is the branch it always was (AC6).
-      if (speakerWindows !== null && seams.speakerTracker !== undefined) {
-        try {
-          const completed = speakerWindows.push(Buffer.from(frame.audio, 'base64'), {
-            ...(frame.sourceRate === undefined ? {} : { sourceRate: frame.sourceRate }),
-            atMs: Date.now(),
-          });
-          for (const window of completed) {
-            seams.log?.(describeSpeakerShadowObservation(seams.speakerTracker.observe(window, Date.now())));
-          }
-        } catch (error) {
-          // A broken shadow reader degrades to NO READINGS, never to a broken relay: this is a side
-          // channel, so its failure is a line, not a throw.
-          if (!speakerObserveFailureLogged) {
-            speakerObserveFailureLogged = true;
-            seams.log?.(
-              `speaker_shadow observe failed: ${error instanceof Error ? error.message : String(error)} ` +
-                `— after ${speakerWindows.windows} window(s); voice is unaffected`,
-            );
-          }
-        }
-      }
-      if (frame.seq === undefined) {
-        // THE UPLINK CAPTURE'S ONE FEED (see `voice-realtime-audio-capture.ts`). The continuous path is
-        // the full microphone stream — silence included — which is the material an offline VAD study
-        // needs; the segmented path below is deliberately NOT captured, because a segmenter has already
-        // dropped its silence and a corpus of speech-only clips cannot answer a detector question.
-        //
-        // Sees the frame on ARRIVAL, before the forward, so the audio and the endpoint's judgement
-        // timeline are read against one origin. A SIDE CHANNEL: the frame is forwarded unconditionally,
-        // and with no capture wired (`?.`) this branch is the bytes it was before the seam existed.
-        seams.audioCapture?.frame(frame.audio, frame.sourceRate, Date.now());
-        // THE WATCHDOG'S READING FOR THE CONTINUOUS WIRE, where the endpoint's own `server_vad` is
-        // what endpoints this audio — so if it goes silent, nothing else can tell the relay that an
-        // utterance happened (measured 2026-10-12: 118.4 s of total upstream silence, and no report).
-        // The segmented path needs no energy gate because it already HAS precise boundaries, the
-        // browser's own segmenter's; it hands those to the same watchdog instead (see the
-        // `segment_start`/`segment_end` branches). Running this gate there as well would be a
-        // second, competing endpointing over audio the segmenter has already decided.
-        reportLocalSpeechBoundary(localSpeechGate.observe(frame.audio));
-        // THE `=== null` FAST PATH. With NEITHER gate built this is the exact relay the continuous wire
-        // was before either existed — same call, same bytes, same order (AC1/AC2). Checked before any
-        // gate work so a default connection never pays for a feature it did not ask for.
-        if (silenceTail === null && uplinkVad === null) {
-          bridge.sendAudioFrame(frame.audio);
-          return;
-        }
-        // `noteLocalActivity` is called for EVERY browser frame, forwarded or not: the upstream pool
-        // reads it as the connection's activity clock, and neither suppressed nor VAD-dropped audio is
-        // an idle connection. Called with EITHER gate on, and its count is the BROWSER's frame count,
-        // never the forwarded one (AC4).
-        bridge.noteLocalActivity?.();
-        if (silenceTail !== null) {
-          // SILENCE TAIL SUPPRESSION (decision doc §10). The browser keeps streaming at full rate; what
-          // crosses the wire is the gate's decision, not the frame's arrival. The local speech gate
-          // above is fed FIRST and unconditionally, so the watchdog's boundaries are unchanged by
-          // suppression — which is what keeps a long quiet stretch from ever arming a stall (AC-363
-          // V-2: the endpoint's silence clock is AUDIO-time, so it cannot advance on audio nobody sent).
-          const decision = silenceTail.observe(frame.audio, Date.now());
-          for (const forwarded of decision.frames) {
-            bridge.sendAudioFrame(forwarded);
-          }
-          if (decision.transition !== null) {
-            // The cost phase's structured reading (see `voice-realtime-log.ts`): one line in, one out.
-            seams.log?.(
-              `silence_tail event=${decision.transition} tailMs=${silenceTailOptions?.tailMs ?? 0} suppressedMs=${Math.round(
-                decision.suppressedMs,
-              )} prerollFrames=${decision.preRollFrames}`,
-            );
-          }
-          return;
-        }
-        // UPLINK VAD (scheme §5). The gate is ASYNC — the classifier answers in frame order with a lag —
-        // so frames are chained rather than awaited here, and whatever a call lets through is forwarded
-        // as it settles. `localSpeechGate` was fed the frame on ARRIVAL above, unconditionally, so the
-        // watchdog's boundaries are the browser's own and never the gate's surviving subset (AC3).
-        enqueueUplinkVad(frame.audio);
-        return;
-      }
-      segmentFrameCounts.set(frame.seq, (segmentFrameCounts.get(frame.seq) ?? 0) + 1);
-      bridge.sendSegmentAudio(frame.seq, frame.audio);
-      return;
-    }
-
-    if (frame.type === 'segment_end') {
-      // An end for a segment this connection never saw open is refused rather than
-      // committed: there is no audio to close, and inventing an empty utterance would ask
-      // the endpoint for a response to nothing.
-      if (!segmentFrameCounts.has(frame.seq)) {
-        seams.log?.(`segment seq=${frame.seq} dropped: no matching segment_start`);
-        send({ type: 'segment_ack', seq: frame.seq, state: 'dropped', reason: 'unknown-segment' });
-        return;
-      }
-      // A repeat of an end already handled is DROPPED rather than committed again: closing one
-      // segment twice would put the same audio upstream a second time and ask the endpoint for a
-      // second response to it — one utterance billed and relayed twice. Idempotent, and silent on
-      // the ack channel because the page already has this segment's answer.
-      if (endedSegmentSeqs.has(frame.seq)) {
-        seams.log?.(`segment seq=${frame.seq} end repeated for an already-closed segment, dropped`);
-        return;
-      }
-      endedSegmentSeqs.add(frame.seq);
-      // SPEC §C4's one line per segment, with the wall clock the log is read against.
-      seams.log?.(
-        `segment seq=${frame.seq} dur=${frame.durationMs ?? 0}ms reason=${frame.reason ?? 'gap'} frames=${
-          segmentFrameCounts.get(frame.seq) ?? 0
-        } at=${new Date().toISOString()}`,
-      );
-      // The segment's own accounting joins the capture's judgement timeline — the endpoint's decision
-      // (which utterance it closed, how long the browser said it ran, how many frames carried it) is
-      // exactly what an offline detector's proposals are graded against. Recorded even though the
-      // segmented path sends no continuous audio: the timeline is the point, not a rider on the WAV.
-      seams.audioCapture?.timeline({
-        kind: 'segment',
-        atMs: Date.now(),
-        seq: frame.seq,
-        durationMs: frame.durationMs ?? 0,
-        frames: segmentFrameCounts.get(frame.seq) ?? 0,
-      });
-      bridge.endSegment(frame.seq);
-      // The segment is closed and its commit asks the endpoint for an answer. If the endpoint said
-      // nothing during the segment, that answer is now owed and the clock starts — see
-      // `noteLocalUtteranceEnd`. A DROPPED or repeated end returns above and deliberately does not
-      // reach here: no commit left, so no answer is owed and nothing may be reported missing.
-      bridge.noteLocalUtteranceEnd();
-      return;
-    }
-
-    seams.log?.(`teardown: the browser sent a close frame (audio frames received=${audioFramesFromBrowser})`);
-    if (uplinkVad === null) {
-      // The default connection has no exit pair to flush, so the close frame is the teardown it always
-      // was — byte-identical to before this seam existed (AC1/AC5).
-      teardown();
-      return;
-    }
-    // UPLINK VAD EXIT (§6). This close frame is the user's explicit exit, the ONLY trigger for the
-    // commit+response.create pair — NOT the socket's `close` below, which also fires on a raw drop. The
-    // async exit owns the teardown; the socket handler is guarded so the imminent `close` cannot race it.
-    void exitUplinkVad();
+    frameRegistry.dispatch(frame.type, frameContext, frameState, frame);
   });
 
   // THE BROWSER LEG'S KEEPALIVE (live 2026-10-15 86559798). Mute stops every browser→server frame,

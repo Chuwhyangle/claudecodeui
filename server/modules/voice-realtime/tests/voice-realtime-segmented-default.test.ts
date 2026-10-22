@@ -67,8 +67,19 @@ import { handleVoiceRealtimeConnection } from '../voice-realtime-ws-proxy.servic
 import { createFakeTransport, waitFor, type FakeTransport } from './realtime-bridge-harness.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-/** The shipping proxy module — the file the false form mutates. */
+/** The shipping proxy module — the file the false form loads. */
 const SHIPPING_PROXY_MODULE = path.resolve(HERE, '../voice-realtime-ws-proxy.service.ts');
+/**
+ * The sibling file the `hello` branch now lives in.
+ *
+ * The frame bodies moved out of the proxy into the inbound-frame registry's handler
+ * set (`gap-voice-realtime-ws-proxy-frame-extension-point`), so a false form mutates
+ * the handler and rewires the proxy copy to import that mutant. The criterion is the
+ * same reading — a proxy that never declares must fail the escape hatch.
+ */
+const SHIPPING_HANDLERS_MODULE = path.resolve(HERE, '../voice-realtime-frame-handlers.ts');
+/** The proxy's single import of the handler set, retargeted so the mutant proxy drives the mutant handlers. */
+const HANDLERS_IMPORT_SPECIFIER = "'./voice-realtime-frame-handlers.js'";
 /** The browser's protocol module: the AC2 client half, loaded as a real module. */
 const BROWSER_PROTOCOL_MODULE = path.resolve(HERE, '../../../../src/modules/chat/voice-realtime/voiceRealtimeProtocol.ts');
 /** The composition root whose wiring AC1 pins as source text. */
@@ -417,15 +428,30 @@ async function declares(handle: Handler): Promise<boolean> {
 }
 
 test('AC6 false form: refusing to declare makes the escape-hatch case red', async () => {
-  const DECLARE_GATE = "if (segmentedRelay && frame.protocol === SEGMENTED_RELAY_PROTOCOL) {";
-  const source = readFileSync(SHIPPING_PROXY_MODULE, 'utf8');
-  assert.equal(countOccurrences(source, DECLARE_GATE), 1, 'the declare anchor must occur exactly once');
+  const DECLARE_GATE = 'if (context.segmentedRelay && frame.protocol === SEGMENTED_RELAY_PROTOCOL) {';
+  const handlersSource = readFileSync(SHIPPING_HANDLERS_MODULE, 'utf8');
+  assert.equal(countOccurrences(handlersSource, DECLARE_GATE), 1, 'the declare anchor must occur exactly once');
+  const proxySource = readFileSync(SHIPPING_PROXY_MODULE, 'utf8');
+  assert.equal(
+    countOccurrences(proxySource, HANDLERS_IMPORT_SPECIFIER),
+    1,
+    'the proxy must import the handler set exactly once, so the mutation copy can retarget it',
+  );
 
+  const handlersMutPath = ownCopy('declare-handlers-mut');
   const basePath = ownCopy('declare-base');
   const mutPath = ownCopy('declare-mut');
   try {
-    writeFileSync(basePath, source, 'utf8');
-    writeFileSync(mutPath, source.replace(DECLARE_GATE, 'if (false) {'), 'utf8');
+    writeFileSync(handlersMutPath, handlersSource.replace(DECLARE_GATE, 'if (false) {'), 'utf8');
+    writeFileSync(basePath, proxySource, 'utf8');
+    writeFileSync(
+      mutPath,
+      proxySource.replace(
+        HANDLERS_IMPORT_SPECIFIER,
+        `'./${path.basename(handlersMutPath, '.ts')}.js'`,
+      ),
+      'utf8',
+    );
 
     const base = (await import(pathToFileURL(basePath).href)) as { handleVoiceRealtimeConnection: Handler };
     const mutant = (await import(pathToFileURL(mutPath).href)) as { handleVoiceRealtimeConnection: Handler };
@@ -433,6 +459,7 @@ test('AC6 false form: refusing to declare makes the escape-hatch case red', asyn
     assert.equal(await declares(base.handleVoiceRealtimeConnection), true, 'unmutated: the escape hatch declares');
     assert.equal(await declares(mutant.handleVoiceRealtimeConnection), false, 'never declaring must redden the escape hatch');
   } finally {
+    rmSync(handlersMutPath, { force: true });
     rmSync(basePath, { force: true });
     rmSync(mutPath, { force: true });
   }
