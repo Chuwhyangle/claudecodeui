@@ -1,7 +1,7 @@
 ---
 id: architecture-plantuml-export-menu
 title: 导出菜单：PlantUML（.puml，主选项）/ 复制 PlantUML / SVG / PNG / Mermaid（旧格式）
-status: ready
+status: done
 labels:
   - feature
 parent: null

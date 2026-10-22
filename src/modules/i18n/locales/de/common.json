@@ -107,7 +107,19 @@
       "body": "Durchgezogene Linie: Assoziation oder Aufruf. Gestrichelte Linie: Abhängigkeit oder Implementierung. Pfeile: △ Vererbung · △ Implementierung · ◆ Komposition · ◇ Aggregation · → Abhängigkeit. «Stereotyp» kennzeichnet die Entitätsart. ● Seed: in dieser Sitzung genannt. +N eingeklappt: durch die aktuelle Detailstufe verborgen."
     },
     "export": {
-      "menu": "Exportieren ▾"
+      "menu": "Exportieren ▾",
+      "plantUml": "PlantUML (.puml)",
+      "copy": "PlantUML kopieren",
+      "svg": "SVG",
+      "png": "PNG",
+      "mermaid": "Mermaid (.mmd, Altformat)",
+      "copied": "PlantUML in die Zwischenablage kopiert",
+      "copyFallbackTitle": "PlantUML manuell kopieren",
+      "copyFallbackHint": "Kein Zugriff auf die Zwischenablage. Markieren und kopieren Sie den Text unten.",
+      "close": "Schließen",
+      "notReady": "Das Diagramm ist noch nicht exportierbar.",
+      "pngScaled": "Das PNG wurde verkleinert, damit die längste Seite {{edge}} px beträgt.",
+      "pngFailed": "Das PNG konnte nicht erstellt werden."
     },
     "search": {
       "label": "Entitäten oder Dateien suchen",
