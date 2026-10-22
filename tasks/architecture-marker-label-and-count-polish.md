@@ -1,7 +1,7 @@
 ---
 id: architecture-marker-label-and-count-polish
 title: 小修复：种子圆点画到节点上、「保持显示」复选框的无障碍名与可见文字一致、读数「相关」数不随切换路径漂移、筛选角标不把「保持显示」算成隐藏
-status: ready
+status: done
 labels:
   - feature
 parent: null
