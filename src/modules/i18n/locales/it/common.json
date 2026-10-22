@@ -126,7 +126,11 @@
       "label": "Cerca entità o file",
       "placeholder": "Cerca entità o file…",
       "noMatches": "Nessuna corrispondenza",
-      "outOfRange": "Fuori dall'intervallo corrente"
+      "outOfRange": "Fuori dall'intervallo corrente",
+      "inGraph": "Nel grafico",
+      "other": "Altrove nel progetto",
+      "retry": "Riprova",
+      "truncated": "Vengono mostrati i primi 20 — restringi la ricerca."
     },
     "readout": {
       "classSummary": "Visualizzazione di {{shown}} classi · {{total}} correlati",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "Gli appunti non sono disponibili. Seleziona e copia il testo qui sotto.",
       "close": "Chiudi",
       "bridgeFallback": "Ripiego: testo del ponte (il modello disegnato non è disponibile)"
+    },
+    "curation": {
+      "heading": "Regola",
+      "pin": "Fissa al grafico",
+      "unpin": "Rimuovi fissa",
+      "pinnedBadge": "Fissato",
+      "removeEntity": "Rimuovi dal grafico",
+      "hideRelation": "Nascondi relazione",
+      "hideRelationNote": "Nasconde solo la visualizzazione; il codice non cambia.",
+      "pinNamed": "Fissa {{name}}",
+      "noSession": "Le regolazioni manuali richiedono una sessione: sono salvate per sessione.",
+      "limitReached": "Quell'elenco è pieno ({{limit}}). Rimuovi prima una voce.",
+      "toastPinned": "{{name}} fissato",
+      "toastRemoved": "{{name}} rimosso dal grafico",
+      "toastUnpinned": "{{name}} non più fissato",
+      "toastUnpinnedConnected": "{{name}} non più fissato; resta nel grafico perché è collegato a {{other}}",
+      "toastRelationHidden": "Relazione nascosta — solo visualizzazione; il codice non cambia.",
+      "readout": "{{excluded}} rimossi manualmente · {{pinned}} fissati",
+      "managerButton": "Regolati {{count}} ▾",
+      "managerTitle": "Regolazioni manuali ({{count}})",
+      "close": "Chiudi regolazioni",
+      "pagePins": "Fissati",
+      "pageExcluded": "Rimossi",
+      "pageHidden": "Relazioni nascoste",
+      "emptyPage": "Qui non c’è nulla.",
+      "restore": "Ripristina",
+      "stale": "Obsoleto",
+      "clear": "Cancella",
+      "restoreGroup": "Ripristina questa pagina",
+      "restoreAll": "Ripristina tutto",
+      "undo": "Annulla",
+      "solo": "Mostra solo questo",
+      "soloClear": "Mostra tutto il grafico"
     }
   },
   "status": {

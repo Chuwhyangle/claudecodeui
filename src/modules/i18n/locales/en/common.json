@@ -132,7 +132,11 @@
       "label": "Search entities or files",
       "placeholder": "Search entities or files…",
       "noMatches": "No matches",
-      "outOfRange": "Not in current range"
+      "outOfRange": "Not in current range",
+      "inGraph": "In the graph",
+      "other": "Elsewhere in the project",
+      "retry": "Retry",
+      "truncated": "Showing the first 20 — narrow the query."
     },
     "readout": {
       "classSummary": "Showing {{shown}} classes · {{total}} related",
@@ -274,6 +278,39 @@
       "copyFallbackHint": "Clipboard access is unavailable. Select and copy the text below.",
       "close": "Close",
       "bridgeFallback": "Fallback: bridge text (the drawn model is unavailable)"
+    },
+    "curation": {
+      "heading": "Adjust",
+      "pin": "Pin to graph",
+      "unpin": "Unpin",
+      "pinnedBadge": "Pinned",
+      "removeEntity": "Remove from graph",
+      "hideRelation": "Hide relation",
+      "hideRelationNote": "Hides the display only; the code is unchanged.",
+      "pinNamed": "Pin {{name}}",
+      "noSession": "Manual adjustments need a session: they are stored per session.",
+      "limitReached": "That list is full ({{limit}}). Remove an entry first.",
+      "toastPinned": "Pinned {{name}}",
+      "toastRemoved": "Removed {{name}} from the graph",
+      "toastUnpinned": "Unpinned {{name}}",
+      "toastUnpinnedConnected": "Unpinned {{name}}; it is still in the graph because it connects to {{other}}",
+      "toastRelationHidden": "Hid the relation — display only; the code is unchanged.",
+      "readout": "{{excluded}} manually removed · {{pinned}} pinned",
+      "managerButton": "Adjusted {{count}} ▾",
+      "managerTitle": "Manual adjustments ({{count}})",
+      "close": "Close adjustments",
+      "pagePins": "Pinned",
+      "pageExcluded": "Removed",
+      "pageHidden": "Hidden relations",
+      "emptyPage": "Nothing here.",
+      "restore": "Restore",
+      "stale": "Stale",
+      "clear": "Clear",
+      "restoreGroup": "Restore this page",
+      "restoreAll": "Restore all",
+      "undo": "Undo",
+      "solo": "Show only this",
+      "soloClear": "Show the whole graph"
     }
   },
   "status": {

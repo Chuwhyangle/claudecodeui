@@ -68,13 +68,23 @@ import { MIN_READABLE_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 // The whole network hop is stubbed; everything below that line (the hook's
 // request-id accounting, the panel's render branches, the bridge, the real
 // PlantUML/ELK renderer) is real.
-const apiMock = vi.hoisted(() => ({ architectureGraph: vi.fn() }));
+const apiMock = vi.hoisted(() => ({
+  architectureGraph: vi.fn(),
+  // The project-wide search/`(file, name)` re-anchor seam. It is stubbed for
+  // the same reason as the graph hop: the curation UI must be exercised without
+  // a network.
+  architectureSearch: vi.fn(),
+}));
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof SharedApiModule>();
   return {
     ...actual,
-    api: { ...actual.api, architectureGraph: apiMock.architectureGraph },
+    api: {
+      ...actual.api,
+      architectureGraph: apiMock.architectureGraph,
+      architectureSearch: apiMock.architectureSearch,
+    },
   };
 });
 
@@ -515,7 +525,7 @@ const SCOPE_HYGIENE_RESULT: ArchitectureGraphResult = {
 };
 
 /** A Response stand-in: only `ok` and `json` are read by `readApiJson`. */
-function jsonResponse(result: ArchitectureGraphResult): Response {
+function jsonResponse(result: unknown): Response {
   return {
     ok: true,
     status: 200,
@@ -628,12 +638,22 @@ function drillNode(host: HTMLElement, id: string): void {
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  apiMock.architectureSearch.mockReset();
+  // A curation item is re-anchored when saved pins/removals exist; the default
+  // answer ("nothing resolves") is never reached by a test with no saved items.
+  apiMock.architectureSearch.mockResolvedValue(jsonResponse({ resolved: [] }));
   // The three display knobs are remembered per project in localStorage; a case
   // that moves them must not decide the next case's starting value.
   for (const projectId of ['project-1', 'project-2']) {
     window.localStorage.removeItem(`architecture.scope.${projectId}`);
     window.localStorage.removeItem(`architecture.detail.${projectId}`);
     window.localStorage.removeItem(`architecture.filter.${projectId}`);
+  }
+  // Curation is session-scoped, so its key carries both ids.
+  for (const projectId of ['project-1', 'project-2']) {
+    for (const sessionId of ['session-1', 'session-2']) {
+      window.localStorage.removeItem(`architecture.curation.v1:${projectId}:${sessionId}`);
+    }
   }
   // jsdom has no canvas: an un-stubbed `getContext('2d')` answers null AND logs
   // a "Not implemented" error on every paint. The minimap paints on a frame, so
@@ -3374,4 +3394,330 @@ test('every reviewed locale carries both fit labels and the focused-fit escape',
       `${locale} must explain a focused fit and name the overview escape`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// architecture-curation-pins-and-excludes — pins / removals / hidden relations
+// ---------------------------------------------------------------------------
+
+/** A Response stand-in for the search endpoint (only `ok`/`json` are read). */
+function responseOf(body: unknown): Response {
+  return { ok: true, status: 200, json: async () => body } as unknown as Response;
+}
+
+/**
+ * The entity subgraph after the server applied a curation request: excluded
+ * ids disappear with their edges, pinned ids become distance-0 `pinned` roots
+ * and `stats.curation` reports what took effect. This is the shape the real
+ * server sends, so the panel's own filtering is exercised against it.
+ */
+function curatedResult(query?: {
+  readonly extraSeeds?: readonly string[];
+  readonly excludeIds?: readonly string[];
+}): ArchitectureGraphResult {
+  const excluded = new Set(query?.excludeIds ?? []);
+  const pins = new Set(query?.extraSeeds ?? []);
+  const nodes = RESULT.graph.entity.nodes
+    .filter((node) => !excluded.has(node.id))
+    .map((node) => (pins.has(node.id)
+      ? { ...node, distance: 0, mentionTier: 'pinned' as const }
+      : node));
+  const ids = new Set(nodes.map((node) => node.id));
+  const edges = RESULT.graph.entity.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+  return {
+    ...RESULT,
+    graph: { file: RESULT.graph.file, entity: { nodes, edges } },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: nodes.length,
+      entityEdges: edges.length,
+      curation: { pinned: nodes.filter((node) => node.mentionTier === 'pinned').length, excluded: excluded.size },
+    },
+  };
+}
+
+const CURATION_PIN_ID = 'src/modules/gamma/C.ts.Gamma';
+const CURATION_REMOVE_ID = 'src/modules/beta/B.ts.Beta';
+const CURATION_ALPHA = 'src/modules/alpha/A.ts.Alpha';
+
+/** The graph mock that honours the request's curation fields. */
+function useCuratedGraphMock(): void {
+  apiMock.architectureGraph.mockImplementation(async (...args: unknown[]) =>
+    jsonResponse(curatedResult(args[3] as { extraSeeds?: string[]; excludeIds?: string[] } | undefined)));
+}
+
+function curationStorageKeyFor(projectId = 'project-1', sessionId = 'session-1'): string {
+  return `architecture.curation.v1:${projectId}:${sessionId}`;
+}
+
+test('搜索「项目其它」组出现并可钉住：图重新请求，该节点带图钉角标', async () => {
+  useCuratedGraphMock();
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    results: [{ id: CURATION_PIN_ID, name: 'Gamma', file: 'src/modules/gamma/c.ts', kind: 'class' }],
+    truncated: false,
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.change(screen.getByLabelText('Search entities or files'), { target: { value: 'Gam' } });
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-search-group="project"]')));
+  await waitFor(() => assert.ok(document.querySelector(`[data-architecture-search-project-result="${CURATION_PIN_ID}"]`)));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'searching alone never refetches the graph');
+
+  fireEvent.click(document.querySelector(`[data-architecture-search-pin="${CURATION_PIN_ID}"]`) as Element);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'pinning re-requests the graph'));
+  const query = apiMock.architectureGraph.mock.calls[1][3] as { extraSeeds?: string[] };
+  assert.deepEqual(query.extraSeeds, [CURATION_PIN_ID], 'the pin rides as extraSeeds');
+  await waitFor(() => assert.ok(host.querySelector('[data-architecture-pinned="true"]'), 'the pinned node carries its marker'));
+  assert.ok(document.querySelector('[data-architecture-curation-toast]'), 'a Toast announces the pin');
+  assert.equal(
+    document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),
+    '1',
+  );
+});
+
+test('移除自动实体后图里不再出现它及其边，Toast「撤销」可恢复', async () => {
+  useCuratedGraphMock();
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  fireEvent.click(host.querySelector(`[data-entity-id="${CURATION_REMOVE_ID}"]`) as Element);
+
+  const removeButton = await waitFor(() => {
+    const button = document.querySelector(`[data-architecture-inspector-remove="${CURATION_REMOVE_ID}"]`);
+    assert.ok(button, 'the inspector offers the removal');
+    return button;
+  });
+  fireEvent.click(removeButton);
+
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
+  assert.deepEqual(
+    (apiMock.architectureGraph.mock.calls[1][3] as { excludeIds?: string[] }).excludeIds,
+    [CURATION_REMOVE_ID],
+  );
+  await waitFor(() => assert.equal(
+    host.querySelector(`[data-entity-id="${CURATION_REMOVE_ID}"]`),
+    null,
+    'the removed node is no longer drawn',
+  ));
+  assert.equal(
+    host.querySelector(`[data-edge-source="${CURATION_REMOVE_ID}"]`),
+    null,
+    'its edges disappeared with it',
+  );
+
+  const toast = document.querySelector('[data-architecture-curation-toast]');
+  assert.ok(toast !== null);
+  const undo = toast.querySelector('[data-architecture-curation-undo]');
+  assert.ok(undo !== null, 'the Toast carries a focusable undo');
+  fireEvent.click(undo);
+
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3));
+  assert.equal(
+    (apiMock.architectureGraph.mock.calls[2][3] as { excludeIds?: string[] }).excludeIds,
+    undefined,
+    'undo restores the uncurated request',
+  );
+  await waitFor(() => assert.ok(host.querySelector(`[data-entity-id="${CURATION_REMOVE_ID}"]`), 'the node returns'));
+});
+
+test('Delete 键移除所选，且 chat.abort 调用计数为 0', async () => {
+  useCuratedGraphMock();
+  const aborts: string[] = [];
+  const pageAbort = (event: KeyboardEvent): void => {
+    if (event.key === 'Delete') aborts.push('chat.abort');
+  };
+  document.addEventListener('keydown', pageAbort);
+
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    const host = await waitForDiagram();
+    fireEvent.click(host.querySelector(`[data-entity-id="${CURATION_REMOVE_ID}"]`) as Element);
+    await waitFor(() => assert.ok(document.querySelector(`[data-architecture-inspector-remove="${CURATION_REMOVE_ID}"]`)));
+
+    host.focus();
+    fireEvent.keyDown(host, { key: 'Delete' });
+
+    await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
+    assert.deepEqual(
+      (apiMock.architectureGraph.mock.calls[1][3] as { excludeIds?: string[] }).excludeIds,
+      [CURATION_REMOVE_ID],
+      'Delete removes the selected entity',
+    );
+    await waitFor(() => assert.equal(host.querySelector(`[data-entity-id="${CURATION_REMOVE_ID}"]`), null));
+    assert.equal(aborts.length, 0, `Delete must not reach the page abort (chat.abort calls: ${String(aborts.length)})`);
+  } finally {
+    document.removeEventListener('keydown', pageAbort);
+  }
+});
+
+test('取消钉住但仍相连时提示「仍因相连而在图中」', async () => {
+  useCuratedGraphMock();
+  window.localStorage.setItem(curationStorageKeyFor(), JSON.stringify({
+    pins: [{ id: CURATION_REMOVE_ID, name: 'Beta', file: 'src/modules/beta/b.ts' }],
+    excluded: [],
+    hiddenEdges: [],
+  }));
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    resolved: [{ id: CURATION_REMOVE_ID, name: 'Beta', file: 'src/modules/beta/b.ts' }],
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-architecture-pinned="true"]')));
+  fireEvent.click(host.querySelector(`[data-entity-id="${CURATION_REMOVE_ID}"]`) as Element);
+
+  const unpin = await waitFor(() => {
+    const button = document.querySelector(`[data-architecture-inspector-unpin="${CURATION_REMOVE_ID}"]`);
+    assert.ok(button, 'the inspector offers the unpin');
+    return button;
+  });
+  fireEvent.click(unpin);
+
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-curation-toast-message]')));
+  const message = document.querySelector('[data-architecture-curation-toast-message]')?.textContent ?? '';
+  assert.match(message, /still in the graph because it connects to/, `unexpected Toast: ${message}`);
+});
+
+test('隐藏关系只改显示（无网络请求）并写明「不改代码」', async () => {
+  useCuratedGraphMock();
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const edgeHit = host.querySelector('[data-architecture-edge-hit]');
+  assert.ok(edgeHit !== null, 'the renderer lays an edge hit band');
+  const from = edgeHit.getAttribute('data-architecture-edge-source') ?? '';
+  const to = edgeHit.getAttribute('data-architecture-edge-target') ?? '';
+  fireEvent.click(edgeHit);
+
+  const hide = await waitFor(() => {
+    const button = document.querySelector('[data-architecture-inspector-hide-relation]');
+    assert.ok(button, 'the relation inspector offers the hide');
+    return button;
+  });
+  fireEvent.click(hide);
+
+  await waitFor(() => assert.equal(
+    host.querySelector(`.uml-edge[data-edge-source="${from}"][data-edge-target="${to}"]`),
+    null,
+    'the hidden relation is no longer drawn',
+  ));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'hiding a relation is a local display change');
+  const message = document.querySelector('[data-architecture-curation-toast-message]')?.textContent ?? '';
+  assert.match(message, /display only; the code is unchanged/, `unexpected Toast: ${message}`);
+});
+
+test('已调整 N 项弹层三页各行还原与全部还原', async () => {
+  useCuratedGraphMock();
+  window.localStorage.setItem(curationStorageKeyFor(), JSON.stringify({
+    pins: [{ id: CURATION_ALPHA, name: 'Alpha', file: 'src/modules/alpha/a.ts' }],
+    excluded: [{ id: CURATION_PIN_ID, name: 'Gamma', file: 'src/modules/gamma/c.ts' }],
+    hiddenEdges: [{ from: 'src/modules/alpha/A2.ts.Alpha2', to: CURATION_ALPHA, type: 'dependency' }],
+  }));
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    resolved: [
+      { id: CURATION_ALPHA, name: 'Alpha', file: 'src/modules/alpha/a.ts' },
+      { id: CURATION_PIN_ID, name: 'Gamma', file: 'src/modules/gamma/c.ts' },
+    ],
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),
+    '3',
+  ));
+
+  fireEvent.click(document.querySelector('[data-architecture-curation-manager-toggle]') as Element);
+  const manager = document.querySelector('[data-architecture-curation-manager]');
+  assert.ok(manager !== null);
+
+  const tabs = [...document.querySelectorAll('[data-architecture-curation-tab]')]
+    .map((tab) => tab.getAttribute('data-architecture-curation-tab'));
+  assert.deepEqual(tabs, ['pins', 'excluded', 'hiddenEdges'], 'three pages');
+  assert.ok(document.querySelector(`[data-architecture-curation-restore="${CURATION_ALPHA}"]`), 'the pin row restores');
+
+  fireEvent.click(document.querySelector('[data-architecture-curation-tab="excluded"]') as Element);
+  assert.ok(document.querySelector(`[data-architecture-curation-restore="${CURATION_PIN_ID}"]`), 'the removal row restores');
+
+  fireEvent.click(document.querySelector('[data-architecture-curation-tab="hiddenEdges"]') as Element);
+  assert.ok(document.querySelector('[data-architecture-curation-restore]'), 'the hidden relation restores');
+
+  const restoreAll = document.querySelector('[data-architecture-curation-restore-all]');
+  assert.ok(restoreAll !== null);
+  assert.match(restoreAll.className, /text-destructive/, 'only the restore-all button uses the destructive colour');
+  fireEvent.click(restoreAll);
+
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),
+    '0',
+    'restore-all clears every page',
+  ));
+});
+
+test('已失效项显示徽标与「清除」，清除后从列表消失', async () => {
+  useCuratedGraphMock();
+  window.localStorage.setItem(curationStorageKeyFor(), JSON.stringify({
+    pins: [],
+    excluded: [{ id: 'old-gamma', name: 'Gamma', file: 'src/modules/gamma/c.ts' }],
+    hiddenEdges: [],
+  }));
+  // The analysis no longer has this (file, name): the saved item stays, stale.
+  apiMock.architectureSearch.mockResolvedValue(responseOf({ resolved: [null] }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  await waitFor(() => assert.ok(apiMock.architectureSearch.mock.calls.length > 0, 'the saved item was re-anchored'));
+
+  fireEvent.click(document.querySelector('[data-architecture-curation-manager-toggle]') as Element);
+  fireEvent.click(document.querySelector('[data-architecture-curation-tab="excluded"]') as Element);
+
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-curation-stale-badge]')));
+  const clear = document.querySelector('[data-architecture-curation-clear="old-gamma"]');
+  assert.ok(clear !== null, 'a stale item offers Clear');
+  fireEvent.click(clear);
+
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-curation-clear="old-gamma"]'), null));
+  assert.equal(
+    document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),
+    '0',
+  );
+});
+
+test('没有会话时功能禁用并说明原因', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId={null} />);
+
+  const disabled = await waitFor(() => {
+    const note = document.querySelector('[data-architecture-curation-disabled="true"]');
+    assert.ok(note, 'the disabled state must be explained');
+    return note;
+  });
+  assert.match(disabled.textContent ?? '', /need a session/);
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 0, 'no session, no graph request');
+});
+
+test('换会话后调整集不串', async () => {
+  useCuratedGraphMock();
+  window.localStorage.setItem(curationStorageKeyFor('project-1', 'session-1'), JSON.stringify({
+    pins: [{ id: CURATION_ALPHA, name: 'Alpha', file: 'src/modules/alpha/a.ts' }],
+    excluded: [],
+    hiddenEdges: [],
+  }));
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    resolved: [{ id: CURATION_ALPHA, name: 'Alpha', file: 'src/modules/alpha/a.ts' }],
+  }));
+
+  const { rerender } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),
+    '1',
+  ));
+
+  rerender(<ArchitecturePanel projectId="project-1" sessionId="session-2" />);
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),
+    '0',
+    'session 2 must not inherit session 1 adjustments',
+  ));
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -50,7 +50,9 @@ import {
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
+  ArchitectureRendererEdge,
   ArchitectureRendererGraph,
+  ArchitectureRendererNode,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
 import { cycleNodeFocus } from '@/modules/architecture/selectionModel';
@@ -154,6 +156,10 @@ const HIGHLIGHT_STYLE = `
      is drawn twice as thick, which survives a greyscale print and colour-blind
      reading. */
   [data-architecture-plantuml] .arch-seed > rect { stroke: #b45309; stroke-width: 3; }
+  /* A hand-pinned entity: its own frame plus the pin glyph annotationNodes
+     inserts, so the reading is a shape/symbol and never colour alone. */
+  [data-architecture-plantuml] .arch-pinned > rect { stroke: #1d4ed8; stroke-width: 3; }
+  [data-architecture-plantuml] .arch-pinned-badge { pointer-events: none; }
   /* Edge relation labels are hidden by default (a dense drawing turns the
      relation stereotypes into a wall of overlapping text); hovering or
      selecting a node reveals the labels of its own edges. The DOM helpers
@@ -201,6 +207,20 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
    * Optional: a renderer embedded without a panel has no menu to feed.
    */
   readonly onViewChange?: (view: ArchitectureDiagramView) => void;
+  /**
+   * Manual curation. Optional as a group so a renderer embedded without a
+   * curation store keeps drawing exactly as before (no menu, no key handling).
+   */
+  readonly canCurate?: boolean;
+  readonly pinnedNodeIds?: readonly string[];
+  readonly onPinNode?: (node: ArchitectureRendererNode) => void;
+  readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
+  readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
+  readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
+  /** "Only show this pinned item": the panel narrows the drawing to one node. */
+  readonly onSoloNode?: (node: ArchitectureRendererNode) => void;
+  /** Ctrl/Cmd+Z while the canvas is focused: undo the latest adjustment. */
+  readonly onUndo?: () => void;
 };
 
 /**
@@ -468,6 +488,20 @@ function annotateNodes(
       element.setAttribute('data-architecture-seed', 'true');
       element.classList.add('arch-seed');
     }
+    // A manual pin is not a session seed: it gets its own marker and a literal
+    // pin glyph, so the reading never depends on colour alone.
+    if (node.mentionTier === 'pinned') {
+      element.setAttribute('data-architecture-pinned', 'true');
+      element.classList.add('arch-pinned');
+      const badge = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      badge.setAttribute('class', 'arch-pinned-badge');
+      badge.setAttribute('data-architecture-pinned-badge', 'true');
+      badge.setAttribute('x', '4');
+      badge.setAttribute('y', '12');
+      badge.setAttribute('font-size', '11');
+      badge.textContent = '📌';
+      element.insertBefore(badge, element.firstChild);
+    }
   }
 }
 
@@ -654,6 +688,14 @@ export function PlantUmlGraph({
   focusNodeId = null,
   focusToken,
   onViewChange,
+  canCurate = false,
+  pinnedNodeIds = [],
+  onPinNode,
+  onUnpinNode,
+  onRemoveNode,
+  onHideRelation,
+  onSoloNode,
+  onUndo,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -722,6 +764,15 @@ export function PlantUmlGraph({
   const lastPointerTypeRef = useRef<string | null>(null);
   // The previous tap, for the touch double-tap drill gesture.
   const lastTapRef = useRef<{ id: string; at: number } | null>(null);
+  // The pin menu: right-click (desktop) or long-press (touch) on a node or a
+  // relation opens the same adjustment actions the inspector offers. Null keeps
+  // it shut; the position is in the canvas's own coordinate space.
+  const [contextMenu, setContextMenu] = useState<
+    | { readonly x: number; readonly y: number; readonly nodeId: string }
+    | { readonly x: number; readonly y: number; readonly edge: ArchitectureRendererEdge }
+    | null
+  >(null);
+  const pinnedSet = useMemo(() => new Set(pinnedNodeIds), [pinnedNodeIds]);
   useEffect(() => {
     viewRef.current = view;
     graphRef.current = graph;
@@ -1287,10 +1338,56 @@ export function PlantUmlGraph({
       hoverCallbackRef.current?.(null);
     };
 
+    // The pin/remove menu: right click on a fine pointer, a 500ms press on a
+    // touch pointer. Coordinates are relative to the canvas's positioned
+    // parent, which is where the menu element is rendered.
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    const cancelLongPress = (): void => {
+      if (longPressTimer === null) return;
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    };
+    const openMenuAt = (clientX: number, clientY: number, target: EventTarget | null): boolean => {
+      const canvas = host.parentElement;
+      if (canvas === null) return false;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, clientX - rect.left);
+      const y = Math.max(0, clientY - rect.top);
+      const edgeHit = target instanceof Element
+        ? target.closest('[data-architecture-edge-hit]')
+        : null;
+      if (edgeHit !== null) {
+        const from = edgeHit.getAttribute('data-architecture-edge-source');
+        const to = edgeHit.getAttribute('data-architecture-edge-target');
+        const relationType = edgeHit.getAttribute('data-architecture-edge-type') ?? '';
+        if (from === null || to === null) return false;
+        setContextMenu({ x, y, edge: { from, to, relationType } });
+        return true;
+      }
+      const id = nodeFrom(target)?.getAttribute('data-entity-id') ?? null;
+      if (id === null || id.startsWith(GROUP_PREFIX) || id.startsWith(STUB_PREFIX)) return false;
+      if (!graphRef.current.nodes.some((candidate) => candidate.id === id)) return false;
+      setContextMenu({ x, y, nodeId: id });
+      return true;
+    };
+
     // Record how the press that produces the next click was made. Mouse clicks
     // keep the original single-click navigation; a touch tap only selects.
     const onPointerDown = (event: PointerEvent): void => {
       lastPointerTypeRef.current = event.pointerType ?? null;
+      cancelLongPress();
+      if (!canCurate || event.pointerType !== 'touch') return;
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        openMenuAt(event.clientX, event.clientY, event.target);
+      }, 500);
+    };
+    const onPointerMove = (): void => cancelLongPress();
+    const onPointerUp = (): void => cancelLongPress();
+    const onContextMenu = (event: MouseEvent): void => {
+      if (!canCurate) return;
+      if (openMenuAt(event.clientX, event.clientY, event.target)) event.preventDefault();
+      else setContextMenu(null);
     };
 
     /** Pin an entity's highlight and announce it to sibling panels. */
@@ -1308,6 +1405,9 @@ export function PlantUmlGraph({
     const onClick = (event: MouseEvent): void => {
       const isTouchTap = lastPointerTypeRef.current === 'touch';
       lastPointerTypeRef.current = null;
+      // Any ordinary click on the drawing closes the pin menu. A click on the
+      // menu itself never reaches this listener (the menu is a sibling).
+      setContextMenu(null);
 
       // A relation's enlarged hit band sits ON TOP of the drawing, so it is
       // checked before the node lookup: clicking a line selects the relation,
@@ -1380,18 +1480,27 @@ export function PlantUmlGraph({
     };
 
     host.addEventListener('pointerdown', onPointerDown);
+    host.addEventListener('pointermove', onPointerMove);
+    host.addEventListener('pointerup', onPointerUp);
+    host.addEventListener('pointercancel', onPointerUp);
     host.addEventListener('mouseover', onMouseOver);
     host.addEventListener('mouseout', onMouseOut);
     host.addEventListener('click', onClick);
     host.addEventListener('dblclick', onDoubleClick);
+    host.addEventListener('contextmenu', onContextMenu);
     return () => {
+      cancelLongPress();
       host.removeEventListener('pointerdown', onPointerDown);
+      host.removeEventListener('pointermove', onPointerMove);
+      host.removeEventListener('pointerup', onPointerUp);
+      host.removeEventListener('pointercancel', onPointerUp);
       host.removeEventListener('mouseover', onMouseOver);
       host.removeEventListener('mouseout', onMouseOut);
       host.removeEventListener('click', onClick);
       host.removeEventListener('dblclick', onDoubleClick);
+      host.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [drillInto]);
+  }, [canCurate, drillInto]);
 
   // The other direction of the cross-panel linkage: a sibling panel selects an
   // entity by its stable id (e.g. a file referenced in chat). The graph pins the
@@ -1621,13 +1730,53 @@ export function PlantUmlGraph({
    */
   const onCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const host = hostRef.current;
-    if (host === null || event.ctrlKey || event.metaKey) return;
+    if (host === null) return;
+
+    // Ctrl/Cmd+Z is the curation undo, but only while the canvas owns focus
+    // (this is the canvas's own key handler).
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && onUndo !== undefined) {
+      event.preventDefault();
+      event.stopPropagation();
+      onUndo();
+      return;
+    }
+    if (event.ctrlKey || event.metaKey) return;
 
     if (event.key === 'Escape') {
+      if (contextMenu !== null) {
+        event.preventDefault();
+        event.stopPropagation();
+        setContextMenu(null);
+        return;
+      }
       if (selectedRef.current === null && selectedRelationRef.current === null) return;
       event.preventDefault();
       event.stopPropagation();
       escapeSelectionCallbackRef.current?.();
+      return;
+    }
+
+    // Delete/Backspace removes the selected entity (or hides the selected
+    // relation) through the panel's curation store. `stopPropagation` keeps the
+    // key away from the chat page's global abort — the drawing owns it only
+    // while a selection exists AND a curation callback can act on it.
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      const edge = selectedRelationRef.current ?? null;
+      const nodeId = selectedRef.current;
+      if (edge === null && nodeId === null) return;
+      if (edge !== null) {
+        if (onHideRelation === undefined) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onHideRelation({ from: edge.from, to: edge.to, relationType: edge.relationType });
+        return;
+      }
+      if (onRemoveNode === undefined || nodeId === null) return;
+      const node = graphRef.current.nodes.find((candidate) => candidate.id === nodeId);
+      if (node === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onRemoveNode(node);
       return;
     }
 
@@ -2084,6 +2233,95 @@ export function PlantUmlGraph({
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
+        {contextMenu !== null && (() => {
+          const menuNode = 'nodeId' in contextMenu
+            ? graph.nodes.find((candidate) => candidate.id === contextMenu.nodeId) ?? null
+            : null;
+          const menuEdge = 'edge' in contextMenu ? contextMenu.edge : null;
+          const isPinned = menuNode !== null && pinnedSet.has(menuNode.id);
+          if (menuNode === null && menuEdge === null) return null;
+          return (
+            <div
+              data-architecture-context-menu="true"
+              role="menu"
+              aria-label={t('architecture.curation.heading', { defaultValue: 'Adjust' })}
+              style={{ position: 'absolute', left: contextMenu.x, top: contextMenu.y, zIndex: 40 }}
+              className="flex min-w-40 flex-col rounded-lg border border-border bg-popover p-1 shadow-lg"
+            >
+              {menuNode !== null && (
+                <>
+                  {isPinned ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-architecture-context-unpin={menuNode.id}
+                      onClick={() => {
+                        setContextMenu(null);
+                        onUnpinNode?.(menuNode);
+                      }}
+                      className="rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      {t('architecture.curation.unpin', { defaultValue: 'Unpin' })}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-architecture-context-pin={menuNode.id}
+                      onClick={() => {
+                        setContextMenu(null);
+                        onPinNode?.(menuNode);
+                      }}
+                      className="rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      {t('architecture.curation.pin', { defaultValue: 'Pin to graph' })}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-architecture-context-remove={menuNode.id}
+                    onClick={() => {
+                      setContextMenu(null);
+                      onRemoveNode?.(menuNode);
+                    }}
+                    className="rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    {t('architecture.curation.removeEntity', { defaultValue: 'Remove from graph' })}
+                  </button>
+                  {isPinned && onSoloNode !== undefined && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-architecture-context-solo={menuNode.id}
+                      onClick={() => {
+                        setContextMenu(null);
+                        onSoloNode(menuNode);
+                      }}
+                      className="rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      {t('architecture.curation.solo', { defaultValue: 'Show only this' })}
+                    </button>
+                  )}
+                </>
+              )}
+              {menuEdge !== null && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-architecture-context-hide={menuEdge.from}
+                  onClick={() => {
+                    setContextMenu(null);
+                    onHideRelation?.(menuEdge);
+                  }}
+                  className="rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                >
+                  {t('architecture.curation.hideRelation', { defaultValue: 'Hide relation' })}
+                </button>
+              )}
+            </div>
+          );
+        })()}
         <div
           data-architecture-canvas-overlays="true"
           // The arrangement is stated inline rather than in utility classes:

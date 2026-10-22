@@ -109,6 +109,10 @@ export type ArchitectureSeedStats = {
 export type ArchitectureGraphQuery = {
   readonly kinds?: readonly ArchitectureEntityKind[];
   readonly relations?: readonly string[];
+  /** Manual pins: entity ids the reader added as roots (server `extraSeeds`). */
+  readonly extraSeeds?: readonly string[];
+  /** Manual removals: entity ids dropped before traversal (server `excludeIds`). */
+  readonly excludeIds?: readonly string[];
 };
 
 /**
@@ -160,7 +164,7 @@ export type ArchitectureGraphStats = {
    * emitted before tiers existed; the panel does not need it, but mirroring the
    * server's stats keeps the payload contract honest for consumers that do.
    */
-  readonly seedTiers?: Readonly<Record<ArchitectureMentionTier, number>>;
+  readonly seedTiers?: Readonly<Partial<Record<ArchitectureMentionTier, number>>>;
   /**
    * Unfiltered counts by relation type over the current scope. Present only
    * when the request carried a filter; the relation filter's readout names the
@@ -169,6 +173,11 @@ export type ArchitectureGraphStats = {
   readonly relationCounts?: Readonly<Record<string, number>>;
   /** What the requested filter removed. Present only when it carried a filter. */
   readonly hidden?: ArchitectureFilterHiddenStats;
+  /** How many manual pins/removals were in effect; absent without curation. */
+  readonly curation?: {
+    readonly pinned: number;
+    readonly excluded: number;
+  };
   readonly seedFiles: number;
   readonly seedIdentifiers: number;
   readonly nodeCount: number;
@@ -176,6 +185,8 @@ export type ArchitectureGraphStats = {
   readonly unresolved: {
     readonly files: readonly string[];
     readonly identifiers: readonly string[];
+    /** Manual pin ids that named no entity; absent without `extraSeeds`. */
+    readonly ids?: readonly string[];
   };
 };
 

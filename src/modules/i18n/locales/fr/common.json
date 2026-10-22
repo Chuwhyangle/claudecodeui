@@ -126,7 +126,11 @@
       "label": "Rechercher des entités ou des fichiers",
       "placeholder": "Rechercher des entités ou des fichiers…",
       "noMatches": "Aucun résultat",
-      "outOfRange": "Hors de la plage actuelle"
+      "outOfRange": "Hors de la plage actuelle",
+      "inGraph": "Dans le graphique",
+      "other": "Ailleurs dans le projet",
+      "retry": "Réessayer",
+      "truncated": "Les 20 premiers sont affichés — affinez la recherche."
     },
     "readout": {
       "classSummary": "Affichage de {{shown}} classes · {{total}} liées",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "L'accès au presse-papiers est indisponible. Sélectionnez et copiez le texte ci-dessous.",
       "close": "Fermer",
       "bridgeFallback": "Repli : texte du pont (le modèle dessiné est indisponible)"
+    },
+    "curation": {
+      "heading": "Ajuster",
+      "pin": "Épingler au graphe",
+      "unpin": "Détacher",
+      "pinnedBadge": "Épinglé",
+      "removeEntity": "Retirer du graphe",
+      "hideRelation": "Masquer la relation",
+      "hideRelationNote": "Masque uniquement l'affichage ; le code reste inchangé.",
+      "pinNamed": "Épingler {{name}}",
+      "noSession": "Les ajustements manuels nécessitent une session : ils sont stockés par session.",
+      "limitReached": "Cette liste est pleine ({{limit}}). Retirez une entrée.",
+      "toastPinned": "{{name}} épinglé",
+      "toastRemoved": "{{name}} retiré du graphe",
+      "toastUnpinned": "{{name}} détaché",
+      "toastUnpinnedConnected": "{{name}} détaché ; il reste dans le graphe car il est relié à {{other}}",
+      "toastRelationHidden": "Relation masquée — affichage seulement ; le code reste inchangé.",
+      "readout": "{{excluded}} retirés manuellement · {{pinned}} épinglés",
+      "managerButton": "Ajustés {{count}} ▾",
+      "managerTitle": "Ajustements manuels ({{count}})",
+      "close": "Fermer les ajustements",
+      "pagePins": "Épinglés",
+      "pageExcluded": "Retirés",
+      "pageHidden": "Relations masquées",
+      "emptyPage": "Rien ici.",
+      "restore": "Restaurer",
+      "stale": "Obsolète",
+      "clear": "Effacer",
+      "restoreGroup": "Restaurer cette page",
+      "restoreAll": "Tout restaurer",
+      "undo": "Annuler",
+      "solo": "Afficher seulement ceci",
+      "soloClear": "Afficher tout le graphe"
     }
   },
   "status": {

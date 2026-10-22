@@ -369,7 +369,14 @@ export const api = {
     projectId: string,
     sessionId: string,
     hops?: number,
-    filter?: { readonly kinds?: readonly string[]; readonly relations?: readonly string[] },
+    filter?: {
+      readonly kinds?: readonly string[];
+      readonly relations?: readonly string[];
+      /** Manual pins: entity ids the reader added as roots. */
+      readonly extraSeeds?: readonly string[];
+      /** Manual removals: entity ids dropped before traversal. */
+      readonly excludeIds?: readonly string[];
+    },
   ) =>
     post('/api/architecture/graph', {
       projectId,
@@ -377,6 +384,29 @@ export const api = {
       ...(hops === undefined ? {} : { hops }),
       ...(filter?.kinds === undefined ? {} : { kinds: filter.kinds }),
       ...(filter?.relations === undefined ? {} : { relations: filter.relations }),
+      ...(filter?.extraSeeds === undefined ? {} : { extraSeeds: filter.extraSeeds }),
+      ...(filter?.excludeIds === undefined ? {} : { excludeIds: filter.excludeIds }),
+    }),
+  /**
+   * Project-wide entity search and `(file, name)` re-anchoring for manual
+   * curation (the architecture tab's "项目其它" result group).
+   *
+   * The response body is the result itself, not a `{ success, data }` envelope.
+   * Exactly one of `query` / `resolve` is sent per request.
+   */
+  architectureSearch: (
+    projectId: string,
+    request:
+      | {
+          readonly query: string;
+          readonly limit?: number;
+          readonly kinds?: readonly string[];
+        }
+      | { readonly resolve: readonly { readonly name: string; readonly file: string }[] },
+  ) =>
+    post('/api/architecture/search', {
+      projectId,
+      ...request,
     }),
   /**
    * The on-demand mention provenance for one graph selection: where in the

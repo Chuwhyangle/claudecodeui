@@ -126,7 +126,11 @@
       "label": "엔티티 또는 파일 검색",
       "placeholder": "엔티티 또는 파일 검색…",
       "noMatches": "일치 항목 없음",
-      "outOfRange": "현재 범위 밖"
+      "outOfRange": "현재 범위 밖",
+      "inGraph": "그래프 안",
+      "other": "프로젝트의 다른 곳",
+      "retry": "다시 시도",
+      "truncated": "처음 20개만 표시합니다 — 검색어를 좁히세요."
     },
     "readout": {
       "classSummary": "{{shown}}개 클래스 표시 · 관련 {{total}}개",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "클립보드를 사용할 수 없습니다. 아래 텍스트를 선택해 복사하세요.",
       "close": "닫기",
       "bridgeFallback": "대체: 브리지 텍스트(그려진 모델을 사용할 수 없음)"
+    },
+    "curation": {
+      "heading": "조정",
+      "pin": "그래프에 고정",
+      "unpin": "고정 해제",
+      "pinnedBadge": "고정됨",
+      "removeEntity": "그래프에서 제거",
+      "hideRelation": "관계 숨기기",
+      "hideRelationNote": "표시만 숨깁니다. 코드는 변경되지 않습니다.",
+      "pinNamed": "{{name}} 고정",
+      "noSession": "수동 조정에는 세션이 필요합니다. 세션별로 저장됩니다.",
+      "limitReached": "이 목록이 가득 찼습니다({{limit}}). 먼저 항목을 제거하세요.",
+      "toastPinned": "{{name}} 고정됨",
+      "toastRemoved": "{{name}}을(를) 그래프에서 제거했습니다",
+      "toastUnpinned": "{{name}} 고정 해제됨",
+      "toastUnpinnedConnected": "{{name}} 고정을 해제했습니다. {{other}}와(과) 연결되어 있어 그래프에 남습니다",
+      "toastRelationHidden": "관계를 숨겼습니다 — 표시만이며 코드는 변경되지 않습니다.",
+      "readout": "수동 제거 {{excluded}}개 · 고정 {{pinned}}개",
+      "managerButton": "조정 {{count}}개 ▾",
+      "managerTitle": "수동 조정({{count}}개)",
+      "close": "조정 닫기",
+      "pagePins": "고정됨",
+      "pageExcluded": "제거됨",
+      "pageHidden": "숨긴 관계",
+      "emptyPage": "여기에는 아무것도 없습니다.",
+      "restore": "복원",
+      "stale": "무효",
+      "clear": "지우기",
+      "restoreGroup": "이 페이지 복원",
+      "restoreAll": "모두 복원",
+      "undo": "실행 취소",
+      "solo": "이것만 표시",
+      "soloClear": "전체 그래프 표시"
     }
   },
   "status": {

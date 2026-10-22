@@ -126,7 +126,11 @@
       "label": "搜尋實體或檔案",
       "placeholder": "搜尋實體或檔案…",
       "noMatches": "沒有相符項目",
-      "outOfRange": "不在目前範圍"
+      "outOfRange": "不在目前範圍",
+      "inGraph": "圖中",
+      "other": "專案其他",
+      "retry": "重試",
+      "truncated": "僅顯示前 20 項，請縮小關鍵詞。"
     },
     "readout": {
       "classSummary": "顯示 {{shown}} 個類別 · 共 {{total}} 個相關",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "剪貼簿無法使用，請選取並複製下方文字。",
       "close": "關閉",
       "bridgeFallback": "回退：橋接層文字（無法取得實際繪製的模型）"
+    },
+    "curation": {
+      "heading": "調整",
+      "pin": "釘住到圖中",
+      "unpin": "取消釘住",
+      "pinnedBadge": "已釘住",
+      "removeEntity": "從圖中移除",
+      "hideRelation": "隱藏關係",
+      "hideRelationNote": "只隱藏顯示，不改程式碼。",
+      "pinNamed": "釘住 {{name}}",
+      "noSession": "手動調整需要工作階段：調整依工作階段儲存。",
+      "limitReached": "該清單已滿（{{limit}}）。請先移除一項。",
+      "toastPinned": "已釘住 {{name}}",
+      "toastRemoved": "已從圖中移除 {{name}}",
+      "toastUnpinned": "已取消釘住 {{name}}",
+      "toastUnpinnedConnected": "已取消釘住 {{name}}；它仍因與 {{other}} 相連而在圖中",
+      "toastRelationHidden": "已隱藏關係——只隱藏顯示，不改程式碼。",
+      "readout": "已手動移除 {{excluded}} 項 · 已釘住 {{pinned}} 項",
+      "managerButton": "已調整 {{count}} 項 ▾",
+      "managerTitle": "手動調整（{{count}} 項）",
+      "close": "關閉調整",
+      "pagePins": "釘住",
+      "pageExcluded": "已移除",
+      "pageHidden": "已隱藏關係",
+      "emptyPage": "這裡沒有內容。",
+      "restore": "還原",
+      "stale": "已失效",
+      "clear": "清除",
+      "restoreGroup": "全部還原本頁",
+      "restoreAll": "全部還原",
+      "undo": "復原",
+      "solo": "只顯示它自己",
+      "soloClear": "顯示整張圖"
     }
   },
   "status": {

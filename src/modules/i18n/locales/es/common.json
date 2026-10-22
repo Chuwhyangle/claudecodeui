@@ -126,7 +126,11 @@
       "label": "Buscar entidades o archivos",
       "placeholder": "Buscar entidades o archivos…",
       "noMatches": "Sin coincidencias",
-      "outOfRange": "Fuera del rango actual"
+      "outOfRange": "Fuera del rango actual",
+      "inGraph": "En el gráfico",
+      "other": "En otras partes del proyecto",
+      "retry": "Reintentar",
+      "truncated": "Mostrando los primeros 20: acota la búsqueda."
     },
     "readout": {
       "classSummary": "Mostrando {{shown}} clases · {{total}} relacionados",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "El portapapeles no está disponible. Selecciona y copia el texto de abajo.",
       "close": "Cerrar",
       "bridgeFallback": "Reserva: texto del puente (el modelo dibujado no está disponible)"
+    },
+    "curation": {
+      "heading": "Ajustar",
+      "pin": "Fijar al gráfico",
+      "unpin": "Desfijar",
+      "pinnedBadge": "Fijado",
+      "removeEntity": "Quitar del gráfico",
+      "hideRelation": "Ocultar relación",
+      "hideRelationNote": "Solo oculta la visualización; el código no cambia.",
+      "pinNamed": "Fijar {{name}}",
+      "noSession": "Los ajustes manuales necesitan una sesión: se guardan por sesión.",
+      "limitReached": "Esa lista está llena ({{limit}}). Quita una entrada primero.",
+      "toastPinned": "{{name}} fijado",
+      "toastRemoved": "{{name}} quitado del gráfico",
+      "toastUnpinned": "{{name}} desfijado",
+      "toastUnpinnedConnected": "{{name}} desfijado; sigue en el gráfico porque se conecta con {{other}}",
+      "toastRelationHidden": "Relación ocultada: solo visualización; el código no cambia.",
+      "readout": "{{excluded}} quitados manualmente · {{pinned}} fijados",
+      "managerButton": "Ajustados {{count}} ▾",
+      "managerTitle": "Ajustes manuales ({{count}})",
+      "close": "Cerrar ajustes",
+      "pagePins": "Fijados",
+      "pageExcluded": "Quitados",
+      "pageHidden": "Relaciones ocultas",
+      "emptyPage": "Aquí no hay nada.",
+      "restore": "Restaurar",
+      "stale": "Obsoleto",
+      "clear": "Borrar",
+      "restoreGroup": "Restaurar esta página",
+      "restoreAll": "Restaurar todo",
+      "undo": "Deshacer",
+      "solo": "Mostrar solo esto",
+      "soloClear": "Mostrar todo el gráfico"
     }
   },
   "status": {

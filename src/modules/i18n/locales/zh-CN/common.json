@@ -126,7 +126,11 @@
       "label": "搜索实体或文件",
       "placeholder": "搜索实体或文件…",
       "noMatches": "无匹配项",
-      "outOfRange": "不在当前范围"
+      "outOfRange": "不在当前范围",
+      "inGraph": "图中",
+      "other": "项目其它",
+      "retry": "重试",
+      "truncated": "仅显示前 20 项，请缩小关键词。"
     },
     "readout": {
       "classSummary": "显示 {{shown}} 个类 · 共 {{total}} 个相关",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "剪贴板不可用，请选中并复制下方文本。",
       "close": "关闭",
       "bridgeFallback": "回退：桥接层文本（无法获取实际绘制的模型）"
+    },
+    "curation": {
+      "heading": "调整",
+      "pin": "钉住到图中",
+      "unpin": "取消钉住",
+      "pinnedBadge": "已钉住",
+      "removeEntity": "从图中移除",
+      "hideRelation": "隐藏关系",
+      "hideRelationNote": "只隐藏显示，不改代码。",
+      "pinNamed": "钉住 {{name}}",
+      "noSession": "手动调整需要会话：调整按会话保存。",
+      "limitReached": "该列表已满（{{limit}}）。请先移除一项。",
+      "toastPinned": "已钉住 {{name}}",
+      "toastRemoved": "已从图中移除 {{name}}",
+      "toastUnpinned": "已取消钉住 {{name}}",
+      "toastUnpinnedConnected": "已取消钉住 {{name}}；它仍因与 {{other}} 相连而在图中",
+      "toastRelationHidden": "已隐藏关系——只隐藏显示，不改代码。",
+      "readout": "已手动移除 {{excluded}} 项 · 已钉住 {{pinned}} 项",
+      "managerButton": "已调整 {{count}} 项 ▾",
+      "managerTitle": "手动调整（{{count}} 项）",
+      "close": "关闭调整",
+      "pagePins": "钉住",
+      "pageExcluded": "已移除",
+      "pageHidden": "已隐藏关系",
+      "emptyPage": "这里没有内容。",
+      "restore": "还原",
+      "stale": "已失效",
+      "clear": "清除",
+      "restoreGroup": "全部还原本页",
+      "restoreAll": "全部还原",
+      "undo": "撤销",
+      "solo": "只显示它自己",
+      "soloClear": "显示整张图"
     }
   },
   "status": {

@@ -126,7 +126,11 @@
       "label": "Cari entitas atau file",
       "placeholder": "Cari entitas atau file…",
       "noMatches": "Tidak ada kecocokan",
-      "outOfRange": "Di luar rentang saat ini"
+      "outOfRange": "Di luar rentang saat ini",
+      "inGraph": "Di grafik",
+      "other": "Di bagian lain proyek",
+      "retry": "Coba lagi",
+      "truncated": "Menampilkan 20 pertama — persempit kueri."
     },
     "readout": {
       "classSummary": "Menampilkan {{shown}} kelas · {{total}} terkait",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "Akses papan klip tidak tersedia. Pilih dan salin teks di bawah.",
       "close": "Tutup",
       "bridgeFallback": "Cadangan: teks jembatan (model yang digambar tidak tersedia)"
+    },
+    "curation": {
+      "heading": "Sesuaikan",
+      "pin": "Sematkan ke grafik",
+      "unpin": "Lepas sematan",
+      "pinnedBadge": "Disematkan",
+      "removeEntity": "Hapus dari grafik",
+      "hideRelation": "Sembunyikan relasi",
+      "hideRelationNote": "Hanya menyembunyikan tampilan; kode tidak berubah.",
+      "pinNamed": "Sematkan {{name}}",
+      "noSession": "Penyesuaian manual memerlukan sesi: disimpan per sesi.",
+      "limitReached": "Daftar itu penuh ({{limit}}). Hapus satu entri dulu.",
+      "toastPinned": "{{name}} disematkan",
+      "toastRemoved": "{{name}} dihapus dari grafik",
+      "toastUnpinned": "{{name}} dilepas sematannya",
+      "toastUnpinnedConnected": "{{name}} dilepas; tetap ada di grafik karena terhubung ke {{other}}",
+      "toastRelationHidden": "Relasi disembunyikan — hanya tampilan; kode tidak berubah.",
+      "readout": "{{excluded}} dihapus manual · {{pinned}} disematkan",
+      "managerButton": "Disesuaikan {{count}} ▾",
+      "managerTitle": "Penyesuaian manual ({{count}})",
+      "close": "Tutup penyesuaian",
+      "pagePins": "Disematkan",
+      "pageExcluded": "Dihapus",
+      "pageHidden": "Relasi tersembunyi",
+      "emptyPage": "Tidak ada apa pun di sini.",
+      "restore": "Pulihkan",
+      "stale": "Basi",
+      "clear": "Bersihkan",
+      "restoreGroup": "Pulihkan halaman ini",
+      "restoreAll": "Pulihkan semua",
+      "undo": "Urungkan",
+      "solo": "Tampilkan hanya ini",
+      "soloClear": "Tampilkan seluruh grafik"
     }
   },
   "status": {

@@ -126,7 +126,11 @@
       "label": "エンティティまたはファイルを検索",
       "placeholder": "エンティティまたはファイルを検索…",
       "noMatches": "一致なし",
-      "outOfRange": "現在の範囲外"
+      "outOfRange": "現在の範囲外",
+      "inGraph": "グラフ内",
+      "other": "プロジェクト内のその他",
+      "retry": "再試行",
+      "truncated": "最初の20件を表示中 — 検索語を絞ってください。"
     },
     "readout": {
       "classSummary": "{{shown}} 個のクラスを表示 · 関連 {{total}} 個",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "クリップボードを利用できません。下のテキストを選択してコピーしてください。",
       "close": "閉じる",
       "bridgeFallback": "フォールバック: ブリッジのテキスト（描画されたモデルを利用できません）"
+    },
+    "curation": {
+      "heading": "調整",
+      "pin": "グラフにピン留め",
+      "unpin": "ピン留め解除",
+      "pinnedBadge": "ピン留め済み",
+      "removeEntity": "グラフから削除",
+      "hideRelation": "関係を非表示",
+      "hideRelationNote": "表示だけを隠します。コードは変更しません。",
+      "pinNamed": "{{name}} をピン留め",
+      "noSession": "手動調整にはセッションが必要です（セッションごとに保存されます）。",
+      "limitReached": "このリストは上限（{{limit}}）です。先に項目を削除してください。",
+      "toastPinned": "{{name}} をピン留めしました",
+      "toastRemoved": "{{name}} をグラフから削除しました",
+      "toastUnpinned": "{{name}} のピン留めを解除しました",
+      "toastUnpinnedConnected": "{{name}} のピン留めを解除しました。{{other}} とつながっているため図に残ります",
+      "toastRelationHidden": "関係を非表示にしました — 表示のみで、コードは変更していません。",
+      "readout": "手動で {{excluded}} 件削除 · {{pinned}} 件ピン留め",
+      "managerButton": "調整 {{count}} 件 ▾",
+      "managerTitle": "手動調整（{{count}} 件）",
+      "close": "調整を閉じる",
+      "pagePins": "ピン留め",
+      "pageExcluded": "削除済み",
+      "pageHidden": "非表示の関係",
+      "emptyPage": "ここには何もありません。",
+      "restore": "戻す",
+      "stale": "無効",
+      "clear": "消去",
+      "restoreGroup": "このページを戻す",
+      "restoreAll": "すべて戻す",
+      "undo": "元に戻す",
+      "solo": "これだけを表示",
+      "soloClear": "グラフ全体を表示"
     }
   },
   "status": {

@@ -126,7 +126,11 @@
       "label": "Varlık veya dosya ara",
       "placeholder": "Varlık veya dosya ara…",
       "noMatches": "Eşleşme yok",
-      "outOfRange": "Geçerli aralığın dışında"
+      "outOfRange": "Geçerli aralığın dışında",
+      "inGraph": "Grafikte",
+      "other": "Projenin başka yerinde",
+      "retry": "Yeniden dene",
+      "truncated": "İlk 20 gösteriliyor — sorguyu daraltın."
     },
     "readout": {
       "classSummary": "{{shown}} sınıf gösteriliyor · {{total}} ilgili",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "Pano erişimi yok. Aşağıdaki metni seçip kopyalayın.",
       "close": "Kapat",
       "bridgeFallback": "Yedek: köprü metni (çizilen model kullanılamıyor)"
+    },
+    "curation": {
+      "heading": "Ayarla",
+      "pin": "Grafiğe sabitle",
+      "unpin": "Sabitlemeyi kaldır",
+      "pinnedBadge": "Sabitlendi",
+      "removeEntity": "Grafikten kaldır",
+      "hideRelation": "İlişkiyi gizle",
+      "hideRelationNote": "Yalnızca görünümü gizler; kod değişmez.",
+      "pinNamed": "{{name}} öğesini sabitle",
+      "noSession": "El ile ayarlamalar bir oturum gerektirir: oturum başına saklanır.",
+      "limitReached": "Bu liste dolu ({{limit}}). Önce bir kayıt kaldırın.",
+      "toastPinned": "{{name}} sabitlendi",
+      "toastRemoved": "{{name}} grafikten kaldırıldı",
+      "toastUnpinned": "{{name}} sabitlemesi kaldırıldı",
+      "toastUnpinnedConnected": "{{name}} sabitlemesi kaldırıldı; {{other}} ile bağlantılı olduğu için grafikte kalıyor",
+      "toastRelationHidden": "İlişki gizlendi — yalnızca görünüm; kod değişmez.",
+      "readout": "{{excluded}} el ile kaldırıldı · {{pinned}} sabitlendi",
+      "managerButton": "Ayarlanan {{count}} ▾",
+      "managerTitle": "El ile ayarlamalar ({{count}})",
+      "close": "Ayarlamaları kapat",
+      "pagePins": "Sabitlenenler",
+      "pageExcluded": "Kaldırılanlar",
+      "pageHidden": "Gizli ilişkiler",
+      "emptyPage": "Burada hiçbir şey yok.",
+      "restore": "Geri yükle",
+      "stale": "Geçersiz",
+      "clear": "Temizle",
+      "restoreGroup": "Bu sayfayı geri yükle",
+      "restoreAll": "Tümünü geri yükle",
+      "undo": "Geri al",
+      "solo": "Yalnızca bunu göster",
+      "soloClear": "Tüm grafiği göster"
     }
   },
   "status": {

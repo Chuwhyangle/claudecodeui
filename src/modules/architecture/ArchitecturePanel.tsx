@@ -11,12 +11,23 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
+import { ArchitectureCurationManager, type ArchitectureCurationPage } from '@/modules/architecture/ArchitectureCurationManager';
 import { ArchitectureDock } from '@/modules/architecture/ArchitectureDock';
 import { ArchitectureInspector } from '@/modules/architecture/ArchitectureInspector';
+import {
+  createCurationStore,
+  type ArchitectureCurationHiddenEdge,
+  type ArchitectureCurationItem,
+  type ArchitectureCurationState,
+  type CurationActionResult,
+  type CurationStorageLike,
+} from '@/modules/architecture/curationStore';
+import { resolveCurationItems, useProjectSearch } from '@/modules/architecture/hooks/useProjectSearch';
 import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
 import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPanel';
 import {
   archguardToPlantUml,
+  nodeFileOf,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/archguardToPlantUml';
 import {
@@ -64,6 +75,7 @@ import { buildReadout } from '@/modules/architecture/readoutNumbers';
 import type {
   ArchitectureDetailReading,
   ArchitectureDrawnPlantUml,
+  ArchitectureEntityKind,
   ArchitectureNodeIdShape,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
@@ -293,6 +305,30 @@ function writeStoredFilter(projectId: string | null, filter: ArchitectureElement
   }
 }
 
+/**
+ * The browser storage the curation store persists through.
+ *
+ * The store's own seam is the two methods it needs, so a blocked/unavailable
+ * `localStorage` (private mode, storage quota) degrades to "this page's state
+ * only" instead of throwing during render.
+ */
+const BROWSER_CURATION_STORAGE: CurationStorageLike = {
+  getItem: (key) => {
+    try {
+      return typeof window === 'undefined' ? null : window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key, value) => {
+    try {
+      if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
+    } catch {
+      // Best-effort: the in-memory store keeps working for this page.
+    }
+  },
+};
+
 /** Add two `hidden` readings; the narrow path composes the local cut onto the server's. */
 function addHidden(base: ArchitectureFilterHidden, extra: ArchitectureFilterHidden): ArchitectureFilterHidden {
   const byKind: Partial<Record<string, number>> = { ...base.byKind };
@@ -370,6 +406,15 @@ type ArchitecturePanelRenderer = ComponentType<
     readonly focusToken?: number;
     /** Reports the drawn view so the export menu can rebuild that document. */
     readonly onViewChange?: (view: ArchitectureDiagramView) => void;
+    /** Manual curation, all optional so a stand-in renderer can ignore them. */
+    readonly canCurate?: boolean;
+    readonly pinnedNodeIds?: readonly string[];
+    readonly onPinNode?: (node: ArchitectureRendererNode) => void;
+    readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
+    readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
+    readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
+    readonly onSoloNode?: (node: ArchitectureRendererNode) => void;
+    readonly onUndo?: () => void;
   }
 >;
 
@@ -604,6 +649,65 @@ function ArchitectureEmptyState({ message }: { message: string }) {
   );
 }
 
+/** How long a curation Toast lives before dismissing itself. */
+const CURATION_TOAST_MS = 6000;
+
+/**
+ * The curation Toast: one sentence about what just changed, plus a focusable
+ * 撤销 action. It auto-dismisses after {@link CURATION_TOAST_MS}, and hovering
+ * or focusing inside it pauses that timer (so a keyboard user can reach the
+ * undo button without racing it).
+ */
+function CurationToast({
+  toast,
+  undoLabel,
+  onUndo,
+  onDismiss,
+}: {
+  readonly toast: { readonly id: number; readonly message: string; readonly undoable: boolean };
+  readonly undoLabel: string;
+  readonly onUndo: () => void;
+  readonly onDismiss: () => void;
+}) {
+  // Whether the pointer/focus currently holds the Toast open; it pauses the
+  // auto-dismiss so the undo action cannot disappear under the reader's hands.
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused) return;
+    const timer = setTimeout(onDismiss, CURATION_TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [paused, onDismiss, toast.id]);
+
+  return (
+    <div
+      role="status"
+      data-architecture-curation-toast="true"
+      // The toast floats above the drawing, bottom-centre so it never covers
+      // the toolbar or the dock.
+      style={{ position: 'absolute', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 60 }}
+      className="flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-lg border border-border bg-popover px-3 py-1.5 text-[11px] text-foreground shadow-lg"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false);
+      }}
+    >
+      <span data-architecture-curation-toast-message="true">{toast.message}</span>
+      {toast.undoable && (
+        <button
+          type="button"
+          data-architecture-curation-undo="true"
+          onClick={onUndo}
+          className="shrink-0 rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {undoLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /**
  * Rendered by WorkspaceMain when the architecture tab is active. It requests the
  * session's neighbourhood on mount (the tab activation) and hands it to the
@@ -729,6 +833,61 @@ export default function ArchitecturePanel({
     setFilterSettings({ projectId, filter: stored, requestFilter: stored });
   }
   const { filter, requestFilter } = filterSettings;
+
+  // ---- Manual curation (pins / removals / hidden relations) ----------------
+  // The store is per `(project, session)`: the graph's seeds are the session's
+  // transcript, so a project has no curation of its own. A missing session
+  // leaves `canEdit: false`, which disables the whole feature (and says why).
+  const curationStore = useMemo(
+    () => createCurationStore({ storage: BROWSER_CURATION_STORAGE, projectId, sessionId }),
+    [projectId, sessionId],
+  );
+  const [curationState, setCurationState] = useState<ArchitectureCurationState>(
+    () => curationStore.getState(),
+  );
+  useEffect(() => {
+    setCurationState(curationStore.getState());
+    return curationStore.subscribe(() => setCurationState(curationStore.getState()));
+  }, [curationStore]);
+  const canCurate = curationStore.canEdit;
+  // Pins and removals are ENTITY operations: the request takes entity ids,
+  // while a file node's id is a path. The file view can still manage/restore
+  // the lists, but it is not where an entity gets pinned.
+  const canCurateEntities = canCurate && granularity === 'entity';
+  const pinnedIds = useMemo(
+    () => curationState.pins.map((entry) => entry.id),
+    [curationState.pins],
+  );
+  const excludedIds = useMemo(
+    () => curationState.excluded.map((entry) => entry.id),
+    [curationState.excluded],
+  );
+  const pinnedIdSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
+  // Hidden relations are keyed by (from, to, type): the same pair can be linked
+  // by more than one relation kind, and only the chosen kind disappears.
+  const hiddenEdgeKey = (edge: { from: string; to: string; relationType: string }): string =>
+    `${edge.from}\u0000${edge.to}\u0000${edge.relationType}`;
+  const hiddenEdgeKeys = useMemo(
+    () => new Set(curationState.hiddenEdges.map((edge) => `${edge.from}\u0000${edge.to}\u0000${edge.type}`)),
+    [curationState.hiddenEdges],
+  );
+  // The `已调整 N 项` manager and the one-node "only show this" display filter.
+  const [curationManagerOpen, setCurationManagerOpen] = useState(false);
+  const [soloNodeId, setSoloNodeId] = useState<string | null>(null);
+  // A curation Toast: `undoable` renders the focusable 撤销 action. The
+  // component pauses its own 6s timer while hovered/focused.
+  const [curationToast, setCurationToast] = useState<{
+    readonly id: number;
+    readonly message: string;
+    readonly undoable: boolean;
+  } | null>(null);
+  const curationToastSeq = useRef(0);
+  const showCurationToast = useCallback((message: string, undoable = true): void => {
+    curationToastSeq.current += 1;
+    setCurationToast({ id: curationToastSeq.current, message, undoable });
+  }, []);
+  const dismissCurationToast = useCallback((): void => setCurationToast(null), []);
+
   // The granularity the last REQUEST was made for. The element axis does not
   // apply to the file graph, so switching views moves the request too — but the
   // drawing switches immediately (both subgraphs arrive in one response).
@@ -764,19 +923,28 @@ export default function ArchitecturePanel({
     () => ({
       ...(requestGranularity === 'entity' ? { kinds: requestFilter.kinds } : {}),
       relations: relationsForPreset(requestFilter.relations),
+      // An EMPTY curation set is the old request: the server keys on the
+      // presence of these fields, and an uncurated session must keep the
+      // pre-curation payload byte-identical.
+      ...(pinnedIds.length === 0 ? {} : { extraSeeds: pinnedIds }),
+      ...(excludedIds.length === 0 ? {} : { excludeIds: excludedIds }),
     }),
-    [requestFilter, requestGranularity],
+    [requestFilter, requestGranularity, pinnedIds, excludedIds],
   );
   const { view, refreshing, reload } = useArchitectureGraph(projectId, sessionId, scope, graphQuery);
   // The payload as it arrived for the current subgraph.
   const rawNeighbourhood = view.status === 'loaded' ? view.result.graph[granularity] : null;
-  // The direct-seed exemptions the filter honours. Stated from the same rule
-  // the pure function applies so the reading never depends on call order: a
-  // distance-0 node with no tier is the legacy direct mention.
-  const directSeedIds = useMemo(
+  // The exemptions the filter honours: a direct session seed (stated from the
+  // same rule the pure function applies) AND a manual pin. A pin is exempt from
+  // the element axis and from the isolated-node cut, exactly like a direct seed
+  // — but it stays its own tier in the drawing.
+  const filterExemptIds = useMemo(
     () => new Set(
       (rawNeighbourhood?.nodes ?? [])
-        .filter((node) => node.distance === 0 && (node.mentionTier === undefined || node.mentionTier === 'direct'))
+        .filter((node) => (
+          node.mentionTier === 'pinned'
+          || (node.distance === 0 && (node.mentionTier === undefined || node.mentionTier === 'direct'))
+        ))
         .map((node) => node.id),
     ),
     [rawNeighbourhood],
@@ -792,16 +960,32 @@ export default function ArchitecturePanel({
   // round-trip); widening has already been requested by `changeFilter`, which
   // keeps this old drawing on screen until the new reading lands.
   const filteredGraph = useMemo(
-    () => (rawNeighbourhood === null ? null : applyFilter(rawNeighbourhood, displayFilter, directSeedIds)),
-    [rawNeighbourhood, displayFilter, directSeedIds],
+    () => (rawNeighbourhood === null ? null : applyFilter(rawNeighbourhood, displayFilter, filterExemptIds)),
+    [rawNeighbourhood, displayFilter, filterExemptIds],
   );
   // The filtered subgraph, with a stable identity so the detail ranking (and the
   // renderer below it) only redo work when the graph itself changes — a hover
-  // must never re-lay the diagram.
+  // must never re-lay the diagram. Hidden relations are a DISPLAY cut only: the
+  // nodes stay, the chosen (from, to, type) edges disappear.
   const activeNeighbourhood = useMemo(
-    () => (filteredGraph === null ? null : { nodes: filteredGraph.nodes, edges: filteredGraph.edges }),
-    [filteredGraph],
+    () => (filteredGraph === null
+      ? null
+      : {
+          nodes: filteredGraph.nodes,
+          edges: filteredGraph.edges.filter((edge) => !hiddenEdgeKeys.has(hiddenEdgeKey(edge))),
+        }),
+    // `hiddenEdgeKeys` is the content digest of the hidden list; the helper is
+    // pure, so it needs no dependency of its own.
+    [filteredGraph, hiddenEdgeKeys],
   );
+  // The drawing's slice: the one-node "只显示它自己" filter (a pinned item's
+  // menu action), applied on top of the readings above. Search and the manager
+  // still read `activeNeighbourhood` so they can find what is folded away.
+  const displayNeighbourhood = useMemo(() => {
+    if (activeNeighbourhood === null || soloNodeId === null) return activeNeighbourhood;
+    const node = activeNeighbourhood.nodes.find((candidate) => candidate.id === soloNodeId);
+    return node === undefined ? activeNeighbourhood : { nodes: [node], edges: [] };
+  }, [activeNeighbourhood, soloNodeId]);
   // What to say was hidden: the server counted the request's filter against the
   // UNFILTERED scope; a narrower local selection adds its own extra cut on top.
   const serverHidden = view.status === 'loaded' ? view.result.stats.hidden : undefined;
@@ -810,17 +994,17 @@ export default function ArchitecturePanel({
     [serverHidden, filteredGraph],
   );
   const detailRanking = useMemo(
-    () => (activeNeighbourhood === null
+    () => (displayNeighbourhood === null
       ? null
-      : rankArchitectureDetail(activeNeighbourhood.nodes, activeNeighbourhood.edges, detail)),
-    [activeNeighbourhood, detail],
+      : rankArchitectureDetail(displayNeighbourhood.nodes, displayNeighbourhood.edges, detail)),
+    [displayNeighbourhood, detail],
   );
   // The two numbers the detail knob reports: retained vs. in-scope (pre-cut).
   const detailReading = useMemo<ArchitectureDetailReading | undefined>(
-    () => (detailRanking === null || activeNeighbourhood === null
+    () => (detailRanking === null || displayNeighbourhood === null
       ? undefined
-      : { shown: detailRanking.retainedNodeIds.size, totalInScope: activeNeighbourhood.nodes.length }),
-    [detailRanking, activeNeighbourhood],
+      : { shown: detailRanking.retainedNodeIds.size, totalInScope: displayNeighbourhood.nodes.length }),
+    [detailRanking, displayNeighbourhood],
   );
   // Whether the compact tier's bottom sheet is open. On that tier the panel
   // draws one header row (the view switch and `Adjust`); every other control
@@ -892,17 +1076,23 @@ export default function ArchitecturePanel({
   // layout budget's cut. PlantUML/ELK runs on the main thread and its layout
   // cost grows super-linearly with the node count, so an over-budget drawing
   // would freeze the tab; the budget is a local view bound, never a refetch.
+  // A pin (and the search's focus target) must survive the layout budget's cut:
+  // the reader asked for that node explicitly.
+  const layoutPinnedIds = useMemo(
+    () => [...new Set([...pinnedNodeIds, ...pinnedIds])],
+    [pinnedNodeIds, pinnedIds],
+  );
   const layoutFit = useMemo(
-    () => (activeNeighbourhood === null
+    () => (displayNeighbourhood === null
       ? null
       : fitToLayoutBudget(
-        activeNeighbourhood.nodes,
-        activeNeighbourhood.edges,
+        displayNeighbourhood.nodes,
+        displayNeighbourhood.edges,
         detail,
         LAYOUT_NODE_BUDGET,
-        pinnedNodeIds,
+        layoutPinnedIds,
       )),
-    [activeNeighbourhood, detail, pinnedNodeIds],
+    [displayNeighbourhood, detail, layoutPinnedIds],
   );
   // The one-line readout's expanded state: the explanation and the two knobs
   // ("raise detail", "reduce scope") live behind this toggle.
@@ -1036,9 +1226,150 @@ export default function ArchitecturePanel({
     // A folded node is only out of range because of the detail tier: raise it
     // to the identity tier before asking the renderer to show the node.
     if (outOfRange) changeDetail('all');
+    // Revealing a node is a request to leave the "only show this pin" slice.
+    setSoloNodeId(null);
     setFocusTarget((current) => ({ id: nodeId, token: (current?.token ?? 0) + 1 }));
     setSearchOpen(false);
   };
+
+  // ---- Curation actions ----------------------------------------------------
+  /** The store shape of a drawn node: `(file, name)` beside the id. */
+  const curationItemOf = useCallback((node: ArchitectureRendererNode): ArchitectureCurationItem => ({
+    id: node.id,
+    name: node.label.trim() === '' ? node.id : node.label,
+    file: nodeFileOf(node, nodeIdShapeOf(granularity)),
+    ...(node.kind === undefined ? {} : { kind: node.kind }),
+  }), [granularity]);
+
+  const reportCurationRefusal = useCallback((result: CurationActionResult): boolean => {
+    if (result.ok) return false;
+    if (result.code === 'NO_SESSION') {
+      showCurationToast(
+        t('architecture.curation.noSession', {
+          defaultValue: 'Manual adjustments need a session: they are stored per session.',
+        }),
+        false,
+      );
+    } else {
+      showCurationToast(
+        t('architecture.curation.limitReached', {
+          defaultValue: 'That list is full ({{limit}}). Remove an entry first.',
+          limit: result.limit ?? 0,
+        }),
+        false,
+      );
+    }
+    return true;
+  }, [showCurationToast, t]);
+
+  const pinItem = useCallback((item: ArchitectureCurationItem, label?: string): void => {
+    if (reportCurationRefusal(curationStore.pin(item))) return;
+    setSearchOpen(false);
+    setSearchQuery('');
+    showCurationToast(t('architecture.curation.toastPinned', {
+      defaultValue: 'Pinned {{name}}',
+      name: label ?? item.name,
+    }));
+  }, [curationStore, reportCurationRefusal, showCurationToast, t]);
+
+  const pinNode = useCallback((node: ArchitectureRendererNode): void => {
+    pinItem(curationItemOf(node));
+  }, [curationItemOf, pinItem]);
+
+  const removeNode = useCallback((node: ArchitectureRendererNode): void => {
+    if (reportCurationRefusal(curationStore.exclude(curationItemOf(node)))) return;
+    showCurationToast(t('architecture.curation.toastRemoved', {
+      defaultValue: 'Removed {{name}} from the graph',
+      name: node.label.trim() === '' ? node.id : node.label,
+    }));
+  }, [curationItemOf, curationStore, reportCurationRefusal, showCurationToast, t]);
+
+  const unpinNode = useCallback((node: ArchitectureRendererNode): void => {
+    // "已取消钉住；它仍因与 X 相连而在图中": an unpinned entity that is still
+    // drawn (because another node or the transcript reaches it) must say so,
+    // or the reader thinks the removal failed.
+    const edges = activeNeighbourhood?.edges ?? [];
+    const neighbourId = edges
+      .filter((edge) => edge.from === node.id || edge.to === node.id)
+      .map((edge) => (edge.from === node.id ? edge.to : edge.from))[0] ?? null;
+    const neighbour = neighbourId === null
+      ? null
+      : activeNeighbourhood?.nodes.find((candidate) => candidate.id === neighbourId) ?? null;
+    if (reportCurationRefusal(curationStore.unpin(node.id))) return;
+    const name = node.label.trim() === '' ? node.id : node.label;
+    showCurationToast(
+      neighbour === null
+        ? t('architecture.curation.toastUnpinned', { defaultValue: 'Unpinned {{name}}', name })
+        : t('architecture.curation.toastUnpinnedConnected', {
+            defaultValue: 'Unpinned {{name}}; it is still in the graph because it connects to {{other}}',
+            name,
+            other: neighbour.label.trim() === '' ? neighbour.id : neighbour.label,
+          }),
+    );
+  }, [activeNeighbourhood, curationStore, reportCurationRefusal, showCurationToast, t]);
+
+  const hideRelation = useCallback((edge: { from: string; to: string; relationType: string }): void => {
+    if (reportCurationRefusal(
+      curationStore.hideEdge({ from: edge.from, to: edge.to, type: edge.relationType }),
+    )) return;
+    showCurationToast(t('architecture.curation.toastRelationHidden', {
+      defaultValue: 'Hid the relation — display only; the code is unchanged.',
+    }));
+  }, [curationStore, reportCurationRefusal, showCurationToast, t]);
+
+  const undoCuration = useCallback((): void => {
+    curationStore.undo();
+    dismissCurationToast();
+  }, [curationStore, dismissCurationToast]);
+
+  const restoreItem = useCallback((group: 'pins' | 'excluded', id: string): void => {
+    if (group === 'pins') curationStore.unpin(id);
+    else curationStore.restore(id);
+  }, [curationStore]);
+
+  const restoreEdge = useCallback((edge: ArchitectureCurationHiddenEdge): void => {
+    curationStore.showEdge(edge);
+  }, [curationStore]);
+
+  const restoreGroup = useCallback((group: ArchitectureCurationPage): void => {
+    curationStore.restoreGroup(group);
+  }, [curationStore]);
+
+  const clearCurationItem = useCallback((group: 'pins' | 'excluded', id: string): void => {
+    curationStore.clearItem(group, id);
+  }, [curationStore]);
+
+  // The project-wide search's second result group. It only runs with a session
+  // (the shared storage key) and from two characters up (the endpoint's floor).
+  const projectSearch = useProjectSearch(projectId, searchQuery, { enabled: canCurate });
+
+  // Re-anchor saved items after a re-analysis. Entity ids can change while
+  // `(file, name)` stays stable, so every loaded analysis resolves the saved
+  // list once; unresolved items are marked stale instead of disappearing.
+  const reconciledAnalysisRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!canCurate || projectId === null || view.status !== 'loaded') return;
+    const items = [...curationState.pins, ...curationState.excluded];
+    if (items.length === 0) return;
+    const analysisKey = `${projectId}\u0000${sessionId ?? ''}\u0000${
+      view.result.provenance.generatedAt ?? ''
+    }\u0000${JSON.stringify(view.result.provenance.fingerprints)}`;
+    if (reconciledAnalysisRef.current === analysisKey) return;
+    reconciledAnalysisRef.current = analysisKey;
+    void (async () => {
+      const resolved = await resolveCurationItems(
+        projectId,
+        items.map((item) => ({ name: item.name, file: item.file })),
+      );
+      // A failed request is not a re-analysis: keep the saved ids and try again
+      // on the next load.
+      if (resolved === null) {
+        reconciledAnalysisRef.current = null;
+        return;
+      }
+      curationStore.reconcile(resolved);
+    })();
+  }, [canCurate, projectId, sessionId, view, curationState.pins, curationState.excluded, curationStore]);
 
   // A scope change (view or session) clears the selection through the reducer.
   useEffect(() => {
@@ -1112,11 +1443,23 @@ export default function ArchitecturePanel({
 
   if (!sessionId) {
     return (
-      <ArchitectureEmptyState
-        message={t('architecture.noSession', {
-          defaultValue: 'Select a session to see the architecture of the files it touched.',
-        })}
-      />
+      <div data-architecture-no-session="true">
+        <ArchitectureEmptyState
+          message={t('architecture.noSession', {
+            defaultValue: 'Select a session to see the architecture of the files it touched.',
+          })}
+        />
+        {/* Manual curation is stored per session, so without one the feature is
+            disabled — and says why instead of offering dead controls. */}
+        <p
+          data-architecture-curation-disabled="true"
+          className="px-6 pb-6 text-xs text-muted-foreground"
+        >
+          {t('architecture.curation.noSession', {
+            defaultValue: 'Manual adjustments need a session: they are stored per session.',
+          })}
+        </p>
+      </div>
     );
   }
 
@@ -1147,7 +1490,9 @@ export default function ArchitecturePanel({
 
   const { result } = view;
   const { stats, mmd, provenance } = result;
-  const hasSeeds = stats.seedFiles > 0 || stats.seedIdentifiers > 0;
+  // A manual pin is a root of its own, so a curated request with no transcript
+  // seeds still has something to draw.
+  const hasSeeds = stats.seedFiles > 0 || stats.seedIdentifiers > 0 || pinnedIds.length > 0;
   const neighbourhood = result.graph[granularity];
   // A reading from the previous graph is not shown against this one.
   const visibleHover = hovered !== null && hovered.key === hoverKey ? hovered.hover : null;
@@ -1155,7 +1500,8 @@ export default function ArchitecturePanel({
   // The graph the renderer was last handed: the detail tier's cut, then the
   // layout budget's. The export rebuilds from the SAME graph, so the file is
   // the drawing on screen rather than a re-derivation from the payload.
-  const drawnGraph: ArchitectureRendererGraph = layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood;
+  const drawnGraph: ArchitectureRendererGraph =
+    layoutFit?.graph ?? detailRanking?.graph ?? displayNeighbourhood ?? neighbourhood;
   // The selection as the renderer and the inspector need it: separate readings,
   // so neither has to narrow the union itself.
   const selectedNodeId = selection?.kind === 'entity' ? selection.nodeId : null;
@@ -1648,9 +1994,29 @@ export default function ArchitecturePanel({
     </div>
   );
 
-  // The search box. Its matches are drawn in a listbox under the input; an
-  // out-of-range match is labelled so the reader knows the detail level folded
-  // it, and choosing it raises the tier and reveals it.
+  // The project-wide search's kind glyph. The same vocabulary the inspector
+  // prints, kept local so the toolbar row stays a one-line reading.
+  const searchKindGlyph = (kind: ArchitectureEntityKind | undefined): string => {
+    switch (kind) {
+      case 'interface':
+        return 'I';
+      case 'enum':
+        return 'E';
+      case 'abstract':
+        return 'A';
+      case 'function':
+        return 'ƒ';
+      case 'class':
+        return 'C';
+      default:
+        return '•';
+    }
+  };
+
+  // The search box. It draws TWO groups: "图中" (local matches, handled by
+  // revealing/focusing an arrived node) and, with a session, "项目其它" — the
+  // project-wide index behind the `＋` pin action. The second group appears
+  // only from two characters up, the endpoint's own floor.
   const searchBox = (
     <div className="relative">
       <input
@@ -1668,7 +2034,22 @@ export default function ArchitecturePanel({
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             setSearchOpen(false);
-          } else if (event.key === 'Enter' && searchMatches.length > 0) {
+            return;
+          }
+          if (event.key !== 'Enter') return;
+          // Shift+Enter pins the first project-wide hit (the second group's
+          // keyboard equivalent of `＋`).
+          if (
+            event.shiftKey
+            && canCurate
+            && projectSearch.search.status === 'ready'
+            && projectSearch.search.results.length > 0
+          ) {
+            event.preventDefault();
+            pinItem(projectSearch.search.results[0]);
+            return;
+          }
+          if (searchMatches.length > 0) {
             const first = searchMatches[0];
             revealNode(first.node.id, !first.inRange);
           }
@@ -1677,11 +2058,24 @@ export default function ArchitecturePanel({
           compactToolbar ? 'w-full text-sm' : 'w-40'
         }`}
       />
+      {projectSearch.search.status === 'loading' && (
+        <span
+          data-architecture-search-loading="true"
+          aria-hidden="true"
+          className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-foreground"
+        />
+      )}
       {searchOpen && searchQuery.trim().length > 0 && (
         <div
           data-architecture-search-results="true"
-          className="absolute left-0 top-full z-30 mt-1 max-h-64 w-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
+          className="absolute left-0 top-full z-30 mt-1 max-h-72 w-80 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
         >
+          <p
+            data-architecture-search-group="in-graph"
+            className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            {t('architecture.search.inGraph', { defaultValue: 'In the graph' })}
+          </p>
           {searchMatches.length === 0 ? (
             <p className="px-2 py-1 text-[11px] text-muted-foreground">
               {t('architecture.search.noMatches', { defaultValue: 'No matches' })}
@@ -1705,9 +2099,105 @@ export default function ArchitecturePanel({
               </button>
             ))
           )}
+
+          {canCurate && searchQuery.trim().length >= 2 && (
+            <>
+              <p
+                data-architecture-search-group="project"
+                className="mt-1 border-t border-border/60 px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {t('architecture.search.other', { defaultValue: 'Elsewhere in the project' })}
+              </p>
+              {projectSearch.search.status === 'error' ? (
+                <div data-architecture-search-error="true" className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
+                  <span className="min-w-0 truncate">{projectSearch.search.message}</span>
+                  <button
+                    type="button"
+                    data-architecture-search-retry="true"
+                    onClick={projectSearch.retry}
+                    className="shrink-0 rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    {t('architecture.search.retry', { defaultValue: 'Retry' })}
+                  </button>
+                </div>
+              ) : projectSearch.search.status === 'ready' ? (
+                <>
+                  {projectSearch.search.results.length === 0 ? (
+                    <p data-architecture-search-project-empty="true" className="px-2 py-1 text-[11px] text-muted-foreground">
+                      {t('architecture.search.noMatches', { defaultValue: 'No matches' })}
+                    </p>
+                  ) : (
+                    projectSearch.search.results.map((hit) => (
+                      <div
+                        key={hit.id}
+                        data-architecture-search-project-result={hit.id}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
+                      >
+                        <span aria-hidden="true" className="w-3 shrink-0 text-center text-muted-foreground">
+                          {searchKindGlyph(hit.kind)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          <span className="font-medium">{hit.name}</span>
+                          <span className="ml-1 text-muted-foreground">{hit.file}</span>
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={t('architecture.curation.pinNamed', { defaultValue: 'Pin {{name}}', name: hit.name })}
+                          data-architecture-search-pin={hit.id}
+                          onClick={() => pinItem(hit)}
+                          className="shrink-0 rounded border border-border px-1.5 py-0.5 font-semibold text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                        >
+                          ＋
+                        </button>
+                      </div>
+                    ))
+                  )}
+                  {projectSearch.search.truncated && (
+                    <p data-architecture-search-truncated="true" className="px-2 py-1 text-[10px] text-muted-foreground">
+                      {t('architecture.search.truncated', {
+                        defaultValue: 'Showing the first 20 — narrow the query.',
+                      })}
+                    </p>
+                  )}
+                </>
+              ) : null}
+            </>
+          )}
         </div>
       )}
     </div>
+  );
+
+  // The `已调整 N 项 ▾` trigger: N is the sum of the three lists. The manager
+  // itself lists every entry with a restore, so this is the one place a reader
+  // can audit and undo a whole page of adjustments after a reload.
+  const curationCount = curationState.pins.length
+    + curationState.excluded.length
+    + curationState.hiddenEdges.length;
+  const curationManagerButton = (
+    <button
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={curationManagerOpen}
+      disabled={!canCurate}
+      title={canCurate
+        ? undefined
+        : t('architecture.curation.noSession', {
+            defaultValue: 'Manual adjustments need a session: they are stored per session.',
+          })}
+      onClick={() => setCurationManagerOpen((open) => !open)}
+      data-architecture-curation-manager-toggle="true"
+      data-architecture-curation-count={curationCount}
+      style={compactTargetStyle}
+      className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40 ${
+        compactToolbar ? 'px-3 py-2 text-left text-sm' : 'px-2 py-0.5 text-xs'
+      }`}
+    >
+      {t('architecture.curation.managerButton', {
+        defaultValue: 'Adjusted {{count}} ▾',
+        count: curationCount,
+      })}
+    </button>
   );
 
   // `?` opens the legend: the place the two duplicated hover instructions and
@@ -2058,6 +2548,20 @@ export default function ArchitecturePanel({
           </button>
         </div>
       )}
+      {(curationState.excluded.length > 0 || curationState.pins.length > 0) && (
+        <p
+          data-architecture-curation-readout="true"
+          data-architecture-curation-pinned={curationState.pins.length}
+          data-architecture-curation-excluded={curationState.excluded.length}
+          className="mt-0.5"
+        >
+          {t('architecture.curation.readout', {
+            defaultValue: '{{excluded}} manually removed · {{pinned}} pinned',
+            excluded: curationState.excluded.length,
+            pinned: curationState.pins.length,
+          })}
+        </p>
+      )}
       {readoutOpen && (
         <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
           {readout.lines.length > 0 && (
@@ -2161,6 +2665,7 @@ export default function ArchitecturePanel({
             {detailGroup}
             {filterDisclosure}
             {searchBox}
+            {curationManagerButton}
             <span className="flex-1" />
             {textToggle}
             {exportMenu}
@@ -2168,6 +2673,18 @@ export default function ArchitecturePanel({
           </>
         )}
       </div>
+
+      {!canCurate && (
+        <p
+          role="status"
+          data-architecture-curation-disabled="true"
+          className="shrink-0 border-b border-border/60 px-3 py-1 text-[10px] text-muted-foreground"
+        >
+          {t('architecture.curation.noSession', {
+            defaultValue: 'Manual adjustments need a session: they are stored per session.',
+          })}
+        </p>
+      )}
 
       {/* The export reading lives outside the menu so it survives the menu
           closing: success, a downscale notice, or a failure is announced to
@@ -2239,6 +2756,7 @@ export default function ArchitecturePanel({
             {filterContent}
           </section>
           {searchBox}
+          {curationManagerButton}
           {exportMenu}
           <section data-architecture-sheet-legend="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
             <span className="text-[11px] font-medium text-muted-foreground">
@@ -2377,6 +2895,17 @@ export default function ArchitecturePanel({
                     onDrawnPlantUmlChange={setDrawnPlantUml}
                     focusNodeId={focusTarget?.id ?? null}
                     focusToken={focusTarget?.token}
+                    // Manual curation: the drawing owns right-click/long-press
+                    // and Delete/Backspace, and reports the result through the
+                    // same store the inspector and the manager use.
+                    canCurate={canCurateEntities}
+                    pinnedNodeIds={pinnedIds}
+                    onPinNode={pinNode}
+                    onUnpinNode={unpinNode}
+                    onRemoveNode={removeNode}
+                    onHideRelation={hideRelation}
+                    onSoloNode={(node) => setSoloNodeId(node.id)}
+                    onUndo={undoCuration}
                   />
                 </CanvasHeaderSlotContext.Provider>
               </CompactToolbarSlotContext.Provider>
@@ -2449,6 +2978,12 @@ export default function ArchitecturePanel({
                   onSelectNode={(nodeId) => dispatchSelection({ type: 'select-entity', nodeId })}
                   onCenterNode={inspectRelatedNode}
                   onOpenChat={onOpenChat}
+                  canCurate={canCurateEntities}
+                  pinned={selectedNodeId !== null && pinnedIdSet.has(selectedNodeId)}
+                  onPinNode={pinNode}
+                  onUnpinNode={unpinNode}
+                  onRemoveNode={removeNode}
+                  onHideRelation={hideRelation}
                 />
               ),
             },
@@ -2483,6 +3018,38 @@ export default function ArchitecturePanel({
             half: t('architecture.dock.snapHalf', { defaultValue: 'Half' }),
             full: t('architecture.dock.snapFull', { defaultValue: 'Full' }),
           }}
+        />
+      )}
+
+      <ArchitectureCurationManager
+        open={curationManagerOpen}
+        onClose={() => setCurationManagerOpen(false)}
+        state={curationState}
+        canEdit={canCurate}
+        onRestoreItem={restoreItem}
+        onRestoreEdge={restoreEdge}
+        onRestoreGroup={restoreGroup}
+        onRestoreAll={() => curationStore.restoreAll()}
+        onClearItem={clearCurationItem}
+      />
+
+      {soloNodeId !== null && (
+        <button
+          type="button"
+          data-architecture-curation-solo-clear="true"
+          onClick={() => setSoloNodeId(null)}
+          className="absolute left-1/2 top-2 z-40 -translate-x-1/2 rounded-full border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {t('architecture.curation.soloClear', { defaultValue: 'Show the whole graph' })}
+        </button>
+      )}
+
+      {curationToast !== null && (
+        <CurationToast
+          toast={curationToast}
+          undoLabel={t('architecture.curation.undo', { defaultValue: 'Undo' })}
+          onUndo={undoCuration}
+          onDismiss={dismissCurationToast}
         />
       )}
       </div>

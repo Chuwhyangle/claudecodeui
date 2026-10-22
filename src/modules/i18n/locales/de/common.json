@@ -126,7 +126,11 @@
       "label": "Entitäten oder Dateien suchen",
       "placeholder": "Entitäten oder Dateien suchen…",
       "noMatches": "Keine Treffer",
-      "outOfRange": "Nicht im aktuellen Bereich"
+      "outOfRange": "Nicht im aktuellen Bereich",
+      "inGraph": "Im Diagramm",
+      "other": "Anderswo im Projekt",
+      "retry": "Erneut versuchen",
+      "truncated": "Die ersten 20 werden angezeigt — schränke die Suche ein."
     },
     "readout": {
       "classSummary": "{{shown}} Klassen werden angezeigt · {{total}} relevant",
@@ -268,6 +272,39 @@
       "copyFallbackHint": "Kein Zugriff auf die Zwischenablage. Markiere den Text unten und kopiere ihn.",
       "close": "Schließen",
       "bridgeFallback": "Rückfall: Brückentext (das gezeichnete Modell ist nicht verfügbar)"
+    },
+    "curation": {
+      "heading": "Anpassen",
+      "pin": "Im Diagramm anheften",
+      "unpin": "Lösen",
+      "pinnedBadge": "Angeheftet",
+      "removeEntity": "Aus Diagramm entfernen",
+      "hideRelation": "Beziehung ausblenden",
+      "hideRelationNote": "Blendet nur die Anzeige aus; der Code bleibt unverändert.",
+      "pinNamed": "{{name}} anheften",
+      "noSession": "Manuelle Anpassungen brauchen eine Sitzung: sie werden pro Sitzung gespeichert.",
+      "limitReached": "Diese Liste ist voll ({{limit}}). Entferne zuerst einen Eintrag.",
+      "toastPinned": "{{name}} angeheftet",
+      "toastRemoved": "{{name}} aus dem Diagramm entfernt",
+      "toastUnpinned": "{{name}} gelöst",
+      "toastUnpinnedConnected": "{{name}} gelöst; es bleibt im Diagramm, weil es mit {{other}} verbunden ist",
+      "toastRelationHidden": "Beziehung ausgeblendet — nur Anzeige; der Code bleibt unverändert.",
+      "readout": "{{excluded}} manuell entfernt · {{pinned}} angeheftet",
+      "managerButton": "Angepasst {{count}} ▾",
+      "managerTitle": "Manuelle Anpassungen ({{count}})",
+      "close": "Anpassungen schließen",
+      "pagePins": "Angeheftet",
+      "pageExcluded": "Entfernt",
+      "pageHidden": "Ausgeblendete Beziehungen",
+      "emptyPage": "Hier ist nichts.",
+      "restore": "Wiederherstellen",
+      "stale": "Veraltet",
+      "clear": "Entfernen",
+      "restoreGroup": "Diese Seite wiederherstellen",
+      "restoreAll": "Alle wiederherstellen",
+      "undo": "Rückgängig",
+      "solo": "Nur dies anzeigen",
+      "soloClear": "Gesamtes Diagramm anzeigen"
     }
   },
   "status": {

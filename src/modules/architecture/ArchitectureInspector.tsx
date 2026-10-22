@@ -51,6 +51,17 @@ type ArchitectureInspectorProps = {
   readonly onCenterNode: (nodeId: string) => void;
   /** Switches the workspace to the Chat tab (the message-locate seam's second half). */
   readonly onOpenChat?: () => void;
+  /**
+   * Manual curation hooks. All optional so the inspector keeps working without
+   * a store (a shell embedding it, or the pre-curation tests): when omitted, no
+   * adjustment section is drawn at all.
+   */
+  readonly canCurate?: boolean;
+  readonly pinned?: boolean;
+  readonly onPinNode?: (node: ArchitectureRendererNode) => void;
+  readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
+  readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
+  readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
 };
 
 /** The entity's display name: its label, or the id's tail when the label repeats the id. */
@@ -336,6 +347,11 @@ function EntityInspector({
   onSelectNode,
   onCenterNode,
   onOpenChat,
+  canCurate = false,
+  pinned = false,
+  onPinNode,
+  onUnpinNode,
+  onRemoveNode,
 }: {
   readonly node: ArchitectureRendererNode;
   readonly graph: ArchitectureRendererGraph;
@@ -347,6 +363,11 @@ function EntityInspector({
   readonly onSelectNode: (nodeId: string) => void;
   readonly onCenterNode: (nodeId: string) => void;
   readonly onOpenChat?: () => void;
+  readonly canCurate?: boolean;
+  readonly pinned?: boolean;
+  readonly onPinNode?: (node: ArchitectureRendererNode) => void;
+  readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
+  readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
 }) {
   const { t, i18n } = useTranslation();
   // Which page the inspector shows. Session-scoped (not remembered): a new
@@ -484,6 +505,58 @@ function EntityInspector({
             </dd>
           </dl>
 
+          {(onPinNode !== undefined || onUnpinNode !== undefined || onRemoveNode !== undefined) && (
+            <section data-architecture-inspector-curation="true" className="flex flex-col gap-1">
+              <h4 className="text-[11px] font-medium text-muted-foreground">
+                {t('architecture.curation.heading', { defaultValue: 'Adjust' })}
+              </h4>
+              <span className="flex flex-wrap gap-1">
+                {pinned
+                  ? onUnpinNode !== undefined && (
+                      <button
+                        type="button"
+                        data-architecture-inspector-unpin={node.id}
+                        disabled={!canCurate}
+                        onClick={() => onUnpinNode(node)}
+                        className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {t('architecture.curation.unpin', { defaultValue: 'Unpin' })}
+                      </button>
+                    )
+                  : onPinNode !== undefined && (
+                      <button
+                        type="button"
+                        data-architecture-inspector-pin={node.id}
+                        disabled={!canCurate}
+                        onClick={() => onPinNode(node)}
+                        className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {t('architecture.curation.pin', { defaultValue: 'Pin to graph' })}
+                      </button>
+                    )}
+                {pinned && (
+                  <span
+                    data-architecture-inspector-pinned-badge="true"
+                    className="rounded bg-accent px-1 py-0.5 text-[10px] text-foreground"
+                  >
+                    {t('architecture.curation.pinnedBadge', { defaultValue: 'Pinned' })}
+                  </span>
+                )}
+                {onRemoveNode !== undefined && (
+                  <button
+                    type="button"
+                    data-architecture-inspector-remove={node.id}
+                    disabled={!canCurate}
+                    onClick={() => onRemoveNode(node)}
+                    className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t('architecture.curation.removeEntity', { defaultValue: 'Remove from graph' })}
+                  </button>
+                )}
+              </span>
+            </section>
+          )}
+
           {members.length > 0 && (
             <section data-architecture-inspector-members={members.length}>
               <h4 className="text-[11px] font-medium text-muted-foreground">
@@ -605,6 +678,8 @@ function RelationInspector({
   includeToolResults,
   onIncludeToolResultsChange,
   onOpenChat,
+  canCurate = false,
+  onHideRelation,
 }: {
   readonly selection: Extract<ArchitectureSelection, { kind: 'relation' }>;
   readonly graph: ArchitectureRendererGraph;
@@ -613,6 +688,8 @@ function RelationInspector({
   readonly includeToolResults: boolean;
   readonly onIncludeToolResultsChange: (value: boolean) => void;
   readonly onOpenChat?: () => void;
+  readonly canCurate?: boolean;
+  readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
 }) {
   const { t, i18n } = useTranslation();
   const fromName = endpointName(graph, selection.from);
@@ -656,6 +733,32 @@ function RelationInspector({
           <span data-architecture-inspector-relation-type={selection.relationType}>{typeLabel}</span>
         </span>
       </header>
+
+      {onHideRelation !== undefined && (
+        <section data-architecture-inspector-curation="true" className="mt-2 flex flex-col gap-1">
+          <h4 className="text-[11px] font-medium text-muted-foreground">
+            {t('architecture.curation.heading', { defaultValue: 'Adjust' })}
+          </h4>
+          <button
+            type="button"
+            data-architecture-inspector-hide-relation={`${selection.from} -> ${selection.to}`}
+            disabled={!canCurate}
+            onClick={() => onHideRelation({
+              from: selection.from,
+              to: selection.to,
+              relationType: selection.relationType,
+            })}
+            className="self-start rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {t('architecture.curation.hideRelation', { defaultValue: 'Hide relation' })}
+          </button>
+          <p className="text-[10px] text-muted-foreground">
+            {t('architecture.curation.hideRelationNote', {
+              defaultValue: 'Hides the display only; the code is unchanged.',
+            })}
+          </p>
+        </section>
+      )}
 
       <section className="mt-2" data-architecture-inspector-underlying={underlying.length}>
         <h4 className="text-[11px] font-medium text-muted-foreground">
@@ -721,6 +824,12 @@ export function ArchitectureInspector({
   onSelectNode,
   onCenterNode,
   onOpenChat,
+  canCurate = false,
+  pinned = false,
+  onPinNode,
+  onUnpinNode,
+  onRemoveNode,
+  onHideRelation,
 }: ArchitectureInspectorProps) {
   if (selection.kind === 'relation') {
     return (
@@ -732,6 +841,8 @@ export function ArchitectureInspector({
         includeToolResults={includeToolResults}
         onIncludeToolResultsChange={onIncludeToolResultsChange}
         onOpenChat={onOpenChat}
+        canCurate={canCurate}
+        onHideRelation={onHideRelation}
       />
     );
   }
@@ -756,6 +867,11 @@ export function ArchitectureInspector({
       onSelectNode={onSelectNode}
       onCenterNode={onCenterNode}
       onOpenChat={onOpenChat}
+      canCurate={canCurate}
+      pinned={pinned}
+      {...(onPinNode === undefined ? {} : { onPinNode })}
+      {...(onUnpinNode === undefined ? {} : { onUnpinNode })}
+      {...(onRemoveNode === undefined ? {} : { onRemoveNode })}
     />
   );
 }

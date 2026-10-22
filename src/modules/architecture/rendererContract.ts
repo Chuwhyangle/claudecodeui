@@ -53,10 +53,12 @@ export type ArchitectureRendererNode = {
 };
 
 /**
- * The three provenance tiers a seed can carry (mirrors the server's
- * `MentionTier`): direct mention, same-name candidate, file-only expansion.
+ * The provenance tiers a seed can carry (mirrors the server's `MentionTier`):
+ * direct mention, same-name candidate, file-only expansion, and a manual pin.
+ * A `pinned` node is a graph root the reader added by hand; it is drawn with a
+ * pin badge and is never counted as a session seed.
  */
-export type ArchitectureMentionTier = 'direct' | 'name' | 'file';
+export type ArchitectureMentionTier = 'direct' | 'name' | 'file' | 'pinned';
 
 /**
  * The normalised kind of an entity node, mirroring the server's vocabulary.

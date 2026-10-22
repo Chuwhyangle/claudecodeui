@@ -130,6 +130,9 @@ const MUTATED_ARCH_JSON_HASH = 'b'.repeat(64);
 type TestParams = {
   hops: number;
   maxNodes: number;
+  /** The two manual-curation knobs the service adds to the content key. */
+  extraSeeds?: readonly string[];
+  excludeIds?: readonly string[];
 };
 
 type TestReading = {
