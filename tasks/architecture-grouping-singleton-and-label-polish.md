@@ -1,7 +1,7 @@
 ---
 id: architecture-grouping-singleton-and-label-polish
 title: 分组去噪：单成员组直接画成节点，孤立文件节点带目录上下文
-status: ready
+status: done
 labels:
   - feature
 parent: null
@@ -20,12 +20,26 @@ extra: {}
 - **孤立节点标签带目录**：孤立（未分组）文件节点的显示名使用项目相对完整路径（沿用 `displayName` 前截不截后的规则，`MAX_DISPLAY_DIR_SEGMENTS`），与组标签风格一致；若实测发现 id 形态问题，同时修正对应的剥离逻辑。
 - 不改 SVG/DOM 契约（`data-entity-id`、`data-package-id` 不变），hover/下钻/爆炸 LOD 继续工作。
 
+### 实测结论（2026-10-22，实施前核实）
+
+- file 图 id = 项目相对路径（`.archguard` 各 scope 的 `sourcePrefix` + index 内文件键，如 `scripts/stamp-version.ts`、`plugin/scripts/…`、`packages/quay/src/…`），**不含** scopeKey。
+- entity 图 id = `<scopeKey>/<index 相对 id>`，scopeKey 是 manifest 里的 8-hex 不透明 token（如 `26b300e9/cli/action.ts.handleActionList`）。
+- 因此 `scopeRelativePath` 无条件剥第一段对 file 图就是错的：它把 `scripts/`、`src/`、`packages/` 当成了 scopeKey。孤立节点丢目录与组名缺顶层目录是同一个根因。
+- 修法落点比 Proposal 多一层：两个粒度必须有人**显式告知** id 形态，故把 `ArchitectureNodeIdShape`（`project-relative` | `scope-prefixed`）加进 renderer contract，由 panel（唯一知道当前子图是哪个的层）传给 renderer，再传给 bridge / readable-zoom / explosion LOD；比在 renderer 里猜（label===id、首段 8-hex 之类）可测且不易漂。
+
+### 实施记录
+
+- commit `d511a44e8 fix(architecture): fold single-member groups and read both id shapes`（分支 `task/architecture-grouping-singleton-and-label-polish`）。
+- panel → renderer 的缝是 `ArchitectureRendererProps.idShape?`（可选，缺省即 entity 形态，手搓 renderer stub 不受影响）。
+- 真实数据复核（quay `.archguard` 全部 scope 合并后的 542 个 file key 直接喂 `computeAdaptiveGrouping(..., { idShape: 'project-relative' })`）：18 个组，`count < 2` 的组 0 个；组内节点 + 未分组 = 542 = 输入；`scripts/stamp-version.ts` 等孤立节点的 label 保留目录。
+- 未做浏览器实机复测（DoD 的 PC/移动视口那一步）：运行中的 :3001 服务读的是主 checkout 的旧 bundle，指向 worktree 需要另起服务，留给 fan-in 落地后的实机验证。
+
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：任何输出的组 `count ≥ 2`；单成员目录的成员出现在 `ungroupedNodeIds`；折叠后总节点数守恒（组内节点数之和 + 未分组 = 输入）；既有「`scripts` 折成一个带计数的组」「组数 ≤ 上限」用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：overview 中孤立文件节点的 label 含目录前缀而非裸文件名；两个同名文件在不同目录时 label 可区分；单成员目录不再出现 `(1)` 组标签；既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] 新增用例钉住 file 图与 entity 图两种 id 形态下 `scopeRelativePath`/`directoryPathOf` 的行为（用真实形态的 fixture，不用合成的单一形态）
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：任何输出的组 `count ≥ 2`；单成员目录的成员出现在 `ungroupedNodeIds`；折叠后总节点数守恒（组内节点数之和 + 未分组 = 输入）；既有「`scripts` 折成一个带计数的组」「组数 ≤ 上限」用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：overview 中孤立文件节点的 label 含目录前缀而非裸文件名；两个同名文件在不同目录时 label 可区分；单成员目录不再出现 `(1)` 组标签；既有 hover/缩放/爆炸/下钻用例不回归
+- [x] 新增用例钉住 file 图与 entity 图两种 id 形态下 `scopeRelativePath`/`directoryPathOf` 的行为（用真实形态的 fixture，不用合成的单一形态）
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -35,6 +49,12 @@ extra: {}
 
 - src/modules/architecture/adaptiveGrouping.ts
 - src/modules/architecture/archguardToPlantUml.ts
+- src/modules/architecture/rendererContract.ts
+- src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/readableZoom.ts
+- src/modules/architecture/explosionLod.ts
 - src/modules/architecture/tests/adaptiveGrouping.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/mobileGestures.test.tsx
 - tasks/architecture-grouping-singleton-and-label-polish.md

@@ -136,11 +136,14 @@ test('a group view re-groups its subtree: subdirectories stay groups, direct fil
     [
       ['scripts', 45],
       ['scripts/release', 2],
-      ['scripts/systemd', 1],
     ],
     'expanding scripts shows its subdirectories as groups instead of 48 flat files',
   );
-  assert.deepEqual(grouping.ungroupedNodeIds, [], 'the direct files belong to the expanded directory');
+  assert.deepEqual(
+    grouping.ungroupedNodeIds,
+    ['src/scripts/systemd/install.ts'],
+    'a one-file subdirectory is not a group — its file is drawn as itself',
+  );
 });
 
 test('a flat leaf directory stays one group even when it is the group view itself', () => {
@@ -165,9 +168,95 @@ test('scope-root files stay outside the grouping and keep their own entity id', 
   );
 });
 
-test('the path helpers strip the scope key and expose the DIRECTORY, never the file', () => {
-  assert.equal(scopeRelativePath('src/modules/chat/Chat.ts.Chat'), 'modules/chat/Chat.ts.Chat');
-  assert.equal(directoryPathOf('src/modules/chat/Chat.ts.Chat'), 'modules/chat');
-  assert.equal(directoryPathOf('src/scripts/anti-drift-touches-check.ts'), 'scripts');
-  assert.equal(directoryPathOf('src/App.tsx'), '', 'a scope-root file has no directory');
+test('the path helpers read BOTH real id shapes: a file id keeps its first directory, an entity id drops its scope key', () => {
+  // Entity graph, real quay payload: `<scopeKey>/<scope-relative id>` where the
+  // scope's source is `packages/quay/src` and the key is the opaque manifest
+  // token (an 8-hex fingerprint, never a directory).
+  assert.equal(
+    scopeRelativePath('26b300e9/cli/action.ts.handleActionList', 'scope-prefixed'),
+    'cli/action.ts.handleActionList',
+  );
+  assert.equal(directoryPathOf('26b300e9/cli/action.ts.handleActionList', 'scope-prefixed'), 'cli');
+  assert.equal(
+    directoryPathOf('4747cc54/ac56-recommended-deordered-check.ts.checkRecommendedDeordered', 'scope-prefixed'),
+    '',
+    'an entity at its scope source root has no directory',
+  );
+
+  // File graph, same project: the id IS the project-relative path, so the first
+  // segment is a REAL directory (`scripts/`, `packages/`) and must survive.
+  assert.equal(scopeRelativePath('scripts/stamp-version.ts', 'project-relative'), 'scripts/stamp-version.ts');
+  assert.equal(directoryPathOf('scripts/stamp-version.ts', 'project-relative'), 'scripts');
+  assert.equal(
+    directoryPathOf('packages/quay/src/fan-in/gate.ts', 'project-relative'),
+    'packages/quay/src/fan-in',
+  );
+  assert.equal(directoryPathOf('orchestration/manager-visual-check.py', 'project-relative'), 'orchestration');
+  // A project-root file has no directory under either reading.
+  assert.equal(directoryPathOf('package.json', 'project-relative'), '');
+  assert.equal(directoryPathOf('quay/package.json', 'scope-prefixed'), '');
+});
+
+test('a real file graph folds every single-member directory and keeps the rest counted', () => {
+  // Quay's file graph shape: project-relative ids, with the flat directories
+  // that actually produced `(1)` boxes (`scripts`, `orchestration`,
+  // `packages/quay/src/fan-in`) beside the counted ones.
+  const ids = [
+    'plugin/scripts/a.ts',
+    'plugin/scripts/b.ts',
+    'scripts/stamp-version.ts',
+    'orchestration/manager-visual-check.py',
+    'packages/quay/bin/quay.js',
+    'packages/quay/bin/launch.js',
+    'packages/quay/src/fan-in/gate.ts',
+  ];
+  const grouping = computeAdaptiveGrouping(ids, { idShape: 'project-relative' });
+
+  assert.deepEqual(
+    grouping.groups.map((group) => [group.prefix, group.count]),
+    [
+      ['packages/quay/bin', 2],
+      ['plugin/scripts', 2],
+    ],
+    'single-member directories are not groups; counted ones keep their project-relative prefix',
+  );
+  assert.ok(
+    grouping.groups.every((group) => group.count >= 2),
+    'no group may stand for a single node',
+  );
+  assert.deepEqual(grouping.ungroupedNodeIds, [
+    'scripts/stamp-version.ts',
+    'orchestration/manager-visual-check.py',
+    'packages/quay/src/fan-in/gate.ts',
+  ]);
+
+  // Conservation: the fold moves nodes between buckets, it never drops one.
+  const grouped = grouping.groups.reduce((total, group) => total + group.nodeIds.length, 0);
+  assert.equal(
+    grouped + grouping.ungroupedNodeIds.length,
+    ids.length,
+    'grouped + ungrouped must equal the input',
+  );
+});
+
+test('the fold applies to the entity shape too, and never leaves a (1) group', () => {
+  const ids = [
+    '26b300e9/cli/action.ts.handleActionList',
+    '26b300e9/cli/action.ts.handleActionRun',
+    '9863d470/gate/factories/registry.ts.createRegistry',
+    '2efc216b/one-off.ts.main',
+  ];
+  const grouping = computeAdaptiveGrouping(ids, { idShape: 'scope-prefixed' });
+
+  assert.deepEqual(
+    grouping.groups.map((group) => [group.prefix, group.count]),
+    [['cli', 2]],
+    'the two-entity directory stays a group; each one-entity directory folds out',
+  );
+  assert.deepEqual(grouping.ungroupedNodeIds, [
+    '9863d470/gate/factories/registry.ts.createRegistry',
+    '2efc216b/one-off.ts.main',
+  ]);
+  const grouped = grouping.groups.reduce((total, group) => total + group.nodeIds.length, 0);
+  assert.equal(grouped + grouping.ungroupedNodeIds.length, ids.length);
 });

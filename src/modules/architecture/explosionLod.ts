@@ -4,9 +4,11 @@ import {
   type ArchitectureHierarchyIndex,
 } from '@/modules/architecture/hierarchyIndex';
 import type {
+  ArchitectureNodeIdShape,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
 } from '@/modules/architecture/rendererContract';
+import { DEFAULT_NODE_ID_SHAPE, scopeRelativePath } from '@/modules/architecture/adaptiveGrouping';
 import { centerElementInContainer } from '@/modules/architecture/svgViewport';
 
 /**
@@ -159,13 +161,17 @@ export function packageDepth(packageId: string): number {
 }
 
 /**
- * The package path implied by an entity id — the same scope-stripped directory
- * split `archguardToPlantUml` uses for its package blocks, so the index and the
- * drawn frames agree even when the renderer publishes no `data-package-id`.
+ * The package path implied by an entity id — the same directory split
+ * `archguardToPlantUml` uses for its package blocks, so the index and the drawn
+ * frames agree even when the renderer publishes no `data-package-id`. `idShape`
+ * must be the drawing's shape: a file id is already project-relative, so
+ * peeling its first segment would name a package no frame carries.
  */
-export function entityPackagePath(id: string): string {
-  const scopeEnd = id.indexOf('/');
-  const relative = scopeEnd === -1 ? id : id.slice(scopeEnd + 1);
+export function entityPackagePath(
+  id: string,
+  idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE,
+): string {
+  const relative = scopeRelativePath(id, idShape);
   const lastSlash = relative.lastIndexOf('/');
   return lastSlash === -1 ? ROOT_PACKAGE_ID : relative.slice(0, lastSlash);
 }
@@ -182,6 +188,7 @@ export function entityPackagePath(id: string): string {
 export function buildExplosionHierarchy(
   host: ParentNode,
   graph: ArchitectureRendererGraph,
+  idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE,
 ): ArchitectureHierarchyIndex {
   const known = new Set(graph.nodes.map((node) => node.id));
   const entities: { id: string; packageId: string }[] = [];
@@ -191,7 +198,7 @@ export function buildExplosionHierarchy(
     const stamped = element.getAttribute('data-package-id');
     entities.push({
       id,
-      packageId: stamped === null ? entityPackagePath(id) : normalizePackageId(stamped),
+      packageId: stamped === null ? entityPackagePath(id, idShape) : normalizePackageId(stamped),
     });
   }
   return buildHierarchyIndex(entities);

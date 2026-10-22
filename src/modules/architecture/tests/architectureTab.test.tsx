@@ -128,9 +128,10 @@ const ENTITY_MMD = '@startuml\nX --> Y\n@enduml';
 
 /**
  * A four-node chain split across three directories: the file graph mirrors the
- * entity graph. The directory split is what gives the overview real group nodes
- * (`modules/alpha`, `modules/beta`, `modules/gamma`), and the chain gives the
- * neighbourhood view a node that only appears at hop 2.
+ * entity graph. The directory split is what gives the overview a real group
+ * node (`src/modules/alpha`), and the chain gives the neighbourhood view a node
+ * that only appears at hop 2. The two directories holding a single file are
+ * drawn as those files, not as `(1)` groups.
  */
 const RESULT: ArchitectureGraphResult = {
   mmd: { file: FILE_MMD, entity: ENTITY_MMD },
@@ -230,6 +231,44 @@ const DEEP_TREE_RESULT: ArchitectureGraphResult = {
     fileEdges: 2,
     nodeCount: 240,
     edgeCount: 2,
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
+ * A FILE graph in the shape the server really emits: project-relative ids whose
+ * first segment is a directory (`scripts/`, `plugin/`, `packages/`). Two of
+ * these directories hold one file each — the `(1)` boxes the report named —
+ * and two files share the name `stamp-version.ts` in different directories.
+ */
+const ISOLATED_FILE_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: {
+      nodes: [
+        { id: 'plugin/scripts/anti-drift-touches-check.ts', label: 'plugin/scripts/anti-drift-touches-check.ts', distance: 0 },
+        { id: 'plugin/scripts/quay-test-script.ts', label: 'plugin/scripts/quay-test-script.ts', distance: 1 },
+        { id: 'scripts/stamp-version.ts', label: 'scripts/stamp-version.ts', distance: 0 },
+        { id: 'orchestration/manager-visual-check.py', label: 'orchestration/manager-visual-check.py', distance: 1 },
+        { id: 'packages/quay/scripts/stamp-version.ts', label: 'packages/quay/scripts/stamp-version.ts', distance: 2 },
+      ],
+      edges: [
+        { from: 'scripts/stamp-version.ts', to: 'plugin/scripts/quay-test-script.ts', relationType: 'call' },
+      ],
+    },
+    entity: { nodes: [], edges: [] },
+  },
+  stats: {
+    entityNodes: 0,
+    fileNodes: 5,
+    entityEdges: 0,
+    fileEdges: 1,
+    truncated: false,
+    seedFiles: 1,
+    seedIdentifiers: 0,
+    nodeCount: 5,
+    edgeCount: 1,
+    unresolved: { files: [], identifiers: [] },
   },
   provenance: RESULT.provenance,
 };
@@ -518,7 +557,13 @@ test('the renderer draws the neighbourhood as an SVG (PlantUML/ELK, not a fake)'
   assert.ok(host.querySelector('svg'), 'an SVG element must be injected into the host');
   assert.ok(host.querySelectorAll('.uml-node').length >= 3, 'the overview folds the graph into path groups');
   assert.ok(host.querySelectorAll('.uml-edge').length >= 2, 'group→group edges must be drawn');
-  assert.match(host.innerHTML, /data-entity-id="grp::modules\/alpha"/, 'the overview group node carries its path prefix');
+  // The file graph's ids are project-relative, so the group prefix keeps `src/`:
+  // peeling it would name the group after a scope key the id does not carry.
+  assert.match(
+    host.innerHTML,
+    /data-entity-id="grp::src\/modules\/alpha"/,
+    'the overview group node carries its path prefix',
+  );
 });
 
 test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG', async () => {
@@ -547,7 +592,7 @@ test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG',
     'focus',
     'a fit below the readable floor must open focused, not as a grey smear',
   );
-  assert.equal(root.getAttribute('data-architecture-readable-package'), 'modules/alpha');
+  assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
 
   // + / − step by the documented factor and switch to the user's own scale.
   fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
@@ -588,7 +633,7 @@ test('the readable toggle switches between the focused default and the whole-gra
   const root = graphRoot();
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
   const focusedScale = Number(root.getAttribute('data-architecture-zoom-scale'));
-  assert.equal(root.getAttribute('data-architecture-readable-package'), 'modules/alpha');
+  assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
 
   // 全貌: the whole drawing at the geometric fit, plus an honest "zoom into …"
   // hint naming the package and how many others share the drawing.
@@ -644,7 +689,7 @@ test('redrawing a view re-derives the scale from the new drawing and keeps the f
 
   // Expand a group; the new drawing has a new natural size, so the scale is
   // re-derived. Fit mode is preserved.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   await waitFor(() => {
     assert.deepEqual(drawnNodeIds(host), ['src/modules/alpha/a.ts', 'src/modules/alpha/a2.ts']);
   });
@@ -662,7 +707,7 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
 
   // Drill to a neighbourhood that spans two packages, so it has a real
   // package-level edge once the entities collapse.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
   fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
   await waitFor(() => {
@@ -704,14 +749,14 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
   for (const edge of host.querySelectorAll('.uml-edge')) {
     assert.equal((edge as HTMLElement).style.display, 'none', 'entity UML edges are hidden at the package level');
   }
-  const alphaLabel = [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+  const alphaLabel = [...host.querySelectorAll('.uml-package[data-package-id="src/modules/alpha"] text')]
     .map((label) => label.textContent)
     .join('');
   assert.match(alphaLabel, /\(2\)$/, 'a collapsed package frame states its entity count');
   const overlayEdges = [...host.querySelectorAll('[data-architecture-lod-edges] line')];
   assert.equal(overlayEdges.length, 1, 'the beta → alpha entity edge aggregates into one package edge');
-  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-source'), 'modules/beta');
-  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-target'), 'modules/alpha');
+  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-source'), 'src/modules/beta');
+  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-target'), 'src/modules/alpha');
   assert.equal(
     host.querySelector('svg'),
     svg,
@@ -735,10 +780,10 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
     assert.equal((edge as HTMLElement).style.display, '', 'entity UML edges are visible again');
   }
   assert.equal(
-    [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+    [...host.querySelectorAll('.uml-package[data-package-id="src/modules/alpha"] text')]
       .map((label) => label.textContent)
       .join(''),
-    'modules/alpha',
+    'src/modules/alpha',
     'the collapsed count is restored',
   );
   assert.equal(host.querySelector('svg'), svg, 'still the same drawing after the round trip');
@@ -765,7 +810,7 @@ test('the explosion view lays the whole hierarchy out once and zoom reveals its 
   // The initial fit is the near level: entities and their UML edges are drawn,
   // inside the package frames the same layout emitted.
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
-  for (const packageId of ['modules/alpha', 'modules/beta', 'modules/gamma']) {
+  for (const packageId of ['src/modules/alpha', 'src/modules/beta', 'src/modules/gamma']) {
     assert.ok(host.querySelector(`.uml-package[data-package-id="${packageId}"]`), `frame ${packageId} is drawn`);
   }
   const svg = host.querySelector('svg');
@@ -779,14 +824,14 @@ test('the explosion view lays the whole hierarchy out once and zoom reveals its 
 
   // The three packages now show their counts and the two cross-package edges;
   // the intra-alpha edge is not a package boundary.
-  const labels = [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+  const labels = [...host.querySelectorAll('.uml-package[data-package-id="src/modules/alpha"] text')]
     .map((label) => label.textContent)
     .join('');
   assert.match(labels, /\(2\)$/, 'the alpha frame states its two entities');
   const packageEdges = [...host.querySelectorAll('[data-architecture-lod-edges] line')]
     .map((line) => `${line.getAttribute('data-lod-edge-source')}->${line.getAttribute('data-lod-edge-target')}`)
     .sort();
-  assert.deepEqual(packageEdges, ['modules/beta->modules/alpha', 'modules/gamma->modules/beta']);
+  assert.deepEqual(packageEdges, ['src/modules/beta->src/modules/alpha', 'src/modules/gamma->src/modules/beta']);
   assert.equal(host.querySelector('svg'), svg, 'the explosion layout survives the level change');
   assert.equal(svg.getAttribute('data-lod-sentinel'), 'kept');
 
@@ -812,11 +857,11 @@ test('overview folds the graph into path groups; clicking a group expands it loc
   assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'overview');
   assert.deepEqual(
     drawnNodeIds(host),
-    ['grp::modules/alpha', 'grp::modules/beta', 'grp::modules/gamma'],
-    'the overview groups by directory layer, never by file name',
+    ['grp::src/modules/alpha', 'src/modules/beta/b.ts', 'src/modules/gamma/c.ts'],
+    'the overview groups by directory layer, never by file name; a one-file directory keeps its file as a node',
   );
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
 
   await waitFor(() => {
     assert.equal(
@@ -838,43 +883,45 @@ test('expanding a deep group re-groups its subtree by directory instead of flatt
   const host = await waitForDiagram();
 
   // Overview: the group bound stops the fold at the package layer (12 groups,
-  // depth 3 would be 48). No group is named after a file.
+  // depth 4 would be 48). No group is named after a file.
   assert.equal(drawnNodeIds(host).length, 12, 'the overview stops at the package layer');
-  assert.ok(drawnNodeIds(host).every((id) => /^grp::packages\/mod-\d+$/.test(id)));
-  assert.match(host.innerHTML, /packages\/mod-0 \(20\)/, 'each group label carries its entity count');
+  assert.ok(drawnNodeIds(host).every((id) => /^grp::src\/packages\/mod-\d+$/.test(id)));
+  assert.match(host.innerHTML, /src\/packages\/mod-0 \(20\)/, 'each group label carries its entity count');
 
   // Expanding one package must apply the SAME directory rule to its subtree:
   // four unit groups, not the 20 file nodes inside it.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::packages/mod-0"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/packages/mod-0"]') as Element);
   await waitFor(() => {
     assert.equal(
       document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'),
       'group',
     );
     assert.deepEqual(drawnNodeIds(host), [
-      'grp::packages/mod-0/unit-0',
-      'grp::packages/mod-0/unit-1',
-      'grp::packages/mod-0/unit-2',
-      'grp::packages/mod-0/unit-3',
+      'grp::src/packages/mod-0/unit-0',
+      'grp::src/packages/mod-0/unit-1',
+      'grp::src/packages/mod-0/unit-2',
+      'grp::src/packages/mod-0/unit-3',
     ], 'the group view groups the subtree by directory instead of listing every file');
   });
   assert.ok(
     !drawnNodeIds(host).some((id) => id.endsWith('.ts')),
     'no file of the expanded directory is drawn as its own node',
   );
-  assert.match(host.innerHTML, /packages\/mod-0\/unit-0 \(5\)/, 'unit groups carry their own counts');
+  assert.match(host.innerHTML, /src\/packages\/mod-0\/unit-0 \(5\)/, 'unit groups carry their own counts');
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 're-grouping is local — never a refetch');
 });
 
 test('a flat directory larger than the group limit stays one counted group when expanded', () => {
+  // File-graph ids: project-relative, so `scripts/` is a real directory and the
+  // group view of it is addressed by that path.
   const nodes = Array.from({ length: 45 }, (_unused, index) => ({
-    id: `src/scripts/tool-${String(index).padStart(2, '0')}.ts`,
-    label: `tool-${String(index).padStart(2, '0')}.ts`,
+    id: `scripts/tool-${String(index).padStart(2, '0')}.ts`,
+    label: `scripts/tool-${String(index).padStart(2, '0')}.ts`,
     distance: 0,
   }));
   const { grouped, nodeIds, puml } = archguardToPlantUml(
     { nodes, edges: [] },
-    { view: { kind: 'group', prefix: 'scripts' }, grouping: 'adaptive' },
+    { view: { kind: 'group', prefix: 'scripts' }, grouping: 'adaptive', idShape: 'project-relative' },
   );
 
   assert.equal(grouped, true, 'the drawing is directory scaffolding, not 45 entity boxes');
@@ -882,11 +929,65 @@ test('a flat directory larger than the group limit stays one counted group when 
   assert.match(puml, /class "scripts \(45\)" as g0/, 'the group keeps its count');
 });
 
+test('the overview never draws a (1) group and names an isolated file by its directory', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(ISOLATED_FILE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // Only the two-file directory stays a group. Each one-file directory is drawn
+  // as the file itself — no `(1)` box survives, in either order of the fold.
+  assert.deepEqual(drawnNodeIds(host), [
+    'grp::plugin/scripts',
+    'orchestration/manager-visual-check.py',
+    'packages/quay/scripts/stamp-version.ts',
+    'scripts/stamp-version.ts',
+  ]);
+  assert.doesNotMatch(host.textContent ?? '', /\(1\)/, 'a one-member group is noise, never a label');
+
+  // The isolated node's label is a PATH, not a bare file name: that is what the
+  // file graph's `scripts/stamp-version.ts` used to lose when its first
+  // directory was peeled as if it were a scope key.
+  const labels = [...host.querySelectorAll('.uml-node text')].map((label) => label.textContent ?? '');
+  assert.ok(labels.includes('scripts/stamp-version.ts'), `the isolated file keeps its directory; labels: ${labels.join(' | ')}`);
+  // Two files with the same name in different directories stay distinguishable.
+  assert.ok(labels.includes('packages/quay/scripts/stamp-version.ts'));
+
+  // The counted group keeps its project-relative prefix and its count.
+  assert.match(host.textContent ?? '', /plugin\/scripts \(2\)/);
+});
+
+test('the bridge labels an isolated file graph node like a group label, with its directory', () => {
+  const graph = ISOLATED_FILE_RESULT.graph.file;
+  const { puml, nodeIds } = archguardToPlantUml(graph, { grouping: 'adaptive', idShape: 'project-relative' });
+
+  assert.deepEqual(nodeIds, [
+    'grp::plugin/scripts',
+    'scripts/stamp-version.ts',
+    'orchestration/manager-visual-check.py',
+    'packages/quay/scripts/stamp-version.ts',
+  ]);
+  assert.match(puml, /class "scripts\/stamp-version\.ts" as n2/, 'the isolated node is named by its path');
+  assert.match(puml, /class "orchestration\/manager-visual-check\.py" as n3/);
+  assert.doesNotMatch(puml, /class "stamp-version\.ts"/, 'a bare file name is the bug this pins');
+  assert.doesNotMatch(puml, /\(1\)/, 'no group label may carry a count of one');
+  // Folding a singleton does not drop its edges: the node keeps its own alias,
+  // and the edge is aggregated onto the alias of whatever it points at (here
+  // the counted group `g0`).
+  assert.match(puml, /n2 \.\.> g0 : <<call>>/);
+});
+
+test('the display name keeps a file graph\'s first directory and strips only an entity graph\'s scope key', () => {
+  // The same string read both ways: the file graph must keep `scripts/`; the
+  // entity graph (`scripts` is its opaque scope key there) must drop it.
+  assert.equal(displayName('scripts/stamp-version.ts', MAX_DISPLAY_DIR_SEGMENTS, 'project-relative'), 'scripts/stamp-version.ts');
+  assert.equal(displayName('scripts/stamp-version.ts', MAX_DISPLAY_DIR_SEGMENTS, 'scope-prefixed'), 'stamp-version.ts');
+});
+
 test('clicking an entity drills into its neighbourhood, and the centre click adds a hop', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   await waitFor(() => {
     assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]'));
   });
@@ -937,7 +1038,7 @@ test('hovering a node highlights its in/out edges and dims the rest', async () =
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
   fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
   await waitFor(() => {
@@ -984,7 +1085,7 @@ test('the drawn SVG carries the stable ids sibling panels query', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
   fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
   await waitFor(() => {
@@ -1018,7 +1119,7 @@ test('clicking an entity pins its in/out highlight and announces it to sibling p
     render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
     const host = await waitForDiagram();
 
-    fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+    fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
     await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
     fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
     await waitFor(() => {
@@ -1109,7 +1210,11 @@ test('activating the panel fetches once and the file/entity toggle never refetch
     [['project-1', 'session-1', 2]],
     'activation must POST exactly once for the selected project/session at the default depth',
   );
-  assert.ok(host.querySelector('[data-entity-id="grp::modules/alpha"]'), 'the file graph is drawn first');
+  // The two subgraphs are read with DIFFERENT id shapes from the same payload:
+  // the entity ids carry the opaque scope key (`src` here) as their first
+  // segment, while the file ids are already project-relative, so `src/` IS a
+  // directory there and stays in the group prefix.
+  assert.ok(host.querySelector('[data-entity-id="grp::src/modules/alpha"]'), 'the file graph is drawn first');
 
   fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
   // Changing granularity remounts the graph (the panel keys it by session+granularity),
@@ -1135,7 +1240,7 @@ test('activating the panel fetches once and the file/entity toggle never refetch
 
   fireEvent.click(screen.getByRole('button', { name: 'File graph' }));
   const fileHost = await waitForDiagram();
-  await waitFor(() => assert.ok(fileHost.querySelector('[data-entity-id="grp::modules/alpha"]')));
+  await waitFor(() => assert.ok(fileHost.querySelector('[data-entity-id="grp::src/modules/alpha"]')));
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
 });
 
