@@ -48,7 +48,7 @@ import type {
   VoiceRealtimeNarratorQueue,
   VoiceRealtimeOutboundFrame,
   VoiceRealtimeProxySeams,
-} from './voice-realtime-ws-proxy.service.js';
+} from './voice-realtime-contract.js';
 
 /**
  * The inbound frame kinds the registry dispatches.

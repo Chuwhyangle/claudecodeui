@@ -2,7 +2,7 @@
 id: gap-voice-realtime-contract-hoist
 title: voice-realtime 契约提升：把帧/exec status/seam 契约类型从 ws-proxy.service.ts 提升到独立
   voice-realtime-contract.ts，6 个叶子模块改 import 契约模块（依赖倒置走完）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -75,11 +75,3 @@ extra:
 - `server/modules/voice-realtime/index.ts`（barrel re-export 面保持）
 - `server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`（既有判据，不改一字，作行为覆盖）
 - `tasks/gap-voice-realtime-contract-hoist.md`（自触）
-
-## Blocker
-
-**2026-10-22T09:09:34.191Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/providers/tests/provider-capabilities-cancel-queued.test.ts:   AssertionError [ERR_ASSERTION]: the byte budget must still say why it cannot be a cancellation
-- run_id：wk-prod-anchor
-- session_id：ffec8c48-ff0b-4f97-be11-c2b5e9846b1e

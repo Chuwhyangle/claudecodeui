@@ -28,12 +28,10 @@ import type { RealtimeSegmentCommitMode } from './voice-realtime-bridge.service.
 import type { DashscopeWireObserver } from './voice-realtime-dashscope-transport.js';
 import type { TurnDetectionOverride } from './voice-realtime-turn-detection.js';
 import type { UpstreamPoolRotation } from './voice-realtime-upstream-pool.js';
-import {
-  handleVoiceRealtimeConnection,
-  resolveSegmentSelection,
-  type VoiceRealtimeOutboundFrame,
-  type VoiceRealtimeProxySeams,
-} from './voice-realtime-ws-proxy.service.js';
+import type {
+  VoiceRealtimeOutboundFrame,
+  VoiceRealtimeProxySeams,
+} from './voice-realtime-contract.js';
 
 /** The sample rate the Realtime session's `pcm16` input expects. */
 const PCM_SAMPLE_RATE = 16_000;
@@ -386,6 +384,13 @@ export async function runVoiceRealtimeDiagnosis(
   input: VoiceRealtimeDiagnosisInput,
   seams: VoiceRealtimeDiagnosisSeams,
 ): Promise<VoiceRealtimeDiagnosisReport> {
+  // The connection handler is the god file this leaf used to statically import for its whole
+  // module graph; the wire contract it needs lives in `voice-realtime-contract.js`, and the handler
+  // itself is loaded lazily here, at the one place that drives a connection. The static import edge
+  // is gone, so a leaf that only speaks the wire contract does not pull the handler in.
+  const { handleVoiceRealtimeConnection, resolveSegmentSelection } = await import(
+    './voice-realtime-ws-proxy.service.js'
+  );
   const startedAt = Date.now();
   const wire: VoiceRealtimeWireEntry[] = [];
   let lastActivityAt = startedAt;
