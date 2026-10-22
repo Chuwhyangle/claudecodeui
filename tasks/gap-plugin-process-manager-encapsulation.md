@@ -2,7 +2,7 @@
 id: gap-plugin-process-manager-encapsulation
 title: PluginProcessManager 封装：plugin-process 的 2 个模块级 const
   Map（runningPlugins/startingPlugins）收进带生命周期的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -57,11 +57,3 @@ extra:
 - ④ 纯位移：develop 版 `startPluginServer/stopPluginServer/getPluginPort/isPluginRunning/stopAllPlugins` 的函数体逐行迁入 `PluginProcessManager` 同名方法，仅 `runningPlugins→this.runningPlugins` / `startingPlugins→this.startingPlugins`；ready 行解析、10s 就绪超时、error/exit 清理、并发合并、SIGTERM+5s SIGKILL 强制 kill 语义均不变，导出签名不变。
 - ⑤(e) `git diff --name-only develop...HEAD` → 仅 `server/modules/plugins/plugin-process.service.ts`；`anti-drift-touches-check --merge-target develop` → `ANTI-DRIFT OK: 1 actual file(s), all within declared Touches`（exit 0）。
 - 前一轮 suite 红根因（**非本任务 delta**）：共享 `node_modules/@yalehwang/plantuml-js` 仍是 0.1.0，`aspectRatio` 不折叠；该包已于 18:35 换成 0.3.0，`src/modules/architecture/tests/layoutAspect.test.tsx` 单跑 7/7 passed（连续 5 次），两个 worktree 共享同一 node_modules。
-
-## Blocker
-
-**2026-10-22T10:28:10.102Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/layoutAspect.test.tsx: AssertionError [ERR_ASSERTION]: aspectRatio 0.53 must fold the flat overview into a portrait canvas; got 3.266 (0 0 1789.96 548) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/layoutAspect.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：80ecd2d0-e507-4c25-8a61-e94e49ba90b1
