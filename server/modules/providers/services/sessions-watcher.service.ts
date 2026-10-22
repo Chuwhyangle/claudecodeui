@@ -585,21 +585,6 @@ export async function watchProviderRoot(input: {
 const PROJECTS_UPDATE_DEBOUNCE_MS = 500;
 const PROJECTS_UPDATE_MAX_WAIT_MS = 2_000;
 
-const watchers: ProviderRootWatcher[] = [];
-
-/**
- * The mode every observed root is running in right now.
- *
- * Exported for the debug agent's external-write criterion
- * (`tests/debug-agent-external-write.test.ts`), whose arms must each prove the
- * fixture root came up in the mechanism that arm pinned: an arm that asked for
- * native events and silently got a polling clock would be reporting a different
- * experiment than the one it names.
- */
-export function readActiveWatcherModes(): Array<{ rootPath: string; mode: WatcherMode }> {
-  return watchers.map((handle) => ({ rootPath: handle.rootPath, mode: handle.mode() }));
-}
-
 type PendingWatcherUpdate = {
   providers: Set<LLMProvider>;
   changeTypes: Set<WatcherEventType>;
@@ -611,11 +596,202 @@ type PendingWatcherUpdate = {
   updatedSessionIds: Set<string>;
 };
 
-let pendingWatcherUpdate: PendingWatcherUpdate | null = null;
-let pendingWatcherUpdateStartedAt: number | null = null;
-let pendingWatcherFlushTimer: ReturnType<typeof setTimeout> | null = null;
-let watcherRefreshInFlight = false;
-let watcherRescheduleAfterRefresh = false;
+/**
+ * Owns this process's provider-root watchers and the debounced
+ * `session_upserted` fan-out they feed.
+ *
+ * Indexed file updates accumulate for `PROJECTS_UPDATE_DEBOUNCE_MS`, but no
+ * longer than `PROJECTS_UPDATE_MAX_WAIT_MS` after the first one, before a single
+ * broadcast. A flush requested while one is already in flight is folded into a
+ * reschedule rather than run concurrently.
+ *
+ * All of the state expressing that lifecycle — the queued batch, its start
+ * time, the flush timer, and the in-flight/reschedule flags — is private here,
+ * so the only ways to change it are `enqueue`, `scheduleUpdate`, and `flush`.
+ * `initializeSessionsWatcher`/`closeSessionsWatcher` drive the whole lifetime
+ * through `start()`/`stop()`.
+ */
+class SessionsWatcher {
+  private readonly watchers: ProviderRootWatcher[] = [];
+  private pendingUpdate: PendingWatcherUpdate | null = null;
+  private pendingUpdateStartedAt: number | null = null;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private refreshInFlight = false;
+  private rescheduleAfterRefresh = false;
+
+  /** The mode every observed root is running in right now. */
+  activeModes(): Array<{ rootPath: string; mode: WatcherMode }> {
+    return this.watchers.map((handle) => ({ rootPath: handle.rootPath, mode: handle.mode() }));
+  }
+
+  /**
+   * Starts provider filesystem watchers and performs initial DB synchronization.
+   */
+  async start(): Promise<void> {
+    console.log('Setting up session watchers');
+
+    const initialSync = await sessionSynchronizerService.synchronizeSessions();
+    console.log('Initial session synchronization complete', {
+      processedByProvider: initialSync.processedByProvider,
+      prunedOrphans: initialSync.prunedOrphans,
+      failures: initialSync.failures,
+    });
+
+    const requestedMode = process.env[WATCHER_MODE_ENV_VAR];
+
+    for (const { provider, rootPath } of await ensureProviderWatchRoots()) {
+      // Resolved OUTSIDE the per-root try below on purpose. An explicit
+      // `CLOUDCLI_WATCHER_MODE=native` that this root cannot honour is a
+      // configuration error, not a per-root hiccup: swallowing it would leave the
+      // root unwatched instead of polling it, which is worse than either mode.
+      const probe = isExplicitPollRequest(requestedMode) ? null : await probeNativeWatcher(rootPath);
+      const trackedFileCount = await countTrackedFiles(rootPath, provider);
+      const resolution = resolveWatcherMode(requestedMode, probe, trackedFileCount);
+
+      try {
+        this.watchers.push(
+          await watchProviderRoot({ provider, rootPath, resolution, trackedFileCount })
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Failed to initialize session watcher for provider "${provider}"`, {
+          rootPath,
+          error: message,
+        });
+      }
+    }
+  }
+
+  /**
+   * Stops all active provider session watchers and discards any queued update.
+   */
+  async stop(): Promise<void> {
+    this.clearFlushTimer();
+
+    await Promise.all(
+      this.watchers.map(async (watcher) => {
+        try {
+          await watcher.close();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error('Failed to close session watcher', { error: message });
+        }
+      })
+    );
+    this.watchers.length = 0;
+    this.pendingUpdate = null;
+    this.pendingUpdateStartedAt = null;
+    this.refreshInFlight = false;
+    this.rescheduleAfterRefresh = false;
+  }
+
+  /** Adds one indexed file update to the pending batch and arms the flush timer. */
+  enqueue(eventType: WatcherEventType, provider: LLMProvider, updatedSessionId: string | null): void {
+    if (!this.pendingUpdate) {
+      this.pendingUpdate = {
+        providers: new Set<LLMProvider>(),
+        changeTypes: new Set<WatcherEventType>(),
+        updatedSessionIds: new Set<string>(),
+      };
+    }
+
+    this.pendingUpdate.providers.add(provider);
+    this.pendingUpdate.changeTypes.add(eventType);
+    if (updatedSessionId) {
+      this.pendingUpdate.updatedSessionIds.add(updatedSessionId);
+    }
+
+    this.scheduleUpdate();
+  }
+
+  /** Re-arms the debounce timer, bounded by the max wait from the first event. */
+  scheduleUpdate(): void {
+    if (!this.pendingUpdate) {
+      return;
+    }
+
+    const now = Date.now();
+    if (this.pendingUpdateStartedAt === null) {
+      this.pendingUpdateStartedAt = now;
+    }
+
+    const elapsed = now - this.pendingUpdateStartedAt;
+    const remainingMaxWait = Math.max(0, PROJECTS_UPDATE_MAX_WAIT_MS - elapsed);
+    const delay = Math.min(PROJECTS_UPDATE_DEBOUNCE_MS, remainingMaxWait);
+
+    this.clearFlushTimer();
+    this.flushTimer = setTimeout(() => {
+      void this.flush();
+    }, delay);
+  }
+
+  /**
+   * Broadcasts the queued batch, folding a request made mid-refresh into a
+   * reschedule of the next flush instead of a second concurrent broadcast.
+   */
+  async flush(): Promise<void> {
+    this.clearFlushTimer();
+
+    if (!this.pendingUpdate) {
+      return;
+    }
+
+    if (this.refreshInFlight) {
+      this.rescheduleAfterRefresh = true;
+      return;
+    }
+
+    const queuedUpdate = this.pendingUpdate;
+    this.pendingUpdate = null;
+    this.pendingUpdateStartedAt = null;
+    this.refreshInFlight = true;
+
+    try {
+      // Per-session deltas instead of full project snapshots: an upsert of one
+      // session can never clobber unrelated client state, so the frontend needs
+      // no "suppress updates while a run is active" protection logic.
+      await broadcastSessionUpsertedBatch(queuedUpdate.updatedSessionIds);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Session watcher refresh failed while broadcasting session_upserted', { error: message });
+    } finally {
+      this.refreshInFlight = false;
+
+      if (this.pendingUpdate || this.rescheduleAfterRefresh) {
+        this.rescheduleAfterRefresh = false;
+        this.scheduleUpdate();
+      }
+    }
+  }
+
+  private clearFlushTimer(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+  }
+}
+
+/**
+ * The process-wide watcher instance.
+ *
+ * `initializeSessionsWatcher`/`closeSessionsWatcher` are its exported lifecycle
+ * and `onUpdate` queues into it; no other module reaches the instance itself.
+ */
+const sessionsWatcher = new SessionsWatcher();
+
+/**
+ * The mode every observed root is running in right now.
+ *
+ * Exported for the debug agent's external-write criterion
+ * (`tests/debug-agent-external-write.test.ts`), whose arms must each prove the
+ * fixture root came up in the mechanism that arm pinned: an arm that asked for
+ * native events and silently got a polling clock would be reporting a different
+ * experiment than the one it names.
+ */
+export function readActiveWatcherModes(): Array<{ rootPath: string; mode: WatcherMode }> {
+  return sessionsWatcher.activeModes();
+}
 
 /**
  * Filters watcher events to provider-specific session artifact file types.
@@ -626,90 +802,6 @@ function isWatcherTargetFile(provider: LLMProvider, filePath: string): boolean {
   }
 
   return filePath.endsWith('.jsonl');
-}
-
-function clearPendingWatcherFlushTimer(): void {
-  if (pendingWatcherFlushTimer) {
-    clearTimeout(pendingWatcherFlushTimer);
-    pendingWatcherFlushTimer = null;
-  }
-}
-
-function schedulePendingWatcherFlush(): void {
-  if (!pendingWatcherUpdate) {
-    return;
-  }
-
-  const now = Date.now();
-  if (pendingWatcherUpdateStartedAt === null) {
-    pendingWatcherUpdateStartedAt = now;
-  }
-
-  const elapsed = now - pendingWatcherUpdateStartedAt;
-  const remainingMaxWait = Math.max(0, PROJECTS_UPDATE_MAX_WAIT_MS - elapsed);
-  const delay = Math.min(PROJECTS_UPDATE_DEBOUNCE_MS, remainingMaxWait);
-
-  clearPendingWatcherFlushTimer();
-  pendingWatcherFlushTimer = setTimeout(() => {
-    void flushPendingWatcherUpdate();
-  }, delay);
-}
-
-function queuePendingWatcherUpdate(
-  eventType: WatcherEventType,
-  provider: LLMProvider,
-  updatedSessionId: string | null
-): void {
-  if (!pendingWatcherUpdate) {
-    pendingWatcherUpdate = {
-      providers: new Set<LLMProvider>(),
-      changeTypes: new Set<WatcherEventType>(),
-      updatedSessionIds: new Set<string>(),
-    };
-  }
-
-  pendingWatcherUpdate.providers.add(provider);
-  pendingWatcherUpdate.changeTypes.add(eventType);
-  if (updatedSessionId) {
-    pendingWatcherUpdate.updatedSessionIds.add(updatedSessionId);
-  }
-
-  schedulePendingWatcherFlush();
-}
-
-async function flushPendingWatcherUpdate(): Promise<void> {
-  clearPendingWatcherFlushTimer();
-
-  if (!pendingWatcherUpdate) {
-    return;
-  }
-
-  if (watcherRefreshInFlight) {
-    watcherRescheduleAfterRefresh = true;
-    return;
-  }
-
-  const queuedUpdate = pendingWatcherUpdate;
-  pendingWatcherUpdate = null;
-  pendingWatcherUpdateStartedAt = null;
-  watcherRefreshInFlight = true;
-
-  try {
-    // Per-session deltas instead of full project snapshots: an upsert of one
-    // session can never clobber unrelated client state, so the frontend needs
-    // no "suppress updates while a run is active" protection logic.
-    await broadcastSessionUpsertedBatch(queuedUpdate.updatedSessionIds);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('Session watcher refresh failed while broadcasting session_upserted', { error: message });
-  } finally {
-    watcherRefreshInFlight = false;
-
-    if (pendingWatcherUpdate || watcherRescheduleAfterRefresh) {
-      watcherRescheduleAfterRefresh = false;
-      schedulePendingWatcherFlush();
-    }
-  }
 }
 
 /**
@@ -734,7 +826,7 @@ async function onUpdate(
       filePath,
       sessionId: result.sessionId,
     });
-    queuePendingWatcherUpdate(eventType, provider, result.sessionId);
+    sessionsWatcher.enqueue(eventType, provider, result.sessionId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Session watcher sync failed for provider "${provider}"`, {
@@ -747,61 +839,20 @@ async function onUpdate(
 
 /**
  * Starts provider filesystem watchers and performs initial DB synchronization.
+ *
+ * Exported for the server bootstrap, which calls it once at startup; the
+ * watcher lifetime itself is `SessionsWatcher.start()`.
  */
 export async function initializeSessionsWatcher(): Promise<void> {
-  console.log('Setting up session watchers');
-
-  const initialSync = await sessionSynchronizerService.synchronizeSessions();
-  console.log('Initial session synchronization complete', {
-    processedByProvider: initialSync.processedByProvider,
-    prunedOrphans: initialSync.prunedOrphans,
-    failures: initialSync.failures,
-  });
-
-  const requestedMode = process.env[WATCHER_MODE_ENV_VAR];
-
-  for (const { provider, rootPath } of await ensureProviderWatchRoots()) {
-    // Resolved OUTSIDE the per-root try below on purpose. An explicit
-    // `CLOUDCLI_WATCHER_MODE=native` that this root cannot honour is a
-    // configuration error, not a per-root hiccup: swallowing it would leave the
-    // root unwatched instead of polling it, which is worse than either mode.
-    const probe = isExplicitPollRequest(requestedMode) ? null : await probeNativeWatcher(rootPath);
-    const trackedFileCount = await countTrackedFiles(rootPath, provider);
-    const resolution = resolveWatcherMode(requestedMode, probe, trackedFileCount);
-
-    try {
-      watchers.push(
-        await watchProviderRoot({ provider, rootPath, resolution, trackedFileCount })
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`Failed to initialize session watcher for provider "${provider}"`, {
-        rootPath,
-        error: message,
-      });
-    }
-  }
+  await sessionsWatcher.start();
 }
 
 /**
  * Stops all active provider session watchers.
+ *
+ * Exported for the server bootstrap's shutdown path, which calls it once; the
+ * watcher lifetime itself is `SessionsWatcher.stop()`.
  */
 export async function closeSessionsWatcher(): Promise<void> {
-  clearPendingWatcherFlushTimer();
-
-  await Promise.all(
-    watchers.map(async (watcher) => {
-      try {
-        await watcher.close();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('Failed to close session watcher', { error: message });
-      }
-    })
-  );
-  watchers.length = 0;
-  pendingWatcherUpdate = null;
-  pendingWatcherUpdateStartedAt = null;
-  watcherRefreshInFlight = false;
-  watcherRescheduleAfterRefresh = false;
+  await sessionsWatcher.stop();
 }
