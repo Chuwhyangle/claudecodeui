@@ -75,6 +75,7 @@ depends_on:
 - src/modules/architecture/tests/mobileGestures.test.tsx
 - src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/modules/architecture/tests/exportMenu.test.tsx
 - src/shared/chatMessageLocator.ts (new)
 - src/shared/tests/chatMessageLocator.test.ts (new)
 - src/shared/api.ts
@@ -112,7 +113,9 @@ depends_on:
 
 **手势**。PC 单击 = 选中并打开停靠区，双击 = 下钻；触摸维持单击选中、双击下钻（`DOUBLE_TAP_MS` 窗口不变）。键盘仅在画布聚焦时生效：`[` / `]` 按 payload 节点顺序循环移动焦点、`Enter` 选中、`Alt+Enter` 下钻；`Escape` 只在存在选择时拦截（`preventDefault` + `stopPropagation`），先关停靠区、第二次清选择；无选择时不拦截，聊天页的全局 abort 不受影响。
 
-**「单击下钻」断言的逐处改动**（`src/modules/architecture/tests/architectureTab.test.tsx`）。新增 `drillNode(host, id)` 帮助函数：先 `click`（保留选中与 `architecture:entity-selected` 断言），再 `doubleClick`（触发下钻）。原先依赖单击下钻的 17 处断言改为该帮助函数：left-drag 的 press-on-node、middle-button/3px 抖动、cancelled-drag 三处；redrawing-view；semantic-zoom；三个 group 展开用例（overview / deep re-group / flat-over-limit）；neighbourhood drill + centre hop；hover highlight 与 stable-ids 的前置下钻；pinned announce 用例的两级下钻。相关用例标题/注释同步改为「double-click」。触摸用例（`mobileGestures.test.tsx`）无需改动。
+**「单击下钻」断言的逐处改动**（`src/modules/architecture/tests/architectureTab.test.tsx`）。新增 `drillNode(host, id)` 帮助函数：先 `click`（保留选中与 `architecture:entity-selected` 断言），再 `doubleClick`（触发下钻）。原先依赖单击下钻的 17 处断言改为该帮助函数：left-drag 的 press-on-node、middle-button/3px 抖动、cancelled-drag 三处；redrawing-view；semantic-zoom；三个 group 展开用例（overview / deep re-group / flat-over-limit）；neighbourhood drill + centre hop；hover highlight 与 stable-ids 的前置下钻；pinned announce 用例的两级下钻。相关用例标题/注释同步改为「double-click」。同批改动：`src/modules/architecture/tests/exportMenu.test.tsx` 的两处下钻断言（目录组展开、实体邻域）同样改为 `fireEvent.doubleClick`，该文件因此加入 Touches。触摸用例（`mobileGestures.test.tsx`）无需改动。
+
+**画布高度链**。停靠区与画布共享的 flex ROW 嵌在「面板直接子节点」内部；面板那个直接子节点本身保持 `flex-1 flex flex-col`。若让 flex row 直接充当面板的子节点，`canvasLayoutContract.test.tsx` 的高度链契约就会在行容器上读 `flex-col` 而报红（行方向正是水平），且下方 `flex-1`/`h-full` 的解析基准也会跟着变。
 
 **自动打开的正确性**。停靠区自动打开效应只依赖 `selection`（不依赖 `dockOpen`），否则 Escape 关闭后会被「仍有选择」立刻重开——本实现第一版出现过该环并导致测试 worker 崩溃，现在由 Escape 用例（先关后再清、document 级 keydown 计数 0）钉住。
 
@@ -126,6 +129,15 @@ depends_on:
 - `selectionModel.test.ts` 4/4；`layoutAspect.test.tsx` 8/8；`dockInspector.test.tsx` 9/9
 - `chatMessageLocate.test.tsx` 3/3；`src/shared/tests/chatMessageLocator.test.ts` 3/3
 - `architectureTab.test.tsx` 65/65；`mobileGestures.test.tsx` 7/7；`mobileCompactToolbar.test.tsx` 9/9
-- `i18nArchitectureTabCompleteness.test.ts` 6/6；`npm run typecheck` 与 `npm run build` 通过
+- `i18nArchitectureTabCompleteness.test.ts` 6/6；`canvasLayoutContract.test.tsx` 3/3；`exportMenu.test.tsx` 11/11
+- `npm run typecheck` 与 `npm run build` 通过
 
 **DoD（真实浏览器）**：本 worker 会话未启动/重启本机 server（重启会杀掉承载会话的进程），浏览器读数与截图留给 fan-in 后的人工复核。
+
+## Blocker
+
+**2026-10-22T13:51:13.218Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/canvasLayoutContract.test.tsx: AssertionError [ERR_ASSERTION]: the canvas region stacks its rows in a column
+- run_id：wk-prod-anchor
+- session_id：366b91ed-92fe-4552-989f-5c5b7cf009be
