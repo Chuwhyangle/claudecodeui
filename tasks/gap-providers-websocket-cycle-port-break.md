@@ -2,7 +2,7 @@
 id: gap-providers-websocket-cycle-port-break
 title: 把 websocket 组拉出 5 成员依赖环：providers/services 的 2 处 websocket
   import（broadcastSessionUpserted/Batch + chatRunRegistry）改经端口注入，环缩为 3
-status: todo
+status: ready
 labels:
   - gap
 parent: null
