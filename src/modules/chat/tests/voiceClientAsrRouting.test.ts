@@ -517,6 +517,47 @@ describe('the fallback a given-up segment is uploaded to', () => {
   });
 });
 
+describe('the relay context field on a proxy upload', () => {
+  it('travels when the addressed recogniser declares that it honors context', async () => {
+    const relay = listProviders().find((adapter) => adapter.id === 'dashscope-omni-relay');
+    if (!relay) throw new Error('the relay recogniser is not registered');
+    setVoiceProviderProfile({ id: relay.id, capabilities: relay.capabilities });
+    const { uploads } = stubVoiceNetwork('整理后的文字');
+
+    await transcribeVoice(
+      segmentBlob(),
+      'segment-1.wav',
+      'listen-1',
+      { kind: 'stored' },
+      '用户：architecture tab 的节点看不出继承关系。',
+    );
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].headers['x-voice-provider']).toBe(relay.id);
+    expect(uploads[0].body.get('context')).toBe('用户：architecture tab 的节点看不出继承关系。');
+  });
+
+  it('is absent when the addressed recogniser does not acknowledge context', async () => {
+    const ordinary = listProviders().find(
+      (adapter) => adapter.capabilities.locality === 'remote' && !adapter.capabilities.honors.context,
+    );
+    if (!ordinary) throw new Error('the registry no longer declares a remote recogniser without context');
+    setVoiceProviderProfile({ id: ordinary.id, capabilities: ordinary.capabilities });
+    const { uploads } = stubVoiceNetwork('ordinary transcript');
+
+    await transcribeVoice(
+      segmentBlob(),
+      'segment-1.wav',
+      'listen-1',
+      { kind: 'stored' },
+      'this context must not be sent',
+    );
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0].body.get('context')).toBeNull();
+  });
+});
+
 describe('a segment that arrives while the model is still downloading', () => {
   it('leaves the device inside the readiness grace — not after the 30 s segment timeout — and is recognised by the fallback', async () => {
     vi.useFakeTimers();

@@ -589,6 +589,106 @@ test('AC6 the address book still opens with the factory entry and keeps every ea
   emit(`provider-capabilities ${dashscopeOmniId}=module-object health-provider=openai-compatible`);
 });
 
+// ── the relay row: context in the system turn, on the same chat wire ──────────────────────────
+
+/**
+ * The relay adapter, entered through the registry for the same TDZ reason the E adapter is.
+ *
+ * The row is a separate provider rather than a mode on `dashscope-omni`: the E prompt is a frozen
+ * measured artefact, and the relay prompt is the voice-input experiment's N1 arm. This reading
+ * drives the service, not the adapter directly, so it also proves the new row is dispatched through
+ * the same seam.
+ */
+const dashscopeRelay = await import(
+  '../../../../shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.js'
+);
+const dashscopeRelayId = dashscopeRelay.id;
+
+test('relay: the context is in the system turn and the tidied text is the answer', async () => {
+  const calls: Recorded[] = [];
+  const service = makeService({
+    calls,
+    answer: () => chatAnswer('现在可以看到 architecture tab 架构图了，但是看不出继承关系。'),
+  });
+  const settings: VoiceSettings = {
+    ...NO_USER_SETTINGS,
+    dashscopeEndpoint: 'https://dashscope.aliyuncs.com',
+    dashscopeApiKey: 'k-relay',
+  };
+  const context = '用户：architecture tab 的图里所有节点箭头都一样，看不出继承关系。';
+
+  const result = await service.transcribe({
+    audio: audioUpload(),
+    overrides: { providerId: dashscopeRelayId },
+    settings,
+    hints: { context },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ok ? result.value.text : '', '现在可以看到 architecture tab 架构图了，但是看不出继承关系。');
+  assert.equal(calls.length, 1, 'the relay row reaches the same outbound port as every other adapter');
+  assert.equal(calls[0].url, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions');
+
+  const body = JSON.parse(String(calls[0].body)) as {
+    messages: { role: string; content: unknown }[];
+    reasoning_effort: string;
+  };
+  const [system, user] = body.messages;
+  assert.equal(system.role, 'system');
+  assert.equal(typeof system.content, 'string');
+  assert.match(String(system.content), /architecture tab/, 'the context is part of the system instructions');
+  assert.doesNotMatch(
+    JSON.stringify(user.content),
+    /architecture tab/,
+    'the context is not repeated as user speech',
+  );
+  assert.match(JSON.stringify(user.content), /把这段录音整理成要发出去的文字/);
+  assert.equal(body.reasoning_effort, 'low');
+  emit(`relay context=system provider=${dashscopeRelayId} url=${calls[0].url}`);
+});
+
+test('relay: a JSON-shaped dictation is returned as text, not mistaken for an envelope', async () => {
+  const calls: Recorded[] = [];
+  const dictation = '{"feature":"voice","enabled":true}';
+  const service = makeService({ calls, answer: () => chatAnswer(dictation) });
+  const settings: VoiceSettings = {
+    ...NO_USER_SETTINGS,
+    dashscopeEndpoint: 'https://dashscope.aliyuncs.com',
+    dashscopeApiKey: 'k-relay',
+  };
+
+  const result = await service.transcribe({
+    audio: audioUpload(),
+    overrides: { providerId: dashscopeRelayId },
+    settings,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.ok ? result.value.text : '', dictation);
+  emit(`relay json-shaped-dictation=preserved provider=${dashscopeRelayId}`);
+});
+
+test('relay: an absent context leaves the system prompt at the no-context arm', async () => {
+  const calls: Recorded[] = [];
+  const service = makeService({ calls, answer: () => chatAnswer('丢词丢得太厉害。') });
+  const settings: VoiceSettings = {
+    ...NO_USER_SETTINGS,
+    dashscopeEndpoint: 'https://dashscope.aliyuncs.com',
+    dashscopeApiKey: 'k-relay',
+  };
+
+  const result = await service.transcribe({
+    audio: audioUpload(),
+    overrides: { providerId: dashscopeRelayId },
+    settings,
+  });
+
+  assert.equal(result.ok, true);
+  const body = JSON.parse(String(calls[0].body)) as { messages: { content: unknown }[] };
+  assert.doesNotMatch(String(body.messages[0].content), /以下是当前 Claude Code 会话的上下文/);
+  emit(`relay context=absent provider=${dashscopeRelayId}`);
+});
+
 // ── AC10: what this task does not do, and the transport it never uses ─────────────────────────
 
 /**

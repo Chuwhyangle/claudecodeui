@@ -59,9 +59,15 @@ export type VoiceContextPack = {
   text: string;
   /** `text.length` in UTF-16 code units — the unit the budget is expressed in. */
   chars: number;
-  /** How many conversation rows the pack carries. */
+  /**
+   * How many blocks the text was rendered from: conversation rows for {@link buildVoiceContextPack},
+   * and those rows plus any draft/voice blocks for {@link buildVoiceInputContextPack}.
+   */
   rows: number;
-  /** The rows the text was rendered from, oldest first — what a criterion compares against the transcript's own filters. */
+  /**
+   * The blocks the text was rendered from, in the order they appear — what a criterion compares
+   * against the transcript's own filters, or against the draft segments it handed in.
+   */
   entries: VoiceContextPackEntry[];
 };
 
@@ -73,6 +79,115 @@ export type VoiceContextPackOptions = {
   /** The clock the relative times are read against. Injected so a test's pack is deterministic. */
   now?: number;
 };
+
+/** The headings the one-shot dictation's own blocks render under, in priority order. */
+export const VOICE_INPUT_DRAFT_BEFORE_HEADING = '【光标前，用户此前输入】';
+export const VOICE_INPUT_DRAFT_AFTER_HEADING = '【光标后，用户此前输入】';
+export const VOICE_INPUT_VOICE_SO_FAR_HEADING = '【本次语音已经生成的文字（继续整理，不要重复）】';
+
+/** Separates the input pack's own blocks, and the conversation from them. Counted against the budget. */
+const VOICE_INPUT_BLOCK_SEPARATOR = '\n\n';
+
+/**
+ * What one one-shot dictation hands the recogniser as its context.
+ *
+ * ONE OBJECT RATHER THAN FOUR PARAMETERS, because the three draft/voice blocks and the conversation
+ * are ONE budget: a signature that took them separately could not say which of them the remaining
+ * room belongs to, and every caller would have to re-derive that ordering.
+ */
+export type VoiceInputContextPackOptions = {
+  /** The visible conversation rows, oldest first. Optional: a listen can run with none. */
+  messages?: readonly ChatMessage[];
+  /** The composer draft as it stood when the listen started, up to the caret. */
+  draftBefore?: string;
+  /** That same snapshot, from the caret on. */
+  draftAfter?: string;
+  /** What this listen has already committed. */
+  voiceSoFar?: string;
+  budgetChars?: number;
+  /** The clock the conversation rows' relative times are read against; injected for deterministic tests. */
+  now?: number;
+};
+
+/**
+ * The dictation pack: the composer's own draft around the caret, what this listen has said so far,
+ * then as much of the visible conversation as the remaining budget fits.
+ *
+ * WHY THE DRAFT COMES FIRST, AHEAD OF THE CONVERSATION. A one-shot dictation is usually an EDIT —
+ * 「把这段改短一点」, 「那个函数名改成驼峰」 — so what the person could already see in the box is
+ * what a spoken referent points at. The conversation is the fallback for a referent the draft does
+ * not contain; spending the budget on session history before the box would make the common case the
+ * one that loses.
+ *
+ * THE DRAFT IS PLACED BY SIDE, NOT AS ONE STRING, because the caret is where the dictation lands:
+ * the text before it is what an anaphor most likely refers to, and the text after it is the thing
+ * being written into. Each side is elided away from the caret, so a long draft loses its far end
+ * rather than the words the person is talking about.
+ *
+ * AN EMPTY SEGMENT RENDERS NOTHING — not an empty heading. A listen with no draft is the ordinary
+ * case, and a pack that announced 【光标前，用户此前输入】 followed by nothing would be telling the
+ * model about the absence of something rather than about anything said.
+ *
+ * THE TOTAL IS THE SAME HARD CAP AS THE CONVERSATION PACK ({@link VOICE_CONTEXT_BUDGET_CHARS}), and
+ * the conversation is built with exactly the room the draft blocks left, so this function's `chars`
+ * is always ≤ `budgetChars` for every input.
+ */
+export function buildVoiceInputContextPack(
+  options: VoiceInputContextPackOptions = {},
+): VoiceContextPack {
+  const budgetChars = options.budgetChars ?? VOICE_CONTEXT_BUDGET_CHARS;
+  const parts: string[] = [];
+  const entries: VoiceContextPackEntry[] = [];
+  let chars = 0;
+
+  /** Appends one heading+body block, elided towards the side the caller keeps when it cannot fit. */
+  const addBlock = (heading: string, body: string, keep: 'head' | 'tail') => {
+    const text = body.trim();
+    if (text === '') return;
+
+    const separator = parts.length === 0 ? '' : VOICE_INPUT_BLOCK_SEPARATOR;
+    // One newline between the heading and its body; both are inside the budget like any other text.
+    const room = budgetChars - chars - separator.length - heading.length - 1;
+    if (room <= 0) return;
+
+    const kept = Math.max(room - 1, 0);
+    const fitted = text.length <= room
+      ? text
+      : keep === 'head'
+        ? `${text.slice(0, kept)}…`
+        : `…${text.slice(text.length - kept)}`;
+    if (fitted === '') return;
+
+    const block = `${heading}\n${fitted}`;
+    parts.push(separator + block);
+    chars += separator.length + block.length;
+    entries.push({ label: heading, text: fitted });
+  };
+
+  // Priority order: the text facing the caret on each side, then what this listen already said.
+  addBlock(VOICE_INPUT_DRAFT_BEFORE_HEADING, options.draftBefore ?? '', 'tail');
+  addBlock(VOICE_INPUT_DRAFT_AFTER_HEADING, options.draftAfter ?? '', 'head');
+  addBlock(VOICE_INPUT_VOICE_SO_FAR_HEADING, options.voiceSoFar ?? '', 'head');
+
+  // The conversation gets WHAT IS LEFT, never a share of its own: the budget is one limit, and the
+  // existing builder already stops at the newest row that does not fit.
+  const separator = parts.length === 0 ? '' : VOICE_INPUT_BLOCK_SEPARATOR;
+  const remaining = budgetChars - chars - separator.length;
+  if (remaining > 0 && (options.messages?.length ?? 0) > 0) {
+    const conversation = buildVoiceContextPack(options.messages ?? [], {
+      budgetChars: remaining,
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+    if (conversation.text !== '') {
+      parts.push(separator + conversation.text);
+      chars += separator.length + conversation.text.length;
+      entries.push(...conversation.entries);
+    }
+  }
+
+  const text = parts.join('');
+  return { text, chars: text.length, rows: entries.length, entries };
+}
 
 /**
  * Whether one transcript row is something the person could see said.

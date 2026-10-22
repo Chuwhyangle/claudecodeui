@@ -64,6 +64,9 @@ const SHIPPING_FILES = [
   // and the third wire's own cases (AC3) need the module the probe drives, since a fixture that did
   // not carry it would make "the third wire is modelled" a claim about a tree nobody assembled.
   'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts',
+  // THE SIXTH ADAPTER IS PART OF THE FIXTURE FOR THE SAME REASON: the registry imports this module
+  // at load time, and it imports the E adapter's helpers, so both modules have to be present.
+  'shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts',
   // THE FOURTH ADAPTER IS PART OF THE FIXTURE FOR THE SAME REASON, and it is not optional either:
   // the registry imports this module at load time, so a fixture without it cannot load the registry
   // at all. It is also the only row that exercises the no-wire branch — a recogniser that declares

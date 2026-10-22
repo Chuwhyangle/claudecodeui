@@ -1,7 +1,7 @@
 ---
 id: gap-voice-input-draft-context-and-provisional-range
 title: Voice input P0：one-shot relay 注入编辑框草稿上下文 + composer 语音区间临时视觉标记
-status: ready
+status: done
 labels:
   - gap
 parent: null

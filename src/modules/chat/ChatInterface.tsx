@@ -639,6 +639,7 @@ function ChatInterface({
     deleteQueuedDraft,
     handleVoiceTranscript,
     handleVoiceListeningStart,
+    voiceRange,
     handleInputChange,
     handleKeyDown,
     handlePaste,
@@ -1204,6 +1205,8 @@ function ChatInterface({
           input={input}
           onVoiceTranscript={handleVoiceTranscript}
           onVoiceListeningStart={handleVoiceListeningStart}
+          voiceRange={voiceRange}
+          contextMessages={visibleMessages}
           scope={draftScope}
           sessionId={currentSessionId || selectedSession?.id || null}
           projectId={selectedProject?.projectId ?? null}

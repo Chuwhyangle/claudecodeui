@@ -70,6 +70,9 @@ const OPENAI_COMPATIBLE_MODULE = 'shared/asr/list/openai-compatible/openai-compa
  * it reads exactly like a probe that is red for everything.
  */
 const DASHSCOPE_OMNI_MODULE = 'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts';
+// The relay row is a sixth registry import. It shares the E adapter's module for its endpoint and
+// credential helpers, so both files have to be in the fixture; without it the registry cannot load.
+const DASHSCOPE_OMNI_RELAY_MODULE = 'shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts';
 const SENSEVOICE_LOCAL_MODULE = 'shared/asr/list/sensevoice-local/sensevoice-local.asr-provider.ts';
 
 /**
@@ -90,6 +93,7 @@ export const FIXTURE_FILES = [
   OPENAI_COMPATIBLE_MODULE,
   MULTIMODAL_MODULE,
   DASHSCOPE_OMNI_MODULE,
+  DASHSCOPE_OMNI_RELAY_MODULE,
   SENSEVOICE_LOCAL_MODULE,
   TRANSCRIPTION_WIRE_MODULE,
   'src/shared/api.ts',

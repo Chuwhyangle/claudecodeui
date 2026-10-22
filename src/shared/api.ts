@@ -1259,12 +1259,18 @@ export type VoiceUploadAddress =
  * made: an upload addressed to a recogniser nobody published would reach the server's default
  * provider — a service the user did not select — which is precisely the disclosure this addressing
  * exists to avoid.
+ *
+ * `context` IS A HINT, NOT A ROUTING DECISION. The caller builds the conversation pack; this
+ * function appends it to the multipart body only when the selected recogniser DECLARES
+ * `honors.context`. A provider that does not acknowledge context must not receive it, and the
+ * direct-backend branch has no wire field for it at all, so the field is simply absent there.
  */
 export async function transcribeVoice(
   blob: Blob,
   filename: string,
   listenId?: string,
   address: VoiceUploadAddress = { kind: 'stored' },
+  context?: string,
 ): Promise<Response> {
   const refusal = unregisteredProviderRefusal() ?? unsupportedContainerRefusal(blob.type);
   if (refusal) {
@@ -1330,6 +1336,9 @@ export async function transcribeVoice(
     // this upload with the listen's raw corpus row, and the direct branch below never reaches that
     // server — so appending it there would send a field no one reads.
     if (listenId !== undefined) body.append('listenId', listenId);
+    // The context is the recogniser's call: a provider whose declaration says it acknowledges a
+    // context receives it, and one that says otherwise never has it put on the wire.
+    if (context !== undefined && profile.capabilities.honors.context) body.append('context', context);
     return api.voice.transcribe(body, { ...voiceConfigHeaders(), 'x-voice-provider': profile.id });
   }
 
@@ -1373,6 +1382,12 @@ export async function transcribeVoice(
   const body = new FormData();
   body.append('audio', blob, filename);
   if (listenId !== undefined) body.append('listenId', listenId);
+  // The generic proxy branch keeps the server's own default. A context is appended only when the
+  // resolved profile is one this client knows ACKNOWLEDGES it; with no profile there is no
+  // declaration to read, and the safe reading is to send none.
+  if (context !== undefined && profile !== null && profile.capabilities.honors.context) {
+    body.append('context', context);
+  }
   return api.voice.transcribe(body, voiceConfigHeaders());
 }
 

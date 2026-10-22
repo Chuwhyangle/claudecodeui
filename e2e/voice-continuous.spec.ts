@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
@@ -67,7 +68,14 @@ const FLUSH_SEC = 0.5;
  */
 const IDLE_WINDOW_SEC = 120;
 
-type Recorded = { url: string; answer: string; index: number };
+/**
+ * One intercepted upload.
+ *
+ * `body` is the raw multipart payload, decoded as UTF-8: the relay context travels as a text field
+ * in exactly that body, so a criterion can read what the browser actually sent rather than what the
+ * hook meant to send.
+ */
+type Recorded = { url: string; answer: string; index: number; body: string };
 
 test.describe.configure({ mode: 'serial' });
 
@@ -86,6 +94,26 @@ test.describe('the continuous voice path end to end', () => {
    * is the one the failure leg makes fail, and every one of its attempts carries the same bytes.
    */
   const failAboveBytes: { value: number | null } = { value: null };
+
+  /**
+   * Writes the DoD's evidence — a screenshot and a context excerpt — when a directory is named.
+   *
+   * OFF BY DEFAULT. A criterion must not write into the tree it is judging, so the capture only
+   * happens for the run whose evidence is being collected (`P0_ARTIFACT_DIR`). The excerpt is the
+   * multipart `context` field alone, which is the pack the model would read: no headers, no key,
+   * no audio.
+   */
+  const captureEvidence = async (name: string, contextBody: string) => {
+    const dir = process.env.P0_ARTIFACT_DIR;
+    if (!dir) return;
+    mkdirSync(dir, { recursive: true });
+    await page.screenshot({ path: path.join(dir, `${name}.png`) });
+    const at = contextBody.indexOf('name="context"');
+    writeFileSync(
+      path.join(dir, `${name}.context.txt`),
+      at >= 0 ? contextBody.slice(at) : '<no context field in the upload>',
+    );
+  };
 
   /** The composer's textarea, the one place committed text lands. */
   const composer = () => page.locator('[data-slot="prompt-input-textarea"]');
@@ -278,10 +306,16 @@ test.describe('the continuous voice path end to end', () => {
     await page.route('**/api/voice/transcribe', async (route) => {
       const index = uploads.length;
       const answer = ANSWERS[Math.min(index, ANSWERS.length - 1)];
-      uploads.push({ url: route.request().url(), answer, index });
+      const postData = route.request().postDataBuffer();
+      uploads.push({
+        url: route.request().url(),
+        answer,
+        index,
+        body: postData ? postData.toString('utf8') : '',
+      });
       const delay = delayMs[index] ?? 0;
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      const bodyBytes = route.request().postDataBuffer()?.length ?? 0;
+      const bodyBytes = postData?.length ?? 0;
       if (failAboveBytes.value !== null && bodyBytes > failAboveBytes.value) {
         await route.fulfill({
           status: 500,
@@ -580,4 +614,95 @@ test.describe('the continuous voice path end to end', () => {
     expect([...added].sort()).toEqual(['voice-inflight-dot']);
     expect(before.testIds.every((id) => during.testIds.includes(id))).toBe(true);
   });
-});
+
+  /*
+   * Voice input P0: the DRAFT the box started in, and the PROVISIONAL range the dictation owns.
+   *
+   * THE RECOGNISER IS THE RELAY ROW. `dashscope-omni-relay` is the same service as the fixture's
+   * `dashscope-omni`, with `honors.context: true` — so the context the client sends is put on the
+   * wire instead of being dropped by the provider's own declaration. The settings are written through
+   * the app's own config endpoint and the next load hydrates them: seeding `localStorage` would lose
+   * to the server copy this run already imported in `beforeAll` (the legacy key is a migration source
+   * only). Because the row is proxy-only, the upload still lands on `/api/voice/transcribe`, which is
+   * where the route stand-in below reads it.
+   */
+
+  /** The draft typed before the mic is pressed. Distinctive, so its presence in a body is a reading. */
+  const P0_DRAFT = '请把架构页的说明改短一点：';
+
+  /** The relay row's settings — the fixture's service and credential fields, under the relay id. */
+  const P0_RELAY_CONFIG = {
+    baseUrl: '',
+    apiKey: '',
+    sttModel: '',
+    ttsModel: '',
+    ttsVoice: '',
+    ttsFormat: '',
+    providerId: 'dashscope-omni-relay',
+    dashscopeEndpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    dashscopeApiKey: 'sk-e2e-p0-relay-fake',
+    dashscopeModel: 'qwen3-asr-flash',
+  };
+
+  test('P0 voice input: the box keeps its draft, the dictation wears a provisional range, and the upload carries the draft', async () => {
+    test.setTimeout(45_000);
+
+    // Select the relay recogniser through the app's endpoint; 200 is the precondition, because every
+    // reading below is about a context that only this row acknowledges.
+    const saved = await page.evaluate(async (settings) => {
+      const token = window.localStorage.getItem('auth-token');
+      const response = await fetch('/api/voice/config', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(settings),
+      });
+      return response.status;
+    }, P0_RELAY_CONFIG);
+    expect(saved, 'the relay recogniser could not be selected').toBe(200);
+
+    // Open the composer first, THEN type the draft: the listen snapshots the box when the mic is
+    // pressed, so a draft typed after that would be a different (and wrong) reading.
+    await openComposer(`/?voiceDebug=1&voiceMinSegmentSec=${SMALL_MIN_SEC}`);
+    await composer().fill(P0_DRAFT);
+    await composer().press('End');
+    await expect(composer()).toHaveValue(P0_DRAFT);
+
+    await micButton().click();
+    await expect(stopButton()).toBeVisible({ timeout: 10_000 });
+    await expect
+      .poll(() => page.evaluate(() => Boolean((window as unknown as { __voiceFake?: { node?: unknown } }).__voiceFake?.node)))
+      .toBe(true);
+
+    // One spoken second, then a pause past the cut threshold: exactly one segment, so the single
+    // answer below is the whole dictation.
+    await speakThenCut();
+    await expect.poll(() => uploads.length, { timeout: 15_000 }).toBe(1);
+
+    // ① The box holds the draft with the dictation after it: the listen committed at the caret the
+    // press opened, which was the end of the draft.
+    await expect(composer()).toHaveValue(`${P0_DRAFT}${ANSWERS[0]}`, { timeout: 15_000 });
+
+    // ② The provisional range covers the dictation and only the dictation — not the draft prefix.
+    const provisional = page.locator('[data-voice-provisional="true"]');
+    await expect(provisional).toHaveCount(1);
+    await expect(provisional).toHaveText(ANSWERS[0]);
+
+    // ③ The upload carried the draft as the relay context. Read from the intercepted body, i.e. what
+    // the browser really sent, and in the multipart field the server parses.
+    const body = uploads[0].body;
+    expect(body, 'the upload carried no context field at all').toContain('name="context"');
+    expect(body, 'the context did not contain the draft the box started in').toContain(P0_DRAFT);
+
+    // The DoD's evidence: this moment — highlight up, draft still ordinary text — plus the pack.
+    await captureEvidence('voice-input-p0-provisional', body);
+
+    // ④ Stop: the listen ends, and the highlight goes with it — the words are ordinary text again.
+    await stopButton().click();
+    await expect(micButton()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-voice-provisional="true"]')).toHaveCount(0);
+    await expect(composer()).toHaveValue(`${P0_DRAFT}${ANSWERS[0]}`);
+  });
+  });

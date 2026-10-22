@@ -42,6 +42,7 @@
 | 2026-10-06 | **客户端本地识别可行性（D2）**：真实 Chromium 里的 SenseVoice-Small int8（onnxruntime-web 1.30.0 + 自写前端），60 条片段、单线程 vs `--isolated` 4 线程、移动视口 390×844 与 4× CPU 节流；T1 RTF p90 · T2 二次打开 · T3 WASM 堆 · T4 ≥0.85 置信度一致率 四闸全过 = 桌面 **go**；真机**待外部** | [2026-10-06-voice-client-asr-probe.md](./2026-10-06-voice-client-asr-probe.md) |
 | 2026-10-09 | **Realtime vs ASR→文本**的四类歧义 / world-model 配对理解质量：同批 24 条冻结语料（同音 6 · 自我更正 5 · 指代 5 · world-model 8）× 2 臂，单次运行；**A 10/24 · B 22/24**，7 条负对照全按预测方向移动（离线确定性替身，无 TTS、无 `--live`）；登记「bridge 工具集缺 `ui_selected_text`」 | [2026-10-09-voice-realtime-ambiguity.md](./2026-10-09-voice-realtime-ambiguity.md) |
 | 2026-10-09 | **真实音频 paired 对比**：同一段真实 TTS 音频（30 条，16 kHz WAV）喂两条**真**臂——A 真实 DashScope ASR→文本 vs B 真实 `qwen3.8-omni-flash-realtime` + Task A bridge（模型自主 function call + 真实 executor 回填）；24 条冻结语料 × 2 臂 × 3 次，单次运行，**180 条真实付费读数**。**A 21/72 · B 32/72**；B 的优势几乎全在**指代类**（A 0/15 是**结构性**：A 无工具通道，0→7 量的是「有没有通道」不是「理解更好」），而**纯语言理解类（自我更正）B 反而更弱**（4/15 vs 6/15）；工具风险两类各 1 次（未按要求调用 · 参数幻觉）如实登记；7 条对照全按预测方向移动；无 `SUSPECTED_STAND_IN`；**8/72 条 Arm B 退化读数**（连接掉 / 45 s 超时 / 空正文）——**GO（有条件）**：值得另立案 `gap-voice-realtime-session-send-smoke`，不给「理解更好」 | [2026-10-09-voice-realtime-real-paired.md](./2026-10-09-voice-realtime-real-paired.md) |
+| 2026-10-22 | **`dashscope-omni-relay` 的 `pauseCues` 证据继承**：同一服务/模型、同一条音频轴；relay 只改提示词与上下文位置，因此沿用 2026-09-24 的裁剪配对读数（不是一次新的音频轴运行） | [2026-10-22-omni-relay-pause-cues.md](./2026-10-22-omni-relay-pause-cues.md) |
 
 ## 工装
 

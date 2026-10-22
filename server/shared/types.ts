@@ -9,6 +9,7 @@ import type {
   AsrCapabilities,
   AsrCredentialFields,
   AsrErrorCode,
+  AsrHints,
   AsrRuntimeStatus,
 } from '../../shared/asr/asrRegistry.js';
 
@@ -2223,6 +2224,15 @@ export type VoiceService = {
      * configuration, and an absent document and an all-empty one are the same reading.
      */
     settings?: VoiceSettings;
+    /**
+     * The caller's hints for the selected recogniser, when it sent any.
+     *
+     * THE ONLY HINT THE TRANSPORT CARRIES TODAY IS `context`: the C2 conversation pack the voice
+     * relay mode uses to resolve a spoken referent. It is passed through unchanged and the adapter
+     * decides whether its own `honors.context` declaration acknowledges it; a provider that does
+     * not must leave it off the wire. It is never written to a capture row or a log line.
+     */
+    hints?: AsrHints;
     /**
      * The pairing id this listen's recording client minted, when it sent one.
      *
