@@ -20,6 +20,13 @@ extra: {}
 - **孤立节点标签带目录**：孤立（未分组）文件节点的显示名使用项目相对完整路径（沿用 `displayName` 前截不截后的规则，`MAX_DISPLAY_DIR_SEGMENTS`），与组标签风格一致；若实测发现 id 形态问题，同时修正对应的剥离逻辑。
 - 不改 SVG/DOM 契约（`data-entity-id`、`data-package-id` 不变），hover/下钻/爆炸 LOD 继续工作。
 
+### 实测结论（2026-10-22，实施前核实）
+
+- file 图 id = 项目相对路径（`.archguard` 各 scope 的 `sourcePrefix` + index 内文件键，如 `scripts/stamp-version.ts`、`plugin/scripts/…`、`packages/quay/src/…`），**不含** scopeKey。
+- entity 图 id = `<scopeKey>/<index 相对 id>`，scopeKey 是 manifest 里的 8-hex 不透明 token（如 `26b300e9/cli/action.ts.handleActionList`）。
+- 因此 `scopeRelativePath` 无条件剥第一段对 file 图就是错的：它把 `scripts/`、`src/`、`packages/` 当成了 scopeKey。孤立节点丢目录与组名缺顶层目录是同一个根因。
+- 修法落点比 Proposal 多一层：两个粒度必须有人**显式告知** id 形态，故把 `ArchitectureNodeIdShape`（`project-relative` | `scope-prefixed`）加进 renderer contract，由 panel（唯一知道当前子图是哪个的层）传给 renderer，再传给 bridge / readable-zoom / explosion LOD；比在 renderer 里猜（label===id、首段 8-hex 之类）可测且不易漂。
+
 ## AC
 
 - [ ] `npx vitest run src/modules/architecture/tests/adaptiveGrouping.test.ts` exit 0：任何输出的组 `count ≥ 2`；单成员目录的成员出现在 `ungroupedNodeIds`；折叠后总节点数守恒（组内节点数之和 + 未分组 = 输入）；既有「`scripts` 折成一个带计数的组」「组数 ≤ 上限」用例不回归
@@ -35,6 +42,12 @@ extra: {}
 
 - src/modules/architecture/adaptiveGrouping.ts
 - src/modules/architecture/archguardToPlantUml.ts
+- src/modules/architecture/rendererContract.ts
+- src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/readableZoom.ts
+- src/modules/architecture/explosionLod.ts
 - src/modules/architecture/tests/adaptiveGrouping.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/mobileGestures.test.tsx
 - tasks/architecture-grouping-singleton-and-label-polish.md
