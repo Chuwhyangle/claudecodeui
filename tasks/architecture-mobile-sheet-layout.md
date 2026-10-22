@@ -26,10 +26,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx` exit 0：粗指针档位下头部只有视角切换与 `调节` 两个控件；点 `调节` 出现 `role="dialog"` 抽屉，含范围/详情/筛选/搜索/导出；抽屉关闭后焦点回到 `调节` 按钮；抽屉打开时调节范围或筛选会更新画布读数；桌面档位不渲染抽屉
-- [ ] 同上命令新增用例：触摸提示是画布内气泡而不是独立一行，自动淡出或点击消失并被记住；缩略图默认收起，按钮 ≥ 44×44，点开后出现 `96×64` 缩略图且不与缩放簇重叠
-- [ ] 同上命令新增用例：所有架构相关控件命中区 ≥ 44×44、相邻间距 ≥ 8px（以 `getBoundingClientRect` 在 jsdom 注入的尺寸下断言）；图区高度占比断言 ≥ 85%
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（桌面不回归）；`npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx` exit 0：粗指针档位下头部只有视角切换与 `调节` 两个控件；点 `调节` 出现 `role="dialog"` 抽屉，含范围/详情/筛选/搜索/导出；抽屉关闭后焦点回到 `调节` 按钮；抽屉打开时调节范围或筛选会更新画布读数；桌面档位不渲染抽屉
+- [x] 同上命令新增用例：触摸提示是画布内气泡而不是独立一行，自动淡出或点击消失并被记住；缩略图默认收起，按钮 ≥ 44×44，点开后出现 `96×64` 缩略图且不与缩放簇重叠
+- [x] 同上命令新增用例：所有架构相关控件命中区 ≥ 44×44、相邻间距 ≥ 8px（以 `getBoundingClientRect` 在 jsdom 注入的尺寸下断言）；图区高度占比断言 ≥ 85%
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（桌面不回归）；`npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -58,4 +58,5 @@ depends_on:
 - src/modules/i18n/locales/tr/common.json
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
+- e2e/architecture-canvas-layout.spec.ts
 - tasks/architecture-mobile-sheet-layout.md
