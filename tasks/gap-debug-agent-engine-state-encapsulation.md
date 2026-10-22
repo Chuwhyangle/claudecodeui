@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **模块级可变容器归零**：`grep -nE "^const releaseStates = new Map" server/modules/debug-agent/debug-agent.engine.ts` 计数 = **0**。
-- [ ] (b) **类/实例持有状态**：`grep -nE "class DebugAgentReleaseRegistry|releaseStates" server/modules/debug-agent/debug-agent.engine.ts` 命中（状态已进类字段）。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 debug-agent.engine 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **模块级可变容器归零**：`grep -nE "^const releaseStates = new Map" server/modules/debug-agent/debug-agent.engine.ts` 计数 = **0**。
+- [x] (b) **类/实例持有状态**：`grep -nE "class DebugAgentReleaseRegistry|releaseStates" server/modules/debug-agent/debug-agent.engine.ts` 命中（状态已进类字段）。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 debug-agent.engine 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
@@ -45,3 +45,11 @@ extra:
 
 - `server/modules/debug-agent/debug-agent.engine.ts`（releaseStates Map → DebugAgentReleaseRegistry 私有字段）
 - `tasks/gap-debug-agent-engine-state-encapsulation.md`（自触）
+
+## Evidence
+
+① (a) `grep -cE "^const releaseStates = new Map" server/modules/debug-agent/debug-agent.engine.ts` ⇒ **0**。 (b) `grep -nE "class DebugAgentReleaseRegistry|releaseStates"` ⇒ L350 `class DebugAgentReleaseRegistry {`；私有字段 L351 `private readonly states = new Map<string, DebugAgentReleaseState>();`；显式单例 L449 `const releaseRegistry = new DebugAgentReleaseRegistry();`；方法 L362 `register` / L379 `release` / L404 `awaitRelease` / L443 `discard`；engine 调用点 L515 `releaseRegistry.register(appSessionId)`、L894 `await releaseRegistry.awaitRelease(appSessionId)`、L910 `releaseRegistry.discard(appSessionId)`，导出动词 L459 `return releaseRegistry.release(appSessionId)`。
+② (c) `bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test --test-concurrency=1 server/modules/debug-agent/tests/debug-agent-typed-turn.test.ts` ⇒ **退出 0**（tests 4 / pass 4 / fail 0，14045ms，含 `an await-release step holds the walk until the release is stated, and then lets it go`）；`… tests/debug-agent-control-plane.test.ts` ⇒ **退出 0**（tests 4 / pass 4 / fail 0，33942ms）。
+③ (d) `npx tsc --noEmit -p server/tsconfig.json` ⇒ **退出 0**；`npm run lint` ⇒ **退出 0**（仅既有 warning）。
+④ 纯位移核对：`releaseDebugAgentRun` 的三序语义（已释放 ⇒ 0；等待中 ⇒ 唤醒并返回 waiter 数；之后 ⇒ 0）逐字搬入 `DebugAgentReleaseRegistry.release`；`awaitRelease` 的「超时先从 waiters 摘除自己再以 `DEBUG_AGENT_RELEASE_TIMEOUT` 拒绝」逐字搬入；run 开始时 carry-over `released` 标志、run 结束时 delete 逐字搬入 `register` / `discard`。未改任何分支、定时数值、错误码或注释语义。无法收进类的状态：无（唯一可变 Map 已成私有字段；只读常量 `DEBUG_AGENT_RELEASE_CEILING_MS` 留在模块级）。
+⑤ (e) `git diff --name-only $(git merge-base HEAD develop) HEAD` ⇒ 仅 `server/modules/debug-agent/debug-agent.engine.ts`（实现提交 e3588c7a0），均在 Touches 内；`anti-drift-touches-check.js --merge-target develop` ⇒ **退出 0**（1 actual file(s)，all within declared Touches）。
