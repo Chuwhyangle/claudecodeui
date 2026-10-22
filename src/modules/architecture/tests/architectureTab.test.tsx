@@ -90,7 +90,9 @@ await i18next.use(initReactI18next).init({
   fallbackLng: 'en',
   ns: ['common'],
   defaultNS: 'common',
-  resources: { en: { common: enCommon } },
+  // zh-CN is loaded for the one case that reads the layout-budget sentence in
+  // the reviewed Chinese wording; the rest of the suite runs in English.
+  resources: { en: { common: enCommon }, 'zh-CN': { common: zhCNCommon } },
   interpolation: { escapeValue: false },
   react: { useSuspense: false },
 });
@@ -374,6 +376,44 @@ const DEEP_TREE_RESULT: ArchitectureGraphResult = {
     fileEdges: 2,
     nodeCount: 240,
     edgeCount: 2,
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
+ * A file graph larger than `LAYOUT_NODE_BUDGET` (600): 650 files in one flat
+ * directory. The identity tier (`all`) retains every one, so the layout budget
+ * must fall back to the highest tier that fits — `common`, 325 nodes — before
+ * the renderer is ever handed the graph.
+ */
+const OVER_BUDGET_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: {
+      nodes: Array.from({ length: 650 }, (_unused, index) => ({
+        id: `src/wide/file-${String(index)}.ts`,
+        label: `file-${String(index)}.ts`,
+        distance: 1,
+      })),
+      edges: [
+        { from: 'src/wide/file-0.ts', to: 'src/wide/file-1.ts', relationType: 'dependency' },
+      ],
+    },
+    entity: { nodes: [], edges: [] },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 0,
+    entityEdges: 0,
+    entityTotal: 0,
+    entityTruncated: false,
+    fileNodes: 650,
+    fileEdges: 1,
+    fileTotal: 650,
+    fileTruncated: false,
+    truncated: false,
+    nodeCount: 650,
+    edgeCount: 1,
   },
   provenance: RESULT.provenance,
 };
@@ -2193,6 +2233,11 @@ test('the one-line readout reports the shown and in-scope numbers from the detai
   assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '4');
   assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
   assert.match(summary()?.textContent ?? '', /Showing 4 files · 4 related/);
+  assert.equal(
+    document.querySelector('[data-architecture-layout-budget]'),
+    null,
+    'a graph within the layout budget adds no sentence to the readout',
+  );
 
   fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
   await waitFor(() => {
@@ -2202,6 +2247,54 @@ test('the one-line readout reports the shown and in-scope numbers from the detai
   });
   assert.equal(document.querySelector('[data-architecture-folded-badge]')?.getAttribute('data-architecture-folded-badge'), '2');
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no step of the detail knob may refetch');
+});
+
+test('an over-budget graph is capped before layout, and the readout says so with no render-all escape', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(OVER_BUDGET_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return null;
+  }
+
+  // The reviewed Chinese wording is the one this task promises the reader.
+  await i18next.changeLanguage('zh-CN');
+  try {
+    render(
+      <ArchitecturePanel
+        projectId="project-1"
+        sessionId="session-1"
+        initialGranularity="file"
+        renderer={StandInRenderer}
+      />,
+    );
+
+    const budget = await waitFor(() => {
+      const element = document.querySelector('[data-architecture-layout-budget]');
+      assert.ok(element instanceof HTMLElement, 'the readout must state the layout budget');
+      return element;
+    });
+    // 650 nodes at the identity tier do not fit 600, so the budget falls back
+    // to `common`, the highest detail tier that does (ceil(650 × 0.5)).
+    assert.equal(budget.getAttribute('data-architecture-layout-budget'), '325');
+    assert.equal(budget.getAttribute('data-architecture-layout-budget-tier'), 'common');
+    assert.equal(budget.getAttribute('data-architecture-layout-budget-dropped'), '325');
+    assert.match(budget.textContent ?? '', /已按布局预算显示 325 个/);
+    assert.match(budget.textContent ?? '', /调高详情会更慢/);
+
+    // The renderer receives the capped graph, never the payload's full 650.
+    assert.equal(seen.at(-1)?.graph.nodes.length, 325, 'the budget is applied BEFORE the layout');
+
+    // A freeze cannot be interrupted on the main thread, so there is no
+    // "render it all anyway" escape to offer.
+    assert.equal(document.querySelector('[data-architecture-layout-budget-all]'), null);
+    assert.doesNotMatch(
+      document.querySelector('[data-architecture-readout]')?.textContent ?? '',
+      /仍然全部渲染|render (it )?all/i,
+    );
+  } finally {
+    await i18next.changeLanguage('en');
+  }
 });
 
 test('both knobs are remembered per project across sessions and remounts', async () => {

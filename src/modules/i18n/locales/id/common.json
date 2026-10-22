@@ -123,6 +123,7 @@
       "raiseDetail": "Naikkan detail",
       "reduceScope": "Kurangi cakupan",
       "budgetOmitted": "{{count}} lainnya tidak disertakan karena anggaran node",
+      "layoutBudget": "Menampilkan {{count}} dalam anggaran tata letak; menaikkan detail lebih lambat",
       "kindFunction": "{{count}} fungsi",
       "kindInterface": "{{count}} antarmuka",
       "kindClass": "{{count}} kelas"
