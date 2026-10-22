@@ -1,7 +1,7 @@
 ---
 id: architecture-first-open-and-marker-polish
 title: 首次打开的小问题：空检查器的停靠区默认不展开、「Budget-limited」只在真有预算约束时出现、种子标记在种子占多数时降级
-status: todo
+status: ready
 labels:
   - feature
 parent: null
