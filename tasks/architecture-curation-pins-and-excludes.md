@@ -1,7 +1,7 @@
 ---
 id: architecture-curation-pins-and-excludes
 title: 手动调整：搜索加入（钉住）与移除/隐藏，撤销、管理弹层、按会话本地持久化，失效项按 (文件, 名字) 重新对应
-status: todo
+status: ready
 labels:
   - feature
 parent: null
