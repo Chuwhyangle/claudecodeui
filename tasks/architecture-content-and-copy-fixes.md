@@ -13,7 +13,7 @@ extra:
 
 2026-10-22 用 MCP 浏览器在本会话（claudecodeui 项目）看到一批「内容不准或说不清」的问题，彼此独立，集中在读数、检查器、会话页、文本复制与图例上。
 
-1. **范围与详情两个旋钮看起来是死的**：本会话里范围 +0/+1/+2/+3 渲染的图完全一样（40 个节点、viewBox 相同），详情 Core/Common/All 也一样，只有读数里「隐藏 N 个函数」在变（5→158→451→637）。原因是 40 个节点全是 `direct` 种子（免隐藏、免裁剪），扩展出来的邻居全被筛选隐藏。修法：读数在范围变化时说明「范围 +N 又找到 K 个相关，都被筛选隐藏（函数 F · 调用 C）」并带一键「显示函数」；详情无变化时在档位按钮上给提示「无变化：当前显示的 N 个都是会话里直接提到的」。
+1. **范围与详情两个旋钮看起来是死的**：本会话里范围 +0/+1/+2/+3 渲染的图完全一样（40 个节点、viewBox 相同），详情 Core/Common/All 也一样，只有读数里「隐藏 N 个函数」在变（5→158→451→637）。原因是 40 个节点全是 `direct` 种子（当时对元素筛选免隐藏、免详情裁剪；后续「会话提到的实体按种类决定是否保持显示、默认全关」的任务会改变这一点，所以本条的提示文案不得依赖「显示的都是会话直接提到的」），扩展出来的邻居全被筛选隐藏。修法：读数在范围变化时说明「范围 +N 又找到 K 个相关，都被筛选隐藏（函数 F · 调用 C）」并带一键「显示函数」；详情无变化时在档位按钮上给提示「无变化：当前范围内没有更多可裁剪的实体」。
 2. **复制出去的 PlantUML 把构造型拼进类名**：文本是 `class "<<function>> displayName" as n5`。修法：构造型作为真正的构造型（`class displayName as n5 <<function>>`）进入桥接与模型，`toPlantUml` 才能产出标准写法；画面上构造型的显示方式保持与现状等价（仍显示 `<<function>>` 与实体名，`data-entity-id` 不变）；文本中任何被引号包住的名字里不得出现 `<<`。
 3. **读数把函数叫「classes」**：`Showing 40 classes` 实际画出的是带橙框的 `<<function>>`。修法：改成按种类的如实说法「显示 40 个（40 函数）」，种类拆分取自被画出的实体。
 4. **`Filter ▾ 4 on` 的含义不明**：它数的是「正在隐藏东西的筛选项」，不是「打开的选项」，默认恰好有 4 个元素选项是开的，极易误读。修法：角标改为「隐藏中 N」并带 `title`/`aria-label` 说明；弹层里每个选项的开/关状态用文字或图标（✓）表达，不只靠底色深浅。
@@ -28,7 +28,7 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/readoutNumbers.test.ts src/modules/architecture/tests/architectureTab.test.tsx` exit 0：范围变化后读数出现「又找到 K 个相关，都被筛选隐藏」与「显示函数」操作，点击后函数出现；详情无变化时档位按钮有「无变化」提示；读数按种类如实说「N 个（F 函数 · C 类…）」，不再把函数叫 classes；筛选角标读「隐藏中 N」且有 `aria-label`；弹层选项开/关有 ✓ 或文字；文件图视角不出现类图的种类统计行
+- [ ] `npx vitest run src/modules/architecture/tests/readoutNumbers.test.ts src/modules/architecture/tests/architectureTab.test.tsx` exit 0：范围变化后读数出现「又找到 K 个相关，都被筛选隐藏」与「显示函数」操作，点击后函数出现；详情无变化时档位按钮有「无变化：当前范围内没有更多可裁剪的实体」提示（文案不引用「直接提到」）；读数按种类如实说「N 个（F 函数 · C 类…）」，不再把函数叫 classes；筛选角标读「隐藏中 N」且有 `aria-label`；弹层选项开/关有 ✓ 或文字；文件图视角不出现类图的种类统计行
 - [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：函数实体的文本是 `class <名> as <别名> <<function>>` 形态，任何带引号的名字里不含 `<<`；文本经 plantuml-js `checkSyntax` 无 error 且经 `parsePlantUml` 得到的构造型为 `function`；画面上仍有 `<<function>>` 与实体名（既有 DOM 契约用例不回归）
 - [ ] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx src/modules/architecture/tests/textPanel.test.tsx` exit 0：关系全被筛选隐藏的函数的检查器写「被筛选隐藏 N 条」并有「显示调用」；悬停提示不含 scope key（不含 `^[0-9a-f]{8}/`）；会话命中带类型徽标，按文件命中的写明「不是该名字」，摘录不从词中间开头；复制头部含项目名与会话标题
 - [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：成员类型 `import("/abs/path/Name").Type` 被归一为 `Type`，不含绝对路径；不带此类类型的既有响应逐字节不变
