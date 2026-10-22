@@ -1,7 +1,7 @@
 ---
 id: architecture-grouping-singleton-and-label-polish
 title: 分组去噪：单成员组直接画成节点，孤立文件节点带目录上下文
-status: ready
+status: done
 labels:
   - feature
 parent: null
