@@ -38,10 +38,10 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/elementRelationFilter.test.ts` exit 0：默认过滤下被提到的函数被隐藏；`keepMentionedKinds` 含 `function` 时被提到的函数显示、其它函数仍隐藏；被钉住的实体在任何设置下都显示；开关打开的种类里被提到的实体不被隐藏孤立节点移除，开关关闭时按普通节点被移除；`isFilterNarrower` 对 `keepMentionedKinds` 缩小为收窄、增加为放宽；`filtersEqual` 与 `activeFilterCount` 的用例；既有「`direct` 永不被隐藏」的断言已逐处改写
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts server/modules/architecture/tests/cache-invalidation.test.ts` exit 0：带 `kinds` 隐藏函数、不带 `keepMentionedKinds` 时被提到的函数不被画出但仍是遍历根（其允许种类的邻居出现）；带 `keepMentionedKinds: ['function']` 时被提到的函数被画出；不带 `kinds` 的请求响应与改前逐字节相同；非法 `keepMentionedKinds` 返回 400；缓存键因该参数不同而不同、相同组合第二次不重算；`stats.mentionedByKind` 与 `stats.hidden.mentionedByKind` 的计数与 fixture 构造一致且不受筛选影响或只反映被隐藏部分；被隐藏的被提到实体不占节点预算（`entityTruncated` 由 true 变 false 的 fixture）
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：默认状态下画面里没有被提到但被隐藏的函数；筛选弹层出现「会话里提到的」一节，按种类显示数量、数量为 0 的种类不出现、复选框状态有文字或 ✓ 表达；打开 `function` 的开关后被提到的函数出现且触发一次请求，收窄（关闭开关）不触发请求；读数第二行写出被隐藏的被提到函数数并带「显示提到的」，点击后函数出现；选择按项目记住且换项目隔离；既有用例中依赖「提到的函数默认可见」的断言已逐处改为显式设置（列在实施记录）
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/elementRelationFilter.test.ts` exit 0：默认过滤下被提到的函数被隐藏；`keepMentionedKinds` 含 `function` 时被提到的函数显示、其它函数仍隐藏；被钉住的实体在任何设置下都显示；开关打开的种类里被提到的实体不被隐藏孤立节点移除，开关关闭时按普通节点被移除；`isFilterNarrower` 对 `keepMentionedKinds` 缩小为收窄、增加为放宽；`filtersEqual` 与 `activeFilterCount` 的用例；既有「`direct` 永不被隐藏」的断言已逐处改写
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts server/modules/architecture/tests/cache-invalidation.test.ts` exit 0：带 `kinds` 隐藏函数、不带 `keepMentionedKinds` 时被提到的函数不被画出但仍是遍历根（其允许种类的邻居出现）；带 `keepMentionedKinds: ['function']` 时被提到的函数被画出；不带 `kinds` 的请求响应与改前逐字节相同；非法 `keepMentionedKinds` 返回 400；缓存键因该参数不同而不同、相同组合第二次不重算；`stats.mentionedByKind` 与 `stats.hidden.mentionedByKind` 的计数与 fixture 构造一致且不受筛选影响或只反映被隐藏部分；被隐藏的被提到实体不占节点预算（`entityTruncated` 由 true 变 false 的 fixture）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：默认状态下画面里没有被提到但被隐藏的函数；筛选弹层出现「会话里提到的」一节，按种类显示数量、数量为 0 的种类不出现、复选框状态有文字或 ✓ 表达；打开 `function` 的开关后被提到的函数出现且触发一次请求，收窄（关闭开关）不触发请求；读数第二行写出被隐藏的被提到函数数并带「显示提到的」，点击后函数出现；选择按项目记住且换项目隔离；既有用例中依赖「提到的函数默认可见」的断言已逐处改为显式设置（列在实施记录）
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -63,6 +63,7 @@ extra: {}
 - src/modules/architecture/tests/elementRelationFilter.test.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/shared/api.ts
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json
@@ -76,3 +77,38 @@ extra: {}
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-mentioned-entities-keep-by-kind.md
+
+## 实施记录
+
+### 语义改动（既有断言逐处改写）
+
+服务端（`generator.test.ts` / `architecture-routes.test.ts`）：
+
+1. 「元素筛选：被隐藏种类的节点不穿过（其后代不可达），direct 种子仍保留」→ 改名并改写为「……被提到的隐藏实体不画但仍是遍历根」：`identifiers: ['Fn']` 的 direct 函数种子不再被画出（`['A','D']`），开关打开后重新出现（`['A','D','Fn']`）。
+2. `stats.hidden` / `relationCounts` 与预算两处 `deepEqual` 增加 `mentionedByKind` 键；`mentionedByKind` 的读数断言由 `{}` 改为 `{ class: 1 }`（`A`/`Seed` 是唯一的直接提及）。
+3. 路由 `kinds: []` 用例：此前「distance-0 direct seed 免隐藏」⇒ 只剩 `Seed`；现在 `Seed` 也被隐藏（`[]` 且无 class 开关），新增 `keepMentionedKinds: ['class']` 一腿证明开关能把它带回来。
+4. 路由「a kinds filter…」用例的 direct seed 腿改写为：被提到的函数默认不画、其 class 邻居 `Deep` 仍出现（遍历根），`keepMentionedKinds: ['function']` 时重新画出。
+5. 缓存键用例新增 `keepMentionedKinds` 维度（不同列表 miss、同一组合（任意顺序）命中、generator 收到排序后的列表）；`cache-invalidation.test.ts` 的 `TestParams` 增加 `kinds`/`keepMentionedKinds` 并新增一条开关内容键用例。
+
+客户端（`elementRelationFilter.test.ts` / `architectureTab.test.tsx`）：
+
+1. 纯函数用例整体重写：默认下被提到的 `DF` 函数被隐藏并计入 `hidden.mentionedByKind`；`keepMentionedKinds: ['function']` 只放回被提到的那个；pinned 在任何设置下都显示；开关打开/关闭对孤立节点移除的两个方向各一条；`isFilterNarrower` 的收缩/放宽、`filtersEqual` 的集合比较、`activeFilterCount` 的计数各加用例。
+2. 依赖「提到的函数默认可见」的三个既有面板用例改为显式设置：`rememberDefaultWithMentionedFunctions()`（默认筛选 + `keepMentionedKinds: ['function']`）用于「entity boxes are UML class shapes…」「the class view opens on the entities themselves…」「the toolbar wraps instead of scrolling…」——断言本身未削弱，图仍是旧数据描述的同一张图。
+3. 新增四个面板用例：默认不画被提到的函数且弹层/读数提供入口；「显示提到的」只打开当前被隐藏的种类并发出一次请求；关闭开关是收窄、不发请求；开关按项目记住且另一项目从全关开始。
+
+### 读数
+
+- 纯函数：`elementRelationFilter.test.ts` 23 passed。
+- 服务端：`generator.test.ts` 20 passed；`cache-invalidation.test.ts` 13 passed；`architecture-routes.test.ts` 32 passed。
+- 客户端：`architectureTab.test.tsx` 81 passed（含 4 条新增）；`i18nArchitectureTabCompleteness.test.ts` 6 passed；`npm run typecheck`、`npm run build` 通过。
+- 新增 4 个文案键（`architecture.filter.mentioned` / `mentionedHint` / `mentionedInKind` / `showMentioned`）已写入全部 12 个 locale。
+
+### 设计取舍
+
+- `keepMentionedKinds` 只在带 `kinds` 时生效；单独发送时服务端接受并把结果交给 generator，但 generator 以 `params.kinds === undefined` 短路，所以响应与「无筛选」逐字节一致（`stats.mentionedByKind` 也不出现）。
+- 被隐藏的被提到实体保留在 `allEntityIds`（文件图投影与未过滤读数仍看到它打开的 scope），只从 `drawnDistance` 移除——因此不占实体节点预算，`entityTotal` 为被画出候选数。
+- 客户端 `isKindExempt` 与 `exemptFromIsolation` 分开：元素轴与孤立节点轴对「被提到」的判定在字面上是两条规则（规则 1 vs 规则 3），合并会让某项读数不成立。
+
+### DoD 状态
+
+DoD 要求真实浏览器在四个会话里核对前后截图与网络面板；本 worker 会话只完成代码、单测与构建，浏览器证据留给人工/后续验收。
