@@ -218,7 +218,11 @@
       "kindEnum": "enumeraciones",
       "kindAbstract": "clases abstractas",
       "kindFunction": "funciones",
-      "kindOther": "otros"
+      "kindOther": "otros",
+      "mentioned": "Mencionadas en esta sesión",
+      "mentionedHint": "Mantenerlas visibles aunque su tipo esté oculto",
+      "mentionedInKind": "{{count}} mencionadas en esta sesión",
+      "showMentioned": "▸ Mostrar mencionadas"
     },
     "scopeHygiene": {
       "summary": "Limpieza de scopes",

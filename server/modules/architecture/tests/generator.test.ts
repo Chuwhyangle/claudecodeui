@@ -724,7 +724,7 @@ const FILTER_INDEX: ArchIndex = {
 const STRUCTURAL_KINDS = ['class', 'interface', 'enum', 'abstract'] as const;
 const FILTER_SEED: GraphSeeds = { files: [], identifiers: ['A'] };
 
-test('元素筛选：被隐藏种类的节点不穿过（其后代不可达），direct 种子仍保留', () => {
+test('元素筛选：被隐藏种类的节点不穿过；被提到的隐藏实体不画但仍是遍历根', () => {
   // Kinds only: the adjacency is the index's own (dependencies/dependents), so
   // this leg isolates the ELEMENT axis. `Fn` is hidden and must not be used as
   // a stepping stone to `D`.
@@ -747,14 +747,46 @@ test('元素筛选：被隐藏种类的节点不穿过（其后代不可达）�
     'the emitted edges are between retained nodes, typed',
   );
 
-  // A direct mention is exempt even when its kind is hidden: `Fn` is seeded by
-  // its unique name (a direct tier), so a kinds-only filter still keeps it.
-  const directSeed = generateGraph(FILTER_INDEX, { files: [], identifiers: ['A', 'Fn'] }, {
-    hops: 0,
+  // A directly-mentioned function is NO LONGER exempt by default: with no
+  // "keep mentioned" switch for `function` it is hidden like any other function
+  // — but it is still a ROOT, so its allowed-kind neighbour `D` appears.
+  const hiddenMention = generateGraph(FILTER_INDEX, { files: [], identifiers: ['Fn'] }, {
+    hops: 1,
     maxNodes: 100,
     kinds: [...STRUCTURAL_KINDS],
   });
-  assert.deepEqual(entityLabels(directSeed), ['A', 'Fn'], 'the direct function seed survives the element filter');
+  assert.deepEqual(
+    entityLabels(hiddenMention),
+    ['A', 'D'],
+    'the mentioned function is not drawn, its class neighbours are',
+  );
+  assert.deepEqual(hiddenMention.stats.hidden?.byKind, { function: 1 });
+  assert.deepEqual(
+    hiddenMention.stats.hidden?.mentionedByKind,
+    { function: 1 },
+    'the hidden node is counted as a mentioned one',
+  );
+
+  // Turning the `function` switch on draws it again, and only it among the
+  // functions: `D` stays visible too (it was already an allowed kind).
+  const keptMention = generateGraph(FILTER_INDEX, { files: [], identifiers: ['Fn'] }, {
+    hops: 1,
+    maxNodes: 100,
+    kinds: [...STRUCTURAL_KINDS],
+    keepMentionedKinds: ['function'],
+  });
+  assert.deepEqual(entityLabels(keptMention), ['A', 'D', 'Fn'], 'the switch draws the mentioned function');
+  assert.deepEqual(keptMention.stats.mentionedByKind, { function: 1 }, 'the count is unfiltered');
+
+  // …and with hops 1 both roots are drawn: `A` (a visible class) and `Fn`
+  // (kept by the switch).
+  const twoRoots = generateGraph(FILTER_INDEX, { files: [], identifiers: ['A', 'Fn'] }, {
+    hops: 0,
+    maxNodes: 100,
+    kinds: [...STRUCTURAL_KINDS],
+    keepMentionedKinds: ['function'],
+  });
+  assert.deepEqual(entityLabels(twoRoots), ['A', 'Fn'], 'the kept mention survives the element filter');
 });
 
 test('关系筛选：只沿允许的关系类型扩展，未允许类型的边不发射', () => {
@@ -853,7 +885,100 @@ test('筛选后的预算：隐藏函数腾出的名额被结构性实体填补�
     byKind: { function: 6 },
     byRelation: {},
     isolated: 0,
+    mentionedByKind: {},
   });
+  // The mentioned denominator is the scope, not the switch: `Seed` is the one
+  // (class) mention, and no function was mentioned.
+  assert.deepEqual(filtered.stats.mentionedByKind, { class: 1 });
+});
+
+test('被隐藏的被提到实体不占节点预算：腾出的名额被普通实体填补（entityTruncated 由 true 变 false）', () => {
+  // Seed (class) plus one directly-mentioned function and two class neighbours,
+  // all one hop away. The mention is a distance-0 root, so without the new rule
+  // it would take one of the three budget slots and truncate the reading.
+  const index: ArchIndex = {
+    fileToIds: {
+      'seed.ts': ['seed.ts.Seed'],
+      'fn.ts': ['fn.ts.MFn'],
+      'k1.ts': ['k1.ts.K1'],
+      'k2.ts': ['k2.ts.K2'],
+    },
+    nameToIds: {
+      Seed: ['seed.ts.Seed'],
+      MFn: ['fn.ts.MFn'],
+      K1: ['k1.ts.K1'],
+      K2: ['k2.ts.K2'],
+    },
+    idToFile: {
+      'seed.ts.Seed': 'seed.ts',
+      'fn.ts.MFn': 'fn.ts',
+      'k1.ts.K1': 'k1.ts',
+      'k2.ts.K2': 'k2.ts',
+    },
+    idToName: {
+      'seed.ts.Seed': 'Seed',
+      'fn.ts.MFn': 'MFn',
+      'k1.ts.K1': 'K1',
+      'k2.ts.K2': 'K2',
+    },
+    dependencies: {
+      'seed.ts.Seed': ['fn.ts.MFn', 'k1.ts.K1', 'k2.ts.K2'],
+      'fn.ts.MFn': [],
+      'k1.ts.K1': [],
+      'k2.ts.K2': [],
+    },
+    dependents: {
+      'seed.ts.Seed': [],
+      'fn.ts.MFn': ['seed.ts.Seed'],
+      'k1.ts.K1': ['seed.ts.Seed'],
+      'k2.ts.K2': ['seed.ts.Seed'],
+    },
+    relationsByType: {
+      dependency: [
+        ['seed.ts.Seed', 'fn.ts.MFn'],
+        ['seed.ts.Seed', 'k1.ts.K1'],
+        ['seed.ts.Seed', 'k2.ts.K2'],
+      ],
+    },
+    entityDetails: {
+      'seed.ts.Seed': { kind: 'class', members: [] },
+      'fn.ts.MFn': { kind: 'function', members: [] },
+      'k1.ts.K1': { kind: 'class', members: [] },
+      'k2.ts.K2': { kind: 'class', members: [] },
+    },
+  };
+  const seeds: GraphSeeds = { files: [], identifiers: ['Seed', 'MFn'] };
+
+  const withoutSwitch = generateGraph(index, seeds, {
+    hops: 1,
+    maxNodes: 3,
+    kinds: [...STRUCTURAL_KINDS],
+  });
+  console.log(
+    `filter reading: mentioned budget nodes=${JSON.stringify(entityLabels(withoutSwitch))} ` +
+      `truncated=${String(withoutSwitch.stats.entityTruncated)} total=${String(withoutSwitch.stats.entityTotal)} ` +
+      `hidden=${JSON.stringify(withoutSwitch.stats.hidden)}`,
+  );
+  assert.deepEqual(entityLabels(withoutSwitch), ['K1', 'K2', 'Seed'], 'the hidden mention frees its slot');
+  assert.equal(withoutSwitch.stats.entityTotal, 3, 'the pre-budget total is the DRAWN candidate count');
+  assert.equal(withoutSwitch.stats.entityTruncated, false, 'three drawn candidates fit the three-node budget');
+  assert.deepEqual(withoutSwitch.stats.hidden?.byKind, { function: 1 });
+  assert.deepEqual(withoutSwitch.stats.hidden?.mentionedByKind, { function: 1 });
+  assert.deepEqual(withoutSwitch.stats.mentionedByKind, { class: 1, function: 1 }, 'unfiltered per-kind mentions');
+
+  // With the function switch on, the mention is drawn and consumes a slot —
+  // which is exactly the pre-switch reading: it truncates.
+  const withSwitch = generateGraph(index, seeds, {
+    hops: 1,
+    maxNodes: 3,
+    kinds: [...STRUCTURAL_KINDS],
+    keepMentionedKinds: ['function'],
+  });
+  assert.deepEqual(entityLabels(withSwitch), ['K1', 'MFn', 'Seed'], 'distance 0 wins the budget again');
+  assert.equal(withSwitch.stats.entityTotal, 4, 'all four reachable entities are candidates');
+  assert.equal(withSwitch.stats.entityTruncated, true);
+  assert.deepEqual(withSwitch.stats.hidden?.byKind, {});
+  assert.deepEqual(withSwitch.stats.hidden?.mentionedByKind, {});
 });
 
 test('stats.hidden / relationCounts 是未过滤的读数；不带筛选时两个键都不存在', () => {
@@ -877,16 +1002,22 @@ test('stats.hidden / relationCounts 是未过滤的读数；不带筛选时两�
     byKind: { function: 1 },
     byRelation: { call: 1, composition: 1 },
     isolated: 0,
+    mentionedByKind: {},
   });
   // The element popover's counts stay unfiltered: functions can be shown (and
   // re-enabled) even while they are hidden.
   assert.deepEqual(filtered.stats.kindCounts, { class: 3, function: 1, interface: 1 });
+  // The "keep mentioned" section's own numbers: `A` is the one direct mention
+  // in this seed, so the class row reads 1 and no function was mentioned.
+  assert.deepEqual(filtered.stats.mentionedByKind, { class: 1 });
+  assert.equal('mentionedByKind' in filtered.stats, true, 'an element filter always states the switch denominator');
 
   // No filter requested ⇒ the two filter-only readouts are absent entirely, so
   // the payload keeps its pre-filter shape.
   const unfiltered = generateGraph(FILTER_INDEX, FILTER_SEED, { hops: 2, maxNodes: 100 });
   assert.equal('hidden' in unfiltered.stats, false);
   assert.equal('relationCounts' in unfiltered.stats, false);
+  assert.equal('mentionedByKind' in unfiltered.stats, false, 'no element filter ⇒ no switch denominator');
   assert.equal(unfiltered.stats.entityTotal, 5, 'the unfiltered scope is the whole two-hop set');
   assert.deepEqual(entityLabels(unfiltered), ['A', 'B', 'C', 'D', 'Fn']);
 });

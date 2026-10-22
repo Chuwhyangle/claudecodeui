@@ -218,7 +218,11 @@
       "kindEnum": "Enums",
       "kindAbstract": "abstrakte Klassen",
       "kindFunction": "Funktionen",
-      "kindOther": "Sonstige"
+      "kindOther": "Sonstige",
+      "mentioned": "In dieser Sitzung erwähnt",
+      "mentionedHint": "Auch dann sichtbar lassen, wenn ihre Art ausgeblendet ist",
+      "mentionedInKind": "{{count}} in dieser Sitzung erwähnt",
+      "showMentioned": "▸ Erwähnte anzeigen"
     },
     "scopeHygiene": {
       "summary": "Scope-Bereinigung",

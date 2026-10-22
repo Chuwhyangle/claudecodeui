@@ -218,7 +218,11 @@
       "kindEnum": "列挙型",
       "kindAbstract": "抽象クラス",
       "kindFunction": "関数",
-      "kindOther": "その他"
+      "kindOther": "その他",
+      "mentioned": "このセッションで言及",
+      "mentionedHint": "種類が非表示でも表示したままにする",
+      "mentionedInKind": "このセッションで {{count}} 件言及",
+      "showMentioned": "▸ 言及されたものを表示"
     },
     "scopeHygiene": {
       "summary": "スコープの整理",

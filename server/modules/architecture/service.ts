@@ -184,6 +184,12 @@ export type ArchitectureGraphInput = {
   readonly maxNodes?: number;
   /** Entity kinds to keep; omitted means no element filter (the old reading). */
   readonly kinds?: readonly EntityKind[];
+  /**
+   * Entity kinds whose session-mentioned entities stay drawn even when the kind
+   * is hidden. Only meaningful alongside `kinds`; omitted means no kind is
+   * exempt. See the generator's `GenerateGraphParams.keepMentionedKinds`.
+   */
+  readonly keepMentionedKinds?: readonly EntityKind[];
   /** Relation types to keep; omitted means no relation filter (the old reading). */
   readonly relations?: readonly RelationType[];
   /**
@@ -210,6 +216,13 @@ export type ArchitectureGraphParams = {
    * to the pre-filter one.
    */
   readonly kinds?: readonly EntityKind[];
+  /**
+   * The "keep mentioned" switches, normalised (sorted + deduplicated) so two
+   * requests naming the same set in a different order share one content key.
+   * Part of the key because it changes which nodes the drawing contains.
+   * Omitted keeps a key written before the switches existed byte-identical.
+   */
+  readonly keepMentionedKinds?: readonly EntityKind[];
   /** The relation filter, same presence rule as {@link kinds}. */
   readonly relations?: readonly RelationType[];
   /**
@@ -971,6 +984,17 @@ function normalizeCurationIds(ids: readonly string[]): string[] {
   return [...new Set(ids)].sort();
 }
 
+/**
+ * Normalise a vocabulary list (the element/relation filters and the "keep
+ * mentioned" switches) for the content-addressed key.
+ *
+ * Same reasoning as {@link normalizeCurationIds}: the generator reads these as
+ * SETS, so a reordered request must not pay for a re-render.
+ */
+function normalizeVocabularyValues<T extends string>(values: readonly T[]): T[] {
+  return [...new Set(values)].sort();
+}
+
 function buildStats(
   reading: GenerateGraphResult,
   seeds: { readonly files: readonly string[]; readonly identifiers: readonly string[] },
@@ -1175,6 +1199,9 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         // undefined` key into the content-addressed params, or the same reading
         // would hash differently from the pre-filter one.
         ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+        ...(input.keepMentionedKinds === undefined
+          ? {}
+          : { keepMentionedKinds: normalizeVocabularyValues(input.keepMentionedKinds) }),
         ...(input.relations === undefined ? {} : { relations: input.relations }),
         ...(input.extraSeeds === undefined
           ? {}

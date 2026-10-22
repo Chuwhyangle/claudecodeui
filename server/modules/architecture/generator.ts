@@ -244,12 +244,28 @@ export type GenerateGraphParams = {
    * is why an old client (or a hand-written stub) that never heard of kinds
    * gets a byte-identical reading. When present, entities of a kind outside the
    * list are removed BEFORE the BFS (the traversal does not pass THROUGH them),
-   * and they are not counted against the node budget.
+   * and they are not counted against the node budget — with one exception:
+   * a direct seed of a hidden kind is still a ROOT (it expands), it just is not
+   * drawn unless its kind is in {@link keepMentionedKinds}.
    *
    * An entity whose `arch.json` detail is missing has no known kind and is
    * therefore never hidden by this axis: "unknown" is not "other".
    */
   readonly kinds?: readonly EntityKind[];
+  /**
+   * Entity kinds whose session-MENTIONED entities stay drawn even though the
+   * kind itself is hidden by {@link kinds} (the client popover's per-kind
+   * "keep mentioned" switches).
+   *
+   * Only meaningful together with `kinds`: with no element filter nothing is
+   * hidden, so this list has no effect (and an absent field keeps every
+   * pre-switch reading byte-identical). A directly-mentioned entity of a hidden
+   * kind NOT listed here is removed from the drawing but stays a traversal
+   * root — its allowed-kind neighbours still appear (the scope "+N" is
+   * unchanged). A PINNED entity is exempt regardless of this list. Omitted and
+   * an empty array mean the same thing: no kind is exempt.
+   */
+  readonly keepMentionedKinds?: readonly EntityKind[];
   /**
    * Relation types to keep, the relation filter's request half.
    *
@@ -318,6 +334,19 @@ export type GraphStats = {
    * legacy reading keeps its exact old stats shape.
    */
   readonly kindCounts?: Readonly<Partial<Record<EntityKind, number>>>;
+  /**
+   * How many entities the session mentioned DIRECTLY within the current scope,
+   * per {@link EntityKind}. The element filter's popover prints these numbers,
+   * so they are deliberately UNFILTERED: hiding functions must not make the
+   * "35 functions mentioned" reading disappear from the switch that would bring
+   * them back.
+   *
+   * Optional and present only when the request carried `kinds` (the element
+   * filter), so a payload written before this reading existed — and a
+   * relations-only request — keeps its exact old stats shape. An entity with no
+   * `arch.json` detail has no known kind and is not counted.
+   */
+  readonly mentionedByKind?: Readonly<Partial<Record<EntityKind, number>>>;
   /** The per-entity member cap this reading was generated with. */
   readonly membersPerEntity?: number;
   /** True when at least one retained node's member list was cut at `membersPerEntity`. */
@@ -375,6 +404,13 @@ export type ArchitectureFilterHidden = {
   readonly byKind: Readonly<Partial<Record<EntityKind, number>>>;
   readonly byRelation: Readonly<Partial<Record<RelationType, number>>>;
   readonly isolated: number;
+  /**
+   * The subset of `byKind` whose entities the session mentioned directly — the
+   * readout's "451 functions hidden (35 of them mentioned in this session)".
+   * Present only when the request carried `kinds`, alongside the top-level
+   * `mentionedByKind`.
+   */
+  readonly mentionedByKind?: Readonly<Partial<Record<EntityKind, number>>>;
 };
 
 /**
@@ -698,8 +734,10 @@ function typedNeighbours(index: ArchIndex): Map<string, TypedNeighbour[]> {
  * is never admitted as a neighbour (the traversal does not pass THROUGH it),
  * and an edge of a disallowed relation is not followed at all. `direct` seeds
  * are roots regardless of their kind — they are what the transcript actually
- * named. A `name`/`file` tier seed is an ordinary node: if its kind is hidden
- * it is removed with everything that only it could have reached.
+ * named — and whether such a root is DRAWN is decided later, by
+ * `keepMentionedKinds` (a hidden mention still expands, it just is not a node
+ * of the drawing). A `name`/`file` tier seed is an ordinary node: if its kind is
+ * hidden it is removed with everything that only it could have reached.
  *
  * Non-direct seeds are filtered exactly like any other node; there is no second
  * exemption. `isDirectSeed` reads the tier map (`undefined` tier = legacy
@@ -1037,6 +1075,30 @@ function countEntityKinds(
 }
 
 /**
+ * Count the entities the session mentioned DIRECTLY, by kind, over `ids`.
+ *
+ * `ids` is the UNFILTERED reachable scope, so the reading answers "how many
+ * functions in this neighbourhood did the transcript name" regardless of which
+ * kinds the request currently shows. An id with no `arch.json` detail has no
+ * known kind and is skipped (it cannot be attributed and is not invented as
+ * `other`), mirroring `countEntityKinds`.
+ */
+function countMentionedKinds(
+  index: ArchIndex,
+  ids: readonly string[],
+  isMentioned: (id: string) => boolean,
+): Partial<Record<EntityKind, number>> {
+  const counts: Partial<Record<EntityKind, number>> = {};
+  for (const id of ids) {
+    if (!isMentioned(id)) continue;
+    const kind = index.entityDetails?.[id]?.kind;
+    if (kind === undefined) continue;
+    counts[kind] = (counts[kind] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
  * The filter's own readout: what it removed, and the relation tally it removed
  * it from.
  *
@@ -1046,6 +1108,10 @@ function countEntityKinds(
  * unfiltered denominator; `hidden.byRelation` is the part of it the filter cut;
  * `hidden.isolated` is read from the FILTERED pre-budget set (the budget's own
  * cut is a different reading, reported by `entityTruncated`).
+ *
+ * The two exemption predicates are separate on purpose: the element axis keeps
+ * a mentioned entity only for a kind whose switch is on, while the isolated
+ * count applies the same rule to the mention and never to an ordinary node.
  */
 function filterReading(
   index: ArchIndex,
@@ -1053,7 +1119,9 @@ function filterReading(
   filteredIds: readonly string[],
   kinds: readonly EntityKind[] | undefined,
   relations: readonly RelationType[] | undefined,
-  isExempt: (id: string) => boolean,
+  isKindExempt: (id: string) => boolean,
+  isIsolationExempt: (id: string) => boolean,
+  isMentioned: (id: string) => boolean,
 ): { relationCounts: Partial<Record<RelationType, number>>; hidden: ArchitectureFilterHidden } {
   const relationCounts: Partial<Record<RelationType, number>> = {};
   const byRelation: Partial<Record<RelationType, number>> = {};
@@ -1065,11 +1133,15 @@ function filterReading(
   }
 
   const byKind: Partial<Record<EntityKind, number>> = {};
+  const mentionedByKind: Partial<Record<EntityKind, number>> = {};
   for (const id of unfilteredIds) {
-    if (isExempt(id)) continue;
+    if (isKindExempt(id)) continue;
     const kind = index.entityDetails?.[id]?.kind;
     if (kind === undefined || kinds === undefined || kinds.includes(kind)) continue;
     byKind[kind] = (byKind[kind] ?? 0) + 1;
+    if (isMentioned(id)) {
+      mentionedByKind[kind] = (mentionedByKind[kind] ?? 0) + 1;
+    }
   }
 
   const degree = new Map<string, number>();
@@ -1079,10 +1151,20 @@ function filterReading(
   }
   let isolated = 0;
   for (const id of filteredIds) {
-    if ((degree.get(id) ?? 0) === 0 && !isExempt(id)) isolated += 1;
+    if ((degree.get(id) ?? 0) === 0 && !isIsolationExempt(id)) isolated += 1;
   }
 
-  return { relationCounts, hidden: { byKind, byRelation, isolated } };
+  return {
+    relationCounts,
+    hidden: {
+      byKind,
+      byRelation,
+      isolated,
+      // Same presence rule as the top-level reading: the element filter was
+      // requested, so the switch's own count exists even when it is zero.
+      ...(kinds === undefined ? {} : { mentionedByKind }),
+    },
+  };
 }
 
 /**
@@ -1175,19 +1257,58 @@ export function generateGraph(
     params.excludeIds,
   );
   // A SEED with no tier (no provenance supplied, or an old payload) is the
-  // documented legacy direct mention: `direct` is the exemption the filters
-  // honour, so that reading has to be stated once, here. Resolved-set
-  // membership matters: "no tier" on a NON-seed is just "not a seed", never an
-  // exemption.
+  // documented legacy direct mention: "direct" is the tier the element filter
+  // reads when it decides whether a hidden kind's mention stays visible, so
+  // that reading has to be stated once, here. Resolved-set membership matters:
+  // "no tier" on a NON-seed is just "not a seed", never a mention.
   const isDirectSeed = (id: string): boolean => {
     if (!resolved.has(id)) return false;
     const tier = tiers?.get(id);
     return tier === undefined || tier === 'direct';
   };
-  // A pin is exempt from every filter axis, like a direct seed — but it is NOT
-  // a session seed and is drawn with its own badge.
+  // A pin is exempt from every filter axis — but it is NOT a session seed and
+  // is drawn with its own badge.
   const isPinned = (id: string): boolean => pinned.has(id);
-  const isExempt = (id: string): boolean => isDirectSeed(id) || isPinned(id);
+  // The kinds whose mentioned entities the reader chose to keep visible. Only
+  // an element filter can hide a kind, so with no `kinds` the list is inert.
+  const keepMentionedKinds: ReadonlySet<EntityKind> | undefined =
+    params.kinds === undefined ? undefined : new Set(params.keepMentionedKinds ?? []);
+  /**
+   * Whether a DIRECTLY-mentioned entity is hidden by the element axis anyway:
+   * its kind is filtered out and that kind's "keep mentioned" switch is off.
+   * Such an entity is not drawn, but it stays a traversal root (the scope "+N"
+   * is a fact about the transcript, not about the switches).
+   */
+  const isHiddenMentioned = (id: string): boolean => {
+    if (params.kinds === undefined || !isDirectSeed(id)) return false;
+    const kind = index.entityDetails?.[id]?.kind;
+    if (kind === undefined || params.kinds.includes(kind)) return false;
+    return !(keepMentionedKinds?.has(kind) ?? false);
+  };
+  /**
+   * Whether an entity of a HIDDEN kind is nevertheless kept by the element
+   * axis: a pin, or a direct mention whose kind's switch is on. A node with no
+   * known kind is never hidden by this axis at all, so it is exempt too.
+   */
+  const isKindExempt = (id: string): boolean => {
+    if (isPinned(id)) return true;
+    if (!isDirectSeed(id)) return false;
+    const kind = index.entityDetails?.[id]?.kind;
+    return kind === undefined || params.kinds === undefined || (keepMentionedKinds?.has(kind) ?? false);
+  };
+  /**
+   * Whether a node escapes the isolated-node count. Same rule as the client's:
+   * a pin always does; a direct mention only for a kind whose switch is on
+   * (with no element filter requested, every direct mention keeps the legacy
+   * exemption), and a node with no known kind keeps it too.
+   */
+  const isIsolationExempt = (id: string): boolean => {
+    if (isPinned(id)) return true;
+    if (!isDirectSeed(id)) return false;
+    if (params.kinds === undefined) return true;
+    const kind = index.entityDetails?.[id]?.kind;
+    return kind === undefined || (keepMentionedKinds?.has(kind) ?? false);
+  };
   const filtering = filterRequested(params);
   const distance = filtering
     ? expandSeedsFiltered(
@@ -1206,7 +1327,17 @@ export function generateGraph(
   // the FULL reachable set below, so its completeness does not depend on how
   // many entities this budget kept.
   const allEntityIds = candidatesByDistance(distance);
-  const { retained, truncated: entityTruncated } = applyBudget(distance, params.maxNodes);
+  // A mentioned entity of a hidden kind is not drawn and MUST NOT consume node
+  // budget: the slot it would have taken is what another entity fills (that is
+  // the whole budget half of this rule). It stays in `allEntityIds`, so the file
+  // projection and the unfiltered readings still see the scope it opened.
+  const hiddenMentionedIds = new Set(
+    params.kinds === undefined ? [] : allEntityIds.filter(isHiddenMentioned),
+  );
+  const drawnDistance = new Map(
+    [...distance].filter(([id]) => !hiddenMentionedIds.has(id)),
+  );
+  const { retained, truncated: entityTruncated } = applyBudget(drawnDistance, params.maxNodes);
   const entityEdges = collectEntityEdges(index, retained, params.relations);
 
   // Project every reachable entity onto its file before budgeting the file
@@ -1288,8 +1419,23 @@ export function generateGraph(
     ? candidatesByDistance(expandSeeds(index, resolved, hops, excluded))
     : allEntityIds;
   const kindCounts = countEntityKinds(index, unfilteredIds);
+  // The switch's own denominator: how many entities of each kind the session
+  // mentioned directly, over the UNFILTERED scope. Present only with an element
+  // filter, so a relations-only (or no-filter) payload keeps its old shape.
+  const mentionedByKind = params.kinds === undefined
+    ? undefined
+    : countMentionedKinds(index, unfilteredIds, isDirectSeed);
   const filterStats = filtering
-    ? filterReading(index, unfilteredIds, allEntityIds, params.kinds, params.relations, isExempt)
+    ? filterReading(
+      index,
+      unfilteredIds,
+      candidatesByDistance(drawnDistance),
+      params.kinds,
+      params.relations,
+      isKindExempt,
+      isIsolationExempt,
+      isDirectSeed,
+    )
     : undefined;
   // The manual-curation readout, present only when the request carried either
   // curation field. `pinned` is read from the EMITTED nodes (a node budget can
@@ -1316,9 +1462,10 @@ export function generateGraph(
       truncated: entityTruncated || fileTruncated,
       entityTruncated,
       fileTruncated,
-      entityTotal: allEntityIds.length,
+      entityTotal: drawnDistance.size,
       fileTotal: fileDistance.size,
       ...(kindCounts !== undefined ? { kindCounts } : {}),
+      ...(mentionedByKind !== undefined ? { mentionedByKind } : {}),
       // Both member readouts are emitted together or not at all: a payload with
       // no cap has nothing to report, and `membersTruncated: false` alone would
       // be a reading of a decision that was never made.

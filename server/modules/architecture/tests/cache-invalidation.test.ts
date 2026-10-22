@@ -133,6 +133,9 @@ type TestParams = {
   /** The two manual-curation knobs the service adds to the content key. */
   extraSeeds?: readonly string[];
   excludeIds?: readonly string[];
+  /** The element filter's two axes; the "keep mentioned" switches ride here. */
+  kinds?: readonly string[];
+  keepMentionedKinds?: readonly string[];
 };
 
 type TestReading = {
@@ -440,4 +443,28 @@ test('AC-417 curation params 计入内容键：extraSeeds/excludeIds 不同即 m
   await h.cache.getReading(makeKey(h.scope, { params: curated }), h.build);
   assert.equal(h.builds(), 3, 'the repeated curation combination performed no second generation');
   assert.equal(h.reads(), 1, 'curation-only changes stay on the parse-layer hit path');
+});
+
+test('AC-417 keep-mentioned switches 计入内容键：不同即 miss，相同即命中', async (t) => {
+  const h = createHarness(t);
+  const filtered = { hops: 1, maxNodes: 50, kinds: ['class', 'interface'], keepMentionedKinds: ['function'] };
+
+  await h.cache.getReading(makeKey(h.scope, { params: filtered }), h.build);
+  // A different switch is a different drawing (the mentioned functions move
+  // in or out), so it must re-render.
+  await h.cache.getReading(
+    makeKey(h.scope, { params: { ...filtered, keepMentionedKinds: ['class'] } }),
+    h.build,
+  );
+  // Removing the field entirely is yet another reading.
+  const { keepMentionedKinds: _omitted, ...withoutSwitches } = filtered;
+  await h.cache.getReading(makeKey(h.scope, { params: withoutSwitches }), h.build);
+  assert.equal(h.builds(), 3, 'each distinct switch combination must re-render');
+
+  // The same combination (a fresh, structurally equal key) hits. (The SERVICE
+  // sorts and de-duplicates the list before it reaches the cache; that
+  // normalisation is pinned on the request path in architecture-routes.test.)
+  await h.cache.getReading(makeKey(h.scope, { params: { ...filtered } }), h.build);
+  assert.equal(h.builds(), 3, 'the repeated switch combination performed no second generation');
+  assert.equal(h.reads(), 1, 'switch-only changes stay on the parse-layer hit path');
 });

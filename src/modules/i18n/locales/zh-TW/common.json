@@ -218,7 +218,11 @@
       "kindEnum": "列舉",
       "kindAbstract": "抽象類別",
       "kindFunction": "函式",
-      "kindOther": "其他"
+      "kindOther": "其他",
+      "mentioned": "工作階段中提及的",
+      "mentionedHint": "即使該種類被隱藏也保持顯示工作階段中提及的",
+      "mentionedInKind": "其中 {{count}} 個在工作階段中提及過",
+      "showMentioned": "▸ 顯示提及的"
     },
     "scopeHygiene": {
       "summary": "scope 清理",

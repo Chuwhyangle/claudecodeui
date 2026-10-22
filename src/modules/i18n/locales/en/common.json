@@ -224,7 +224,11 @@
       "kindEnum": "enums",
       "kindAbstract": "abstract classes",
       "kindFunction": "functions",
-      "kindOther": "others"
+      "kindOther": "others",
+      "mentioned": "Mentioned in this session",
+      "mentionedHint": "Keep these shown even when their kind is hidden",
+      "mentionedInKind": "{{count}} mentioned in this session",
+      "showMentioned": "▸ Show mentioned"
     },
     "scopeHygiene": {
       "summary": "Scope cleanup",

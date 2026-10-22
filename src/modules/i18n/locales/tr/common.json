@@ -218,7 +218,11 @@
       "kindEnum": "numaralandırmalar",
       "kindAbstract": "soyut sınıflar",
       "kindFunction": "fonksiyonlar",
-      "kindOther": "diğerleri"
+      "kindOther": "diğerleri",
+      "mentioned": "Bu oturumda anılanlar",
+      "mentionedHint": "Türleri gizli olsa bile görünür tut",
+      "mentionedInKind": "Bu oturumda {{count}} kez anıldı",
+      "showMentioned": "▸ Anılanları göster"
     },
     "scopeHygiene": {
       "summary": "Scope temizliği",

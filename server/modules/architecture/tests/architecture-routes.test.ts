@@ -1215,7 +1215,13 @@ type FilterBody = NeighborhoodBody & {
   mmd: { file: string; entity: string };
   stats: NeighborhoodBody['stats'] & {
     relationCounts?: Record<string, number>;
-    hidden?: { byKind: Record<string, number>; byRelation: Record<string, number>; isolated: number };
+    mentionedByKind?: Record<string, number>;
+    hidden?: {
+      byKind: Record<string, number>;
+      byRelation: Record<string, number>;
+      isolated: number;
+      mentionedByKind?: Record<string, number>;
+    };
   };
 };
 
@@ -1253,11 +1259,20 @@ test('no filter request keeps the pre-filter payload shape; the same reading is 
   assert.deepEqual(entityIdSet(explicitlyAll), entityIdSet(unfiltered));
   assert.deepEqual(edgeKeySet(explicitlyAll), edgeKeySet(unfiltered));
   assert.deepEqual(explicitlyAll.mmd, unfiltered.mmd, 'the export documents are identical too');
-  assert.deepEqual(explicitlyAll.stats.hidden, { byKind: {}, byRelation: {}, isolated: 0 });
+  assert.deepEqual(explicitlyAll.stats.hidden, {
+    byKind: {},
+    byRelation: {},
+    isolated: 0,
+    mentionedByKind: {},
+  });
   assert.deepEqual(explicitlyAll.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
+  // The mentioned denominator exists only because an element filter was asked
+  // for: `Seed` is the one (class) mention in this transcript.
+  assert.deepEqual(explicitlyAll.stats.mentionedByKind, { class: 1 });
+  assert.equal('mentionedByKind' in unfiltered.stats, false, 'no element filter ⇒ no switch denominator');
 });
 
-test('a kinds filter removes the kind before the BFS: its descendants are unreachable, its seeds survive', async (t) => {
+test('a kinds filter hides a mentioned entity of a hidden kind, which still expands the scope', async (t) => {
   const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
 
   const filtered = (await readGraphBody(root, SEED_TRANSCRIPT, {
@@ -1285,26 +1300,54 @@ test('a kinds filter removes the kind before the BFS: its descendants are unreac
 
   // The hidden counts are UNFILTERED readings: one function, and every edge of
   // the unfiltered scope by type.
-  assert.deepEqual(filtered.stats.hidden, { byKind: { function: 1 }, byRelation: {}, isolated: 0 });
+  assert.deepEqual(filtered.stats.hidden, {
+    byKind: { function: 1 },
+    byRelation: {},
+    isolated: 0,
+    mentionedByKind: {},
+  });
   assert.deepEqual(filtered.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
   // The element popover can still say "1 function" while hiding it.
   assert.deepEqual(filtered.stats.kindCounts, { class: 3, function: 1, interface: 1 });
+  // …and the switch's own denominator is unfiltered too: `Seed` is the mention.
+  assert.deepEqual(filtered.stats.mentionedByKind, { class: 1 });
 
-  // A seed the transcript names DIRECTLY survives its hidden kind: adding `Fn`
-  // to the transcript makes it a direct seed, which is the one exemption.
-  const directSeed = (await readGraphBody(
-    root,
-    [
-      ...SEED_TRANSCRIPT,
-      message({ id: 'text-2', kind: 'text', role: 'assistant', content: 'It calls `Fn` directly.' }),
-    ],
-    { hops: 2, kinds: STRUCTURAL_KIND_VALUES },
-  )) as FilterBody;
-  assert.ok(
-    entityIdSet(directSeed).includes('scope-src/Fn'),
-    'a directly mentioned function is never hidden by the element filter',
+  // Naming `Fn` DIRECTLY in the transcript no longer exempts it: it is hidden
+  // like any other function, but it stays a ROOT, so its class neighbour
+  // `Deep` (reachable only through it) is now in scope.
+  const mentionedTranscript = [
+    ...SEED_TRANSCRIPT,
+    message({ id: 'text-2', kind: 'text', role: 'assistant', content: 'It calls `Fn` directly.' }),
+  ];
+  const mentionedHidden = (await readGraphBody(root, mentionedTranscript, {
+    hops: 2,
+    kinds: STRUCTURAL_KIND_VALUES,
+  })) as FilterBody;
+  assert.equal(
+    entityIdSet(mentionedHidden).includes('scope-src/Fn'),
+    false,
+    'a directly mentioned function of a hidden kind is not drawn by default',
   );
-  assert.deepEqual(directSeed.stats.hidden?.byKind, {}, 'the direct function is not counted as hidden');
+  assert.ok(
+    entityIdSet(mentionedHidden).includes('scope-src/Deep'),
+    'the hidden mention is still a traversal root, so its allowed-kind neighbour appears',
+  );
+  assert.deepEqual(mentionedHidden.stats.hidden?.byKind, { function: 1 });
+  assert.deepEqual(mentionedHidden.stats.hidden?.mentionedByKind, { function: 1 });
+  assert.deepEqual(mentionedHidden.stats.mentionedByKind, { class: 1, function: 1 });
+
+  // Opening the `function` switch draws it again and empties the hidden counts.
+  const mentionedKept = (await readGraphBody(root, mentionedTranscript, {
+    hops: 2,
+    kinds: STRUCTURAL_KIND_VALUES,
+    keepMentionedKinds: ['function'],
+  })) as FilterBody;
+  assert.ok(
+    entityIdSet(mentionedKept).includes('scope-src/Fn'),
+    'the switch keeps the directly mentioned function drawn',
+  );
+  assert.deepEqual(mentionedKept.stats.hidden?.byKind, {});
+  assert.deepEqual(mentionedKept.stats.hidden?.mentionedByKind, {});
 });
 
 test('a relations filter expands only along the allowed types and emits only them', async (t) => {
@@ -1329,7 +1372,11 @@ test('a relations filter expands only along the allowed types and emits only the
 
 test('the filter participates in the content-addressed cache key (and a repeat is a hit)', async (t) => {
   const { root } = createIndexProject(t, FILTER_PROJECT_INDEX, FILTER_ARCHIVE);
-  const generatorCalls: Array<{ kinds?: readonly string[]; relations?: readonly string[] }> = [];
+  const generatorCalls: Array<{
+    kinds?: readonly string[];
+    keepMentionedKinds?: readonly string[];
+    relations?: readonly string[];
+  }> = [];
   const app = express();
   app.use(express.json());
   app.use(
@@ -1343,6 +1390,9 @@ test('the filter participates in the content-addressed cache key (and a repeat i
         generateGraph: (...args) => {
           generatorCalls.push({
             ...(args[2].kinds === undefined ? {} : { kinds: args[2].kinds }),
+            ...(args[2].keepMentionedKinds === undefined
+              ? {}
+              : { keepMentionedKinds: args[2].keepMentionedKinds }),
             ...(args[2].relations === undefined ? {} : { relations: args[2].relations }),
           });
           return generateGraph(...args);
@@ -1376,11 +1426,39 @@ test('the filter participates in the content-addressed cache key (and a repeat i
     assert.equal(body.provenance.cacheHit, true, 'the same combination must not be recomputed');
     assert.equal(generatorCalls.length, 2, 'the repeated combination performed no second generation');
 
+    // The "keep mentioned" switches are part of the same key: a different list
+    // is a different reading, and the same list (in any order) is a hit.
+    const kept = await postGraph(baseUrl, {
+      ...base,
+      kinds: STRUCTURAL_KIND_VALUES,
+      keepMentionedKinds: ['function', 'class'],
+    });
+    assert.equal(kept.status, 200);
+    body = (await kept.json()) as FilterBody;
+    assert.equal(body.provenance.cacheHit, false, 'a different switch set is a different key');
+    assert.equal(generatorCalls.length, 3);
+    assert.deepEqual(
+      generatorCalls[2]?.keepMentionedKinds,
+      ['class', 'function'],
+      'the generator receives the normalized (sorted) list',
+    );
+
+    const keptRepeat = await postGraph(baseUrl, {
+      ...base,
+      kinds: STRUCTURAL_KIND_VALUES,
+      keepMentionedKinds: ['class', 'function'],
+    });
+    assert.equal(keptRepeat.status, 200);
+    body = (await keptRepeat.json()) as FilterBody;
+    assert.equal(body.provenance.cacheHit, true, 'the same switch set must not be recomputed');
+    assert.equal(generatorCalls.length, 3);
+
     // The unfiltered reading is yet another key.
     assert.equal((await postGraph(baseUrl, base)).status, 200);
-    assert.equal(generatorCalls.length, 3);
-    assert.equal(generatorCalls[2]?.kinds, undefined, 'the unfiltered request carries no filtered params');
-    assert.equal(generatorCalls[2]?.relations, undefined);
+    assert.equal(generatorCalls.length, 4);
+    assert.equal(generatorCalls[3]?.kinds, undefined, 'the unfiltered request carries no filtered params');
+    assert.equal(generatorCalls[3]?.relations, undefined);
+    assert.equal(generatorCalls[3]?.keepMentionedKinds, undefined);
   });
   console.log(`filter reading: generator calls=${JSON.stringify(generatorCalls)}`);
 });
@@ -1407,6 +1485,8 @@ test('an unknown kind or relation type is refused with 400 rather than silently 
       { ...base, relations: ['dependency', 'handshake'] },
       { ...base, kinds: 'class' },
       { ...base, relations: [1] },
+      { ...base, kinds: ['class'], keepMentionedKinds: ['class', 'rocket'] },
+      { ...base, keepMentionedKinds: 'function' },
     ]) {
       const response = await postGraph(baseUrl, request);
       assert.equal(response.status, 400, `expected 400 for ${JSON.stringify(request)}`);
@@ -1415,12 +1495,26 @@ test('an unknown kind or relation type is refused with 400 rather than silently 
     }
 
     // An EMPTY array is legal and means "show none of that axis" — every
-    // non-exempt entity goes, and only the direct seed is left.
+    // entity goes now, including the directly mentioned class seed (a mention
+    // is no longer exempt without its kind's switch).
     const empty = await postGraph(baseUrl, { ...base, kinds: [], hops: 0 });
     assert.equal(empty.status, 200);
     const body = (await empty.json()) as FilterBody;
-    assert.deepEqual(entityIdSet(body), ['scope-src/Seed'], 'kinds: [] hides every non-exempt entity');
-    assert.deepEqual(body.stats.hidden?.byKind, {}, 'a distance-0 direct seed keeps its hidden kind intact');
+    assert.deepEqual(entityIdSet(body), [], 'kinds: [] hides every entity, mentioned or not');
+    assert.deepEqual(body.stats.hidden?.byKind, { class: 1 });
+    assert.deepEqual(body.stats.hidden?.mentionedByKind, { class: 1 });
+
+    // …and the class switch brings it back.
+    const kept = await postGraph(baseUrl, {
+      ...base,
+      kinds: [],
+      keepMentionedKinds: ['class'],
+      hops: 0,
+    });
+    assert.equal(kept.status, 200);
+    const keptBody = (await kept.json()) as FilterBody;
+    assert.deepEqual(entityIdSet(keptBody), ['scope-src/Seed'], 'the switch keeps the mentioned class');
+    assert.deepEqual(keptBody.stats.hidden?.byKind, {});
   });
 });
 

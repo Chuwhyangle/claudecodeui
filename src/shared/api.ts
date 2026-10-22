@@ -371,6 +371,12 @@ export const api = {
     hops?: number,
     filter?: {
       readonly kinds?: readonly string[];
+      /**
+       * The element filter's per-kind "keep mentioned" switches. Same
+       * vocabulary as `kinds`; omitted when empty, so a default request carries
+       * no new field.
+       */
+      readonly keepMentionedKinds?: readonly string[];
       readonly relations?: readonly string[];
       /** Manual pins: entity ids the reader added as roots. */
       readonly extraSeeds?: readonly string[];
@@ -383,6 +389,7 @@ export const api = {
       sessionId,
       ...(hops === undefined ? {} : { hops }),
       ...(filter?.kinds === undefined ? {} : { kinds: filter.kinds }),
+      ...(filter?.keepMentionedKinds === undefined ? {} : { keepMentionedKinds: filter.keepMentionedKinds }),
       ...(filter?.relations === undefined ? {} : { relations: filter.relations }),
       ...(filter?.extraSeeds === undefined ? {} : { extraSeeds: filter.extraSeeds }),
       ...(filter?.excludeIds === undefined ? {} : { excludeIds: filter.excludeIds }),

@@ -28,12 +28,15 @@ import type {
  * relation this client cannot name is at least as weak as a dependency, so it
  * survives `dependency`/`call` and disappears from `structural`.
  *
- * Only a `direct` mention is exempt from hiding, and only on distance-0 nodes.
- * `distance === 0` is NOT the same fact as "the transcript mentioned it": a
- * common name can resolve to hundreds of entities, so exempting every
- * distance-0 node would let same-name candidates hollow out the default
- * function-hiding. A payload with no `mentionTier` at all is the legacy
- * reading, where distance 0 WAS the seed, and is therefore treated as direct.
+ * A `direct` mention is NOT exempt from the element axis any more. The shipped
+ * rule (2026-10-23) is opt-in PER KIND: a kind listed in
+ * {@link ArchitectureElementRelationFilter.keepMentionedKinds} keeps the
+ * entities the session mentioned, every other kind hides them like any other
+ * node. `distance === 0` is NOT the same fact as "the transcript mentioned it":
+ * a common name can resolve to hundreds of entities, so the mention check reads
+ * the payload's `mentionTier`, and a payload with no `mentionTier` at all is the
+ * legacy reading where distance 0 WAS the seed. A `pinned` entity stays exempt
+ * from every axis, whatever the switches say.
  */
 
 /** The element axis' vocabulary, in the order the popover lists it. */
@@ -67,6 +70,14 @@ export type ArchitectureElementRelationFilter = {
   readonly relations: ArchitectureRelationPreset;
   /** Whether nodes with no incident edge are removed. */
   readonly hideIsolated: boolean;
+  /**
+   * The kinds whose session-mentioned entities stay visible even when the kind
+   * itself is hidden (the filter popover's per-kind "keep mentioned" switches).
+   * Empty by default: a mentioned entity of a hidden kind is hidden like any
+   * other, and no kind is exempt from the isolated-node cut just for having been
+   * mentioned. A `pinned` entity is exempt regardless of this list.
+   */
+  readonly keepMentionedKinds: readonly ArchitectureEntityKind[];
 };
 
 /**
@@ -74,12 +85,13 @@ export type ArchitectureElementRelationFilter = {
  * nodes the relation cut leaves isolated. Turning the relation preset to
  * `call` is what makes the isolated toggle default OFF again — with every edge
  * shown, an isolated node is a real fact about the analysis, not a side effect
- * of the filter.
+ * of the filter. No kind keeps its mentioned entities by default.
  */
 export const ARCHITECTURE_DEFAULT_FILTER: ArchitectureElementRelationFilter = {
   kinds: ARCHITECTURE_DEFAULT_ELEMENT_KINDS,
   relations: 'dependency',
   hideIsolated: true,
+  keepMentionedKinds: [],
 };
 
 /**
@@ -142,6 +154,14 @@ export type ArchitectureFilterHidden = {
   readonly byKind: Partial<Record<ArchitectureEntityKind, number>>;
   readonly byRelation: Record<string, number>;
   readonly isolated: number;
+  /**
+   * Of the nodes the element axis removed, how many were DIRECTLY mentioned by
+   * the session, per kind. It is a SUBSET of `byKind`, not an addition to it:
+   * it answers "how many of the hidden functions did this session name".
+   * Absent when no mentioned entity was hidden, so a pre-switch payload keeps
+   * its exact old shape.
+   */
+  readonly mentionedByKind?: Partial<Record<ArchitectureEntityKind, number>>;
 };
 
 /** The pure filter's answer: the surviving subgraph and the removals it made. */
@@ -152,20 +172,81 @@ export type ArchitectureFilterResult = {
 };
 
 /**
- * Whether a node is a DIRECT seed, the one exemption every axis honours.
+ * Whether a node was DIRECTLY mentioned by the session.
  *
  * An explicit `directSeedIds` membership wins; otherwise the payload's own
  * provenance decides. A distance-0 node with NO `mentionTier` is the legacy
  * payload, whose distance 0 was exactly "the transcript named this", so it is
  * direct. A `name`/`file` tier node is an ordinary node — which is the point:
- * distance 0 alone must not exempt it.
+ * distance 0 alone must not exempt it. A `pinned` node is not a session
+ * mention; it has its own exemption (see {@link isPinnedNode}).
  */
 function isDirectSeedNode(
   node: ArchitectureRendererNode,
   directSeedIds: ReadonlySet<string>,
 ): boolean {
+  if (node.mentionTier === 'pinned') return false;
   if (directSeedIds.has(node.id)) return true;
   return node.distance === 0 && (node.mentionTier === undefined || node.mentionTier === 'direct');
+}
+
+/** Whether the reader pinned this node by hand: exempt from every axis, always. */
+function isPinnedNode(node: ArchitectureRendererNode): boolean {
+  return node.mentionTier === 'pinned';
+}
+
+/**
+ * Whether a mentioned entity of a HIDDEN kind survives because its kind's
+ * "keep mentioned" switch is on.
+ *
+ * A node with no known kind has no switch to open, and the element axis never
+ * removes it anyway (see {@link applyFilter}), so it is not this exemption's
+ * business.
+ */
+function keepsMentionedKind(
+  node: ArchitectureRendererNode,
+  filter: ArchitectureElementRelationFilter,
+  directSeedIds: ReadonlySet<string>,
+): boolean {
+  if (node.kind === undefined) return false;
+  if (!filter.keepMentionedKinds.includes(node.kind)) return false;
+  return isDirectSeedNode(node, directSeedIds);
+}
+
+/**
+ * Whether a node survives the element axis.
+ *
+ * A pin always does. A node whose kind is shown does. A node with no known kind
+ * does ("no detail" is not `other`). Otherwise only a directly-mentioned entity
+ * of a kind whose switch is on survives; every other node of a hidden kind is
+ * removed, mentioned or not.
+ */
+function passesElementAxis(
+  node: ArchitectureRendererNode,
+  filter: ArchitectureElementRelationFilter,
+  directSeedIds: ReadonlySet<string>,
+): boolean {
+  if (isPinnedNode(node)) return true;
+  if (node.kind === undefined || filter.kinds.includes(node.kind)) return true;
+  return keepsMentionedKind(node, filter, directSeedIds);
+}
+
+/**
+ * Whether a node is exempt from the isolated-node cut.
+ *
+ * A pin always is. A directly-mentioned entity is exempt only for a kind whose
+ * switch is on — with the switch off it is an ordinary node and the removal
+ * applies to it like to any other. A node with no known kind has no switch, so
+ * it keeps the legacy "the seed is never an isolated casualty" reading.
+ */
+function exemptFromIsolation(
+  node: ArchitectureRendererNode,
+  filter: ArchitectureElementRelationFilter,
+  directSeedIds: ReadonlySet<string>,
+): boolean {
+  if (isPinnedNode(node)) return true;
+  if (!isDirectSeedNode(node, directSeedIds)) return false;
+  return node.kind === undefined || filter.keepMentionedKinds.includes(node.kind);
 }
 
 /**
@@ -182,6 +263,11 @@ function isDirectSeedNode(
  * File-graph nodes carry no kind at all, which is what makes this function safe
  * for the file view's relation-only filtering.
  *
+ * The removals are counted twice: `byKind` is every node the element axis took,
+ * and `mentionedByKind` is the subset of those the session mentioned directly.
+ * The second reading is what lets the readout say "451 functions hidden (35 of
+ * them mentioned in this session)" without a second pass.
+ *
  * Empty and fully-hidden inputs are ordinary answers, not errors.
  */
 export function applyFilter(
@@ -190,12 +276,17 @@ export function applyFilter(
   directSeedIds: ReadonlySet<string> = new Set<string>(),
 ): ArchitectureFilterResult {
   const byKind: Partial<Record<ArchitectureEntityKind, number>> = {};
+  const mentionedByKind: Partial<Record<ArchitectureEntityKind, number>> = {};
   const keptNodes = graph.nodes.filter((node) => {
-    if (isDirectSeedNode(node, directSeedIds)) return true;
-    if (node.kind === undefined || filter.kinds.includes(node.kind)) return true;
-    byKind[node.kind] = (byKind[node.kind] ?? 0) + 1;
+    if (passesElementAxis(node, filter, directSeedIds)) return true;
+    const kind = node.kind as ArchitectureEntityKind;
+    byKind[kind] = (byKind[kind] ?? 0) + 1;
+    if (isDirectSeedNode(node, directSeedIds)) {
+      mentionedByKind[kind] = (mentionedByKind[kind] ?? 0) + 1;
+    }
     return false;
   });
+  const hasMentionedHidden = Object.keys(mentionedByKind).length > 0;
 
   const keptIds = new Set(keptNodes.map((node) => node.id));
   const byRelation: Record<string, number> = {};
@@ -206,8 +297,15 @@ export function applyFilter(
     return false;
   });
 
+  const hiddenOf = (isolated: number): ArchitectureFilterHidden => ({
+    byKind,
+    byRelation,
+    isolated,
+    ...(hasMentionedHidden ? { mentionedByKind } : {}),
+  });
+
   if (!filter.hideIsolated) {
-    return { nodes: keptNodes, edges: relKeptEdges, hidden: { byKind, byRelation, isolated: 0 } };
+    return { nodes: keptNodes, edges: relKeptEdges, hidden: hiddenOf(0) };
   }
 
   const degree = new Map<string, number>();
@@ -218,14 +316,14 @@ export function applyFilter(
 
   let isolated = 0;
   const finalNodes = keptNodes.filter((node) => {
-    if ((degree.get(node.id) ?? 0) > 0 || isDirectSeedNode(node, directSeedIds)) return true;
+    if ((degree.get(node.id) ?? 0) > 0 || exemptFromIsolation(node, filter, directSeedIds)) return true;
     isolated += 1;
     return false;
   });
   const finalIds = new Set(finalNodes.map((node) => node.id));
   const finalEdges = relKeptEdges.filter((edge) => finalIds.has(edge.from) && finalIds.has(edge.to));
 
-  return { nodes: finalNodes, edges: finalEdges, hidden: { byKind, byRelation, isolated } };
+  return { nodes: finalNodes, edges: finalEdges, hidden: hiddenOf(isolated) };
 }
 
 /**
@@ -233,9 +331,12 @@ export function applyFilter(
  * panel filter the arrived payload instead of asking the server again.
  *
  * Narrower means every axis keeps a subset: the kind list shrinks (set
- * inclusion, not size), the relation preset moves down or stays, and the
- * isolated toggle is at least as aggressive. Equality counts as narrower (it is
- * the no-op case a caller should skip before rendering work).
+ * inclusion, not size), the relation preset moves down or stays, the isolated
+ * toggle is at least as aggressive, and the "keep mentioned" list shrinks — a
+ * kind whose switch is turned OFF hides more than before, while turning one ON
+ * can only bring back entities an arrived payload may no longer carry.
+ * Equality counts as narrower (it is the no-op case a caller should skip before
+ * rendering work).
  */
 export function isFilterNarrower(
   next: ArchitectureElementRelationFilter,
@@ -244,7 +345,8 @@ export function isFilterNarrower(
   const kindsSubset = next.kinds.every((kind) => previous.kinds.includes(kind));
   const relationsNarrower = PRESET_RANK[next.relations] <= PRESET_RANK[previous.relations];
   const isolatedNarrower = next.hideIsolated || !previous.hideIsolated;
-  return kindsSubset && relationsNarrower && isolatedNarrower;
+  const mentionedSubset = next.keepMentionedKinds.every((kind) => previous.keepMentionedKinds.includes(kind));
+  return kindsSubset && relationsNarrower && isolatedNarrower && mentionedSubset;
 }
 
 /** True when the two selections describe the same shown set. */
@@ -254,28 +356,38 @@ export function filtersEqual(
 ): boolean {
   const sameKinds =
     left.kinds.length === right.kinds.length && left.kinds.every((kind) => right.kinds.includes(kind));
-  return sameKinds && left.relations === right.relations && left.hideIsolated === right.hideIsolated;
+  const sameMentioned =
+    left.keepMentionedKinds.length === right.keepMentionedKinds.length
+    && left.keepMentionedKinds.every((kind) => right.keepMentionedKinds.includes(kind));
+  return sameKinds && left.relations === right.relations && left.hideIsolated === right.hideIsolated
+    && sameMentioned;
 }
 
 /**
  * How many filter decisions are non-default, the number the toolbar badge
- * states. It counts the hidden kinds plus each non-`call` relation preset plus
- * the isolated toggle, so "已启用 N 项" answers "how much is this tab doing to
- * the graph" rather than "how many checkboxes exist".
+ * states. It counts the hidden kinds, each non-`call` relation preset, the
+ * isolated toggle, and every kind whose "keep mentioned" switch is on, so
+ * "已启用 N 项" answers "how much is this tab doing to the graph" rather than
+ * "how many checkboxes exist".
  */
 export function activeFilterCount(filter: ArchitectureElementRelationFilter): number {
   const hiddenKinds = ARCHITECTURE_ELEMENT_KINDS.filter((kind) => !filter.kinds.includes(kind)).length;
-  return hiddenKinds + (filter.relations === 'call' ? 0 : 1) + (filter.hideIsolated ? 1 : 0);
+  return hiddenKinds
+    + (filter.relations === 'call' ? 0 : 1)
+    + (filter.hideIsolated ? 1 : 0)
+    + filter.keepMentionedKinds.length;
 }
 
 /**
  * The "show everything" selection behind the readout's one-click reset: every
- * kind, every relation, and no isolated-node removal.
+ * kind, every relation, and no isolated-node removal. The "keep mentioned"
+ * switches are irrelevant here (nothing is hidden), so they reset to empty.
  */
 export const ARCHITECTURE_SHOW_ALL_FILTER: ArchitectureElementRelationFilter = {
   kinds: ARCHITECTURE_ELEMENT_KINDS,
   relations: 'call',
   hideIsolated: false,
+  keepMentionedKinds: [],
 };
 
 /** The total number of items a `hidden` reading says were removed. */

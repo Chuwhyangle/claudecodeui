@@ -218,7 +218,11 @@
       "kindEnum": "열거형",
       "kindAbstract": "추상 클래스",
       "kindFunction": "함수",
-      "kindOther": "기타"
+      "kindOther": "기타",
+      "mentioned": "이 세션에서 언급됨",
+      "mentionedHint": "종류가 숨겨져 있어도 계속 표시",
+      "mentionedInKind": "이 세션에서 {{count}}개 언급됨",
+      "showMentioned": "▸ 언급된 항목 표시"
     },
     "scopeHygiene": {
       "summary": "스코프 정리",

@@ -218,7 +218,11 @@
       "kindEnum": "enum",
       "kindAbstract": "kelas abstrak",
       "kindFunction": "fungsi",
-      "kindOther": "lainnya"
+      "kindOther": "lainnya",
+      "mentioned": "Disebut dalam sesi ini",
+      "mentionedHint": "Tetap tampilkan meskipun jenisnya disembunyikan",
+      "mentionedInKind": "{{count}} disebut dalam sesi ini",
+      "showMentioned": "▸ Tampilkan yang disebut"
     },
     "scopeHygiene": {
       "summary": "Pembersihan scope",

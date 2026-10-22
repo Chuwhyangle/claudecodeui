@@ -218,7 +218,11 @@
       "kindEnum": "enum",
       "kindAbstract": "classi astratte",
       "kindFunction": "funzioni",
-      "kindOther": "altri"
+      "kindOther": "altri",
+      "mentioned": "Menzionate in questa sessione",
+      "mentionedHint": "Mantienile visibili anche quando il tipo è nascosto",
+      "mentionedInKind": "{{count}} menzionate in questa sessione",
+      "showMentioned": "▸ Mostra le menzionate"
     },
     "scopeHygiene": {
       "summary": "Pulizia degli scope",

@@ -108,6 +108,13 @@ export type ArchitectureSeedStats = {
  */
 export type ArchitectureGraphQuery = {
   readonly kinds?: readonly ArchitectureEntityKind[];
+  /**
+   * The element filter's per-kind "keep mentioned" switches: kinds whose
+   * session-mentioned entities stay drawn even though the kind is hidden.
+   * Only meaningful alongside `kinds`, and omitted when empty so a default
+   * request stays byte-identical to the pre-switch one.
+   */
+  readonly keepMentionedKinds?: readonly ArchitectureEntityKind[];
   readonly relations?: readonly string[];
   /** Manual pins: entity ids the reader added as roots (server `extraSeeds`). */
   readonly extraSeeds?: readonly string[];
@@ -124,6 +131,12 @@ export type ArchitectureFilterHiddenStats = {
   readonly byKind: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
   readonly byRelation: Readonly<Record<string, number>>;
   readonly isolated: number;
+  /**
+   * The subset of `byKind` the session mentioned directly, per kind. Absent
+   * when no mentioned entity was hidden (an older server never sends it), so
+   * the readout's "N of them mentioned" clause only appears when it is true.
+   */
+  readonly mentionedByKind?: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
 };
 
 /**
@@ -155,6 +168,12 @@ export type ArchitectureGraphStats = {
    * that is absent from the map has a count of zero.
    */
   readonly kindCounts?: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
+  /**
+   * UNFILTERED counts of the entities the session mentioned directly, per kind
+   * — the "keep mentioned" section's numbers. Absent when the request carried
+   * no element filter (and on payloads written before the switches existed).
+   */
+  readonly mentionedByKind?: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
   /** The per-entity member cap the server applied to `node.members`. */
   readonly membersPerEntity?: number;
   /** True when at least one node's member list was cut at `membersPerEntity`. */

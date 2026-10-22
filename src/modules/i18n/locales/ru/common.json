@@ -218,7 +218,11 @@
       "kindEnum": "перечисления",
       "kindAbstract": "абстрактные классы",
       "kindFunction": "функции",
-      "kindOther": "прочие"
+      "kindOther": "прочие",
+      "mentioned": "Упомянуто в этой сессии",
+      "mentionedHint": "Показывать, даже если их тип скрыт",
+      "mentionedInKind": "{{count}} упомянуто в этой сессии",
+      "showMentioned": "▸ Показать упомянутые"
     },
     "scopeHygiene": {
       "summary": "Очистка scope",

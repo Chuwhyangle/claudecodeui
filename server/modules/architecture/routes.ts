@@ -116,7 +116,9 @@ function optionalIdListField(
  * service supplies the ADR defaults, and an explicit zero is legal (a zero-hop
  * graph is the seeds themselves; a zero budget is an empty graph). `kinds` and
  * `relations` are the optional element/relation filters; leaving both out is
- * the old, unfiltered reading.
+ * the old, unfiltered reading. `keepMentionedKinds` is the element filter's
+ * per-kind "keep mentioned" switch list — same vocabulary, same 400 on an
+ * unknown value; it is inert without `kinds`.
  */
 function readGraphInput(body: unknown): ArchitectureGraphInput {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
@@ -124,6 +126,11 @@ function readGraphInput(body: unknown): ArchitectureGraphInput {
   }
   const record = body as Record<string, unknown>;
   const kinds = optionalVocabularyField<EntityKind>(record, 'kinds', ENTITY_KINDS);
+  const keepMentionedKinds = optionalVocabularyField<EntityKind>(
+    record,
+    'keepMentionedKinds',
+    ENTITY_KINDS,
+  );
   const relations = optionalVocabularyField<RelationType>(record, 'relations', RELATION_TYPES);
   const extraSeeds = optionalIdListField(record, 'extraSeeds', MAX_EXTRA_SEEDS);
   const excludeIds = optionalIdListField(record, 'excludeIds', MAX_EXCLUDE_IDS);
@@ -133,6 +140,7 @@ function readGraphInput(body: unknown): ArchitectureGraphInput {
     hops: optionalCountField(record, 'hops'),
     maxNodes: optionalCountField(record, 'maxNodes'),
     ...(kinds === undefined ? {} : { kinds }),
+    ...(keepMentionedKinds === undefined ? {} : { keepMentionedKinds }),
     ...(relations === undefined ? {} : { relations }),
     ...(extraSeeds === undefined ? {} : { extraSeeds }),
     ...(excludeIds === undefined ? {} : { excludeIds }),

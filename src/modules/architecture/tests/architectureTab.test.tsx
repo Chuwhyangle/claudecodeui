@@ -681,6 +681,27 @@ function rememberShowAllFilter(projectId = 'project-1'): void {
   );
 }
 
+/**
+ * Remember the SHIPPED default with the `function` mention switch on.
+ *
+ * A case whose fixture has a directly-mentioned function (`CLASS_DIAGRAM_RESULT`)
+ * used to see it drawn for free: the old rule exempted every direct mention.
+ * Since 2026-10-23 a mention is kept only for a kind whose switch is on, so such
+ * a case states that switch explicitly — the same per-case rewrite
+ * `rememberShowAllFilter` performs, and no assertion is weakened.
+ */
+function rememberDefaultWithMentionedFunctions(projectId = 'project-1'): void {
+  window.localStorage.setItem(
+    `architecture.filter.${projectId}`,
+    JSON.stringify({
+      kinds: ['class', 'interface', 'enum', 'abstract'],
+      relations: 'dependency',
+      hideIsolated: true,
+      keepMentionedKinds: ['function'],
+    }),
+  );
+}
+
 const projectWithArchguard = (hasArchguardCache: boolean): Project => ({
   projectId: 'project-1',
   displayName: 'probe',
@@ -1887,6 +1908,7 @@ test('edge relation labels stay hidden until a node is hovered, then leave with 
 });
 
 test('entity boxes are UML class shapes, and a session seed carries the seed marker', async () => {
+  rememberDefaultWithMentionedFunctions();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
@@ -1927,6 +1949,7 @@ test('entity boxes are UML class shapes, and a session seed carries the seed mar
 });
 
 test('the class view opens on the entities themselves: no directory boxes, readable zoom, LOD intact', async () => {
+  rememberDefaultWithMentionedFunctions();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
   const host = await waitForDiagram();
@@ -2734,6 +2757,9 @@ test('a readable-floor fit is named after the action, while the zoom tier states
  * pins.
  */
 test('the toolbar wraps instead of scrolling, the class diagram is the default, and the readout tracks the filter', async () => {
+  // The fixture's distance-0 function is a session mention; the case is about
+  // the toolbar/readout, so it states the switch that keeps the mention drawn.
+  rememberDefaultWithMentionedFunctions();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
@@ -3291,6 +3317,250 @@ async function openFilterMenu(): Promise<HTMLElement> {
   });
   return menu;
 }
+
+/**
+ * A class-view payload in the shape the server now answers the SHIPPED default:
+ * the session's mentioned function (`MFn`) is NOT drawn, because its kind's
+ * "keep mentioned" switch is off, but both stats readings still name it — the
+ * popover's section and the readout's "show mentioned" action are how the
+ * reader brings it back.
+ */
+const MENTION_IDS = {
+  seed: 'src/modules/mention/Seed.ts.Seed',
+  fn: 'src/modules/mention/MFn.ts.MFn',
+  svc: 'src/modules/mention/Svc.ts.Svc',
+} as const;
+
+const HIDDEN_MENTION_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        { id: MENTION_IDS.seed, label: 'Seed', distance: 0, kind: 'class', mentionTier: 'direct' },
+        { id: MENTION_IDS.svc, label: 'Svc', distance: 1, kind: 'class' },
+      ],
+      edges: [
+        { from: MENTION_IDS.svc, to: MENTION_IDS.seed, relationType: 'dependency' },
+      ],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 2,
+    entityEdges: 1,
+    entityTotal: 2,
+    entityTruncated: false,
+    truncated: false,
+    kindCounts: { class: 2, function: 1 },
+    relationCounts: { dependency: 1 },
+    mentionedByKind: { class: 1, function: 1 },
+    hidden: {
+      byKind: { function: 1 },
+      byRelation: {},
+      isolated: 0,
+      mentionedByKind: { function: 1 },
+    },
+  },
+  provenance: RESULT.provenance,
+};
+
+/** The same reading with the `function` switch ON: the mention is drawn. */
+const KEPT_MENTION_RESULT: ArchitectureGraphResult = {
+  ...HIDDEN_MENTION_RESULT,
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        { id: MENTION_IDS.seed, label: 'Seed', distance: 0, kind: 'class', mentionTier: 'direct' },
+        { id: MENTION_IDS.fn, label: 'MFn', distance: 0, kind: 'function', mentionTier: 'direct' },
+        { id: MENTION_IDS.svc, label: 'Svc', distance: 1, kind: 'class' },
+      ],
+      edges: [
+        { from: MENTION_IDS.svc, to: MENTION_IDS.seed, relationType: 'dependency' },
+        { from: MENTION_IDS.svc, to: MENTION_IDS.fn, relationType: 'dependency' },
+      ],
+    },
+  },
+  stats: {
+    ...HIDDEN_MENTION_RESULT.stats,
+    entityNodes: 3,
+    entityEdges: 2,
+    entityTotal: 3,
+    relationCounts: { dependency: 2 },
+    hidden: { byKind: {}, byRelation: {}, isolated: 0, mentionedByKind: {} },
+  },
+};
+
+/** Remember a selection for a project the way the panel's own writer does. */
+function rememberFilter(projectId: string, filter: Record<string, unknown>): void {
+  window.localStorage.setItem(`architecture.filter.${projectId}`, JSON.stringify(filter));
+}
+
+test('a mentioned function is hidden by default; the popover and the readout offer it back', async () => {
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(HIDDEN_MENTION_RESULT));
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(KEPT_MENTION_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+
+  // ① The default drawing has no mentioned function.
+  assert.deepEqual(
+    latest().graph.nodes.map((node) => node.id),
+    [MENTION_IDS.seed, MENTION_IDS.svc],
+    'the mentioned function is not drawn while its kind has no switch on',
+  );
+
+  // ② The readout's second line names the hidden mentioned count and offers the
+  //    one-click action.
+  const hidden = document.querySelector('[data-architecture-filter-hidden]');
+  assert.ok(hidden instanceof HTMLElement, 'the readout must carry the hidden reading');
+  assert.match(hidden.textContent ?? '', /1 functions \(1 mentioned in this session\)/);
+  const showMentioned = hidden.querySelector('[data-architecture-filter-show-mentioned]');
+  assert.ok(showMentioned instanceof HTMLElement, 'the readout offers "show mentioned"');
+
+  // ③ The popover's section lists only the kinds with a count, with a glyph
+  //    state (not colour alone).
+  const menu = await openFilterMenu();
+  const section = menu.querySelector('[data-architecture-filter-mentioned]');
+  assert.ok(section instanceof HTMLElement, 'the popover carries the mentioned section');
+  const rows = [...menu.querySelectorAll('[data-architecture-filter-mentioned-kind]')];
+  assert.deepEqual(
+    rows.map((row) => row.getAttribute('data-architecture-filter-mentioned-kind')),
+    ['class', 'function'],
+    'zero-count kinds are not listed',
+  );
+  assert.deepEqual(
+    rows.map((row) => row.getAttribute('data-architecture-filter-mentioned-kind-count')),
+    ['1', '1'],
+  );
+  const functionRow = menu.querySelector('[data-architecture-filter-mentioned-kind="function"]');
+  assert.equal(functionRow?.getAttribute('aria-checked'), 'false', 'the switch ships off');
+  assert.match(functionRow?.textContent ?? '', /☐/, 'the off state is spelled out');
+  assert.match(functionRow?.textContent ?? '', /1 functions/);
+
+  // ④ Opening the function switch requests the wider reading exactly once, and
+  //    the restored mention is drawn.
+  fireEvent.click(functionRow as Element);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'widening asks the server once');
+  assert.deepEqual(
+    ((apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as { keepMentionedKinds?: string[] })
+      .keepMentionedKinds,
+    ['function'],
+    'the request carries the switch',
+  );
+  await waitFor(() => assert.ok(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn)));
+  const checkedRow = document.querySelector('[data-architecture-filter-mentioned-kind="function"]');
+  assert.equal(checkedRow?.getAttribute('aria-checked'), 'true');
+  assert.match(checkedRow?.textContent ?? '', /☑/);
+});
+
+test('the readout’s "show mentioned" opens exactly the kinds the reading hides', async () => {
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(HIDDEN_MENTION_RESULT));
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(KEPT_MENTION_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+
+  fireEvent.click(document.querySelector('[data-architecture-filter-show-mentioned]') as Element);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2);
+  assert.deepEqual(
+    ((apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as { keepMentionedKinds?: string[] })
+      .keepMentionedKinds,
+    ['function'],
+    'only the kind the reading hid is opened',
+  );
+  await waitFor(() => assert.ok(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn)));
+  assert.equal(
+    document.querySelector('[data-architecture-filter-hidden]'),
+    null,
+    'nothing is hidden any more, so the second line is gone',
+  );
+});
+
+test('closing a mention switch is a narrowing answered from the payload, with no request', async () => {
+  rememberFilter('project-1', {
+    kinds: ['class', 'interface', 'enum', 'abstract'],
+    relations: 'dependency',
+    hideIsolated: true,
+    keepMentionedKinds: ['function'],
+  });
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(KEPT_MENTION_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+  assert.ok(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn), 'the switch starts on');
+
+  await openFilterMenu();
+  fireEvent.click(document.querySelector('[data-architecture-filter-mentioned-kind="function"]') as Element);
+  await waitFor(() => assert.equal(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn), false));
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'narrowing is answered from the payload in hand');
+});
+
+test('the mention switches are remembered per project and isolated from another', async () => {
+  rememberFilter('project-1', {
+    kinds: ['class', 'interface', 'enum', 'abstract'],
+    relations: 'dependency',
+    hideIsolated: true,
+    keepMentionedKinds: ['function'],
+  });
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(KEPT_MENTION_RESULT));
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  await openFilterMenu();
+  assert.equal(
+    document.querySelector('[data-architecture-filter-mentioned-kind="function"]')?.getAttribute('aria-checked'),
+    'true',
+    'the remembered switch drives the reopened popover',
+  );
+  assert.deepEqual(
+    ((apiMock.architectureGraph.mock.calls.at(-1) as unknown[])[3] as { keepMentionedKinds?: string[] })
+      .keepMentionedKinds,
+    ['function'],
+    'the remembered switch drives the first request too',
+  );
+  first.unmount();
+
+  // Another project starts from the shipped default: the switch is off.
+  render(<ArchitecturePanel projectId="project-2" sessionId="session-3" />);
+  await waitForDiagram();
+  await openFilterMenu();
+  assert.equal(
+    document.querySelector('[data-architecture-filter-mentioned-kind="function"]')?.getAttribute('aria-checked'),
+    'false',
+    'another project starts with every mention switch off',
+  );
+});
 
 test('the default filter draws no function box and no call edge, and the readout states what it hid', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(UNFILTERED_FILTER_RESULT));

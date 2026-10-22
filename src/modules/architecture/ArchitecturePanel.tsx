@@ -294,6 +294,11 @@ function readStoredFilter(projectId: string | null): ArchitectureElementRelation
       hideIsolated: typeof record.hideIsolated === 'boolean'
         ? record.hideIsolated
         : ARCHITECTURE_DEFAULT_FILTER.hideIsolated,
+      // An entry written before the switches existed has no such field: the
+      // shipped default (no kind exempt) is the right fallback, not "all on".
+      keepMentionedKinds: Array.isArray(record.keepMentionedKinds)
+        ? record.keepMentionedKinds.filter(isElementKind)
+        : ARCHITECTURE_DEFAULT_FILTER.keepMentionedKinds,
     };
   } catch {
     return ARCHITECTURE_DEFAULT_FILTER;
@@ -344,7 +349,20 @@ function addHidden(base: ArchitectureFilterHidden, extra: ArchitectureFilterHidd
   for (const [type, count] of Object.entries(extra.byRelation)) {
     byRelation[type] = (byRelation[type] ?? 0) + count;
   }
-  return { byKind, byRelation, isolated: base.isolated + extra.isolated };
+  // The mentioned subset is summed on the same axes as `byKind`: the server cut
+  // is one reading and a local narrowing is another, and the readout's "N of
+  // them mentioned" has to describe both. Absent on both sides ⇒ absent, so an
+  // old payload keeps its exact shape.
+  const mentionedByKind: Partial<Record<string, number>> = { ...base.mentionedByKind };
+  for (const [kind, count] of Object.entries(extra.mentionedByKind ?? {})) {
+    mentionedByKind[kind] = (mentionedByKind[kind] ?? 0) + (count ?? 0);
+  }
+  return {
+    byKind,
+    byRelation,
+    isolated: base.isolated + extra.isolated,
+    ...(Object.keys(mentionedByKind).length === 0 ? {} : { mentionedByKind }),
+  };
 }
 
 /** An empty `hidden` reading, for a payload whose server carried no filter stats. */
@@ -990,10 +1008,15 @@ export default function ArchitecturePanel({
     [hoverKey],
   );
   // The request the server is asked for. `kinds` rides only on the entity view
-  // (a file has no element kind); `relations` rides on both views.
+  // (a file has no element kind); `relations` rides on both views. The
+  // "keep mentioned" switches are part of `kinds`' own axis, so they ride only
+  // there too — and an empty list is the old request, not a new field.
   const graphQuery = useMemo(
     () => ({
       ...(requestGranularity === 'entity' ? { kinds: requestFilter.kinds } : {}),
+      ...(requestGranularity === 'entity' && requestFilter.keepMentionedKinds.length > 0
+        ? { keepMentionedKinds: requestFilter.keepMentionedKinds }
+        : {}),
       relations: relationsForPreset(requestFilter.relations),
       // An EMPTY curation set is the old request: the server keys on the
       // presence of these fields, and an uncurated session must keep the
@@ -1025,8 +1048,15 @@ export default function ArchitecturePanel({
   // (file nodes carry none) while still honouring the relation/isolated axes.
   const effectiveKinds = granularity === 'entity' ? filter.kinds : ARCHITECTURE_ELEMENT_KINDS;
   const displayFilter = useMemo(
-    () => ({ kinds: effectiveKinds, relations: filter.relations, hideIsolated: filter.hideIsolated }),
-    [effectiveKinds, filter.relations, filter.hideIsolated],
+    () => ({
+      kinds: effectiveKinds,
+      relations: filter.relations,
+      hideIsolated: filter.hideIsolated,
+      // Also on the file view: a file node carries no kind, so the list is
+      // inert there without needing a second filter shape.
+      keepMentionedKinds: filter.keepMentionedKinds,
+    }),
+    [effectiveKinds, filter.relations, filter.hideIsolated, filter.keepMentionedKinds],
   );
   // The filter over the arrived payload. Narrowing is answered here (no
   // round-trip); widening has already been requested by `changeFilter`, which
@@ -2066,6 +2096,42 @@ export default function ArchitecturePanel({
       : [...filter.kinds, kind];
     changeFilter({ ...filter, kinds });
   };
+  /**
+   * Flip one kind's "keep mentioned" switch. Turning it ON can bring back
+   * entities the arrived payload may not carry (the server had already hidden
+   * them), so it is a widening and re-requests; turning it OFF is a narrowing
+   * and is answered from the payload in hand.
+   */
+  const toggleKeepMentioned = (kind: (typeof ARCHITECTURE_ELEMENT_KINDS)[number]): void => {
+    const keepMentionedKinds = filter.keepMentionedKinds.includes(kind)
+      ? filter.keepMentionedKinds.filter((entry) => entry !== kind)
+      : [...filter.keepMentionedKinds, kind];
+    changeFilter({ ...filter, keepMentionedKinds });
+  };
+  // Only the kinds the session actually mentioned are offered: a switch over a
+  // zero-count kind would be a control with nothing to keep. The numbers come
+  // from `stats.mentionedByKind`, which the server counts over the UNFILTERED
+  // scope, so hiding a kind never makes its own number disappear.
+  const mentionedKindCounts = stats.mentionedByKind ?? {};
+  const mentionedKinds = ARCHITECTURE_ELEMENT_KINDS.filter(
+    (kind) => (mentionedKindCounts[kind] ?? 0) > 0,
+  );
+  /**
+   * Open the switches for every kind whose mentioned entities the current
+   * reading hides — the readout's "show mentioned" action. It names only the
+   * kinds that are actually hidden, so a not-yet-mentioned kind is not silently
+   * enabled.
+   */
+  const showHiddenMentioned = (): void => {
+    const hiddenKinds = Object.entries(hiddenReading.mentionedByKind ?? {})
+      .filter(([, count]) => (count ?? 0) > 0)
+      .map(([kind]) => kind as (typeof ARCHITECTURE_ELEMENT_KINDS)[number]);
+    if (hiddenKinds.length === 0) return;
+    const keepMentionedKinds = [
+      ...new Set([...filter.keepMentionedKinds, ...hiddenKinds]),
+    ];
+    changeFilter({ ...filter, keepMentionedKinds });
+  };
   const filterContent = (
     <div data-architecture-filter-panel="true" className="flex flex-col gap-2 text-xs">
       {/* The element axis does not exist on the file graph: a file has no
@@ -2095,6 +2161,48 @@ export default function ArchitecturePanel({
                   }`}
                 >
                   {count === undefined ? kindLabel(kind) : `${String(count)} ${kindLabel(kind)}`}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+
+      {granularity === 'entity' && mentionedKinds.length > 0 && (
+        <fieldset data-architecture-filter-mentioned="true" className="flex flex-col gap-1">
+          <legend className="mb-1 text-[11px] font-medium text-muted-foreground">
+            {t('architecture.filter.mentioned', { defaultValue: 'Mentioned in this session' })}
+          </legend>
+          <p data-architecture-filter-mentioned-hint="true" className="text-[10px] text-muted-foreground">
+            {t('architecture.filter.mentionedHint', {
+              defaultValue: 'Keep these shown even when their kind is hidden',
+            })}
+          </p>
+          <div className="flex flex-wrap" style={{ gap: coarsePointer ? TOUCH_CONTROL_GAP_PX : 4 }}>
+            {mentionedKinds.map((kind) => {
+              const count = mentionedKindCounts[kind] ?? 0;
+              const on = filter.keepMentionedKinds.includes(kind);
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={on}
+                  aria-label={`${kindLabel(kind)}: ${String(count)}`}
+                  data-architecture-filter-mentioned-kind={kind}
+                  data-architecture-filter-mentioned-kind-count={String(count)}
+                  onClick={() => toggleKeepMentioned(kind)}
+                  style={compactTargetStyle}
+                  className={`flex items-center gap-1 rounded border px-2 py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                    on
+                      ? 'border-primary/60 bg-accent text-foreground'
+                      : 'border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {/* The state is carried by a glyph AND the background, so it
+                      does not depend on colour alone. */}
+                  <span aria-hidden="true">{on ? '☑' : '☐'}</span>
+                  {`${String(count)} ${kindLabel(kind)}`}
                 </button>
               );
             })}
@@ -2600,9 +2708,25 @@ export default function ArchitecturePanel({
   // The filter's own reading, the readout's second line. The parts reuse the
   // SAME labels the popover's checkboxes show, so the number and the control
   // can never disagree, and `total` above is the FILTERED in-scope count.
+  // The mentioned subset of each hidden kind is a parenthetical on that kind's
+  // own part: "451 functions (35 mentioned in this session)". It never becomes
+  // a separate part, because it is a subset of the number beside it, not a
+  // second removal.
+  const hiddenMentionedByKind = hiddenReading.mentionedByKind ?? {};
   const hiddenKindParts = Object.entries(hiddenReading.byKind)
     .filter(([, count]) => (count ?? 0) > 0)
-    .map(([kind, count]) => `${String(count)} ${kindLabel(kind as (typeof ARCHITECTURE_ELEMENT_KINDS)[number])}`);
+    .map(([kind, count]) => {
+      const label = `${String(count)} ${kindLabel(kind as (typeof ARCHITECTURE_ELEMENT_KINDS)[number])}`;
+      const mentioned = hiddenMentionedByKind[kind as (typeof ARCHITECTURE_ELEMENT_KINDS)[number]] ?? 0;
+      if (mentioned <= 0) return label;
+      return `${label} (${t('architecture.filter.mentionedInKind', {
+        defaultValue: '{{count}} mentioned in this session',
+        count: mentioned,
+      })})`;
+    });
+  const hiddenMentionedKinds = ARCHITECTURE_ELEMENT_KINDS.filter(
+    (kind) => (hiddenMentionedByKind[kind] ?? 0) > 0,
+  );
   const hiddenRelationParts = Object.entries(hiddenReading.byRelation)
     .filter(([, count]) => count > 0)
     .map(([type, count]) => t('architecture.filter.relationPart', {
@@ -2834,6 +2958,9 @@ export default function ArchitecturePanel({
           data-architecture-filter-hidden-kinds={JSON.stringify(hiddenReading.byKind)}
           data-architecture-filter-hidden-relations={JSON.stringify(hiddenReading.byRelation)}
           data-architecture-filter-hidden-isolated={hiddenReading.isolated}
+          data-architecture-filter-hidden-mentioned={
+            hiddenMentionedKinds.length === 0 ? '' : JSON.stringify(hiddenMentionedByKind)
+          }
           className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5"
         >
           <span>
@@ -2842,6 +2969,19 @@ export default function ArchitecturePanel({
               parts: hiddenParts.join(' · '),
             })}
           </span>
+          {hiddenMentionedKinds.length > 0 && (
+            // The one-click counterpart to the popover's switches: show exactly
+            // the mentioned entities of the kinds this reading is hiding.
+            <button
+              type="button"
+              data-architecture-filter-show-mentioned="true"
+              onClick={showHiddenMentioned}
+              style={compactTargetStyle}
+              className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.filter.showMentioned', { defaultValue: '▸ Show mentioned' })}
+            </button>
+          )}
           <button
             type="button"
             data-architecture-filter-show-all="true"
