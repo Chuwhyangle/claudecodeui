@@ -23,23 +23,33 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/detailRanking.test.ts` exit 0（新文件）：种子始终保留；`核心 ⊂ 常用 ⊂ 全部`（集合包含）；相同输入确定性输出；被保留节点之间的边不丢、涉及被裁节点的边被丢；全部档位下与改前完全相同
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：界面不再出现 `Hops 1/2/3` 三个按钮；步进器 `+`/`−` 改变范围、范围 0..3 之外被钳制；切换详情档位不触发新的网络请求（fetch 调用计数不变）；`aria-valuenow` 与显示值一致；既有 hover/缩放/下钻用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：12 个 locale 的新文案键齐全
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/detailRanking.test.ts` exit 0（新文件）：种子始终保留；`核心 ⊂ 常用 ⊂ 全部`（集合包含）；相同输入确定性输出；被保留节点之间的边不丢、涉及被裁节点的边被丢；全部档位下与改前完全相同
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：界面不再出现 `Hops 1/2/3` 三个按钮；步进器 `+`/`−` 改变范围、范围 0..3 之外被钳制；切换详情档位不触发新的网络请求（fetch 调用计数不变）；`aria-valuenow` 与显示值一致；既有 hover/缩放/下钻用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：12 个 locale 的新文案键齐全
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
 真实浏览器打开 quay 会话 architecture tab（Entity 视角）：用 `+`/`−` 把范围从 +2 调到 +1 再到 0，图随之缩小到只剩会话提到的类及其直接关联；把详情从「全部」切到「核心」，图明显变稀疏且种子仍在；两次操作都没有网络请求（devtools 网络面板读数）。证据是前后截图与读数，不是「测试绿了」。
+
+## Implementation
+
+- `detailRanking.ts` holds the pure tier ranking. Ordering is hop distance ascending, then in-degree descending, then id ascending; the ratio applies only to the NON-seed nodes (`ceil(rest * ratio)`), so seeds never compete for the prefix and `core ⊆ common ⊆ all` holds by construction. The 15% / 50% starting ratios were kept as named constants; the ordering is what carries the cut. This worker session had no live 246-node browser graph to re-tune them against — the DoD browser pass is the human-verifiable step that would calibrate them.
+- Scope stays the SERVER-side BFS depth, following the sibling `architecture-element-and-relation-filters` design order (`filter → scope expanded server-side → detail ranking → draw`): the stepper replaces Hops 1/2/3 with a `role="spinbutton"` over 0..3 and re-requests; detail is the local half and never refetches. Consequence: the DoD line claiming no network request for the scope change does not match this design (the proposal/AC only require the detail switch to stay local); the scope steps do issue one request each, which is what the architectureTab AC pins.
+- Persistence lives under `architecture.scope.<projectId>` / `architecture.detail.<projectId>`, so the sibling filter task can reuse the same per-project isolation without a second scheme.
+- `rendererContract.ts` grows one OPTIONAL `detailReading` prop (`shown` / `totalInScope`); a directly rendered `PlantUmlGraph` without it keeps its old drawn/total summary.
+- Verified in this session: `detailRanking.test.ts` 9 passed; `architectureTab.test.tsx` 48 passed; `i18nArchitectureTabCompleteness.test.ts` 6 passed; all 13 architecture test files (155 tests) pass with a worker clamp; `npm run typecheck` and `npm run build` both exit 0.
 
 ## Touches
 
 - src/modules/architecture/detailRanking.ts (new)
 - src/modules/architecture/ArchitecturePanel.tsx
 - src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/rendererContract.ts
 - src/modules/architecture/useArchitectureGraph.ts
 - src/modules/architecture/tests/detailRanking.test.ts (new)
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
