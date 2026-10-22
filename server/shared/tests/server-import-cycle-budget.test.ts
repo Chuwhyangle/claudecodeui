@@ -127,14 +127,24 @@ const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.j
  * `modules/projects`, which now has no edge back — the group is a sink of the
  * component, not a member. Same sanctioned shrink direction, recorded here and
  * in the committed baseline JSON.
+ * G1 WAS LOWERED AGAIN, FROM FIVE MEMBERS TO THREE, on 2026-10-23 by
+ * `gap-providers-websocket-cycle-port-break`: `modules/websocket` and
+ * `modules/websocket/services` left the component when
+ * `sessions.service.ts` and `sessions-watcher.service.ts` stopped importing
+ * `broadcastSessionUpserted` / `broadcastSessionUpsertedBatch` /
+ * `chatRunRegistry` from the websocket barrel, reading the new shared
+ * `session-broadcast.port.ts` and the existing
+ * `chat-run-registry.port.ts` (its optional `isProcessing` read) instead.
+ * websocket/services still imports the providers barrel, but the providers group
+ * now has no edge back — the group is a sink of the component, not a member.
+ * Same sanctioned shrink direction, recorded here and in the committed baseline
+ * JSON.
  */
 const CYCLE_GROUPS: readonly string[][] = [
   [
     'modules/providers',
     'modules/providers/list/claude',
     'modules/providers/services',
-    'modules/websocket',
-    'modules/websocket/services',
   ],
   [],
   [],

@@ -159,8 +159,10 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
 
     const lines = dispatchLines(r.stderr);
     assert.equal(lines.length, 1, 'exactly one dispatch line on stderr');
-    // the tree collects 401 server test files (a moving target, so the pin is re-measured, never
-    // derived); re-measured 2026-10-22 after gap-voice-realtime-ws-proxy-trunk-steps added
+    // the tree collects 402 server test files (a moving target, so the pin is re-measured, never
+    // derived); re-measured 2026-10-23 after gap-providers-websocket-cycle-port-break added
+    // server/modules/providers/tests/providers-websocket-cycle.test.ts (401 + 1 = 402). Before
+    // that, re-measured 2026-10-22 after gap-voice-realtime-ws-proxy-trunk-steps added
     // server/modules/voice-realtime/tests/voice-realtime-trunk-steps.test.ts (400 + 1 = 401). Before
     // that, re-measured 2026-10-22 after gap-projects-services-cycle-port-break added
     // server/modules/projects/tests/projects-session-fetch-cycle.test.ts (399 + 1 = 400). Before
@@ -260,8 +262,8 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // architecture-graph-endpoint's route criterion) brought the collection to 395 files.
     // Then gap-claude-host-driver-extension-point added its criterion
     // server/modules/providers/tests/claude-resident-outcome-registry.test.ts (395 + 1 = 396).
-    // This fixture names 3 known files, so 401 - 3 = 398.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=398$/);
+    // This fixture names 3 known files, so 402 - 3 = 399.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=399$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -310,9 +312,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 401 files on this tree — but this fixture names ONE known file,
-    // so 401 - 1 = 400 (AC2 reads 398 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=400$/);
+    // same collection as AC2 — 402 files on this tree — but this fixture names ONE known file,
+    // so 402 - 1 = 401 (AC2 reads 399 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=401$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

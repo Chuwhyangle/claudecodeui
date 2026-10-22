@@ -535,3 +535,4 @@
 1977	server/modules/voice-realtime/tests/voice-realtime-frame-registry.test.ts
 2700	server/modules/voice/tests/voice-provider-cycle.test.ts
 2000	server/modules/projects/tests/projects-session-fetch-cycle.test.ts
+2200	server/modules/providers/tests/providers-websocket-cycle.test.ts

@@ -17,6 +17,7 @@ import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.por
 import { installConnectedClientsPort } from '@/shared/ports/connected-clients.port.js';
 import { installProjectsSessionFetchPort } from '@/shared/ports/projects-session-fetch.port.js';
 import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
+import { installSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
 import { installVoiceLexiconPort } from '@/shared/ports/voice-lexicon.port.js';
 import { installVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
 import {
@@ -37,7 +38,7 @@ import {
     sweepOrphanClaudeSessionScopes,
     uiLastOpenedSessionService,
 } from '@/modules/providers/index.js';
-import { activityStore, BOOT_ID, broadcastHostsChanged, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
+import { activityStore, BOOT_ID, broadcastHostsChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { createSessionHostsRouter, sessionHostManager } from '@/modules/session-hosts/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
@@ -156,6 +157,8 @@ import { configureWebPush } from './modules/notifications/index.js';
 //
 //   provider-registry  <- the concrete provider table (provider.registry.ts)
 //   chat-run-registry  <- the process run registry (websocket chat-run-registry.service.ts)
+//   session-broadcast  <- the websocket module's session upsert delta producer
+//                         (keeps modules/providers out of the provider/websocket cycle)
 //   connected-clients  <- the websocket module's live connection set
 //   voice-rules        <- the voice-realtime in-process active-session set and rules table
 //   voice-runtime-config <- the Live Voice settings-file reader. The PORT lives in `server/shared`
@@ -172,6 +175,7 @@ import { configureWebPush } from './modules/notifications/index.js';
 // next to the composition root it belongs to.
 installProviderRegistryPort(providerRegistry);
 installChatRunRegistryPort(chatRunRegistry);
+installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch });
 installConnectedClientsPort({ count: () => connectedClients.size });
 installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
 installVoiceRuntimeConfigReader(() => {
