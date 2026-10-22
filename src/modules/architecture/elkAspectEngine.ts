@@ -117,7 +117,7 @@ const WRAPPING_LAYOUT_OPTIONS: Readonly<Record<string, string>> = {
  * only lever that folds a WIDE, single-component graph: measured on the real
  * overview (18 group boxes, 17 edges, labels `modules/... (N)`), every
  * `elk.aspectRatio` from 0.4 to 2.5 drew the very same 1789.96×548 canvas
- * (aspect 3.27). With `layerBound=2` the same graph is 535×904 (aspect 0.59).
+ * (aspect 3.27). With `layerBound=2` the same graph is 534.71×904 (aspect 0.59).
  */
 const LEAF_LAYER_BOUND_STRATEGY = 'COFFMAN_GRAHAM';
 
@@ -128,7 +128,7 @@ const LEAF_LAYER_BOUND_STRATEGY = 'COFFMAN_GRAHAM';
  * The starting point was `round(sqrt(ratio * N * 0.25))`; calibrating it on the
  * real overview above (N = 18) showed the rounding has to go UP: at ratio 0.4
  * `round` yields 1, which drew 351×1612 and *lengthened* total edge length
- * (17886 vs the 17494 baseline), while `ceil` yields 2 — 535×904 with
+ * (17886 vs the 17494 baseline), while `ceil` yields 2 — 534.71×904 with
  * crossings unchanged (0) and a shorter edge total (10725). The bound is
  * therefore `ceil(sqrt(ratio * N * 0.25))`, clamped to the layer's own size.
  */
