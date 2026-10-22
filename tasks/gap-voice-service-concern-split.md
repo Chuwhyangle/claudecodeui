@@ -1,7 +1,7 @@
 ---
 id: gap-voice-service-concern-split
 title: voice.service 按关注点拆分（R1 纯提取）：capture / lexicon / 转写 / 上传迁到命名兄弟模块，service 只留组合
-status: todo
+status: ready
 labels:
   - gap
 parent: null
