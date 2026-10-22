@@ -44,7 +44,8 @@ import { buildVoiceContextPack, buildVoiceRunOutput } from '@/modules/chat/utils
 import { createLiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 import type { LiveSegment, LiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 
-import { readVoiceRuntimeConfig, voiceRealtimeSocketUrl } from '@/shared/api';
+import { voiceRealtimeSocketUrl } from '@/shared/api';
+import { readVoiceRuntimeConfig } from '@/shared/voiceRuntimeConfig';
 import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';
 

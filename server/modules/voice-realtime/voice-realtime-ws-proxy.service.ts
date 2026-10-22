@@ -47,7 +47,7 @@ import { readFileSync } from 'node:fs';
 
 import { WebSocket } from 'ws';
 
-import { truncateRenderedVoiceContext } from '@/shared/utils.js';
+import { truncateRenderedVoiceContext } from '@shared/voice/voiceContextTruncation.js';
 
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
 import { pickAnnouncePhraseFrom } from './voice-realtime-announce-phrases.js';

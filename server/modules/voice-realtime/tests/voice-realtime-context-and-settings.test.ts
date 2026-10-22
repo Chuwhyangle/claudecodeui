@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 
 import { WebSocket as WS } from 'ws';
 
-import { truncateRenderedVoiceContext } from '@/shared/utils.js';
+import { truncateRenderedVoiceContext } from '@shared/voice/voiceContextTruncation.js';
 
 import { createVoiceService } from '../../voice/index.js';
 

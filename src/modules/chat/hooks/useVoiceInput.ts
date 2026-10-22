@@ -31,8 +31,9 @@ import {
   routeClientAsrSegment,
   type VoiceClientFallbackReason,
 } from '@/shared/voiceClientAsrWorker';
-import { api, captureRawVoice, effectivePauseCuesDeclaration, readVoiceRuntimeConfig, transcribeVoice } from '@/shared/api';
+import { api, captureRawVoice, effectivePauseCuesDeclaration, transcribeVoice } from '@/shared/api';
 import type { VoiceUploadAddress } from '@/shared/api';
+import { readVoiceRuntimeConfig } from '@/shared/voiceRuntimeConfig';
 import {
   hydrateVoiceRawCapture,
   isVoiceClientAsrSelected,

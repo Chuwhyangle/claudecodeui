@@ -22,9 +22,6 @@ import {
 // The provider address book, the same table the server's health reading republishes. The
 // browser asks it whether an id exists rather than keeping its own list of the ids it knows.
 import type { AsrCapabilities, AsrErrorCode, PauseCuesDeclaration } from '@shared/asr/asrRegistry';
-// The runtime knobs' shape is the SHARED voice contract: the server's settings loader fills the
-// same type, so the browser's cache and the deployment's reading cannot drift apart.
-import type { VoiceContextPackRuntimeSettings } from '@shared/voice/voiceSettingsRegistry';
 import {
   baseMimeType,
   classifyUpstreamFailure,
@@ -1021,31 +1018,10 @@ export function readVoiceProviderRows(): VoiceProviderRow[] {
   return voiceProviderRows;
 }
 
-/**
- * The deployment's effective context-pack size, as the last `GET /api/voice/runtime-config`
- * answered it, or `null` before any reading arrived.
- *
- * A SYNCHRONOUS SLOT beside `voiceProviderProfile`, for the same reason that one exists: the pack
- * is built inside a socket callback (the first `context` frame goes out on `open`) where awaiting a
- * request is not possible, so the reading has to have been published ahead of it. `null` means "no
- * reading yet", and every caller treats it as the shipped defaults — the browser never invents a
- * value when the server has not said one.
- */
-let voiceRuntimeConfig: VoiceContextPackRuntimeSettings | null = null;
-
-/**
- * Publishes the runtime-config reading. Called by the chat module's `useVoiceAvailable`, which is
- * the one place the payload is fetched; nothing else writes it. `null` clears it (a failed fetch
- * leaves the defaults in force rather than keeping a stale reading).
- */
-export function setVoiceRuntimeConfig(config: VoiceContextPackRuntimeSettings | null): void {
-  voiceRuntimeConfig = config;
-}
-
-/** The published runtime-config reading, or `null` before one arrived. */
-export function readVoiceRuntimeConfig(): VoiceContextPackRuntimeSettings | null {
-  return voiceRuntimeConfig;
-}
+// The runtime-config SLOT (the effective context-pack size) lives in `src/shared/voiceRuntimeConfig`
+// rather than here: the hooks that build a pack are driven by criteria that replace this module
+// with a partial double, so a name added here would arrive in those doubles as `undefined`. The
+// endpoint itself is `api.voice.runtimeConfig` above; the cache sits beside its readers.
 
 /**
  * The recogniser a clip the CLIENT gave up on is uploaded to, or `null` when this deployment has none.

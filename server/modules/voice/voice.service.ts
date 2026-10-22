@@ -15,7 +15,11 @@ import type {
   VoiceSettingsStore,
   VoiceSpeechPayload,
 } from '@/shared/types.js';
-import { readInstalledVoiceRuntimeConfig, truncateRenderedVoiceContext } from '@/shared/utils.js';
+// The rendered-pack trimmer lives in the shared voice tree — the same tree the AC-139 dispatch
+// falsification copies wholesale — so reaching it here keeps this service's whole runtime graph
+// inside the trees that criterion builds. The runtime-config READER is a server-side port and is
+// handed in by the composition root instead, for the same reason.
+import { truncateRenderedVoiceContext } from '@shared/voice/voiceContextTruncation.js';
 
 // The provider address book AND the dispatch. The health payload republishes what this module
 // exports, the request paths ask it whether an id exists at all, and `transcribe` asks it for the
@@ -171,7 +175,7 @@ type VoiceServiceDependencies = {
    * configuration wired" — the service then forwards the caller's `hints.context` unchanged, which
    * is the shape every leaf test and probe keeps. The shipping composition root always supplies it.
    */
-  runtimeConfig?: () => { contextPack: VoiceContextPackRuntimeSettings };
+  runtimeConfig?: () => { contextPack: VoiceContextPackRuntimeSettings } | null;
 };
 
 // The provider id is not part of the outbound request's configuration: it selects which
@@ -1111,13 +1115,9 @@ export function createVoiceService(dependencies: VoiceServiceDependencies): Voic
       const providerId = effectiveProviderId(requestedProviderId, dependencies.defaults, settings);
       // THE ONE-SHOT PATH'S CONTEXT BUDGET. Truncated up front, so the adapter only ever sees a
       // pack the deployment's configuration allows; the log line names both readings when it trims.
-      // The reader comes from the injected seam (a test) or the composition root's installed port;
-      // with neither wired the caller's context is forwarded unchanged.
-      const hints = truncateVoiceContextForRuntimeConfig(
-        input.hints,
-        dependencies.runtimeConfig ?? readInstalledVoiceRuntimeConfig,
-        log,
-      );
+      // The reader comes from the injected seam — the composition root's installed port in the
+      // shipping deployment — and with it unwired the caller's context is forwarded unchanged.
+      const hints = truncateVoiceContextForRuntimeConfig(input.hints, dependencies.runtimeConfig, log);
 
       // WHAT THIS ATTEMPT READ OFF THE TRANSPORT, filled in by `captureTransport` below and read by
       // the row's payload. Attempt-scoped by construction: both are locals of this call, so an answer

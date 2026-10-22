@@ -4,7 +4,7 @@ import multer from 'multer';
 
 import { voiceSettingsDb } from '@/modules/database/index.js';
 import type { VoiceLogPort, VoiceSettings } from '@/shared/types.js';
-import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
+import { findApplicationRoot, getModuleDirectory, readInstalledVoiceRuntimeConfig } from '@/shared/utils.js';
 
 // The provider address book, read here for the one figure the transport layer can know without
 // knowing which provider will serve the request: the ceiling above every declared budget.
@@ -289,6 +289,11 @@ const voiceService = createVoiceService({
   // whether a record is written. Wiring it here rather than in the service is what keeps the store's
   // directory the composition root's one answer, exactly as the capture directory is.
   voiceData: createVoiceDataStore({ directory: voiceDataDirectory }),
+  // The one-shot path's context budget, read through the port the composition root installed in
+  // `server/index.ts`. Wired HERE rather than defaulted inside the service for the same reason the
+  // settings-file loader is: the service's runtime graph stays inside the shared trees the AC-139
+  // dispatch falsification copies, so a leaf import of a server port would red that criterion.
+  runtimeConfig: readInstalledVoiceRuntimeConfig,
   logger: voiceLog,
   fetchBackend: async (url, options) => {
     const abortController = new AbortController();

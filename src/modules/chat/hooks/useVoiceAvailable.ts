@@ -7,7 +7,8 @@ import {
   installVoiceClientAsrEngine,
   voiceClientAsrReadiness,
 } from '@/shared/voiceClientAsrWorker';
-import { api, setVoiceProviderProfile, setVoiceProviderRows, setVoiceRuntimeConfig } from '@/shared/api';
+import { api, setVoiceProviderProfile, setVoiceProviderRows } from '@/shared/api';
+import { setVoiceRuntimeConfig } from '@/shared/voiceRuntimeConfig';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import type { VoiceProviderRow } from '@/shared/types';
 import {
