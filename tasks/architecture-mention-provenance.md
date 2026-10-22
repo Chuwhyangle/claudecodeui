@@ -1,7 +1,7 @@
 ---
 id: architecture-mention-provenance
 title: 种子分三档（直接提及/同名候选/同文件扩展）+ 提及出处 + 按需查询会话文本的接口（默认不含 tool_result，可勾选加入）
-status: ready
+status: done
 labels:
   - feature
 parent: null
