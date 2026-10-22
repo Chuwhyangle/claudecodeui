@@ -196,6 +196,144 @@ export function fitAvoidingCorners(
   return Math.min(fit, allowed);
 }
 
+/** Where a fitted drawing is placed inside the canvas content box, in CSS pixels. */
+export type SvgFitPlacement = {
+  /** The uniform scale to apply. */
+  readonly scale: number;
+  /** The drawing's left edge, measured from the content box's left edge. */
+  readonly offsetX: number;
+  /** The drawing's top edge, measured from the content box's top edge. */
+  readonly offsetY: number;
+};
+
+/** A drawing's box at a placement. */
+type PlacedRect = { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
+
+/** Strict overlap: touching edges are clear, exactly like the CSS boxes they model. */
+function placedOverlaps(a: PlacedRect, b: PlacedRect): boolean {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/**
+ * Find a translation of a `width`×`height` drawing (inside `viewport`) that
+ * does not overlap ANY corner rectangle, or `null` when no translation exists.
+ *
+ * The drawing is free to move anywhere its box still lies inside the content
+ * box — the old centred-only rule could not express "move the drawing away
+ * from the floating chrome", which is exactly what made a centred fit shrink
+ * symmetrically. A candidate translation only ever needs to sit on a boundary
+ * of the free space: the content box's edges, or another rectangle's edge.
+ * Every such coordinate is enumerated per axis and the combinations are
+ * checked, so a non-empty feasible region can never be missed by the search.
+ */
+function placementAvoidingCorners(
+  natural: SvgViewportSize,
+  viewport: SvgViewportSize,
+  corners: readonly SvgCornerRect[],
+  scale: number,
+): { offsetX: number; offsetY: number } | null {
+  const width = natural.width * scale;
+  const height = natural.height * scale;
+  if (!(width > 0) || !(height > 0)) return null;
+  if (width > viewport.width + 1e-9 || height > viewport.height + 1e-9) return null;
+
+  const maxX = Math.max(0, viewport.width - width);
+  const maxY = Math.max(0, viewport.height - height);
+  const clampX = (value: number): number => Math.min(maxX, Math.max(0, value));
+  const clampY = (value: number): number => Math.min(maxY, Math.max(0, value));
+
+  const xs = new Set<number>([0, maxX]);
+  const ys = new Set<number>([0, maxY]);
+  for (const corner of corners) {
+    if (!(corner.width > 0) || !(corner.height > 0)) continue;
+    // The translations at which the drawing's right/bottom edge lands on the
+    // corner's left/top edge, and its left/top edge on the corner's right/bottom.
+    xs.add(clampX(corner.left - width));
+    xs.add(clampX(corner.left + corner.width));
+    ys.add(clampY(corner.top - height));
+    ys.add(clampY(corner.top + corner.height));
+  }
+
+  for (const offsetY of ys) {
+    for (const offsetX of xs) {
+      const rect: PlacedRect = {
+        left: offsetX,
+        top: offsetY,
+        right: offsetX + width,
+        bottom: offsetY + height,
+      };
+      const blocked = corners.some((corner) => corner.width > 0 && corner.height > 0
+        && placedOverlaps(rect, {
+          left: corner.left,
+          top: corner.top,
+          right: corner.left + corner.width,
+          bottom: corner.top + corner.height,
+        }));
+      if (!blocked) return { offsetX, offsetY };
+    }
+  }
+  return null;
+}
+
+/**
+ * The largest fit that keeps the drawing clear of the floating corner chrome,
+ * PLUS the translation that achieves it.
+ *
+ * When a placement that clears every corner exists at the geometric fit, the
+ * fit is kept in full and the drawing is moved off-centre (towards the side
+ * away from the chrome). Only when no placement exists at that scale is the
+ * scale reduced — and then only as far as the largest scale that DOES admit a
+ * placement. This is what lets a wide graph whose corner chrome only clips the
+ * bottom-right stay at its true fit instead of shrinking symmetrically.
+ *
+ * Falls back to the plain centred fit (`fitZoomScale`) when even the smallest
+ * permitted scale admits no placement (a corner covering the whole canvas), so
+ * an impossible constraint degrades to the old reading instead of collapsing
+ * or throwing.
+ */
+export function fitPlacementAvoidingCorners(
+  natural: SvgViewportSize,
+  viewport: SvgViewportSize,
+  corners: readonly SvgCornerRect[],
+  minScale: number = MIN_READABLE_ZOOM_SCALE,
+): SvgFitPlacement {
+  const fit = fitZoomScale(natural, viewport, minScale);
+  const centred = (): SvgFitPlacement => ({
+    scale: fit,
+    offsetX: Math.max(0, (viewport.width - natural.width * fit) / 2),
+    offsetY: Math.max(0, (viewport.height - natural.height * fit) / 2),
+  });
+  if (corners.length === 0) return centred();
+  if (!(natural.width > 0) || !(natural.height > 0)) return centred();
+  if (!(viewport.width > 0) || !(viewport.height > 0)) return centred();
+
+  const measured = corners.filter((corner) => corner.width > 0 && corner.height > 0);
+  if (measured.length === 0) return centred();
+
+  const fitPlacement = placementAvoidingCorners(natural, viewport, measured, fit);
+  if (fitPlacement !== null) return { scale: fit, ...fitPlacement };
+
+  const floorPlacement = placementAvoidingCorners(natural, viewport, measured, minScale);
+  if (floorPlacement === null) return centred();
+
+  // Feasibility is monotone in practice (a smaller drawing has more room to
+  // move); 40 bisections pin the boundary far below a screen pixel.
+  let low = minScale;
+  let high = fit;
+  let best = floorPlacement;
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const mid = (low + high) / 2;
+    const placement = placementAvoidingCorners(natural, viewport, measured, mid);
+    if (placement === null) {
+      high = mid;
+    } else {
+      low = mid;
+      best = placement;
+    }
+  }
+  return { scale: low, ...best };
+}
+
 /** The on-screen size of `natural` at `scale`, with the scale clamped first. */
 export function zoomedSvgSize(natural: SvgViewportSize, scale: number): SvgViewportSize {
   const applied = clampZoomScale(scale);

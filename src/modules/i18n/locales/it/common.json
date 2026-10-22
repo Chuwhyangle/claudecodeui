@@ -233,7 +233,12 @@
       "open": "Regola",
       "title": "Regola",
       "close": "Chiudi pannello di regolazione",
-      "dragHandle": "Trascina per chiudere"
+      "dragHandle": "Trascina per chiudere",
+      "view": "Vista",
+      "scope": "Ambito",
+      "detail": "Dettaglio",
+      "filter": "Filtro",
+      "export": "Esporta"
     },
     "dock": {
       "title": "Ispettore",

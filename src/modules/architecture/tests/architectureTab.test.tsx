@@ -1394,6 +1394,16 @@ test('the readable toggle switches between the focused default and the whole-gra
   assert.ok(hint !== null, 'overview mode must say what the reader is looking at');
   assert.match(hint.textContent ?? '', /modules\/alpha/, 'the hint names the densest seeded package');
   assert.match(hint.textContent ?? '', /0 other package/, 'the hint carries the other-package count');
+  // The tier's "Zoom N%" and the zoom cluster's own scale reading are ONE
+  // value: both derive from the applied zoom state, never from a second
+  // constrained-fit computation.
+  const tierReadout = document.querySelector('[data-architecture-zoom-level]');
+  assert.ok(tierReadout instanceof HTMLElement);
+  assert.equal(
+    /Zoom (\d+)%/.exec(hint.textContent ?? '')?.[1] + '%',
+    tierReadout.textContent,
+    'the readable hint and the scale readout must print the same percentage',
+  );
   // The strip shows only the last two path segments; the full id is the title.
   assert.equal(
     hint.getAttribute('title'),
@@ -2715,10 +2725,15 @@ test('a readable-floor fit is named after the action, while the zoom tier states
 });
 
 /**
- * The reworked header: ONE row, the class diagram first, no standing hint
+ * The reworked header: one toolbar, the class diagram first, no standing hint
  * sentence, and a one-line readout whose two numbers follow the detail knob.
+ *
+ * The row WRAPS instead of scrolling. `overflow-x: auto` made the block axis a
+ * scroll container too, which clipped the search results to a 3px line; the
+ * wrapping row (and the popovers painted into it) is the fix this criterion
+ * pins.
  */
-test('the toolbar is one non-wrapping row, the class diagram is the default, and the readout tracks the filter', async () => {
+test('the toolbar wraps instead of scrolling, the class diagram is the default, and the readout tracks the filter', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
@@ -2727,14 +2742,16 @@ test('the toolbar is one non-wrapping row, the class diagram is the default, and
   const toolbars = [...document.querySelectorAll('[data-architecture-toolbar]')];
   assert.equal(toolbars.length, 1, 'the header must be a single row');
   const toolbar = toolbars[0];
-  // jsdom does no layout, so "one line" is stated structurally: neither the row
-  // nor any container inside it may wrap.
-  assert.doesNotMatch(toolbar.className, /(^|\s)flex-wrap(\s|$)/);
+  // jsdom does no layout, so the contract is stated structurally: the row must
+  // never be a scroll container (that is what clipped the search results), and
+  // it wraps so its popovers can paint outside the row's vertical band.
+  assert.doesNotMatch(toolbar.className, /(^|\s)overflow-x-(auto|scroll|hidden)(\s|$)/);
+  assert.match(toolbar.className, /(^|\s)flex-wrap(\s|$)/);
   for (const node of toolbar.querySelectorAll('*')) {
     assert.doesNotMatch(
       node.getAttribute('class') ?? '',
-      /(^|\s)flex-wrap(\s|$)/,
-      'no container inside the toolbar may wrap onto a second line',
+      /(^|\s)overflow-x-(auto|scroll|hidden)(\s|$)/,
+      'no container inside the toolbar may scroll horizontally and clip a popover',
     );
   }
 
@@ -3023,6 +3040,128 @@ test('searching the class diagram reveals and centres the node; a folded hit rep
     );
   } finally {
     Element.prototype.getBoundingClientRect = originalRect;
+  }
+});
+
+test('the search is a combobox and its results are not inside a clipping ancestor', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const input = document.querySelector('[data-architecture-search]') as HTMLInputElement;
+  assert.ok(input instanceof HTMLInputElement);
+  assert.equal(input.getAttribute('role'), 'combobox', 'the input must advertise the combobox pattern');
+  assert.equal(input.getAttribute('aria-expanded'), 'false');
+  const listId = input.getAttribute('aria-controls');
+  assert.ok(listId, 'the combobox must name the listbox it controls');
+
+  fireEvent.change(input, { target: { value: 'Reader' } });
+  const results = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-search-results]');
+    assert.ok(node instanceof HTMLElement, 'the search lists the matching entity');
+    return node;
+  });
+  assert.equal(results.id, listId, 'aria-controls names the listbox that is actually drawn');
+  assert.equal(results.getAttribute('role'), 'listbox');
+  assert.equal(input.getAttribute('aria-expanded'), 'true');
+
+  // The shipped defect: the results lived inside the toolbar's `overflow-x:
+  // auto` row, whose block axis also became a SCROLL container and clipped the
+  // list to its first 3px. No scroll container may sit between the widget and
+  // the panel (the panel's own `overflow: hidden` shell is a fixed box the
+  // popover fits inside, so it is not the defect being pinned).
+  for (let ancestor = results.parentElement; ancestor !== null && ancestor !== document.body; ancestor = ancestor.parentElement) {
+    const className = typeof ancestor.className === 'string' ? ancestor.className : '';
+    assert.doesNotMatch(
+      className,
+      /(^|\s)overflow(-x|-y)?-(auto|scroll)(\s|$)/,
+      `the search results must not sit inside a scroll container: ${className}`,
+    );
+  }
+  const toolbarAncestor = results.closest('[data-architecture-toolbar]');
+  assert.equal(toolbarAncestor?.className.includes('overflow-x-auto') ?? false, false);
+
+  // A press outside the widget closes it without swallowing that press.
+  fireEvent.mouseDown(document.body);
+  assert.equal(document.querySelector('[data-architecture-search-results]'), null, 'an outside press closes the list');
+
+  // Re-open and drive the keyboard: arrow keys move the active option, Enter
+  // chooses it.
+  const reopenedInput = document.querySelector('[data-architecture-search]') as HTMLInputElement;
+  fireEvent.focus(reopenedInput);
+  fireEvent.change(reopenedInput, { target: { value: 'Reader' } });
+  const reopened = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-search-results]');
+    assert.ok(node instanceof HTMLElement, 'focus re-opens the match list');
+    return node;
+  });
+  const option = reopened.querySelector('[role="option"]') as HTMLElement;
+  assert.ok(option instanceof HTMLElement, 'each result is an option');
+  fireEvent.keyDown(reopenedInput, { key: 'ArrowDown' });
+  assert.equal(reopenedInput.getAttribute('aria-activedescendant'), option.id);
+  assert.equal(option.getAttribute('aria-selected'), 'true', 'the active option is announced');
+  fireEvent.keyDown(reopenedInput, { key: 'Enter' });
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+});
+
+test('the filter, legend and Adjusted popovers close on an outside press and on Escape', async () => {
+  const aborts: string[] = [];
+  const recordEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') aborts.push('chat.abort');
+  };
+  document.addEventListener('keydown', recordEscape);
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    await waitForDiagram();
+
+    const filter = document.querySelector('[data-architecture-filter-toggle]') as HTMLElement;
+    assert.ok(filter instanceof HTMLElement);
+    fireEvent.click(filter);
+    assert.ok(document.querySelector('[data-architecture-filter-menu]'), 'the filter menu opens');
+    fireEvent.mouseDown(document.body);
+    assert.equal(document.querySelector('[data-architecture-filter-menu]'), null, 'an outside press closes the filter menu');
+    fireEvent.click(filter);
+    assert.ok(document.querySelector('[data-architecture-filter-menu]'));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    assert.equal(document.querySelector('[data-architecture-filter-menu]'), null, 'Escape closes the filter menu');
+    assert.equal(document.activeElement, filter, 'focus returns to the filter disclosure');
+
+    const legend = document.querySelector('[data-architecture-legend-toggle]') as HTMLElement;
+    assert.ok(legend instanceof HTMLElement);
+    fireEvent.click(legend);
+    assert.ok(document.querySelector('[data-architecture-legend]'), 'the legend opens');
+    fireEvent.mouseDown(document.body);
+    assert.equal(document.querySelector('[data-architecture-legend]'), null, 'an outside press closes the legend');
+    fireEvent.click(legend);
+    assert.ok(document.querySelector('[data-architecture-legend]'));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    assert.equal(document.querySelector('[data-architecture-legend]'), null, 'Escape closes the legend');
+    assert.equal(document.activeElement, legend, 'focus returns to the legend disclosure');
+
+    const adjusted = document.querySelector('[data-architecture-curation-manager-toggle]') as HTMLElement;
+    assert.ok(adjusted instanceof HTMLElement);
+    assert.equal(adjusted.hasAttribute('disabled'), false, 'the session permits manual adjustments');
+    fireEvent.click(adjusted);
+    assert.ok(document.querySelector('[data-architecture-curation-manager]'), 'the Adjusted popover opens');
+    fireEvent.mouseDown(document.body);
+    assert.equal(
+      document.querySelector('[data-architecture-curation-manager]'),
+      null,
+      'an outside press closes the Adjusted popover',
+    );
+    fireEvent.click(adjusted);
+    assert.ok(document.querySelector('[data-architecture-curation-manager]'));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    assert.equal(document.querySelector('[data-architecture-curation-manager]'), null, 'Escape closes it');
+    assert.equal(document.activeElement, adjusted, 'focus returns to the Adjusted disclosure');
+
+    assert.equal(
+      aborts.length,
+      0,
+      `a popover's Escape must not reach the page abort (chat.abort calls: ${String(aborts.length)})`,
+    );
+  } finally {
+    document.removeEventListener('keydown', recordEscape);
   }
 });
 

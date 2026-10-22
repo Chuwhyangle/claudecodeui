@@ -239,7 +239,12 @@
       "open": "Adjust",
       "title": "Adjust",
       "close": "Close adjust panel",
-      "dragHandle": "Drag to close"
+      "dragHandle": "Drag to close",
+      "view": "View",
+      "scope": "Scope",
+      "detail": "Detail",
+      "filter": "Filter",
+      "export": "Export"
     },
     "dock": {
       "title": "Inspector",

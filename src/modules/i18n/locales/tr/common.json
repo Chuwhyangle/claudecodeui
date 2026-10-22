@@ -233,7 +233,12 @@
       "open": "Ayarla",
       "title": "Ayarla",
       "close": "Ayar panelini kapat",
-      "dragHandle": "Kapatmak için sürükleyin"
+      "dragHandle": "Kapatmak için sürükleyin",
+      "view": "Görünüm",
+      "scope": "Kapsam",
+      "detail": "Ayrıntı",
+      "filter": "Filtre",
+      "export": "Dışa aktar"
     },
     "dock": {
       "title": "Denetçi",

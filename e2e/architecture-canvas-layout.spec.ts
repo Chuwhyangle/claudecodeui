@@ -119,6 +119,15 @@ const SEL = {
   zoomIn: '[data-architecture-zoom-in]',
   overviewMode: '[data-architecture-readable-overview-mode]',
   explosion: '[data-architecture-explosion]',
+  // The provenance/cleanup row: a FOOTER under the canvas on every tier.
+  footer: '[data-architecture-source-footer]',
+  sourceLine: '[data-architecture-source-line]',
+  // The project search's combobox and its listbox.
+  search: '[data-architecture-search]',
+  searchResults: '[data-architecture-search-results]',
+  searchOption: '[data-architecture-search-results] [role="option"]',
+  zoomLevel: '[data-architecture-zoom-level]',
+  readableHint: '[data-architecture-readable-hint]',
 } as const;
 
 /* ── the server's own faces ────────────────────────────────────────────────────────────────── */
@@ -242,6 +251,25 @@ type LayoutReading = {
   zoomMode: string;
   zoomScale: number | null;
   readableMode: string;
+  /**
+   * The theoretical maximum fit: min(content width ÷ natural width, content
+   * height ÷ natural height, 1). The zoom scale must reach 95% of it; the
+   * shipped symmetric shrink reached 70%.
+   */
+  theoreticalFit: number | null;
+  /** The drawing's natural (viewBox) size, so a red can recompute the ratio. */
+  natural: { width: number; height: number } | null;
+  /** The provenance/cleanup footer's box. */
+  footer: Box | null;
+  /** Whether the footer is in the document flow (not an absolute overlay). */
+  footerPosition: string;
+  /** Footer overlaps the corner chrome — the defect the footer replaced. */
+  footerOverMinimap: boolean;
+  footerOverZoomCluster: boolean;
+  /** The tier's own percentage, for the "one value" agreement. */
+  zoomLevelText: string;
+  /** The readable hint's "Zoom N%" percentage, when the hint is drawn. */
+  readableHintPercent: number | null;
 };
 
 /**
@@ -309,13 +337,38 @@ const readLayout = (page: Page): Promise<LayoutReading> =>
       .filter((box): box is Box => box !== null)
       .filter((box) => canvasBox === null || box.y2 <= canvasBox.y + 1);
     const chromeBottom = chrome.length > 0 ? Math.max(...chrome.map((box) => box.y2)) : null;
+    // The footer is in-flow chrome BELOW the canvas, so the drawing's available
+    // height is what remains above it. Without this subtraction the footer
+    // would read as lost canvas height.
+    const footer = document.querySelector(sel.footer);
+    const footerBox = boxOf(footer);
+    const footerHeight = footerBox !== null ? footerBox.h : 0;
     const availableHeight = panelBox !== null && chromeBottom !== null
-      ? Math.max(0, panelBox.y2 - chromeBottom)
+      ? Math.max(0, panelBox.y2 - chromeBottom - footerHeight)
       : null;
 
-    const hostPaddingTop = host === null
-      ? 0
-      : Number.parseFloat(window.getComputedStyle(host).paddingTop) || 0;
+    const hostStyle = host === null ? null : window.getComputedStyle(host);
+    const hostPaddingTop = host === null ? 0 : Number.parseFloat(hostStyle?.paddingTop ?? '') || 0;
+    const hostPaddingX = (Number.parseFloat(hostStyle?.paddingLeft ?? '') || 0)
+      + (Number.parseFloat(hostStyle?.paddingRight ?? '') || 0);
+    const hostPaddingY = hostPaddingTop + (Number.parseFloat(hostStyle?.paddingBottom ?? '') || 0);
+    const hostContent = host === null
+      ? null
+      : { width: host.clientWidth - hostPaddingX, height: host.clientHeight - hostPaddingY };
+    const viewBoxParts = (svg?.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+    const natural = viewBoxParts.length === 4
+      && viewBoxParts.every(Number.isFinite)
+      && viewBoxParts[2] > 0
+      && viewBoxParts[3] > 0
+      ? { width: viewBoxParts[2], height: viewBoxParts[3] }
+      : null;
+    const theoreticalFit = natural !== null && hostContent !== null
+      && hostContent.width > 0 && hostContent.height > 0
+      ? Math.min(hostContent.width / natural.width, hostContent.height / natural.height, 1)
+      : null;
+    const zoomLevel = document.querySelector(sel.zoomLevel);
+    const readableHint = document.querySelector(sel.readableHint);
+    const hintPercent = /Zoom (\d+)%/.exec(readableHint?.textContent ?? '') ?? null;
     const drawingTop = hostBox !== null && svgBox !== null
       ? Math.max(hostBox.y + hostPaddingTop, svgBox.y)
       : null;
@@ -363,8 +416,121 @@ const readLayout = (page: Page): Promise<LayoutReading> =>
       zoomMode: graphRoot?.getAttribute('data-architecture-zoom-mode') ?? '<none>',
       zoomScale: numberOf(graphRoot, 'data-architecture-zoom-scale'),
       readableMode: graphRoot?.getAttribute('data-architecture-readable-mode') ?? '<none>',
+      theoreticalFit,
+      natural,
+      footer: footerBox,
+      footerPosition: footer === null ? '<none>' : window.getComputedStyle(footer).position,
+      footerOverMinimap: overlaps(footerBox, minimapBox),
+      footerOverZoomCluster: overlaps(footerBox, zoomClusterBox),
+      zoomLevelText: (zoomLevel?.textContent ?? '').trim(),
+      readableHintPercent: hintPercent === null ? null : Number(hintPercent[1]),
     };
   }, SEL);
+
+/**
+ * How much of the search result list must be VISIBLE (after every clipping
+ * ancestor and the viewport are intersected). The shipped defect left 3px; a
+ * usable list shows several rows.
+ */
+const SEARCH_RESULT_MIN_VISIBLE_PX = 120;
+
+/** What the search combobox reports about its popover, measured in one round trip. */
+type SearchReading = {
+  input: Box | null;
+  results: Box | null;
+  option: Box | null;
+  /** The results' height left after intersecting the viewport and every clipping ancestor. */
+  visibleHeight: number;
+  /** The results box lies wholly inside the viewport. */
+  insideViewport: boolean;
+  /** `elementFromPoint` at the VISIBLE centre lands on one of this listbox's options. */
+  centerHitsOption: boolean;
+  center: { x: number; y: number } | null;
+};
+
+/**
+ * Read the search popover's geometry. The clipping intersection is the point:
+ * `getBoundingClientRect` ignores ancestor clipping, so a list clipped to 3px
+ * by a scroll container still reports its full height. Every scroll/clip
+ * ancestor's box is intersected in, exactly as the paint would be clipped.
+ */
+const readSearch = (page: Page): Promise<SearchReading> =>
+  page.evaluate((sel) => {
+    const boxOf = (element: Element | null): Box | null => {
+      if (element === null) return null;
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, w: rect.width, h: rect.height, x2: rect.right, y2: rect.bottom };
+    };
+    const input = document.querySelector(sel.search);
+    const results = document.querySelector(sel.searchResults);
+    if (!(results instanceof HTMLElement)) {
+      return {
+        input: boxOf(input),
+        results: null,
+        option: null,
+        visibleHeight: 0,
+        insideViewport: false,
+        centerHitsOption: false,
+        center: null,
+      };
+    }
+    const rect = results.getBoundingClientRect();
+    let clip = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    for (let ancestor = results.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+      const style = window.getComputedStyle(ancestor);
+      const overflows = `${style.overflow} ${style.overflowX} ${style.overflowY}`;
+      if (!/(auto|scroll|hidden)/.test(overflows)) continue;
+      const box = ancestor.getBoundingClientRect();
+      clip = {
+        left: Math.max(clip.left, box.left),
+        top: Math.max(clip.top, box.top),
+        right: Math.min(clip.right, box.right),
+        bottom: Math.min(clip.bottom, box.bottom),
+      };
+    }
+    const left = Math.max(rect.left, clip.left);
+    const right = Math.min(rect.right, clip.right);
+    const top = Math.max(rect.top, clip.top);
+    const bottom = Math.min(rect.bottom, clip.bottom);
+    const center = right > left && bottom > top
+      ? { x: (left + right) / 2, y: (top + bottom) / 2 }
+      : null;
+    const hit = center === null ? null : document.elementFromPoint(center.x, center.y);
+    const option = hit?.closest('[role="option"]') ?? null;
+    return {
+      input: boxOf(input),
+      results: boxOf(results),
+      option: boxOf(results.querySelector('[role="option"]')),
+      visibleHeight: Math.max(0, bottom - top),
+      insideViewport: rect.left >= 0 && rect.top >= 0
+        && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight,
+      centerHitsOption: option !== null && results.contains(option),
+      center,
+    };
+  }, SEL);
+
+/**
+ * Reading 6: the search results are fully visible and their visible centre is
+ * an option of the same listbox.
+ */
+const assertSearchUsable = (reading: SearchReading, label: string): void => {
+  expect.soft(reading.results, `${label}: the search must draw a result list`).not.toBeNull();
+  expect.soft(
+    reading.insideViewport,
+    `${label}: the result list must lie wholly inside the viewport; results=${formatBox(reading.results)}`,
+  ).toBe(true);
+  expect.soft(
+    reading.visibleHeight,
+    `${label}: the result list must be visible, not clipped by a scroll ancestor — `
+      + `visible height ${formatNumber(reading.visibleHeight)}px (threshold ${SEARCH_RESULT_MIN_VISIBLE_PX}px) `
+      + `results=${formatBox(reading.results)}`,
+  ).toBeGreaterThanOrEqual(SEARCH_RESULT_MIN_VISIBLE_PX);
+  expect.soft(
+    reading.centerHitsOption,
+    `${label}: elementFromPoint at the visible centre must land on an option — `
+      + `centre=${JSON.stringify(reading.center)} results=${formatBox(reading.results)} option=${formatBox(reading.option)}`,
+  ).toBe(true);
+};
 
 /** A box as the criterion prints it: `x,y,w,h`, rounded, or a named absence. */
 const formatBox = (box: Box | null): string =>
@@ -400,6 +566,70 @@ const printReading = (label: string, reading: LayoutReading): void => {
   console.log(`[architecture-layout] ${label}.readout.budget.words=${reading.readoutBudgetWords}`);
   console.log(`[architecture-layout] ${label}.readout.text=${JSON.stringify(reading.readoutText)}`);
   console.log(`[architecture-layout] ${label}.zoom=${reading.zoomMode}@${formatNumber(reading.zoomScale)} readable=${reading.readableMode}`);
+  console.log(`[architecture-layout] ${label}.theoretical.fit=${formatNumber(reading.theoreticalFit)} natural=${JSON.stringify(reading.natural)}`);
+  console.log(`[architecture-layout] ${label}.footer.box=${formatBox(reading.footer)} position=${reading.footerPosition}`);
+  console.log(`[architecture-layout] ${label}.footer.over.minimap=${reading.footerOverMinimap} footer.over.zoomCluster=${reading.footerOverZoomCluster}`);
+  console.log(`[architecture-layout] ${label}.zoom.level.text=${JSON.stringify(reading.zoomLevelText)} readable.hint.percent=${formatNumber(reading.readableHintPercent)}`);
+};
+
+/**
+ * Reading 4: the provenance/cleanup row is a FOOTER in document flow, clear of
+ * the canvas's corner chrome.
+ *
+ * The shipped layout floated it (and the "Scope cleanup" pill) over the
+ * drawing's bottom-left corner, so it covered graph content and, on a phone,
+ * stacked onto the zoom cluster. Both facts are read as geometry here.
+ */
+const assertFooterInFlow = (reading: LayoutReading, label: string): void => {
+  expect.soft(reading.footer, `${label}: the panel must draw the provenance footer`).not.toBeNull();
+  expect.soft(
+    reading.footerPosition === 'absolute' || reading.footerPosition === 'fixed',
+    `${label}: the footer must be in the document flow, not a floating layer (position=${reading.footerPosition})`,
+  ).toBe(false);
+  expect.soft(
+    reading.footerOverMinimap,
+    `${label}: the footer must not overlap the minimap; footer=${formatBox(reading.footer)} minimap=${formatBox(reading.minimap)}`,
+  ).toBe(false);
+  expect.soft(
+    reading.footerOverZoomCluster,
+    `${label}: the footer must not overlap the zoom cluster; footer=${formatBox(reading.footer)} cluster=${formatBox(reading.zoomCluster)}`,
+  ).toBe(false);
+};
+
+/**
+ * Reading 5: Fit really fits.
+ *
+ * `theoreticalFit` is the geometric maximum computed from the SVG's own
+ * viewBox and the host's content box; the applied scale must reach 95% of it.
+ * The shipped symmetric shrink — the drawing centred and then shrunk to clear
+ * the bottom-right chrome — reached 70%, so this threshold is far from the red
+ * it exists to catch. Where the zoom tier is on screen, its percentage and the
+ * readable hint's "Zoom N%" must be the SAME number.
+ */
+const assertFitNearTheoretical = (reading: LayoutReading, label: string): void => {
+  expect.soft(
+    reading.theoreticalFit,
+    `${label}: the theoretical fit needs a measurable SVG viewBox and canvas`,
+  ).not.toBeNull();
+  expect.soft(
+    reading.zoomScale,
+    `${label}: the renderer must publish the applied zoom scale`,
+  ).not.toBeNull();
+  const theoretical = reading.theoreticalFit ?? 0;
+  const applied = reading.zoomScale ?? 0;
+  expect.soft(
+    applied >= theoretical * 0.95,
+    `${label}: Fit must keep at least 95% of the theoretical fit — `
+      + `scale ${formatNumber(applied)} vs theoretical ${formatNumber(theoretical)} `
+      + `(natural=${JSON.stringify(reading.natural)} host content box drives the theoretical value)`,
+  ).toBe(true);
+  if (reading.zoomLevelText !== '' && reading.readableHintPercent !== null) {
+    expect.soft(
+      reading.zoomLevelText,
+      `${label}: the zoom tier and the readable hint must print one percentage — `
+        + `tier=${JSON.stringify(reading.zoomLevelText)} hint=${formatNumber(reading.readableHintPercent)}%`,
+    ).toBe(`${reading.readableHintPercent}%`);
+  }
 };
 
 /* ── the guard's own legs ─────────────────────────────────────────────────────────────────── */
@@ -874,6 +1104,20 @@ test('main arm — the canvas fills the panel and the readout names the drawing 
 
   try {
     await openArchitectureTab(page, sessionId);
+
+    // The search combobox: typing a seed name must open a list that is fully
+    // usable — the shipped layout clipped it to a 3px line under the toolbar.
+    // A stem shared by many drawn entities, so the list is tall enough to have a
+    // meaningful visible centre (one row would make the reading vacuous).
+    const searchQuery = 'Stage';
+    await page.locator(SEL.search).first().fill(searchQuery);
+    await expect(page.locator(SEL.searchResults).first()).toBeVisible({ timeout: 10_000 });
+    const search = await readSearch(page);
+    console.log(`[architecture-layout] pc.search=${JSON.stringify(search)}`);
+    assertSearchUsable(search, 'pc.search');
+    await page.locator(SEL.search).first().fill('');
+    await page.keyboard.press('Escape');
+
     await showWholeGraph(page);
 
     const fitted = await readLayout(page);
@@ -881,6 +1125,8 @@ test('main arm — the canvas fills the panel and the readout names the drawing 
     assertCanvasFilled(fitted, 'pc.fitted');
     assertReadoutAboveDrawing(fitted, 'pc.fitted');
     assertChromeClearOfNodes(fitted, 'pc.fitted');
+    assertFooterInFlow(fitted, 'pc.fitted');
+    assertFitNearTheoretical(fitted, 'pc.fitted');
 
     // Reading 3 is taken on the view that draws every entity as its own box.
     await showExplosionView(page);
@@ -918,6 +1164,8 @@ test('main arm — the phone canvas fills the panel and every control is a 44px 
     assertCanvasFilled(fitted, 'phone.fitted');
     assertReadoutAboveDrawing(fitted, 'phone.fitted');
     assertChromeClearOfNodes(fitted, 'phone.fitted');
+    assertFooterInFlow(fitted, 'phone.fitted');
+    assertFitNearTheoretical(fitted, 'phone.fitted');
 
     const controls = await page.evaluate((sel) => {
       const panel = document.querySelector(sel.panel);
@@ -1096,6 +1344,71 @@ test('control arm B — an absolute readout row covers the drawing’s first row
     const restored = await readLayout(page);
     printReading('controlB.restored', restored);
     assertReadoutAboveDrawing(restored, 'controlB.restored');
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * Control arm C: the shipped clipping, injected.
+ *
+ * `overflow-x: auto` on the toolbar ALSO makes the block axis a scroll
+ * container, which is exactly how the search results were clipped to their
+ * first 3px; `height: 39px` reproduces the measured toolbar row. The style is
+ * injected into the live toolbar, and the SAME {@link readSearch} function is
+ * asserted on both sides: usable before, clipped with the style, usable again
+ * once it is removed.
+ */
+test('control arm C — a scrolling toolbar clips the search result list', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    // A stem shared by many drawn entities, so the list is tall enough to have a
+    // meaningful visible centre (one row would make the reading vacuous).
+    const searchQuery = 'Stage';
+    await page.locator(SEL.search).first().fill(searchQuery);
+    await expect(page.locator(SEL.searchResults).first()).toBeVisible({ timeout: 10_000 });
+
+    const before = await readSearch(page);
+    console.log(`[architecture-layout] controlC.before=${JSON.stringify(before)}`);
+    assertSearchUsable(before, 'controlC.before');
+
+    const injected = await page.evaluate((sel) => {
+      const toolbar = document.querySelector(sel.toolbar);
+      if (!(toolbar instanceof HTMLElement)) return null;
+      const previous = toolbar.style.cssText;
+      // The shipped shape: a horizontal scroller whose block axis scrolls too.
+      toolbar.style.overflowX = 'auto';
+      toolbar.style.overflowY = 'auto';
+      toolbar.style.height = '39px';
+      return { previous };
+    }, SEL);
+    console.log(`[architecture-layout] controlC.injected=${injected !== null}`);
+    expect(injected, 'the toolbar must be on screen').not.toBeNull();
+    await settle(page, 400);
+
+    const clipped = await readSearch(page);
+    console.log(`[architecture-layout] controlC.clipped=${JSON.stringify(clipped)}`);
+    expect.soft(
+      clipped.visibleHeight,
+      `control arm C: a scrolling toolbar must clip the result list — `
+        + `visible height ${formatNumber(clipped.visibleHeight)}px must be < ${SEARCH_RESULT_MIN_VISIBLE_PX}px; `
+        + `results=${formatBox(clipped.results)}`,
+    ).toBeLessThan(SEARCH_RESULT_MIN_VISIBLE_PX);
+
+    await page.evaluate((sel) => {
+      const toolbar = document.querySelector(sel.toolbar);
+      if (toolbar instanceof HTMLElement) toolbar.style.cssText = '';
+    }, SEL);
+    await settle(page, 400);
+
+    const restored = await readSearch(page);
+    console.log(`[architecture-layout] controlC.restored=${JSON.stringify(restored)}`);
+    assertSearchUsable(restored, 'controlC.restored');
   } finally {
     await context.close();
   }

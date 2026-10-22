@@ -233,7 +233,12 @@
       "open": "調節",
       "title": "調節",
       "close": "關閉調節面板",
-      "dragHandle": "拖動關閉"
+      "dragHandle": "拖動關閉",
+      "view": "檢視",
+      "scope": "範圍",
+      "detail": "詳情",
+      "filter": "篩選",
+      "export": "匯出"
     },
     "dock": {
       "title": "檢查器",
