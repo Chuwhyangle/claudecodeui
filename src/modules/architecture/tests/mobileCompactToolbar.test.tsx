@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';
@@ -12,19 +12,19 @@ import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 
 /**
- * The compact (phone) architecture toolbar:
- *  · the whole chrome is ONE row — title, granularity switch, "…" — including
- *    the graph's own controls, which are portaled into that row's menu instead
- *    of taking a second diagram toolbar row;
- *  · that menu holds the scope stepper and the detail presets, the honesty
- *    readings, and export; the zoom cluster is NOT a toolbar entry — it floats
- *    on the drawing itself;
- *  · a coarse pointer has no hover, so the hover readout is not rendered at
- *    all and the touch instruction is a dismissible one-off;
- *  · the scope spinbutton reports the +N value (「范围」/`+2`) and its ± steps
- *    re-request the selected depth, while the detail presets never refetch;
- *  · a real truncation still shows as a compact badge in the row while the menu
- *    is shut.
+ * The phone architecture layout:
+ *  · the header is ONE row holding only the view switch and `Adjust`;
+ *  · `Adjust` opens a real bottom-sheet dialog (`role="dialog"`, aria-modal,
+ *    focus trap, focus restored to the trigger) carrying scope, detail, the
+ *    SAME filter content the desktop `Filter ▾` popover draws, search, export
+ *    and the legend; it is capped at 45vh so the drawing stays visible;
+ *  · the one-line readout floats on the drawing's top-left instead of taking
+ *    a header row, and its second line states what the filter is hiding;
+ *  · the minimap starts collapsed above the zoom cluster and opens to 96×64;
+ *  · the touch instruction is a one-off in-canvas bubble (`role="status"`)
+ *    that fades itself out after 3s or closes on demand, and the dismissal is
+ *    remembered;
+ *  · every control keeps a 44×44 hit area with an 8px gap between neighbours.
  */
 
 const apiMock = vi.hoisted(() => ({ architectureGraph: vi.fn() }));
@@ -48,7 +48,8 @@ await i18next.use(initReactI18next).init({
 });
 
 // jsdom ships no ResizeObserver; the diagram observes its scroll container to
-// re-fit. Recording the callbacks keeps the component's effect from throwing.
+// re-fit. Recording the callbacks keeps the component's effect from throwing
+// AND lets a case re-measure a viewport jsdom reports as zero-sized.
 const resizeCallbacks = new Set<ResizeObserverCallback>();
 class RecordingResizeObserver {
   private readonly callback: ResizeObserverCallback;
@@ -70,6 +71,20 @@ class RecordingResizeObserver {
   }
 }
 globalThis.ResizeObserver = RecordingResizeObserver as unknown as typeof ResizeObserver;
+
+/** jsdom ships no `PointerEvent`; the sheet's drag reads `clientY` from it. */
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number;
+  readonly pointerType: string;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? '';
+  }
+}
+(window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent =
+  TestPointerEvent as unknown as typeof PointerEvent;
 
 const TOUCH_ONLY_QUERY = '(pointer: coarse) and (hover: none)';
 
@@ -194,7 +209,7 @@ function graphRoot(): HTMLElement {
   return root;
 }
 
-/** The single compact toolbar row, asserting there is exactly one. */
+/** The single compact header row, asserting there is exactly one. */
 function toolbarRow(): HTMLElement {
   const rows = document.querySelectorAll('[data-architecture-toolbar]');
   assert.equal(rows.length, 1, 'the compact tier must spend exactly one row on chrome');
@@ -203,18 +218,28 @@ function toolbarRow(): HTMLElement {
   return row;
 }
 
-/** The panel's own toolbar row (the desktop tier also has a graph toolbar row). */
-function panelToolbar(): HTMLElement {
-  const row = panelRoot().querySelector('[data-architecture-toolbar]');
-  assert.ok(row instanceof HTMLElement);
-  return row;
+function openSheet(): HTMLElement {
+  fireEvent.click(screen.getByRole('button', { name: 'Adjust' }));
+  const sheet = document.querySelector('[data-architecture-sheet]');
+  assert.ok(sheet instanceof HTMLElement, 'the Adjust button must open the bottom sheet');
+  return sheet;
 }
 
-function openMenu(): HTMLElement {
-  fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-  const menu = document.querySelector('[data-architecture-overflow-menu]');
-  assert.ok(menu instanceof HTMLElement, 'the compact menu must open');
-  return menu;
+/**
+ * Pin a viewport for the minimap. jsdom reports zero sizes, so the component
+ * correctly concludes there is nothing to map; this injects a small content box
+ * and an overflowing drawing, then re-runs the recorded ResizeObserver callback
+ * exactly as a real resize would.
+ */
+function makeDrawingOverflow(host: HTMLElement): void {
+  Object.defineProperty(host, 'clientWidth', { configurable: true, value: 140 });
+  Object.defineProperty(host, 'clientHeight', { configurable: true, value: 100 });
+  const svg = host.querySelector('svg');
+  assert.ok(svg instanceof SVGSVGElement);
+  svg.setAttribute('viewBox', '0 0 4000 1000');
+  act(() => {
+    for (const callback of [...resizeCallbacks]) callback([], {} as ResizeObserver);
+  });
 }
 
 beforeEach(() => {
@@ -224,6 +249,9 @@ beforeEach(() => {
   // decide the next case's starting value.
   window.localStorage.removeItem('architecture.scope.project-1');
   window.localStorage.removeItem('architecture.detail.project-1');
+  window.localStorage.removeItem('architecture.filter.project-1');
+  window.localStorage.removeItem('architecture.touchHint.dismissed');
+  window.localStorage.removeItem('architecture.minimap.collapsed');
   setViewport(1024, 768);
   stubMatchMedia(() => false);
 });
@@ -233,243 +261,362 @@ afterEach(() => {
   setViewport(originalInnerWidth, originalInnerHeight);
 });
 
-test('the compact tier spends its only toolbar row on the title, granularity and "…"', async () => {
+test('the phone header is one row: the view switch and Adjust, nothing else', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const row = toolbarRow();
-  assert.match(row.textContent ?? '', /Architecture/, 'the row carries the title');
-  assert.ok(
-    within(row).getByRole('radiogroup', { name: 'Graph granularity' }),
-    'the granularity switch stays on the row',
-  );
-  assert.ok(within(row).getByRole('button', { name: 'More actions' }), 'the "…" toggle is the row\'s last entry');
+  // The compact tier's two control groups, and only those two. The title and
+  // the truncation badge are gone from the header (the readout carries them).
+  const groups = [...row.children].filter((child) => child.matches('[data-architecture-view-control], [data-architecture-sheet-toggle]'));
+  assert.equal(groups.length, 2, 'the header spends its row on exactly the view switch and Adjust');
+  assert.ok(within(row).getByRole('radiogroup', { name: 'Graph granularity' }));
+  const adjust = within(row).getByRole('button', { name: 'Adjust' });
+  assert.equal(adjust.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(adjust.getAttribute('aria-expanded'), 'false');
+  assert.equal(row.textContent?.includes('Architecture'), false, 'the title is not part of the phone row');
 
-  // The graph must not draw a second toolbar row of its own on this tier.
-  assert.equal(
-    graphRoot().querySelector('[data-architecture-overflow-toggle]'),
-    null,
-    'the graph must not repeat the toolbar row',
-  );
-  assert.equal(
-    graphRoot().querySelector('[data-architecture-toolbar]'),
-    null,
-    'the graph renders no toolbar of its own in compact mode',
-  );
-  // The zoom cluster is drawn ON the canvas (bottom right) on every tier; it is
-  // not a toolbar entry, so the single row still carries only title/granularity/"…".
-  const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
-  assert.ok(cluster instanceof HTMLElement, 'the zoom controls live on the drawing');
-  assert.equal(row.contains(cluster), false, 'the zoom cluster must not be part of the row');
+  // One row of chrome, and the graph draws no toolbar of its own.
+  assert.equal(document.querySelectorAll('[data-architecture-toolbar]').length, 1);
+  assert.equal(graphRoot().querySelector('[data-architecture-toolbar]'), null);
+  // The readout is an overlay on the drawing, not a second chrome row.
+  const overlay = document.querySelector('[data-architecture-readout-overlay]');
+  assert.ok(overlay instanceof HTMLElement);
+  assert.ok(overlay.closest('[data-architecture-toolbar]') === null, 'the readout does not live in the header');
+  assert.ok(overlay.closest('[data-architecture-canvas-region]') !== null, 'the readout floats on the drawing');
+  assert.equal(document.querySelector('[data-architecture-canvas-header]'), null, 'no in-flow chrome row on a phone');
 });
 
-test('the "…" menu holds the two knobs and export — the readout and zoom live in the row above the canvas', async () => {
+test('Adjust opens a dialog holding scope, detail, filter, search and export', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  const menu = openMenu();
+  const sheet = openSheet();
+  assert.equal(sheet.getAttribute('role'), 'dialog');
+  assert.equal(sheet.getAttribute('aria-modal'), 'true');
+  assert.equal(sheet.style.maxHeight, '45vh', 'the sheet leaves the drawing visible');
 
-  // The honesty readings became the readout row and source line; the menu
-  // no longer repeats them (there is no second reading surface).
-  assert.equal(menu.querySelector('[data-architecture-honesty]'), null);
-  const header = document.querySelector('[data-architecture-canvas-header]');
-  assert.ok(header instanceof HTMLElement, 'the readout row sits above the canvas');
-  assert.ok(header.querySelector('[data-architecture-readout]'), 'the one-line readout sits in the row above the canvas');
-  assert.ok(document.querySelector('[data-architecture-source-line]'), 'the source line sits on the canvas');
-  const scope = menu.querySelector('[data-architecture-scope-control]');
-  assert.ok(scope instanceof HTMLElement, 'the scope stepper lives in the menu');
-  assert.ok(menu.querySelector('[data-architecture-scope-decrease]'), 'the stepper offers −');
-  assert.ok(menu.querySelector('[data-architecture-scope-increase]'), 'the stepper offers +');
+  assert.ok(sheet.querySelector('[data-architecture-scope-control]'), 'scope stepper');
   assert.equal(
-    menu.querySelectorAll('[data-architecture-detail-option]').length,
+    sheet.querySelectorAll('[data-architecture-detail-option]').length,
     3,
-    'the detail radiogroup offers 核心/常用/全部',
+    'the three detail presets',
   );
-  assert.ok(menu.querySelector('[data-architecture-export]'), 'export is reachable from the menu');
+  assert.ok(sheet.querySelector('[data-architecture-filter-panel]'), 'the same filter component the desktop popover hosts');
+  assert.ok(sheet.querySelector('[data-architecture-search]'), 'search box');
+  assert.ok(sheet.querySelector('[data-architecture-export]'), 'export menu');
+  assert.ok(sheet.querySelector('[data-architecture-legend-content]'), 'legend');
 
-  // The zoom controls are the drawing's own chrome now: they float on the
-  // canvas, so the menu must not repeat them.
-  for (const control of ['zoom-out', 'zoom-in', 'zoom-fit']) {
-    assert.equal(
-      menu.querySelector(`[data-architecture-${control}]`),
-      null,
-      `the ${control} control belongs to the canvas cluster, not the menu`,
-    );
-  }
+  // Focus returns to the trigger when the dialog closes.
+  const trigger = screen.getByRole('button', { name: 'Adjust' });
+  fireEvent.click(sheet.querySelector('[data-architecture-sheet-close]') as Element);
+  assert.equal(document.querySelector('[data-architecture-sheet]'), null, 'the sheet closes');
+  assert.equal(document.activeElement, trigger, 'focus goes back to the Adjust button');
 
-  // The cluster drives the same viewport scale the toolbar used to.
-  const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
-  assert.ok(cluster instanceof HTMLElement, 'the cluster is on the drawing');
-  const before = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  fireEvent.click(cluster.querySelector('[data-architecture-zoom-in]') as Element);
-  await waitFor(() => {
-    assert.ok(
-      Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > before,
-      'the cluster zoom must reach the drawing',
-    );
-  });
-  assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
+  // The dialog's Tab trap wraps at the end instead of leaving the sheet.
+  const reopened = openSheet();
+  const focusables = [...reopened.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  const last = focusables[focusables.length - 1];
+  last.focus();
+  fireEvent.keyDown(last, { key: 'Tab' });
+  assert.equal(document.activeElement, focusables[0], 'Tab from the last control wraps to the first');
+
+  // Pulling the handle down past the threshold closes the sheet.
+  const handle = reopened.querySelector('[data-architecture-sheet-drag-handle]');
+  assert.ok(handle instanceof HTMLElement);
+  fireEvent.pointerDown(handle, { pointerId: 1, pointerType: 'touch', clientY: 100 });
+  fireEvent.pointerMove(handle, { pointerId: 1, pointerType: 'touch', clientY: 200 });
+  fireEvent.pointerUp(handle, { pointerId: 1, pointerType: 'touch', clientY: 200 });
+  assert.equal(document.querySelector('[data-architecture-sheet]'), null, 'a downward drag dismisses the sheet');
 });
 
-test('the menu stepper reports the +N scope and re-requests the selected depth', async () => {
+test('stepping scope or narrowing the filter inside the sheet updates the floating readout', async () => {
   usePhone();
+  // The first request answers the default scope; the scope step is answered by
+  // a wider reading, so the floating readout's number actually moves.
+  apiMock.architectureGraph
+    .mockResolvedValueOnce(jsonResponse(RESULT))
+    .mockResolvedValueOnce(jsonResponse(TRUNCATED_RESULT));
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  const menu = openMenu();
-  const readout = menu.querySelector('[role="spinbutton"]');
-  assert.ok(readout instanceof HTMLElement, 'the scope readout is a spinbutton');
-  assert.equal(readout.textContent, '+2', 'the displayed value is +N');
-  assert.equal(readout.getAttribute('aria-valuenow'), '2');
-  assert.equal(readout.getAttribute('aria-valuemax'), '3');
+  const sheet = openSheet();
+  const readoutOverlay = document.querySelector('[data-architecture-readout-overlay]');
+  assert.ok(readoutOverlay instanceof HTMLElement);
+  assert.equal(
+    readoutOverlay.querySelector('[data-architecture-readout-total]')?.getAttribute('data-architecture-readout-total'),
+    '3',
+    'the first reading states the default scope',
+  );
 
-  // The Chinese bundle is the wording the mobile review asked for.
-  assert.equal(zhCNCommon.architecture.controls.scope, '范围');
-  assert.equal(zhCNCommon.architecture.controls.detailCore, '核心');
-
-  fireEvent.click(menu.querySelector('[data-architecture-scope-increase]') as Element);
+  // Scope is a server parameter: +2 → +3 re-requests and the readout follows.
+  const spin = sheet.querySelector('[role="spinbutton"]');
+  assert.ok(spin instanceof HTMLElement);
+  assert.equal(spin.textContent, '+2');
+  fireEvent.click(sheet.querySelector('[data-architecture-scope-increase]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
-  // The first three arguments are the session/scope triple this case is about;
-  // a fourth (the element/relation filter query) now rides along on every
-  // request, and its own shape is asserted by architectureTab's filter cases.
   assert.deepEqual(
     apiMock.architectureGraph.mock.calls[1].slice(0, 3),
     ['project-1', 'session-1', 3],
     'stepping + from +2 must re-request hops=3',
   );
+  await waitFor(() =>
+    assert.equal(
+      readoutOverlay.querySelector('[data-architecture-readout-total]')?.getAttribute('data-architecture-readout-total'),
+      '9',
+      'the floating readout follows the new scope reading',
+    ),
+  );
   assert.equal(
-    menu.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'),
+    sheet.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'),
     '3',
-    'the readout follows the scope',
-  );
-});
-
-test('a coarse pointer renders no hover hint, and the touch hint is dismissible', async () => {
-  usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-  await waitForDiagram();
-
-  assert.equal(
-    document.querySelector('[data-architecture-hover]'),
-    null,
-    'a finger cannot hover, so the hover readout must not exist',
-  );
-  assert.equal(
-    screen.queryByText(/Hover a node for its relation types/),
-    null,
-    'the contradictory hover instruction must not be rendered on a coarse pointer',
+    'the sheet stepper follows the scope',
   );
 
-  const hint = document.querySelector('[data-architecture-touch-hint]');
-  assert.ok(hint instanceof HTMLElement, 'the touch instruction is shown once');
-  const close = within(hint).getByRole('button', { name: 'Dismiss hint' });
-  fireEvent.click(close);
-  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'the hint is dismissible');
-});
-
-test('the touch hint is a row above the drawing, never an overlay on its top nodes', async () => {
-  usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-  await waitForDiagram();
-
-  const hint = document.querySelector('[data-architecture-touch-hint]');
-  assert.ok(hint instanceof HTMLElement, 'the touch hint is on screen on first entry');
-
-  // jsdom performs no layout, so overlap is read structurally: the hint must be
-  // OUTSIDE the drawing surface, before it in document order, and in normal
-  // flow. Any of those failing would put it back over the top node row.
-  assert.equal(
-    hint.closest('[data-architecture-plantuml]'),
-    null,
-    'the hint must not be rendered inside the drawing surface',
-  );
-  const drawing = graphRoot();
-  const drawingRegion = drawing.parentElement;
-  assert.ok(drawingRegion instanceof HTMLElement);
-  assert.equal(
-    hint.parentElement,
-    drawingRegion.parentElement,
-    'the hint and the drawing region are siblings in the panel column',
-  );
+  // The filter is the same component: choosing "show every relation" removes
+  // the hidden-count second line from the readout while the sheet stays open.
   assert.ok(
-    hint.compareDocumentPosition(drawingRegion) & Node.DOCUMENT_POSITION_FOLLOWING,
-    'the hint comes before the drawing, so it cannot cover its top edge',
+    readoutOverlay.querySelector('[data-architecture-filter-hidden]'),
+    'the default filter hides the call edge, so the readout states it first',
   );
-  assert.doesNotMatch(
-    hint.className,
-    /(^|\s)(absolute|fixed|sticky)(\s|$)/,
-    'the hint must stay in normal flow, not be positioned over the drawing',
+  fireEvent.click(sheet.querySelector('[data-architecture-filter-relation="call"]') as Element);
+  await waitFor(() =>
+    assert.equal(
+      readoutOverlay.querySelector('[data-architecture-filter-hidden]'),
+      null,
+      'showing every relation leaves nothing hidden to state',
+    ),
   );
-  assert.match(
-    drawingRegion.className,
-    /(^|\s)flex-1(\s|$)/,
-    'the drawing still absorbs the remaining height of the panel',
-  );
+  assert.ok(document.querySelector('[data-architecture-sheet]'), 'the sheet stays open while the drawing changes');
 
-  // Its close target is a full 44×44 on a coarse pointer.
-  const close = within(hint).getByRole('button', { name: 'Dismiss hint' });
-  const style = getComputedStyle(close);
-  assert.equal(style.minHeight, '44px', 'the dismiss target must be 44px tall');
-  assert.equal(style.minWidth, '44px', 'the dismiss target must be 44px wide');
+  // The Chinese bundle carries the review wording.
+  assert.equal(zhCNCommon.architecture.sheet.open, '调节');
+  assert.equal(zhCNCommon.architecture.controls.scope, '范围');
 });
 
-test('a truncated graph keeps a compact "+N folded" badge in the row while the menu is shut', async () => {
+test('the desktop tier keeps its header and renders no sheet', async () => {
+  // The beforeEach setup: fine pointer, 1024px.
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  assert.equal(document.querySelector('[data-architecture-sheet-toggle]'), null, 'no Adjust button on desktop');
+  assert.equal(document.querySelector('[data-architecture-sheet]'), null, 'no bottom sheet on desktop');
+  const header = document.querySelector('[data-architecture-toolbar]');
+  assert.ok(header instanceof HTMLElement);
+  assert.ok(header.querySelector('[data-architecture-scope-control]'), 'desktop keeps the scope stepper in the header');
+  assert.ok(header.querySelector('[data-architecture-detail-control]'), 'desktop keeps the detail presets');
+  assert.ok(header.querySelector('[data-architecture-filter-toggle]'), 'desktop keeps the Filter ▾ disclosure');
+  assert.ok(header.querySelector('[data-architecture-export]'), 'desktop keeps export');
+  assert.ok(header.querySelector('[data-architecture-legend-toggle]'), 'desktop keeps the legend button');
+  assert.ok(document.querySelector('[data-architecture-canvas-header]'), 'desktop keeps the in-flow readout row');
+  assert.ok(document.querySelector('[data-architecture-readout]'), 'desktop still shows the one-line readout');
+});
+
+test('the minimap starts collapsed above the zoom cluster and opens to 96×64 without overlap', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+  makeDrawingOverflow(host);
+
+  const expand = await waitFor(() => {
+    const button = document.querySelector('[data-architecture-minimap-expand]');
+    assert.ok(button instanceof HTMLElement, 'a phone gets the collapsed minimap button by default');
+    return button;
+  });
+  const expandStyle = getComputedStyle(expand);
+  assert.equal(expandStyle.minHeight, '44px', 'the collapsed minimap is a 44px target');
+  assert.equal(expandStyle.minWidth, '44px');
+  assert.equal(document.querySelector('[data-architecture-minimap-canvas]'), null, 'the map is not expanded yet');
+
+  fireEvent.click(expand);
+  const canvas = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-minimap-canvas]');
+    assert.ok(element instanceof HTMLElement, 'clicking the button opens the map');
+    return element;
+  });
+  assert.equal(canvas.style.width, '96px', 'the phone map is the 96px thumbnail');
+  assert.equal(canvas.style.height, '64px');
+
+  // Both on-canvas blocks live in ONE absolute column with a positive gap, in
+  // the order map-then-cluster, so they cannot intersect.
+  const overlays = document.querySelector('[data-architecture-canvas-overlays]');
+  const cluster = document.querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(overlays instanceof HTMLElement);
+  assert.ok(cluster instanceof HTMLElement);
+  assert.equal(overlays.style.rowGap, '8px');
+  assert.equal(overlays.style.flexDirection, 'column');
+  const minimap = document.querySelector('[data-architecture-minimap]');
+  assert.ok(minimap instanceof HTMLElement);
+  assert.ok(
+    minimap.compareDocumentPosition(cluster) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'the map sits above the zoom cluster',
+  );
+
+  // Inject the two boxes' sizes and prove the gap: the arithmetic is what the
+  // flex column above states, read through getBoundingClientRect.
+  minimap.getBoundingClientRect = () => ({
+    x: 250, y: 500, left: 250, top: 500, width: 96, height: 64, right: 346, bottom: 564,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  cluster.getBoundingClientRect = () => ({
+    x: 250, y: 572, left: 250, top: 572, width: 44, height: 140, right: 294, bottom: 712,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  const mapRect = minimap.getBoundingClientRect();
+  const clusterRect = cluster.getBoundingClientRect();
+  assert.ok(clusterRect.top - mapRect.bottom >= 8, 'the map and the cluster keep an 8px gap');
+});
+
+test('the touch hint is a one-off bubble on the drawing, dismissed by click or fade and remembered', async () => {
+  usePhone();
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  const hint = document.querySelector('[data-architecture-touch-hint]');
+  assert.ok(hint instanceof HTMLElement, 'the hint appears on first entry');
+  assert.equal(hint.getAttribute('role'), 'status', 'the hint is announced without stealing focus');
+  assert.equal(hint.style.position, 'absolute', 'the hint is an overlay bubble, not a row');
+  assert.ok(hint.closest('[data-architecture-canvas-region]'), 'the bubble lives inside the drawing region');
+  assert.equal(hint.closest('[data-architecture-toolbar]'), null, 'it never takes a header row');
+  assert.match(hint.textContent ?? '', /Drag with one finger/);
+  assert.match(hint.textContent ?? '', /pinch to zoom/);
+
+  fireEvent.click(within(hint).getByRole('button', { name: 'Dismiss hint' }));
+  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'clicking it dismisses it');
+  assert.equal(
+    window.localStorage.getItem('architecture.touchHint.dismissed'),
+    'true',
+    'the dismissal is remembered',
+  );
+
+  // A fresh mount does not resurrect it.
+  first.unmount();
+  const second = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'the remembered dismissal survives a mount');
+
+  // The other accepted dismissal channel: the 3s fade's animation end.
+  second.unmount();
+  window.localStorage.removeItem('architecture.touchHint.dismissed');
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+  const fades = document.querySelector('[data-architecture-touch-hint]');
+  assert.ok(fades instanceof HTMLElement);
+  assert.match(fades.style.animation, /3000ms/, 'the fade runs for 3 seconds');
+  act(() => {
+    fireEvent.animationEnd(fades);
+  });
+  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'the fade end removes the bubble');
+  assert.equal(window.localStorage.getItem('architecture.touchHint.dismissed'), 'true');
+});
+
+test('every architecture control keeps a 44×44 target and an 8px gap from its neighbour', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+  makeDrawingOverflow(host);
+  const sheet = openSheet();
+
+  // Open the export menu too, so its items are part of the reading.
+  fireEvent.click(sheet.querySelector('[data-architecture-export]') as Element);
+
+  const controls = [
+    ...panelRoot().querySelectorAll<HTMLElement>('button, input, [role="spinbutton"]'),
+  ];
+  assert.ok(controls.length >= 20, `the phone layout must expose its controls; got ${controls.length}`);
+  for (const control of controls) {
+    const style = getComputedStyle(control);
+    assert.equal(style.minHeight, '44px', `a coarse-pointer target must be 44px tall: ${control.getAttribute('data-architecture-export-item') ?? control.textContent ?? control.getAttribute('aria-label') ?? ''}`);
+    assert.equal(style.minWidth, '44px', `a coarse-pointer target must be 44px wide: ${control.getAttribute('data-architecture-export-item') ?? control.textContent ?? control.getAttribute('aria-label') ?? ''}`);
+  }
+
+  // The groups that place controls next to each other declare a gap of at
+  // least 8px. Injecting the boxes (jsdom has no layout) and reading them
+  // through getBoundingClientRect proves the neighbours cannot touch.
+  const groups = [
+    toolbarRow(),
+    sheet.querySelector('[data-architecture-scope-control]'),
+    sheet.querySelector('[data-architecture-detail-control]'),
+    sheet.querySelector('[data-architecture-sheet-body]'),
+    document.querySelector('[data-architecture-export-menu-root]'),
+    document.querySelector('[data-architecture-canvas-overlays]'),
+    document.querySelector('[data-architecture-zoom-cluster]'),
+  ];
+  for (const group of groups) {
+    assert.ok(group instanceof HTMLElement, 'the group must be on screen');
+    const declared = group.style.gap
+      || group.style.rowGap
+      || group.style.columnGap;
+    const gap = Number.parseFloat(declared);
+    assert.ok(Number.isFinite(gap) && gap >= 8, `a control group must keep an 8px gap; got ${declared || '(none)'}`);
+  }
+
+  // Pairwise geometry for the zoom cluster: buttons stacked with that gap.
+  const cluster = document.querySelector('[data-architecture-zoom-cluster]') as HTMLElement;
+  const clusterButtons = [...cluster.querySelectorAll('button')];
+  const gap = Number.parseFloat(cluster.style.gap);
+  let top = 100;
+  for (const button of clusterButtons) {
+    const boxTop = top;
+    button.getBoundingClientRect = () => ({
+      x: 0, y: boxTop, left: 0, top: boxTop, width: 44, height: 44, right: 44, bottom: boxTop + 44,
+      toJSON: () => ({}),
+    }) as DOMRect;
+    top += 44 + gap;
+  }
+  for (let index = 1; index < clusterButtons.length; index += 1) {
+    const previous = clusterButtons[index - 1].getBoundingClientRect();
+    const current = clusterButtons[index].getBoundingClientRect();
+    assert.ok(current.top - previous.bottom >= 8, 'adjacent zoom controls keep an 8px gap');
+  }
+});
+
+test('the drawing keeps at least 85% of the phone tab height', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  const panel = panelRoot();
+  const region = document.querySelector('[data-architecture-canvas-region]');
+  const row = toolbarRow();
+  assert.ok(region instanceof HTMLElement);
+  // The only in-flow chrome is the 44px-target header row (44 + 2×6px
+  // padding). jsdom cannot lay it out, so the two boxes are injected and the
+  // region is then the flex-1 remainder below the row.
+  const rect = (height: number, width = 390): DOMRect => ({
+    x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  const rowHeight = 44 + 12;
+  panel.getBoundingClientRect = () => rect(844);
+  row.getBoundingClientRect = () => rect(rowHeight);
+  region.getBoundingClientRect = () => rect(844 - rowHeight);
+  assert.match(region.className, /(^|\s)flex-1(\s|$)/, 'the drawing absorbs the remaining height');
+  assert.equal(panel.contains(row), true, 'the single header row lives in the tab column');
+  assert.equal(panel.contains(region), true, 'the drawing lives in the same tab column');
+  assert.equal(row.contains(region), false, 'the drawing is below the row, not inside it');
+  const share = region.getBoundingClientRect().height / panel.getBoundingClientRect().height;
+  assert.ok(share >= 0.85, `the drawing must keep ≥85% of the tab; got ${Math.round(share * 100)}%`);
+});
+
+test('a truncated graph states the cut on the floating readout, not in the header', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(TRUNCATED_RESULT));
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  const row = toolbarRow();
-  const badge = row.querySelector('[data-architecture-truncated-badge]');
-  assert.ok(badge instanceof HTMLElement, 'a real cut must stay visible without opening the menu');
-  // The old ``shown/total`` numbers became a text badge: 9 reachable, 3 kept.
+  const overlay = document.querySelector('[data-architecture-readout-overlay]');
+  assert.ok(overlay instanceof HTMLElement);
+  const badge = overlay.querySelector('[data-architecture-truncated-badge]');
+  assert.ok(badge instanceof HTMLElement, 'the cut stays visible without opening the sheet');
   assert.equal(badge.getAttribute('data-architecture-truncated-omitted'), '6');
-  assert.match(badge.textContent ?? '', /\+6 folded/, 'the badge states how many the budget left out');
+  assert.match(badge.textContent ?? '', /\+6 folded/);
   assert.equal(
-    document.querySelector('[data-architecture-overflow-menu]'),
+    toolbarRow().querySelector('[data-architecture-truncated-badge]'),
     null,
-    'the badge is what makes the cut visible while the menu is shut',
+    'the header row carries no badge — it belongs to the readout',
   );
-
-  // The full reading is the readout in the row above the canvas, not a second menu row.
-  const truncated = document.querySelector('[data-architecture-readout] [data-architecture-truncated]');
-  assert.ok(truncated instanceof HTMLElement);
-  assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '3');
-  assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
-  // The collapsed line carries one budget marker; the omitted count moved into
-  // the expanded explanation (the row badge above still states it compactly).
-  assert.match(truncated.textContent ?? '', /Budget-limited/);
-  assert.doesNotMatch(truncated.textContent ?? '', /more left out by the node budget/);
-});
-
-test('the desktop header is ONE row and the graph draws no toolbar of its own', async () => {
-  // Deliberately the desktop setup from beforeEach (fine pointer, 1024px).
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
-  await waitForDiagram();
-
-  const row = panelToolbar();
-  assert.ok(row.querySelector('[data-architecture-view-control]'), 'the view radiogroup lives in the header');
-  assert.ok(row.querySelector('[data-architecture-scope-control]'), 'desktop keeps the scope stepper in the header');
-  assert.ok(row.querySelector('[data-architecture-detail-control]'), 'desktop keeps the detail presets in the header');
-  assert.ok(row.querySelector('[data-architecture-export]'), 'desktop keeps the export button in the header');
-  assert.ok(row.querySelector('[data-architecture-legend-toggle]'), 'the legend entry lives in the header');
-  assert.equal(document.querySelectorAll('[data-architecture-toolbar]').length, 1, 'one row, not two');
-  assert.equal(document.querySelector('[data-architecture-honesty]'), null, 'the honesty bar is gone');
-  assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'desktop has no compact menu');
-  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'desktop gets no standing hint');
-
-  // The zoom tier now sits in the in-flow row ABOVE the canvas (nothing
-  // repeats it in the panel's single toolbar row, and nothing floats it over
-  // the drawing).
-  const header = document.querySelector('[data-architecture-canvas-header]');
-  assert.ok(header instanceof HTMLElement, 'the canvas has its own chrome row');
-  const tier = header.querySelector('[data-architecture-zoom-tier]');
-  assert.ok(tier instanceof HTMLElement, 'the tier indicator sits in the row above the canvas');
-  assert.equal(row.contains(tier), false, 'the panel toolbar row does not repeat the tier');
-  assert.equal(graphRoot().querySelector('[data-architecture-toolbar]'), null);
-  const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
-  assert.ok(cluster instanceof HTMLElement, 'the desktop canvas carries the zoom cluster');
-  assert.ok(cluster.querySelector('[data-architecture-zoom-in]'));
+  assert.ok(document.querySelector('[data-architecture-sheet]') === null, 'the reading needs no open sheet');
 });

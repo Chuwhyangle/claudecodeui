@@ -61,7 +61,8 @@
         "show": "显示图概览",
         "hide": "收起图概览"
       },
-      "zoomTier": "缩放档位"
+      "zoomTier": "缩放档位",
+      "touchHintBubble": "单指拖动，双指缩放，双击节点下钻"
     },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",
@@ -182,6 +183,12 @@
       "outside": "{{count}} 个在项目目录之外已忽略",
       "normalized": "{{count}} 个绝对路径 id 已规范",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "调节",
+      "title": "调节",
+      "close": "关闭调节面板",
+      "dragHandle": "拖动关闭"
     }
   },
   "status": {

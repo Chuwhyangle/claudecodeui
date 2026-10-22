@@ -19,8 +19,8 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
  *    scroll container;
  *  · a touch tap only selects (the drawing must not re-lay out under the
  *    finger); drilling needs an explicit gesture — double-tap or "Drill in";
- *  · a coarse pointer gets 44×44 hit areas and a narrow screen collects the
- *    toolbar into one expandable overflow menu;
+ *  · a coarse pointer gets 44×44 hit areas and a narrow screen keeps one header
+ *    row, moving the other entries into the bottom sheet;
  *  · the canvas owns the wheel (a plain wheel zooms around the cursor), and the
  *    zoom cluster floats on the drawing rather than in the toolbar.
  */
@@ -208,15 +208,16 @@ function graphRoot(): HTMLElement {
 }
 
 /**
- * The compact tier has ONE toolbar row on the panel; the graph's own controls
- * (drill, zoom, back) are portaled into that row's "…" menu. Open it only when
- * it is shut, so a sequence that leaves it open does not toggle it closed.
+ * The compact tier has ONE header row on the panel; the graph's own controls
+ * (drill, back, readable mode) are portaled into the bottom sheet that the
+ * `Adjust` button opens. Open it only when it is shut, so a sequence that
+ * leaves it open does not close it.
  */
 function openCompactMenu(): void {
-  if (document.querySelector('[data-architecture-overflow-menu]') === null) {
-    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  if (document.querySelector('[data-architecture-sheet]') === null) {
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust' }));
   }
-  assert.ok(document.querySelector('[data-architecture-overflow-menu]'), 'the compact menu must be open');
+  assert.ok(document.querySelector('[data-architecture-sheet]'), 'the bottom sheet must be open');
 }
 
 function drawnNodeIds(host: HTMLElement): string[] {
@@ -442,13 +443,12 @@ test('a coarse pointer gives every toolbar button a 44×44 hit area', async () =
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  const toggle = screen.getByRole('button', { name: 'More actions' });
+  const toggle = screen.getByRole('button', { name: 'Adjust' });
   fireEvent.click(toggle);
-  const menu = document.querySelector('[data-architecture-overflow-menu]');
-  assert.ok(menu !== null, 'the compact toolbar must expand');
+  assert.ok(document.querySelector('[data-architecture-sheet]'), 'the bottom sheet must open');
 
   // Every control the compact tier can reach, INCLUDING the ones the renderer
-  // portals into the menu — the panel is where the whole toolbar lives now.
+  // portals into the sheet — the panel is where the whole chrome lives now.
   const panel = document.querySelector('[data-architecture-panel]');
   assert.ok(panel instanceof HTMLElement);
   const buttons = [...panel.querySelectorAll('button')];
@@ -460,7 +460,7 @@ test('a coarse pointer gives every toolbar button a 44×44 hit area', async () =
   }
 });
 
-test('a narrow screen collects the toolbar entries into one expandable overflow menu', async () => {
+test('a narrow screen keeps one header row and moves the other entries into the sheet', async () => {
   // Narrow but FINE pointer: this is a small desktop window, not a touch device.
   setViewport(375, 812);
   stubMatchMedia(() => false);
@@ -480,15 +480,15 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   assert.equal(
     document.querySelector('[data-architecture-export]'),
     null,
-    'the header export button moves into the same overflow menu',
+    'the header export button moves into the sheet',
   );
 
-  const toggle = screen.getByRole('button', { name: 'More actions' });
+  const toggle = screen.getByRole('button', { name: 'Adjust' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
   fireEvent.click(toggle);
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.ok(document.querySelector('[data-architecture-overflow-menu]'), 'the menu must expand');
-  assert.ok(document.querySelector('[data-architecture-export]'), 'export must be reachable from the menu');
+  assert.ok(document.querySelector('[data-architecture-sheet]'), 'the sheet must open');
+  assert.ok(document.querySelector('[data-architecture-export]'), 'export must be reachable from the sheet');
 
   const zoomIn = screen.getByRole('button', { name: 'Zoom in' });
   assert.ok(cluster.contains(zoomIn), 'the zoom control read by name is the cluster one');
@@ -497,7 +497,7 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   assert.ok(Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > 1);
 });
 
-test('the menu closes and the legacy Mermaid item still writes the .mmd document', async () => {
+test('the sheet closes and the legacy Mermaid item still writes the .mmd document', async () => {
   setViewport(375, 812);
   stubMatchMedia(() => false);
   const downloads: string[] = [];
@@ -510,7 +510,7 @@ test('the menu closes and the legacy Mermaid item still writes the .mmd document
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Adjust' }));
   act(() => {
     fireEvent.click(document.querySelector('[data-architecture-export]') as Element);
   });
@@ -519,5 +519,5 @@ test('the menu closes and the legacy Mermaid item still writes the .mmd document
   });
 
   assert.deepEqual(downloads, ['architecture-file.mmd'], 'the legacy item must write the same document the header used to');
-  assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'the menu closes after exporting');
+  assert.equal(document.querySelector('[data-architecture-sheet]'), null, 'the sheet closes after exporting');
 });

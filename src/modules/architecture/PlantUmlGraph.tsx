@@ -31,6 +31,7 @@ import {
 } from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import {
+  TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useCanvasHeaderSlot,
   useCompactToolbarSlot,
@@ -1426,7 +1427,8 @@ export function PlantUmlGraph({
     <span
       role="group"
       aria-label={t('architecture.plantuml.readable.group', { defaultValue: 'Readable zoom mode' })}
-      className="flex items-center gap-1 rounded border border-border/60 p-0.5"
+      style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
+      className="flex items-center rounded border border-border/60 p-0.5"
     >
       <button
         type="button"
@@ -1632,7 +1634,8 @@ export function PlantUmlGraph({
       data-architecture-zoom-tier="true"
       role="group"
       aria-label={t('architecture.plantuml.zoomTier', { defaultValue: 'Zoom level' })}
-      className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
+      style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
+      className="pointer-events-auto flex max-w-full flex-wrap items-center rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
     >
       <span data-architecture-zoom-tier-label="true" className="px-1 font-medium text-foreground">
         {zoomTierLabel}
@@ -1709,16 +1712,19 @@ export function PlantUmlGraph({
       data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
-      {canvasHeaderSlot !== null
-        ? createPortal(headerControls, canvasHeaderSlot)
-        : (
-          <div
-            data-architecture-graph-header="true"
-            className="flex shrink-0 flex-wrap items-center justify-end gap-1 px-1 pb-1"
-          >
-            {headerControls}
-          </div>
-        )}
+      {canvasHeaderSlot !== null ? (
+        createPortal(headerControls, canvasHeaderSlot)
+      ) : compactToolbar ? null : (
+        // The compact tier has no in-flow chrome row: when the panel has not
+        // mounted a slot (the bottom sheet is shut), drawing one would put a
+        // second row back between the header and the drawing.
+        <div
+          data-architecture-graph-header="true"
+          className="flex shrink-0 flex-wrap items-center justify-end gap-1 px-1 pb-1"
+        >
+          {headerControls}
+        </div>
+      )}
       {compactToolbar ? (
         // On the compact tier the panel already spends the one row it has on
         // the title, granularity and "…"; the rest of this renderer's controls
@@ -1796,7 +1802,8 @@ export function PlantUmlGraph({
             role="group"
             aria-label={zoomGroupLabel}
             data-architecture-zoom-cluster="true"
-            className="pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 shadow-sm"
+            style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
+            className="pointer-events-auto flex flex-col items-center rounded-lg border border-border/60 bg-background/90 p-1 shadow-sm"
           >
             {zoomInButton}
             {zoomOutButton}

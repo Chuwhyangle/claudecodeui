@@ -61,7 +61,8 @@
         "show": "Mostra la panoramica del diagramma",
         "hide": "Comprimi la panoramica del diagramma"
       },
-      "zoomTier": "Livello di zoom"
+      "zoomTier": "Livello di zoom",
+      "touchHintBubble": "Trascina con un dito per spostare, pizzica per zoomare, doppio tocco per approfondire."
     },
     "title": "Architettura",
     "noSession": "Seleziona una sessione per vedere l'architettura dei file che ha toccato.",
@@ -182,6 +183,12 @@
       "outside": "{{count}} fuori dalla directory del progetto sono stati ignorati",
       "normalized": "{{count}} id di percorso assoluto normalizzati",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "Regola",
+      "title": "Regola",
+      "close": "Chiudi pannello di regolazione",
+      "dragHandle": "Trascina per chiudere"
     }
   },
   "status": {

@@ -61,7 +61,8 @@
         "show": "顯示圖概覽",
         "hide": "收合圖概覽"
       },
-      "zoomTier": "縮放層級"
+      "zoomTier": "縮放層級",
+      "touchHintBubble": "單指拖動，雙指縮放，雙擊節點下鑽"
     },
     "title": "架構",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",
@@ -182,6 +183,12 @@
       "outside": "{{count}} 個在專案目錄之外已忽略",
       "normalized": "{{count}} 個絕對路徑 id 已規範",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "調節",
+      "title": "調節",
+      "close": "關閉調節面板",
+      "dragHandle": "拖動關閉"
     }
   },
   "status": {

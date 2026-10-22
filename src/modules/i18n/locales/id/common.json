@@ -61,7 +61,8 @@
         "show": "Tampilkan ringkasan diagram",
         "hide": "Ciutkan ringkasan diagram"
       },
-      "zoomTier": "Tingkat zoom"
+      "zoomTier": "Tingkat zoom",
+      "touchHintBubble": "Seret dengan satu jari untuk menggeser, cubit untuk zoom, ketuk dua kali untuk menelusuri."
     },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",
@@ -182,6 +183,12 @@
       "outside": "{{count}} di luar direktori proyek diabaikan",
       "normalized": "{{count}} id jalur absolut dinormalisasi",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "Sesuaikan",
+      "title": "Sesuaikan",
+      "close": "Tutup panel penyesuaian",
+      "dragHandle": "Seret untuk menutup"
     }
   },
   "status": {

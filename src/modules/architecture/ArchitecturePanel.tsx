@@ -10,6 +10,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
+import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
 import {
   archguardToPlantUml,
   type ArchitectureDiagramView,
@@ -50,6 +51,7 @@ import {
 import {
   CanvasHeaderSlotContext,
   CompactToolbarSlotContext,
+  TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useTouchLayout,
 } from '@/modules/architecture/hooks/useTouchLayout';
@@ -103,6 +105,27 @@ const FILTER_REQUEST_DEBOUNCE_MS = 250;
 const SCOPE_STORAGE_PREFIX = 'architecture.scope.';
 const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
 const FILTER_STORAGE_PREFIX = 'architecture.filter.';
+/** Whether the one-off touch instruction has been dismissed in this browser. */
+const TOUCH_HINT_STORAGE_KEY = 'architecture.touchHint.dismissed';
+
+/** The touch instruction is a one-off: a remembered dismissal keeps it off screen. */
+function readStoredTouchHintDismissed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(TOUCH_HINT_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/** Remember the dismissal; storage being unavailable must not resurrect the bubble. */
+function writeStoredTouchHintDismissed(): void {
+  try {
+    window.localStorage.setItem(TOUCH_HINT_STORAGE_KEY, 'true');
+  } catch {
+    // Private mode: the dismissal still holds for this session.
+  }
+}
 
 /** The remembered knobs for one project; `projectId` keys the loaded pair. */
 type ArchitectureDisplaySettings = {
@@ -485,7 +508,12 @@ function ArchitectureExportMenu({
   };
 
   return (
-    <div ref={containerRef} className={compact ? 'flex flex-col gap-1' : 'relative'} data-architecture-export-menu-root="true">
+    <div
+      ref={containerRef}
+      className={compact ? 'flex flex-col' : 'relative'}
+      style={compact ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
+      data-architecture-export-menu-root="true"
+    >
       <button
         ref={toggleRef}
         type="button"
@@ -515,10 +543,10 @@ function ArchitectureExportMenu({
           aria-label={t('architecture.export.menu', { defaultValue: 'Export ▾' })}
           data-architecture-export-menu="true"
           onKeyDown={handleMenuKeyDown}
-          style={compact ? undefined : popoverPosition ?? { left: 8, top: 56 }}
+          style={compact ? { gap: TOUCH_CONTROL_GAP_PX } : popoverPosition ?? { left: 8, top: 56 }}
           className={
             compact
-              ? 'flex flex-col gap-1'
+              ? 'flex flex-col'
               : 'fixed z-50 flex w-56 flex-col rounded-lg border border-border bg-popover p-1 shadow-lg'
           }
         >
@@ -779,21 +807,31 @@ export default function ArchitecturePanel({
       : { shown: detailRanking.retainedNodeIds.size, totalInScope: activeNeighbourhood.nodes.length }),
     [detailRanking, activeNeighbourhood],
   );
-  // Whether the compact tier's single "…" menu is open. On that tier the panel
-  // draws one toolbar row and every other control lives behind this toggle.
-  const [compactMenuOpen, setCompactMenuOpen] = useState(false);
-  // The menu's DOM node while it is open. It is handed to the renderer through
-  // `CompactToolbarSlotContext` so the graph's own controls are drawn inside the
-  // same menu instead of in a second toolbar row.
-  const [compactMenuHost, setCompactMenuHost] = useState<HTMLElement | null>(null);
+  // Whether the compact tier's bottom sheet is open. On that tier the panel
+  // draws one header row (the view switch and `Adjust`); every other control
+  // lives in this sheet, which is the phone's one menu.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // The control that opened the sheet. Closing the dialog returns focus here.
+  const sheetTriggerRef = useRef<HTMLButtonElement | null>(null);
+  // The sheet body's DOM node while it is open. It is handed to the renderer
+  // through `CompactToolbarSlotContext` so the graph's own controls are drawn
+  // inside the same sheet instead of in a second toolbar row.
+  const [sheetControlsHost, setSheetControlsHost] = useState<HTMLElement | null>(null);
   // The right-hand cell of the in-flow row above the canvas. The renderer
   // portals the zoom tier and its scale reading into it, so that chrome sits in
-  // normal flow instead of floating over the drawing's first row.
+  // normal flow instead of floating over the drawing's first row. On the
+  // compact tier the same slot lives INSIDE the sheet (the canvas keeps no
+  // in-flow chrome row there).
   const [canvasHeaderHost, setCanvasHeaderHost] = useState<HTMLElement | null>(null);
   // A coarse pointer has no hover, so the touch instruction is shown once and
-  // then dismissed — either by its close button or by the first node selection.
-  // It never becomes a permanent row the way the old gesture line was.
-  const [touchHintDismissed, setTouchHintDismissed] = useState(false);
+  // then dismissed — by its close button, by the first node selection, or by
+  // its own fade-out. The choice is remembered per browser, so the bubble is a
+  // genuine one-off rather than a row that returns on every mount.
+  const [touchHintDismissed, setTouchHintDismissed] = useState<boolean>(readStoredTouchHintDismissed);
+  const dismissTouchHint = useCallback((): void => {
+    setTouchHintDismissed(true);
+    writeStoredTouchHintDismissed();
+  }, []);
   // The node the reader asked to see, and the token that re-triggers the same
   // request. The renderer navigates to it and centres it; the panel only holds
   // the request so a search hit survives the renderer's own navigation state.
@@ -1088,7 +1126,7 @@ export default function ArchitecturePanel({
         void exportPng();
       }}
       onExportMermaid={exportMermaid}
-      onAction={() => setCompactMenuOpen(false)}
+      onAction={() => setSheetOpen(false)}
     />
   );
 
@@ -1115,7 +1153,8 @@ export default function ArchitecturePanel({
       role="radiogroup"
       aria-label={t('architecture.granularity', { defaultValue: 'Graph granularity' })}
       data-architecture-view-control="true"
-      className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+      style={{ gap: compactToolbar ? TOUCH_CONTROL_GAP_PX : 4 }}
+      className="flex items-center rounded-lg border border-border/60 p-0.5"
     >
       <button
         type="button"
@@ -1155,7 +1194,8 @@ export default function ArchitecturePanel({
       role="group"
       aria-label={t('architecture.controls.scope', { defaultValue: 'Scope' })}
       data-architecture-scope-control="true"
-      className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+      style={{ gap: compactToolbar ? TOUCH_CONTROL_GAP_PX : 4 }}
+      className="flex items-center rounded-lg border border-border/60 p-0.5"
     >
       <button
         type="button"
@@ -1177,6 +1217,7 @@ export default function ArchitecturePanel({
         aria-valuemax={ARCHITECTURE_SCOPE_MAX}
         aria-valuetext={`+${scope}`}
         data-architecture-scope-value={scope}
+        style={compactTargetStyle}
         onKeyDown={(event) => {
           if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
             event.preventDefault();
@@ -1225,7 +1266,8 @@ export default function ArchitecturePanel({
       role="radiogroup"
       aria-label={t('architecture.controls.detail', { defaultValue: 'Detail' })}
       data-architecture-detail-control="true"
-      className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
+      style={{ gap: compactToolbar ? TOUCH_CONTROL_GAP_PX : 4 }}
+      className="flex items-center rounded-lg border border-border/60 p-0.5"
     >
       <button
         type="button"
@@ -1288,7 +1330,7 @@ export default function ArchitecturePanel({
           <legend className="mb-1 text-[11px] font-medium text-muted-foreground">
             {t('architecture.filter.elements', { defaultValue: 'Elements' })}
           </legend>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap" style={{ gap: coarsePointer ? TOUCH_CONTROL_GAP_PX : 4 }}>
             {ARCHITECTURE_ELEMENT_KINDS.map((kind) => {
               const count = stats.kindCounts?.[kind];
               return (
@@ -1324,7 +1366,7 @@ export default function ArchitecturePanel({
         <span className="text-[11px] font-medium text-muted-foreground">
           {t('architecture.filter.relations', { defaultValue: 'Relations' })}
         </span>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap" style={{ gap: coarsePointer ? TOUCH_CONTROL_GAP_PX : 4 }}>
           {ARCHITECTURE_RELATION_PRESETS.map((preset) => (
             <button
               key={preset}
@@ -1439,6 +1481,7 @@ export default function ArchitecturePanel({
         aria-label={t('architecture.search.label', { defaultValue: 'Search entities or files' })}
         placeholder={t('architecture.search.placeholder', { defaultValue: 'Search entities or files…' })}
         data-architecture-search="true"
+        style={compactToolbar ? TOUCH_TARGET_STYLE : undefined}
         onChange={(event) => {
           setSearchQuery(event.target.value);
           setSearchOpen(true);
@@ -1452,7 +1495,9 @@ export default function ArchitecturePanel({
             revealNode(first.node.id, !first.inRange);
           }
         }}
-        className="w-40 rounded-md border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        className={`rounded-md border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          compactToolbar ? 'w-full text-sm' : 'w-40'
+        }`}
       />
       {searchOpen && searchQuery.trim().length > 0 && (
         <div
@@ -1508,18 +1553,29 @@ export default function ArchitecturePanel({
   );
 
   // The legend body names every visual vocabulary the drawing uses, including
-  // the text form of the old circular fold badge (`+N folded`).
-  const legend = (
+  // the text form of the old circular fold badge (`+N folded`). It is drawn in
+  // the desktop `?` popover and, on the compact tier, directly inside the
+  // bottom sheet (the sheet is the one place the phone's readings live).
+  const legendBody = (
     <div
-      data-architecture-legend="true"
-      role="dialog"
-      aria-label={t('architecture.legend.title', { defaultValue: 'Legend' })}
-      className="absolute right-2 top-11 z-40 w-80 whitespace-pre-line rounded-lg border border-border bg-popover p-3 text-[11px] text-muted-foreground shadow-lg"
+      data-architecture-legend-content="true"
+      className="whitespace-pre-line text-[11px] text-muted-foreground"
     >
       {t('architecture.legend.body', {
         defaultValue:
           'Solid line: association or call.\nDashed line: dependency or implementation.\nArrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency.\n«stereotype» marks the entity kind.\n● seed: named in this session.\n+N folded: hidden by the current detail level.',
       })}
+    </div>
+  );
+
+  const legend = (
+    <div
+      data-architecture-legend="true"
+      role="dialog"
+      aria-label={t('architecture.legend.title', { defaultValue: 'Legend' })}
+      className="absolute right-2 top-11 z-40 w-80 rounded-lg border border-border bg-popover p-3 text-[11px] text-muted-foreground shadow-lg"
+    >
+      {legendBody}
     </div>
   );
 
@@ -1752,6 +1808,18 @@ export default function ArchitecturePanel({
         <span data-architecture-readout-summary={readout.shown} data-architecture-readout-total={readout.related}>
           {readoutSummary}
         </span>
+        {compactToolbar && truncation.truncated && (
+          // The compact tier has no room for a second badge in its one header
+          // row, so the budget reading travels with the floating readout chip.
+          <span
+            data-architecture-truncated-badge="true"
+            data-architecture-truncated-granularity={granularity}
+            data-architecture-truncated-omitted={budgetOmitted}
+            className="whitespace-nowrap font-medium text-amber-600 dark:text-amber-400"
+          >
+            +{budgetOmitted} folded
+          </span>
+        )}
         {readout.limited && (
           // ONE short amber marker, never the three budget sentences the task
           // replaces: the layer-specific numbers live in the expanded area. The
@@ -1852,6 +1920,7 @@ export default function ArchitecturePanel({
               type="button"
               onClick={raiseDetail}
               data-architecture-raise-detail="true"
+              style={compactTargetStyle}
               className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
             >
               {t('architecture.readout.raiseDetail', { defaultValue: 'Raise detail' })}
@@ -1861,6 +1930,7 @@ export default function ArchitecturePanel({
               onClick={() => changeScope(scope - 1)}
               data-architecture-reduce-scope="true"
               disabled={scope <= ARCHITECTURE_SCOPE_MIN}
+              style={compactTargetStyle}
               className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {t('architecture.readout.reduceScope', { defaultValue: 'Reduce scope' })}
@@ -1873,43 +1943,33 @@ export default function ArchitecturePanel({
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden" data-architecture-panel="true">
+      {/* The one-off touch bubble's own fade. It is keyed CSS (not a JS timer)
+          so the dismissal runs off the animation end even in a background tab,
+          and a test can drive it with a single animation event. */}
+      <style>{'@keyframes architecture-touch-hint-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }'}</style>
       <div
         data-architecture-toolbar="true"
+        style={compactToolbar ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
         // ONE row on every tier: no wrapping container is allowed here, so the
         // header can never grow into the two/three rows the review measured.
         className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border/60 px-3 py-1.5"
       >
         {compactToolbar ? (
           <>
-            <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-              {t('architecture.title', { defaultValue: 'Architecture' })}
-            </h3>
             {granularityGroup}
-            {truncation.truncated && (
-              <span
-                data-architecture-truncated-badge="true"
-                data-architecture-truncated-granularity={granularity}
-                data-architecture-truncated-omitted={budgetOmitted}
-                title={t('architecture.readout.budgetOmitted', {
-                  defaultValue: '{{count}} more left out by the node budget',
-                  count: budgetOmitted,
-                })}
-                className="whitespace-nowrap text-[11px] font-medium text-amber-600 dark:text-amber-400"
-              >
-                +{budgetOmitted} folded
-              </span>
-            )}
+            <span className="flex-1" />
             <button
+              ref={sheetTriggerRef}
               type="button"
-              aria-haspopup="true"
-              aria-expanded={compactMenuOpen}
-              aria-label={t('architecture.plantuml.moreActions', { defaultValue: 'More actions' })}
-              onClick={() => setCompactMenuOpen((open) => !open)}
-              data-architecture-overflow-toggle="true"
+              aria-haspopup="dialog"
+              aria-expanded={sheetOpen}
+              aria-label={t('architecture.sheet.open', { defaultValue: 'Adjust' })}
+              onClick={() => setSheetOpen(true)}
+              data-architecture-sheet-toggle="true"
               style={compactTargetStyle}
-              className="rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+              className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
             >
-              ⋯
+              {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
             </button>
           </>
         ) : (
@@ -1972,28 +2032,49 @@ export default function ArchitecturePanel({
         </div>
       )}
 
-      {compactToolbar && compactMenuOpen && (
-        <div
-          data-architecture-overflow-menu="true"
-          className="absolute right-2 top-12 z-30 flex max-h-[70%] w-72 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-lg"
+      {compactToolbar && (
+        <ArchitectureSheet
+          open={sheetOpen}
+          title={t('architecture.sheet.title', { defaultValue: 'Adjust' })}
+          closeLabel={t('architecture.sheet.close', { defaultValue: 'Close adjust panel' })}
+          handleLabel={t('architecture.sheet.dragHandle', { defaultValue: 'Drag to close' })}
+          onClose={() => setSheetOpen(false)}
+          returnFocusRef={sheetTriggerRef}
         >
+          {/* The renderer's own view chrome (tier, scale, readable mode, Back,
+              Drill in) is portaled in here; on the compact tier the sheet is
+              the one menu, so those entries do not spend a second canvas row. */}
+          <div
+            ref={setCanvasHeaderHost}
+            data-architecture-sheet-view-controls="true"
+            className="flex flex-col"
+            style={{ gap: TOUCH_CONTROL_GAP_PX }}
+          />
           {scopeGroup}
           {detailGroup}
-          {filterDisclosure}
-          {/* Export is here on the compact tier: the sheet is the panel's one
-              menu, so the format list is drawn inside it rather than adding a
-              second header control that would not fit. */}
+          <section data-architecture-sheet-filter="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t('architecture.filter.menu', { defaultValue: 'Filter ▾' })}
+            </span>
+            {filterContent}
+          </section>
+          {searchBox}
           {exportMenu}
-          {/* The renderer's own controls (view navigation, readable mode, drill,
-              zoom, export) are portaled in here — they belong to the drawing,
-              not to the panel, and the slot keeps them at this menu's target
-              size rather than in a second toolbar row. */}
+          <section data-architecture-sheet-legend="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t('architecture.legend.title', { defaultValue: 'Legend' })}
+            </span>
+            {legendBody}
+          </section>
+          {/* The renderer's remaining controls (view label, export) are drawn
+              inside the same sheet at the same 44px targets. */}
           <div
-            ref={setCompactMenuHost}
+            ref={setSheetControlsHost}
             data-architecture-compact-graph-controls="true"
-            className="flex flex-col gap-1 border-t border-border/60 pt-1"
+            className="flex flex-col border-t border-border/60 pt-2"
+            style={{ gap: TOUCH_CONTROL_GAP_PX }}
           />
-        </div>
+        </ArchitectureSheet>
       )}
 
       {/* The canvas region is a flex COLUMN: every `flex-1` below it needs a
@@ -2004,49 +2085,74 @@ export default function ArchitecturePanel({
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
           <>
-            {coarsePointer && !touchHintDismissed && (
+            {/* Desktop keeps its in-flow row: the readout on the left, the
+                renderer's zoom tier and scale on the right. The compact tier
+                has no such row — its readout floats on the drawing and the
+                renderer's view chrome is portaled into the bottom sheet. */}
+            {!compactToolbar && (
               <div
-                data-architecture-touch-hint="true"
-                role="status"
-                className="flex items-start gap-2 border-b border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground"
+                data-architecture-canvas-header="true"
+                className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1"
               >
-                <span className="min-w-0 flex-1">
-                  {t('architecture.plantuml.touchHint', {
-                    defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
-                  })}
-                </span>
-                <button
-                  type="button"
-                  aria-label={t('architecture.dismissHint', { defaultValue: 'Dismiss hint' })}
-                  onClick={() => setTouchHintDismissed(true)}
-                  style={compactTargetStyle}
-                  className="rounded border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-                >
-                  ×
-                </button>
+                <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
+                <div
+                  ref={setCanvasHeaderHost}
+                  data-architecture-canvas-header-actions="true"
+                  className="flex min-w-0 max-w-[65%] shrink-0 flex-wrap items-center justify-end gap-1"
+                />
               </div>
             )}
-            {/* ONE in-flow row above the drawing: the readout on the left, the
-                renderer's zoom tier and scale on the right. As an absolutely
-                positioned overlay this chrome covered the graph's first row. */}
-            <div
-              data-architecture-canvas-header="true"
-              className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1"
-            >
-              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
-              <div
-                ref={setCanvasHeaderHost}
-                data-architecture-canvas-header-actions="true"
-                className="flex min-w-0 max-w-[65%] shrink-0 flex-wrap items-center justify-end gap-1"
-              />
-            </div>
             <div
               ref={graphAreaRef}
               aria-busy={refreshing}
               data-architecture-refreshing={refreshing ? 'true' : undefined}
+              data-architecture-canvas-region="true"
               className={`relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`}
             >
-              <CompactToolbarSlotContext.Provider value={compactMenuHost}>
+              {/* One-off, in-canvas instruction. It is an overlay bubble (not a
+                  row in the panel column), fades itself out after 3s, and the
+                  dismissal is remembered, so it can never become standing
+                  chrome. `role="status"` keeps it announceable. */}
+              {compactToolbar && coarsePointer && !touchHintDismissed && (
+                <div
+                  data-architecture-touch-hint="true"
+                  role="status"
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: 8,
+                    zIndex: 30,
+                    maxWidth: '55%',
+                    animation: 'architecture-touch-hint-fade 3000ms ease forwards',
+                  }}
+                  onAnimationEnd={dismissTouchHint}
+                  className="pointer-events-auto flex items-start rounded-lg border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+                >
+                  <span className="min-w-0 flex-1">
+                    {t('architecture.plantuml.touchHintBubble', {
+                      defaultValue: 'Drag with one finger to pan, pinch to zoom, double-tap a node to drill in.',
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('architecture.dismissHint', { defaultValue: 'Dismiss hint' })}
+                    onClick={dismissTouchHint}
+                    style={compactTargetStyle}
+                    className="rounded border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              {compactToolbar && (
+                <div
+                  data-architecture-readout-overlay="true"
+                  className="pointer-events-none absolute left-2 top-2 z-20 max-w-[calc(100%-1rem)]"
+                >
+                  {readoutPanel}
+                </div>
+              )}
+              <CompactToolbarSlotContext.Provider value={sheetControlsHost}>
                 <CanvasHeaderSlotContext.Provider value={canvasHeaderHost}>
                   <Renderer
                     key={`${sessionId}:${granularity}:${scope}`}
@@ -2062,7 +2168,7 @@ export default function ArchitecturePanel({
                     onNodeHover={handleNodeHover}
                     // Selecting a node is the reader working the drawing; the
                     // one-off touch instruction has done its job by then.
-                    onNodeClick={() => setTouchHintDismissed(true)}
+                    onNodeClick={dismissTouchHint}
                     // The renderer owns the drill-down view; reporting it keeps
                     // the export menu's PlantUML identical to the drawing.
                     onViewChange={setDiagramView}

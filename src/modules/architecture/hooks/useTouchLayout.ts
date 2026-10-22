@@ -22,6 +22,17 @@ const COARSE_POINTER_QUERY = '(pointer: coarse)';
 export const TOUCH_TARGET_STYLE = { minHeight: '44px', minWidth: '44px' } as const;
 
 /**
+ * The minimum space between two adjacent hit areas on a coarse pointer.
+ *
+ * WCAG 2.5.5 fixes the target SIZE; packing 44px boxes shoulder to shoulder
+ * still lets a thumb land on the neighbour. The mobile layout therefore states
+ * its inter-control gap as a number here, so the header, the bottom sheet and
+ * the on-canvas clusters all use the same reading instead of three arbitrary
+ * `gap-1`/`gap-2` utilities.
+ */
+export const TOUCH_CONTROL_GAP_PX = 8;
+
+/**
  * The hit area of the on-canvas zoom cluster on a FINE pointer: 32×32 CSS
  * pixels. The cluster floats over the drawing, so its controls must stay small
  * enough not to hide the diagram, yet WCAG 2.5.8's minimum is 24px and 32 keeps

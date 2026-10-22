@@ -61,7 +61,8 @@
         "show": "다이어그램 개요 표시",
         "hide": "다이어그램 개요 접기"
       },
-      "zoomTier": "확대/축소 수준"
+      "zoomTier": "확대/축소 수준",
+      "touchHintBubble": "한 손가락으로 끌어 이동하고, 두 손가락으로 확대/축소하며, 두 번 탭하여 탐색합니다."
     },
     "title": "아키텍처",
     "noSession": "세션을 선택하면 해당 세션이 건드린 파일의 아키텍처를 볼 수 있습니다.",
@@ -182,6 +183,12 @@
       "outside": "프로젝트 디렉터리 밖의 {{count}}개를 무시함",
       "normalized": "절대 경로 id {{count}}개를 정규화함",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "조정",
+      "title": "조정",
+      "close": "조정 패널 닫기",
+      "dragHandle": "끌어서 닫기"
     }
   },
   "status": {

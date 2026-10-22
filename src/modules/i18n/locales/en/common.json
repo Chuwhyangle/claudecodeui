@@ -97,7 +97,8 @@
         "show": "Show graph overview",
         "hide": "Collapse graph overview"
       },
-      "zoomTier": "Zoom level"
+      "zoomTier": "Zoom level",
+      "touchHintBubble": "Drag with one finger to pan, pinch to zoom, double-tap a node to drill in."
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {
@@ -188,6 +189,12 @@
       "outside": "{{count}} outside the project directory were ignored",
       "normalized": "{{count}} absolute-path ids normalised",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "Adjust",
+      "title": "Adjust",
+      "close": "Close adjust panel",
+      "dragHandle": "Drag to close"
     }
   },
   "status": {

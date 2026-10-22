@@ -33,6 +33,14 @@ import {
 export const MINIMAP_WIDTH_PX = 160;
 export const MINIMAP_HEIGHT_PX = 100;
 
+/**
+ * The phone's expanded minimap. The bottom sheet owns the knobs, so the map is
+ * a glance-only 96×64 thumbnail above the zoom cluster; 160×100 would cover
+ * the drawing it is meant to summarise.
+ */
+export const MINIMAP_MOBILE_WIDTH_PX = 96;
+export const MINIMAP_MOBILE_HEIGHT_PX = 64;
+
 /** The collapsed form's hit area (a phone shows only this button by default). */
 export const MINIMAP_COLLAPSED_TARGET_PX = 44;
 
@@ -414,6 +422,11 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
   // `getContext` returning null (jsdom) is permanent for the element; remember
   // it so a scroll burst does not retry a call that only logs a warning each time.
   const contextUnavailableRef = useRef(false);
+  // The map's own size: 160×100 on a fine pointer, the phone's glance-sized
+  // 96×64 when the layout tier is mobile. The imperative painter reads it from
+  // a ref for the same reason it reads the scale from one — paint runs outside
+  // the render that produced it.
+  const mapSizeRef = useRef({ width: MINIMAP_WIDTH_PX, height: MINIMAP_HEIGHT_PX });
 
   // Live mirrors for the imperative paint, which runs outside the render that
   // produced them. Assigning during render keeps them one render ahead, never
@@ -428,6 +441,9 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
   translateRef.current = t;
 
   const collapsed = preference === null ? isMobile : preference === 'collapsed';
+  const mapWidth = isMobile ? MINIMAP_MOBILE_WIDTH_PX : MINIMAP_WIDTH_PX;
+  const mapHeight = isMobile ? MINIMAP_MOBILE_HEIGHT_PX : MINIMAP_HEIGHT_PX;
+  mapSizeRef.current = { width: mapWidth, height: mapHeight };
 
   /** The current reading, with the host's live scroll offsets folded in. */
   const liveReading = useCallback((): MinimapViewportReading | null => {
@@ -448,16 +464,17 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
     if (reading === null) return null;
     const range = visibleRangeRect(reading);
     if (range === null) return null;
+    const { width: mapWidth, height: mapHeight } = mapSizeRef.current;
     const width = Math.min(
-      MINIMAP_WIDTH_PX,
+      mapWidth,
       Math.max(range.width, FRAME_MIN_SIZE_PX),
     );
     const height = Math.min(
-      MINIMAP_HEIGHT_PX,
+      mapHeight,
       Math.max(range.height, FRAME_MIN_SIZE_PX),
     );
-    const left = clamp(range.left + range.width / 2 - width / 2, 0, MINIMAP_WIDTH_PX - width);
-    const top = clamp(range.top + range.height / 2 - height / 2, 0, MINIMAP_HEIGHT_PX - height);
+    const left = clamp(range.left + range.width / 2 - width / 2, 0, mapWidth - width);
+    const top = clamp(range.top + range.height / 2 - height / 2, 0, mapHeight - height);
     return { left, top, width, height };
   }, [liveReading]);
 
@@ -469,18 +486,19 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
     const drawing = host === null ? null : host.querySelector('svg');
     if (drawing === null) return null;
     const ratio = pixelRatio();
+    const { width: mapWidth, height: mapHeight } = mapSizeRef.current;
     const base = document.createElement('canvas');
-    base.width = Math.round(MINIMAP_WIDTH_PX * ratio);
-    base.height = Math.round(MINIMAP_HEIGHT_PX * ratio);
+    base.width = Math.round(mapWidth * ratio);
+    base.height = Math.round(mapHeight * ratio);
     const context = base.getContext('2d');
     if (context === null) return null;
     const natural = measurementRef.current?.natural ?? readSvgNaturalSize(drawing as SVGSVGElement);
-    const layout = natural === null ? null : minimapLayout(natural);
+    const layout = natural === null ? null : minimapLayout(natural, { width: mapWidth, height: mapHeight });
     if (layout === null) return null;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.clearRect(0, 0, MINIMAP_WIDTH_PX, MINIMAP_HEIGHT_PX);
+    context.clearRect(0, 0, mapWidth, mapHeight);
     context.fillStyle = BACKGROUND_COLOR;
-    context.fillRect(0, 0, MINIMAP_WIDTH_PX, MINIMAP_HEIGHT_PX);
+    context.fillRect(0, 0, mapWidth, mapHeight);
     for (const box of readMinimapBoxes(drawing)) {
       context.fillStyle = box.seed
         ? SEED_COLOR
@@ -528,10 +546,11 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
       return;
     }
     const ratio = pixelRatio();
+    const { width: mapWidth, height: mapHeight } = mapSizeRef.current;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    context.clearRect(0, 0, MINIMAP_WIDTH_PX, MINIMAP_HEIGHT_PX);
+    context.clearRect(0, 0, mapWidth, mapHeight);
     const base = baseBitmap();
-    if (base !== null) context.drawImage(base, 0, 0, MINIMAP_WIDTH_PX, MINIMAP_HEIGHT_PX);
+    if (base !== null) context.drawImage(base, 0, 0, mapWidth, mapHeight);
     if (range === null) return;
     context.lineWidth = FRAME_LINE_WIDTH_PX;
     context.strokeStyle = FRAME_COLOR;
@@ -760,6 +779,7 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
             aria-expanded
             aria-label={collapseLabel}
             onClick={() => setCollapsed(true)}
+            style={touchUi ? TOUCH_TARGET_STYLE : undefined}
             className="absolute right-0 top-0 z-10 rounded bg-background/90 px-1 text-[10px] leading-none text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
           >
             −
@@ -773,9 +793,9 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
               percent: 100,
             })}
             tabIndex={0}
-            width={Math.round(MINIMAP_WIDTH_PX * ratio)}
-            height={Math.round(MINIMAP_HEIGHT_PX * ratio)}
-            style={{ width: `${MINIMAP_WIDTH_PX}px`, height: `${MINIMAP_HEIGHT_PX}px`, touchAction: 'none' }}
+            width={Math.round(mapWidth * ratio)}
+            height={Math.round(mapHeight * ratio)}
+            style={{ width: `${mapWidth}px`, height: `${mapHeight}px`, touchAction: 'none' }}
             className="block cursor-crosshair rounded outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}

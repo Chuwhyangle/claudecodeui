@@ -61,7 +61,8 @@
         "show": "Diyagram genel görünümünü göster",
         "hide": "Diyagram genel görünümünü daralt"
       },
-      "zoomTier": "Yakınlaştırma düzeyi"
+      "zoomTier": "Yakınlaştırma düzeyi",
+      "touchHintBubble": "Tek parmakla sürükleyin, iki parmakla yakınlaştırın, düğüme çift dokunarak inin."
     },
     "title": "Mimari",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",
@@ -182,6 +183,12 @@
       "outside": "Proje dizini dışındaki {{count}} kapsam yoksayıldı",
       "normalized": "{{count}} mutlak yol id'si normalleştirildi",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "Ayarla",
+      "title": "Ayarla",
+      "close": "Ayar panelini kapat",
+      "dragHandle": "Kapatmak için sürükleyin"
     }
   },
   "status": {

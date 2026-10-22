@@ -61,7 +61,8 @@
         "show": "Afficher l’aperçu du diagramme",
         "hide": "Réduire l’aperçu du diagramme"
       },
-      "zoomTier": "Niveau de zoom"
+      "zoomTier": "Niveau de zoom",
+      "touchHintBubble": "Faites glisser avec un doigt pour déplacer, pincez pour zoomer, double-touchez pour explorer."
     },
     "title": "Architecture",
     "noSession": "Sélectionnez une session pour voir l'architecture des fichiers qu'elle a touchés.",
@@ -182,6 +183,12 @@
       "outside": "{{count}} hors du répertoire du projet ont été ignorés",
       "normalized": "{{count}} ids de chemin absolu normalisés",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "Ajuster",
+      "title": "Ajuster",
+      "close": "Fermer le panneau de réglage",
+      "dragHandle": "Faire glisser pour fermer"
     }
   },
   "status": {

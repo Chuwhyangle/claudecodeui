@@ -61,7 +61,8 @@
         "show": "Diagrammübersicht einblenden",
         "hide": "Diagrammübersicht einklappen"
       },
-      "zoomTier": "Zoomstufe"
+      "zoomTier": "Zoomstufe",
+      "touchHintBubble": "Mit einem Finger ziehen zum Verschieben, zwei Finger zum Zoomen, Doppel-Tippen zum Eintauchen."
     },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",
@@ -182,6 +183,12 @@
       "outside": "{{count}} außerhalb des Projektverzeichnisses wurden ignoriert",
       "normalized": "{{count}} absolute Pfad-IDs normalisiert",
       "outsideItem": "{{label}} — {{sources}}"
+    },
+    "sheet": {
+      "open": "Anpassen",
+      "title": "Anpassen",
+      "close": "Anpassungsbereich schließen",
+      "dragHandle": "Zum Schließen ziehen"
     }
   },
   "status": {
