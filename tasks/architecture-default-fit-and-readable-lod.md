@@ -29,12 +29,31 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` exit 0：新增用例——整图适应缩放低于 0.69 时默认仍是整图适应（整图完全落入画布，缩放 ≥ 理论 fit 的 95%），而不是 `max(fit, 0.69)`；用户显式选择 Focus 后被记住（按项目隔离）、再次打开仍是 Focus；换项目不串；既有的 Focus 档缩放计算用例在显式选择路径下不回归
-- [ ] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` exit 0：标题反向缩放用例——给定缩放 0.33，标题屏幕字高 ≥ 11px 且 ≤ 16px；缩放 1.0 时不再放大（不小于原字号）；框屏幕宽度 < 60px 时不画标题；外层与内层标题冲突时外层保留；裁剪纯函数用例——折线被裁剪到两个框的边界且每一段保持水平或垂直（正交）、端点在框边界上、同一对 package 多条边合并为一条且线宽随权重增加、无可用折线时退化为正交 L 形；不再产生任何 `arch-lod-package-edge` 的 `<line>` 元素
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/svgViewport.test.tsx` exit 0：默认状态整图在画布内（`svg` 盒完全位于画布盒内）；`Focus` 档按钮仍可进入可读聚焦；既有 LOD、爆炸、下钻、hover 用例不回归（涉及「默认是 focus」的旧断言已逐处改写并列在实施记录）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：默认状态整图落入画布（PC 与手机视口都断言）；低缩放档位下可见的 package 标题屏幕字高 ≥ 11px；LOD 层的关系线每一段都是水平或竖直的（正交），且不存在 `arch-lod-package-edge` 的 `<line>`
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——把标题覆盖层强制为不反向缩放后，读数的字高落到 11px 以下（证明守卫能取假），主臂与控制臂用同一读取函数
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` exit 0：新增用例——整图适应缩放低于 0.69 时默认仍是整图适应（整图完全落入画布，缩放 ≥ 理论 fit 的 95%），而不是 `max(fit, 0.69)`；用户显式选择 Focus 后被记住（按项目隔离）、再次打开仍是 Focus；换项目不串；既有的 Focus 档缩放计算用例在显式选择路径下不回归
+- [x] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` exit 0：标题反向缩放用例——给定缩放 0.33，标题屏幕字高 ≥ 11px 且 ≤ 16px；缩放 1.0 时不再放大（不小于原字号）；框屏幕宽度 < 60px 时不画标题；外层与内层标题冲突时外层保留；裁剪纯函数用例——折线被裁剪到两个框的边界且每一段保持水平或垂直（正交）、端点在框边界上、同一对 package 多条边合并为一条且线宽随权重增加、无可用折线时退化为正交 L 形；不再产生任何 `arch-lod-package-edge` 的 `<line>` 元素
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/svgViewport.test.tsx` exit 0：默认状态整图在画布内（`svg` 盒完全位于画布盒内）；`Focus` 档按钮仍可进入可读聚焦；既有 LOD、爆炸、下钻、hover 用例不回归（涉及「默认是 focus」的旧断言已逐处改写并列在实施记录）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：默认状态整图落入画布（PC 与手机视口都断言）；低缩放档位下可见的 package 标题屏幕字高 ≥ 11px；LOD 层的关系线每一段都是水平或竖直的（正交），且不存在 `arch-lod-package-edge` 的 `<line>`
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——把标题覆盖层强制为不反向缩放后，读数的字高落到 11px 以下（证明守卫能取假），主臂与控制臂用同一读取函数
+- [x] `npm run typecheck` 与 `npm run build` 通过
+
+## Implementation Record
+
+### Verification (2026-10-23, worktree `architecture-default-fit-and-readable-lod`, HEAD `7b9ec267e`)
+
+- `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` → 13 passed.
+- `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` → 15 passed.
+- `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/svgViewport.test.tsx` → 82 + 17 passed.
+- `npx vitest run src/modules/architecture/tests --maxWorkers=4` → 24 files / 340 passed (whole module).
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts` → 7 passed (46.7s; file budget is the existing 120s `SPEC_BUDGET_MS` entry, so no config change was needed). New readings: default `svg` box inside the canvas box on PC and phone (`pc.default` / `phone.default`); package titles `screenFontPx=11.4997` at zoom 0.221; four package relation paths, all `orthogonal=true`, `line.count=0`.
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` → 4 passed. Control arm D reads `controlD.before` 11.4997px → `controlD.injected` 2.6559px (`transform: scale(1)` on the title groups) → `controlD.restored` 11.4997px, through the same `readLod` function.
+- `npm run typecheck` → clean; `npm run build` → clean.
+
+### Rewritten "default is focus" assertions
+
+- `architectureTab.test.tsx`: `fittedWidthIn` now derives the geometric fit with the manual 5% floor (was the readable floor); "the diagram opens fitted…" expects `readable-mode=overview` + `zoom-fit-mode=overview`, asserts the SVG presentation size fits the host, and then exercises Focus→Overview through the readable group; "the readable toggle…" is reordered overview-first (default hint shown, then explicit Focus, then back); the old "a readable-floor fit is named…" case is now "the explicit Focus choice is named…" and enters Focus before reading the fit control; the unmeasured class-view default now asserts natural size (1.0) instead of `>= MIN_READABLE_ZOOM_SCALE`.
+- `explosionLod.test.tsx`: the overlay query moved from `line` to `path.arch-lod-package-edge`; the far/middle/drawn-cluster cases keep their counts and weights.
+- `readableZoom.test.tsx`: the old "fit below the readable scale opens in focus" case is split into a default-overview case and an explicit-focus case; the empty-graph case asserts overview by default and the focus arm under `mode: 'focus'`; the fit-control case passes `mode: 'focus'` explicitly.
+- `e2e/architecture-canvas-layout.spec.ts`: geometry readings gained the `canvas` box; `readLod`/`assertLodReadable` and control arm D are new; the existing arms are unchanged.
 
 ## DoD
 
