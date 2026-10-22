@@ -232,9 +232,29 @@ function tap(target: Element): void {
   fireEvent.click(target);
 }
 
+/**
+ * State the "show everything" filter explicitly.
+ *
+ * The panel's shipped default hides `call` edges and the nodes they leave
+ * isolated; the fixture below is the UNFILTERED three-file chain (its comment
+ * names `src/modules/beta/b.ts` as drawn), so the cases that read the drawn
+ * node set opt out of the default instead of being narrowed by it.
+ */
+function rememberShowAllFilter(projectId = 'project-1'): void {
+  window.localStorage.setItem(
+    `architecture.filter.${projectId}`,
+    JSON.stringify({
+      kinds: ['class', 'interface', 'enum', 'abstract', 'function', 'other'],
+      relations: 'call',
+      hideIsolated: false,
+    }),
+  );
+}
+
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  window.localStorage.removeItem('architecture.filter.project-1');
   setViewport(1024, 768);
   stubMatchMedia(() => false);
 });
@@ -351,6 +371,7 @@ test('the canvas owns the wheel — a plain wheel zooms too — and Ctrl+wheel k
 
 test('a touch tap selects without re-laying out; drilling needs Drill in or a double-tap', async () => {
   usePhone();
+  rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const drawing = host.querySelector('svg');

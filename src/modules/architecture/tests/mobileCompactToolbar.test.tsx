@@ -329,8 +329,11 @@ test('the menu stepper reports the +N scope and re-requests the selected depth',
 
   fireEvent.click(menu.querySelector('[data-architecture-scope-increase]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
+  // The first three arguments are the session/scope triple this case is about;
+  // a fourth (the element/relation filter query) now rides along on every
+  // request, and its own shape is asserted by architectureTab's filter cases.
   assert.deepEqual(
-    apiMock.architectureGraph.mock.calls[1],
+    apiMock.architectureGraph.mock.calls[1].slice(0, 3),
     ['project-1', 'session-1', 3],
     'stepping + from +2 must re-request hops=3',
   );

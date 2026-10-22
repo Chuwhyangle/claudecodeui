@@ -20,6 +20,7 @@ import {
   pngTargetSize,
   sanitizeFilenameSegment,
 } from '@/modules/architecture/exportArtifacts';
+import type * as ExportArtifactsModule from '@/modules/architecture/exportArtifacts';
 import { rankArchitectureDetail } from '@/modules/architecture/detailRanking';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
 import enCommon from '@/modules/i18n/locales/en/common.json';
@@ -56,7 +57,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 // bounds are covered below; the panel path only needs to know what it was
 // asked to draw and that the notice follows the returned target.
 vi.mock('@/modules/architecture/exportArtifacts', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/modules/architecture/exportArtifacts')>();
+  const actual = await importOriginal<typeof ExportArtifactsModule>();
   return { ...actual, rasterizeSvgToPng: artifactMock.rasterizeSvgToPng };
 });
 
@@ -212,6 +213,26 @@ async function readLastDownload(): Promise<string> {
   return readBlobText(downloads[downloads.length - 1].blob);
 }
 
+/**
+ * State the "show everything" filter explicitly.
+ *
+ * The panel's shipped default hides `call` edges (and the class view's
+ * functions). These export cases assert the document for the graph as it
+ * ARRIVED, so they opt out of the default instead of deriving a filtered
+ * expectation; the default itself is covered by `elementRelationFilter.test.ts`
+ * and the filter criteria in `architectureTab.test.tsx`.
+ */
+function rememberShowAllFilter(projectId = 'project-1'): void {
+  window.localStorage.setItem(
+    `architecture.filter.${projectId}`,
+    JSON.stringify({
+      kinds: ['class', 'interface', 'enum', 'abstract', 'function', 'other'],
+      relations: 'call',
+      hideIsolated: false,
+    }),
+  );
+}
+
 /** The exact document the bridge builds for one view of one graph. */
 function expectedPuml(
   graph: ArchitectureRendererGraph,
@@ -239,7 +260,9 @@ beforeEach(() => {
   for (const projectId of ['project-1', 'project-2']) {
     window.localStorage.removeItem(`architecture.scope.${projectId}`);
     window.localStorage.removeItem(`architecture.detail.${projectId}`);
+    window.localStorage.removeItem(`architecture.filter.${projectId}`);
   }
+  rememberShowAllFilter();
   // jsdom has no canvas; the minimap's documented "cannot draw" path answers
   // null instead of logging one "Not implemented" error per paint.
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
