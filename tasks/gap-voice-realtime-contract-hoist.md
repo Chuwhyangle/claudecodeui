@@ -2,7 +2,7 @@
 id: gap-voice-realtime-contract-hoist
 title: voice-realtime 契约提升：把帧/exec status/seam 契约类型从 ws-proxy.service.ts 提升到独立
   voice-realtime-contract.ts，6 个叶子模块改 import 契约模块（依赖倒置走完）
-status: ready
+status: done
 labels:
   - gap
 parent: null
