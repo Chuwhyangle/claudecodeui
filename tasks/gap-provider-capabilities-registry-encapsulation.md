@@ -2,7 +2,7 @@
 id: gap-provider-capabilities-registry-encapsulation
 title: ProviderCapabilitiesRegistry 封装：provider-capabilities 的
   RUNTIME_PROVIDER_CAPABILITIES Map 收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
