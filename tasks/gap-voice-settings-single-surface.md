@@ -42,25 +42,32 @@ extra:
 
 ## AC
 
-- [ ] (a) **共享契约存在且被引用**：`test -f shared/voice/voiceSettingsRegistry.ts`（或等价共享文件）退出 0；`grep -q "voiceSettingsRegistry" src/shared/voiceConfig.ts server/modules/voice-realtime/voice-realtime-settings.ts` 退出 0。
-- [ ] (b) **无跨面重复定义**：结构性 grep——每个 voice settings key 在 `src/` 与 `server/` 两端的「定义」合并后，任一 key 的字符串字面量定义只出现在共享契约一处（判据打印 `duplicatedKeys=[]`，具体 keys 清单见判据文件）。
-- [ ] (c) **规则单点注册**：`voice-rules` 与 `voice-mode-rules` 的规则都经共享规则注册表注册；`grep -rn "installVoiceRules\|registerVoiceRule\|voiceModeRules" server --include='*.ts' | grep -v '/tests/'` 的命中只在注册表与装配点。
-- [ ] (d) **既有行为判据不改一字仍绿**：`npx vitest run src/shared/tests/voiceConfig.test.ts src/shared/tests/voiceConfigHydration.test.ts` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/` 下 voice-settings 相关既有判据单跑退出 0（若文件名漂移用等价判据替换并记录）。
-- [ ] (e) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
-- [ ] (f) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **共享契约存在且被引用**：`test -f shared/voice/voiceSettingsRegistry.ts`（或等价共享文件）退出 0；`grep -q "voiceSettingsRegistry" src/shared/voiceConfig.ts server/modules/voice-realtime/voice-realtime-settings.ts` 退出 0。
+- [x] (b) **无跨面重复定义**：结构性 grep——每个 voice settings key 在 `src/` 与 `server/` 两端的「定义」合并后，任一 key 的字符串字面量定义只出现在共享契约一处（判据打印 `duplicatedKeys=[]`，具体 keys 清单见判据文件）。
+- [x] (c) **规则单点注册**：`voice-rules` 与 `voice-mode-rules` 的规则都经共享规则注册表注册；`grep -rn "installVoiceRules\|registerVoiceRule\|voiceModeRules" server --include='*.ts' | grep -v '/tests/'` 的命中只在注册表与装配点。
+- [x] (d) **既有行为判据不改一字仍绿**：`npx vitest run src/shared/tests/voiceConfig.test.ts src/shared/tests/voiceConfigHydration.test.ts` 退出 0；`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/` 下 voice-settings 相关既有判据单跑退出 0（若文件名漂移用等价判据替换并记录）。
+- [x] (e) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0。
+- [x] (f) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
 真实落地的标准是「语音 settings/rules 有了**单一类型契约 + 单一规则注册位**，跨面重复定义清零」，不是「多了一个共享文件」。必须贴出：①(a) 共享契约的导出面与两个消费端的 import 行；②(b) `duplicatedKeys=[]` 读数（并列出全量 key 清单）；③(c) 规则注册点的唯一命中清单；④(d) 既有判据单跑退出码；⑤(e) typecheck/lint；⑥纯位移核对（每个 key 的默认值与语义未变；无法收敛的 key 逐条列出原因）。运行结束不重启 :3001、不发布。
 
+> 实测补记（执行者，2026-10-22）：①(a) `test -f shared/voice/voiceSettingsRegistry.ts` ⇒ 0；`grep -q voiceSettingsRegistry <两个消费端>` ⇒ 0（两端均 `import ... from '@shared/voice/voiceSettingsRegistry.js'`）。②(b) `node scripts/voice-settings-single-surface-check.mjs` ⇒ `settingsKeys=13 registryKeys=13 duplicatedKeys=[]`；13 个 key：baseUrl / apiKey / sttModel / ttsModel / ttsVoice / ttsFormat / providerId / dashscopeEndpoint / dashscopeApiKey / dashscopeModel / liveVoiceDashscopeApiKey / voiceDataRecording / voiceDataMaxBytes。③(c) 命中 `server/index.ts:21,172`、`server/modules/voice-realtime/index.ts:24,26,37,53`、`server/shared/ports/voice-rules.port.ts:43`——前两处是装配点（注册规则、安装 port），最后一处是注册表的 re-export 面。④(d) vitest 两文件 25/25 绿；server 侧逐文件单跑（按 AGENTS.md 不整目录 fan-out）：voice-realtime-context-and-settings 31/31、status-injection 8/8、context-injection 6/6、voice-settings.db.integration 7/7、voice-dashscope-settings 32/32、voice-config.routes 6/6、claude-resident-dispatch-hook 4/4，均退出 0。⑤(e) `npm run typecheck` 0、`npm run lint` 0（仅既有 warning）。⑥纯位移：默认值表、max-length 表、空文档、规则三臂文本逐字未变，判据 (d) 覆盖；`server/tsconfig.json` 新增 `@shared/*` 别名（镜像前端既有别名），使服务端与浏览器指向同一个模块文件。**无法收敛/未收敛**：`server/modules/voice-realtime/mode.ts`（实际文件名为 `voice-realtime-mode.ts`）里的 `SEGMENTED_RELAY_PROTOCOL` 与浏览器端同名常量重复，但既有判据 `server/modules/voice-realtime/tests/voice-realtime-segmented-default.test.ts` 要求浏览器模块以单引号字面量导出该词并将两侧逐字比对——收敛会红掉该判据，故按现状保留，不改。
+
 ## Touches
 
-- `shared/voice/voiceSettingsRegistry.ts` (new)（VoiceSettings 类型 + 默认值契约 + 规则注册表，镜像 asrRegistry）
-- `src/shared/voiceConfig.ts`（改为从共享契约读取，删除重复 key 定义）
-- `server/modules/voice-realtime/voice-realtime-settings.ts`（同上）
-- `server/shared/ports/voice-rules.port.ts`（规则改为经共享规则注册表）
-- `server/modules/voice-realtime/voice-mode-rules.ts`（规则注册进共享注册表）
-- `server/modules/voice-realtime/mode.ts`（读面从共享契约取）
-- `src/shared/tests/voiceConfig.test.ts`（既有判据，不改一字，作行为覆盖）
-- `src/shared/tests/voiceConfigHydration.test.ts`（既有判据，不改一字，作行为覆盖）
-- `tasks/gap-voice-settings-single-surface.md`（自触）
+- `shared/voice/voiceSettingsRegistry.ts` (new: VoiceSettings contract, defaults, realtime file keys, rules registry, port)
+- `src/shared/voiceConfig.ts` (VoiceConfig = Required<VoiceSettings>; defaults and field list from the contract)
+- `server/shared/types.ts` (VoiceSettings re-exported from the contract)
+- `server/modules/database/repositories/voice-settings.db.ts` (contract field list and empty document)
+- `server/modules/voice/voice.service.ts` (contract field list, bounds and empty document)
+- `server/modules/voice-realtime/voice-realtime-settings.ts` (contract realtime key list and context variable)
+- `server/modules/voice-realtime/voice-mode-rules.ts` (three rule arms declared as registrations)
+- `server/modules/voice-realtime/index.ts` (assembly point: registers the rules, installs the port)
+- `server/shared/ports/voice-rules.port.ts` (port storage re-exported from the contract)
+- `server/tsconfig.json` (the @shared alias the browser already has)
+- `scripts/voice-settings-single-surface-check.mjs` (new: AC b and c criterion, prints duplicatedKeys=[])
+- `src/shared/tests/voiceConfig.test.ts` (existing criterion, unchanged, behaviour coverage)
+- `src/shared/tests/voiceConfigHydration.test.ts` (existing criterion, unchanged, behaviour coverage)
+- `tasks/gap-voice-settings-single-surface.md` (self-touch)
