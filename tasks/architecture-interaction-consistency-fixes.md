@@ -21,10 +21,10 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/explosionLod.test.tsx` exit 0：档位条里只有一组 `Focus | Overview` 控件与一个缩放读数，不再同时出现标签式的 `Overview/Focus` 文字；`Back to overview` 仅在邻域/组视图下出现；切换类图↔文件图后视图为默认视图；缩放读数在档位条与缩放簇里是同一个数
-- [ ] 同上命令：关闭停靠区（× 按钮与 Escape）后选择已清空且无 `.arch-dim`；选中节点时无论上次停在哪个页签都打开 Inspector；搜索回车在当前图里居中并选中且视图不变；`Shift+Enter` 进入邻域；不在当前图里的实体显示原因与「显示它」操作且点击后该实体出现；选中无关联高亮的节点时不出现任何 `.arch-dim`，有高亮时未选中节点不透明度不低于 0.35
-- [ ] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx src/modules/architecture/tests/selectionModel.test.ts` exit 0（既有用例不回归；涉及「关闭保留选择」「单击直接下钻」的旧断言已逐处改写并列在实施记录）；`chat.abort` 调用计数在所有 Escape 用例里为 0
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/explosionLod.test.tsx` exit 0：档位条里只有一组 `Focus | Overview` 控件与一个缩放读数，不再同时出现标签式的 `Overview/Focus` 文字；`Back to overview` 仅在邻域/组视图下出现；切换类图↔文件图后视图为默认视图；缩放读数在档位条与缩放簇里是同一个数
+- [x] 同上命令：关闭停靠区（× 按钮与 Escape）后选择已清空且无 `.arch-dim`；选中节点时无论上次停在哪个页签都打开 Inspector；搜索回车在当前图里居中并选中且视图不变；`Shift+Enter` 进入邻域；不在当前图里的实体显示原因与「显示它」操作且点击后该实体出现；选中无关联高亮的节点时不出现任何 `.arch-dim`，有高亮时未选中节点不透明度不低于 0.35
+- [x] `npx vitest run src/modules/architecture/tests/dockInspector.test.tsx src/modules/architecture/tests/selectionModel.test.ts` exit 0（既有用例不回归；涉及「关闭保留选择」「单击直接下钻」的旧断言已逐处改写并列在实施记录）；`chat.abort` 调用计数在所有 Escape 用例里为 0
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -43,6 +43,8 @@ extra:
 - src/modules/architecture/tests/dockInspector.test.tsx
 - src/modules/architecture/tests/selectionModel.test.ts
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/modules/architecture/tests/mobileGestures.test.tsx
+- src/modules/architecture/tests/selectionTray.test.tsx
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json
@@ -56,3 +58,26 @@ extra:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-interaction-consistency-fixes.md
+
+## Implementation record
+
+Rewritten old assertions (each now states the new contract instead of the old
+one; no assertion was weakened):
+
+- `dockInspector.test.tsx` — 「Escape closes the dock first, then clears the
+  selection」 asserted `the selection survives the dock closing`. Rewritten to
+  assert the selection is cleared with the dock and no `.arch-dim` remains;
+  added the ×-button twin. `chat.abort` (the document-level stand-in) stays 0.
+- `selectionTray.test.tsx` — 「Escape collapses the expanded tray first …」
+  asserted `the selection survives the dock closing` for the second Escape.
+  Rewritten: the collapse keeps the selection, and the dock close that follows
+  clears it (0) so no tray pill is left behind.
+- `architectureTab.test.tsx` — the two zoom-tier cases asserted the removed
+  `[data-architecture-zoom-tier-label]` / `[data-architecture-readable-hint]`
+  and the separate fit notice; rewritten against the one `Focus | Overview`
+  control, the one scale reading (tier and cluster), and the merged Focus
+  sentence. The two search cases asserted that choosing a hit drilled
+  (`data-architecture-view === 'neighborhood'`); rewritten to assert the view
+  does not change on Enter/click, and that Shift+Enter / the row's secondary
+  action drills. `mobileGestures.test.tsx` follows the breadcrumb's new
+  accessible name (`Back to Overview`).
