@@ -2897,6 +2897,15 @@ test('scope hygiene shows only when the server cleaned up, and expands to its co
   const toggle = document.querySelector('[data-architecture-scope-hygiene]');
   assert.ok(toggle instanceof HTMLElement, 'the source line carries an expandable cleanup item');
   assert.match(toggle.textContent ?? '', /Scope cleanup/);
+  assert.equal(
+    toggle.closest('[data-architecture-canvas-region]'),
+    null,
+    'the cleanup item lives in the footer below the canvas, not over the drawing',
+  );
+  assert.ok(
+    toggle.closest('[data-architecture-source-footer]') !== null,
+    'the cleanup item shares the provenance footer',
+  );
   assert.equal(toggle.getAttribute('data-architecture-scope-hygiene-total'), '28');
   assert.equal(toggle.getAttribute('data-architecture-scope-hygiene-kept'), '16');
   assert.equal(
@@ -3041,6 +3050,30 @@ test('searching the class diagram reveals and centres the node; a folded hit rep
   } finally {
     Element.prototype.getBoundingClientRect = originalRect;
   }
+});
+
+test('the provenance row is a footer after the canvas, not an absolute pill over it', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const footer = document.querySelector('[data-architecture-source-footer]');
+  const region = document.querySelector('[data-architecture-canvas-region]');
+  const line = document.querySelector('[data-architecture-source-line]');
+  assert.ok(footer instanceof HTMLElement, 'the provenance row is drawn as a footer');
+  assert.ok(region instanceof HTMLElement);
+  assert.ok(line instanceof HTMLElement);
+  assert.equal(footer.contains(line), true);
+  assert.equal(
+    line.closest('[data-architecture-canvas-region]'),
+    null,
+    'the source line must not live inside the drawing region',
+  );
+  assert.equal(footer.className.includes('absolute'), false, 'the footer is in the document flow');
+  assert.equal(
+    region.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    Node.DOCUMENT_POSITION_FOLLOWING,
+    'the footer comes after the drawing in document order',
+  );
 });
 
 test('the search is a combobox and its results are not inside a clipping ancestor', async () => {

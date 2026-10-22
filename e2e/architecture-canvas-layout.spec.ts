@@ -1115,6 +1115,17 @@ test('main arm — the canvas fills the panel and the readout names the drawing 
     const search = await readSearch(page);
     console.log(`[architecture-layout] pc.search=${JSON.stringify(search)}`);
     assertSearchUsable(search, 'pc.search');
+    // The arrow keys move the active option in the real browser too.
+    await page.locator(SEL.search).first().press('ArrowDown');
+    const activeOption = await page.locator(SEL.search).first().getAttribute('aria-activedescendant');
+    expect(
+      activeOption,
+      'ArrowDown must move the combobox onto an option of the drawn list',
+    ).not.toBeNull();
+    expect(
+      await page.locator(`[id="${activeOption}"]`).getAttribute('aria-selected'),
+      'the active option must be announced as selected',
+    ).toBe('true');
     await page.locator(SEL.search).first().fill('');
     await page.keyboard.press('Escape');
 
@@ -1166,6 +1177,52 @@ test('main arm — the phone canvas fills the panel and every control is a 44px 
     assertChromeClearOfNodes(fitted, 'phone.fitted');
     assertFooterInFlow(fitted, 'phone.fitted');
     assertFitNearTheoretical(fitted, 'phone.fitted');
+
+    // The Adjust sheet labels every group and keeps the stepper's controls
+    // visible — the phone tier's two review findings.
+    if (await openControlSheet(page)) {
+      const sections = await page.evaluate((sel) => {
+        const sheet = document.querySelector(sel.sheet);
+        if (sheet === null) return null;
+        const names = ['view', 'scope', 'detail', 'filter', 'export', 'legend'];
+        return names.map((name) => {
+          const section = sheet.querySelector(`[data-architecture-sheet-${name}]`);
+          return {
+            name,
+            present: section !== null,
+            title: (section?.querySelector('span')?.textContent ?? '').trim(),
+          };
+        });
+      }, SEL);
+      console.log(`[architecture-layout] phone.sheet.sections=${JSON.stringify(sections)}`);
+      expect(sections, 'the Adjust sheet must draw its groups').not.toBeNull();
+      for (const section of sections ?? []) {
+        expect.soft(section.present, `Adjust must draw the ${section.name} group`).toBe(true);
+        expect.soft(section.title.length, `Adjust's ${section.name} group must carry a title`).toBeGreaterThan(0);
+      }
+      const stepper = await page.evaluate((sel) => {
+        const sheet = document.querySelector(sel.sheet);
+        const buttons = sheet === null
+          ? []
+          : [...sheet.querySelectorAll('[data-architecture-scope-decrease], [data-architecture-scope-increase]')]
+            .map((button) => {
+              const rect = button.getBoundingClientRect();
+              return { w: rect.width, h: rect.height, border: getComputedStyle(button).borderTopWidth };
+            });
+        return buttons;
+      }, SEL);
+      console.log(`[architecture-layout] phone.sheet.stepper=${JSON.stringify(stepper)}`);
+      expect(stepper.length, 'the scope stepper must expose its two buttons').toBe(2);
+      for (const button of stepper) {
+        expect.soft(button.w, `the scope stepper's buttons must be 44px wide: ${JSON.stringify(button)}`).toBeGreaterThanOrEqual(44);
+        expect.soft(button.h, `the scope stepper's buttons must be 44px tall: ${JSON.stringify(button)}`).toBeGreaterThanOrEqual(44);
+        expect.soft(
+          Number.parseFloat(button.border) > 0,
+          `the scope stepper's buttons must draw a visible border: ${JSON.stringify(button)}`,
+        ).toBe(true);
+      }
+      await closeControlSheet(page);
+    }
 
     const controls = await page.evaluate((sel) => {
       const panel = document.querySelector(sel.panel);
