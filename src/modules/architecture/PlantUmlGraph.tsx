@@ -27,6 +27,7 @@ import {
   createLayoutEngine,
   shouldRelayoutForAspect,
   type ArchitectureLayoutEngine,
+  type ArchitectureLayoutEngineClass,
 } from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import {
@@ -488,6 +489,10 @@ export function PlantUmlGraph({
   const [drawn, setDrawn] = useState<{ view: ArchitectureDiagramView; nodes: number; edges: number } | null>(null);
   // A failed render is shown instead of the previous (now stale) diagram.
   const [failure, setFailure] = useState<string | null>(null);
+  // How long the drawing on screen took to lay out and render, in ms. Exposed
+  // as `data-architecture-layout-ms` for the DoD's readings; deliberately not
+  // shown as UI text (a number the reader cannot act on is noise).
+  const [layoutMs, setLayoutMs] = useState<number | null>(null);
   // Read inside the delegated DOM listeners without re-registering them: the
   // listeners are registered once per mount, while these values change as the
   // parent re-renders (hover key, graph swap).
@@ -730,18 +735,15 @@ export function PlantUmlGraph({
         // as its own async chunk, so the first-screen bundle stays untouched.
         const { createRenderer, ElkLayoutEngine } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
           createRenderer: PlantUmlRendererFactory;
-          ElkLayoutEngine: new () => ArchitectureLayoutEngine;
+          ElkLayoutEngine: ArchitectureLayoutEngineClass;
         };
         if (cancelled) return;
 
         // The container's shape is a LAYOUT input, not a post-render scale: the
-        // engine is built with it so ELK draws for this container instead of
-        // for its own default proportions.
+        // engine is CONSTRUCTED with it so ELK draws for this container instead
+        // of for its own default proportions.
         const drawnAspect = layoutAspect ?? measureLayoutAspect(host);
-        const engine = createLayoutEngine({
-          aspectRatio: drawnAspect,
-          engine: new ElkLayoutEngine(),
-        });
+        const engine = createLayoutEngine({ aspectRatio: drawnAspect, Engine: ElkLayoutEngine });
         // The panel is the adaptive consumer: the bridge collapses directory
         // layers itself (the renderer's `groupByPathPrefix` would count a file
         // name as a layer, which is the bug this view exists to avoid). The
@@ -749,10 +751,15 @@ export function PlantUmlGraph({
         // keeps its top directory in every group prefix and label.
         const diagram = archguardToPlantUml(graph, { view, grouping: 'adaptive', idShape });
         const renderer = createRenderer(rendererOptionsFor(view, diagram, engine));
+        // Layout + render is the expensive, blocking part (ELK runs on the main
+        // thread); its duration is the DoD's per-view reading.
+        const renderStartedAt = performance.now();
         const { svg } = await renderer.render(diagram.puml);
+        const elapsedMs = Math.round(performance.now() - renderStartedAt);
         if (cancelled) return;
 
         host.innerHTML = svg;
+        setLayoutMs(elapsedMs);
         drawnAspectRef.current = drawnAspect;
         restoreEntityIds(host, diagram.aliasOf);
         // Labels are off until a node is hovered/selected, and every entity
@@ -885,6 +892,7 @@ export function PlantUmlGraph({
         if (cancelled) return;
         host.innerHTML = '';
         setDrawn(null);
+        setLayoutMs(null);
         setFailure(error instanceof Error ? error.message : 'unknown render error');
       }
     })();
@@ -1539,6 +1547,7 @@ export function PlantUmlGraph({
       data-architecture-zoom-mode={zoom.mode}
       data-architecture-zoom-scale={zoom.scale}
       data-architecture-lod-depth={lodDepth ?? undefined}
+      data-architecture-layout-ms={layoutMs ?? undefined}
       data-architecture-readable-mode={readableView?.mode}
       data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >

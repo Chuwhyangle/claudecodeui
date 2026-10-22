@@ -123,6 +123,7 @@
       "raiseDetail": "詳細を上げる",
       "reduceScope": "範囲を狭める",
       "budgetOmitted": "{{count}} 個はノード予算により除外",
+      "layoutBudget": "レイアウト予算内で {{count}} 個を表示中。詳細を上げると遅くなります",
       "kindFunction": "{{count}} 個の関数",
       "kindInterface": "{{count}} 個のインターフェース",
       "kindClass": "{{count}} 個のクラス"
