@@ -30,7 +30,7 @@ import {
   emitVoiceRealtimeSynthesisFrames,
   type VoiceRealtimeTtsSynthesis,
 } from './voice-realtime-tts.js';
-import type { VoiceRealtimeNarratorTtsSeam } from './voice-realtime-ws-proxy.service.js';
+import type { VoiceRealtimeNarratorTtsSeam } from './voice-realtime-contract.js';
 
 /**
  * The sherpa runtime's smallest useful surface. Declared by shape, not by import, so this leaf stays

@@ -40,7 +40,7 @@ import type {
   VoiceRealtimeNarratorSeams,
   VoiceRealtimeRunEndAckSeam,
   VoiceRealtimeRunEndSummarySeams,
-} from './voice-realtime-ws-proxy.service.js';
+} from './voice-realtime-contract.js';
 
 /**
  * The environment variable that names the run-end confirmation's candidate sentences.
