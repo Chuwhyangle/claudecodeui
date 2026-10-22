@@ -108,6 +108,11 @@ const SEL = {
   readout: '[data-architecture-readout]',
   readoutSummary: '[data-architecture-readout-summary]',
   readoutTotal: '[data-architecture-readout-total]',
+  // The phone tier puts the view controls in a bottom sheet opened by this
+  // header button; the desktop tier has neither element.
+  sheetToggle: '[data-architecture-sheet-toggle]',
+  sheet: '[data-architecture-sheet]',
+  sheetClose: '[data-architecture-sheet-close]',
   minimap: '[data-architecture-minimap]',
   zoomCluster: '[data-architecture-zoom-cluster]',
   node: '.uml-node',
@@ -204,6 +209,10 @@ type LayoutReading = {
   /** The readout row: the panel's canvas header, or the readout itself on older builds. */
   readoutRow: Box | null;
   readout: Box | null;
+  /** Whether the readout is in flow (desktop) or floats over the drawing (phone). */
+  readoutPosition: string;
+  /** Drawn nodes the floating readout overlaps (phone tier). */
+  readoutOverNodes: number;
   /** The drawing's first row as the canvas shows it: the SVG's box, clipped to the host. */
   drawingTop: number | null;
   /** The topmost drawn node box, reported beside `drawingTop` so a red names both. */
@@ -322,6 +331,8 @@ const readLayout = (page: Page): Promise<LayoutReading> =>
     const chromeOverNodes = chromeOverNodeBoxes.length;
 
     const readoutText = (readout?.innerText ?? '').replace(/\s+/g, ' ').trim();
+    const readoutBox = boxOf(readout);
+    const readoutOverNodes = nodeBoxes.filter((box) => overlaps(box, readoutBox)).length;
 
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -332,7 +343,9 @@ const readLayout = (page: Page): Promise<LayoutReading> =>
         ? hostBox.h / availableHeight
         : null,
       readoutRow: readoutRowBox,
-      readout: boxOf(readout),
+      readout: readoutBox,
+      readoutPosition: readout === null ? '<none>' : window.getComputedStyle(readout).position,
+      readoutOverNodes,
       drawingTop,
       firstNodeTop: nodeBoxes.length > 0 ? Math.min(...nodeBoxes.map((box) => box.y)) : null,
       svg: svgBox,
@@ -370,6 +383,8 @@ const printReading = (label: string, reading: LayoutReading): void => {
   console.log(`[architecture-layout] ${label}.canvas.fill.ratio=${formatNumber(reading.fillRatio)}`);
   console.log(`[architecture-layout] ${label}.readout.row.box=${formatBox(reading.readoutRow)}`);
   console.log(`[architecture-layout] ${label}.readout.box=${formatBox(reading.readout)}`);
+  console.log(`[architecture-layout] ${label}.readout.position=${reading.readoutPosition}`);
+  console.log(`[architecture-layout] ${label}.readout.over.nodes=${reading.readoutOverNodes}`);
   console.log(`[architecture-layout] ${label}.svg.box=${formatBox(reading.svg)}`);
   console.log(`[architecture-layout] ${label}.drawing.top=${formatNumber(reading.drawingTop)}`);
   console.log(`[architecture-layout] ${label}.first.node.top=${formatNumber(reading.firstNodeTop)}`);
@@ -430,6 +445,18 @@ const assertReadoutAboveDrawing = (reading: LayoutReading, label: string): void 
     reading.readoutRow,
     `${label}: the source must draw the readout this guard is about`,
   ).not.toBeNull();
+  // The phone tier deliberately floats the readout on the drawing's top-left
+  // (the mobile layout's single header row has no room for it). There "above
+  // the drawing" is not the contract; "inside the canvas and clear of the
+  // drawn nodes" is.
+  if (reading.readoutPosition === 'absolute' || reading.readoutPosition === 'fixed') {
+    expect.soft(
+      reading.readoutOverNodes,
+      `${label}: the floating readout must not cover a drawn node — `
+        + `${reading.readoutOverNodes} node(s) overlap readout=${formatBox(reading.readout)}`,
+    ).toBe(0);
+    return;
+  }
   expect.soft(
     reading.drawingTop,
     `${label}: the drawing's first row must be measurable; svg=${formatBox(reading.svg)} host=${formatBox(reading.host)}`,
@@ -684,10 +711,35 @@ async function settle(page: Page, ms = 400): Promise<void> {
 }
 
 /**
+ * Open the phone tier's bottom sheet, where the renderer's view controls live.
+ *
+ * A no-op on the desktop tier (there is no `Adjust` button). On a phone the
+ * sheet is a modal dialog, so it must be CLOSED again before any geometry leg
+ * is read — otherwise the sheet, not the drawing, is what the viewport shows.
+ */
+async function openControlSheet(page: Page): Promise<boolean> {
+  const toggle = page.locator(SEL.sheetToggle);
+  if ((await toggle.count()) === 0) return false;
+  if ((await page.locator(SEL.sheet).count()) === 0) await toggle.first().click();
+  await expect(page.locator(SEL.sheet)).toBeVisible({ timeout: 10_000 });
+  return true;
+}
+
+/** Close the phone tier's bottom sheet if it is open; a no-op on desktop. */
+async function closeControlSheet(page: Page): Promise<void> {
+  const close = page.locator(SEL.sheetClose);
+  if ((await close.count()) === 0) return;
+  await close.first().click();
+  await expect(page.locator(SEL.sheet)).toHaveCount(0, { timeout: 10_000 });
+}
+
+/**
  * The whole-graph view: the only state whose scale is computed to keep the
  * drawing clear of the corner chrome.
  */
 async function showWholeGraph(page: Page): Promise<void> {
+  // On the phone tier the control lives inside the bottom sheet.
+  await openControlSheet(page);
   const overview = page.locator(SEL.overviewMode);
   if ((await overview.count()) > 0 && (await overview.first().isVisible())) {
     await overview.first().click();
@@ -697,6 +749,7 @@ async function showWholeGraph(page: Page): Promise<void> {
       { timeout: 15_000 },
     );
   }
+  await closeControlSheet(page);
   await settle(page);
 }
 
@@ -744,9 +797,12 @@ async function scrollDrawingToFirstRow(page: Page): Promise<void> {
 async function showExplosionView(page: Page): Promise<void> {
   const alreadyExploded = await page.locator(SEL.graphRoot).getAttribute('data-architecture-view') === 'hierarchy';
   if (!alreadyExploded) {
+    // On the phone tier the explosion control lives inside the bottom sheet.
+    await openControlSheet(page);
     const explosion = page.locator(SEL.explosion);
     expect(await explosion.count(), 'the panel must offer the explosion view this reading draws').toBeGreaterThan(0);
     await explosion.first().click();
+    await closeControlSheet(page);
   }
   await page.waitForFunction(
     (sel) => {
