@@ -2,7 +2,7 @@
 id: gap-voice-realtime-ws-proxy-trunk-steps
 title: voice-realtime-ws-proxy
   主干步骤注册：连接生命周期的横切步骤（握手后/每帧前后/中断决策/状态注入）做成可注册有序步骤表，中心只遍历（第三刀主干形态）
-status: ready
+status: done
 labels:
   - gap
 parent: null

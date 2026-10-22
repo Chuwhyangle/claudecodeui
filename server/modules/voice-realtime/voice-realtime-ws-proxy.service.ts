@@ -134,6 +134,18 @@ import type {
   VoiceRealtimeFrameContext,
   VoiceRealtimeFrameRegistry,
 } from './voice-realtime-frame-registry.js';
+import { createDefaultVoiceRealtimeTrunkSteps } from './voice-realtime-trunk-step-handlers.js';
+import type {
+  VoiceRealtimeTrunkPayloads,
+  VoiceRealtimeTrunkStep,
+  VoiceRealtimeTrunkStepRegistry,
+  VoiceRealtimeTrunkTiming,
+} from './voice-realtime-trunk-steps.js';
+
+// The `before-frame` parse and the `interrupt-decision` fence moved into the trunk step file
+// beside this one (a step body runs them and a value import back would close a module cycle);
+// they are re-exported here so every existing caller's import path is unchanged.
+export { decideModelInterrupt, readVoiceRealtimeInboundFrame } from './voice-realtime-trunk-step-handlers.js';
 
 /** The WebSocket path this handler answers. Mounted by the websocket gateway. */
 export const VOICE_REALTIME_PATH = '/voice-realtime';
@@ -1387,52 +1399,10 @@ export type ModelInterruptDecision = 'abort' | 'covered';
  * The interrupt FENCE (SPEC §0.3 D-7 / §18.4 G2, GOAL-041 AC-343): does this model-initiated stop
  * run, or is it the debounce `covered`?
  *
- * WHY A FENCE AT ALL. The model can call `session_interrupt` for a sentence whose command the
- * CURRENT run has already dequeued into its turn — an E-2 self-answer, or a retry after the
- * `TOOL_LOOP_GUARD` — and stopping a run for an utterance it is already answering is the
- * repeat-interrupt thrash D-7 exists to forbid. Two readings rule that out, and one of them is
- * enough:
- *
- *   · COVERED — `max(coveredSeqs) >= triggerSeq`. The trigger utterance's command reached the host's
- *     `started` state, so the run already carries it (SPEC §18.3: `covers` from `command_lifecycle`
- *     `started` events, joined through the `commandUuid → utteranceSeq` map). Because `utteranceSeq`
- *     only ever grows and the model always triggers on the LATEST utterance, no earlier-starting
- *     sentence can stand in for a later one: `max(covers) >= triggerSeq` is exactly "the trigger
- *     sentence is already inside the run".
- *   · IDEMPOTENT — `abortedTriggerSeq === triggerSeq`. The SAME call repeated after it already ran is
- *     not a second stop. This is the ONLY guard a session with no lifecycle channel has, which is the
- *     documented degradation for a non-resident connection (see {@link HostCommandLifecycleReading}).
- *
- * `triggerSeq === null` means no non-empty utterance has been heard, so there is no sentence to
- * fence on and the path is exactly the pre-fence one — a bare stop still aborts.
- *
- * Exported and pure so a criterion can drive the fence's own decision directly, including the false
- * form that must redden: with BOTH guards neutralized (`coveredSeqs` empty, `abortedTriggerSeq`
- * null) the same input decides `abort` every time — two aborts for the one sentence, which is what
- * removing the fence would do (SPEC §18.7 F3).
+ * THE RULE MOVED to `voice-realtime-trunk-step-handlers.ts` with the `interrupt-decision` step
+ * that runs it; it is re-exported above, so the body and its reasoning are one edit away. The
+ * decision is what the connection reads back out of that timing's payload.
  */
-export function decideModelInterrupt(input: {
-  triggerSeq: number | null;
-  coveredSeqs: ReadonlySet<number>;
-  abortedTriggerSeq: number | null;
-}): ModelInterruptDecision {
-  if (input.triggerSeq === null) {
-    return 'abort';
-  }
-  if (input.abortedTriggerSeq === input.triggerSeq) {
-    return 'covered';
-  }
-  let maxCovered: number | null = null;
-  for (const seq of input.coveredSeqs) {
-    if (maxCovered === null || seq > maxCovered) {
-      maxCovered = seq;
-    }
-  }
-  if (maxCovered !== null && maxCovered >= input.triggerSeq) {
-    return 'covered';
-  }
-  return 'abort';
-}
 
 /**
  * The fixed sentence prepended to the FIRST message that enters the CLI after an interrupt (SPEC §0.3
@@ -2150,6 +2120,18 @@ export type VoiceRealtimeProxySeams = {
    */
   frameRegistry?: VoiceRealtimeFrameRegistry;
   /**
+   * The connection-lifecycle step table: the ordered steps this connection runs at each trunk
+   * timing (after the handshake, around every frame, at the interrupt fence, at each status
+   * injection, on the way out).
+   *
+   * Optional, and absent is the shipped set — {@link createDefaultVoiceRealtimeTrunkSteps}, whose
+   * steps live in `voice-realtime-trunk-step-handlers.ts`. A criterion hands in its own table so a
+   * step registered from the test file is what a real connection runs at that timing (and so
+   * unregistering that step proves the traversal really consults the table). The steps never see
+   * this object; it is the connection's schedule, not a step input.
+   */
+  trunkSteps?: VoiceRealtimeTrunkStepRegistry;
+  /**
    * A fresh, read-only sample of the BOUND session's own queue, or `null` when it cannot be taken.
    *
    * THE ONE READING THE RELAY CANNOT PRODUCE. Every other term in {@link queuedDepth} is an event
@@ -2425,105 +2407,12 @@ export function describeTransportError(error: { code: string } & Record<string, 
 /**
  * Parses one raw browser frame.
  *
- * Returns `null` for anything this handler does not understand. A malformed or
- * unknown frame is dropped rather than answered: the browser speaks a protocol
- * this server owns, so an unknown frame is a version mismatch, and replying to
- * every one of them would turn a mismatch into a frame storm.
+ * THE READER MOVED to `voice-realtime-trunk-step-handlers.ts` with the `before-frame` step that
+ * runs it; it is re-exported above, so the body and its reasoning are one edit away. `null` is
+ * the drop reading it always was: a malformed or unknown frame is refused rather than answered,
+ * because the browser speaks a protocol this server owns and a reply per mismatch would be a
+ * frame storm.
  */
-export function readVoiceRealtimeInboundFrame(raw: unknown): VoiceRealtimeInboundFrame | null {
-  if (typeof raw !== 'string') {
-    return null;
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-
-  if (typeof parsed !== 'object' || parsed === null) {
-    return null;
-  }
-
-  const frame = parsed as Record<string, unknown>;
-  // The segmented-relay offer. `protocol` is read as a string and nothing more: whether it is a
-  // token this proxy speaks is the HANDLER's decision, because that depends on the connection's mode
-  // — the reader stays a pure shape-check so both answers are observable from one parsed frame.
-  if (frame.type === 'hello' && typeof frame.protocol === 'string') {
-    return { type: 'hello', protocol: frame.protocol };
-  }
-
-  // A `seq` makes an audio frame a segment's; its absence keeps the continuous path.
-  // A non-integer `seq` is dropped rather than coerced: guessing an idempotency key is
-  // worse than refusing the frame, which the browser already treats as unacknowledged.
-  if (frame.type === 'audio' && typeof frame.audio === 'string') {
-    // The rate the client declared, when it declared a usable one. Absent stays ABSENT (not defaulted
-    // here): only the first audio frame's rate reaches the capture's header, and it is the capture, not
-    // this reader, that knows what "no rate declared" means. Adding the key only when present is also
-    // what keeps this reader's output identical for every existing caller that deep-compares it.
-    const rate: { sourceRate?: number } =
-      typeof frame.sourceRate === 'number' && Number.isFinite(frame.sourceRate) && frame.sourceRate > 0
-        ? { sourceRate: frame.sourceRate }
-        : {};
-    if (frame.seq === undefined) {
-      return { type: 'audio', audio: frame.audio, ...rate };
-    }
-    return Number.isInteger(frame.seq)
-      ? { type: 'audio', audio: frame.audio, seq: frame.seq as number, ...rate }
-      : null;
-  }
-
-  if (frame.type === 'segment_start' && Number.isInteger(frame.seq)) {
-    return {
-      type: 'segment_start',
-      seq: frame.seq as number,
-      ...(typeof frame.startedAtMs === 'number' ? { startedAtMs: frame.startedAtMs } : {}),
-    };
-  }
-
-  if (frame.type === 'segment_end' && Number.isInteger(frame.seq)) {
-    const reason = frame.reason;
-    return {
-      type: 'segment_end',
-      seq: frame.seq as number,
-      ...(typeof frame.durationMs === 'number' ? { durationMs: frame.durationMs } : {}),
-      ...(reason === 'gap' || reason === 'max' || reason === 'end' ? { reason } : {}),
-    };
-  }
-
-  if (frame.type === 'context' && typeof frame.text === 'string') {
-    // `chars`/`rows` are the browser's own accounting and are logged, so they are read as given and
-    // defaulted rather than validated: a frame with the text is usable, and refusing it over a
-    // mis-counted integer would drop the context the text carries.
-    return {
-      type: 'context',
-      text: frame.text,
-      chars: typeof frame.chars === 'number' && Number.isFinite(frame.chars) ? frame.chars : frame.text.length,
-      rows: typeof frame.rows === 'number' && Number.isFinite(frame.rows) ? frame.rows : 0,
-    };
-  }
-
-  // The narrator queue's pacing ack. Like `hello`'s protocol, the id is read as a string and nothing
-  // more: whether it names the utterance standing NOW is the QUEUE's decision (a stale ack must not
-  // advance it), not this shape-check's.
-  if (frame.type === 'narrator_done' && typeof frame.utteranceId === 'string') {
-    return { type: 'narrator_done', utteranceId: frame.utteranceId };
-  }
-
-  // The answer to one `run_output_request`. The id and the text are both required: a reply that
-  // cannot name its request cannot be matched to a run, and an empty text is the page saying this
-  // turn produced nothing visible (a real reading, not a malformed frame).
-  if (frame.type === 'run_output' && typeof frame.requestId === 'string' && typeof frame.text === 'string') {
-    return { type: 'run_output', requestId: frame.requestId, text: frame.text };
-  }
-
-  if (frame.type === 'close') {
-    return { type: 'close' };
-  }
-
-  return null;
-}
 
 //----------------- THE LIVE VOICE REGISTRY — the one fact the dispatch hook gates on -------------
 //
@@ -2591,6 +2480,36 @@ export function handleVoiceRealtimeConnection(
   let sending = false;
   let closed = false;
   let audioFramesFromBrowser = 0;
+
+  // ---- the connection's trunk step table -------------------------------------------------------
+  //
+  // THE LIFECYCLE'S REGISTRATION SLOT. Everything below that happens at a FIXED moment of this
+  // connection's life — the upstream handshake settling, the parse in front of every inbound frame,
+  // the interrupt fence, an instruction going upstream, the capture's last words on the way out —
+  // is a step in an ordered table (see `voice-realtime-trunk-steps.ts`) rather than another branch
+  // here. A fresh table per connection, exactly like the frame registry: the shipped steps come
+  // from `voice-realtime-trunk-step-handlers.ts`, a criterion hands in its own.
+  //
+  // The context is built at RUN time, not here, because `teardown` and `uplinkVad` are initialised
+  // further down this function and a step never runs before the connection is fully assembled.
+  const trunkSteps = seams.trunkSteps ?? createDefaultVoiceRealtimeTrunkSteps();
+  const runTrunk = <TTiming extends VoiceRealtimeTrunkTiming>(
+    timing: TTiming,
+    payload: VoiceRealtimeTrunkPayloads[TTiming],
+  ): void => {
+    trunkSteps.run(timing, {
+      timing,
+      seams,
+      send,
+      bridge,
+      teardown: () => teardown(),
+      advertiseInstructions: () => advertiseInstructions(),
+      get uplinkVad() {
+        return uplinkVad;
+      },
+      payload,
+    });
+  };
 
   // ---- the narrator's queue (GOAL-047; see `createVoiceRealtimeNarratorQueue`) ------------------
   //
@@ -2863,9 +2782,21 @@ export function handleVoiceRealtimeConnection(
       return false;
     }
     advertisedKey = key;
-    bridge.sendSessionUpdate(
-      composeVoiceRealtimeInstructions(settings, contextText, status.text === '' ? undefined : status.text),
-    );
+    // THE INJECTION ITSELF IS A TRUNK STEP (`status-injection`): this function composes what goes
+    // upstream, the table's step puts it on the wire. A `session.update` that does not leave leaves
+    // `sent` false, and the caller's bookkeeping reads that rather than assuming the send happened.
+    const injection: VoiceRealtimeTrunkPayloads['status-injection'] = {
+      instructions: composeVoiceRealtimeInstructions(
+        settings,
+        contextText,
+        status.text === '' ? undefined : status.text,
+      ),
+      sent: false,
+    };
+    runTrunk('status-injection', injection);
+    if (!injection.sent) {
+      return false;
+    }
     if (contextText !== '') {
       // What was injected, by size and provenance — never the body: this log goes to the server's
       // console, and the body is the user's conversation (SPEC §C2).
@@ -5450,9 +5381,17 @@ export function handleVoiceRealtimeConnection(
     // the model asked again for a sentence the run already has (SPEC §18.4 G2).
     refreshInterruptCovers();
     const fenceTriggerSeq = utteranceSeq === 0 ? null : utteranceSeq;
-    if (
-      decideModelInterrupt({ triggerSeq: fenceTriggerSeq, coveredSeqs, abortedTriggerSeq }) === 'covered'
-    ) {
+    // THE DECISION IS A TRUNK STEP (`interrupt-decision`): the fence rule itself lives in the
+    // table's shipped step (`decideModelInterrupt`), which writes the verdict back into this payload.
+    // A table with no such step leaves it `null` — read as "not covered", the pre-fence path.
+    const fence: VoiceRealtimeTrunkPayloads['interrupt-decision'] = {
+      triggerSeq: fenceTriggerSeq,
+      coveredSeqs,
+      abortedTriggerSeq,
+      decision: null,
+    };
+    runTrunk('interrupt-decision', fence);
+    if (fence.decision === 'covered') {
       // Re-sample the host for the depth the receipt reports, for the same reason the success path
       // does: a number carried over from an earlier sample can disagree with what the CLI holds now.
       refreshHostQueue();
@@ -6287,11 +6226,12 @@ export function handleVoiceRealtimeConnection(
       seams.log?.(`teardown: closed the open segment seq=${flushedSeq} with the frames received`);
     }
     flushCoalesced();
-    // The capture's last words: the recorder patches the WAV's size fields and appends the final
-    // frame/byte/duration reading. A no-op with no capture wired, and fail-open with one — a capture
-    // that cannot be closed must not keep a dead connection's microphone open (why this is before the
-    // socket close, with the rest of the teardown).
-    seams.audioCapture?.finalize();
+    // THE CONNECTION'S WAY OUT IS A TRUNK TIMING (`before-close`). The shipped step is the capture's
+    // last words: the recorder patches the WAV's size fields and appends the final frame/byte/duration
+    // reading. A no-op with no capture wired, and fail-open with one — a capture that cannot be closed
+    // must not keep a dead connection's microphone open (why this runs before the socket close, with
+    // the rest of the teardown).
+    runTrunk('before-close', { audioFramesFromBrowser });
     // THE SPEAKER TRACKER'S ONE SUMMARY LINE (AC7): windows, accepted, coverage, first-vs-core and the
     // re-anchor/provisional counts, written on the connection's own way out. Readings only — no audio,
     // no per-sample PCM. Absent with no seam, so a default connection's log is unchanged.
@@ -6427,20 +6367,11 @@ export function handleVoiceRealtimeConnection(
   // has exhausted its attempts and closed — so the state is what decides whether
   // there is a session to advertise. Sending an update on a closed bridge would
   // be dropped silently and leave the browser listening to nothing.
+  //
+  // WHAT TO DO ABOUT IT IS THE TABLE'S `after-handshake` STEP (the shipped one answers the page
+  // with a `TRANSPORT` error and ends the connection, or advertises the instructions as they stand).
   void bridge.whenConnected().then(() => {
-    if (bridge.state !== 'open') {
-      send({
-        type: 'error',
-        code: 'TRANSPORT',
-        message: 'The Realtime upstream could not be reached.',
-      });
-      teardown();
-      return;
-    }
-    // The session is opened with the instructions AS THEY STAND: the settings read at the top of
-    // this connection, plus whatever pack the browser has sent by now. A pack that arrives after
-    // this point is applied by its own branch in the message handler.
-    advertiseInstructions();
+    runTrunk('after-handshake', { connected: bridge.state === 'open' });
   });
 
   // ---- the inbound-frame dispatch seam --------------------------------------------------------
@@ -6517,13 +6448,18 @@ export function handleVoiceRealtimeConnection(
   };
 
   socket.on('message', (raw: unknown) => {
-    const frame = readVoiceRealtimeInboundFrame(
-      Buffer.isBuffer(raw) ? raw.toString('utf8') : typeof raw === 'string' ? raw : String(raw),
-    );
+    // THE FRAME'S TWO TRUNK TIMINGS: `before-frame` parses (the shipped step writes the frame into
+    // the payload, `null` for anything the reader refuses), `after-frame` runs once the frame
+    // registry has taken it. The parse is no longer inline here — it is the table's first step, so
+    // a per-frame concern has a registration slot on either side of the routing.
+    const inbound: VoiceRealtimeTrunkPayloads['before-frame'] = { raw, frame: null };
+    runTrunk('before-frame', inbound);
+    const frame = inbound.frame;
     if (!frame) {
       return;
     }
     frameRegistry.dispatch(frame.type, frameContext, frameState, frame);
+    runTrunk('after-frame', { frame });
   });
 
   // THE BROWSER LEG'S KEEPALIVE (live 2026-10-15 86559798). Mute stops every browser→server frame,
