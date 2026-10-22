@@ -22,10 +22,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：新增用例用 class（含字段/方法）、interface、function 三种 kind 的真实形态 fixture，断言产出 puml 含 `class`/`interface` 声明、成员行带可见性符号、function 带 `<<function>>` 且无成员栏；标签是实体名而不是 `file.ts.Name`；缺 `kind` 的旧 fixture 产物与改前逐字相同
-- [ ] 同文件新增用例：同一 package 内两个同名实体时回落限定名且两者可区分；`membersTruncated` 时出现 `… +N` 行
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/hierarchyIndex.test.ts src/modules/architecture/tests/explosionLod.test.tsx` exit 0：默认状态 SVG 中没有任何边标签文本，悬停某节点后其关联边出现关系类型文本，移开后消失；`distance === 0` 的节点带种子标记属性；既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：新增用例用 class（含字段/方法）、interface、function 三种 kind 的真实形态 fixture，断言产出 puml 含 `class`/`interface` 声明、成员行带可见性符号、function 带 `<<function>>` 且无成员栏；标签是实体名而不是 `file.ts.Name`；缺 `kind` 的旧 fixture 产物与改前逐字相同
+- [x] 同文件新增用例：同一 package 内两个同名实体时回落限定名且两者可区分；`membersTruncated` 时出现 `… +N` 行
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/hierarchyIndex.test.ts src/modules/architecture/tests/explosionLod.test.tsx` exit 0：默认状态 SVG 中没有任何边标签文本，悬停某节点后其关联边出现关系类型文本，移开后消失；`distance === 0` 的节点带种子标记属性；既有 hover/缩放/爆炸/下钻用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
