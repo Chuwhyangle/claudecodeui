@@ -1,7 +1,7 @@
 ---
 id: architecture-mentioned-entities-keep-by-kind
 title: 会话提到的实体不再自动免隐藏：筛选弹层按种类给出提及数量与「保持显示」开关（默认全关），服务端与客户端用同一规则
-status: ready
+status: done
 labels:
   - feature
 parent: null
