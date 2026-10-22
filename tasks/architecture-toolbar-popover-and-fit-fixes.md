@@ -1,7 +1,7 @@
 ---
 id: architecture-toolbar-popover-and-fit-fixes
 title: 搜索结果框不再被工具栏裁掉、Fit 真正适应、弹层点外面关闭、角落浮层让图避让（桌面与手机）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
