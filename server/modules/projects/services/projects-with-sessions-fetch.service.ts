@@ -4,9 +4,7 @@ import path from 'node:path';
 import { hasArchguardCache } from '@/modules/architecture/index.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { quayService } from '@/modules/quay/index.js';
-import { sessionSynchronizerService } from '@/modules/providers/index.js';
-import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
-import type { RealtimeClientConnection } from '@/shared/types.js';
+import { readProjectsSessionFetchPort } from '@/shared/ports/projects-session-fetch.port.js';
 import { AppError } from '@/shared/utils.js';
 import {
   compileSessionFilter,
@@ -226,18 +224,36 @@ function readProjectSessionsPageByPath(
 }
 
 // Broadcast progress to all connected WebSocket clients.
-// Uses the unified `kind` envelope like every other websocket frame.
+// Uses the unified `kind` envelope like every other websocket frame. The frame
+// is built here; iterating the connection set and testing `readyState` is the
+// port's job (it owns the websocket module's set), which is what keeps this
+// group from importing `modules/websocket`. An uninstalled port means no
+// websocket module was composed in this process — there is nobody to send to.
 function broadcastProgress(progress: ProgressUpdate) {
   const message = JSON.stringify({
     kind: 'loading_progress',
     ...progress,
   });
 
-  connectedClients.forEach((client: RealtimeClientConnection) => {
-    if (client.readyState === WS_OPEN_STATE) {
-      client.send(message);
-    }
-  });
+  readProjectsSessionFetchPort()?.broadcast(message);
+}
+
+/**
+ * Runs the provider-wide session scan before a listing is read.
+ *
+ * The scan itself lives in the providers module; the composition root installs
+ * it on the port. A caller asking for a refresh in a process that never
+ * assembled that layer is a wiring error — answering with the stale listing
+ * would hide it.
+ */
+async function synchronizeSessionsThroughPort(): Promise<void> {
+  const port = readProjectsSessionFetchPort();
+  if (!port) {
+    throw new Error(
+      'projects-session-fetch port is not installed: server/index.ts must install it before the projects routes can synchronize sessions',
+    );
+  }
+  await port.synchronizeSessions();
 }
 
 /**
@@ -247,7 +263,7 @@ export async function getProjectsWithSessions(
   options: GetProjectsWithSessionsOptions = {}
 ): Promise<ProjectListItem[]> {
   if (!options.skipSynchronization) {
-    await sessionSynchronizerService.synchronizeSessions();
+    await synchronizeSessionsThroughPort();
   }
 
   const projectRows = projectsDb.getProjectPaths() as Array<{
@@ -324,7 +340,7 @@ export async function getArchivedProjectsWithSessions(
   options: Pick<GetProjectsWithSessionsOptions, 'skipSynchronization'> = {},
 ): Promise<ArchivedProjectListItem[]> {
   if (!options.skipSynchronization) {
-    await sessionSynchronizerService.synchronizeSessions();
+    await synchronizeSessionsThroughPort();
   }
 
   const projectRows = projectsDb.getArchivedProjectPaths() as Array<{

@@ -37,13 +37,20 @@
  * from Tarjan.
  *
  * Readings measured on this tree (2026-10-22, TypeScript compiler API, after
- * `gap-voice-provider-cycle-port-break`):
+ * `gap-projects-services-cycle-port-break`):
  *
- *   files=362 staticEdges=1392 dynamicEdges=3 sccs=[7]   (file-level resolved edges; G1 is
- *                                the seven remaining provider/websocket directories — the
- *                                `modules/voice` member left when `voice-lexicon.ts`'s literal
- *                                dynamic import of the provider barrel became a shared port,
- *                                so `dynamicEdges` fell 4 → 3)
+ *   files=363 staticEdges=1391 dynamicEdges=3 sccs=[5]   (file-level resolved edges; G1 is
+ *                                the five remaining provider/websocket directories — the
+ *                                `modules/projects` and `modules/projects/services` members
+ *                                left when `projects-with-sessions-fetch.service.ts`'s
+ *                                provider and websocket imports became the shared
+ *                                `projects-session-fetch` port. The file count rose 362 → 363
+ *                                with that port file; the static edge count fell 1392 → 1391
+ *                                because the service's `RealtimeClientConnection` type import
+ *                                from `server/shared/types.ts` went away with the direct
+ *                                websocket iteration, while the two removed runtime imports
+ *                                were replaced by one service → port edge plus one index →
+ *                                port edge)
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
  *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
@@ -108,11 +115,21 @@ const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.j
  * `import('@/modules/providers/index.js')` and read a shared port installed by
  * `server/index.ts` instead. The sanctioned shrink direction, recorded in both this pin and
  * the committed baseline JSON.
+ *
+ * G1 WAS LOWERED AGAIN, FROM SEVEN MEMBERS TO FIVE, on 2026-10-22 by
+ * `gap-projects-services-cycle-port-break`: `modules/projects` and
+ * `modules/projects/services` left the component when
+ * `projects-with-sessions-fetch.service.ts` stopped importing
+ * `sessionSynchronizerService` (providers) and `WS_OPEN_STATE` /
+ * `connectedClients` (websocket) directly, reading the shared
+ * `projects-session-fetch.port.ts` installed by `server/index.ts` instead. The
+ * remaining providers/websocket imports of `generateDisplayName` point INTO
+ * `modules/projects`, which now has no edge back — the group is a sink of the
+ * component, not a member. Same sanctioned shrink direction, recorded here and
+ * in the committed baseline JSON.
  */
 const CYCLE_GROUPS: readonly string[][] = [
   [
-    'modules/projects',
-    'modules/projects/services',
     'modules/providers',
     'modules/providers/list/claude',
     'modules/providers/services',
@@ -481,18 +498,20 @@ test('(b) every non-trivial SCC is contained in one baseline group — static-on
   //     (`voice-lexicon.ts`, `@/modules/providers/index.js`)
   // `gap-voice-provider-cycle-port-break` (2026-10-22) replaced it with the shared
   // `voice-lexicon.port.ts`, so static-only and static+literal-dynamic now both see the
-  // seven-member G1. The dynamic-only edges are still printed below: any future one that
-  // changes an SCC will show up in this output, which is what keeps the equality assertion
-  // from hiding a divergence.
+  // five-member G1 (the projects pair left it too — see CYCLE_GROUPS). The dynamic-only
+  // edges are still printed below: any future one that changes an SCC will show up in this
+  // output, which is what keeps the equality assertion from hiding a divergence.
   //
   // The eleven-member component this file originally pinned was lowered by
   // `gap-server-provider-websocket-init-cycle-ports` (2026-10-20): the
   // `session-hosts -> mcp-gateway`, `providers/list/claude -> websocket`,
   // `providers/list/claude -> voice-realtime` and `providers -> provider.registry` edges
   // became shared ports, which removed `modules/mcp-gateway`, `modules/session-hosts` and
-  // `modules/voice-realtime` from the component. This task lowered the eight-member result
-  // to seven by removing `modules/voice`. The ratchet may only shrink; these edits record
-  // strictly smaller readings.
+  // `modules/voice-realtime` from the component. `gap-voice-provider-cycle-port-break`
+  // lowered the eight-member result to seven by removing `modules/voice`, and
+  // `gap-projects-services-cycle-port-break` lowered it to five by moving the projects
+  // group's only two outgoing edges onto `projects-session-fetch.port.ts`. The ratchet may
+  // only shrink; these edits record strictly smaller readings.
   const staticPairs = new Set(staticOnly.dirEdges.map((edge) => `${edge.from} -> ${edge.to}`));
   const dynamicOnlyEdges = withDynamic.dirEdges.filter((edge) => !staticPairs.has(`${edge.from} -> ${edge.to}`));
   for (const edge of dynamicOnlyEdges) console.log(`(b) dynamic-only edge ${repoRelative(edge.from)} -> ${repoRelative(edge.to)}`);
