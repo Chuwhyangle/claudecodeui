@@ -48,6 +48,7 @@ import {
   type ReadableZoomMode,
 } from '@/modules/architecture/readableZoom';
 import type {
+  ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
@@ -76,19 +77,31 @@ import {
  */
 type PlantUmlView = { kind: 'neighborhood'; entity: string; hops: number };
 
-type PlantUmlRenderer = {
-  render: (puml: string) => Promise<{ svg: string }>;
-};
+/** The drawn model's type, without importing the package into this module's graph. */
+type PlantUmlDrawnModel = ArchitectureDrawnPlantUml['model'];
 
 /**
- * `layout` takes the engine instance, not the `'elk'` keyword: the engine is
- * built by `createLayoutEngine` so the container's aspect ratio reaches the
- * layout (see `elkAspectEngine.ts`).
+ * `renderDetailed` returns the model that was actually laid out and drawn,
+ * alongside the SVG — `model` is what the text page serializes, and `layout` is
+ * the geometry the renderer used. `layout` takes the engine instance, not the
+ * `'elk'` keyword: the engine is built by `createLayoutEngine` so the
+ * container's aspect ratio reaches the layout (see `elkAspectEngine.ts`).
  */
-type PlantUmlRendererFactory = (options: {
-  layout: ArchitectureLayoutEngine;
-  view?: PlantUmlView;
-}) => PlantUmlRenderer;
+type PlantUmlRenderDetailed = (
+  puml: string,
+  options: { layout: ArchitectureLayoutEngine; view?: PlantUmlView },
+) => Promise<{
+  model: PlantUmlDrawnModel;
+  layout: unknown;
+  svg: string;
+}>;
+
+/** The upstream serializer and viewer, carried to the text page with the model. */
+type PlantUmlToPlantUml = (model: PlantUmlDrawnModel) => string;
+type PlantUmlApplyView = (
+  model: PlantUmlDrawnModel,
+  view: PlantUmlView,
+) => PlantUmlDrawnModel;
 
 /** The alias marker the renderer prefixes on overview group nodes (`grp::<path prefix>`). */
 const GROUP_PREFIX = 'grp::';
@@ -637,6 +650,7 @@ export function PlantUmlGraph({
   selectedRelation = null,
   relayoutLocked = false,
   onExport,
+  onDrawnPlantUmlChange,
   focusNodeId = null,
   focusToken,
   onViewChange,
@@ -676,6 +690,11 @@ export function PlantUmlGraph({
   const edgeClickCallbackRef = useRef(onEdgeClick);
   const selectionClearCallbackRef = useRef(onSelectionClear);
   const escapeSelectionCallbackRef = useRef(onEscapeSelection);
+  // The drawn-model consumer. A ref, like the other callbacks: reporting the
+  // model must not make the draw effect depend on the parent's render identity.
+  const drawnCallbackRef = useRef(onDrawnPlantUmlChange);
+  // The geometry of the current drawing, kept beside the model it belongs to.
+  const drawnLayoutRef = useRef<unknown>(null);
   // The panel's selection, readable from the delegated listeners and the async
   // draw without re-registering either. It is also what the draw re-applies
   // after replacing the SVG.
@@ -711,9 +730,10 @@ export function PlantUmlGraph({
     edgeClickCallbackRef.current = onEdgeClick;
     selectionClearCallbackRef.current = onSelectionClear;
     escapeSelectionCallbackRef.current = onEscapeSelection;
+    drawnCallbackRef.current = onDrawnPlantUmlChange;
     selectedNodeIdRef.current = selectedNodeId;
     selectedRelationRef.current = selectedRelation;
-  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, selectedNodeId, selectedRelation]);
+  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, onDrawnPlantUmlChange, selectedNodeId, selectedRelation]);
 
   // Repaint the selection whenever the panel changes it. The draw effect below
   // applies the same styles to a fresh SVG; this one covers a selection made
@@ -1012,10 +1032,13 @@ export function PlantUmlGraph({
       try {
         // The only plantuml-js/elkjs import in the module graph: Vite emits it
         // as its own async chunk, so the first-screen bundle stays untouched.
-        const { createRenderer, ElkLayoutEngine } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
-          createRenderer: PlantUmlRendererFactory;
-          ElkLayoutEngine: ArchitectureLayoutEngineClass;
-        };
+        const { renderDetailed, toPlantUml, applyView, ElkLayoutEngine } =
+          (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+            renderDetailed: PlantUmlRenderDetailed;
+            toPlantUml: PlantUmlToPlantUml;
+            applyView: PlantUmlApplyView;
+            ElkLayoutEngine: ArchitectureLayoutEngineClass;
+          };
         if (cancelled) return;
 
         // The container's shape is a LAYOUT input, not a post-render scale: the
@@ -1036,16 +1059,33 @@ export function PlantUmlGraph({
           grouping: entityGraph ? 'raw' : 'adaptive',
           idShape,
         });
-        const renderer = createRenderer(rendererOptionsFor(view, diagram, engine));
         // Layout + render is the expensive, blocking part (ELK runs on the main
-        // thread); its duration is the DoD's per-view reading.
+        // thread); its duration is the DoD's per-view reading. `renderDetailed`
+        // runs the same pipeline but hands back the model that was actually
+        // drawn, which the text page serializes (see `onDrawnPlantUmlChange`).
         const renderStartedAt = performance.now();
-        const { svg } = await renderer.render(diagram.puml);
+        const detailed = await renderDetailed(
+          diagram.puml,
+          rendererOptionsFor(view, diagram, engine),
+        );
         const elapsedMs = Math.round(performance.now() - renderStartedAt);
         if (cancelled) return;
 
+        const { svg, model } = detailed;
+        // The geometry the renderer used, kept for consumers that would rather
+        // read rectangles than reverse-engineer the SVG (not yet wired).
+        drawnLayoutRef.current = detailed.layout;
         host.innerHTML = svg;
         setLayoutMs(elapsedMs);
+        // The text page reads this: the model just drawn, plus the upstream
+        // functions that serialize and scope it. `diagram.aliasOf` is the
+        // graph-id (and overview `grp::` group) → drawn entity id map.
+        drawnCallbackRef.current?.({
+          model,
+          entityIdOf: diagram.aliasOf,
+          toPlantUml,
+          applyView,
+        });
         drawnAspectRef.current = drawnAspect;
         restoreEntityIds(host, diagram.aliasOf);
         // Labels are off until a node is hovered/selected, and every entity
@@ -1199,12 +1239,20 @@ export function PlantUmlGraph({
         host.innerHTML = '';
         setDrawn(null);
         setLayoutMs(null);
+        // The previous drawing is gone; the text page must not keep describing it.
+        drawnLayoutRef.current = null;
+        drawnCallbackRef.current?.(null);
         setFailure(error instanceof Error ? error.message : 'unknown render error');
       }
     })();
 
     return () => {
       cancelled = true;
+      // A superseded/unmounted drawing no longer describes the page's canvas.
+      // The text page debounces its rebuild, so a redraw settling quickly never
+      // flashes the bridge fallback.
+      drawnLayoutRef.current = null;
+      drawnCallbackRef.current?.(null);
     };
   }, [applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
 

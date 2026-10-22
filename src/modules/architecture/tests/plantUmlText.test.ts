@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 
-import { checkSyntax } from '@yalehwang/plantuml-js';
+import { applyView, checkSyntax, parsePlantUml, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import { test } from 'vitest';
 
 import { archguardToPlantUml } from '@/modules/architecture/archguardToPlantUml';
 import {
+  buildPlantUmlDocument,
   buildPlantUmlText,
   measurePlantUmlText,
   NoSelectionScopeError,
@@ -17,7 +18,10 @@ import {
   TEXT_PREVIEW_LINE_LIMIT,
   wrapSessionContext,
 } from '@/modules/architecture/plantUmlText';
-import type { ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
+import type {
+  ArchitectureDrawnPlantUml,
+  ArchitectureRendererGraph,
+} from '@/modules/architecture/rendererContract';
 
 /**
  * The text page's pure core:
@@ -83,6 +87,64 @@ function assertSyntaxOk(puml: string): void {
   const result = checkSyntax(puml);
   assert.deepEqual(result.errors, [], `PlantUML must parse without errors:\n${puml}`);
 }
+
+type BridgeOptions = Parameters<typeof archguardToPlantUml>[1];
+
+/**
+ * The drawn model the renderer would report for one bridge document:
+ * `renderDetailed` parses, applies the default transforms and details, and
+ * hands back the exact model it laid out. `toPlantUml`/`applyView` are carried
+ * with it, the same way `PlantUmlGraph` hands them to the text page.
+ */
+async function drawnFor(
+  graph: ArchitectureRendererGraph,
+  options: BridgeOptions,
+): Promise<{
+  bridge: ReturnType<typeof archguardToPlantUml>;
+  detailed: Awaited<ReturnType<typeof renderDetailed>>;
+  drawn: ArchitectureDrawnPlantUml;
+}> {
+  const bridge = archguardToPlantUml(graph, options);
+  const detailed = await renderDetailed(bridge.puml, {});
+  return {
+    bridge,
+    detailed,
+    drawn: {
+      model: detailed.model,
+      entityIdOf: bridge.aliasOf,
+      toPlantUml,
+      applyView,
+    },
+  };
+}
+
+/**
+ * Two raw alpha→run relations and a function with a member compartment: the
+ * renderer's default transform aggregates the pair into one weighted edge, and
+ * the upstream serializer has to carry `<<function>>` and the member row.
+ */
+const RICH_GRAPH: ArchitectureRendererGraph = {
+  nodes: [
+    {
+      id: ALPHA,
+      label: 'Alpha',
+      distance: 0,
+      kind: 'class',
+      members: [{ name: 'count', kind: 'field', visibility: 'private', signature: 'number' }],
+    },
+    {
+      id: 's1/src/modules/alpha/run.ts.run',
+      label: 'run',
+      distance: 1,
+      kind: 'function',
+      members: [{ name: 'halt', kind: 'method', signature: '(): void' }],
+    },
+  ],
+  edges: [
+    { from: ALPHA, to: 's1/src/modules/alpha/run.ts.run', relationType: 'dependency' },
+    { from: ALPHA, to: 's1/src/modules/alpha/run.ts.run', relationType: 'call' },
+  ],
+};
 
 test('the full scope is the whole graph, exactly as the bridge builds it', () => {
   const puml = buildPlantUmlText(ENTITY_GRAPH, { kind: 'full' }, ENTITY_OPTIONS);
@@ -237,4 +299,122 @@ test('the session-context payload is the header, a blank line, and the fenced do
     wrapSessionContext('About the diagram:', puml),
     'About the diagram:\n\n```plantuml\n@startuml\n@enduml\n```',
   );
+});
+
+test('the full scope serializes the drawn model verbatim, not the bridge text', async () => {
+  const { bridge, detailed, drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
+  const built = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'full' }, { ...ENTITY_OPTIONS, drawn });
+  assert.equal(built.fallback, false);
+  assert.equal(built.text, toPlantUml(detailed.model), 'the document is toPlantUml(the drawn model)');
+  // The upstream serializer names package aliases, which the bridge does not;
+  // this is what proves the drawn model — not the bridge — produced the text.
+  assert.notEqual(built.text, bridge.puml);
+  assert.deepEqual(classLabels(built.text), ['Alpha', 'Beta', 'Gamma', 'Delta']);
+  assertSyntaxOk(built.text);
+});
+
+test('the drawn document keeps aggregated edges and member compartments and round-trips stably', async () => {
+  const { detailed, drawn } = await drawnFor(RICH_GRAPH, ENTITY_OPTIONS);
+  const text = buildPlantUmlText(RICH_GRAPH, { kind: 'full' }, { ...ENTITY_OPTIONS, drawn });
+  assert.equal(text, toPlantUml(detailed.model));
+  // The bridge emits two alpha→run relations; the renderer aggregates them into
+  // one drawn edge, and that is what the text carries.
+  assert.equal(
+    text.match(/n0 \.\.> n1/g)?.length,
+    1,
+    'the two raw relations are one aggregated edge in the drawn text',
+  );
+  assert.match(text, /class "<<function>> run" as n1/);
+  assert.match(text, /- count: number/, 'the member compartment survives the serialization');
+  assert.equal(toPlantUml(parsePlantUml(text)), text, 'parse → toPlantUml is stable');
+  assertSyntaxOk(text);
+});
+
+test('the drawn-model viewport scope keeps exactly the intersecting nodes and their edges', async () => {
+  const { drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
+  const text = buildPlantUmlText(
+    ENTITY_GRAPH,
+    { kind: 'viewport', nodeIds: [ALPHA, BETA] },
+    { ...ENTITY_OPTIONS, drawn },
+  );
+  assert.deepEqual(classLabels(text), ['Alpha', 'Beta'], 'gamma and delta are outside the viewport');
+  assert.match(text, /n0 \.\.> n1/);
+  assert.doesNotMatch(text, /n2|n3/, 'no edge to a node outside the scope');
+  assertSyntaxOk(text);
+});
+
+test('the drawn-model selection scope is the anchor plus one hop, from applyView', async () => {
+  const { drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
+  const text = buildPlantUmlText(
+    ENTITY_GRAPH,
+    { kind: 'selection', nodeIds: [BETA] },
+    { ...ENTITY_OPTIONS, drawn },
+  );
+  const betaAlias = drawn.entityIdOf.get(BETA);
+  assert.ok(betaAlias !== undefined);
+  assert.equal(text, toPlantUml(applyView(drawn.model, {
+    kind: 'neighborhood',
+    entity: betaAlias,
+    hops: 1,
+  })));
+  assert.deepEqual(classLabels(text), ['Alpha', 'Beta', 'Gamma']);
+  assert.doesNotMatch(text, /Delta/, 'delta is two hops away from beta');
+});
+
+test('the drawn-model multi-selection scope unions each anchor neighbourhood', async () => {
+  const { drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
+  const text = buildPlantUmlText(
+    ENTITY_GRAPH,
+    { kind: 'selection', nodeIds: [ALPHA, BETA] },
+    { ...ENTITY_OPTIONS, drawn },
+  );
+  // Alpha reaches delta, beta reaches gamma: the union is the whole graph.
+  assert.deepEqual(classLabels(text), ['Alpha', 'Beta', 'Gamma', 'Delta']);
+  assert.match(text, /n0 \.\.> n1/, 'the selected relation itself is in the text');
+});
+
+test('a thrown or missing upstream serializer falls back to the bridge text and says so', async () => {
+  const { drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
+  const bridgePuml = archguardToPlantUml(ENTITY_GRAPH, ENTITY_OPTIONS).puml;
+
+  const thrown = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'full' }, {
+    ...ENTITY_OPTIONS,
+    drawn: {
+      ...drawn,
+      toPlantUml: () => {
+        throw new Error('serializer exploded');
+      },
+    },
+  });
+  assert.equal(thrown.fallback, true);
+  assert.equal(thrown.text, bridgePuml);
+
+  // A runtime that does not carry the function at all is the same fallback,
+  // never a crash and never an empty page.
+  const missing = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'full' }, {
+    ...ENTITY_OPTIONS,
+    drawn: { ...drawn, toPlantUml: undefined as unknown as ArchitectureDrawnPlantUml['toPlantUml'] },
+  });
+  assert.equal(missing.fallback, true);
+  assert.equal(missing.text, bridgePuml);
+
+  const missingView = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'selection', nodeIds: [BETA] }, {
+    ...ENTITY_OPTIONS,
+    drawn: { ...drawn, applyView: undefined as unknown as ArchitectureDrawnPlantUml['applyView'] },
+  });
+  assert.equal(missingView.fallback, true);
+});
+
+test('the +1 scope without anchors stays an explicit no-selection error with a drawn model', async () => {
+  const { drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
+  assert.throws(
+    () => buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'selection', nodeIds: [] }, { ...ENTITY_OPTIONS, drawn }),
+    (error: unknown) => error instanceof NoSelectionScopeError,
+  );
+});
+
+test('without a drawn model the document is the bridge text and is marked as a fallback', () => {
+  const built = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'full' }, ENTITY_OPTIONS);
+  assert.equal(built.fallback, true);
+  assert.equal(built.text, archguardToPlantUml(ENTITY_GRAPH, ENTITY_OPTIONS).puml);
 });

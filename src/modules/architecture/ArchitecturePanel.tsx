@@ -63,6 +63,7 @@ import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/la
 import { buildReadout } from '@/modules/architecture/readoutNumbers';
 import type {
   ArchitectureDetailReading,
+  ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
@@ -931,6 +932,12 @@ export default function ArchitecturePanel({
   // The PlantUML text offered in the manual-copy dialog when the Clipboard API
   // is unavailable. `null` keeps the dialog shut.
   const [copyFallbackText, setCopyFallbackText] = useState<string | null>(null);
+  // The model the renderer actually laid out and drew, reported by the mounted
+  // renderer. The text page serializes THIS, so aggregated/folded shapes in the
+  // drawing also appear in the copied document. Null while nothing is drawn or
+  // when a stand-in renderer does not report a model (the text page then says
+  // it is showing the bridge fallback).
+  const [drawnPlantUml, setDrawnPlantUml] = useState<ArchitectureDrawnPlantUml | null>(null);
   // The rendered drawing's container, so the export actions can read the live
   // SVG without the renderer having to hand its host ref up the tree.
   const graphAreaRef = useRef<HTMLDivElement | null>(null);
@@ -2366,6 +2373,8 @@ export default function ArchitecturePanel({
                     // The renderer owns the drill-down view; reporting it keeps
                     // the export menu's PlantUML identical to the drawing.
                     onViewChange={setDiagramView}
+                    // The model it actually drew, for the text page.
+                    onDrawnPlantUmlChange={setDrawnPlantUml}
                     focusNodeId={focusTarget?.id ?? null}
                     focusToken={focusTarget?.token}
                   />
@@ -2449,6 +2458,7 @@ export default function ArchitecturePanel({
               content: (
                 <ArchitectureTextPanel
                   graph={drawnGraph}
+                  drawn={drawnPlantUml}
                   idShape={nodeIdShapeOf(granularity)}
                   granularity={granularity}
                   view={diagramView}

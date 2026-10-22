@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { PlantUmlModel } from '@yalehwang/plantuml-js/elk';
 
 /**
  * The architecture tab's renderer contract.
@@ -127,6 +128,39 @@ export type ArchitectureDetailReading = {
   readonly totalInScope: number;
 };
 
+/** The one view the drawn-model text scopes apply on top of the drawing. */
+export type ArchitectureDrawnNeighborhoodView = {
+  readonly kind: 'neighborhood';
+  readonly entity: string;
+  readonly hops: number;
+};
+
+/**
+ * The drawing as the renderer actually laid it out, together with the upstream
+ * functions that serialize and scope it.
+ *
+ * `model` is `renderDetailed(...).model` — the model that was laid out and
+ * drawn (after view/transform/detail), not a re-derivation from the payload.
+ * `entityIdOf` maps a graph node id (or an overview group id such as
+ * `grp::src/modules/alpha`) to the entity id the drawing gave it, so a scope
+ * expressed in the panel's ids can be cut out of the drawn model.
+ *
+ * The two functions are carried rather than imported here so the text page
+ * stays on the renderer's lazy `plantuml-js/elk` chunk: `toPlantUml(model)`
+ * serializes a drawn model and `applyView(model, {kind:'neighborhood'})`
+ * returns one entity's N-hop submodel. A runtime that lacks either falls back
+ * to the local bridge text (see `plantUmlText.ts`).
+ */
+export type ArchitectureDrawnPlantUml = {
+  readonly model: PlantUmlModel;
+  readonly entityIdOf: ReadonlyMap<string, string>;
+  readonly toPlantUml: (model: PlantUmlModel) => string;
+  readonly applyView: (
+    model: PlantUmlModel,
+    view: ArchitectureDrawnNeighborhoodView,
+  ) => PlantUmlModel;
+};
+
 /** What a renderer reports while the pointer is over a node. */
 export type ArchitectureRendererHover = {
   /** The hovered node, as it was handed to the renderer. */
@@ -189,6 +223,11 @@ export type ArchitectureRendererHover = {
  * renderer it states the shown/in-scope numbers so the renderer's visible-summary
  * slot can report them instead of its own drawn/total reading. A renderer that
  * ignores it simply keeps the local reading.
+ *
+ * `onDrawnPlantUmlChange` is optional: a renderer that lays out a PlantUML
+ * model reports that model (and its serializers) here, so the panel's text page
+ * can show the document that was actually drawn. A renderer that draws
+ * something else, or nothing, leaves it unset.
  */
 export type ArchitectureRendererProps = {
   readonly graph: ArchitectureRendererGraph;
@@ -209,6 +248,14 @@ export type ArchitectureRendererProps = {
   } | null;
   readonly relayoutLocked?: boolean;
   readonly onExport?: () => void;
+  /**
+   * Reports the model this renderer actually drew, or null while it draws
+   * nothing (before the first success, after a failure, and on unmount). The
+   * panel forwards it to the text page so the copied document is the drawing.
+   * Optional so a stand-in renderer that draws nothing still satisfies the
+   * contract; the text page then keeps its bridge text.
+   */
+  readonly onDrawnPlantUmlChange?: (drawn: ArchitectureDrawnPlantUml | null) => void;
 };
 
 /**

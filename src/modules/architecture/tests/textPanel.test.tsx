@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { applyView, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -11,9 +12,10 @@ import {
   ArchitectureTextPanel,
   ArchitectureTextSyntaxBadge,
 } from '@/modules/architecture/ArchitectureTextPanel';
+import { archguardToPlantUml, type ArchitectureDiagramView } from '@/modules/architecture/archguardToPlantUml';
 import { buildPlantUmlText } from '@/modules/architecture/plantUmlText';
-import type { ArchitectureDiagramView } from '@/modules/architecture/archguardToPlantUml';
 import type {
+  ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
 } from '@/modules/architecture/rendererContract';
@@ -132,6 +134,7 @@ type PanelOverrides = {
   readonly idShape?: ArchitectureNodeIdShape;
   readonly view?: ArchitectureDiagramView;
   readonly granularity?: 'file' | 'entity';
+  readonly drawn?: ArchitectureDrawnPlantUml | null;
 };
 
 /** Render the page directly, with a detached-but-queryable canvas reference. */
@@ -143,6 +146,7 @@ function renderTextPanel(overrides: PanelOverrides = {}) {
   const result = render(
     <ArchitectureTextPanel
       graph={overrides.graph ?? BASE_GRAPH}
+      drawn={overrides.drawn ?? null}
       idShape={overrides.idShape ?? 'scope-prefixed'}
       granularity={overrides.granularity ?? 'entity'}
       view={overrides.view ?? { kind: 'hierarchy' }}
@@ -490,4 +494,48 @@ test('the dock gains a second "Text" tab and the toolbar entry opens it', async 
   fireEvent.click(tabs[0]);
   await waitFor(() => assert.equal(document.querySelector('[data-architecture-text-panel]'), null));
   assert.ok(document.querySelector('[data-architecture-dock-empty]'));
+});
+
+test('the page renders the drawn model and never claims to be a bridge output', async () => {
+  const bridge = archguardToPlantUml(BASE_GRAPH, ENTITY_OPTIONS);
+  const detailed = await renderDetailed(bridge.puml, {});
+  renderTextPanel({
+    drawn: { model: detailed.model, entityIdOf: bridge.aliasOf, toPlantUml, applyView },
+  });
+
+  // The upstream serializer is the source of the document: package aliases are
+  // its spelling, the bridge never emits them.
+  assert.match(preview().textContent ?? '', /package "src" as src/);
+  assert.equal(
+    document.querySelector('[data-architecture-text-fallback-source="bridge"]'),
+    null,
+    'a successful drawn model is not annotated as a fallback',
+  );
+  // The removed note must not come back.
+  assert.doesNotMatch(document.body.textContent ?? '', /按桥接层输出/);
+  await waitFor(() =>
+    assert.equal(
+      document.querySelector('[data-architecture-text-syntax]')?.getAttribute('data-architecture-text-syntax'),
+      'ok',
+    ),
+  );
+});
+
+test('a failing drawn serializer keeps the page populated and annotates the fallback', async () => {
+  const drawn: ArchitectureDrawnPlantUml = {
+    model: { diagramType: 'class', entities: [], relations: [], packages: [] },
+    entityIdOf: new Map(),
+    toPlantUml: () => {
+      throw new Error('serializer exploded');
+    },
+    applyView: () => {
+      throw new Error('unexpected');
+    },
+  };
+  renderTextPanel({ drawn });
+
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-text-fallback-source="bridge"]')));
+  // Still a real document (the bridge's), not a blank page.
+  assert.match(preview().textContent ?? '', /Alpha/);
+  assert.doesNotMatch(document.body.textContent ?? '', /按桥接层输出/);
 });

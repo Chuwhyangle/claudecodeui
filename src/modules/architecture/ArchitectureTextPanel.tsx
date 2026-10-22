@@ -8,17 +8,19 @@ import {
 } from '@/modules/architecture/exportArtifacts';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
-  buildPlantUmlText,
+  buildPlantUmlDocument,
   measurePlantUmlText,
   nodesIntersectingViewport,
   NoSelectionScopeError,
   previewPlantUmlText,
   VIEWPORT_RECOMPUTE_DELAY_MS,
   wrapSessionContext,
+  type ArchitecturePlantUmlDocument,
   type ArchitectureTextRect,
   type ArchitectureTextScope,
 } from '@/modules/architecture/plantUmlText';
 import type {
+  ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
 } from '@/modules/architecture/rendererContract';
@@ -30,10 +32,12 @@ import { formatAbsoluteTime } from '@/shared/utils';
  * The dock's second page: the PlantUML text of the drawing, a scope selector,
  * the document's size reading, and the copy/download actions.
  *
- * The page never re-derives the picture: `graph` is the same object the
- * renderer was handed (filters, detail tier and layout budget already applied),
- * and {@link buildPlantUmlText} runs the same bridge the drawing used. The scope
- * only chooses a subset of that graph.
+ * The page does not re-derive the picture: `drawn` is the model the renderer
+ * actually laid out and drew (`renderDetailed(...).model`), and the document is
+ * serialized from it — so transformed shapes (aggregated edges, folded hubs)
+ * appear in the text. The scope only chooses a subset of that model. Without a
+ * drawn model — or when the upstream serializer fails — the page falls back to
+ * the local bridge and marks the text as such.
  *
  * The render cost is bounded on purpose: the `<pre>` shows at most 300 lines
  * (copy and download always use the full document), so a 211k-character diagram
@@ -55,6 +59,13 @@ type ArchitectureTextScopeKind = 'full' | 'viewport' | 'selection';
 type ArchitectureTextPanelProps = {
   /** The exact graph the renderer drew (after filters, detail tier and budget). */
   readonly graph: ArchitectureRendererGraph;
+  /**
+   * The model the renderer actually laid out and drew, when it reported one.
+   * Its presence is what makes the text the drawing; absent (a stand-in
+   * renderer, or the first paint before the drawing exists) the page shows the
+   * bridge text with its fallback annotation.
+   */
+  readonly drawn?: ArchitectureDrawnPlantUml | null;
   /** The subgraph's id scheme, forwarded to the bridge's path reading. */
   readonly idShape: ArchitectureNodeIdShape;
   /** Which subgraph is on screen; decides the download filename and view label. */
@@ -148,6 +159,7 @@ export function ArchitectureTextSyntaxBadge({ text }: { readonly text: string })
 
 export function ArchitectureTextPanel({
   graph,
+  drawn = null,
   idShape,
   granularity,
   view,
@@ -172,15 +184,17 @@ export function ArchitectureTextPanel({
   // The node ids the viewport scope currently covers. Measured from the live
   // SVG (never from the payload) so panning/zooming is what changes the text.
   const [viewportNodeIds, setViewportNodeIds] = useState<readonly string[]>([]);
-  // The document as last REBUILT (after the debounce). It is state, not a memo,
-  // because a rebuild must not run on every intermediate filter/view render.
-  const [text, setText] = useState<string>(() => {
+  // The document as last REBUILT (after the debounce), with its provenance. It
+  // is state, not a memo, because a rebuild must not run on every intermediate
+  // filter/view render.
+  const [document, setDocument] = useState<ArchitecturePlantUmlDocument>(() => {
     try {
-      return buildPlantUmlText(graph, { kind: 'full' }, { view, grouping, idShape });
+      return buildPlantUmlDocument(graph, { kind: 'full' }, { view, grouping, idShape, drawn });
     } catch {
-      return '';
+      return { text: '', fallback: true };
     }
   });
+  const text = document.text;
   // Whether "Updated" shows beside the reading. Transient by design: it marks a
   // recomputation, it is not a standing status.
   const [updatedVisible, setUpdatedVisible] = useState(false);
@@ -227,29 +241,29 @@ export function ArchitectureTextPanel({
   // a 211k-character document must not be regenerated once per step.
   useEffect(() => {
     if (scope === null) {
-      setText('');
+      setDocument({ text: '', fallback: true });
       return;
     }
     const timer = setTimeout(() => {
-      let next: string;
+      let next: ArchitecturePlantUmlDocument;
       try {
-        next = buildPlantUmlText(graph, scope, { view, grouping, idShape });
+        next = buildPlantUmlDocument(graph, scope, { view, grouping, idShape, drawn });
       } catch (error) {
         if (error instanceof NoSelectionScopeError) {
-          setText('');
+          setDocument({ text: '', fallback: true });
           return;
         }
         // Any other failure is a real defect: let it surface rather than
         // showing an empty page as if the scope were empty.
         throw error;
       }
-      if (lastBuiltTextRef.current === next) return;
-      lastBuiltTextRef.current = next;
-      setText(next);
+      if (lastBuiltTextRef.current === next.text) return;
+      lastBuiltTextRef.current = next.text;
+      setDocument(next);
       setUpdatedVisible(true);
     }, TEXT_REGENERATE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [graph, scope, view, grouping, idShape]);
+  }, [graph, scope, view, grouping, idShape, drawn]);
 
   // "Updated" is a short-lived marker, not a state the reader can leave on.
   useEffect(() => {
@@ -476,6 +490,18 @@ export function ArchitectureTextPanel({
               </span>
             )}
             <ArchitectureTextSyntaxBadge text={text} />
+            {document.fallback && (
+              // Honest provenance: the upstream serializer was unavailable or
+              // failed, so this text is the local bridge's, not the drawing's.
+              <span
+                data-architecture-text-fallback-source="bridge"
+                className="rounded border border-amber-600/40 px-1 text-[11px] text-amber-600 dark:text-amber-400"
+              >
+                {t('architecture.text.bridgeFallback', {
+                  defaultValue: 'Fallback: bridge text (the drawn model is unavailable)',
+                })}
+              </span>
+            )}
           </div>
           {volume.level !== 'normal' && (
             <p
