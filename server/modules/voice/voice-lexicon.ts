@@ -1,4 +1,5 @@
 import { sessionsDb, voiceUserIdentifiersDb } from '@/modules/database/index.js';
+import { readVoiceLexiconPort } from '@/shared/ports/voice-lexicon.port.js';
 import type {
   VoiceHumanMessage,
   VoiceIdentifierRow,
@@ -287,15 +288,27 @@ export function createVoiceLexiconService(deps: VoiceLexiconDependencies): Voice
  * import — a cold start that one unreadable transcript could block is a cold
  * start that does not happen.
  *
- * The provider barrel is reached through a DYNAMIC import on purpose. The chat
- * dispatch (this module's other consumer) already makes `voice` a dependency of
- * `websocket`, and `providers` depends on `websocket`; a static import here would
- * close that cycle at module-eval time. The source is only ever called on the
- * import route, long after the module graph has settled, so a deferred import is
- * both sufficient and the only safe spelling.
+ * The provider barrel is NOT imported here. The chat dispatch (this module's
+ * other consumer) already makes `voice` a dependency of `websocket`, and
+ * `providers` depends on `websocket`; a static import would close that cycle at
+ * module-eval time, and a literal dynamic import closed it for the directory
+ * scanner (which counts `import()` like `import`) — so the eight-member cycle
+ * never actually broke. The reader now arrives through
+ * `readVoiceLexiconPort()`, installed by `server/index.ts`: `voice` depends on
+ * `server/shared/**` only, the edge to `modules/providers` is gone, and the
+ * capability is still reached at call time, on the import route, long after the
+ * module graph has settled.
  */
 async function listHumanMessagesFromSessionIndex(): Promise<VoiceHumanMessage[]> {
-  const { sessionsService } = await import('@/modules/providers/index.js');
+  const historyReader = readVoiceLexiconPort();
+  if (!historyReader) {
+    // A missing installation is a misassembled process, not an empty history:
+    // silently returning [] would report a successful cold start that imported
+    // nothing. Fail on the route instead, naming the line the assembly owes.
+    throw new Error(
+      'voice lexicon history port is not installed — server/index.ts must call installVoiceLexiconPort()',
+    );
+  }
   const messages: VoiceHumanMessage[] = [];
 
   for (const session of sessionsDb.getAllSessions()) {
@@ -305,7 +318,7 @@ async function listHumanMessagesFromSessionIndex(): Promise<VoiceHumanMessage[]>
 
     let history;
     try {
-      history = await sessionsService.fetchHistory(session.session_id, { limit: null, offset: 0 });
+      history = await historyReader.fetchHistory(session.session_id, { limit: null, offset: 0 });
     } catch {
       continue;
     }

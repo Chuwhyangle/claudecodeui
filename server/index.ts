@@ -16,6 +16,7 @@ import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRunt
 import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
 import { installConnectedClientsPort } from '@/shared/ports/connected-clients.port.js';
 import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
+import { installVoiceLexiconPort } from '@/shared/ports/voice-lexicon.port.js';
 import { installVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
 import {
     closeSessionsWatcher,
@@ -155,6 +156,7 @@ import { configureWebPush } from './modules/notifications/index.js';
 //   chat-run-registry  <- the process run registry (websocket chat-run-registry.service.ts)
 //   connected-clients  <- the websocket module's live connection set
 //   voice-rules        <- the voice-realtime in-process active-session set and rules table
+//   voice-lexicon      <- the sessions service's history reader (keeps modules/voice out of the provider cycle)
 //
 // Re-installing the same objects is idempotent; nothing here constructs a second
 // registry. The install functions are imported with the rest of the shared
@@ -164,6 +166,7 @@ installProviderRegistryPort(providerRegistry);
 installChatRunRegistryPort(chatRunRegistry);
 installConnectedClientsPort({ count: () => connectedClients.size });
 installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
+installVoiceLexiconPort({ fetchHistory: (sessionId, options) => sessionsService.fetchHistory(sessionId, options) });
 
 const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.

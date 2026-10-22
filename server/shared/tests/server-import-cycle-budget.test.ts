@@ -2,7 +2,7 @@
  * AC-394 — the directory-level import-cycle BUDGET ratchet for `server/`.
  *
  * GOAL-045's ledger refactor keeps adding and moving directories under
- * `server/modules/**`, and the eight-member cycle this file pins is the static shadow of
+ * `server/modules/**`, and the seven-member cycle this file pins is the static shadow of
  * exactly the coupling that refactor is trying to break (the ledger inlined in the driver,
  * `RESIDENT_RUN_IS_TURN` read from two places). What this criterion does is serialise that
  * structure into one reading that reds on the FIRST commit that widens it, instead of
@@ -36,16 +36,14 @@
  * directory that holds the file; an edge is a cross-directory import. Non-trivial SCCs come
  * from Tarjan.
  *
- * Readings measured on this tree (2026-10-20, TypeScript compiler API, after
- * `gap-server-provider-websocket-init-cycle-ports` on top of
- * `gap-database-connection-directory-cycle`):
+ * Readings measured on this tree (2026-10-22, TypeScript compiler API, after
+ * `gap-voice-provider-cycle-port-break`):
  *
- *   files=332 staticEdges=1301 dynamicEdges=4 sccs=[8]   (file-level resolved edges; the
- *                                two-member `.` ↔ `modules/browser-use` SCC is GONE — the G3
- *                                slot is now empty, see the `CYCLE_GROUPS` note. `dynamicEdges`
- *                                fell 5 → 4 because the relocation turned the one dynamic
- *                                `modules/cli -> modules/browser-use` import into a same-directory
- *                                one)
+ *   files=362 staticEdges=1392 dynamicEdges=3 sccs=[7]   (file-level resolved edges; G1 is
+ *                                the seven remaining provider/websocket directories — the
+ *                                `modules/voice` member left when `voice-lexicon.ts`'s literal
+ *                                dynamic import of the provider barrel became a shared port,
+ *                                so `dynamicEdges` fell 4 → 3)
  *   unresolved internal = 19   (16 to the repo-root `shared/`, 3 to in-server `.js` files
  *                               living in out-of-cycle directories)
  *   non-literal dynamic specifiers = 2, in the two named files (both optional-dependency seams)
@@ -53,16 +51,15 @@
  *                               `shared/mcp-contract`, `modules/database/core` and
  *                               `modules/architecture`)
  *
- * ONE READING DIVERGES FROM THE立案 NOTE, and the divergence is itself pinned (see the `(b)`
- * case). The note expects the static-only and the static+literal-dynamic readings to agree
- * member-for-member. On this tree they do NOT: the eight-member cycle is closed by one
- * LITERAL dynamic import (`voice-lexicon.ts:298` → `modules/providers`), so static-only
- * yields a seven-member component. What is asserted instead is the invariant that does hold —
- * both readings clear the pinned groups, and the static-only component is a strict sub-part of
- * the dynamic one — plus an explicit `(b) DEVIATION:` line naming the difference, so nobody
- * can later mistake it for a scanner artefact. (The eleven-member component that originally
- * closed through `claude-host-driver.provider.ts`'s dynamic import of `modules/voice-realtime`
- * was lowered here; see the `(b)` case's note.)
+ * THE TWO READINGS NOW AGREE member-for-member (see the `(b)` case). Until
+ * `gap-voice-provider-cycle-port-break`, the static-only reading yielded a SEVEN-member
+ * component while the static+literal-dynamic reading yielded EIGHT: the extra member,
+ * `modules/voice`, was carried in by one literal dynamic import
+ * (`voice-lexicon.ts` → `@/modules/providers/index.js`). Removing that edge removed the
+ * divergence, so the `(b)` case asserts equality of the two readings rather than a
+ * deviation. (The eleven-member component that originally closed through
+ * `claude-host-driver.provider.ts`'s dynamic import of `modules/voice-realtime` was lowered
+ * earlier; see the `(b)` case's note.)
  *
  * The baseline JSON is a committed artifact and a ratchet: the groups may only shrink, the
  * budgets may only fall. It is never edited to accommodate a red.
@@ -104,6 +101,13 @@ const BASELINE_PATH = path.join(TEST_DIR, 'server-import-cycle-budget.baseline.j
  * entrypoint into `modules/cli/`. The slot is kept (not deleted) for the same reason as G2 —
  * the three groups stay disjoint and a future re-formation of this exact cycle has to be
  * re-pinned explicitly rather than sliding into an unused slot.
+ *
+ * G1 WAS LOWERED FROM EIGHT MEMBERS TO SEVEN on 2026-10-22 by
+ * `gap-voice-provider-cycle-port-break`: `modules/voice` left the component when
+ * `voice-lexicon.ts` stopped carrying the literal dynamic
+ * `import('@/modules/providers/index.js')` and read a shared port installed by
+ * `server/index.ts` instead. The sanctioned shrink direction, recorded in both this pin and
+ * the committed baseline JSON.
  */
 const CYCLE_GROUPS: readonly string[][] = [
   [
@@ -112,7 +116,6 @@ const CYCLE_GROUPS: readonly string[][] = [
     'modules/providers',
     'modules/providers/list/claude',
     'modules/providers/services',
-    'modules/voice',
     'modules/websocket',
     'modules/websocket/services',
   ],
@@ -472,31 +475,33 @@ test('(b) every non-trivial SCC is contained in one baseline group — static-on
     for (const component of graph.nonTrivialSccs) console.log(`(b) ${label} SCC[${component.length}] ${component.map(repoRelative).join(', ')}`);
   }
 
-  // MEASURED DEVIATION from the立案 note, on the record in the criterion's own output.
-  //
-  // The two readings are NOT member-for-member identical on this tree, and this is a real,
-  // load-bearing structural fact rather than a scanner artefact: the eight-member cycle is
-  // reached only because ONE literal dynamic `import()` closes it —
+  // THE TWO READINGS AGREE member-for-member on this tree, and that agreement is the
+  // load-bearing fact: the only directory-level dynamic edge that closed a cycle was
   //   · modules/voice -> modules/providers
-  //     (`voice-lexicon.ts:298`, `@/modules/providers/index.js`)
-  // Statically, `modules/voice` reaches the cycle through no static import at all, so the
-  // static-only reading yields a SEVEN-member component. "The same result" therefore holds
-  // at the level of the baseline GROUPS (both readings place every cycle inside one pinned
-  // group, and no group gains a member), and the static-only reading is a strict sub-part of
-  // the dynamic one — not as an equality of member lists. The dynamic-only edges are printed
-  // below so the difference can never be dismissed as scanner noise.
+  //     (`voice-lexicon.ts`, `@/modules/providers/index.js`)
+  // `gap-voice-provider-cycle-port-break` (2026-10-22) replaced it with the shared
+  // `voice-lexicon.port.ts`, so static-only and static+literal-dynamic now both see the
+  // seven-member G1. The dynamic-only edges are still printed below: any future one that
+  // changes an SCC will show up in this output, which is what keeps the equality assertion
+  // from hiding a divergence.
   //
   // The eleven-member component this file originally pinned was lowered by
   // `gap-server-provider-websocket-init-cycle-ports` (2026-10-20): the
   // `session-hosts -> mcp-gateway`, `providers/list/claude -> websocket`,
   // `providers/list/claude -> voice-realtime` and `providers -> provider.registry` edges
   // became shared ports, which removed `modules/mcp-gateway`, `modules/session-hosts` and
-  // `modules/voice-realtime` from the component. The ratchet may only shrink; this edit
-  // records the new, strictly smaller reading.
+  // `modules/voice-realtime` from the component. This task lowered the eight-member result
+  // to seven by removing `modules/voice`. The ratchet may only shrink; these edits record
+  // strictly smaller readings.
   const staticPairs = new Set(staticOnly.dirEdges.map((edge) => `${edge.from} -> ${edge.to}`));
   const dynamicOnlyEdges = withDynamic.dirEdges.filter((edge) => !staticPairs.has(`${edge.from} -> ${edge.to}`));
   for (const edge of dynamicOnlyEdges) console.log(`(b) dynamic-only edge ${repoRelative(edge.from)} -> ${repoRelative(edge.to)}`);
-  console.log(`(b) DEVIATION: static-only SCCs=${JSON.stringify(staticOnly.nonTrivialSccs.map((component) => component.length))} vs static+dynamic=${JSON.stringify(withDynamic.nonTrivialSccs.map((component) => component.length))} — the member lists differ by exactly modules/voice, which the literal dynamic import above carries into G1`);
+  console.log(`(b) readings agree: static-only SCCs=${JSON.stringify(staticOnly.nonTrivialSccs.map((component) => component.length))} vs static+dynamic=${JSON.stringify(withDynamic.nonTrivialSccs.map((component) => component.length))}`);
+  assert.deepEqual(
+    canonicalGroups(staticOnly.nonTrivialSccs),
+    canonicalGroups(withDynamic.nonTrivialSccs),
+    'static-only and static+literal-dynamic must agree member-for-member — a divergence means a literal dynamic import is closing a directory cycle',
+  );
 
   const baseline = readBaseline();
   const baselineGroups = [baseline.cycleGroups.G1, baseline.cycleGroups.G2, baseline.cycleGroups.G3];
