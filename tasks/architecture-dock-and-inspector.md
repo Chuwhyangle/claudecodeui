@@ -1,7 +1,7 @@
 ---
 id: architecture-dock-and-inspector
 title: 右侧停靠区 + 实体/关系检查器：单击选中、双击下钻，会话页显示提及该实体的消息并可跳到 Chat 定位；停靠区开合时冻结重新布局
-status: ready
+status: done
 labels:
   - feature
 parent: null
