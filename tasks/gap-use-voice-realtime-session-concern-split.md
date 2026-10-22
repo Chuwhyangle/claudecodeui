@@ -2,7 +2,7 @@
 id: gap-use-voice-realtime-session-concern-split
 title: useVoiceRealtimeSession 按关注点拆分（第一刀）：把 3110 行 hook 里混装的纯逻辑（narrator WAV /
   PCM 编码 / caption 排序）迁到命名兄弟模块，hook 只留状态机
-status: ready
+status: done
 labels:
   - gap
 parent: null
