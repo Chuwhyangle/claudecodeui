@@ -138,7 +138,15 @@
       "layoutBudget": "{{count}} innerhalb des Layout-Budgets angezeigt; mehr Detail dauert länger",
       "kindFunction": "{{count}} Funktionen",
       "kindInterface": "{{count}} Schnittstellen",
-      "kindClass": "{{count}} Klassen"
+      "kindClass": "{{count}} Klassen",
+      "budgetLimited": "Budgetbegrenzt",
+      "budgetLimitedAria": "Budgetbegrenzt durch {{layers}}",
+      "layerDetail": "Detailstufe",
+      "layerLayout": "Layout-Budget",
+      "layerServer": "Knotenbudget",
+      "detailLayer": "Die Detailstufe behält {{value}}.",
+      "layoutLayer": "Das Layout-Budget zeichnet nur {{value}} – mehr würde langsam; senken Sie das Detail, um mehr zu sehen.",
+      "serverLayer": "Das Knotenbudget hat {{value}} ausgelassen – verkleinern Sie den Bereich, um sie zu sehen."
     },
     "source": {
       "unresolved": "{{count}} in dieser Sitzung genannte Namen wurden nicht im Analyse-Cache gefunden",

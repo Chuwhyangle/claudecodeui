@@ -144,7 +144,15 @@
       "layoutBudget": "Showing {{count}} within the layout budget; raising detail takes longer",
       "kindFunction": "{{count}} functions",
       "kindInterface": "{{count}} interfaces",
-      "kindClass": "{{count}} classes"
+      "kindClass": "{{count}} classes",
+      "budgetLimited": "Budget-limited",
+      "budgetLimitedAria": "Budget-limited by {{layers}}",
+      "layerDetail": "detail level",
+      "layerLayout": "layout budget",
+      "layerServer": "node budget",
+      "detailLayer": "Detail level kept {{value}}.",
+      "layoutLayer": "The layout budget draws {{value}} — more would be slow; lower the detail to see more.",
+      "serverLayer": "The node budget left {{value}} out — reduce the scope to see them."
     },
     "source": {
       "unresolved": "{{count}} names mentioned in this session were not found in the analysis cache",

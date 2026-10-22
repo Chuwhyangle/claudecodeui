@@ -138,7 +138,15 @@
       "layoutBudget": "Mostrati {{count}} entro il budget di layout; aumentare il dettaglio richiede più tempo",
       "kindFunction": "{{count}} funzioni",
       "kindInterface": "{{count}} interfacce",
-      "kindClass": "{{count}} classi"
+      "kindClass": "{{count}} classi",
+      "budgetLimited": "Limitato dal budget",
+      "budgetLimitedAria": "Limitato da {{layers}}",
+      "layerDetail": "livello di dettaglio",
+      "layerLayout": "budget di layout",
+      "layerServer": "budget dei nodi",
+      "detailLayer": "Il livello di dettaglio mantiene {{value}}.",
+      "layoutLayer": "Il budget di layout disegna solo {{value}}; di più sarebbe lento, riduci il dettaglio per vedere di più.",
+      "serverLayer": "Il budget dei nodi ha escluso {{value}}; riduci l'ambito per vederli."
     },
     "source": {
       "unresolved": "{{count}} nomi menzionati in questa sessione non sono stati trovati nella cache di analisi",

@@ -138,7 +138,15 @@
       "layoutBudget": "已按布局预算显示 {{count}} 个，调高详情会更慢",
       "kindFunction": "{{count}} 个函数",
       "kindInterface": "{{count}} 个接口",
-      "kindClass": "{{count}} 个类"
+      "kindClass": "{{count}} 个类",
+      "budgetLimited": "受预算限制",
+      "budgetLimitedAria": "受以下预算限制：{{layers}}",
+      "layerDetail": "详情档位",
+      "layerLayout": "布局预算",
+      "layerServer": "服务端预算",
+      "detailLayer": "详情档位保留了 {{value}} 个。",
+      "layoutLayer": "布局预算只画 {{value}} 个；再多会卡，可降低详情。",
+      "serverLayer": "服务端预算另有 {{value}} 个没取回；减小范围可看全。"
     },
     "source": {
       "unresolved": "本次会话中提到的 {{count}} 个名字未在分析缓存中找到",

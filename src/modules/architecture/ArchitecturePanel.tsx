@@ -39,6 +39,7 @@ import {
   useTouchLayout,
 } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/layoutBudget';
+import { buildReadout } from '@/modules/architecture/readoutNumbers';
 import type {
   ArchitectureDetailReading,
   ArchitectureNodeIdShape,
@@ -171,8 +172,12 @@ function truncationReading(result: ArchitectureGraphResult, granularity: Archite
  * translate in their head. The precision stays available in `title` (the local
  * `toLocaleString()`), while the visible text answers the only question the
  * source line asks: how old is this analysis?
+ *
+ * `locale` is the INTERFACE language (`i18n.language`), not the browser's:
+ * the rest of the UI is already in that language, so a "10 hours ago" next to
+ * Chinese labels (or the reverse) is a bug the reader sees.
  */
-function formatRelativeTime(iso: string | null): string {
+function formatRelativeTime(iso: string | null, locale: string): string {
   if (iso === null) return 'unknown';
   const analysed = Date.parse(iso);
   if (Number.isNaN(analysed)) return 'unknown';
@@ -185,7 +190,7 @@ function formatRelativeTime(iso: string | null): string {
     ['minute', 60],
     ['second', 1],
   ];
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   for (const [unit, size] of steps) {
     if (Math.abs(seconds) >= size || unit === 'second') {
       return formatter.format(Math.round(seconds / size), unit);
@@ -195,10 +200,10 @@ function formatRelativeTime(iso: string | null): string {
 }
 
 /** The precise local instant behind a relative reading; the `<time>` title. */
-function formatAbsoluteTime(iso: string | null): string | undefined {
+function formatAbsoluteTime(iso: string | null, locale: string): string | undefined {
   if (iso === null) return undefined;
   const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString(locale);
 }
 
 type ArchitecturePanelProps = {
@@ -487,7 +492,7 @@ export default function ArchitecturePanel({
   renderer: Renderer = PlantUmlGraph as ArchitecturePanelRenderer,
   initialGranularity = 'entity',
 }: ArchitecturePanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // The pointer/size tier. On a narrow screen the export action moves into the
   // graph's overflow menu (one menu, not two), and on a coarse pointer every
   // header control grows to a 44px target.
@@ -804,11 +809,19 @@ export default function ArchitecturePanel({
 
   const truncation = truncationReading(result, granularity);
   // How many nodes the server's node budget left out of this subgraph. The
-  // readout answers this inline instead of printing a budget number.
+  // compact toolbar badge and the marker's data attributes read it; the
+  // expanded explanation states it as one of its layers.
   const budgetOmitted = Math.max(0, truncation.total - truncation.shown);
-  const retainedCount = detailRanking?.retainedNodeIds.size ?? neighbourhood.nodes.length;
-  const inScopeCount = activeNeighbourhood?.nodes.length ?? neighbourhood.nodes.length;
-  const foldedCount = detailRanking?.foldedCount ?? 0;
+  // The ONE reading the reader gets: N is what the layout was handed (group
+  // boxes count their members), M is the server's pre-budget total. The pure
+  // function decides which budget layers are named; the panel only renders it.
+  const readout = buildReadout({
+    detailRetained: detailRanking?.retainedNodeIds.size ?? neighbourhood.nodes.length,
+    drawnBoxes: layoutFit?.graph.nodes ?? [],
+    returnedCount: truncation.shown,
+    relatedTotal: truncation.total,
+    locale: i18n.language,
+  });
 
   // Both subgraphs are in hand; toggling only picks one, so it must not refetch.
   // The two options are a radiogroup because exactly one graph is on screen.
@@ -1088,14 +1101,26 @@ export default function ArchitecturePanel({
   const readoutSummary = classNoun === 'class'
     ? t('architecture.readout.classSummary', {
         defaultValue: 'Showing {{shown}} classes · {{total}} related',
-        shown: retainedCount,
-        total: inScopeCount,
+        shown: readout.shownText,
+        total: readout.relatedText,
       })
     : t('architecture.readout.fileSummary', {
         defaultValue: 'Showing {{shown}} files · {{total}} related',
-        shown: retainedCount,
-        total: inScopeCount,
+        shown: readout.shownText,
+        total: readout.relatedText,
       });
+  // The amber marker's accessible name has to say WHICH budget is squeezing;
+  // the visible text stays one short word so the line does not grow back into
+  // the three-sentence block the task replaces.
+  const budgetLayerNames = readout.limitedLayers.map((layer) => {
+    if (layer === 'detail') return t('architecture.readout.layerDetail', { defaultValue: 'detail level' });
+    if (layer === 'layout') return t('architecture.readout.layerLayout', { defaultValue: 'layout budget' });
+    return t('architecture.readout.layerServer', { defaultValue: 'node budget' });
+  });
+  const budgetLimitedLabel = t('architecture.readout.budgetLimitedAria', {
+    defaultValue: 'Budget-limited by {{layers}}',
+    layers: budgetLayerNames.join(', '),
+  });
 
   const raiseDetail = (): void => {
     const index = ARCHITECTURE_DETAIL_TIERS.indexOf(detail);
@@ -1119,9 +1144,9 @@ export default function ArchitecturePanel({
           <time
             data-architecture-generated-at
             dateTime={provenance.generatedAt}
-            title={formatAbsoluteTime(provenance.generatedAt)}
+            title={formatAbsoluteTime(provenance.generatedAt, i18n.language)}
           >
-            {formatRelativeTime(provenance.generatedAt)}
+            {formatRelativeTime(provenance.generatedAt, i18n.language)}
           </time>
         ) : (
           <span data-architecture-generated-at>unknown</span>
@@ -1176,57 +1201,73 @@ export default function ArchitecturePanel({
         style={compactTargetStyle}
         className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
-        <span data-architecture-readout-summary={retainedCount} data-architecture-readout-total={inScopeCount}>
+        <span data-architecture-readout-summary={readout.shown} data-architecture-readout-total={readout.related}>
           {readoutSummary}
         </span>
-        {foldedCount > 0 && (
-          <span data-architecture-folded-badge={foldedCount} className="text-foreground">
-            {t('architecture.readout.folded', { defaultValue: '+{{count}} folded', count: foldedCount })}
-          </span>
-        )}
-        {layoutFit?.limited === true && (
-          // The layout budget is stated, never offered as a "render it all
-          // anyway" escape: the freeze it prevents cannot be interrupted on
-          // the main thread. The number is what the renderer actually draws.
+        {readout.limited && (
+          // ONE short amber marker, never the three budget sentences the task
+          // replaces: the layer-specific numbers live in the expanded area. The
+          // accessible name still says which layer(s) are squeezing, and the
+          // DOM readings the panel has always exposed stay on this element with
+          // the new meaning (N = drawn entities, M = pre-budget related).
           <span
-            data-architecture-layout-budget={layoutFit.graph.nodes.length}
-            data-architecture-layout-budget-tier={layoutFit.tier}
-            data-architecture-layout-budget-dropped={layoutFit.droppedCount}
+            data-architecture-budget-limited="true"
+            aria-label={budgetLimitedLabel}
+            {...(layoutFit?.limited === true
+              ? {
+                  'data-architecture-layout-budget': layoutFit.graph.nodes.length,
+                  'data-architecture-layout-budget-tier': layoutFit.tier,
+                  'data-architecture-layout-budget-dropped': layoutFit.droppedCount,
+                }
+              : {})}
+            {...(truncation.truncated
+              ? {
+                  'data-architecture-truncated': 'true',
+                  'data-architecture-truncated-granularity': granularity,
+                  'data-architecture-truncated-shown': truncation.shown,
+                  'data-architecture-truncated-total': truncation.total,
+                  'data-architecture-truncated-omitted': budgetOmitted,
+                }
+              : {})}
             className="text-amber-600 dark:text-amber-400"
           >
-            {t('architecture.readout.layoutBudget', {
-              defaultValue: 'Showing {{count}} within the layout budget; raising detail takes longer',
-              count: layoutFit.graph.nodes.length,
-            })}
-          </span>
-        )}
-        {truncation.truncated && (
-          <span
-            data-architecture-truncated="true"
-            data-architecture-truncated-granularity={granularity}
-            data-architecture-truncated-shown={truncation.shown}
-            data-architecture-truncated-total={truncation.total}
-            data-architecture-truncated-omitted={budgetOmitted}
-            className="text-amber-600 dark:text-amber-400"
-          >
-            {t('architecture.readout.budgetOmitted', {
-              defaultValue: '{{count}} more left out by the node budget',
-              count: budgetOmitted,
-            })}
+            {t('architecture.readout.budgetLimited', { defaultValue: 'Budget-limited' })}
           </span>
         )}
         <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
       </button>
       {readoutOpen && (
         <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
-          <p>
-            {t('architecture.readout.explanation', {
-              defaultValue:
-                '{{shown}} is what the current detail level keeps; {{total}} is every related entity in the current scope.',
-              shown: retainedCount,
-              total: inScopeCount,
-            })}
-          </p>
+          {readout.lines.length > 0 && (
+            // One line per budget layer that cut, each with its own number and
+            // its "how to adjust" clause. Untriggered layers are absent.
+            <div data-architecture-readout-budget-lines="true" className="flex flex-col gap-0.5">
+              {readout.lines.map((line) => (
+                <p
+                  key={line.layer}
+                  data-architecture-readout-line={line.layer}
+                  data-architecture-readout-line-count={line.count}
+                >
+                  {line.layer === 'detail'
+                    ? t('architecture.readout.detailLayer', {
+                        defaultValue: 'Detail level kept {{value}}.',
+                        value: line.countText,
+                      })
+                    : line.layer === 'layout'
+                      ? t('architecture.readout.layoutLayer', {
+                          defaultValue:
+                            'The layout budget draws {{value}} — more would be slow; lower the detail to see more.',
+                          value: line.countText,
+                        })
+                      : t('architecture.readout.serverLayer', {
+                          defaultValue:
+                            'The node budget left {{value}} out — reduce the scope to see them.',
+                          value: line.countText,
+                        })}
+                </p>
+              ))}
+            </div>
+          )}
           {kindLine !== null && kindLine.length > 0 && (
             <p data-architecture-kind-counts="true">{kindLine}</p>
           )}

@@ -435,7 +435,10 @@ test('a truncated graph keeps a compact "+N folded" badge in the row while the m
   assert.ok(truncated instanceof HTMLElement);
   assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '3');
   assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
-  assert.match(truncated.textContent ?? '', /6 more left out by the node budget/);
+  // The collapsed line carries one budget marker; the omitted count moved into
+  // the expanded explanation (the row badge above still states it compactly).
+  assert.match(truncated.textContent ?? '', /Budget-limited/);
+  assert.doesNotMatch(truncated.textContent ?? '', /more left out by the node budget/);
 });
 
 test('the desktop header is ONE row and the graph draws no toolbar of its own', async () => {

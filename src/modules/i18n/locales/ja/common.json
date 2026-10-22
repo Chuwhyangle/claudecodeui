@@ -138,7 +138,15 @@
       "layoutBudget": "レイアウト予算内で {{count}} 個を表示中。詳細を上げると遅くなります",
       "kindFunction": "{{count}} 個の関数",
       "kindInterface": "{{count}} 個のインターフェース",
-      "kindClass": "{{count}} 個のクラス"
+      "kindClass": "{{count}} 個のクラス",
+      "budgetLimited": "予算による制限あり",
+      "budgetLimitedAria": "{{layers}} による予算制限",
+      "layerDetail": "詳細レベル",
+      "layerLayout": "レイアウト予算",
+      "layerServer": "ノード予算",
+      "detailLayer": "詳細レベルで {{value}} 個を保持しました。",
+      "layoutLayer": "レイアウト予算では {{value}} 個だけを描画します。これ以上は遅くなるため、詳細を下げてください。",
+      "serverLayer": "ノード予算により {{value}} 個が取得されていません。範囲を狭めると表示できます。"
     },
     "source": {
       "unresolved": "このセッションで言及された {{count}} 個の名前は分析キャッシュに見つかりませんでした",
