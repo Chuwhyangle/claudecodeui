@@ -360,6 +360,17 @@ export function useChatComposerState({
    * may be typing) cannot be a snapshot from an earlier render.
    */
   const voiceInsertionRef = useRef<VoiceInsertion | null>(null);
+  /**
+   * The interval `voiceInsertionRef` currently holds, as a value the composer can paint from.
+   *
+   * The ref above stays the source of truth — it is read and written from callbacks that outlive a
+   * render — but a ref write does not redraw anything. This mirror exists for the one consumer that
+   * has to SEE the range: the composer paints the provisional background behind the committed voice
+   * text, and an overlay that only learned about the range on the next unrelated render would show
+   * the highlight late and drop it late. Every write to the ref below writes this too, so the two
+   * cannot describe different intervals.
+   */
+  const [voiceRange, setVoiceRange] = useState<Pick<VoiceInsertion, 'start' | 'end'> | null>(null);
   const selectedProjectId = selectedProject?.projectId;
   // Prefer the stable backend-allocated id (selectedSession.id) but fall back
   // to currentSessionId for a just-established session that hasn't been
@@ -1289,7 +1300,11 @@ export function useChatComposerState({
    * talking shift it rather than being overwritten.
    */
   const handleVoiceListeningStart = useCallback((cursor: number) => {
-    voiceInsertionRef.current = beginVoiceInsertion(inputValueRef.current, cursor);
+    const opening = beginVoiceInsertion(inputValueRef.current, cursor);
+    voiceInsertionRef.current = opening;
+    // An empty interval at the caret: the overlay has nothing to paint yet, and the range's opening
+    // point is where the next committed segment will appear.
+    setVoiceRange({ start: opening.start, end: opening.end });
   }, []);
 
   /**
@@ -1310,15 +1325,20 @@ export function useChatComposerState({
     if (range) {
       next = range.text.slice(0, range.start) + text + range.text.slice(range.end);
       voiceInsertionRef.current = { text: next, start: range.start, end: range.start + text.length };
+      setVoiceRange({ start: range.start, end: range.start + text.length });
     } else {
       const base = inputValueRef.current.trim();
       next = base ? `${base} ${text}` : text;
+      // The append shape has no tracked interval, but the appended words are still this listen's
+      // text, so the overlay highlights the tail it just wrote rather than nothing.
+      setVoiceRange({ start: base ? base.length + 1 : 0, end: next.length });
     }
     setInput(next);
     inputValueRef.current = next;
     if (send) {
       // The listen is over once it is sent; the next one opens a fresh range at the new caret.
       voiceInsertionRef.current = null;
+      setVoiceRange(null);
       handleSubmitRef.current?.(createFakeSubmitEvent());
     }
   }, [setInput]);
@@ -1423,9 +1443,13 @@ export function useChatComposerState({
       // through some other path) drops the range rather than shifting it to the wrong place.
       const range = voiceInsertionRef.current;
       if (range) {
-        voiceInsertionRef.current = range.text === inputValueRef.current
+        const remapped = range.text === inputValueRef.current
           ? applyVoiceChange(range, newValue)
           : null;
+        voiceInsertionRef.current = remapped;
+        // The same value the ref now holds: an edit inside the committed words moves the highlight
+        // with them, and an edit that invalidated the range drops it from the overlay too.
+        setVoiceRange(remapped === null ? null : { start: remapped.start, end: remapped.end });
       }
 
       setInput(newValue);
@@ -1653,6 +1677,7 @@ export function useChatComposerState({
     deleteQueuedDraft,
     handleVoiceTranscript,
     handleVoiceListeningStart,
+    voiceRange,
     handleInputChange,
     handleKeyDown,
     handlePaste,

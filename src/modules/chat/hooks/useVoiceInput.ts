@@ -21,6 +21,7 @@ import {
   type VoiceSegmentMetric,
   type VoiceUsage,
 } from '@/modules/chat/utils/voice/voiceLiveReading';
+import { buildVoiceInputContextPack } from '@/modules/chat/utils/voice/voiceContextPack';
 import { voicePlayer } from '@/modules/chat/utils/voice/voicePlayer';
 import { VOICE_FRAME_PROCESSOR_NAME, type VoiceFrameMessage } from '@/modules/chat/audio/voiceFrameProcessor';
 import { voiceFrameProcessorUrl } from '@/modules/chat/audio/voiceFrameProcessorUrl';
@@ -43,6 +44,7 @@ import { identifierFidelity } from '@/shared/identifierFidelity';
 import { repairIdentifiers } from '@/shared/identifierRepair';
 import { StreamingVad, type VadEvent } from '@/shared/voiceEndpoint';
 import type {
+  ChatMessage,
   VoiceClip,
   VoiceClipPlayState,
   VoiceClipSlot,
@@ -485,6 +487,18 @@ function gapFilterSecForCapture(): number {
   return DEFAULT_KEEP_GAP_SEC;
 }
 
+/**
+ * The snapshot a new session keeps, with its caret clamped into its own text.
+ *
+ * The caret is read off a textarea and can be stale or out of range (a standalone render has no
+ * textarea at all); clamping here is what keeps the split from producing a 「光标前」 longer than
+ * the draft it came from.
+ */
+function draftSnapshotOrNull(draft: VoiceDraftSnapshot | undefined): VoiceDraftSnapshot | null {
+  if (draft === undefined) return null;
+  return { text: draft.text, cursor: Math.max(0, Math.min(draft.cursor, draft.text.length)) };
+}
+
 /** Concatenates PCM payloads into one buffer. */
 function concatBytes(chunks: Uint8Array[]): Uint8Array {
   let total = 0;
@@ -525,6 +539,14 @@ type CaptureSession = {
   parts: ReassemblyPart[];
   /** The full committed text last handed to the composer. */
   committed: string;
+  /**
+   * The composer draft this listen started in, with its caret — the 「光标前/光标后」 halves of the
+   * context pack. Snapshotted once when the session is created and never refreshed: the draft the
+   * user keeps editing while they talk is not what this dictation is being committed into.
+   *
+   * `null` for the file entry, which has no box to have started from.
+   */
+  draft: VoiceDraftSnapshot | null;
   /** Segments submitted but not yet settled (retries included). */
   pending: number;
   /** The next ordinal a newly closed segment takes. */
@@ -598,6 +620,33 @@ type UseVoiceInputOptions = {
    * supplies one so it can push PCM without a browser audio thread or a microphone.
    */
   captureEngine?: VoiceCaptureEngine;
+  /**
+   * The conversation the relay-mode context pack is built from.
+   *
+   * THE SAME ROWS LIVE VOICE USES, passed by the pane that renders them. The pack is built at
+   * upload time rather than at listen start, so a turn that landed while the user was speaking is
+   * part of what the recogniser sees. It is read through a ref because the transcription callbacks
+   * outlive a render, exactly like the other options above. Absent means no pack: a caller that
+   * does not own a transcript (or a test) sends no context, and the relay provider falls back to
+   * the no-context arm.
+   */
+  contextMessages?: readonly ChatMessage[];
+};
+
+/**
+ * The composer's draft at the moment a listen began, and where the caret was in it.
+ *
+ * HANDED IN BY THE PRESS, NOT READ FROM AN OPTION, because both halves are only exact at that
+ * instant: the box's text is a prop of an already-completed render, and the caret is read off the
+ * textarea when the mic is pressed. A value captured at session creation would be right; a value
+ * re-read at upload time would be wrong by design — the draft is expected to change as the user
+ * keeps editing while they talk, and this listen's context is the box it started from.
+ */
+export type VoiceDraftSnapshot = {
+  /** The whole draft as the box held it when the mic was pressed. */
+  text: string;
+  /** The caret inside that draft: everything before it is 「光标前」, everything at/after 「光标后」. */
+  cursor: number;
 };
 
 /** Stable identity for the absent-candidate case, so the default does not re-create the callback each render. */
@@ -636,7 +685,7 @@ export function useVoiceInput(
   onError?: (failure: VoiceFailureReport) => void,
   options: UseVoiceInputOptions = {},
 ) {
-  const { scope = null, isActive = true, candidates = NO_CANDIDATES, captureEngine } = options;
+  const { scope = null, isActive = true, candidates = NO_CANDIDATES, captureEngine, contextMessages } = options;
   const [state, setState] = useState<VoiceInputState>('idle');
   // How many segments are uploaded but not yet settled. A counter rather than the session's own
   // `pending` (a ref) because the composer's in-flight indicator is painted from it, and a ref
@@ -676,12 +725,17 @@ export function useVoiceInput(
   const onErrorRef = useRef(onError);
   const candidatesRef = useRef(candidates);
   const captureEngineRef = useRef(captureEngine);
+  // The transcript the relay mode's pack is built from. A ref for the same reason the callbacks
+  // above are refs: a segment's upload may settle after several renders, and the pack must be the
+  // conversation as it stood when the upload was sent, not the one this callback closed over.
+  const contextMessagesRef = useRef<readonly ChatMessage[]>(contextMessages ?? []);
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
     onErrorRef.current = onError;
     candidatesRef.current = candidates;
     captureEngineRef.current = captureEngine;
-  }, [onTranscript, onError, candidates, captureEngine]);
+    contextMessagesRef.current = contextMessages ?? [];
+  }, [onTranscript, onError, candidates, captureEngine, contextMessages]);
 
   const ensureClipAudio = (track: VoiceClipTrack) => {
     const existing = clipAudioRef.current[track];
@@ -866,11 +920,24 @@ export function useVoiceInput(
         ? { kind: 'stored' }
         : { kind: 'client-fallback', giveUpMessage: fallback.message };
 
+      // Built per upload from the SNAPSHOT, not from the box as it stands now: the draft the user
+      // started the dictation in is the one this listen is being committed into, and the text this
+      // listen has already committed is what it must not repeat. The conversation rows are read at
+      // upload time, so a turn that landed while the user was speaking is included. An empty pack
+      // is `undefined` rather than an empty string, so a provider with context support sees the
+      // no-context request exactly as it would have without this parameter.
+      const context = buildVoiceInputContextPack({
+        messages: contextMessagesRef.current,
+        draftBefore: session.draft === null ? '' : session.draft.text.slice(0, session.draft.cursor),
+        draftAfter: session.draft === null ? '' : session.draft.text.slice(session.draft.cursor),
+        voiceSoFar: session.committed,
+      }).text;
       const response = await transcribeVoice(
         job.blob,
         `${SEGMENT_BASE_NAME}-${job.index + 1}.wav`,
         session.listenId,
         address,
+        context === '' ? undefined : context,
       );
       if (!response.ok) {
         const refusal = await refusalDetail(response);
@@ -1132,7 +1199,7 @@ export function useVoiceInput(
     }
   };
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (draft?: VoiceDraftSnapshot) => {
     if (startingRef.current || sessionRef.current) return;
     // A new listen starts with nothing in flight: the previous session's counter has no meaning
     // for this one, and the indicator must not open lit.
@@ -1166,6 +1233,7 @@ export function useVoiceInput(
         settled: new Map(),
         parts: [],
         committed: '',
+        draft: draftSnapshotOrNull(draft),
         pending: 0,
         nextIndex: 0,
         lastActivityAt: Date.now(),
@@ -1256,9 +1324,13 @@ export function useVoiceInput(
     if (session) stopCapture(session, opts?.send ?? false);
   }, []);
 
-  const toggle = useCallback(() => {
+  /**
+   * Starts or stops the mic. The draft rides the STARTING call only: it is the box the listen will
+   * be committed into, and a press that stops needs no new one.
+   */
+  const toggle = useCallback((draft?: VoiceDraftSnapshot) => {
     if (state === 'recording') stop();
-    else if (state === 'idle') void start();
+    else if (state === 'idle') void start(draft);
   }, [state, start, stop]);
 
   /**
@@ -1311,6 +1383,9 @@ export function useVoiceInput(
         settled: new Map(),
         parts: [],
         committed: '',
+        // A file has no composer draft behind it: the box it is transcribed into is whatever the
+        // caller's own insertion range holds, and this entry never reads one.
+        draft: null,
         pending: 0,
         nextIndex: 0,
         lastActivityAt: Date.now(),

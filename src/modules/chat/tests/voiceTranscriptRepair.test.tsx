@@ -8,9 +8,11 @@ import { afterEach, beforeEach, test, vi } from 'vitest';
 
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import { createFakeVoiceCapture } from '@/modules/chat/tests/voiceCaptureTestHarness';
+import { VOICE_INPUT_VOICE_SO_FAR_HEADING } from '@/modules/chat/utils/voice/voiceContextPack';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 // Type-only, so it is erased before vi.mock's hoisted factory runs.
 import type * as SharedApi from '@/shared/api';
+import type { ChatMessage } from '@/shared/types';
 
 /**
  * The transcript's last step, on the path the app really runs it on.
@@ -137,82 +139,95 @@ const REPAIRED = 'please open voice.routes.ts and fix the proxy';
  * the recording starts: a repair reading taken before the composer has the names would
  * report "nothing repaired" for a reason that has nothing to do with the repair.
  */
+/**
+ * Every prop the composer needs that a case does NOT vary, so each harness below states only its
+ * own half. The two harnesses (one-shot press, and the stateful box below) must render the same
+ * composer; a second copy of this list would be a second composer.
+ */
+const BASE_COMPOSER_PROPS: Record<string, unknown> = {
+  pendingPermissionRequests: [],
+  handlePermissionDecision: () => undefined,
+  handleGrantToolPermission: () => ({ success: true }),
+  activity: null,
+  isLoading: false,
+  onAbortSession: () => undefined,
+  permissionMode: 'default',
+  availablePermissionModes: ['default'],
+  onSelectPermissionMode: () => undefined,
+  providerLabel: 'Claude',
+  effort: 'medium',
+  availableEffortOptions: [],
+  onSelectEffort: () => undefined,
+  model: 'test-model',
+  availableModelOptions: [],
+  onSelectModel: () => undefined,
+  modelsLoading: false,
+  tokenBudget: null,
+  onShowTokenUsage: () => undefined,
+  slashCommandsCount: 0,
+  onToggleCommandMenu: () => undefined,
+  hasInput: false,
+  onClearInput: () => undefined,
+  onSubmit: () => undefined,
+  isDragActive: false,
+  queuedDraft: null,
+  isEditingSentMessage: false,
+  onCancelEditMessage: () => undefined,
+  scheduledMessages: [],
+  onScheduleMessage: () => undefined,
+  onCancelScheduledMessage: () => undefined,
+  onEditQueuedDraft: () => undefined,
+  onDeleteQueuedDraft: () => undefined,
+  attachedFiles: [],
+  onRemoveAttachment: () => undefined,
+  fileErrors: new Map<string, string>(),
+  showFileDropdown: false,
+  filteredFiles: [],
+  selectedFileIndex: 0,
+  onSelectFile: () => undefined,
+  filteredCommands: [],
+  selectedCommandIndex: 0,
+  onCommandSelect: () => undefined,
+  onCloseCommandMenu: () => undefined,
+  isCommandMenuOpen: false,
+  frequentCommands: [],
+  getRootProps: () => ({}),
+  getInputProps: () => ({}),
+  openAttachmentPicker: () => undefined,
+  inputHighlightRef: { current: null },
+  renderInputWithMentions: () => null,
+  scope: 'session-a',
+  isActive: true,
+  onInputChange: () => undefined,
+  onTextareaClick: () => undefined,
+  onTextareaKeyDown: () => undefined,
+  onTextareaPaste: () => undefined,
+  onTextareaScrollSync: () => undefined,
+  onTextareaInput: () => undefined,
+  placeholder: 'Ask anything',
+  isTextareaExpanded: false,
+};
+
+const composerProps = (overrides: Record<string, unknown>) =>
+  ({ ...BASE_COMPOSER_PROPS, ...overrides } as unknown as React.ComponentProps<typeof ChatComposer>);
+
 const speakInto = async (
   projectId: string,
   transcript: string,
   onVoiceTranscript: (text: string, send?: boolean) => void,
+  contextMessages?: readonly ChatMessage[],
 ) => {
   const fetchesBefore = getFileIndex.mock.calls.length;
   const capture = createFakeVoiceCapture();
   const view = render(
-    React.createElement(ChatComposer, {
+    React.createElement(ChatComposer, composerProps({
       voiceCaptureEngine: capture.engine,
-      pendingPermissionRequests: [],
-      handlePermissionDecision: () => undefined,
-      handleGrantToolPermission: () => ({ success: true }),
-      activity: null,
-      isLoading: false,
-      onAbortSession: () => undefined,
-      permissionMode: 'default',
-      availablePermissionModes: ['default'],
-      onSelectPermissionMode: () => undefined,
-      providerLabel: 'Claude',
-      effort: 'medium',
-      availableEffortOptions: [],
-      onSelectEffort: () => undefined,
-      model: 'test-model',
-      availableModelOptions: [],
-      onSelectModel: () => undefined,
-      modelsLoading: false,
-      tokenBudget: null,
-      onShowTokenUsage: () => undefined,
-      slashCommandsCount: 0,
-      onToggleCommandMenu: () => undefined,
-      hasInput: false,
-      onClearInput: () => undefined,
-      onSubmit: () => undefined,
-      isDragActive: false,
-      queuedDraft: null,
-      isEditingSentMessage: false,
-      onCancelEditMessage: () => undefined,
-      scheduledMessages: [],
-      onScheduleMessage: () => undefined,
-      onCancelScheduledMessage: () => undefined,
-      onEditQueuedDraft: () => undefined,
-      onDeleteQueuedDraft: () => undefined,
-      attachedFiles: [],
-      onRemoveAttachment: () => undefined,
-      fileErrors: new Map<string, string>(),
-      showFileDropdown: false,
-      filteredFiles: [],
-      selectedFileIndex: 0,
-      onSelectFile: () => undefined,
-      filteredCommands: [],
-      selectedCommandIndex: 0,
-      onCommandSelect: () => undefined,
-      onCloseCommandMenu: () => undefined,
-      isCommandMenuOpen: false,
-      frequentCommands: [],
-      getRootProps: () => ({}),
-      getInputProps: () => ({}),
-      openAttachmentPicker: () => undefined,
-      inputHighlightRef: { current: null },
-      renderInputWithMentions: () => null,
       textareaRef: { current: null },
       input: '',
       onVoiceTranscript,
-      scope: 'session-a',
+      contextMessages,
       projectId,
-      isActive: true,
-      onInputChange: () => undefined,
-      onTextareaClick: () => undefined,
-      onTextareaKeyDown: () => undefined,
-      onTextareaPaste: () => undefined,
-      onTextareaScrollSync: () => undefined,
-      onTextareaInput: () => undefined,
-      placeholder: 'Ask anything',
-      isTextareaExpanded: false,
-    } as unknown as React.ComponentProps<typeof ChatComposer>),
+    })),
   );
 
   // Drain the candidate fetch before recording, so the press is judged against a
@@ -261,6 +276,24 @@ test('a mis-heard name is repaired against the project the composer is open in',
   view.unmount();
 });
 
+test('a listen carries the visible conversation as the relay context', async () => {
+  transcribeVoice.mockResolvedValue({ ok: true, json: async () => ({ text: PLAIN_ZH }) });
+  const contextMessages: ChatMessage[] = [
+    { type: 'user', content: 'architecture tab 的继承关系看不出来', timestamp: Date.now() },
+  ];
+
+  const view = await speakInto('project-context', PLAIN_ZH, vi.fn(), contextMessages);
+
+  const call = transcribeVoice.mock.calls[0];
+  assert.ok(call, 'nothing reached the recogniser');
+  assert.match(
+    String(call[4]),
+    /architecture tab 的继承关系看不出来/,
+    'the relay context must be the visible conversation the composer was handed',
+  );
+  view.unmount();
+});
+
 test('a sentence carrying no identifier arrives character for character', async () => {
   for (const [index, sentence] of [PLAIN_EN, PLAIN_ZH].entries()) {
     transcribeVoice.mockResolvedValue({ ok: true, json: async () => ({ text: sentence }) });
@@ -277,4 +310,177 @@ test('a sentence carrying no identifier arrives character for character', async 
     assert.equal(call?.[1], false, 'a mic press that was not a "send" must not become one');
     view.unmount();
   }
+});
+
+/* ─── The same composer with a box that really holds a draft ───────── */
+
+/**
+ * The composer with `input` as REAL state.
+ *
+ * THE ONE-SHOT HARNESS ABOVE PASSES A CONSTANT `input`, which is enough for the repair readings and
+ * not enough for the context pack: the pack is built from the box a listen started in and from what
+ * the listen has already committed, so both halves have to actually change on screen. Here `input`
+ * is state, `onVoiceTranscript` writes the committed dictation into it the way the state layer does
+ * (at the caret the listen opened at), and `onDraftSetterReady` hands out the setter a case types
+ * through while the microphone is still open.
+ */
+type DraftSetter = ((next: string) => void) | null;
+
+function StatefulChatComposer({
+  capture,
+  onDraftSetterReady,
+  draft,
+  textareaRef,
+  projectId,
+  contextMessages,
+}: {
+  capture: ReturnType<typeof createFakeVoiceCapture>;
+  onDraftSetterReady: (setter: DraftSetter) => void;
+  draft: string;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  projectId: string;
+  contextMessages?: readonly ChatMessage[];
+}) {
+  const [input, setInput] = React.useState(draft);
+  // The setter is handed OUT rather than written into a prop object: a component may not mutate
+  // what it was given (oxlint's `react(immutability)`), and the test's only need is the callback.
+  React.useEffect(() => {
+    onDraftSetterReady(setInput);
+    return () => {
+      onDraftSetterReady(null);
+    };
+  }, [onDraftSetterReady]);
+
+  // The committed dictation lands at the caret the listen opened at, which is the whole draft here.
+  const onVoiceTranscript = React.useCallback(
+    (text: string) => {
+      setInput(draft + text);
+    },
+    [draft],
+  );
+
+  return React.createElement(ChatComposer, composerProps({
+    voiceCaptureEngine: capture.engine,
+    textareaRef,
+    input,
+    onVoiceTranscript,
+    contextMessages,
+    projectId,
+  }));
+}
+
+/** The draft this case starts the listen in; the caret sits at the seam between the two halves. */
+const DRAFT_BEFORE = 'P0-DRAFT-BEFORE 把这段说明改短一点：';
+const DRAFT_AFTER = 'P0-DRAFT-AFTER 后面这句先留着';
+const FIRST_ANSWER = 'alpha bravo';
+
+test('a listen carries the box it started in and what it has already said, not the edits since', async () => {
+  transcribeVoice.mockResolvedValue({ ok: true, json: async () => ({ text: FIRST_ANSWER }) });
+  const capture = createFakeVoiceCapture();
+  // The registration callback the component hands its setter to. The element below is created
+  // once, so this identity is stable across the component's own re-renders, which is what the
+  // registration effect depends on.
+  let setDraft: DraftSetter = null;
+  const onDraftSetterReady = (setter: DraftSetter) => {
+    setDraft = setter;
+  };
+  const textareaRef: React.RefObject<HTMLTextAreaElement | null> = { current: null };
+  const conversation: ChatMessage[] = [
+    { type: 'user', content: 'CONVERSATION-ROW 架构页的继承关系', timestamp: Date.now() },
+  ];
+
+  const view = render(React.createElement(StatefulChatComposer, {
+    capture,
+    onDraftSetterReady,
+    draft: DRAFT_BEFORE + DRAFT_AFTER,
+    textareaRef,
+    projectId: 'project-draft',
+    contextMessages: conversation,
+  }));
+  // Let the composer's own candidate fetch settle, as the one-shot harness above does.
+  await act(async () => {});
+
+  // THE CARET IS THE READING, so it is placed explicitly: the draft's two halves only exist
+  // relative to it, and a default selection of 0 would make the "before" half empty.
+  const textarea = view.getByPlaceholderText('Ask anything') as HTMLTextAreaElement;
+  textarea.focus();
+  textarea.setSelectionRange(DRAFT_BEFORE.length, DRAFT_BEFORE.length);
+
+  await act(async () => {
+    view.getByRole('button', { name: 'Voice input' }).click();
+  });
+  assert.ok(
+    view.getByRole('button', { name: 'Stop recording' }),
+    'the recorder has to really be running, or no segment is ever uploaded',
+  );
+
+  // Segment 1: three seconds of speech, then the shipped ten-second silence flush closes it.
+  // (`DEFAULT_FLUSH_SILENCE_SEC` is 10; a shorter pause is not a cut.)
+  await act(async () => {
+    capture.speak(3);
+    capture.endSpeech();
+    capture.push(10.5);
+  });
+  // Two flushes: the upload's promise resolve, then the commit that follows it.
+  await act(async () => {});
+  await act(async () => {});
+  assert.equal(
+    (view.getByPlaceholderText('Ask anything') as HTMLTextAreaElement).value,
+    `${DRAFT_BEFORE}${DRAFT_AFTER}${FIRST_ANSWER}`,
+    'the committed answer never reached the box, so the later upload has nothing to be told to avoid',
+  );
+
+  // The user keeps typing while the microphone is still open. This text belongs to the box NOW,
+  // not to the box the listen started in — and the snapshot is what the recogniser must see.
+  await act(async () => {
+    setDraft?.(`${DRAFT_BEFORE}${DRAFT_AFTER}${FIRST_ANSWER}UNCOMMITTED-EDIT`);
+  });
+
+  // Segment 2: another utterance, closed by the stop.
+  await act(async () => {
+    capture.speak(3);
+  });
+  await act(async () => {
+    view.getByRole('button', { name: 'Stop recording' }).click();
+  });
+  await act(async () => {});
+
+  assert.ok(
+    transcribeVoice.mock.calls.length >= 2,
+    `the second segment was never uploaded (${transcribeVoice.mock.calls.length} requests)`,
+  );
+  const [first, second] = transcribeVoice.mock.calls
+    .slice(0, 2)
+    .map((call) => String(call[4]));
+
+  // The FIRST upload has nothing committed yet, so it carries no "voice so far" section at all.
+  assert.ok(first !== '', 'the first upload carried no context');
+  assert.ok(first.includes(DRAFT_BEFORE), 'the draft before the caret is missing from the first context');
+  assert.ok(first.includes(DRAFT_AFTER), 'the draft after the caret is missing from the first context');
+  assert.equal(
+    first.includes(VOICE_INPUT_VOICE_SO_FAR_HEADING),
+    false,
+    'the first context announced already-spoken text that did not exist yet',
+  );
+  assert.ok(
+    first.includes('CONVERSATION-ROW 架构页的继承关系'),
+    'the composer\'s visible conversation never reached the recogniser',
+  );
+
+  // The SECOND upload carries the snapshot draft AND what the listen had committed — never the edit
+  // the user made after it began.
+  assert.ok(second !== '', 'the second upload carried no context');
+  assert.ok(second.includes(DRAFT_BEFORE), 'the snapshot draft before the caret is missing from the second context');
+  assert.ok(second.includes(DRAFT_AFTER), 'the snapshot draft after the caret is missing from the second context');
+  assert.ok(
+    second.includes(`${VOICE_INPUT_VOICE_SO_FAR_HEADING}\n${FIRST_ANSWER}`),
+    'what the listen had already committed is missing from the second context',
+  );
+  assert.equal(
+    second.includes('UNCOMMITTED-EDIT'),
+    false,
+    'an edit made after the listen began leaked into its context',
+  );
+
+  view.unmount();
 });

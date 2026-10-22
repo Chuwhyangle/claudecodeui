@@ -21,7 +21,7 @@ import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { findSessionHostState, findSessionOccupancy, useSessionHosts } from '@/shared/hooks/useSessionHosts';
 import { loadProjectIdentifiers } from '@/shared/projectIdentifiers';
 import { isVoiceDebugEnabled } from '@/shared/voiceDebug';
-import type { QueuedDraft, ScheduledMessage, SlashCommand,SessionActivity,PendingPermissionRequest,PermissionMode,ProviderModelOption,VoiceFailureReport } from '@/shared/types';
+import type { ChatMessage, QueuedDraft, ScheduledMessage, SlashCommand,SessionActivity,PendingPermissionRequest,PermissionMode,ProviderModelOption,VoiceFailureReport } from '@/shared/types';
 import {
   PromptInput,
   PromptInputHeader,
@@ -34,6 +34,7 @@ import {
 } from '@/modules/chat/composer/PromptInput';
 import CommandMenu from '@/modules/chat/composer/CommandMenu';
 import { deriveActivityDockView } from '@/modules/chat/utils/voice/activityDockView';
+import type { VoiceInsertion } from '@/modules/chat/utils/voice/voiceInsertion';
 import ComposerAttachment from '@/modules/chat/composer/ComposerAttachment';
 import VoiceInputButton, { VoiceFailureNotice } from '@/modules/chat/composer/VoiceInputButton';
 import VoiceUploadButton from '@/modules/chat/composer/VoiceUploadButton';
@@ -144,6 +145,14 @@ type ChatComposerProps = {
    */
   onVoiceListeningStart?: (cursor: number) => void;
   /**
+   * The interval of the box that the open listen's committed text occupies, or null.
+   *
+   * Handed back by the state layer that tracks the insertion range, because the overlay paints the
+   * provisional background from it. A listen that has committed nothing yet reports an empty interval
+   * at the caret; absent (a standalone render) means no highlight.
+   */
+  voiceRange?: Pick<VoiceInsertion, 'start' | 'end'> | null;
+  /**
    * Enters Live Voice (continuous audio to the Realtime model). A separate control from the
    * dictation mic: it never goes through `onVoiceTranscript` or the draft. Absent hides the button.
    */
@@ -170,6 +179,13 @@ type ChatComposerProps = {
   voiceCaptureEngine?: VoiceCaptureEngine;
   /** Draft scope of the open chat; a change drops the recorded clip, which belongs to the chat it was recorded in. */
   scope: string | null;
+  /**
+   * The session transcript the relay-mode context pack is built from.
+   *
+   * The same rows Live Voice receives, handed in by the pane that renders them. Optional so the
+   * standalone renders used by tests keep working; absent means a relay upload carries no context.
+   */
+  contextMessages?: readonly ChatMessage[];
   /**
    * The open project, whose file tree supplies the names a transcript gets repaired against.
    * Required rather than optional so a caller that forgets it is a type error instead of a
@@ -264,6 +280,7 @@ export default function ChatComposer({
   input,
   onVoiceTranscript,
   onVoiceListeningStart,
+  voiceRange,
   onLiveVoice,
   liveVoiceDisabled,
   liveVoiceDisabledReason,
@@ -279,6 +296,7 @@ export default function ChatComposer({
   onTextareaInput,
   onInputFocusChange,
   sessionId = null,
+  contextMessages,
   placeholder,
   isTextareaExpanded,
   sendByCtrlEnter,
@@ -475,10 +493,34 @@ export default function ChatComposer({
   } = useVoiceInput(
     onVoiceTranscript ?? noopTranscript,
     handleVoiceError,
-    { scope, isActive: isActive && !hasQuestionPanel, candidates: identifierCandidates, captureEngine: voiceCaptureEngine },
+    {
+      scope,
+      isActive: isActive && !hasQuestionPanel,
+      candidates: identifierCandidates,
+      captureEngine: voiceCaptureEngine,
+      contextMessages,
+    },
   );
   const isRecording = voiceState === 'recording';
   const isTranscribing = voiceState === 'transcribing';
+  /*
+   * The slice of the box the open listen has committed into — painted, never edited.
+   *
+   * ONLY WHILE A LISTEN OWNS IT. The interval is where the dictation lands, so its background says
+   * "these words came from the microphone and are still being written". Once the listen is over they
+   * are the user's ordinary editable text, and a highlight that outlived the listen would claim the
+   * composer still owns a range it no longer tracks.
+   *
+   * CLAMPED TO THE BOX, because the state layer and this render can be one commit apart and the
+   * textarea is the single source of what the draft currently is: a range that no longer lies inside
+   * it paints nothing rather than slicing past the end of the text.
+   */
+  const provisionalVoiceRange = voiceState !== 'idle'
+    && voiceRange
+    && voiceRange.start < voiceRange.end
+    && voiceRange.end <= input.length
+    ? voiceRange
+    : null;
   // Starting the next recording is the user answering the last failure, so it dismisses the notice.
   // Wrapped here rather than inside the button because the failing attempt's message is the
   // composer's state: the button renders what it is handed and owns no memory of the last failure.
@@ -488,7 +530,13 @@ export default function ChatComposer({
     // now. Signalled before the hook switches to recording, so the range is open before the first
     // segment can land. A press that stops needs no signal — the range is already open.
     if (voiceState === 'idle') {
-      onVoiceListeningStart?.(textareaRef.current?.selectionStart ?? input.length);
+      const cursor = textareaRef.current?.selectionStart ?? input.length;
+      onVoiceListeningStart?.(cursor);
+      // The box as it stands is this listen's context: the recogniser is told what the caret is in
+      // the middle of, which is what a spoken 「这段」 points at. Read here rather than inside the
+      // hook because only this render has the text and only this moment has the caret.
+      voiceToggle({ text: input, cursor });
+      return;
     }
     voiceToggle();
   }, [voiceToggle, voiceState, onVoiceListeningStart, textareaRef, input]);
@@ -840,7 +888,25 @@ export default function ChatComposer({
           <PromptInputBody className={areToolsInline ? 'flex min-w-0 flex-col' : undefined}>
             <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
               <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6 text-transparent">
-                {renderInputWithMentions(input)}
+                {/*
+                  The overlay is the textarea's own text, drawn transparently, so it can carry a
+                  background the textarea itself cannot. The provisional span splits it into the
+                  user's own draft, the words this listen committed, and the draft after them — the
+                  middle one gets the low-contrast wash, and `box-decoration-clone` keeps it on every
+                  line a wrapped dictation covers.
+                */}
+                {provisionalVoiceRange ? (
+                  <>
+                    {renderInputWithMentions(input.slice(0, provisionalVoiceRange.start))}
+                    <span
+                      data-voice-provisional="true"
+                      className="rounded-sm bg-primary/10 box-decoration-clone"
+                    >
+                      {input.slice(provisionalVoiceRange.start, provisionalVoiceRange.end)}
+                    </span>
+                    {renderInputWithMentions(input.slice(provisionalVoiceRange.end))}
+                  </>
+                ) : renderInputWithMentions(input)}
               </div>
             </div>
 
