@@ -43,14 +43,14 @@ extra:
 
 ## AC
 
-- [ ] (a) **providers/services 不再 import websocket**：`grep -rnE "@/modules/websocket" server/modules/providers/services --include='*.ts'` 计数 = **0**（含动态 import 字面量）；`grep -n "session-broadcast" server/index.ts` 命中（assembly 安装）。
-- [ ] (b) **端口存在**：`test -f server/shared/ports/session-broadcast.port.ts` 退出 0；`grep -q "session-broadcast" server/index.ts` 退出 0。
-- [ ] (c) **判据存在且跑通（websocket 出环）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/providers-websocket-cycle.test.ts` 退出 0；复用 AC-394 的 `strongComponents`/`collectServerSources`，打印 `websocketInProvidersScc=false`（并打印每段非平凡 SCC 成员，websocket 组不在 providers 组 SCC 内）。
-- [ ] (d) **AC-394 棘轮仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0（G1 5→3 属允许缩小；逐成员仍是基线子集）。
-- [ ] (e) **既有行为判据不改一字仍绿**：覆盖 sessions-watcher / sessions 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (f) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (g) **collateral**：新增一个 `server/**/*.test.ts` ⇒ quay-test-script 两条 pin 各 +1 及注释算术；覆盖率地板跌破 90% 才追加 suite-duration-baseline 行；单文件复跑 quay-test-script.test.ts 退出 0。
-- [ ] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **providers/services 不再 import websocket**：`grep -rnE "@/modules/websocket" server/modules/providers/services --include='*.ts'` 计数 = **0**（含动态 import 字面量）；`grep -n "session-broadcast" server/index.ts` 命中（assembly 安装）。
+- [x] (b) **端口存在**：`test -f server/shared/ports/session-broadcast.port.ts` 退出 0；`grep -q "session-broadcast" server/index.ts` 退出 0。
+- [x] (c) **判据存在且跑通（websocket 出环）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/providers-websocket-cycle.test.ts` 退出 0；复用 AC-394 的 `strongComponents`/`collectServerSources`，打印 `websocketInProvidersScc=false`（并打印每段非平凡 SCC 成员，websocket 组不在 providers 组 SCC 内）。
+- [x] (d) **AC-394 棘轮仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0（G1 5→3 属允许缩小；逐成员仍是基线子集）。
+- [x] (e) **既有行为判据不改一字仍绿**：覆盖 sessions-watcher / sessions 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (f) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (g) **collateral**：新增一个 `server/**/*.test.ts` ⇒ quay-test-script 两条 pin 各 +1 及注释算术；覆盖率地板跌破 90% 才追加 suite-duration-baseline 行；单文件复跑 quay-test-script.test.ts 退出 0。
+- [x] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
