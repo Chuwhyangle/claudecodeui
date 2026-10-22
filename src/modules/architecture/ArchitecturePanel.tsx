@@ -24,6 +24,7 @@ import {
 } from '@/modules/architecture/curationStore';
 import { resolveCurationItems, useProjectSearch } from '@/modules/architecture/hooks/useProjectSearch';
 import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
+import { ArchitectureSelectionTray } from '@/modules/architecture/ArchitectureSelectionTray';
 import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPanel';
 import {
   archguardToPlantUml,
@@ -87,10 +88,14 @@ import { readSvgNaturalSize } from '@/modules/architecture/svgViewport';
 import {
   createSelectionState,
   reduceSelection,
+  resolveDraftScope,
   selectionInScope,
+  selectionsInScope,
+  type ArchitectureSelection,
   type ArchitectureSelectionScope,
 } from '@/modules/architecture/selectionModel';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
+import { readDraftText, writeDraftText } from '@/shared/chatDrafts';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
@@ -415,6 +420,18 @@ type ArchitecturePanelRenderer = ComponentType<
     readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
     readonly onSoloNode?: (node: ArchitectureRendererNode) => void;
     readonly onUndo?: () => void;
+    /** Multi-select: additive clicks, the marquee, and the whole set's styling. */
+    readonly onToggleNodeClick?: (node: ArchitectureRendererNode) => void;
+    readonly onToggleEdgeClick?: (edge: ArchitectureRendererEdge) => void;
+    readonly onBoxSelect?: (selections: readonly ArchitectureSelection[]) => void;
+    readonly onMultiSelectStart?: (node: ArchitectureRendererNode) => void;
+    readonly multiSelectMode?: boolean;
+    readonly selectedNodeIds?: readonly string[];
+    readonly selectedRelations?: readonly {
+      readonly from: string;
+      readonly to: string;
+      readonly relationType: string;
+    }[];
   }
 >;
 
@@ -1055,7 +1072,28 @@ export default function ArchitecturePanel({
     selectionScope,
     createSelectionState,
   );
+  // The whole selection set, for the tray and the renderer's multi-select
+  // styling. `selection` stays the primary (last added) member, which is what
+  // the dock inspector and the renderer's pinned highlight read.
+  const selections = selectionsInScope(selectionState, selectionScope);
   const selection = selectionInScope(selectionState, selectionScope);
+  // The set split into the two shapes the renderer styles and the tray labels.
+  const selectedNodeIds = useMemo(
+    () => selections.flatMap((entry) => (entry.kind === 'entity' ? [entry.nodeId] : [])),
+    [selections],
+  );
+  const selectedRelations = useMemo(
+    () => selections.flatMap((entry) => (entry.kind === 'relation'
+      ? [{ from: entry.from, to: entry.to, relationType: entry.relationType }]
+      : [])),
+    [selections],
+  );
+  // Whether the touch multi-select mode is on. It makes every tap a toggle
+  // instead of a replace; a long-press on an entity turns it on.
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  // Whether the selection tray is expanded. The panel owns it because Escape
+  // collapses the tray before it clears the selection.
+  const [trayExpanded, setTrayExpanded] = useState(false);
   // Whether the dock is on screen. Remembered per browser, and forced open by a
   // fresh selection (the gesture that selects is a request to inspect).
   const [dockOpen, setDockOpen] = useState<boolean>(readStoredDockOpen);
@@ -1410,6 +1448,9 @@ export default function ArchitecturePanel({
   const selectNodeOnCanvas = useCallback((node: ArchitectureRendererNode): void => {
     dispatchSelection({ type: 'select-entity', nodeId: node.id });
   }, []);
+  const toggleNodeOnCanvas = useCallback((node: ArchitectureRendererNode): void => {
+    dispatchSelection({ type: 'toggle-entity', nodeId: node.id });
+  }, []);
   const selectRelationOnCanvas = useCallback((edge: ArchitectureRendererEdge): void => {
     dispatchSelection({
       type: 'select-relation',
@@ -1418,23 +1459,61 @@ export default function ArchitecturePanel({
       relationType: edge.relationType,
     });
   }, []);
+  const toggleRelationOnCanvas = useCallback((edge: ArchitectureRendererEdge): void => {
+    dispatchSelection({
+      type: 'toggle-relation',
+      from: edge.from,
+      to: edge.to,
+      relationType: edge.relationType,
+    });
+  }, []);
+  /** A touch long-press on an entity: turn multi-select on and add that node. */
+  const startMultiSelect = useCallback((node: ArchitectureRendererNode): void => {
+    setMultiSelectMode(true);
+    dispatchSelection({ type: 'toggle-entity', nodeId: node.id });
+  }, []);
+  /** A marquee release: add every drawn thing the rectangle hit. */
+  const addBoxSelection = useCallback((boxed: readonly ArchitectureSelection[]): void => {
+    if (boxed.length > 0) dispatchSelection({ type: 'add-selections', selections: boxed });
+  }, []);
+  const toggleSelection = useCallback((entry: ArchitectureSelection): void => {
+    dispatchSelection(
+      entry.kind === 'entity'
+        ? { type: 'toggle-entity', nodeId: entry.nodeId }
+        : { type: 'toggle-relation', from: entry.from, to: entry.to, relationType: entry.relationType },
+    );
+  }, []);
   /**
-   * Escape, while the canvas owns the key: the first press closes the dock
-   * (the selection survives), the next clears the selection. `stopPropagation`
-   * happens in the renderer, so the chat page's global abort never fires.
+   * Escape, while the canvas owns the key: an expanded tray collapses first
+   * (the selection survives), then the dock closes, then the selection clears.
+   * `stopPropagation` happens in the renderer, so the chat page's global abort
+   * never fires.
    */
   const escapeSelection = useCallback((): void => {
+    if (trayExpanded) {
+      setTrayExpanded(false);
+      return;
+    }
     if (dockOpen) {
       changeDockOpen(false);
       return;
     }
+    setMultiSelectMode(false);
     dispatchSelection({ type: 'clear' });
-  }, [dockOpen, changeDockOpen]);
+  }, [dockOpen, changeDockOpen, trayExpanded]);
   /** A click on the empty canvas clears the selection AND closes the dock. */
   const clearSelectionOnCanvas = useCallback((): void => {
     dispatchSelection({ type: 'clear' });
+    setMultiSelectMode(false);
     if (dockOpen) changeDockOpen(false);
   }, [dockOpen, changeDockOpen]);
+  // An empty set has nothing to expand: reset both tray readings with it, so a
+  // later selection starts from the pill rather than a stale drawer.
+  useEffect(() => {
+    if (selections.length > 0) return;
+    setTrayExpanded(false);
+    setMultiSelectMode(false);
+  }, [selections.length]);
   /** Selecting a related node from the inspector also centres it in the drawing. */
   const inspectRelatedNode = (nodeId: string): void => {
     dispatchSelection({ type: 'select-entity', nodeId });
@@ -1509,15 +1588,71 @@ export default function ArchitecturePanel({
     ? { from: selection.from, to: selection.to, relationType: selection.relationType }
     : null;
   // The coarse drawer's collapsed (96px) reading: what is selected, in one line.
-  const dockSummary: string | null = selection === null
+  // A multi-selection states its size instead of pretending one member speaks
+  // for the set.
+  const dockSummary: string | null = selections.length === 0
     ? null
-    : selection.kind === 'entity'
-      ? (() => {
-        const node = drawnGraph.nodes.find((candidate) => candidate.id === selection.nodeId);
-        if (node === undefined) return selection.nodeId;
-        return `${node.label.trim() === '' ? node.id : node.label} · ${node.kind ?? 'other'}`;
-      })()
-      : `${selection.from} → ${selection.to}`;
+    : selections.length > 1
+      ? t('architecture.inspector.selectedCount', {
+        defaultValue: '{{count}} selected',
+        count: selections.length,
+      })
+      : selection !== null && selection.kind === 'entity'
+        ? (() => {
+          const node = drawnGraph.nodes.find((candidate) => candidate.id === selection.nodeId);
+          if (node === undefined) return selection.nodeId;
+          return `${node.label.trim() === '' ? node.id : node.label} · ${node.kind ?? 'other'}`;
+        })()
+        : selection !== null
+          ? `${selection.from} → ${selection.to}`
+          : null;
+
+  /**
+   * Append the tray's composed text to the chat draft and switch to Chat.
+   *
+   * The write is deliberately an APPEND: the reader may already be half-way
+   * through a message, and the tray adds context rather than replacing it. The
+   * scope is the composer's own (`resolveDraftScope`), and the composer restores
+   * the text through its draft subscription. Sending stays the reader's action.
+   */
+  const composeSelectionText = (text: string): void => {
+    const scope = resolveDraftScope(projectId, sessionId);
+    if (scope === null) return;
+    const existing = readDraftText(scope);
+    const appended = existing.trim() === '';
+    writeDraftText(scope, appended ? text : `${existing}\n\n${text}`);
+    onOpenChat?.();
+    // The composer belongs to a sibling module; focus it through its documented
+    // slot rather than importing the chat module into this one.
+    window.setTimeout(() => {
+      document
+        .querySelector<HTMLTextAreaElement>('textarea[data-slot="prompt-input-textarea"]')
+        ?.focus();
+    }, 0);
+    showCurationToast(
+      appended
+        ? t('architecture.tray.toastAdded', { defaultValue: 'Put in the input box' })
+        : t('architecture.tray.toastAppended', { defaultValue: 'Appended to the input box' }),
+      false,
+    );
+  };
+
+  /** "Remove selected" walks the curation actions: exclude entities, hide relations. */
+  const removeSelected = (): void => {
+    for (const entry of selections) {
+      if (entry.kind === 'entity') {
+        const node = drawnGraph.nodes.find((candidate) => candidate.id === entry.nodeId);
+        if (node !== undefined) removeNode(node);
+      } else {
+        hideRelation(entry);
+      }
+    }
+    dispatchSelection({ type: 'clear' });
+  };
+
+  // A pin/unpin action on a single entity reads the same store the tray's
+  // removal does, so the two can never disagree.
+  const canComposeSelection = resolveDraftScope(projectId, sessionId) !== null;
 
   /**
    * The PlantUML document for the view on screen, exactly as the bridge builds
@@ -2881,6 +3016,13 @@ export default function ArchitecturePanel({
                       selectNodeOnCanvas(node);
                     }}
                     onEdgeClick={selectRelationOnCanvas}
+                    onToggleNodeClick={toggleNodeOnCanvas}
+                    onToggleEdgeClick={toggleRelationOnCanvas}
+                    onBoxSelect={addBoxSelection}
+                    onMultiSelectStart={startMultiSelect}
+                    multiSelectMode={multiSelectMode}
+                    selectedNodeIds={selectedNodeIds}
+                    selectedRelations={selectedRelations}
                     onSelectionClear={clearSelectionOnCanvas}
                     onEscapeSelection={escapeSelection}
                     selectedNodeId={selectedNodeId}
@@ -2934,6 +3076,33 @@ export default function ArchitecturePanel({
               )}
 
               {sourceLine}
+
+              {/* The selection tray floats inside the canvas: tags, the memo,
+                  the optional PlantUML attachment and the append-to-draft
+                  action. On the compact tier it becomes a bottom bar/drawer. */}
+              {selections.length > 0 && (
+                <ArchitectureSelectionTray
+                  selections={selections}
+                  graph={drawnGraph}
+                  idShape={nodeIdShapeOf(granularity)}
+                  view={diagramView}
+                  grouping={granularity === 'file' ? 'adaptive' : 'raw'}
+                  drawn={drawnPlantUml}
+                  projectId={projectId}
+                  analyzedAt={provenance.generatedAt}
+                  canCompose={canComposeSelection}
+                  canRemove={canCurateEntities}
+                  multiSelect={multiSelectMode}
+                  expanded={trayExpanded}
+                  compact={compactToolbar}
+                  onExpandedChange={setTrayExpanded}
+                  onExitMultiSelect={() => setMultiSelectMode(false)}
+                  onToggleItem={toggleSelection}
+                  onClear={clearSelectionOnCanvas}
+                  onCompose={composeSelectionText}
+                  onRemoveSelected={removeSelected}
+                />
+              )}
             </div>
           </>
         ) : (
@@ -2964,6 +3133,19 @@ export default function ArchitecturePanel({
                 <p data-architecture-dock-empty="true" className="text-xs text-muted-foreground">
                   {t('architecture.dock.empty', {
                     defaultValue: 'Select a node or a relation on the drawing.',
+                  })}
+                </p>
+              ) : selections.length > 1 ? (
+                // A multi-selection has no single entity/relation detail to
+                // show; the open-ended work belongs in the tray, so the
+                // inspector states the count instead of picking a member.
+                <p
+                  data-architecture-inspector-summary={selections.length}
+                  className="text-xs text-muted-foreground"
+                >
+                  {t('architecture.inspector.selectedCount', {
+                    defaultValue: '{{count}} selected',
+                    count: selections.length,
                   })}
                 </p>
               ) : (

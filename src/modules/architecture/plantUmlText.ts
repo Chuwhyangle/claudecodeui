@@ -67,6 +67,12 @@ export type ArchitectureTextScope =
    */
   | { readonly kind: 'viewport'; readonly nodeIds: readonly string[] }
   /**
+   * Exactly the selected anchors: the entities the reader picked, or both ends
+   * of every selected relation, with only the edges whose ends both survive.
+   * The architecture selection tray's "selected only" scope.
+   */
+  | { readonly kind: 'selected'; readonly nodeIds: readonly string[] }
+  /**
    * The selection and its one-hop neighbourhood: the anchor ids are the selected
    * entity, or both ends of the selected relation, and the scope adds every node
    * one edge away from them. An empty anchor list is the dedicated
@@ -215,6 +221,10 @@ export function scopeSubgraph(
       return graph;
     case 'viewport':
       return inducedSubgraph(graph, expandScopeNodeIds(graph, scope.nodeIds, idShape));
+    case 'selected': {
+      if (scope.nodeIds.length === 0) throw new NoSelectionScopeError();
+      return inducedSubgraph(graph, new Set(scope.nodeIds));
+    }
     default: {
       if (scope.nodeIds.length === 0) throw new NoSelectionScopeError();
       return inducedSubgraph(graph, expandSelectionNeighbourhood(graph, scope.nodeIds));
@@ -297,6 +307,19 @@ function drawnModelForScope(
         drawn.model,
         drawnEntityIdsForViewport(graph, drawn, scope.nodeIds, idShape),
       );
+    case 'selected': {
+      if (scope.nodeIds.length === 0) throw new NoSelectionScopeError();
+      const drawnIds = new Set(drawn.model.entities.map((entity) => entity.id));
+      const entityIds = new Set<string>();
+      for (const id of scope.nodeIds) {
+        const entityId = drawn.entityIdOf.get(id);
+        if (entityId !== undefined && drawnIds.has(entityId)) entityIds.add(entityId);
+      }
+      // No anchor is drawn (the current view folded every one into a stub): the
+      // caller falls back to the bridge, which can still express the scope.
+      if (entityIds.size === 0) throw new DrawnScopeUnavailableError();
+      return filterDrawnModel(drawn.model, entityIds);
+    }
     default: {
       if (scope.nodeIds.length === 0) throw new NoSelectionScopeError();
       const drawnIds = new Set(drawn.model.entities.map((entity) => entity.id));

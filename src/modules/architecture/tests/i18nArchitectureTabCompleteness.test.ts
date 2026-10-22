@@ -27,13 +27,15 @@ const LOCALES_DIR = resolve(REPO_ROOT, 'src', 'modules', 'i18n', 'locales');
  * Every architecture source that draws translated chrome. The dock and the
  * inspector were split out of the panel, so their keys must be part of the same
  * completeness reading rather than escaping it by living in a new file; the
- * text page is the dock's second tab and joins the same rule.
+ * text page is the dock's second tab and joins the same rule; the selection
+ * tray's strings are read the same way.
  */
 const ARCHITECTURE_SOURCES = [
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitecturePanel.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureDock.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureInspector.tsx'),
   resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureTextPanel.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureSelectionTray.tsx'),
 ];
 const TABS_SOURCE = resolve(REPO_ROOT, 'src', 'modules', 'project-workspace', 'WorkspaceTabs.tsx');
 

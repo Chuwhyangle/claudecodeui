@@ -158,6 +158,22 @@ test('a draft written on another device is picked up while the session is open',
   assert.equal(view.result.current.input, 'typed on the phone');
 });
 
+test('an append from another surface is restored without dropping the half-typed text', async () => {
+  // The architecture selection tray appends its composed context to this same
+  // scope. The composer must restore the APPENDED draft (not only a wholesale
+  // external rewrite), or the reader watching the chat loses the tray's text.
+  const view = renderComposer({ id: 'session-a' });
+
+  await act(async () => {
+    view.result.current.setInput('half-typed');
+  });
+  await act(async () => {
+    writeDraftText('session-a', `${readDraftText('session-a')}\n\nabout these elements`);
+  });
+
+  assert.equal(view.result.current.input, 'half-typed\n\nabout these elements');
+});
+
 test('clearing the composer clears that session\'s stored draft', async () => {
   const view = renderComposer({ id: 'session-a' });
 

@@ -55,7 +55,13 @@ import type {
   ArchitectureRendererNode,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
-import { cycleNodeFocus } from '@/modules/architecture/selectionModel';
+import {
+  cycleNodeFocus,
+  selectionsIntersectingBox,
+  type ArchitectureBoxCandidate,
+  type ArchitectureSelection,
+  type ArchitectureSelectionRect,
+} from '@/modules/architecture/selectionModel';
 import {
   centerElementInContainer,
   createSvgDragPan,
@@ -221,6 +227,37 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
   readonly onSoloNode?: (node: ArchitectureRendererNode) => void;
   /** Ctrl/Cmd+Z while the canvas is focused: undo the latest adjustment. */
   readonly onUndo?: () => void;
+  /**
+   * Additive click: Shift/Ctrl/Cmd on a fine pointer, or any tap while the touch
+   * multi-select mode is on. The panel toggles that member of the set; without
+   * this callback the click keeps the contract's replace semantics.
+   */
+  readonly onToggleNodeClick?: (node: ArchitectureRendererNode) => void;
+  readonly onToggleEdgeClick?: (edge: ArchitectureRendererEdge) => void;
+  /**
+   * The whole selection set, used to style every member. The contract's
+   * `selectedNodeId`/`selectedRelation` stay the primary reading, so a renderer
+   * embedded without the panel keeps exactly its old props.
+   */
+  readonly selectedNodeIds?: readonly string[];
+  readonly selectedRelations?: readonly {
+    readonly from: string;
+    readonly to: string;
+    readonly relationType: string;
+  }[];
+  /** Whether the touch multi-select mode is on (taps become toggles). */
+  readonly multiSelectMode?: boolean;
+  /**
+   * A 500ms press on an entity on a coarse pointer. The panel turns multi-select
+   * mode on and adds that node; a press anywhere else keeps the curation menu.
+   */
+  readonly onMultiSelectStart?: (node: ArchitectureRendererNode) => void;
+  /**
+   * Shift+drag marquee result (the drawn entities and relations the rectangle
+   * hit). Absent keeps the canvas's old pan-only drag, which is what a renderer
+   * embedded without a tray wants.
+   */
+  readonly onBoxSelect?: (selections: readonly ArchitectureSelection[]) => void;
 };
 
 /**
@@ -609,49 +646,80 @@ function edgeElement(host: HTMLElement, from: string, to: string): Element | nul
 }
 
 /**
- * Draw the panel's selection on the freshly rendered (or re-rendered) SVG: a
- * heavier frame plus a check badge on the selected node, or a bolder line and
- * its visible type label on the selected relation. Cleared first, so a
- * selection that is no longer drawn leaves no residue.
+ * Draw the panel's selection set on the freshly rendered (or re-rendered) SVG:
+ * a heavier frame plus a check badge on every selected node, and a bolder line
+ * with its visible type label on every selected relation. Cleared first, so a
+ * selection that is no longer drawn leaves no residue. Single-selection callers
+ * pass one-element arrays and get exactly the old drawing.
  */
 function applySelectionStyles(
   host: HTMLElement,
-  nodeId: string | null,
-  relation: { readonly from: string; readonly to: string } | null,
+  nodeIds: readonly string[],
+  relations: readonly { readonly from: string; readonly to: string }[],
 ): void {
   for (const element of host.querySelectorAll('.arch-selected, .arch-edge-selected')) {
     element.classList.remove('arch-selected', 'arch-edge-selected');
   }
   for (const badge of host.querySelectorAll('.arch-selected-check')) badge.remove();
 
-  if (nodeId !== null) {
+  for (const nodeId of nodeIds) {
     const node = nodeElement(host, nodeId);
-    if (node !== null) {
-      node.classList.add('arch-selected');
-      const rect = node.querySelector('rect');
-      if (rect !== null) {
-        const badge = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        const x = Number(rect.getAttribute('x') ?? '0') + Number(rect.getAttribute('width') ?? '0') - 4;
-        const y = Number(rect.getAttribute('y') ?? '0') + 11;
-        badge.setAttribute('x', String(x));
-        badge.setAttribute('y', String(y));
-        badge.setAttribute('text-anchor', 'end');
-        badge.setAttribute('font-size', '11');
-        badge.setAttribute('class', 'arch-selected-check');
-        badge.setAttribute('data-architecture-selected-check', nodeId);
-        badge.textContent = '✓';
-        node.appendChild(badge);
-      }
+    if (node === null) continue;
+    node.classList.add('arch-selected');
+    const rect = node.querySelector('rect');
+    if (rect !== null) {
+      const badge = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      const x = Number(rect.getAttribute('x') ?? '0') + Number(rect.getAttribute('width') ?? '0') - 4;
+      const y = Number(rect.getAttribute('y') ?? '0') + 11;
+      badge.setAttribute('x', String(x));
+      badge.setAttribute('y', String(y));
+      badge.setAttribute('text-anchor', 'end');
+      badge.setAttribute('font-size', '11');
+      badge.setAttribute('class', 'arch-selected-check');
+      badge.setAttribute('data-architecture-selected-check', nodeId);
+      badge.textContent = '✓';
+      node.appendChild(badge);
     }
   }
 
-  if (relation !== null) {
+  for (const relation of relations) {
     const edge = edgeElement(host, relation.from, relation.to);
-    if (edge !== null) {
-      edge.classList.add('arch-edge-selected');
-      for (const label of edge.querySelectorAll('text')) label.removeAttribute('display');
-    }
+    if (edge === null) continue;
+    edge.classList.add('arch-edge-selected');
+    for (const label of edge.querySelectorAll('text')) label.removeAttribute('display');
   }
+}
+
+/** The drawn rectangles a marquee hit test compares against, in client pixels. */
+function rectOf(element: Element): ArchitectureSelectionRect {
+  const rect = element.getBoundingClientRect();
+  return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+}
+
+/**
+ * Every drawn entity and relation, paired with the rectangle it occupies. Group
+ * and stub nodes are view scaffolding rather than entities, so a marquee never
+ * selects them. A zero-area box (jsdom, a hidden tab) is dropped by the same
+ * half-open rule the pure hit test applies.
+ */
+function boxCandidates(host: HTMLElement): ArchitectureBoxCandidate[] {
+  const candidates: ArchitectureBoxCandidate[] = [];
+  for (const element of host.querySelectorAll('[data-entity-id]')) {
+    const id = element.getAttribute('data-entity-id') ?? '';
+    if (id === '' || id.startsWith(GROUP_PREFIX) || id.startsWith(STUB_PREFIX)) continue;
+    candidates.push({ selection: { kind: 'entity', nodeId: id }, rect: rectOf(element) });
+  }
+  for (const element of host.querySelectorAll('[data-architecture-edge-hit]')) {
+    const from = element.getAttribute('data-architecture-edge-source');
+    const to = element.getAttribute('data-architecture-edge-target');
+    if (from === null || to === null) continue;
+    const relationType = element.getAttribute('data-architecture-edge-type') ?? '';
+    candidates.push({
+      selection: { kind: 'relation', from, to, relationType },
+      rect: rectOf(element),
+    });
+  }
+  return candidates;
 }
 
 /**
@@ -696,6 +764,13 @@ export function PlantUmlGraph({
   onHideRelation,
   onSoloNode,
   onUndo,
+  onToggleNodeClick,
+  onToggleEdgeClick,
+  selectedNodeIds,
+  selectedRelations,
+  multiSelectMode = false,
+  onMultiSelectStart,
+  onBoxSelect,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -732,6 +807,26 @@ export function PlantUmlGraph({
   const edgeClickCallbackRef = useRef(onEdgeClick);
   const selectionClearCallbackRef = useRef(onSelectionClear);
   const escapeSelectionCallbackRef = useRef(onEscapeSelection);
+  // Multi-select callbacks, in refs for the same reason as the click callbacks:
+  // the delegated listeners are registered once per mount.
+  const toggleNodeCallbackRef = useRef(onToggleNodeClick);
+  const toggleEdgeCallbackRef = useRef(onToggleEdgeClick);
+  const multiSelectStartCallbackRef = useRef(onMultiSelectStart);
+  const boxSelectCallbackRef = useRef(onBoxSelect);
+  const multiSelectModeRef = useRef(multiSelectMode);
+  // A click the browser fires AFTER a gesture that already acted (a long-press
+  // entering multi-select, or a marquee release) must not toggle/clear again.
+  const suppressClickRef = useRef(false);
+  // Whether Shift is held, read by the drag-pan predicate. Updated from a
+  // window CAPTURE listener so it is fresh before the canvas's bubble listeners.
+  const shiftHeldRef = useRef(false);
+  // The marquee rectangle in the canvas's coordinates (null when not dragging).
+  // State, not a ref: the overlay must follow the finger/pointer.
+  const [marquee, setMarquee] = useState<
+    { readonly left: number; readonly top: number; readonly width: number; readonly height: number } | null
+  >(null);
+  // The same rectangle in client pixels, for the hit test on release.
+  const marqueeClientRef = useRef<ArchitectureSelectionRect | null>(null);
   // The drawn-model consumer. A ref, like the other callbacks: reporting the
   // model must not make the draw effect depend on the parent's render identity.
   const drawnCallbackRef = useRef(onDrawnPlantUmlChange);
@@ -742,6 +837,11 @@ export function PlantUmlGraph({
   // after replacing the SVG.
   const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
   const selectedRelationRef = useRef<PlantUmlGraphProps['selectedRelation']>(selectedRelation);
+  // The whole set, readable from the async draw that replaces the SVG.
+  const selectedNodeIdsRef = useRef<readonly string[]>(selectedNodeIds ?? []);
+  const selectedRelationsRef = useRef<NonNullable<PlantUmlGraphProps['selectedRelations']>>(
+    selectedRelations ?? [],
+  );
   // The node the `[`/`]` keyboard cursor sits on. A ref (not state): moving the
   // cursor only touches SVG classes, so it must not re-render (and never
   // re-layout) the drawing.
@@ -781,22 +881,34 @@ export function PlantUmlGraph({
     edgeClickCallbackRef.current = onEdgeClick;
     selectionClearCallbackRef.current = onSelectionClear;
     escapeSelectionCallbackRef.current = onEscapeSelection;
+    toggleNodeCallbackRef.current = onToggleNodeClick;
+    toggleEdgeCallbackRef.current = onToggleEdgeClick;
+    multiSelectStartCallbackRef.current = onMultiSelectStart;
+    boxSelectCallbackRef.current = onBoxSelect;
+    multiSelectModeRef.current = multiSelectMode;
     drawnCallbackRef.current = onDrawnPlantUmlChange;
     selectedNodeIdRef.current = selectedNodeId;
     selectedRelationRef.current = selectedRelation;
-  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, onDrawnPlantUmlChange, selectedNodeId, selectedRelation]);
+    selectedNodeIdsRef.current = selectedNodeIds
+      ?? (selectedNodeId === null ? [] : [selectedNodeId]);
+    selectedRelationsRef.current = selectedRelations
+      ?? (selectedRelation === null ? [] : [selectedRelation]);
+  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, onDrawnPlantUmlChange, selectedNodeId, selectedRelation, selectedNodeIds, selectedRelations, onToggleNodeClick, onToggleEdgeClick, onMultiSelectStart, onBoxSelect, multiSelectMode]);
 
   // Repaint the selection whenever the panel changes it. The draw effect below
   // applies the same styles to a fresh SVG; this one covers a selection made
-  // without a re-layout.
+  // without a re-layout. The whole set is styled; `selectedNodeId` stays the
+  // primary reading the pinned highlight and Delete follow.
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
-    applySelectionStyles(host, selectedNodeId, selectedRelation ?? null);
+    const nodeIds = selectedNodeIds ?? (selectedNodeId === null ? [] : [selectedNodeId]);
+    const relationList = selectedRelations ?? (selectedRelation === null ? [] : [selectedRelation]);
+    applySelectionStyles(host, nodeIds, relationList);
     selectedRef.current = selectedNodeId;
     if (selectedNodeId !== null) highlightSelection(host, selectedNodeId);
-    else if (selectedRelation === null) clearHighlight(host);
-  }, [selectedNodeId, selectedRelation]);
+    else if (relationList.length === 0) clearHighlight(host);
+  }, [selectedNodeId, selectedRelation, selectedNodeIds, selectedRelations]);
 
   // Tell the panel which slice is on screen. The export menu rebuilds exactly
   // this view; a remount (session/scope change resets `view`) reports the
@@ -994,13 +1106,115 @@ export function PlantUmlGraph({
   // it. Presses on a node are refused so they stay selection/drill gestures,
   // and fingers are left to `createSvgTouchGestures` — one pan, two input
   // families, never two competing drag states.
+  // Shift+drag is the marquee (below): refusing a pan while Shift is held is
+  // what keeps the two drag readings from running at the same time.
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
     const pan = createSvgDragPan(host, {
-      canPanFrom: (target) => !(target instanceof Element && target.closest('[data-entity-id]') !== null),
+      canPanFrom: (target) => !shiftHeldRef.current
+        && !(target instanceof Element && target.closest('[data-entity-id]') !== null),
     });
     return () => pan.destroy();
+  }, []);
+
+  // Whether Shift is held, kept fresh by a window CAPTURE listener: the capture
+  // phase runs before the canvas's own bubble listeners, so the drag-pan
+  // predicate reads the modifier of the very press that starts the gesture.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const record = (event: KeyboardEvent | PointerEvent): void => {
+      shiftHeldRef.current = event.shiftKey;
+    };
+    window.addEventListener('keydown', record, true);
+    window.addEventListener('keyup', record, true);
+    window.addEventListener('pointerdown', record, true);
+    return () => {
+      window.removeEventListener('keydown', record, true);
+      window.removeEventListener('keyup', record, true);
+      window.removeEventListener('pointerdown', record, true);
+    };
+  }, []);
+
+  // Shift+drag marquee: a rectangle in client pixels whose release selects every
+  // drawn entity and relation it intersects. A plain drag never starts one (it
+  // stays the pan above). The overlay is drawn in the canvas's coordinates so it
+  // follows the pointer exactly.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || typeof window === 'undefined') return;
+    const canvas = host.parentElement;
+    let drag: { readonly pointerId: number; readonly startX: number; readonly startY: number } | null = null;
+
+    const canvasOffset = (): { left: number; top: number } => {
+      const rect = canvas?.getBoundingClientRect();
+      return { left: rect?.left ?? 0, top: rect?.top ?? 0 };
+    };
+    const updateMarquee = (clientX: number, clientY: number): void => {
+      if (drag === null) return;
+      const box: ArchitectureSelectionRect = {
+        left: Math.min(drag.startX, clientX),
+        top: Math.min(drag.startY, clientY),
+        right: Math.max(drag.startX, clientX),
+        bottom: Math.max(drag.startY, clientY),
+      };
+      marqueeClientRef.current = box;
+      const offset = canvasOffset();
+      setMarquee({
+        left: box.left - offset.left,
+        top: box.top - offset.top,
+        width: box.right - box.left,
+        height: box.bottom - box.top,
+      });
+    };
+
+    const onDown = (event: PointerEvent): void => {
+      if (event.pointerType === 'touch' || event.button !== 0 || !event.shiftKey) return;
+      drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
+      marqueeClientRef.current = {
+        left: event.clientX,
+        top: event.clientY,
+        right: event.clientX,
+        bottom: event.clientY,
+      };
+      event.preventDefault();
+      updateMarquee(event.clientX, event.clientY);
+    };
+    const onMove = (event: PointerEvent): void => {
+      if (drag === null || event.pointerId !== drag.pointerId) return;
+      event.preventDefault();
+      updateMarquee(event.clientX, event.clientY);
+    };
+    const onUp = (event: PointerEvent): void => {
+      if (drag === null || event.pointerId !== drag.pointerId) return;
+      const box = marqueeClientRef.current;
+      drag = null;
+      marqueeClientRef.current = null;
+      setMarquee(null);
+      if (box === null) return;
+      // A shift+CLICK that never travelled is not a marquee; let the click
+      // listener handle it as an ordinary additive click.
+      if (box.right - box.left < 2 && box.bottom - box.top < 2) return;
+      suppressClickRef.current = true;
+      boxSelectCallbackRef.current?.(selectionsIntersectingBox(boxCandidates(host), box));
+    };
+    const onCancel = (event: PointerEvent): void => {
+      if (drag === null || event.pointerId !== drag.pointerId) return;
+      drag = null;
+      marqueeClientRef.current = null;
+      setMarquee(null);
+    };
+
+    host.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    return () => {
+      host.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
   }, []);
 
   // The LOD debouncer lives for the mount; a drawing change cancels its pending
@@ -1146,7 +1360,7 @@ export function PlantUmlGraph({
         // Relations get their enlarged, invisible hit bands; the panel's
         // selection is repainted on top of the fresh drawing.
         addEdgeHitTargets(host, coarsePointer);
-        applySelectionStyles(host, selectedNodeIdRef.current, selectedRelationRef.current ?? null);
+        applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
         // observer keeps following the container only for a fit user.
@@ -1373,13 +1587,38 @@ export function PlantUmlGraph({
 
     // Record how the press that produces the next click was made. Mouse clicks
     // keep the original single-click navigation; a touch tap only selects.
+    //
+    // A 500ms press on a real entity enters the touch multi-select mode (the
+    // panel turns the mode on and adds that node); a press on a relation or the
+    // blank canvas keeps opening the curation menu. `navigator.vibrate` is the
+    // optional acknowledgement — guarded because jsdom and some browsers lack it.
     const onPointerDown = (event: PointerEvent): void => {
       lastPointerTypeRef.current = event.pointerType ?? null;
       cancelLongPress();
-      if (!canCurate || event.pointerType !== 'touch') return;
+      if (event.pointerType !== 'touch') return;
+      const target = event.target;
       longPressTimer = setTimeout(() => {
         longPressTimer = null;
-        openMenuAt(event.clientX, event.clientY, event.target);
+        const id = nodeFrom(target)?.getAttribute('data-entity-id') ?? null;
+        const node = id === null
+          ? null
+          : graphRef.current.nodes.find((candidate) => candidate.id === id) ?? null;
+        if (
+          node !== null
+          && !id?.startsWith(GROUP_PREFIX)
+          && !id?.startsWith(STUB_PREFIX)
+          && multiSelectStartCallbackRef.current !== undefined
+        ) {
+          // The click the browser sends on release must not undo the toggle the
+          // long press just performed.
+          suppressClickRef.current = true;
+          if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+            navigator.vibrate(10);
+          }
+          multiSelectStartCallbackRef.current(node);
+          return;
+        }
+        if (canCurate) openMenuAt(event.clientX, event.clientY, target);
       }, 500);
     };
     const onPointerMove = (): void => cancelLongPress();
@@ -1405,6 +1644,15 @@ export function PlantUmlGraph({
     const onClick = (event: MouseEvent): void => {
       const isTouchTap = lastPointerTypeRef.current === 'touch';
       lastPointerTypeRef.current = null;
+      // A gesture already acted on release (long-press multi-select, marquee):
+      // the browser's trailing click is not a second command.
+      if (suppressClickRef.current) {
+        suppressClickRef.current = false;
+        return;
+      }
+      // Additive = the platform's add-to-selection modifier, or any tap while
+      // the touch multi-select mode is on.
+      const additive = event.shiftKey || event.ctrlKey || event.metaKey || multiSelectModeRef.current;
       // Any ordinary click on the drawing closes the pin menu. A click on the
       // menu itself never reaches this listener (the menu is a sibling).
       setContextMenu(null);
@@ -1421,6 +1669,10 @@ export function PlantUmlGraph({
         const relationType = edgeHit.getAttribute('data-architecture-edge-type') ?? '';
         if (from === null || to === null) return;
         const edge = { from, to, relationType };
+        if (additive && toggleEdgeCallbackRef.current !== undefined) {
+          toggleEdgeCallbackRef.current(edge);
+          return;
+        }
         selectedRelationRef.current = edge;
         selectedRef.current = null;
         setSelectedId(null);
@@ -1449,7 +1701,17 @@ export function PlantUmlGraph({
         selectedRef.current = id;
         highlightRelations(host, id);
       } else {
-        if (!graphRef.current.nodes.some((candidate) => candidate.id === id)) return;
+        const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
+        if (node === undefined) return;
+        // Additive clicks toggle the member without touching the drill machinery
+        // (a multi-select gesture is not a request to open the neighbourhood).
+        if (additive && toggleNodeCallbackRef.current !== undefined) {
+          selectedRef.current = id;
+          highlightRelations(host, id);
+          announceSelection(graphRef.current, id);
+          toggleNodeCallbackRef.current(node);
+          return;
+        }
         selectEntity(id);
       }
       setSelectedId(id);
@@ -1798,6 +2060,23 @@ export function PlantUmlGraph({
         focused.setAttribute('data-architecture-keyboard-focus', 'true');
       }
       host.setAttribute('data-architecture-keyboard-focus-id', nextId);
+      return;
+    }
+
+    // Space / Shift+Enter toggles the keyboard cursor's node in the selection
+    // set; a renderer embedded without a tray keeps the old "select" reading.
+    if (event.key === ' ' || event.key === 'Spacebar' || (event.key === 'Enter' && event.shiftKey)) {
+      const id = keyboardFocusRef.current;
+      if (id === null) return;
+      const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
+      if (node === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectedRef.current = id;
+      highlightRelations(host, id);
+      announceSelection(graphRef.current, id);
+      if (toggleNodeCallbackRef.current !== undefined) toggleNodeCallbackRef.current(node);
+      else clickCallbackRef.current?.(node);
       return;
     }
 
@@ -2233,6 +2512,23 @@ export function PlantUmlGraph({
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
+        {marquee !== null && (
+          <div
+            data-architecture-marquee="true"
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: marquee.left,
+              top: marquee.top,
+              width: marquee.width,
+              height: marquee.height,
+              zIndex: 35,
+              pointerEvents: 'none',
+              border: '1px dashed #1d4ed8',
+              background: 'rgba(29, 78, 216, 0.08)',
+            }}
+          />
+        )}
         {contextMenu !== null && (() => {
           const menuNode = 'nodeId' in contextMenu
             ? graph.nodes.find((candidate) => candidate.id === contextMenu.nodeId) ?? null
