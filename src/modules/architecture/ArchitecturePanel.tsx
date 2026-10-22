@@ -51,6 +51,7 @@ import {
   filtersEqual,
   hiddenTotal,
   isFilterNarrower,
+  keptMentionedCount,
   relationsForPreset,
   type ArchitectureElementRelationFilter,
   type ArchitectureFilterHidden,
@@ -143,6 +144,12 @@ const FILTER_REQUEST_DEBOUNCE_MS = 250;
 const SCOPE_STORAGE_PREFIX = 'architecture.scope.';
 const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
 const FILTER_STORAGE_PREFIX = 'architecture.filter.';
+/**
+ * The id of the "keep these shown…" hint paragraph. Every "keep mentioned"
+ * switch points `aria-describedby` at it, so the visible name and the extra
+ * explanation are separate readings instead of one overloaded `aria-label`.
+ */
+const MENTIONED_HINT_ID = 'architecture-filter-mentioned-hint';
 /** Whether the one-off touch instruction has been dismissed in this browser. */
 const TOUCH_HINT_STORAGE_KEY = 'architecture.touchHint.dismissed';
 /**
@@ -2173,6 +2180,10 @@ export default function ArchitecturePanel({
     drawnBoxes: layoutFit?.graph.nodes ?? [],
     returnedCount: truncation.shown,
     relatedTotal: truncation.total,
+    // M follows the CURRENT display filter over the response in hand: a local
+    // narrowing must not keep reading the wider payload's `entityTotal` (that
+    // made the same filter read 5 related, then 40, after a widening detour).
+    filteredCount: displayNeighbourhood?.nodes.length ?? neighbourhood.nodes.length,
     locale: i18n.language,
   });
 
@@ -2450,7 +2461,11 @@ export default function ArchitecturePanel({
           <legend className="mb-1 text-[11px] font-medium text-muted-foreground">
             {t('architecture.filter.mentioned', { defaultValue: 'Mentioned in this session' })}
           </legend>
-          <p data-architecture-filter-mentioned-hint="true" className="text-[10px] text-muted-foreground">
+          <p
+            id={MENTIONED_HINT_ID}
+            data-architecture-filter-mentioned-hint="true"
+            className="text-[10px] text-muted-foreground"
+          >
             {t('architecture.filter.mentionedHint', {
               defaultValue: 'Keep these shown even when their kind is hidden',
             })}
@@ -2459,13 +2474,20 @@ export default function ArchitecturePanel({
             {mentionedKinds.map((kind) => {
               const count = mentionedKindCounts[kind] ?? 0;
               const on = filter.keepMentionedKinds.includes(kind);
+              // The visible text is "35 functions"; the accessible name must
+              // START with exactly that (WCAG "label in name") and leave the
+              // extra explanation to `aria-describedby`.
+              const visible = `${String(count)} ${kindLabel(kind)}`;
               return (
                 <button
                   key={kind}
                   type="button"
                   role="checkbox"
                   aria-checked={on}
-                  aria-label={`${kindLabel(kind)}: ${String(count)}`}
+                  aria-label={`${visible}, ${t('architecture.filter.mentionedToggleAria', {
+                    defaultValue: 'mentioned in this session, kept visible even when the kind is hidden',
+                  })}`}
+                  aria-describedby={MENTIONED_HINT_ID}
                   data-architecture-filter-mentioned-kind={kind}
                   data-architecture-filter-mentioned-kind-count={String(count)}
                   onClick={() => toggleKeepMentioned(kind)}
@@ -2545,13 +2567,23 @@ export default function ArchitecturePanel({
 
   const filterTriggerLabel = t('architecture.filter.menu', { defaultValue: 'Filter ▾' });
   const filterBadge = activeFilterCount(filter);
+  // "Keeping N" is the OPPOSITE direction from "Hiding N": opening a "keep
+  // mentioned" switch shows more, so it must never raise the hidden count. The
+  // badge states the two readings separately.
+  const filterKept = keptMentionedCount(filter);
   // The badge counts DECISIONS THAT HIDE SOMETHING, not "options that are on".
   // The default filter has every kind enabled except functions/others, so the
   // old "4 on" read as four visible things while four cuts were in force.
-  const filterBadgeAria = t('architecture.copyFix.filterBadgeAria', {
-    defaultValue: '{{count}} filter decisions are hiding content (elements, relations, isolated nodes)',
-    count: filterBadge,
-  });
+  const filterBadgeAria = filterKept === 0
+    ? t('architecture.copyFix.filterBadgeAria', {
+      defaultValue: '{{count}} filter decisions are hiding content (elements, relations, isolated nodes)',
+      count: filterBadge,
+    })
+    : t('architecture.copyFix.filterBadgeKeepingAria', {
+      defaultValue: '{{count}} filter decisions are hiding content; {{kept}} kinds are kept visible',
+      count: filterBadge,
+      kept: filterKept,
+    });
   const openFilterMenu = (): void => {
     if (!compactToolbar) {
       const rect = filterButtonRef.current?.getBoundingClientRect();
@@ -2583,7 +2615,13 @@ export default function ArchitecturePanel({
           aria-label={filterBadgeAria}
           className="ml-1 rounded-full bg-accent px-1.5 text-[10px] tabular-nums text-foreground"
         >
-          {t('architecture.copyFix.filterBadge', { defaultValue: 'Hiding {{count}}', count: filterBadge })}
+          {filterKept === 0
+            ? t('architecture.copyFix.filterBadge', { defaultValue: 'Hiding {{count}}', count: filterBadge })
+            : t('architecture.copyFix.filterBadgeKeeping', {
+              defaultValue: 'Hiding {{count}} · keeping {{kept}}',
+              count: filterBadge,
+              kept: filterKept,
+            })}
         </span>
       </button>
       {filterMenuOpen && (

@@ -43,6 +43,8 @@
       "detailNoChange": "Aucun changement : plus rien à réduire dans la portée actuelle",
       "filterBadge": "Masque {{count}}",
       "filterBadgeAria": "{{count}} choix de filtre masquent du contenu (éléments, relations, nœuds isolés)",
+      "filterBadgeKeeping": "Masque {{count}} · garde {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} choix de filtre masquent du contenu ; {{kept}} types restent visibles",
       "inspectorHiddenRelations": "{{count}} masqués par le filtre ({{relations}})",
       "showRelation": "▸ Afficher {{relation}}",
       "hoverSummary": "{{name}} · {{file}} · {{in}} entrantes / {{out}} sortantes",
@@ -253,6 +255,7 @@
       "kindOther": "autres",
       "mentioned": "Mentionnées dans cette session",
       "mentionedHint": "Les garder visibles même si leur type est masqué",
+      "mentionedToggleAria": "mentionnées dans cette session, visibles même si leur type est masqué",
       "mentionedInKind": "{{count}} mentionnées dans cette session",
       "showMentioned": "▸ Afficher les mentionnées"
     },

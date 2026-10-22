@@ -43,6 +43,8 @@
       "detailNoChange": "변경 없음: 현재 범위에서 더 줄일 항목이 없습니다",
       "filterBadge": "숨김 {{count}}",
       "filterBadgeAria": "필터 설정 {{count}}개가 콘텐츠를 숨기고 있습니다 (요소, 관계, 고립 노드)",
+      "filterBadgeKeeping": "숨김 {{count}} · 유지 {{kept}}",
+      "filterBadgeKeepingAria": "필터 설정 {{count}}개가 콘텐츠를 숨기고 있습니다. {{kept}}개 종류는 계속 표시됩니다",
       "inspectorHiddenRelations": "필터로 {{count}}개 숨김 ({{relations}})",
       "showRelation": "▸ {{relation}} 표시",
       "hoverSummary": "{{name}} · {{file}} · 들어옴 {{in}} / 나감 {{out}}",
@@ -253,6 +255,7 @@
       "kindOther": "기타",
       "mentioned": "이 세션에서 언급됨",
       "mentionedHint": "종류가 숨겨져 있어도 계속 표시",
+      "mentionedToggleAria": "이 세션에서 언급됨, 종류가 숨겨져 있어도 계속 표시",
       "mentionedInKind": "이 세션에서 {{count}}개 언급됨",
       "showMentioned": "▸ 언급된 항목 표시"
     },

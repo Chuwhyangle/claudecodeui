@@ -43,6 +43,8 @@
       "detailNoChange": "Без изменений: в текущей области больше нечего сокращать",
       "filterBadge": "Скрыто {{count}}",
       "filterBadgeAria": "{{count}} решений фильтра скрывают содержимое (элементы, связи, изолированные узлы)",
+      "filterBadgeKeeping": "Скрыто {{count}} · оставлено {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} решений фильтра скрывают содержимое; {{kept}} типов остаются видимыми",
       "inspectorHiddenRelations": "{{count}} скрыто фильтром ({{relations}})",
       "showRelation": "▸ Показать {{relation}}",
       "hoverSummary": "{{name}} · {{file}} · вх. {{in}} / исх. {{out}}",
@@ -253,6 +255,7 @@
       "kindOther": "прочие",
       "mentioned": "Упомянуто в этой сессии",
       "mentionedHint": "Показывать, даже если их тип скрыт",
+      "mentionedToggleAria": "упомянуто в этой сессии, показывается, даже если тип скрыт",
       "mentionedInKind": "{{count}} упомянуто в этой сессии",
       "showMentioned": "▸ Показать упомянутые"
     },

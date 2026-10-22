@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import { buildReadout, drawnKindCounts } from '@/modules/architecture/readoutNumbers';
+import { buildReadout, drawnKindCounts, relatedScopeTotal } from '@/modules/architecture/readoutNumbers';
 
 /**
  * The readout contract, as a pure function:
  *  · N is the entity count the layout was handed (group boxes count every
  *    member, so N is never a box count);
  *  · M is the server's pre-budget total, falling back to the returned count on
- *    older payloads;
+ *    older payloads, minus whatever the CURRENT display filter removed from the
+ *    payload in hand — so the same filter reads the same number whatever route
+ *    (a fresh request or a local narrowing) produced that payload;
  *  · each budget layer that cut gets exactly one explanation line, with its own
  *    number; the detail line is also stated when the other two budgets both
  *    cut (the retained → drawn → omitted chain is what reconciles N with M);
@@ -118,23 +120,68 @@ test('only the detail tier cutting states the detail line', () => {
 });
 
 test('a node a display filter hid is not a budget cut (the live voice 19 → 18 reading)', () => {
-  // The server returned 19 related entities; the "hide isolated nodes" display
-  // filter removed one, so the detail tier ranked 18 and kept all of them, and
-  // the layout drew all 18. No budget cut anything, and the removed node is
-  // already stated on the readout's own filter line ("1 isolated nodes").
+  // The server returned 19 related entities; the display filter removed one (the
+  // "hide isolated nodes" switch), so the detail tier ranked 18 and kept all of
+  // them, and the layout drew all 18. No budget cut anything, and the removed
+  // node is already stated on the readout's own filter line ("1 isolated nodes").
+  // M follows the filter too: the current scope is the 18 left, not the 19 that
+  // arrived before the filter ran.
   const readout = buildReadout({
     detailRetained: 18,
     detailInScope: 18,
     drawnBoxes: Array.from({ length: 18 }, () => box),
     returnedCount: 19,
     relatedTotal: 19,
+    filteredCount: 18,
   });
 
   assert.equal(readout.shown, 18);
-  assert.equal(readout.related, 19);
+  assert.equal(readout.related, 18);
   assert.equal(readout.limited, false, 'a filtered-out node must not light the budget marker');
   assert.deepEqual(readout.limitedLayers, []);
   assert.deepEqual(readout.lines, []);
+});
+
+test('M is decided by the response set through the current filter, not by the path that reached it', () => {
+  const drawn = Array.from({ length: 5 }, () => box);
+  // The reader's same filter, reached directly: the server answered the narrow
+  // request with 5 entities (5 related).
+  const direct = buildReadout({
+    detailRetained: 5,
+    detailInScope: 5,
+    drawnBoxes: drawn,
+    returnedCount: 5,
+    relatedTotal: 5,
+    filteredCount: 5,
+  });
+  // The same filter after a widening detour: the payload in hand is the WIDER
+  // one (40 arrived, 40 in the server's total), and the local narrowing leaves 5.
+  const afterDetour = buildReadout({
+    detailRetained: 5,
+    detailInScope: 5,
+    drawnBoxes: drawn,
+    returnedCount: 40,
+    relatedTotal: 40,
+    filteredCount: 5,
+  });
+
+  assert.equal(direct.related, 5);
+  assert.equal(afterDetour.related, 5, 'the same filter must read the same related count');
+  assert.equal(afterDetour.relatedText, direct.relatedText, 'including its formatted text');
+  assert.deepEqual(afterDetour.limitedLayers, direct.limitedLayers);
+  assert.deepEqual(afterDetour.lines, direct.lines);
+});
+
+test('relatedScopeTotal takes local filter removals off M but keeps a server omission', () => {
+  // 40 of 100 in scope arrived; the display filter removed 35 of them:
+  // M = 100 − 35 = 65. The 60 the server's budget never served stay counted.
+  assert.equal(relatedScopeTotal(40, 5, 100), 65);
+  // No display removals ⇒ the server's pre-budget total stands.
+  assert.equal(relatedScopeTotal(40, 40, 100), 100);
+  // An older payload with no pre-budget total reads what arrived.
+  assert.equal(relatedScopeTotal(5, 5), 5);
+  // A filtered reading above the arrived set cannot invent entities.
+  assert.equal(relatedScopeTotal(5, 9, 5), 5);
 });
 
 test('the detail tier is still read as cutting against the set it actually ranked', () => {

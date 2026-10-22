@@ -43,6 +43,8 @@
       "detailNoChange": "変更なし: 現在の範囲ではこれ以上削減できません",
       "filterBadge": "非表示 {{count}}",
       "filterBadgeAria": "{{count}} 件のフィルター設定が内容を隠しています（要素・関係・孤立ノード）",
+      "filterBadgeKeeping": "非表示 {{count}} · 維持 {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} 件のフィルター設定が内容を隠しています。{{kept}} 種類は表示したままです",
       "inspectorHiddenRelations": "フィルターで {{count}} 件非表示（{{relations}}）",
       "showRelation": "▸ {{relation}}を表示",
       "hoverSummary": "{{name}} · {{file}} · 入 {{in}} / 出 {{out}}",
@@ -253,6 +255,7 @@
       "kindOther": "その他",
       "mentioned": "このセッションで言及",
       "mentionedHint": "種類が非表示でも表示したままにする",
+      "mentionedToggleAria": "このセッションで言及、種類が非表示でも表示したまま",
       "mentionedInKind": "このセッションで {{count}} 件言及",
       "showMentioned": "▸ 言及されたものを表示"
     },

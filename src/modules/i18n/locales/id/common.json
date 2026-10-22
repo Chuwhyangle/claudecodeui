@@ -43,6 +43,8 @@
       "detailNoChange": "Tidak ada perubahan: tidak ada lagi yang bisa dipangkas dalam cakupan ini",
       "filterBadge": "Menyembunyikan {{count}}",
       "filterBadgeAria": "{{count}} keputusan filter menyembunyikan konten (elemen, relasi, node terisolasi)",
+      "filterBadgeKeeping": "Menyembunyikan {{count}} · mempertahankan {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} keputusan filter menyembunyikan konten; {{kept}} jenis tetap ditampilkan",
       "inspectorHiddenRelations": "{{count}} disembunyikan filter ({{relations}})",
       "showRelation": "▸ Tampilkan {{relation}}",
       "hoverSummary": "{{name}} · {{file}} · {{in}} masuk / {{out}} keluar",
@@ -253,6 +255,7 @@
       "kindOther": "lainnya",
       "mentioned": "Disebut dalam sesi ini",
       "mentionedHint": "Tetap tampilkan meskipun jenisnya disembunyikan",
+      "mentionedToggleAria": "disebut dalam sesi ini, tetap tampil meskipun jenisnya disembunyikan",
       "mentionedInKind": "{{count}} disebut dalam sesi ini",
       "showMentioned": "▸ Tampilkan yang disebut"
     },

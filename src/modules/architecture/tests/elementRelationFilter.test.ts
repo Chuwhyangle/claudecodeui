@@ -12,9 +12,13 @@ import {
   hiddenTotal,
   isFilterNarrower,
   isRelationAllowed,
+  keptMentionedCount,
   relationsForPreset,
   type ArchitectureElementRelationFilter,
 } from '@/modules/architecture/elementRelationFilter';
+// The marker geometry lives beside its only consumer; this file pins it as a
+// pure function (the panel test proves the drawn dots follow it).
+import { markerAnchor } from '@/modules/architecture/PlantUmlGraph';
 import type {
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
@@ -412,8 +416,43 @@ describe('the filter model’s own helpers', () => {
     // Two hidden kinds + one non-call preset + the isolated toggle.
     assert.equal(activeFilterCount(ARCHITECTURE_DEFAULT_FILTER), 4);
     assert.equal(activeFilterCount(ARCHITECTURE_SHOW_ALL_FILTER), 0);
-    // Every switch the reader opens is one more decision the tab is making.
-    assert.equal(activeFilterCount(filterWith({ keepMentionedKinds: ['function'] })), 5);
-    assert.equal(activeFilterCount(filterWith({ keepMentionedKinds: ['class', 'function'] })), 6);
+    // A "keep mentioned" switch SHOWS more, so it is not a hiding decision: the
+    // badge used to climb from 4 to 5 while the graph drew more entities.
+    assert.equal(activeFilterCount(filterWith({ keepMentionedKinds: ['function'] })), 4);
+    assert.equal(activeFilterCount(filterWith({ keepMentionedKinds: ['class', 'function'] })), 4);
+  });
+
+  it('states the kept-mentioned switches as their own count, not as hiding', () => {
+    assert.equal(keptMentionedCount(ARCHITECTURE_DEFAULT_FILTER), 0);
+    assert.equal(keptMentionedCount(ARCHITECTURE_SHOW_ALL_FILTER), 0);
+    assert.equal(keptMentionedCount(filterWith({ keepMentionedKinds: ['function'] })), 1);
+    assert.equal(keptMentionedCount(filterWith({ keepMentionedKinds: ['class', 'function'] })), 2);
+    // The two readings move in opposite directions: opening a switch raises the
+    // kept count and leaves the hidden count exactly where it was.
+    const closed = filterWith({ keepMentionedKinds: [] });
+    const opened = filterWith({ keepMentionedKinds: ['function'] });
+    assert.equal(activeFilterCount(opened), activeFilterCount(closed));
+    assert.equal(keptMentionedCount(opened), keptMentionedCount(closed) + 1);
+  });
+});
+
+describe('markerAnchor', () => {
+  it('anchors a dot or pin inside the node’s own absolute rect', () => {
+    // The renderer emits rects in absolute coordinates (no group translate),
+    // so the anchor must be the rect's own x/y plus the inset — not (4,4).
+    assert.deepEqual(markerAnchor({ x: 368, y: 64 }, 4, 4), { x: 372, y: 68 });
+    assert.deepEqual(markerAnchor({ x: 32, y: 64 }, 4, 12), { x: 36, y: 76 });
+  });
+
+  it('gives different nodes different anchors', () => {
+    const first = markerAnchor({ x: 368, y: 64 }, 4, 4);
+    const second = markerAnchor({ x: 264, y: 64 }, 4, 4);
+    assert.notDeepEqual(first, second, 'two nodes must never share the origin anchor');
+  });
+
+  it('degrades a missing or unreadable rect to the origin offset, never NaN', () => {
+    assert.deepEqual(markerAnchor(null, 4, 4), { x: 4, y: 4 });
+    assert.deepEqual(markerAnchor(undefined, 4, 12), { x: 4, y: 12 });
+    assert.deepEqual(markerAnchor({ x: Number.NaN, y: 2 }, 4, 4), { x: 4, y: 6 });
   });
 });

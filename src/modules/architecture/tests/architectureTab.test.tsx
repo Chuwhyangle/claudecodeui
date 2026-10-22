@@ -2311,9 +2311,20 @@ test('seeds at half the drawn entities or more draw the light marker, and the le
     assert.ok(node !== null, `${id} must be drawn`);
     return node;
   };
+  const rectOf = (node: Element): { x: number; y: number; width: number; height: number } => {
+    const rect = node.querySelector('rect');
+    assert.ok(rect !== null, 'a drawn entity carries its own rect');
+    return {
+      x: Number(rect.getAttribute('x')),
+      y: Number(rect.getAttribute('y')),
+      width: Number(rect.getAttribute('width')),
+      height: Number(rect.getAttribute('height')),
+    };
+  };
 
   // Seed-majority (3 of 4): light form only. The heavy class is what draws the
   // thick amber frame, so its absence is the "no longer shouting" reading.
+  const dotAnchors: { x: number; y: number }[] = [];
   for (const seedId of [
     'src/modules/many/SeedOne.ts.SeedOne',
     'src/modules/many/SeedTwo.ts.SeedTwo',
@@ -2323,8 +2334,40 @@ test('seeds at half the drawn entities or more draw the light marker, and the le
     assert.equal(seed.getAttribute('data-architecture-seed'), 'light', `${seedId} carries the light seed reading`);
     assert.equal(seed.classList.contains('arch-seed-light'), true, `${seedId} has the light style class`);
     assert.equal(seed.classList.contains('arch-seed'), false, `${seedId} must NOT carry the heavy frame class`);
-    assert.ok(seed.querySelector('[data-architecture-seed-dot]'), `${seedId} carries the dot shape reading`);
+    const dot = seed.querySelector('[data-architecture-seed-dot]');
+    assert.ok(dot !== null, `${seedId} carries the dot shape reading`);
+    // The renderer draws rects in ABSOLUTE coordinates (no group translate), so
+    // the dot must be anchored to THIS node's rect — a fixed (4,4) is the SVG
+    // origin, which is where all 37 dots of the live graph used to pile up.
+    const box = rectOf(seed);
+    const dotX = Number(dot.getAttribute('cx'));
+    const dotY = Number(dot.getAttribute('cy'));
+    assert.ok(
+      dotX > box.x && dotX < box.x + box.width,
+      `${seedId}'s dot x=${dotX} must sit inside its rect [${box.x}, ${box.x + box.width}]`,
+    );
+    assert.ok(
+      dotY > box.y && dotY < box.y + box.height,
+      `${seedId}'s dot y=${dotY} must sit inside its rect [${box.y}, ${box.y + box.height}]`,
+    );
+    dotAnchors.push({ x: dotX, y: dotY });
   }
+  assert.equal(
+    new Set(dotAnchors.map((anchor) => `${anchor.x},${anchor.y}`)).size,
+    dotAnchors.length,
+    'different seeds carry different dot anchors (one shared origin is the bug)',
+  );
+  // The drawn bounding box is the union of the node rects and their markers; a
+  // marker anchored at the SVG origin would stretch it there. Every dot is
+  // inside a rect (above), and the rects themselves never start at the origin.
+  const drawnRects = [...host.querySelectorAll('.uml-node[data-entity-id]')].map((node) => rectOf(node));
+  const bboxLeft = Math.min(...drawnRects.map((rect) => rect.x));
+  const bboxTop = Math.min(...drawnRects.map((rect) => rect.y));
+  const markerLeft = Math.min(...dotAnchors.map((anchor) => anchor.x - 2.5));
+  const markerTop = Math.min(...dotAnchors.map((anchor) => anchor.y - 2.5));
+  assert.ok(bboxLeft > 0 && bboxTop > 0, 'the drawing starts away from the SVG origin');
+  assert.ok(markerLeft >= bboxLeft, `no dot extends the box left of the node rects (${markerLeft} < ${bboxLeft})`);
+  assert.ok(markerTop >= bboxTop, `no dot extends the box above the node rects (${markerTop} < ${bboxTop})`);
   const follower = nodeOf('src/modules/many/Follower.ts.Follower');
   assert.equal(follower.getAttribute('data-architecture-seed'), null, 'a non-seed carries no marker');
   assert.equal(follower.classList.contains('arch-seed-light'), false);
@@ -3973,11 +4016,22 @@ test('a mentioned function is hidden by default; the popover and the readout off
     return props;
   };
 
-  // ① The default drawing has no mentioned function.
+  // ① The default drawing has no mentioned function, and the readout says so.
   assert.deepEqual(
     latest().graph.nodes.map((node) => node.id),
     [MENTION_IDS.seed, MENTION_IDS.svc],
     'the mentioned function is not drawn while its kind has no switch on',
+  );
+  const readoutTotal = (): string | null | undefined =>
+    document.querySelector('[data-architecture-readout-summary]')?.getAttribute('data-architecture-readout-total');
+  const filterBadgeElement = (): Element | null => document.querySelector('[data-architecture-filter-badge]');
+  assert.equal(readoutTotal(), '2', 'M names the entities the current filter leaves');
+  assert.equal(filterBadgeElement()?.getAttribute('data-architecture-filter-badge'), '4');
+  assert.match(filterBadgeElement()?.textContent ?? '', /Hiding 4/);
+  assert.doesNotMatch(
+    filterBadgeElement()?.textContent ?? '',
+    /keeping/,
+    'with no switch open the badge states only what it hides',
   );
 
   // ② The readout's second line names the hidden mentioned count and offers the
@@ -4007,6 +4061,21 @@ test('a mentioned function is hidden by default; the popover and the readout off
   assert.equal(functionRow?.getAttribute('aria-checked'), 'false', 'the switch ships off');
   assert.match(functionRow?.textContent ?? '', /☐/, 'the off state is spelled out');
   assert.match(functionRow?.textContent ?? '', /1 functions/);
+  // WCAG "label in name": the accessible name starts with the VISIBLE text
+  // ("1 functions"), and the extra explanation is its own described-by reading.
+  for (const row of rows) {
+    const visible = (row.textContent ?? '').replace(/[☐☑]/g, '').trim();
+    assert.ok(visible.length > 0);
+    assert.ok(
+      (row.getAttribute('aria-label') ?? '').startsWith(visible),
+      `the accessible name must start with the visible text ("${visible}"), got "${row.getAttribute('aria-label')}"`,
+    );
+    assert.equal(row.getAttribute('aria-describedby'), 'architecture-filter-mentioned-hint');
+  }
+  assert.equal(
+    document.getElementById('architecture-filter-mentioned-hint')?.textContent,
+    'Keep these shown even when their kind is hidden',
+  );
 
   // ④ Opening the function switch requests the wider reading exactly once, and
   //    the restored mention is drawn.
@@ -4023,6 +4092,28 @@ test('a mentioned function is hidden by default; the popover and the readout off
   const checkedRow = document.querySelector('[data-architecture-filter-mentioned-kind="function"]');
   assert.equal(checkedRow?.getAttribute('aria-checked'), 'true');
   assert.match(checkedRow?.textContent ?? '', /☑/);
+  // Keeping a kind visible SHOWS more: the hidden count must not move, and the
+  // kept count is stated as its own reading.
+  assert.equal(
+    filterBadgeElement()?.getAttribute('data-architecture-filter-badge'),
+    '4',
+    'opening a "keep mentioned" switch must not increase the hidden count',
+  );
+  assert.match(filterBadgeElement()?.textContent ?? '', /Hiding 4 · keeping 1/);
+  assert.match(
+    filterBadgeElement()?.getAttribute('aria-label') ?? '',
+    /4 filter decisions are hiding content; 1 kinds are kept visible/,
+  );
+  await waitFor(() => assert.equal(readoutTotal(), '3', 'the wider payload adds the restored mention to M'));
+
+  // ⑤ Closing it again is a local narrowing over the SAME (wider) payload. M
+  //    must return to what the identical filter read before the detour: the
+  //    old code kept the wide payload's entityTotal and drifted to 3.
+  fireEvent.click(document.querySelector('[data-architecture-filter-mentioned-kind="function"]') as Element);
+  await waitFor(() => assert.equal(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn), false));
+  assert.equal(readoutTotal(), '2', 'the same filter reads the same related count whichever path reached it');
+  assert.doesNotMatch(filterBadgeElement()?.textContent ?? '', /keeping/, 'the kept reading leaves with the switch');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'closing is narrowing — answered from the payload');
 });
 
 test('the readout’s "show mentioned" opens exactly the kinds the reading hides', async () => {
@@ -4472,6 +4563,25 @@ test('搜索「项目其它」组出现并可钉住：图重新请求，该节�
   const query = apiMock.architectureGraph.mock.calls[1][3] as { extraSeeds?: string[] };
   assert.deepEqual(query.extraSeeds, [CURATION_PIN_ID], 'the pin rides as extraSeeds');
   await waitFor(() => assert.ok(host.querySelector('[data-architecture-pinned="true"]'), 'the pinned node carries its marker'));
+  // The pin glyph is anchored like the seed dot: the node's rect is drawn in
+  // absolute coordinates, so a fixed (4,12) would paint it at the SVG origin.
+  const pinnedNode = host.querySelector('[data-architecture-pinned="true"]');
+  assert.ok(pinnedNode !== null);
+  const pinnedRect = pinnedNode.querySelector('rect');
+  const pinBadge = pinnedNode.querySelector('[data-architecture-pinned-badge]');
+  assert.ok(pinnedRect !== null && pinBadge !== null, 'the pin draws its glyph');
+  const rectX = Number(pinnedRect.getAttribute('x'));
+  const rectY = Number(pinnedRect.getAttribute('y'));
+  const badgeX = Number(pinBadge.getAttribute('x'));
+  const badgeY = Number(pinBadge.getAttribute('y'));
+  assert.ok(
+    badgeX > rectX && badgeX < rectX + Number(pinnedRect.getAttribute('width')),
+    `the pin badge x=${badgeX} must sit inside its node rect starting at ${rectX}`,
+  );
+  assert.ok(
+    badgeY > rectY && badgeY < rectY + Number(pinnedRect.getAttribute('height')),
+    `the pin badge y=${badgeY} must sit inside its node rect starting at ${rectY}`,
+  );
   assert.ok(document.querySelector('[data-architecture-curation-toast]'), 'a Toast announces the pin');
   assert.equal(
     document.querySelector('[data-architecture-curation-manager-toggle]')?.getAttribute('data-architecture-curation-count'),

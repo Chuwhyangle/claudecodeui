@@ -43,6 +43,8 @@
       "detailNoChange": "无变化：当前范围内没有更多可裁剪的实体",
       "filterBadge": "隐藏中 {{count}}",
       "filterBadgeAria": "{{count}} 项筛选正在隐藏内容（元素、关系、孤立节点）",
+      "filterBadgeKeeping": "隐藏 {{count}} · 保持 {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} 项筛选正在隐藏内容；保持显示 {{kept}} 个种类",
       "inspectorHiddenRelations": "被筛选隐藏 {{count}} 条（{{relations}}）",
       "showRelation": "▸ 显示{{relation}}",
       "hoverSummary": "{{name}} · {{file}} · 入 {{in}} / 出 {{out}}",
@@ -253,6 +255,7 @@
       "kindOther": "其他",
       "mentioned": "会话里提到的",
       "mentionedHint": "即使该种类被隐藏也保持显示会话里提到的",
+      "mentionedToggleAria": "会话里提到的，即使该种类被隐藏也保持显示",
       "mentionedInKind": "其中 {{count}} 个在会话里提到过",
       "showMentioned": "▸ 显示提到的"
     },

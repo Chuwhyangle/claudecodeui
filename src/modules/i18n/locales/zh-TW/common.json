@@ -43,6 +43,8 @@
       "detailNoChange": "無變化：目前範圍內沒有更多可裁剪的實體",
       "filterBadge": "隱藏中 {{count}}",
       "filterBadgeAria": "{{count}} 項篩選正在隱藏內容（元素、關係、孤立節點）",
+      "filterBadgeKeeping": "隱藏 {{count}} · 保持 {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} 項篩選正在隱藏內容；保持顯示 {{kept}} 個種類",
       "inspectorHiddenRelations": "被篩選隱藏 {{count}} 條（{{relations}}）",
       "showRelation": "▸ 顯示{{relation}}",
       "hoverSummary": "{{name}} · {{file}} · 入 {{in}} / 出 {{out}}",
@@ -253,6 +255,7 @@
       "kindOther": "其他",
       "mentioned": "工作階段中提及的",
       "mentionedHint": "即使該種類被隱藏也保持顯示工作階段中提及的",
+      "mentionedToggleAria": "工作階段中提及的，即使該種類被隱藏也保持顯示",
       "mentionedInKind": "其中 {{count}} 個在工作階段中提及過",
       "showMentioned": "▸ 顯示提及的"
     },

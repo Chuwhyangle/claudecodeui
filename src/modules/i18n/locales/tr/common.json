@@ -43,6 +43,8 @@
       "detailNoChange": "Değişiklik yok: geçerli kapsamda kırpılacak başka bir şey yok",
       "filterBadge": "{{count}} gizleniyor",
       "filterBadgeAria": "{{count}} filtre kararı içeriği gizliyor (öğeler, ilişkiler, yalıtılmış düğümler)",
+      "filterBadgeKeeping": "{{count}} gizleniyor · {{kept}} korunuyor",
+      "filterBadgeKeepingAria": "{{count}} filtre kararı içeriği gizliyor; {{kept}} tür görünür tutuluyor",
       "inspectorHiddenRelations": "{{count}} filtre tarafından gizlendi ({{relations}})",
       "showRelation": "▸ {{relation}} göster",
       "hoverSummary": "{{name}} · {{file}} · {{in}} gelen / {{out}} giden",
@@ -253,6 +255,7 @@
       "kindOther": "diğerleri",
       "mentioned": "Bu oturumda anılanlar",
       "mentionedHint": "Türleri gizli olsa bile görünür tut",
+      "mentionedToggleAria": "bu oturumda anıldı, türü gizli olsa bile görünür tutulur",
       "mentionedInKind": "Bu oturumda {{count}} kez anıldı",
       "showMentioned": "▸ Anılanları göster"
     },

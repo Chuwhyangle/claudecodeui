@@ -43,6 +43,8 @@
       "detailNoChange": "Keine Änderung: Im aktuellen Umfang lässt sich nichts weiter kürzen",
       "filterBadge": "Verbirgt {{count}}",
       "filterBadgeAria": "{{count}} Filterentscheidungen verbergen Inhalte (Elemente, Beziehungen, isolierte Knoten)",
+      "filterBadgeKeeping": "Verbirgt {{count}} · behält {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} Filterentscheidungen verbergen Inhalte; {{kept}} Arten bleiben sichtbar",
       "inspectorHiddenRelations": "{{count}} vom Filter verborgen ({{relations}})",
       "showRelation": "▸ {{relation}} anzeigen",
       "hoverSummary": "{{name}} · {{file}} · {{in}} ein / {{out}} aus",
@@ -253,6 +255,7 @@
       "kindOther": "Sonstige",
       "mentioned": "In dieser Sitzung erwähnt",
       "mentionedHint": "Auch dann sichtbar lassen, wenn ihre Art ausgeblendet ist",
+      "mentionedToggleAria": "in dieser Sitzung erwähnt, auch sichtbar, wenn ihre Art ausgeblendet ist",
       "mentionedInKind": "{{count}} in dieser Sitzung erwähnt",
       "showMentioned": "▸ Erwähnte anzeigen"
     },

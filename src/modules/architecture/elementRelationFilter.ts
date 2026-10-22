@@ -380,18 +380,30 @@ export function filtersEqual(
 }
 
 /**
- * How many filter decisions are non-default, the number the toolbar badge
- * states. It counts the hidden kinds, each non-`call` relation preset, the
- * isolated toggle, and every kind whose "keep mentioned" switch is on, so
- * "已启用 N 项" answers "how much is this tab doing to the graph" rather than
- * "how many checkboxes exist".
+ * How many filter decisions are HIDING something, the number the toolbar badge
+ * states. It counts the hidden kinds, each non-`call` relation preset, and the
+ * isolated toggle — every option whose effect is to take content away.
+ *
+ * The per-kind "keep mentioned" switches are deliberately NOT counted: opening
+ * one shows MORE (a mentioned entity of a hidden kind comes back), so adding it
+ * here made the "Hiding N" badge go UP while the graph showed more. The kept
+ * count is its own reading ({@link keptMentionedCount}) and the badge states it
+ * separately.
  */
 export function activeFilterCount(filter: ArchitectureElementRelationFilter): number {
   const hiddenKinds = ARCHITECTURE_ELEMENT_KINDS.filter((kind) => !filter.kinds.includes(kind)).length;
   return hiddenKinds
     + (filter.relations === 'call' ? 0 : 1)
-    + (filter.hideIsolated ? 1 : 0)
-    + filter.keepMentionedKinds.length;
+    + (filter.hideIsolated ? 1 : 0);
+}
+
+/**
+ * How many kinds the reader is keeping visible through their "keep mentioned"
+ * switches. This is the opposite direction from {@link activeFilterCount} — the
+ * badge states it as "keeping N", never as part of the hidden count.
+ */
+export function keptMentionedCount(filter: ArchitectureElementRelationFilter): number {
+  return filter.keepMentionedKinds.length;
 }
 
 /**

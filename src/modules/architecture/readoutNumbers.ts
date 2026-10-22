@@ -11,8 +11,10 @@
  *  · N ("showing N") is the number of ENTITIES the renderer was handed after
  *    the detail tier AND the layout budget — a group box counts every member it
  *    stands for, so N is never a box count.
- *  · M ("M related") is every related entity in the current scope, taken from
- *    the server's pre-budget total when the payload carries one.
+ *  · M ("M related") is every related entity in the current scope: the server's
+ *    pre-budget total, minus whatever the CURRENT display filter removed from
+ *    the payload in hand, so the same filter over the same response always
+ *    reads the same number (see `relatedScopeTotal`).
  *  · each budget layer gets at most one explanation line, and only the layers
  *    that actually cut something are named.
  */
@@ -64,6 +66,13 @@ export type ArchitectureReadoutInputs = {
    * which case M falls back to the returned count.
    */
   readonly relatedTotal?: number;
+  /**
+   * Entities the CURRENT display filter leaves in the payload in hand.
+   *
+   * Pass it whenever a display filter ran over the arrived subgraph. Omit it
+   * when the arrived set IS the scope — the two readings then coincide.
+   */
+  readonly filteredCount?: number;
   /** Locale for thousands separators; defaults to English so tests are stable. */
   readonly locale?: string;
 };
@@ -179,6 +188,32 @@ function entityCountOf(boxes: readonly ArchitectureReadoutDrawnBox[]): number {
 }
 
 /**
+ * M under the CURRENT display filter: the server's pre-budget total minus the
+ * entities the display filter removed from the payload in hand.
+ *
+ * M used to be the server's total alone. A widening request replaces the
+ * payload, and a later local narrowing keeps the WIDER payload's `entityTotal`,
+ * so the same filter read `5 related` on the first visit and `40 related` after
+ * opening and closing a "keep mentioned" switch. Subtracting the filter's own
+ * removals makes M a function of the response set and the filter only — never of
+ * the route that produced them.
+ *
+ * The filter's removals are measured on the arrived set (`returnedCount` minus
+ * `filteredCount`); entities the server's own budget never served stay counted,
+ * because no display filter removed them.
+ */
+export function relatedScopeTotal(
+  returnedCount: number,
+  filteredCount: number,
+  relatedTotal?: number,
+): number {
+  const returned = normaliseCount(returnedCount);
+  const filtered = Math.min(normaliseCount(filteredCount), returned);
+  const total = Math.max(returned, normaliseCount(relatedTotal ?? returned));
+  return total - (returned - filtered);
+}
+
+/**
  * Build the one-line reading and its layered explanation.
  *
  * The detail tier cannot retain more than the server returned, so its reading
@@ -201,8 +236,12 @@ export function buildReadout(inputs: ArchitectureReadoutInputs): ArchitectureRea
   const detailRetained = Math.min(normaliseCount(inputs.detailRetained), detailInScope);
   const shown = entityCountOf(inputs.drawnBoxes);
   // M is the pre-budget total when the payload carries one; an older payload
-  // (or an impossible smaller total) falls back to what actually arrived.
-  const related = Math.max(returned, normaliseCount(inputs.relatedTotal ?? returned));
+  // (or an impossible smaller total) falls back to what actually arrived. When
+  // the caller names the filtered set, the display filter's own removals are
+  // taken off that total (see `relatedScopeTotal`).
+  const related = inputs.filteredCount === undefined
+    ? Math.max(returned, normaliseCount(inputs.relatedTotal ?? returned))
+    : relatedScopeTotal(returned, inputs.filteredCount, inputs.relatedTotal);
 
   // Each layer is named only when IT cut: the detail tier against the set it
   // ranked, the layout budget against the set the tier retained, the server

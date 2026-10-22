@@ -43,6 +43,8 @@
       "detailNoChange": "No change: nothing more can be trimmed within the current scope",
       "filterBadge": "Hiding {{count}}",
       "filterBadgeAria": "{{count}} filter decisions are hiding content (elements, relations, isolated nodes)",
+      "filterBadgeKeeping": "Hiding {{count}} · keeping {{kept}}",
+      "filterBadgeKeepingAria": "{{count}} filter decisions are hiding content; {{kept}} kinds are kept visible",
       "inspectorHiddenRelations": "{{count}} hidden by the filter ({{relations}})",
       "showRelation": "▸ Show {{relation}}",
       "hoverSummary": "{{name}} · {{file}} · {{in}} in / {{out}} out",
@@ -259,6 +261,7 @@
       "kindOther": "others",
       "mentioned": "Mentioned in this session",
       "mentionedHint": "Keep these shown even when their kind is hidden",
+      "mentionedToggleAria": "mentioned in this session, kept visible even when the kind is hidden",
       "mentionedInKind": "{{count}} mentioned in this session",
       "showMentioned": "▸ Show mentioned"
     },

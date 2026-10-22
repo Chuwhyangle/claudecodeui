@@ -571,6 +571,51 @@ function highlightEdge(host: HTMLElement, edge: Element | null): void {
   for (const label of edge.querySelectorAll('text')) label.removeAttribute('display');
 }
 
+/** A drawn node rect's own coordinates, as the renderer emits them. */
+type MarkerRect = {
+  readonly x: number;
+  readonly y: number;
+};
+
+/**
+ * The SVG point `dx`/`dy` inside a node's own rect.
+ *
+ * The renderer draws each node's `rect` in ABSOLUTE SVG coordinates — the
+ * enclosing `<g class="uml-node">` carries no `translate` — so a marker written
+ * at a fixed `(4,4)` lands on the canvas origin for every node instead of on the
+ * node it annotates. Anchoring the marker to the rect keeps each marker on its
+ * own box and keeps the drawing's bounding box unchanged. Used by the seed dot
+ * and the pin badge in {@link annotateNodes}; exported so the geometry can be
+ * tested without a layout pass.
+ */
+export function markerAnchor(
+  rect: MarkerRect | null | undefined,
+  dx: number,
+  dy: number,
+): { readonly x: number; readonly y: number } {
+  const x = rect === null || rect === undefined ? 0 : rect.x;
+  const y = rect === null || rect === undefined ? 0 : rect.y;
+  return {
+    x: (Number.isFinite(x) ? x : 0) + dx,
+    y: (Number.isFinite(y) ? y : 0) + dy,
+  };
+}
+
+/**
+ * The first `rect` a node group draws, read as the node's own geometry.
+ *
+ * `applySelectionStyles` already reads the same rect for its check badge, so
+ * every node-anchored decoration agrees on which rectangle is the box.
+ */
+function nodeRectOf(element: Element): MarkerRect | null {
+  const rect = element.querySelector('rect');
+  if (rect === null) return null;
+  return {
+    x: Number(rect.getAttribute('x') ?? '0'),
+    y: Number(rect.getAttribute('y') ?? '0'),
+  };
+}
+
 /**
  * Annotate the freshly drawn SVG with the two readings the node boxes no longer
  * carry themselves:
@@ -608,14 +653,16 @@ function annotateNodes(
     if (isSessionSeedNode(node)) {
       if (seedMode === 'light') {
         // A DOM-shape reading, not colour alone: a small dot beside the label
-        // plus the thin frame from the stylesheet.
+        // plus the thin frame from the stylesheet. The dot is anchored to THIS
+        // node's rect (see `markerAnchor`) — a fixed (4,4) is the SVG origin.
         element.setAttribute('data-architecture-seed', 'light');
         element.classList.add('arch-seed-light');
         const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         dot.setAttribute('class', 'arch-seed-dot');
         dot.setAttribute('data-architecture-seed-dot', 'true');
-        dot.setAttribute('cx', '4');
-        dot.setAttribute('cy', '4');
+        const dotAnchor = markerAnchor(nodeRectOf(element), 4, 4);
+        dot.setAttribute('cx', String(dotAnchor.x));
+        dot.setAttribute('cy', String(dotAnchor.y));
         dot.setAttribute('r', '2.5');
         element.insertBefore(dot, element.firstChild);
       } else {
@@ -631,8 +678,11 @@ function annotateNodes(
       const badge = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       badge.setAttribute('class', 'arch-pinned-badge');
       badge.setAttribute('data-architecture-pinned-badge', 'true');
-      badge.setAttribute('x', '4');
-      badge.setAttribute('y', '12');
+      // Same absolute-coordinate rule as the seed dot: a fixed (4,12) would
+      // paint every pin glyph at the canvas origin.
+      const badgeAnchor = markerAnchor(nodeRectOf(element), 4, 12);
+      badge.setAttribute('x', String(badgeAnchor.x));
+      badge.setAttribute('y', String(badgeAnchor.y));
       badge.setAttribute('font-size', '11');
       badge.textContent = '📌';
       element.insertBefore(badge, element.firstChild);
