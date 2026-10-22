@@ -1,7 +1,7 @@
 ---
 id: architecture-scope-and-detail-controls
 title: 「范围 +N」步进器 + 「详情 核心/常用/全部」：用可理解的两个旋钮取代 Hops 三按钮与不明的节点计数
-status: ready
+status: done
 labels:
   - feature
 parent: null
