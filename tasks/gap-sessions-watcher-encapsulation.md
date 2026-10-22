@@ -2,7 +2,7 @@
 id: gap-sessions-watcher-encapsulation
 title: SessionsWatcher 封装：sessions-watcher 的 5 个模块级
   let（pendingWatcherUpdate/flushTimer/refreshInFlight/reschedule）收进带生命周期的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
