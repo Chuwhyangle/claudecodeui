@@ -89,6 +89,11 @@ export const FIXTURE_FILES = [
   SERVER_TSCONFIG,
   TYPES_MODULE,
   SERVICE_MODULE,
+  // The settings/rules contract the service imports through its `@shared` alias. This is the one
+  // edge the shared-subtree closure cannot derive — that helper follows relative specifiers only,
+  // and an alias is a build-time mapping — so a fixture without it cannot load the service at all:
+  // the import throws, the reader prints nothing, and every behavioural reading is `unavailable`.
+  'shared/voice/voiceSettingsRegistry.ts',
   // The service's runtime siblings: it composes the capture seam and re-exports the browser
   // recogniser's asset surface from these two named modules (the concern split in
   // `gap-voice-service-concern-split`). A fixture without them cannot load the service at all, so
@@ -114,6 +119,104 @@ export const FIXTURE_FILES = [
  * forbids, because that is the copy that goes stale when a provider changes.
  */
 const CAPABILITY_DECLARATION = /\b(acceptsMime|maxInlineRequestBytes|pauseCues|oversize|billing|oneShot)\s*:/;
+
+/**
+ * `source` with its comments removed, leaving string and template literals (and their contents)
+ * byte-for-byte intact.
+ *
+ * WHY THE DECLARATION SCAN IS COMMENT-BLIND. The capability names above are also the words a
+ * comment uses to EXPLAIN the registry — `src/shared/voiceTrim.ts` documents that a relay
+ * recogniser declares `pauseCues: 'neutral'`, which is a true statement about
+ * `shared/asr/.../dashscope-omni-relay.asr-provider.ts`, not a client-side capability table.
+ * Scanning raw text read that sentence as a declaration and red the probe on 2026-10-22
+ * (`87a4199ab`, one JSDoc line, no behavioural change). A reading that flips on prose is not
+ * reading the invariant it claims to read.
+ *
+ * WHY NOT A REGEX REPLACEMENT. `source.replace(/\/\/.*$/gm, '')` truncates every URL at its
+ * scheme (`https://…`) and turns string contents into code, which would trade this false
+ * positive for false negatives. So this walks the source one character at a time and only drops
+ * comment syntax found in CODE position: quotes and backticks toggle a literal state in which
+ * `//` is just text, a `/` that can begin a regex is consumed as a regex (its character class may
+ * contain quotes), and removed comments are replaced by a space so two tokens cannot fuse.
+ * Newlines survive, so line structure is unchanged.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+function stripComments(source) {
+  /** @type {string[]} */
+  const out = [];
+  // The delimiter of the literal we are inside, or '' in code position.
+  let quote = '';
+  // The last non-whitespace character emitted in code position, used to tell a regex literal
+  // (`/…/` after `=`, `(`, `,`, …) from division (after an identifier or a closing bracket).
+  let previous = '';
+  let index = 0;
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (quote) {
+      out.push(char);
+      if (char === '\\' && index + 1 < source.length) {
+        // An escaped pair stays together, including an escaped delimiter.
+        out.push(source[index + 1]);
+        index += 2;
+        continue;
+      }
+      if (char === quote) quote = '';
+      index += 1;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      out.push(char);
+      previous = char;
+      index += 1;
+      continue;
+    }
+    if (char === '/' && next === '/') {
+      index += 2;
+      while (index < source.length && source[index] !== '\n') index += 1;
+      out.push(' ');
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      index += 2;
+      out.push(' ');
+      while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
+        if (source[index] === '\n') out.push('\n');
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+    if (char === '/' && (previous === '' || /[(,=:[!&|?{};+\-*%^~<>]/.test(previous))) {
+      let cursor = index + 1;
+      let inClass = false;
+      let closed = false;
+      while (cursor < source.length) {
+        const inner = source[cursor];
+        if (inner === '\\') { cursor += 2; continue; }
+        if (inner === '\n') break;
+        if (inner === '[') { inClass = true; cursor += 1; continue; }
+        if (inner === ']') { inClass = false; cursor += 1; continue; }
+        if (inner === '/' && !inClass) { closed = true; cursor += 1; break; }
+        cursor += 1;
+      }
+      if (closed) {
+        while (cursor < source.length && /[a-z]/i.test(source[cursor])) cursor += 1;
+        out.push(source.slice(index, cursor));
+        previous = '/';
+        index = cursor;
+        continue;
+      }
+    }
+    out.push(char);
+    if (!/\s/.test(char)) previous = char;
+    index += 1;
+  }
+  return out.join('');
+}
 
 /**
  * @param {string} root
@@ -342,7 +445,9 @@ function clientReadings(root) {
   /** @type {string[]} */
   const failures = [];
   const files = sourceFiles(root, 'src');
-  const declaring = files.filter((file) => CAPABILITY_DECLARATION.test(readTreeFile(root, file)));
+  // Strip comments before matching: a capability name in prose describes a declaration, it is not
+  // one. The code in the same file is read unchanged, so a real table is still caught.
+  const declaring = files.filter((file) => CAPABILITY_DECLARATION.test(stripComments(readTreeFile(root, file))));
 
   // The two symbols the client's capability path runs through: the variable that holds the
   // health reading's provider, and the hook call that fills it.

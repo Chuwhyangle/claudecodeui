@@ -37,6 +37,13 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
 const PROBE = path.join(SCRIPT_DIR, 'asr-health-provider-check.mjs');
 
 const SERVICE_MODULE = 'server/modules/voice/voice.service.ts';
+const API_MODULE = 'src/shared/api.ts';
+/**
+ * A line in the fixture's `api.ts` that occurs exactly once, used as the insertion point for the
+ * AC6 controls below. Each case asserts its own `from` is unique, so a second copy would fail the
+ * control rather than silently mutating the wrong site.
+ */
+const PROFILE_SLOT = 'let voiceProviderProfile: { id: string; capabilities: AsrCapabilities } | null = null;';
 
 function buildFixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), 'asr-health-fixture-'));
@@ -79,6 +86,10 @@ function greenFixture(t) {
 
 /**
  * Replaces `from` with `to`, refusing to silently no-op on a fixture that has drifted.
+ *
+ * The `from` must occur EXACTLY ONCE: a mutation that names a string found twice could move a
+ * different site than the case believes it moved, and the case would then read green for the wrong
+ * reason.
  * @param {string} root
  * @param {string} relativePath
  * @param {string} from
@@ -87,8 +98,27 @@ function greenFixture(t) {
 function patchFixtureFile(root, relativePath, from, to) {
   const filePath = path.join(root, relativePath);
   const source = readFileSync(filePath, 'utf8');
-  assert.ok(source.includes(from), `${relativePath} no longer contains ${from}; this case needs updating`);
+  const occurrences = source.split(from).length - 1;
+  assert.equal(occurrences, 1, `${relativePath} contains ${from} ${occurrences} time(s), expected exactly 1; this case needs updating`);
   writeFileSync(filePath, source.replace(from, to));
+}
+
+/**
+ * Replaces EVERY occurrence of `from`, requiring `expected` of them — the "rename all N sites"
+ * mutations. Kept separate from `patchFixtureFile` so a counted rename is explicit rather than a
+ * silently different meaning of the same helper.
+ * @param {string} root
+ * @param {string} relativePath
+ * @param {string} from
+ * @param {string} to
+ * @param {number} expected
+ */
+function renameEverywhere(root, relativePath, from, to, expected) {
+  const filePath = path.join(root, relativePath);
+  const source = readFileSync(filePath, 'utf8');
+  const occurrences = source.split(from).length - 1;
+  assert.equal(occurrences, expected, `${relativePath} contains ${from} ${occurrences} time(s), expected ${expected}; this case needs updating`);
+  writeFileSync(filePath, source.split(from).join(to));
 }
 
 test('AC7/AC8: the landing reading is candidate (a), and a frontend-tree landing is refused', (t) => {
@@ -207,4 +237,83 @@ test('AC4/AC8: a renamed `configured` field is reported, not merely un-flagged',
   const result = runProbe(root);
   assert.notEqual(result.status, 0, `a renamed configured field must not pass:\n${result.stdout}`);
   assert.match(result.stdout, /^configured-field-present=missing$/m, `the verdict must name the reading that moved:\n${result.stdout}`);
+});
+
+test('AC6/AC8: a second capability declaration in the client is reported', (t) => {
+  const root = greenFixture(t);
+
+  // The fake form: the client keeps its own copy of a capability table — the copy AC6 exists to
+  // forbid, because it is the one that goes stale when the registry changes a provider.
+  const declaration = "export const probeCaps = { pauseCues: 'neutral' };";
+  patchFixtureFile(root, API_MODULE, PROFILE_SLOT, `${declaration}\n${PROFILE_SLOT}`);
+
+  const result = runProbe(root);
+  assert.notEqual(result.status, 0, `a client-side capability declaration must not pass:\n${result.stdout}`);
+  assert.match(result.stdout, /^client-capability-table=declared-in-1-file\(s\)$/m, `the verdict must name the reading that moved:\n${result.stdout}`);
+  assert.match(
+    result.stdout,
+    /^failure=AC6: the client declares capabilities of its own in src\/shared\/api\.ts$/m,
+    `the verdict must name the file that declares them:\n${result.stdout}`,
+  );
+
+  patchFixtureFile(root, API_MODULE, `${declaration}\n`, '');
+  const restored = runProbe(root);
+  assert.equal(restored.status, 0, `the declaration's removal must restore green:\n${restored.stdout}`);
+});
+
+test('AC6/AC8: a capability name in a comment is prose, but the same text as code is a declaration', (t) => {
+  const root = greenFixture(t);
+
+  // The regression shape (`87a4199ab`): one JSDoc line that explains the registry's own
+  // `pauseCues: 'neutral'` declaration. It is documentation, not a second capability table, so
+  // the probe must stay green. The sentence is read from the file that carries it rather than
+  // retyped here, so this control cannot drift from the prose it mirrors.
+  const sentence = readFileSync(path.join(REPO_ROOT, 'src/shared/voiceTrim.ts'), 'utf8')
+    .split('\n')
+    .find((line) => /^\s*\*/.test(line) && /\bpauseCues\s*:/.test(line));
+  assert.ok(sentence, 'the shipping tree no longer carries the documented sentence this control mirrors');
+  const comment = `/*\n${sentence}\n */`;
+
+  patchFixtureFile(root, API_MODULE, PROFILE_SLOT, `${comment}\n${PROFILE_SLOT}`);
+  const asComment = runProbe(root);
+  assert.equal(asComment.status, 0, `a capability name inside a comment must not be read as a declaration:\n${asComment.stdout}`);
+  assert.match(asComment.stdout, /^client-capability-table=none$/m, `the comment must not move the reading:\n${asComment.stdout}`);
+
+  // The same text at the same place, with the comment delimiters removed. The two branches differ
+  // ONLY in whether it is a comment, so the red below is about code-vs-prose and nothing else.
+  patchFixtureFile(root, API_MODULE, comment, "export const probeRelayCaps = { pauseCues: 'neutral' };");
+  const asCode = runProbe(root);
+  assert.notEqual(asCode.status, 0, `the same text as code must be read as a declaration:\n${asCode.stdout}`);
+  assert.match(asCode.stdout, /^client-capability-table=declared-in-1-file\(s\)$/m, `the code form must move the reading:\n${asCode.stdout}`);
+});
+
+test('AC6/AC8: a client that no longer asks the registry is reported', (t) => {
+  const root = greenFixture(t);
+
+  // The fake form: the client stops consulting the registry. The declaration scan would stay
+  // green on this tree, so without this control deleting the leg would look like a pass.
+  renameEverywhere(root, API_MODULE, 'tryResolve', 'resolveProvider', 3);
+  const unasked = runProbe(root);
+  assert.notEqual(unasked.status, 0, `a client that does not ask the registry must not pass:\n${unasked.stdout}`);
+  assert.match(unasked.stdout, /does not ask the registry/, `the verdict must name the missing registry read:\n${unasked.stdout}`);
+
+  renameEverywhere(root, API_MODULE, 'resolveProvider', 'tryResolve', 3);
+  const restored = runProbe(root);
+  assert.equal(restored.status, 0, `restoring the registry read must restore green:\n${restored.stdout}`);
+});
+
+test('AC6/AC8: a client whose capability read points moved is reported', (t) => {
+  const root = greenFixture(t);
+
+  // The fake form: the variable that carries the health reading's provider is renamed, so the
+  // published profile is no longer what the capability path reads. The hook's setter is left
+  // alone: only the read point moved, which is exactly the reading this leg owns.
+  renameEverywhere(root, API_MODULE, 'voiceProviderProfile', 'voiceProfile', 7);
+  const moved = runProbe(root);
+  assert.notEqual(moved.status, 0, `a moved capability read point must not pass:\n${moved.stdout}`);
+  assert.match(moved.stdout, /read points/, `the verdict must name the moved read point:\n${moved.stdout}`);
+
+  renameEverywhere(root, API_MODULE, 'voiceProfile', 'voiceProviderProfile', 7);
+  const restored = runProbe(root);
+  assert.equal(restored.status, 0, `restoring the read point must restore green:\n${restored.stdout}`);
 });
