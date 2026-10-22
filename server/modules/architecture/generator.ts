@@ -411,6 +411,15 @@ export type ArchitectureFilterHidden = {
    * `mentionedByKind`.
    */
   readonly mentionedByKind?: Readonly<Partial<Record<EntityKind, number>>>;
+  /**
+   * Per EMITTED node, how many of its relations the relation axis hid, by
+   * relation type. The aggregate `byRelation` above answers "how many call
+   * edges were dropped"; this answers "the function in front of me draws no
+   * relation because N of its own calls were dropped", which is what the
+   * inspector and hover reading state. Absent when no relation was hidden (or
+   * no relation filter ran), so an unfiltered payload keeps its old shape.
+   */
+  readonly byNodeRelations?: Readonly<Record<string, Readonly<Partial<Record<RelationType, number>>>>>;
 };
 
 /**
@@ -1125,10 +1134,24 @@ function filterReading(
 ): { relationCounts: Partial<Record<RelationType, number>>; hidden: ArchitectureFilterHidden } {
   const relationCounts: Partial<Record<RelationType, number>> = {};
   const byRelation: Partial<Record<RelationType, number>> = {};
+  // Per drawn node: the relations of its own that the relation axis removed.
+  // Counted over the FILTERED node set so a node the element axis dropped never
+  // appears here — only a box the reader can actually click needs this reading.
+  const byNodeRelations: Record<string, Partial<Record<RelationType, number>>> = {};
+  const emitted = new Set(filteredIds);
   for (const edge of collectEntityEdges(index, unfilteredIds)) {
     relationCounts[edge.type] = (relationCounts[edge.type] ?? 0) + 1;
     if (!relationAllowed(relations, edge.type)) {
       byRelation[edge.type] = (byRelation[edge.type] ?? 0) + 1;
+    }
+  }
+  for (const edge of collectEntityEdges(index, filteredIds)) {
+    if (relationAllowed(relations, edge.type)) continue;
+    for (const id of [edge.from, edge.to]) {
+      if (!emitted.has(id)) continue;
+      const counts = byNodeRelations[id] ?? {};
+      counts[edge.type] = (counts[edge.type] ?? 0) + 1;
+      byNodeRelations[id] = counts;
     }
   }
 
@@ -1163,6 +1186,7 @@ function filterReading(
       // Same presence rule as the top-level reading: the element filter was
       // requested, so the switch's own count exists even when it is zero.
       ...(kinds === undefined ? {} : { mentionedByKind }),
+      ...(Object.keys(byNodeRelations).length === 0 ? {} : { byNodeRelations }),
     },
   };
 }

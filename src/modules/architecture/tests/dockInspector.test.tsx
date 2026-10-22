@@ -596,3 +596,148 @@ test('the Text door opens the dock with nothing selected', async () => {
   await waitFor(() => assert.ok(dock() !== null, 'an explicit Text press opens the dock with no selection'));
   assert.ok(document.querySelector('[data-architecture-text-panel]'), 'and it shows the text page the reader asked for');
 });
+
+/**
+ * The content/copy reading (2026-10-22): the inspector explains a filtered-away
+ * relation instead of printing a bare zero, the hover tooltip names the entity
+ * instead of leaking its scope key, and a session hit says WHAT it is.
+ */
+const HIDDEN_FN = '93e0a992/modules/alpha/fn.ts.fnFn';
+const HIDDEN_CLS = '93e0a992/modules/alpha/cls.ts.Cls';
+
+const HIDDEN_RELATIONS_RESULT: ArchitectureGraphResult = {
+  mmd: RESULT.mmd,
+  graph: {
+    file: { nodes: [{ id: 'modules/alpha/fn.ts', label: 'fn.ts', distance: 0 }], edges: [] },
+    entity: {
+      nodes: [
+        { id: HIDDEN_FN, label: 'fnFn', distance: 0, kind: 'function', mentionTier: 'direct' },
+        { id: HIDDEN_CLS, label: 'Cls', distance: 1, kind: 'class' },
+      ],
+      // The only relation is a CALL, which the shipped dependency preset hides.
+      edges: [{ from: HIDDEN_FN, to: HIDDEN_CLS, relationType: 'call' }],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 2,
+    entityTotal: 2,
+    entityEdges: 1,
+    fileNodes: 1,
+    fileTotal: 1,
+    fileEdges: 0,
+    truncated: false,
+    nodeCount: 3,
+    edgeCount: 1,
+  },
+  provenance: RESULT.provenance,
+};
+
+/** The shipped default plus functions shown: the call edge is still hidden. */
+function rememberShowFunctions(): void {
+  window.localStorage.setItem('architecture.filter.project-1', JSON.stringify({
+    kinds: ['class', 'interface', 'enum', 'abstract', 'function', 'other'],
+    relations: 'dependency',
+    hideIsolated: false,
+    keepMentionedKinds: [],
+  }));
+}
+
+test('a function whose relations are all filtered away says how many, and offers to show that relation', async () => {
+  rememberShowFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(HIDDEN_RELATIONS_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const panel = await openInspectorFor(host, HIDDEN_FN);
+
+  // The drawn degree is honestly zero...
+  assert.equal(
+    panel.querySelector('[data-architecture-inspector-out-degree]')?.getAttribute('data-architecture-inspector-out-degree'),
+    '0',
+  );
+  // ...and the inspector says WHY instead of stopping there.
+  const hidden = panel.querySelector('[data-architecture-inspector-hidden-relations]');
+  assert.ok(hidden instanceof HTMLElement, 'the inspector must state the hidden relations');
+  assert.equal(hidden.getAttribute('data-architecture-inspector-hidden-relations'), '1');
+  assert.equal(hidden.getAttribute('data-architecture-inspector-hidden-relation-types'), 'call');
+  assert.match(hidden.textContent ?? '', /1 hidden by the filter \(Call\)/);
+
+  const showCall = panel.querySelector('[data-architecture-inspector-show-relation="call"]');
+  assert.ok(showCall instanceof HTMLElement, 'the reading offers the one-click widening');
+  assert.match(showCall.textContent ?? '', /Show Call/i);
+  fireEvent.click(showCall);
+
+  await waitFor(() => assert.equal(
+    inspector()?.querySelector('[data-architecture-inspector-out-degree]')?.getAttribute('data-architecture-inspector-out-degree'),
+    '1',
+    'showing the call relation draws the edge (and the degree follows)',
+  ));
+});
+
+test('the hover tooltip names the entity and its file, never the scope key', async () => {
+  rememberShowFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(HIDDEN_RELATIONS_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.mouseOver(host.querySelector(`[data-entity-id="${HIDDEN_FN}"]`) as Element);
+  const hover = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-hover]');
+    assert.ok(element instanceof HTMLElement, 'hovering a node states its reading');
+    return element;
+  });
+
+  assert.equal(hover.getAttribute('data-architecture-hover-name'), 'fnFn');
+  assert.match(hover.textContent ?? '', /fnFn/);
+  assert.match(hover.textContent ?? '', /modules\/alpha\/fn\.ts/, 'the file is named');
+  assert.doesNotMatch(hover.textContent ?? '', /(^|\s)[0-9a-f]{8}\//, 'the opaque scope key never leaks');
+  assert.doesNotMatch(hover.textContent ?? '', /relations: no outgoing\/incoming relation/);
+  // The zero relations are explained, not hidden: the call edge the filter
+  // dropped is stated on the same line.
+  assert.match(hover.textContent ?? '', /1 more hidden by the filter/);
+});
+
+test('each session hit carries its type, and a file-only hit says it is not the name', async () => {
+  apiMock.architectureMentions.mockResolvedValue(mentionsFor([
+    {
+      messageId: 'message-text',
+      role: 'assistant',
+      kind: 'text',
+      match: 'name',
+      excerpt: '…please look at Alpha before you change it…',
+      at: '2026-10-22T09:00:00.000Z',
+    },
+    {
+      messageId: 'message-tool',
+      kind: 'tool_use',
+      toolName: 'Read',
+      match: 'file',
+      excerpt: '…modules/alpha/A.ts…',
+      at: '2026-10-22T09:01:00.000Z',
+    },
+  ]));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const panel = await openInspectorFor(host, ALPHA);
+  fireEvent.click(panel.querySelector('[data-architecture-inspector-tab="sessions"]') as Element);
+
+  const messageBadge = await waitFor(() => {
+    const element = panel.querySelector('[data-architecture-mention-badge="message"]');
+    assert.ok(element instanceof HTMLElement, 'a prose hit is a message');
+    return element;
+  });
+  assert.match(messageBadge.textContent ?? '', /Message/);
+
+  const toolBadge = panel.querySelector('[data-architecture-mention-badge="tool-file"]');
+  assert.ok(toolBadge instanceof HTMLElement, 'a file-tool hit is typed as a tool call');
+  assert.match(toolBadge.textContent ?? '', /Tool: Read file/);
+
+  const toolRow = panel.querySelector('[data-architecture-mention="message-tool"]');
+  assert.ok(toolRow instanceof HTMLElement);
+  assert.equal(toolRow.getAttribute('data-architecture-mention-match'), 'file');
+  const caveat = toolRow.querySelector('[data-architecture-mention-file-only="true"]');
+  assert.ok(caveat !== null, 'a path hit must say the file matched, not the name');
+  assert.match(caveat.textContent ?? '', /mentioned the file, not the name/);
+  // The excerpt the server sent starts at a word boundary and is marked as cut.
+  assert.match(toolRow.textContent ?? '', /…modules\/alpha\/A\.ts/);
+});

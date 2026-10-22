@@ -62,6 +62,17 @@ type ArchitectureInspectorProps = {
   readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
   readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
   readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
+  /**
+   * Per node, the relations the filter hid, by relation type. The inspector
+   * states them instead of printing a bare "0 in · 0 out"; omitted when the
+   * caller has no hidden reading.
+   */
+  readonly hiddenRelations?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /**
+   * Widens the relation filter to include one type — the "Show calls" action
+   * beside a hidden-relation reading. Omitted when the host has no filter.
+   */
+  readonly onShowRelationType?: (relationType: string) => void;
 };
 
 /** The entity's display name: its label, or the id's tail when the label repeats the id. */
@@ -109,7 +120,7 @@ function kindLabelKey(node: ArchitectureRendererNode): string {
   }
 }
 
-/** One transcript hit row: role badge, relative time, and the excerpt with the name marked. */
+/** One transcript hit row: a TYPE badge, relative time, and the excerpt with the name marked. */
 function MentionRow({
   hit,
   name,
@@ -124,12 +135,18 @@ function MentionRow({
   readonly locateLabel: string;
 }) {
   const { t } = useTranslation();
-  const roleLabel = hit.kind === 'tool_result'
+  // The badge says WHAT the row is, not who spoke: a Read-tool hit is not an
+  // assistant message, and calling it one was half the reported confusion.
+  const badgeKey = hit.kind === 'tool_result' ? 'tool' : hit.kind === 'tool_use' ? 'tool-file' : 'message';
+  const badgeLabel = hit.kind === 'tool_result'
     ? t('architecture.mentions.roleTool', { defaultValue: 'Tool output' })
-    : hit.role === 'user'
-      ? t('architecture.mentions.roleUser', { defaultValue: 'User' })
-      : t('architecture.mentions.roleAssistant', { defaultValue: 'Assistant' });
-  const roleKey = hit.kind === 'tool_result' ? 'tool' : hit.role === 'user' ? 'user' : 'assistant';
+    : hit.kind === 'tool_use'
+      ? t('architecture.copyFix.mentionBadgeToolFile', {
+          defaultValue: 'Tool: {{tool}} file',
+          tool: hit.toolName ?? t('architecture.copyFix.mentionBadgeToolUnknown', { defaultValue: 'file' }),
+        })
+      : t('architecture.copyFix.mentionBadgeMessage', { defaultValue: 'Message' });
+  const fileOnly = hit.match === 'file';
 
   // Highlight every occurrence of the name in the excerpt. The split is
   // case-insensitive and keeps the original text, so a path hit highlights the
@@ -158,15 +175,17 @@ function MentionRow({
         onClick={onLocate}
         aria-label={locateLabel}
         data-architecture-mention={hit.messageId}
-        data-architecture-mention-role={roleKey}
+        data-architecture-mention-role={hit.role ?? (hit.kind === 'tool_result' ? 'tool' : 'assistant')}
+        data-architecture-mention-type={badgeKey}
+        data-architecture-mention-match={hit.match ?? 'name'}
         className="flex w-full flex-col items-start gap-0.5 rounded px-1 py-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
       >
         <span className="flex items-center gap-1.5 text-[10px] font-medium">
           <span
-            data-architecture-mention-badge={roleKey}
+            data-architecture-mention-badge={badgeKey}
             className="rounded bg-muted px-1 py-0.5 text-muted-foreground"
           >
-            {roleLabel}
+            {badgeLabel}
           </span>
           <time
             dateTime={hit.at}
@@ -176,6 +195,14 @@ function MentionRow({
             {formatRelativeTime(hit.at, locale)}
           </time>
         </span>
+        {fileOnly && (
+          <span
+            data-architecture-mention-file-only="true"
+            className="text-[10px] italic text-muted-foreground"
+          >
+            {t('architecture.copyFix.mentionFileOnly', { defaultValue: 'mentioned the file, not the name' })}
+          </span>
+        )}
         <span className="line-clamp-2 text-[11px] text-foreground">
           {segments.map((segment, index) => (segment.marked ? (
             <mark
@@ -352,6 +379,8 @@ function EntityInspector({
   onPinNode,
   onUnpinNode,
   onRemoveNode,
+  hiddenRelations,
+  onShowRelationType,
 }: {
   readonly node: ArchitectureRendererNode;
   readonly graph: ArchitectureRendererGraph;
@@ -368,6 +397,8 @@ function EntityInspector({
   readonly onPinNode?: (node: ArchitectureRendererNode) => void;
   readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
   readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
+  readonly hiddenRelations?: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  readonly onShowRelationType?: (relationType: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   // Which page the inspector shows. Session-scoped (not remembered): a new
@@ -380,8 +411,7 @@ function EntityInspector({
   const name = nodeName(node);
   const file = nodeFileOf(node, idShape);
 
-  const { incoming, outgoing, relatedByType } = useMemo(() => {
-    const inEdges: ArchitectureRendererEdge[] = [];
+  const { incoming, outgoing, relatedByType } = useMemo(() => {    const inEdges: ArchitectureRendererEdge[] = [];
     const outEdges: ArchitectureRendererEdge[] = [];
     const grouped = new Map<string, { node: ArchitectureRendererNode; direction: 'in' | 'out' }[]>();
     const byId = new Map(graph.nodes.map((candidate) => [candidate.id, candidate]));
@@ -399,6 +429,15 @@ function EntityInspector({
     }
     return { incoming: inEdges.length, outgoing: outEdges.length, relatedByType: grouped };
   }, [graph, node.id]);
+
+  // The relation axis's removals for THIS box: a function with "0 in · 0 out"
+  // usually lost its calls to the filter, not to the analysis.
+  const hiddenRelationsOfNode = hiddenRelations?.[node.id] ?? {};
+  const hiddenRelationTypes = Object.keys(hiddenRelationsOfNode)
+    .filter((type) => (hiddenRelationsOfNode[type] ?? 0) > 0)
+    .sort();
+  const hiddenRelationTotal = hiddenRelationTypes
+    .reduce((total, type) => total + (hiddenRelationsOfNode[type] ?? 0), 0);
 
   const { view, reload } = useMentions({
     projectId,
@@ -502,6 +541,35 @@ function EntityInspector({
               <span data-architecture-inspector-out-degree={outgoing}>
                 {t('architecture.inspector.outDegree', { defaultValue: '{{count}} out', count: outgoing })}
               </span>
+              {hiddenRelationTotal > 0 && (
+                <>
+                  {' · '}
+                  <span
+                    data-architecture-inspector-hidden-relations={hiddenRelationTotal}
+                    data-architecture-inspector-hidden-relation-types={hiddenRelationTypes.join(',')}
+                    title={hiddenRelationTypes.map(relationLabel).join(', ')}
+                  >
+                    {t('architecture.copyFix.inspectorHiddenRelations', {
+                      defaultValue: '{{count}} hidden by the filter ({{relations}})',
+                      count: hiddenRelationTotal,
+                      relations: hiddenRelationTypes.map(relationLabel).join(', '),
+                    })}
+                  </span>
+                  {onShowRelationType !== undefined && hiddenRelationTypes.length > 0 && (
+                    <button
+                      type="button"
+                      data-architecture-inspector-show-relation={hiddenRelationTypes[0]}
+                      onClick={() => onShowRelationType(hiddenRelationTypes[0])}
+                      className="ml-1 font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      {t('architecture.copyFix.showRelation', {
+                        defaultValue: '▸ Show {{relation}}',
+                        relation: relationLabel(hiddenRelationTypes[0]),
+                      })}
+                    </button>
+                  )}
+                </>
+              )}
             </dd>
           </dl>
 
@@ -830,6 +898,8 @@ export function ArchitectureInspector({
   onUnpinNode,
   onRemoveNode,
   onHideRelation,
+  hiddenRelations,
+  onShowRelationType,
 }: ArchitectureInspectorProps) {
   if (selection.kind === 'relation') {
     return (
@@ -872,6 +942,8 @@ export function ArchitectureInspector({
       {...(onPinNode === undefined ? {} : { onPinNode })}
       {...(onUnpinNode === undefined ? {} : { onUnpinNode })}
       {...(onRemoveNode === undefined ? {} : { onRemoveNode })}
+      {...(hiddenRelations === undefined ? {} : { hiddenRelations })}
+      {...(onShowRelationType === undefined ? {} : { onShowRelationType })}
     />
   );
 }

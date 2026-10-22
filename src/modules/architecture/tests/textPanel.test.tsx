@@ -154,6 +154,10 @@ function renderTextPanel(overrides: PanelOverrides = {}) {
       selection={overrides.selection ?? null}
       projectId="project-1"
       sessionId="session-1"
+      // The workspace knows the display name and the session title; the
+      // copied header must use them, not the opaque ids.
+      projectName="claudecodeui"
+      sessionTitle="Copy fixes"
       analyzedAt={GENERATED_AT}
       viewLabel="Class diagram"
       filterSummary="7 functions hidden; relations: structural"
@@ -380,7 +384,8 @@ test('copy as session context carries the header facts and a plantuml fence', as
   await waitFor(() => assert.equal(clipboard.mock.calls.length, 1));
 
   const copied = String(clipboard.mock.calls[0][0]);
-  assert.match(copied, /^About the architecture diagram \(project project-1, session session-1, analysed at /);
+  assert.match(copied, /^About the architecture diagram \(project claudecodeui, session Copy fixes, analysed at /);
+  assert.doesNotMatch(copied, /project project-1/, 'the id must not be the headline once the name is known');
   assert.match(copied, /; scope: Whole filtered graph; view: Class diagram; filter: 7 functions hidden; relations: structural\):/);
   assert.match(copied, /\n\n```plantuml\n@startuml\n/);
   assert.ok(copied.endsWith('@enduml\n```'), 'the document must be closed inside the fence');

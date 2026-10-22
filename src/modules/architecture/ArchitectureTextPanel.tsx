@@ -78,6 +78,13 @@ type ArchitectureTextPanelProps = {
   readonly selection: ArchitectureSelection | null;
   readonly projectId: string | null;
   readonly sessionId: string | null;
+  /**
+   * The project's display name and the session's title, when the workspace
+   * knows them. The copied header states these instead of the opaque ids; the
+   * ids stay as the fallback so a standalone embed still produces a header.
+   */
+  readonly projectName?: string | null;
+  readonly sessionTitle?: string | null;
   /** The reading's `provenance.generatedAt`, shown in the session-context header. */
   readonly analyzedAt: string | null;
   /** The panel's translated class/file label for the header. */
@@ -167,6 +174,8 @@ export function ArchitectureTextPanel({
   selection,
   projectId,
   sessionId,
+  projectName = null,
+  sessionTitle = null,
   analyzedAt,
   viewLabel,
   filterSummary,
@@ -357,11 +366,19 @@ export function ArchitectureTextPanel({
   // The header the chat receives. It states the four facts a reader needs to
   // know what the pasted document describes, so the text is not orphaned from
   // its project/session/view/filter once it leaves this page.
+  //
+  // Project and session are named the way the workspace labels them; the raw
+  // ids are the fallback, never the headline (`project b0a96771-c926-…` told a
+  // reader nothing).
+  const projectLabel = projectName?.trim() || projectId
+    || t('architecture.text.unknownProject', { defaultValue: 'unknown' });
+  const sessionLabel = sessionTitle?.trim() || sessionId
+    || t('architecture.text.unknownSession', { defaultValue: 'unknown' });
   const contextHeader = t('architecture.text.sessionHeader', {
     defaultValue:
       'About the architecture diagram (project {{project}}, session {{session}}, analysed at {{analyzedAt}}; scope: {{scope}}; view: {{view}}; filter: {{filter}}):',
-    project: projectId ?? t('architecture.text.unknownProject', { defaultValue: 'unknown' }),
-    session: sessionId ?? t('architecture.text.unknownSession', { defaultValue: 'unknown' }),
+    project: projectLabel,
+    session: sessionLabel,
     analyzedAt: analyzedLabel,
     scope: scopeLabels[scopeKind],
     view: viewLabel,

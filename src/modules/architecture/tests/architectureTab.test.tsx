@@ -2676,7 +2676,7 @@ test('the truncation reading follows the current granularity and appends the omi
   const summary = document.querySelector('[data-architecture-readout-summary]');
   assert.equal(summary?.getAttribute('data-architecture-readout-summary'), '4');
   assert.equal(summary?.getAttribute('data-architecture-readout-total'), '9');
-  assert.match(summary?.textContent ?? '', /Showing 4 classes · 9 related/);
+  assert.match(summary?.textContent ?? '', /Showing 4 \(.*\) · 9 related|Showing 4 · 9 related/);
   // The collapsed line is the two numbers plus ONE marker: the old
   // per-budget sentences moved into the expanded explanation.
   assert.match(truncated.textContent ?? '', /Budget-limited/);
@@ -3147,7 +3147,7 @@ test('the toolbar wraps instead of scrolling, the class diagram is the default, 
   // The one-line readout: shown vs. every related entity in the current scope.
   const summary = (): Element | null => document.querySelector('[data-architecture-readout-summary]');
   assert.ok(summary() instanceof HTMLElement);
-  assert.match(summary()?.textContent ?? '', /Showing 4 classes · 4 related/);
+  assert.match(summary()?.textContent ?? '', /Showing 4 \(1 functions · 1 interfaces · 2 classes\) · 4 related/);
   assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '4');
   assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
   const readout = document.querySelector('[data-architecture-readout]');
@@ -3158,7 +3158,7 @@ test('the toolbar wraps instead of scrolling, the class diagram is the default, 
   await waitFor(() => {
     assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '2');
     assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
-    assert.match(summary()?.textContent ?? '', /Showing 2 classes · 4 related/);
+    assert.match(summary()?.textContent ?? '', /Showing 2 \(.*\) · 4 related|Showing 2 · 4 related/);
   });
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the detail knob never refetches');
 });
@@ -4722,4 +4722,225 @@ test('换会话后调整集不串', async () => {
     '0',
     'session 2 must not inherit session 1 adjustments',
   ));
+});
+
+/**
+ * The content/copy reading (2026-10-22): a scope step that finds more of the
+ * graph and then hides all of it must SAY so and offer the one click back; a
+ * detail knob that cannot trim anything must say that too; the filter badge is
+ * a hiding count, not an "on" count.
+ */
+const SCOPE_ONE = 's1/src/modules/alpha/a.ts.Alpha';
+const SCOPE_TWO = 's1/src/modules/alpha/b.ts.Beta';
+const SCOPE_FN_ONE = 's1/src/modules/alpha/f1.ts.f1';
+const SCOPE_FN_TWO = 's1/src/modules/alpha/f2.ts.f2';
+
+function scopeDeltaResult(input: {
+  readonly scope: number;
+  readonly showFunctions: boolean;
+}): ArchitectureGraphResult {
+  // Two classes joined by a dependency edge: the default filter hides isolated
+  // nodes, so a lone box would be removed by the local filter before drawing.
+  const nodes: ArchitectureNeighborhood['nodes'] = [
+    { id: SCOPE_ONE, label: 'Alpha', distance: 0, kind: 'class' },
+    { id: SCOPE_TWO, label: 'Beta', distance: 1, kind: 'class' },
+    ...(input.showFunctions
+      ? [
+          { id: SCOPE_FN_ONE, label: 'f1', distance: 1, kind: 'function' as const },
+          { id: SCOPE_FN_TWO, label: 'f2', distance: 1, kind: 'function' as const },
+        ]
+      : []),
+  ];
+  const hiddenFunctions = input.showFunctions ? 0 : 2;
+  return {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: {
+      file: {
+        nodes: [{ id: 'src/modules/alpha/a.ts', label: 'src/modules/alpha/a.ts', distance: 0 }],
+        edges: [],
+      },
+      entity: {
+        nodes,
+        edges: [
+          { from: SCOPE_TWO, to: SCOPE_ONE, relationType: 'dependency' },
+          ...(input.showFunctions
+            ? [
+                // Dependency edges so the default relation preset keeps them:
+                // the functions must stop being isolated once they are shown.
+                { from: SCOPE_FN_ONE, to: SCOPE_ONE, relationType: 'dependency' as const },
+                { from: SCOPE_FN_TWO, to: SCOPE_ONE, relationType: 'dependency' as const },
+              ]
+            : []),
+        ],
+      },
+    },
+    stats: {
+      entityNodes: nodes.length,
+      fileNodes: 1,
+      entityEdges: input.showFunctions ? 3 : 1,
+      fileEdges: 0,
+      truncated: false,
+      entityTotal: input.scope === 2 ? 2 : 4,
+      fileTotal: 1,
+      seedFiles: 1,
+      seedIdentifiers: 1,
+      nodeCount: nodes.length + 1,
+      edgeCount: input.showFunctions ? 3 : 1,
+      unresolved: { files: [], identifiers: [] },
+      ...(input.scope === 2
+        ? {}
+        : {
+            hidden: {
+              byKind: hiddenFunctions === 0 ? {} : { function: hiddenFunctions },
+              byRelation: {},
+              isolated: 0,
+            },
+          }),
+    },
+    provenance: { generatedAt: GENERATED_AT, fingerprints: [], cacheHit: false },
+  };
+}
+
+test('a scope step whose new entities are all filtered away says so and offers to show them', async () => {
+  apiMock.architectureGraph.mockImplementation(async (
+    _projectId: string,
+    _sessionId: string,
+    scope: number,
+    query: { kinds?: readonly string[] } | undefined,
+  ) => {
+    const kinds = query?.kinds ?? [];
+    return jsonResponse(scopeDeltaResult({
+      scope,
+      // The "Show functions" click widens the kind axis to include functions;
+      // the server then returns them.
+      showFunctions: kinds.includes('function'),
+    }));
+  });
+  // A stand-in renderer keeps this criterion on the PANEL's reading: the real
+  // ELK drawing is exercised by the rest of this file, and mounting it here
+  // only adds render cost to a filter/scope assertion.
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  assert.deepEqual(latest().graph.nodes.map((node) => node.id), [SCOPE_ONE, SCOPE_TWO]);
+  assert.equal(document.querySelector('[data-architecture-scope-hidden]'), null, 'nothing hidden yet');
+
+  fireEvent.click(document.querySelector('[data-architecture-scope-increase]') as Element);
+
+  const notice = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-scope-hidden]');
+    assert.ok(element instanceof HTMLElement, 'the scope step must explain the invisible gain');
+    return element;
+  });
+  assert.equal(notice.getAttribute('data-architecture-scope-hidden'), '2');
+  assert.match(notice.textContent ?? '', /Scope \+3 found 2 more related, all hidden by the filter/);
+  assert.match(notice.textContent ?? '', /2 functions/, 'the hidden kinds are named');
+  // The comparison payload draws the same two boxes: every new entity is hidden.
+  assert.deepEqual(latest().graph.nodes.map((node) => node.id), [SCOPE_ONE, SCOPE_TWO]);
+
+  // Let the scope response's commit settle before the next filter change: two
+  // queued widenings in the same tick race the hook's refresh bookkeeping.
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const showFunctions = document.querySelector('[data-architecture-scope-show-kinds="function"]');
+  assert.ok(showFunctions instanceof HTMLElement, 'the reading offers the one-click fix');
+  assert.match(showFunctions.textContent ?? '', /Show functions/);
+  fireEvent.click(showFunctions);
+
+  await waitFor(() => assert.ok(
+    latest().graph.nodes.some((node) => node.id === SCOPE_FN_ONE),
+    'clicking the action must hand the functions to the drawing',
+  ));
+  assert.equal(
+    document.querySelector('[data-architecture-scope-hidden]') === null,
+    true,
+    'the explanation clears',
+  );
+  const lastKinds = (apiMock.architectureGraph.mock.calls.at(-1) as unknown[])[3] as { kinds?: readonly string[] };
+  assert.ok(lastKinds.kinds?.includes('function'), 'the widening is a server request with the function kind');
+});
+
+test('a detail knob that cannot trim anything carries the no-change explanation', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(scopeDeltaResult({ scope: 2, showFunctions: false })));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  for (const tier of ['core', 'common', 'all']) {
+    const button = document.querySelector(`[data-architecture-detail-option="${tier}"]`);
+    assert.ok(button instanceof HTMLElement);
+    assert.equal(
+      button.getAttribute('data-architecture-detail-no-change'),
+      'true',
+      `${tier} must be marked as a no-op on this graph`,
+    );
+    assert.equal(
+      button.getAttribute('title'),
+      'No change: nothing more can be trimmed within the current scope',
+    );
+    assert.doesNotMatch(button.getAttribute('title') ?? '', /directly mentioned|直接提到/i);
+  }
+});
+
+test('the filter badge reads as a hiding count and the options carry a glyph, not only a fill', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const badge = document.querySelector('[data-architecture-filter-badge]');
+  assert.ok(badge instanceof HTMLElement);
+  assert.match(badge.textContent ?? '', /Hiding \d+/, 'the badge states decisions that hide, not options that are on');
+  assert.match(badge.getAttribute('aria-label') ?? '', /filter decisions are hiding content/);
+  assert.ok((badge.getAttribute('title') ?? '').length > 0);
+
+  fireEvent.click(document.querySelector('[data-architecture-filter-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-filter-menu]')));
+
+  // Every kind switch states its on/off in a glyph as well as the fill.
+  const functionSwitch = document.querySelector('[data-architecture-filter-kind="function"]');
+  assert.ok(functionSwitch instanceof HTMLElement);
+  assert.match(functionSwitch.textContent ?? '', /☐/, 'a hidden kind is an empty box');
+  const classSwitch = document.querySelector('[data-architecture-filter-kind="class"]');
+  assert.match(classSwitch?.textContent ?? '', /☑/, 'a shown kind is a checked box');
+  const relationSwitch = document.querySelector('[data-architecture-filter-relation="dependency"]');
+  assert.match(relationSwitch?.textContent ?? '', /✓/, 'the selected relation preset is a tick');
+});
+
+test('the file graph never prints the class-view kind tally', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-readout-detail]')));
+  assert.equal(
+    document.querySelector('[data-architecture-kind-counts]'),
+    null,
+    'a file graph has no entity kinds, so the class tally must not be stated there',
+  );
+});
+
+
+
+
+test('the neighbourhood view keeps edge labels hidden, like every other view', async () => {
+  rememberShowAllFilter();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // Drill one hop from an entity: the renderer switches to its neighbourhood view.
+  fireEvent.doubleClick(host.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]') as Element);
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'),
+    'neighborhood',
+  ));
+  assert.ok(host.querySelectorAll('.uml-edge text').length > 0, 'the renderer still draws the labels');
+  assert.deepEqual(visibleEdgeLabels(host), [], 'no label is visible until the reader hovers an edge endpoint');
 });

@@ -24,10 +24,10 @@ import type { NormalizedMessage } from '@/shared/types.js';
 import {
   FILE_SEED_TOOLS,
   IDENTIFIER_TOKEN,
+  mentionExcerpt,
   projectPathTokens,
   readCommand,
   readFilePath,
-  seedMentionExcerpt,
   toolResultText,
   type SeedMentionHit,
   type SeedMentionKind,
@@ -50,6 +50,8 @@ type IndexedMessage = {
   readonly id: string;
   readonly role?: 'user' | 'assistant';
   readonly kind: SeedMentionKind;
+  /** The file tool that produced a `tool_use` row, so the UI can name it. */
+  readonly toolName?: string;
   readonly at: string;
   readonly content: string;
 };
@@ -80,7 +82,7 @@ export type SessionMentionIndex = {
 function indexedRow(
   message: NormalizedMessage,
   includeToolResults: boolean,
-): { kind: SeedMentionKind; content: string } | undefined {
+): { kind: SeedMentionKind; content: string; toolName?: string } | undefined {
   if (message.kind === 'text') {
     if (message.role !== 'user' && message.role !== 'assistant') return undefined;
     return typeof message.content === 'string' && message.content.length > 0
@@ -90,7 +92,9 @@ function indexedRow(
   if (message.kind === 'tool_use') {
     if (typeof message.toolName === 'string' && FILE_SEED_TOOLS.has(message.toolName)) {
       const filePath = readFilePath(message.toolInput);
-      return filePath === undefined ? undefined : { kind: 'tool_use', content: filePath };
+      return filePath === undefined
+        ? undefined
+        : { kind: 'tool_use', content: filePath, toolName: message.toolName };
     }
     if (includeToolResults && message.toolName === 'Bash') {
       const command = readCommand(message.toolInput);
@@ -167,6 +171,7 @@ export function buildMentionIndex(
       id: message.id,
       ...(message.role === undefined ? {} : { role: message.role }),
       kind: row.kind,
+      ...(row.toolName === undefined ? {} : { toolName: row.toolName }),
       at: message.timestamp,
       content: row.content,
     });
@@ -249,16 +254,38 @@ type Candidate = {
   readonly start: number;
   /** Mutated only when a name hit upgrades an earlier path-only reading. */
   backticked: boolean;
+  /** How this row matched; a name match always wins the union. */
+  match: 'name' | 'file';
 };
 
 /** Build the hit for one candidate row. */
-function candidateHit(index: SessionMentionIndex, candidate: Candidate, name: string): MentionHit {
+function candidateHit(
+  index: SessionMentionIndex,
+  candidate: Candidate,
+  name: string,
+  file: string | undefined,
+): MentionHit {
   const row = index.messages[candidate.ordinal];
+  // A file hit must read as a PROJECT-RELATIVE path. The row may hold an
+  // absolute path (a tool call, or prose pasted from a terminal); when the
+  // matched file is in it, the excerpt starts at that file so the prefix the
+  // reader cannot use disappears.
+  let content = row.content;
+  let start = Math.max(0, candidate.start);
+  if (candidate.match === 'file' && file !== undefined) {
+    const at = content.indexOf(file);
+    if (at >= 0) {
+      content = content.slice(at);
+      start = 0;
+    }
+  }
   return {
     messageId: row.id,
     ...(row.role === undefined ? {} : { role: row.role }),
     kind: row.kind,
-    excerpt: seedMentionExcerpt(row.content, Math.max(0, candidate.start), name.length),
+    ...(row.toolName === undefined ? {} : { toolName: row.toolName }),
+    match: candidate.match,
+    excerpt: mentionExcerpt(content, start, name.length),
     at: row.at,
   };
 }
@@ -285,28 +312,33 @@ export function queryMentionIndex(
 ): MentionHitResult {
   const limit = query.limit ?? DEFAULT_MENTION_HIT_LIMIT;
   const byOrdinal = new Map<number, Candidate>();
-  const add = (ordinal: number, name: string): void => {
+  const add = (ordinal: number, name: string, match: 'name' | 'file'): void => {
     const row = index.messages[ordinal];
     if (row === undefined) return;
     const existing = byOrdinal.get(ordinal);
     const backticked = isBackticked(row.content, name);
     if (existing !== undefined) {
       existing.backticked ||= backticked;
+      // A row that names BOTH the entity and its path is a name mention: the
+      // "this is only the file" caveat must not fire there.
+      if (match === 'name') existing.match = 'name';
       return;
     }
-    byOrdinal.set(ordinal, { ordinal, start: hitOffset(row.content, name), backticked });
+    byOrdinal.set(ordinal, { ordinal, start: hitOffset(row.content, name), backticked, match });
   };
 
   if (query.name !== undefined && query.name.length > 0) {
-    for (const ordinal of index.tokens.get(query.name) ?? []) add(ordinal, query.name);
+    for (const ordinal of index.tokens.get(query.name) ?? []) add(ordinal, query.name, 'name');
   }
   if (query.file !== undefined && query.file.length > 0) {
-    for (const ordinal of fileCandidates(index, query.file)) add(ordinal, query.file);
+    for (const ordinal of fileCandidates(index, query.file)) add(ordinal, query.file, 'file');
   }
 
   const name = query.name ?? query.file ?? '';
   const candidates = [...byOrdinal.values()].sort(compareCandidates);
-  const hits = candidates.slice(0, limit).map((candidate) => candidateHit(index, candidate, name));
+  const hits = candidates
+    .slice(0, limit)
+    .map((candidate) => candidateHit(index, candidate, name, query.file));
   return { hits, truncated: candidates.length > limit };
 }
 
@@ -336,9 +368,10 @@ export function queryCoMentionIndex(
       ordinal,
       start: tokenOffset(row?.content ?? '', first),
       backticked: row === undefined ? false : isBackticked(row.content, first),
+      match: 'name',
     };
   }).sort(compareCandidates);
 
-  const hits = candidates.slice(0, limit).map((candidate) => candidateHit(index, candidate, first));
+  const hits = candidates.slice(0, limit).map((candidate) => candidateHit(index, candidate, first, undefined));
   return { hits, truncated: candidates.length > limit };
 }

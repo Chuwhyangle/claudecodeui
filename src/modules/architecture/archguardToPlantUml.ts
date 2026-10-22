@@ -313,24 +313,58 @@ function entityBodyOf(
 }
 
 /**
- * The declaration head for a kind-bearing node. `<<interface>>` and
- * `<<function>>` are part of the drawn title: the renderer's parser drops a
- * trailing stereotype token, so the only place a stereotype survives into the
- * SVG is the quoted name itself.
+ * The declaration head for a kind-bearing node.
+ *
+ * The stereotype is written as a REAL PlantUML stereotype (`class "Name" as n0
+ * <<function>>`) instead of being glued into the quoted display name. Copying
+ * the document is the point: an external PlantUML tool must render the same
+ * «function» / «interface» badge the tab draws, and a `<<…>>` inside a quoted
+ * name is just text to it. `alias` is part of the head because the standard
+ * spelling puts the stereotype AFTER the alias.
+ *
+ * Consumers that DRAW this document (the renderer's parser predates real
+ * stereotype support) normalise it back with {@link parserSafePlantUml}; the
+ * text the reader copies and exports is this standard spelling.
  */
-function entityHead(kind: NonNullable<ArchitectureNeighborhoodNode['kind']>, label: string): string {
+function entityHead(
+  kind: NonNullable<ArchitectureNeighborhoodNode['kind']>,
+  label: string,
+  alias: string,
+): string {
   switch (kind) {
     case 'interface':
-      return `interface "<<interface>> ${label}"`;
+      return `interface "${label}" as ${alias} <<interface>>`;
     case 'enum':
-      return `enum "${label}"`;
+      return `enum "${label}" as ${alias}`;
     case 'abstract':
-      return `abstract class "${label}"`;
+      return `abstract class "${label}" as ${alias}`;
     case 'function':
-      return `class "<<function>> ${label}"`;
+      return `class "${label}" as ${alias} <<function>>`;
     default:
-      return `class "${label}"`;
+      return `class "${label}" as ${alias}`;
   }
+}
+
+/**
+ * The same document in the spelling the bundled renderer's parser understands.
+ *
+ * `@yalehwang/plantuml-js` 0.3.1 recognises `class "Name" <<stereotype>> as n0`
+ * (stereotype BEFORE the alias) but not the standard `as n0 <<stereotype>>`
+ * order, and it never preserves a stereotype as data. The drawing therefore
+ * receives this parser-safe form, which keeps the alias and the display name
+ * intact, and then re-states the stereotype in the DOM (`annotateNodes`). The
+ * DOCUMENT the reader copies stays in the standard form above.
+ */
+export function parserSafePlantUml(source: string): string {
+  return source
+    .split('\n')
+    .map((line) => {
+      const match = /^(\s*)((?:abstract\s+)?(?:class|interface|enum))\s+"([^"]*)"\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s+<<([^>]+)>>(\s*\{?)\s*$/.exec(line);
+      if (match === null) return line;
+      const [, indent, keyword, name, alias, stereotype, brace] = match;
+      return `${indent}${keyword} "<<${stereotype}>> ${name}" as ${alias}${brace}`;
+    })
+    .join('\n');
 }
 
 /**
@@ -348,7 +382,7 @@ function entityDeclarationLines(
   if (node.kind === undefined || label === null) {
     return [`class "${sanitizeName(displayName(node.id, MAX_DISPLAY_DIR_SEGMENTS, idShape))}" as ${alias}`];
   }
-  const head = `${entityHead(node.kind, sanitizeName(label))} as ${alias}`;
+  const head = entityHead(node.kind, sanitizeName(label), alias);
   const body = entityBodyOf(node, membersTruncated);
   if (body.length === 0) return [head];
   return [`${head} {`, ...body.map((row) => `  ${row}`), '}'];

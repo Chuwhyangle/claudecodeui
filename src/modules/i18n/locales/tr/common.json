@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} sınıf",
+      "kindFunction": "{{count}} işlev",
+      "kindInterface": "{{count}} arayüz",
+      "kindOther": "{{count}} diğer",
+      "entitySummary": "{{shown}} gösteriliyor ({{kinds}}) · {{total}} ilişkili",
+      "entitySummaryPlain": "{{shown}} gösteriliyor · {{total}} ilişkili",
+      "scopeMoreHidden": "Kapsam +{{scope}} {{count}} ilişkili daha buldu, hepsi filtre tarafından gizlendi ({{parts}})",
+      "showKinds": "▸ {{kinds}} göster",
+      "detailNoChange": "Değişiklik yok: geçerli kapsamda kırpılacak başka bir şey yok",
+      "filterBadge": "{{count}} gizleniyor",
+      "filterBadgeAria": "{{count}} filtre kararı içeriği gizliyor (öğeler, ilişkiler, yalıtılmış düğümler)",
+      "inspectorHiddenRelations": "{{count}} filtre tarafından gizlendi ({{relations}})",
+      "showRelation": "▸ {{relation}} göster",
+      "hoverSummary": "{{name}} · {{file}} · {{in}} gelen / {{out}} giden",
+      "hoverNoRelations": "çizilmiş ilişki yok",
+      "hoverHidden": "{{count}} tane daha filtre tarafından gizlendi",
+      "mentionBadgeToolFile": "Araç: {{tool}} dosyası",
+      "mentionBadgeToolUnknown": "dosya",
+      "mentionBadgeMessage": "Mesaj",
+      "mentionFileOnly": "adı değil dosyayı belirtti"
+    },
     "tray":     {
       "region": "Seçim",
       "pill": "{{count}} seçili ▴",

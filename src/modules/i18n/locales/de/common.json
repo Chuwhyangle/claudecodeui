@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} Klassen",
+      "kindFunction": "{{count}} Funktionen",
+      "kindInterface": "{{count}} Schnittstellen",
+      "kindOther": "{{count}} andere",
+      "entitySummary": "{{shown}} angezeigt ({{kinds}}) · {{total}} verwandt",
+      "entitySummaryPlain": "{{shown}} angezeigt · {{total}} verwandt",
+      "scopeMoreHidden": "Umfang +{{scope}} fand {{count}} weitere verwandte, alle vom Filter verborgen ({{parts}})",
+      "showKinds": "▸ {{kinds}} anzeigen",
+      "detailNoChange": "Keine Änderung: Im aktuellen Umfang lässt sich nichts weiter kürzen",
+      "filterBadge": "Verbirgt {{count}}",
+      "filterBadgeAria": "{{count}} Filterentscheidungen verbergen Inhalte (Elemente, Beziehungen, isolierte Knoten)",
+      "inspectorHiddenRelations": "{{count}} vom Filter verborgen ({{relations}})",
+      "showRelation": "▸ {{relation}} anzeigen",
+      "hoverSummary": "{{name}} · {{file}} · {{in}} ein / {{out}} aus",
+      "hoverNoRelations": "keine gezeichneten Beziehungen",
+      "hoverHidden": "{{count}} weitere vom Filter verborgen",
+      "mentionBadgeToolFile": "Werkzeug: {{tool}}-Datei",
+      "mentionBadgeToolUnknown": "Datei",
+      "mentionBadgeMessage": "Nachricht",
+      "mentionFileOnly": "nannte die Datei, nicht den Namen"
+    },
     "tray":     {
       "region": "Auswahl",
       "pill": "{{count}} ausgewählt ▴",

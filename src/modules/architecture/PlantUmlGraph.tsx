@@ -10,10 +10,12 @@ import {
   DEFAULT_NEIGHBORHOOD_HOPS,
   isSessionSeedNode,
   nodeFileOf,
+  parserSafePlantUml,
   seedMarkerMode,
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
+import { standardiseDrawnStereotypes } from '@/modules/architecture/plantUmlText';
 import {
   applyExplosionLod,
   buildExplosionHierarchy,
@@ -31,8 +33,7 @@ import {
   type ArchitectureLayoutEngine,
   type ArchitectureLayoutEngineClass,
 } from '@/modules/architecture/elkAspectEngine';
-import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
-import {
+import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';import {
   TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useCanvasHeaderSlot,
@@ -1538,7 +1539,12 @@ export function PlantUmlGraph({
         // drawn, which the text page serializes (see `onDrawnPlantUmlChange`).
         const renderStartedAt = performance.now();
         const detailed = await renderDetailed(
-          diagram.puml,
+          // The document the reader copies uses real stereotypes
+          // (`class "X" as n0 <<function>>`); the bundled parser needs that
+          // token before the alias, so the DRAWING gets the parser-safe
+          // spelling. `standardiseDrawnStereotypes` reverses it when the drawn
+          // model is serialized for the text page.
+          parserSafePlantUml(diagram.puml),
           rendererOptionsFor(view, diagram, engine),
         );
         const elapsedMs = Math.round(performance.now() - renderStartedAt);
@@ -1556,7 +1562,10 @@ export function PlantUmlGraph({
         drawnCallbackRef.current?.({
           model,
           entityIdOf: diagram.aliasOf,
-          toPlantUml,
+          // The drawn model names each function `<<function>> Name` (the
+          // parser-safe spelling it was rendered from); the copied document
+          // must carry the stereotype as a real token instead.
+          toPlantUml: (drawnModel) => standardiseDrawnStereotypes(toPlantUml(drawnModel)),
           applyView,
         });
         drawnAspectRef.current = drawnAspect;

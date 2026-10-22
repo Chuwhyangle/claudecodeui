@@ -1,8 +1,9 @@
-import type { PlantUmlModel } from '@yalehwang/plantuml-js/elk';
+import type { PlantUmlEntity, PlantUmlModel } from '@yalehwang/plantuml-js/elk';
 
 import { DEFAULT_NODE_ID_SHAPE, directoryPathOf } from '@/modules/architecture/adaptiveGrouping';
 import {
   archguardToPlantUml,
+  parserSafePlantUml,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/archguardToPlantUml';
 import type {
@@ -40,6 +41,94 @@ import type {
  * reading is always labelled "approx." because a tokenizer would disagree.
  */
 export const TEXT_CHARS_PER_TOKEN = 3.5;
+
+/** One parsed entity, with the stereotype the bundled parser drops. */
+export type ArchitectureParsedEntity = PlantUmlEntity & {
+  /** The `<<…>>` token the declaration carried (`function`, `interface`, …). */
+  readonly stereotype?: string;
+};
+
+/** A parsed document whose entities carry their stereotype as data. */
+export type ArchitectureParsedModel = Omit<PlantUmlModel, 'entities'> & {
+  readonly entities: readonly ArchitectureParsedEntity[];
+};
+
+/**
+ * The declaration orders a stereotype can appear in.
+ *  · standard: `class "Name" as n0 <<function>>` (what we copy/export);
+ *  · parser-safe: `class "<<function>> Name" as n0` (what the renderer parses,
+ *    and what the drawn model still carries).
+ */
+const STANDARD_STEREOTYPE_LINE = /^\s*(?:(?:abstract\s+)?(?:class|interface|enum))\s+"([^"]*)"(?:\s*~[^~]+~)?\s+as\s+([A-Za-z_][A-Za-z0-9_]*)\s+<<([^>]+)>>/;
+const SAFE_STEREOTYPE_LINE = /^\s*(?:(?:abstract\s+)?(?:class|interface|enum))\s+"<<([^>]+)>>\s+([^"]*)"(?:\s*~[^~]+~)?\s+as\s+([A-Za-z_][A-Za-z0-9_]*)/;
+
+/**
+ * Parse a PlantUML document and report each entity's stereotype as DATA.
+ *
+ * `@yalehwang/plantuml-js` 0.3.1's parser drops a `<<stereotype>>` token (its
+ * own comment says it is "not part of the name in M2"), so a document written
+ * in the standard spelling cannot report «function» through it. This entry
+ * therefore parses the PARSER-SAFE spelling (see
+ * {@link parserSafePlantUml}) and attaches the stereotype read from the
+ * caller's own source, keyed by the declaration's alias.
+ *
+ * The package is imported dynamically for the same reason the syntax badge does
+ * it: the renderer chunk must not join the tab's first screen.
+ *
+ * Consumers: `tests/plantUmlText.test.ts` (the standard-spelling criterion).
+ */
+export async function parsePlantUml(source: string): Promise<ArchitectureParsedModel> {
+  const { parsePlantUml: parseUpstream } = await import('@yalehwang/plantuml-js');
+  const model = parseUpstream(parserSafePlantUml(source)) as PlantUmlModel;
+
+  const stereotypeOf = new Map<string, string>();
+  for (const line of source.split('\n')) {
+    const standard = STANDARD_STEREOTYPE_LINE.exec(line);
+    if (standard !== null) {
+      stereotypeOf.set(standard[2], standard[3]);
+      continue;
+    }
+    const safe = SAFE_STEREOTYPE_LINE.exec(line);
+    if (safe !== null) stereotypeOf.set(safe[3], safe[1]);
+  }
+
+  return {
+    ...model,
+    entities: model.entities.map((entity) => {
+      const stereotype = stereotypeOf.get(entity.id);
+      if (stereotype === undefined) return entity;
+      // The parser-safe spelling keeps the token in the name; the reading this
+      // entry promises is the bare name PLUS the stereotype as data.
+      const name = entity.name.startsWith(`<<${stereotype}>> `)
+        ? entity.name.slice(stereotype.length + 5)
+        : entity.name;
+      return { ...entity, name, stereotype };
+    }),
+  };
+}
+
+/**
+ * Turn a drawn model's serialization back into the standard stereotype
+ * spelling.
+ *
+ * The renderer parses the parser-safe spelling, so the model it reports names
+ * each function `<<function>> haltVerdict`. Serializing that model verbatim
+ * would copy the glued-name bug back out. This rewrites each declaration line
+ * `class "<<function>> Name" as n0` to `class "Name" as n0 <<function>>` — the
+ * form an external PlantUML tool renders as a real stereotype — while leaving
+ * every other line (relations, packages, members) byte-identical.
+ */
+export function standardiseDrawnStereotypes(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const match = /^(\s*)((?:abstract\s+)?(?:class|interface|enum))\s+"<<([^>]+)>>\s+([^"]*)"(\s*~[^~]+~)?\s+as\s+(\S+)(.*)$/.exec(line);
+      if (match === null) return line;
+      const [, indent, keyword, stereotype, name, generics, alias, rest] = match;
+      return `${indent}${keyword} "${name}"${generics ?? ''} as ${alias} <<${stereotype}>>${rest}`;
+    })
+    .join('\n');
+}
 
 /** How many lines the page renders. Copy and download always use the whole text. */
 export const TEXT_PREVIEW_LINE_LIMIT = 300;

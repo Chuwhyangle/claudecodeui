@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} クラス",
+      "kindFunction": "{{count}} 関数",
+      "kindInterface": "{{count}} インターフェース",
+      "kindOther": "{{count}} その他",
+      "entitySummary": "{{shown}} 件を表示（{{kinds}}）· 関連 {{total}} 件",
+      "entitySummaryPlain": "{{shown}} 件を表示 · 関連 {{total}} 件",
+      "scopeMoreHidden": "範囲 +{{scope}} で関連が {{count}} 件増えましたが、すべてフィルターで非表示です（{{parts}}）",
+      "showKinds": "▸ {{kinds}}を表示",
+      "detailNoChange": "変更なし: 現在の範囲ではこれ以上削減できません",
+      "filterBadge": "非表示 {{count}}",
+      "filterBadgeAria": "{{count}} 件のフィルター設定が内容を隠しています（要素・関係・孤立ノード）",
+      "inspectorHiddenRelations": "フィルターで {{count}} 件非表示（{{relations}}）",
+      "showRelation": "▸ {{relation}}を表示",
+      "hoverSummary": "{{name}} · {{file}} · 入 {{in}} / 出 {{out}}",
+      "hoverNoRelations": "描画された関係はありません",
+      "hoverHidden": "さらに {{count}} 件がフィルターで非表示",
+      "mentionBadgeToolFile": "ツール: {{tool}} ファイル",
+      "mentionBadgeToolUnknown": "ファイル",
+      "mentionBadgeMessage": "メッセージ",
+      "mentionFileOnly": "名前ではなくファイルに言及"
+    },
     "tray":     {
       "region": "選択",
       "pill": "{{count}} 件選択 ▴",

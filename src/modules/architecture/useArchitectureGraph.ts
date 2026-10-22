@@ -137,6 +137,12 @@ export type ArchitectureFilterHiddenStats = {
    * the readout's "N of them mentioned" clause only appears when it is true.
    */
   readonly mentionedByKind?: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
+  /**
+   * Per emitted node, the relations of its own the relation axis hid, by type.
+   * The inspector uses it to explain "0 in · 0 out" instead of printing a bare
+   * zero; absent when nothing was hidden, so an unfiltered payload is unchanged.
+   */
+  readonly byNodeRelations?: Readonly<Record<string, Readonly<Record<string, number>>>>;
 };
 
 /**

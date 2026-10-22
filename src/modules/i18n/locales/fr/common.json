@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "Shell indisponible pour les sessions résidentes"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} classes",
+      "kindFunction": "{{count}} fonctions",
+      "kindInterface": "{{count}} interfaces",
+      "kindOther": "{{count}} autres",
+      "entitySummary": "{{shown}} affichés ({{kinds}}) · {{total}} liés",
+      "entitySummaryPlain": "{{shown}} affichés · {{total}} liés",
+      "scopeMoreHidden": "Portée +{{scope}} : {{count}} éléments liés de plus, tous masqués par le filtre ({{parts}})",
+      "showKinds": "▸ Afficher {{kinds}}",
+      "detailNoChange": "Aucun changement : plus rien à réduire dans la portée actuelle",
+      "filterBadge": "Masque {{count}}",
+      "filterBadgeAria": "{{count}} choix de filtre masquent du contenu (éléments, relations, nœuds isolés)",
+      "inspectorHiddenRelations": "{{count}} masqués par le filtre ({{relations}})",
+      "showRelation": "▸ Afficher {{relation}}",
+      "hoverSummary": "{{name}} · {{file}} · {{in}} entrantes / {{out}} sortantes",
+      "hoverNoRelations": "aucune relation dessinée",
+      "hoverHidden": "{{count}} de plus masquées par le filtre",
+      "mentionBadgeToolFile": "Outil : fichier {{tool}}",
+      "mentionBadgeToolUnknown": "fichier",
+      "mentionBadgeMessage": "Message",
+      "mentionFileOnly": "mentionne le fichier, pas le nom"
+    },
     "tray":     {
       "region": "Sélection",
       "pill": "{{count}} sélectionnés ▴",

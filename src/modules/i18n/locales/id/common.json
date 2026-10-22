@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} kelas",
+      "kindFunction": "{{count}} fungsi",
+      "kindInterface": "{{count}} antarmuka",
+      "kindOther": "{{count}} lainnya",
+      "entitySummary": "Menampilkan {{shown}} ({{kinds}}) · {{total}} terkait",
+      "entitySummaryPlain": "Menampilkan {{shown}} · {{total}} terkait",
+      "scopeMoreHidden": "Cakupan +{{scope}} menemukan {{count}} terkait lagi, semuanya disembunyikan filter ({{parts}})",
+      "showKinds": "▸ Tampilkan {{kinds}}",
+      "detailNoChange": "Tidak ada perubahan: tidak ada lagi yang bisa dipangkas dalam cakupan ini",
+      "filterBadge": "Menyembunyikan {{count}}",
+      "filterBadgeAria": "{{count}} keputusan filter menyembunyikan konten (elemen, relasi, node terisolasi)",
+      "inspectorHiddenRelations": "{{count}} disembunyikan filter ({{relations}})",
+      "showRelation": "▸ Tampilkan {{relation}}",
+      "hoverSummary": "{{name}} · {{file}} · {{in}} masuk / {{out}} keluar",
+      "hoverNoRelations": "tidak ada relasi yang digambar",
+      "hoverHidden": "{{count}} lagi disembunyikan filter",
+      "mentionBadgeToolFile": "Alat: berkas {{tool}}",
+      "mentionBadgeToolUnknown": "berkas",
+      "mentionBadgeMessage": "Pesan",
+      "mentionFileOnly": "menyebut berkasnya, bukan namanya"
+    },
     "tray":     {
       "region": "Seleksi",
       "pill": "{{count}} dipilih ▴",

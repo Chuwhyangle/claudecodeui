@@ -819,6 +819,60 @@ test('entity nodes carry the arch.json kind and members, with kindCounts over th
   assert.equal(body.provenance.diagnostics, undefined, 'a readable archive produces no diagnostic');
 });
 
+test('import-expression member types are reduced to the exported name, and other signatures stay byte-identical', async (t) => {
+  // ArchGuard's TypeScript extractor can leave an absolute import expression in
+  // a field/method type: a build-machine path the class box must never print.
+  const ABSOLUTE = '/data/home/yale/work/claudecodeui/src/modules/architecture/rendererContract';
+  const { root } = createIndexProject(t, DETAIL_CHAIN, archiveWith([
+    {
+      id: 'k0.ts.Seed',
+      name: 'Seed',
+      type: 'class',
+      members: [
+        {
+          name: 'shape',
+          type: 'property',
+          visibility: 'public',
+          fieldType: `import("${ABSOLUTE}").ArchitectureNodeIdShape`,
+        },
+        {
+          name: 'narrow',
+          type: 'method',
+          visibility: 'public',
+          parameters: [
+            { name: 'value', type: `import("${ABSOLUTE}").ArchitectureNodeIdShape`, isOptional: false },
+            { name: 'plain', type: 'number', isOptional: true },
+          ],
+          returnType: `Promise<import("${ABSOLUTE}").ArchitectureNodeIdShape>`,
+        },
+        { name: 'count', type: 'property', visibility: 'private', fieldType: 'number' },
+      ],
+    },
+    { id: 'k1.ts.Middle', name: 'Middle', type: 'interface', members: [] },
+    { id: 'k2.ts.Leaf', name: 'Leaf', type: 'function', members: [] },
+    { id: 'k3.ts.Deep', name: 'Deep', type: 'class', isAbstract: true, members: [] },
+  ]));
+  const body = await readGraphBody(root, DETAIL_TRANSCRIPT, { hops: 3 });
+
+  const seedNode = body.graph.entity.nodes.find((node) => node.id === 'scope-src/k0.ts.Seed');
+  assert.ok(seedNode !== undefined);
+  const byName = new Map((seedNode.members ?? []).map((member) => [member.name, member]));
+
+  assert.equal(
+    byName.get('shape')?.signature,
+    'ArchitectureNodeIdShape',
+    'a field type loses the import expression and its absolute path',
+  );
+  assert.equal(
+    byName.get('narrow')?.signature,
+    'narrow(value: ArchitectureNodeIdShape, plain?: number): Promise<ArchitectureNodeIdShape>',
+    'parameter and return types are normalised in place',
+  );
+  // The control: a signature with no import expression is byte-identical.
+  assert.equal(byName.get('count')?.signature, 'number');
+  assert.doesNotMatch(JSON.stringify(body.graph.entity), /\/data\/home\/yale|import\(/);
+});
+
 test('a scope without arch.json keeps the legacy node shape and names the degradation in provenance', async (t) => {
   const { root } = createIndexProject(t, DETAIL_CHAIN);
   const body = await readGraphBody(root, DETAIL_TRANSCRIPT, { hops: 3 });
@@ -992,7 +1046,15 @@ type MentionBody = {
     entityId: string;
     candidateCount: number;
     ambiguous: boolean;
-    hits: { messageId: string; role?: string; kind: string; excerpt: string; at: string }[];
+    hits: {
+      messageId: string;
+      role?: string;
+      kind: string;
+      toolName?: string;
+      match?: string;
+      excerpt: string;
+      at: string;
+    }[];
   }[];
   edge?: { coMentions: MentionBody['mentions'][number]['hits'] };
   truncated: boolean;
@@ -1045,8 +1107,17 @@ test('mentions 唯一名字：命中都来自 fixture 历史，candidateCount=1 
     assert.ok(hit.excerpt.length > 0, 'every hit carries an excerpt');
     assert.ok(hit.at.length > 0, 'every hit carries the message timestamp');
   }
-  // The Read row names the entity's FILE, so its provenance is included too.
-  assert.ok(unique.hits.some((hit) => hit.messageId === 'read-1'));
+  // The Read row names the entity's FILE, so its provenance is included too —
+  // and it says so: the tool name and the file-only reading are data now.
+  const readHit = unique.hits.find((hit) => hit.messageId === 'read-1');
+  assert.ok(readHit !== undefined, 'the Read tool call is a hit');
+  assert.equal(readHit.toolName, 'Read', 'the badge can name the tool');
+  assert.equal(readHit.match, 'file', 'a path hit is file-only, not a name mention');
+  assert.doesNotMatch(readHit.excerpt, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'no absolute path in the excerpt');
+  assert.match(readHit.excerpt, /src\/m\/u\.ts/, 'the excerpt shows the project-relative path');
+  for (const hit of unique.hits.filter((candidate) => candidate.kind === 'text')) {
+    assert.equal(hit.match, 'name', 'a prose hit is a name mention');
+  }
   assert.equal(body.truncated, false);
   console.log(`mentions reading: unique hits=${JSON.stringify(unique.hits.map((hit) => [hit.messageId, hit.kind]))}`);
 });
@@ -1221,6 +1292,7 @@ type FilterBody = NeighborhoodBody & {
       byRelation: Record<string, number>;
       isolated: number;
       mentionedByKind?: Record<string, number>;
+      byNodeRelations?: Record<string, Record<string, number>>;
     };
   };
 };
@@ -1368,6 +1440,46 @@ test('a relations filter expands only along the allowed types and emits only the
   assert.deepEqual(dependencyOnly.stats.hidden?.byRelation, { call: 1, composition: 1 });
   assert.deepEqual(dependencyOnly.stats.hidden?.byKind, {}, 'the element axis was not requested');
   assert.deepEqual(dependencyOnly.stats.relationCounts, { call: 1, dependency: 2, composition: 1 });
+});
+
+test('the relation axis reports each drawn node’s own hidden relations', async (t) => {
+  // Two entities joined only by a call edge: with the default dependency
+  // preset both are DRAWN (they are seeds/neighbours), but neither box has a
+  // relation — the reading that used to print "0 in · 0 out" with no reason.
+  const pairIndex: ScopeIndexFixture = {
+    fileToIds: { 'pair.ts': ['A', 'B'] },
+    nameToIds: { A: ['A'], B: ['B'] },
+    idToFile: { A: 'pair.ts', B: 'pair.ts' },
+    idToName: { A: 'A', B: 'B' },
+    dependencies: { A: ['B'], B: [] },
+    dependents: { A: [], B: ['A'] },
+    relationsByType: { call: [['A', 'B']], dependency: [] },
+  };
+  const pairArchive = archiveWith([
+    { id: 'A', name: 'A', type: 'function', members: [] },
+    { id: 'B', name: 'B', type: 'class', members: [] },
+  ]);
+  const { root } = createIndexProject(t, pairIndex, pairArchive);
+  const body = (await readGraphBody(root, [
+    // Both ends are DIRECT seeds, so the element axis keeps them and the only
+    // thing between them is the call edge the relation preset drops.
+    message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Look at `A` and `B`.' }),
+  ], {
+    hops: 1,
+    kinds: ['class', 'interface', 'enum', 'abstract', 'function'],
+    relations: ['dependency'],
+  })) as FilterBody;
+
+  const hidden = body.stats.hidden;
+  assert.deepEqual(hidden?.byRelation, { call: 1 }, 'the aggregate reading is unchanged');
+  assert.deepEqual(
+    hidden?.byNodeRelations,
+    { 'scope-src/A': { call: 1 }, 'scope-src/B': { call: 1 } },
+    'both endpoints of the dropped edge name it, keyed by the emitted node id',
+  );
+  for (const node of body.graph.entity.nodes) {
+    assert.equal(node.kind === 'function' || node.kind === 'class', true);
+  }
 });
 
 test('the filter participates in the content-addressed cache key (and a repeat is a hit)', async (t) => {
@@ -2350,4 +2462,19 @@ test('/search 未登录 401，带 token 通过', async (t) => {
     const accepted = await postSearch(baseUrl, { projectId: 'project-1', query: 'alpha' }, 'test-token');
     assert.equal(accepted.status, 200);
   });
+});
+
+test('mention excerpts start on a word boundary and mark the cut with an ellipsis', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  // 240 characters with no whitespace before the name: a fixed ±80-character
+  // window would begin inside that word.
+  const transcript = [
+    message({ id: 'long-1', kind: 'text', role: 'assistant', content: `${'x'.repeat(240)} Unique stands alone.` }),
+  ];
+  const body = await readMentionsBody(root, transcript, { entityIds: ['scope-src/M.u'] });
+  const hit = body.mentions[0]?.hits.find((candidate) => candidate.messageId === 'long-1');
+  assert.ok(hit !== undefined, 'the row names the entity');
+  assert.match(hit.excerpt, /^…/, 'a cut at the front is visible');
+  assert.doesNotMatch(hit.excerpt, /^…x/, 'the excerpt does not start inside the long word');
+  assert.match(hit.excerpt, /^…Unique stands alone\./, 'it starts on the word boundary');
 });

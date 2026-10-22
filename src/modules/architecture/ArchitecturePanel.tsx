@@ -73,7 +73,7 @@ import {
   useTouchLayout,
 } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/layoutBudget';
-import { buildReadout } from '@/modules/architecture/readoutNumbers';
+import { buildReadout, drawnKindCounts } from '@/modules/architecture/readoutNumbers';
 import type {
   ArchitectureDetailReading,
   ArchitectureDrawnPlantUml,
@@ -342,11 +342,25 @@ function addHidden(base: ArchitectureFilterHidden, extra: ArchitectureFilterHidd
   for (const [kind, count] of Object.entries(extra.mentionedByKind ?? {})) {
     mentionedByKind[kind] = (mentionedByKind[kind] ?? 0) + (count ?? 0);
   }
+  // Per-node relation removals compose the same way: the server's relation axis
+  // and a local narrowing are one reading of what the box in front of the
+  // reader lost.
+  const byNodeRelations: Record<string, Record<string, number>> = {};
+  for (const source of [base.byNodeRelations ?? {}, extra.byNodeRelations ?? {}]) {
+    for (const [id, counts] of Object.entries(source)) {
+      const merged = byNodeRelations[id] ?? {};
+      for (const [type, count] of Object.entries(counts)) {
+        merged[type] = (merged[type] ?? 0) + count;
+      }
+      byNodeRelations[id] = merged;
+    }
+  }
   return {
     byKind,
     byRelation,
     isolated: base.isolated + extra.isolated,
     ...(Object.keys(mentionedByKind).length === 0 ? {} : { mentionedByKind }),
+    ...(Object.keys(byNodeRelations).length === 0 ? {} : { byNodeRelations }),
   };
 }
 
@@ -382,6 +396,12 @@ type ArchitecturePanelProps = {
   projectId: string | null;
   /** The selected session whose transcript supplies the graph's seeds. */
   sessionId: string | null;
+  /**
+   * The project's display name and the session's title, for the text page's
+   * copied header. Optional: a standalone embed falls back to the ids.
+   */
+  projectName?: string | null;
+  sessionTitle?: string | null;
   /**
    * The graph renderer implementation, defaulting to the PlantUML/ELK renderer.
    * Any component implementing the renderer contract can be swapped in here
@@ -676,6 +696,69 @@ function ArchitectureEmptyState({ message }: { message: string }) {
   );
 }
 
+/** One legend glyph: a line style, an arrow head, a stereotype badge or the seed frame. */
+function LegendSwatch({ glyph }: { readonly glyph: string }) {
+  const stroke = 'currentColor';
+  const common = { fill: 'none', stroke, strokeWidth: 1.2 } as const;
+  return (
+    <svg
+      viewBox="0 0 34 14"
+      width="34"
+      height="14"
+      aria-hidden="true"
+      data-architecture-legend-swatch={glyph}
+      className="shrink-0 text-muted-foreground"
+    >
+      {glyph === 'association' && <line x1="2" y1="7" x2="32" y2="7" {...common} />}
+      {glyph === 'dependency' && <line x1="2" y1="7" x2="32" y2="7" strokeDasharray="4 2" {...common} />}
+      {/* Solid line + hollow triangle, versus the dashed line below: the old
+          legend printed `△` for both inheritance and implementation. */}
+      {glyph === 'inheritance' && (
+        <>
+          <line x1="2" y1="7" x2="24" y2="7" {...common} />
+          <path d="M24 2 L33 7 L24 12 Z" {...common} />
+        </>
+      )}
+      {glyph === 'implementation' && (
+        <>
+          <line x1="2" y1="7" x2="24" y2="7" strokeDasharray="4 2" {...common} />
+          <path d="M24 2 L33 7 L24 12 Z" {...common} />
+        </>
+      )}
+      {glyph === 'composition' && (
+        <>
+          <line x1="8" y1="7" x2="32" y2="7" {...common} />
+          <path d="M2 7 L5 4 L8 7 L5 10 Z" fill={stroke} stroke={stroke} strokeWidth="1.2" />
+        </>
+      )}
+      {glyph === 'aggregation' && (
+        <>
+          <line x1="8" y1="7" x2="32" y2="7" {...common} />
+          <path d="M2 7 L5 4 L8 7 L5 10 Z" {...common} />
+        </>
+      )}
+      {glyph === 'stereotype' && (
+        <>
+          <rect x="1" y="3" width="32" height="8" rx="2" {...common} />
+          <line x1="6" y1="7" x2="28" y2="7" strokeDasharray="2 2" {...common} />
+        </>
+      )}
+      {/* A seed is the ORANGE THICK frame, not a `●` dot. */}
+      {glyph === 'seed' && (
+        <rect x="2" y="2" width="30" height="10" rx="1.5" fill="none" stroke="#d97706" strokeWidth="2.5" />
+      )}
+      {glyph === 'folded' && (
+        <>
+          <rect x="2" y="2" width="30" height="10" rx="2" strokeDasharray="3 2" {...common} />
+          <line x1="12" y1="7" x2="22" y2="7" {...common} />
+          <path d="M12 4 L9 7 L12 10" {...common} />
+          <path d="M22 4 L25 7 L22 10" {...common} />
+        </>
+      )}
+    </svg>
+  );
+}
+
 /** How long a curation Toast lives before dismissing itself. */
 const CURATION_TOAST_MS = 6000;
 
@@ -800,6 +883,8 @@ function useDismissiblePopover(
 export default function ArchitecturePanel({
   projectId,
   sessionId,
+  projectName = null,
+  sessionTitle = null,
   renderer: Renderer = PlantUmlGraph as ArchitecturePanelRenderer,
   initialGranularity = 'entity',
   onOpenChat,
@@ -1706,6 +1791,80 @@ export default function ArchitecturePanel({
     revealNode(nodeId, false);
   };
 
+  // A scope change can find more of the graph and then hide ALL of it behind
+  // the element/relation filter: the drawing looks identical and the knob feels
+  // dead. Remember the previous settled reading so the delta can be stated, and
+  // offer the one click that makes those entities visible.
+  //
+  // Declared ABOVE the status branches: a hook added after a conditional
+  // return changes the hook order when the panel leaves its loading state.
+  type ScopeHiddenDelta = {
+    readonly scope: number;
+    readonly found: number;
+    readonly kinds: readonly { readonly kind: ArchitectureEntityKind; readonly count: number }[];
+    readonly relations: readonly { readonly type: string; readonly count: number }[];
+  };
+  const loadedResult = view.status === 'loaded' ? view.result : null;
+  // `readout.related` is the pre-budget total; the truncation reading is the
+  // same denominator and is available before the status narrowing.
+  const scopeRelatedTotal = loadedResult === null
+    ? 0
+    : truncationReading(loadedResult, granularity).total;
+  const scopeReadingRef = useRef<{
+    scope: number;
+    related: number;
+    hidden: number;
+    kinds: Readonly<Record<string, number>>;
+    relations: Readonly<Record<string, number>>;
+  } | null>(null);
+  const [scopeHiddenDelta, setScopeHiddenDelta] = useState<ScopeHiddenDelta | null>(null);
+  // The payload the previous reading was taken from. The scope STATE flips
+  // before the new response arrives, so keying the comparison on it would
+  // record the old numbers under the new scope and lose the delta.
+  const scopeResultRef = useRef<ArchitectureGraphResult | null>(null);
+  useEffect(() => {
+    if (loadedResult === null) return;
+    if (scopeResultRef.current === loadedResult) return;
+    scopeResultRef.current = loadedResult;
+    const current = {
+      scope,
+      related: scopeRelatedTotal,
+      hidden: hiddenTotal(hiddenReading),
+      kinds: { ...hiddenReading.byKind } as Record<string, number>,
+      relations: { ...hiddenReading.byRelation },
+    };
+    const previous = scopeReadingRef.current;
+    scopeReadingRef.current = current;
+    if (previous === null) return;
+    const found = current.related - previous.related;
+    const hiddenDelta = current.hidden - previous.hidden;
+    // Only an INCREASE in scope can produce "it found more and hid it"; any
+    // other settled reading (a filter widening that revealed them, a smaller
+    // scope) makes the notice stale, so it is cleared.
+    if (scope <= previous.scope || found <= 0 || hiddenDelta < found) {
+      setScopeHiddenDelta(null);
+      return;
+    }
+    // Only the NEW removals belong to this transition, not the whole reading.
+    const kinds = Object.entries(current.kinds)
+      .map(([kind, count]) => ({ kind: kind as ArchitectureEntityKind, count: count - (previous.kinds[kind] ?? 0) }))
+      .filter((entry) => entry.count > 0);
+    const relations = Object.entries(current.relations)
+      .map(([type, count]) => ({ type, count: count - (previous.relations[type] ?? 0) }))
+      .filter((entry) => entry.count > 0);
+    setScopeHiddenDelta({ scope, found, kinds, relations });
+  }, [loadedResult, scope, scopeRelatedTotal, hiddenReading]);
+  // The one-click fix: every kind the transition hid becomes visible again
+  // (a widening, so `changeFilter` re-requests it from the server).
+  const showScopeHiddenKinds = (): void => {
+    if (scopeHiddenDelta === null || scopeHiddenDelta.kinds.length === 0) return;
+    const kinds = [...new Set([
+      ...filter.kinds,
+      ...scopeHiddenDelta.kinds.map((entry) => entry.kind),
+    ])];
+    changeFilter({ ...filter, kinds });
+  };
+
   if (!sessionId) {
     return (
       <div data-architecture-no-session="true">
@@ -1767,6 +1926,24 @@ export default function ArchitecturePanel({
   // the drawing on screen rather than a re-derivation from the payload.
   const drawnGraph: ArchitectureRendererGraph =
     layoutFit?.graph ?? detailRanking?.graph ?? displayNeighbourhood ?? neighbourhood;
+
+  // The hover reading, stated from the payload instead of the internal id: the
+  // id carries the opaque scope key (`93e0a992/…`), which means nothing to the
+  // reader and leaked into the tooltip.
+  const hoverReading = visibleHover === null
+    ? null
+    : (() => {
+        const node = visibleHover.node;
+        const label = node.label.trim() === '' || node.label === node.id
+          ? node.id.slice(node.id.lastIndexOf('.') + 1)
+          : node.label;
+        const file = nodeFileOf(node, nodeIdShapeOf(granularity));
+        const outgoing = drawnGraph.edges.filter((edge) => edge.from === node.id).length;
+        const incoming = drawnGraph.edges.filter((edge) => edge.to === node.id).length;
+        const hidden = Object.values(hiddenReading.byNodeRelations?.[node.id] ?? {})
+          .reduce((total, count) => total + count, 0);
+        return { id: node.id, label, file, incoming, outgoing, hidden };
+      })();
   // The selection as the renderer and the inspector need it: separate readings,
   // so neither has to narrow the union itself.
   const selectedNodeId = selection?.kind === 'entity' ? selection.nodeId : null;
@@ -2118,6 +2295,19 @@ export default function ArchitecturePanel({
     `${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
       detail === tier ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
     }`;
+  // The detail knob only re-ranks what is already drawn, so on a graph where no
+  // tier can fold anything it is a dead control. Saying so on the buttons is
+  // better than the reader concluding the knob is broken.
+  const detailNothingToTrim = displayNeighbourhood !== null
+    && ARCHITECTURE_DETAIL_TIERS.every((tier) =>
+      rankArchitectureDetail(displayNeighbourhood.nodes, displayNeighbourhood.edges, tier)
+        .retainedNodeIds.size >= displayNeighbourhood.nodes.length);
+  const detailNoChangeLabel = t('architecture.copyFix.detailNoChange', {
+    defaultValue: 'No change: nothing more can be trimmed within the current scope',
+  });
+  const detailNoChangeProps = detailNothingToTrim
+    ? { title: detailNoChangeLabel, 'data-architecture-detail-no-change': 'true' }
+    : {};
   const detailGroup = (
     <div
       role="radiogroup"
@@ -2135,6 +2325,7 @@ export default function ArchitecturePanel({
         onClick={() => changeDetail('core')}
         style={compactTargetStyle}
         className={detailButtonClass('core')}
+        {...detailNoChangeProps}
       >
         {t('architecture.controls.detailCore', { defaultValue: 'Core' })}
       </button>
@@ -2147,6 +2338,7 @@ export default function ArchitecturePanel({
         onClick={() => changeDetail('common')}
         style={compactTargetStyle}
         className={detailButtonClass('common')}
+        {...detailNoChangeProps}
       >
         {t('architecture.controls.detailCommon', { defaultValue: 'Common' })}
       </button>
@@ -2159,6 +2351,7 @@ export default function ArchitecturePanel({
         onClick={() => changeDetail('all')}
         style={compactTargetStyle}
         className={detailButtonClass('all')}
+        {...detailNoChangeProps}
       >
         {t('architecture.controls.detailAll', { defaultValue: 'All' })}
       </button>
@@ -2242,6 +2435,8 @@ export default function ArchitecturePanel({
                       : 'border-border text-muted-foreground hover:text-foreground'
                   }`}
                 >
+                  {/* The on/off state is a glyph, not only a fill shade. */}
+                  <span aria-hidden="true" className="mr-1">{filter.kinds.includes(kind) ? '☑' : '☐'}</span>
                   {count === undefined ? kindLabel(kind) : `${String(count)} ${kindLabel(kind)}`}
                 </button>
               );
@@ -2324,6 +2519,9 @@ export default function ArchitecturePanel({
                   : 'border-border text-muted-foreground hover:text-foreground'
               }`}
             >
+              {/* A radio's selected state is a glyph too, so it survives a
+                  colour-blind reader and a low-contrast theme. */}
+              <span aria-hidden="true" className="mr-1">{filter.relations === preset ? '✓' : '○'}</span>
               {relationPresetLabel(preset)}
             </button>
           ))}
@@ -2347,6 +2545,13 @@ export default function ArchitecturePanel({
 
   const filterTriggerLabel = t('architecture.filter.menu', { defaultValue: 'Filter ▾' });
   const filterBadge = activeFilterCount(filter);
+  // The badge counts DECISIONS THAT HIDE SOMETHING, not "options that are on".
+  // The default filter has every kind enabled except functions/others, so the
+  // old "4 on" read as four visible things while four cuts were in force.
+  const filterBadgeAria = t('architecture.copyFix.filterBadgeAria', {
+    defaultValue: '{{count}} filter decisions are hiding content (elements, relations, isolated nodes)',
+    count: filterBadge,
+  });
   const openFilterMenu = (): void => {
     if (!compactToolbar) {
       const rect = filterButtonRef.current?.getBoundingClientRect();
@@ -2374,9 +2579,11 @@ export default function ArchitecturePanel({
         {filterTriggerLabel}
         <span
           data-architecture-filter-badge={filterBadge}
+          title={filterBadgeAria}
+          aria-label={filterBadgeAria}
           className="ml-1 rounded-full bg-accent px-1.5 text-[10px] tabular-nums text-foreground"
         >
-          {t('architecture.filter.badge', { defaultValue: '{{count}} on', count: filterBadge })}
+          {t('architecture.copyFix.filterBadge', { defaultValue: 'Hiding {{count}}', count: filterBadge })}
         </span>
       </button>
       {filterMenuOpen && (
@@ -2782,6 +2989,17 @@ export default function ArchitecturePanel({
       data-architecture-legend-content="true"
       className="whitespace-pre-line text-[11px] text-muted-foreground"
     >
+      {/* The line-style and arrow vocabulary as PICTURES, not just the letters
+          the old body printed (which used `△` for both inheritance and
+          implementation and said "● seed" for an orange frame). */}
+      <div
+        data-architecture-legend-swatches="true"
+        className="mb-1 grid grid-cols-3 gap-x-2 gap-y-1 not-italic"
+      >
+        {['association', 'dependency', 'inheritance', 'implementation', 'composition', 'aggregation', 'stereotype', 'seed', 'folded'].map((glyph) => (
+          <LegendSwatch key={glyph} glyph={glyph} />
+        ))}
+      </div>
       {t('architecture.legend.body', {
         defaultValue:
           'Solid line: association or call.\nDashed line: dependency or implementation.\nArrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency.\n«stereotype» marks the entity kind.\n● seed: named in this session.\n+N folded: hidden by the current detail level.',
@@ -2819,8 +3037,12 @@ export default function ArchitecturePanel({
   // The kind tally is a factual reading of what the analysis contains, NOT a
   // judgement about the drawing. `class` folds the UML flavours the class
   // diagram draws the same way (class/abstract/enum).
+  // The kind tally is a factual reading of the ANALYSIS (pre-budget), NOT a
+  // description of the drawing — the readout's own line states the drawn mix.
+  // It is an entity-view reading only: a file graph has no entity kinds, so the
+  // class tally there described a different graph.
   const kindCounts = stats.kindCounts;
-  const kindLine = kindCounts === undefined
+  const kindLine = kindCounts === undefined || granularity !== 'entity'
     ? null
     : [
         { count: kindCounts.function ?? 0, key: 'kindFunction', defaultValue: '{{count}} functions' },
@@ -2835,13 +3057,33 @@ export default function ArchitecturePanel({
         .map((part) => t(`architecture.readout.${part.key}`, { defaultValue: part.defaultValue, count: part.count }))
         .join(' · ');
 
-  const classNoun = granularity === 'entity' ? 'class' : 'file';
-  const readoutSummary = classNoun === 'class'
-    ? t('architecture.readout.classSummary', {
-        defaultValue: 'Showing {{shown}} classes · {{total}} related',
-        shown: readout.shownText,
-        total: readout.relatedText,
-      })
+  // The DRAWN mix, counted from the boxes on screen. "Showing 40 classes" was a
+  // view label while every box was a «function»; this line names what is drawn.
+  const drawnKindParts = drawnKindCounts(layoutFit?.graph.nodes ?? []).map((part) => {
+    switch (part.kind) {
+      case 'function':
+        return t('architecture.copyFix.kindFunction', { defaultValue: '{{count}} functions', count: part.count });
+      case 'interface':
+        return t('architecture.copyFix.kindInterface', { defaultValue: '{{count}} interfaces', count: part.count });
+      case 'class':
+        return t('architecture.copyFix.kindClass', { defaultValue: '{{count}} classes', count: part.count });
+      default:
+        return t('architecture.copyFix.kindOther', { defaultValue: '{{count}} others', count: part.count });
+    }
+  });
+  const readoutSummary = granularity === 'entity'
+    ? drawnKindParts.length > 0
+      ? t('architecture.copyFix.entitySummary', {
+          defaultValue: 'Showing {{shown}} ({{kinds}}) · {{total}} related',
+          shown: readout.shownText,
+          kinds: drawnKindParts.join(' · '),
+          total: readout.relatedText,
+        })
+      : t('architecture.copyFix.entitySummaryPlain', {
+          defaultValue: 'Showing {{shown}} · {{total}} related',
+          shown: readout.shownText,
+          total: readout.relatedText,
+        })
     : t('architecture.readout.fileSummary', {
         defaultValue: 'Showing {{shown}} files · {{total}} related',
         shown: readout.shownText,
@@ -3104,6 +3346,41 @@ export default function ArchitecturePanel({
         )}
         <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
       </button>
+      {/* A scope step that found entities and then hid all of them: state the
+          delta and offer the one click that brings them back. */}
+      {scopeHiddenDelta !== null && (
+        <div
+          data-architecture-scope-hidden={scopeHiddenDelta.found}
+          data-architecture-scope-hidden-scope={scopeHiddenDelta.scope}
+          className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5"
+        >
+          <span>
+            {t('architecture.copyFix.scopeMoreHidden', {
+              defaultValue: 'Scope +{{scope}} found {{count}} more related, all hidden by the filter ({{parts}})',
+              scope: scopeHiddenDelta.scope,
+              count: scopeHiddenDelta.found,
+              parts: [
+                ...scopeHiddenDelta.kinds.map((entry) => `${String(entry.count)} ${kindLabel(entry.kind)}`),
+                ...scopeHiddenDelta.relations.map((entry) => `${String(entry.count)} ${relationTypeLabel(entry.type)} relations`),
+              ].join(' · '),
+            })}
+          </span>
+          {scopeHiddenDelta.kinds.length > 0 && (
+            <button
+              type="button"
+              data-architecture-scope-show-kinds={scopeHiddenDelta.kinds.map((entry) => entry.kind).join(',')}
+              onClick={showScopeHiddenKinds}
+              style={compactTargetStyle}
+              className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.copyFix.showKinds', {
+                defaultValue: '▸ Show {{kinds}}',
+                kinds: scopeHiddenDelta.kinds.map((entry) => kindLabel(entry.kind)).join(' · '),
+              })}
+            </button>
+          )}
+        </div>
+      )}
       {/* The filter's second line: what the element/relation selection is
           hiding, and the one-click reset. Deliberately separate from the
           detail sentence above — the two knobs must not share a number. */}
@@ -3568,21 +3845,36 @@ export default function ArchitecturePanel({
                   standing instructions: it only exists while a node is under
                   the pointer, so the page has no permanent hint sentence. It
                   stays a transient overlay; the readout above does not. */}
-              {visibleHover !== null && (
+              {hoverReading !== null && (
                 <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
                   <span
-                    data-architecture-hover={visibleHover.node.id}
-                    data-architecture-hover-relations={visibleHover.relations.join(',')}
+                    data-architecture-hover={hoverReading.id}
+                    data-architecture-hover-name={hoverReading.label}
+                    data-architecture-hover-relations={visibleHover?.relations.join(',') ?? ''}
+                    data-architecture-hover-in={hoverReading.incoming}
+                    data-architecture-hover-out={hoverReading.outgoing}
                     className="pointer-events-none rounded bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm"
                   >
-                    {t('architecture.hover.relations', {
-                      defaultValue: '{{node}} — relations: {{relations}}',
-                      node: visibleHover.node.id,
-                      relations:
-                        visibleHover.relations.length === 0
-                          ? t('architecture.hover.none', { defaultValue: 'no outgoing/incoming relation' })
-                          : visibleHover.relations.join(', '),
+                    {t('architecture.copyFix.hoverSummary', {
+                      defaultValue: '{{name}} · {{file}} · {{in}} in / {{out}} out',
+                      name: hoverReading.label,
+                      file: hoverReading.file,
+                      in: hoverReading.incoming,
+                      out: hoverReading.outgoing,
                     })}
+                    {' — '}
+                    {visibleHover !== null && visibleHover.relations.length > 0
+                      ? visibleHover.relations.join(', ')
+                      : t('architecture.copyFix.hoverNoRelations', { defaultValue: 'no drawn relations' })}
+                    {hoverReading.hidden > 0 && (
+                      <>
+                        {' · '}
+                        {t('architecture.copyFix.hoverHidden', {
+                          defaultValue: '{{count}} more hidden by the filter',
+                          count: hoverReading.hidden,
+                        })}
+                      </>
+                    )}
                   </span>
                 </div>
               )}
@@ -3675,6 +3967,12 @@ export default function ArchitecturePanel({
                   onUnpinNode={unpinNode}
                   onRemoveNode={removeNode}
                   onHideRelation={hideRelation}
+                  {...(hiddenReading.byNodeRelations === undefined
+                    ? {}
+                    : { hiddenRelations: hiddenReading.byNodeRelations })}
+                  // Widening: the preset that includes every relation type, so
+                  // a hidden call/structure edge is drawn again.
+                  onShowRelationType={() => changeFilter({ ...filter, relations: 'call' })}
                 />
               ),
             },
@@ -3692,6 +3990,8 @@ export default function ArchitecturePanel({
                   selection={selection}
                   projectId={projectId}
                   sessionId={sessionId}
+                  projectName={projectName}
+                  sessionTitle={sessionTitle}
                   analyzedAt={provenance.generatedAt}
                   viewLabel={textViewLabel}
                   filterSummary={textFilterSummary}

@@ -17,7 +17,7 @@
  *    that actually cut something are named.
  */
 
-import type { ArchitectureRendererNode } from '@/modules/architecture/rendererContract';
+import type { ArchitectureEntityKind, ArchitectureRendererNode } from '@/modules/architecture/rendererContract';
 
 /** The three places in the pipeline where a budget can hold entities back. */
 export type ArchitectureReadoutLayer = 'detail' | 'layout' | 'server';
@@ -93,7 +93,79 @@ export type ArchitectureReadout = {
   readonly lines: readonly ArchitectureReadoutLine[];
 };
 
-/** A count that cannot go below zero or leak a fraction into the reading. */
+/**
+ * The four kind buckets the one-line reading names.
+ *
+ * `abstract`/`enum` fold into `class` because the drawing shows them as class
+ * boxes with a UML keyword; `other` is a real entity whose ArchGuard kind this
+ * client does not recognise. A node with NO kind (a legacy entity payload, an
+ * overview group box) is not invented into a bucket — the reading names only
+ * what it actually knows.
+ */
+export type ArchitectureReadoutKindBucket = 'function' | 'interface' | 'class' | 'other';
+
+/** One kind bucket and how many DRAWN entities it stands for. */
+export type ArchitectureReadoutKindCount = {
+  readonly kind: ArchitectureReadoutKindBucket;
+  readonly count: number;
+};
+
+/** The bucket order the summary line states, most specific first. */
+const KIND_BUCKET_ORDER: readonly ArchitectureReadoutKindBucket[] = [
+  'function',
+  'interface',
+  'class',
+  'other',
+];
+
+/** The bucket one entity kind folds into. */
+function kindBucketOf(kind: ArchitectureEntityKind): ArchitectureReadoutKindBucket {
+  switch (kind) {
+    case 'function':
+      return 'function';
+    case 'interface':
+      return 'interface';
+    case 'class':
+    case 'abstract':
+    case 'enum':
+      return 'class';
+    default:
+      return 'other';
+  }
+}
+
+/**
+ * Count the entities the DRAWING shows, by kind.
+ *
+ * The one-line reading used to say "Showing 40 classes" while every box was an
+ * orange-framed `<<function>>`: the noun was a view label, not a reading. This
+ * function counts the boxes actually drawn (group boxes count the members they
+ * stand for, exactly like N) so the sentence can name the real mix.
+ */
+export function drawnKindCounts(
+  boxes: readonly ArchitectureReadoutDrawnBox[],
+): readonly ArchitectureReadoutKindCount[] {
+  const counts: Record<ArchitectureReadoutKindBucket, number> = {
+    function: 0,
+    interface: 0,
+    class: 0,
+    other: 0,
+  };
+  for (const box of boxes) {
+    // Only a renderer node carries a kind; a group box stands for members whose
+    // kinds this reading does not know, so it contributes no bucket.
+    const kind = 'kind' in box ? box.kind : undefined;
+    if (kind === undefined) continue;
+    counts[kindBucketOf(kind)] += 1;
+  }
+  return KIND_BUCKET_ORDER
+    .filter((kind) => counts[kind] > 0)
+    .map((kind) => ({ kind, count: counts[kind] }));
+}
+
+/**
+ * A count that cannot go below zero or leak a fraction into the reading.
+ */
 function normaliseCount(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0;
 }

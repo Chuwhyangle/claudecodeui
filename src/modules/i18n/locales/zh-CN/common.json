@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} 类",
+      "kindFunction": "{{count}} 函数",
+      "kindInterface": "{{count}} 接口",
+      "kindOther": "{{count}} 其他",
+      "entitySummary": "显示 {{shown}} 个（{{kinds}}）· 相关 {{total}} 个",
+      "entitySummaryPlain": "显示 {{shown}} 个 · 相关 {{total}} 个",
+      "scopeMoreHidden": "范围 +{{scope}} 又找到 {{count}} 个相关，都被筛选隐藏（{{parts}}）",
+      "showKinds": "▸ 显示{{kinds}}",
+      "detailNoChange": "无变化：当前范围内没有更多可裁剪的实体",
+      "filterBadge": "隐藏中 {{count}}",
+      "filterBadgeAria": "{{count}} 项筛选正在隐藏内容（元素、关系、孤立节点）",
+      "inspectorHiddenRelations": "被筛选隐藏 {{count}} 条（{{relations}}）",
+      "showRelation": "▸ 显示{{relation}}",
+      "hoverSummary": "{{name}} · {{file}} · 入 {{in}} / 出 {{out}}",
+      "hoverNoRelations": "没有画出的关系",
+      "hoverHidden": "另有 {{count}} 条被筛选隐藏",
+      "mentionBadgeToolFile": "工具：{{tool}} 文件",
+      "mentionBadgeToolUnknown": "文件",
+      "mentionBadgeMessage": "消息",
+      "mentionFileOnly": "提到了该文件，不是该名字"
+    },
     "tray":     {
       "region": "已选元素",
       "pill": "已选 {{count}} 项 ▴",

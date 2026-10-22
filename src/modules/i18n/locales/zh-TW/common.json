@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} 類",
+      "kindFunction": "{{count}} 函式",
+      "kindInterface": "{{count}} 介面",
+      "kindOther": "{{count}} 其他",
+      "entitySummary": "顯示 {{shown}} 個（{{kinds}}）· 相關 {{total}} 個",
+      "entitySummaryPlain": "顯示 {{shown}} 個 · 相關 {{total}} 個",
+      "scopeMoreHidden": "範圍 +{{scope}} 又找到 {{count}} 個相關，都被篩選隱藏（{{parts}}）",
+      "showKinds": "▸ 顯示{{kinds}}",
+      "detailNoChange": "無變化：目前範圍內沒有更多可裁剪的實體",
+      "filterBadge": "隱藏中 {{count}}",
+      "filterBadgeAria": "{{count}} 項篩選正在隱藏內容（元素、關係、孤立節點）",
+      "inspectorHiddenRelations": "被篩選隱藏 {{count}} 條（{{relations}}）",
+      "showRelation": "▸ 顯示{{relation}}",
+      "hoverSummary": "{{name}} · {{file}} · 入 {{in}} / 出 {{out}}",
+      "hoverNoRelations": "沒有畫出的關係",
+      "hoverHidden": "另有 {{count}} 條被篩選隱藏",
+      "mentionBadgeToolFile": "工具：{{tool}} 檔案",
+      "mentionBadgeToolUnknown": "檔案",
+      "mentionBadgeMessage": "訊息",
+      "mentionFileOnly": "提到了該檔案，不是該名字"
+    },
     "tray":     {
       "region": "已選元素",
       "pill": "已選 {{count}} 項 ▴",

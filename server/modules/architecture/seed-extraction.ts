@@ -279,6 +279,17 @@ export type SeedMentionHit = {
   readonly messageId: string;
   readonly role?: 'user' | 'assistant';
   readonly kind: SeedMentionKind;
+  /**
+   * The tool that produced a `tool_use` hit (`Read`, `Edit`, …). Absent on text
+   * and tool-result rows, so a pre-existing payload's shape is unchanged.
+   */
+  readonly toolName?: string;
+  /**
+   * How the row matched: the entity NAME, or only its FILE path. A file-only
+   * hit is "this tool touched the file", not "someone said the identifier" —
+   * the inspector must say so instead of presenting it as a mention.
+   */
+  readonly match?: 'name' | 'file';
   /** Roughly 80 characters either side of the hit, whitespace-collapsed. */
   readonly excerpt: string;
   /** The message's timestamp, so a caller can order hits without a second read. */
@@ -340,6 +351,36 @@ export function seedMentionExcerpt(content: string, start: number, length: numbe
   const from = Math.max(0, start - MENTION_EXCERPT_RADIUS);
   const to = Math.min(content.length, start + length + MENTION_EXCERPT_RADIUS);
   return content.slice(from, to).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A provenance excerpt that never starts or ends inside a word, and says so
+ * with an ellipsis when it cut.
+ *
+ * The seed-reading excerpt above is a fixed character window; on the on-demand
+ * `/mentions` page that produced fragments like `…ation of the helper`, which
+ * reads as if the transcript started mid-word. This window walks outward to the
+ * nearest whitespace (within a bounded slack) and marks a real cut with `…`, so
+ * a truncated excerpt is visibly truncated.
+ *
+ * Consumers: `mentions.ts` only — the eager seed reading keeps its exact
+ * historical window.
+ */
+export function mentionExcerpt(content: string, start: number, length: number): string {
+  let from = Math.max(0, start - MENTION_EXCERPT_RADIUS);
+  let to = Math.min(content.length, start + length + MENTION_EXCERPT_RADIUS);
+  if (from > 0) {
+    const space = content.lastIndexOf(' ', from);
+    // No whitespace before the window (a long unbroken token): start at the
+    // hit itself rather than mid-word.
+    from = space === -1 ? Math.max(0, start) : space + 1;
+  }
+  if (to < content.length) {
+    const space = content.indexOf(' ', to);
+    if (space !== -1) to = space;
+  }
+  const body = content.slice(from, to).replace(/\s+/g, ' ').trim();
+  return `${from > 0 ? '…' : ''}${body}${to < content.length ? '…' : ''}`;
 }
 
 /**

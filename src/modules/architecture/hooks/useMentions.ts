@@ -12,6 +12,14 @@ export type ArchitectureMentionHit = {
   readonly messageId: string;
   readonly role?: 'user' | 'assistant';
   readonly kind: 'text' | 'tool_use' | 'tool_result';
+  /** The file tool behind a `tool_use` hit (`Read`, `Edit`, …). */
+  readonly toolName?: string;
+  /**
+   * `name` when the transcript named the entity, `file` when only its path
+   * matched (a Read/Edit tool call). A file hit is evidence the file was
+   * touched, not that the identifier was spoken.
+   */
+  readonly match?: 'name' | 'file';
   readonly excerpt: string;
   readonly at: string;
 };

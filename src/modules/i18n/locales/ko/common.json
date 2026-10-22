@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "상주 세션에서는 Shell을 사용할 수 없습니다"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} 클래스",
+      "kindFunction": "{{count}} 함수",
+      "kindInterface": "{{count}} 인터페이스",
+      "kindOther": "{{count}} 기타",
+      "entitySummary": "{{shown}}개 표시 ({{kinds}}) · 관련 {{total}}개",
+      "entitySummaryPlain": "{{shown}}개 표시 · 관련 {{total}}개",
+      "scopeMoreHidden": "범위 +{{scope}}에서 관련 항목 {{count}}개를 더 찾았지만 모두 필터로 숨겨졌습니다 ({{parts}})",
+      "showKinds": "▸ {{kinds}} 표시",
+      "detailNoChange": "변경 없음: 현재 범위에서 더 줄일 항목이 없습니다",
+      "filterBadge": "숨김 {{count}}",
+      "filterBadgeAria": "필터 설정 {{count}}개가 콘텐츠를 숨기고 있습니다 (요소, 관계, 고립 노드)",
+      "inspectorHiddenRelations": "필터로 {{count}}개 숨김 ({{relations}})",
+      "showRelation": "▸ {{relation}} 표시",
+      "hoverSummary": "{{name}} · {{file}} · 들어옴 {{in}} / 나감 {{out}}",
+      "hoverNoRelations": "그려진 관계 없음",
+      "hoverHidden": "{{count}}개 더 필터로 숨김",
+      "mentionBadgeToolFile": "도구: {{tool}} 파일",
+      "mentionBadgeToolUnknown": "파일",
+      "mentionBadgeMessage": "메시지",
+      "mentionFileOnly": "이름이 아니라 파일을 언급"
+    },
     "tray":     {
       "region": "선택",
       "pill": "{{count}}개 선택 ▴",

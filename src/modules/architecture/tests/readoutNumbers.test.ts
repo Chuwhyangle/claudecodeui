@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { test } from 'vitest';
 
-import { buildReadout } from '@/modules/architecture/readoutNumbers';
+import { buildReadout, drawnKindCounts } from '@/modules/architecture/readoutNumbers';
 
 /**
  * The readout contract, as a pure function:
@@ -244,5 +244,37 @@ test('every emitted count is rendered with the requested locale separators', () 
   assert.deepEqual(
     readout.lines.map((line) => line.countText),
     ['10,000', '9,000', '2,500'],
+  );
+});
+
+test('the drawn kinds are counted from the boxes, so a function is never called a class', () => {
+  const counts = drawnKindCounts([
+    { id: 'a', label: 'a', distance: 0, kind: 'function' },
+    { id: 'b', label: 'b', distance: 1, kind: 'function' },
+    { id: 'c', label: 'c', distance: 2, kind: 'class' },
+    { id: 'd', label: 'd', distance: 3, kind: 'abstract' },
+    { id: 'e', label: 'e', distance: 4, kind: 'enum' },
+    { id: 'f', label: 'f', distance: 5, kind: 'interface' },
+    { id: 'g', label: 'g', distance: 6, kind: 'other' },
+  ]);
+
+  assert.deepEqual(counts, [
+    { kind: 'function', count: 2 },
+    { kind: 'interface', count: 1 },
+    { kind: 'class', count: 3 },
+    { kind: 'other', count: 1 },
+  ], 'abstract and enum fold into class; functions keep their own bucket');
+});
+
+test('a box with no known kind contributes no bucket instead of inventing one', () => {
+  // A legacy entity payload and an overview group box both carry no kind.
+  assert.deepEqual(drawnKindCounts([box, { memberCount: 4 }]), []);
+  // A group box counts members for N, but the kind reading must not guess them.
+  assert.deepEqual(
+    drawnKindCounts([
+      { memberCount: 4 },
+      { id: 'x', label: 'x', distance: 0, kind: 'function' },
+    ]),
+    [{ kind: 'function', count: 1 }],
   );
 });

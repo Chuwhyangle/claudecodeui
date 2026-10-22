@@ -162,6 +162,13 @@ export type ArchitectureFilterHidden = {
    * its exact old shape.
    */
   readonly mentionedByKind?: Partial<Record<ArchitectureEntityKind, number>>;
+  /**
+   * Per emitted node, the relations of its own the relation axis hid, by type.
+   * The client-side filter also fills this when it drops an edge, so a locally
+   * narrowed reading explains the same zero an unfiltered server payload does.
+   * Absent when nothing was hidden on this axis.
+   */
+  readonly byNodeRelations?: Readonly<Record<string, Readonly<Record<string, number>>>>;
 };
 
 /** The pure filter's answer: the surviving subgraph and the removals it made. */
@@ -290,10 +297,18 @@ export function applyFilter(
 
   const keptIds = new Set(keptNodes.map((node) => node.id));
   const byRelation: Record<string, number> = {};
+  // The same removals, attributed to the boxes that stay: the inspector can
+  // then say a function's "0 in · 0 out" is the relation axis, not a fact.
+  const byNodeRelations: Record<string, Record<string, number>> = {};
   const relKeptEdges = graph.edges.filter((edge) => {
     if (!keptIds.has(edge.from) || !keptIds.has(edge.to)) return false;
     if (isRelationAllowed(filter.relations, edge.relationType)) return true;
     byRelation[edge.relationType] = (byRelation[edge.relationType] ?? 0) + 1;
+    for (const id of [edge.from, edge.to]) {
+      const counts = byNodeRelations[id] ?? {};
+      counts[edge.relationType] = (counts[edge.relationType] ?? 0) + 1;
+      byNodeRelations[id] = counts;
+    }
     return false;
   });
 
@@ -302,6 +317,7 @@ export function applyFilter(
     byRelation,
     isolated,
     ...(hasMentionedHidden ? { mentionedByKind } : {}),
+    ...(Object.keys(byNodeRelations).length === 0 ? {} : { byNodeRelations }),
   });
 
   if (!filter.hideIsolated) {

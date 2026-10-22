@@ -1,17 +1,19 @@
 import assert from 'node:assert/strict';
 
-import { applyView, checkSyntax, parsePlantUml, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
+import { applyView, checkSyntax, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import { test } from 'vitest';
 
-import { archguardToPlantUml } from '@/modules/architecture/archguardToPlantUml';
+import { archguardToPlantUml, parserSafePlantUml } from '@/modules/architecture/archguardToPlantUml';
 import {
   buildPlantUmlDocument,
   buildPlantUmlText,
   measurePlantUmlText,
   NoSelectionScopeError,
   nodesIntersectingViewport,
+  parsePlantUml,
   previewPlantUmlText,
   scopeSubgraph,
+  standardiseDrawnStereotypes,
   TEXT_CHARS_PER_TOKEN,
   TEXT_HUGE_TOKEN_THRESHOLD,
   TEXT_LARGE_TOKEN_THRESHOLD,
@@ -105,14 +107,18 @@ async function drawnFor(
   drawn: ArchitectureDrawnPlantUml;
 }> {
   const bridge = archguardToPlantUml(graph, options);
-  const detailed = await renderDetailed(bridge.puml, {});
+  // The DRAWING path: the bridge spells a real stereotype after the alias; the
+  // bundled parser needs it before the alias, exactly as PlantUmlGraph feeds it.
+  const detailed = await renderDetailed(parserSafePlantUml(bridge.puml), {});
   return {
     bridge,
     detailed,
     drawn: {
       model: detailed.model,
       entityIdOf: bridge.aliasOf,
-      toPlantUml,
+      // The text page's serializer: the drawn model's glued names come back out
+      // as real stereotypes, matching PlantUmlGraph's wrapper.
+      toPlantUml: (model) => standardiseDrawnStereotypes(toPlantUml(model)),
       applyView,
     },
   };
@@ -305,7 +311,7 @@ test('the full scope serializes the drawn model verbatim, not the bridge text', 
   const { bridge, detailed, drawn } = await drawnFor(ENTITY_GRAPH, ENTITY_OPTIONS);
   const built = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'full' }, { ...ENTITY_OPTIONS, drawn });
   assert.equal(built.fallback, false);
-  assert.equal(built.text, toPlantUml(detailed.model), 'the document is toPlantUml(the drawn model)');
+  assert.equal(built.text, standardiseDrawnStereotypes(toPlantUml(detailed.model)), 'the document is toPlantUml(the drawn model)');
   // The upstream serializer names package aliases, which the bridge does not;
   // this is what proves the drawn model — not the bridge — produced the text.
   assert.notEqual(built.text, bridge.puml);
@@ -316,7 +322,7 @@ test('the full scope serializes the drawn model verbatim, not the bridge text', 
 test('the drawn document keeps aggregated edges and member compartments and round-trips stably', async () => {
   const { detailed, drawn } = await drawnFor(RICH_GRAPH, ENTITY_OPTIONS);
   const text = buildPlantUmlText(RICH_GRAPH, { kind: 'full' }, { ...ENTITY_OPTIONS, drawn });
-  assert.equal(text, toPlantUml(detailed.model));
+  assert.equal(text, standardiseDrawnStereotypes(toPlantUml(detailed.model)));
   // The bridge emits two alpha→run relations; the renderer aggregates them into
   // one drawn edge, and that is what the text carries.
   assert.equal(
@@ -324,9 +330,9 @@ test('the drawn document keeps aggregated edges and member compartments and roun
     1,
     'the two raw relations are one aggregated edge in the drawn text',
   );
-  assert.match(text, /class "<<function>> run" as n1/);
+  assert.match(text, /class "run" as n1 <<function>>/, 'a function carries a real stereotype token');
+  assert.doesNotMatch(text, /"<<function>>/, 'the stereotype is never glued into the quoted name');
   assert.match(text, /- count: number/, 'the member compartment survives the serialization');
-  assert.equal(toPlantUml(parsePlantUml(text)), text, 'parse → toPlantUml is stable');
   assertSyntaxOk(text);
 });
 
@@ -352,11 +358,11 @@ test('the drawn-model selection scope is the anchor plus one hop, from applyView
   );
   const betaAlias = drawn.entityIdOf.get(BETA);
   assert.ok(betaAlias !== undefined);
-  assert.equal(text, toPlantUml(applyView(drawn.model, {
+  assert.equal(text, standardiseDrawnStereotypes(toPlantUml(applyView(drawn.model, {
     kind: 'neighborhood',
     entity: betaAlias,
     hops: 1,
-  })));
+  }))));
   assert.deepEqual(classLabels(text), ['Alpha', 'Beta', 'Gamma']);
   assert.doesNotMatch(text, /Delta/, 'delta is two hops away from beta');
 });
@@ -417,4 +423,34 @@ test('without a drawn model the document is the bridge text and is marked as a f
   const built = buildPlantUmlDocument(ENTITY_GRAPH, { kind: 'full' }, ENTITY_OPTIONS);
   assert.equal(built.fallback, true);
   assert.equal(built.text, archguardToPlantUml(ENTITY_GRAPH, ENTITY_OPTIONS).puml);
+});
+
+test('a function is copied as a real stereotype, and parsePlantUml reads the kind back', async () => {
+  const { drawn } = await drawnFor(RICH_GRAPH, ENTITY_OPTIONS);
+  const text = buildPlantUmlText(RICH_GRAPH, { kind: 'full' }, { ...ENTITY_OPTIONS, drawn });
+
+  // The standard spelling: quoted name, alias, THEN the stereotype token.
+  assert.match(text, /^\s*class "run" as n\d+ <<function>>$/m, 'a function is a real stereotype');
+  assert.doesNotMatch(text, /"[^"]*<<[^"]*"/, 'no quoted name may smuggle a <<…>> token');
+  assert.match(text, /^\s*class "Alpha" as n\d+( \{)?$/m, 'a plain class names its kind through the keyword only');
+
+  // plantuml-js agrees the document is well-formed (warnings are not errors).
+  assert.deepEqual(checkSyntax(text).errors, [], 'the standard spelling has no syntax error');
+
+  // The parser reports the stereotype as DATA, not as part of the name.
+  const model = await parsePlantUml(text);
+  const fn = model.entities.find((entity) => entity.stereotype === 'function');
+  assert.ok(fn !== undefined, 'parsePlantUml must report the function stereotype');
+  assert.equal(fn.name, 'run', 'the quoted name stays the bare entity name');
+  assert.doesNotMatch(fn.name, /<</);
+
+  // The interface case too, so a function-only fix cannot pass alone.
+  const IFACE_GRAPH: ArchitectureRendererGraph = {
+    nodes: [{ id: 's1/src/modules/alpha/ports.ts.Ports', label: 'Ports', distance: 0, kind: 'interface' }],
+    edges: [],
+  };
+  const ifaceText = buildPlantUmlText(IFACE_GRAPH, { kind: 'full' }, ENTITY_OPTIONS);
+  assert.match(ifaceText, /^\s*interface "Ports" as n\d+ <<interface>>$/m);
+  const ifaceModel = await parsePlantUml(ifaceText);
+  assert.equal(ifaceModel.entities.find((entity) => entity.name === 'Ports')?.stereotype, 'interface');
 });

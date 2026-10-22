@@ -416,6 +416,10 @@ function WorkspaceMain({
               <ArchitecturePanel
                 projectId={selectedProject.projectId}
                 sessionId={selectedSession?.id ?? null}
+                // The copied header names the project and session the way the
+                // workspace labels them; the ids are only a fallback.
+                projectName={selectedProject.displayName}
+                sessionTitle={selectedSession?.title ?? selectedSession?.summary ?? null}
                 // The inspector's mention hits switch the workspace to Chat
                 // after asking the shared locator seam to centre the message;
                 // the architecture module never imports the chat module.

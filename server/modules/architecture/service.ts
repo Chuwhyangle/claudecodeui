@@ -701,11 +701,28 @@ function normalizeMemberKind(type: unknown): EntityMemberKind | null {
   return null;
 }
 
+/**
+ * ArchGuard's TypeScript extractor sometimes spells a type as an import
+ * expression that still carries the analyser machine's absolute path:
+ * `import("/data/home/yale/.../rendererContract").ArchitectureNodeIdShape`.
+ * That is a build-machine detail, not a reading: the class box must show
+ * `ArchitectureNodeIdShape`. Any import expression anywhere inside the type
+ * string (generics, unions, arrays) is reduced to its exported name, and a
+ * string without one is returned byte-identical.
+ */
+const IMPORT_EXPRESSION_TYPE = /import\(\s*["'][^"']*["']\s*\)\s*\.\s*([A-Za-z_$][\w$]*)/g;
+
+export function normalizeMemberType(type: string): string {
+  return type.replace(IMPORT_EXPRESSION_TYPE, '$1');
+}
+
 /** Render one parameter of a method signature (`name?: type`, or just `name`). */
 function renderParameter(value: unknown): string | null {
   if (!isRecord(value) || typeof value.name !== 'string' || value.name.length === 0) return null;
   const optional = value.isOptional === true ? '?' : '';
-  const type = typeof value.type === 'string' && value.type.length > 0 ? `: ${value.type}` : '';
+  const type = typeof value.type === 'string' && value.type.length > 0
+    ? `: ${normalizeMemberType(value.type)}`
+    : '';
   return `${value.name}${optional}${type}`;
 }
 
@@ -720,12 +737,16 @@ function renderParameter(value: unknown): string | null {
 function memberSignature(member: Record<string, unknown>, kind: EntityMemberKind): string | undefined {
   const name = typeof member.name === 'string' ? member.name : '';
   if (kind === 'field') {
-    return typeof member.fieldType === 'string' && member.fieldType.length > 0 ? member.fieldType : undefined;
+    return typeof member.fieldType === 'string' && member.fieldType.length > 0
+      ? normalizeMemberType(member.fieldType)
+      : undefined;
   }
   const parameters = Array.isArray(member.parameters)
     ? member.parameters.map(renderParameter).filter((part): part is string => part !== null)
     : [];
-  const returns = typeof member.returnType === 'string' && member.returnType.length > 0 ? `: ${member.returnType}` : '';
+  const returns = typeof member.returnType === 'string' && member.returnType.length > 0
+    ? `: ${normalizeMemberType(member.returnType)}`
+    : '';
   return `${name}(${parameters.join(', ')})${returns}`;
 }
 

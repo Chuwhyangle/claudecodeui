@@ -31,6 +31,28 @@
     "shellResidentDisabledLabel": "Shell unavailable for resident sessions"
   },
   "architecture": {
+    "copyFix": {
+      "kindClass": "{{count}} classes",
+      "kindFunction": "{{count}} functions",
+      "kindInterface": "{{count}} interfaces",
+      "kindOther": "{{count}} others",
+      "entitySummary": "Showing {{shown}} ({{kinds}}) · {{total}} related",
+      "entitySummaryPlain": "Showing {{shown}} · {{total}} related",
+      "scopeMoreHidden": "Scope +{{scope}} found {{count}} more related, all hidden by the filter ({{parts}})",
+      "showKinds": "▸ Show {{kinds}}",
+      "detailNoChange": "No change: nothing more can be trimmed within the current scope",
+      "filterBadge": "Hiding {{count}}",
+      "filterBadgeAria": "{{count}} filter decisions are hiding content (elements, relations, isolated nodes)",
+      "inspectorHiddenRelations": "{{count}} hidden by the filter ({{relations}})",
+      "showRelation": "▸ Show {{relation}}",
+      "hoverSummary": "{{name}} · {{file}} · {{in}} in / {{out}} out",
+      "hoverNoRelations": "no drawn relations",
+      "hoverHidden": "{{count}} more hidden by the filter",
+      "mentionBadgeToolFile": "Tool: {{tool}} file",
+      "mentionBadgeToolUnknown": "file",
+      "mentionBadgeMessage": "Message",
+      "mentionFileOnly": "mentioned the file, not the name"
+    },
     "tray":     {
       "region": "Selection",
       "pill": "{{count}} selected ▴",

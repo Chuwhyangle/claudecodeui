@@ -392,8 +392,9 @@ test('entity kind and members draw a UML class box: compartments, visibility, st
   // The box label is the ENTITY name; the file it lives in moved to the
   // package frame (and the renderer's hover title), never into the label.
   assert.doesNotMatch(puml, /rolling-slope-check\.ts\.haltVerdict/, 'the label must not carry the file name');
-  assert.match(puml, /^\s+class "<<function>> haltVerdict" as n0$/m, 'a function is a single-compartment box');
-  assert.doesNotMatch(puml, /class "<<function>> haltVerdict" as n0 \{/, 'a function never gets a member compartment');
+  assert.match(puml, /^\s+class "haltVerdict" as n0 <<function>>$/m, 'a function is a single-compartment box with a real stereotype');
+  assert.doesNotMatch(puml, /class "haltVerdict" as n0 <<function>> \{/, 'a function never gets a member compartment');
+  assert.doesNotMatch(puml, /"<<function>>/, 'the stereotype is never glued into the quoted name');
 
   assert.match(puml, /^\s+class "RollingCheck" as n1 \{$/m, 'a class opens a member compartment');
   assert.match(puml, /^\s+- threshold: number$/m, 'a private field keeps its `-` symbol and declared type');
@@ -401,7 +402,7 @@ test('entity kind and members draw a UML class box: compartments, visibility, st
   assert.match(puml, /^\s+~ packages: string\[\]$/m, 'a package-private field keeps its `~` symbol');
   assert.match(puml, /^\s+\+ haltVerdict\(input: number\): boolean$/m, 'a method keeps its `+` symbol and signature');
 
-  assert.match(puml, /^\s+interface "<<interface>> SlopeReader" as n2 \{$/m, 'an interface is declared as interface and carries the stereotype');
+  assert.match(puml, /^\s+interface "SlopeReader" as n2 <<interface>> \{$/m, 'an interface is declared as interface and carries the stereotype');
   assert.match(puml, /^\s+\+ read\(\): number$/m, 'an interface method is a member row');
 
   assert.match(puml, /^\s+enum "Level" as n3$/m, 'an enum uses the parser’s enum kind');
@@ -419,8 +420,8 @@ test('entity kind and members draw a UML class box: compartments, visibility, st
     view: { kind: 'group', prefix: 'modules/rolling' },
     grouping: 'adaptive',
   });
-  assert.match(adaptive.puml, /class "<<function>> haltVerdict" as n0/, 'adaptive path keeps the function stereotype');
-  assert.match(adaptive.puml, /interface "<<interface>> SlopeReader"/, 'and the interface declaration');
+  assert.match(adaptive.puml, /class "haltVerdict" as n0 <<function>>/, 'adaptive path keeps the function stereotype');
+  assert.match(adaptive.puml, /interface "SlopeReader" as n2 <<interface>>/, 'and the interface declaration');
   assert.match(adaptive.puml, /- threshold: number/, 'and the member rows');
 });
 
@@ -435,9 +436,10 @@ test('two same-named entities in one package fall back to a file-qualified label
 
   const { puml } = archguardToPlantUml(graph);
 
-  assert.match(puml, /^\s+interface "<<interface>> Reader\.ts\.Reader" as n0$/m, 'the collision falls back to file + entity');
-  assert.match(puml, /^\s+interface "<<interface>> Ports\.ts\.Reader" as n1$/m, 'and the other one is distinguishable');
-  assert.doesNotMatch(puml, /<<interface>> Reader"/, 'no two boxes share the bare label');
+  assert.match(puml, /^\s+interface "Reader\.ts\.Reader" as n0 <<interface>>$/m, 'the collision falls back to file + entity');
+  assert.match(puml, /^\s+interface "Ports\.ts\.Reader" as n1 <<interface>>$/m, 'and the other one is distinguishable');
+  assert.doesNotMatch(puml, /interface "Reader"/, 'no two boxes share the bare label');
+  assert.doesNotMatch(puml, /"<<interface>>/, 'the stereotype is never glued into the quoted name');
 });
 
 test('a truncated member list ends with the documented … +N marker line', () => {
