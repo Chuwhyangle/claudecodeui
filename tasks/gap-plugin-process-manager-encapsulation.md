@@ -2,7 +2,7 @@
 id: gap-plugin-process-manager-encapsulation
 title: PluginProcessManager 封装：plugin-process 的 2 个模块级 const
   Map（runningPlugins/startingPlugins）收进带生命周期的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
