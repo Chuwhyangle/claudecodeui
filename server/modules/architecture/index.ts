@@ -10,10 +10,6 @@
 // consumer: server/modules/architecture/tests/generator.test.ts (AC-415)
 export type {
   ArchIndex,
-  EntityDetail,
-  EntityKind,
-  EntityMember,
-  EntityMemberKind,
   GenerateGraphParams,
   GenerateGraphResult,
   GraphSeeds,
@@ -32,8 +28,6 @@ export { extractSeeds } from './seed-extraction.js';
 export { DEFAULT_HOPS, DEFAULT_MAX_NODES, createArchitectureService, hasArchguardCache } from './service.js';
 // consumer: server/modules/architecture/tests/architecture-routes.test.ts (AC-418)
 export type {
-  ArchitectureDiagnostic,
-  ArchitectureDiagnosticCode,
   ArchitectureGraphInput,
   ArchitectureGraphParams,
   ArchitectureGraphResult,
