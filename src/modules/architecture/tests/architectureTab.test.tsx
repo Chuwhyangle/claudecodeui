@@ -541,6 +541,76 @@ test('the panel draws through the renderer contract, with no library dependency'
   assert.equal(document.querySelector('[data-architecture-hover]'), null);
 });
 
+test('the entity detail fields pass through the renderer contract unchanged', async () => {
+  // The contract only GROWS optional data: a payload with kinds/members and the
+  // extra stats/provenance readings must reach the renderer exactly as sent, so
+  // a later renderer can use it without any panel-side mapping.
+  const detailed: ArchitectureGraphResult = {
+    ...RESULT,
+    graph: {
+      file: RESULT.graph.file,
+      entity: {
+        nodes: [
+          {
+            id: 'src/modules/alpha/A.ts.Alpha',
+            label: 'Alpha',
+            distance: 0,
+            kind: 'class',
+            members: [
+              { name: 'count', kind: 'field', visibility: 'private', signature: 'number' },
+              { name: 'run', kind: 'method', visibility: 'public', signature: 'run(): Promise<void>' },
+            ],
+          },
+          { id: 'src/modules/alpha/A2.ts.Alpha2', label: 'Alpha2', distance: 1, kind: 'interface', members: [] },
+          { id: 'src/modules/beta/B.ts.Beta', label: 'Beta', distance: 2, kind: 'function' },
+          { id: 'src/modules/gamma/C.ts.Gamma', label: 'Gamma', distance: 3, kind: 'abstract' },
+        ],
+        edges: RESULT.graph.entity.edges,
+      },
+    },
+    stats: {
+      ...RESULT.stats,
+      kindCounts: { class: 1, interface: 1, function: 1, abstract: 1 },
+      membersPerEntity: 20,
+      membersTruncated: true,
+    },
+    provenance: {
+      ...RESULT.provenance,
+      diagnostics: [{ scope: 'scope-src', code: 'ARCH_JSON_MISSING', message: 'scope has no arch.json' }],
+    },
+  };
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(detailed));
+
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+
+  await waitFor(() => {
+    const nodes = seen.at(-1)?.graph.nodes ?? [];
+    assert.ok(nodes.some((node) => node.kind === 'class'), 'the entity subgraph with kinds must reach the renderer');
+  });
+
+  const nodes = seen.at(-1)?.graph.nodes ?? [];
+  const alpha = nodes.find((node) => node.id === 'src/modules/alpha/A.ts.Alpha');
+  assert.equal(alpha?.kind, 'class');
+  assert.deepEqual(alpha?.members, [
+    { name: 'count', kind: 'field', visibility: 'private', signature: 'number' },
+    { name: 'run', kind: 'method', visibility: 'public', signature: 'run(): Promise<void>' },
+  ]);
+  const alpha2 = nodes.find((node) => node.id === 'src/modules/alpha/A2.ts.Alpha2');
+  assert.equal(alpha2?.kind, 'interface');
+  assert.deepEqual(alpha2?.members, [], 'an empty member list is preserved rather than dropped');
+  const beta = nodes.find((node) => node.id === 'src/modules/beta/B.ts.Beta');
+  assert.equal(beta?.kind, 'function');
+  assert.equal('members' in (beta ?? {}), false, 'a node without members stays without the key');
+});
+
 test('the bridge maps every ArchGuard relation kind onto its UML arrow and stereotype', () => {
   const graph: ArchitectureNeighborhood = {
     nodes: [
