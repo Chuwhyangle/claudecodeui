@@ -34,6 +34,13 @@ import {
   wire as dashscopeOmniWire,
 } from './list/dashscope-omni/dashscope-omni.asr-provider.js';
 import {
+  capabilities as dashscopeOmniRelayCapabilities,
+  credentials as dashscopeOmniRelayCredentials,
+  id as dashscopeOmniRelayId,
+  transcribe as dashscopeOmniRelayTranscribe,
+  wire as dashscopeOmniRelayWire,
+} from './list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.js';
+import {
   capabilities as multimodalCapabilities,
   id as multimodalId,
   transcribe as multimodalTranscribe,
@@ -100,6 +107,20 @@ export type AsrCapabilities = {
    * the adapter must leave it off the wire rather than forward it and hope.
    */
   honors: { prompt: boolean; language: boolean; context: boolean };
+  /**
+   * Where a provider that honors `context` places it on the `chat-audio` wire.
+   *
+   * ABSENT MEANS `'user'`, the position the original chat adapters use: one more text part in the
+   * user turn. `'system'` is the position the voice-relay experiment measured — the context is
+   * appended to the system instructions so it frames the whole request instead of reading as one
+   * more thing the user said. The distinction is DECLARED rather than inferred because the contract
+   * board has to build the golden request the declaration promises: a board that assumed one
+   * position would red a provider that deliberately chose the other.
+   *
+   * It is optional and has no effect unless `honors.context` is true; a provider that acknowledges
+   * no context has nowhere to place one.
+   */
+  contextPlacement?: 'user' | 'system';
   /** Billing unit. Decides how a saved-second reading converts into money. */
   billing: 'audio-seconds' | 'audio-tokens' | 'request';
   /** What trimming does to this recogniser's accuracy: pauses are punctuation cues (ADR-004 §二). */
@@ -896,6 +917,24 @@ const REGISTERED: readonly AsrAdapter[] = [
     capabilities: sensevoiceWasmCapabilities,
     transcribe: sensevoiceWasmTranscribe,
   },
+  // APPENDED LAST, for the reason the rows above give: the first row is what an id-less
+  // deployment resolves to, so this selectable recogniser must not move it.
+  //
+  // THIS ROW IS THE SAME SERVICE AS `dashscope-omni` WITH A DIFFERENT PROMPT AND CONTEXT
+  // PLACEMENT. It is a separate provider rather than a mode on the E adapter because the E
+  // prompt is a frozen measured artefact (`scripts/asr-omni-prompt-frozen-check.mjs`), and a
+  // second behaviour behind the same id would make every reading of that id ambiguous. The
+  // credential fields and the address rule are the E module's own, shared by reference.
+  {
+    id: dashscopeOmniRelayId,
+    capabilities: dashscopeOmniRelayCapabilities,
+    wire: dashscopeOmniRelayWire,
+    // The E module's own rule, by reference: the relay provider is the same service, and the
+    // criterion's single-copy reading requires the hostname-bearing function to have one home.
+    allowedBaseUrl: dashscopeOmniAllowedBaseUrl,
+    credentials: dashscopeOmniRelayCredentials,
+    transcribe: dashscopeOmniRelayTranscribe,
+  },
 ];
 
 /** The registered adapters, in registration order. */
@@ -961,6 +1000,9 @@ const PAUSE_CUES_EVIDENCE: Readonly<Record<string, string>> = {
   [openaiCompatibleId]: 'docs/experiments/2026-09-22-voice-provider-paired-quality.md',
   [multimodalId]: 'docs/experiments/2026-09-23-gemini.md',
   [dashscopeOmniId]: 'docs/experiments/2026-09-24-omni-written.md',
+  // The relay row is the same service and model as the row above, so the audio-axis measurement
+  // transfers; its own record explains why, and when that inheritance would stop holding.
+  [dashscopeOmniRelayId]: 'docs/experiments/2026-10-22-omni-relay-pause-cues.md',
 };
 
 /**

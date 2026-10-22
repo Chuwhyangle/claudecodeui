@@ -669,7 +669,12 @@ function chatGoldenBody(capabilities: AsrCapabilities, model: string): string {
     },
     { type: 'text', text: INVARIANT_JSON_TASK_TOKEN },
   ];
-  if (capabilities.honors.context) parts.push({ type: 'text', text: INVARIANT_CONTEXT });
+  // A context placed in the system turn is part of the system string the board tokenises, so it
+  // must NOT also appear as a user part here. The declaration says which position the adapter
+  // promises; the recorded body is canonicalised into the same shape either way.
+  if (capabilities.honors.context && capabilities.contextPlacement !== 'system') {
+    parts.push({ type: 'text', text: INVARIANT_CONTEXT });
+  }
   return JSON.stringify({
     model,
     // The decode parameters this provider's E condition was run at. Retyped rather than imported
