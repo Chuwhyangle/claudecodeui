@@ -36,6 +36,7 @@
       "zoomIn": "Acercar",
       "zoomOut": "Alejar",
       "zoomFit": "Ajustar a la vista",
+      "zoomFocus": "Enfoque",
       "zoomActual": "Tamaño real (100%)",
       "lod": {
         "packages": "Paquetes",
@@ -52,7 +53,8 @@
         "overview": "Vista general",
         "focusHint": "Enfocado en {{package}}",
         "overviewHint": "Zoom {{zoom}} % · amplía {{package}} y {{count}} paquete(s) más",
-        "collapsed": "El gráfico es demasiado ancho, así que se plegó a la vista general por directorios."
+        "collapsed": "El gráfico es demasiado ancho, así que se plegó a la vista general por directorios.",
+        "focusedFitHint": "El zoom legible está activo, así que esta vista es un enfoque; elige «Vista general» para ver todo el gráfico."
       }
     },
     "title": "Arquitectura",

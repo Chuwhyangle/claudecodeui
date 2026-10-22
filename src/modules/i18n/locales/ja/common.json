@@ -36,6 +36,7 @@
       "zoomIn": "拡大",
       "zoomOut": "縮小",
       "zoomFit": "表示に合わせる",
+      "zoomFocus": "フォーカス",
       "zoomActual": "実際のサイズ (100%)",
       "lod": {
         "packages": "パッケージ",
@@ -52,7 +53,8 @@
         "overview": "全体表示",
         "focusHint": "{{package}} にフォーカス中",
         "overviewHint": "ズーム {{zoom}}% · {{package}} と他 {{count}} 個のパッケージを拡大表示",
-        "collapsed": "グラフが横に広すぎるため、ディレクトリ概要に折りたたみました。"
+        "collapsed": "グラフが横に広すぎるため、ディレクトリ概要に折りたたみました。",
+        "focusedFitHint": "読みやすいズームが有効なため、この表示はフォーカスです。全体を見るには「全体表示」を選んでください。"
       }
     },
     "title": "アーキテクチャ",

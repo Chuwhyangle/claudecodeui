@@ -36,6 +36,7 @@
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern",
       "zoomFit": "An Ansicht anpassen",
+      "zoomFocus": "Fokus",
       "zoomActual": "Originalgröße (100%)",
       "lod": {
         "packages": "Pakete",
@@ -52,7 +53,8 @@
         "overview": "Übersicht",
         "focusHint": "Fokussiert auf {{package}}",
         "overviewHint": "Zoom {{zoom}} % · zoomen Sie auf {{package}} und {{count}} weitere(s) Paket(e)",
-        "collapsed": "Der Graph ist zu breit und wurde daher auf die Verzeichnisübersicht reduziert."
+        "collapsed": "Der Graph ist zu breit und wurde daher auf die Verzeichnisübersicht reduziert.",
+        "focusedFitHint": "Der lesbare Zoom ist aktiv, daher zeigt diese Ansicht einen Fokus – wählen Sie „Übersicht“, um den ganzen Graphen zu sehen."
       }
     },
     "title": "Architektur",

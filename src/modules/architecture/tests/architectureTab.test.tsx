@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -11,6 +11,17 @@ import { beforeAll, beforeEach, test, vi } from 'vitest';
 import type { AppTab, Project } from '@/shared/types';
 import type * as SharedApiModule from '@/shared/api';
 import enCommon from '@/modules/i18n/locales/en/common.json';
+import deCommon from '@/modules/i18n/locales/de/common.json';
+import esCommon from '@/modules/i18n/locales/es/common.json';
+import frCommon from '@/modules/i18n/locales/fr/common.json';
+import idCommon from '@/modules/i18n/locales/id/common.json';
+import itCommon from '@/modules/i18n/locales/it/common.json';
+import jaCommon from '@/modules/i18n/locales/ja/common.json';
+import koCommon from '@/modules/i18n/locales/ko/common.json';
+import ruCommon from '@/modules/i18n/locales/ru/common.json';
+import trCommon from '@/modules/i18n/locales/tr/common.json';
+import zhCNCommon from '@/modules/i18n/locales/zh-CN/common.json';
+import zhTWCommon from '@/modules/i18n/locales/zh-TW/common.json';
 import { WorkspaceHeader } from '@/modules/project-workspace';
 import {
   ArchitecturePanel,
@@ -606,8 +617,10 @@ test('the diagram opens fitted, and the toolbar plus Ctrl+wheel resize the SVG',
   assert.equal(svgWidth(host), natural.width);
   assert.equal(Number(host.querySelector('svg')?.getAttribute('height')), natural.height);
 
-  // Fit returns to the container-derived size.
-  fireEvent.click(screen.getByRole('button', { name: 'Fit to view' }));
+  // Fit returns to the container-derived size. In this host the fit is a
+  // readable focus, so the control is named "Focus" (see the dedicated case
+  // below); read it by its data attribute so this check stays about the scale.
+  fireEvent.click(root.querySelector('[data-architecture-zoom-fit]') as Element);
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
   assert.equal(await waitForFit(host), fitted);
 
@@ -651,8 +664,11 @@ test('the readable toggle switches between the focused default and the whole-gra
     'the overview mode is the pressed toggle',
   );
 
-  // 聚焦: back to the readable floor around the same package.
-  fireEvent.click(screen.getByRole('button', { name: 'Focus' }));
+  // 聚焦: back to the readable floor around the same package. The group is read
+  // explicitly because the zoom fit control now also carries the "Focus" label
+  // while the readable floor is what a fit applies.
+  const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
+  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Focus' }));
   assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus');
   assert.equal(Number(root.getAttribute('data-architecture-zoom-scale')), focusedScale);
   assert.equal(document.querySelector('[data-architecture-readable-hint]'), null);
@@ -1415,4 +1431,75 @@ test('the fetch effect tears down cleanly when the panel unmounts mid-request', 
   resolveResponse(jsonResponse(RESULT));
 
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 1));
+});
+
+test('a readable-floor fit is called "Focus" and names Overview as the whole-graph escape', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await screen.findByTestId('plantuml-host');
+  sizeHost(host, 160, 120);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+
+  const root = graphRoot();
+  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
+
+  // The geometric fit here is far below the readable floor, so pressing fit
+  // lands on the focus view. The control must say that, not "Fit to view".
+  const fit = root.querySelector('[data-architecture-zoom-fit]');
+  assert.ok(fit instanceof HTMLElement);
+  assert.equal(fit.getAttribute('data-architecture-zoom-fit-mode'), 'focus', 'the fit lands on a focus view');
+  assert.equal(fit.textContent, 'Focus', 'the control is named after what it applies');
+  assert.equal(fit.getAttribute('aria-pressed'), 'true', 'the zoom on screen is still the fit');
+  // `data-architecture-zoom-mode` keeps its existing fit/custom vocabulary.
+  assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
+
+  const notice = document.querySelector('[data-architecture-readable-fit-notice]');
+  assert.ok(notice instanceof HTMLElement, 'a focused fit must say the whole graph is one choice away');
+  assert.match(notice.textContent ?? '', /Overview/, 'the notice names the control that shows everything');
+  assert.match(notice.textContent ?? '', /whole graph/i);
+
+  // Choosing Overview really fits the whole drawing; the fit control goes back
+  // to saying so, and the notice has nothing left to explain.
+  const readableGroup = screen.getByRole('group', { name: 'Readable zoom mode' });
+  fireEvent.click(within(readableGroup).getByRole('button', { name: 'Overview' }));
+  await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'overview'));
+  const wholeFit = root.querySelector('[data-architecture-zoom-fit]');
+  assert.ok(wholeFit instanceof HTMLElement);
+  assert.equal(wholeFit.getAttribute('data-architecture-zoom-fit-mode'), 'overview');
+  assert.equal(wholeFit.textContent, 'Fit to view');
+  assert.equal(wholeFit.getAttribute('aria-pressed'), 'true');
+  assert.equal(document.querySelector('[data-architecture-readable-fit-notice]'), null);
+});
+
+test('every reviewed locale carries both fit labels and the focused-fit escape', () => {
+  const bundles: Record<string, unknown> = {
+    en: enCommon,
+    de: deCommon,
+    es: esCommon,
+    fr: frCommon,
+    id: idCommon,
+    it: itCommon,
+    ja: jaCommon,
+    ko: koCommon,
+    ru: ruCommon,
+    tr: trCommon,
+    'zh-CN': zhCNCommon,
+    'zh-TW': zhTWCommon,
+  };
+  const plantumlOf = (bundle: unknown) => (bundle as {
+    architecture: {
+      plantuml: { zoomFit?: string; zoomFocus?: string; readable?: { focusedFitHint?: string } };
+    };
+  }).architecture.plantuml;
+
+  assert.equal(Object.keys(bundles).length, 12, 'the reviewed locale set');
+  for (const [locale, bundle] of Object.entries(bundles)) {
+    const plantuml = plantumlOf(bundle);
+    assert.ok((plantuml.zoomFit ?? '').length > 0, `${locale} must name the whole-graph fit`);
+    assert.ok((plantuml.zoomFocus ?? '').length > 0, `${locale} must name the readable focus`);
+    assert.ok(
+      (plantuml.readable?.focusedFitHint ?? '').length > 0,
+      `${locale} must explain a focused fit and name the overview escape`,
+    );
+  }
 });

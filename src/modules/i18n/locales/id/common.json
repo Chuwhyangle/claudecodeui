@@ -36,6 +36,7 @@
       "zoomIn": "Perbesar",
       "zoomOut": "Perkecil",
       "zoomFit": "Sesuaikan dengan tampilan",
+      "zoomFocus": "Fokus",
       "zoomActual": "Ukuran asli (100%)",
       "lod": {
         "packages": "Paket",
@@ -52,7 +53,8 @@
         "overview": "Ikhtisar",
         "focusHint": "Berfokus pada {{package}}",
         "overviewHint": "Zoom {{zoom}}% · perbesar {{package}} dan {{count}} paket lainnya",
-        "collapsed": "Graf terlalu lebar, jadi dilipat ke ikhtisar direktori."
+        "collapsed": "Graf terlalu lebar, jadi dilipat ke ikhtisar direktori.",
+        "focusedFitHint": "Zoom terbaca aktif, jadi tampilan ini terfokus — pilih “Ikhtisar” untuk melihat seluruh graf."
       }
     },
     "title": "Arsitektur",

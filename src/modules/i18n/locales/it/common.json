@@ -36,6 +36,7 @@
       "zoomIn": "Ingrandisci",
       "zoomOut": "Riduci",
       "zoomFit": "Adatta alla vista",
+      "zoomFocus": "Focalizza",
       "zoomActual": "Dimensioni reali (100%)",
       "lod": {
         "packages": "Pacchetti",
@@ -52,7 +53,8 @@
         "overview": "Panoramica",
         "focusHint": "In focus su {{package}}",
         "overviewHint": "Zoom {{zoom}}% · ingrandisci {{package}} e altri {{count}} pacchetti",
-        "collapsed": "Il grafo è troppo largo, quindi è stato ripiegato nella panoramica per directory."
+        "collapsed": "Il grafo è troppo largo, quindi è stato ripiegato nella panoramica per directory.",
+        "focusedFitHint": "Lo zoom leggibile è attivo, quindi questa vista è focalizzata — scegli «Panoramica» per vedere tutto il grafo."
       }
     },
     "title": "Architettura",

@@ -36,6 +36,7 @@
       "zoomIn": "Yakınlaştır",
       "zoomOut": "Uzaklaştır",
       "zoomFit": "Görünüme sığdır",
+      "zoomFocus": "Odak",
       "zoomActual": "Gerçek boyut (%100)",
       "lod": {
         "packages": "Paketler",
@@ -52,7 +53,8 @@
         "overview": "Genel görünüm",
         "focusHint": "{{package}} odaklı",
         "overviewHint": "Yakınlaştırma %{{zoom}} · {{package}} ve {{count}} diğer paketi yakınlaştır",
-        "collapsed": "Graf çok geniş olduğu için dizin genel görünümüne katlandı."
+        "collapsed": "Graf çok geniş olduğu için dizin genel görünümüne katlandı.",
+        "focusedFitHint": "Okunabilir yakınlaştırma açık olduğundan bu görünüm odaklıdır — tüm grafiği görmek için “Genel görünüm”ü seçin."
       }
     },
     "title": "Mimari",

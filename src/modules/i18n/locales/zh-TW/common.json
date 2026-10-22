@@ -36,6 +36,7 @@
       "zoomIn": "放大",
       "zoomOut": "縮小",
       "zoomFit": "配合檢視",
+      "zoomFocus": "聚焦",
       "zoomActual": "實際大小（100%）",
       "lod": {
         "packages": "套件",
@@ -52,7 +53,8 @@
         "overview": "全貌",
         "focusHint": "已聚焦 {{package}}",
         "overviewHint": "縮放 {{zoom}}% · 放大查看 {{package}} 等 {{count}} 個套件",
-        "collapsed": "圖過寬，已摺疊為目錄全貌。"
+        "collapsed": "圖過寬，已摺疊為目錄全貌。",
+        "focusedFitHint": "已按可讀縮放聚焦，點「全貌」查看整圖。"
       }
     },
     "title": "架構",

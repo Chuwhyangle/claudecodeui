@@ -36,6 +36,7 @@
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "zoomFit": "适应视图",
+      "zoomFocus": "聚焦",
       "zoomActual": "实际大小（100%）",
       "lod": {
         "packages": "包",
@@ -52,7 +53,8 @@
         "overview": "全貌",
         "focusHint": "已聚焦 {{package}}",
         "overviewHint": "缩放 {{zoom}}% · 放大查看 {{package}} 等 {{count}} 个包",
-        "collapsed": "图过宽，已折叠为目录全貌。"
+        "collapsed": "图过宽，已折叠为目录全貌。",
+        "focusedFitHint": "已按可读缩放聚焦，点“全貌”查看整图。"
       }
     },
     "title": "架构",

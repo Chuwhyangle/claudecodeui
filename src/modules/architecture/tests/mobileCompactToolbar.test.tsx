@@ -340,8 +340,53 @@ test('a coarse pointer renders no hover hint, and the touch hint is dismissible'
   assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'the hint is dismissible');
 });
 
-test('a truncated graph keeps a compact badge in the row while the menu is shut', async () => {
-  apiMock.architectureGraph.mockResolvedValue(jsonResponse(TRUNCATED_RESULT));
+test('the touch hint is a row above the drawing, never an overlay on its top nodes', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const hint = document.querySelector('[data-architecture-touch-hint]');
+  assert.ok(hint instanceof HTMLElement, 'the touch hint is on screen on first entry');
+
+  // jsdom performs no layout, so overlap is read structurally: the hint must be
+  // OUTSIDE the drawing surface, before it in document order, and in normal
+  // flow. Any of those failing would put it back over the top node row.
+  assert.equal(
+    hint.closest('[data-architecture-plantuml]'),
+    null,
+    'the hint must not be rendered inside the drawing surface',
+  );
+  const drawing = graphRoot();
+  const drawingRegion = drawing.parentElement;
+  assert.ok(drawingRegion instanceof HTMLElement);
+  assert.equal(
+    hint.parentElement,
+    drawingRegion.parentElement,
+    'the hint and the drawing region are siblings in the panel column',
+  );
+  assert.ok(
+    hint.compareDocumentPosition(drawingRegion) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'the hint comes before the drawing, so it cannot cover its top edge',
+  );
+  assert.doesNotMatch(
+    hint.className,
+    /(^|\s)(absolute|fixed|sticky)(\s|$)/,
+    'the hint must stay in normal flow, not be positioned over the drawing',
+  );
+  assert.match(
+    drawingRegion.className,
+    /(^|\s)flex-1(\s|$)/,
+    'the drawing still absorbs the remaining height of the panel',
+  );
+
+  // Its close target is a full 44×44 on a coarse pointer.
+  const close = within(hint).getByRole('button', { name: 'Dismiss hint' });
+  const style = getComputedStyle(close);
+  assert.equal(style.minHeight, '44px', 'the dismiss target must be 44px tall');
+  assert.equal(style.minWidth, '44px', 'the dismiss target must be 44px wide');
+});
+
+test('a truncated graph keeps a compact badge in the row while the menu is shut', async () => {  apiMock.architectureGraph.mockResolvedValue(jsonResponse(TRUNCATED_RESULT));
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
