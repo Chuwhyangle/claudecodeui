@@ -40,3 +40,11 @@ extra:
 - e2e/support/architectureFixture.ts
 - playwright.config.ts
 - tasks/architecture-lod-labels-and-edges-polish.md
+
+## Blocker
+
+**2026-10-22T23:17:35.201Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：c72dfdf5-b00a-4803-994b-6aa29fac354a
