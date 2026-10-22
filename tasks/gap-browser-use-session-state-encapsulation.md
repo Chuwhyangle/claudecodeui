@@ -45,11 +45,3 @@ extra:
 
 - `server/modules/browser-use/browser-use.service.ts`（2 个 const Map → BrowserUseRuntime 私有字段）
 - `tasks/gap-browser-use-session-state-encapsulation.md`（自触）
-
-## Blocker
-
-**2026-10-22T10:33:52.864Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/layoutAspect.test.tsx: AssertionError [ERR_ASSERTION]: aspectRatio 0.53 must fold the flat overview into a portrait canvas; got 3.266 (0 0 1789.96 548) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/layoutAspect.test.tsx]
-- run_id：wk-prod-anchor
-- session_id：57d820f9-9555-47da-8ee8-592cc09411a5
