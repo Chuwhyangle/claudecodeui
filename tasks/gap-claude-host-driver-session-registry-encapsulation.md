@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **模块级可变 Map 归零**：`grep -nE "^const (sessionDeliveryReadings|sessionDeliverySignatures|sessionTurnRunReadings|sessionDeliveryLookups|sessionProcessingReadings) = new Map" server/modules/providers/list/claude/claude-host-driver.provider.ts` 计数 = **0**。
-- [ ] (b) **类存在且持有状态**：`grep -nE "class ClaudeResidentSessionRegistries" server/modules/providers/list/claude/claude-host-driver.provider.ts` 命中（或等价独立文件），且 driver 持实例。
-- [ ] (c) **既有行为不改一字仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-reconcile.test.ts` 与 `claude-resident-outcome-registry.test.ts` 各自单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **模块级可变 Map 归零**：`grep -nE "^const (sessionDeliveryReadings|sessionDeliverySignatures|sessionTurnRunReadings|sessionDeliveryLookups|sessionProcessingReadings) = new Map" server/modules/providers/list/claude/claude-host-driver.provider.ts` 计数 = **0**。
+- [x] (b) **类存在且持有状态**：`grep -nE "class ClaudeResidentSessionRegistries" server/modules/providers/list/claude/claude-host-driver.provider.ts` 命中（或等价独立文件），且 driver 持实例。
+- [x] (c) **既有行为不改一字仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-reconcile.test.ts` 与 `claude-resident-outcome-registry.test.ts` 各自单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 

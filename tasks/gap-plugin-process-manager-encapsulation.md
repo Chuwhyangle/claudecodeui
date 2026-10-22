@@ -45,3 +45,23 @@ extra:
 
 - `server/modules/plugins/plugin-process.service.ts`（2 个 const Map → PluginProcessManager 私有字段 + 生命周期）
 - `tasks/gap-plugin-process-manager-encapsulation.md`（自触）
+
+## Evidence
+
+**2026-10-22 第 2 轮 worker（worktree `gap-plugin-process-manager-encapsulation`，merge develop 后）**
+
+- ①(a) `grep -nE "^const (runningPlugins|startingPlugins) = new Map" server/modules/plugins/plugin-process.service.ts` → **0 hit（exit 1）**。
+- ①(b) `class PluginProcessManager` @ `plugin-process.service.ts:23`；私有字段 `runningPlugins` :25、`startingPlugins` :27；单实例 `const pluginProcessManager = new PluginProcessManager()` :178；生命周期方法 `start` :35、`stop` :116、`getPort` :143、`isRunning` :150、`stopAll` :157。
+- ②(c) 仓库**无**直接覆盖 `plugin-process.service.ts` 的 server 判据（`grep -rln "plugin-process|PluginProcessManager" server --include=*.test.ts` 无命中）；按 AC 的「等价判据替换并记录」取插件域既有 server 判据 `server/modules/plugins/tests/plugins.service.test.ts` 单跑 → `TEST_EXIT=0`（tests 1 / pass 1 / fail 0）。另跑导出面 smoke：`getPluginPort(none)=null`、`isPluginRunning(none)=false`、`stopPluginServer(none)` resolve `undefined`、`stopAllPlugins()=[]`，六个导出名不变。
+- ③(d) `npx tsc --noEmit -p server/tsconfig.json` → **0**；`npx oxlint src/ server/ scripts/ shared/` → **0**（本文件无 finding）。
+- ④ 纯位移：develop 版 `startPluginServer/stopPluginServer/getPluginPort/isPluginRunning/stopAllPlugins` 的函数体逐行迁入 `PluginProcessManager` 同名方法，仅 `runningPlugins→this.runningPlugins` / `startingPlugins→this.startingPlugins`；ready 行解析、10s 就绪超时、error/exit 清理、并发合并、SIGTERM+5s SIGKILL 强制 kill 语义均不变，导出签名不变。
+- ⑤(e) `git diff --name-only develop...HEAD` → 仅 `server/modules/plugins/plugin-process.service.ts`；`anti-drift-touches-check --merge-target develop` → `ANTI-DRIFT OK: 1 actual file(s), all within declared Touches`（exit 0）。
+- 前一轮 suite 红根因（**非本任务 delta**）：共享 `node_modules/@yalehwang/plantuml-js` 仍是 0.1.0，`aspectRatio` 不折叠；该包已于 18:35 换成 0.3.0，`src/modules/architecture/tests/layoutAspect.test.tsx` 单跑 7/7 passed（连续 5 次），两个 worktree 共享同一 node_modules。
+
+## Blocker
+
+**2026-10-22T10:28:10.102Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/layoutAspect.test.tsx: AssertionError [ERR_ASSERTION]: aspectRatio 0.53 must fold the flat overview into a portrait canvas; got 3.266 (0 0 1789.96 548) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/layoutAspect.test.tsx]
+- run_id：wk-prod-anchor
+- session_id：80ecd2d0-e507-4c25-8a61-e94e49ba90b1
