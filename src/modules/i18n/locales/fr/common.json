@@ -266,7 +266,8 @@
       "confirmCopy": "Copier quand même",
       "copyFallbackTitle": "Copier le PlantUML manuellement",
       "copyFallbackHint": "L'accès au presse-papiers est indisponible. Sélectionnez et copiez le texte ci-dessous.",
-      "close": "Fermer"
+      "close": "Fermer",
+      "bridgeFallback": "Repli : texte du pont (le modèle dessiné est indisponible)"
     }
   },
   "status": {

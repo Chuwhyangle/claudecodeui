@@ -266,7 +266,8 @@
       "confirmCopy": "それでもコピー",
       "copyFallbackTitle": "PlantUML を手動でコピー",
       "copyFallbackHint": "クリップボードを利用できません。下のテキストを選択してコピーしてください。",
-      "close": "閉じる"
+      "close": "閉じる",
+      "bridgeFallback": "フォールバック: ブリッジのテキスト（描画されたモデルを利用できません）"
     }
   },
   "status": {

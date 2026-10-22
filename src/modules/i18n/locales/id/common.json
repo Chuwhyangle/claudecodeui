@@ -266,7 +266,8 @@
       "confirmCopy": "Tetap salin",
       "copyFallbackTitle": "Salin PlantUML secara manual",
       "copyFallbackHint": "Akses papan klip tidak tersedia. Pilih dan salin teks di bawah.",
-      "close": "Tutup"
+      "close": "Tutup",
+      "bridgeFallback": "Cadangan: teks jembatan (model yang digambar tidak tersedia)"
     }
   },
   "status": {

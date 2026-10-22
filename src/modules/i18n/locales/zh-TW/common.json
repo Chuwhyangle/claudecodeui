@@ -266,7 +266,8 @@
       "confirmCopy": "仍要複製",
       "copyFallbackTitle": "手動複製 PlantUML",
       "copyFallbackHint": "剪貼簿無法使用，請選取並複製下方文字。",
-      "close": "關閉"
+      "close": "關閉",
+      "bridgeFallback": "回退：橋接層文字（無法取得實際繪製的模型）"
     }
   },
   "status": {

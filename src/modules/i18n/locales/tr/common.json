@@ -266,7 +266,8 @@
       "confirmCopy": "Yine de kopyala",
       "copyFallbackTitle": "PlantUML’i elle kopyala",
       "copyFallbackHint": "Pano erişimi yok. Aşağıdaki metni seçip kopyalayın.",
-      "close": "Kapat"
+      "close": "Kapat",
+      "bridgeFallback": "Yedek: köprü metni (çizilen model kullanılamıyor)"
     }
   },
   "status": {

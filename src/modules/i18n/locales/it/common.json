@@ -266,7 +266,8 @@
       "confirmCopy": "Copia comunque",
       "copyFallbackTitle": "Copia il PlantUML manualmente",
       "copyFallbackHint": "Gli appunti non sono disponibili. Seleziona e copia il testo qui sotto.",
-      "close": "Chiudi"
+      "close": "Chiudi",
+      "bridgeFallback": "Ripiego: testo del ponte (il modello disegnato non è disponibile)"
     }
   },
   "status": {

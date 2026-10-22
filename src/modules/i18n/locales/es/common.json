@@ -266,7 +266,8 @@
       "confirmCopy": "Copiar de todos modos",
       "copyFallbackTitle": "Copiar el PlantUML manualmente",
       "copyFallbackHint": "El portapapeles no está disponible. Selecciona y copia el texto de abajo.",
-      "close": "Cerrar"
+      "close": "Cerrar",
+      "bridgeFallback": "Reserva: texto del puente (el modelo dibujado no está disponible)"
     }
   },
   "status": {

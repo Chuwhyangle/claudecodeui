@@ -272,7 +272,8 @@
       "confirmCopy": "Copy anyway",
       "copyFallbackTitle": "Copy the PlantUML manually",
       "copyFallbackHint": "Clipboard access is unavailable. Select and copy the text below.",
-      "close": "Close"
+      "close": "Close",
+      "bridgeFallback": "Fallback: bridge text (the drawn model is unavailable)"
     }
   },
   "status": {

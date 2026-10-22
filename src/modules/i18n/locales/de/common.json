@@ -266,7 +266,8 @@
       "confirmCopy": "Trotzdem kopieren",
       "copyFallbackTitle": "PlantUML manuell kopieren",
       "copyFallbackHint": "Kein Zugriff auf die Zwischenablage. Markiere den Text unten und kopiere ihn.",
-      "close": "Schließen"
+      "close": "Schließen",
+      "bridgeFallback": "Rückfall: Brückentext (das gezeichnete Modell ist nicht verfügbar)"
     }
   },
   "status": {
