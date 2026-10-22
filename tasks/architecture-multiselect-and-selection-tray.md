@@ -1,7 +1,7 @@
 ---
 id: architecture-multiselect-and-selection-tray
 title: 多选与选择托盘：Shift/Ctrl 点选、Shift 框选、长按多选；选中后写一段文字放进 Chat 输入框（追加，可附选中子图的 PlantUML）
-status: ready
+status: done
 labels:
   - feature
 parent: null
