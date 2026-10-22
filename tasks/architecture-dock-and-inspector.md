@@ -129,3 +129,11 @@ depends_on:
 - `i18nArchitectureTabCompleteness.test.ts` 6/6；`npm run typecheck` 与 `npm run build` 通过
 
 **DoD（真实浏览器）**：本 worker 会话未启动/重启本机 server（重启会杀掉承载会话的进程），浏览器读数与截图留给 fan-in 后的人工复核。
+
+## Blocker
+
+**2026-10-22T13:51:13.218Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/canvasLayoutContract.test.tsx: AssertionError [ERR_ASSERTION]: the canvas region stacks its rows in a column
+- run_id：wk-prod-anchor
+- session_id：366b91ed-92fe-4552-989f-5c5b7cf009be
