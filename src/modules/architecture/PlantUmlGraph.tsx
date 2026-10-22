@@ -7,6 +7,7 @@ import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/adaptiveGrouping';
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
+  nodeFileOf,
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
@@ -42,6 +43,7 @@ import {
   type ReadableZoomMode,
 } from '@/modules/architecture/readableZoom';
 import type {
+  ArchitectureNodeIdShape,
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
@@ -126,6 +128,16 @@ const HIGHLIGHT_STYLE = `
   [data-architecture-plantuml] .arch-hl-in .uml-arrow,
   [data-architecture-plantuml] .arch-hl-out .uml-arrow { fill: #2563eb; stroke: #2563eb; }
   [data-architecture-plantuml] .arch-center rect { fill: #dbeafe; stroke: #1d4ed8; }
+  /* A session seed (distance 0) is marked by WEIGHT, not only colour: the frame
+     is drawn twice as thick, which survives a greyscale print and colour-blind
+     reading. */
+  [data-architecture-plantuml] .arch-seed > rect { stroke: #b45309; stroke-width: 3; }
+  /* Edge relation labels are hidden by default (a dense drawing turns the
+     relation stereotypes into a wall of overlapping text); hovering or
+     selecting a node reveals the labels of its own edges. The DOM helpers
+     hideEdgeLabels/showHighlightedEdgeLabels toggle the SVG display
+     presentation attribute on the labels the renderer already drew, so this is
+     a visibility toggle, never a re-layout. */
   /* Directory groups are scaffolding, not entities: same dashed, grey frame the
      renderer's own overview stubs use, so a collapsed overview reads as a map. */
   [data-architecture-plantuml] [data-entity-id^="grp::"] rect { fill: #f6f8fa; stroke-dasharray: 5,3; }
@@ -269,16 +281,36 @@ function centerOnPackage(host: HTMLElement, packageId: string): void {
   if (target !== null) centerElementInContainer(host, target);
 }
 
+/**
+ * Hide every edge relation label the renderer drew. The label is still in the
+ * DOM (the SVG structure is the renderer's contract); only its visibility is
+ * toggled, which is why a hover never re-lays the drawing out.
+ */
+function hideEdgeLabels(host: HTMLElement): void {
+  for (const label of host.querySelectorAll('.uml-edge text')) {
+    label.setAttribute('display', 'none');
+  }
+}
+
+/** Reveal the labels of the edges the highlight marked (and only those). */
+function showHighlightedEdgeLabels(host: HTMLElement): void {
+  for (const edge of host.querySelectorAll('.arch-hl-in, .arch-hl-out')) {
+    for (const label of edge.querySelectorAll('text')) label.removeAttribute('display');
+  }
+}
+
 /** Remove every highlight class the hover interaction may have added. */
 function clearHighlight(host: HTMLElement): void {
   for (const element of host.querySelectorAll('.arch-dim, .arch-hl-in, .arch-hl-out')) {
     element.classList.remove('arch-dim', 'arch-hl-in', 'arch-hl-out');
   }
+  hideEdgeLabels(host);
 }
 
 /**
  * Dim everything except the hovered node and its one-hop neighbourhood, and
- * mark its outgoing (`arch-hl-out`) and incoming (`arch-hl-in`) edges.
+ * mark its outgoing (`arch-hl-out`) and incoming (`arch-hl-in`) edges. The
+ * marked edges are also the only ones whose relation label becomes visible.
  */
 function highlightRelations(host: HTMLElement, id: string): void {
   clearHighlight(host);
@@ -299,6 +331,41 @@ function highlightRelations(host: HTMLElement, id: string): void {
   for (const node of host.querySelectorAll('.uml-node')) {
     const nodeId = node.getAttribute('data-entity-id');
     if (nodeId !== null && !neighbours.has(nodeId)) node.classList.add('arch-dim');
+  }
+  showHighlightedEdgeLabels(host);
+}
+
+/**
+ * Annotate the freshly drawn SVG with the two readings the node boxes no longer
+ * carry themselves:
+ *  · the hover `<title>` names the FILE the entity lives in — the box label is
+ *    the bare entity name, so the path has to live somewhere the pointer can
+ *    reveal it;
+ *  · a session seed (`distance === 0`) gets the seed marker attribute + class,
+ *    which the stylesheet turns into the thicker frame (see HIGHLIGHT_STYLE).
+ * View scaffolding (group and stub nodes) is not an entity and is skipped.
+ */
+function annotateNodes(
+  host: HTMLElement,
+  graph: ArchitectureRendererGraph,
+  idShape: ArchitectureNodeIdShape,
+): void {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = element.getAttribute('data-entity-id');
+    if (id === null) continue;
+    const node = byId.get(id);
+    if (node === undefined) continue;
+    const file = nodeFileOf(node, idShape);
+    if (file !== '') {
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = file;
+      element.insertBefore(title, element.firstChild);
+    }
+    if (node.distance === 0) {
+      element.setAttribute('data-architecture-seed', 'true');
+      element.classList.add('arch-seed');
+    }
   }
 }
 
@@ -649,6 +716,10 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
         host.innerHTML = svg;
         drawnAspectRef.current = drawnAspect;
         restoreEntityIds(host, diagram.aliasOf);
+        // Labels are off until a node is hovered/selected, and every entity
+        // box carries its source file + seed marker (see `annotateNodes`).
+        hideEdgeLabels(host);
+        annotateNodes(host, graph, idShape);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
         // observer keeps following the container only for a fit user.

@@ -201,3 +201,157 @@ test('an empty graph is still a complete, package-free document', () => {
   assert.equal(empty.rendererEntity, null);
   assert.deepEqual(empty.nodeIds, []);
 });
+
+/**
+ * A real-shape ENTITY graph: the nodes carry the server's `kind`/`members`
+ * detail (mirrored from the backend's `EntityKind`/`EntityMember`, see
+ * `server/modules/architecture/generator.ts`). The class members deliberately
+ * cover all four visibility keywords the backend passes through.
+ */
+const ENTITY_DETAIL_GRAPH: ArchitectureNeighborhood = {
+  nodes: [
+    {
+      id: 'src/modules/rolling/rolling-slope-check.ts.haltVerdict',
+      label: 'haltVerdict',
+      distance: 0,
+      kind: 'function',
+    },
+    {
+      id: 'src/modules/rolling/rolling-slope-check.ts.RollingCheck',
+      label: 'RollingCheck',
+      distance: 1,
+      kind: 'class',
+      members: [
+        { name: 'threshold', kind: 'field', visibility: 'private', signature: 'number' },
+        { name: 'slope', kind: 'field', visibility: 'protected', signature: 'number' },
+        { name: 'packages', kind: 'field', visibility: 'package-private', signature: 'string[]' },
+        { name: 'haltVerdict', kind: 'method', visibility: 'public', signature: 'haltVerdict(input: number): boolean' },
+      ],
+    },
+    {
+      id: 'src/modules/rolling/ports.ts.SlopeReader',
+      label: 'SlopeReader',
+      distance: 2,
+      kind: 'interface',
+      members: [
+        { name: 'read', kind: 'method', visibility: 'public', signature: 'read(): number' },
+      ],
+    },
+    {
+      id: 'src/modules/rolling/kinds.ts.Level',
+      label: 'Level',
+      distance: 2,
+      kind: 'enum',
+      members: [],
+    },
+    {
+      id: 'src/modules/rolling/base.ts.Base',
+      label: 'Base',
+      distance: 3,
+      kind: 'abstract',
+      members: [],
+    },
+  ],
+  edges: [
+    { from: 'src/modules/rolling/rolling-slope-check.ts.RollingCheck', to: 'src/modules/rolling/rolling-slope-check.ts.haltVerdict', relationType: 'call' },
+    { from: 'src/modules/rolling/rolling-slope-check.ts.RollingCheck', to: 'src/modules/rolling/ports.ts.SlopeReader', relationType: 'implementation' },
+  ],
+};
+
+test('entity kind and members draw a UML class box: compartments, visibility, stereotypes', () => {
+  const { puml } = archguardToPlantUml(ENTITY_DETAIL_GRAPH);
+
+  // The box label is the ENTITY name; the file it lives in moved to the
+  // package frame (and the renderer's hover title), never into the label.
+  assert.doesNotMatch(puml, /rolling-slope-check\.ts\.haltVerdict/, 'the label must not carry the file name');
+  assert.match(puml, /^\s+class "<<function>> haltVerdict" as n0$/m, 'a function is a single-compartment box');
+  assert.doesNotMatch(puml, /class "<<function>> haltVerdict" as n0 \{/, 'a function never gets a member compartment');
+
+  assert.match(puml, /^\s+class "RollingCheck" as n1 \{$/m, 'a class opens a member compartment');
+  assert.match(puml, /^\s+- threshold: number$/m, 'a private field keeps its `-` symbol and declared type');
+  assert.match(puml, /^\s+# slope: number$/m, 'a protected field keeps its `#` symbol');
+  assert.match(puml, /^\s+~ packages: string\[\]$/m, 'a package-private field keeps its `~` symbol');
+  assert.match(puml, /^\s+\+ haltVerdict\(input: number\): boolean$/m, 'a method keeps its `+` symbol and signature');
+
+  assert.match(puml, /^\s+interface "<<interface>> SlopeReader" as n2 \{$/m, 'an interface is declared as interface and carries the stereotype');
+  assert.match(puml, /^\s+\+ read\(\): number$/m, 'an interface method is a member row');
+
+  assert.match(puml, /^\s+enum "Level" as n3$/m, 'an enum uses the parser’s enum kind');
+  assert.match(puml, /^\s+abstract class "Base" as n4$/m, 'an abstract class uses the parser’s abstract kind');
+
+  // Fields are drawn before methods, which is the only field/method separation
+  // this renderer's single body compartment offers.
+  const fieldIndex = puml.indexOf('- threshold: number');
+  const methodIndex = puml.indexOf('+ haltVerdict(input: number): boolean');
+  assert.ok(fieldIndex >= 0 && fieldIndex < methodIndex, 'fields precede methods inside the box');
+
+  // The panel draws the ADAPTIVE path; expanding a leaf directory must yield the
+  // same UML shapes as the raw bridge contract.
+  const adaptive = archguardToPlantUml(ENTITY_DETAIL_GRAPH, {
+    view: { kind: 'group', prefix: 'modules/rolling' },
+    grouping: 'adaptive',
+  });
+  assert.match(adaptive.puml, /class "<<function>> haltVerdict" as n0/, 'adaptive path keeps the function stereotype');
+  assert.match(adaptive.puml, /interface "<<interface>> SlopeReader"/, 'and the interface declaration');
+  assert.match(adaptive.puml, /- threshold: number/, 'and the member rows');
+});
+
+test('two same-named entities in one package fall back to a file-qualified label', () => {
+  const graph: ArchitectureNeighborhood = {
+    nodes: [
+      { id: 'src/a/Reader.ts.Reader', label: 'Reader', distance: 0, kind: 'interface' },
+      { id: 'src/a/Ports.ts.Reader', label: 'Reader', distance: 1, kind: 'interface' },
+    ],
+    edges: [],
+  };
+
+  const { puml } = archguardToPlantUml(graph);
+
+  assert.match(puml, /^\s+interface "<<interface>> Reader\.ts\.Reader" as n0$/m, 'the collision falls back to file + entity');
+  assert.match(puml, /^\s+interface "<<interface>> Ports\.ts\.Reader" as n1$/m, 'and the other one is distinguishable');
+  assert.doesNotMatch(puml, /<<interface>> Reader"/, 'no two boxes share the bare label');
+});
+
+test('a truncated member list ends with the documented … +N marker line', () => {
+  const full = archguardToPlantUml(ENTITY_DETAIL_GRAPH);
+  assert.doesNotMatch(full.puml, /… \+N/, 'the marker is absent unless the reading reports truncation');
+
+  const truncated = archguardToPlantUml(ENTITY_DETAIL_GRAPH, { membersTruncated: true });
+  assert.match(truncated.puml, /^\s+\+ … \+N$/m, 'the marked node ends with the truncation row');
+  // Only boxes that actually draw members get the marker: a function is one
+  // compartment and an empty class body has nothing to truncate. The flag is
+  // reading-level, so both member-bearing boxes are marked — never an invented
+  // per-node count.
+  assert.equal(
+    (truncated.puml.match(/… \+N/g) ?? []).length,
+    2,
+    'the class and the interface each end with one marker',
+  );
+});
+
+test('a node without `kind` keeps the byte-identical legacy document', () => {
+  // The pre-detail bridge output, spelled out: this is the contract that a
+  // payload written before `kind`/`members` existed must not visibly change.
+  const legacy: ArchitectureNeighborhood = {
+    nodes: [
+      { id: 'src/a/F.ts.Foo', label: 'Foo', distance: 0 },
+      { id: 'src/b/G.ts.Bar', label: 'Bar', distance: 1 },
+    ],
+    edges: [{ from: 'src/a/F.ts.Foo', to: 'src/b/G.ts.Bar', relationType: 'call' }],
+  };
+
+  assert.equal(
+    archguardToPlantUml(legacy).puml,
+    [
+      '@startuml',
+      'package "a" {',
+      '  class "a/F.ts.Foo" as n0',
+      '}',
+      'package "b" {',
+      '  class "b/G.ts.Bar" as n1',
+      '}',
+      'n0 ..> n1 : <<call>>',
+      '@enduml',
+    ].join('\n'),
+  );
+});

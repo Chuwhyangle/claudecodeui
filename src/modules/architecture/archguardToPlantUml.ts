@@ -8,7 +8,10 @@ import {
   scopeRelativePath,
   type AdaptiveGrouping,
 } from '@/modules/architecture/adaptiveGrouping';
-import type { ArchitectureNodeIdShape } from '@/modules/architecture/rendererContract';
+import type {
+  ArchitectureEntityMember,
+  ArchitectureNodeIdShape,
+} from '@/modules/architecture/rendererContract';
 import type {
   ArchitectureNeighborhood,
   ArchitectureNeighborhoodEdge,
@@ -103,6 +106,14 @@ export type ArchitecturePlantUml = {
 type ArchguardBridgeOptions = {
   /** Which slice to draw. Defaults to the overview. */
   readonly view?: ArchitectureDiagramView;
+  /**
+   * The reading's member lists were cut at the server's per-entity cap
+   * (`stats.membersTruncated`). The flag is reading-level, so which node was cut
+   * is not attributable here: every entity box that HAS members ends with the
+   * documented `… +N` marker line instead of an invented per-node count.
+   * Absent/false leaves the boxes untouched.
+   */
+  readonly membersTruncated?: boolean;
   /** Reuse an alias map built over the full graph (required when filtering). */
   readonly aliasOf?: ReadonlyMap<string, string>;
   /**
@@ -165,6 +176,188 @@ function sanitizeName(name: string): string {
 }
 
 /**
+ * The entity name a kind-bearing node is labelled with.
+ *
+ * The server's `label` for an entity node is its bare identifier
+ * (`haltVerdict`), which is exactly what a UML class box shows; the file it
+ * lives in moves into the package frame and the hover `<title>`. A payload
+ * whose label is missing or still the raw id falls back to the id's own last
+ * `.`-segment, so the box never reverts to `file.ts.Name` by accident.
+ */
+function entityNameOf(node: ArchitectureNeighborhoodNode, idShape: ArchitectureNodeIdShape): string {
+  const label = node.label.trim();
+  if (label !== '' && label !== node.id) return label;
+  const rel = pathName(node.id, idShape);
+  const tail = rel.slice(rel.lastIndexOf('/') + 1);
+  const dot = tail.lastIndexOf('.');
+  return dot === -1 ? tail : tail.slice(dot + 1);
+}
+
+/**
+ * The file a node lives in, project-relative (`modules/chat/Chat.ts`): the
+ * node's path minus the entity suffix its id carries. A file-graph node IS its
+ * file, so nothing is stripped.
+ *
+ * Consumers: `PlantUmlGraph.tsx` (the hover `<title>` that carries the file the
+ * node box no longer spells out) and the label-collision fallback below.
+ */
+export function nodeFileOf(
+  node: Pick<ArchitectureNeighborhoodNode, 'id' | 'label'>,
+  idShape: ArchitectureNodeIdShape = DEFAULT_NODE_ID_SHAPE,
+): string {
+  const rel = pathName(node.id, idShape);
+  const lastSlash = rel.lastIndexOf('/');
+  const tail = rel.slice(lastSlash + 1);
+  const label = node.label.trim();
+  if (label !== '' && label !== node.id && tail.endsWith(`.${label}`)) {
+    return rel.slice(0, rel.length - label.length - 1);
+  }
+  return rel;
+}
+
+/**
+ * The visibility symbol a UML member row starts with. ArchGuard writes the
+ * keyword (`public`/`private`/`protected`); a payload without one is a
+ * TypeScript member with the language's default visibility, which is public.
+ * The parser requires a leading symbol for a body line, so there is no
+ * "unspecified" case to emit.
+ */
+function visibilitySymbol(visibility: string | undefined): string {
+  switch (visibility) {
+    case 'private':
+    case '-':
+      return '-';
+    case 'protected':
+    case '#':
+      return '#';
+    case 'package':
+    case 'package-private':
+    case 'internal':
+    case '~':
+      return '~';
+    default:
+      return '+';
+  }
+}
+
+/** One member row: visibility symbol plus the server's display-ready one-liner. */
+function memberRow(member: ArchitectureEntityMember): string {
+  const text = member.kind === 'field'
+    ? (member.signature === undefined ? member.name : `${member.name}: ${member.signature}`)
+    : (member.signature === undefined ? `${member.name}()` : member.signature);
+  return `${visibilitySymbol(member.visibility)} ${sanitizeName(text)}`;
+}
+
+/**
+ * The body compartments of an entity box, fields first then methods (the
+ * renderer draws one compartment for both, so the order is what keeps them
+ * apart). A function is a single-compartment box: it never gets a body, even
+ * if the payload somehow carries members for it.
+ *
+ * `membersTruncated` appends the reading's `… +N` marker after the last row.
+ */
+function entityBodyOf(
+  node: ArchitectureNeighborhoodNode,
+  membersTruncated: boolean,
+): readonly string[] {
+  if (node.kind === 'function') return [];
+  const members = node.members ?? [];
+  const rows = [
+    ...members.filter((member) => member.kind === 'field').map(memberRow),
+    ...members.filter((member) => member.kind === 'method').map(memberRow),
+  ];
+  if (membersTruncated && rows.length > 0) rows.push(`${visibilitySymbol(undefined)} … +N`);
+  return rows;
+}
+
+/**
+ * The declaration head for a kind-bearing node. `<<interface>>` and
+ * `<<function>>` are part of the drawn title: the renderer's parser drops a
+ * trailing stereotype token, so the only place a stereotype survives into the
+ * SVG is the quoted name itself.
+ */
+function entityHead(kind: NonNullable<ArchitectureNeighborhoodNode['kind']>, label: string): string {
+  switch (kind) {
+    case 'interface':
+      return `interface "<<interface>> ${label}"`;
+    case 'enum':
+      return `enum "${label}"`;
+    case 'abstract':
+      return `abstract class "${label}"`;
+    case 'function':
+      return `class "<<function>> ${label}"`;
+    default:
+      return `class "${label}"`;
+  }
+}
+
+/**
+ * The full declaration (head plus optional body) of one entity, as lines that
+ * the package emitter indents. A legacy node (no `kind`) keeps the pre-detail
+ * rendering byte-for-byte: the front-truncated `file.ts.Name` class line.
+ */
+function entityDeclarationLines(
+  node: ArchitectureNeighborhoodNode,
+  alias: string,
+  label: string | null,
+  idShape: ArchitectureNodeIdShape,
+  membersTruncated: boolean,
+): readonly string[] {
+  if (node.kind === undefined || label === null) {
+    return [`class "${sanitizeName(displayName(node.id, MAX_DISPLAY_DIR_SEGMENTS, idShape))}" as ${alias}`];
+  }
+  const head = `${entityHead(node.kind, sanitizeName(label))} as ${alias}`;
+  const body = entityBodyOf(node, membersTruncated);
+  if (body.length === 0) return [head];
+  return [`${head} {`, ...body.map((row) => `  ${row}`), '}'];
+}
+
+/**
+ * The label each kind-bearing node draws, with the collision fallback: two
+ * entities with the same name inside one package are told apart by the file
+ * they live in (`Reader.ts.Reader` vs `Ports.ts.Reader`). Legacy nodes are
+ * absent from the map — they never enter this naming scheme.
+ */
+function entityLabels(
+  nodes: readonly ArchitectureNeighborhoodNode[],
+  idShape: ArchitectureNodeIdShape,
+): Map<string, string> {
+  const names = new Map<string, string>();
+  const seen = new Map<string, number>();
+  for (const node of nodes) {
+    if (node.kind === undefined) continue;
+    const label = entityNameOf(node, idShape);
+    names.set(node.id, label);
+    const key = `${directoryPathOf(node.id, idShape)}\u0000${label}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  const labels = new Map<string, string>();
+  for (const node of nodes) {
+    const label = names.get(node.id);
+    if (label === undefined) continue;
+    const key = `${directoryPathOf(node.id, idShape)}\u0000${label}`;
+    labels.set(
+      node.id,
+      (seen.get(key) ?? 0) > 1
+        ? `${fileNameOf(node, idShape, label)}.${label}`
+        : label,
+    );
+  }
+  return labels;
+}
+
+/** The file part of a node's path, without its directories or entity suffix. */
+function fileNameOf(
+  node: ArchitectureNeighborhoodNode,
+  idShape: ArchitectureNodeIdShape,
+  entityName: string,
+): string {
+  const file = nodeFileOf(node, idShape);
+  const tail = file.slice(file.lastIndexOf('/') + 1);
+  return tail !== '' ? tail : entityName;
+}
+
+/**
  * The package path (directory chain) of a node, from the scope-stripped path:
  * `scope/src/modules/chat/hooks/useX.ts.useX` → `src/modules/chat/hooks`.
  * An id with no directory (a top-level file) has no package (`''`).
@@ -193,7 +386,7 @@ type PackageTreeNode = {
 function insertIntoPackageTree(
   root: PackageTreeNode,
   packagePath: string,
-  line: string,
+  lines: readonly string[],
 ): void {
   let node = root;
   const segments = packagePath.split('/').filter(Boolean);
@@ -207,7 +400,7 @@ function insertIntoPackageTree(
     }
     node = child;
   }
-  node.entityLines.push(line);
+  node.entityLines.push(...lines);
 }
 
 /**
@@ -250,19 +443,21 @@ function emitEntityDocument(
   drawn: { readonly nodes: readonly ArchitectureNeighborhoodNode[]; readonly edges: readonly ArchitectureNeighborhoodEdge[] },
   aliasOf: ReadonlyMap<string, string>,
   idShape: ArchitectureNodeIdShape,
+  membersTruncated: boolean,
 ): { puml: string; nodeIds: readonly string[] } {
   // The class lines are grouped into the nested package tree by directory path:
   // the renderer parses the blocks into package frames and stamps every entity
   // with its innermost package (`data-package-id`), which is what the frontend
   // hierarchy index reads instead of inferring containment from geometry.
   const packageRoot: PackageTreeNode = { id: '', children: new Map(), entityLines: [] };
+  const labels = entityLabels(drawn.nodes, idShape);
   for (const node of drawn.nodes) {
     const alias = aliasOf.get(node.id);
     if (alias === undefined) continue;
     insertIntoPackageTree(
       packageRoot,
       packagePathOf(node.id, idShape),
-      `class "${sanitizeName(displayName(node.id, MAX_DISPLAY_DIR_SEGMENTS, idShape))}" as ${alias}`,
+      entityDeclarationLines(node, alias, labels.get(node.id) ?? null, idShape, membersTruncated),
     );
   }
 
@@ -303,6 +498,7 @@ function emitGroupedDocument(
   grouping: AdaptiveGrouping,
   aliasOf: ReadonlyMap<string, string>,
   idShape: ArchitectureNodeIdShape,
+  membersTruncated: boolean,
 ): ArchitecturePlantUml {
   const lines = ['@startuml'];
   const mergedAliases = new Map(aliasOf);
@@ -320,10 +516,16 @@ function emitGroupedDocument(
     lines.push(`class "${sanitizeName(groupLabel(group.prefix, group.count))}" as ${alias}`);
   });
 
+  // Ungrouped nodes are entities the fold drew as themselves, so they take the
+  // same UML shape (kind, members, pure name label) the entity drawing uses.
+  // They sit at the top level: a group document has no package frames.
+  const labels = entityLabels(drawn.nodes, idShape);
+  const nodeOf = new Map(drawn.nodes.map((node) => [node.id, node]));
   for (const id of grouping.ungroupedNodeIds) {
     const alias = aliasOf.get(id);
-    if (alias === undefined) continue;
-    lines.push(`class "${sanitizeName(displayName(id, MAX_DISPLAY_DIR_SEGMENTS, idShape))}" as ${alias}`);
+    const node = nodeOf.get(id);
+    if (alias === undefined || node === undefined) continue;
+    lines.push(...entityDeclarationLines(node, alias, labels.get(id) ?? null, idShape, membersTruncated));
   }
 
   const aliasFor = (id: string): string | undefined => {
@@ -368,16 +570,17 @@ function adaptiveOverviewDocument(
   graph: ArchitectureNeighborhood,
   aliasOf: ReadonlyMap<string, string>,
   idShape: ArchitectureNodeIdShape,
+  membersTruncated: boolean,
 ): ArchitecturePlantUml {
   const grouping = computeAdaptiveGrouping(graph.nodes.map((node) => node.id), {
     maxGroups: OVERVIEW_GROUP_LIMIT,
     idShape,
   });
   if (grouping.groups.length === 0) {
-    const raw = emitEntityDocument(graph, aliasOf, idShape);
+    const raw = emitEntityDocument(graph, aliasOf, idShape, membersTruncated);
     return { ...raw, aliasOf, rendererEntity: null, grouped: false };
   }
-  return emitGroupedDocument(graph, grouping, aliasOf, idShape);
+  return emitGroupedDocument(graph, grouping, aliasOf, idShape, membersTruncated);
 }
 
 /**
@@ -404,6 +607,7 @@ function adaptiveGroupViewDocument(
   prefix: string,
   aliasOf: ReadonlyMap<string, string>,
   idShape: ArchitectureNodeIdShape,
+  membersTruncated: boolean,
 ): ArchitecturePlantUml {
   const drawn = groupSubgraph(graph, prefix, idShape);
   const grouping = computeAdaptiveGrouping(drawn.nodes.map((node) => node.id), {
@@ -418,7 +622,7 @@ function adaptiveGroupViewDocument(
   // No subdirectory group left: the whole subtree is entities (a leaf directory
   // of any size). Reuse the caller's alias map and the entity drawing.
   if (groups.length === 0) {
-    const raw = emitEntityDocument(drawn, aliasOf, idShape);
+    const raw = emitEntityDocument(drawn, aliasOf, idShape, membersTruncated);
     return { ...raw, aliasOf, rendererEntity: null, grouped: false };
   }
 
@@ -435,6 +639,7 @@ function adaptiveGroupViewDocument(
     { depth: grouping.depth, groups, ungroupedNodeIds },
     aliasOf,
     idShape,
+    membersTruncated,
   );
 }
 
@@ -451,16 +656,17 @@ export function archguardToPlantUml(
   const view = options.view ?? { kind: 'overview' };
   const aliasOf = options.aliasOf ?? archguardAliasMap(graph.nodes);
   const idShape = options.idShape ?? DEFAULT_NODE_ID_SHAPE;
+  const membersTruncated = options.membersTruncated === true;
 
   // The adaptive path is the panel's; the raw path is the bridge's own mapping
   // contract (and the default), which emits exactly the entities it is given.
   if (options.grouping === 'adaptive') {
-    if (view.kind === 'overview') return adaptiveOverviewDocument(graph, aliasOf, idShape);
-    if (view.kind === 'group') return adaptiveGroupViewDocument(graph, view.prefix, aliasOf, idShape);
+    if (view.kind === 'overview') return adaptiveOverviewDocument(graph, aliasOf, idShape, membersTruncated);
+    if (view.kind === 'group') return adaptiveGroupViewDocument(graph, view.prefix, aliasOf, idShape, membersTruncated);
   }
 
   const drawn = view.kind === 'group' ? groupSubgraph(graph, view.prefix, idShape) : graph;
-  const raw = emitEntityDocument(drawn, aliasOf, idShape);
+  const raw = emitEntityDocument(drawn, aliasOf, idShape, membersTruncated);
   return {
     ...raw,
     aliasOf,

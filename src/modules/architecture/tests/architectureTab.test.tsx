@@ -219,6 +219,66 @@ const RESULT: ArchitectureGraphResult = {
 };
 
 /**
+ * An ENTITY subgraph carrying the server's `kind`/`members` detail, all inside
+ * one directory so the group view flattens every entity into the drawing. The
+ * hops are distinct (0..3) and give the seed marker exactly one node to find.
+ */
+const CLASS_DIAGRAM_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        {
+          id: 'src/modules/alpha/halt.ts.haltVerdict',
+          label: 'haltVerdict',
+          distance: 0,
+          kind: 'function',
+        },
+        {
+          id: 'src/modules/alpha/reader.ts.Reader',
+          label: 'Reader',
+          distance: 1,
+          kind: 'interface',
+          members: [
+            { name: 'read', kind: 'method', visibility: 'public', signature: 'read(): number' },
+          ],
+        },
+        {
+          id: 'src/modules/alpha/store.ts.Store',
+          label: 'Store',
+          distance: 2,
+          kind: 'class',
+          members: [
+            { name: 'threshold', kind: 'field', visibility: 'private', signature: 'number' },
+            { name: 'put', kind: 'method', visibility: 'public', signature: 'put(value: number): void' },
+          ],
+        },
+        {
+          id: 'src/modules/alpha/clock.ts.Clock',
+          label: 'Clock',
+          distance: 3,
+          kind: 'abstract',
+        },
+      ],
+      edges: [
+        { from: 'src/modules/alpha/reader.ts.Reader', to: 'src/modules/alpha/halt.ts.haltVerdict', relationType: 'call' },
+        { from: 'src/modules/alpha/store.ts.Store', to: 'src/modules/alpha/reader.ts.Reader', relationType: 'dependency' },
+        { from: 'src/modules/alpha/clock.ts.Clock', to: 'src/modules/alpha/halt.ts.haltVerdict', relationType: 'dependency' },
+      ],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 4,
+    entityEdges: 3,
+    entityTotal: 4,
+    entityTruncated: false,
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
  * A tree deeper than the overview can show: 12 packages × 4 units × 5 files.
  * Depth 3 would be 48 groups (over the bound), so the overview stops at the
  * package layer. Expanding one package therefore still contains 20 files that
@@ -1459,6 +1519,80 @@ test('clicking an entity drills into its neighbourhood, and the centre click add
     );
   });
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'drilling is local — the payload arrived whole');
+});
+
+/** Edge-label `<text>` elements that are actually rendered (not `display="none"`). */
+function visibleEdgeLabels(host: HTMLElement): Element[] {
+  return [...host.querySelectorAll('.uml-edge text')]
+    .filter((label) => label.getAttribute('display') !== 'none');
+}
+
+test('edge relation labels stay hidden until a node is hovered, then leave with the pointer', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  // The renderer still draws the `<<uses>>`/`<<call>>` labels — the drawing is
+  // the same document — but none of them is visible while nothing is hovered.
+  assert.ok(host.querySelectorAll('.uml-edge text').length > 0, 'the renderer drew the relation labels');
+  assert.deepEqual(visibleEdgeLabels(host), [], 'a default drawing shows no edge label text');
+
+  // Two edges meet at beta/b: its `call` onto the alpha group, and the
+  // `inheritance` coming from gamma/c. Only the call carries a label — the
+  // inheritance arrow SHAPE is its semantics (the relation table gives it no
+  // text) — so hovering reveals exactly one label.
+  const hovered = host.querySelector('[data-entity-id="src/modules/beta/b.ts"]') as Element;
+  const outEdge = drawnEdge(host, 'src/modules/beta/b.ts', 'grp::src/modules/alpha');
+  const inEdge = drawnEdge(host, 'src/modules/gamma/c.ts', 'src/modules/beta/b.ts');
+  fireEvent.mouseOver(hovered);
+
+  const visible = visibleEdgeLabels(host);
+  assert.equal(visible.length, 1, 'only the hovered node’s own labelled edge shows its relation text');
+  assert.equal(visible[0]?.textContent, '<<call>>', 'the revealed text is the relation kind');
+  assert.ok(outEdge.contains(visible[0] ?? null), 'and it belongs to the call edge');
+  assert.equal(inEdge.querySelectorAll('text').length, 0, 'the inheritance edge is drawn by its arrow, not a label');
+
+  fireEvent.mouseOut(hovered);
+  assert.deepEqual(visibleEdgeLabels(host), [], 'leaving the node hides every edge label again');
+});
+
+test('entity boxes are UML class shapes, and a session seed carries the seed marker', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="grp::modules/alpha"]')));
+  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
+
+  const nodeOf = (id: string): Element => {
+    const node = host.querySelector(`[data-entity-id="${id}"]`);
+    assert.ok(node !== null, `${id} must be drawn`);
+    return node;
+  };
+
+  // The function is a single-compartment box with its stereotype.
+  const functionNode = nodeOf('src/modules/alpha/halt.ts.haltVerdict');
+  assert.match(functionNode.textContent ?? '', /<<function>>/, 'a function box carries the <<function>> stereotype');
+
+  // The interface carries its own stereotype; the class draws its compartments.
+  assert.match(nodeOf('src/modules/alpha/reader.ts.Reader').textContent ?? '', /<<interface>>/);
+  const classNode = nodeOf('src/modules/alpha/store.ts.Store');
+  assert.match(classNode.textContent ?? '', /- threshold: number/, 'a private field row keeps its symbol');
+  assert.match(classNode.textContent ?? '', /\+ put\(value: number\): void/, 'a method row keeps its signature');
+
+  // The label is the bare entity name; the file it lives in is in the tooltip.
+  assert.equal(
+    classNode.querySelector('title')?.textContent,
+    'modules/alpha/store.ts',
+    'the hover title carries the file the box no longer spells out',
+  );
+
+  // The transcript seed (distance 0) is marked by an attribute the stylesheet
+  // turns into the thicker frame — a non-colour reading.
+  assert.equal(functionNode.getAttribute('data-architecture-seed'), 'true', 'a seed node carries the seed marker');
+  assert.equal(classNode.getAttribute('data-architecture-seed'), null, 'a non-seed node does not');
 });
 
 test('hovering a node highlights its in/out edges and dims the rest', async () => {
