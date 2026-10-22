@@ -938,6 +938,10 @@ export const api = {
     writeLabels: (recordId: string, body: { finalText: string; labels: VoiceEditLabel[] }) =>
       patch(`/api/voice/data/${encodeURIComponent(recordId)}`, body),
     tts: (text: string, options: ApiRequestOptions = {}) => post('/api/voice/tts', { text }, options),
+    // The deployment's runtime knobs for the context pack (rows / character budget / per-row cap).
+    // Its own endpoint rather than a field on `health`, which is a per-user provider reading that
+    // can 503; this one describes the process and always answers.
+    runtimeConfig: () => get('/api/voice/runtime-config'),
     // The user's own backend settings, stored per user so they follow the
     // account rather than the browser profile they were typed in.
     config: () => get('/api/voice/config'),
@@ -1013,6 +1017,11 @@ export function setVoiceProviderRows(rows: VoiceProviderRow[]): void {
 export function readVoiceProviderRows(): VoiceProviderRow[] {
   return voiceProviderRows;
 }
+
+// The runtime-config SLOT (the effective context-pack size) lives in `src/shared/voiceRuntimeConfig`
+// rather than here: the hooks that build a pack are driven by criteria that replace this module
+// with a partial double, so a name added here would arrive in those doubles as `undefined`. The
+// endpoint itself is `api.voice.runtimeConfig` above; the cache sits beside its readers.
 
 /**
  * The recogniser a clip the CLIENT gave up on is uploaded to, or `null` when this deployment has none.

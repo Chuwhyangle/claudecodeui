@@ -2,6 +2,7 @@ import {
   VOICE_SETTINGS_EMPTY_DOCUMENT,
   VOICE_SETTINGS_MAX_LENGTHS,
   VOICE_SETTINGS_STRING_FIELDS,
+  type VoiceContextPackRuntimeSettings,
   type VoiceSettingsStringField,
 } from '@shared/voice/voiceSettingsRegistry.js';
 import type {
@@ -14,6 +15,11 @@ import type {
   VoiceSettingsStore,
   VoiceSpeechPayload,
 } from '@/shared/types.js';
+// The rendered-pack trimmer lives in the shared voice tree — the same tree the AC-139 dispatch
+// falsification copies wholesale — so reaching it here keeps this service's whole runtime graph
+// inside the trees that criterion builds. The runtime-config READER is a server-side port and is
+// handed in by the composition root instead, for the same reason.
+import { truncateRenderedVoiceContext } from '@shared/voice/voiceContextTruncation.js';
 
 // The provider address book AND the dispatch. The health payload republishes what this module
 // exports, the request paths ask it whether an id exists at all, and `transcribe` asks it for the
@@ -34,7 +40,7 @@ import {
 // so the pure function has to be callable here. It lives in the `shared/asr` tree the falsification
 // criterion copies wholesale, so importing it does not add an edge to a module that tree lacks.
 import { flagStats } from '../../../shared/asr/confidenceFlags.js';
-import type { AsrAdapter, AsrCapabilities, AsrErrorCode, AsrFailure, AsrSuccess } from '../../../shared/asr/asrRegistry.js';
+import type { AsrAdapter, AsrCapabilities, AsrErrorCode, AsrFailure, AsrHints, AsrSuccess } from '../../../shared/asr/asrRegistry.js';
 // The wire's own vocabulary for how much of an upstream answer is allowed to be malformed, which
 // this path names below. A TYPE import deliberately: what the wire implements — the request it
 // builds, the answer it parses — is reached through the adapter now, so the only thing left for
@@ -161,6 +167,15 @@ type VoiceServiceDependencies = {
    * is the one place the default-on rule lives.
    */
   voiceData?: VoiceDataStore;
+  /**
+   * The deployment's effective context-pack size for the ONE-SHOT dictation path.
+   *
+   * A READER rather than a value: the settings file is read per request (an edit reaches the next
+   * upload without a restart), exactly like the HTTP endpoint above. Absent means "no runtime
+   * configuration wired" — the service then forwards the caller's `hints.context` unchanged, which
+   * is the shape every leaf test and probe keeps. The shipping composition root always supplies it.
+   */
+  runtimeConfig?: () => { contextPack: VoiceContextPackRuntimeSettings } | null;
 };
 
 // The provider id is not part of the outbound request's configuration: it selects which
@@ -945,6 +960,41 @@ async function readUpstreamAnswer(response: Response): Promise<VoiceCaptureRawRe
 }
 
 /**
+ * Trims a one-shot dictation's rendered conversation context to the deployment's effective pack
+ * size, and reports a trim on the service's own log.
+ *
+ * THE SAME READING THE LIVE PATH USES. The browser builds the pack and sends it as `hints.context`;
+ * this path is the server's last chance to enforce the reading it resolved for the request, so an
+ * older page or a hand-written upload cannot exceed the configured rows/budget. `runtimeConfig`
+ * being absent means the deployment wired no reading (a leaf test, a probe), and the context is
+ * forwarded unchanged — the historical behaviour.
+ *
+ * Consumers: `transcribe` below only.
+ */
+function truncateVoiceContextForRuntimeConfig(
+  hints: AsrHints | undefined,
+  runtimeConfig: (() => { contextPack: VoiceContextPackRuntimeSettings } | null) | undefined,
+  log: VoiceLogPort,
+): AsrHints | undefined {
+  const context = hints?.context;
+  if (context === undefined || context === '' || runtimeConfig === undefined) {
+    return hints;
+  }
+  const reading = runtimeConfig();
+  if (reading === null) {
+    return hints;
+  }
+  const truncated = truncateRenderedVoiceContext(context, reading.contextPack);
+  if (!truncated.truncated) {
+    return hints;
+  }
+  log.info(
+    `context truncated from=${truncated.sourceRows} rows/${truncated.sourceChars} chars to=${truncated.rows} rows/${truncated.chars} chars`,
+  );
+  return { ...hints, context: truncated.text };
+}
+
+/**
  * Creates the Voice application service used by the Voice composition root and
  * its unit tests. The outbound request function and server configuration are
  * required so the service never reads globals or creates production defaults.
@@ -1063,6 +1113,11 @@ export function createVoiceService(dependencies: VoiceServiceDependencies): Voic
       const settings = input.settings;
       const requestedProviderId = input.overrides.providerId?.trim();
       const providerId = effectiveProviderId(requestedProviderId, dependencies.defaults, settings);
+      // THE ONE-SHOT PATH'S CONTEXT BUDGET. Truncated up front, so the adapter only ever sees a
+      // pack the deployment's configuration allows; the log line names both readings when it trims.
+      // The reader comes from the injected seam — the composition root's installed port in the
+      // shipping deployment — and with it unwired the caller's context is forwarded unchanged.
+      const hints = truncateVoiceContextForRuntimeConfig(input.hints, dependencies.runtimeConfig, log);
 
       // WHAT THIS ATTEMPT READ OFF THE TRANSPORT, filled in by `captureTransport` below and read by
       // the row's payload. Attempt-scoped by construction: both are locals of this call, so an answer
@@ -1420,7 +1475,7 @@ export function createVoiceService(dependencies: VoiceServiceDependencies): Voic
             // The adapter's declaration decides whether this reaches the wire. Passing it through
             // is the whole seam: a provider that does not honor context ignores it, and the
             // relay provider places it in the system turn.
-            ...(input.hints === undefined ? {} : { hints: input.hints }),
+            ...(hints === undefined ? {} : { hints }),
           },
           {
             baseUrl: config.baseUrl,

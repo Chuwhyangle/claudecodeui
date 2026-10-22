@@ -42,7 +42,10 @@ import {
   buildVoiceContextPack,
   buildVoiceInputContextPack,
   isVoiceContextRow,
+  resolveVoiceContextPackRuntime,
   VOICE_CONTEXT_BUDGET_CHARS,
+  VOICE_CONTEXT_MAX_ROWS,
+  VOICE_CONTEXT_PACK_CEILING,
   VOICE_CONTEXT_ROW_CAP_CHARS,
   VOICE_INPUT_DRAFT_AFTER_HEADING,
   VOICE_INPUT_DRAFT_BEFORE_HEADING,
@@ -377,11 +380,12 @@ test('② the pack never exceeds its budget, over ≥200 seeded random batches a
   assert.ok(nonTrivial > RANDOM_SEEDS / 2, `only ${nonTrivial} seeds produced a multi-row pack`);
 });
 
-test('② the shipped budget and row cap are the SPEC values, and the default holds the budget', () => {
-  assert.equal(VOICE_CONTEXT_BUDGET_CHARS, 2000);
+test('② the shipped budget and row cap are the defaults, and the default holds the budget', () => {
+  assert.equal(VOICE_CONTEXT_BUDGET_CHARS, 1200);
   assert.equal(VOICE_CONTEXT_ROW_CAP_CHARS, 600);
+  assert.equal(VOICE_CONTEXT_MAX_ROWS, 4);
 
-  // Twelve rows of 500 characters: far past 2000 in total, so the default budget is what cuts it.
+  // Twelve rows of 500 characters: far past 1200 in total, so the default budget is what cuts it.
   const messages: ChatMessage[] = Array.from({ length: 12 }, (_, index) => ({
     type: index % 2 === 0 ? 'user' : 'assistant',
     content: `row-${index} ${'y'.repeat(500)}`,
@@ -390,6 +394,55 @@ test('② the shipped budget and row cap are the SPEC values, and the default ho
   const pack = buildVoiceContextPack(messages, { now: NOW });
   assert.ok(pack.chars <= VOICE_CONTEXT_BUDGET_CHARS, `default budget overshot: ${pack.chars}`);
   assert.ok(pack.rows > 0 && pack.rows < messages.length, 'the default budget did not cut anything');
+  assert.ok(pack.rows <= VOICE_CONTEXT_MAX_ROWS, `default row cap overshot: ${pack.rows}`);
+});
+
+test('② runtime knobs: 2/400 produces rows<=2 && chars<=400, defaults are 4/1200, 99/99999 is clamped to the browser ceiling', () => {
+  // Six visible rows, each long enough that the row cap and the budget both matter.
+  const messages: ChatMessage[] = Array.from({ length: 6 }, (_, index) => ({
+    type: index % 2 === 0 ? 'user' : 'assistant',
+    content: `RUNTIME-${index} ${'z'.repeat(320)}`,
+    timestamp: FRESH,
+  }));
+
+  const runtime = buildVoiceContextPack(messages, { maxRows: 2, budgetChars: 400, rowCapChars: 300, now: NOW });
+  console.log(`runtime 2/400/300 -> rows=${runtime.rows} chars=${runtime.chars}`);
+  assert.ok(runtime.rows <= 2, `runtime row cap overshot: ${runtime.rows}`);
+  assert.ok(runtime.chars <= 400, `runtime budget overshot: ${runtime.chars}`);
+  assert.ok(runtime.text.includes('RUNTIME-5'), 'the newest row is what survives the trim');
+  assert.equal(runtime.text.includes('RUNTIME-0'), false, 'the oldest row is dropped');
+
+  const defaults = buildVoiceContextPack(messages, { now: NOW });
+  console.log(`defaults -> rows=${defaults.rows} chars=${defaults.chars}`);
+  assert.ok(defaults.rows <= 4, `default row cap overshot: ${defaults.rows}`);
+  assert.ok(defaults.chars <= 1200, `default budget overshot: ${defaults.chars}`);
+
+  // A reading past the browser's ceiling is CLAMPED, never obeyed: 99 rows / 99,999 chars would be
+  // three times the protocol envelope the socket was validated at.
+  const ceiling = resolveVoiceContextPackRuntime({ maxRows: 99, budgetChars: 99999, rowCapChars: 99999 });
+  console.log(
+    `config 99/99999 -> clamped maxRows=${ceiling.maxRows} budgetChars=${ceiling.budgetChars} rowCapChars=${ceiling.rowCapChars} (ceiling ${VOICE_CONTEXT_PACK_CEILING.maxRows}/${VOICE_CONTEXT_PACK_CEILING.budgetChars}/${VOICE_CONTEXT_PACK_CEILING.rowCapChars})`,
+  );
+  assert.equal(ceiling.maxRows, VOICE_CONTEXT_PACK_CEILING.maxRows);
+  assert.equal(ceiling.budgetChars, VOICE_CONTEXT_PACK_CEILING.budgetChars);
+  assert.equal(ceiling.rowCapChars, VOICE_CONTEXT_PACK_CEILING.rowCapChars);
+
+  const clamped = buildVoiceContextPack(messages, { maxRows: 99, budgetChars: 99999, rowCapChars: 99999, now: NOW });
+  console.log(`config 99/99999 build -> rows=${clamped.rows} chars=${clamped.chars}`);
+  assert.ok(clamped.rows <= VOICE_CONTEXT_PACK_CEILING.maxRows);
+  assert.ok(clamped.chars <= VOICE_CONTEXT_PACK_CEILING.budgetChars);
+
+  // The one-shot pack forwards the same row cap to its conversation portion.
+  const input = buildVoiceInputContextPack({
+    messages,
+    maxRows: 2,
+    budgetChars: 400,
+    rowCapChars: 300,
+    now: NOW,
+  });
+  console.log(`input runtime 2/400/300 -> rows=${input.rows} chars=${input.chars}`);
+  assert.ok(input.chars <= 400);
+  assert.ok(input.rows <= 2);
 });
 
 test('② the walk STOPS at the newest row that did not fit instead of skipping it', () => {

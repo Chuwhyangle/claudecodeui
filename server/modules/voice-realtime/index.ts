@@ -221,8 +221,9 @@ export {
 // decides whether this deployment observes speakers at all, the calibrated thresholds it observes
 // at, the environment escape hatch that overrides mode/model path, the CAM++ model and the
 // per-connection seam the proxy reads. `server/index.ts` reads the settings file once per connection,
-// resolves `env > file > default`, caches the model per resolved path and builds one seam per browser
-// connection; the proxy logs the seam's `speaker_shadow` readings and nothing else ever sees them.
+// resolves `env > file > default`, assembles the `SpeakerTrackerRegistry` (which owns the per-path
+// model cache) and builds one seam per browser connection; the proxy logs the seam's
+// `speaker_shadow` readings and nothing else ever sees them.
 // Shadow is READ-ONLY: no frame, no client message, no commit, no audio change.
 export {
   SPEAKER_TRACKING_MODEL_DIR_DEFAULT,
@@ -243,6 +244,7 @@ export {
   type SpeakerTrackingValueSource,
 } from './voice-speaker-tracking-arm.js';
 export {
+  SpeakerTrackerRegistry,
   createSpeakerTrackerModel,
   createSpeakerTrackerSeam,
   type SpeakerEmbedder,
@@ -328,16 +330,21 @@ export {
   type VoiceRealtimeRunEndSummarizerInput,
   type VoiceRealtimeRunEndSummarizerOptions,
 } from './voice-realtime-summary.js';
-// The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the environment
-// and an explicit override. `server/index.ts` calls it at the assembly point both the browser socket
-// and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as that call's
-// override — so a deployment that names no cap gets NONE rather than a fallback literal, and the
-// criterion reads the same answers from the same function.
+// The per-window spend cap (the `SPEND_LIMIT` guard), resolved as a pure function of the override,
+// the environment and the settings file. `server/index.ts` calls it at the assembly point both the
+// browser socket and the HTTP diagnosis route share — the diagnosis route's own ¥0.05 arrives as
+// that call's override, the default is ¥0.05/30 s, and a refused value is reported while the
+// default stays in force — so a typo cannot silently disarm the guard. The criterion reads the same
+// answers from the same function.
 export {
+  DEFAULT_SPEND_WINDOW_LIMIT_CNY,
+  DEFAULT_SPEND_WINDOW_MS,
   VOICE_REALTIME_MAX_CNY_PER_30S_ENV,
   describeSpendWindowLimit,
   resolveSpendWindowLimit,
+  type SpendGuardFileValues,
   type SpendWindowLimitResolution,
+  type SpendWindowLimitSource,
 } from './voice-realtime-spend-guard.js';
 // The HTTP-layer Live Voice diagnosis (an audio file through the same proxy a microphone
 // uses). `server/index.ts` mounts the router and reuses `summarizeWireObservation` for the
@@ -468,7 +475,15 @@ export {
 // with the environment kept as the escape hatch). The proxy reads it again for the per-connection
 // instructions. Kept on the barrel because the composition root is outside this module and must not
 // deep-import it.
-export { loadVoiceRealtimeSettings, type VoiceRealtimeSettings } from './voice-realtime-settings.js';
+export {
+  loadVoiceRealtimeSettings,
+  readVoiceRealtimeRuntimeConfig,
+  resolveContextPackRuntimeSettings,
+  type VoiceContextPackRuntimeResolution,
+  type VoiceRealtimeRuntimeConfigReading,
+  type VoiceRealtimeSettings,
+  type VoiceRuntimeValueSource,
+} from './voice-realtime-settings.js';
 export {
   DEFAULT_VOICE_REALTIME_TTS_CACHE_MAX_ENTRIES,
   createVoiceRealtimeTtsCache,

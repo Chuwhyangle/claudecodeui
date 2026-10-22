@@ -47,6 +47,8 @@ import { readFileSync } from 'node:fs';
 
 import { WebSocket } from 'ws';
 
+import { truncateRenderedVoiceContext } from '@shared/voice/voiceContextTruncation.js';
+
 import { clearVoiceSessionActive, markVoiceSessionActive } from './voice-realtime-active.js';
 import { pickAnnouncePhraseFrom } from './voice-realtime-announce-phrases.js';
 import type { VoiceRealtimeAudioCapture } from './voice-realtime-audio-capture.js';
@@ -68,6 +70,7 @@ import {
 import {
   composeVoiceRealtimeInstructions,
   loadVoiceRealtimeSettings,
+  resolveContextPackRuntimeSettings,
 } from './voice-realtime-settings.js';
 import {
   DEFAULT_VOICE_REALTIME_CLOSING_TURN,
@@ -576,14 +579,14 @@ function readOmissionFillParams(): { params: OmissionFillParams | null; problem:
 /**
  * The most pack text one `context` frame may carry, in UTF-16 code units.
  *
- * The browser builds its pack to the SPEC's own budget (`VOICE_CONTEXT_BUDGET_CHARS` in
- * `src/modules/chat/utils/voiceContextPack.ts`) and this is that number again, on purpose: the
- * proxy does not trust the page with what reaches the upstream. A frame over the cap is refused
- * whole — not truncated — because a partial pack is a conversation with a hole in it, and a hole is
- * worse for the model than no context at all. Nothing legitimate ever sends one; the refusal exists
- * so a client that grew its own, larger budget is visible in the log instead of silently obeyed.
+ * The browser builds its pack to the SPEC's own budget; this bound is the browser's absolute
+ * CEILING (`VOICE_CONTEXT_PACK_BROWSER_CEILING`), not the shipped default. The connection's
+ * effective budget (200–4000) trims every frame before this check (see the dispatch below), so this
+ * is the backstop for a caller that bypassed the trim. A frame over it is refused whole — not
+ * truncated — because a partial pack is a conversation with a hole in it, and a hole is worse for
+ * the model than no context at all.
  */
-export const VOICE_REALTIME_CONTEXT_MAX_CHARS = 2000;
+export const VOICE_REALTIME_CONTEXT_MAX_CHARS = 4000;
 
 // ---- S-A: the execution-status line (SPEC `voice-realtime-persistent-control-SPEC.md` §8.3) ----
 
@@ -1587,9 +1590,24 @@ export function handleVoiceRealtimeConnection(
   // Read ONCE, here, and this connection keeps this reading for its whole life: an edit to the
   // settings file reaches the NEXT connection and leaves live ones alone (the criterion reads this
   // as "a new connection gets the new template, an existing one is unaffected").
-  const settings = loadVoiceRealtimeSettings({ baseInstructions: seams.instructions, settingsPath: seams.settingsPath });
+  //
+  // The composition root has already taken this connection's reading for the spend guard, and hands
+  // it over as `seams.settings`; using it (rather than reading the file again) is what keeps the
+  // cap, the prompt and the pack budget from describing two different file revisions. A criterion
+  // that builds the connection itself passes no reading, so the historical per-connection load is
+  // the fallback.
+  const settings =
+    seams.settings ?? loadVoiceRealtimeSettings({ baseInstructions: seams.instructions, settingsPath: seams.settingsPath });
   if (settings.problems.length > 0) {
     seams.log?.(`settings: using the built-in prompt — ${settings.problems.join('; ')}`);
+  }
+  // THE CONTEXT PACK'S EFFECTIVE SIZE FOR THIS CONNECTION: `environment > settings file > default`,
+  // resolved once from the same reading. The server-side truncation below and the browser's builder
+  // read the same numbers; a pack that arrives larger than this (an older client, a hand-written
+  // frame) is trimmed to the newest rows instead of being handed to the model whole.
+  const contextPackRuntime = resolveContextPackRuntimeSettings(process.env, settings.contextPack, settings.source);
+  for (const problem of contextPackRuntime.problems) {
+    seams.log?.(`contextPack: ${problem} — the next source applies`);
   }
   // THE DETECTOR THIS CONNECTION WILL USE, resolved ONCE here so the line below and the gate built further
   // down cannot disagree about it. The line fires only when the SETTINGS FILE named a parameter — the edit
@@ -5419,10 +5437,33 @@ export function handleVoiceRealtimeConnection(
     // a per-frame concern has a registration slot on either side of the routing.
     const inbound: VoiceRealtimeTrunkPayloads['before-frame'] = { raw, frame: null };
     runTrunk('before-frame', inbound);
-    const frame = inbound.frame;
-    if (!frame) {
+    const parsed = inbound.frame;
+    if (!parsed) {
       return;
     }
+    // THE SERVER-SIDE SIZE CHECK, applied to the frame BEFORE the registry sees it. The reading is
+    // this connection's (`environment > settings file > default`, resolved once above); a pack the
+    // browser built at a larger size — an older page, a hand-written frame, an edit racing the
+    // connect — is trimmed to the newest rows instead of being refused whole or forwarded at the
+    // old size. The browser builder remains the first line of defence; this is the one that cannot
+    // be skipped by a client.
+    const frame =
+      parsed.type === 'context'
+        ? (() => {
+            const truncated = truncateRenderedVoiceContext(parsed.text, contextPackRuntime.values);
+            if (truncated.truncated) {
+              seams.log?.(
+                `context truncated from=${truncated.sourceRows} rows/${truncated.sourceChars} chars to=${truncated.rows} rows/${truncated.chars} chars`,
+              );
+            }
+            return {
+              ...parsed,
+              text: truncated.text,
+              chars: truncated.chars,
+              rows: truncated.rows,
+            };
+          })()
+        : parsed;
     frameRegistry.dispatch(frame.type, frameContext, frameState, frame);
     runTrunk('after-frame', { frame });
   });

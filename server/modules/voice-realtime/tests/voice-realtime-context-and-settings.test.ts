@@ -25,6 +25,10 @@ import { fileURLToPath } from 'node:url';
 
 import { WebSocket as WS } from 'ws';
 
+import { truncateRenderedVoiceContext } from '@shared/voice/voiceContextTruncation.js';
+
+import { createVoiceService } from '../../voice/index.js';
+
 import {
   DEFAULT_SESSION_DEFAULTS,
   createDashscopeTransport,
@@ -157,18 +161,27 @@ test('a session that was sent no pack opens with the base prompt, byte for byte'
   assert.deepEqual(instructionsSent(transport), ['BASE-PROMPT']);
 });
 
-test('字符预算硬上限: the proxy re-checks the frame and refuses an over-cap pack whole', async () => {
+test('字符预算硬上限: an over-cap frame is trimmed to the connection reading, never forwarded whole', async () => {
   const { socket, transport, logs } = wire();
   await waitFor(() => transport.openCalls >= 1);
   await waitFor(() => instructionsSent(transport).length >= 1);
 
+  // No row boundaries: the server treats it as one row and elides it to the shipped 600-char row
+  // cap, so the frame is USABLE rather than refused — the reading this connection resolved is what
+  // decides, not the client's size.
   const oversized = '字'.repeat(VOICE_REALTIME_CONTEXT_MAX_CHARS + 1);
   socket.receive(contextFrame(oversized));
-  await waitFor(() => logs.some((line) => line.includes('context refused')));
+  await waitFor(() => logs.some((line) => line.includes('context truncated from=')));
   assert.equal(
     instructionsSent(transport).some((text) => text.includes(oversized)),
     false,
-    'the cap is re-checked server-side; an over-cap pack must not reach the upstream',
+    'the over-cap frame must not reach the upstream whole',
+  );
+  const injected = instructionsSent(transport).find((text) => text.includes('字'))!;
+  assert.ok(injected !== undefined, 'the trimmed pack must still reach the upstream');
+  assert.ok(
+    injected.length < oversized.length,
+    `the forwarded instructions are ${injected.length} chars, not shorter than the ${oversized.length}-char frame`,
   );
 });
 
@@ -705,4 +718,195 @@ test('AC2: a file with no environment override runs at the file values, and says
   assert.equal(resolution.sources.modelPath, 'settings file');
   assert.equal(resolution.sources.thresholds.track, 'default');
   assert.ok(lines.some((line) => line.includes('source=settings file')));
+});
+
+// ── the runtime knobs: contextPack + spendGuard in the settings file ─────────────────────────────
+//
+// `contextPack` sizes the C2 pack on BOTH voice entries; `spendGuard` is the per-window spend cap.
+// The readings below go through the REAL loader, so what is pinned is the path a deployment's file
+// actually travels: defaults, file values, refusal of a bad KNOWN key, and unknown-key tolerance.
+
+test('AC1: contextPack and spendGuard load from the file, default, and refuse invalid values', () => {
+  const defaults = readSettings({}, (loaded) => ({
+    contextPack: loaded.contextPack,
+    spend: loaded.spendGuard,
+    problems: loaded.problems,
+  }));
+  console.log(
+    `defaults maxRows=${defaults.contextPack.maxRows} budgetChars=${defaults.contextPack.budgetChars} rowCapChars=${defaults.contextPack.rowCapChars} spend=${defaults.spend.maxCnyPerWindow}`,
+  );
+  assert.deepEqual(defaults.problems, []);
+  assert.deepEqual(defaults.contextPack, { maxRows: 4, budgetChars: 1200, rowCapChars: 600 });
+  assert.equal(defaults.spend.maxCnyPerWindow, 0.05);
+  assert.equal(defaults.spend.windowMs, 30_000);
+
+  const file = readSettings(
+    {
+      contextPack: { maxRows: 2, budgetChars: 400, rowCapChars: 300 },
+      spendGuard: { maxCnyPerWindow: 0.1, windowMs: 45_000 },
+    },
+    (loaded) => ({ contextPack: loaded.contextPack, spend: loaded.spendGuard, problems: loaded.problems, source: loaded.source }),
+  );
+  console.log(
+    `file maxRows=${file.contextPack.maxRows} budgetChars=${file.contextPack.budgetChars} rowCapChars=${file.contextPack.rowCapChars} spend=${file.spend.maxCnyPerWindow}`,
+  );
+  assert.deepEqual(file.problems, []);
+  assert.equal(file.source, 'file');
+  assert.deepEqual(file.contextPack, { maxRows: 2, budgetChars: 400, rowCapChars: 300 });
+  assert.deepEqual(file.spend, { maxCnyPerWindow: 0.1, windowMs: 45_000 });
+
+  const invalid = readSettings(
+    {
+      contextPack: { maxRows: 0, budgetChars: 99999 },
+      spendGuard: { maxCnyPerWindow: 'abc' },
+    },
+    (loaded) => ({
+      contextPack: loaded.contextPack,
+      spend: loaded.spendGuard,
+      problems: loaded.problems,
+      source: loaded.source,
+    }),
+  );
+  console.log('invalid maxRows=0 budgetChars=99999 spend=abc -> default + problem');
+  assert.deepEqual(invalid.contextPack, { maxRows: 4, budgetChars: 1200, rowCapChars: 600 });
+  assert.equal(invalid.spend.maxCnyPerWindow, 0.05);
+  assert.equal(invalid.source, 'default', 'a refused known key refuses the reading, as every shape error here does');
+  assert.match(invalid.problems.join('; '), /contextPack\.maxRows/);
+  assert.match(invalid.problems.join('; '), /contextPack\.budgetChars/);
+  assert.match(invalid.problems.join('; '), /spendGuard\.maxCnyPerWindow/);
+
+  // Unknown sub-keys are the forward-compatibility surface: ignored, never a refusal.
+  const unknown = readSettings(
+    {
+      contextPack: { maxRows: 2, futureKnob: true },
+      spendGuard: { windowMs: 30_000, futureKnob: 'x' },
+    },
+    (loaded) => ({ contextPack: loaded.contextPack, spend: loaded.spendGuard, problems: loaded.problems }),
+  );
+  assert.deepEqual(unknown.problems, [], 'unknown sub-keys must be ignored');
+  assert.equal(unknown.contextPack.maxRows, 2);
+  assert.equal(unknown.contextPack.budgetChars, 1200, 'an omitted field keeps the default');
+  assert.equal(unknown.spend.maxCnyPerWindow, 0.05);
+
+  // The deployment-level reader applies `environment > file > default` and reports a refused
+  // environment spelling instead of silently ignoring it.
+  const runtime = readSettings({ contextPack: { maxRows: 2, budgetChars: 400 } }, (loaded) => loaded.contextPack);
+  assert.deepEqual(runtime, { maxRows: 2, budgetChars: 400, rowCapChars: 600 });
+});
+
+test('AC5: the rendered-pack truncation keeps the newest rows inside rows/chars', () => {
+  const rows = Array.from({ length: 6 }, (_, index) =>
+    `${index % 2 === 0 ? '用户' : '助手'}（刚刚）：ROW-${index} ${'甲'.repeat(320)}`,
+  );
+  const pack = rows.join('\n');
+  console.log(`truncate input rows=${rows.length} chars=${pack.length}`);
+  const truncated = truncateRenderedVoiceContext(pack, { maxRows: 2, budgetChars: 400, rowCapChars: 190 });
+  console.log(
+    `truncate 2/400/190 -> rows=${truncated.rows} chars=${truncated.chars} sourceRows=${truncated.sourceRows} sourceChars=${truncated.sourceChars} truncated=${truncated.truncated}`,
+  );
+  assert.ok(truncated.rows <= 2, `row cap overshot: ${truncated.rows}`);
+  assert.ok(truncated.chars <= 400, `budget overshot: ${truncated.chars}`);
+  assert.equal(truncated.text.includes('ROW-5'), true, 'the newest row is kept');
+  assert.equal(truncated.text.includes('ROW-0'), false, 'the oldest row is dropped');
+
+  // A pack already inside the limits is returned byte-for-byte and does NOT claim a truncation.
+  const small = '用户（刚刚）：短\n助手（刚刚）：也短';
+  const untouched = truncateRenderedVoiceContext(small, { maxRows: 4, budgetChars: 1200, rowCapChars: 600 });
+  assert.equal(untouched.text, small);
+  assert.equal(untouched.truncated, false);
+});
+
+test('AC5/AC6: the proxy trims a context frame to THIS connection reading, and an edit reaches only the next connection', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'voice-runtime-pack-'));
+  const file = join(dir, 'settings.json');
+  const packFor = (tag: string): string =>
+    Array.from({ length: 6 }, (_, index) =>
+      `${index % 2 === 0 ? '用户' : '助手'}（刚刚）：${tag}-${index} ${'乙'.repeat(200)}`,
+    ).join('\n');
+  try {
+    writeFileSync(
+      file,
+      JSON.stringify({ contextPack: { maxRows: 4, budgetChars: 1200, rowCapChars: 600 } }),
+      'utf8',
+    );
+    const live = wire({ settingsPath: file });
+    await waitFor(() => instructionsSent(live.transport).length >= 1);
+    live.socket.receive(contextFrame(packFor('A'), 6));
+    await waitFor(() => live.logs.some((line) => line.startsWith('context truncated from=')));
+    const firstTrim = live.logs.find((line) => line.startsWith('context truncated from='))!;
+    console.log(`AC6 connection A ${firstTrim}`);
+    assert.match(firstTrim, /^context truncated from=6 rows\/\d+ chars to=4 rows\/\d+ chars$/, 'AC6: A reads 4 rows');
+
+    // The edit lands while A is live; A keeps the reading it connected with.
+    writeFileSync(
+      file,
+      JSON.stringify({ contextPack: { maxRows: 2, budgetChars: 400, rowCapChars: 190 } }),
+      'utf8',
+    );
+    const next = wire({ settingsPath: file });
+    await waitFor(() => instructionsSent(next.transport).length >= 1);
+    next.socket.receive(contextFrame(packFor('B'), 6));
+    await waitFor(() => next.logs.some((line) => line.startsWith('context truncated from=')));
+    const nextTrim = next.logs.find((line) => line.startsWith('context truncated from='))!;
+    console.log(`AC6 connection B ${nextTrim}`);
+    assert.match(nextTrim, /^context truncated from=6 rows\/\d+ chars to=2 rows\/\d+ chars$/, 'AC6: B reads 2 rows');
+    assert.ok(Number(/to=\d+ rows\/(\d+) chars/.exec(nextTrim)![1]) <= 400, 'B is inside its 400-char budget');
+
+    // A different pack, so the proxy does not answer from its frame dedup: A's reading is unchanged.
+    live.socket.receive(contextFrame(packFor('C'), 6));
+    await waitFor(() => live.logs.filter((line) => line.startsWith('context truncated from=')).length >= 2);
+    const secondTrim = live.logs.filter((line) => line.startsWith('context truncated from=')).at(-1)!;
+    console.log(`AC6 connection A after the edit ${secondTrim}`);
+    assert.match(secondTrim, /to=4 rows\//, 'A must keep its connect-time reading (no mid-session swap)');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('AC5: the one-shot path trims hints.context to the same reading, and the fetch recorder sees the trimmed body', async () => {
+  const rows = Array.from({ length: 6 }, (_, index) => `用户（刚刚）：SHOT-${index} ${'丙'.repeat(320)}`).join('\n');
+  const bodies: string[] = [];
+  const logs: string[] = [];
+  const service = createVoiceService({
+    defaults: { baseUrl: '', apiKey: '', sttModel: 'whisper-1', ttsModel: 'tts-1', ttsVoice: 'alloy', providerId: '' },
+    timeoutMs: 1_000,
+    fetchBackend: async (_url, init) => {
+      bodies.push(String(init.body));
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"transcript":"k","instruction":"k"}' } }] }),
+        { status: 200 },
+      );
+    },
+    runtimeConfig: () => ({ contextPack: { maxRows: 2, budgetChars: 400, rowCapChars: 190 } }),
+    logger: { info: (line: string) => logs.push(line) },
+  });
+
+  const result = await service.transcribe({
+    audio: { bytes: Buffer.alloc(16, 0x6b), mimeType: 'audio/webm', fileName: 'clip.webm' },
+    overrides: {},
+    settings: {
+      baseUrl: '',
+      apiKey: '',
+      sttModel: 'whisper-1',
+      ttsModel: '',
+      ttsVoice: '',
+      ttsFormat: '',
+      providerId: 'dashscope-omni-relay',
+      dashscopeEndpoint: 'https://llm-szunnpxbx46k86c0.cn-beijing.maas.aliyuncs.com',
+      dashscopeApiKey: 'sk-test',
+      dashscopeModel: '',
+    },
+    hints: { context: rows },
+  });
+  assert.equal(result.ok, true, 'the one-shot request must reach the recorder');
+  assert.equal(bodies.length, 1);
+  const body = JSON.parse(bodies[0]!) as { messages: Array<{ content: unknown }> };
+  const system = String(body.messages[0]?.content ?? '');
+  console.log(`one-shot recorder body chars=${bodies[0]!.length} containsNewest=${system.includes('SHOT-5')} containsOldest=${system.includes('SHOT-0')}`);
+  assert.equal(system.includes('SHOT-5'), true, 'the newest row survives the trim');
+  assert.equal(system.includes('SHOT-0'), false, 'the oldest row was dropped before the wire');
+  assert.ok(
+    logs.some((line) => line.startsWith('context truncated from=')),
+    `the one-shot path must log the trim, saw ${JSON.stringify(logs)}`,
+  );
 });

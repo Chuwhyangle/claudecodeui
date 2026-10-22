@@ -21,6 +21,10 @@ import { fileURLToPath } from 'node:url';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { parseFrontMatter } from '@/shared/frontmatter.js';
+// The context-pack SIZE the installed runtime-config port reports. The truncation itself lives in
+// the shared voice tree (`shared/voice/voiceContextTruncation.ts`) because the AC-139 dispatch
+// falsification copies that tree wholesale; this file only names the shape the reader returns.
+import type { RenderedVoiceContextLimits } from '@shared/voice/voiceContextTruncation.js';
 import type {
   AnyRecord,
   ApiSuccessShape,
@@ -1850,4 +1854,50 @@ export function isClaudeRequestCaptureRow(entry: unknown): boolean {
   }
   const type = (entry as { type?: unknown }).type;
   return typeof type === 'string' && CLAUDE_REQUEST_CAPTURE_ROW_TYPES.has(type);
+}
+
+//----------------- VOICE RUNTIME CONFIG PORT ------------
+
+/**
+ * One deployment-level reading of the runtime knobs a voice consumer needs.
+ *
+ * Deliberately NARROW: the context pack's three numbers and nothing else. The route that serves
+ * them to the browser, the one-shot dictation path and the Live Voice proxy all read the SAME
+ * installed reader, so one settings-file edit governs every voice entry without a restart.
+ */
+export type VoiceRuntimeConfigReading = {
+  contextPack: RenderedVoiceContextLimits;
+  /** Whether the settings file was read and accepted (`file`) or the defaults stood (`default`). */
+  source?: 'default' | 'file';
+  /** Readable warnings (a refused block, an unreadable file), oldest first. */
+  warnings?: readonly string[];
+};
+
+/**
+ * The installed reader, or null before the composition root installs one.
+ *
+ * WHY A PORT RATHER THAN AN IMPORT. The reader lives in the `voice-realtime` module (it owns the
+ * settings-file loader), while its consumers live in the `voice` module. A direct `voice →
+ * voice-realtime` import closes a real import cycle through the websocket/providers cluster (the
+ * AC-394 ratchet reds on it), and the alternative — duplicating the loader — would let the two
+ * voice entries drift. So the composition root, which already imports both modules, installs the
+ * reader here and each consumer resolves it through this shared port. Absent means "no runtime
+ * configuration wired": consumers fall back to the shipped defaults.
+ */
+let installedVoiceRuntimeConfigReader: (() => VoiceRuntimeConfigReading) | null = null;
+
+/** Installs (or clears, with `null`) the process's runtime-config reader. Idempotent. */
+export function installVoiceRuntimeConfigReader(reader: (() => VoiceRuntimeConfigReading) | null): void {
+  installedVoiceRuntimeConfigReader = reader;
+}
+
+/**
+ * Reads the installed runtime-config port, or `null` when the composition root has not installed
+ * one (a leaf test, a probe, a process that never mounts the voice routes).
+ *
+ * The reader itself is invoked here, per call, so the settings file is re-read for each request /
+ * connection — the hot-update contract — rather than snapshotted at install time.
+ */
+export function readInstalledVoiceRuntimeConfig(): VoiceRuntimeConfigReading | null {
+  return installedVoiceRuntimeConfigReader === null ? null : installedVoiceRuntimeConfigReader();
 }

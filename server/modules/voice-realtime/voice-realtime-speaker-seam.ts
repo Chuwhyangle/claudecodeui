@@ -287,6 +287,39 @@ export function createSpeakerTrackerModel(options: {
   };
 }
 
+/**
+ * THE PROCESS-WIDE MODEL CACHE, owned here rather than by the composition root.
+ *
+ * Consumed by `server/index.ts`: a CAM++ ONNX session is expensive, so `modelFor` starts one path's
+ * load on first use and returns that SAME model to every later connection that resolves to the
+ * path. The map is the registry's private state — the composition root assembles one registry and
+ * never holds the cache itself.
+ *
+ * A failed load is memoized inside the model, so a broken model is cached too: it must never take a
+ * voice connection down, and it must not be retried on every connection.
+ */
+export class SpeakerTrackerRegistry {
+  private readonly speakerTrackerModels = new Map<string, SpeakerTrackerModel>();
+
+  /** Where the single load/failure line goes. */
+  private readonly log: (line: string) => void;
+
+  constructor(options: { log?: (line: string) => void } = {}) {
+    this.log = options.log ?? ((line) => console.log(line));
+  }
+
+  /** The process-wide model for `modelPath`, loading it once on first use. */
+  modelFor(modelPath: string): SpeakerTrackerModel {
+    const existing = this.speakerTrackerModels.get(modelPath);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const model = createSpeakerTrackerModel({ modelPath, log: this.log });
+    this.speakerTrackerModels.set(modelPath, model);
+    return model;
+  }
+}
+
 /** Wraps the native extractor. One stream per window, released with it. */
 function createSherpaSpeakerEmbedder(
   runtime: SherpaSpeakerRuntime,

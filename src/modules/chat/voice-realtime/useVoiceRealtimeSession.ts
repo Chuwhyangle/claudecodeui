@@ -45,6 +45,7 @@ import { createLiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegment
 import type { LiveSegment, LiveSegmenter } from '@/modules/chat/utils/voice/voiceLiveSegmenter';
 
 import { voiceRealtimeSocketUrl } from '@/shared/api';
+import { readVoiceRuntimeConfig } from '@/shared/voiceRuntimeConfig';
 import type { ChatMessage, VoiceRealtimeSegmentOutcome } from '@/shared/types';
 import { StreamingVad } from '@/shared/voiceEndpoint';
 
@@ -1086,7 +1087,11 @@ export function useVoiceRealtimeSession({
     if (socket.readyState !== WebSocket.OPEN) {
       return;
     }
-    const pack = buildVoiceContextPack(contextMessagesRef.current);
+    // The deployment's effective rows / budget / per-row cap, published by `useVoiceAvailable`.
+    // `null` (no reading yet, or a failed fetch) is the shipped default — the builder never invents
+    // a value the server did not name. The proxy trims again server-side, so a reading that lands
+    // after this first frame still governs what reaches the model.
+    const pack = buildVoiceContextPack(contextMessagesRef.current, readVoiceRuntimeConfig() ?? {});
     const frame = contextFrame(pack);
     // No frame for an empty pack, and none for a pack that matches what this connection already
     // sent: the first run over an empty conversation sends nothing at all.

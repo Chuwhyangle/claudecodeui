@@ -55,6 +55,49 @@ The WAV must be mono 16 kHz 16-bit PCM
 The server also logs every upstream event and every frame sent to the browser, one line each,
 prefixed `[voice-realtime <session8>]`.
 
+## Runtime knobs: `contextPack` and `spendGuard`
+
+Both Live Voice and one-shot dictation read the deployment's settings file
+(`VOICE_REALTIME_SETTINGS_PATH`). Two blocks govern the C2 pack's size and the per-window spend cap:
+
+```json
+{
+  "contextPack": { "maxRows": 4, "budgetChars": 1200, "rowCapChars": 600 },
+  "spendGuard": { "maxCnyPerWindow": 0.05, "windowMs": 30000 }
+}
+```
+
+| block | field | accepted range | shipped default |
+| --- | --- | --- | --- |
+| `contextPack` | `maxRows` | 1–12 | 4 |
+| `contextPack` | `budgetChars` | 200–4000 | 1200 |
+| `contextPack` | `rowCapChars` | 100–2000 | 600 |
+| `spendGuard` | `maxCnyPerWindow` | 0.001–10 CNY | 0.05 |
+| `spendGuard` | `windowMs` | 5000–60000 ms | 30000 |
+
+**Precedence.** `contextPack`: `environment > settings file > default`, where the escape hatches are
+`VOICE_REALTIME_CONTEXT_MAX_ROWS`, `VOICE_REALTIME_CONTEXT_BUDGET_CHARS` and
+`VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS`. `spendGuard`: the HTTP diagnosis route's per-run override >
+`VOICE_REALTIME_MAX_CNY_PER_30S` > the file > the default; `windowMs` has no environment spelling and
+comes from the file (then the default).
+
+**Refusal.** A known field with the wrong type or an out-of-range value refuses the WHOLE block; the
+defaults apply and the reason reaches the connection log (`settings: using the built-in prompt — …`)
+and `GET /api/voice/runtime-config`'s `warnings`. Unknown keys/sub-keys are ignored. The spend guard
+has **no off switch**: `null`/`0` are refused, not obeyed — name a larger positive number to widen it.
+
+**Hot update.** The file is read once per Live Voice connection and per request for
+`/api/voice/runtime-config` and `/api/voice/transcribe`. An edit therefore reaches the NEXT connection
+and the next request; a session already speaking keeps the reading it connected with (no mid-session
+swap). The browser fetches the endpoint during the voice-availability check and caches the effective
+values; if the fetch fails it builds with the shipped defaults. The browser — not the file — owns the
+hard ceiling (12 rows / 4,000 chars / 2,000 per row); a larger reading is clamped, never obeyed.
+
+**Server-side truncation.** The proxy trims every `context` frame and the one-shot path trims
+`hints.context` to the reading that connection/request resolved: the newest rows first, each row
+elided head-70% + `…` + tail-30%, oldest rows dropped. The log line names both readings:
+`context truncated from=<n> rows/<chars> chars to=<n> rows/<chars> chars`.
+
 ## Spend guard
 
 Every Live Voice connection is metered from the `usage` of each `response.done`, priced as in the October 2026 bill
@@ -62,26 +105,45 @@ Every Live Voice connection is metered from the `usage` of each `response.done`,
 `usage connection total input=… output=… cost~CNY…` shows the running figure. Read bill lines against that log:
 the realtime model bills one line per connection, at its end.
 
-**The per-30-s window cap is OFF unless it is configured — production sets no default.** `VOICE_REALTIME_MAX_CNY_PER_30S`
-names the most a connection may spend inside 30 s. Unset (the shipped state) the assembled `spendGuard` carries **no**
-`maxCnyPerWindow` at all, so the window branch can never fire and no connection is ever ended for its rate. Set to a
-positive number, crossing it ends the connection with a `SPEND_LIMIT` error: `Voice spending guard: this connection used
-about ¥… in 30 s (limit ¥…), so it was ended. Start Live Voice again to continue.` A value that is not a positive number
-(`abc`, `0`, `-1`, a blank string) is **refused**: the cap stays off *and* the server logs a `spend window limit: …` line,
-because `Number('abc')` is `NaN` and `spent > NaN` is always false — an unvalidated typo would disarm the guard
-invisibly. The HTTP diagnosis route passes its own ¥0.05 window for its scripted clip; an override always outranks the
-deployment's variable.
+**The per-window cap ships at ¥0.05 / 30 s and is ALWAYS armed.** That is a RATE guard, not a cost line: the
+observed 30 s windows (147 real connections, 2026-10-11…22) have p50 ¥0.0117, p90 ¥0.0376 and p99 ¥0.0654, so
+¥0.05 leaves ~96% of normal connections untouched while the recorded runaway loop (≈¥0.49/min) crosses it several
+times over. The normal entry is `spendGuard.maxCnyPerWindow` in the settings file; `VOICE_REALTIME_MAX_CNY_PER_30S`
+is the environment escape hatch and the HTTP diagnosis route passes its own per-run override. An explicit value
+that is out of range (`abc`, `0`, `-1`, a blank string) is **refused**: the default stays armed and the server logs
+a `spend window limit: …` line, because `Number('abc')` is `NaN` and `spent > NaN` is always false — an unvalidated
+typo must not disarm the guard. Crossing the cap ends the connection with a `SPEND_LIMIT` error:
+`Voice spending guard: this connection used about ¥… in 30 s (limit ¥…), so it was ended. Start Live Voice again to continue.`
 
-Production deliberately names no cap because the window threshold was tight for *normal* tool use, not just for
-runaways: a response that re-reads a ~1k-token context and emits ~18 tokens costs about ¥0.0016, so ¥0.015 was roughly
-nine responses per 30 s — and every tool round trip is one full context re-read. Runaway cost is covered by
-`TOOL_LOOP_GUARD` instead: the bridge refuses a 7th tool call inside one utterance, and resets the count when the user
-speaks, which bounds the 2026-10-10 shape (89 calls in a minute) with or without a spend cap.
+There is no default cap on a connection's total or length; `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` is the explicit
+opt-in that imposes one. Runaway cost is additionally bounded by `TOOL_LOOP_GUARD`: the bridge refuses a 7th tool
+call inside one utterance.
 
-There is no default cap on a connection's total or length either; `VOICE_REALTIME_MAX_CNY_PER_CONNECTION` is the
-explicit opt-in that imposes one.
+### Real readings from the 2026-10-23 DoD run
+
+Probe: the real server (`npx tsx --tsconfig=server/tsconfig.json server/index.ts`) on port **3917**, isolated
+`HOME` and `DATABASE_PATH`, `VOICE_REALTIME_ENDPOINT=ws://127.0.0.1:3918` pointing at an in-process stand-in
+upstream that emits `response.done` with `usage(5600,100,30)` (≈¥0.0090) per browser audio frame. The temp settings
+file started as `{"contextPack":{"maxRows":2,"budgetChars":400,"rowCapChars":190},"spendGuard":{"maxCnyPerWindow":0.001,"windowMs":30000}}`.
+
+* `GET /api/voice/runtime-config` → `contextPack={"maxRows":2,"budgetChars":400,"rowCapChars":190}`, `source=file`.
+* Connection A, a pack built from those values: `context injected chars=381 rows=2 template=file`.
+* Connection A, a stale 6-row / 1,271-char frame: `context truncated from=6 rows/1271 chars to=2 rows/381 chars`.
+* Edit the same file to `{"contextPack":{"maxRows":4,"budgetChars":1200,"rowCapChars":600},"spendGuard":{"maxCnyPerWindow":0.05,"windowMs":30000}}`:
+  * Connection B (new): `context truncated from=6 rows/1271 chars to=4 rows/847 chars` → `context injected chars=847 rows=4`.
+  * Connection A (still live): its next frame still reads `context truncated from=6 rows/1271 chars to=2 rows/381 chars` — no mid-session swap.
+  * `SPEND_LIMIT` on B: `… used about ¥0.054 in 30 s (limit ¥0.050) …` (6 charged responses; the 7th crossed it).
+* Connection A's `SPEND_LIMIT`: `… used about ¥0.009 in 30 s (limit ¥0.001) …` — the file's 0.001, not the default.
+* Delete the `spendGuard` block and open connection C: `SPEND_LIMIT: … (limit ¥0.050)` at `cny=0.05391`, i.e. the
+  shipped default, with `windowMs=30000`.
+* The stand-in upstream's last `session.update` for connection B carried the 4 newest rows and none of the two
+  dropped ones.
+* The one-shot path's fetch recorder (unit, `voice-realtime-context-and-settings.test.ts`): a 6-row/≈2,000-char
+  `hints.context` with `2/400/190` reaches the wire with `SHOT-5` present, `SHOT-0` absent, and the service log
+  carries `context truncated from=`.
 
 > **Not implemented, by design.** `docs/proposals/voice-realtime-segmented-relay-SPEC.md` (C5) also asks the window
-> limit to widen with the context package: `windowLimit = 0.015 + 0.003 × (package tokens / 1000)`. That scaling is
-> **not implemented** — the package size is read per connection inside the proxy while the seams are assembled once at
-> boot, so it needs a `createTransport` signature change and is its own task. The SPEC text stays as the design record.
+> limit to widen with the context package: `windowLimit = 0.05 + 0.003 × (package tokens / 1000)`. That scaling is
+> **not implemented** — the package size is read per connection inside the proxy while the seams are assembled once
+> per connection at the composition root, so it needs a `createTransport` signature change and is its own task. The
+> SPEC text stays as the design record.

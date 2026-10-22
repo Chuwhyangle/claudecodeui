@@ -8,6 +8,11 @@ export { voiceClientAssetRoutes } from './voice.module.js';
 // signed-in user's saved DashScope key. One narrow read so the entrypoint does not reach into the
 // database module's repository for a settings row.
 export { readVoiceSettings } from './voice.module.js';
+// createVoiceService: used by the Live Voice criterion (`voice-realtime-context-and-settings.test.ts`)
+// to drive the one-shot `hints.context` truncation through the SAME service the composition root
+// builds, with its outbound port replaced by a recorder. Exposed through the barrel because that
+// consumer lives in a sibling module and must not deep-import this one.
+export { createVoiceService } from './voice.service.js';
 // voiceLexicon: the U-source lexicon singleton. Used by the chat dispatch to
 // record the identifier-shaped tokens of every message a user sends — the
 // auto-record half of the cold-start-plus-live pair — and by the Voice routes.

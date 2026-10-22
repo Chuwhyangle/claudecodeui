@@ -14,6 +14,17 @@
   "_omissionFill": "A partial override of the omission-fill producer's parameters, in the snake_case spelling of server/modules/voice-realtime/omission-fill-params.json. An empty object keeps the shipped values.",
   "announcePhrases": "好的|收到|明白|在办",
   "_announcePhrases": "The announce closing turn's sentence table, '|'-separated. Needs at least 3 phrases; each at most 15 characters. Invalid values are refused whole and the shipped table is used.",
+  "contextPack": {
+    "maxRows": 4,
+    "budgetChars": 1200,
+    "rowCapChars": 600
+  },
+  "_contextPack": "The C2 context pack's size, consumed by both Live Voice and one-shot dictation. Ranges: maxRows 1-12, budgetChars 200-4000, rowCapChars 100-2000. Precedence: environment (VOICE_REALTIME_CONTEXT_MAX_ROWS / VOICE_REALTIME_CONTEXT_BUDGET_CHARS / VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS) > this file > shipped default (4 / 1200 / 600). Fields left out keep the default; a known field out of range refuses the WHOLE block and the defaults apply, with the reason reported in the connection log. The browser also enforces a hard ceiling of 12 rows / 4,000 chars / 2,000 per row.",
+  "spendGuard": {
+    "maxCnyPerWindow": 0.05,
+    "windowMs": 30000
+  },
+  "_spendGuard": "The Live Voice per-window spend cap. Ranges: maxCnyPerWindow 0.001-10 CNY; windowMs 5000-60000 ms. Precedence: the HTTP diagnosis route's per-run override > environment (VOICE_REALTIME_MAX_CNY_PER_30S) > this file > the ¥0.05 / 30 s default. The guard is NEVER disabled: there is no null/0 spelling for 'off', and a refused value keeps the default armed and is reported in the connection log. Changes reach the NEXT connection (and the next one-shot upload / runtime-config request); a live session keeps the reading it connected with.",
   "speakerTracking": {
     "mode": "shadow",
     "modelDir": "models/speaker",

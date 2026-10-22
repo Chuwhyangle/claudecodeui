@@ -31,6 +31,7 @@ import type { VoiceRealtimeClosingTurn } from './voice-realtime-closing-turn.js'
 import type { VoiceRealtimeFrameRegistry } from './voice-realtime-frame-registry.js';
 import type { VoiceRealtimeTransport } from './voice-realtime-mode.js';
 import type { OmissionFillParams } from './voice-realtime-omission-fill.js';
+import type { VoiceRealtimeSettings } from './voice-realtime-settings.js';
 import type { SilenceTailOptions } from './voice-realtime-silence-tail.js';
 import type { VoiceSpeakerTrackerSeam } from './voice-realtime-speaker-seam.js';
 import type {
@@ -815,6 +816,21 @@ export type VoiceRealtimeProxySeams = {
    * A criterion points it at a file it owns; a deployment sets the environment variable instead.
    */
   settingsPath?: string;
+  /**
+   * THIS connection's settings reading, already taken by the composition root — the ONE reading the
+   * connection uses for every file-sourced knob.
+   *
+   * WHY IT TRAVELS THROUGH THE SEAM. `server/index.ts` resolves the spend guard before the proxy
+   * starts, and the proxy needs the same reading for the context pack's size and the injected
+   * prompt. If each side read the file itself, an edit landing between the two reads would give one
+   * connection a cap from the old file and a pack budget from the new one — exactly the split
+   * reading this seam exists to prevent. The proxy uses this reading when present and only falls
+   * back to loading the file when a criterion constructs the connection without a composition root.
+   *
+   * Optional: absent is the historical per-connection `loadVoiceRealtimeSettings` call, so a leaf
+   * test's hand-built seams keep working unchanged.
+   */
+  settings?: VoiceRealtimeSettings;
   /**
    * How a spoken instruction waits for a session that is mid-turn. Optional: the defaults
    * ({@link BUSY_RETRY_INTERVAL_MS}, {@link BUSY_RETRY_MAX_MS}) are what ships; a criterion

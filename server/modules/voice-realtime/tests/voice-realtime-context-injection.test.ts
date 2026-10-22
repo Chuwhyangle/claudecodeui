@@ -18,9 +18,10 @@
  *   - no pack, no change: a connection that is never sent a `context` frame opens
  *     with instructions BYTE-IDENTICAL to `seams.instructions` (the empty case has
  *     no header and no blank lines — which is also what makes it comparable);
- *   - the cap is enforced here: a frame over `VOICE_REALTIME_CONTEXT_MAX_CHARS` is
- *     refused whole with a log line, and the next, in-budget frame is still injected
- *     (so the refusal is about the size, not a broken path);
+ *   - the size limit is enforced here: a frame over the connection's effective budget is
+ *     TRIMMED to the newest rows (the runtime knobs are configurable now), with a
+ *     `context truncated from=… to=…` line, and the next, in-budget frame is still
+ *     injected (so the trim is about the size, not a broken path);
  *   - read-once: one settings file read is held for a connection's whole life —
  *     editing the file under a live connection does not change what that connection
  *     composes, while the next connection reads the new file;
@@ -186,7 +187,7 @@ test('a connection never sent a context frame opens BYTE-IDENTICAL to the base p
   );
 });
 
-test('a frame over the cap is refused whole with a log line, and the next in-budget frame is still injected', async () => {
+test('a frame over the budget is trimmed with a log line, and the next in-budget frame is still injected', async () => {
   const { socket, transport, logs } = wireConnection();
   await waitFor(() => transport.openCalls >= 1);
   await waitFor(() => advertisedInstructions(transport).length >= 1);
@@ -194,18 +195,24 @@ test('a frame over the cap is refused whole with a log line, and the next in-bud
   const oversized = '要'.repeat(VOICE_REALTIME_CONTEXT_MAX_CHARS + 1);
   socket.receive(contextFrame(oversized));
 
-  await waitFor(() => logs.some((line) => line.includes('context refused')));
+  // The frame is USABLE, not dropped: with no row boundaries it is one row, elided to the shipped
+  // 600-char row cap, and the connection's reading (default 4 / 1,200 / 600) is what decides.
+  await waitFor(() => logs.some((line) => line.includes('context truncated from=')));
   assert.ok(
-    logs.some((line) => line.includes(`${VOICE_REALTIME_CONTEXT_MAX_CHARS}`)),
-    'the refusal must name the cap it exceeded',
+    logs.some((line) => line.includes(`rows/${VOICE_REALTIME_CONTEXT_MAX_CHARS + 1} chars`)),
+    'the trim must name the frame it received',
   );
   assert.equal(
     advertisedInstructions(transport).some((instructions) => instructions.includes(oversized)),
     false,
-    'an over-cap pack must not reach the upstream, whole or in part',
+    'an over-budget pack must not reach the upstream whole',
+  );
+  assert.ok(
+    advertisedInstructions(transport).some((instructions) => instructions.includes('要')),
+    'the trimmed pack must still reach the upstream',
   );
 
-  // The refusal is about SIZE, not a broken path: an in-budget frame on the same connection
+  // The trim is about SIZE, not a broken path: an in-budget frame on the same connection
   // is injected normally, which is what stops this case passing vacuously.
   const ok = '用户：这是合法的一包。';
   socket.receive(contextFrame(ok));
