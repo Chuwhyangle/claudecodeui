@@ -16,12 +16,13 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
  *  · the whole chrome is ONE row — title, granularity switch, "…" — including
  *    the graph's own controls, which are portaled into that row's menu instead
  *    of taking a second diagram toolbar row;
- *  · that menu holds the hops switch, the honesty readings, and export; the
- *    zoom cluster is NOT a toolbar entry — it floats on the drawing itself;
+ *  · that menu holds the scope stepper and the detail presets, the honesty
+ *    readings, and export; the zoom cluster is NOT a toolbar entry — it floats
+ *    on the drawing itself;
  *  · a coarse pointer has no hover, so the hover readout is not rendered at
  *    all and the touch instruction is a dismissible one-off;
- *  · the hops options name themselves in words ("Hops 1" / 「跳数 1」) and carry
- *    the same words as their accessible name;
+ *  · the scope spinbutton reports the +N value (「范围」/`+2`) and its ± steps
+ *    re-request the selected depth, while the detail presets never refetch;
  *  · a real truncation still shows as a compact badge in the row while the menu
  *    is shut.
  */
@@ -219,6 +220,10 @@ function openMenu(): HTMLElement {
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  // The knobs are remembered per project; a case that moves them must not
+  // decide the next case's starting value.
+  window.localStorage.removeItem('architecture.scope.project-1');
+  window.localStorage.removeItem('architecture.detail.project-1');
   setViewport(1024, 768);
   stubMatchMedia(() => false);
 });
@@ -259,7 +264,7 @@ test('the compact tier spends its only toolbar row on the title, granularity and
   assert.equal(row.contains(cluster), false, 'the zoom cluster must not be part of the row');
 });
 
-test('the "…" menu holds hops, the honesty readings and export — the canvas owns the zoom', async () => {
+test('the "…" menu holds the two knobs, the honesty readings and export — the canvas owns the zoom', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
@@ -267,9 +272,15 @@ test('the "…" menu holds hops, the honesty readings and export — the canvas 
   const menu = openMenu();
 
   assert.ok(menu.querySelector('[data-architecture-honesty]'), 'the honesty readings live in the menu');
-  const hops = menu.querySelector('[data-architecture-hops-control]');
-  assert.ok(hops instanceof HTMLElement, 'the hops switch lives in the menu');
-  assert.equal(hops.querySelectorAll('[data-architecture-hops-option]').length, 3);
+  const scope = menu.querySelector('[data-architecture-scope-control]');
+  assert.ok(scope instanceof HTMLElement, 'the scope stepper lives in the menu');
+  assert.ok(menu.querySelector('[data-architecture-scope-decrease]'), 'the stepper offers −');
+  assert.ok(menu.querySelector('[data-architecture-scope-increase]'), 'the stepper offers +');
+  assert.equal(
+    menu.querySelectorAll('[data-architecture-detail-option]').length,
+    3,
+    'the detail radiogroup offers 核心/常用/全部',
+  );
   assert.ok(menu.querySelector('[data-architecture-overflow-export]'), 'export is reachable from the menu');
 
   // The zoom controls are the drawing's own chrome now: they float on the
@@ -296,32 +307,33 @@ test('the "…" menu holds hops, the honesty readings and export — the canvas 
   assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
 });
 
-test('the menu hops switch names its options and re-requests the selected depth', async () => {
+test('the menu stepper reports the +N scope and re-requests the selected depth', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
 
   const menu = openMenu();
-  const options = [...menu.querySelectorAll('[data-architecture-hops-option]')];
-  assert.deepEqual(
-    options.map((option) => option.getAttribute('data-architecture-hops-option')),
-    ['1', '2', '3'],
-  );
-  for (const option of options) {
-    const depth = option.getAttribute('data-architecture-hops-option');
-    assert.equal(option.textContent, `Hops ${depth}`, 'the option must say what it counts');
-    assert.equal(option.getAttribute('aria-label'), `Hops ${depth}`, 'the accessible name repeats it');
-  }
+  const readout = menu.querySelector('[role="spinbutton"]');
+  assert.ok(readout instanceof HTMLElement, 'the scope readout is a spinbutton');
+  assert.equal(readout.textContent, '+2', 'the displayed value is +N');
+  assert.equal(readout.getAttribute('aria-valuenow'), '2');
+  assert.equal(readout.getAttribute('aria-valuemax'), '3');
 
   // The Chinese bundle is the wording the mobile review asked for.
-  assert.equal(zhCNCommon.architecture.controls.hopOption, '跳数 {{count}}');
+  assert.equal(zhCNCommon.architecture.controls.scope, '范围');
+  assert.equal(zhCNCommon.architecture.controls.detailCore, '核心');
 
-  fireEvent.click(options[2]);
+  fireEvent.click(menu.querySelector('[data-architecture-scope-increase]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
   assert.deepEqual(
     apiMock.architectureGraph.mock.calls[1],
     ['project-1', 'session-1', 3],
-    'choosing "Hops 3" from the menu must re-request hops=3',
+    'stepping + from +2 must re-request hops=3',
+  );
+  assert.equal(
+    menu.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'),
+    '3',
+    'the readout follows the scope',
   );
 });
 
@@ -423,7 +435,8 @@ test('desktop keeps the hover readout and its multi-control header', async () =>
   await waitForDiagram();
 
   const row = panelToolbar();
-  assert.ok(row.querySelector('[data-architecture-hops-control]'), 'desktop keeps hops in the header');
+  assert.ok(row.querySelector('[data-architecture-scope-control]'), 'desktop keeps the scope stepper in the header');
+  assert.ok(row.querySelector('[data-architecture-detail-control]'), 'desktop keeps the detail presets in the header');
   assert.ok(row.querySelector('[data-architecture-export]'), 'desktop keeps the export button in the header');
   assert.ok(document.querySelector('[data-architecture-honesty]'), 'desktop keeps the honesty bar');
   assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'desktop has no compact menu');

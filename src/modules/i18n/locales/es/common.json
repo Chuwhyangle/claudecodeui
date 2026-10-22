@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "Saltos",
       "hopOption": "Saltos {{count}}",
-      "maxNodes": "Máx. nodos"
+      "maxNodes": "Máx. nodos",
+      "scope": "Alcance",
+      "scopeDecrease": "Reducir alcance",
+      "scopeIncrease": "Ampliar alcance",
+      "detail": "Detalle",
+      "detailCore": "Núcleo",
+      "detailCommon": "Habitual",
+      "detailAll": "Todo",
+      "detailReading": "Mostrando {{shown}} de {{total}} nodos relacionados"
     },
     "exportMmd": "Exportar .mmd",
     "expandHint": "Pasa el cursor por un nodo para ver sus tipos de relación; haz clic en un nodo para expandir su siguiente salto.",

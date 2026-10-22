@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "ホップ数",
       "hopOption": "ホップ数 {{count}}",
-      "maxNodes": "最大ノード数"
+      "maxNodes": "最大ノード数",
+      "scope": "範囲",
+      "scopeDecrease": "範囲を狭める",
+      "scopeIncrease": "範囲を広げる",
+      "detail": "詳細",
+      "detailCore": "コア",
+      "detailCommon": "標準",
+      "detailAll": "すべて",
+      "detailReading": "関連ノード {{total}} 件中 {{shown}} 件を表示"
     },
     "exportMmd": ".mmd をエクスポート",
     "expandHint": "ノードにホバーすると関係タイプを表示します。ノードをクリックすると次のホップを展開します。",

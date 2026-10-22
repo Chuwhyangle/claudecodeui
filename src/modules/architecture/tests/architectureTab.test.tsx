@@ -486,6 +486,12 @@ function drawnEdge(host: HTMLElement, from: string, to: string): Element {
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  // The two display knobs are remembered per project in localStorage; a case
+  // that moves them must not decide the next case's starting value.
+  for (const projectId of ['project-1', 'project-2']) {
+    window.localStorage.removeItem(`architecture.scope.${projectId}`);
+    window.localStorage.removeItem(`architecture.detail.${projectId}`);
+  }
   // jsdom has no canvas: an un-stubbed `getContext('2d')` answers null AND logs
   // a "Not implemented" error on every paint. The minimap paints on a frame, so
   // answer null directly — it is the component's documented "cannot draw" path.
@@ -1982,43 +1988,159 @@ test('the truncation notice follows the current granularity and carries the show
   );
 });
 
-test('the hops control re-requests the graph with the selected server-side depth', async () => {
+test('the scope stepper re-requests the selected depth and clamps to 0..3', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
 
   assert.deepEqual(
     apiMock.architectureGraph.mock.calls,
     [['project-1', 'session-1', 2]],
-    'the first request asks for the default depth',
+    'the first request asks for the remembered default depth',
   );
 
-  const oneHop = document.querySelector('[data-architecture-hops-option="1"]');
-  assert.ok(oneHop instanceof HTMLButtonElement, 'the hops control must offer one hop');
-  assert.equal(oneHop.getAttribute('aria-pressed'), 'false');
-  fireEvent.click(oneHop);
-  await waitForDiagram();
+  const readout = (): HTMLElement | null => document.querySelector('[role="spinbutton"]');
+  assert.ok(readout() instanceof HTMLElement, 'the scope control is a spinbutton, not three pressed buttons');
+  assert.equal(readout()?.getAttribute('aria-valuenow'), '2');
+  assert.equal(readout()?.getAttribute('aria-valuemin'), '0');
+  assert.equal(readout()?.getAttribute('aria-valuemax'), '3');
+  assert.equal(readout()?.textContent, '+2', 'the displayed value is the +N form the reader asked for');
+  assert.equal(readout()?.getAttribute('aria-valuetext'), '+2');
+
+  fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
   assert.deepEqual(
     apiMock.architectureGraph.mock.calls[1],
     ['project-1', 'session-1', 1],
-    'lowering the depth must refetch with hops=1',
+    'lowering the scope must refetch with hops=1',
   );
-  assert.equal(
-    document.querySelector('[data-architecture-hops-option="1"]')?.getAttribute('aria-pressed'),
-    'true',
-    'the selected depth is the pressed option',
+  assert.equal(readout()?.getAttribute('aria-valuenow'), '1', 'aria-valuenow follows the displayed value');
+  assert.equal(readout()?.textContent, '+1');
+
+  // Walk down to the floor; the − control is disabled and a click cannot go
+  // below it (the clamp also holds if a stale stored value or key event tries).
+  fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3));
+  assert.deepEqual(apiMock.architectureGraph.mock.calls[2], ['project-1', 'session-1', 0]);
+  const decrease = document.querySelector('[data-architecture-scope-decrease]');
+  assert.ok(decrease instanceof HTMLButtonElement);
+  assert.equal(decrease.disabled, true, 'the stepper disables − at scope 0');
+  fireEvent.click(decrease);
+  await waitForDiagram();
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 3, 'scope 0 is the floor — no further request');
+  assert.equal(readout()?.getAttribute('aria-valuenow'), '0');
+
+  // Walk up to the ceiling; + is then disabled too.
+  for (let step = 0; step < 3; step += 1) {
+    fireEvent.click(document.querySelector('[data-architecture-scope-increase]') as Element);
+    await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 4 + step));
+  }
+  assert.deepEqual(
+    apiMock.architectureGraph.mock.calls.map((call) => call[2]),
+    [2, 1, 0, 1, 2, 3],
+    'each step asks the server for exactly its depth',
+  );
+  const increase = document.querySelector('[data-architecture-scope-increase]');
+  assert.ok(increase instanceof HTMLButtonElement);
+  assert.equal(increase.disabled, true, 'the stepper disables + at scope 3');
+  fireEvent.click(increase);
+  await waitForDiagram();
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 6, 'scope 3 is the ceiling — no further request');
+});
+
+test('the detail presets cut the arrived graph without re-requesting it', async () => {
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" data-stand-in-nodes={props.graph.nodes.length} />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
+
+  const latest = (): ArchitectureRendererProps => {
+    const props = seen.at(-1);
+    if (props === undefined) throw new Error('the stand-in renderer was never rendered');
+    return props;
+  };
+
+  // `all` is the default and the identity: the whole four-node fixture arrives.
+  assert.equal(document.querySelector('[data-architecture-detail-option="all"]')?.getAttribute('aria-checked'), 'true');
+  assert.equal(latest().graph.nodes.length, 4);
+  assert.deepEqual(latest().detailReading, { shown: 4, totalInScope: 4 });
+
+  // `core` keeps the distance-0 seed plus ceil(3 * 0.15) = 1 non-seed node.
+  fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
+  await waitFor(() => assert.equal(latest().detailReading?.shown, 2));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'detail is a local cut — never a refetch');
+  assert.deepEqual(latest().detailReading, { shown: 2, totalInScope: 4 });
+  assert.ok(
+    latest().graph.nodes.some((node) => node.distance === 0),
+    'the transcript seed survives the core tier',
+  );
+  assert.deepEqual(
+    latest().graph.nodes.map((node) => node.id),
+    ['src/modules/alpha/a.ts', 'src/modules/alpha/a2.ts'],
+    'the nearest non-seed node is the one core keeps',
   );
 
-  const threeHops = document.querySelector('[data-architecture-hops-option="3"]');
-  assert.ok(threeHops instanceof HTMLButtonElement, 'the hops control must offer three hops');
-  fireEvent.click(threeHops);
+  // `common` keeps ceil(3 * 0.5) = 2 non-seed nodes, so the tiers nest.
+  fireEvent.click(document.querySelector('[data-architecture-detail-option="common"]') as Element);
+  await waitFor(() => assert.equal(latest().detailReading?.shown, 3));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
+  assert.deepEqual(latest().detailReading, { shown: 3, totalInScope: 4 });
+});
+
+test('the visible summary reports the shown and in-scope numbers from the detail knob', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
-  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3));
-  assert.deepEqual(
-    apiMock.architectureGraph.mock.calls[2],
-    ['project-1', 'session-1', 3],
-    'raising the depth must refetch with hops=3',
+
+  // The old visible-summary slot now carries the two numbers the knob promises.
+  const summary = (): Element | null => document.querySelector('[data-architecture-visible-summary]');
+  assert.ok(summary() instanceof HTMLElement);
+  assert.equal(summary()?.getAttribute('data-architecture-detail-shown'), '4');
+  assert.equal(summary()?.getAttribute('data-architecture-detail-total'), '4');
+  assert.match(summary()?.textContent ?? '', /4 of 4/);
+
+  fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
+  await waitFor(() => {
+    assert.equal(summary()?.getAttribute('data-architecture-detail-shown'), '2');
+    assert.equal(summary()?.getAttribute('data-architecture-detail-total'), '4');
+    assert.match(summary()?.textContent ?? '', /2 of 4/);
+  });
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no step of the detail knob may refetch');
+});
+
+test('both knobs are remembered per project across sessions and remounts', async () => {
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.at(-1)?.[2], 1));
+  fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
+  await waitFor(() =>
+    assert.equal(document.querySelector('[data-architecture-detail-option="core"]')?.getAttribute('aria-checked'), 'true'),
   );
+  first.unmount();
+
+  // The same project, a different session: the pair comes back from storage.
+  const second = render(<ArchitecturePanel projectId="project-1" sessionId="session-2" />);
+  await waitForDiagram();
+  assert.equal(document.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'), '1');
+  assert.equal(document.querySelector('[data-architecture-detail-option="core"]')?.getAttribute('aria-checked'), 'true');
+  assert.deepEqual(
+    apiMock.architectureGraph.mock.calls.at(-1),
+    ['project-1', 'session-2', 1],
+    'the remembered scope must drive the request for a sibling session too',
+  );
+  second.unmount();
+
+  // Another project is isolated: it starts from the defaults, not project-1's pair.
+  render(<ArchitecturePanel projectId="project-2" sessionId="session-3" />);
+  await waitForDiagram();
+  assert.equal(document.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'), '2');
+  assert.equal(document.querySelector('[data-architecture-detail-option="all"]')?.getAttribute('aria-checked'), 'true');
+  assert.deepEqual(apiMock.architectureGraph.mock.calls.at(-1), ['project-2', 'session-3', 2]);
 });
 
 test('the export button writes the server-returned .mmd document', async () => {

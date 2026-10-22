@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "홉",
       "hopOption": "홉 {{count}}",
-      "maxNodes": "최대 노드"
+      "maxNodes": "최대 노드",
+      "scope": "범위",
+      "scopeDecrease": "범위 줄이기",
+      "scopeIncrease": "범위 늘리기",
+      "detail": "세부 정보",
+      "detailCore": "핵심",
+      "detailCommon": "보통",
+      "detailAll": "전체",
+      "detailReading": "관련 노드 {{total}}개 중 {{shown}}개 표시"
     },
     "exportMmd": ".mmd 내보내기",
     "expandHint": "노드에 마우스를 올리면 관계 유형이 표시됩니다. 노드를 클릭하면 다음 홉이 확장됩니다.",

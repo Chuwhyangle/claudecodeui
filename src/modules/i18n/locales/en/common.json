@@ -41,7 +41,15 @@
     "controls": {
       "maxHops": "Hops",
       "hopOption": "Hops {{count}}",
-      "maxNodes": "Max nodes"
+      "maxNodes": "Max nodes",
+      "scope": "Scope",
+      "scopeDecrease": "Decrease scope",
+      "scopeIncrease": "Increase scope",
+      "detail": "Detail",
+      "detailCore": "Core",
+      "detailCommon": "Common",
+      "detailAll": "All",
+      "detailReading": "Showing {{shown}} of {{total}} related nodes"
     },
     "exportMmd": "Export .mmd",
     "expandHint": "Hover a node for its relation types; click a node to expand its next hop.",

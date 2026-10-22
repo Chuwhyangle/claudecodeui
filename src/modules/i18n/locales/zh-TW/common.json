@@ -72,7 +72,15 @@
     "controls": {
       "maxHops": "跳數",
       "hopOption": "跳數 {{count}}",
-      "maxNodes": "最大節點數"
+      "maxNodes": "最大節點數",
+      "scope": "範圍",
+      "scopeDecrease": "縮小範圍",
+      "scopeIncrease": "擴大範圍",
+      "detail": "詳情",
+      "detailCore": "核心",
+      "detailCommon": "常用",
+      "detailAll": "全部",
+      "detailReading": "顯示 {{shown}} 個類 · 共 {{total}} 個相關"
     },
     "exportMmd": "匯出 .mmd",
     "expandHint": "懸停節點檢視關聯類型；點擊節點展開下一跳。",
