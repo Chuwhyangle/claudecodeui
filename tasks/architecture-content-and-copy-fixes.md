@@ -1,7 +1,7 @@
 ---
 id: architecture-content-and-copy-fixes
 title: 内容与文案：范围/详情无效时给出原因、PlantUML 构造型写成真构造型、种类说法与筛选角标准确、检查器与会话命中说清楚
-status: todo
+status: ready
 labels:
   - feature
 parent: null
