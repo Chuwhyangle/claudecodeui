@@ -233,7 +233,12 @@
       "open": "Sesuaikan",
       "title": "Sesuaikan",
       "close": "Tutup panel penyesuaian",
-      "dragHandle": "Seret untuk menutup"
+      "dragHandle": "Seret untuk menutup",
+      "view": "Tampilan",
+      "scope": "Cakupan",
+      "detail": "Detail",
+      "filter": "Filter",
+      "export": "Ekspor"
     },
     "dock": {
       "title": "Inspektur",

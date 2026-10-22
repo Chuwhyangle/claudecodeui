@@ -233,7 +233,12 @@
       "open": "Anpassen",
       "title": "Anpassen",
       "close": "Anpassungsbereich schließen",
-      "dragHandle": "Zum Schließen ziehen"
+      "dragHandle": "Zum Schließen ziehen",
+      "view": "Ansicht",
+      "scope": "Umfang",
+      "detail": "Detail",
+      "filter": "Filter",
+      "export": "Export"
     },
     "dock": {
       "title": "Inspektor",

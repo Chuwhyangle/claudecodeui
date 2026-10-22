@@ -233,7 +233,12 @@
       "open": "Ajuster",
       "title": "Ajuster",
       "close": "Fermer le panneau de réglage",
-      "dragHandle": "Faire glisser pour fermer"
+      "dragHandle": "Faire glisser pour fermer",
+      "view": "Vue",
+      "scope": "Portée",
+      "detail": "Détail",
+      "filter": "Filtre",
+      "export": "Exporter"
     },
     "dock": {
       "title": "Inspecteur",

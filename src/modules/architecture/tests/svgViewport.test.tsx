@@ -9,6 +9,7 @@ import {
   createSvgViewport,
   fitAllZoomScale,
   fitAvoidingCorners,
+  fitPlacementAvoidingCorners,
   fitZoomScale,
   MAX_ZOOM_SCALE,
   MIN_READABLE_ZOOM_SCALE,
@@ -435,6 +436,88 @@ test('fitAvoidingCorners takes the most conservative limit across several corner
     fitAvoidingCorners(NATURAL, HOST, [tight, loose]),
     fitAvoidingCorners(NATURAL, HOST, [loose, tight]),
   );
+});
+
+/* ── the measured form: one-sided yielding instead of a symmetric shrink ─────────────────── */
+
+const MEASURED_NATURAL = { width: 4395.67, height: 1943.7 };
+const MEASURED_VIEWPORT = { width: 1151, height: 615 };
+/** The minimap and the zoom cluster, both anchored to the bottom-right corner. */
+const MEASURED_CORNERS = [
+  { left: 985, top: 509, width: 166, height: 106 },
+  { left: 1074, top: 482, width: 77, height: 133 },
+];
+/** What the canvas really affords: (1151−24)/4395.67 — the p-3 padding is 12px a side. */
+const THEORETICAL_FIT = Math.min((1151 - 24) / 4395.67, (615 - 24) / 1943.7);
+
+/** The drawing's box at a placement, in the content box's coordinates. */
+function placedDrawingRect(
+  natural: { width: number; height: number },
+  placement: { scale: number; offsetX: number; offsetY: number },
+): { left: number; top: number; right: number; bottom: number } {
+  return {
+    left: placement.offsetX,
+    top: placement.offsetY,
+    right: placement.offsetX + natural.width * placement.scale,
+    bottom: placement.offsetY + natural.height * placement.scale,
+  };
+}
+
+test('the measured form keeps ≥95% of the theoretical fit by YIELDING to the corner chrome', () => {
+  // The shipped behaviour shrank the drawing symmetrically to 18.1% of the
+  // canvas, leaving 30% of the width unused, because a CENTRED drawing can only
+  // clear a bottom-right corner by getting smaller.
+  const placement = fitPlacementAvoidingCorners(
+    MEASURED_NATURAL,
+    MEASURED_VIEWPORT,
+    MEASURED_CORNERS,
+    MIN_ZOOM_SCALE,
+  );
+
+  assert.ok(
+    placement.scale >= THEORETICAL_FIT * 0.95,
+    `the fit must keep at least 95% of the theoretical maximum ${THEORETICAL_FIT}: `
+      + `got ${placement.scale} at (${placement.offsetX}, ${placement.offsetY})`,
+  );
+
+  // The drawing really is clear of BOTH corner rectangles at that placement.
+  const rect = placedDrawingRect(MEASURED_NATURAL, placement);
+  for (const corner of MEASURED_CORNERS) assert.equal(intersects(rect, corner), false);
+  assert.ok(rect.left >= 0 && rect.top >= 0, 'the yielded drawing stays inside the canvas');
+  assert.ok(rect.right <= MEASURED_VIEWPORT.width + 1e-6);
+  assert.ok(rect.bottom <= MEASURED_VIEWPORT.height + 1e-6);
+
+  // The one-sided yield is what bought the size: the drawing is NOT centred
+  // (the centred placement at this scale would overlap the chrome).
+  assert.ok(
+    Math.abs(placement.offsetY - (MEASURED_VIEWPORT.height - MEASURED_NATURAL.height * placement.scale) / 2) > 1,
+    'the drawing must be moved off-centre to clear the chrome',
+  );
+});
+
+test('when every placement intersects, the fit drops below the theoretical maximum', () => {
+  // A full-width band across the bottom quarter leaves no horizontal way out
+  // and only a third of the height: any placement at the fit intersects, so the
+  // scale has to come down.
+  const band = { left: 0, top: 300, width: MEASURED_VIEWPORT.width, height: 315 };
+  const placement = fitPlacementAvoidingCorners(
+    MEASURED_NATURAL,
+    MEASURED_VIEWPORT,
+    [band],
+    MIN_ZOOM_SCALE,
+  );
+  assert.ok(
+    placement.scale < THEORETICAL_FIT * 0.95,
+    `no placement clears the band at the fit, so the scale must drop; got ${placement.scale}`,
+  );
+  const rect = placedDrawingRect(MEASURED_NATURAL, placement);
+  assert.equal(intersects(rect, band), false, 'the reduced fit still clears the band');
+
+  // The impossible case (a corner covering the whole canvas) degrades to the
+  // plain centred fit instead of collapsing to nothing — the old fallback.
+  const everywhere = { left: -10, top: -10, width: MEASURED_VIEWPORT.width + 20, height: MEASURED_VIEWPORT.height + 20 };
+  const fallback = fitPlacementAvoidingCorners(MEASURED_NATURAL, MEASURED_VIEWPORT, [everywhere], MIN_ZOOM_SCALE);
+  assert.equal(fallback.scale, fitZoomScale(MEASURED_NATURAL, MEASURED_VIEWPORT, MIN_ZOOM_SCALE));
 });
 
 test('fitAvoidingCorners falls back to the plain fit for an unmeasurable or oversized corner', () => {

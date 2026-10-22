@@ -280,12 +280,29 @@ test('the phone header is one row: the view switch and Adjust, nothing else', as
   // One row of chrome, and the graph draws no toolbar of its own.
   assert.equal(document.querySelectorAll('[data-architecture-toolbar]').length, 1);
   assert.equal(graphRoot().querySelector('[data-architecture-toolbar]'), null);
-  // The readout is an overlay on the drawing, not a second chrome row.
-  const overlay = document.querySelector('[data-architecture-readout-overlay]');
-  assert.ok(overlay instanceof HTMLElement);
-  assert.ok(overlay.closest('[data-architecture-toolbar]') === null, 'the readout does not live in the header');
-  assert.ok(overlay.closest('[data-architecture-canvas-region]') !== null, 'the readout floats on the drawing');
-  assert.equal(document.querySelector('[data-architecture-canvas-header]'), null, 'no in-flow chrome row on a phone');
+  // The readout is an IN-FLOW row above the drawing, not a translucent card
+  // floating over its top-left corner (the card covered the drawing and
+  // collided with the corner chrome).
+  const readoutRow = document.querySelector('[data-architecture-readout-overlay]');
+  assert.ok(readoutRow instanceof HTMLElement);
+  assert.equal(
+    readoutRow,
+    document.querySelector('[data-architecture-canvas-header]'),
+    'the phone readout is the canvas header row',
+  );
+  assert.equal(readoutRow.className.includes('absolute'), false, 'the readout row is in flow, not an overlay');
+  assert.ok(readoutRow.closest('[data-architecture-toolbar]') === null, 'the readout does not live in the header');
+  assert.ok(
+    readoutRow.closest('[data-architecture-canvas-region]') === null,
+    'the readout row sits above the drawing region, not inside it',
+  );
+  const region = document.querySelector('[data-architecture-canvas-region]');
+  assert.ok(region instanceof HTMLElement);
+  assert.equal(
+    readoutRow.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING,
+    Node.DOCUMENT_POSITION_FOLLOWING,
+    'the drawing comes after the readout row in document order',
+  );
 });
 
 test('Adjust opens a dialog holding scope, detail, filter, search and export', async () => {
@@ -308,6 +325,38 @@ test('Adjust opens a dialog holding scope, detail, filter, search and export', a
   assert.ok(sheet.querySelector('[data-architecture-search]'), 'search box');
   assert.ok(sheet.querySelector('[data-architecture-export]'), 'export menu');
   assert.ok(sheet.querySelector('[data-architecture-legend-content]'), 'legend');
+
+  // Every group has a title: View / Scope / Detail / Filter / Export / Legend.
+  for (const section of ['view', 'scope', 'detail', 'filter', 'export', 'legend']) {
+    const container = sheet.querySelector(`[data-architecture-sheet-${section}]`);
+    assert.ok(container instanceof HTMLElement, `the sheet must draw the ${section} group`);
+    const title = container.querySelector('span');
+    assert.ok(
+      (title?.textContent ?? '').trim().length > 0,
+      `the ${section} group must carry a visible title`,
+    );
+  }
+  // The filter group's title is the bare word "Filter": `Filter ▾` belongs to
+  // the disclosure button, not to a section heading.
+  assert.equal(
+    sheet.querySelector('[data-architecture-sheet-filter] > span')?.textContent?.trim(),
+    'Filter',
+  );
+
+  // The scope stepper's two buttons have a visible border and a 44×44 box, and
+  // the reading is vertically centred between them.
+  for (const attribute of ['data-architecture-scope-decrease', 'data-architecture-scope-increase']) {
+    const button = sheet.querySelector(`[${attribute}]`) as HTMLElement;
+    assert.ok(button instanceof HTMLElement);
+    assert.match(button.className, /(^|\s)border(\s|$)/, `${attribute} must draw a visible border`);
+    assert.equal(button.style.minHeight, '44px');
+    assert.equal(button.style.minWidth, '44px');
+  }
+  assert.match(
+    (sheet.querySelector('[role="spinbutton"]') as HTMLElement).className,
+    /(^|\s)items-center(\s|$)/,
+    'the scope reading must be vertically centred',
+  );
 
   // Focus returns to the trigger when the dialog closes.
   const trigger = screen.getByRole('button', { name: 'Adjust' });

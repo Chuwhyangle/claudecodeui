@@ -67,13 +67,14 @@ import {
   createSvgDragPan,
   createSvgTouchGestures,
   createSvgViewport,
-  fitAvoidingCorners,
+  fitPlacementAvoidingCorners,
   fitZoomScale,
   measureViewportSize,
   MIN_ZOOM_SCALE,
   readSvgNaturalSize,
   ZOOM_STEP,
   type SvgCornerRect,
+  type SvgFitPlacement,
   type SvgViewportController,
   type SvgViewportSize,
 } from '@/modules/architecture/svgViewport';
@@ -972,18 +973,43 @@ export function PlantUmlGraph({
    * deliberately larger than its box (a pannable, legible crop), where shrinking
    * to avoid a fixed corner would undo the readability the mode exists for.
    */
-  const scaleForDecision = useCallback(
+  const placementForDecision = useCallback(
     (
       natural: SvgViewportSize | null,
       box: SvgViewportSize | null,
       decision: ReadableZoomDecision,
-    ): number => (
+    ): SvgFitPlacement | null => (
       decision.mode === 'overview' && natural !== null && box !== null
-        ? fitAvoidingCorners(natural, box, cornerRects(), MIN_ZOOM_SCALE)
-        : decision.scale
+        // The placement clears the chrome by TRANSLATING the drawing first and
+        // only shrinking when no translation can. Returning the offset is what
+        // lets a centred fit that is merely clipped in one corner stay at full
+        // size instead of shrinking symmetrically.
+        ? fitPlacementAvoidingCorners(natural, box, cornerRects(), MIN_ZOOM_SCALE)
+        : null
     ),
     [cornerRects],
   );
+
+  /**
+   * Apply a fit placement to the drawing through its own margins. The host is a
+   * flex column with `align-items: flex-start`; an explicit left/top margin
+   * pins the drawing at the placement's offset, while `margin-bottom: auto`
+   * keeps it from being stretched. `null` restores the stylesheet's centring.
+   */
+  const applyPlacement = useCallback((drawing: SVGSVGElement | null, placement: SvgFitPlacement | null): void => {
+    if (drawing === null) return;
+    if (placement === null) {
+      drawing.style.marginLeft = 'auto';
+      drawing.style.marginRight = 'auto';
+      drawing.style.marginTop = 'auto';
+      drawing.style.marginBottom = 'auto';
+      return;
+    }
+    drawing.style.marginLeft = placement.offsetX > 0 ? `${placement.offsetX}px` : '0';
+    drawing.style.marginRight = 'auto';
+    drawing.style.marginTop = placement.offsetY > 0 ? `${placement.offsetY}px` : '0';
+    drawing.style.marginBottom = 'auto';
+  }, []);
 
   // The readable default applied to the drawing on screen: focus or overview,
   // the package focus centres, and the overview hint (if any). Rendering reads
@@ -1416,7 +1442,9 @@ export function PlantUmlGraph({
           } else if (view.kind === 'hierarchy') {
             setCollapsedNotice(false);
           }
-          drawnScale = viewport.zoomTo(scaleForDecision(natural, box, decision));
+          const placement = placementForDecision(natural, box, decision);
+          drawnScale = viewport.zoomTo(placement?.scale ?? decision.scale);
+          applyPlacement(drawing, placement);
           applyZoom({ scale: drawnScale, mode: zoomRef.current.mode });
           readout = {
             mode: decision.mode,
@@ -1519,7 +1547,7 @@ export function PlantUmlGraph({
       drawnLayoutRef.current = null;
       drawnCallbackRef.current?.(null);
     };
-  }, [applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
+  }, [applyPlacement, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, placementForDecision, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1872,7 +1900,9 @@ export function PlantUmlGraph({
           ? current
           : { mode: decision.mode, focusPackageId: decision.focusPackageId, hint: decision.overviewHint }
       ));
-      const scale = viewport.zoomTo(scaleForDecision(natural, box, decision));
+      const placement = placementForDecision(natural, box, decision);
+      const scale = viewport.zoomTo(placement?.scale ?? decision.scale);
+      applyPlacement(drawing, placement);
       if (Math.abs(scale - zoomRef.current.scale) < 1e-6) return;
       applyZoom({ scale, mode: 'fit' });
     });
@@ -1884,7 +1914,7 @@ export function PlantUmlGraph({
     const overlays = host.parentElement?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]');
     if (overlays !== undefined && overlays !== null) observer.observe(overlays);
     return () => observer.disconnect();
-  }, [applyZoom, scaleForDecision, scheduleAspectRelayout]);
+  }, [applyPlacement, applyZoom, placementForDecision, scheduleAspectRelayout]);
 
   // The zoom is read through `zoomRef` when the debounced application runs, so
   // a burst of wheel/resize updates coalesces into one visibility toggle rather
@@ -1928,7 +1958,9 @@ export function PlantUmlGraph({
       ],
       mode,
     });
-    applyZoom({ scale: viewport.zoomTo(scaleForDecision(natural, box, decision)), mode: 'fit' });
+    const placement = placementForDecision(natural, box, decision);
+    applyZoom({ scale: viewport.zoomTo(placement?.scale ?? decision.scale), mode: 'fit' });
+    applyPlacement(drawing, placement);
     setReadableView({
       mode: decision.mode,
       focusPackageId: decision.focusPackageId,
@@ -1937,7 +1969,7 @@ export function PlantUmlGraph({
     if (decision.mode === 'focus' && decision.focusPackageId !== null) {
       centerOnPackage(host, decision.focusPackageId);
     }
-  }, [applyZoom, scaleForDecision]);
+  }, [applyPlacement, applyZoom, placementForDecision]);
 
   const fitDiagram = (): void => {
     const host = hostRef.current;
@@ -1967,7 +1999,9 @@ export function PlantUmlGraph({
       ],
       mode: readableModeRef.current ?? undefined,
     });
-    applyZoom({ scale: viewport.zoomTo(scaleForDecision(natural, box, decision)), mode: 'fit' });
+    const placement = placementForDecision(natural, box, decision);
+    applyZoom({ scale: viewport.zoomTo(placement?.scale ?? decision.scale), mode: 'fit' });
+    applyPlacement(drawing, placement);
     setReadableView({
       mode: decision.mode,
       focusPackageId: decision.focusPackageId,
@@ -2218,7 +2252,12 @@ export function PlantUmlGraph({
     >
       {t('architecture.plantuml.readable.overviewHint', {
         defaultValue: 'Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)',
-        zoom: readableView.hint.zoomPercent,
+        // The percentage is the SAME reading the zoom tier's own `zoomReadout`
+        // prints: both are derived from `zoom.scale`, never from the decision's
+        // unconstrained fit. The two used to disagree (the tier said the true
+        // fit, the readout the corner-avoiding one) whenever the chrome forced
+        // a smaller scale.
+        zoom: Math.round(zoom.scale * 100),
         package: shortPackageName(readableView.hint.packageId),
         count: readableView.hint.packageCount,
       })}

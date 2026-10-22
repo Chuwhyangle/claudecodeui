@@ -726,6 +726,48 @@ function CurationToast({
 }
 
 /**
+ * Dismiss a disclosure popover the way every menu in this panel must behave:
+ * a press outside it closes it WITHOUT swallowing that press (the listener is
+ * a plain `mousedown` observer, so the click still reaches its target), and
+ * Escape closes it before the chat page's document-level Escape can abort the
+ * running turn, returning focus to the disclosure that opened it.
+ *
+ * Used by `ArchitecturePanel` for the filter, legend and "Adjusted" popovers.
+ */
+function useDismissiblePopover(
+  open: boolean,
+  close: () => void,
+  triggerRef: { readonly current: HTMLElement | null },
+  panelSelector: string,
+): void {
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target as Node | null;
+      if (target === null) return;
+      if (triggerRef.current?.contains(target) === true) return;
+      if (document.querySelector(panelSelector)?.contains(target) === true) return;
+      // No preventDefault: the press that closed the popover still lands.
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      // Capture phase: this runs before the chat page's document-level abort.
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [open, close, triggerRef, panelSelector]);
+}
+
+/**
  * Rendered by WorkspaceMain when the architecture tab is active. It requests the
  * session's neighbourhood on mount (the tab activation) and hands it to the
  * configured renderer through the renderer contract (`rendererContract.ts`) —
@@ -890,6 +932,15 @@ export default function ArchitecturePanel({
   );
   // The `已调整 N 项` manager and the one-node "only show this" display filter.
   const [curationManagerOpen, setCurationManagerOpen] = useState(false);
+  // The disclosure that opened the manager, so Escape can return focus to it.
+  const curationManagerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeCurationManager = useCallback((): void => setCurationManagerOpen(false), []);
+  useDismissiblePopover(
+    curationManagerOpen,
+    closeCurationManager,
+    curationManagerButtonRef,
+    '[data-architecture-curation-manager]',
+  );
   const [soloNodeId, setSoloNodeId] = useState<string | null>(null);
   // A curation Toast: `undoable` renders the focusable 撤销 action. The
   // component pauses its own 6s timer while hovered/focused.
@@ -921,6 +972,10 @@ export default function ArchitecturePanel({
   useEffect(() => () => {
     if (filterDebounceRef.current !== null) clearTimeout(filterDebounceRef.current);
   }, []);
+  const closeFilterMenu = useCallback((): void => setFilterMenuOpen(false), []);
+  // Outside-press / Escape dismissal for every panel-owned popover: the menu
+  // used to close only by pressing its own trigger again.
+  useDismissiblePopover(filterMenuOpen, closeFilterMenu, filterButtonRef, '[data-architecture-filter-menu]');
   // The node under the pointer and its visible relation kinds, as reported by
   // the mounted renderer. Kept here so the readout is renderer-neutral; the key
   // names the graph the reading came from (session + granularity + scope), so
@@ -1137,6 +1192,10 @@ export default function ArchitecturePanel({
   const [readoutOpen, setReadoutOpen] = useState(false);
   // The `?` legend popover; shut by default so the drawing owns the canvas.
   const [legendOpen, setLegendOpen] = useState(false);
+  // The disclosure that opened the legend, so Escape can return focus to it.
+  const legendButtonRef = useRef<HTMLButtonElement | null>(null);
+  const closeLegend = useCallback((): void => setLegendOpen(false), []);
+  useDismissiblePopover(legendOpen, closeLegend, legendButtonRef, '[data-architecture-legend]');
   // The source line's unresolved-names list, expanded on demand rather than
   // printing every unresolved identifier as a permanent row.
   const [unresolvedOpen, setUnresolvedOpen] = useState(false);
@@ -1146,10 +1205,33 @@ export default function ArchitecturePanel({
   // The search box's text. It is local because it only filters the payload in
   // hand; selecting a result is what changes the graph.
   const [searchQuery, setSearchQuery] = useState('');
-  // Whether the match list is open. Focus loss is deliberately not a close
-  // trigger (a click on a result would blur the input first); selecting a
-  // result, pressing Escape, or clearing the box closes it.
+  // Whether the match list is open. Escape, choosing a result, or a press
+  // outside the combobox closes it; a press on a result is inside the widget,
+  // so it does not count as "outside".
   const [searchOpen, setSearchOpen] = useState(false);
+  // The option the combobox's arrow keys moved onto, as an index into the
+  // flattened option list (in-graph matches first, then project hits). -1 means
+  // no active option, so Enter keeps its historical "first match" behaviour.
+  // Essential (not derivable): it is the transient focus of a keyboard user.
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
+  // The combobox's DOM root and input. The outside-press listener needs the
+  // root, and returning focus after Escape needs the input.
+  const searchRootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  // A press outside the combobox closes it WITHOUT swallowing the press (the
+  // listener observes `mousedown`; the click still reaches its target). The
+  // earlier contract required a second press on the box itself to close it.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onPointerDown = (event: MouseEvent): void => {
+      // A press inside the widget (input or an option) is not "outside".
+      if (searchRootRef.current?.contains(event.target as Node) === true) return;
+      setSearchOpen(false);
+      setActiveSearchIndex(-1);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [searchOpen]);
   // The slice the mounted renderer is drawing. The renderer owns its view, so
   // it reports every navigation here; the export menu rebuilds exactly this
   // view instead of guessing from the last click.
@@ -1863,7 +1945,9 @@ export default function ArchitecturePanel({
         onClick={() => changeScope(scope - 1)}
         disabled={scope <= ARCHITECTURE_SCOPE_MIN}
         style={compactTargetStyle}
-        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
+        // A visible border is what makes the `−`/`+` read as buttons rather
+        // than stray glyphs; the 44px box is the touch target.
+        className={`${headerButtonClass} border border-border outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
       >
         −
       </button>
@@ -1892,7 +1976,9 @@ export default function ArchitecturePanel({
             changeScope(ARCHITECTURE_SCOPE_MAX);
           }
         }}
-        className={`min-w-8 rounded px-1 text-center tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+        // The reading is vertically centred in its own box: `+2` used to sit
+        // higher than the `−`/`+` glyphs beside it.
+        className={`inline-flex min-w-8 items-center justify-center rounded px-1 text-center tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
           coarsePointer ? 'text-sm' : 'text-xs'
         }`}
       >
@@ -1905,7 +1991,7 @@ export default function ArchitecturePanel({
         onClick={() => changeScope(scope + 1)}
         disabled={scope >= ARCHITECTURE_SCOPE_MAX}
         style={compactTargetStyle}
-        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
+        className={`${headerButtonClass} border border-border outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
       >
         +
       </button>
@@ -2152,10 +2238,47 @@ export default function ArchitecturePanel({
   // revealing/focusing an arrived node) and, with a session, "项目其它" — the
   // project-wide index behind the `＋` pin action. The second group appears
   // only from two characters up, the endpoint's own floor.
+  //
+  // The widget is a real combobox: the input carries `role="combobox"` and
+  // `aria-activedescendant`, the results are a `listbox` of `option`s, the
+  // arrow keys move the active option and Enter chooses it. The first options
+  // are the in-graph matches; the project-wide hits follow in the same list.
+  const projectHits = canCurate
+    && searchQuery.trim().length >= 2
+    && projectSearch.search.status === 'ready'
+    ? projectSearch.search.results
+    : [];
+  const searchOptionCount = searchMatches.length + projectHits.length;
+  const searchListId = 'architecture-search-listbox';
+  const searchOptionId = (index: number): string => `architecture-search-option-${index}`;
+  const moveSearchActive = (delta: number): void => {
+    if (searchOptionCount === 0) return;
+    setActiveSearchIndex((current) => {
+      if (current < 0) return delta > 0 ? 0 : searchOptionCount - 1;
+      return (current + delta + searchOptionCount) % searchOptionCount;
+    });
+  };
+  const chooseSearchOption = (index: number): void => {
+    if (index < searchMatches.length) {
+      const match = searchMatches[index];
+      revealNode(match.node.id, !match.inRange);
+    } else {
+      const hit = projectHits[index - searchMatches.length];
+      if (hit !== undefined) pinItem(hit);
+    }
+    setSearchOpen(false);
+    setActiveSearchIndex(-1);
+  };
   const searchBox = (
-    <div className="relative">
+    <div ref={searchRootRef} className="relative" data-architecture-search-root="true">
       <input
+        ref={searchInputRef}
         type="search"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={searchOpen && searchQuery.trim().length > 0}
+        aria-controls={searchListId}
+        aria-activedescendant={activeSearchIndex >= 0 && searchOpen ? searchOptionId(activeSearchIndex) : undefined}
         value={searchQuery}
         aria-label={t('architecture.search.label', { defaultValue: 'Search entities or files' })}
         placeholder={t('architecture.search.placeholder', { defaultValue: 'Search entities or files…' })}
@@ -2164,11 +2287,34 @@ export default function ArchitecturePanel({
         onChange={(event) => {
           setSearchQuery(event.target.value);
           setSearchOpen(true);
+          setActiveSearchIndex(-1);
         }}
-        onFocus={() => setSearchOpen(true)}
+        onFocus={() => {
+          setSearchOpen(true);
+          setActiveSearchIndex(-1);
+        }}
+        onBlur={(event) => {
+          // Focus moving INTO the listbox (a result press) keeps it open; any
+          // other focus loss closes it.
+          if (searchRootRef.current?.contains(event.relatedTarget as Node | null) === true) return;
+          setSearchOpen(false);
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
             setSearchOpen(false);
+            setActiveSearchIndex(-1);
+            return;
+          }
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            moveSearchActive(1);
+            return;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            moveSearchActive(-1);
             return;
           }
           if (event.key !== 'Enter') return;
@@ -2182,6 +2328,11 @@ export default function ArchitecturePanel({
           ) {
             event.preventDefault();
             pinItem(projectSearch.search.results[0]);
+            return;
+          }
+          if (activeSearchIndex >= 0) {
+            event.preventDefault();
+            chooseSearchOption(activeSearchIndex);
             return;
           }
           if (searchMatches.length > 0) {
@@ -2202,6 +2353,9 @@ export default function ArchitecturePanel({
       )}
       {searchOpen && searchQuery.trim().length > 0 && (
         <div
+          id={searchListId}
+          role="listbox"
+          aria-label={t('architecture.search.label', { defaultValue: 'Search entities or files' })}
           data-architecture-search-results="true"
           className="absolute left-0 top-full z-30 mt-1 max-h-72 w-80 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
         >
@@ -2216,10 +2370,14 @@ export default function ArchitecturePanel({
               {t('architecture.search.noMatches', { defaultValue: 'No matches' })}
             </p>
           ) : (
-            searchMatches.map((match) => (
+            searchMatches.map((match, index) => (
               <button
                 key={match.node.id}
+                id={searchOptionId(index)}
                 type="button"
+                role="option"
+                aria-selected={activeSearchIndex === index}
+                data-architecture-search-option-index={index}
                 data-architecture-search-result={match.node.id}
                 data-architecture-search-in-range={match.inRange}
                 onClick={() => revealNode(match.node.id, !match.inRange)}
@@ -2262,9 +2420,12 @@ export default function ArchitecturePanel({
                       {t('architecture.search.noMatches', { defaultValue: 'No matches' })}
                     </p>
                   ) : (
-                    projectSearch.search.results.map((hit) => (
+                    projectSearch.search.results.map((hit, projectIndex) => (
                       <div
                         key={hit.id}
+                        id={searchOptionId(searchMatches.length + projectIndex)}
+                        role="option"
+                        aria-selected={activeSearchIndex === searchMatches.length + projectIndex}
                         data-architecture-search-project-result={hit.id}
                         className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
                       >
@@ -2311,6 +2472,7 @@ export default function ArchitecturePanel({
     + curationState.hiddenEdges.length;
   const curationManagerButton = (
     <button
+      ref={curationManagerButtonRef}
       type="button"
       aria-haspopup="dialog"
       aria-expanded={curationManagerOpen}
@@ -2340,6 +2502,7 @@ export default function ArchitecturePanel({
   // now live.
   const legendButton = (
     <button
+      ref={legendButtonRef}
       type="button"
       aria-haspopup="true"
       aria-expanded={legendOpen}
@@ -2466,15 +2629,22 @@ export default function ArchitecturePanel({
 
   /** The analysis/seed source line ... */
   /**
-   * The analysis/seed source line, bottom-left. Relative time on the surface,
-   * the exact local instant in `title`. Extracted so the empty-reading state
-   * shows it too (the provenance exists even when no seed resolved).
+   * The analysis/seed source line, now a FOOTER in the panel's document flow
+   * BELOW the canvas instead of a pill floating over the drawing's bottom-left
+   * corner. Relative time on the surface, the exact local instant in `title`.
+   * Its detail lists expand UPWARDS out of the footer (`position: absolute;
+   * bottom-full`), so opening one never changes the canvas's size. Extracted so
+   * the empty-reading state shows it too (the provenance exists even when no
+   * seed resolved).
    */
-  const sourceLine = (
-    <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex flex-col items-start gap-1 text-[11px] text-muted-foreground">
+  const sourceFooter = (
+    <div
+      data-architecture-source-footer="true"
+      className="relative z-20 flex shrink-0 items-center gap-2 overflow-hidden border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
+    >
       <span
         data-architecture-source-line="true"
-        className="pointer-events-auto rounded-md border border-border/60 bg-background/90 px-2 py-1 shadow-sm"
+        className="min-w-0 truncate rounded-md border border-border/60 bg-background/90 px-2 py-1 shadow-sm"
       >
         {t('architecture.honesty.analysis', { defaultValue: 'Analysis' })}:{' '}
         {provenance.generatedAt ? (
@@ -2508,7 +2678,7 @@ export default function ArchitecturePanel({
         <ul
           data-architecture-unresolved-list="true"
           aria-label={t('architecture.source.listLabel', { defaultValue: 'Unresolved names' })}
-          className="pointer-events-auto max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
+          className="absolute bottom-full left-3 z-30 mb-1 max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
         >
           {unresolvedNames.map((name) => (
             <li key={name}>{name}</li>
@@ -2527,7 +2697,7 @@ export default function ArchitecturePanel({
           data-architecture-scope-hygiene-kept={scopeHygiene.kept}
           onClick={() => setScopeHygieneOpen((open) => !open)}
           style={compactTargetStyle}
-          className="pointer-events-auto rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+          className="shrink-0 rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
         >
           {t('architecture.scopeHygiene.summary', { defaultValue: 'Scope cleanup' })}
           <span aria-hidden="true">{scopeHygieneOpen ? ' ▾' : ' ▸'}</span>
@@ -2539,7 +2709,7 @@ export default function ArchitecturePanel({
           aria-label={t('architecture.scopeHygiene.detailLabel', {
             defaultValue: 'Scope cleanup details',
           })}
-          className="pointer-events-auto max-h-40 max-w-xs overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
+          className="absolute bottom-full right-3 z-30 mb-1 max-h-40 max-w-xs overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
         >
           <li data-architecture-scope-hygiene-counts="true">
             {t('architecture.scopeHygiene.scopeCount', {
@@ -2767,9 +2937,13 @@ export default function ArchitecturePanel({
       <div
         data-architecture-toolbar="true"
         style={compactToolbar ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
-        // ONE row on every tier: no wrapping container is allowed here, so the
-        // header can never grow into the two/three rows the review measured.
-        className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border/60 px-3 py-1.5"
+        // The row WRAPS rather than scrolls. `overflow-x: auto` also makes the
+        // block axis a scroll container, which clipped every absolutely
+        // positioned child — the search results were cut to a 3px line. Wrapping
+        // keeps the popovers in normal paint flow, and the desktop row still
+        // fits one line at its breakpoint (it only wraps when the width really
+        // runs out, which is preferable to hiding controls in a scroller).
+        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5"
       >
         {compactToolbar ? (
           <>
@@ -2873,26 +3047,50 @@ export default function ArchitecturePanel({
           onClose={() => setSheetOpen(false)}
           returnFocusRef={sheetTriggerRef}
         >
-          {/* The renderer's own view chrome (tier, scale, readable mode, Back,
-              Drill in) is portaled in here; on the compact tier the sheet is
-              the one menu, so those entries do not spend a second canvas row. */}
-          <div
-            ref={setCanvasHeaderHost}
-            data-architecture-sheet-view-controls="true"
-            className="flex flex-col"
-            style={{ gap: TOUCH_CONTROL_GAP_PX }}
-          />
-          {scopeGroup}
-          {detailGroup}
+          {/* Every group in the sheet is LABELLED. The unlabelled version made
+              the reader read `Filter ▾` as a section title and the `− +2 +`
+              stepper as an unlabelled mystery; the titles are the same words
+              the desktop toolbar's tooltips use. */}
+          <section data-architecture-sheet-view="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t('architecture.sheet.view', { defaultValue: 'View' })}
+            </span>
+            {/* The renderer's own view chrome (tier, scale, readable mode, Back,
+                Drill in) is portaled in here; on the compact tier the sheet is
+                the one menu, so those entries do not spend a second canvas row. */}
+            <div
+              ref={setCanvasHeaderHost}
+              data-architecture-sheet-view-controls="true"
+              className="flex flex-col"
+              style={{ gap: TOUCH_CONTROL_GAP_PX }}
+            />
+          </section>
+          <section data-architecture-sheet-scope="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t('architecture.sheet.scope', { defaultValue: 'Scope' })}
+            </span>
+            {scopeGroup}
+          </section>
+          <section data-architecture-sheet-detail="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t('architecture.sheet.detail', { defaultValue: 'Detail' })}
+            </span>
+            {detailGroup}
+          </section>
           <section data-architecture-sheet-filter="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
             <span className="text-[11px] font-medium text-muted-foreground">
-              {t('architecture.filter.menu', { defaultValue: 'Filter ▾' })}
+              {t('architecture.sheet.filter', { defaultValue: 'Filter' })}
             </span>
             {filterContent}
           </section>
           {searchBox}
           {curationManagerButton}
-          {exportMenu}
+          <section data-architecture-sheet-export="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {t('architecture.sheet.export', { defaultValue: 'Export' })}
+            </span>
+            {exportMenu}
+          </section>
           <section data-architecture-sheet-legend="true" className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
             <span className="text-[11px] font-medium text-muted-foreground">
               {t('architecture.legend.title', { defaultValue: 'Legend' })}
@@ -2941,6 +3139,20 @@ export default function ArchitecturePanel({
                 />
               </div>
             )}
+            {/* The compact tier's readout is an IN-FLOW row above the drawing,
+                not a translucent card floating over its top-left corner (the
+                card covered the drawing and collided with the corner chrome).
+                It is marked as the canvas header so the layout contract treats
+                it as chrome: the drawing's available height starts below it. */}
+            {compactToolbar && (
+              <div
+                data-architecture-canvas-header="true"
+                data-architecture-readout-overlay="true"
+                className="flex shrink-0 border-b border-border/60 px-3 py-1"
+              >
+                {readoutPanel}
+              </div>
+            )}
             <div
               ref={graphAreaRef}
               // Focus returns here when the dock closes (see ArchitectureDock's
@@ -2984,14 +3196,6 @@ export default function ArchitecturePanel({
                   >
                     ×
                   </button>
-                </div>
-              )}
-              {compactToolbar && (
-                <div
-                  data-architecture-readout-overlay="true"
-                  className="pointer-events-none absolute left-2 top-2 z-20 max-w-[calc(100%-1rem)]"
-                >
-                  {readoutPanel}
                 </div>
               )}
               <CompactToolbarSlotContext.Provider value={sheetControlsHost}>
@@ -3075,8 +3279,6 @@ export default function ArchitecturePanel({
                 </div>
               )}
 
-              {sourceLine}
-
               {/* The selection tray floats inside the canvas: tags, the memo,
                   the optional PlantUML attachment and the append-to-draft
                   action. On the compact tier it becomes a bottom bar/drawer. */}
@@ -3112,7 +3314,6 @@ export default function ArchitecturePanel({
                 defaultValue: 'This session has not referenced any file or identifier that the analysis can place.',
               })}
             />
-            {sourceLine}
           </>
         )}
 
@@ -3235,6 +3436,11 @@ export default function ArchitecturePanel({
         />
       )}
       </div>
+      {/* The provenance/cleanup row is the panel's FOOTER: in the document
+          flow BELOW the canvas (and the dock), never a pill over the drawing.
+          The canvas therefore keeps only the minimap and the zoom cluster as
+          floating corner chrome. */}
+      {sourceFooter}
       </div>
     </div>
   );

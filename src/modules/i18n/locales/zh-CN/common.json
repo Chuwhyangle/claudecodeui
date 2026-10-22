@@ -233,7 +233,12 @@
       "open": "调节",
       "title": "调节",
       "close": "关闭调节面板",
-      "dragHandle": "拖动关闭"
+      "dragHandle": "拖动关闭",
+      "view": "视图",
+      "scope": "范围",
+      "detail": "详情",
+      "filter": "筛选",
+      "export": "导出"
     },
     "dock": {
       "title": "检查器",

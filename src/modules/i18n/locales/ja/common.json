@@ -233,7 +233,12 @@
       "open": "調整",
       "title": "調整",
       "close": "調整パネルを閉じる",
-      "dragHandle": "ドラッグして閉じる"
+      "dragHandle": "ドラッグして閉じる",
+      "view": "表示",
+      "scope": "範囲",
+      "detail": "詳細",
+      "filter": "フィルター",
+      "export": "エクスポート"
     },
     "dock": {
       "title": "インスペクター",
