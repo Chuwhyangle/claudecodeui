@@ -60,7 +60,8 @@
         "label": "Vista general del diagrama: {{percent}} % del dibujo visible",
         "show": "Mostrar la vista general del diagrama",
         "hide": "Contraer la vista general del diagrama"
-      }
+      },
+      "zoomTier": "Nivel de zoom"
     },
     "title": "Arquitectura",
     "noSession": "Selecciona una sesión para ver la arquitectura de los archivos que tocó.",
@@ -80,7 +81,8 @@
       "detailCore": "Núcleo",
       "detailCommon": "Habitual",
       "detailAll": "Todo",
-      "detailReading": "Mostrando {{shown}} de {{total}} nodos relacionados"
+      "detailReading": "Mostrando {{shown}} de {{total}} nodos relacionados",
+      "classView": "Diagrama de clases"
     },
     "exportMmd": "Exportar .mmd",
     "expandHint": "Pasa el cursor por un nodo para ver sus tipos de relación; haz clic en un nodo para expandir su siguiente salto.",
@@ -99,6 +101,35 @@
       "entityTruncated": "Gráfico de entidades truncado — mostrando {{shown}} de {{total}} entidades (presupuesto de nodos {{limit}}).",
       "fileTruncated": "Gráfico de archivos truncado — mostrando {{shown}} de {{total}} archivos (presupuesto de nodos {{limit}}).",
       "lowerHops": "{{hops}} saltos superan el presupuesto de nodos — reduce los saltos para ver toda la vecindad."
+    },
+    "legend": {
+      "title": "Leyenda",
+      "body": "Línea continua: asociación o llamada. Línea discontinua: dependencia o implementación. Flechas: △ herencia · △ implementación · ◆ composición · ◇ agregación · → dependencia. «estereotipo» indica el tipo de entidad. ● semilla: mencionada en esta sesión. +N plegados: ocultos por el nivel de detalle actual."
+    },
+    "export": {
+      "menu": "Exportar ▾"
+    },
+    "search": {
+      "label": "Buscar entidades o archivos",
+      "placeholder": "Buscar entidades o archivos…",
+      "noMatches": "Sin coincidencias",
+      "outOfRange": "Fuera del rango actual"
+    },
+    "readout": {
+      "classSummary": "Mostrando {{shown}} clases · {{total}} relacionados",
+      "fileSummary": "Mostrando {{shown}} archivos · {{total}} relacionados",
+      "folded": "+{{count}} plegados",
+      "explanation": "{{shown}} es lo que conserva el nivel de detalle actual; {{total}} son todas las entidades relacionadas del ámbito actual.",
+      "raiseDetail": "Aumentar detalle",
+      "reduceScope": "Reducir ámbito",
+      "budgetOmitted": "{{count}} más quedaron fuera por el presupuesto de nodos",
+      "kindFunction": "{{count}} funciones",
+      "kindInterface": "{{count}} interfaces",
+      "kindClass": "{{count}} clases"
+    },
+    "source": {
+      "unresolved": "{{count}} nombres mencionados en esta sesión no se encontraron en la caché de análisis",
+      "listLabel": "Nombres sin resolver"
     }
   },
   "status": {

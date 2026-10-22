@@ -578,7 +578,7 @@ test('the panel draws through the renderer contract, with no library dependency'
     return <div data-stand-in-renderer="true" data-stand-in-nodes={props.graph.nodes.length} />;
   }
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" renderer={StandInRenderer} />);
 
   await waitFor(() => assert.ok(document.querySelector('[data-stand-in-renderer]')));
   assert.equal(
@@ -657,9 +657,9 @@ test('the entity detail fields pass through the renderer contract unchanged', as
     return <div data-stand-in-renderer="true" />;
   }
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" renderer={StandInRenderer} />);
   await waitFor(() => assert.ok(seen.length > 0));
-  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
 
   await waitFor(() => {
     const nodes = seen.at(-1)?.graph.nodes ?? [];
@@ -735,7 +735,7 @@ test('the display name keeps relpath.EntityName and truncates the FRONT, not the
 });
 
 test('the renderer draws the neighbourhood as an SVG (PlantUML/ELK, not a fake)', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   assert.ok(host.querySelector('svg'), 'an SVG element must be injected into the host');
@@ -751,7 +751,7 @@ test('the renderer draws the neighbourhood as an SVG (PlantUML/ELK, not a fake)'
 });
 
 test('the diagram opens fitted, and the canvas cluster plus Ctrl+wheel resize the SVG', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   // Pin the content box a laid-out browser would report, then deliver the resize
   // notification the way the observer would on a real container change.
@@ -807,7 +807,7 @@ test('the diagram opens fitted, and the canvas cluster plus Ctrl+wheel resize th
 });
 
 test('a plain wheel zooms around the cursor and never reaches the page', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const root = graphRoot();
   const svg = host.querySelector('svg');
@@ -883,7 +883,7 @@ test('a plain wheel zooms around the cursor and never reaches the page', async (
 });
 
 test('a left drag on the blank canvas pans, while a press on a node never does', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const root = graphRoot();
   const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
@@ -917,7 +917,7 @@ test('a left drag on the blank canvas pans, while a press on a node never does',
 });
 
 test('a middle-button drag pans too, and a sub-4px press is still a click', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const root = graphRoot();
 
@@ -946,7 +946,7 @@ test('a middle-button drag pans too, and a sub-4px press is still a click', asyn
 });
 
 test('a cancelled drag leaves no drag state behind', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const root = graphRoot();
 
@@ -967,7 +967,7 @@ test('a cancelled drag leaves no drag state behind', async () => {
 });
 
 test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const root = graphRoot();
 
@@ -1004,7 +1004,7 @@ test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone
 });
 
 test('the zoom cluster lives on the canvas, not in the toolbar, with 32px targets', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   const canvas = canvasOf(host);
@@ -1072,7 +1072,7 @@ function chromeBoxes(overlays: HTMLElement, map: HTMLElement, cluster: HTMLEleme
 
 test('the minimap sits in the canvas beside the zoom cluster and remembers being collapsed', async () => {
   window.localStorage.removeItem('architecture.minimap.collapsed');
-  const { unmount } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const { unmount } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
   await waitFor(() => assert.ok(host.querySelector('svg')));
@@ -1118,7 +1118,7 @@ test('the minimap sits in the canvas beside the zoom cluster and remembers being
   assert.equal(document.querySelector('[data-architecture-minimap-canvas]'), null, 'the map collapses');
   unmount();
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const reopenedHost = await screen.findByTestId('plantuml-host');
   sizeHost(reopenedHost, 160, 120);
   await waitFor(() => assert.ok(reopenedHost.querySelector('svg')));
@@ -1159,7 +1159,7 @@ test('the zoom cluster grows to 44px targets on a coarse pointer', async () => {
     }),
   });
   try {
-    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
     await waitForDiagram();
     const cluster = zoomCluster();
     for (const button of cluster.querySelectorAll('button')) {
@@ -1177,7 +1177,7 @@ test('the zoom cluster grows to 44px targets on a coarse pointer', async () => {
 });
 
 test('the readable toggle switches between the focused default and the whole-graph overview', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
   await waitFor(() => assert.ok(host.querySelector('svg')));
@@ -1215,7 +1215,7 @@ test('the readable toggle switches between the focused default and the whole-gra
 });
 
 test('a band-shaped explosion drawing collapses to the overview with a notice', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // A canvas 30px wide but 600px tall: any real drawing's natural aspect ratio
@@ -1236,7 +1236,7 @@ test('a band-shaped explosion drawing collapses to the overview with a notice', 
 });
 
 test('redrawing a view re-derives the scale from the new drawing and keeps the fit mode', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
   await waitFor(() => assert.ok(host.querySelector('svg')));
@@ -1258,7 +1258,7 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
   // package edges; the near level shows the entity UML edges again. Both come
   // from ONE layout — the SVG element the renderer emitted must never be
   // replaced while zooming across levels.
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // Drill to a neighbourhood that spans two packages, so it has a real
@@ -1349,7 +1349,7 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
 test('the explosion view lays the whole hierarchy out once and zoom reveals its levels', async () => {
   // The DoD gesture: one full-graph layout, then zoom alone moves from the
   // package level to subpackages and entities — no re-layout in between.
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
@@ -1407,7 +1407,7 @@ test('the explosion view lays the whole hierarchy out once and zoom reveals its 
 });
 
 test('overview folds the graph into path groups; clicking a group expands it locally', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'overview');
@@ -1435,7 +1435,7 @@ test('overview folds the graph into path groups; clicking a group expands it loc
 
 test('expanding a deep group re-groups its subtree by directory instead of flattening its files', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(DEEP_TREE_RESULT));
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // Overview: the group bound stops the fold at the package layer (12 groups,
@@ -1496,7 +1496,7 @@ test('expanding a flat directory larger than the group limit draws its files, no
     provenance: RESULT.provenance,
   };
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(result));
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // The overview folds the directory into one counted box.
@@ -1525,7 +1525,7 @@ test('expanding a flat directory larger than the group limit draws its files, no
 
 test('the overview never draws a (1) group and names an isolated file by its directory', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(ISOLATED_FILE_RESULT));
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // Only the two-file directory stays a group. Each one-file directory is drawn
@@ -1578,7 +1578,7 @@ test('the display name keeps a file graph\'s first directory and strips only an 
 });
 
 test('clicking an entity drills into its neighbourhood, and the centre click adds a hop', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
@@ -1635,7 +1635,7 @@ function visibleEdgeLabels(host: HTMLElement): Element[] {
 }
 
 test('edge relation labels stay hidden until a node is hovered, then leave with the pointer', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // The renderer still draws the `<<uses>>`/`<<call>>` labels — the drawing is
@@ -1664,10 +1664,10 @@ test('edge relation labels stay hidden until a node is hovered, then leave with 
 
 test('entity boxes are UML class shapes, and a session seed carries the seed marker', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
   const host = await waitForDiagram();
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="grp::modules/alpha"]')));
   fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
@@ -1703,7 +1703,7 @@ test('entity boxes are UML class shapes, and a session seed carries the seed mar
 });
 
 test('hovering a node highlights its in/out edges and dims the rest', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
@@ -1750,7 +1750,7 @@ test('hovering a node highlights its in/out edges and dims the rest', async () =
 });
 
 test('the drawn SVG carries the stable ids sibling panels query', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
@@ -1784,7 +1784,7 @@ test('clicking an entity pins its in/out highlight and announces it to sibling p
   };
   window.addEventListener('architecture:entity-selected', listener);
   try {
-    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
     const host = await waitForDiagram();
 
     fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
@@ -1838,7 +1838,7 @@ test('clicking an entity pins its in/out highlight and announces it to sibling p
 });
 
 test('a sibling panel selects an entity by its stable id and the graph drills to it', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // The documented cross-panel contract: any module that knows an ArchGuard
@@ -1870,7 +1870,7 @@ test('a sibling panel selects an entity by its stable id and the graph drills to
 });
 
 test('activating the panel fetches once and the file/entity toggle never refetches', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   assert.deepEqual(
@@ -1884,7 +1884,7 @@ test('activating the panel fetches once and the file/entity toggle never refetch
   // directory there and stays in the group prefix.
   assert.ok(host.querySelector('[data-entity-id="grp::src/modules/alpha"]'), 'the file graph is drawn first');
 
-  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
   // Changing granularity remounts the graph (the panel keys it by session+granularity),
   // so re-acquire the host rather than reusing the file graph's detached element.
   const entityHost = await waitForDiagram();
@@ -1906,7 +1906,7 @@ test('activating the panel fetches once and the file/entity toggle never refetch
     'the entity toggle selects a subgraph that is already in hand — it must not refetch',
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'File graph' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'File graph' }));
   const fileHost = await waitForDiagram();
   await waitFor(() => assert.ok(fileHost.querySelector('[data-entity-id="grp::src/modules/alpha"]')));
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
@@ -1946,17 +1946,28 @@ test('the renderer is reached through a dynamic import, never the first-screen c
   );
 });
 
-test('the truncation notice follows the current granularity and carries the shown/total numbers', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+test('the truncation reading follows the current granularity and appends the omitted count', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
+  // The source line states a RELATIVE age and keeps the exact local instant in
+  // `title` — the raw UTC ISO string is no longer the visible reading.
   const generatedAt = document.querySelector('[data-architecture-generated-at]');
-  assert.equal(generatedAt?.textContent, GENERATED_AT, 'the analysis time must be the manifest timestamp');
+  assert.ok(generatedAt instanceof HTMLTimeElement);
+  assert.match(generatedAt.textContent ?? '', /ago|now/i, 'the analysis time is a relative reading');
+  assert.notEqual(generatedAt.textContent, GENERATED_AT, 'the raw UTC ISO string must not be shown');
+  assert.equal(generatedAt.getAttribute('dateTime'), GENERATED_AT, 'the machine-readable instant is kept');
+  assert.ok(
+    (generatedAt.getAttribute('title') ?? '').length > 0
+      && generatedAt.getAttribute('title') !== GENERATED_AT,
+    'the title carries the precise LOCAL time, not the UTC ISO string',
+  );
 
   const unresolved = document.querySelector('[data-architecture-unresolved]');
-  assert.equal(
-    unresolved?.textContent,
-    '2 unresolved seed(s)',
+  assert.equal(unresolved?.getAttribute('data-architecture-unresolved'), '2');
+  assert.match(
+    unresolved?.textContent ?? '',
+    /^2 names mentioned in this session were not found in the analysis cache/,
     `both unresolved seeds (1 file + 1 identifier) must be counted; got ${unresolved?.textContent}`,
   );
 
@@ -1968,28 +1979,26 @@ test('the truncation notice follows the current granularity and carries the show
     'a complete file graph must not claim to be truncated',
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Entity graph' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
   await waitForDiagram();
   const truncated = document.querySelector('[data-architecture-truncated]');
   assert.ok(truncated, 'the truncated entity reading must say so');
   assert.equal(truncated.getAttribute('data-architecture-truncated-granularity'), 'entity');
   assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '4');
   assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
-  assert.match(truncated.textContent ?? '', /truncated/i);
-  assert.match(
-    truncated.textContent ?? '',
-    /4 of 9/,
-    `the notice must state the actual and total counts; got ${truncated.textContent}`,
-  );
-  // At the default 2 hops the notice also says how to recover the full view.
-  assert.ok(
-    document.querySelector('[data-architecture-hops-advice]'),
-    'a truncation caused by the depth must point at the hops control',
-  );
+  assert.equal(truncated.getAttribute('data-architecture-truncated-omitted'), '5');
+  // The truncation is appended to the one-line readout, in the same sentence
+  // shape as the "showing N of M" reading — not a separate amber row.
+  assert.match(truncated.textContent ?? '', /5 more left out by the node budget/);
+  assert.equal(document.querySelector('[data-architecture-hops-advice]'), null);
+  // The server's node budget never appears as a number in the UI.
+  assert.doesNotMatch(document.body.textContent ?? '', /\b\d+ of \d+ (files|entities)\b/);
+  assert.doesNotMatch(document.body.textContent ?? '', /node budget \d+/i);
 });
 
+
 test('the scope stepper re-requests the selected depth and clamps to 0..3', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   assert.deepEqual(
@@ -2058,7 +2067,7 @@ test('the detail presets cut the arrived graph without re-requesting it', async 
     return <div data-stand-in-renderer="true" data-stand-in-nodes={props.graph.nodes.length} />;
   }
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" renderer={StandInRenderer} />);
   await waitFor(() => assert.ok(seen.length > 0));
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1);
 
@@ -2095,28 +2104,29 @@ test('the detail presets cut the arrived graph without re-requesting it', async 
   assert.deepEqual(latest().detailReading, { shown: 3, totalInScope: 4 });
 });
 
-test('the visible summary reports the shown and in-scope numbers from the detail knob', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+test('the one-line readout reports the shown and in-scope numbers from the detail knob', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  // The old visible-summary slot now carries the two numbers the knob promises.
-  const summary = (): Element | null => document.querySelector('[data-architecture-visible-summary]');
+  // The on-canvas readout is the single place the two numbers are stated.
+  const summary = (): Element | null => document.querySelector('[data-architecture-readout-summary]');
   assert.ok(summary() instanceof HTMLElement);
-  assert.equal(summary()?.getAttribute('data-architecture-detail-shown'), '4');
-  assert.equal(summary()?.getAttribute('data-architecture-detail-total'), '4');
-  assert.match(summary()?.textContent ?? '', /4 of 4/);
+  assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '4');
+  assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
+  assert.match(summary()?.textContent ?? '', /Showing 4 files · 4 related/);
 
   fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
   await waitFor(() => {
-    assert.equal(summary()?.getAttribute('data-architecture-detail-shown'), '2');
-    assert.equal(summary()?.getAttribute('data-architecture-detail-total'), '4');
-    assert.match(summary()?.textContent ?? '', /2 of 4/);
+    assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '2');
+    assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
+    assert.match(summary()?.textContent ?? '', /Showing 2 files · 4 related/);
   });
+  assert.equal(document.querySelector('[data-architecture-folded-badge]')?.getAttribute('data-architecture-folded-badge'), '2');
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no step of the detail knob may refetch');
 });
 
 test('both knobs are remembered per project across sessions and remounts', async () => {
-  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
@@ -2128,7 +2138,7 @@ test('both knobs are remembered per project across sessions and remounts', async
   first.unmount();
 
   // The same project, a different session: the pair comes back from storage.
-  const second = render(<ArchitecturePanel projectId="project-1" sessionId="session-2" />);
+  const second = render(<ArchitecturePanel projectId="project-1" sessionId="session-2" initialGranularity="file" />);
   await waitForDiagram();
   assert.equal(document.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'), '1');
   assert.equal(document.querySelector('[data-architecture-detail-option="core"]')?.getAttribute('aria-checked'), 'true');
@@ -2140,7 +2150,7 @@ test('both knobs are remembered per project across sessions and remounts', async
   second.unmount();
 
   // Another project is isolated: it starts from the defaults, not project-1's pair.
-  render(<ArchitecturePanel projectId="project-2" sessionId="session-3" />);
+  render(<ArchitecturePanel projectId="project-2" sessionId="session-3" initialGranularity="file" />);
   await waitForDiagram();
   assert.equal(document.querySelector('[role="spinbutton"]')?.getAttribute('aria-valuenow'), '2');
   assert.equal(document.querySelector('[data-architecture-detail-option="all"]')?.getAttribute('aria-checked'), 'true');
@@ -2156,10 +2166,10 @@ test('the export button writes the server-returned .mmd document', async () => {
     downloads.push(this.download);
   });
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  fireEvent.click(screen.getByRole('button', { name: 'Export .mmd' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Export ▾' }));
 
   assert.deepEqual(downloads, ['architecture-file.mmd'], 'the file-granularity document must be exported');
   assert.equal(createObjectUrl.mock.calls.length, 1);
@@ -2169,7 +2179,7 @@ test('the export button writes the server-returned .mmd document', async () => {
 test('an empty seed set renders the empty state, not a blank graph', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(EMPTY_RESULT));
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
 
   await waitFor(() =>
     assert.ok(
@@ -2182,11 +2192,11 @@ test('an empty seed set renders the empty state, not a blank graph', async () =>
     null,
     'no seeds means there is no graph to draw',
   );
-  // The honesty bar still describes the (empty) reading rather than disappearing.
-  assert.equal(document.querySelector('[data-architecture-generated-at]')?.textContent, GENERATED_AT);
-  assert.equal(
-    document.querySelector('[data-architecture-unresolved]')?.textContent,
-    '0 unresolved seed(s)',
+  // The source line still describes the (empty) reading rather than disappearing.
+  assert.ok(document.querySelector('[data-architecture-generated-at]') instanceof HTMLElement);
+  assert.match(
+    document.querySelector('[data-architecture-unresolved]')?.textContent ?? '',
+    /^0 names mentioned in this session were not found in the analysis cache/,
   );
 });
 
@@ -2198,15 +2208,15 @@ test('the fetch effect tears down cleanly when the panel unmounts mid-request', 
     resolveResponse = resolve;
   }));
 
-  const { unmount } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const { unmount } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   unmount();
   resolveResponse(jsonResponse(RESULT));
 
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 1));
 });
 
-test('a readable-floor fit is called "Focus" and names Overview as the whole-graph escape', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+test('a readable-floor fit is named after the action, while the zoom tier states Focus', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');
   sizeHost(host, 160, 120);
   await waitFor(() => assert.ok(host.querySelector('svg')));
@@ -2215,12 +2225,19 @@ test('a readable-floor fit is called "Focus" and names Overview as the whole-gra
   const root = graphRoot();
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-readable-mode'), 'focus'));
 
-  // The geometric fit here is far below the readable floor, so pressing fit
-  // lands on the focus view. The control must say that, not "Fit to view".
+  // The zoom tier is stated ONCE, by the on-canvas tier group. The fit button
+  // names what it DOES ("Fit to view"), not the tier it happens to land on.
+  const tier = document.querySelector('[data-architecture-zoom-tier]');
+  assert.ok(tier instanceof HTMLElement, 'the zoom tier lives on the canvas');
+  assert.equal(
+    tier.querySelector('[data-architecture-zoom-tier-label]')?.textContent,
+    'Focus',
+    'the tier label is the one place the Focus state is stated',
+  );
   const fit = root.querySelector('[data-architecture-zoom-fit]');
   assert.ok(fit instanceof HTMLElement);
   assert.equal(fit.getAttribute('data-architecture-zoom-fit-mode'), 'focus', 'the fit lands on a focus view');
-  assert.equal(fit.textContent, 'Focus', 'the control is named after what it applies');
+  assert.equal(fit.textContent, 'Fit to view', 'the control is named after what it applies');
   assert.equal(fit.getAttribute('aria-pressed'), 'true', 'the zoom on screen is still the fit');
   // `data-architecture-zoom-mode` keeps its existing fit/custom vocabulary.
   assert.equal(root.getAttribute('data-architecture-zoom-mode'), 'fit');
@@ -2241,6 +2258,216 @@ test('a readable-floor fit is called "Focus" and names Overview as the whole-gra
   assert.equal(wholeFit.textContent, 'Fit to view');
   assert.equal(wholeFit.getAttribute('aria-pressed'), 'true');
   assert.equal(document.querySelector('[data-architecture-readable-fit-notice]'), null);
+});
+
+/**
+ * The reworked header: ONE row, the class diagram first, no standing hint
+ * sentence, and a one-line readout whose two numbers follow the detail knob.
+ */
+test('the toolbar is one non-wrapping row, the class diagram is the default, and the readout tracks the filter', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  // Exactly one toolbar row on the page; the renderer no longer draws its own.
+  const toolbars = [...document.querySelectorAll('[data-architecture-toolbar]')];
+  assert.equal(toolbars.length, 1, 'the header must be a single row');
+  const toolbar = toolbars[0];
+  // jsdom does no layout, so "one line" is stated structurally: neither the row
+  // nor any container inside it may wrap.
+  assert.doesNotMatch(toolbar.className, /(^|\s)flex-wrap(\s|$)/);
+  for (const node of toolbar.querySelectorAll('*')) {
+    assert.doesNotMatch(
+      node.getAttribute('class') ?? '',
+      /(^|\s)flex-wrap(\s|$)/,
+      'no container inside the toolbar may wrap onto a second line',
+    );
+  }
+
+  // Every control the task names lives on that one row.
+  assert.ok(toolbar.querySelector('[data-architecture-view-control]'));
+  assert.ok(toolbar.querySelector('[data-architecture-scope-control]'));
+  assert.ok(toolbar.querySelector('[data-architecture-detail-control]'));
+  assert.ok(toolbar.querySelector('[data-architecture-search]'));
+  assert.ok(toolbar.querySelector('[data-architecture-export]'));
+  assert.ok(toolbar.querySelector('[data-architecture-legend-toggle]'));
+
+  // The class diagram is the shipped default.
+  assert.equal(
+    toolbar.querySelector('[data-architecture-view-option="entity"]')?.getAttribute('aria-checked'),
+    'true',
+    'the class (entity) diagram must open first',
+  );
+  assert.equal(
+    toolbar.querySelector('[data-architecture-view-option="file"]')?.getAttribute('aria-checked'),
+    'false',
+  );
+
+  // The two duplicated standing hover instructions are gone; hovering still
+  // produces a transient reading, but the page carries no permanent hint.
+  const bodyText = document.body.textContent ?? '';
+  assert.doesNotMatch(bodyText, /Hover a node for its relation types/);
+  assert.doesNotMatch(bodyText, /Hover a node to highlight its relations/);
+  assert.equal(document.querySelector('[data-architecture-hover]'), null);
+
+  // The one-line readout: shown vs. every related entity in the current scope.
+  const summary = (): Element | null => document.querySelector('[data-architecture-readout-summary]');
+  assert.ok(summary() instanceof HTMLElement);
+  assert.match(summary()?.textContent ?? '', /Showing 4 classes · 4 related/);
+  assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '4');
+  assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
+  const readout = document.querySelector('[data-architecture-readout]');
+  assert.equal(readout?.getAttribute('aria-live'), 'polite', 'readout changes must be announced');
+
+  // Core keeps the transcript seed plus one nearest non-seed node.
+  fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
+  await waitFor(() => {
+    assert.equal(summary()?.getAttribute('data-architecture-readout-summary'), '2');
+    assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
+    assert.match(summary()?.textContent ?? '', /Showing 2 classes · 4 related/);
+  });
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the detail knob never refetches');
+});
+
+test('a truncated reading appends the omitted count to the same readout and prints no budget number', async () => {
+  // RESULT's ENTITY subgraph is cut: 4 shown, 9 reachable (5 omitted).
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const truncated = document.querySelector('[data-architecture-readout] [data-architecture-truncated]');
+  assert.ok(truncated instanceof HTMLElement, 'the readout must carry the cut');
+  assert.equal(truncated.getAttribute('data-architecture-truncated-granularity'), 'entity');
+  assert.equal(truncated.getAttribute('data-architecture-truncated-omitted'), '5');
+  assert.match(truncated.textContent ?? '', /5 more left out by the node budget/);
+  const bodyText = document.body.textContent ?? '';
+  assert.doesNotMatch(bodyText, /\b2000 of\b/i);
+  assert.doesNotMatch(bodyText, /\b\d+ of \d+ (files|entities)\b/);
+});
+
+test('the expanded readout lists kind totals only when the payload carries them', async () => {
+  const withKinds: ArchitectureGraphResult = {
+    ...CLASS_DIAGRAM_RESULT,
+    stats: {
+      ...CLASS_DIAGRAM_RESULT.stats,
+      kindCounts: { function: 805, interface: 300, class: 5 },
+    },
+  };
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(withKinds));
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+  const kinds = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-kind-counts]');
+    assert.ok(node instanceof HTMLElement, 'an expanded readout shows the kind tally');
+    return node;
+  });
+  assert.equal(kinds.textContent, '805 functions · 300 interfaces · 5 classes');
+  first.unmount();
+
+  // A payload without `kindCounts` must not fabricate the line.
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-readout-detail]')));
+  assert.equal(document.querySelector('[data-architecture-kind-counts]'), null);
+});
+
+test('unresolved names expand into a list, and the analysis time is relative with a local title', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const time = document.querySelector('[data-architecture-generated-at]');
+  assert.ok(time instanceof HTMLTimeElement);
+  assert.match(time.textContent ?? '', /ago|now/i);
+  assert.ok((time.getAttribute('title') ?? '').length > 0);
+  assert.notEqual(time.getAttribute('title'), GENERATED_AT, 'the title is local, not the UTC ISO string');
+
+  const unresolved = document.querySelector('[data-architecture-unresolved]');
+  assert.ok(unresolved instanceof HTMLElement);
+  assert.equal(document.querySelector('[data-architecture-unresolved-list]'), null);
+  fireEvent.click(unresolved);
+  const list = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-unresolved-list]');
+    assert.ok(node instanceof HTMLElement, 'the names expand into a list');
+    return node;
+  });
+  const names = [...list.querySelectorAll('li')].map((item) => item.textContent);
+  assert.deepEqual(names, ['src/unknown.ts', 'NoSuchThing']);
+});
+
+test('searching the class diagram reveals and centres the node; a folded hit reports the range', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  const originalRect = Element.prototype.getBoundingClientRect;
+  // A laid-out box for the searched node, so the centring scroll has real
+  // numbers behind it (jsdom itself would report a zero-area rect at the origin).
+  Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+    if (this.getAttribute('data-entity-id') === 'src/modules/alpha/reader.ts.Reader') {
+      return {
+        left: 500, top: 400, width: 100, height: 60,
+        right: 600, bottom: 460, x: 500, y: 400, toJSON: () => ({}),
+      } as DOMRect;
+    }
+    return { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+  };
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    const host = await waitForDiagram();
+    sizeHost(host, 400, 300);
+    host.scrollLeft = 0;
+    host.scrollTop = 0;
+
+    const search = document.querySelector('[data-architecture-search]') as HTMLInputElement;
+    fireEvent.change(search, { target: { value: 'Reader' } });
+    const hit = await waitFor(() => {
+      const node = document.querySelector('[data-architecture-search-result="src/modules/alpha/reader.ts.Reader"]');
+      assert.ok(node instanceof HTMLElement, 'the search lists the matching entity');
+      return node;
+    });
+    assert.equal(hit.getAttribute('data-architecture-search-in-range'), 'true');
+    fireEvent.click(hit);
+
+    await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+    await waitFor(() =>
+      assert.ok(drawnNodeIds(screen.getByTestId('plantuml-host')).includes('src/modules/alpha/reader.ts.Reader')),
+    );
+    const focused = await waitFor(() => {
+      const node = document.querySelector('[data-architecture-focus-target="src/modules/alpha/reader.ts.Reader"]');
+      assert.ok(node instanceof Element, 'the chosen node is revealed and marked');
+      return node;
+    });
+    assert.ok(focused.classList.contains('arch-focus'));
+    assert.ok(host.scrollLeft > 0, `the node must be centred; got scrollLeft=${host.scrollLeft}`);
+    assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'search works on the payload in hand');
+
+    // A node the detail tier folded away is labelled out of range; choosing it
+    // raises the detail tier and reveals it.
+    fireEvent.click(document.querySelector('[data-architecture-detail-option="core"]') as Element);
+    fireEvent.change(search, { target: { value: 'Store' } });
+    const outOfRange = await waitFor(() => {
+      const node = document.querySelector('[data-architecture-search-result="src/modules/alpha/store.ts.Store"]');
+      assert.ok(node instanceof HTMLElement);
+      return node;
+    });
+    assert.equal(outOfRange.getAttribute('data-architecture-search-in-range'), 'false');
+    assert.match(outOfRange.textContent ?? '', /Not in current range/);
+    fireEvent.click(outOfRange);
+    await waitFor(() =>
+      assert.equal(
+        document.querySelector('[data-architecture-detail-option="all"]')?.getAttribute('aria-checked'),
+        'true',
+        'choosing an out-of-range match raises the detail tier',
+      ),
+    );
+    await waitFor(() =>
+      assert.ok(
+        document.querySelector('[data-architecture-focus-target="src/modules/alpha/store.ts.Store"]'),
+        'and focuses the requested node',
+      ),
+    );
+  } finally {
+    Element.prototype.getBoundingClientRect = originalRect;
+  }
 });
 
 test('every reviewed locale carries both fit labels and the focused-fit escape', () => {

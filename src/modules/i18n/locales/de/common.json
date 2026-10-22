@@ -60,7 +60,8 @@
         "label": "Diagrammübersicht, {{percent}} % der Zeichnung sichtbar",
         "show": "Diagrammübersicht einblenden",
         "hide": "Diagrammübersicht einklappen"
-      }
+      },
+      "zoomTier": "Zoomstufe"
     },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",
@@ -80,7 +81,8 @@
       "detailCore": "Kern",
       "detailCommon": "Üblich",
       "detailAll": "Alle",
-      "detailReading": "{{shown}} von {{total}} relevanten Knoten werden angezeigt"
+      "detailReading": "{{shown}} von {{total}} relevanten Knoten werden angezeigt",
+      "classView": "Klassendiagramm"
     },
     "exportMmd": ".mmd exportieren",
     "expandHint": "Knoten überfahren zeigt Beziehungstypen; Klick auf einen Knoten erweitert den nächsten Hop.",
@@ -99,6 +101,35 @@
       "entityTruncated": "Entitätsdiagramm abgeschnitten — {{shown}} von {{total}} Entitäten werden angezeigt (Knotenbudget {{limit}}).",
       "fileTruncated": "Dateidiagramm abgeschnitten — {{shown}} von {{total}} Dateien werden angezeigt (Knotenbudget {{limit}}).",
       "lowerHops": "{{hops}} Hops überschreiten das Knotenbudget — verringern Sie die Hops, um die gesamte Nachbarschaft zu sehen."
+    },
+    "legend": {
+      "title": "Legende",
+      "body": "Durchgezogene Linie: Assoziation oder Aufruf. Gestrichelte Linie: Abhängigkeit oder Implementierung. Pfeile: △ Vererbung · △ Implementierung · ◆ Komposition · ◇ Aggregation · → Abhängigkeit. «Stereotyp» kennzeichnet die Entitätsart. ● Seed: in dieser Sitzung genannt. +N eingeklappt: durch die aktuelle Detailstufe verborgen."
+    },
+    "export": {
+      "menu": "Exportieren ▾"
+    },
+    "search": {
+      "label": "Entitäten oder Dateien suchen",
+      "placeholder": "Entitäten oder Dateien suchen…",
+      "noMatches": "Keine Treffer",
+      "outOfRange": "Nicht im aktuellen Bereich"
+    },
+    "readout": {
+      "classSummary": "{{shown}} Klassen werden angezeigt · {{total}} relevant",
+      "fileSummary": "{{shown}} Dateien werden angezeigt · {{total}} relevant",
+      "folded": "+{{count}} eingeklappt",
+      "explanation": "{{shown}} behält die aktuelle Detailstufe; {{total}} sind alle relevanten Entitäten im aktuellen Bereich.",
+      "raiseDetail": "Detail erhöhen",
+      "reduceScope": "Bereich verkleinern",
+      "budgetOmitted": "{{count}} weitere durch das Knotenbudget ausgelassen",
+      "kindFunction": "{{count}} Funktionen",
+      "kindInterface": "{{count}} Schnittstellen",
+      "kindClass": "{{count}} Klassen"
+    },
+    "source": {
+      "unresolved": "{{count}} in dieser Sitzung genannte Namen wurden nicht im Analyse-Cache gefunden",
+      "listLabel": "Ungelöste Namen"
     }
   },
   "status": {

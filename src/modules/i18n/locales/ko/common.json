@@ -60,7 +60,8 @@
         "label": "다이어그램 개요, 전체의 {{percent}}% 표시",
         "show": "다이어그램 개요 표시",
         "hide": "다이어그램 개요 접기"
-      }
+      },
+      "zoomTier": "확대/축소 수준"
     },
     "title": "아키텍처",
     "noSession": "세션을 선택하면 해당 세션이 건드린 파일의 아키텍처를 볼 수 있습니다.",
@@ -80,7 +81,8 @@
       "detailCore": "핵심",
       "detailCommon": "보통",
       "detailAll": "전체",
-      "detailReading": "관련 노드 {{total}}개 중 {{shown}}개 표시"
+      "detailReading": "관련 노드 {{total}}개 중 {{shown}}개 표시",
+      "classView": "클래스 다이어그램"
     },
     "exportMmd": ".mmd 내보내기",
     "expandHint": "노드에 마우스를 올리면 관계 유형이 표시됩니다. 노드를 클릭하면 다음 홉이 확장됩니다.",
@@ -99,6 +101,35 @@
       "entityTruncated": "엔티티 그래프가 잘렸습니다 — {{total}}개 중 {{shown}}개 엔티티 표시 중 (노드 예산 {{limit}}).",
       "fileTruncated": "파일 그래프가 잘렸습니다 — {{total}}개 중 {{shown}}개 파일 표시 중 (노드 예산 {{limit}}).",
       "lowerHops": "{{hops}}홉이 노드 예산을 초과합니다 — 홉을 줄이면 전체 이웃을 볼 수 있습니다."
+    },
+    "legend": {
+      "title": "범례",
+      "body": "실선: 연관 또는 호출. 점선: 의존 또는 구현. 화살표: △ 상속 · △ 구현 · ◆ 컴포지션 · ◇ 집합 · → 의존. «스테레오타입»은 엔티티 종류를 나타냅니다. ● 시드: 이 세션에서 언급됨. +N 접힘: 현재 상세 수준에서 숨겨짐."
+    },
+    "export": {
+      "menu": "내보내기 ▾"
+    },
+    "search": {
+      "label": "엔티티 또는 파일 검색",
+      "placeholder": "엔티티 또는 파일 검색…",
+      "noMatches": "일치 항목 없음",
+      "outOfRange": "현재 범위 밖"
+    },
+    "readout": {
+      "classSummary": "{{shown}}개 클래스 표시 · 관련 {{total}}개",
+      "fileSummary": "{{shown}}개 파일 표시 · 관련 {{total}}개",
+      "folded": "+{{count}} 접힘",
+      "explanation": "{{shown}}은 현재 상세 수준에서 유지되는 수이고, {{total}}은 현재 범위의 모든 관련 엔티티입니다.",
+      "raiseDetail": "상세 늘리기",
+      "reduceScope": "범위 줄이기",
+      "budgetOmitted": "노드 예산으로 {{count}}개 더 제외됨",
+      "kindFunction": "함수 {{count}}개",
+      "kindInterface": "인터페이스 {{count}}개",
+      "kindClass": "클래스 {{count}}개"
+    },
+    "source": {
+      "unresolved": "이 세션에서 언급된 이름 {{count}}개를 분석 캐시에서 찾지 못했습니다",
+      "listLabel": "미해결 이름"
     }
   },
   "status": {

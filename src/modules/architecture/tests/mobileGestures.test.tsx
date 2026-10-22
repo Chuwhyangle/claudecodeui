@@ -246,7 +246,7 @@ afterEach(() => {
 
 test('the SVG host owns touch input and a pinch zooms around the two-finger midpoint', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   // touch-action: none is the declaration that stops the browser from turning
@@ -300,7 +300,7 @@ test('the SVG host owns touch input and a pinch zooms around the two-finger midp
 
 test('one finger drags the drawing by panning the scroll container', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
   fireEvent.pointerDown(host, { pointerId: 7, pointerType: 'touch', clientX: 300, clientY: 300 });
@@ -327,7 +327,7 @@ test('one finger drags the drawing by panning the scroll container', async () =>
 
 test('the canvas owns the wheel — a plain wheel zooms too — and Ctrl+wheel keeps working', async () => {
   // Deliberately the desktop setup from beforeEach (fine pointer, 1024px).
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const before = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
 
@@ -351,7 +351,7 @@ test('the canvas owns the wheel — a plain wheel zooms too — and Ctrl+wheel k
 
 test('a touch tap selects without re-laying out; drilling needs Drill in or a double-tap', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   const drawing = host.querySelector('svg');
   assert.ok(drawing !== null);
@@ -418,7 +418,7 @@ test('a touch tap selects without re-laying out; drilling needs Drill in or a do
 
 test('a coarse pointer gives every toolbar button a 44×44 hit area', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const toggle = screen.getByRole('button', { name: 'More actions' });
@@ -443,7 +443,7 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   // Narrow but FINE pointer: this is a small desktop window, not a touch device.
   setViewport(375, 812);
   stubMatchMedia(() => false);
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   // The zoom cluster is chrome of the DRAWING, not a toolbar entry: it stays on
@@ -486,7 +486,7 @@ test('the menu closes and the export action still writes the .mmd document', asy
     downloads.push(this.download);
   });
 
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   fireEvent.click(screen.getByRole('button', { name: 'More actions' }));

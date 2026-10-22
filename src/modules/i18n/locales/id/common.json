@@ -60,7 +60,8 @@
         "label": "Ringkasan diagram, menampilkan {{percent}}% gambar",
         "show": "Tampilkan ringkasan diagram",
         "hide": "Ciutkan ringkasan diagram"
-      }
+      },
+      "zoomTier": "Tingkat zoom"
     },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",
@@ -80,7 +81,8 @@
       "detailCore": "Inti",
       "detailCommon": "Umum",
       "detailAll": "Semua",
-      "detailReading": "Menampilkan {{shown}} dari {{total}} node terkait"
+      "detailReading": "Menampilkan {{shown}} dari {{total}} node terkait",
+      "classView": "Diagram kelas"
     },
     "exportMmd": "Ekspor .mmd",
     "expandHint": "Arahkan kursor ke node untuk melihat jenis relasinya; klik node untuk memperluas lompatan berikutnya.",
@@ -99,6 +101,35 @@
       "entityTruncated": "Graf entitas terpotong — menampilkan {{shown}} dari {{total}} entitas (anggaran node {{limit}}).",
       "fileTruncated": "Graf berkas terpotong — menampilkan {{shown}} dari {{total}} berkas (anggaran node {{limit}}).",
       "lowerHops": "{{hops}} lompatan melebihi anggaran node — kurangi lompatan untuk melihat seluruh ketetanggaan."
+    },
+    "legend": {
+      "title": "Legenda",
+      "body": "Garis penuh: asosiasi atau pemanggilan. Garis putus-putus: dependensi atau implementasi. Panah: △ pewarisan · △ implementasi · ◆ komposisi · ◇ agregasi · → dependensi. «stereotype» menandai jenis entitas. ● seed: disebut dalam sesi ini. +N dilipat: disembunyikan oleh tingkat detail saat ini."
+    },
+    "export": {
+      "menu": "Ekspor ▾"
+    },
+    "search": {
+      "label": "Cari entitas atau file",
+      "placeholder": "Cari entitas atau file…",
+      "noMatches": "Tidak ada kecocokan",
+      "outOfRange": "Di luar rentang saat ini"
+    },
+    "readout": {
+      "classSummary": "Menampilkan {{shown}} kelas · {{total}} terkait",
+      "fileSummary": "Menampilkan {{shown}} file · {{total}} terkait",
+      "folded": "+{{count}} dilipat",
+      "explanation": "{{shown}} adalah yang dipertahankan tingkat detail saat ini; {{total}} adalah semua entitas terkait dalam cakupan saat ini.",
+      "raiseDetail": "Naikkan detail",
+      "reduceScope": "Kurangi cakupan",
+      "budgetOmitted": "{{count}} lainnya tidak disertakan karena anggaran node",
+      "kindFunction": "{{count}} fungsi",
+      "kindInterface": "{{count}} antarmuka",
+      "kindClass": "{{count}} kelas"
+    },
+    "source": {
+      "unresolved": "{{count}} nama yang disebut dalam sesi ini tidak ditemukan di cache analisis",
+      "listLabel": "Nama belum terselesaikan"
     }
   },
   "status": {

@@ -60,7 +60,8 @@
         "label": "Panoramica del diagramma: {{percent}}% del disegno visibile",
         "show": "Mostra la panoramica del diagramma",
         "hide": "Comprimi la panoramica del diagramma"
-      }
+      },
+      "zoomTier": "Livello di zoom"
     },
     "title": "Architettura",
     "noSession": "Seleziona una sessione per vedere l'architettura dei file che ha toccato.",
@@ -80,7 +81,8 @@
       "detailCore": "Nucleo",
       "detailCommon": "Comune",
       "detailAll": "Tutti",
-      "detailReading": "Visualizzati {{shown}} di {{total}} nodi correlati"
+      "detailReading": "Visualizzati {{shown}} di {{total}} nodi correlati",
+      "classView": "Diagramma delle classi"
     },
     "exportMmd": "Esporta .mmd",
     "expandHint": "Passa il cursore su un nodo per i tipi di relazione; fai clic su un nodo per espandere il salto successivo.",
@@ -99,6 +101,35 @@
       "entityTruncated": "Grafo delle entità troncato — visualizzate {{shown}} di {{total}} entità (budget nodi {{limit}}).",
       "fileTruncated": "Grafo dei file troncato — visualizzati {{shown}} di {{total}} file (budget nodi {{limit}}).",
       "lowerHops": "{{hops}} salti superano il budget dei nodi — riduci i salti per vedere l'intero vicinato."
+    },
+    "legend": {
+      "title": "Legenda",
+      "body": "Linea continua: associazione o chiamata. Linea tratteggiata: dipendenza o implementazione. Frecce: △ ereditarietà · △ implementazione · ◆ composizione · ◇ aggregazione · → dipendenza. «stereotipo» indica il tipo di entità. ● seed: menzionato in questa sessione. +N compressi: nascosti dal livello di dettaglio corrente."
+    },
+    "export": {
+      "menu": "Esporta ▾"
+    },
+    "search": {
+      "label": "Cerca entità o file",
+      "placeholder": "Cerca entità o file…",
+      "noMatches": "Nessuna corrispondenza",
+      "outOfRange": "Fuori dall'intervallo corrente"
+    },
+    "readout": {
+      "classSummary": "Visualizzazione di {{shown}} classi · {{total}} correlati",
+      "fileSummary": "Visualizzazione di {{shown}} file · {{total}} correlati",
+      "folded": "+{{count}} compressi",
+      "explanation": "{{shown}} è ciò che mantiene il livello di dettaglio corrente; {{total}} sono tutte le entità correlate nell'ambito corrente.",
+      "raiseDetail": "Aumenta dettaglio",
+      "reduceScope": "Riduci ambito",
+      "budgetOmitted": "{{count}} altri esclusi dal budget dei nodi",
+      "kindFunction": "{{count}} funzioni",
+      "kindInterface": "{{count}} interfacce",
+      "kindClass": "{{count}} classi"
+    },
+    "source": {
+      "unresolved": "{{count}} nomi menzionati in questa sessione non sono stati trovati nella cache di analisi",
+      "listLabel": "Nomi non risolti"
     }
   },
   "status": {

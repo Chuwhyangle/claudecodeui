@@ -49,7 +49,8 @@
       "detailCore": "Core",
       "detailCommon": "Common",
       "detailAll": "All",
-      "detailReading": "Showing {{shown}} of {{total}} related nodes"
+      "detailReading": "Showing {{shown}} of {{total}} related nodes",
+      "classView": "Class diagram"
     },
     "exportMmd": "Export .mmd",
     "expandHint": "Hover a node for its relation types; click a node to expand its next hop.",
@@ -95,7 +96,8 @@
         "label": "Graph overview, showing {{percent}}% of the drawing",
         "show": "Show graph overview",
         "hide": "Collapse graph overview"
-      }
+      },
+      "zoomTier": "Zoom level"
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "honesty": {
@@ -105,6 +107,35 @@
       "entityTruncated": "Entity graph truncated — showing {{shown}} of {{total}} entities (node budget {{limit}}).",
       "fileTruncated": "File graph truncated — showing {{shown}} of {{total}} files (node budget {{limit}}).",
       "lowerHops": "{{hops}} hops exceed the node budget — lower the hops to see the whole neighbourhood."
+    },
+    "legend": {
+      "title": "Legend",
+      "body": "Solid line: association or call. Dashed line: dependency or implementation. Arrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency. «stereotype» marks the entity kind. ● seed: named in this session. +N folded: hidden by the current detail level."
+    },
+    "export": {
+      "menu": "Export ▾"
+    },
+    "search": {
+      "label": "Search entities or files",
+      "placeholder": "Search entities or files…",
+      "noMatches": "No matches",
+      "outOfRange": "Not in current range"
+    },
+    "readout": {
+      "classSummary": "Showing {{shown}} classes · {{total}} related",
+      "fileSummary": "Showing {{shown}} files · {{total}} related",
+      "folded": "+{{count}} folded",
+      "explanation": "{{shown}} is what the current detail level keeps; {{total}} is every related entity in the current scope.",
+      "raiseDetail": "Raise detail",
+      "reduceScope": "Reduce scope",
+      "budgetOmitted": "{{count}} more left out by the node budget",
+      "kindFunction": "{{count}} functions",
+      "kindInterface": "{{count}} interfaces",
+      "kindClass": "{{count}} classes"
+    },
+    "source": {
+      "unresolved": "{{count}} names mentioned in this session were not found in the analysis cache",
+      "listLabel": "Unresolved names"
     }
   },
   "status": {

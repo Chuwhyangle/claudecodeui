@@ -60,7 +60,8 @@
         "label": "図の全体像（表示範囲 {{percent}}%）",
         "show": "図の全体像を表示",
         "hide": "図の全体像を折りたたむ"
-      }
+      },
+      "zoomTier": "ズームレベル"
     },
     "title": "アーキテクチャ",
     "noSession": "セッションを選択すると、そのセッションが触れたファイルのアーキテクチャが表示されます。",
@@ -80,7 +81,8 @@
       "detailCore": "コア",
       "detailCommon": "標準",
       "detailAll": "すべて",
-      "detailReading": "関連ノード {{total}} 件中 {{shown}} 件を表示"
+      "detailReading": "関連ノード {{total}} 件中 {{shown}} 件を表示",
+      "classView": "クラス図"
     },
     "exportMmd": ".mmd をエクスポート",
     "expandHint": "ノードにホバーすると関係タイプを表示します。ノードをクリックすると次のホップを展開します。",
@@ -99,6 +101,35 @@
       "entityTruncated": "エンティティグラフは切り詰められています — {{total}} 件中 {{shown}} 件のエンティティを表示中（ノード予算 {{limit}}）。",
       "fileTruncated": "ファイルグラフは切り詰められています — {{total}} 件中 {{shown}} 件のファイルを表示中（ノード予算 {{limit}}）。",
       "lowerHops": "{{hops}} ホップはノード予算を超えています — ホップ数を減らすと近傍全体を表示できます。"
+    },
+    "legend": {
+      "title": "凡例",
+      "body": "実線: 関連または呼び出し。破線: 依存または実装。矢印: △ 継承 · △ 実装 · ◆ コンポジション · ◇ 集約 · → 依存。«ステレオタイプ» はエンティティ種別を示します。● シード: このセッションで言及。+N 折りたたみ: 現在の詳細レベルで非表示。"
+    },
+    "export": {
+      "menu": "エクスポート ▾"
+    },
+    "search": {
+      "label": "エンティティまたはファイルを検索",
+      "placeholder": "エンティティまたはファイルを検索…",
+      "noMatches": "一致なし",
+      "outOfRange": "現在の範囲外"
+    },
+    "readout": {
+      "classSummary": "{{shown}} 個のクラスを表示 · 関連 {{total}} 個",
+      "fileSummary": "{{shown}} 個のファイルを表示 · 関連 {{total}} 個",
+      "folded": "+{{count}} 折りたたみ",
+      "explanation": "{{shown}} は現在の詳細レベルで残る数、{{total}} は現在の範囲内の関連エンティティ全体です。",
+      "raiseDetail": "詳細を上げる",
+      "reduceScope": "範囲を狭める",
+      "budgetOmitted": "{{count}} 個はノード予算により除外",
+      "kindFunction": "{{count}} 個の関数",
+      "kindInterface": "{{count}} 個のインターフェース",
+      "kindClass": "{{count}} 個のクラス"
+    },
+    "source": {
+      "unresolved": "このセッションで言及された {{count}} 個の名前は分析キャッシュに見つかりませんでした",
+      "listLabel": "未解決の名前"
     }
   },
   "status": {
