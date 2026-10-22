@@ -1952,3 +1952,308 @@ test('scope hygiene: upstream outsideProjectRoot/parentScopeKey win over the heu
   assert.deepEqual(both.hygiene.droppedOutsideRoot.map((entry) => entry.scope), ['flagged-inside']);
   assert.deepEqual(Object.keys(both.index.idToFile), ['flagged-outside/external.ts.E']);
 });
+
+// ---------------------------------------------------------------------------
+// architecture-curation-pins-and-excludes — graph curation + /search
+// ---------------------------------------------------------------------------
+
+const CURATION_INDEX: ScopeIndexFixture = {
+  fileToIds: { 'n0.ts': ['N0'], 'n1.ts': ['N1'], 'n2.ts': ['N2'], 'n3.ts': ['N3'] },
+  nameToIds: { Seed: ['N0'], One: ['N1'], Two: ['N2'], Three: ['N3'] },
+  idToFile: { N0: 'n0.ts', N1: 'n1.ts', N2: 'n2.ts', N3: 'n3.ts' },
+  idToName: { N0: 'Seed', N1: 'One', N2: 'Two', N3: 'Three' },
+  dependencies: { N0: ['N1'], N1: ['N2'], N2: ['N3'], N3: [] },
+  dependents: { N0: [], N1: ['N0'], N2: ['N1'], N3: ['N2'] },
+  relationsByType: {
+    dependency: [
+      ['N0', 'N1'],
+      ['N1', 'N2'],
+      ['N2', 'N3'],
+    ],
+  },
+};
+
+const CURATION_ARCHIVE = archiveWith([
+  { id: 'N0', type: 'class', members: [] },
+  {
+    id: 'N1',
+    type: 'function',
+    members: [
+      { id: 'N1.m1', name: 'one', type: 'method', parameters: [], returnType: 'void' },
+      { id: 'N1.m2', name: 'two', type: 'method', parameters: [], returnType: 'void' },
+    ],
+  },
+  { id: 'N2', type: 'interface', members: [] },
+  { id: 'N3', type: 'class', members: [] },
+]);
+
+/** A transcript whose only seed is the identifier `Seed`. */
+function curationTranscript(): NormalizedMessage[] {
+  return [message({ id: 'text-curation', kind: 'text', role: 'assistant', content: '`Seed` is the entry point.' })];
+}
+
+function postSearch(baseUrl: string, body: unknown, token?: string): Promise<Response> {
+  return fetch(`${baseUrl}/api/architecture/search`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function curationApp(root: string, generateGraphCounter?: unknown[]): Express {
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => curationTranscript(),
+        ...(generateGraphCounter === undefined
+          ? {}
+          : {
+              generateGraph: (...args: Parameters<typeof generateGraph>) => {
+                generateGraphCounter.push(args[2]);
+                return generateGraph(...args);
+              },
+            }),
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+  return app;
+}
+
+test('curation：excludeIds 移除遍历前的节点与边，extraSeeds 是 pinned 根且免于筛选', async (t) => {
+  const { root } = createIndexProject(t, CURATION_INDEX, CURATION_ARCHIVE);
+  const app = curationApp(root);
+
+  await withServer(app, async (baseUrl) => {
+    const baseline = (await (await postGraph(baseUrl, {
+      projectId: 'project-1',
+      sessionId: SESSION_ID,
+      hops: 2,
+    })).json()) as NeighborhoodBody;
+    assert.equal(baseline.stats.entityNodes, 3, 'two hops from Seed reach Seed, One and Two');
+    assert.equal('curation' in baseline.stats, false, 'no params ⇒ no curation key');
+    assert.equal(
+      'ids' in (baseline.stats.unresolved as Record<string, unknown>),
+      false,
+      'no extraSeeds ⇒ no unresolved.ids',
+    );
+
+    const excluded = (await (await postGraph(baseUrl, {
+      projectId: 'project-1',
+      sessionId: SESSION_ID,
+      hops: 2,
+      excludeIds: ['scope-src/N1'],
+    })).json()) as NeighborhoodBody;
+    assert.deepEqual(
+      excluded.graph.entity.nodes.map((node) => node.id),
+      ['scope-src/N0'],
+      'removing One severs the chain: Two and Three are unreachable',
+    );
+    assert.deepEqual(excluded.graph.entity.edges, [], 'the removed node takes its edges with it');
+    assert.deepEqual(excluded.stats.curation, { pinned: 0, excluded: 1 });
+
+    const pinned = (await (await postGraph(baseUrl, {
+      projectId: 'project-1',
+      sessionId: SESSION_ID,
+      hops: 0,
+      kinds: ['class'],
+      extraSeeds: ['scope-src/N1'],
+      maxNodes: 100,
+    })).json()) as NeighborhoodBody;
+    const one = pinned.graph.entity.nodes.find((node) => node.id === 'scope-src/N1') as
+      | (NeighborhoodBody['graph']['entity']['nodes'][number] & { mentionTier?: string })
+      | undefined;
+    assert.equal(one?.mentionTier, 'pinned', 'the function pin survives the class-only filter');
+    assert.deepEqual(pinned.stats.curation, { pinned: 1, excluded: 0 });
+
+    const missing = (await (await postGraph(baseUrl, {
+      projectId: 'project-1',
+      sessionId: SESSION_ID,
+      hops: 0,
+      extraSeeds: ['no/such.Entity'],
+    })).json()) as NeighborhoodBody;
+    assert.deepEqual(
+      (missing.stats.unresolved as Record<string, unknown>).ids,
+      ['no/such.Entity'],
+      'an unknown pin is reported for the client to mark stale',
+    );
+  });
+});
+
+test('curation：两个参数进入缓存键（排序后），相同组合第二次不重算，超上限 400', async (t) => {
+  const { root } = createIndexProject(t, CURATION_INDEX, CURATION_ARCHIVE);
+  const generatorCalls: unknown[] = [];
+  const app = curationApp(root, generatorCalls);
+
+  await withServer(app, async (baseUrl) => {
+    const base = { projectId: 'project-1', sessionId: SESSION_ID, hops: 1 };
+    const first = await postGraph(baseUrl, { ...base, extraSeeds: ['N1', 'N2'] });
+    assert.equal(first.status, 200);
+    const firstBody = (await first.json()) as NeighborhoodBody;
+    assert.equal(firstBody.provenance.cacheHit, false);
+    assert.equal(generatorCalls.length, 1);
+
+    // The same SET in a different order is the same content key.
+    const reordered = await postGraph(baseUrl, { ...base, extraSeeds: ['N2', 'N1'] });
+    const reorderedBody = (await reordered.json()) as NeighborhoodBody;
+    assert.equal(reorderedBody.provenance.cacheHit, true, 'sorted ids make a reordered request a cache hit');
+    assert.equal(generatorCalls.length, 1);
+
+    // A different exclusion is a different key.
+    const excluded = await postGraph(baseUrl, { ...base, extraSeeds: ['N1', 'N2'], excludeIds: ['N3'] });
+    const excludedBody = (await excluded.json()) as NeighborhoodBody;
+    assert.equal(excludedBody.provenance.cacheHit, false, 'a new excludeIds set is a new content key');
+    assert.equal(generatorCalls.length, 2);
+
+    for (const body of [
+      { ...base, extraSeeds: Array.from({ length: 201 }, (_, index) => `id-${index}`) },
+      { ...base, excludeIds: Array.from({ length: 501 }, (_, index) => `id-${index}`) },
+    ]) {
+      const response = await postGraph(baseUrl, body);
+      assert.equal(response.status, 400, 'over the cap is refused, never silently truncated');
+      const parsed = (await response.json()) as { error: { code: string } };
+      assert.equal(parsed.error.code, 'INVALID_REQUEST');
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /search — project-wide query and (file, name) re-anchoring
+// ---------------------------------------------------------------------------
+
+function buildSearchIndex(): {
+  index: ScopeIndexFixture;
+  archive: unknown;
+} {
+  const fileToIds: Record<string, string[]> = {};
+  const nameToIds: Record<string, string[]> = {};
+  const idToFile: Record<string, string> = {};
+  const idToName: Record<string, string> = {};
+  const dependencies: Record<string, string[]> = {};
+  const dependents: Record<string, string[]> = {};
+  const entities: unknown[] = [];
+
+  const add = (id: string, name: string, file: string, type: string): void => {
+    fileToIds[file] = [...(fileToIds[file] ?? []), id];
+    nameToIds[name] = [id];
+    idToFile[id] = file;
+    idToName[id] = name;
+    dependencies[id] = [];
+    dependents[id] = [];
+    entities.push({ id, type, members: [] });
+  };
+
+  add('S.Alpha', 'Alpha', 's/alpha.ts', 'class');
+  add('S.AlphaService', 'AlphaService', 's/alphaService.ts', 'interface');
+  add('S.alphaHelper', 'alphaHelper', 's/alphaHelper.ts', 'function');
+  add('S.Beta', 'Beta', 's/beta.ts', 'class');
+  // Twenty-five matches are what makes `truncated` observable at the 20 cap.
+  for (let index = 0; index < 25; index += 1) {
+    const suffix = String(index).padStart(2, '0');
+    add(`S.Widget${suffix}`, `Widget${suffix}`, `s/widget${suffix}.ts`, 'class');
+  }
+
+  return {
+    index: { fileToIds, nameToIds, idToFile, idToName, dependencies, dependents },
+    archive: archiveWith(entities),
+  };
+}
+
+test('/search：前缀/子串排序、kinds、truncated、resolve 按 (file, name) 返回当前 id', async (t) => {
+  const { index, archive } = buildSearchIndex();
+  const { root } = createIndexProject(t, index, archive);
+  const app = curationApp(root);
+
+  await withServer(app, async (baseUrl) => {
+    const ranked = await postSearch(baseUrl, { projectId: 'project-1', query: 'alpha' });
+    assert.equal(ranked.status, 200);
+    const rankedBody = (await ranked.json()) as {
+      results: { id: string; name: string; file: string; kind?: string }[];
+      truncated: boolean;
+    };
+    assert.deepEqual(
+      rankedBody.results.map((hit) => hit.name),
+      ['Alpha', 'AlphaService', 'alphaHelper'],
+      'exact first, then prefix, then substring (case-insensitive)',
+    );
+    assert.equal(rankedBody.truncated, false);
+    assert.equal(rankedBody.results[0]?.kind, 'class', 'the hit carries the entity kind');
+
+    const kinds = (await (await postSearch(baseUrl, {
+      projectId: 'project-1',
+      query: 'alpha',
+      kinds: ['interface'],
+    })).json()) as { results: { name: string }[] };
+    assert.deepEqual(kinds.results.map((hit) => hit.name), ['AlphaService']);
+
+    const many = (await (await postSearch(baseUrl, { projectId: 'project-1', query: 'Widget' })).json()) as {
+      results: unknown[];
+      truncated: boolean;
+    };
+    assert.equal(many.results.length, 20, 'the result list is bounded at 20');
+    assert.equal(many.truncated, true, 'more matches than the bound is reported, not hidden');
+
+    const resolved = (await (await postSearch(baseUrl, {
+      projectId: 'project-1',
+      resolve: [
+        { name: 'AlphaService', file: 'src/s/alphaService.ts' },
+        { name: 'Gone', file: 'src/s/gone.ts' },
+      ],
+    })).json()) as { resolved: ({ id: string; name: string; file: string } | null)[] };
+    assert.equal(
+      resolved.resolved[0]?.id,
+      'scope-src/S.AlphaService',
+      '(file, name) re-anchors onto the current (scope-prefixed) id',
+    );
+    assert.deepEqual(resolved.resolved[1], null, 'an unresolvable item stays null for the client to mark stale');
+
+    for (const bad of [
+      { projectId: 'project-1', query: 'a' },
+      { projectId: 'project-1' },
+      { projectId: 'project-1', query: 'alpha', resolve: [] },
+    ]) {
+      const response = await postSearch(baseUrl, bad);
+      assert.equal(response.status, 400, `expected 400 for ${JSON.stringify(bad)}`);
+      const parsed = (await response.json()) as { error: { code: string } };
+      assert.equal(parsed.error.code, 'INVALID_REQUEST');
+    }
+  });
+});
+
+test('/search 未登录 401，带 token 通过', async (t) => {
+  const { index, archive } = buildSearchIndex();
+  const { root } = createIndexProject(t, index, archive);
+  const app = express();
+  app.use(express.json());
+  app.use('/api/architecture', (request, response, next) => {
+    if (request.headers.authorization === undefined) {
+      response.status(401).json({ error: 'Access denied. No token provided.', code: 'AUTH_TOKEN_INVALID' });
+      return;
+    }
+    next();
+  });
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => curationTranscript(),
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  await withServer(app, async (baseUrl) => {
+    const anonymous = await postSearch(baseUrl, { projectId: 'project-1', query: 'alpha' });
+    assert.equal(anonymous.status, 401, 'a request with no bearer token must be refused');
+    const accepted = await postSearch(baseUrl, { projectId: 'project-1', query: 'alpha' }, 'test-token');
+    assert.equal(accepted.status, 200);
+  });
+});

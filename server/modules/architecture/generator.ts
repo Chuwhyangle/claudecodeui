@@ -149,12 +149,16 @@ export type ArchIndex = {
  *    entities than {@link DIRECT_MAX_CANDIDATES} and nothing disambiguated it
  *    (a same-named candidate);
  *  · `file`   — it was pulled in because its FILE was named (a pasted path or
- *    a file tool's `file_path`).
+ *    a file tool's `file_path`);
+ *  · `pinned` — the reader added it by hand (the `extraSeeds` request field).
+ *    A pin is a root stronger than `direct`, exempt from the element/relation
+ *    filters and from the member cap.
  *
  * Only `direct` is what the UI draws as a session seed; `name`/`file` entities
  * stay in the graph (the neighbourhood is unchanged) but are not highlighted.
+ * `pinned` is drawn with its own pin badge, never as a session seed.
  */
-export type MentionTier = 'direct' | 'name' | 'file';
+export type MentionTier = 'direct' | 'name' | 'file' | 'pinned';
 
 /**
  * Adjacent-seed provenance the tiering needs, supplied by the extractor
@@ -257,6 +261,26 @@ export type GenerateGraphParams = {
    * filter legitimately leaves just the seeds.
    */
   readonly relations?: readonly RelationType[];
+  /**
+   * Entity ids the reader PINNED by hand (the `extraSeeds` request field).
+   *
+   * They are roots exactly like the transcript's seeds (`distance 0`) but carry
+   * `mentionTier: 'pinned'`, are exempt from the element/relation filters and
+   * keep their full member list. An id that does not name an entity in the
+   * merged index is reported in `unresolved.ids` instead of being dropped.
+   * Omitted means "no manual pins" — the reading is byte-identical to the
+   * pre-curation one.
+   */
+  readonly extraSeeds?: readonly string[];
+  /**
+   * Entity ids the reader REMOVED by hand (the `excludeIds` request field).
+   *
+   * Removal happens BEFORE traversal: an excluded entity is never a root,
+   * BFS does not pass THROUGH it, and every edge incident to it disappears
+   * with it. It overrides every filter (a pin, a direct seed and a file seed
+   * all lose to it). Omitted means "nothing removed".
+   */
+  readonly excludeIds?: readonly string[];
 };
 
 /**
@@ -303,7 +327,7 @@ export type GraphStats = {
    * when the caller supplied provenance, so a legacy reading has no such key;
    * the three counts always sum to the number of tiered nodes in `graph`.
    */
-  readonly seedTiers?: Readonly<Record<MentionTier, number>>;
+  readonly seedTiers?: Readonly<Partial<Record<MentionTier, number>>>;
   /**
    * Unfiltered counts by relation type over the current scope (the pre-budget
    * reachable entity set). "Unfiltered" is the point: the relation filter's
@@ -329,6 +353,21 @@ export type GraphStats = {
    *                   separately by `entityTruncated`.
    */
   readonly hidden?: ArchitectureFilterHidden;
+  /**
+   * The manual-curation readout: how many pins and removals were actually in
+   * effect for this reading. Present only when the request carried
+   * `extraSeeds`/`excludeIds`, so an uncurated payload keeps its exact old
+   * stats shape. `pinned` counts pinned entities that made it into the emitted
+   * entity graph; `excluded` counts requested ids that named a real entity
+   * (i.e. that the traversal actually removed).
+   */
+  readonly curation?: ArchitectureCurationStats;
+};
+
+/** How many manual pins/removals the generator actually applied. */
+export type ArchitectureCurationStats = {
+  readonly pinned: number;
+  readonly excluded: number;
 };
 
 /** The `stats.hidden` reading: what the filter removed, by axis. */
@@ -338,10 +377,18 @@ export type ArchitectureFilterHidden = {
   readonly isolated: number;
 };
 
-/** Seeds that matched nothing in this index, in first-occurrence order (deduplicated). */
+/**
+ * Seeds that matched nothing in this index, in first-occurrence order
+ * (deduplicated).
+ *
+ * `ids` is the manual-pin half and exists only when the caller supplied
+ * `extraSeeds`: it lists the ids that did not name an entity, which is what the
+ * client marks "已失效" instead of silently forgetting the pin.
+ */
 export type UnresolvedSeeds = {
   readonly files: string[];
   readonly identifiers: string[];
+  readonly ids?: string[];
 };
 
 /**
@@ -550,15 +597,19 @@ function expandSeeds(
   index: ArchIndex,
   resolved: ReadonlySet<string>,
   hops: number,
+  excluded: ReadonlySet<string> = new Set<string>(),
 ): Map<string, number> {
   const distance = new Map<string, number>();
-  for (const id of resolved) distance.set(id, 0);
+  for (const id of resolved) {
+    if (!excluded.has(id)) distance.set(id, 0);
+  }
 
-  let frontier = [...resolved];
+  let frontier = [...distance.keys()];
   for (let hop = 1; hop <= hops && frontier.length > 0; hop += 1) {
     const next: string[] = [];
     for (const id of frontier) {
       for (const neighbor of [...(index.dependencies[id] ?? []), ...(index.dependents[id] ?? [])]) {
+        if (excluded.has(neighbor)) continue;
         if (distance.has(neighbor) || !Object.hasOwn(index.idToFile, neighbor)) continue;
         distance.set(neighbor, hop);
         next.push(neighbor);
@@ -570,7 +621,12 @@ function expandSeeds(
 }
 
 /** Strength order used when one entity is reachable from several seeds. */
-const TIER_STRENGTH: Readonly<Record<MentionTier, number>> = { direct: 3, name: 2, file: 1 };
+const TIER_STRENGTH: Readonly<Record<MentionTier, number>> = {
+  pinned: 4,
+  direct: 3,
+  name: 2,
+  file: 1,
+};
 
 /** True when a filter axis was requested at all. */
 function filterRequested(params: GenerateGraphParams): boolean {
@@ -656,11 +712,17 @@ function expandSeedsFiltered(
   kinds: readonly EntityKind[] | undefined,
   relations: readonly RelationType[] | undefined,
   isDirectSeed: (id: string) => boolean,
+  excluded: ReadonlySet<string> = new Set<string>(),
+  isPinned: (id: string) => boolean = () => false,
 ): Map<string, number> {
   const distance = new Map<string, number>();
   const roots: string[] = [];
   for (const id of resolved) {
-    if (!isDirectSeed(id) && !kindAllowed(index, id, kinds)) continue;
+    // Removal beats everything, including a pin, a direct seed and a file seed.
+    if (excluded.has(id)) continue;
+    // A pin is a root regardless of its kind; a direct seed likewise. Any other
+    // tier is an ordinary node and disappears with its hidden kind.
+    if (!isDirectSeed(id) && !isPinned(id) && !kindAllowed(index, id, kinds)) continue;
     distance.set(id, 0);
     roots.push(id);
   }
@@ -679,9 +741,13 @@ function expandSeedsFiltered(
     const next: string[] = [];
     for (const id of frontier) {
       for (const neighbour of neighboursOf(id)) {
+        if (excluded.has(neighbour.id)) continue;
         if (!relationAllowed(relations, neighbour.type)) continue;
         if (distance.has(neighbour.id) || !Object.hasOwn(index.idToFile, neighbour.id)) continue;
-        if (!kindAllowed(index, neighbour.id, kinds)) continue;
+        // A pinned entity is never admitted as a filtered-out neighbour: it is
+        // already a root, and re-admitting it here — exempt from the element
+        // axis — is what keeps it in the reading when its kind is filtered.
+        if (!kindAllowed(index, neighbour.id, kinds) && !isPinned(neighbour.id)) continue;
         distance.set(neighbour.id, hop);
         next.push(neighbour.id);
       }
@@ -709,19 +775,32 @@ function expandSeedsFiltered(
 function resolveSeeds(
   index: ArchIndex,
   seeds: GraphSeeds,
+  extraSeeds?: readonly string[],
+  excludeIds?: readonly string[],
 ): {
   resolved: Set<string>;
   unresolved: UnresolvedSeeds;
   tiers: Map<string, MentionTier> | undefined;
   mentionCounts: Map<string, number> | undefined;
+  pinned: Set<string>;
+  excluded: Set<string>;
 } {
   const resolved = new Set<string>();
   const unresolvedFiles: string[] = [];
   const unresolvedIdentifiers: string[] = [];
+  const unresolvedIds: string[] = [];
   const seenFiles = new Set<string>();
   const seenIdentifiers = new Set<string>();
-  const tiers = seeds.mentions === undefined ? undefined : new Map<string, MentionTier>();
-  const mentionCounts = seeds.mentions === undefined ? undefined : new Map<string, number>();
+  const seenExtraSeeds = new Set<string>();
+  const pinned = new Set<string>();
+  // Removal is applied BEFORE anything else: an excluded id is not a root, is
+  // never traversed through, and cannot be resurrected by a seed list.
+  const excluded = new Set(excludeIds ?? []);
+  // Manual pins carry a tier of their own even when the caller supplied no
+  // transcript provenance, so a curated request still labels its roots.
+  const wantsTiers = seeds.mentions !== undefined || (extraSeeds?.length ?? 0) > 0;
+  const tiers = wantsTiers ? new Map<string, MentionTier>() : undefined;
+  const mentionCounts = wantsTiers ? new Map<string, number>() : undefined;
 
   const admit = (ids: readonly string[] | undefined, tier: MentionTier, mentionCount: number): boolean => {
     if (ids === undefined || ids.length === 0) return false;
@@ -780,11 +859,47 @@ function resolveSeeds(
     if (!admitted) unresolvedIdentifiers.push(identifier);
   }
 
+  // Manual pins are roots of their own. A pin that names no entity is reported
+  // in `unresolved.ids` — the client keeps it in its curation list and marks it
+  // stale rather than silently forgetting the reader's choice.
+  for (const id of extraSeeds ?? []) {
+    if (seenExtraSeeds.has(id)) continue;
+    seenExtraSeeds.add(id);
+    if (!Object.hasOwn(index.idToFile, id)) {
+      unresolvedIds.push(id);
+      continue;
+    }
+    resolved.add(id);
+    pinned.add(id);
+    if (tiers !== undefined) {
+      const current = tiers.get(id);
+      if (current === undefined || TIER_STRENGTH.pinned > TIER_STRENGTH[current]) tiers.set(id, 'pinned');
+    }
+    if (mentionCounts !== undefined) mentionCounts.set(id, mentionCounts.get(id) ?? 0);
+  }
+
+  // Removal wins over every seed list and every tier: the entity is out of the
+  // graph, so it is neither a root nor a pinned root.
+  for (const id of excluded) {
+    resolved.delete(id);
+    pinned.delete(id);
+    tiers?.delete(id);
+    mentionCounts?.delete(id);
+  }
+
   return {
     resolved,
-    unresolved: { files: unresolvedFiles, identifiers: unresolvedIdentifiers },
+    unresolved: {
+      files: unresolvedFiles,
+      identifiers: unresolvedIdentifiers,
+      // Absent unless the caller asked for manual pins, so a pre-curation
+      // payload keeps its exact old `unresolved` shape.
+      ...(extraSeeds === undefined ? {} : { ids: unresolvedIds }),
+    },
     tiers,
     mentionCounts,
+    pinned,
+    excluded,
   };
 }
 
@@ -938,7 +1053,7 @@ function filterReading(
   filteredIds: readonly string[],
   kinds: readonly EntityKind[] | undefined,
   relations: readonly RelationType[] | undefined,
-  isDirectSeed: (id: string) => boolean,
+  isExempt: (id: string) => boolean,
 ): { relationCounts: Partial<Record<RelationType, number>>; hidden: ArchitectureFilterHidden } {
   const relationCounts: Partial<Record<RelationType, number>> = {};
   const byRelation: Partial<Record<RelationType, number>> = {};
@@ -951,7 +1066,7 @@ function filterReading(
 
   const byKind: Partial<Record<EntityKind, number>> = {};
   for (const id of unfilteredIds) {
-    if (isDirectSeed(id)) continue;
+    if (isExempt(id)) continue;
     const kind = index.entityDetails?.[id]?.kind;
     if (kind === undefined || kinds === undefined || kinds.includes(kind)) continue;
     byKind[kind] = (byKind[kind] ?? 0) + 1;
@@ -964,7 +1079,7 @@ function filterReading(
   }
   let isolated = 0;
   for (const id of filteredIds) {
-    if ((degree.get(id) ?? 0) === 0 && !isDirectSeed(id)) isolated += 1;
+    if ((degree.get(id) ?? 0) === 0 && !isExempt(id)) isolated += 1;
   }
 
   return { relationCounts, hidden: { byKind, byRelation, isolated } };
@@ -985,6 +1100,7 @@ function entityNode(
   maxMembers: number | undefined,
   truncated: { value: boolean },
   mention?: { readonly tier: MentionTier; readonly count: number },
+  keepFullMembers = false,
 ): NeighborhoodNode {
   const base: NeighborhoodNode = {
     id,
@@ -997,7 +1113,9 @@ function entityNode(
   const detail = index.entityDetails?.[id];
   if (detail === undefined) return base;
 
-  const cap = maxMembers ?? detail.members.length;
+  // A hand-pinned entity is exempt from the detail cut: the reader asked for
+  // THIS entity, so it is drawn whole even when the payload cap is in force.
+  const cap = keepFullMembers ? detail.members.length : (maxMembers ?? detail.members.length);
   const members = detail.members.length > cap ? detail.members.slice(0, cap) : detail.members;
   if (members.length < detail.members.length) truncated.value = true;
   return members.length === 0 ? { ...base, kind: detail.kind } : { ...base, kind: detail.kind, members };
@@ -1050,7 +1168,12 @@ export function generateGraph(
     );
   }
 
-  const { resolved, unresolved, tiers, mentionCounts } = resolveSeeds(index, seeds);
+  const { resolved, unresolved, tiers, mentionCounts, pinned, excluded } = resolveSeeds(
+    index,
+    seeds,
+    params.extraSeeds,
+    params.excludeIds,
+  );
   // A SEED with no tier (no provenance supplied, or an old payload) is the
   // documented legacy direct mention: `direct` is the exemption the filters
   // honour, so that reading has to be stated once, here. Resolved-set
@@ -1061,10 +1184,23 @@ export function generateGraph(
     const tier = tiers?.get(id);
     return tier === undefined || tier === 'direct';
   };
+  // A pin is exempt from every filter axis, like a direct seed — but it is NOT
+  // a session seed and is drawn with its own badge.
+  const isPinned = (id: string): boolean => pinned.has(id);
+  const isExempt = (id: string): boolean => isDirectSeed(id) || isPinned(id);
   const filtering = filterRequested(params);
   const distance = filtering
-    ? expandSeedsFiltered(index, resolved, hops, params.kinds, params.relations, isDirectSeed)
-    : expandSeeds(index, resolved, hops);
+    ? expandSeedsFiltered(
+      index,
+      resolved,
+      hops,
+      params.kinds,
+      params.relations,
+      isDirectSeed,
+      excluded,
+      isPinned,
+    )
+    : expandSeeds(index, resolved, hops, excluded);
 
   // The entity graph is the budgeted prefix. The file graph is projected from
   // the FULL reachable set below, so its completeness does not depend on how
@@ -1120,17 +1256,19 @@ export function generateGraph(
     const mention = tier === undefined
       ? undefined
       : { tier, count: mentionCounts?.get(id) ?? 0 };
-    return entityNode(index, id, hop, maxMembers, membersTruncated, mention);
+    return entityNode(index, id, hop, maxMembers, membersTruncated, mention, pinned.has(id));
   });
 
   // Seed tiers are a reading of the EMITTED nodes, not of the resolved set: a
   // node budget can cut a seed, and the counts must stay consistent with what
-  // the payload actually carries.
-  const seedTiers: Record<MentionTier, number> | undefined =
+  // the payload actually carries. The `pinned` key is only added when a pin
+  // exists, so a pre-curation payload keeps its exact three-key shape.
+  const seedTiers: Partial<Record<MentionTier, number>> | undefined =
     tiers === undefined ? undefined : { direct: 0, name: 0, file: 0 };
   if (seedTiers !== undefined) {
     for (const node of entityNodes) {
-      if (node.mentionTier !== undefined) seedTiers[node.mentionTier] += 1;
+      if (node.mentionTier === undefined) continue;
+      seedTiers[node.mentionTier] = (seedTiers[node.mentionTier] ?? 0) + 1;
     }
   }
 
@@ -1147,12 +1285,22 @@ export function generateGraph(
   // UNFILTERED reachable set: the element filter's own UI has to be able to say
   // "805 functions" for the functions it is currently hiding.
   const unfilteredIds = filtering
-    ? candidatesByDistance(expandSeeds(index, resolved, hops))
+    ? candidatesByDistance(expandSeeds(index, resolved, hops, excluded))
     : allEntityIds;
   const kindCounts = countEntityKinds(index, unfilteredIds);
   const filterStats = filtering
-    ? filterReading(index, unfilteredIds, allEntityIds, params.kinds, params.relations, isDirectSeed)
+    ? filterReading(index, unfilteredIds, allEntityIds, params.kinds, params.relations, isExempt)
     : undefined;
+  // The manual-curation readout, present only when the request carried either
+  // curation field. `pinned` is read from the EMITTED nodes (a node budget can
+  // cut one and the count must match the payload); `excluded` counts ids that
+  // named a real entity, i.e. that removal actually took out.
+  const curation = params.extraSeeds === undefined && params.excludeIds === undefined
+    ? undefined
+    : {
+        pinned: entityNodes.filter((node) => node.mentionTier === 'pinned').length,
+        excluded: [...excluded].filter((id) => Object.hasOwn(index.idToFile, id)).length,
+      };
 
   return {
     mmd: { file: fileMmd, entity: entityMmd },
@@ -1184,6 +1332,7 @@ export function generateGraph(
       ...(filterStats === undefined
         ? {}
         : { relationCounts: filterStats.relationCounts, hidden: filterStats.hidden }),
+      ...(curation === undefined ? {} : { curation }),
     },
     unresolved,
   };

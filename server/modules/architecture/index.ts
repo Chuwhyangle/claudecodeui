@@ -10,6 +10,7 @@
 // consumer: server/modules/architecture/tests/generator.test.ts (AC-415),
 // the provenance-tier criterion, and service.ts (GraphSeeds carries `mentions`)
 export type {
+  ArchitectureCurationStats,
   ArchIndex,
   GenerateGraphParams,
   GenerateGraphResult,
@@ -46,6 +47,8 @@ export type {
   ArchitectureMentionsInput,
   ArchitectureMentionsResult,
   ArchitectureProvenance,
+  ArchitectureSearchInput,
+  ArchitectureSearchResult,
   ArchitectureSeedStats,
   ArchitectureService,
   ArchitectureServiceDeps,
@@ -65,6 +68,14 @@ export type {
   ScopeHygieneResult,
   SubsumedScope,
 } from './scope-hygiene.js';
+// consumer: the `/search` criterion and `service.ts` (the pure search half)
+export { SEARCH_MAX_RESULTS, SEARCH_MIN_QUERY_LENGTH, resolveEntities, searchEntities } from './search.js';
+export type {
+  ArchitectureSearchHit,
+  ArchitectureSearchOptions,
+  ArchitectureSearchQueryResult,
+  ArchitectureSearchTarget,
+} from './search.js';
 // consumer: server/index.ts (mounts the router under /api/architecture)
 export { createArchitectureModule } from './module.js';
 export type { ArchitectureModuleDeps } from './module.js';

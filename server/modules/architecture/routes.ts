@@ -25,8 +25,15 @@ import { ENTITY_KINDS, RELATION_TYPES, type EntityKind, type RelationType } from
 import type {
   ArchitectureGraphInput,
   ArchitectureMentionsInput,
+  ArchitectureSearchInput,
   ArchitectureService,
 } from './service.js';
+
+/** Manual pins are bounded at 200 (the curation store's own cap). */
+export const MAX_EXTRA_SEEDS = 200;
+
+/** Manual removals are bounded at 500 (the curation store's own cap). */
+export const MAX_EXCLUDE_IDS = 500;
 
 function invalidRequest(message: string): AppError {
   return new AppError(message, { code: 'INVALID_REQUEST', statusCode: 400 });
@@ -80,6 +87,31 @@ function optionalVocabularyField<T extends string>(
 }
 
 /**
+ * Read an optional array of non-empty entity ids with a hard cap.
+ *
+ * An ABSENT field is "no manual curation" and keeps the old reading. An empty
+ * array is legal (the caller says "I have no pins") and is not the same thing
+ * as an absent field: it makes the response carry `stats.curation`. Over the
+ * cap is a 400 rather than a silent truncation — dropping pins would draw a
+ * graph the client did not ask for.
+ */
+function optionalIdListField(
+  body: Record<string, unknown>,
+  name: string,
+  cap: number,
+): readonly string[] | undefined {
+  const value = body[name];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string' || entry.length === 0)) {
+    throw invalidRequest(`"${name}" must be an array of non-empty strings`);
+  }
+  if (value.length > cap) {
+    throw invalidRequest(`"${name}" carries ${value.length} ids; the maximum is ${cap}`);
+  }
+  return value as string[];
+}
+
+/**
  * Parse and validate the request body. `hops`/`maxNodes` are optional: the
  * service supplies the ADR defaults, and an explicit zero is legal (a zero-hop
  * graph is the seeds themselves; a zero budget is an empty graph). `kinds` and
@@ -93,6 +125,8 @@ function readGraphInput(body: unknown): ArchitectureGraphInput {
   const record = body as Record<string, unknown>;
   const kinds = optionalVocabularyField<EntityKind>(record, 'kinds', ENTITY_KINDS);
   const relations = optionalVocabularyField<RelationType>(record, 'relations', RELATION_TYPES);
+  const extraSeeds = optionalIdListField(record, 'extraSeeds', MAX_EXTRA_SEEDS);
+  const excludeIds = optionalIdListField(record, 'excludeIds', MAX_EXCLUDE_IDS);
   return {
     projectId: requireStringField(record, 'projectId'),
     sessionId: requireStringField(record, 'sessionId'),
@@ -100,7 +134,61 @@ function readGraphInput(body: unknown): ArchitectureGraphInput {
     maxNodes: optionalCountField(record, 'maxNodes'),
     ...(kinds === undefined ? {} : { kinds }),
     ...(relations === undefined ? {} : { relations }),
+    ...(extraSeeds === undefined ? {} : { extraSeeds }),
+    ...(excludeIds === undefined ? {} : { excludeIds }),
   };
+}
+
+/**
+ * Parse the `/search` body: exactly one of the two forms.
+ *
+ * `query` must be at least 2 characters (the ranking is meaningless below
+ * that); `limit` is an optional non-negative integer, bounded by the service.
+ * `resolve` is an array of `{ name, file }` pairs. A body carrying neither, or
+ * both, is a client bug the route refuses instead of guessing.
+ */
+function readSearchInput(body: unknown): ArchitectureSearchInput {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    throw invalidRequest('request body must be a JSON object');
+  }
+  const record = body as Record<string, unknown>;
+  const projectId = requireStringField(record, 'projectId');
+  const hasQuery = record.query !== undefined;
+  const hasResolve = record.resolve !== undefined;
+  if (hasQuery === hasResolve) {
+    throw invalidRequest('exactly one of "query" or "resolve" is required');
+  }
+
+  if (hasQuery) {
+    const query = requireStringField(record, 'query');
+    if (query.trim().length < 2) {
+      throw invalidRequest('"query" must be at least 2 characters');
+    }
+    const limit = optionalCountField(record, 'limit');
+    const kinds = optionalVocabularyField<EntityKind>(record, 'kinds', ENTITY_KINDS);
+    return {
+      projectId,
+      query,
+      ...(limit === undefined ? {} : { limit }),
+      ...(kinds === undefined ? {} : { kinds }),
+    };
+  }
+
+  const resolveValue = record.resolve;
+  if (!Array.isArray(resolveValue)) {
+    throw invalidRequest('"resolve" must be an array of { name, file } objects');
+  }
+  const resolve = resolveValue.map((entry, index) => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw invalidRequest(`"resolve[${index}]" must be an object with "name" and "file"`);
+    }
+    const pair = entry as Record<string, unknown>;
+    return {
+      name: requireStringField(pair, 'name'),
+      file: requireStringField(pair, 'file'),
+    };
+  });
+  return { projectId, resolve };
 }
 
 /**
@@ -191,6 +279,15 @@ export function createArchitectureRoutes(service: ArchitectureService): Router {
     asyncHandler(async (request, response) => {
       const input = readMentionsInput(request.body);
       const result = await service.readMentions(input);
+      response.json(result);
+    }),
+  );
+
+  router.post(
+    '/search',
+    asyncHandler(async (request, response) => {
+      const input = readSearchInput(request.body);
+      const result = await service.readSearch(input);
       response.json(result);
     }),
   );

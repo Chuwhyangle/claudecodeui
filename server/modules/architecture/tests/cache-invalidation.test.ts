@@ -415,3 +415,26 @@ test('合并规则版本进入缓存键：规则版本变化不命中旧缓存',
   assert.equal(again, versioned, 'the same rules version returns the cached reading object');
   assert.equal(h.builds(), 3);
 });
+
+test('AC-417 curation params 计入内容键：extraSeeds/excludeIds 不同即 miss，相同即命中', async (t) => {
+  const h = createHarness(t);
+  const curated = { hops: 1, maxNodes: 50, extraSeeds: ['a.ts.A'], excludeIds: ['b.ts.B'] };
+
+  await h.cache.getReading(makeKey(h.scope, { params: curated }), h.build);
+  // A different pin set is a different reading (the traversal roots changed).
+  await h.cache.getReading(
+    makeKey(h.scope, { params: { ...curated, extraSeeds: ['a.ts.A', 'c.ts.C'] } }),
+    h.build,
+  );
+  // A different removal set likewise.
+  await h.cache.getReading(
+    makeKey(h.scope, { params: { ...curated, excludeIds: ['b.ts.B', 'd.ts.D'] } }),
+    h.build,
+  );
+  assert.equal(h.builds(), 3, 'each distinct curation combination must re-render');
+
+  // The same combination (a fresh, structurally equal key) hits.
+  await h.cache.getReading(makeKey(h.scope, { params: curated }), h.build);
+  assert.equal(h.builds(), 3, 'the repeated curation combination performed no second generation');
+  assert.equal(h.reads(), 1, 'curation-only changes stay on the parse-layer hit path');
+});

@@ -641,9 +641,15 @@ test('mention tiers：direct > name > file，节点带档位与提及数，stats
   assert.equal(byId.get('src/big.ts.e0')?.mentionCount, 2);
 
   // ④ the stats counts are read from the EMITTED nodes, so they agree.
-  const counted = { direct: 0, name: 0, file: 0 };
+  // `pinned` joins the vocabulary with the curation task; this fixture has no
+  // pins, so the count map stays the original three keys.
+  const counted: Partial<Record<'direct' | 'name' | 'file' | 'pinned', number>> = {
+    direct: 0,
+    name: 0,
+    file: 0,
+  };
   for (const node of result.graph.entity.nodes) {
-    if (node.mentionTier !== undefined) counted[node.mentionTier] += 1;
+    if (node.mentionTier !== undefined) counted[node.mentionTier] = (counted[node.mentionTier] ?? 0) + 1;
   }
   assert.deepEqual(result.stats.seedTiers, counted);
   assert.deepEqual(result.stats.seedTiers, { direct: 2, name: 4, file: 8 });
@@ -883,4 +889,109 @@ test('stats.hidden / relationCounts 是未过滤的读数；不带筛选时两�
   assert.equal('relationCounts' in unfiltered.stats, false);
   assert.equal(unfiltered.stats.entityTotal, 5, 'the unfiltered scope is the whole two-hop set');
   assert.deepEqual(entityLabels(unfiltered), ['A', 'B', 'C', 'D', 'Fn']);
+});
+
+// ---------------------------------------------------------------------------
+// Manual curation: excludeIds (removal before traversal) + extraSeeds (pins)
+// ---------------------------------------------------------------------------
+
+test('AC-415 curation：excludeIds 在遍历前移除，节点不穿过、边一并消失', () => {
+  // Without the removal, two hops from A reach A, Fn, C, D and B.
+  const baseline = generateGraph(FILTER_INDEX, FILTER_SEED, { hops: 2, maxNodes: 100 });
+  assert.deepEqual(entityLabels(baseline), ['A', 'B', 'C', 'D', 'Fn']);
+
+  // Removing C severs the ONLY path to B (A →(dependency) C →(composition) B).
+  const curated = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 2,
+    maxNodes: 100,
+    excludeIds: ['c.ts.C'],
+  });
+  assert.deepEqual(entityLabels(curated), ['A', 'D', 'Fn'], 'the removed node is gone and B is unreachable through it');
+  assert.equal(
+    curated.graph.entity.edges.some((edge) => edge.from === 'c.ts.C' || edge.to === 'c.ts.C'),
+    false,
+    'every edge incident to the removed entity is gone',
+  );
+  assert.deepEqual(curated.stats.curation, { pinned: 0, excluded: 1 }, 'the readout counts the removal that took effect');
+
+  // Removal beats a seed: an excluded session seed does not reappear as a root.
+  const excludedSeed = generateGraph(FILTER_INDEX, { files: [], identifiers: ['A', 'C'] }, {
+    hops: 1,
+    maxNodes: 100,
+    excludeIds: ['a.ts.A', 'c.ts.C'],
+  });
+  assert.deepEqual(entityLabels(excludedSeed), [], 'both roots were removed, so there is nothing to traverse from');
+});
+
+test('AC-415 curation：extraSeeds 是 pinned 根，免于元素/关系筛选且成员不被裁剪', () => {
+  // `Fn` is a function; the element filter hides functions, but a pin is exempt.
+  const pinned = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 1,
+    maxNodes: 100,
+    kinds: [...STRUCTURAL_KINDS],
+    extraSeeds: ['fn.ts.Fn'],
+  });
+  assert.deepEqual(entityLabels(pinned), ['A', 'C', 'D', 'Fn'], 'the pinned function survives the element axis');
+  const fn = pinned.graph.entity.nodes.find((node) => node.id === 'fn.ts.Fn');
+  assert.equal(fn?.distance, 0, 'a pin is a root');
+  assert.equal(fn?.mentionTier, 'pinned', 'a pin carries its own tier, stronger than direct');
+  assert.deepEqual(pinned.stats.curation, { pinned: 1, excluded: 0 });
+
+  // A pin is also a root under the relation axis: the call edge A → Fn is not
+  // followed (call is filtered out), yet Fn is still drawn.
+  const relationFiltered = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 0,
+    maxNodes: 100,
+    relations: ['dependency'],
+    extraSeeds: ['fn.ts.Fn'],
+  });
+  assert.deepEqual(entityLabels(relationFiltered), ['A', 'Fn']);
+
+  // Detail cropping: the pinned node keeps every member even when the cap cuts
+  // its neighbours.
+  const withMembers: ArchIndex = {
+    ...FILTER_INDEX,
+    entityDetails: {
+      ...FILTER_INDEX.entityDetails,
+      'a.ts.A': {
+        kind: 'class',
+        members: [
+          { name: 'a1', kind: 'field' },
+          { name: 'a2', kind: 'field' },
+        ],
+      },
+      'fn.ts.Fn': {
+        kind: 'function',
+        members: [
+          { name: 'f1', kind: 'field' },
+          { name: 'f2', kind: 'field' },
+        ],
+      },
+    },
+  };
+  const capped = generateGraph(withMembers, { files: [], identifiers: ['A'] }, {
+    hops: 1,
+    maxNodes: 100,
+    maxMembers: 1,
+    extraSeeds: ['fn.ts.Fn'],
+  });
+  const cappedA = capped.graph.entity.nodes.find((node) => node.id === 'a.ts.A');
+  const cappedFn = capped.graph.entity.nodes.find((node) => node.id === 'fn.ts.Fn');
+  assert.equal(cappedA?.members?.length, 1, 'an ordinary node is still cut by the cap');
+  assert.equal(cappedFn?.members?.length, 2, 'a pinned node is exempt from the detail cut');
+});
+
+test('AC-415 curation：解析不到的 extraSeeds 进入 unresolved.ids，缺省参数保持旧响应形态', () => {
+  const missing = generateGraph(FILTER_INDEX, FILTER_SEED, {
+    hops: 0,
+    maxNodes: 100,
+    extraSeeds: ['no/such.Entity'],
+  });
+  assert.deepEqual(missing.unresolved.ids, ['no/such.Entity'], 'an unknown pin is reported, never silently dropped');
+  assert.deepEqual(missing.stats.curation, { pinned: 0, excluded: 0 });
+
+  // Absent curation params: no new keys at all — the pre-curation payload shape.
+  const legacy = generateGraph(FILTER_INDEX, FILTER_SEED, { hops: 1, maxNodes: 100 });
+  assert.equal('curation' in legacy.stats, false, 'stats.curation is absent without the params');
+  assert.equal('ids' in legacy.unresolved, false, 'unresolved.ids is absent without extraSeeds');
 });

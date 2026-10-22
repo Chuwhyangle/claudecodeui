@@ -66,6 +66,12 @@ import {
   type MentionHit,
   type SessionMentionIndex,
 } from './mentions.js';
+import {
+  resolveEntities,
+  searchEntities,
+  type ArchitectureSearchHit,
+  type ArchitectureSearchTarget,
+} from './search.js';
 
 /** Where a project's ArchGuard manifest lives, relative to the project root. */
 const MANIFEST_RELATIVE_PATH = path.join('.archguard', 'query', 'manifest.json');
@@ -180,6 +186,13 @@ export type ArchitectureGraphInput = {
   readonly kinds?: readonly EntityKind[];
   /** Relation types to keep; omitted means no relation filter (the old reading). */
   readonly relations?: readonly RelationType[];
+  /**
+   * Entity ids to add as manual roots (the reader's pins). Omitted means the
+   * old reading; an id that names nothing rides back in `unresolved.ids`.
+   */
+  readonly extraSeeds?: readonly string[];
+  /** Entity ids to remove before traversal. Omitted means nothing is removed. */
+  readonly excludeIds?: readonly string[];
 };
 
 /** The generation knobs that participate in the content-addressed cache key. */
@@ -199,6 +212,14 @@ export type ArchitectureGraphParams = {
   readonly kinds?: readonly EntityKind[];
   /** The relation filter, same presence rule as {@link kinds}. */
   readonly relations?: readonly RelationType[];
+  /**
+   * Manual pins, normalised (sorted + deduplicated) so two requests naming the
+   * same set in a different order share one content key. Omitted keeps the
+   * pre-curation key byte-identical.
+   */
+  readonly extraSeeds?: readonly string[];
+  /** Manual removals, same normalisation and presence rule as {@link extraSeeds}. */
+  readonly excludeIds?: readonly string[];
 };
 
 /** How many seeds the transcript yielded, before any were resolved. */
@@ -318,6 +339,40 @@ export type ArchitectureMentionsResult = {
 };
 
 /**
+ * The `/search` request, a union of its two forms:
+ *  · `{ projectId, query, limit?, kinds? }` searches the whole project index;
+ *  · `{ projectId, resolve: [{ name, file }] }` re-anchors saved curation items
+ *    onto the current ids after a re-analysis.
+ *
+ * The route refuses a body with neither (or with both), because the two forms
+ * answer different questions and silently picking one would hide the mistake.
+ */
+export type ArchitectureSearchInput =
+  | {
+      readonly projectId: string;
+      readonly query: string;
+      readonly limit?: number;
+      readonly kinds?: readonly EntityKind[];
+    }
+  | {
+      readonly projectId: string;
+      readonly resolve: readonly ArchitectureSearchTarget[];
+    };
+
+/**
+ * The `/search` answer: the query form carries `results`/`truncated`, the
+ * resolve form carries `resolved` in request order (`null` = no such entity).
+ */
+export type ArchitectureSearchResult =
+  | {
+      readonly results: readonly ArchitectureSearchHit[];
+      readonly truncated: boolean;
+    }
+  | {
+      readonly resolved: readonly (ArchitectureSearchHit | null)[];
+    };
+
+/**
  * The injected seams. Production binds them to the projects repository and the
  * providers module's full-history reader; the criterion binds temp directories
  * and a fixed transcript, and can replace `generateGraph` with a counter to
@@ -348,6 +403,7 @@ export type ArchitectureServiceDeps = {
 export type ArchitectureService = {
   readGraph(input: ArchitectureGraphInput): Promise<ArchitectureGraphResult>;
   readMentions(input: ArchitectureMentionsInput): Promise<ArchitectureMentionsResult>;
+  readSearch(input: ArchitectureSearchInput): Promise<ArchitectureSearchResult>;
 };
 
 /**
@@ -904,6 +960,17 @@ function emptyReading(): GenerateGraphResult {
   };
 }
 
+/**
+ * Normalise a curation id list for the content-addressed key.
+ *
+ * Sorting and de-duplication make two requests that name the same set in a
+ * different order the SAME reading — the generator is order-insensitive, so the
+ * key has to be too, or a re-render would be paid for a reordered array.
+ */
+function normalizeCurationIds(ids: readonly string[]): string[] {
+  return [...new Set(ids)].sort();
+}
+
 function buildStats(
   reading: GenerateGraphResult,
   seeds: { readonly files: readonly string[]; readonly identifiers: readonly string[] },
@@ -1109,6 +1176,12 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         // would hash differently from the pre-filter one.
         ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
         ...(input.relations === undefined ? {} : { relations: input.relations }),
+        ...(input.extraSeeds === undefined
+          ? {}
+          : { extraSeeds: normalizeCurationIds(input.extraSeeds) }),
+        ...(input.excludeIds === undefined
+          ? {}
+          : { excludeIds: normalizeCurationIds(input.excludeIds) }),
       };
       const fingerprints = refs.map((ref, index) => ({
         scope: scopeKeys[index],
@@ -1117,13 +1190,33 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
 
       // An empty transcript has nothing to expand. Short-circuit BEFORE the
       // cache/generator: there is no content key worth memoising and no
-      // generation step worth spending (AC-418).
-      if (seeds.files.length === 0 && seeds.identifiers.length === 0) {
+      // generation step worth spending (AC-418). Manual pins are roots of their
+      // own, so a curated request with no transcript seeds is NOT empty.
+      const hasExtraSeeds = (input.extraSeeds?.length ?? 0) > 0;
+      if (
+        seeds.files.length === 0
+        && seeds.identifiers.length === 0
+        && !hasExtraSeeds
+      ) {
         const reading = emptyReading();
+        const curated = input.extraSeeds !== undefined || input.excludeIds !== undefined;
         return {
           mmd: reading.mmd,
           graph: reading.graph,
-          stats: buildStats(reading, seeds),
+          stats: {
+            ...buildStats(reading, seeds),
+            ...(curated
+              ? {
+                  curation: {
+                    pinned: 0,
+                    excluded: (input.excludeIds ?? []).filter((id) => Object.hasOwn(merged.idToFile, id)).length,
+                  },
+                }
+              : {}),
+            ...(input.extraSeeds === undefined
+              ? {}
+              : { unresolved: { ...reading.unresolved, ids: [] } }),
+          },
           provenance: {
             generatedAt: manifest.generatedAt,
             fingerprints,
@@ -1224,6 +1317,27 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         ...(edge === undefined ? {} : { edge }),
         truncated,
       };
+    },
+
+    async readSearch(input: ArchitectureSearchInput): Promise<ArchitectureSearchResult> {
+      const projectPath = deps.resolveProjectPath(input.projectId);
+      if (projectPath === null) {
+        throw new AppError(`Project "${input.projectId}" was not found.`, {
+          code: 'PROJECT_NOT_FOUND',
+          statusCode: 404,
+        });
+      }
+
+      // Search runs over the SAME merged index the graph was built from, so an
+      // id from a result is directly addressable as an `extraSeeds` entry.
+      const { merged } = await loadIndex(projectPath, input.projectId);
+      if ('resolve' in input) {
+        return { resolved: resolveEntities(merged, input.resolve) };
+      }
+      return searchEntities(merged, input.query, {
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+      });
     },
   };
 }
