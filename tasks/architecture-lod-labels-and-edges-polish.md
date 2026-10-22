@@ -1,7 +1,7 @@
 ---
 id: architecture-lod-labels-and-edges-polish
 title: 低缩放档位的 package 标题不重影不重叠、权重标签与边更清晰、空包框降权
-status: ready
+status: done
 labels:
   - feature
 parent: null
