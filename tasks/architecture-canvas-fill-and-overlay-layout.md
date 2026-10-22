@@ -1,7 +1,7 @@
 ---
 id: architecture-canvas-fill-and-overlay-layout
 title: 画布布局修复：画布占满可用高度；读数与缩放档位并成画布上方一行（不再盖住图的第一行）；角落浮层让图避让并垂直居中
-status: todo
+status: ready
 labels:
   - feature
 parent: null
