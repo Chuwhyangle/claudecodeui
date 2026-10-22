@@ -2,7 +2,7 @@
 id: gap-voice-settings-single-surface
 title: 语音 settings/rules 收敛成单一抽象：5 个面（voiceConfig / voice-realtime-settings /
   voice-rules.port / voice-mode-rules / mode）收敛为一个共享类型契约 + 规则注册位（镜像 asrRegistry）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
