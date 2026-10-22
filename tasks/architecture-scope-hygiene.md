@@ -2,7 +2,7 @@
 id: architecture-scope-hygiene
 title: 服务端 scope 清理：绝对路径 id 规范成相对路径、重叠 scope 按 (相对文件, 名字) 去重并重定向边、项目根之外的 scope
   丢弃，并把诊断暴露给界面
-status: todo
+status: ready
 labels:
   - feature
 parent: null
