@@ -393,6 +393,132 @@ test('AC-415 假形态 B：边引用未定义节点 ⇒ 合法性断言红', () 
   );
 });
 
+/**
+ * A chain of four entities whose `entityDetails` mirror the shape the service
+ * parses out of a real `arch.json`: a class with a constructor/property/method
+ * body, an interface of properties, a plain function, and an abstract class.
+ *
+ * The ids use ArchGuard's `<scope-relative path>.<Name>` form, so the reading
+ * here exercises the same id space the merged service index hands over.
+ */
+const DETAIL_INDEX: ArchIndex = {
+  fileToIds: {
+    'k0.ts': ['k0.ts.Seed'],
+    'k1.ts': ['k1.ts.Middle'],
+    'k2.ts': ['k2.ts.Leaf'],
+    'k3.ts': ['k3.ts.Deep'],
+  },
+  nameToIds: { Seed: ['k0.ts.Seed'], Middle: ['k1.ts.Middle'], Leaf: ['k2.ts.Leaf'], Deep: ['k3.ts.Deep'] },
+  idToFile: {
+    'k0.ts.Seed': 'k0.ts',
+    'k1.ts.Middle': 'k1.ts',
+    'k2.ts.Leaf': 'k2.ts',
+    'k3.ts.Deep': 'k3.ts',
+  },
+  idToName: {
+    'k0.ts.Seed': 'Seed',
+    'k1.ts.Middle': 'Middle',
+    'k2.ts.Leaf': 'Leaf',
+    'k3.ts.Deep': 'Deep',
+  },
+  dependencies: { 'k0.ts.Seed': ['k1.ts.Middle'], 'k1.ts.Middle': ['k2.ts.Leaf'], 'k2.ts.Leaf': ['k3.ts.Deep'], 'k3.ts.Deep': [] },
+  dependents: { 'k0.ts.Seed': [], 'k1.ts.Middle': ['k0.ts.Seed'], 'k2.ts.Leaf': ['k1.ts.Middle'], 'k3.ts.Deep': ['k2.ts.Leaf'] },
+  entityDetails: {
+    'k0.ts.Seed': {
+      kind: 'class',
+      members: [
+        { name: 'constructor', kind: 'method', visibility: 'public', signature: 'constructor(a: number)' },
+        { name: 'count', kind: 'field', visibility: 'private', signature: 'number' },
+        { name: 'labels', kind: 'field', visibility: 'private', signature: 'string[]' },
+        { name: 'run', kind: 'method', visibility: 'public', signature: 'run(): Promise<void>' },
+        { name: 'stop', kind: 'method', visibility: 'public', signature: 'stop(): void' },
+        { name: 'reset', kind: 'method', visibility: 'private', signature: 'reset(): void' },
+      ],
+    },
+    'k1.ts.Middle': {
+      kind: 'interface',
+      members: [
+        { name: 'id', kind: 'field', visibility: 'public', signature: 'string' },
+        { name: 'fork', kind: 'field', visibility: 'public', signature: 'IProviderFork' },
+      ],
+    },
+    'k2.ts.Leaf': { kind: 'function', members: [{ name: 'options', kind: 'field', visibility: 'public', signature: 'Options' }] },
+    'k3.ts.Deep': { kind: 'abstract', members: [] },
+  },
+};
+
+test('AC-415 实体细节：kind 透传、members 按上限截断并报告，kindCounts 统计预算前全体', () => {
+  // Three hops reach all four entities; a two-node budget keeps only the seed
+  // and its first neighbour, which is what makes "pre-budget" observable.
+  const result = generateGraph(
+    DETAIL_INDEX,
+    { files: [], identifiers: ['Seed'] },
+    { hops: 3, maxNodes: 2, maxMembers: 3 },
+  );
+  console.log(
+    `AC-415 reading: detail nodes=${JSON.stringify(result.graph.entity.nodes.map((node) => [node.id, node.kind, node.members?.length ?? 0]))} ` +
+      `kindCounts=${JSON.stringify(result.stats.kindCounts)} membersTruncated=${String(result.stats.membersTruncated)} ` +
+      `membersPerEntity=${String(result.stats.membersPerEntity)}`,
+  );
+
+  const byId = new Map(result.graph.entity.nodes.map((node) => [node.id, node]));
+  const seedNode = byId.get('k0.ts.Seed');
+  const middleNode = byId.get('k1.ts.Middle');
+  assert.ok(seedNode !== undefined && middleNode !== undefined, 'the two retained nodes must be present');
+  assert.equal(byId.size, 2, 'the node budget still cuts the entity graph at maxNodes');
+
+  // ① kind is the normalised entity kind, one per retained node.
+  assert.equal(seedNode.kind, 'class');
+  assert.equal(middleNode.kind, 'interface');
+
+  // ② members are front-truncated to maxMembers (not re-sorted, not dropped).
+  assert.equal(result.stats.membersPerEntity, 3);
+  assert.equal(seedNode.members?.length, 3, 'a six-member class ships exactly the cap');
+  assert.deepEqual(
+    seedNode.members?.map((member) => member.name),
+    ['constructor', 'count', 'labels'],
+    'the retained members are the first N in ArchGuard order',
+  );
+  assert.deepEqual(seedNode.members?.[1], {
+    name: 'count',
+    kind: 'field',
+    visibility: 'private',
+    signature: 'number',
+  });
+  assert.equal(result.stats.membersTruncated, true, 'a cut member list must be visibly cut');
+  assert.equal(middleNode.members?.length, 2, 'an under-cap entity keeps its whole body');
+
+  // ③ kindCounts is a reading of the PRE-budget reachable set: all four kinds,
+  //    including the two entities the node budget cut.
+  assert.deepEqual(result.stats.kindCounts, { class: 1, interface: 1, function: 1, abstract: 1 });
+  assert.equal(result.stats.entityTotal, 4, 'the kind counts describe the same pre-budget total');
+  assert.equal(result.stats.entityNodes, 2);
+
+  // ④ the file graph is a path projection: no kind, no members, old shape.
+  for (const node of result.graph.file.nodes) {
+    assert.deepEqual(Object.keys(node).sort(), ['distance', 'id', 'label']);
+  }
+});
+
+test('AC-415 实体细节：无 entityDetails 时保持旧形态，不凭空产出 kindCounts', () => {
+  const legacy = generateGraph(FIXTURE, FULL_CHAIN_SEEDS, { hops: 1, maxNodes: 100, maxMembers: 5 });
+  for (const node of legacy.graph.entity.nodes) {
+    assert.deepEqual(Object.keys(node).sort(), ['distance', 'id', 'label'], 'a detail-less index emits the legacy node');
+  }
+  assert.equal('kindCounts' in legacy.stats, false, 'no details ⇒ no kindCounts key at all');
+  // The cap was still applied (a knob was passed), so its readout rides, but it
+  // is a reading of zero truncation rather than of missing data.
+  assert.equal(legacy.stats.membersPerEntity, 5);
+  assert.equal(legacy.stats.membersTruncated, false);
+
+  // And with no cap at all, neither member key is emitted — BYTE-identical old
+  // stats shape for callers that never heard of members.
+  const uncapped = generateGraph(FIXTURE, FULL_CHAIN_SEEDS, { hops: 1, maxNodes: 100 });
+  assert.equal('membersPerEntity' in uncapped.stats, false);
+  assert.equal('membersTruncated' in uncapped.stats, false);
+  assert.equal('kindCounts' in uncapped.stats, false);
+});
+
 test('AC-415 带类型边：call/composition 选不同箭头，自环被丢弃', () => {
   const index: ArchIndex = {
     fileToIds: { 'a.ts': ['a.ts.A', 'a.ts.B'], 'b.ts': ['b.ts.C'] },

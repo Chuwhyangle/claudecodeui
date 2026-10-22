@@ -38,6 +38,10 @@ import {
   generateGraph,
   isRelationType,
   type ArchIndex,
+  type EntityDetail,
+  type EntityKind,
+  type EntityMember,
+  type EntityMemberKind,
   type GenerateGraphResult,
   type GraphStats,
   type NeighborhoodGraph,
@@ -51,6 +55,26 @@ const MANIFEST_RELATIVE_PATH = path.join('.archguard', 'query', 'manifest.json')
 
 /** Where each scope's pre-built adjacency lives, relative to the project root. */
 const QUERY_RELATIVE_DIRECTORY = path.join('.archguard', 'query');
+
+/**
+ * Name of the per-scope archive that carries entity kinds and members. It sits
+ * NEXT TO `arch-index.json` (the index deliberately does not repeat either),
+ * and its content is what the index's `archJsonHash` fingerprints.
+ */
+const ARCHIVE_FILENAME = 'arch.json';
+
+/**
+ * Default cap on the members carried per entity node.
+ *
+ * The entity graph is a UML class-diagram source, and a box with more than a
+ * couple of dozen rows is unreadable before it is slow, so the cap is a payload
+ * bound rather than a display opinion: a 60-member god class ships its first 20
+ * rows plus `membersTruncated: true`, which is enough to style the node and say
+ * "there is more behind this" without a megabyte of signatures. It is a
+ * generation knob (part of the content-addressed key), so a caller can raise it
+ * without touching the cache by accident.
+ */
+export const DEFAULT_MAX_MEMBERS = 20;
 
 /**
  * Default node budget for the ENTITY graph. It is deliberately LOOSE: the
@@ -130,6 +154,8 @@ export type ArchitectureGraphParams = {
   readonly hops: number;
   readonly maxNodes: number;
   readonly maxFiles: number;
+  /** Per-entity member cap; part of the key because it changes the payload. */
+  readonly maxMembers: number;
 };
 
 /** How many seeds the transcript yielded, before any were resolved. */
@@ -150,16 +176,45 @@ export type ArchitectureGraphStats = GraphStats &
     readonly unresolved: UnresolvedSeeds;
   };
 
+/** Why a scope contributed no entity details. */
+export type ArchitectureDiagnosticCode =
+  /** The scope directory has an `arch-index.json` but no sibling `arch.json`. */
+  | 'ARCH_JSON_MISSING'
+  /** `arch.json` exists but the filesystem read failed (permissions, I/O). */
+  | 'ARCH_JSON_UNREADABLE'
+  /** `arch.json` was read but is not the documented shape (JSON or `entities`). */
+  | 'ARCH_JSON_INVALID';
+
+/**
+ * One visible reading of a degraded detail source.
+ *
+ * The architecture tab still answers when `arch.json` is missing — the graph is
+ * just drawn without kinds and members — but "degraded" must be distinguishable
+ * from "this analysis has no classes", so the reason rides along in the
+ * provenance instead of being swallowed by a bare `try { } catch { }`.
+ */
+export type ArchitectureDiagnostic = {
+  readonly scope: string;
+  readonly code: ArchitectureDiagnosticCode;
+  readonly message: string;
+};
+
 /**
  * Honesty payload (ADR-005 decision 7): when the ArchGuard analysis that backs
- * this reading was produced, which scope fingerprints were used, and whether
- * this response came from the result cache.
+ * this reading was produced, which scope fingerprints were used, whether this
+ * response came from the result cache, and — new and optional — any detail
+ * source that was degraded.
  */
 export type ArchitectureProvenance = {
   /** `manifest.generatedAt` — the analysis time, not the request time. */
   readonly generatedAt: string | null;
   readonly fingerprints: readonly { readonly scope: string; readonly archJsonHash: string }[];
   readonly cacheHit: boolean;
+  /**
+   * One entry per scope whose `arch.json` could not be used. Omitted when every
+   * source was intact, so a healthy payload keeps its exact old provenance.
+   */
+  readonly diagnostics?: readonly ArchitectureDiagnostic[];
 };
 
 /**
@@ -186,6 +241,12 @@ export type ArchitectureServiceDeps = {
   readonly readSessionHistory: (sessionId: string) => Promise<readonly NormalizedMessage[]>;
   /** Generation step; overridable so a criterion can count calls. */
   readonly generateGraph?: typeof generateGraph;
+  /**
+   * Reads one scope's `arch.json` text. Optional: production leaves it unset and
+   * the service reads the file itself, while a criterion injects a counter to
+   * prove the content-addressed cache performs no second archive read.
+   */
+  readonly readArchiveFile?: (filePath: string) => Promise<string>;
 };
 
 /** The service surface consumed by the route. */
@@ -318,13 +379,19 @@ function mergeFileKey(prefix: string, file: string): string {
  * the directory its keys are relative to.
  *
  * `ArchitectureScopeIndex` is the cache's `TIndex`: it must carry
- * `archJsonHash`, and the merge reads the other two fields. `sourcePrefix`
+ * `archJsonHash`, and the merge reads the other fields. `sourcePrefix`
  * belongs to the manifest, not to the file, so it is stamped on at read time.
+ *
+ * `entityDetails`/`diagnostics` come from the sibling `arch.json`, read in the
+ * SAME parse step (so they are memoised under the same `archJsonHash` and cost
+ * one read per analysis, never one per request). `entityDetails` is absent when
+ * that archive is missing or unusable; `diagnostics` says why.
  */
 type ParsedScopeIndex = ArchIndex & {
   readonly archJsonHash: string;
   readonly scopeKey: string;
   readonly sourcePrefix: string;
+  readonly diagnostics: readonly ArchitectureDiagnostic[];
 };
 
 /**
@@ -352,16 +419,153 @@ function parseRelationsByType(
 }
 
 /**
+ * Normalise an `arch.json` entity `type` plus its `isAbstract` flag onto the
+ * wire's five-plus-one kind vocabulary.
+ *
+ * `abstract` is derived (a class flagged `isAbstract`), not an ArchGuard type,
+ * so a renderer can style it without reading a second field. Unknown types map
+ * to `other` instead of being dropped: the node is still real.
+ */
+function normalizeEntityKind(type: unknown, isAbstract: unknown): EntityKind {
+  if (type === 'class') return isAbstract === true ? 'abstract' : 'class';
+  if (type === 'interface') return 'interface';
+  if (type === 'enum') return 'enum';
+  if (type === 'function') return 'function';
+  return 'other';
+}
+
+/**
+ * Collapse ArchGuard's member vocabulary onto `field`/`method`.
+ *
+ * `property` is the spelling the TypeScript extractor uses for an interface
+ * field, and constructors/getters/setters are callable members; everything else
+ * (`static block`, future kinds) is skipped rather than mislabelled.
+ */
+function normalizeMemberKind(type: unknown): EntityMemberKind | null {
+  if (type === 'field' || type === 'property') return 'field';
+  if (type === 'method' || type === 'constructor' || type === 'getter' || type === 'setter') return 'method';
+  return null;
+}
+
+/** Render one parameter of a method signature (`name?: type`, or just `name`). */
+function renderParameter(value: unknown): string | null {
+  if (!isRecord(value) || typeof value.name !== 'string' || value.name.length === 0) return null;
+  const optional = value.isOptional === true ? '?' : '';
+  const type = typeof value.type === 'string' && value.type.length > 0 ? `: ${value.type}` : '';
+  return `${value.name}${optional}${type}`;
+}
+
+/**
+ * A display-ready one-liner for a member.
+ *
+ * Methods get `name(a: T, b?: U): R`; fields get their declared type (ArchGuard
+ * records it as `fieldType`) and nothing when it recorded none. This is the
+ * `signature` a class box prints — it is never parsed back, so it stays a
+ * string rather than a structured shape.
+ */
+function memberSignature(member: Record<string, unknown>, kind: EntityMemberKind): string | undefined {
+  const name = typeof member.name === 'string' ? member.name : '';
+  if (kind === 'field') {
+    return typeof member.fieldType === 'string' && member.fieldType.length > 0 ? member.fieldType : undefined;
+  }
+  const parameters = Array.isArray(member.parameters)
+    ? member.parameters.map(renderParameter).filter((part): part is string => part !== null)
+    : [];
+  const returns = typeof member.returnType === 'string' && member.returnType.length > 0 ? `: ${member.returnType}` : '';
+  return `${name}(${parameters.join(', ')})${returns}`;
+}
+
+/** Parse one member record, or `null` when it is not a shape this module can name. */
+function parseMember(value: unknown): EntityMember | null {
+  if (!isRecord(value) || typeof value.name !== 'string' || value.name.length === 0) return null;
+  const kind = normalizeMemberKind(value.type);
+  if (kind === null) return null;
+  const visibility = typeof value.visibility === 'string' ? value.visibility : undefined;
+  const signature = memberSignature(value, kind);
+  return {
+    name: value.name,
+    kind,
+    ...(visibility === undefined ? {} : { visibility }),
+    ...(signature === undefined ? {} : { signature }),
+  };
+}
+
+/** Parse ArchGuard's `entities` array into the per-entity detail map. */
+function parseEntities(entities: readonly unknown[]): Record<string, EntityDetail> {
+  const details: Record<string, EntityDetail> = {};
+  for (const value of entities) {
+    if (!isRecord(value) || typeof value.id !== 'string' || value.id.length === 0) continue;
+    const members = Array.isArray(value.members)
+      ? value.members.map(parseMember).filter((member): member is EntityMember => member !== null)
+      : [];
+    details[value.id] = { kind: normalizeEntityKind(value.type, value.isAbstract), members };
+  }
+  return details;
+}
+
+/**
+ * Read one scope's `arch.json` for entity kinds and members.
+ *
+ * Never throws: the caller's reading degrades to the legacy node shape, and the
+ * returned diagnostic is what keeps the degradation visible in the provenance.
+ */
+async function readScopeArchive(
+  readArchiveFile: (filePath: string) => Promise<string>,
+  archivePath: string,
+  scopeKey: string,
+): Promise<{ details?: Record<string, EntityDetail>; diagnostic?: ArchitectureDiagnostic }> {
+  let text: string;
+  try {
+    text = await readArchiveFile(archivePath);
+  } catch (error) {
+    const missing = (error as NodeJS.ErrnoException).code === 'ENOENT';
+    return {
+      diagnostic: {
+        scope: scopeKey,
+        code: missing ? 'ARCH_JSON_MISSING' : 'ARCH_JSON_UNREADABLE',
+        message: missing
+          ? `scope '${scopeKey}' has no ${ARCHIVE_FILENAME}; entity nodes carry no kind or members`
+          : `scope '${scopeKey}' could not read ${ARCHIVE_FILENAME}: ${String(error)}`,
+      },
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = null;
+  }
+  if (!isRecord(parsed) || !Array.isArray(parsed.entities)) {
+    return {
+      diagnostic: {
+        scope: scopeKey,
+        code: 'ARCH_JSON_INVALID',
+        message: `scope '${scopeKey}' has an unreadable ${ARCHIVE_FILENAME} (no entities array); entity nodes carry no kind or members`,
+      },
+    };
+  }
+  return { details: parseEntities(parsed.entities) };
+}
+
+/**
  * Parse one `.archguard/query/<scope>/arch-index.json`.
  *
  * Only the seven fields the AC-415 generator reads are validated. Anything
  * else in the file (`cycles`, ...) is irrelevant here and is dropped, which is
  * also what keeps the merge shape small for the generator.
+ *
+ * After the index is validated, the sibling `arch.json` is read for entity
+ * kinds and members. That read is deliberately TOLERANT: a missing or broken
+ * archive degrades the reading (nodes keep `id`/`label`/`distance`) and records
+ * a diagnostic, because an old analysis tree must not turn the whole tab into a
+ * 500. The index itself stays strict — a broken index is the error it always was.
  */
 async function readScopeIndex(
   projectPath: string,
   scopeKey: string,
   sourcePrefix: string,
+  readArchiveFile: (filePath: string) => Promise<string>,
 ): Promise<ParsedScopeIndex> {
   const indexPath = path.join(projectPath, QUERY_RELATIVE_DIRECTORY, scopeKey, 'arch-index.json');
   let text: string;
@@ -388,10 +592,17 @@ async function readScopeIndex(
     throw new Error(`ArchGuard index at '${indexPath}' carries no archJsonHash`);
   }
 
+  const archive = await readScopeArchive(
+    readArchiveFile,
+    path.join(projectPath, QUERY_RELATIVE_DIRECTORY, scopeKey, ARCHIVE_FILENAME),
+    scopeKey,
+  );
+
   return {
     archJsonHash: parsed.archJsonHash,
     scopeKey,
     sourcePrefix,
+    diagnostics: archive.diagnostic === undefined ? [] : [archive.diagnostic],
     fileToIds: requireField(isStringArrayRecord(parsed.fileToIds) ? parsed.fileToIds : undefined, 'fileToIds', scopeKey),
     nameToIds: requireField(isStringArrayRecord(parsed.nameToIds) ? parsed.nameToIds : undefined, 'nameToIds', scopeKey),
     dependencies: requireField(isStringArrayRecord(parsed.dependencies) ? parsed.dependencies : undefined, 'dependencies', scopeKey),
@@ -399,6 +610,9 @@ async function readScopeIndex(
     idToFile: requireField(isStringRecord(parsed.idToFile) ? parsed.idToFile : undefined, 'idToFile', scopeKey),
     idToName: requireField(isStringRecord(parsed.idToName) ? parsed.idToName : undefined, 'idToName', scopeKey),
     relationsByType: parseRelationsByType(parsed.relationsByType),
+    // Spread rather than assign, so the key is ABSENT (not `undefined`) when the
+    // archive was unusable — the generator keys its legacy shape on presence.
+    ...(archive.details === undefined ? {} : { entityDetails: archive.details }),
   };
 }
 
@@ -441,6 +655,10 @@ function mergeScopeIndexes(indexes: readonly ParsedScopeIndex[]): ArchIndex {
   const idToFile: Record<string, string> = {};
   const idToName: Record<string, string> = {};
   const relationsByType: Partial<Record<RelationType, [string, string][]>> = {};
+  // Only attached when at least one scope actually contributed details, so a
+  // project whose archives are all missing keeps the pre-detail index shape.
+  const entityDetails: Record<string, EntityDetail> = {};
+  let hasDetails = false;
 
   for (const index of indexes) {
     const mapFile = (file: string): string => mergeFileKey(index.sourcePrefix, file);
@@ -468,9 +686,22 @@ function mergeScopeIndexes(indexes: readonly ParsedScopeIndex[]): ArchIndex {
       const bucket = (relationsByType[type] ??= []);
       for (const [from, to] of pairs) bucket.push([mapId(from), mapId(to)]);
     }
+    if (index.entityDetails !== undefined) {
+      hasDetails = true;
+      for (const [id, detail] of Object.entries(index.entityDetails)) entityDetails[mapId(id)] = detail;
+    }
   }
 
-  return { fileToIds, nameToIds, dependencies, dependents, idToFile, idToName, relationsByType };
+  return {
+    fileToIds,
+    nameToIds,
+    dependencies,
+    dependents,
+    idToFile,
+    idToName,
+    relationsByType,
+    ...(hasDetails ? { entityDetails } : {}),
+  };
 }
 
 /**
@@ -537,6 +768,9 @@ function buildStats(
  */
 export function createArchitectureService(deps: ArchitectureServiceDeps): ArchitectureService {
   const generate = deps.generateGraph ?? generateGraph;
+  // Production reads the archive with the same `fs.promises` the index uses; a
+  // criterion injects a counter here to observe the cache's disk behaviour.
+  const readArchiveFile = deps.readArchiveFile ?? ((filePath: string) => fsPromises.readFile(filePath, 'utf8'));
 
   /**
    * Fingerprint memo, keyed by the index FILE and stamped with `mtime`/size.
@@ -563,10 +797,10 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
   ): Promise<ParsedScopeIndex> {
     const indexPath = path.join(projectPath, QUERY_RELATIVE_DIRECTORY, scopeKey, 'arch-index.json');
     const stamp = await statStamp(indexPath);
-    if (stamp === null) return readScopeIndex(projectPath, scopeKey, sourcePrefix);
+    if (stamp === null) return readScopeIndex(projectPath, scopeKey, sourcePrefix, readArchiveFile);
     const memo = fingerprints.get(indexPath);
     if (memo !== undefined && memo.stamp === stamp) return memo.parsed;
-    const parsed = await readScopeIndex(projectPath, scopeKey, sourcePrefix);
+    const parsed = await readScopeIndex(projectPath, scopeKey, sourcePrefix, readArchiveFile);
     fingerprints.set(indexPath, { stamp, parsed });
     return parsed;
   }
@@ -587,7 +821,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         const stamp = await statStamp(indexPath);
         const memo = fingerprints.get(indexPath);
         if (stamp !== null && memo !== undefined && memo.stamp === stamp) return memo.parsed;
-        const parsed = await readScopeIndex(projectPath, scopeKey, sourcePrefix);
+        const parsed = await readScopeIndex(projectPath, scopeKey, sourcePrefix, readArchiveFile);
         if (stamp !== null) fingerprints.set(indexPath, { stamp, parsed });
         return parsed;
       },
@@ -653,11 +887,16 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         hops: input.hops ?? DEFAULT_HOPS,
         maxNodes: input.maxNodes ?? DEFAULT_MAX_NODES,
         maxFiles: DEFAULT_MAX_FILES,
+        maxMembers: DEFAULT_MAX_MEMBERS,
       };
       const fingerprints = refs.map((ref, index) => ({
         scope: scopeKeys[index],
         archJsonHash: ref.archJsonHash,
       }));
+      // Degradations are a property of the analysis, so they ride even on the
+      // empty-seed short circuit: a tab that shows nothing should still be able
+      // to say why its nodes would have no kinds.
+      const diagnostics = cachedIndexes.flatMap((index) => index.diagnostics);
 
       // An empty transcript has nothing to expand. Short-circuit BEFORE the
       // cache/generator: there is no content key worth memoising and no
@@ -672,6 +911,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
             generatedAt: manifest.generatedAt,
             fingerprints,
             cacheHit: false,
+            ...(diagnostics.length === 0 ? {} : { diagnostics }),
           },
         };
       }
@@ -701,6 +941,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
           // `build` runs only on a result-layer miss, so this is a reading of
           // the cache itself rather than a guess about its internals.
           cacheHit: !built,
+          ...(diagnostics.length === 0 ? {} : { diagnostics }),
         },
       };
     },

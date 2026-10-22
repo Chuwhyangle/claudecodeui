@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
+  ArchitectureEntityKind,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
   ArchitectureRendererNode,
@@ -25,17 +26,37 @@ export type ArchitectureProvenanceFingerprint = {
   readonly archJsonHash: string;
 };
 
+/** Why a scope contributed no entity kinds/members (mirrors the server). */
+export type ArchitectureDiagnosticCode =
+  | 'ARCH_JSON_MISSING'
+  | 'ARCH_JSON_UNREADABLE'
+  | 'ARCH_JSON_INVALID';
+
+/**
+ * One visible reading of a degraded entity-detail source: the scope whose
+ * `arch.json` could not be used, why, and a human-readable message. Absent from
+ * the provenance entirely when every source was intact.
+ */
+export type ArchitectureDiagnostic = {
+  readonly scope: string;
+  readonly code: ArchitectureDiagnosticCode;
+  readonly message: string;
+};
+
 /**
  * Honesty payload (ADR-005 decision 7): when the ArchGuard analysis behind this
- * reading was produced, which scope fingerprints it used, and whether the
- * server answered from its content-addressed result cache. The panel shows all
- * three so a user can tell "last analysis" from "live working tree".
+ * reading was produced, which scope fingerprints it used, whether the server
+ * answered from its content-addressed result cache, and — optional — any
+ * degraded detail source. The panel shows the first three so a user can tell
+ * "last analysis" from "live working tree".
  */
 export type ArchitectureProvenance = {
   /** `manifest.generatedAt` — the analysis time, not the request time. */
   readonly generatedAt: string | null;
   readonly fingerprints: readonly ArchitectureProvenanceFingerprint[];
   readonly cacheHit: boolean;
+  /** Present only when some scope's `arch.json` was missing or unusable. */
+  readonly diagnostics?: readonly ArchitectureDiagnostic[];
 };
 
 /** How many seeds the session transcript yielded, before any were resolved. */
@@ -67,6 +88,16 @@ export type ArchitectureGraphStats = {
   readonly entityTotal?: number;
   /** Distinct file nodes before the file budget. */
   readonly fileTotal?: number;
+  /**
+   * PRE-BUDGET reachable entities per normalized kind (server-owned analysis
+   * readout). Absent when the server had no `arch.json` detail at all; a kind
+   * that is absent from the map has a count of zero.
+   */
+  readonly kindCounts?: Readonly<Partial<Record<ArchitectureEntityKind, number>>>;
+  /** The per-entity member cap the server applied to `node.members`. */
+  readonly membersPerEntity?: number;
+  /** True when at least one node's member list was cut at `membersPerEntity`. */
+  readonly membersTruncated?: boolean;
   readonly seedFiles: number;
   readonly seedIdentifiers: number;
   readonly nodeCount: number;

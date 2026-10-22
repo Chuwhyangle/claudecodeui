@@ -43,6 +43,50 @@
  * `idToFile` is not a node this index can place, so it is dropped rather than
  * emitted with a made-up file.
  */
+/**
+ * The node-kind discriminator an entity-graph node carries, normalised from the
+ * `type` ArchGuard writes on each `arch.json` entity.
+ *
+ * `abstract` is not an ArchGuard `type`: it is a `class` whose `isAbstract` flag
+ * is set, so the frontend can style it apart from a concrete class without a
+ * second boolean on the wire. Everything this module does not recognise (a
+ * namespace, a type alias, a future ArchGuard kind) normalises to `other`
+ * rather than being dropped — a node with an unknown kind is still a node.
+ */
+export type EntityKind = 'class' | 'interface' | 'enum' | 'abstract' | 'function' | 'other';
+
+/** The two member kinds a class/interface body distinguishes. */
+export type EntityMemberKind = 'field' | 'method';
+
+/**
+ * One member of an entity, as the entity graph carries it.
+ *
+ * `kind` collapses ArchGuard's finer `type` vocabulary (`field`/`property` →
+ * `field`; `method`/`constructor`/`getter`/`setter` → `method`) so a renderer
+ * has exactly two cases. `visibility` is passed through verbatim when present.
+ * `signature` is a display-ready one-liner: for a method its parameter list
+ * and return type (`checkCredentials(): Promise<...>`), for a field its
+ * declared type when ArchGuard recorded one.
+ */
+export type EntityMember = {
+  readonly name: string;
+  readonly kind: EntityMemberKind;
+  readonly visibility?: string;
+  readonly signature?: string;
+};
+
+/**
+ * What the sibling `arch.json` knows about one entity beyond its index entry.
+ *
+ * This is the payload of the `kind`/`members` node fields. It is OPTIONAL on
+ * every entity: a scope whose `arch.json` is absent or unreadable contributes
+ * no details, and its nodes keep the legacy `id`/`label`/`distance` shape.
+ */
+export type EntityDetail = {
+  readonly kind: EntityKind;
+  readonly members: readonly EntityMember[];
+};
+
 /** The relation types ArchGuard records for a scope. */
 export type RelationType = 'dependency' | 'call' | 'composition' | 'inheritance' | 'implementation';
 
@@ -69,6 +113,16 @@ export type ArchIndex = {
    * a scope index may omit the field entirely.
    */
   readonly relationsByType?: Readonly<Partial<Record<RelationType, readonly (readonly [string, string])[]>>>;
+  /**
+   * Per-entity kind and members, read from the scope's sibling `arch.json`
+   * (they are NOT in `arch-index.json`). Keyed by the same raw entity id as
+   * `idToFile`/`idToName`, so the caller's scope-prefix merge applies here too.
+   *
+   * Optional, and absent as a whole when no scope contributed details: that is
+   * what keeps a legacy payload (or a project whose `arch.json` is missing)
+   * byte-identical to the pre-detail shape.
+   */
+  readonly entityDetails?: Readonly<Record<string, EntityDetail>>;
 };
 
 /**
@@ -102,6 +156,13 @@ export type GenerateGraphParams = {
   readonly maxNodes: number;
   /** Independent file-node budget. Defaults to `maxNodes` when omitted. */
   readonly maxFiles?: number;
+  /**
+   * Cap on the members emitted per entity node. Omitted means "no cap": a
+   * caller that has no product opinion gets the full member list, and a
+   * payload produced without the field is byte-identical to the pre-detail
+   * shape. The route-side caller passes the shipped default.
+   */
+  readonly maxMembers?: number;
 };
 
 /**
@@ -128,6 +189,21 @@ export type GraphStats = {
   readonly entityTotal?: number;
   /** Distinct file nodes before the file budget. Optional on older payloads. */
   readonly fileTotal?: number;
+  /**
+   * Count of the PRE-BUDGET reachable entities per {@link EntityKind}. This is
+   * a property of the analysis, not of the node budget: a `maxNodes` cut never
+   * changes it. Only entities whose `arch.json` detail was readable are
+   * counted (an entity with no detail has no known kind, and is NOT silently
+   * counted as `other`).
+   *
+   * Optional and absent when the index carries no `entityDetails` at all, so a
+   * legacy reading keeps its exact old stats shape.
+   */
+  readonly kindCounts?: Readonly<Partial<Record<EntityKind, number>>>;
+  /** The per-entity member cap this reading was generated with. */
+  readonly membersPerEntity?: number;
+  /** True when at least one retained node's member list was cut at `membersPerEntity`. */
+  readonly membersTruncated?: boolean;
 };
 
 /** Seeds that matched nothing in this index, in first-occurrence order (deduplicated). */
@@ -156,6 +232,19 @@ export type NeighborhoodNode = {
   readonly label: string;
   readonly distance: number;
   readonly type?: string;
+  /**
+   * The entity's normalised kind, when its scope's `arch.json` was readable.
+   * Omitted on the file graph always (a file is not a class), and on the
+   * entity graph for a scope whose archive is missing or unparseable — so an
+   * old payload and a detail-less reading stay indistinguishable in shape.
+   */
+  readonly kind?: EntityKind;
+  /**
+   * The entity's members (capped at the caller's `maxMembers`). Omitted when
+   * no detail is available OR the entity has no members; `membersTruncated`
+   * in the stats says whether any node's list was cut.
+   */
+  readonly members?: readonly EntityMember[];
 };
 
 /** One directed edge of the neighbourhood JSON, typed by ArchGuard's relation kind. */
@@ -488,6 +577,59 @@ function entityLabel(index: ArchIndex, id: string): string {
 }
 
 /**
+ * Count the PRE-BUDGET reachable entities by kind.
+ *
+ * `ids` is the full reachable set, not the retained prefix — `kindCounts`
+ * describes the analysis the reading was cut from, which is what lets a UI say
+ * "412 functions in this neighbourhood" while drawing a 50-node preview.
+ *
+ * Returns `undefined` when the index carries no details at all (the legacy
+ * shape), so a reading without `arch.json` keeps its exact old stats object.
+ * An entity that has no detail entry is skipped rather than counted as `other`:
+ * `other` means "an ArchGuard kind this module does not know", while a missing
+ * entry means "no information", and conflating the two would invent data.
+ */
+function countEntityKinds(
+  index: ArchIndex,
+  ids: readonly string[],
+): Partial<Record<EntityKind, number>> | undefined {
+  const details = index.entityDetails;
+  if (details === undefined) return undefined;
+  const counts: Partial<Record<EntityKind, number>> = {};
+  for (const id of ids) {
+    const detail = details[id];
+    if (detail === undefined) continue;
+    counts[detail.kind] = (counts[detail.kind] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Build one entity node, enriching it with `kind`/`members` when the index has
+ * a detail entry for it.
+ *
+ * The cap is applied here rather than in the caller so the emitted member list
+ * and the `membersTruncated` flag are computed from the same comparison — a
+ * node can never be cut without the stats saying so, or vice versa.
+ */
+function entityNode(
+  index: ArchIndex,
+  id: string,
+  distance: number,
+  maxMembers: number | undefined,
+  truncated: { value: boolean },
+): NeighborhoodNode {
+  const base: NeighborhoodNode = { id, label: entityLabel(index, id), distance };
+  const detail = index.entityDetails?.[id];
+  if (detail === undefined) return base;
+
+  const cap = maxMembers ?? detail.members.length;
+  const members = detail.members.length > cap ? detail.members.slice(0, cap) : detail.members;
+  if (members.length < detail.members.length) truncated.value = true;
+  return members.length === 0 ? { ...base, kind: detail.kind } : { ...base, kind: detail.kind, members };
+}
+
+/**
  * Map the generator's internal edges onto the JSON wire shape.
  *
  * The JSON keeps one entry per (from, to, relationType) triple — the same
@@ -518,6 +660,7 @@ export function generateGraph(
 ): GenerateGraphResult {
   const hops = params.hops ?? 1;
   const maxFiles = params.maxFiles ?? params.maxNodes;
+  const maxMembers = params.maxMembers;
   if (!Number.isInteger(hops) || hops < 0) {
     throw new RangeError(`generateGraph: hops must be a non-negative integer, received ${String(hops)}`);
   }
@@ -526,6 +669,11 @@ export function generateGraph(
   }
   if (!Number.isInteger(maxFiles) || maxFiles < 0) {
     throw new RangeError(`generateGraph: maxFiles must be a non-negative integer, received ${String(maxFiles)}`);
+  }
+  if (maxMembers !== undefined && (!Number.isInteger(maxMembers) || maxMembers < 0)) {
+    throw new RangeError(
+      `generateGraph: maxMembers must be a non-negative integer when supplied, received ${String(maxMembers)}`,
+    );
   }
 
   const { resolved, unresolved } = resolveSeeds(index, seeds);
@@ -575,12 +723,13 @@ export function generateGraph(
 
   // The JSON node list carries each node's true hop distance; `retained` is
   // already sorted (distance, id), so retaining that order here is what makes a
-  // client-side `maxNodes` prefix meaningful rather than arbitrary.
-  const entityNodes: NeighborhoodNode[] = retained.map((id) => ({
-    id,
-    label: entityLabel(index, id),
-    distance: distance.get(id) ?? 0,
-  }));
+  // client-side `maxNodes` prefix meaningful rather than arbitrary. Detail
+  // enrichment happens per retained node only: the file graph is a projection
+  // of PATHS, which carry no members, and stays exactly as it was.
+  const membersTruncated = { value: false };
+  const entityNodes: NeighborhoodNode[] = retained.map((id) =>
+    entityNode(index, id, distance.get(id) ?? 0, maxMembers, membersTruncated),
+  );
 
   const fileNodeList: NeighborhoodNode[] = fileNodes.map((file) => ({
     id: file,
@@ -588,6 +737,11 @@ export function generateGraph(
     distance: fileDistance.get(file) ?? 0,
   }));
   fileNodeList.sort((a, b) => a.distance - b.distance || compareIds(a.id, b.id));
+
+  // Kind counts describe the FULL reachable set (`allEntityIds`), i.e. before
+  // the node budget — deliberately not `retained`, so cutting the preview never
+  // rewrites the analysis readout.
+  const kindCounts = countEntityKinds(index, allEntityIds);
 
   return {
     mmd: { file: fileMmd, entity: entityMmd },
@@ -605,6 +759,13 @@ export function generateGraph(
       fileTruncated,
       entityTotal: allEntityIds.length,
       fileTotal: fileDistance.size,
+      ...(kindCounts !== undefined ? { kindCounts } : {}),
+      // Both member readouts are emitted together or not at all: a payload with
+      // no cap has nothing to report, and `membersTruncated: false` alone would
+      // be a reading of a decision that was never made.
+      ...(maxMembers !== undefined
+        ? { membersPerEntity: maxMembers, membersTruncated: membersTruncated.value }
+        : {}),
     },
     unresolved,
   };

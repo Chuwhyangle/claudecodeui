@@ -11,9 +11,10 @@ import type { ComponentType } from 'react';
  *
  * The graph shapes mirror the server's neighbourhood JSON schema
  * (`server/modules/architecture/generator.ts`): a node is `id`/`label`/
- * `distance` plus a RESERVED optional `type`, an edge is `from`/`to`/
- * `relationType`. The wire payload satisfies these types structurally, so no
- * per-renderer mapping step is needed.
+ * `distance` plus a RESERVED optional `type` and the optional entity detail
+ * (`kind`/`members`), an edge is `from`/`to`/`relationType`. The wire payload
+ * satisfies these types structurally, so no per-renderer mapping step is
+ * needed.
  */
 
 /**
@@ -23,12 +24,43 @@ import type { ComponentType } from 'react';
  *
  * `type` is reserved for a future node-kind discriminator; the server does not
  * emit it yet, and it stays optional so a payload without it is valid.
+ *
+ * `kind`/`members` are the server's entity detail (see the backend generator's
+ * `EntityKind`/`EntityMember`): the normalised UML kind and the class/interface
+ * body. They are OPTIONAL on purpose — the file graph never carries them, an
+ * entity whose `arch.json` was unusable carries neither, and a payload written
+ * before they existed stays valid. This contract only forwards them; no
+ * renderer change is implied by their presence.
  */
 export type ArchitectureRendererNode = {
   readonly id: string;
   readonly label: string;
   readonly distance: number;
   readonly type?: string;
+  readonly kind?: ArchitectureEntityKind;
+  readonly members?: readonly ArchitectureEntityMember[];
+};
+
+/**
+ * The normalised kind of an entity node, mirroring the server's vocabulary.
+ * `abstract` is a class flagged abstract upstream, and `other` is a real entity
+ * whose ArchGuard kind this client does not recognise (never a missing one).
+ */
+export type ArchitectureEntityKind = 'class' | 'interface' | 'enum' | 'abstract' | 'function' | 'other';
+
+/** Whether a member is drawn in the attribute or the operation compartment. */
+export type ArchitectureEntityMemberKind = 'field' | 'method';
+
+/**
+ * One member of an entity box. `signature` is the server's display-ready
+ * one-liner (a method's parameters/return type, or a field's declared type) and
+ * is absent when upstream recorded none; it is never parsed back.
+ */
+export type ArchitectureEntityMember = {
+  readonly name: string;
+  readonly kind: ArchitectureEntityMemberKind;
+  readonly visibility?: string;
+  readonly signature?: string;
 };
 
 /** One directed graph edge, carrying ArchGuard's relation kind for styling. */
