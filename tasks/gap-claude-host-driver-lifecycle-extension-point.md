@@ -2,7 +2,7 @@
 id: gap-claude-host-driver-lifecycle-extension-point
 title: ClaudeResidentHostDriver 第二刀：run/turn 结局处理与通知改成可注册扩展点（react
   侧镜像第一刀，handler 从同目录兄弟文件注册 + 负对照判据），driver 只留派发骨架
-status: todo
+status: ready
 labels:
   - gap
 parent: null
