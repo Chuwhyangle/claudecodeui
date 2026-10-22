@@ -253,8 +253,47 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
  * that cannot serve any user-facing request. Declarations here are made by the
  * provider's own construction path at boot and are absent until then, which is
  * also how a build with the provider gated off reads: no declaration, no row.
+ *
+ * The registry owns the mutable container as a private field; it used to be a
+ * module-level `Map`, and it lives here so every write and read goes through a
+ * named method. One instance is created at module scope
+ * ({@link runtimeProviderCapabilities}) because the declarations are made by
+ * each provider's construction path at boot and read by the same process's
+ * routes; a test that needs a clean slate imports the module fresh.
  */
-const RUNTIME_PROVIDER_CAPABILITIES = new Map<string, RuntimeProviderCapabilities>();
+class ProviderCapabilitiesRegistry {
+  /** Declarations keyed by provider id; absent means "never declared". */
+  private readonly declarations = new Map<string, RuntimeProviderCapabilities>();
+
+  /**
+   * Records one declaration as a detached copy.
+   *
+   * Idempotent and last-write-wins: the declaration is derived from the
+   * provider's own driver, so re-declaring the same provider at a second
+   * construction point (tests build the registry more than once per process)
+   * must not fail or accumulate.
+   */
+  declare(capabilities: RuntimeProviderCapabilities): void {
+    this.declarations.set(capabilities.provider, copyRuntimeCapabilities(capabilities));
+  }
+
+  /**
+   * Reads one declaration as a detached copy, or `undefined` when nothing
+   * declared it — either the provider is gated off in this build, or its
+   * construction path never ran.
+   */
+  get(provider: string): RuntimeProviderCapabilities | undefined {
+    const declared = this.declarations.get(provider);
+    if (!declared) {
+      return undefined;
+    }
+
+    return copyRuntimeCapabilities(declared);
+  }
+}
+
+/** The single capability registry this module's readers and writers share. */
+const runtimeProviderCapabilities = new ProviderCapabilitiesRegistry();
 
 /**
  * A detached copy of one declaration.
@@ -294,28 +333,19 @@ export const providerCapabilitiesService = {
   },
 
   /**
-   * Records the lifecycle facts of one non-union provider.
-   *
-   * Idempotent and last-write-wins: the declaration is derived from the
-   * provider's own driver, so re-declaring the same provider at a second
-   * construction point (tests build the registry more than once per process)
-   * must not fail or accumulate.
+   * Records the lifecycle facts of one non-union provider via the registry;
+   * see {@link ProviderCapabilitiesRegistry.declare} for the copy and
+   * last-write-wins semantics.
    */
   declareRuntimeProviderCapabilities(capabilities: RuntimeProviderCapabilities): void {
-    RUNTIME_PROVIDER_CAPABILITIES.set(capabilities.provider, copyRuntimeCapabilities(capabilities));
+    runtimeProviderCapabilities.declare(capabilities);
   },
 
   /**
-   * Reads one non-union provider's declaration, or `undefined` when nothing
-   * declared it — either the provider is gated off in this build, or its
-   * construction path never ran.
+   * Reads one non-union provider's declaration via the registry; the returned
+   * row is a detached copy, or `undefined` when nothing declared it.
    */
   getRuntimeProviderCapabilities(provider: string): RuntimeProviderCapabilities | undefined {
-    const declared = RUNTIME_PROVIDER_CAPABILITIES.get(provider);
-    if (!declared) {
-      return undefined;
-    }
-
-    return copyRuntimeCapabilities(declared);
+    return runtimeProviderCapabilities.get(provider);
   },
 };
