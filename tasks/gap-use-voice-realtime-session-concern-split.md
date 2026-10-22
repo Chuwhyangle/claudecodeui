@@ -36,11 +36,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **兄弟模块存在且 hook 引用**：`test -f src/modules/chat/voice-realtime/narratorWav.ts -a -f src/modules/chat/voice-realtime/audioFrameEncoding.ts -a -f src/modules/chat/voice-realtime/captionOrdering.ts` 退出 0；`grep -qE "narratorWav|audioFrameEncoding|captionOrdering" src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 退出 0。
-- [ ] (b) **中心文件瘦身**：`test "$(wc -l < src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts)" -lt 3110` 退出 0（基线=立案实测 3110）。
-- [ ] (c) **既有行为判据不改一字仍绿**：窄跑 `npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx src/modules/chat/voice-realtime/tests/voiceRealtimeNarratorStream.test.tsx` 退出 0（纯位移后这些用例必须原样全绿）。
-- [ ] (d) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
+- [x] (a) **兄弟模块存在且 hook 引用**：`test -f src/modules/chat/voice-realtime/narratorWav.ts -a -f src/modules/chat/voice-realtime/audioFrameEncoding.ts -a -f src/modules/chat/voice-realtime/captionOrdering.ts` 退出 0；`grep -qE "narratorWav|audioFrameEncoding|captionOrdering" src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts` 退出 0。
+- [x] (b) **中心文件瘦身**：`test "$(wc -l < src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts)" -lt 3110` 退出 0（基线=立案实测 3110）。
+- [x] (c) **既有行为判据不改一字仍绿**：窄跑 `npx vitest run src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.test.tsx src/modules/chat/voice-realtime/tests/useVoiceRealtimeSession.segmented.test.tsx src/modules/chat/voice-realtime/tests/voiceRealtimeNarratorStream.test.tsx` 退出 0（纯位移后这些用例必须原样全绿）。
+- [x] (d) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
 
 ## DoD
 
