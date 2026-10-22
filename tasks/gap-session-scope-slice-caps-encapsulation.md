@@ -1,7 +1,7 @@
 ---
 id: gap-session-scope-slice-caps-encapsulation
 title: ClaudeSessionScope 封装：claude-session-scope 的 appliedSliceCaps Set 收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
