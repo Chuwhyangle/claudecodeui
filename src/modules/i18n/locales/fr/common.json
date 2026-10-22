@@ -123,6 +123,7 @@
       "raiseDetail": "Augmenter le détail",
       "reduceScope": "Réduire la portée",
       "budgetOmitted": "{{count}} de plus omis par le budget de nœuds",
+      "layoutBudget": "{{count}} affichés dans le budget de mise en page ; augmenter le détail prend plus de temps",
       "kindFunction": "{{count}} fonctions",
       "kindInterface": "{{count}} interfaces",
       "kindClass": "{{count}} classes"

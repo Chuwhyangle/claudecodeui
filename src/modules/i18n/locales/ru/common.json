@@ -123,6 +123,7 @@
       "raiseDetail": "Повысить детализацию",
       "reduceScope": "Уменьшить область",
       "budgetOmitted": "{{count}} ещё не вошли из-за лимита узлов",
+      "layoutBudget": "Показано {{count}} в пределах бюджета компоновки; повышение детализации замедлит отрисовку",
       "kindFunction": "{{count}} функций",
       "kindInterface": "{{count}} интерфейсов",
       "kindClass": "{{count}} классов"

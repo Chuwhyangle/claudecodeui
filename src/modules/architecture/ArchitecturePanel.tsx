@@ -16,6 +16,7 @@ import {
   TOUCH_TARGET_STYLE,
   useTouchLayout,
 } from '@/modules/architecture/hooks/useTouchLayout';
+import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/layoutBudget';
 import type {
   ArchitectureDetailReading,
   ArchitectureNodeIdShape,
@@ -342,6 +343,29 @@ export default function ArchitecturePanel({
   // request. The renderer navigates to it and centres it; the panel only holds
   // the request so a search hit survives the renderer's own navigation state.
   const [focusTarget, setFocusTarget] = useState<ArchitectureFocusTarget | null>(null);
+  // The node the reader asked for is PINNED: the layout budget may cut a large
+  // graph down to its most important nodes, and a searched-for node must
+  // survive that cut even when its own importance would put it outside it.
+  const pinnedNodeIds = useMemo(
+    () => (focusTarget === null ? [] : [focusTarget.id]),
+    [focusTarget],
+  );
+  // The graph the renderer actually receives: the detail tier's cut, then the
+  // layout budget's cut. PlantUML/ELK runs on the main thread and its layout
+  // cost grows super-linearly with the node count, so an over-budget drawing
+  // would freeze the tab; the budget is a local view bound, never a refetch.
+  const layoutFit = useMemo(
+    () => (activeNeighbourhood === null
+      ? null
+      : fitToLayoutBudget(
+        activeNeighbourhood.nodes,
+        activeNeighbourhood.edges,
+        detail,
+        LAYOUT_NODE_BUDGET,
+        pinnedNodeIds,
+      )),
+    [activeNeighbourhood, detail, pinnedNodeIds],
+  );
   // The one-line readout's expanded state: the explanation and the two knobs
   // ("raise detail", "reduce scope") live behind this toggle.
   const [readoutOpen, setReadoutOpen] = useState(false);
@@ -921,7 +945,7 @@ export default function ArchitecturePanel({
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
                 <Renderer
                   key={`${sessionId}:${granularity}:${scope}`}
-                  graph={detailRanking?.graph ?? neighbourhood}
+                  graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
                   // The detail knob's two numbers, so a renderer that has a
                   // visible-summary slot can report shown/in-scope rather than
                   // its own drawn/total reading.
@@ -962,6 +986,23 @@ export default function ArchitecturePanel({
                     {foldedCount > 0 && (
                       <span data-architecture-folded-badge={foldedCount} className="text-foreground">
                         {t('architecture.readout.folded', { defaultValue: '+{{count}} folded', count: foldedCount })}
+                      </span>
+                    )}
+                    {layoutFit?.limited === true && (
+                      // The layout budget is stated, never offered as a "render
+                      // it all anyway" escape: the freeze it prevents cannot be
+                      // interrupted on the main thread. The number is what the
+                      // renderer actually draws.
+                      <span
+                        data-architecture-layout-budget={layoutFit.graph.nodes.length}
+                        data-architecture-layout-budget-tier={layoutFit.tier}
+                        data-architecture-layout-budget-dropped={layoutFit.droppedCount}
+                        className="text-amber-600 dark:text-amber-400"
+                      >
+                        {t('architecture.readout.layoutBudget', {
+                          defaultValue: 'Showing {{count}} within the layout budget; raising detail takes longer',
+                          count: layoutFit.graph.nodes.length,
+                        })}
                       </span>
                     )}
                     {truncation.truncated && (

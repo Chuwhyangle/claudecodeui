@@ -6,32 +6,51 @@ import type { LayoutEngine } from '@yalehwang/plantuml-js/elk';
  * ELK lays a graph out for its own default proportions, so a container's shape
  * never reached the layout: a tall narrow screen was handed the same wide
  * drawing a desktop got, and the client only scaled that drawing to fit. This
- * module is the layout-side half of the fix — it builds the renderer's
- * `LayoutEngine` and injects the container's width/height ratio into the ELK
- * layout call, so the drawing is laid out FOR the container instead of scaled
- * into it afterwards.
+ * module is the layout-side half of the fix — it CONSTRUCTS the renderer's
+ * `LayoutEngine` with the container's width/height ratio as the engine's
+ * `aspectRatio` option, so the drawing is laid out FOR the container instead of
+ * scaled into it afterwards.
  *
- * The package's ELK engine (0.2.x) exposes no `layoutOptions` of its own, so
- * the hint is injected at the one seam that exists: the graph object each
- * engine hands to its elkjs client. `createLayoutEngine` is the SINGLE place
- * that seam is touched, which is also why switching to the upstream
- * `layoutOptions: { aspectRatio }` (plantuml-js `gap-layout-aspect-ratio-option`)
- * is a one-function change here and nowhere else: callers keep passing a ratio
- * and tests keep asserting the ratio reaches the layout.
+ * This is the upstream seam `elkAspectEngine`'s predecessor announced: through
+ * plantuml-js 0.2.x the package exposed no layout options, so the ratio was
+ * injected by wrapping the engine's private elkjs client. 0.3.0 makes
+ * `aspectRatio` a public constructor option (and injects it into the root and
+ * every package container), so the wrap is gone: `createLayoutEngine` is the
+ * SINGLE place an engine is constructed, and it passes exactly one option.
  *
  * Consumers: `PlantUmlGraph.tsx` (the diagram) and
- * `tests/layoutAspect.test.tsx` (ratio plumbing, structure equivalence, the
- * re-layout threshold and its debounce).
+ * `tests/layoutAspect.test.tsx` (ratio plumbing, the re-layout threshold and
+ * its debounce, and the drawn proportions of real-shape fixtures).
  */
 
 /** The layout contract this module returns; mirrors the package's `LayoutEngine`. */
 export type ArchitectureLayoutEngine = LayoutEngine;
 
 /**
+ * The public constructor options this module uses. Kept as a structural subset
+ * of the package's `ElkLayoutOptions` so no package type has to be imported at
+ * runtime (the package is loaded through a dynamic import by the caller).
+ */
+export type ArchitectureLayoutEngineOptions = {
+  /** Target canvas width/height ratio (`elk.aspectRatio`), e.g. 16/9 for a desktop panel. */
+  readonly aspectRatio?: number;
+};
+
+/**
+ * The engine constructor the factory builds. Injected rather than imported:
+ * the package is loaded through a dynamic import (it must stay out of the
+ * first-screen chunk), so the caller owns that import and this module owns the
+ * options the instance is built with.
+ */
+export type ArchitectureLayoutEngineClass = new (
+  options?: ArchitectureLayoutEngineOptions,
+) => ArchitectureLayoutEngine;
+
+/**
  * The ratio the ELK engine applies when nothing measures the container. It is
- * the package's own built-in default (`elk.aspectRatio: '1.6'` in 0.2.x), so a
- * drawing made without a hint is compared against the ratio it actually used
- * rather than against a number invented here.
+ * the package's own built-in default (`elk.aspectRatio: 1.6`), so a drawing
+ * made without a hint is compared against the ratio it actually used rather
+ * than against a number invented here.
  */
 export const DEFAULT_LAYOUT_ASPECT_RATIO = 1.6;
 
@@ -77,166 +96,34 @@ export function shouldRelayoutForAspect(drawn: number | null, measured: number |
   return Math.abs(clampAspectRatio(measured) - base) / base > ASPECT_RELAYOUT_THRESHOLD;
 }
 
-/** One graph node as the engine hands it to elkjs; only `layoutOptions` and `children` are read. */
-type ElkGraph = {
-  readonly layoutOptions?: Readonly<Record<string, string>>;
-  readonly children?: readonly ElkGraph[];
-};
-
-/** The elkjs client the engine lays out through; its `layout` is the injection seam. */
-type ElkClient = {
-  layout(graph: ElkGraph, options?: unknown): Promise<unknown>;
-};
-
-/** The only part of the wrapped engine this module needs, and the part the package keeps private. */
-type EngineWithElkClient = {
-  elk: ElkClient;
-};
-
-/**
- * The client's ORIGINAL layout, remembered across wraps so wrapping the same
- * engine twice replaces the ratio instead of stacking two injections (the
- * second graph would otherwise be re-hinted on the way into the first).
- */
-const BASE_ELK_LAYOUT = Symbol('architecture.elkAspect.baseLayout');
-type ElkClientWithBase = ElkClient & { [BASE_ELK_LAYOUT]?: ElkClient['layout'] };
-
-/**
- * `elk.layered.wrapping.strategy = MULTI_EDGE`. Measured while implementing
- * this module: `elk.aspectRatio` alone only steers how DISCONNECTED components
- * are packed, so a deep dependency chain stayed a 0.03-aspect strip whatever
- * ratio was asked for. Wrapping is what makes the layered algorithm fold a long
- * layer sequence into rows and therefore honour the requested ratio.
- */
-const WRAPPING_LAYOUT_OPTIONS: Readonly<Record<string, string>> = {
-  'elk.layered.wrapping.strategy': '2',
-};
-
-/**
- * The layering strategy that caps how many nodes one layer may hold. It is the
- * only lever that folds a WIDE, single-component graph: measured on the real
- * overview (18 group boxes, 17 edges, labels `modules/... (N)`), every
- * `elk.aspectRatio` from 0.4 to 2.5 drew the very same 1789.96×548 canvas
- * (aspect 3.27). With `layerBound=2` the same graph is 534.71×904 (aspect 0.59).
- */
-const LEAF_LAYER_BOUND_STRATEGY = 'COFFMAN_GRAHAM';
-
-/**
- * How many nodes a flat leaf layer may put in one row, derived from the
- * container ratio and the number of leaves in that layer.
- *
- * The starting point was `round(sqrt(ratio * N * 0.25))`; calibrating it on the
- * real overview above (N = 18) showed the rounding has to go UP: at ratio 0.4
- * `round` yields 1, which drew 351×1612 and *lengthened* total edge length
- * (17886 vs the 17494 baseline), while `ceil` yields 2 — 534.71×904 with
- * crossings unchanged (0) and a shorter edge total (10725). The bound is
- * therefore `ceil(sqrt(ratio * N * 0.25))`, clamped to the layer's own size.
- */
-function leafLayerBound(ratio: number, leafCount: number): number {
-  const derived = Math.ceil(Math.sqrt(ratio * leafCount * 0.25));
-  return Math.min(leafCount, Math.max(1, derived));
-}
-
-/** Whether every child of `graph` is an entity leaf — the flat layer ELK draws as one wide strip. */
-function isLeafLayer(graph: ElkGraph): graph is ElkGraph & { readonly children: readonly ElkGraph[] } {
-  return graph.children !== undefined
-    && graph.children.length > 0
-    && graph.children.every((child) => child.children === undefined);
-}
-
-/**
- * The same graph with the container ratio (and the wrapping that makes it bite)
- * applied — at EVERY hierarchical level, not just the root.
- *
- * The architecture model is packaged: the root only arranges a handful of
- * package containers while the layered layout that decides the drawing's shape
- * runs inside each container. Measured: setting the option on the root alone
- * left a 26-package chain at aspect 0.06 whatever ratio was asked for, while
- * the same option on the containers moved it to 1.64 for a 1.33 container.
- *
- * The layer bound is the exception to "every level": it is applied ONLY to the
- * top layer when that layer consists solely of leaves — the flat overview
- * (directory group boxes or entities) that `aspectRatio` cannot fold at all.
- * Nested/composite layers keep the ratio hint alone: `COFFMAN_GRAHAM` +
- * `layerBound` inside packages regressed a 26-package hierarchy from 670 ms to
- * 2389 ms of layout time and, combined with `INCLUDE_CHILDREN`, once threw
- * `TypeError: Cannot read properties of undefined (reading 'c')`.
- */
-function withAspectHint(graph: ElkGraph, ratio: number): ElkGraph {
-  return hintGraphLevel(graph, ratio, true);
-}
-
-/**
- * One level of {@link withAspectHint}. `isTop` keeps the leaf-layer bound on
- * the root only: a nested package whose children are leaves is still a nested
- * layer, and gets the ratio hint alone (see the note above).
- */
-function hintGraphLevel(graph: ElkGraph, ratio: number, isTop: boolean): ElkGraph {
-  const bound = isTop && ratio < DEFAULT_LAYOUT_ASPECT_RATIO && isLeafLayer(graph)
-    ? leafLayerBound(ratio, graph.children.length)
-    : null;
-  const layoutOptions: Record<string, string> = {
-    ...graph.layoutOptions,
-    ...WRAPPING_LAYOUT_OPTIONS,
-    'elk.aspectRatio': String(ratio),
-  };
-  if (bound !== null) {
-    layoutOptions['elk.layered.layering.strategy'] = LEAF_LAYER_BOUND_STRATEGY;
-    layoutOptions['elk.layered.layering.coffmanGraham.layerBound'] = String(bound);
-  }
-  if (graph.children === undefined) return { ...graph, layoutOptions };
-  return {
-    ...graph,
-    layoutOptions,
-    children: graph.children.map((child) => hintGraphLevel(child, ratio, false)),
-  };
-}
-
-/** What the factory needs: the ratio to apply (null = leave the engine alone) and the engine to steer. */
+/** What the factory needs: the ratio to apply (null = no hint) and the engine class to build. */
 export type CreateLayoutEngineOptions = {
   /**
    * The container's width/height, or `null` when nothing measured it (a
-   * container that has not been laid out yet). `null` returns the engine
-   * untouched, so a caller without a measurement keeps the package's own
+   * container that has not been laid out yet). `null` constructs the engine
+   * with no options, so a caller without a measurement keeps the package's own
    * proportions instead of a guess.
    */
   readonly aspectRatio: number | null;
-  /**
-   * The engine to wrap. Injected rather than constructed here because the
-   * package is loaded through a dynamic import (it must stay out of the
-   * first-screen chunk) — the caller owns that import, this module owns what is
-   * done with the instance.
-   */
-  readonly engine: ArchitectureLayoutEngine;
+  /** The engine class to construct; see {@link ArchitectureLayoutEngineClass}. */
+  readonly Engine: ArchitectureLayoutEngineClass;
 };
 
 /**
  * Build the layout engine the renderer is given. THE single construction point
- * for the architecture diagram: `PlantUmlGraph` never touches an engine other
- * than through this function, so replacing the injection with the upstream
- * `createRenderer({ layout: 'elk', layoutOptions: { aspectRatio } })` is a
- * change to this body alone.
+ * for the architecture diagram: `PlantUmlGraph` never constructs an engine
+ * itself, so the ratio is passed through this one function.
+ *
+ * Only `aspectRatio` is set. The local 0.2.x patches — the `wrapping.strategy`
+ * raw option and the leaf-layer `COFFMAN_GRAHAM` bound — were measured on
+ * 0.3.0 and removed: `aspectRatio` now folds flat overviews and nested
+ * hierarchies on its own, and neither patch changed a single reading (see the
+ * task's implementation record).
  */
 export function createLayoutEngine({
   aspectRatio,
-  engine,
+  Engine,
 }: CreateLayoutEngineOptions): ArchitectureLayoutEngine {
-  if (aspectRatio === null) return engine;
-
-  const ratio = clampAspectRatio(aspectRatio);
-  const client = (engine as unknown as Partial<EngineWithElkClient>).elk;
-  if (client === undefined || typeof client.layout !== 'function') {
-    // Fail loudly rather than quietly drawing the default proportions: a hint
-    // that never reaches the layout must not look like a hint that was applied.
-    throw new Error(
-      'createLayoutEngine: the layout engine exposes no elkjs client, so the container aspect ratio cannot be applied',
-    );
-  }
-
-  const target = client as ElkClientWithBase;
-  const layoutInElk = target[BASE_ELK_LAYOUT] ?? client.layout.bind(client);
-  target[BASE_ELK_LAYOUT] = layoutInElk;
-  client.layout = (graph: ElkGraph, options?: unknown): Promise<unknown> =>
-    layoutInElk(withAspectHint(graph, ratio), options);
-  return engine;
+  if (aspectRatio === null) return new Engine();
+  return new Engine({ aspectRatio: clampAspectRatio(aspectRatio) });
 }

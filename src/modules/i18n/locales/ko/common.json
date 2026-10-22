@@ -123,6 +123,7 @@
       "raiseDetail": "상세 늘리기",
       "reduceScope": "범위 줄이기",
       "budgetOmitted": "노드 예산으로 {{count}}개 더 제외됨",
+      "layoutBudget": "레이아웃 예산 내에서 {{count}}개 표시 중이며, 상세 수준을 높이면 더 느려집니다",
       "kindFunction": "함수 {{count}}개",
       "kindInterface": "인터페이스 {{count}}개",
       "kindClass": "클래스 {{count}}개"
