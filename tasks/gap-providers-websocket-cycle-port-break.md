@@ -56,12 +56,22 @@ extra:
 
 真实落地的标准是「providers 组不再 import websocket、websocket 组退出了 SCC、退出是经端口注入」，不是「多了一个端口文件」。必须贴出：①(a)(b) 的 grep/test 读数与端口安装行；②(c) 判据打印的逐段 SCC 成员与 `websocketInProvidersScc=false`；③(d) AC-394 判据 G1/G2/G3 逐成员（5→3 后仍是基线子集）；④(e) 既有判据退出码；⑤(f) tsc/lint；⑥(g) collateral；⑦纯位移核对（广播/运行查询语义未变）。运行结束不重启 :3001、不发布。
 
+## Evidence
+
+**2026-10-23（续做轮）— 上一轮 suite 三条红同源：端口自安装缺失**
+
+- 三条红（`debug-agent-external-write` / `session-upsert-broadcast` / `session-rename-route`）是同一根因，不是环境抖动：端口只在 `server/index.ts` 安装，而这三条判据都经由 websocket barrel + providers service 组装、不加载 composition root ⇒ `readSessionBroadcastPort()` 返回 null ⇒ rename 与 watcher 批量广播全部变成 no-op（读数 `0 !== 1`、drain `saw 0`），与日志里 `[sessions] rename ...` 之后没有任何帧一致。
+- 修法：在 `server/modules/websocket/services/session-upsert-broadcast.service.ts` 模块体底部自安装 `installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch })`，与 `websocket-state.service.ts:26`（connected-clients）、`chat-run-registry.service.ts:1343`（chat-run-registry）同款；这正是新 port 注释已声明、初版遗漏的装配点。`server/index.ts` 的显式安装保留（重复安装为 no-op，最后安装者胜出）。
+- 单文件复跑读数：`session-upsert-broadcast.test.ts` 8/8 pass；`session-rename-route.test.ts` 4/4 pass；`debug-agent-external-write.test.ts` 5/5 pass（drain saw 2 upserts，blind criterion failures=[]）。
+- 环不受影响：providers 侧仍只读端口（不新增 providers→websocket 边）；新增的自安装边方向是 websocket→shared，不进 providers/websocket 环。
+
 ## Touches
 
 - `server/modules/providers/services/sessions-watcher.service.ts`（broadcastSessionUpsertedBatch 改经 port）
 - `server/modules/providers/services/sessions.service.ts`（broadcastSessionUpserted + chatRunRegistry 改经 port）
 - `server/shared/ports/session-broadcast.port.ts` (new)（broadcastSessionUpserted / broadcastSessionUpsertedBatch 能力）
 - `server/shared/ports/chat-run-registry.port.ts`（条件性：read 函数覆盖 listRunningRuns/isProcessing；新成员可选）
+- `server/modules/websocket/services/session-upsert-broadcast.service.ts`（端口自安装，与 websocket-state / chat-run-registry 同款；使不经 server/index.ts 的装配/判据也安装真实广播者）
 - `server/index.ts`（assembly 安装 session-broadcast port）
 - `server/modules/providers/tests/providers-websocket-cycle.test.ts` (new)（判据：复用 AC-394 扫描器断言 websocket 出环）
 - `server/shared/tests/quay-test-script.test.ts`（collateral：两条 pin 各 +1 及注释算术）
@@ -69,3 +79,11 @@ extra:
 - `server/shared/tests/server-import-cycle-budget.baseline.json`（棘轮：G1 去掉 websocket 组）
 - `scripts/suite-duration-baseline.tsv`（collateral：仅当覆盖率地板跌破 90%）
 - `tasks/gap-providers-websocket-cycle-port-break.md`（自触）
+
+## Blocker
+
+**2026-10-22T22:42:19.054Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/debug-agent/tests/debug-agent-external-write.test.ts:   AssertionError [ERR_ASSERTION]: the load event must have been observed for the drain to mean anything (saw 0)
+- run_id：wk-prod-anchor
+- session_id：9cc0d8d2-66c2-454a-8a70-7e5da01bffc2
