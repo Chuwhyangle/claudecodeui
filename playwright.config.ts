@@ -367,6 +367,15 @@ const RUN_SERVERS = [
 const SINGLE_SPEC_CEILING_MS = 55_000;
 /** Per-spec budgets that differ from `SINGLE_SPEC_CEILING_MS`. Keyed by basename so the rule holds from any cwd. */
 const SPEC_BUDGET_MS: Record<string, number> = {
+  // The architecture tab's geometry criterion: four cases in one worker, each
+  // driving a real page (two viewports of the main arm, two control arms that
+  // inject a defect style and re-read). Measured 2026-10-22 on this worktree:
+  // `4 passed (35.2s)` for the whole invocation — boot, both servers and the
+  // browser launch included — against the 55 s single-file default. 120_000 is
+  // what the sibling interaction-heavy entries below declare, and it keeps a
+  // load-slowed fan-in run from being killed mid-case by the watchdog while
+  // still landing the line inside the goal gate's 60 s kill for a healthy run.
+  'architecture-canvas-layout.spec.ts': 120_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2588,6 +2597,11 @@ if (isDataDirOwner) {
 // the collision the block above describes is between the fixture tree and the *claude* provider's scan root, not
 // between two fixture users — and the specs never run in one invocation, since a selection names one file.
 const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
+  // The architecture tab's geometry criterion. It needs the fixture home for two things the seam
+  // exists for: a session whose transcript names the entities the reading is about (so the server's
+  // seed extractor resolves them), and a project the client will offer the Architecture tab for. The
+  // `.archguard` tree itself is written by the spec under this home before it arms the scenario.
+  'architecture-canvas-layout.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second
