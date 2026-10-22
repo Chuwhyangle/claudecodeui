@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **模块级可变容器归零**：`grep -nE "^const (sessions|handles) = new Map" server/modules/browser-use/browser-use.service.ts` 计数 = **0**。
-- [ ] (b) **状态进类**：`grep -nE "class BrowserUseRuntime" server/modules/browser-use/browser-use.service.ts` 命中，且 `sessions`/`handles` 在类私有字段内。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 browser-use 的既有 server 判据单跑退出 0。
-- [ ] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **模块级可变容器归零**：`grep -nE "^const (sessions|handles) = new Map" server/modules/browser-use/browser-use.service.ts` 计数 = **0**。
+- [x] (b) **状态进类**：`grep -nE "class BrowserUseRuntime" server/modules/browser-use/browser-use.service.ts` 命中，且 `sessions`/`handles` 在类私有字段内。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 browser-use 的既有 server 判据单跑退出 0。
+- [x] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
@@ -45,3 +45,11 @@ extra:
 
 - `server/modules/browser-use/browser-use.service.ts`（2 个 const Map → BrowserUseRuntime 私有字段）
 - `tasks/gap-browser-use-session-state-encapsulation.md`（自触）
+
+## Blocker
+
+**2026-10-22T10:12:05.340Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：6da9f738-d171-49cb-9439-8b47b5f05fd6
