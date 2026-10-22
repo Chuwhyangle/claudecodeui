@@ -22,6 +22,17 @@ const COARSE_POINTER_QUERY = '(pointer: coarse)';
 export const TOUCH_TARGET_STYLE = { minHeight: '44px', minWidth: '44px' } as const;
 
 /**
+ * The hit area of the on-canvas zoom cluster on a FINE pointer: 32×32 CSS
+ * pixels. The cluster floats over the drawing, so its controls must stay small
+ * enough not to hide the diagram, yet WCAG 2.5.8's minimum is 24px and 32 keeps
+ * a mouse comfortably on target. Expressed as an inline style for the same
+ * reason as {@link TOUCH_TARGET_STYLE}: the reading must not depend on the
+ * stylesheet, and a test can assert the number directly. A coarse pointer still
+ * uses the 44px {@link TOUCH_TARGET_STYLE}.
+ */
+export const ZOOM_CLUSTER_TARGET_STYLE = { minHeight: '32px', minWidth: '32px' } as const;
+
+/**
  * Where the compact toolbar's renderer-owned controls are drawn.
  *
  * `ArchitecturePanel` draws ONE compact toolbar row (title, granularity, "…")
