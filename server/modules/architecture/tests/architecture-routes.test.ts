@@ -44,6 +44,7 @@ import {
   type NeighborhoodEdge,
   type NeighborhoodNode,
 } from '../generator.js';
+import { buildMentionIndex } from '../mentions.js';
 import { createArchitectureRoutes } from '../routes.js';
 import { createArchitectureService, hasArchguardCache } from '../service.js';
 
@@ -185,6 +186,17 @@ function postGraph(baseUrl: string, body: unknown): Promise<Response> {
   return fetch(`${baseUrl}/api/architecture/graph`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+function postMentions(baseUrl: string, body: unknown, token?: string): Promise<Response> {
+  return fetch(`${baseUrl}/api/architecture/mentions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -517,15 +529,25 @@ test('the neighbourhood JSON schema is pinned to the renderer contract fields', 
     message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Start at `Alpha`.' }),
   ], { hops: 1 });
 
-  // Every node is id/label/distance — and nothing else, so `type` stays reserved
-  // (an emitted value would change what old clients read).
-  for (const node of [...body.graph.entity.nodes, ...body.graph.file.nodes]) {
+  // Every node carries the three contract fields; an ENTITY seed additionally
+  // carries the optional provenance pair, and the reserved `type` is never
+  // emitted. The file graph has no seeds, so its nodes stay exactly three-key.
+  const provenanceKeys = new Set(['mentionTier', 'mentionCount']);
+  for (const node of body.graph.entity.nodes) {
+    const extra = Object.keys(node).filter((key) => !['distance', 'id', 'label'].includes(key));
+    assert.ok(extra.every((key) => provenanceKeys.has(key)), `unexpected entity node key; got ${JSON.stringify(node)}`);
+  }
+  for (const node of body.graph.file.nodes) {
     assert.deepEqual(
       Object.keys(node).sort(),
       ['distance', 'id', 'label'],
-      `a node must carry exactly id/label/distance; got ${JSON.stringify(node)}`,
+      `a file node must carry exactly id/label/distance; got ${JSON.stringify(node)}`,
     );
   }
+  const seedNode = body.graph.entity.nodes.find((node) => node.distance === 0);
+  assert.ok(seedNode !== undefined);
+  assert.ok('mentionTier' in seedNode && 'mentionCount' in seedNode, 'a seed carries its provenance pair');
+  assert.equal('type' in seedNode, false, 'the reserved type stays unemitted');
   // Every edge is from/to/relationType.
   for (const edge of [...body.graph.entity.edges, ...body.graph.file.edges]) {
     assert.deepEqual(
@@ -792,11 +814,15 @@ test('a scope without arch.json keeps the legacy node shape and names the degrad
 
   assert.equal(body.graph.entity.nodes.length, 4);
   for (const node of body.graph.entity.nodes) {
+    // The legacy DETAIL shape is "no kind, no members". The provenance fields
+    // are a separate, additive reading and are expected on distance-0 nodes.
     assert.deepEqual(
-      Object.keys(node).sort(),
+      Object.keys(node).filter((key) => key !== 'mentionTier' && key !== 'mentionCount').sort(),
       ['distance', 'id', 'label'],
-      `a node from a scope without arch.json must keep the legacy shape; got ${JSON.stringify(node)}`,
+      `a node from a scope without arch.json must keep the legacy detail shape; got ${JSON.stringify(node)}`,
     );
+    assert.equal('kind' in node, false);
+    assert.equal('members' in node, false);
   }
   assert.equal('kindCounts' in body.stats, false, 'no readable detail ⇒ no kind counts');
 
@@ -816,7 +842,12 @@ test('an unparseable arch.json degrades to the legacy shape with an ARCH_JSON_IN
 
   const body = await readGraphBody(root, DETAIL_TRANSCRIPT, { hops: 3 });
   for (const node of body.graph.entity.nodes) {
-    assert.deepEqual(Object.keys(node).sort(), ['distance', 'id', 'label']);
+    assert.deepEqual(
+      Object.keys(node).filter((key) => key !== 'mentionTier' && key !== 'mentionCount').sort(),
+      ['distance', 'id', 'label'],
+    );
+    assert.equal('kind' in node, false);
+    assert.equal('members' in node, false);
   }
   assert.equal(body.provenance.diagnostics?.[0]?.code, 'ARCH_JSON_INVALID');
   assert.equal(body.provenance.diagnostics?.[0]?.scope, 'scope-src');
@@ -908,5 +939,256 @@ test('a missing project or a malformed body is refused with the transport code, 
 
     const negative = await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, hops: -1 });
     assert.equal(negative.status, 400);
+  });
+});
+
+/*
+ * The on-demand provenance endpoint (`POST /api/architecture/mentions`).
+ *
+ * One scope with three entities sharing the name `main` and one uniquely-named
+ * `Unique`; the transcript names both in prose, names `Unique` in a tool result
+ * (the opt-in tier) and touches Unique's file through a Read tool. That is
+ * enough to read every field of the response: candidate counts, ambiguity,
+ * the default/opt-in split, path matching and edge co-mentions.
+ */
+const MENTION_INDEX: ScopeIndexFixture = {
+  fileToIds: { 'm/a.ts': ['M.a'], 'm/b.ts': ['M.b'], 'm/c.ts': ['M.c'], 'm/u.ts': ['M.u'] },
+  nameToIds: { main: ['M.a', 'M.b', 'M.c'], Unique: ['M.u'] },
+  idToFile: { 'M.a': 'm/a.ts', 'M.b': 'm/b.ts', 'M.c': 'm/c.ts', 'M.u': 'm/u.ts' },
+  idToName: { 'M.a': 'main', 'M.b': 'main', 'M.c': 'main', 'M.u': 'Unique' },
+  dependencies: { 'M.a': [], 'M.b': [], 'M.c': [], 'M.u': [] },
+  dependents: { 'M.a': [], 'M.b': [], 'M.c': [], 'M.u': [] },
+};
+
+function mentionTranscript(root: string): NormalizedMessage[] {
+  return [
+    message({ id: 'text-1', kind: 'text', role: 'user', content: 'We discussed `Unique` and main in one breath.' }),
+    message({ id: 'text-2', kind: 'text', role: 'assistant', content: 'Only `Unique` is bound here; main is elsewhere.' }),
+    message({ id: 'text-3', kind: 'text', role: 'user', content: '`main` and `Unique` share a page.' }),
+    message({ id: 'result-1', kind: 'tool_result', toolId: 'call-r', content: 'Unique appears in the tool output' }),
+    message({
+      id: 'read-1',
+      kind: 'tool_use',
+      role: 'assistant',
+      toolName: 'Read',
+      toolInput: { file_path: path.join(root, 'src', 'm', 'u.ts') },
+    }),
+  ];
+}
+
+type MentionBody = {
+  mentions: {
+    entityId: string;
+    candidateCount: number;
+    ambiguous: boolean;
+    hits: { messageId: string; role?: string; kind: string; excerpt: string; at: string }[];
+  }[];
+  edge?: { coMentions: MentionBody['mentions'][number]['hits'] };
+  truncated: boolean;
+};
+
+async function readMentionsBody(
+  root: string,
+  transcript: NormalizedMessage[],
+  request: Record<string, unknown>,
+  buildMentionIndexOverride?: typeof buildMentionIndex,
+): Promise<MentionBody> {
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => transcript,
+        ...(buildMentionIndexOverride === undefined ? {} : { buildMentionIndex: buildMentionIndexOverride }),
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  let body: MentionBody | null = null;
+  await withServer(app, async (baseUrl) => {
+    const response = await postMentions(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, ...request });
+    assert.equal(response.status, 200);
+    body = (await response.json()) as MentionBody;
+  });
+  if (body === null) throw new Error('the server never answered');
+  return body;
+}
+
+test('mentions 唯一名字：命中都来自 fixture 历史，candidateCount=1 且不 ambiguous', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const transcript = mentionTranscript(root);
+  const known = new Set(transcript.map((row) => row.id));
+
+  const body = await readMentionsBody(root, transcript, { entityIds: ['scope-src/M.u'] });
+  const unique = body.mentions[0];
+  assert.ok(unique !== undefined);
+  assert.equal(unique.entityId, 'scope-src/M.u');
+  assert.equal(unique.candidateCount, 1);
+  assert.equal(unique.ambiguous, false);
+  assert.ok(unique.hits.length > 0, 'the unique name must have hits');
+  for (const hit of unique.hits) {
+    assert.ok(known.has(hit.messageId), `${hit.messageId} must exist in the fixture history`);
+    assert.ok(hit.excerpt.length > 0, 'every hit carries an excerpt');
+    assert.ok(hit.at.length > 0, 'every hit carries the message timestamp');
+  }
+  // The Read row names the entity's FILE, so its provenance is included too.
+  assert.ok(unique.hits.some((hit) => hit.messageId === 'read-1'));
+  assert.equal(body.truncated, false);
+  console.log(`mentions reading: unique hits=${JSON.stringify(unique.hits.map((hit) => [hit.messageId, hit.kind]))}`);
+});
+
+test('mentions 同名候选：ambiguous=true 且 candidateCount 等于 nameToIds 长度', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const body = await readMentionsBody(root, mentionTranscript(root), { entityIds: ['scope-src/M.a'] });
+  const main = body.mentions[0];
+  assert.ok(main !== undefined);
+  assert.equal(main.candidateCount, 3);
+  assert.equal(main.ambiguous, true);
+  assert.deepEqual(
+    [...new Set(main.hits.map((hit) => hit.messageId))].sort(),
+    ['text-1', 'text-2', 'text-3'],
+    'every prose row that spells the shared name is a hit',
+  );
+  console.log(`mentions reading: main candidateCount=${main.candidateCount} ambiguous=${String(main.ambiguous)}`);
+});
+
+test('mentions 边：coMentions 是两端名字同条消息的命中', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const body = await readMentionsBody(root, mentionTranscript(root), {
+    edge: { from: 'scope-src/M.a', to: 'scope-src/M.u' },
+  });
+  assert.ok(body.edge !== undefined);
+  assert.deepEqual(
+    body.edge.coMentions.map((hit) => hit.messageId).sort(),
+    ['text-1', 'text-2', 'text-3'],
+    'every row naming BOTH endpoints is a co-mention',
+  );
+  assert.deepEqual(body.mentions, [], 'an edge-only request returns no per-entity list');
+  console.log(`mentions reading: coMentions=${JSON.stringify(body.edge.coMentions.map((hit) => hit.messageId))}`);
+});
+
+test('mentions includeToolResults：默认不含 tool_result，开启后多出该 kind', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const transcript = mentionTranscript(root);
+
+  const byDefault = await readMentionsBody(root, transcript, { entityIds: ['scope-src/M.u'] });
+  assert.ok(byDefault.mentions[0]?.hits.every((hit) => hit.kind !== 'tool_result'));
+
+  const optedIn = await readMentionsBody(root, transcript, {
+    entityIds: ['scope-src/M.u'],
+    includeToolResults: true,
+  });
+  const toolHits = optedIn.mentions[0]?.hits.filter((hit) => hit.kind === 'tool_result') ?? [];
+  assert.equal(toolHits.length, 1, 'the tool_result row is the only extra hit');
+  assert.equal(toolHits[0]?.messageId, 'result-1');
+  console.log(`mentions reading: defaultKinds=${JSON.stringify(byDefault.mentions[0]?.hits.map((hit) => hit.kind))}`);
+});
+
+test('mentions 扫描上限：超过 20000 条消息置 truncated', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const transcript: NormalizedMessage[] = [];
+  for (let index = 0; index < 20_005; index += 1) {
+    transcript.push(message({ id: `bulk-${index}`, kind: 'text', role: 'user', content: `row ${index}` }));
+  }
+  transcript.push(message({ id: 'last-row', kind: 'text', role: 'user', content: '`Unique` is last' }));
+
+  const body = await readMentionsBody(root, transcript, { entityIds: ['scope-src/M.u'] });
+  assert.equal(body.truncated, true, 'a history beyond the scan cap must report the cut');
+  assert.ok(body.mentions[0]?.hits.some((hit) => hit.messageId === 'last-row'), 'the most recent rows are the ones scanned');
+  console.log(`mentions reading: scanned cap truncated=${String(body.truncated)}`);
+});
+
+test('mentions 索引缓存：同一历史上第二次相同请求不重建倒排索引', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const transcript = mentionTranscript(root);
+  let builds = 0;
+  const countingBuild: typeof buildMentionIndex = (messages, options) => {
+    builds += 1;
+    return buildMentionIndex(messages, options);
+  };
+
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => transcript,
+        buildMentionIndex: countingBuild,
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  await withServer(app, async (baseUrl) => {
+    const request = { projectId: 'project-1', sessionId: SESSION_ID, entityIds: ['scope-src/M.u'] };
+    assert.equal((await postMentions(baseUrl, request)).status, 200);
+    assert.equal(builds, 1, 'the first request builds the index');
+    assert.equal((await postMentions(baseUrl, request)).status, 200);
+    assert.equal(builds, 1, 'the same history version must reuse the index');
+    // The opt-in flag is part of the index identity, so it is a new build.
+    assert.equal((await postMentions(baseUrl, { ...request, includeToolResults: true })).status, 200);
+    assert.equal(builds, 2, 'a different tool-result mode needs its own index');
+  });
+  console.log(`mentions reading: builds=${builds}`);
+});
+
+/*
+ * The route is mounted behind `authenticateToken` in `server/index.ts`; this
+ * apps-level stand-in reproduces that mount (refuse a request with no bearer
+ * token) so the transport criteria are read here too. The token value itself is
+ * irrelevant — the middleware stops at its absence.
+ */
+test('mentions 未登录 401，缺参数 400', async (t) => {
+  const { root } = createIndexProject(t, MENTION_INDEX);
+  const app = express();
+  app.use(express.json());
+  app.use('/api/architecture', (request, response, next) => {
+    if (request.headers.authorization === undefined) {
+      response.status(401).json({ error: 'Access denied. No token provided.', code: 'AUTH_TOKEN_INVALID' });
+      return;
+    }
+    next();
+  });
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => mentionTranscript(root),
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  await withServer(app, async (baseUrl) => {
+    const anonymous = await postMentions(baseUrl, {
+      projectId: 'project-1',
+      sessionId: SESSION_ID,
+      entityIds: ['scope-src/M.u'],
+    });
+    assert.equal(anonymous.status, 401, 'a request with no bearer token must be refused');
+
+    // A token lets the request through the stand-in; the missing target then
+    // reaches the route's own validation.
+    const noTarget = await postMentions(
+      baseUrl,
+      { projectId: 'project-1', sessionId: SESSION_ID },
+      'test-token',
+    );
+    assert.equal(noTarget.status, 400, 'neither entityIds nor edge must be a bad request');
+    const noTargetBody = (await noTarget.json()) as { error: { code: string } };
+    assert.equal(noTargetBody.error.code, 'INVALID_REQUEST');
+
+    const accepted = await postMentions(
+      baseUrl,
+      { projectId: 'project-1', sessionId: SESSION_ID, entityIds: ['scope-src/M.u'] },
+      'test-token',
+    );
+    assert.equal(accepted.status, 200, 'the same request with a token is accepted');
   });
 });

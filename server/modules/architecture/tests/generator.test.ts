@@ -25,7 +25,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { generateGraph, validateMermaid, type ArchIndex, type GenerateGraphResult } from '../index.js';
+import {
+  DIRECT_MAX_CANDIDATES,
+  generateGraph,
+  validateMermaid,
+  type ArchIndex,
+  type GenerateGraphResult,
+  type GraphSeeds,
+} from '../index.js';
 
 const FIXTURE_PATH = path.join(import.meta.dirname, 'fixtures', 'arch-index.sample.json');
 
@@ -545,4 +552,109 @@ test('AC-415 带类型边：call/composition 选不同箭头，自环被丢弃',
   assert.ok(!entity.includes('a_ts_A -.-> a_ts_A'), 'an entity self-loop must be dropped');
   assert.deepEqual(validateMermaid(entity), [], 'the typed document must validate cleanly');
   assert.strictEqual(result.stats.entityEdges, 3, 'dependency + call + composition = 3 edges, self-loop dropped');
+});
+
+// ------------------------- mention tiers -------------------------
+
+/**
+ * A real-shape tiering fixture.
+ *
+ *  · `main` resolves to FIVE entities across five files (the ambiguous-name
+ *    shape the live index has for common names);
+ *  · `OnlyOne` is unique;
+ *  · `src/big.ts` holds EIGHT entities (the file-expansion shape).
+ *
+ * `src/a.ts` is named alongside `main` in the synthetic transcript, so its one
+ * entity is disambiguated to `direct` while the other four stay `name`.
+ */
+const TIER_MAIN_IDS = [
+  'src/a.ts.mainA',
+  'src/b.ts.mainB',
+  'src/c.ts.mainC',
+  'src/d.ts.mainD',
+  'src/e.ts.mainE',
+];
+const TIER_BIG_IDS = Array.from({ length: 8 }, (_unused, index) => `src/big.ts.e${String(index)}`);
+const TIER_INDEX: ArchIndex = {
+  fileToIds: {
+    'src/a.ts': ['src/a.ts.mainA'],
+    'src/b.ts': ['src/b.ts.mainB'],
+    'src/c.ts': ['src/c.ts.mainC'],
+    'src/d.ts': ['src/d.ts.mainD'],
+    'src/e.ts': ['src/e.ts.mainE'],
+    'src/only.ts': ['src/only.ts.OnlyOne'],
+    'src/big.ts': TIER_BIG_IDS,
+  },
+  nameToIds: { main: TIER_MAIN_IDS, OnlyOne: ['src/only.ts.OnlyOne'] },
+  idToFile: Object.fromEntries([
+    ...TIER_MAIN_IDS.map((id) => [id, id.slice(0, id.lastIndexOf('.'))]),
+    ['src/only.ts.OnlyOne', 'src/only.ts'],
+    ...TIER_BIG_IDS.map((id) => [id, 'src/big.ts']),
+  ]),
+  idToName: Object.fromEntries([
+    ...TIER_MAIN_IDS.map((id) => [id, 'main']),
+    ['src/only.ts.OnlyOne', 'OnlyOne'],
+    ...TIER_BIG_IDS.map((id) => [id, id.slice(id.lastIndexOf('.') + 1)]),
+  ]),
+  dependencies: Object.fromEntries([...TIER_MAIN_IDS, 'src/only.ts.OnlyOne', ...TIER_BIG_IDS].map((id) => [id, []])),
+  dependents: Object.fromEntries([...TIER_MAIN_IDS, 'src/only.ts.OnlyOne', ...TIER_BIG_IDS].map((id) => [id, []])),
+};
+
+const TIER_SEEDS: GraphSeeds = {
+  files: ['src/big.ts'],
+  identifiers: ['main', 'OnlyOne'],
+  mentions: {
+    // Only src/a.ts co-occurred with the name in the transcript.
+    identifierFiles: { main: ['src/a.ts'] },
+    identifierCounts: { main: 3, OnlyOne: 1 },
+    fileCounts: { 'src/big.ts': 2 },
+  },
+};
+
+test('mention tiers：direct > name > file，节点带档位与提及数，stats.seedTiers 与节点一致', () => {
+  const result = generateGraph(TIER_INDEX, TIER_SEEDS, { hops: 0, maxNodes: 100 });
+  const byId = new Map(result.graph.entity.nodes.map((node) => [node.id, node]));
+  console.log(
+    `mention-tier reading: threshold=${DIRECT_MAX_CANDIDATES} tiers=` +
+      JSON.stringify(result.graph.entity.nodes.map((node) => [node.id, node.mentionTier, node.mentionCount])) +
+      ` stats=${JSON.stringify(result.stats.seedTiers)}`,
+  );
+
+  assert.equal(DIRECT_MAX_CANDIDATES, 3);
+  assert.equal(result.stats.entityNodes, TIER_MAIN_IDS.length + 1 + TIER_BIG_IDS.length);
+
+  // ① ambiguous name + path co-occurrence ⇒ direct; without the path ⇒ name.
+  assert.equal(byId.get('src/a.ts.mainA')?.mentionTier, 'direct', 'the co-mentioned file disambiguates the name');
+  for (const id of TIER_MAIN_IDS.slice(1)) {
+    assert.equal(byId.get(id)?.mentionTier, 'name', `${id} is a same-name candidate`);
+  }
+  // ② a unique name is direct by candidate count alone.
+  assert.equal(byId.get('src/only.ts.OnlyOne')?.mentionTier, 'direct');
+  // ③ file-only expansion is the file tier.
+  for (const id of TIER_BIG_IDS) {
+    assert.equal(byId.get(id)?.mentionTier, 'file', `${id} was expanded from its file`);
+  }
+
+  // mentionCount is the number of messages naming the resolving seed.
+  assert.equal(byId.get('src/a.ts.mainA')?.mentionCount, 3);
+  assert.equal(byId.get('src/only.ts.OnlyOne')?.mentionCount, 1);
+  assert.equal(byId.get('src/big.ts.e0')?.mentionCount, 2);
+
+  // ④ the stats counts are read from the EMITTED nodes, so they agree.
+  const counted = { direct: 0, name: 0, file: 0 };
+  for (const node of result.graph.entity.nodes) {
+    if (node.mentionTier !== undefined) counted[node.mentionTier] += 1;
+  }
+  assert.deepEqual(result.stats.seedTiers, counted);
+  assert.deepEqual(result.stats.seedTiers, { direct: 2, name: 4, file: 8 });
+});
+
+test('mention tiers：没有 provenance 的旧调用逐字节保持旧节点与旧 stats 形态', () => {
+  const legacySeeds: GraphSeeds = { files: TIER_SEEDS.files, identifiers: TIER_SEEDS.identifiers };
+  const result = generateGraph(TIER_INDEX, legacySeeds, { hops: 0, maxNodes: 100 });
+
+  for (const node of result.graph.entity.nodes) {
+    assert.deepEqual(Object.keys(node).sort(), ['distance', 'id', 'label']);
+  }
+  assert.equal('seedTiers' in result.stats, false, 'no provenance ⇒ no seedTiers key');
 });

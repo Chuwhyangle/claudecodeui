@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
   ArchitectureEntityKind,
+  ArchitectureMentionTier,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
   ArchitectureRendererNode,
@@ -98,6 +99,12 @@ export type ArchitectureGraphStats = {
   readonly membersPerEntity?: number;
   /** True when at least one node's member list was cut at `membersPerEntity`. */
   readonly membersTruncated?: boolean;
+  /**
+   * Counts of the distance-0 entity nodes per mention tier. Absent on a payload
+   * emitted before tiers existed; the panel does not need it, but mirroring the
+   * server's stats keeps the payload contract honest for consumers that do.
+   */
+  readonly seedTiers?: Readonly<Record<ArchitectureMentionTier, number>>;
   readonly seedFiles: number;
   readonly seedIdentifiers: number;
   readonly nodeCount: number;

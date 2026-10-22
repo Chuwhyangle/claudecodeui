@@ -23,6 +23,7 @@
  *    {@link hasArchguardCache} path check through this module's barrel.
  *  · `server/modules/architecture/tests/architecture-routes.test.js` (AC-418).
  */
+import { createHash } from 'node:crypto';
 import fs, { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 
@@ -43,12 +44,22 @@ import {
   type EntityMember,
   type EntityMemberKind,
   type GenerateGraphResult,
+  type GraphSeeds,
   type GraphStats,
   type NeighborhoodGraph,
   type RelationType,
+  type SeedMentionProvenance,
   type UnresolvedSeeds,
 } from './generator.js';
-import { extractSeeds } from './seed-extraction.js';
+import { extractSeeds, extractSeedMentions, type SeedMentionResult } from './seed-extraction.js';
+import {
+  buildMentionIndex,
+  DEFAULT_MENTION_HIT_LIMIT,
+  queryCoMentionIndex,
+  queryMentionIndex,
+  type MentionHit,
+  type SessionMentionIndex,
+} from './mentions.js';
 
 /** Where a project's ArchGuard manifest lives, relative to the project root. */
 const MANIFEST_RELATIVE_PATH = path.join('.archguard', 'query', 'manifest.json');
@@ -229,6 +240,46 @@ export type ArchitectureGraphResult = {
 };
 
 /**
+ * The on-demand provenance request behind `POST /api/architecture/mentions`.
+ *
+ * `entityIds` and `edge` are alternatives (the route refuses a request with
+ * neither): the first asks "where was this entity named?", the second asks
+ * "where did these two entities meet?". `includeToolResults` opts into the
+ * noisy tier for this ONE query — the graph's own extraction stays unchanged.
+ */
+export type ArchitectureMentionsInput = {
+  readonly projectId: string;
+  readonly sessionId: string;
+  readonly entityIds?: readonly string[];
+  readonly edge?: { readonly from: string; readonly to: string };
+  readonly includeToolResults?: boolean;
+  readonly limit?: number;
+};
+
+/**
+ * One entity's provenance reading.
+ *
+ * `candidateCount` is how many entities carry this name in the merged index;
+ * `ambiguous` is `candidateCount > 1`, which is what lets the UI say "the name
+ * X matches N entities, so these hits may point at any of them". `hits` is the
+ * already-limited list and the top-level `truncated` says whether any list or
+ * the scan itself was cut.
+ */
+export type ArchitectureMentionEntity = {
+  readonly entityId: string;
+  readonly candidateCount: number;
+  readonly ambiguous: boolean;
+  readonly hits: readonly MentionHit[];
+};
+
+/** The `/mentions` response: per-entity hits plus the optional edge co-mentions. */
+export type ArchitectureMentionsResult = {
+  readonly mentions: readonly ArchitectureMentionEntity[];
+  readonly edge?: { readonly coMentions: readonly MentionHit[] };
+  readonly truncated: boolean;
+};
+
+/**
  * The injected seams. Production binds them to the projects repository and the
  * providers module's full-history reader; the criterion binds temp directories
  * and a fixed transcript, and can replace `generateGraph` with a counter to
@@ -247,11 +298,18 @@ export type ArchitectureServiceDeps = {
    * prove the content-addressed cache performs no second archive read.
    */
   readonly readArchiveFile?: (filePath: string) => Promise<string>;
+  /**
+   * Builds the `/mentions` inverted index. Optional: production leaves it set
+   * to `mentions.ts`'s implementation, while a criterion injects a counting
+   * wrapper to prove a repeated query on the same history does no rebuild.
+   */
+  readonly buildMentionIndex?: typeof buildMentionIndex;
 };
 
 /** The service surface consumed by the route. */
 export type ArchitectureService = {
   readGraph(input: ArchitectureGraphInput): Promise<ArchitectureGraphResult>;
+  readMentions(input: ArchitectureMentionsInput): Promise<ArchitectureMentionsResult>;
 };
 
 /**
@@ -724,6 +782,53 @@ function resolveSeedFile(projectPath: string, raw: string): string | null {
   return toPosix(relative);
 }
 
+/**
+ * Turn the extractor's provenance into the generator's tiering summary.
+ *
+ * File traces are keyed by the RAW path text the transcript used, so every one
+ * is resolved to the project-relative key the index stores first. A file's
+ * resolved key may appear in several rows; the counts add up, which is what
+ * `mentionCount` reports.
+ *
+ * Identifier co-occurrence is read from the SAME message: a row that names
+ * `main` and spells `src/main.ts` disambiguates the name, so every file that
+ * row mentions is attributed to that identifier's co-occurrence set.
+ *
+ * Consumers: `createArchitectureService` (the graph path only; `/mentions`
+ * answers the same question lazily through `mentions.ts`).
+ */
+function buildSeedMentionProvenance(
+  extracted: SeedMentionResult,
+  projectPath: string,
+): SeedMentionProvenance {
+  const filesByMessage = new Map<string, Set<string>>();
+  const fileCounts: Record<string, number> = {};
+
+  for (const [rawFile, trace] of extracted.files) {
+    const resolved = resolveSeedFile(projectPath, rawFile);
+    if (resolved === null) continue;
+    fileCounts[resolved] = (fileCounts[resolved] ?? 0) + trace.hits.length;
+    for (const hit of trace.hits) {
+      const files = filesByMessage.get(hit.messageId) ?? new Set<string>();
+      files.add(resolved);
+      filesByMessage.set(hit.messageId, files);
+    }
+  }
+
+  const identifierFiles: Record<string, readonly string[]> = {};
+  const identifierCounts: Record<string, number> = {};
+  for (const [identifier, trace] of extracted.identifiers) {
+    identifierCounts[identifier] = trace.hits.length;
+    const files = new Set<string>();
+    for (const hit of trace.hits) {
+      for (const file of filesByMessage.get(hit.messageId) ?? []) files.add(file);
+    }
+    if (files.size > 0) identifierFiles[identifier] = [...files].sort();
+  }
+
+  return { identifierFiles, identifierCounts, fileCounts };
+}
+
 function emptyReading(): GenerateGraphResult {
   return {
     mmd: { file: EMPTY_GRAPH_MMD, entity: EMPTY_GRAPH_MMD },
@@ -827,6 +932,86 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
       },
     });
 
+  // The `/mentions` index lives one build per (session history version,
+  // includeToolResults). The version is the row count plus a digest of the last
+  // row's id, which is enough to tell "the transcript grew/changed" from "the
+  // same history is being queried again" without hashing the whole transcript.
+  const mentionIndexCache = new Map<
+    string,
+    { version: string; includeToolResults: boolean; index: SessionMentionIndex }
+  >();
+  const buildMentions = deps.buildMentionIndex ?? buildMentionIndex;
+
+  function historyVersion(messages: readonly NormalizedMessage[]): string {
+    const last = messages.at(-1);
+    const digest = createHash('sha1').update(last?.id ?? '').digest('hex');
+    return `${messages.length}:${digest}`;
+  }
+
+  async function mentionIndexFor(
+    sessionId: string,
+    messages: readonly NormalizedMessage[],
+    includeToolResults: boolean,
+  ): Promise<SessionMentionIndex> {
+    const version = historyVersion(messages);
+    const memo = mentionIndexCache.get(sessionId);
+    if (memo !== undefined && memo.version === version && memo.includeToolResults === includeToolResults) {
+      return memo.index;
+    }
+    const index = buildMentions(messages, { includeToolResults });
+    mentionIndexCache.set(sessionId, { version, includeToolResults, index });
+    return index;
+  }
+
+  /** The project lookup + manifest + merged index every architecture read needs. */
+  async function loadIndex(
+    projectPath: string,
+    projectId: string,
+  ): Promise<{
+    manifest: ArchguardManifest;
+    merged: ArchIndex;
+    refs: ArchitectureIndexRef[];
+    scopeKeys: readonly string[];
+    diagnostics: readonly ArchitectureDiagnostic[];
+  }> {
+    const manifest = await readArchguardManifest(projectPath);
+    if (manifest === null) {
+      throw new AppError(
+        `Project "${projectId}" has no .archguard/query/manifest.json — the architecture tab is unavailable.`,
+        {
+          code: 'ARCHGUARD_CACHE_NOT_FOUND',
+          statusCode: 404,
+          details: { hasArchguardCache: false },
+        },
+      );
+    }
+
+    const scopeKeys: string[] = [];
+    for (const scope of manifest.scopes) {
+      if (!scopeKeys.includes(scope.key)) scopeKeys.push(scope.key);
+    }
+
+    // Read each scope (one stat in the steady state) so the merge can answer
+    // `nameToIds` and the seeds can be extracted before the content key exists.
+    const sourcePrefixByKey = new Map(
+      manifest.scopes.map((scope) => [scope.key, scopeSourcePrefix(projectPath, scope.sources)]),
+    );
+    const parsedIndexes = await Promise.all(
+      scopeKeys.map((scopeKey) => readScope(projectPath, scopeKey, sourcePrefixByKey.get(scopeKey) ?? '')),
+    );
+    const refs: ArchitectureIndexRef[] = parsedIndexes.map((parsed, index) => ({
+      scope: encodeScope(projectPath, scopeKeys[index]),
+      archJsonHash: parsed.archJsonHash,
+    }));
+
+    // Route the references through the parse layer so a same-fingerprint hit
+    // never re-reads the file inside the cache either.
+    const cachedIndexes = await Promise.all(refs.map((ref) => cache.getIndex(ref)));
+    const merged = mergeScopeIndexes(cachedIndexes);
+    const diagnostics = cachedIndexes.flatMap((index) => index.diagnostics);
+    return { manifest, merged, refs, scopeKeys, diagnostics };
+  }
+
   return {
     async readGraph(input: ArchitectureGraphInput): Promise<ArchitectureGraphResult> {
       const projectPath = deps.resolveProjectPath(input.projectId);
@@ -837,50 +1022,23 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         });
       }
 
-      const manifest = await readArchguardManifest(projectPath);
-      if (manifest === null) {
-        throw new AppError(
-          `Project "${input.projectId}" has no .archguard/query/manifest.json — the architecture tab is unavailable.`,
-          {
-            code: 'ARCHGUARD_CACHE_NOT_FOUND',
-            statusCode: 404,
-            details: { hasArchguardCache: false },
-          },
-        );
-      }
-
-      const scopeKeys: string[] = [];
-      for (const scope of manifest.scopes) {
-        if (!scopeKeys.includes(scope.key)) scopeKeys.push(scope.key);
-      }
-
-      // Read each scope (one stat in the steady state) so the merge can answer
-      // `nameToIds` and the seeds can be extracted before the content key exists.
-      const sourcePrefixByKey = new Map(
-        manifest.scopes.map((scope) => [scope.key, scopeSourcePrefix(projectPath, scope.sources)]),
-      );
-      const parsedIndexes = await Promise.all(
-        scopeKeys.map((scopeKey) => readScope(projectPath, scopeKey, sourcePrefixByKey.get(scopeKey) ?? '')),
-      );
-      const refs: ArchitectureIndexRef[] = parsedIndexes.map((parsed, index) => ({
-        scope: encodeScope(projectPath, scopeKeys[index]),
-        archJsonHash: parsed.archJsonHash,
-      }));
-
-      // Route the references through the parse layer so a same-fingerprint hit
-      // never re-reads the file inside the cache either.
-      const cachedIndexes = await Promise.all(refs.map((ref) => cache.getIndex(ref)));
-      const merged = mergeScopeIndexes(cachedIndexes);
+      const { manifest, merged, refs, scopeKeys, diagnostics } = await loadIndex(projectPath, input.projectId);
       const knownIdentifiers = new Set(Object.keys(merged.nameToIds));
 
       const messages = await deps.readSessionHistory(input.sessionId);
       const extracted = extractSeeds(messages, knownIdentifiers);
+      // Extraction runs once more for provenance: the same rows, the same
+      // qualification rules, so a tier can never claim a mention the seed lists
+      // did not see.
+      const mentionExtraction = extractSeedMentions(messages, knownIdentifiers);
 
-      const seeds = {
-        files: extracted.files
-          .map((file) => resolveSeedFile(projectPath, file))
-          .filter((file): file is string => file !== null),
+      const seedFiles = extracted.files
+        .map((file) => resolveSeedFile(projectPath, file))
+        .filter((file): file is string => file !== null);
+      const seeds: GraphSeeds = {
+        files: seedFiles,
         identifiers: extracted.identifiers,
+        mentions: buildSeedMentionProvenance(mentionExtraction, projectPath),
       };
 
       const params: ArchitectureGraphParams = {
@@ -893,10 +1051,6 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         scope: scopeKeys[index],
         archJsonHash: ref.archJsonHash,
       }));
-      // Degradations are a property of the analysis, so they ride even on the
-      // empty-seed short circuit: a tab that shows nothing should still be able
-      // to say why its nodes would have no kinds.
-      const diagnostics = cachedIndexes.flatMap((index) => index.diagnostics);
 
       // An empty transcript has nothing to expand. Short-circuit BEFORE the
       // cache/generator: there is no content key worth memoising and no
@@ -943,6 +1097,64 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
           cacheHit: !built,
           ...(diagnostics.length === 0 ? {} : { diagnostics }),
         },
+      };
+    },
+
+    async readMentions(input: ArchitectureMentionsInput): Promise<ArchitectureMentionsResult> {
+      const projectPath = deps.resolveProjectPath(input.projectId);
+      if (projectPath === null) {
+        throw new AppError(`Project "${input.projectId}" was not found.`, {
+          code: 'PROJECT_NOT_FOUND',
+          statusCode: 404,
+        });
+      }
+
+      // The names and files a hit is matched against come from the same merged
+      // index the graph was built from, so an entity id in the graph payload is
+      // directly addressable here.
+      const { merged } = await loadIndex(projectPath, input.projectId);
+      const messages = await deps.readSessionHistory(input.sessionId);
+      const includeToolResults = input.includeToolResults === true;
+      const index = await mentionIndexFor(input.sessionId, messages, includeToolResults);
+      const limit = input.limit ?? DEFAULT_MENTION_HIT_LIMIT;
+
+      let truncated = index.truncated;
+      const mentions: ArchitectureMentionEntity[] = [];
+      for (const entityId of input.entityIds ?? []) {
+        const name = merged.idToName[entityId];
+        const file = merged.idToFile[entityId];
+        const candidates = name === undefined ? 0 : (merged.nameToIds[name]?.length ?? 0);
+        const reading = queryMentionIndex(index, {
+          ...(name === undefined ? {} : { name }),
+          ...(file === undefined ? {} : { file }),
+          limit,
+        });
+        truncated ||= reading.truncated;
+        mentions.push({
+          entityId,
+          candidateCount: candidates,
+          ambiguous: candidates > 1,
+          hits: reading.hits,
+        });
+      }
+
+      // An edge's reading needs BOTH endpoint names; an id the index cannot
+      // name contributes nothing rather than failing the whole request.
+      let edge: { coMentions: readonly MentionHit[] } | undefined;
+      if (input.edge !== undefined) {
+        const fromName = merged.idToName[input.edge.from];
+        const toName = merged.idToName[input.edge.to];
+        const reading = fromName === undefined || toName === undefined
+          ? { hits: [], truncated: false }
+          : queryCoMentionIndex(index, fromName, toName, limit);
+        truncated ||= reading.truncated;
+        edge = { coMentions: reading.hits };
+      }
+
+      return {
+        mentions,
+        ...(edge === undefined ? {} : { edge }),
+        truncated,
       };
     },
   };

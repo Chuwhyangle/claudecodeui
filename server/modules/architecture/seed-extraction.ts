@@ -42,8 +42,13 @@ export type SeedExtractionResult = {
   identifiers: string[];
 };
 
-/** Tools whose `toolInput.file_path` names a file the conversation touched. */
-const FILE_SEED_TOOLS: ReadonlySet<string> = new Set(['Read', 'Edit', 'Write', 'NotebookEdit']);
+/**
+ * Tools whose `toolInput.file_path` names a file the conversation touched.
+ *
+ * Exported for `mentions.ts`, which indexes the same tool rows for the
+ * on-demand provenance search; both readings must name the same tools.
+ */
+export const FILE_SEED_TOOLS: ReadonlySet<string> = new Set(['Read', 'Edit', 'Write', 'NotebookEdit']);
 
 /**
  * Upper bound on file seeds, applied AFTER de-duplication so a path that is
@@ -61,8 +66,14 @@ const MAX_FILE_SEEDS = 20;
  */
 const MAX_IDENTIFIER_SEEDS = 40;
 
-/** Identifier-shaped tokens: `[A-Za-z_$][A-Za-z0-9_$]*` (AC-416). */
-const IDENTIFIER_TOKEN = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+/**
+ * Identifier-shaped tokens: `[A-Za-z_$][A-Za-z0-9_$]*` (AC-416).
+ *
+ * Exported for `mentions.ts`'s inverted index: the on-demand search tokenises
+ * messages with the SAME word-boundary definition the extractor uses, so a
+ * name that is a seed is also a searchable token.
+ */
+export const IDENTIFIER_TOKEN = /[A-Za-z_$][A-Za-z0-9_$]*/g;
 
 /** Inline code spans — everything between a pair of backticks is one span. */
 const BACKTICK_SPAN = /`[^`]*`/g;
@@ -94,8 +105,11 @@ const HOSTNAME_SEGMENT = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
  * transcript is untrusted input, and one malformed row must not abort the
  * extraction. The path is returned VERBATIM (no absolute/relative conversion,
  * no scope-prefix splitting) — that belongs to the caller.
+ *
+ * Consumers: `extractSeeds`/`extractSeedMentions` below, and `mentions.ts`'
+ * inverted index (the same tool rows, the same path reading).
  */
-function readFilePath(toolInput: unknown): string | undefined {
+export function readFilePath(toolInput: unknown): string | undefined {
   let parsed = toolInput;
   if (typeof parsed === 'string') {
     try {
@@ -117,9 +131,15 @@ function readFilePath(toolInput: unknown): string | undefined {
  * its tool calls anyway, while a path a person typed is a direct statement of
  * which file the conversation is about. Hostname-shaped first segments are
  * rejected so `www.example.com/a/b.html` is not mistaken for `a/b.html`.
+ *
+ * Returns the token AND its offset in `content`, because the provenance
+ * readings (`extractSeedMentions`, `mentions.ts`) need the excerpt window
+ * around the hit while the seed lists only need the token.
+ *
+ * Consumers: `extractSeeds`, `extractSeedMentions`, and `mentions.ts`.
  */
-function projectPathCandidates(content: string): string[] {
-  const candidates: string[] = [];
+export function projectPathTokens(content: string): Array<{ token: string; start: number }> {
+  const candidates: Array<{ token: string; start: number }> = [];
   for (const match of content.matchAll(PROJECT_PATH_TOKEN)) {
     const token = match[1];
     const firstSegment = token.replace(/^\.{0,2}\//, '').split('/')[0];
@@ -130,14 +150,21 @@ function projectPathCandidates(content: string): string[] {
     const lastSegment = token.split('/').at(-1) ?? '';
     const dot = lastSegment.lastIndexOf('.');
     if (dot <= 0 || !/^[A-Za-z][A-Za-z0-9]*$/.test(lastSegment.slice(dot + 1))) continue;
-    candidates.push(token);
+    // `match[0]` includes the boundary character before the token; the token
+    // itself starts at the end of the match minus its own length.
+    candidates.push({ token, start: (match.index ?? 0) + match[0].length - token.length });
   }
   return candidates;
 }
 
+/** The token-only projection of {@link projectPathTokens}. */
+function projectPathCandidates(content: string): string[] {
+  return projectPathTokens(content).map((entry) => entry.token);
+}
+
 /**
- * Candidate identifier tokens from one text message, in first-occurrence order
- * (duplicates kept; the caller filters and de-duplicates).
+ * Candidate identifier tokens (with their offsets) from one text message, in
+ * first-occurrence order (duplicates kept; the caller filters and de-duplicates).
  *
  * A token qualifies when EITHER of the two AC-416 rules names it:
  *  ① it sits inside a backtick span — any case counts, so an all-lowercase
@@ -148,22 +175,30 @@ function projectPathCandidates(content: string): string[] {
  * The union is taken in a single left-to-right token walk so the result keeps
  * first-occurrence order across both rules rather than emitting one rule's
  * tokens ahead of the other's.
+ *
+ * Consumers: `identifierCandidates` below (the seed lists) and
+ * `extractSeedMentions` (which needs the offset for the excerpt).
  */
-function identifierCandidates(content: string): string[] {
+export function identifierCandidateTokens(content: string): Array<{ token: string; start: number }> {
   const spanRanges: Array<{ start: number; end: number }> = [];
   for (const match of content.matchAll(BACKTICK_SPAN)) {
-    const start = match.index;
+    const start = match.index ?? 0;
     spanRanges.push({ start, end: start + match[0].length });
   }
 
-  const candidates: string[] = [];
+  const candidates: Array<{ token: string; start: number }> = [];
   for (const match of content.matchAll(IDENTIFIER_TOKEN)) {
     const token = match[0];
-    const start = match.index;
+    const start = match.index ?? 0;
     const inSpan = spanRanges.some((range) => start >= range.start && start < range.end);
-    if (inSpan || /[A-Z]/.test(token)) candidates.push(token);
+    if (inSpan || /[A-Z]/.test(token)) candidates.push({ token, start });
   }
   return candidates;
+}
+
+/** The token-only projection of {@link identifierCandidateTokens}. */
+function identifierCandidates(content: string): string[] {
+  return identifierCandidateTokens(content).map((entry) => entry.token);
 }
 
 /**
@@ -227,4 +262,254 @@ export function extractSeeds(
   }
 
   return { files, identifiers };
+}
+
+// ------------------------- mention provenance -------------------------
+
+/**
+ * Where one seed mention was found. The three values mirror the transcript
+ * tiers the extractor recognises: prose, a file-tool call, and — only when the
+ * caller opts in — a tool result or Bash command.
+ */
+export type SeedMentionKind = 'text' | 'tool_use' | 'tool_result';
+
+/** One provenance hit: the message that named the seed and the text around it. */
+export type SeedMentionHit = {
+  /** `NormalizedMessage.id` — the id the transcript UI and the API share. */
+  readonly messageId: string;
+  readonly role?: 'user' | 'assistant';
+  readonly kind: SeedMentionKind;
+  /** Roughly 80 characters either side of the hit, whitespace-collapsed. */
+  readonly excerpt: string;
+  /** The message's timestamp, so a caller can order hits without a second read. */
+  readonly at: string;
+};
+
+/**
+ * Every provenance hit for one seed.
+ *
+ * `truncated` is per seed: a chatty transcript can name one entity more than
+ * `MAX_MENTION_HITS_PER_SEED` times, and the flag is how the reader learns the
+ * list is a prefix rather than the whole story.
+ */
+export type SeedMentionTrace = {
+  readonly seed: string;
+  readonly kind: 'identifier' | 'file';
+  readonly hits: readonly SeedMentionHit[];
+  readonly truncated: boolean;
+};
+
+/**
+ * The extractor's provenance reading: one trace per seed that was mentioned.
+ *
+ * A seed with no hits has no entry (rather than an empty trace), so
+ * `map.size` is the count of seeds with provenance. `includeToolResults`
+ * echoes the mode the reading was taken in — the same transcript yields two
+ * different maps, and a caller must be able to say which one it holds.
+ */
+export type SeedMentionResult = {
+  readonly identifiers: ReadonlyMap<string, SeedMentionTrace>;
+  readonly files: ReadonlyMap<string, SeedMentionTrace>;
+  readonly includeToolResults: boolean;
+};
+
+export type SeedMentionOptions = {
+  /**
+   * Scan `tool_result` rows and Bash command text as provenance sources.
+   *
+   * Defaults to false, matching the seed extractor's deliberate decision that
+   * tool output is the noise tier. The on-demand `/mentions` endpoint is the
+   * only caller that turns it on.
+   */
+  readonly includeToolResults?: boolean;
+};
+
+/** Upper bound on provenance hits kept per seed; the excess sets `truncated`. */
+const MAX_MENTION_HITS_PER_SEED = 20;
+
+/** Characters kept either side of a hit when building an excerpt. */
+const MENTION_EXCERPT_RADIUS = 80;
+
+/**
+ * An excerpt window around one hit, with runs of whitespace folded to spaces.
+ *
+ * Consumers: `extractSeedMentions` below and `mentions.ts` (the on-demand
+ * search), so both readings return the same excerpt shape for the same hit.
+ */
+export function seedMentionExcerpt(content: string, start: number, length: number): string {
+  const from = Math.max(0, start - MENTION_EXCERPT_RADIUS);
+  const to = Math.min(content.length, start + length + MENTION_EXCERPT_RADIUS);
+  return content.slice(from, to).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Read the command text of a Bash `tool_use` row, accepting the same two
+ * `toolInput` shapes {@link readFilePath} does.
+ *
+ * Consumers: `extractSeedMentions` and `mentions.ts` (both read Bash output as
+ * the opt-in `tool_result` tier).
+ */
+export function readCommand(toolInput: unknown): string | undefined {
+  let parsed = toolInput;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+  if (parsed === null || typeof parsed !== 'object') return undefined;
+  const command = (parsed as { command?: unknown }).command;
+  return typeof command === 'string' && command.length > 0 ? command : undefined;
+}
+
+/**
+ * The text body of a `tool_result` row.
+ *
+ * Providers put the output on `content` (Claude) or under `toolResult.content`
+ * (rows that survived normalization with the richer envelope). Both are read;
+ * a non-string body means this row has no searchable text.
+ *
+ * Consumers: `extractSeedMentions` and `mentions.ts`.
+ */
+export function toolResultText(message: NormalizedMessage): string | undefined {
+  if (typeof message.content === 'string' && message.content.length > 0) return message.content;
+  const nested = message.toolResult?.content;
+  return typeof nested === 'string' && nested.length > 0 ? nested : undefined;
+}
+
+/**
+ * Accumulates one seed's hits, split by seed kind, while applying the per-seed
+ * cap.
+ *
+ * Kept as a tiny closure so every source arm below shares exactly one cap and
+ * one `truncated` rule; a second implementation is how the cap would drift.
+ */
+function createHitRecorder(): {
+  record: (kind: 'identifier' | 'file', seed: string, hit: SeedMentionHit) => void;
+  finish: () => { identifiers: Map<string, SeedMentionTrace>; files: Map<string, SeedMentionTrace> };
+} {
+  const hits = {
+    identifier: new Map<string, SeedMentionHit[]>(),
+    file: new Map<string, SeedMentionHit[]>(),
+  };
+  const truncated = new Set<string>();
+  return {
+    record(kind, seed, hit) {
+      const list = hits[kind].get(seed);
+      if (list === undefined) {
+        hits[kind].set(seed, [hit]);
+        return;
+      }
+      if (list.length >= MAX_MENTION_HITS_PER_SEED) {
+        truncated.add(`${kind}\u0000${seed}`);
+        return;
+      }
+      list.push(hit);
+    },
+    finish() {
+      const build = (kind: 'identifier' | 'file'): Map<string, SeedMentionTrace> => {
+        const traces = new Map<string, SeedMentionTrace>();
+        for (const [seed, list] of hits[kind]) {
+          traces.set(seed, {
+            seed,
+            kind,
+            hits: list,
+            truncated: truncated.has(`${kind}\u0000${seed}`),
+          });
+        }
+        return traces;
+      };
+      return { identifiers: build('identifier'), files: build('file') };
+    },
+  };
+}
+
+/**
+ * Extract per-seed provenance from one session's normalized history.
+ *
+ * The SOURCES match {@link extractSeeds} by default — user/assistant prose and
+ * the four file tools' `file_path` — so a seed's provenance never claims a row
+ * the extractor itself ignores. `options.includeToolResults` additionally scans
+ * `tool_result` bodies and Bash commands, tagging those hits
+ * `kind: 'tool_result'`; that opt-in exists for the on-demand `/mentions`
+ * search, not for extraction (whose default reading stays unchanged).
+ *
+ * One hit per seed per message: a word repeated inside one row is one mention,
+ * which is what keeps `mentionCount` a count of messages that named the seed.
+ *
+ * Consumers: the AC-418 service (tiering and `mentionCount`) and, through the
+ * barrel, `tests/seed-extraction.test.ts`.
+ */
+export function extractSeedMentions(
+  messages: readonly NormalizedMessage[],
+  knownIdentifiers: ReadonlySet<string>,
+  options: SeedMentionOptions = {},
+): SeedMentionResult {
+  const includeToolResults = options.includeToolResults === true;
+  const recorder = createHitRecorder();
+
+  const scanText = (message: NormalizedMessage, content: string, kind: SeedMentionKind): void => {
+    const hitAt = (start: number, length: number): SeedMentionHit => ({
+      messageId: message.id,
+      ...(message.role === undefined ? {} : { role: message.role }),
+      kind,
+      excerpt: seedMentionExcerpt(content, start, length),
+      at: message.timestamp,
+    });
+
+    const seenIdentifiers = new Set<string>();
+    for (const candidate of identifierCandidateTokens(content)) {
+      if (!knownIdentifiers.has(candidate.token) || seenIdentifiers.has(candidate.token)) continue;
+      seenIdentifiers.add(candidate.token);
+      recorder.record('identifier', candidate.token, hitAt(candidate.start, candidate.token.length));
+    }
+
+    const seenFiles = new Set<string>();
+    for (const candidate of projectPathTokens(content)) {
+      if (seenFiles.has(candidate.token)) continue;
+      seenFiles.add(candidate.token);
+      recorder.record('file', candidate.token, hitAt(candidate.start, candidate.token.length));
+    }
+  };
+
+  for (const message of messages) {
+    if (
+      message.kind === 'text'
+      && (message.role === 'user' || message.role === 'assistant')
+      && typeof message.content === 'string'
+    ) {
+      scanText(message, message.content, 'text');
+      continue;
+    }
+
+    if (message.kind === 'tool_use') {
+      if (typeof message.toolName === 'string' && FILE_SEED_TOOLS.has(message.toolName)) {
+        const filePath = readFilePath(message.toolInput);
+        if (filePath !== undefined) {
+          recorder.record('file', filePath, {
+            messageId: message.id,
+            ...(message.role === undefined ? {} : { role: message.role }),
+            kind: 'tool_use',
+            excerpt: filePath,
+            at: message.timestamp,
+          });
+        }
+        continue;
+      }
+      if (includeToolResults && message.toolName === 'Bash') {
+        const command = readCommand(message.toolInput);
+        if (command !== undefined) scanText(message, command, 'tool_result');
+      }
+      continue;
+    }
+
+    if (message.kind === 'tool_result' && includeToolResults) {
+      const content = toolResultText(message);
+      if (content !== undefined) scanText(message, content, 'tool_result');
+    }
+  }
+
+  const { identifiers, files } = recorder.finish();
+  return { identifiers, files, includeToolResults };
 }

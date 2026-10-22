@@ -7,21 +7,31 @@
  * the Tier-1 check through this door only, and `server/index.ts` mounts the
  * composed module; no consumer deep-imports an internal file.
  */
-// consumer: server/modules/architecture/tests/generator.test.ts (AC-415)
+// consumer: server/modules/architecture/tests/generator.test.ts (AC-415),
+// the provenance-tier criterion, and service.ts (GraphSeeds carries `mentions`)
 export type {
   ArchIndex,
   GenerateGraphParams,
   GenerateGraphResult,
   GraphSeeds,
   GraphStats,
+  MentionTier,
+  SeedMentionProvenance,
   UnresolvedSeeds,
 } from './generator.js';
 // consumer: server/modules/architecture/tests/generator.test.ts (AC-415)
-export { generateGraph, validateMermaid } from './generator.js';
+export { DIRECT_MAX_CANDIDATES, generateGraph, validateMermaid } from './generator.js';
 // consumer: server/modules/architecture/tests/seed-extraction.test.ts
-export type { SeedExtractionResult } from './seed-extraction.js';
+export type {
+  SeedExtractionResult,
+  SeedMentionHit,
+  SeedMentionKind,
+  SeedMentionOptions,
+  SeedMentionResult,
+  SeedMentionTrace,
+} from './seed-extraction.js';
 // consumer: server/modules/architecture/tests/seed-extraction.test.ts
-export { extractSeeds } from './seed-extraction.js';
+export { extractSeeds, extractSeedMentions } from './seed-extraction.js';
 // consumer: server/modules/projects/services/projects-with-sessions-fetch.service.ts,
 // server/modules/mcp-gateway/mcp-overview-tools.ts (the Tier-1 gate),
 // server/modules/architecture/tests/architecture-routes.test.ts (AC-418)
@@ -32,6 +42,9 @@ export type {
   ArchitectureGraphParams,
   ArchitectureGraphResult,
   ArchitectureGraphStats,
+  ArchitectureMentionEntity,
+  ArchitectureMentionsInput,
+  ArchitectureMentionsResult,
   ArchitectureProvenance,
   ArchitectureSeedStats,
   ArchitectureService,

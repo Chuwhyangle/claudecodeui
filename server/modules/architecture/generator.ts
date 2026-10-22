@@ -126,17 +126,72 @@ export type ArchIndex = {
 };
 
 /**
+ * How a distance-0 entity earned its place in the graph.
+ *
+ *  · `direct` — the transcript named it and the name is unambiguous (few
+ *    candidates) or the same message also spelled its file path;
+ *  · `name`   — the transcript named it, but the name resolves to more
+ *    entities than {@link DIRECT_MAX_CANDIDATES} and nothing disambiguated it
+ *    (a same-named candidate);
+ *  · `file`   — it was pulled in because its FILE was named (a pasted path or
+ *    a file tool's `file_path`).
+ *
+ * Only `direct` is what the UI draws as a session seed; `name`/`file` entities
+ * stay in the graph (the neighbourhood is unchanged) but are not highlighted.
+ */
+export type MentionTier = 'direct' | 'name' | 'file';
+
+/**
+ * Adjacent-seed provenance the tiering needs, supplied by the extractor
+ * alongside the seed lists.
+ *
+ * Every map is optional-by-presence at the outer level: `GraphSeeds.mentions`
+ * being absent is the legacy reading, where no node carries a tier.
+ *
+ *  · `identifierFiles` — identifier → project-relative files that occurred in
+ *    a message that also named the identifier (path co-occurrence);
+ *  · `identifierCounts` — identifier → number of provenance mentions;
+ *  · `fileCounts` — file seed → number of provenance mentions.
+ */
+export type SeedMentionProvenance = {
+  readonly identifierFiles: Readonly<Record<string, readonly string[]>>;
+  readonly identifierCounts: Readonly<Record<string, number>>;
+  readonly fileCounts: Readonly<Record<string, number>>;
+};
+
+/**
  * The caller's seed lists, already split by scope and stripped of prefixes.
  *
  * `files` entries are looked up in `fileToIds` verbatim; `identifiers` entries
  * are looked up in `nameToIds` with an EXACT, case-sensitive match (no substring
  * or fuzzy matching). Duplicates are collapsed; a seed that resolves to nothing
  * is reported in {@link UnresolvedSeeds} instead of being silently dropped.
+ *
+ * `mentions` is OPTIONAL provenance: absent means the caller ran no mention
+ * extraction, and the payload keeps its exact pre-tier shape (no
+ * `mentionTier`/`mentionCount` on nodes, no `stats.seedTiers`).
  */
 export type GraphSeeds = {
   readonly files: readonly string[];
   readonly identifiers: readonly string[];
+  readonly mentions?: SeedMentionProvenance;
 };
+
+/**
+ * A name resolving to at most this many entities is treated as a DIRECT
+ * mention; anything larger is a same-name candidate (`name` tier) unless the
+ * message also spells the entity's file path.
+ *
+ * Calibrated on the live `.archguard` index (2026-10-22): across the three
+ * scopes the merged `nameToIds` held 1,750 names for 2,009 resolutions — 1,493
+ * unique names, 255 names with two entities, 2 with three, and no name with
+ * more. A threshold of 3 therefore keeps every unambiguous name direct while
+ * still separating a genuinely shared name (the task's `main` fixture, which
+ * maps to five entities) from a unique one. The number is a starting point, not
+ * a law: it is part of this module's contract, and the implementation record's
+ * reading is what justifies it.
+ */
+export const DIRECT_MAX_CANDIDATES = 3;
 
 /**
  * Generation knobs. There is deliberately no shipped default for `maxNodes`:
@@ -204,6 +259,12 @@ export type GraphStats = {
   readonly membersPerEntity?: number;
   /** True when at least one retained node's member list was cut at `membersPerEntity`. */
   readonly membersTruncated?: boolean;
+  /**
+   * Counts of the EMITTED distance-0 nodes by {@link MentionTier}. Present only
+   * when the caller supplied provenance, so a legacy reading has no such key;
+   * the three counts always sum to the number of tiered nodes in `graph`.
+   */
+  readonly seedTiers?: Readonly<Record<MentionTier, number>>;
 };
 
 /** Seeds that matched nothing in this index, in first-occurrence order (deduplicated). */
@@ -245,6 +306,15 @@ export type NeighborhoodNode = {
    * in the stats says whether any node's list was cut.
    */
   readonly members?: readonly EntityMember[];
+  /**
+   * Tier of this node's seed mention. Present ONLY on `distance === 0` nodes,
+   * and only when the caller supplied {@link SeedMentionProvenance}; the file
+   * graph never carries it. An old payload therefore has neither field, and a
+   * client reading an absent `mentionTier` keeps its pre-tier behaviour.
+   */
+  readonly mentionTier?: MentionTier;
+  /** How many messages mentioned the seed(s) this node was resolved from. */
+  readonly mentionCount?: number;
 };
 
 /** One directed edge of the neighbourhood JSON, typed by ArchGuard's relation kind. */
@@ -428,6 +498,9 @@ function expandSeeds(
   return distance;
 }
 
+/** Strength order used when one entity is reachable from several seeds. */
+const TIER_STRENGTH: Readonly<Record<MentionTier, number>> = { direct: 3, name: 2, file: 1 };
+
 /**
  * Resolve the two seed lists against a single index.
  *
@@ -436,24 +509,42 @@ function expandSeeds(
  * `nameToIds`; a file by exact key presence in `fileToIds`. Never falls back to
  * substring, case-insensitive or fuzzy matching — a near-miss is an unresolved
  * seed the caller can surface, not a silent substitution.
+ *
+ * When `seeds.mentions` is present, each resolved id also gets a
+ * {@link MentionTier} (the STRONGEST tier across every seed that resolved it)
+ * and its mention count (the sum over those seeds). Resolution and the
+ * `distance` semantics are unchanged; the tier map is additional provenance,
+ * never a filter.
  */
 function resolveSeeds(
   index: ArchIndex,
   seeds: GraphSeeds,
-): { resolved: Set<string>; unresolved: UnresolvedSeeds } {
+): {
+  resolved: Set<string>;
+  unresolved: UnresolvedSeeds;
+  tiers: Map<string, MentionTier> | undefined;
+  mentionCounts: Map<string, number> | undefined;
+} {
   const resolved = new Set<string>();
   const unresolvedFiles: string[] = [];
   const unresolvedIdentifiers: string[] = [];
   const seenFiles = new Set<string>();
   const seenIdentifiers = new Set<string>();
+  const tiers = seeds.mentions === undefined ? undefined : new Map<string, MentionTier>();
+  const mentionCounts = seeds.mentions === undefined ? undefined : new Map<string, number>();
 
-  const admit = (ids: readonly string[] | undefined): boolean => {
+  const admit = (ids: readonly string[] | undefined, tier: MentionTier, mentionCount: number): boolean => {
     if (ids === undefined || ids.length === 0) return false;
     let admitted = false;
     for (const id of ids) {
       if (!Object.hasOwn(index.idToFile, id)) continue;
       resolved.add(id);
       admitted = true;
+      if (tiers !== undefined) {
+        const current = tiers.get(id);
+        if (current === undefined || TIER_STRENGTH[tier] > TIER_STRENGTH[current]) tiers.set(id, tier);
+      }
+      if (mentionCounts !== undefined) mentionCounts.set(id, (mentionCounts.get(id) ?? 0) + mentionCount);
     }
     return admitted;
   };
@@ -461,21 +552,49 @@ function resolveSeeds(
   for (const file of seeds.files) {
     if (seenFiles.has(file)) continue;
     seenFiles.add(file);
-    if (!admit(Object.hasOwn(index.fileToIds, file) ? index.fileToIds[file] : undefined)) {
+    const count = seeds.mentions?.fileCounts[file] ?? 0;
+    if (!admit(Object.hasOwn(index.fileToIds, file) ? index.fileToIds[file] : undefined, 'file', count)) {
       unresolvedFiles.push(file);
     }
   }
   for (const identifier of seeds.identifiers) {
     if (seenIdentifiers.has(identifier)) continue;
     seenIdentifiers.add(identifier);
-    if (!admit(Object.hasOwn(index.nameToIds, identifier) ? index.nameToIds[identifier] : undefined)) {
-      unresolvedIdentifiers.push(identifier);
+    const ids = Object.hasOwn(index.nameToIds, identifier) ? index.nameToIds[identifier] : undefined;
+    const candidateCount = ids?.length ?? 0;
+    const coMentionedFiles = seeds.mentions?.identifierFiles[identifier] ?? [];
+    const count = seeds.mentions?.identifierCounts[identifier] ?? 0;
+    // A name is DIRECT when it is unambiguous by candidate count, or when the
+    // transcript itself disambiguated it by spelling the entity's file path in
+    // the same message. Otherwise it is a same-name candidate.
+    const tierFor = (id: string): MentionTier => {
+      if (candidateCount <= DIRECT_MAX_CANDIDATES) return 'direct';
+      const file = index.idToFile[id];
+      return file !== undefined && coMentionedFiles.includes(file) ? 'direct' : 'name';
+    };
+    let admitted = false;
+    for (const id of ids ?? []) {
+      if (!Object.hasOwn(index.idToFile, id)) continue;
+      // `admit` applies one tier to the whole list; identifiers need a
+      // per-entity reading, so the resolution is repeated here and the shared
+      // bookkeeping is the same two maps.
+      resolved.add(id);
+      admitted = true;
+      const tier = tierFor(id);
+      if (tiers !== undefined) {
+        const current = tiers.get(id);
+        if (current === undefined || TIER_STRENGTH[tier] > TIER_STRENGTH[current]) tiers.set(id, tier);
+      }
+      if (mentionCounts !== undefined) mentionCounts.set(id, (mentionCounts.get(id) ?? 0) + count);
     }
+    if (!admitted) unresolvedIdentifiers.push(identifier);
   }
 
   return {
     resolved,
     unresolved: { files: unresolvedFiles, identifiers: unresolvedIdentifiers },
+    tiers,
+    mentionCounts,
   };
 }
 
@@ -618,8 +737,16 @@ function entityNode(
   distance: number,
   maxMembers: number | undefined,
   truncated: { value: boolean },
+  mention?: { readonly tier: MentionTier; readonly count: number },
 ): NeighborhoodNode {
-  const base: NeighborhoodNode = { id, label: entityLabel(index, id), distance };
+  const base: NeighborhoodNode = {
+    id,
+    label: entityLabel(index, id),
+    distance,
+    // A tier is only ever emitted for a seed (distance 0) and only when the
+    // caller supplied provenance; every other node keeps the legacy shape.
+    ...(mention === undefined ? {} : { mentionTier: mention.tier, mentionCount: mention.count }),
+  };
   const detail = index.entityDetails?.[id];
   if (detail === undefined) return base;
 
@@ -676,7 +803,7 @@ export function generateGraph(
     );
   }
 
-  const { resolved, unresolved } = resolveSeeds(index, seeds);
+  const { resolved, unresolved, tiers, mentionCounts } = resolveSeeds(index, seeds);
   const distance = expandSeeds(index, resolved, hops);
 
   // The entity graph is the budgeted prefix. The file graph is projected from
@@ -727,9 +854,25 @@ export function generateGraph(
   // enrichment happens per retained node only: the file graph is a projection
   // of PATHS, which carry no members, and stays exactly as it was.
   const membersTruncated = { value: false };
-  const entityNodes: NeighborhoodNode[] = retained.map((id) =>
-    entityNode(index, id, distance.get(id) ?? 0, maxMembers, membersTruncated),
-  );
+  const entityNodes: NeighborhoodNode[] = retained.map((id) => {
+    const hop = distance.get(id) ?? 0;
+    const tier = hop === 0 ? tiers?.get(id) : undefined;
+    const mention = tier === undefined
+      ? undefined
+      : { tier, count: mentionCounts?.get(id) ?? 0 };
+    return entityNode(index, id, hop, maxMembers, membersTruncated, mention);
+  });
+
+  // Seed tiers are a reading of the EMITTED nodes, not of the resolved set: a
+  // node budget can cut a seed, and the counts must stay consistent with what
+  // the payload actually carries.
+  const seedTiers: Record<MentionTier, number> | undefined =
+    tiers === undefined ? undefined : { direct: 0, name: 0, file: 0 };
+  if (seedTiers !== undefined) {
+    for (const node of entityNodes) {
+      if (node.mentionTier !== undefined) seedTiers[node.mentionTier] += 1;
+    }
+  }
 
   const fileNodeList: NeighborhoodNode[] = fileNodes.map((file) => ({
     id: file,
@@ -766,6 +909,7 @@ export function generateGraph(
       ...(maxMembers !== undefined
         ? { membersPerEntity: maxMembers, membersTruncated: membersTruncated.value }
         : {}),
+      ...(seedTiers !== undefined ? { seedTiers } : {}),
     },
     unresolved,
   };

@@ -39,7 +39,23 @@ export type ArchitectureRendererNode = {
   readonly type?: string;
   readonly kind?: ArchitectureEntityKind;
   readonly members?: readonly ArchitectureEntityMember[];
+  /**
+   * How the transcript mentioned this node, on distance-0 nodes only.
+   *
+   * Optional by design: a payload written before tiers existed carries neither
+   * this nor `mentionCount`, and such a node keeps the legacy "distance 0 is a
+   * seed" reading. When present, ONLY `'direct'` is drawn as a session seed.
+   */
+  readonly mentionTier?: ArchitectureMentionTier;
+  /** How many messages mentioned the seed this node was resolved from. */
+  readonly mentionCount?: number;
 };
+
+/**
+ * The three provenance tiers a seed can carry (mirrors the server's
+ * `MentionTier`): direct mention, same-name candidate, file-only expansion.
+ */
+export type ArchitectureMentionTier = 'direct' | 'name' | 'file';
 
 /**
  * The normalised kind of an entity node, mirroring the server's vocabulary.

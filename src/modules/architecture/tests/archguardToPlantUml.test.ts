@@ -355,3 +355,27 @@ test('a node without `kind` keeps the byte-identical legacy document', () => {
     ].join('\n'),
   );
 });
+
+test('mention tiers are renderer metadata: they never change the bridge document', () => {
+  // The seed marker is applied by the renderer AFTER PlantUML is laid out, so
+  // the bridge must ignore `mentionTier`/`mentionCount`. A tier change is a
+  // marker change, never a different class box or alias order.
+  const legacy: ArchitectureNeighborhood = {
+    nodes: [{ id: 'src/a/F.ts.Foo', label: 'Foo', distance: 0 }],
+    edges: [],
+  };
+  const tiered: ArchitectureNeighborhood = {
+    nodes: [
+      {
+        id: 'src/a/F.ts.Foo',
+        label: 'Foo',
+        distance: 0,
+        mentionTier: 'name',
+        mentionCount: 3,
+      },
+    ],
+    edges: [],
+  };
+
+  assert.equal(archguardToPlantUml(tiered).puml, archguardToPlantUml(legacy).puml);
+});

@@ -33,7 +33,7 @@ import test from 'node:test';
 import type { NormalizedMessage } from '@/shared/types.js';
 import { createNormalizedMessage } from '@/shared/utils.js';
 
-import { extractSeeds } from '../index.js';
+import { extractSeeds, extractSeedMentions } from '../index.js';
 
 const SESSION_ID = 'seed-extraction-fixture-session';
 
@@ -315,4 +315,76 @@ test('tiering 标识符种子 cap：去重后只保留前 40 个', () => {
   assert.equal(seeds.identifiers.length, 40);
   assert.deepEqual(seeds.identifiers, names.slice(0, 40));
   assert.ok(!seeds.identifiers.includes('Entity40'), 'the 41st distinct identifier is dropped');
+});
+
+// ------------------------- mention provenance -------------------------
+
+/**
+ * Provenance fixture: the same identifier appears in prose, a pasted-path row,
+ * a `tool_result` body and a Bash command; `SetupForm` appears ONLY in the
+ * tool-result tier, so "default excludes tool output" has a visible witness.
+ */
+const MENTION_FIXTURE: readonly NormalizedMessage[] = [
+  assistantText('The `reassemble` helper rebuilds a turn, and `App` renders it.'),
+  userText('Please fix `reassemble`; the pasted path is src/user/pasted.ts.'),
+  row({ kind: 'tool_result', toolId: 'call-r', content: 'SetupForm and `reassemble` appear in the tool output' }),
+  toolUse('Bash', { command: 'grep -rn `reassemble` src/bash/probe.ts' }),
+  toolUse('Read', { file_path: 'src/App.tsx' }),
+];
+
+test('mention provenance 默认：只取文本与文件工具，返回 messageId/role/kind/excerpt', () => {
+  const mentions = extractSeedMentions(MENTION_FIXTURE, KNOWN_IDENTIFIERS);
+  const reassemble = mentions.identifiers.get('reassemble');
+  assert.ok(reassemble !== undefined, 'the prose identifier must have provenance');
+
+  assert.equal(reassemble.hits.length, 2, 'two text rows name it; tool result and Bash are off by default');
+  for (const hit of reassemble.hits) {
+    assert.ok(MENTION_FIXTURE.some((message) => message.id === hit.messageId), 'messageId must be a real fixture row');
+    assert.equal(hit.kind, 'text');
+    assert.match(hit.excerpt, /reassemble/);
+    assert.ok(hit.at.length > 0, 'the hit carries the message timestamp');
+  }
+  assert.equal(reassemble.hits[0]?.role, 'assistant');
+  assert.equal(reassemble.hits[1]?.role, 'user');
+
+  // A seed that appears ONLY in the tool-result tier has no trace by default.
+  assert.equal(mentions.identifiers.has('SetupForm'), false, 'tool_result must not produce default provenance');
+  assert.equal(mentions.includeToolResults, false);
+
+  // File provenance: a file-tool `file_path` and a pasted user path both show
+  // up, tagged with the source that produced them.
+  const readFile = mentions.files.get('src/App.tsx');
+  assert.equal(readFile?.hits[0]?.kind, 'tool_use');
+  assert.equal(readFile?.hits[0]?.excerpt, 'src/App.tsx');
+  const pastedFile = mentions.files.get('src/user/pasted.ts');
+  assert.equal(pastedFile?.hits[0]?.kind, 'text');
+  console.log(
+    `mention reading: reassemble hits=${reassemble.hits.length} files=${JSON.stringify([...mentions.files.keys()])}`,
+  );
+});
+
+test('mention provenance includeToolResults：tool_result 与 Bash 命中标 kind=tool_result', () => {
+  const mentions = extractSeedMentions(MENTION_FIXTURE, KNOWN_IDENTIFIERS, { includeToolResults: true });
+  const reassemble = mentions.identifiers.get('reassemble');
+  assert.ok(reassemble !== undefined);
+  assert.equal(reassemble.hits.length, 4, 'both text rows plus the tool result and the Bash command');
+
+  const toolHits = reassemble.hits.filter((hit) => hit.kind === 'tool_result');
+  assert.equal(toolHits.length, 2, 'the opt-in tier is exactly the two non-text rows');
+  assert.ok(mentions.identifiers.has('SetupForm'), 'a tool-result-only name now has provenance');
+  assert.equal(mentions.identifiers.get('SetupForm')?.hits[0]?.kind, 'tool_result');
+  assert.equal(mentions.includeToolResults, true);
+  console.log(
+    `mention reading: opt-in hits=${reassemble.hits.length} toolResultHits=${toolHits.length}`,
+  );
+});
+
+test('mention provenance cap：每个种子最多 20 条命中并置 truncated', () => {
+  const manyRows = Array.from({ length: 22 }, () => userText('`reassemble` again'));
+  const mentions = extractSeedMentions(manyRows, KNOWN_IDENTIFIERS);
+  const trace = mentions.identifiers.get('reassemble');
+  assert.ok(trace !== undefined);
+  assert.equal(trace.hits.length, 20);
+  assert.equal(trace.truncated, true, 'the 21st and 22nd messages must be reported as cut');
+  console.log(`mention reading: cap kept=${trace.hits.length} truncated=${String(trace.truncated)}`);
 });

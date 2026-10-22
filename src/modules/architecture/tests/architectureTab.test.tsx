@@ -279,6 +279,59 @@ const CLASS_DIAGRAM_RESULT: ArchitectureGraphResult = {
 };
 
 /**
+ * The three mention tiers plus one legacy node. All four are distance 0 and
+ * live in one directory so a single group expansion draws them. The legacy node
+ * deliberately omits `mentionTier`: an old payload must keep the pre-tier
+ * "distance 0 is a seed" reading.
+ */
+const MENTION_TIER_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        {
+          id: 'src/modules/tiers/Direct.ts.Direct',
+          label: 'Direct',
+          distance: 0,
+          mentionTier: 'direct',
+          mentionCount: 4,
+        },
+        {
+          id: 'src/modules/tiers/Name.ts.Name',
+          label: 'Name',
+          distance: 0,
+          mentionTier: 'name',
+          mentionCount: 2,
+        },
+        {
+          id: 'src/modules/tiers/File.ts.File',
+          label: 'File',
+          distance: 0,
+          mentionTier: 'file',
+          mentionCount: 1,
+        },
+        {
+          id: 'src/modules/tiers/Legacy.ts.Legacy',
+          label: 'Legacy',
+          distance: 0,
+        },
+      ],
+      edges: [],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 4,
+    entityEdges: 0,
+    entityTotal: 4,
+    entityTruncated: false,
+    seedTiers: { direct: 1, name: 1, file: 1 },
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
  * A tree deeper than the overview can show: 12 packages × 4 units × 5 files.
  * Depth 3 would be 48 groups (over the bound), so the overview stops at the
  * package layer. Expanding one package therefore still contains 20 files that
@@ -1700,6 +1753,32 @@ test('entity boxes are UML class shapes, and a session seed carries the seed mar
   // turns into the thicker frame — a non-colour reading.
   assert.equal(functionNode.getAttribute('data-architecture-seed'), 'true', 'a seed node carries the seed marker');
   assert.equal(classNode.getAttribute('data-architecture-seed'), null, 'a non-seed node does not');
+});
+
+test('only a direct mention carries the seed marker; name/file tiers and old payloads are read correctly', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(MENTION_TIER_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="grp::modules/tiers"]')));
+  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/tiers"]') as Element);
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/tiers/Direct.ts.Direct"]')));
+
+  const marker = (id: string): string | null => {
+    const node = host.querySelector(`[data-entity-id="${id}"]`);
+    assert.ok(node !== null, `${id} must be drawn`);
+    return node.getAttribute('data-architecture-seed');
+  };
+
+  // `direct` is the only tier the UI draws as a session seed.
+  assert.equal(marker('src/modules/tiers/Direct.ts.Direct'), 'true', 'a direct mention is a seed');
+  // `name` and `file` are still distance 0, but they are NOT seeds.
+  assert.equal(marker('src/modules/tiers/Name.ts.Name'), null, 'a same-name candidate is not a seed');
+  assert.equal(marker('src/modules/tiers/File.ts.File'), null, 'a file-only expansion is not a seed');
+  // A payload written before mentionTier existed keeps the legacy reading.
+  assert.equal(marker('src/modules/tiers/Legacy.ts.Legacy'), 'true', 'an old payload still marks distance-0 nodes');
 });
 
 test('hovering a node highlights its in/out edges and dims the rest', async () => {

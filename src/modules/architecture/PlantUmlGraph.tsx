@@ -351,8 +351,8 @@ function highlightRelations(host: HTMLElement, id: string): void {
  *  · the hover `<title>` names the FILE the entity lives in — the box label is
  *    the bare entity name, so the path has to live somewhere the pointer can
  *    reveal it;
- *  · a session seed (`distance === 0`) gets the seed marker attribute + class,
- *    which the stylesheet turns into the thicker frame (see HIGHLIGHT_STYLE).
+ *  · a DIRECT session mention gets the seed marker attribute + class, which the
+ *    stylesheet turns into the thicker frame (see HIGHLIGHT_STYLE).
  * View scaffolding (group and stub nodes) is not an entity and is skipped.
  */
 function annotateNodes(
@@ -372,7 +372,12 @@ function annotateNodes(
       title.textContent = file;
       element.insertBefore(title, element.firstChild);
     }
-    if (node.distance === 0) {
+    // Old payloads carry no tier: falling back to `distance === 0` is what
+    // keeps them visually unchanged. With tiers, only a direct mention is a
+    // seed — same-name candidates (`name`) and file-expanded entities (`file`)
+    // stay in the graph but lose the marker.
+    const isSeed = node.mentionTier === undefined ? node.distance === 0 : node.mentionTier === 'direct';
+    if (isSeed) {
       element.setAttribute('data-architecture-seed', 'true');
       element.classList.add('arch-seed');
     }
