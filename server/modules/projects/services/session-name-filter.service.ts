@@ -78,27 +78,54 @@ export function parseStoredSessionFilter(storedJson: string | null | undefined):
   }
 }
 
-const compiledStoredFilterCache = new Map<string, (sessionName: string) => boolean>();
+/**
+ * Owns the memoized matchers compiled from stored `session_filter` JSON.
+ *
+ * The cache used to be a module-level `const ... = new Map` mutated from one
+ * function: a global mutable container with no owner. It is a private field now,
+ * and the class exposes the two transitions the module actually performs — look
+ * a matcher up by its JSON text, and compile it on a miss. The module exports one
+ * instance ({@link sessionFilterCompiler}) used by `compileStoredSessionFilter`.
+ */
+export class SessionFilterCompiler {
+  private readonly cache = new Map<string, (sessionName: string) => boolean>();
+
+  /** The matcher already compiled for this stored JSON, or undefined on a miss. */
+  get(storedJson: string): ((sessionName: string) => boolean) | undefined {
+    return this.cache.get(storedJson);
+  }
+
+  /**
+   * Matcher for a raw stored `session_filter` JSON, memoized by the JSON text so
+   * per-row SQL callbacks do not recompile regexes. Invalid stored rules are ignored.
+   */
+  compile(storedJson: string | null | undefined): (sessionName: string) => boolean {
+    if (!storedJson) {
+      return () => false;
+    }
+    let matcher = this.get(storedJson);
+    if (!matcher) {
+      try {
+        matcher = compileSessionFilter(parseStoredSessionFilter(storedJson));
+      } catch {
+        matcher = () => false;
+      }
+      if (this.cache.size > 200) {
+        this.cache.clear();
+      }
+      this.cache.set(storedJson, matcher);
+    }
+    return matcher;
+  }
+}
+
+/** The module's one compiler; see {@link SessionFilterCompiler}. */
+export const sessionFilterCompiler = new SessionFilterCompiler();
 
 /**
  * Matcher for a raw stored `session_filter` JSON, memoized by the JSON text so
  * per-row SQL callbacks do not recompile regexes. Invalid stored rules are ignored.
  */
 export function compileStoredSessionFilter(storedJson: string | null | undefined): (sessionName: string) => boolean {
-  if (!storedJson) {
-    return () => false;
-  }
-  let matcher = compiledStoredFilterCache.get(storedJson);
-  if (!matcher) {
-    try {
-      matcher = compileSessionFilter(parseStoredSessionFilter(storedJson));
-    } catch {
-      matcher = () => false;
-    }
-    if (compiledStoredFilterCache.size > 200) {
-      compiledStoredFilterCache.clear();
-    }
-    compiledStoredFilterCache.set(storedJson, matcher);
-  }
-  return matcher;
+  return sessionFilterCompiler.compile(storedJson);
 }

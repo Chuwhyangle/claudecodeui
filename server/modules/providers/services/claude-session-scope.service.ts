@@ -380,14 +380,52 @@ function probeOnce(memoryMax: string): boolean {
 }
 
 /**
- * Slice caps this process has already written, as `<slice>\0<cap>` keys.
+ * The record of which slice caps this process has already written, and the only owner of that
+ * state.
  *
  * `mapCliOptionsToSDK` builds a hook per turn, so applying the cap unconditionally would be one
  * `systemctl set-property` per turn for a value that only changes when the configuration does.
- * Keyed by the pair rather than by the slice so a *different* cap is still applied — that is what
- * makes the write observable at all.
+ * {@link ensureSliceCapApplied} therefore remembers the pairs it has written. Whole-file private:
+ * nothing outside this module reaches the set, and the state cannot be mutated except through the
+ * method below.
  */
-const appliedSliceCaps = new Set<string>();
+class ClaudeSessionScope {
+  /**
+   * Slice caps this instance has already written, as `<slice>\0<cap>` keys.
+   *
+   * Keyed by the pair rather than by the slice so a *different* cap is still applied — that is what
+   * makes the write observable at all. A failed write is not recorded, so the next turn retries it.
+   */
+  private readonly appliedSliceCaps = new Set<string>();
+
+  /**
+   * Applies a slice's memory cap at most once per `<slice, cap>` pair, and reports whether the cap
+   * is in place.
+   *
+   * `false` means a fresh write was attempted and systemd refused it; the pair is then left
+   * unremembered so a later turn retries. Consumed by {@link createResidentScopeSpawn}, which logs
+   * the refusal once rather than per turn.
+   */
+  ensureSliceCapApplied(sliceName: string, memoryMax: string): boolean {
+    const key = `${sliceName}\u0000${memoryMax}`;
+    if (this.appliedSliceCaps.has(key)) {
+      return true;
+    }
+    if (!applyResidentSliceMemoryMax(sliceName, memoryMax)) {
+      return false;
+    }
+    this.appliedSliceCaps.add(key);
+    return true;
+  }
+}
+
+/**
+ * The process-wide instance that owns the slice caps this server has written.
+ *
+ * One per process on purpose: the dedupe outlives any single hook, because `mapCliOptionsToSDK`
+ * builds a new hook each turn.
+ */
+const sessionScope = new ClaudeSessionScope();
 
 /** Default spawn: Node's own, cast because `ChildProcess.stdin` is `Writable | null` in the typings. */
 const defaultScopeSpawn: ResidentScopeSpawnImpl = (command, args, options) =>
@@ -521,15 +559,10 @@ export function createResidentScopeSpawn(
     : deps.sliceMemoryMax;
 
   if (sliceName && sliceMemoryMax) {
-    const key = `${sliceName}\u0000${sliceMemoryMax}`;
-    if (!appliedSliceCaps.has(key)) {
-      if (applyResidentSliceMemoryMax(sliceName, sliceMemoryMax)) {
-        appliedSliceCaps.add(key);
-      } else {
-        console.error(
-          `[resident-scope] could not cap slice ${sliceName} at ${sliceMemoryMax}; per-session caps still apply`,
-        );
-      }
+    if (!sessionScope.ensureSliceCapApplied(sliceName, sliceMemoryMax)) {
+      console.error(
+        `[resident-scope] could not cap slice ${sliceName} at ${sliceMemoryMax}; per-session caps still apply`,
+      );
     }
   }
 

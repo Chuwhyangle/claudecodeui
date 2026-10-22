@@ -63,7 +63,7 @@ extra:
 2. `src/shared/api.ts`：加端点与一个同步缓存（`setVoiceRuntimeConfig` / `voiceRuntimeConfig`，形状仿 `setVoiceProviderProfile`）。`useVoiceAvailable` 在 health/config 流程里拉取并缓存；失败时保留 `null`，调用方用默认值。
 3. `src/modules/chat/utils/voice/voiceContextPack.ts`：保留 shipped 默认 4/1200/600；新增浏览器硬上限 4,000/12；`buildVoiceContextPack` / `buildVoiceInputContextPack` 接受运行时 `maxRows` / `budgetChars` / `rowCapChars`，调用方传入缓存值，缺省回落默认。
 4. `useVoiceRealtimeSession.ts` 的 `sendContextPack` 与 `useVoiceInput.ts` 的 one-shot 调用点传入缓存值；首包竞态用服务端截断兜底。
-5. 服务端截断兜底：在 `server/shared/utils.ts` 加一个纯函数 `truncateRenderedVoiceContext(text, { maxRows, budgetChars, rowCapChars })`（按 `用户（…）：` / `助手（…）：` 行边界，保留最新 N 行；单行超预算按 head 70% + `…` + tail 30%），proxy 的 `context` 帧与 `/api/voice/transcribe` 的 `hints.context` 都调用它；日志写 `context truncated from=… rows/… chars to=… rows/… chars`。它只处理已渲染文本，不重写 ChatMessage 折叠规则；用同一输入的浏览器包做对照测试，防两套规则漂移。
+5. 服务端截断兜底：在 `server/shared/utils.ts` 加一个纯函数 `truncateRenderedVoiceContext(text, { maxRows, budgetChars, rowCapChars })`（按 `用户（…）：` / `助手（…）：` 行边界，保留最新 N 行；单行超预算按 head 70% + `…` + tail 30%），proxy 的 `context` 帧与 `/api/voice/transcribe` 的 `hints.context` 都调用它；日志写 `context truncated from=… rows/… chars to=… rows/… chars`。它只处理已渲染文本，不重写 ChatMessage 折叠规则；用同一输入的浏览器包做对照测试，防两套规则漂移。（落地修订：该纯函数放在 `shared/voice/voiceContextTruncation.ts` —— AC-139 falsification 的临时树只复制 `shared/asr` + `shared/voice`，从 `server/shared` 取值 import 会让未变异的正控制红在解析上；见 2026-10-23 提交 `voice: keep the runtime-graph additions inside the falsification's temp tree`。`server/shared/utils.ts` 只保留运行期读取端口。）
 6. 测试：`server/modules/voice/tests/voice-config.routes.test.ts`（端点/默认/坏文件）、`src/modules/chat/utils/tests/voiceContextPack.test.ts` + `src/modules/chat/voice-realtime/tests/contextPack.test.ts`（builder 运行时值/上限/回落）、既有 `voice-realtime-context-and-settings.test.ts`（截断/热更新/单次读取）。
 7. 文档：`docs/operations/voice-realtime-test-stages.md` 写 schema、优先级、范围、热更新语义；`docs/proposals/voice-realtime-segmented-relay-SPEC.md` 的字符预算/成本表标注“配置可调，默认 1,200/4、spend 0.05”。
 
@@ -98,6 +98,7 @@ extra:
 ## Touches
 
 - shared/voice/voiceSettingsRegistry.ts
+- shared/voice/voiceContextTruncation.ts
 - server/modules/voice-realtime/voice-realtime-settings.ts
 - server/modules/voice-realtime/voice-realtime-spend-guard.ts
 - server/modules/voice-realtime/index.ts
@@ -109,6 +110,7 @@ extra:
 - server/modules/voice/voice-service-transcribe.ts
 - server/shared/utils.ts
 - src/shared/api.ts
+- src/shared/voiceRuntimeConfig.ts
 - src/modules/chat/hooks/useVoiceAvailable.ts
 - src/modules/chat/voice-realtime/useVoiceRealtimeSession.ts
 - src/modules/chat/hooks/useVoiceInput.ts
@@ -126,3 +128,11 @@ extra:
 - server/modules/voice/index.ts
 - server/modules/voice-realtime/tests/voice-realtime-context-injection.test.ts
 - tasks/gap-voice-config-file-contextpack-spendguard.md
+
+## Blocker
+
+**2026-10-22T17:55:10.380Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts:   AssertionError [ERR_ASSERTION]: the unmutated temp tree must pass the criterion:
+- run_id：wk-prod-anchor
+- session_id：2790cd37-ab82-4237-ab2d-5349429cd546

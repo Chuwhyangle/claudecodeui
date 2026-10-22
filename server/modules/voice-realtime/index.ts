@@ -221,8 +221,9 @@ export {
 // decides whether this deployment observes speakers at all, the calibrated thresholds it observes
 // at, the environment escape hatch that overrides mode/model path, the CAM++ model and the
 // per-connection seam the proxy reads. `server/index.ts` reads the settings file once per connection,
-// resolves `env > file > default`, caches the model per resolved path and builds one seam per browser
-// connection; the proxy logs the seam's `speaker_shadow` readings and nothing else ever sees them.
+// resolves `env > file > default`, assembles the `SpeakerTrackerRegistry` (which owns the per-path
+// model cache) and builds one seam per browser connection; the proxy logs the seam's
+// `speaker_shadow` readings and nothing else ever sees them.
 // Shadow is READ-ONLY: no frame, no client message, no commit, no audio change.
 export {
   SPEAKER_TRACKING_MODEL_DIR_DEFAULT,
@@ -243,6 +244,7 @@ export {
   type SpeakerTrackingValueSource,
 } from './voice-speaker-tracking-arm.js';
 export {
+  SpeakerTrackerRegistry,
   createSpeakerTrackerModel,
   createSpeakerTrackerSeam,
   type SpeakerEmbedder,
