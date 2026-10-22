@@ -74,10 +74,8 @@ extra:
 
 ## Blocker
 
-**2026-10-22T08:35:02.514Z — worker 未落地（exited-not-landed）**
+**2026-10-22T08:44:43.387Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=merge-develop: Auto-merging server/modules/voice/voice.service.ts
-CONFLICT (content): Merge conflict in server/modules/voice/voice.service.ts
-Automatic merge failed; fix conflicts and then commit the result.
+- 未落地原因：step=suite: not ok - server/modules/voice/tests/voice-provider-dispatch-falsify.test.ts:   AssertionError [ERR_ASSERTION]: the unmutated temp tree must pass the criterion:
 - run_id：wk-prod-anchor
-- session_id：1303cfc1-4643-4353-a4de-055db5489479
+- session_id：e7d77a5e-a88b-44fb-9da1-fa1a4277dc89
