@@ -138,7 +138,15 @@
       "layoutBudget": "{{count}} affichés dans le budget de mise en page ; augmenter le détail prend plus de temps",
       "kindFunction": "{{count}} fonctions",
       "kindInterface": "{{count}} interfaces",
-      "kindClass": "{{count}} classes"
+      "kindClass": "{{count}} classes",
+      "budgetLimited": "Limité par le budget",
+      "budgetLimitedAria": "Limité par {{layers}}",
+      "layerDetail": "niveau de détail",
+      "layerLayout": "budget de mise en page",
+      "layerServer": "budget de nœuds",
+      "detailLayer": "Le niveau de détail conserve {{value}}.",
+      "layoutLayer": "Le budget de mise en page ne dessine que {{value}} ; davantage serait lent, réduisez le détail pour en voir plus.",
+      "serverLayer": "Le budget de nœuds a omis {{value}} ; réduisez la portée pour les voir."
     },
     "source": {
       "unresolved": "{{count}} noms mentionnés dans cette session n’ont pas été trouvés dans le cache d’analyse",
@@ -165,6 +173,15 @@
       "kindAbstract": "classes abstraites",
       "kindFunction": "fonctions",
       "kindOther": "autres"
+    },
+    "scopeHygiene": {
+      "summary": "Nettoyage des scopes",
+      "detailLabel": "Détails du nettoyage des scopes",
+      "scopeCount": "{{total}} scopes, {{kept}} conservés",
+      "subsumed": "{{count}} fusionnés dans un scope externe ({{entities}} entités en double supprimées)",
+      "outside": "{{count}} hors du répertoire du projet ont été ignorés",
+      "normalized": "{{count}} ids de chemin absolu normalisés",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

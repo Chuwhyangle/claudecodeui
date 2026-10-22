@@ -396,3 +396,22 @@ test('AC-417 真实指纹：fingerprint 来自真实 arch-index.json 的 archJso
   });
   assert.equal(reread.archJsonHash, MUTATED_ARCH_JSON_HASH, 'the cache keys on the file-reported fingerprint');
 });
+
+test('合并规则版本进入缓存键：规则版本变化不命中旧缓存', async (t) => {
+  const h = createHarness(t);
+  const key = makeKey(h.scope);
+
+  // The pre-version key (the field omitted) and two rule versions are three
+  // distinct contents for the same `.archguard` bytes.
+  await h.cache.getReading(key, h.build);
+  await h.cache.getReading({ ...cloneKey(key), rulesVersion: 'scope-hygiene@1' }, h.build);
+  const versioned = await h.cache.getReading({ ...cloneKey(key), rulesVersion: 'scope-hygiene@2' }, h.build);
+
+  assert.equal(h.builds(), 3, 'each merge-rule version must re-render; the old entry must not be served');
+  assert.equal(h.reads(), 1, 'a version-only change stays on the parse-layer hit path');
+
+  // The same version is a hit, so the version is content, not a per-call nonce.
+  const again = await h.cache.getReading({ ...cloneKey(key), rulesVersion: 'scope-hygiene@2' }, h.build);
+  assert.equal(again, versioned, 'the same rules version returns the cached reading object');
+  assert.equal(h.builds(), 3);
+});

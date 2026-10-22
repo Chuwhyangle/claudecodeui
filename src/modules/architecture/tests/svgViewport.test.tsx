@@ -8,6 +8,7 @@ import {
   createSvgDragPan,
   createSvgViewport,
   fitAllZoomScale,
+  fitAvoidingCorners,
   fitZoomScale,
   MAX_ZOOM_SCALE,
   MIN_READABLE_ZOOM_SCALE,
@@ -336,4 +337,110 @@ test('a cancelled drag leaves no drag state behind and touch stays with the gest
   } finally {
     pan.destroy();
   }
+});
+
+/**
+ * The fitted drawing's box as the layout draws it: left-aligned, vertically
+ * centred (auto block margins), and top-aligned once it is taller than the box.
+ * Mirrors the CSS the host uses, so an "intersection" here is the browser's.
+ */
+function fittedDrawingRect(
+  natural: { width: number; height: number },
+  host: { width: number; height: number },
+  scale: number,
+): { left: number; top: number; right: number; bottom: number } {
+  const width = natural.width * scale;
+  const height = natural.height * scale;
+  return {
+    left: 0,
+    right: width,
+    top: height <= host.height ? (host.height - height) / 2 : 0,
+    bottom: height <= host.height ? (host.height + height) / 2 : height,
+  };
+}
+
+/** Strict rectangle intersection: touching edges do not count. */
+function intersects(
+  a: { left: number; top: number; right: number; bottom: number },
+  b: { left: number; top: number; width: number; height: number },
+): boolean {
+  return a.left < b.left + b.width && b.left < a.right
+    && a.top < b.top + b.height && b.top < a.bottom;
+}
+
+const NATURAL = { width: 1000, height: 500 };
+const HOST = { width: 800, height: 600 };
+/** The bottom-right minimap: it reaches into the fitted drawing's band. */
+const CORNER = { left: 500, top: 450, width: 100, height: 100 };
+
+test('fitAvoidingCorners returns the plain fit when no corner intersects it', () => {
+  // The geometric fit is 0.8 (800×400); this corner sits in the free top-left.
+  const clear = { left: 0, top: 0, width: 80, height: 40 };
+  assert.equal(fitAvoidingCorners(NATURAL, HOST, []), fitZoomScale(NATURAL, HOST));
+  assert.equal(fitAvoidingCorners(NATURAL, HOST, [clear]), fitZoomScale(NATURAL, HOST));
+  // "Byte-identical", not merely close: the same call returns the same double.
+  assert.ok(Object.is(
+    fitAvoidingCorners(NATURAL, HOST, [clear]),
+    fitZoomScale(NATURAL, HOST),
+  ));
+  // The minScale argument is forwarded to the same fit, so the fallback sits on
+  // the whole-graph floor when that is what the caller asked for.
+  assert.equal(
+    fitAvoidingCorners(NATURAL, HOST, [clear], MIN_ZOOM_SCALE),
+    fitZoomScale(NATURAL, HOST, MIN_ZOOM_SCALE),
+  );
+});
+
+test('fitAvoidingCorners shrinks to the largest scale that clears an intersecting corner', () => {
+  const fit = fitZoomScale(NATURAL, HOST);
+  assert.equal(fit, 0.8);
+  assert.ok(intersects(fittedDrawingRect(NATURAL, HOST, fit), CORNER), 'the fixture really overlaps at the fit');
+
+  const scale = fitAvoidingCorners(NATURAL, HOST, [CORNER]);
+  // Clearing vertically is cheaper than clearing horizontally here:
+  // 2·450 − 600 = 300 → 300/500 = 0.6, versus 500/1000 = 0.5.
+  assert.equal(scale, 0.6);
+  assert.equal(
+    intersects(fittedDrawingRect(NATURAL, HOST, scale), CORNER),
+    false,
+    'the returned scale must not intersect the corner',
+  );
+  assert.ok(
+    intersects(fittedDrawingRect(NATURAL, HOST, scale + 0.001), CORNER),
+    'one step above it must intersect: 0.6 is the LARGEST clearing scale',
+  );
+});
+
+test('fitAvoidingCorners takes the most conservative limit across several corners', () => {
+  const loose = { left: 700, top: 460, width: 100, height: 140 };   // clears at 0.7
+  const tight = { left: 600, top: 450, width: 200, height: 150 };   // clears at 0.6
+  const looseScale = fitAvoidingCorners(NATURAL, HOST, [loose]);
+  const tightScale = fitAvoidingCorners(NATURAL, HOST, [tight]);
+  assert.equal(looseScale, 0.7);
+  assert.equal(tightScale, 0.6);
+  assert.equal(
+    fitAvoidingCorners(NATURAL, HOST, [loose, tight]),
+    Math.min(looseScale, tightScale),
+    'the drawing must clear BOTH corners, so the tighter limit wins',
+  );
+  // Order must not matter: the answer is the same set of constraints.
+  assert.equal(
+    fitAvoidingCorners(NATURAL, HOST, [tight, loose]),
+    fitAvoidingCorners(NATURAL, HOST, [loose, tight]),
+  );
+});
+
+test('fitAvoidingCorners falls back to the plain fit for an unmeasurable or oversized corner', () => {
+  const fit = fitZoomScale(NATURAL, HOST);
+  // A corner covering the whole canvas leaves no positive scale to clear:
+  // degrade to the original fit instead of collapsing or throwing.
+  assert.equal(
+    fitAvoidingCorners(NATURAL, HOST, [{ left: -100, top: -100, width: 2000, height: 2000 }]),
+    fit,
+  );
+  // An unmeasured (zero-area) corner constrains nothing.
+  assert.equal(fitAvoidingCorners(NATURAL, HOST, [{ left: 0, top: 0, width: 0, height: 0 }]), fit);
+  // A degenerate drawing/host is the same "cannot reason about it" case.
+  assert.equal(fitAvoidingCorners({ width: 0, height: 0 }, HOST, [CORNER]), fitZoomScale({ width: 0, height: 0 }, HOST));
+  assert.equal(fitAvoidingCorners(NATURAL, { width: 0, height: 0 }, [CORNER]), 1);
 });

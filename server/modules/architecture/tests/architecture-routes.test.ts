@@ -21,7 +21,7 @@
  */
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -47,6 +47,7 @@ import {
 } from '../generator.js';
 import { buildMentionIndex } from '../mentions.js';
 import { createArchitectureRoutes } from '../routes.js';
+import { mergeScopesWithHygiene } from '../scope-hygiene.js';
 import { createArchitectureService, hasArchguardCache } from '../service.js';
 
 const MANIFEST_GENERATED_AT = '2026-10-20T15:52:34.427Z';
@@ -263,6 +264,15 @@ test('a cached project answers mmd + stats + provenance, and a repeated call is 
       [SRC_HASH, SERVER_HASH],
     );
     assert.equal(body.provenance.cacheHit, false, 'the first identical call is a miss');
+    // This fixture has two overlapping-free scopes with relative ids, so the
+    // hygiene merge changes nothing and the provenance keeps its pre-hygiene
+    // key set exactly (only `diagnostics` is added, from the missing archives).
+    assert.deepEqual(Object.keys(body.provenance), [
+      'generatedAt',
+      'fingerprints',
+      'cacheHit',
+      'diagnostics',
+    ]);
 
     const second = await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID });
     assert.equal(second.status, 200);
@@ -1462,4 +1472,483 @@ test('mentions 未登录 401，缺参数 400', async (t) => {
     );
     assert.equal(accepted.status, 200, 'the same request with a token is accepted');
   });
+});
+
+// ---------------------------------------------------------------------------
+// architecture-scope-hygiene — the merge rules
+// ---------------------------------------------------------------------------
+
+/**
+ * A manifest shaped like the real archguard one the task was filed from: three
+ * NESTED scopes over the same tree (project root, `src`, `src/mermaid`), two
+ * scopes whose sources are outside this project (a claudecodeui-shaped checkout
+ * and a `/tmp` fixture), and one scope whose entity ids/files are ABSOLUTE
+ * paths — the upstream parser bug that produced `42ceaef3//data/home/...`.
+ *
+ * The overlap is deliberate in two places: `App` is indexed by both the outer
+ * and the `src` scope, `MermaidView` by both the outer and the absolute-id
+ * `mermaid` scope. `Mid` and `OnlyInner` exist in only one scope and must
+ * survive.
+ */
+function createHygieneProject(t: { after(callback: () => void): void }): {
+  root: string;
+  outsideClaudecodeui: string;
+  outsideTmp: string;
+} {
+  const root = mkdtempSync(path.join(tmpdir(), 'arch-hygiene-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  // Two outside sources that need not exist: containment compares paths, and a
+  // non-existent path falls back to `path.resolve` exactly as production does.
+  const outsideClaudecodeui = '/data/home/yale/work/claudecodeui';
+  const outsideTmp = path.join(tmpdir(), 'arch-hygiene-outside-fixture');
+
+  writeJson(path.join(root, '.archguard', 'query', 'manifest.json'), {
+    version: '1.0',
+    generatedAt: MANIFEST_GENERATED_AT,
+    // The real manifest's globalScopeKey pointed at a scope from ANOTHER
+    // project; the service must never use it to pick a scope.
+    globalScopeKey: 'outside-claudecodeui',
+    scopes: [
+      { key: 'outer-scope', label: 'archguard (typescript)', language: 'typescript', sources: [root] },
+      { key: 'mid-scope', label: 'src (typescript)', language: 'typescript', sources: [path.join(root, 'src')] },
+      {
+        key: 'inner-scope',
+        label: 'mermaid (typescript)',
+        language: 'typescript',
+        sources: [path.join(root, 'src', 'mermaid')],
+      },
+      {
+        key: 'outside-claudecodeui',
+        label: 'claudecodeui (typescript)',
+        language: 'typescript',
+        sources: [outsideClaudecodeui],
+      },
+      {
+        key: 'outside-tmp',
+        label: 'fixture (typescript)',
+        language: 'typescript',
+        sources: [outsideTmp],
+      },
+    ],
+  });
+
+  writeJson(path.join(root, '.archguard', 'query', 'outer-scope', 'arch-index.json'), {
+    version: '1.0',
+    generatedAt: '2026-10-20T10:00:00.000Z',
+    archJsonHash: '1'.repeat(64),
+    language: 'typescript',
+    fileToIds: {
+      'src/app.ts': ['src/app.ts.App'],
+      'src/mermaid/MermaidView.ts': ['src/mermaid/MermaidView.ts.MermaidView'],
+    },
+    nameToIds: {
+      App: ['src/app.ts.App'],
+      MermaidView: ['src/mermaid/MermaidView.ts.MermaidView'],
+    },
+    idToFile: {
+      'src/app.ts.App': 'src/app.ts',
+      'src/mermaid/MermaidView.ts.MermaidView': 'src/mermaid/MermaidView.ts',
+    },
+    idToName: {
+      'src/app.ts.App': 'App',
+      'src/mermaid/MermaidView.ts.MermaidView': 'MermaidView',
+    },
+    dependencies: {
+      'src/app.ts.App': ['src/mermaid/MermaidView.ts.MermaidView'],
+      'src/mermaid/MermaidView.ts.MermaidView': [],
+    },
+    dependents: {
+      'src/app.ts.App': [],
+      'src/mermaid/MermaidView.ts.MermaidView': ['src/app.ts.App'],
+    },
+    relationsByType: {
+      dependency: [['src/app.ts.App', 'src/mermaid/MermaidView.ts.MermaidView']],
+    },
+  });
+  writeJson(path.join(root, '.archguard', 'query', 'outer-scope', 'arch.json'), {
+    version: '1.0',
+    language: 'typescript',
+    entities: [
+      { id: 'src/app.ts.App', type: 'class', members: [] },
+      { id: 'src/mermaid/MermaidView.ts.MermaidView', type: 'class', members: [] },
+    ],
+  });
+
+  writeJson(path.join(root, '.archguard', 'query', 'mid-scope', 'arch-index.json'), {
+    version: '1.0',
+    generatedAt: '2026-10-20T11:00:00.000Z',
+    archJsonHash: '2'.repeat(64),
+    language: 'typescript',
+    fileToIds: { 'app.ts': ['app.ts.App'], 'mid.ts': ['mid.ts.Mid'] },
+    nameToIds: { App: ['app.ts.App'], Mid: ['mid.ts.Mid'] },
+    idToFile: { 'app.ts.App': 'app.ts', 'mid.ts.Mid': 'mid.ts' },
+    idToName: { 'app.ts.App': 'App', 'mid.ts.Mid': 'Mid' },
+    // The edge into the duplicate `App` must be re-pointed at the OUTER scope's
+    // retained id, not dropped.
+    dependencies: { 'app.ts.App': [], 'mid.ts.Mid': ['app.ts.App'] },
+    dependents: { 'app.ts.App': ['mid.ts.Mid'], 'mid.ts.Mid': [] },
+    relationsByType: { call: [['mid.ts.Mid', 'app.ts.App']] },
+  });
+
+  const absoluteMermaidId = path.join(root, 'src', 'mermaid', 'MermaidView.ts') + '.MermaidView';
+  const absoluteOnlyInnerId = path.join(root, 'src', 'mermaid', 'OnlyInner.ts') + '.OnlyInner';
+  writeJson(path.join(root, '.archguard', 'query', 'inner-scope', 'arch-index.json'), {
+    version: '1.0',
+    generatedAt: '2026-10-20T12:00:00.000Z',
+    archJsonHash: '3'.repeat(64),
+    language: 'typescript',
+    // Absolute ids AND absolute file keys, exactly as the upstream parser wrote
+    // them (`42ceaef3//data/home/...` came from prefixing these).
+    fileToIds: {
+      [path.join(root, 'src', 'mermaid', 'MermaidView.ts')]: [absoluteMermaidId],
+      [path.join(root, 'src', 'mermaid', 'OnlyInner.ts')]: [absoluteOnlyInnerId],
+    },
+    nameToIds: { MermaidView: [absoluteMermaidId], OnlyInner: [absoluteOnlyInnerId] },
+    idToFile: {
+      [absoluteMermaidId]: path.join(root, 'src', 'mermaid', 'MermaidView.ts'),
+      [absoluteOnlyInnerId]: path.join(root, 'src', 'mermaid', 'OnlyInner.ts'),
+    },
+    idToName: { [absoluteMermaidId]: 'MermaidView', [absoluteOnlyInnerId]: 'OnlyInner' },
+    // A self-edge that only appears as one AFTER the alias rewrite; the merge
+    // must drop it rather than emit a loop.
+    dependencies: { [absoluteMermaidId]: [absoluteMermaidId], [absoluteOnlyInnerId]: [absoluteMermaidId] },
+    dependents: { [absoluteMermaidId]: [absoluteOnlyInnerId], [absoluteOnlyInnerId]: [] },
+    relationsByType: { composition: [[absoluteOnlyInnerId, absoluteMermaidId]] },
+  });
+  writeJson(path.join(root, '.archguard', 'query', 'inner-scope', 'arch.json'), {
+    version: '1.0',
+    language: 'typescript',
+    entities: [
+      { id: absoluteMermaidId, type: 'class', members: [] },
+      { id: absoluteOnlyInnerId, type: 'function', members: [] },
+    ],
+  });
+
+  for (const key of ['outside-claudecodeui', 'outside-tmp']) {
+    writeJson(path.join(root, '.archguard', 'query', key, 'arch-index.json'), {
+      version: '1.0',
+      generatedAt: MANIFEST_GENERATED_AT,
+      archJsonHash: key === 'outside-claudecodeui' ? '4'.repeat(64) : '5'.repeat(64),
+      language: 'typescript',
+      fileToIds: { 'outside.ts': [`outside.ts.${key}`] },
+      nameToIds: { [`Outside-${key}`]: [`outside.ts.${key}`] },
+      idToFile: { [`outside.ts.${key}`]: 'outside.ts' },
+      idToName: { [`outside.ts.${key}`]: `Outside-${key}` },
+      dependencies: { [`outside.ts.${key}`]: [] },
+      dependents: { [`outside.ts.${key}`]: [] },
+    });
+  }
+
+  return { root, outsideClaudecodeui, outsideTmp };
+}
+
+/** A transcript naming every project file in the hygiene fixture, so every entity is a seed. */
+function hygieneTranscript(root: string): NormalizedMessage[] {
+  return ['src/app.ts', 'src/mid.ts', path.join('src', 'mermaid', 'OnlyInner.ts'), path.join('src', 'mermaid', 'MermaidView.ts')].map(
+    (relative, index) =>
+      message({
+        id: `tool-${index}`,
+        kind: 'tool_use',
+        role: 'assistant',
+        toolName: 'Read',
+        toolInput: { file_path: path.join(root, relative) },
+      }),
+  );
+}
+
+type HygieneBody = {
+  graph: {
+    file: { nodes: { id: string }[]; edges: { from: string; to: string }[] };
+    entity: {
+      nodes: { id: string; label: string; distance: number; kind?: string }[];
+      edges: { from: string; to: string; relationType: string }[];
+    };
+  };
+  provenance: {
+    scopeHygiene?: {
+      total: number;
+      kept: number;
+      droppedOutsideRoot: { scope: string; label: string; sources: string[] }[];
+      subsumed: { scope: string; label: string; intoScope: string; droppedEntities: number }[];
+      normalizedAbsoluteIds: number;
+    };
+  };
+};
+
+async function readHygieneBody(
+  root: string,
+  messages: NormalizedMessage[] = hygieneTranscript(root),
+): Promise<HygieneBody> {
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => messages,
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+  let body: HygieneBody | null = null;
+  await withServer(app, async (baseUrl) => {
+    const response = await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID });
+    assert.equal(response.status, 200);
+    body = (await response.json()) as HygieneBody;
+  });
+  assert.ok(body !== null);
+  return body;
+}
+
+test('scope hygiene: nested scopes collapse to the outer entity, absolute ids normalise, outside scopes vanish', async (t) => {
+  const { root, outsideClaudecodeui, outsideTmp } = createHygieneProject(t);
+  const body = await readHygieneBody(root);
+
+  const hygiene = body.provenance.scopeHygiene;
+  assert.ok(hygiene !== undefined, 'a cleaned-up merge must report scopeHygiene');
+  assert.equal(hygiene.total, 5);
+  assert.equal(hygiene.kept, 3, 'outer, mid and inner still place distinct entities');
+  assert.deepEqual(hygiene.droppedOutsideRoot, [
+    { scope: 'outside-claudecodeui', label: 'claudecodeui (typescript)', sources: [outsideClaudecodeui] },
+    { scope: 'outside-tmp', label: 'fixture (typescript)', sources: [outsideTmp] },
+  ]);
+  assert.deepEqual(hygiene.subsumed, [
+    { scope: 'mid-scope', label: 'src (typescript)', intoScope: 'outer-scope', droppedEntities: 1 },
+    { scope: 'inner-scope', label: 'mermaid (typescript)', intoScope: 'outer-scope', droppedEntities: 1 },
+  ]);
+  assert.equal(hygiene.normalizedAbsoluteIds, 2, 'the two absolute ids of the mermaid scope were normalised');
+
+  const entityIds = body.graph.entity.nodes.map((node) => node.id);
+  // Exactly one id per canonical (file, name); the OUTER scope's copy survived.
+  assert.deepEqual(entityIds, [
+    'inner-scope/src/mermaid/OnlyInner.ts.OnlyInner',
+    'mid-scope/mid.ts.Mid',
+    'outer-scope/src/app.ts.App',
+    'outer-scope/src/mermaid/MermaidView.ts.MermaidView',
+  ]);
+  assert.ok(entityIds.every((id) => !id.startsWith('/')), 'no entity id may start with /');
+  assert.ok(entityIds.every((id) => !id.includes('//')), 'no entity id may contain //');
+  assert.ok(!entityIds.some((id) => id.includes('outside')), 'a scope outside the project contributes no node');
+
+  const fileIds = body.graph.file.nodes.map((node) => node.id);
+  assert.deepEqual(fileIds.sort(), [
+    'src/app.ts',
+    'src/mermaid/MermaidView.ts',
+    'src/mermaid/OnlyInner.ts',
+    'src/mid.ts',
+  ]);
+  assert.ok(fileIds.every((id) => !id.startsWith('/') && !id.includes('//')));
+  assert.ok(!fileIds.some((id) => id.split('/')[0] === 'data'), 'the `data (…)` directory group came from absolute ids');
+
+  const edges = body.graph.entity.edges.map((edge) => `${edge.from} -> ${edge.to}`);
+  assert.ok(edges.includes('mid-scope/mid.ts.Mid -> outer-scope/src/app.ts.App'), 'the dropped id was re-pointed at the keeper');
+  assert.ok(
+    edges.includes('inner-scope/src/mermaid/OnlyInner.ts.OnlyInner -> outer-scope/src/mermaid/MermaidView.ts.MermaidView'),
+    'an absolute-id edge was re-pointed after normalisation',
+  );
+  assert.ok(edges.every((edge) => edge.split(' -> ')[0] !== edge.split(' -> ')[1]), 'no self-loop survives');
+  assert.equal(new Set(edges).size, edges.length, 'no duplicate edge survives');
+  assert.ok(edges.length >= 3, 'no edge was lost by the rewrite');
+
+  const kindById = new Map(body.graph.entity.nodes.map((node) => [node.id, node.kind]));
+  assert.equal(kindById.get('outer-scope/src/mermaid/MermaidView.ts.MermaidView'), 'class', 'entityDetails follow the kept id');
+  assert.equal(kindById.get('inner-scope/src/mermaid/OnlyInner.ts.OnlyInner'), 'function');
+});
+
+test('scope hygiene: the merge is deterministic and a no-cleanup project keeps the legacy shape', () => {
+  const index = {
+    fileToIds: { 'a.ts': ['A.x'] },
+    nameToIds: { Alpha: ['A.x'] },
+    idToFile: { 'A.x': 'a.ts' },
+    idToName: { 'A.x': 'Alpha' },
+    dependencies: { 'A.x': [] },
+    dependents: { 'A.x': [] },
+    relationsByType: {},
+  };
+  const scopes = [
+    {
+      key: 'scope-src',
+      label: 'src (typescript)',
+      sources: ['/projects/demo/src'],
+      sourcePrefix: 'src',
+      generatedAt: MANIFEST_GENERATED_AT,
+      index,
+    },
+  ];
+
+  const first = mergeScopesWithHygiene({ projectPath: '/projects/demo', scopes });
+  const second = mergeScopesWithHygiene({ projectPath: '/projects/demo', scopes });
+
+  // The pre-hygiene merge verbatim: one scope, relative ids, no overlap.
+  assert.deepEqual(first.index, {
+    fileToIds: { 'src/a.ts': ['scope-src/A.x'] },
+    nameToIds: { Alpha: ['scope-src/A.x'] },
+    dependencies: { 'scope-src/A.x': [] },
+    dependents: { 'scope-src/A.x': [] },
+    idToFile: { 'scope-src/A.x': 'src/a.ts' },
+    idToName: { 'scope-src/A.x': 'Alpha' },
+    relationsByType: {},
+  });
+  assert.deepEqual(first.hygiene, {
+    total: 1,
+    kept: 1,
+    droppedOutsideRoot: [],
+    subsumed: [],
+    normalizedAbsoluteIds: 0,
+  });
+  assert.equal(JSON.stringify(first), JSON.stringify(second), 'the same input must produce the same bytes');
+});
+
+test('scope hygiene: a project reached through a symlink alias is still inside the project', async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'arch-hygiene-symlink-'));
+  const alias = `${root}-alias`;
+  t.after(() => {
+    rmSync(alias, { force: true });
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(path.join(root, 'src'), { recursive: true });
+  symlinkSync(root, alias, 'dir');
+
+  const index = {
+    fileToIds: { 'a.ts': ['a.ts.A'] },
+    nameToIds: { A: ['a.ts.A'] },
+    idToFile: { 'a.ts.A': 'a.ts' },
+    idToName: { 'a.ts.A': 'A' },
+    dependencies: { 'a.ts.A': [] },
+    dependents: { 'a.ts.A': [] },
+  };
+  const scope = {
+    key: 'alias-scope',
+    label: 'src (typescript)',
+    sources: [path.join(alias, 'src')],
+    sourcePrefix: 'src',
+    generatedAt: MANIFEST_GENERATED_AT,
+    index,
+  };
+
+  // A raw string comparison would call the alias path "outside"; realpath must not.
+  const raw = mergeScopesWithHygiene({
+    projectPath: root,
+    scopes: [scope],
+    canonicalizePath: (value) => path.resolve(value),
+  });
+  assert.equal(raw.hygiene.droppedOutsideRoot.length, 1, 'the control: without realpath the alias looks outside');
+
+  const real = mergeScopesWithHygiene({
+    projectPath: root,
+    scopes: [scope],
+    canonicalizePath: (value) => {
+      try {
+        return realpathSync(value);
+      } catch {
+        return path.resolve(value);
+      }
+    },
+  });
+  assert.equal(real.hygiene.droppedOutsideRoot.length, 0, 'realpath keeps the aliased scope inside');
+  assert.deepEqual(real.index.idToFile, { 'alias-scope/a.ts.A': 'src/a.ts' });
+
+  // And end to end: the route (which injects realpath) draws the entity.
+  writeJson(path.join(root, '.archguard', 'query', 'manifest.json'), {
+    version: '1.0',
+    generatedAt: MANIFEST_GENERATED_AT,
+    scopes: [{ key: 'alias-scope', label: 'src (typescript)', sources: [path.join(alias, 'src')] }],
+  });
+  writeJson(path.join(root, '.archguard', 'query', 'alias-scope', 'arch-index.json'), {
+    version: '1.0',
+    generatedAt: MANIFEST_GENERATED_AT,
+    archJsonHash: 'a'.repeat(64),
+    language: 'typescript',
+    ...index,
+  });
+  const body = await readHygieneBody(root, [
+    message({
+      id: 'tool-alias',
+      kind: 'tool_use',
+      role: 'assistant',
+      toolName: 'Read',
+      toolInput: { file_path: path.join(root, 'src', 'a.ts') },
+    }),
+  ]);
+  assert.equal(body.provenance.scopeHygiene, undefined, 'nothing was dropped, so no cleanup is reported');
+  assert.deepEqual(body.graph.entity.nodes.map((node) => node.id), ['alias-scope/a.ts.A']);
+});
+
+test('scope hygiene: upstream outsideProjectRoot/parentScopeKey win over the heuristic, and their absence falls back', () => {
+  const entity = (file: string, id: string, name: string) => ({
+    fileToIds: { [file]: [id] },
+    nameToIds: { [name]: [id] },
+    idToFile: { [id]: file },
+    idToName: { [id]: name },
+    dependencies: { [id]: [] },
+    dependents: { [id]: [] },
+  });
+
+  // parentScopeKey says `child-scope` (the SHORTER prefix) is nested inside
+  // `parent-scope`; the heuristic alone would keep the child.
+  const parent = {
+    key: 'parent-scope',
+    label: 'deep (typescript)',
+    sources: ['/projects/demo/src/deep'],
+    sourcePrefix: 'src/deep',
+    generatedAt: MANIFEST_GENERATED_AT,
+    index: entity('x.ts', 'x.ts.X', 'X'),
+  };
+  const child = {
+    key: 'child-scope',
+    label: 'root (typescript)',
+    sources: ['/projects/demo'],
+    sourcePrefix: '',
+    generatedAt: '2026-10-21T00:00:00.000Z',
+    parentScopeKey: 'parent-scope',
+    index: entity('src/deep/x.ts', 'src/deep/x.ts.X', 'X'),
+  };
+  const withParent = mergeScopesWithHygiene({
+    projectPath: '/projects/demo',
+    scopes: [parent, child],
+    canonicalizePath: (value) => path.resolve(value),
+  });
+  assert.deepEqual(Object.keys(withParent.index.idToFile), ['parent-scope/x.ts.X'], 'parentScopeKey decides the outer scope');
+
+  const { parentScopeKey: _ignored, ...childWithoutParent } = child;
+  const withoutParent = mergeScopesWithHygiene({
+    projectPath: '/projects/demo',
+    scopes: [parent, childWithoutParent],
+    canonicalizePath: (value) => path.resolve(value),
+  });
+  assert.deepEqual(
+    Object.keys(withoutParent.index.idToFile),
+    ['child-scope/src/deep/x.ts.X'],
+    'without the metadata the shortest source prefix wins, exactly as the heuristic alone',
+  );
+
+  // outsideProjectRoot is trusted verbatim in BOTH directions: an inside source
+  // flagged true is dropped, an outside source flagged false is kept.
+  const flaggedInside = {
+    key: 'flagged-inside',
+    label: 'flagged (typescript)',
+    sources: ['/projects/demo/src'],
+    sourcePrefix: 'src',
+    generatedAt: MANIFEST_GENERATED_AT,
+    outsideProjectRoot: true,
+    index: entity('inside.ts', 'inside.ts.I', 'I'),
+  };
+  const flaggedOutside = {
+    key: 'flagged-outside',
+    label: 'external (typescript)',
+    sources: ['/somewhere/else'],
+    sourcePrefix: '',
+    generatedAt: MANIFEST_GENERATED_AT,
+    outsideProjectRoot: false,
+    index: entity('external.ts', 'external.ts.E', 'E'),
+  };
+  const both = mergeScopesWithHygiene({
+    projectPath: '/projects/demo',
+    scopes: [flaggedInside, flaggedOutside],
+    canonicalizePath: (value) => path.resolve(value),
+  });
+  assert.deepEqual(both.hygiene.droppedOutsideRoot.map((entry) => entry.scope), ['flagged-inside']);
+  assert.deepEqual(Object.keys(both.index.idToFile), ['flagged-outside/external.ts.E']);
 });

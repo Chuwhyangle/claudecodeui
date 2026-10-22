@@ -82,8 +82,29 @@ export const RELAY_SYSTEM = [
 /** The line that introduces the visible-conversation pack. */
 export const CONTEXT_HEADER = '以下是当前 Claude Code 会话的上下文（用户看得见的内容，最新在后）。';
 
-/** The user turn's task, exactly as the N1 arm sent it. */
+/** The task, exactly as the N1 arm wrote it. It lives in the system turn, never beside the audio. */
 export const RELAY_TASK = '把这段录音整理成要发出去的文字，只输出整理后的文字。';
+
+/**
+ * The rules that keep the task sentence from becoming content.
+ *
+ * WHY THIS IS NOT IN THE USER TURN. The first version put `RELAY_TASK` beside the audio as a text
+ * part. On a real 10 s recording whose speech occupied only the first two seconds, the model
+ * returned the task sentence itself as the transcription: the task was text in the same user turn
+ * as the recording, so with little audio to tidy it treated those words as something the person had
+ * said. The system turn is where instructions belong; the user turn now carries the recording
+ * alone, and these lines say explicitly that the task is not part of what was said.
+ *
+ * THE EMPTY-ON-SILENCE LINE is the second half of the same defect: a model with nothing to tidy
+ * must answer with nothing (the adapter maps an empty answer to `NO_SPEECH_DETECTED`), never with
+ * the instruction, a completion of a half-heard sentence, or a plausible-sounding invention.
+ */
+export const AUDIO_ONLY_RULES = [
+  'THE AUDIO IS THE ONLY SOURCE OF CONTENT.',
+  'The task sentence in this system message is an instruction to you, not something the user said. Never copy it, paraphrase it, or return it as the answer.',
+  'If the audio contains no intelligible speech, return an empty string. Do not fill silence with anything.',
+  'Do not infer, complete or invent words that are not audible. Return only the spoken words, tidied.',
+].join(' ');
 
 /**
  * The thinking budget. `low` matches the shipped chat adapter and the contract board's recorded
@@ -93,12 +114,17 @@ export const RELAY_TASK = '把这段录音整理成要发出去的文字，只�
 export const REASONING_EFFORT = 'low';
 
 /**
- * The system turn for one request: the relay instruction, plus the context when the caller has
- * one. No context means the instruction alone, which is the N0 arm's shape.
+ * The system turn for one request: the relay instruction, the audio-only rules, the task, and the
+ * context when the caller has one. No context means the instruction/task/rules alone.
+ *
+ * THE TASK IS LABELLED AND LIVES HERE, not in the user turn. The label is not cosmetic: it gives
+ * the model a name for the instruction so it can tell the instruction apart from the recording,
+ * which is what the first real-and-silent recording needed.
  */
 export function relaySystemPrompt(context?: string): string {
   const trimmed = context?.trim() ?? '';
-  return trimmed === '' ? RELAY_SYSTEM : `${RELAY_SYSTEM}\n\n${CONTEXT_HEADER}\n\n${trimmed}`;
+  const base = `${RELAY_SYSTEM}\n\n${AUDIO_ONLY_RULES}\n\nTASK (never output this): ${RELAY_TASK}`;
+  return trimmed === '' ? base : `${base}\n\n${CONTEXT_HEADER}\n\n${trimmed}`;
 }
 
 // ── the declaration ──────────────────────────────────────────────────────────────────────────
@@ -123,12 +149,13 @@ export const capabilities: AsrCapabilities = {
     'audio/aac',
     'audio/amr',
   ],
-  // The published inline maximum, and it is the WHOLE request: system prompt, task turn, context
-  // and encoded audio.
+  // The published inline maximum, and it is the WHOLE request: system prompt, task instruction,
+  // context and encoded audio.
   maxInlineRequestBytes: 10 * 1024 * 1024,
   oversize: 'reject',
   honors: { prompt: false, language: false, context: true },
   contextPlacement: 'system',
+  taskPlacement: 'system',
   billing: 'audio-tokens',
   pauseCues: 'neutral',
   style: 'written',
@@ -193,6 +220,8 @@ export function buildRelayRequestBody(
       { role: 'system', content: relaySystemPrompt(request.hints?.context) },
       {
         role: 'user',
+        // AUDIO ONLY. The task is in the system turn (see `relaySystemPrompt`); a text part here is
+        // the bug that made a silent recording answer with the instruction.
         content: [
           {
             type: 'input_audio',
@@ -201,7 +230,6 @@ export function buildRelayRequestBody(
               format: audioFormatFor(request.audio.mimeType),
             },
           },
-          { type: 'text', text: RELAY_TASK },
         ],
       },
     ],
@@ -270,7 +298,7 @@ export async function transcribe(request: AsrRequest, invocation: AsrInvocation)
       message:
         `inline request of ${requestBytes} B exceeds provider '${id}' budget of ` +
         `${capabilities.maxInlineRequestBytes} B (the budget covers the whole request: the encoded ` +
-        `audio, the system prompt, the context and the task turn together, not the audio alone)`,
+        `audio, the system prompt, the context and the task instruction together, not the audio alone)`,
     };
   }
 

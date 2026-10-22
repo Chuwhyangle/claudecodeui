@@ -265,6 +265,19 @@ export function decideReadableZoom(input: ReadableZoomInput): ReadableZoomDecisi
   };
 }
 
+/**
+ * The compact reading of a package id used by the zoom strip: the last
+ * `segments` path segments (`data/home/yale/work/archguard/src/cli/mcp` →
+ * `cli/mcp`). The full id stays available to the caller for the `title`, so the
+ * strip never hides which package it means. Consumers: `PlantUmlGraph.tsx` and
+ * the readable-zoom tests.
+ */
+export function shortPackageName(packageId: string, segments = 2): string {
+  const parts = packageId.split('/').filter((part) => part.length > 0);
+  if (parts.length === 0) return '';
+  return parts.slice(-Math.max(1, segments)).join('/');
+}
+
 /** The locale key of the fit control while it really contains the whole drawing. */
 export const FIT_CONTROL_WHOLE_KEY = 'architecture.plantuml.zoomFit';
 

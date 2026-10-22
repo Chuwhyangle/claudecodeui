@@ -138,7 +138,15 @@
       "layoutBudget": "{{count}} innerhalb des Layout-Budgets angezeigt; mehr Detail dauert länger",
       "kindFunction": "{{count}} Funktionen",
       "kindInterface": "{{count}} Schnittstellen",
-      "kindClass": "{{count}} Klassen"
+      "kindClass": "{{count}} Klassen",
+      "budgetLimited": "Budgetbegrenzt",
+      "budgetLimitedAria": "Budgetbegrenzt durch {{layers}}",
+      "layerDetail": "Detailstufe",
+      "layerLayout": "Layout-Budget",
+      "layerServer": "Knotenbudget",
+      "detailLayer": "Die Detailstufe behält {{value}}.",
+      "layoutLayer": "Das Layout-Budget zeichnet nur {{value}} – mehr würde langsam; senken Sie das Detail, um mehr zu sehen.",
+      "serverLayer": "Das Knotenbudget hat {{value}} ausgelassen – verkleinern Sie den Bereich, um sie zu sehen."
     },
     "source": {
       "unresolved": "{{count}} in dieser Sitzung genannte Namen wurden nicht im Analyse-Cache gefunden",
@@ -165,6 +173,15 @@
       "kindAbstract": "abstrakte Klassen",
       "kindFunction": "Funktionen",
       "kindOther": "Sonstige"
+    },
+    "scopeHygiene": {
+      "summary": "Scope-Bereinigung",
+      "detailLabel": "Details zur Scope-Bereinigung",
+      "scopeCount": "{{total}} Scopes, {{kept}} behalten",
+      "subsumed": "{{count}} mit einem äußeren Scope zusammengeführt ({{entities}} doppelte Entitäten verworfen)",
+      "outside": "{{count}} außerhalb des Projektverzeichnisses wurden ignoriert",
+      "normalized": "{{count}} absolute Pfad-IDs normalisiert",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

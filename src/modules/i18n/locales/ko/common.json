@@ -138,7 +138,15 @@
       "layoutBudget": "레이아웃 예산 내에서 {{count}}개 표시 중이며, 상세 수준을 높이면 더 느려집니다",
       "kindFunction": "함수 {{count}}개",
       "kindInterface": "인터페이스 {{count}}개",
-      "kindClass": "클래스 {{count}}개"
+      "kindClass": "클래스 {{count}}개",
+      "budgetLimited": "예산 제한됨",
+      "budgetLimitedAria": "{{layers}} 예산 제한",
+      "layerDetail": "상세 수준",
+      "layerLayout": "레이아웃 예산",
+      "layerServer": "노드 예산",
+      "detailLayer": "상세 수준에서 {{value}}개를 유지했습니다.",
+      "layoutLayer": "레이아웃 예산은 {{value}}개만 그립니다. 더 많이 그리면 느려지므로 상세 수준을 낮추세요.",
+      "serverLayer": "노드 예산으로 {{value}}개를 가져오지 못했습니다. 범위를 줄이면 볼 수 있습니다."
     },
     "source": {
       "unresolved": "이 세션에서 언급된 이름 {{count}}개를 분석 캐시에서 찾지 못했습니다",
@@ -165,6 +173,15 @@
       "kindAbstract": "추상 클래스",
       "kindFunction": "함수",
       "kindOther": "기타"
+    },
+    "scopeHygiene": {
+      "summary": "스코프 정리",
+      "detailLabel": "스코프 정리 세부 정보",
+      "scopeCount": "스코프 {{total}}개, {{kept}}개 유지",
+      "subsumed": "{{count}}개가 외부 스코프로 병합됨(중복 엔티티 {{entities}}개 제거)",
+      "outside": "프로젝트 디렉터리 밖의 {{count}}개를 무시함",
+      "normalized": "절대 경로 id {{count}}개를 정규화함",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

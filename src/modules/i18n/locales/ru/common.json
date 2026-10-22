@@ -138,7 +138,15 @@
       "layoutBudget": "Показано {{count}} в пределах бюджета компоновки; повышение детализации замедлит отрисовку",
       "kindFunction": "{{count}} функций",
       "kindInterface": "{{count}} интерфейсов",
-      "kindClass": "{{count}} классов"
+      "kindClass": "{{count}} классов",
+      "budgetLimited": "Ограничено бюджетом",
+      "budgetLimitedAria": "Ограничено бюджетом: {{layers}}",
+      "layerDetail": "уровень детализации",
+      "layerLayout": "бюджет компоновки",
+      "layerServer": "бюджет узлов",
+      "detailLayer": "Уровень детализации сохранил {{value}}.",
+      "layoutLayer": "Бюджет компоновки рисует только {{value}}; больше будет медленно — снизьте детализацию, чтобы увидеть больше.",
+      "serverLayer": "Бюджет узлов не включил {{value}}; уменьшите область, чтобы их увидеть."
     },
     "source": {
       "unresolved": "{{count}} имён, упомянутых в этой сессии, не найдено в кэше анализа",
@@ -165,6 +173,15 @@
       "kindAbstract": "абстрактные классы",
       "kindFunction": "функции",
       "kindOther": "прочие"
+    },
+    "scopeHygiene": {
+      "summary": "Очистка scope",
+      "detailLabel": "Подробности очистки scope",
+      "scopeCount": "{{total}} scope, сохранено {{kept}}",
+      "subsumed": "{{count}} объединены с внешним scope (удалено {{entities}} дублирующихся сущностей)",
+      "outside": "{{count}} вне каталога проекта проигнорированы",
+      "normalized": "{{count}} абсолютных id путей нормализовано",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

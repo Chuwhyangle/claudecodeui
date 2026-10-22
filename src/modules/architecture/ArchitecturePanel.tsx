@@ -48,11 +48,13 @@ import {
   serializeSvgForExport,
 } from '@/modules/architecture/exportArtifacts';
 import {
+  CanvasHeaderSlotContext,
   CompactToolbarSlotContext,
   TOUCH_TARGET_STYLE,
   useTouchLayout,
 } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/layoutBudget';
+import { buildReadout } from '@/modules/architecture/readoutNumbers';
 import type {
   ArchitectureDetailReading,
   ArchitectureNodeIdShape,
@@ -266,8 +268,12 @@ function truncationReading(result: ArchitectureGraphResult, granularity: Archite
  * translate in their head. The precision stays available in `title` (the local
  * `toLocaleString()`), while the visible text answers the only question the
  * source line asks: how old is this analysis?
+ *
+ * `locale` is the INTERFACE language (`i18n.language`), not the browser's:
+ * the rest of the UI is already in that language, so a "10 hours ago" next to
+ * Chinese labels (or the reverse) is a bug the reader sees.
  */
-function formatRelativeTime(iso: string | null): string {
+function formatRelativeTime(iso: string | null, locale: string): string {
   if (iso === null) return 'unknown';
   const analysed = Date.parse(iso);
   if (Number.isNaN(analysed)) return 'unknown';
@@ -280,7 +286,7 @@ function formatRelativeTime(iso: string | null): string {
     ['minute', 60],
     ['second', 1],
   ];
-  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   for (const [unit, size] of steps) {
     if (Math.abs(seconds) >= size || unit === 'second') {
       return formatter.format(Math.round(seconds / size), unit);
@@ -290,10 +296,10 @@ function formatRelativeTime(iso: string | null): string {
 }
 
 /** The precise local instant behind a relative reading; the `<time>` title. */
-function formatAbsoluteTime(iso: string | null): string | undefined {
+function formatAbsoluteTime(iso: string | null, locale: string): string | undefined {
   if (iso === null) return undefined;
   const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString();
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString(locale);
 }
 
 type ArchitecturePanelProps = {
@@ -582,7 +588,8 @@ export default function ArchitecturePanel({
   renderer: Renderer = PlantUmlGraph as ArchitecturePanelRenderer,
   initialGranularity = 'entity',
 }: ArchitecturePanelProps) {
-  const { t } = useTranslation();
+  // `i18n` is the readout's locale (locale-aware times); `t` labels both knobs.
+  const { t, i18n } = useTranslation();
 
   // The element filter's labels. Each `t()` names its key literally (not a
   // template) so the locale-completeness test extracts every one of them from
@@ -624,6 +631,7 @@ export default function ArchitecturePanel({
     // A type nobody named: print it rather than inventing a category.
     return relationType;
   };
+
   // The pointer/size tier. On a narrow screen the export action moves into the
   // graph's overflow menu (one menu, not two), and on a coarse pointer every
   // header control grows to a 44px target.
@@ -778,6 +786,10 @@ export default function ArchitecturePanel({
   // `CompactToolbarSlotContext` so the graph's own controls are drawn inside the
   // same menu instead of in a second toolbar row.
   const [compactMenuHost, setCompactMenuHost] = useState<HTMLElement | null>(null);
+  // The right-hand cell of the in-flow row above the canvas. The renderer
+  // portals the zoom tier and its scale reading into it, so that chrome sits in
+  // normal flow instead of floating over the drawing's first row.
+  const [canvasHeaderHost, setCanvasHeaderHost] = useState<HTMLElement | null>(null);
   // A coarse pointer has no hover, so the touch instruction is shown once and
   // then dismissed — either by its close button or by the first node selection.
   // It never becomes a permanent row the way the old gesture line was.
@@ -817,6 +829,9 @@ export default function ArchitecturePanel({
   // The source line's unresolved-names list, expanded on demand rather than
   // printing every unresolved identifier as a permanent row.
   const [unresolvedOpen, setUnresolvedOpen] = useState(false);
+  // Expansion state for the scope-cleanup row; it only exists for readings the
+  // server reported a cleanup for, so a healthy project renders nothing here.
+  const [scopeHygieneOpen, setScopeHygieneOpen] = useState(false);
   // The search box's text. It is local because it only filters the payload in
   // hand; selecting a result is what changes the graph.
   const [searchQuery, setSearchQuery] = useState('');
@@ -1074,11 +1089,19 @@ export default function ArchitecturePanel({
 
   const truncation = truncationReading(result, granularity);
   // How many nodes the server's node budget left out of this subgraph. The
-  // readout answers this inline instead of printing a budget number.
+  // compact toolbar badge and the marker's data attributes read it; the
+  // expanded explanation states it as one of its layers.
   const budgetOmitted = Math.max(0, truncation.total - truncation.shown);
-  const retainedCount = detailRanking?.retainedNodeIds.size ?? neighbourhood.nodes.length;
-  const inScopeCount = activeNeighbourhood?.nodes.length ?? neighbourhood.nodes.length;
-  const foldedCount = detailRanking?.foldedCount ?? 0;
+  // The ONE reading the reader gets: N is what the layout was handed (group
+  // boxes count their members), M is the server's pre-budget total. The pure
+  // function decides which budget layers are named; the panel only renders it.
+  const readout = buildReadout({
+    detailRetained: detailRanking?.retainedNodeIds.size ?? neighbourhood.nodes.length,
+    drawnBoxes: layoutFit?.graph.nodes ?? [],
+    returnedCount: truncation.shown,
+    relatedTotal: truncation.total,
+    locale: i18n.language,
+  });
 
   // Both subgraphs are in hand; toggling only picks one, so it must not refetch.
   // The two options are a radiogroup because exactly one graph is on screen.
@@ -1497,6 +1520,12 @@ export default function ArchitecturePanel({
 
   const unresolvedNames = [...stats.unresolved.files, ...stats.unresolved.identifiers];
   const unresolvedCount = unresolvedNames.length;
+  // The server's scope hygiene reading. Absent = the merge changed nothing, and
+  // the source line then shows no cleanup affordance at all.
+  const scopeHygiene = provenance.scopeHygiene;
+  const subsumedEntityCount = scopeHygiene === undefined
+    ? 0
+    : scopeHygiene.subsumed.reduce((total, entry) => total + entry.droppedEntities, 0);
   // The kind tally is a factual reading of what the analysis contains, NOT a
   // judgement about the drawing. `class` folds the UML flavours the class
   // diagram draws the same way (class/abstract/enum).
@@ -1520,14 +1549,26 @@ export default function ArchitecturePanel({
   const readoutSummary = classNoun === 'class'
     ? t('architecture.readout.classSummary', {
         defaultValue: 'Showing {{shown}} classes · {{total}} related',
-        shown: retainedCount,
-        total: inScopeCount,
+        shown: readout.shownText,
+        total: readout.relatedText,
       })
     : t('architecture.readout.fileSummary', {
         defaultValue: 'Showing {{shown}} files · {{total}} related',
-        shown: retainedCount,
-        total: inScopeCount,
+        shown: readout.shownText,
+        total: readout.relatedText,
       });
+  // The amber marker's accessible name has to say WHICH budget is squeezing;
+  // the visible text stays one short word so the line does not grow back into
+  // the three-sentence block the task replaces.
+  const budgetLayerNames = readout.limitedLayers.map((layer) => {
+    if (layer === 'detail') return t('architecture.readout.layerDetail', { defaultValue: 'detail level' });
+    if (layer === 'layout') return t('architecture.readout.layerLayout', { defaultValue: 'layout budget' });
+    return t('architecture.readout.layerServer', { defaultValue: 'node budget' });
+  });
+  const budgetLimitedLabel = t('architecture.readout.budgetLimitedAria', {
+    defaultValue: 'Budget-limited by {{layers}}',
+    layers: budgetLayerNames.join(', '),
+  });
 
   // The filter's own reading, the readout's second line. The parts reuse the
   // SAME labels the popover's checkboxes show, so the number and the control
@@ -1576,9 +1617,9 @@ export default function ArchitecturePanel({
           <time
             data-architecture-generated-at
             dateTime={provenance.generatedAt}
-            title={formatAbsoluteTime(provenance.generatedAt)}
+            title={formatAbsoluteTime(provenance.generatedAt, i18n.language)}
           >
-            {formatRelativeTime(provenance.generatedAt)}
+            {formatRelativeTime(provenance.generatedAt, i18n.language)}
           </time>
         ) : (
           <span data-architecture-generated-at>unknown</span>
@@ -1610,8 +1651,219 @@ export default function ArchitecturePanel({
           ))}
         </ul>
       )}
+      {/* Scope cleanup: what the server dropped or rewrote before drawing. It
+          sits after the analysis/seed line because it explains that line's
+          numbers, and it is absent entirely when the merge changed nothing. */}
+      {scopeHygiene !== undefined && (
+        <button
+          type="button"
+          aria-expanded={scopeHygieneOpen}
+          data-architecture-scope-hygiene="true"
+          data-architecture-scope-hygiene-total={scopeHygiene.total}
+          data-architecture-scope-hygiene-kept={scopeHygiene.kept}
+          onClick={() => setScopeHygieneOpen((open) => !open)}
+          style={compactTargetStyle}
+          className="pointer-events-auto rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {t('architecture.scopeHygiene.summary', { defaultValue: 'Scope cleanup' })}
+          <span aria-hidden="true">{scopeHygieneOpen ? ' ▾' : ' ▸'}</span>
+        </button>
+      )}
+      {scopeHygiene !== undefined && scopeHygieneOpen && (
+        <ul
+          data-architecture-scope-hygiene-detail="true"
+          aria-label={t('architecture.scopeHygiene.detailLabel', {
+            defaultValue: 'Scope cleanup details',
+          })}
+          className="pointer-events-auto max-h-40 max-w-xs overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
+        >
+          <li data-architecture-scope-hygiene-counts="true">
+            {t('architecture.scopeHygiene.scopeCount', {
+              defaultValue: '{{total}} scopes, kept {{kept}}',
+              total: scopeHygiene.total,
+              kept: scopeHygiene.kept,
+            })}
+          </li>
+          {scopeHygiene.subsumed.length > 0 && (
+            <li data-architecture-scope-hygiene-subsumed={scopeHygiene.subsumed.length}>
+              {t('architecture.scopeHygiene.subsumed', {
+                defaultValue: '{{count}} merged into an outer scope ({{entities}} duplicate entities dropped)',
+                count: scopeHygiene.subsumed.length,
+                entities: subsumedEntityCount,
+              })}
+            </li>
+          )}
+          {scopeHygiene.droppedOutsideRoot.length > 0 && (
+            <li data-architecture-scope-hygiene-outside={scopeHygiene.droppedOutsideRoot.length}>
+              {t('architecture.scopeHygiene.outside', {
+                defaultValue: '{{count}} outside the project directory were ignored',
+                count: scopeHygiene.droppedOutsideRoot.length,
+              })}
+            </li>
+          )}
+          {scopeHygiene.normalizedAbsoluteIds > 0 && (
+            <li data-architecture-scope-hygiene-normalized={scopeHygiene.normalizedAbsoluteIds}>
+              {t('architecture.scopeHygiene.normalized', {
+                defaultValue: '{{count}} absolute-path ids normalised',
+                count: scopeHygiene.normalizedAbsoluteIds,
+              })}
+            </li>
+          )}
+          {scopeHygiene.droppedOutsideRoot.map((entry) => (
+            <li key={entry.scope} data-architecture-scope-hygiene-outside-scope={entry.scope}>
+              {t('architecture.scopeHygiene.outsideItem', {
+                defaultValue: '{{label}} — {{sources}}',
+                label: entry.label,
+                sources: entry.sources.join(', '),
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
 
+  );
+
+  /**
+   * The one-line reading. It is the only place the shown/in-scope numbers are
+   * stated, and it lives in the panel's in-flow row ABOVE the drawing (left
+   * cell): as an overlay it covered the first row of the graph. The filter's
+   * second line sits under it, so hiding and narrowing never share a number.
+   */
+  const readoutPanel = (
+    <div
+      data-architecture-readout="true"
+      aria-live="polite"
+      className="pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+    >
+      <button
+        type="button"
+        aria-expanded={readoutOpen}
+        onClick={() => setReadoutOpen((open) => !open)}
+        data-architecture-readout-toggle="true"
+        style={compactTargetStyle}
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        <span data-architecture-readout-summary={readout.shown} data-architecture-readout-total={readout.related}>
+          {readoutSummary}
+        </span>
+        {readout.limited && (
+          // ONE short amber marker, never the three budget sentences the task
+          // replaces: the layer-specific numbers live in the expanded area. The
+          // accessible name still says which layer(s) are squeezing, and the
+          // DOM readings the panel has always exposed stay on this element with
+          // the new meaning (N = drawn entities, M = pre-budget related).
+          <span
+            data-architecture-budget-limited="true"
+            aria-label={budgetLimitedLabel}
+            {...(layoutFit?.limited === true
+              ? {
+                  'data-architecture-layout-budget': layoutFit.graph.nodes.length,
+                  'data-architecture-layout-budget-tier': layoutFit.tier,
+                  'data-architecture-layout-budget-dropped': layoutFit.droppedCount,
+                }
+              : {})}
+            {...(truncation.truncated
+              ? {
+                  'data-architecture-truncated': 'true',
+                  'data-architecture-truncated-granularity': granularity,
+                  'data-architecture-truncated-shown': truncation.shown,
+                  'data-architecture-truncated-total': truncation.total,
+                  'data-architecture-truncated-omitted': budgetOmitted,
+                }
+              : {})}
+            className="text-amber-600 dark:text-amber-400"
+          >
+            {t('architecture.readout.budgetLimited', { defaultValue: 'Budget-limited' })}
+          </span>
+        )}
+        <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
+      </button>
+      {/* The filter's second line: what the element/relation selection is
+          hiding, and the one-click reset. Deliberately separate from the
+          detail sentence above — the two knobs must not share a number. */}
+      {hiddenCount > 0 && (
+        <div
+          data-architecture-filter-hidden={hiddenCount}
+          data-architecture-filter-hidden-kinds={JSON.stringify(hiddenReading.byKind)}
+          data-architecture-filter-hidden-relations={JSON.stringify(hiddenReading.byRelation)}
+          data-architecture-filter-hidden-isolated={hiddenReading.isolated}
+          className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5"
+        >
+          <span>
+            {t('architecture.filter.hiddenPrefix', {
+              defaultValue: 'Hidden {{parts}}',
+              parts: hiddenParts.join(' · '),
+            })}
+          </span>
+          <button
+            type="button"
+            data-architecture-filter-show-all="true"
+            onClick={() => changeFilter(ARCHITECTURE_SHOW_ALL_FILTER)}
+            style={compactTargetStyle}
+            className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            {t('architecture.filter.showAll', { defaultValue: '▸ Show all' })}
+          </button>
+        </div>
+      )}
+      {readoutOpen && (
+        <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
+          {readout.lines.length > 0 && (
+            // One line per budget layer that cut, each with its own number and
+            // its "how to adjust" clause. Untriggered layers are absent.
+            <div data-architecture-readout-budget-lines="true" className="flex flex-col gap-0.5">
+              {readout.lines.map((line) => (
+                <p
+                  key={line.layer}
+                  data-architecture-readout-line={line.layer}
+                  data-architecture-readout-line-count={line.count}
+                >
+                  {line.layer === 'detail'
+                    ? t('architecture.readout.detailLayer', {
+                        defaultValue: 'Detail level kept {{value}}.',
+                        value: line.countText,
+                      })
+                    : line.layer === 'layout'
+                      ? t('architecture.readout.layoutLayer', {
+                          defaultValue:
+                            'The layout budget draws {{value}} — more would be slow; lower the detail to see more.',
+                          value: line.countText,
+                        })
+                      : t('architecture.readout.serverLayer', {
+                          defaultValue:
+                            'The node budget left {{value}} out — reduce the scope to see them.',
+                          value: line.countText,
+                        })}
+                </p>
+              ))}
+            </div>
+          )}
+          {kindLine !== null && kindLine.length > 0 && (
+            <p data-architecture-kind-counts="true">{kindLine}</p>
+          )}
+          <span className="flex gap-2">
+            <button
+              type="button"
+              onClick={raiseDetail}
+              data-architecture-raise-detail="true"
+              className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.readout.raiseDetail', { defaultValue: 'Raise detail' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => changeScope(scope - 1)}
+              data-architecture-reduce-scope="true"
+              disabled={scope <= ARCHITECTURE_SCOPE_MIN}
+              className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {t('architecture.readout.reduceScope', { defaultValue: 'Reduce scope' })}
+            </button>
+          </span>
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -1739,7 +1991,12 @@ export default function ArchitecturePanel({
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      {/* The canvas region is a flex COLUMN: every `flex-1` below it needs a
+          flex parent to resolve against, and every `h-full` below it needs a
+          parent with a definite height. As a block container this line let the
+          whole chain fall back to content height (the measured 342px canvas
+          inside a 669px region). */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
           <>
             {coarsePointer && !touchHintDismissed && (
@@ -1764,162 +2021,58 @@ export default function ArchitecturePanel({
                 </button>
               </div>
             )}
+            {/* ONE in-flow row above the drawing: the readout on the left, the
+                renderer's zoom tier and scale on the right. As an absolutely
+                positioned overlay this chrome covered the graph's first row. */}
+            <div
+              data-architecture-canvas-header="true"
+              className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1"
+            >
+              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
+              <div
+                ref={setCanvasHeaderHost}
+                data-architecture-canvas-header-actions="true"
+                className="flex min-w-0 max-w-[65%] shrink-0 flex-wrap items-center justify-end gap-1"
+              />
+            </div>
             <div
               ref={graphAreaRef}
               aria-busy={refreshing}
               data-architecture-refreshing={refreshing ? 'true' : undefined}
-              className={`relative min-h-0 flex-1 transition-opacity ${refreshing ? 'opacity-60' : ''}`}
+              className={`relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`}
             >
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
-                <Renderer
-                  key={`${sessionId}:${granularity}:${scope}`}
-                  graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
-                  // The detail knob's two numbers, so a renderer that has a
-                  // visible-summary slot can report shown/in-scope rather than
-                  // its own drawn/total reading.
-                  detailReading={detailReading}
-                  // Which subgraph this is decides how ids are read (label and
-                  // group prefixes). The renderer must not have to guess: see
-                  // `nodeIdShapeOf`.
-                  idShape={nodeIdShapeOf(granularity)}
-                  onNodeHover={handleNodeHover}
-                  // Selecting a node is the reader working the drawing; the
-                  // one-off touch instruction has done its job by then.
-                  onNodeClick={() => setTouchHintDismissed(true)}
-                  // The renderer owns the drill-down view; reporting it keeps
-                  // the export menu's PlantUML identical to the drawing.
-                  onViewChange={setDiagramView}
-                  focusNodeId={focusTarget?.id ?? null}
-                  focusToken={focusTarget?.token}
-                />
+                <CanvasHeaderSlotContext.Provider value={canvasHeaderHost}>
+                  <Renderer
+                    key={`${sessionId}:${granularity}:${scope}`}
+                    graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
+                    // The detail knob's two numbers, so a renderer that has a
+                    // visible-summary slot can report shown/in-scope rather than
+                    // its own drawn/total reading.
+                    detailReading={detailReading}
+                    // Which subgraph this is decides how ids are read (label and
+                    // group prefixes). The renderer must not have to guess: see
+                    // `nodeIdShapeOf`.
+                    idShape={nodeIdShapeOf(granularity)}
+                    onNodeHover={handleNodeHover}
+                    // Selecting a node is the reader working the drawing; the
+                    // one-off touch instruction has done its job by then.
+                    onNodeClick={() => setTouchHintDismissed(true)}
+                    // The renderer owns the drill-down view; reporting it keeps
+                    // the export menu's PlantUML identical to the drawing.
+                    onViewChange={setDiagramView}
+                    focusNodeId={focusTarget?.id ?? null}
+                    focusToken={focusTarget?.token}
+                  />
+                </CanvasHeaderSlotContext.Provider>
               </CompactToolbarSlotContext.Provider>
 
-              {/* The one-line reading, ON the drawing's top-left corner. It is
-                  the only place the shown/in-scope numbers are stated. */}
-              <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
-                <div
-                  data-architecture-readout="true"
-                  aria-live="polite"
-                  className="pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
-                >
-                  <button
-                    type="button"
-                    aria-expanded={readoutOpen}
-                    onClick={() => setReadoutOpen((open) => !open)}
-                    data-architecture-readout-toggle="true"
-                    style={compactTargetStyle}
-                    className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                  >
-                    <span data-architecture-readout-summary={retainedCount} data-architecture-readout-total={inScopeCount}>
-                      {readoutSummary}
-                    </span>
-                    {foldedCount > 0 && (
-                      <span data-architecture-folded-badge={foldedCount} className="text-foreground">
-                        {t('architecture.readout.folded', { defaultValue: '+{{count}} folded', count: foldedCount })}
-                      </span>
-                    )}
-                    {layoutFit?.limited === true && (
-                      // The layout budget is stated, never offered as a "render
-                      // it all anyway" escape: the freeze it prevents cannot be
-                      // interrupted on the main thread. The number is what the
-                      // renderer actually draws.
-                      <span
-                        data-architecture-layout-budget={layoutFit.graph.nodes.length}
-                        data-architecture-layout-budget-tier={layoutFit.tier}
-                        data-architecture-layout-budget-dropped={layoutFit.droppedCount}
-                        className="text-amber-600 dark:text-amber-400"
-                      >
-                        {t('architecture.readout.layoutBudget', {
-                          defaultValue: 'Showing {{count}} within the layout budget; raising detail takes longer',
-                          count: layoutFit.graph.nodes.length,
-                        })}
-                      </span>
-                    )}
-                    {truncation.truncated && (
-                      <span
-                        data-architecture-truncated="true"
-                        data-architecture-truncated-granularity={granularity}
-                        data-architecture-truncated-shown={truncation.shown}
-                        data-architecture-truncated-total={truncation.total}
-                        data-architecture-truncated-omitted={budgetOmitted}
-                        className="text-amber-600 dark:text-amber-400"
-                      >
-                        {t('architecture.readout.budgetOmitted', {
-                          defaultValue: '{{count}} more left out by the node budget',
-                          count: budgetOmitted,
-                        })}
-                      </span>
-                    )}
-                    <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
-                  </button>
-                  {/* The filter's second line: what the element/relation
-                      selection is hiding, and the one-click reset. It is
-                      deliberately separate from the detail sentence above —
-                      the two knobs must not share a number. */}
-                  {hiddenCount > 0 && (
-                    <div
-                      data-architecture-filter-hidden={hiddenCount}
-                      data-architecture-filter-hidden-kinds={JSON.stringify(hiddenReading.byKind)}
-                      data-architecture-filter-hidden-relations={JSON.stringify(hiddenReading.byRelation)}
-                      data-architecture-filter-hidden-isolated={hiddenReading.isolated}
-                      className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5"
-                    >
-                      <span>
-                        {t('architecture.filter.hiddenPrefix', {
-                          defaultValue: 'Hidden {{parts}}',
-                          parts: hiddenParts.join(' · '),
-                        })}
-                      </span>
-                      <button
-                        type="button"
-                        data-architecture-filter-show-all="true"
-                        onClick={() => changeFilter(ARCHITECTURE_SHOW_ALL_FILTER)}
-                        style={compactTargetStyle}
-                        className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
-                      >
-                        {t('architecture.filter.showAll', { defaultValue: '▸ Show all' })}
-                      </button>
-                    </div>
-                  )}
-                  {readoutOpen && (
-                    <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
-                      <p>
-                        {t('architecture.readout.explanation', {
-                          defaultValue:
-                            '{{shown}} is what the current detail level keeps; {{total}} is every related entity in the current scope.',
-                          shown: retainedCount,
-                          total: inScopeCount,
-                        })}
-                      </p>
-                      {kindLine !== null && kindLine.length > 0 && (
-                        <p data-architecture-kind-counts="true">{kindLine}</p>
-                      )}
-                      <span className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={raiseDetail}
-                          data-architecture-raise-detail="true"
-                          className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-                        >
-                          {t('architecture.readout.raiseDetail', { defaultValue: 'Raise detail' })}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => changeScope(scope - 1)}
-                          data-architecture-reduce-scope="true"
-                          disabled={scope <= ARCHITECTURE_SCOPE_MIN}
-                          className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {t('architecture.readout.reduceScope', { defaultValue: 'Reduce scope' })}
-                        </button>
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {/* The hover relation reading replaces the two duplicated
-                    standing instructions: it only exists while a node is under
-                    the pointer, so the page has no permanent hint sentence. */}
-                {visibleHover !== null && (
+              {/* The hover relation reading replaces the two duplicated
+                  standing instructions: it only exists while a node is under
+                  the pointer, so the page has no permanent hint sentence. It
+                  stays a transient overlay; the readout above does not. */}
+              {visibleHover !== null && (
+                <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
                   <span
                     data-architecture-hover={visibleHover.node.id}
                     data-architecture-hover-relations={visibleHover.relations.join(',')}
@@ -1934,8 +2087,8 @@ export default function ArchitecturePanel({
                           : visibleHover.relations.join(', '),
                     })}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
 
               {sourceLine}
             </div>

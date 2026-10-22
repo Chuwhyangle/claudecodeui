@@ -477,6 +477,43 @@ const EMPTY_RESULT: ArchitectureGraphResult = {
   provenance: { generatedAt: GENERATED_AT, fingerprints: [], cacheHit: false },
 };
 
+/**
+ * The reading from a manifest with the real archguard pathologies: nested
+ * scopes over the same files, absolute-path ids, and scopes belonging to other
+ * projects. The server reports what it cleaned in `provenance.scopeHygiene`.
+ */
+const SCOPE_HYGIENE_RESULT: ArchitectureGraphResult = {
+  ...RESULT,
+  provenance: {
+    ...RESULT.provenance,
+    scopeHygiene: {
+      total: 28,
+      kept: 16,
+      droppedOutsideRoot: [
+        {
+          scope: '93e0a992',
+          label: 'claudecodeui (typescript)',
+          sources: ['/data/home/yale/work/claudecodeui'],
+        },
+        {
+          scope: 'ab4fee8d',
+          label: 'quay (typescript)',
+          sources: ['/data/home/yale/work/quay'],
+        },
+      ],
+      subsumed: [
+        {
+          scope: '465376a8',
+          label: 'src (typescript)',
+          intoScope: '8f71319d',
+          droppedEntities: 514,
+        },
+      ],
+      normalizedAbsoluteIds: 159,
+    },
+  },
+};
+
 /** A Response stand-in: only `ok` and `json` are read by `readApiJson`. */
 function jsonResponse(result: ArchitectureGraphResult): Response {
   return {
@@ -1128,7 +1165,16 @@ test('the zoom cluster lives on the canvas, not in the toolbar, with 32px target
   assert.ok(canvas.contains(cluster), 'the cluster must be inside the canvas container');
   assert.equal(cluster.getAttribute('role'), 'group');
   assert.equal(cluster.getAttribute('aria-label'), 'Diagram zoom', 'the cluster carries an accessible name');
-  assert.ok(cluster.querySelector('[data-architecture-zoom-level]'), 'the percentage readout belongs to the cluster');
+  // The scale reading moved UP into the in-flow row above the canvas (it used
+  // to sit inside this floating cluster, which put it over the drawing).
+  const header = document.querySelector('[data-architecture-canvas-header]');
+  assert.ok(header instanceof HTMLElement, 'the readout/tier row must sit above the canvas');
+  assert.ok(header.querySelector('[data-architecture-zoom-level]'), 'the scale reading belongs to the row above the canvas');
+  assert.equal(
+    cluster.querySelector('[data-architecture-zoom-level]'),
+    null,
+    'the floating cluster carries buttons only; the reading is not drawn over the graph',
+  );
   for (const control of ['zoom-in', 'zoom-out', 'zoom-fit']) {
     assert.ok(cluster.querySelector(`[data-architecture-${control}]`), `${control} must be in the cluster`);
   }
@@ -1314,6 +1360,17 @@ test('the readable toggle switches between the focused default and the whole-gra
   assert.ok(hint !== null, 'overview mode must say what the reader is looking at');
   assert.match(hint.textContent ?? '', /modules\/alpha/, 'the hint names the densest seeded package');
   assert.match(hint.textContent ?? '', /0 other package/, 'the hint carries the other-package count');
+  // The strip shows only the last two path segments; the full id is the title.
+  assert.equal(
+    hint.getAttribute('title'),
+    'src/modules/alpha',
+    'the full package id stays available as the title',
+  );
+  assert.doesNotMatch(
+    hint.textContent ?? '',
+    /src\/modules\/alpha/,
+    'the strip must not print the whole path',
+  );
   assert.equal(
     screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed'),
     'true',
@@ -2153,9 +2210,27 @@ test('the truncation reading follows the current granularity and appends the omi
   assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '4');
   assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
   assert.equal(truncated.getAttribute('data-architecture-truncated-omitted'), '5');
-  // The truncation is appended to the one-line readout, in the same sentence
-  // shape as the "showing N of M" reading — not a separate amber row.
-  assert.match(truncated.textContent ?? '', /5 more left out by the node budget/);
+  // N is the drawn entity count and M is the pre-budget total, not the
+  // returned count the old readout used for its second number.
+  const summary = document.querySelector('[data-architecture-readout-summary]');
+  assert.equal(summary?.getAttribute('data-architecture-readout-summary'), '4');
+  assert.equal(summary?.getAttribute('data-architecture-readout-total'), '9');
+  assert.match(summary?.textContent ?? '', /Showing 4 classes · 9 related/);
+  // The collapsed line is the two numbers plus ONE marker: the old
+  // per-budget sentences moved into the expanded explanation.
+  assert.match(truncated.textContent ?? '', /Budget-limited/);
+  const collapsedText = document.querySelector('[data-architecture-readout]')?.textContent ?? '';
+  assert.doesNotMatch(collapsedText, /left out by the node budget/i);
+  assert.doesNotMatch(collapsedText, /within the layout budget/i);
+  // The expanded explanation names the server layer with its own number.
+  fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+  const serverLine = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-readout-line="server"]');
+    assert.ok(element instanceof HTMLElement, 'the expanded readout must state the server budget line');
+    return element;
+  });
+  assert.equal(serverLine.getAttribute('data-architecture-readout-line-count'), '5');
+  assert.match(serverLine.textContent ?? '', /node budget left 5 out/);
   assert.equal(document.querySelector('[data-architecture-hops-advice]'), null);
   // The server's node budget never appears as a number in the UI.
   assert.doesNotMatch(document.body.textContent ?? '', /\b\d+ of \d+ (files|entities)\b/);
@@ -2292,7 +2367,20 @@ test('the one-line readout reports the shown and in-scope numbers from the detai
     assert.equal(summary()?.getAttribute('data-architecture-readout-total'), '4');
     assert.match(summary()?.textContent ?? '', /Showing 2 files · 4 related/);
   });
-  assert.equal(document.querySelector('[data-architecture-folded-badge]')?.getAttribute('data-architecture-folded-badge'), '2');
+  // The old "+N folded" chip is gone from the collapsed line: one marker names
+  // the squeezing layer, and the expanded explanation states the detail count.
+  assert.equal(document.querySelector('[data-architecture-folded-badge]'), null);
+  const marker = document.querySelector('[data-architecture-budget-limited]');
+  assert.ok(marker instanceof HTMLElement, 'a detail cut is a budget pressure and must be marked');
+  assert.match(marker.getAttribute('aria-label') ?? '', /detail level/);
+  fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+  const detailLine = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-readout-line="detail"]');
+    assert.ok(element instanceof HTMLElement, 'the expanded readout states the detail layer');
+    return element;
+  });
+  assert.equal(detailLine.getAttribute('data-architecture-readout-line-count'), '2');
+  assert.match(detailLine.textContent ?? '', /Detail level kept 2/);
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no step of the detail knob may refetch');
 });
 
@@ -2327,8 +2415,22 @@ test('an over-budget graph is capped before layout, and the readout says so with
     assert.equal(budget.getAttribute('data-architecture-layout-budget'), '325');
     assert.equal(budget.getAttribute('data-architecture-layout-budget-tier'), 'common');
     assert.equal(budget.getAttribute('data-architecture-layout-budget-dropped'), '325');
-    assert.match(budget.textContent ?? '', /已按布局预算显示 325 个/);
-    assert.match(budget.textContent ?? '', /调高详情会更慢/);
+    // The collapsed line is the two numbers plus ONE marker; the layer sentence
+    // lives in the expanded explanation (and still names how to adjust).
+    assert.equal(budget.textContent, '受预算限制');
+    assert.match(budget.getAttribute('aria-label') ?? '', /布局预算/);
+    const summary = document.querySelector('[data-architecture-readout-summary]');
+    assert.equal(summary?.getAttribute('data-architecture-readout-summary'), '325');
+    assert.equal(summary?.getAttribute('data-architecture-readout-total'), '650');
+    assert.match(summary?.textContent ?? '', /显示 325 个文件 · 共 650 个相关/);
+    fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+    const layoutLine = await waitFor(() => {
+      const element = document.querySelector('[data-architecture-readout-line="layout"]');
+      assert.ok(element instanceof HTMLElement, 'the expanded readout states the layout budget');
+      return element;
+    });
+    assert.match(layoutLine.textContent ?? '', /布局预算只画 325 个/);
+    assert.match(layoutLine.textContent ?? '', /可降低详情/);
 
     // The renderer receives the capped graph, never the payload's full 650.
     assert.equal(seen.at(-1)?.graph.nodes.length, 325, 'the budget is applied BEFORE the layout');
@@ -2587,7 +2689,7 @@ test('the toolbar is one non-wrapping row, the class diagram is the default, and
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the detail knob never refetches');
 });
 
-test('a truncated reading appends the omitted count to the same readout and prints no budget number', async () => {
+test('a truncated reading marks the collapsed line and states the omitted count in the explanation', async () => {
   // RESULT's ENTITY subgraph is cut: 4 shown, 9 reachable (5 omitted).
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
@@ -2596,7 +2698,20 @@ test('a truncated reading appends the omitted count to the same readout and prin
   assert.ok(truncated instanceof HTMLElement, 'the readout must carry the cut');
   assert.equal(truncated.getAttribute('data-architecture-truncated-granularity'), 'entity');
   assert.equal(truncated.getAttribute('data-architecture-truncated-omitted'), '5');
-  assert.match(truncated.textContent ?? '', /5 more left out by the node budget/);
+  assert.match(truncated.textContent ?? '', /Budget-limited/);
+  // The collapsed line no longer carries the budget sentence; the expanded
+  // explanation does, with its own number.
+  assert.doesNotMatch(
+    document.querySelector('[data-architecture-readout-toggle]')?.textContent ?? '',
+    /more left out by the node budget/i,
+  );
+  fireEvent.click(document.querySelector('[data-architecture-readout-toggle]') as Element);
+  const serverLine = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-readout-line="server"]');
+    assert.ok(element instanceof HTMLElement, 'the expanded readout states the server layer');
+    return element;
+  });
+  assert.match(serverLine.textContent ?? '', /node budget left 5 out/);
   const bodyText = document.body.textContent ?? '';
   assert.doesNotMatch(bodyText, /\b2000 of\b/i);
   assert.doesNotMatch(bodyText, /\b\d+ of \d+ (files|entities)\b/);
@@ -2652,6 +2767,95 @@ test('unresolved names expand into a list, and the analysis time is relative wit
   });
   const names = [...list.querySelectorAll('li')].map((item) => item.textContent);
   assert.deepEqual(names, ['src/unknown.ts', 'NoSuchThing']);
+});
+
+test('scope hygiene shows only when the server cleaned up, and expands to its counts and outside scopes', async () => {
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  assert.equal(
+    document.querySelector('[data-architecture-scope-hygiene]'),
+    null,
+    'a project whose merge changed nothing shows no cleanup row',
+  );
+  first.unmount();
+
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(SCOPE_HYGIENE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const toggle = document.querySelector('[data-architecture-scope-hygiene]');
+  assert.ok(toggle instanceof HTMLElement, 'the source line carries an expandable cleanup item');
+  assert.match(toggle.textContent ?? '', /Scope cleanup/);
+  assert.equal(toggle.getAttribute('data-architecture-scope-hygiene-total'), '28');
+  assert.equal(toggle.getAttribute('data-architecture-scope-hygiene-kept'), '16');
+  assert.equal(
+    document.querySelector('[data-architecture-scope-hygiene-detail]'),
+    null,
+    'the counts stay collapsed until the reader expands the row',
+  );
+
+  const callsBeforeExpand = apiMock.architectureGraph.mock.calls.length;
+  fireEvent.click(toggle);
+  const detail = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-scope-hygiene-detail]');
+    assert.ok(node instanceof HTMLElement, 'expanding lists what was cleaned');
+    return node;
+  });
+  const text = detail.textContent ?? '';
+  assert.match(text, /28 scopes, kept 16/);
+  assert.match(text, /1 merged into an outer scope \(514 duplicate entities dropped\)/);
+  assert.match(text, /2 outside the project directory were ignored/);
+  assert.match(text, /159 absolute-path ids normalised/);
+
+  const outside = [...detail.querySelectorAll('[data-architecture-scope-hygiene-outside-scope]')].map(
+    (node) => node.textContent,
+  );
+  assert.deepEqual(outside, [
+    'claudecodeui (typescript) — /data/home/yale/work/claudecodeui',
+    'quay (typescript) — /data/home/yale/work/quay',
+  ]);
+  assert.equal(
+    apiMock.architectureGraph.mock.calls.length,
+    callsBeforeExpand,
+    'expanding the row is local — never a refetch',
+  );
+});
+
+test('the analysis time follows the interface language, not the browser language', async () => {
+  // A reading exactly ten hours old so both languages land on the hour unit.
+  const generatedAt = new Date(Date.now() - 10 * 3600 * 1000).toISOString();
+  apiMock.architectureGraph.mockResolvedValue(
+    jsonResponse({
+      ...CLASS_DIAGRAM_RESULT,
+      provenance: { ...CLASS_DIAGRAM_RESULT.provenance, generatedAt },
+    }),
+  );
+  const browserLanguage = Object.getOwnPropertyDescriptor(window.navigator, 'language');
+  try {
+    // Browser French, interface English: the reading must be English.
+    Object.defineProperty(window.navigator, 'language', { value: 'fr-FR', configurable: true });
+    const english = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    await waitForDiagram();
+    const englishTime = document.querySelector('[data-architecture-generated-at]');
+    assert.ok(englishTime instanceof HTMLTimeElement);
+    assert.match(englishTime.textContent ?? '', /10 hours ago/, 'the interface language picks the relative wording');
+    assert.doesNotMatch(englishTime.textContent ?? '', /il y a|小时前/, 'navigator.language must not win');
+    english.unmount();
+
+    // Browser English, interface Chinese: the reading must be Chinese.
+    Object.defineProperty(window.navigator, 'language', { value: 'en-US', configurable: true });
+    await i18next.changeLanguage('zh-CN');
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    await waitForDiagram();
+    const chineseTime = document.querySelector('[data-architecture-generated-at]');
+    assert.ok(chineseTime instanceof HTMLTimeElement);
+    assert.match(chineseTime.textContent ?? '', /10小时前/, 'the interface language picks the relative wording');
+    assert.doesNotMatch(chineseTime.textContent ?? '', /ago/, 'navigator.language must not win');
+    assert.match(chineseTime.getAttribute('title') ?? '', /\d{4}/, 'the absolute title follows the same locale source');
+  } finally {
+    await i18next.changeLanguage('en');
+    if (browserLanguage !== undefined) Object.defineProperty(window.navigator, 'language', browserLanguage);
+  }
 });
 
 test('searching the class diagram reveals and centres the node; a folded hit reports the range', async () => {

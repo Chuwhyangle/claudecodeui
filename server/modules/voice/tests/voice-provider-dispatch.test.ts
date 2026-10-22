@@ -642,9 +642,50 @@ test('relay: the context is in the system turn and the tidied text is the answer
     /architecture tab/,
     'the context is not repeated as user speech',
   );
-  assert.match(JSON.stringify(user.content), /把这段录音整理成要发出去的文字/);
+  assert.match(String(system.content), /把这段录音整理成要发出去的文字/, 'the task is system-only');
+  assert.deepEqual(
+    (user.content as { type?: unknown }[]).map((part) => part.type),
+    ['input_audio'],
+    'the user turn is the recording alone; the task must not sit beside it',
+  );
   assert.equal(body.reasoning_effort, 'low');
   emit(`relay context=system provider=${dashscopeRelayId} url=${calls[0].url}`);
+});
+
+test('relay prompt: the task is system-only and the user turn carries the recording alone', async () => {
+  const calls: Recorded[] = [];
+  const service = makeService({ calls, answer: () => chatAnswer('好，我们就现场试一下。') });
+  const settings: VoiceSettings = {
+    ...NO_USER_SETTINGS,
+    dashscopeEndpoint: 'https://dashscope.aliyuncs.com',
+    dashscopeApiKey: 'k-relay',
+  };
+
+  const result = await service.transcribe({
+    audio: audioUpload(),
+    overrides: { providerId: dashscopeRelayId },
+    settings,
+  });
+
+  assert.equal(result.ok, true);
+  const body = JSON.parse(String(calls[0].body)) as {
+    messages: { role: string; content: unknown }[];
+  };
+  const system = String(body.messages[0].content);
+  const user = body.messages[1].content;
+  assert.match(system, /TASK \(never output this\): /, 'the task sentence must be in the system turn');
+  assert.match(system, /THE AUDIO IS THE ONLY SOURCE OF CONTENT\./);
+  assert.ok(Array.isArray(user), 'the user turn is the parts array');
+  assert.deepEqual(
+    (user as { type?: unknown }[]).map((part) => part.type),
+    ['input_audio'],
+    'the user turn must carry the recording and no text part — a task beside the audio is what a silent clip echoed back',
+  );
+  assert.ok(
+    !JSON.stringify(user).includes(dashscopeRelay.RELAY_TASK),
+    'the task sentence must not appear anywhere in the user turn',
+  );
+  emit(`relay prompt=system-only user-parts=${(user as { type?: unknown }[]).length}`);
 });
 
 test('relay: a JSON-shaped dictation is returned as text, not mistaken for an envelope', async () => {

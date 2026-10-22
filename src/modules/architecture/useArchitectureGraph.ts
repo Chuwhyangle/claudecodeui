@@ -44,6 +44,35 @@ export type ArchitectureDiagnostic = {
   readonly message: string;
 };
 
+/** A scope ignored because it does not index this project at all. */
+export type ArchitectureDroppedOutsideRootScope = {
+  readonly scope: string;
+  readonly label: string;
+  readonly sources: readonly string[];
+};
+
+/** A scope that lost overlapping entities to an outer scope indexing the same file. */
+export type ArchitectureSubsumedScope = {
+  readonly scope: string;
+  readonly label: string;
+  readonly intoScope: string;
+  readonly droppedEntities: number;
+};
+
+/**
+ * What the server's scope merge cleaned up: absolute-path ids normalised,
+ * overlapping scopes collapsed, and scopes outside the project ignored.
+ * Mirrors the server's `ScopeHygiene`; absent from the provenance entirely when
+ * the merge changed nothing, so a healthy reading draws no cleanup row.
+ */
+export type ArchitectureScopeHygiene = {
+  readonly total: number;
+  readonly kept: number;
+  readonly droppedOutsideRoot: readonly ArchitectureDroppedOutsideRootScope[];
+  readonly subsumed: readonly ArchitectureSubsumedScope[];
+  readonly normalizedAbsoluteIds: number;
+};
+
 /**
  * Honesty payload (ADR-005 decision 7): when the ArchGuard analysis behind this
  * reading was produced, which scope fingerprints it used, whether the server
@@ -58,6 +87,8 @@ export type ArchitectureProvenance = {
   readonly cacheHit: boolean;
   /** Present only when some scope's `arch.json` was missing or unusable. */
   readonly diagnostics?: readonly ArchitectureDiagnostic[];
+  /** Present only when the scope merge actually dropped or rewrote something. */
+  readonly scopeHygiene?: ArchitectureScopeHygiene;
 };
 
 /** How many seeds the session transcript yielded, before any were resolved. */

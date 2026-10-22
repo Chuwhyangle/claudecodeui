@@ -138,7 +138,15 @@
       "layoutBudget": "Menampilkan {{count}} dalam anggaran tata letak; menaikkan detail lebih lambat",
       "kindFunction": "{{count}} fungsi",
       "kindInterface": "{{count}} antarmuka",
-      "kindClass": "{{count}} kelas"
+      "kindClass": "{{count}} kelas",
+      "budgetLimited": "Dibatasi anggaran",
+      "budgetLimitedAria": "Dibatasi oleh {{layers}}",
+      "layerDetail": "tingkat detail",
+      "layerLayout": "anggaran tata letak",
+      "layerServer": "anggaran node",
+      "detailLayer": "Tingkat detail mempertahankan {{value}}.",
+      "layoutLayer": "Anggaran tata letak hanya menggambar {{value}}; lebih banyak akan lambat, turunkan detail untuk melihat lebih banyak.",
+      "serverLayer": "Anggaran node meninggalkan {{value}}; kurangi cakupan untuk melihatnya."
     },
     "source": {
       "unresolved": "{{count}} nama yang disebut dalam sesi ini tidak ditemukan di cache analisis",
@@ -165,6 +173,15 @@
       "kindAbstract": "kelas abstrak",
       "kindFunction": "fungsi",
       "kindOther": "lainnya"
+    },
+    "scopeHygiene": {
+      "summary": "Pembersihan scope",
+      "detailLabel": "Detail pembersihan scope",
+      "scopeCount": "{{total}} scope, {{kept}} dipertahankan",
+      "subsumed": "{{count}} digabungkan ke scope luar ({{entities}} entitas duplikat dibuang)",
+      "outside": "{{count}} di luar direktori proyek diabaikan",
+      "normalized": "{{count}} id jalur absolut dinormalisasi",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

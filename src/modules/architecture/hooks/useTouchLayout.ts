@@ -53,6 +53,25 @@ export function useCompactToolbarSlot(): HTMLElement | null {
   return useContext(CompactToolbarSlotContext);
 }
 
+/**
+ * Where the in-flow chrome row ABOVE the canvas keeps its right-hand cell.
+ *
+ * `ArchitecturePanel` draws that row (the one-line readout is its left cell)
+ * and offers the right cell as a DOM slot; `PlantUmlGraph` portals the zoom
+ * tier strip and its scale reading into it. That is what keeps the tier in
+ * normal flow instead of floating it over the drawing's first row.
+ *
+ * `null` means the renderer is not inside a panel (or the panel has not mounted
+ * the row), so the renderer draws the same strip itself in an in-flow row above
+ * its own canvas — the standalone form stays honest.
+ */
+export const CanvasHeaderSlotContext = createContext<HTMLElement | null>(null);
+
+/** The renderer's read of {@link CanvasHeaderSlotContext}. */
+export function useCanvasHeaderSlot(): HTMLElement | null {
+  return useContext(CanvasHeaderSlotContext);
+}
+
 const getIsCoarsePointer = (): boolean => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia(COARSE_POINTER_QUERY).matches;

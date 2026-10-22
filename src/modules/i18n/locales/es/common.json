@@ -138,7 +138,15 @@
       "layoutBudget": "Mostrando {{count}} dentro del presupuesto de diseño; subir el detalle tarda más",
       "kindFunction": "{{count}} funciones",
       "kindInterface": "{{count}} interfaces",
-      "kindClass": "{{count}} clases"
+      "kindClass": "{{count}} clases",
+      "budgetLimited": "Limitado por presupuesto",
+      "budgetLimitedAria": "Limitado por {{layers}}",
+      "layerDetail": "nivel de detalle",
+      "layerLayout": "presupuesto de diseño",
+      "layerServer": "presupuesto de nodos",
+      "detailLayer": "El nivel de detalle conservó {{value}}.",
+      "layoutLayer": "El presupuesto de diseño dibuja solo {{value}}; más sería lento, reduzca el detalle para ver más.",
+      "serverLayer": "El presupuesto de nodos dejó fuera {{value}}; reduzca el ámbito para verlos."
     },
     "source": {
       "unresolved": "{{count}} nombres mencionados en esta sesión no se encontraron en la caché de análisis",
@@ -165,6 +173,15 @@
       "kindAbstract": "clases abstractas",
       "kindFunction": "funciones",
       "kindOther": "otros"
+    },
+    "scopeHygiene": {
+      "summary": "Limpieza de scopes",
+      "detailLabel": "Detalles de la limpieza de scopes",
+      "scopeCount": "{{total}} scopes, {{kept}} conservados",
+      "subsumed": "{{count}} fusionados con un scope externo ({{entities}} entidades duplicadas descartadas)",
+      "outside": "{{count}} fuera del directorio del proyecto fueron ignorados",
+      "normalized": "{{count}} ids de ruta absoluta normalizados",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

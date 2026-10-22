@@ -53,6 +53,12 @@ import {
 } from './generator.js';
 import { extractSeeds, extractSeedMentions, type SeedMentionResult } from './seed-extraction.js';
 import {
+  mergeScopesWithHygiene,
+  SCOPE_HYGIENE_RULES_VERSION,
+  type HygieneScope,
+  type ScopeHygiene,
+} from './scope-hygiene.js';
+import {
   buildMentionIndex,
   DEFAULT_MENTION_HIT_LIMIT,
   queryCoMentionIndex,
@@ -144,6 +150,18 @@ export type ArchguardManifestScope = {
    * merge can express every scope's files as one project-relative key space.
    */
   readonly sources?: readonly string[];
+  /**
+   * Upstream metadata (not yet shipped by every ArchGuard version): the scope
+   * was analysed from a directory outside this project. When present it is
+   * trusted verbatim; when absent the service compares canonicalised paths.
+   */
+  readonly outsideProjectRoot?: boolean;
+  /**
+   * Upstream metadata: the scope this one is nested inside. It decides which
+   * copy of a duplicated entity is the "outer" one; absent means the path
+   * heuristic decides.
+   */
+  readonly parentScopeKey?: string;
 };
 
 /** The subset of `.archguard/query/manifest.json` this service reads. */
@@ -240,6 +258,12 @@ export type ArchitectureProvenance = {
    * source was intact, so a healthy payload keeps its exact old provenance.
    */
   readonly diagnostics?: readonly ArchitectureDiagnostic[];
+  /**
+   * What the scope merge cleaned up (absolute-path ids, overlapping scopes,
+   * scopes outside the project). Omitted when the merge changed nothing, so a
+   * healthy single-scope reading keeps its exact old provenance shape.
+   */
+  readonly scopeHygiene?: ScopeHygiene;
 };
 
 /**
@@ -370,7 +394,15 @@ function parseManifestScope(value: unknown): ArchguardManifestScope {
     ? value.sources.filter((source): source is string => typeof source === 'string')
     : undefined;
   const label = typeof value.label === 'string' ? value.label : undefined;
-  return { key: value.key, label, sources };
+  // Upstream fields are OPTIONAL and appear only once ArchGuard ships them; an
+  // old manifest must not fail here, so each is read only when well-typed.
+  const outsideProjectRoot = typeof value.outsideProjectRoot === 'boolean'
+    ? value.outsideProjectRoot
+    : undefined;
+  const parentScopeKey = typeof value.parentScopeKey === 'string' && value.parentScopeKey.length > 0
+    ? value.parentScopeKey
+    : undefined;
+  return { key: value.key, label, sources, outsideProjectRoot, parentScopeKey };
 }
 
 /**
@@ -408,9 +440,16 @@ function toPosix(value: string): string {
 }
 
 /** A project-relative POSIX path, or `null` when the source lies outside the project. */
-function projectRelativeSource(projectPath: string, source: string): string | null {
+function projectRelativeSource(
+  projectPath: string,
+  source: string,
+  canonicalize: (value: string) => string,
+): string | null {
   if (!path.isAbsolute(source)) return toPosix(path.normalize(source));
-  const relative = path.relative(projectPath, source);
+  // Canonicalise BOTH ends: a manifest may spell this repository through a
+  // symlink alias (`/home/...` vs `/data/...`), and a raw `path.relative`
+  // would then read the source as outside and lose its prefix.
+  const relative = path.relative(canonicalize(projectPath), canonicalize(source));
   if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
     return relative === '' ? '' : null;
   }
@@ -424,9 +463,13 @@ function projectRelativeSource(projectPath: string, source: string): string | nu
  * index's keys are relative to. A scope with no usable source keeps its keys
  * as-is (prefix `''`), which is the pre-existing single-root behaviour.
  */
-function scopeSourcePrefix(projectPath: string, sources: readonly string[] | undefined): string {
+function scopeSourcePrefix(
+  projectPath: string,
+  sources: readonly string[] | undefined,
+  canonicalize: (value: string) => string,
+): string {
   const relatives = (sources ?? [])
-    .map((source) => projectRelativeSource(projectPath, source))
+    .map((source) => projectRelativeSource(projectPath, source, canonicalize))
     .filter((relative): relative is string => relative !== null);
   if (relatives.length === 0) return '';
 
@@ -440,19 +483,14 @@ function scopeSourcePrefix(projectPath: string, sources: readonly string[] | und
   return common.join('/');
 }
 
-/** Join a scope prefix and an index key into the merged project-relative key. */
-function mergeFileKey(prefix: string, file: string): string {
-  const normalized = toPosix(file).replace(/^\.\//, '');
-  return prefix.length === 0 ? normalized : `${prefix}/${normalized}`;
-}
-
 /**
- * One parsed scope index plus the identity the merge needs: its fingerprint and
- * the directory its keys are relative to.
+ * One parsed scope index plus the identity the merge needs: its fingerprint,
+ * the directory its keys are relative to, and when it was analysed.
  *
  * `ArchitectureScopeIndex` is the cache's `TIndex`: it must carry
- * `archJsonHash`, and the merge reads the other fields. `sourcePrefix`
- * belongs to the manifest, not to the file, so it is stamped on at read time.
+ * `archJsonHash`, and the merge reads the other fields. `sourcePrefix` and the
+ * manifest's upstream metadata belong to the manifest, not to the file, so
+ * they are stamped on at merge time.
  *
  * `entityDetails`/`diagnostics` come from the sibling `arch.json`, read in the
  * SAME parse step (so they are memoised under the same `archJsonHash` and cost
@@ -463,8 +501,83 @@ type ParsedScopeIndex = ArchIndex & {
   readonly archJsonHash: string;
   readonly scopeKey: string;
   readonly sourcePrefix: string;
+  /** The index's own `generatedAt`; breaks a tie between equal-source scopes. */
+  readonly generatedAt: string | null;
   readonly diagnostics: readonly ArchitectureDiagnostic[];
 };
+
+/**
+ * Canonicalise a path for the scope-containment comparison.
+ *
+ * `realpath` is what makes the check honest: ArchGuard normalises symlink
+ * aliases (`/home/...` vs `/data/...`), so a raw string comparison would call
+ * this project's own scope "outside the project". A path that does not exist
+ * (a stale manifest entry) falls back to `path.resolve`, which still compares
+ * the segments the manifest recorded.
+ */
+function canonicalizeForContainment(value: string): string {
+  try {
+    return fs.realpathSync.native(value);
+  } catch {
+    try {
+      return fs.realpathSync(value);
+    } catch {
+      return path.resolve(value);
+    }
+  }
+}
+
+/**
+ * Merge every scope's index into the single `ArchIndex` the generator takes.
+ *
+ * Entity ids are namespaced by scope key (two scopes can index the same name)
+ * and files are re-expressed as project-relative keys (the overlapping
+ * `src`/`chat` scopes both point at `src/modules/chat/...`). The hygiene rules
+ * in `scope-hygiene.ts` then normalise absolute ids, drop scopes that do not
+ * belong to this project, and collapse the same `(file, name)` indexed by a
+ * nested scope into the outer scope's entity, re-pointing every edge.
+ */
+function mergeScopeIndexes(
+  projectPath: string,
+  cachedIndexes: readonly ParsedScopeIndex[],
+  manifest: ArchguardManifest,
+): { index: ArchIndex; hygiene: ScopeHygiene } {
+  const scopeByKey = new Map(manifest.scopes.map((scope) => [scope.key, scope]));
+  const scopes: HygieneScope[] = cachedIndexes.map((parsed) => {
+    const manifestScope = scopeByKey.get(parsed.scopeKey);
+    return {
+      key: parsed.scopeKey,
+      label: manifestScope?.label,
+      sources: manifestScope?.sources ?? [],
+      sourcePrefix: parsed.sourcePrefix,
+      generatedAt: parsed.generatedAt,
+      ...(manifestScope?.outsideProjectRoot === undefined
+        ? {}
+        : { outsideProjectRoot: manifestScope.outsideProjectRoot }),
+      ...(manifestScope?.parentScopeKey === undefined
+        ? {}
+        : { parentScopeKey: manifestScope.parentScopeKey }),
+      index: parsed,
+    };
+  });
+  const { index, hygiene } = mergeScopesWithHygiene({
+    projectPath,
+    scopes,
+    canonicalizePath: canonicalizeForContainment,
+  });
+  return { index, hygiene };
+}
+
+/**
+ * Whether the hygiene reading describes an actual cleanup. A merge that dropped
+ * nothing, collapsed nothing and normalised nothing is omitted from the
+ * provenance entirely, which keeps a healthy payload byte-identical.
+ */
+function reportsCleanup(hygiene: ScopeHygiene): boolean {
+  return hygiene.droppedOutsideRoot.length > 0
+    || hygiene.subsumed.length > 0
+    || hygiene.normalizedAbsoluteIds > 0;
+}
 
 /**
  * Parse the typed-edge map a scope index may carry.
@@ -674,6 +787,7 @@ async function readScopeIndex(
     archJsonHash: parsed.archJsonHash,
     scopeKey,
     sourcePrefix,
+    generatedAt: typeof parsed.generatedAt === 'string' ? parsed.generatedAt : null,
     diagnostics: archive.diagnostic === undefined ? [] : [archive.diagnostic],
     fileToIds: requireField(isStringArrayRecord(parsed.fileToIds) ? parsed.fileToIds : undefined, 'fileToIds', scopeKey),
     nameToIds: requireField(isStringArrayRecord(parsed.nameToIds) ? parsed.nameToIds : undefined, 'nameToIds', scopeKey),
@@ -698,81 +812,6 @@ function decodeScope(scope: string): { projectPath: string; scopeKey: string } {
   return {
     projectPath: scope.slice(0, separator),
     scopeKey: scope.slice(separator + SCOPE_SEPARATOR.length),
-  };
-}
-
-function pushUnique(target: string[], values: readonly string[]): void {
-  const existing = new Set(target);
-  for (const value of values) {
-    if (existing.has(value)) continue;
-    existing.add(value);
-    target.push(value);
-  }
-}
-
-/**
- * Merge every scope's index into the single `ArchIndex` the generator takes.
- *
- * Entity ids are namespaced by scope key (two scopes can index the same name)
- * and files are re-expressed as project-relative keys (the overlapping
- * `src`/`chat` scopes both point at `src/modules/chat/...`). Edges are rewritten
- * consistently; a neighbour that this scope does not place is kept in the
- * adjacency and dropped by the generator, exactly as for a single index.
- */
-function mergeScopeIndexes(indexes: readonly ParsedScopeIndex[]): ArchIndex {
-  const fileToIds: Record<string, string[]> = {};
-  const nameToIds: Record<string, string[]> = {};
-  const dependencies: Record<string, string[]> = {};
-  const dependents: Record<string, string[]> = {};
-  const idToFile: Record<string, string> = {};
-  const idToName: Record<string, string> = {};
-  const relationsByType: Partial<Record<RelationType, [string, string][]>> = {};
-  // Only attached when at least one scope actually contributed details, so a
-  // project whose archives are all missing keeps the pre-detail index shape.
-  const entityDetails: Record<string, EntityDetail> = {};
-  let hasDetails = false;
-
-  for (const index of indexes) {
-    const mapFile = (file: string): string => mergeFileKey(index.sourcePrefix, file);
-    const mapId = (id: string): string => `${index.scopeKey}/${id}`;
-
-    for (const [file, ids] of Object.entries(index.fileToIds)) {
-      const target = mergeFileKey(index.sourcePrefix, file);
-      fileToIds[target] ??= [];
-      pushUnique(fileToIds[target], ids.map(mapId));
-    }
-    for (const [name, ids] of Object.entries(index.nameToIds)) {
-      nameToIds[name] ??= [];
-      pushUnique(nameToIds[name], ids.map(mapId));
-    }
-    for (const [id, file] of Object.entries(index.idToFile)) idToFile[mapId(id)] = mapFile(file);
-    for (const [id, name] of Object.entries(index.idToName)) idToName[mapId(id)] = name;
-    for (const [from, neighbours] of Object.entries(index.dependencies)) {
-      dependencies[mapId(from)] = neighbours.map(mapId);
-    }
-    for (const [to, neighbours] of Object.entries(index.dependents)) {
-      dependents[mapId(to)] = neighbours.map(mapId);
-    }
-    for (const [type, pairs] of Object.entries(index.relationsByType ?? {})) {
-      if (!isRelationType(type)) continue;
-      const bucket = (relationsByType[type] ??= []);
-      for (const [from, to] of pairs) bucket.push([mapId(from), mapId(to)]);
-    }
-    if (index.entityDetails !== undefined) {
-      hasDetails = true;
-      for (const [id, detail] of Object.entries(index.entityDetails)) entityDetails[mapId(id)] = detail;
-    }
-  }
-
-  return {
-    fileToIds,
-    nameToIds,
-    dependencies,
-    dependents,
-    idToFile,
-    idToName,
-    relationsByType,
-    ...(hasDetails ? { entityDetails } : {}),
   };
 }
 
@@ -935,6 +974,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         const sourcePrefix = scopeSourcePrefix(
           projectPath,
           manifest?.scopes.find((entry) => entry.key === scopeKey)?.sources,
+          canonicalizeForContainment,
         );
         const indexPath = path.join(projectPath, QUERY_RELATIVE_DIRECTORY, scopeKey, 'arch-index.json');
         const stamp = await statStamp(indexPath);
@@ -984,12 +1024,13 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
   ): Promise<{
     manifest: ArchguardManifest;
     merged: ArchIndex;
+    /** What the scope merge cleaned up; the caller omits it when nothing was. */
+    hygiene: ScopeHygiene;
     refs: ArchitectureIndexRef[];
     scopeKeys: readonly string[];
     diagnostics: readonly ArchitectureDiagnostic[];
   }> {
-    const manifest = await readArchguardManifest(projectPath);
-    if (manifest === null) {
+    const manifest = await readArchguardManifest(projectPath);    if (manifest === null) {
       throw new AppError(
         `Project "${projectId}" has no .archguard/query/manifest.json — the architecture tab is unavailable.`,
         {
@@ -1008,7 +1049,10 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
     // Read each scope (one stat in the steady state) so the merge can answer
     // `nameToIds` and the seeds can be extracted before the content key exists.
     const sourcePrefixByKey = new Map(
-      manifest.scopes.map((scope) => [scope.key, scopeSourcePrefix(projectPath, scope.sources)]),
+      manifest.scopes.map((scope) => [
+        scope.key,
+        scopeSourcePrefix(projectPath, scope.sources, canonicalizeForContainment),
+      ]),
     );
     const parsedIndexes = await Promise.all(
       scopeKeys.map((scopeKey) => readScope(projectPath, scopeKey, sourcePrefixByKey.get(scopeKey) ?? '')),
@@ -1021,9 +1065,9 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
     // Route the references through the parse layer so a same-fingerprint hit
     // never re-reads the file inside the cache either.
     const cachedIndexes = await Promise.all(refs.map((ref) => cache.getIndex(ref)));
-    const merged = mergeScopeIndexes(cachedIndexes);
+    const { index: merged, hygiene } = mergeScopeIndexes(projectPath, cachedIndexes, manifest);
     const diagnostics = cachedIndexes.flatMap((index) => index.diagnostics);
-    return { manifest, merged, refs, scopeKeys, diagnostics };
+    return { manifest, merged, hygiene, refs, scopeKeys, diagnostics };
   }
 
   return {
@@ -1036,7 +1080,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         });
       }
 
-      const { manifest, merged, refs, scopeKeys, diagnostics } = await loadIndex(projectPath, input.projectId);
+      const { manifest, merged, hygiene, refs, scopeKeys, diagnostics } = await loadIndex(projectPath, input.projectId);
       const knownIdentifiers = new Set(Object.keys(merged.nameToIds));
 
       const messages = await deps.readSessionHistory(input.sessionId);
@@ -1085,6 +1129,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
             fingerprints,
             cacheHit: false,
             ...(diagnostics.length === 0 ? {} : { diagnostics }),
+            ...(reportsCleanup(hygiene) ? { scopeHygiene: hygiene } : {}),
           },
         };
       }
@@ -1097,6 +1142,9 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
           seeds,
           params,
           indexes: refs,
+          // The merge rules shape the reading but none of the other key parts
+          // do, so the version is what makes a rule change a cache miss.
+          rulesVersion: SCOPE_HYGIENE_RULES_VERSION,
         },
         () => {
           built = true;
@@ -1115,6 +1163,7 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
           // the cache itself rather than a guess about its internals.
           cacheHit: !built,
           ...(diagnostics.length === 0 ? {} : { diagnostics }),
+          ...(reportsCleanup(hygiene) ? { scopeHygiene: hygiene } : {}),
         },
       };
     },

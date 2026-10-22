@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 
 import { test } from 'vitest';
 
-import { trimVoiceAudio } from '@/shared/voiceTrim';
+import { trimSilenceEdges, trimVoiceAudio } from '@/shared/voiceTrim';
 
 /*
  * The fixtures are synthesised, not recorded, and that is the point: each one
@@ -318,6 +318,43 @@ test('the module is a pure DSP function with no React and no DOM', () => {
       `the module must not touch ${global}`,
     );
   }
+});
+
+/*
+ * `trimSilenceEdges` is the dictation-segment policy: edges only, every internal pause whole.
+ *
+ * The fixture says why this is a separate policy rather than a second table: two bursts separated
+ * by a 0.4 s pause sit inside 4 s of audio. The ordinary trim would cap the pause; this one must
+ * keep it, while still removing the >2 s of silence after the last burst. The survival ratio is
+ * read as the tripwire — a trim that touched speech would take it below 1.
+ */
+test('trimSilenceEdges removes the empty edges and keeps every internal pause', () => {
+  const speech = 0.8;
+  const gap = 0.4;
+  const samples = new Float32Array(RATE * 5);
+  const burst = (fromSec: number, toSec: number) => {
+    for (let i = Math.round(fromSec * RATE); i < Math.round(toSec * RATE); i += 1) {
+      samples[i] = 0.3 * Math.sin((i / RATE) * 2 * Math.PI * 220);
+    }
+  };
+  burst(0, speech);
+  burst(speech + gap, speech + gap + speech);
+
+  const result = trimSilenceEdges(samples, RATE);
+
+  assert.equal(result.stats.fallback, false, 'the edges are a trim, not a fallback');
+  assert.ok(result.stats.outputSec < 3, `the 3 s silent tail must be gone, got ${result.stats.outputSec}s`);
+  assert.ok(result.stats.outputSec > speech * 2 + gap, `the internal ${gap}s pause must survive, got ${result.stats.outputSec}s`);
+  assert.equal(result.stats.speechKeptRatio, 1, 'every detected speech sample must survive');
+});
+
+test('trimSilenceEdges returns a speechless buffer unchanged', () => {
+  const samples = new Float32Array(RATE * 2);
+  const result = trimSilenceEdges(samples, RATE);
+
+  assert.equal(result.stats.fallback, true);
+  assert.equal(result.stats.fallbackReason, 'noSpeech');
+  assert.equal(result.samples.length, samples.length, 'a speechless segment is not shortened to an empty upload');
 });
 
 /*

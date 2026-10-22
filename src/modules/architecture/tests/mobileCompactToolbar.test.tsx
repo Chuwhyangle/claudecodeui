@@ -264,17 +264,19 @@ test('the compact tier spends its only toolbar row on the title, granularity and
   assert.equal(row.contains(cluster), false, 'the zoom cluster must not be part of the row');
 });
 
-test('the "…" menu holds the two knobs and export — the readout and zoom live on the canvas', async () => {
+test('the "…" menu holds the two knobs and export — the readout and zoom live in the row above the canvas', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const menu = openMenu();
 
-  // The honesty readings became the on-canvas readout and source line; the menu
+  // The honesty readings became the readout row and source line; the menu
   // no longer repeats them (there is no second reading surface).
   assert.equal(menu.querySelector('[data-architecture-honesty]'), null);
-  assert.ok(document.querySelector('[data-architecture-readout]'), 'the one-line readout sits on the canvas');
+  const header = document.querySelector('[data-architecture-canvas-header]');
+  assert.ok(header instanceof HTMLElement, 'the readout row sits above the canvas');
+  assert.ok(header.querySelector('[data-architecture-readout]'), 'the one-line readout sits in the row above the canvas');
   assert.ok(document.querySelector('[data-architecture-source-line]'), 'the source line sits on the canvas');
   const scope = menu.querySelector('[data-architecture-scope-control]');
   assert.ok(scope instanceof HTMLElement, 'the scope stepper lives in the menu');
@@ -431,12 +433,15 @@ test('a truncated graph keeps a compact "+N folded" badge in the row while the m
     'the badge is what makes the cut visible while the menu is shut',
   );
 
-  // The full reading is the on-canvas readout, not a second menu row.
+  // The full reading is the readout in the row above the canvas, not a second menu row.
   const truncated = document.querySelector('[data-architecture-readout] [data-architecture-truncated]');
   assert.ok(truncated instanceof HTMLElement);
   assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '3');
   assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
-  assert.match(truncated.textContent ?? '', /6 more left out by the node budget/);
+  // The collapsed line carries one budget marker; the omitted count moved into
+  // the expanded explanation (the row badge above still states it compactly).
+  assert.match(truncated.textContent ?? '', /Budget-limited/);
+  assert.doesNotMatch(truncated.textContent ?? '', /more left out by the node budget/);
 });
 
 test('the desktop header is ONE row and the graph draws no toolbar of its own', async () => {
@@ -455,9 +460,14 @@ test('the desktop header is ONE row and the graph draws no toolbar of its own', 
   assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'desktop has no compact menu');
   assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'desktop gets no standing hint');
 
-  // The graph's zoom tier floats on the canvas; nothing repeats it in a row.
-  const tier = graphRoot().querySelector('[data-architecture-zoom-tier]');
-  assert.ok(tier instanceof HTMLElement, 'the tier indicator sits on the canvas');
+  // The zoom tier now sits in the in-flow row ABOVE the canvas (nothing
+  // repeats it in the panel's single toolbar row, and nothing floats it over
+  // the drawing).
+  const header = document.querySelector('[data-architecture-canvas-header]');
+  assert.ok(header instanceof HTMLElement, 'the canvas has its own chrome row');
+  const tier = header.querySelector('[data-architecture-zoom-tier]');
+  assert.ok(tier instanceof HTMLElement, 'the tier indicator sits in the row above the canvas');
+  assert.equal(row.contains(tier), false, 'the panel toolbar row does not repeat the tier');
   assert.equal(graphRoot().querySelector('[data-architecture-toolbar]'), null);
   const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
   assert.ok(cluster instanceof HTMLElement, 'the desktop canvas carries the zoom cluster');

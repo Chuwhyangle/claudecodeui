@@ -109,6 +109,88 @@ export function fitAllZoomScale(natural: SvgViewportSize, viewport: SvgViewportS
   return fitZoomScale(natural, viewport, MIN_ZOOM_SCALE);
 }
 
+/**
+ * A rectangle a floating corner overlay occupies, expressed in the CANVAS
+ * CONTENT BOX's coordinates: the origin is the content box's top-left corner,
+ * so the host's padding is already removed and the numbers line up with the
+ * box `measureViewportSize` returns.
+ */
+export type SvgCornerRect = {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+/** The scale whose drawing rect is just inside `limit`, or -Infinity for "impossible". */
+function limitScale(limitPx: number, naturalPx: number): number {
+  return limitPx > 0 ? limitPx / naturalPx : Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * The largest scale at which the drawing — left-aligned and vertically centred
+ * in the content box — does not overlap `corner`. The drawing's geometry at
+ * scale `s` is `width = natural.width · s`, `height = natural.height · s`,
+ * anchored at x = 0 and at y = (host.height − height) / 2 (auto block margins
+ * centre a short drawing; a drawing taller than the box starts at 0 and scrolls).
+ *
+ * Non-overlap can be reached on either axis: the drawing can end LEFT of the
+ * corner (its whole width at or before the corner's left edge), or ABOVE /
+ * BELOW it (its centred band at or outside one of the corner's horizontal
+ * edges). The largest usable scale is the largest of those limits; -Infinity
+ * means no positive scale avoids this corner.
+ */
+function scaleAvoidingCorner(
+  natural: SvgViewportSize,
+  viewport: SvgViewportSize,
+  corner: SvgCornerRect,
+): number {
+  const horizontal = limitScale(corner.left, natural.width);
+  // Centred band: bottom = (host.height + height) / 2, so "bottom ≤ corner.top"
+  // means height ≤ 2·corner.top − host.height.
+  const verticalBelow = limitScale(2 * corner.top - viewport.height, natural.height);
+  // Top = (host.height − height) / 2, so "top ≥ corner.bottom" means
+  // height ≤ host.height − 2·corner.bottom.
+  const cornerBottom = corner.top + corner.height;
+  const verticalAbove = limitScale(viewport.height - 2 * cornerBottom, natural.height);
+  return Math.max(horizontal, verticalBelow, verticalAbove);
+}
+
+/**
+ * The fit scale that also keeps the whole drawing clear of the floating corner
+ * chrome (the minimap and the zoom cluster).
+ *
+ * With no corner intersecting the fitted drawing the result is EXACTLY
+ * `fitZoomScale(natural, viewport, minScale)` — same inputs, same call, same
+ * number. When the fitted drawing would run under a corner, the scale drops to
+ * the largest value that clears it. Several corners take the most conservative
+ * (smallest) limit. A corner larger than the canvas leaves no positive scale
+ * that clears it, so the result falls back to the plain fit instead of
+ * collapsing the drawing to nothing.
+ */
+export function fitAvoidingCorners(
+  natural: SvgViewportSize,
+  viewport: SvgViewportSize,
+  corners: readonly SvgCornerRect[],
+  minScale: number = MIN_READABLE_ZOOM_SCALE,
+): number {
+  const fit = fitZoomScale(natural, viewport, minScale);
+  if (corners.length === 0) return fit;
+  if (!(natural.width > 0) || !(natural.height > 0)) return fit;
+  if (!(viewport.width > 0) || !(viewport.height > 0)) return fit;
+
+  let allowed = Number.POSITIVE_INFINITY;
+  for (const corner of corners) {
+    // An unmeasured (jsdom) or empty corner rect constrains nothing.
+    if (!(corner.width > 0) || !(corner.height > 0)) continue;
+    const limit = scaleAvoidingCorner(natural, viewport, corner);
+    if (!Number.isFinite(limit) || limit <= 0) return fit;
+    allowed = Math.min(allowed, limit);
+  }
+  if (!Number.isFinite(allowed)) return fit;
+  return Math.min(fit, allowed);
+}
+
 /** The on-screen size of `natural` at `scale`, with the scale clamped first. */
 export function zoomedSvgSize(natural: SvgViewportSize, scale: number): SvgViewportSize {
   const applied = clampZoomScale(scale);
