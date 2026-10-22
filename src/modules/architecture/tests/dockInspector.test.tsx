@@ -529,3 +529,56 @@ test('the touch tier draws the same inspector in a bottom drawer with three snap
     assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'neighborhood');
   });
 });
+
+/**
+ * First-open behaviour (2026-10-22 sessions): a fresh entry must never open the
+ * empty inspector on its own, a session switch must not carry an open dock into
+ * a reading with no selection, and the toolbar's Text door is the one explicit
+ * open that works with nothing selected.
+ */
+test('a remembered open state never opens the dock on a fresh entry', async () => {
+  // The reported cause: the previous browser remembered the dock open, so a
+  // new session entered with a 320px column holding only "Select a node …".
+  window.localStorage.setItem('architecture.dock.open', 'true');
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  assert.equal(dock(), null, 'no selection and no explicit open: the dock must not take a column');
+  assert.equal(inspector(), null, 'and the empty inspector page is not rendered off screen');
+});
+
+test('a session switch carries no open dock into a reading with no selection', async () => {
+  const { rerender } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  await openInspectorFor(host, ALPHA);
+  assert.ok(dock() !== null, 'the selection opened the dock');
+
+  rerender(<ArchitecturePanel projectId="project-1" sessionId="session-2" />);
+  await waitFor(() => assert.equal(
+    dock(),
+    null,
+    'the new session has no selection, so the dock must not stay open as an empty column',
+  ));
+});
+
+test('after the reader closes the dock, a new session does not reopen it', async () => {
+  const { rerender } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  await openInspectorFor(host, ALPHA);
+  fireEvent.click(document.querySelector('[data-architecture-dock-close]') as Element);
+  await waitFor(() => assert.equal(dock(), null, 'the explicit close lands'));
+
+  rerender(<ArchitecturePanel projectId="project-1" sessionId="session-2" />);
+  await waitForDiagram();
+  assert.equal(dock(), null, 'an explicit close is not undone by entering another session');
+});
+
+test('the Text door opens the dock with nothing selected', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  assert.equal(dock(), null, 'nothing is open before the reader asks');
+
+  fireEvent.click(document.querySelector('[data-architecture-text-toggle]') as Element);
+  await waitFor(() => assert.ok(dock() !== null, 'an explicit Text press opens the dock with no selection'));
+  assert.ok(document.querySelector('[data-architecture-text-panel]'), 'and it shows the text page the reader asked for');
+});

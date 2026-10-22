@@ -146,7 +146,8 @@
     },
     "legend": {
       "title": "Legenda",
-      "body": "Garis penuh: asosiasi atau pemanggilan. Garis putus-putus: dependensi atau implementasi. Panah: △ pewarisan · △ implementasi · ◆ komposisi · ◇ agregasi · → dependensi. «stereotype» menandai jenis entitas. ● seed: disebut dalam sesi ini. +N dilipat: disembunyikan oleh tingkat detail saat ini."
+      "body": "Garis penuh: asosiasi atau pemanggilan. Garis putus-putus: dependensi atau implementasi. Panah: △ pewarisan · △ implementasi · ◆ komposisi · ◇ agregasi · → dependensi. «stereotype» menandai jenis entitas. ● seed: disebut dalam sesi ini. +N dilipat: disembunyikan oleh tingkat detail saat ini.",
+      "seedLight": "Banyak seed: ditandai dengan bingkai tipis dan titik kecil."
     },
     "export": {
       "menu": "Ekspor ▾",

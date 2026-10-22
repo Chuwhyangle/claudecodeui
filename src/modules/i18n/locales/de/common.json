@@ -146,7 +146,8 @@
     },
     "legend": {
       "title": "Legende",
-      "body": "Durchgezogene Linie: Assoziation oder Aufruf. Gestrichelte Linie: Abhängigkeit oder Implementierung. Pfeile: △ Vererbung · △ Implementierung · ◆ Komposition · ◇ Aggregation · → Abhängigkeit. «Stereotyp» kennzeichnet die Entitätsart. ● Seed: in dieser Sitzung genannt. +N eingeklappt: durch die aktuelle Detailstufe verborgen."
+      "body": "Durchgezogene Linie: Assoziation oder Aufruf. Gestrichelte Linie: Abhängigkeit oder Implementierung. Pfeile: △ Vererbung · △ Implementierung · ◆ Komposition · ◇ Aggregation · → Abhängigkeit. «Stereotyp» kennzeichnet die Entitätsart. ● Seed: in dieser Sitzung genannt. +N eingeklappt: durch die aktuelle Detailstufe verborgen.",
+      "seedLight": "Viele Seeds: Sie werden mit dünnem Rahmen und kleinem Punkt markiert."
     },
     "export": {
       "menu": "Exportieren ▾",

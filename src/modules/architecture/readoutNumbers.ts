@@ -41,6 +41,19 @@ export type ArchitectureReadoutDrawnBox = ArchitectureReadoutBox | ArchitectureR
 export type ArchitectureReadoutInputs = {
   /** Entities the detail tier retained after ranking the returned subgraph. */
   readonly detailRetained: number;
+  /**
+   * Entities the detail tier actually ranked — the in-scope count AFTER the
+   * display filters (element kind, relation preset, hidden isolated nodes).
+   *
+   * The detail cut is measured against THIS number, not against what the
+   * server returned: a node removed by a display filter never reached the
+   * tier, so it must not be read as a detail-tier fold. Those removals already
+   * have their own line in the readout ("3 isolated nodes"), and counting them
+   * here as well made an untroubled graph read `Budget-limited`.
+   *
+   * Omit it when no display filter ran — the two counts then coincide.
+   */
+  readonly detailInScope?: number;
   /** Boxes the layout budget handed to the renderer (groups count members). */
   readonly drawnBoxes: readonly ArchitectureReadoutDrawnBox[];
   /** Entities the server returned for this subgraph (after its node budget). */
@@ -106,15 +119,23 @@ function entityCountOf(boxes: readonly ArchitectureReadoutDrawnBox[]): number {
  */
 export function buildReadout(inputs: ArchitectureReadoutInputs): ArchitectureReadout {
   const returned = normaliseCount(inputs.returnedCount);
-  // The detail tier ranks the returned subgraph, so it can never retain more
-  // than arrived; a caller that passes a pre-server count is clamped here.
-  const detailRetained = Math.min(normaliseCount(inputs.detailRetained), returned);
+  // The detail tier ranks the subgraph the filters left, so it can never
+  // retain more than that (nor more than arrived); a caller that passes a
+  // pre-filter or pre-server count is clamped here.
+  const detailInScope = Math.min(
+    normaliseCount(inputs.detailInScope ?? returned),
+    returned,
+  );
+  const detailRetained = Math.min(normaliseCount(inputs.detailRetained), detailInScope);
   const shown = entityCountOf(inputs.drawnBoxes);
   // M is the pre-budget total when the payload carries one; an older payload
   // (or an impossible smaller total) falls back to what actually arrived.
   const related = Math.max(returned, normaliseCount(inputs.relatedTotal ?? returned));
 
-  const detailCut = detailRetained < returned;
+  // Each layer is named only when IT cut: the detail tier against the set it
+  // ranked, the layout budget against the set the tier retained, the server
+  // against the whole scope.
+  const detailCut = detailRetained < detailInScope;
   const layoutCut = shown < detailRetained;
   const serverCut = related > returned;
 

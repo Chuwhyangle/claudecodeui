@@ -146,7 +146,8 @@
     },
     "legend": {
       "title": "Gösterge",
-      "body": "Düz çizgi: ilişkilendirme veya çağrı. Kesikli çizgi: bağımlılık veya gerçekleme. Oklar: △ kalıtım · △ gerçekleme · ◆ kompozisyon · ◇ toplama · → bağımlılık. «stereotype» varlık türünü belirtir. ● seed: bu oturumda adı geçti. +N katlandı: geçerli ayrıntı düzeyince gizlendi."
+      "body": "Düz çizgi: ilişkilendirme veya çağrı. Kesikli çizgi: bağımlılık veya gerçekleme. Oklar: △ kalıtım · △ gerçekleme · ◆ kompozisyon · ◇ toplama · → bağımlılık. «stereotype» varlık türünü belirtir. ● seed: bu oturumda adı geçti. +N katlandı: geçerli ayrıntı düzeyince gizlendi.",
+      "seedLight": "Çok sayıda tohum: ince çerçeve ve küçük nokta ile işaretlenir."
     },
     "export": {
       "menu": "Dışa aktar ▾",

@@ -334,8 +334,12 @@ export function readMinimapBoxes(root: ParentNode): MinimapBox[] {
     boxes.push({
       ...box,
       kind: packageFrame || entityId.startsWith('grp::') ? 'group' : 'entity',
+      // The seed marker has two forms (`arch-seed` and the light
+      // `arch-seed-light`); both are seeds, and `data-architecture-seed`
+      // carries `true` or `light` depending on which form is in use.
       seed: element.classList.contains('arch-seed')
-        || element.getAttribute('data-architecture-seed') === 'true',
+        || element.classList.contains('arch-seed-light')
+        || element.getAttribute('data-architecture-seed') !== null,
     });
   }
   // Stable in modern engines, but state the ordering the painter relies on.

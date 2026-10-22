@@ -117,6 +117,45 @@ test('only the detail tier cutting states the detail line', () => {
   );
 });
 
+test('a node a display filter hid is not a budget cut (the live voice 19 → 18 reading)', () => {
+  // The server returned 19 related entities; the "hide isolated nodes" display
+  // filter removed one, so the detail tier ranked 18 and kept all of them, and
+  // the layout drew all 18. No budget cut anything, and the removed node is
+  // already stated on the readout's own filter line ("1 isolated nodes").
+  const readout = buildReadout({
+    detailRetained: 18,
+    detailInScope: 18,
+    drawnBoxes: Array.from({ length: 18 }, () => box),
+    returnedCount: 19,
+    relatedTotal: 19,
+  });
+
+  assert.equal(readout.shown, 18);
+  assert.equal(readout.related, 19);
+  assert.equal(readout.limited, false, 'a filtered-out node must not light the budget marker');
+  assert.deepEqual(readout.limitedLayers, []);
+  assert.deepEqual(readout.lines, []);
+});
+
+test('the detail tier is still read as cutting against the set it actually ranked', () => {
+  // Same 19 → 18 filter removal, but this time the detail tier folded ten of
+  // the 18 it ranked: that IS a detail cut and must keep its line.
+  const readout = buildReadout({
+    detailRetained: 8,
+    detailInScope: 18,
+    drawnBoxes: Array.from({ length: 8 }, () => box),
+    returnedCount: 19,
+    relatedTotal: 19,
+  });
+
+  assert.deepEqual(readout.limitedLayers, ['detail']);
+  assert.deepEqual(
+    readout.lines.map((line) => [line.layer, line.count]),
+    [['detail', 8]],
+    'the line states what the tier kept, not the server total',
+  );
+});
+
 test('group boxes count their members, so N stays an entity count', () => {
   const readout = buildReadout({
     detailRetained: 10,

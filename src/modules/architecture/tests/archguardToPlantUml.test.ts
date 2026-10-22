@@ -6,6 +6,9 @@ import {
   archguardAliasMap,
   archguardToPlantUml,
   displayName,
+  isSessionSeedNode,
+  LIGHT_SEED_SHARE_THRESHOLD,
+  seedMarkerMode,
 } from '@/modules/architecture/archguardToPlantUml';
 import {
   applyFilter,
@@ -551,4 +554,45 @@ test('a package whose every child the filter hid does not appear in the document
     { view: { kind: 'group', prefix: 'modules' }, grouping: 'adaptive' },
   );
   assert.doesNotMatch(adaptive.puml, /noise/, 'the grouped path drops it too');
+});
+
+/**
+ * The seed-marker rule. It is a property of the DRAWN graph, not of any one
+ * session: once seeds are at least half the entities, a thick frame would mark
+ * most of the drawing and stop discriminating, so the marker goes light.
+ */
+const seed = (id: string, distance = 0): ArchitectureNeighborhoodNode => ({
+  id,
+  label: id,
+  distance,
+  mentionTier: 'direct',
+});
+const plain = (id: string, distance = 1): ArchitectureNeighborhoodNode => ({ id, label: id, distance });
+
+test('the seed marker is heavy while seeds are a minority of the drawn entities', () => {
+  assert.equal(seedMarkerMode([seed('a'), plain('b'), plain('c'), plain('d')]), 'heavy');
+  // 1 of 3 is below the 50% threshold.
+  assert.equal(seedMarkerMode([seed('a'), plain('b'), plain('c')]), 'heavy');
+  assert.equal(seedMarkerMode([]), 'heavy', 'an empty graph has nothing to mark');
+});
+
+test('the seed marker goes light at exactly the named share and above', () => {
+  assert.equal(LIGHT_SEED_SHARE_THRESHOLD, 0.5);
+  // 2 of 4 = 50%: the threshold is inclusive ("50% 及以上").
+  assert.equal(seedMarkerMode([seed('a'), seed('b'), plain('c'), plain('d')]), 'light');
+  // 3 of 4 = 75%.
+  assert.equal(seedMarkerMode([seed('a'), seed('b'), seed('c'), plain('d')]), 'light');
+  assert.equal(seedMarkerMode([seed('a'), seed('b')]), 'light', 'an all-seed drawing is light too');
+});
+
+test('only a direct mention is a seed; old payloads keep the distance-0 reading', () => {
+  assert.equal(isSessionSeedNode({ distance: 0, mentionTier: 'direct' }), true);
+  assert.equal(isSessionSeedNode({ distance: 0, mentionTier: 'name' }), false);
+  assert.equal(isSessionSeedNode({ distance: 0, mentionTier: 'file' }), false);
+  assert.equal(isSessionSeedNode({ distance: 0, mentionTier: 'pinned' }), false);
+  assert.equal(isSessionSeedNode({ distance: 0 }), true, 'a payload without tiers keeps the legacy reading');
+  assert.equal(isSessionSeedNode({ distance: 2 }), false);
+  // The tier wins over distance: a direct mention that is not distance 0 (it
+  // cannot happen on today's payload, but the rule must not depend on it).
+  assert.equal(isSessionSeedNode({ distance: 2, mentionTier: 'direct' }), true);
 });

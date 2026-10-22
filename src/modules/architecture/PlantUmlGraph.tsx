@@ -8,7 +8,9 @@ import { ArchitectureMinimap } from '@/modules/architecture/ArchitectureMinimap'
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
+  isSessionSeedNode,
   nodeFileOf,
+  seedMarkerMode,
   type ArchitectureDiagramView,
   type ArchitecturePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
@@ -165,6 +167,12 @@ const HIGHLIGHT_STYLE = `
      is drawn twice as thick, which survives a greyscale print and colour-blind
      reading. */
   [data-architecture-plantuml] .arch-seed > rect { stroke: #b45309; stroke-width: 3; }
+  /* When seeds are half the drawn entities or more the thick frame would mark
+     most of the drawing and stop discriminating, so the marker degrades to a
+     thin frame plus a small dot. The dot is drawn into the box itself (see
+     annotateNodes), so the reading is never colour alone. */
+  [data-architecture-plantuml] .arch-seed-light > rect { stroke: #b45309; stroke-width: 1; }
+  [data-architecture-plantuml] .arch-seed-light .arch-seed-dot { fill: #b45309; pointer-events: none; }
   /* A hand-pinned entity: its own frame plus the pin glyph annotationNodes
      inserts, so the reading is a shape/symbol and never colour alone. */
   [data-architecture-plantuml] .arch-pinned > rect { stroke: #1d4ed8; stroke-width: 3; }
@@ -518,7 +526,8 @@ function highlightEdge(host: HTMLElement, edge: Element | null): void {
  *    the bare entity name, so the path has to live somewhere the pointer can
  *    reveal it;
  *  · a DIRECT session mention gets the seed marker attribute + class, which the
- *    stylesheet turns into the thicker frame (see HIGHLIGHT_STYLE).
+ *    stylesheet turns into a thicker frame (see HIGHLIGHT_STYLE) — or the light
+ *    frame + dot when seeds are the majority of the drawn entities.
  * View scaffolding (group and stub nodes) is not an entity and is skipped.
  */
 function annotateNodes(
@@ -527,6 +536,10 @@ function annotateNodes(
   idShape: ArchitectureNodeIdShape,
 ): void {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  // One reading for the whole drawing: a marker that covered most of the boxes
+  // would stop distinguishing anything, so it degrades to its light form (thin
+  // frame + dot) once seeds are at least half the drawn entities.
+  const seedMode = seedMarkerMode(graph.nodes);
   for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
     const id = element.getAttribute('data-entity-id');
     if (id === null) continue;
@@ -538,14 +551,25 @@ function annotateNodes(
       title.textContent = file;
       element.insertBefore(title, element.firstChild);
     }
-    // Old payloads carry no tier: falling back to `distance === 0` is what
-    // keeps them visually unchanged. With tiers, only a direct mention is a
-    // seed — same-name candidates (`name`) and file-expanded entities (`file`)
-    // stay in the graph but lose the marker.
-    const isSeed = node.mentionTier === undefined ? node.distance === 0 : node.mentionTier === 'direct';
-    if (isSeed) {
-      element.setAttribute('data-architecture-seed', 'true');
-      element.classList.add('arch-seed');
+    // The seed reading itself is the shared predicate (`isSessionSeedNode`), so
+    // old payloads keep `distance === 0` and only a direct mention is a seed.
+    if (isSessionSeedNode(node)) {
+      if (seedMode === 'light') {
+        // A DOM-shape reading, not colour alone: a small dot beside the label
+        // plus the thin frame from the stylesheet.
+        element.setAttribute('data-architecture-seed', 'light');
+        element.classList.add('arch-seed-light');
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('class', 'arch-seed-dot');
+        dot.setAttribute('data-architecture-seed-dot', 'true');
+        dot.setAttribute('cx', '4');
+        dot.setAttribute('cy', '4');
+        dot.setAttribute('r', '2.5');
+        element.insertBefore(dot, element.firstChild);
+      } else {
+        element.setAttribute('data-architecture-seed', 'true');
+        element.classList.add('arch-seed');
+      }
     }
     // A manual pin is not a session seed: it gets its own marker and a literal
     // pin glyph, so the reading never depends on colour alone.

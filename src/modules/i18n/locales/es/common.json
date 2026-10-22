@@ -146,7 +146,8 @@
     },
     "legend": {
       "title": "Leyenda",
-      "body": "Línea continua: asociación o llamada. Línea discontinua: dependencia o implementación. Flechas: △ herencia · △ implementación · ◆ composición · ◇ agregación · → dependencia. «estereotipo» indica el tipo de entidad. ● semilla: mencionada en esta sesión. +N plegados: ocultos por el nivel de detalle actual."
+      "body": "Línea continua: asociación o llamada. Línea discontinua: dependencia o implementación. Flechas: △ herencia · △ implementación · ◆ composición · ◇ agregación · → dependencia. «estereotipo» indica el tipo de entidad. ● semilla: mencionada en esta sesión. +N plegados: ocultos por el nivel de detalle actual.",
+      "seedLight": "Muchas semillas: se marcan con un marco fino y un punto pequeño."
     },
     "export": {
       "menu": "Exportar ▾",

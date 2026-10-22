@@ -216,6 +216,48 @@ export function nodeFileOf(
 }
 
 /**
+ * Whether a node is a session seed: a DIRECT transcript mention.
+ *
+ * Old payloads carry no `mentionTier`; falling back to `distance === 0` is what
+ * keeps them visually unchanged. With tiers, only a direct mention is a seed —
+ * same-name candidates (`name`) and file-expanded entities (`file`) stay in the
+ * graph but never earn the marker, and a manual pin (`pinned`) is its own tier.
+ */
+export function isSessionSeedNode(
+  node: Pick<ArchitectureNeighborhoodNode, 'distance' | 'mentionTier'>,
+): boolean {
+  return node.mentionTier === undefined ? node.distance === 0 : node.mentionTier === 'direct';
+}
+
+/**
+ * The share of DRAWN entities that are session seeds at which the seed marker
+ * stops discriminating and degrades to its lighter form.
+ *
+ * A marker that paints most of the drawing the same colour says nothing: with
+ * seeds at half the entities or more, the thick amber frame no longer tells a
+ * reader which boxes the transcript named. The marker then becomes a thin frame
+ * plus a small dot, which keeps the reading without shouting over the drawing.
+ */
+export const LIGHT_SEED_SHARE_THRESHOLD = 0.5;
+
+/**
+ * How the seed marker should be drawn for this graph: `'heavy'` while seeds are
+ * the minority (the marker still discriminates), `'light'` once they are half
+ * the drawn entities or more. An empty graph has nothing to mark, so it reads
+ * as `'heavy'` — the mode is inert there.
+ *
+ * Consumers: `PlantUmlGraph.tsx` (annotates the drawn boxes) and
+ * `ArchitecturePanel.tsx` (the legend states the light form when it is in use).
+ */
+export function seedMarkerMode(
+  nodes: readonly ArchitectureNeighborhoodNode[],
+): 'heavy' | 'light' {
+  if (nodes.length === 0) return 'heavy';
+  const seedCount = nodes.filter(isSessionSeedNode).length;
+  return seedCount / nodes.length >= LIGHT_SEED_SHARE_THRESHOLD ? 'light' : 'heavy';
+}
+
+/**
  * The visibility symbol a UML member row starts with. ArchGuard writes the
  * keyword (`public`/`private`/`protected`); a payload without one is a
  * TypeScript member with the language's default visibility, which is public.

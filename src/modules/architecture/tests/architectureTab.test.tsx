@@ -291,8 +291,83 @@ const CLASS_DIAGRAM_RESULT: ArchitectureGraphResult = {
 };
 
 /**
- * The three mention tiers plus one legacy node. All four are distance 0 and
- * live in one directory so a single group expansion draws them. The legacy node
+ * Three direct session seeds among four drawn entities (75%), all in one
+ * directory and connected by kept dependency relations. This is the fixture the
+ * light-marker rule is asserted on: the drawing is seed-majority, so a thick
+ * amber frame would paint most of it and stop distinguishing anything. It is a
+ * FIXTURE on purpose — the rule must not depend on how often a particular real
+ * session happens to be seed-heavy under whatever the current default filter is.
+ */
+const MAJORITY_SEED_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+  graph: {
+    file: RESULT.graph.file,
+    entity: {
+      nodes: [
+        {
+          id: 'src/modules/many/SeedOne.ts.SeedOne',
+          label: 'SeedOne',
+          distance: 0,
+          kind: 'class',
+          mentionTier: 'direct',
+        },
+        {
+          id: 'src/modules/many/SeedTwo.ts.SeedTwo',
+          label: 'SeedTwo',
+          distance: 0,
+          kind: 'class',
+          mentionTier: 'direct',
+        },
+        {
+          id: 'src/modules/many/SeedThree.ts.SeedThree',
+          label: 'SeedThree',
+          distance: 0,
+          kind: 'interface',
+          mentionTier: 'direct',
+        },
+        {
+          id: 'src/modules/many/Follower.ts.Follower',
+          label: 'Follower',
+          distance: 1,
+          kind: 'class',
+        },
+      ],
+      edges: [
+        {
+          from: 'src/modules/many/Follower.ts.Follower',
+          to: 'src/modules/many/SeedOne.ts.SeedOne',
+          relationType: 'dependency',
+        },
+        {
+          from: 'src/modules/many/SeedTwo.ts.SeedTwo',
+          to: 'src/modules/many/SeedOne.ts.SeedOne',
+          relationType: 'dependency',
+        },
+        {
+          from: 'src/modules/many/SeedThree.ts.SeedThree',
+          to: 'src/modules/many/SeedTwo.ts.SeedTwo',
+          relationType: 'dependency',
+        },
+      ],
+    },
+  },
+  stats: {
+    ...RESULT.stats,
+    entityNodes: 4,
+    entityEdges: 3,
+    entityTotal: 4,
+    entityTruncated: false,
+    seedFiles: 1,
+    seedIdentifiers: 3,
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
+ * The three mention tiers plus one legacy node, among two plain neighbours so
+ * the seed share stays a MINORITY (2 of 6): these cases pin which tier earns
+ * the seed marker, and the light-marker rule must not change that reading.
+ * All of them fit one directory and one group expansion. The legacy node
  * deliberately omits `mentionTier`: an old payload must keep the pre-tier
  * "distance 0 is a seed" reading.
  */
@@ -328,15 +403,30 @@ const MENTION_TIER_RESULT: ArchitectureGraphResult = {
           label: 'Legacy',
           distance: 0,
         },
+        // Two plain neighbours: they keep the seed share at 2 of 6, so these
+        // cases stay on the marker's majority-independent reading.
+        {
+          id: 'src/modules/tiers/Plain.ts.Plain',
+          label: 'Plain',
+          distance: 1,
+        },
+        {
+          id: 'src/modules/tiers/Other.ts.Other',
+          label: 'Other',
+          distance: 2,
+        },
       ],
-      edges: [],
+      edges: [
+        { from: 'src/modules/tiers/Plain.ts.Plain', to: 'src/modules/tiers/Direct.ts.Direct', relationType: 'dependency' },
+        { from: 'src/modules/tiers/Other.ts.Other', to: 'src/modules/tiers/Plain.ts.Plain', relationType: 'dependency' },
+      ],
     },
   },
   stats: {
     ...RESULT.stats,
-    entityNodes: 4,
-    entityEdges: 0,
-    entityTotal: 4,
+    entityNodes: 6,
+    entityEdges: 2,
+    entityTotal: 6,
     entityTruncated: false,
     seedTiers: { direct: 1, name: 1, file: 1 },
   },
@@ -2101,6 +2191,69 @@ test('only a direct mention carries the seed marker; name/file tiers and old pay
   assert.equal(marker('src/modules/tiers/File.ts.File'), null, 'a file-only expansion is not a seed');
   // A payload written before mentionTier existed keeps the legacy reading.
   assert.equal(marker('src/modules/tiers/Legacy.ts.Legacy'), 'true', 'an old payload still marks distance-0 nodes');
+});
+
+test('seeds at half the drawn entities or more draw the light marker, and the legend says so', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(MAJORITY_SEED_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/many/SeedOne.ts.SeedOne"]')));
+
+  const nodeOf = (id: string): Element => {
+    const node = host.querySelector(`[data-entity-id="${id}"]`);
+    assert.ok(node !== null, `${id} must be drawn`);
+    return node;
+  };
+
+  // Seed-majority (3 of 4): light form only. The heavy class is what draws the
+  // thick amber frame, so its absence is the "no longer shouting" reading.
+  for (const seedId of [
+    'src/modules/many/SeedOne.ts.SeedOne',
+    'src/modules/many/SeedTwo.ts.SeedTwo',
+    'src/modules/many/SeedThree.ts.SeedThree',
+  ]) {
+    const seed = nodeOf(seedId);
+    assert.equal(seed.getAttribute('data-architecture-seed'), 'light', `${seedId} carries the light seed reading`);
+    assert.equal(seed.classList.contains('arch-seed-light'), true, `${seedId} has the light style class`);
+    assert.equal(seed.classList.contains('arch-seed'), false, `${seedId} must NOT carry the heavy frame class`);
+    assert.ok(seed.querySelector('[data-architecture-seed-dot]'), `${seedId} carries the dot shape reading`);
+  }
+  const follower = nodeOf('src/modules/many/Follower.ts.Follower');
+  assert.equal(follower.getAttribute('data-architecture-seed'), null, 'a non-seed carries no marker');
+  assert.equal(follower.classList.contains('arch-seed-light'), false);
+
+  // The legend states the light form, so the symbol on the drawing is explained.
+  fireEvent.click(document.querySelector('[data-architecture-legend-toggle]') as Element);
+  await waitFor(() => {
+    const legend = document.querySelector('[data-architecture-legend-content]');
+    assert.ok(legend !== null);
+    assert.match(legend.textContent ?? '', /Many seeds/, 'the legend names the light marker when it is in use');
+  });
+});
+
+test('seeds in the minority keep the heavy marker and the plain legend', async () => {
+  rememberDefaultWithMentionedFunctions();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
+
+  // One seed among four drawn entities (25%): the thick frame still
+  // distinguishes it, so the marker must stay exactly as it was.
+  const seed = host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]');
+  assert.ok(seed !== null);
+  assert.equal(seed.getAttribute('data-architecture-seed'), 'true');
+  assert.equal(seed.classList.contains('arch-seed'), true);
+  assert.equal(seed.classList.contains('arch-seed-light'), false);
+  assert.equal(seed.querySelector('[data-architecture-seed-dot]'), null, 'the minority form has no dot');
+
+  fireEvent.click(document.querySelector('[data-architecture-legend-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-legend-content]')));
+  assert.doesNotMatch(
+    document.querySelector('[data-architecture-legend-content]')?.textContent ?? '',
+    /Many seeds/,
+    'the light-marker note is absent while the drawing uses the heavy form',
+  );
 });
 
 test('hovering a node highlights its in/out edges and dims the rest', async () => {

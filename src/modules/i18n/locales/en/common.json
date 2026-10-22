@@ -152,7 +152,8 @@
     },
     "legend": {
       "title": "Legend",
-      "body": "Solid line: association or call. Dashed line: dependency or implementation. Arrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency. «stereotype» marks the entity kind. ● seed: named in this session. +N folded: hidden by the current detail level."
+      "body": "Solid line: association or call. Dashed line: dependency or implementation. Arrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency. «stereotype» marks the entity kind. ● seed: named in this session. +N folded: hidden by the current detail level.",
+      "seedLight": "Many seeds: they are marked with a thin frame and a small dot."
     },
     "export": {
       "menu": "Export ▾",

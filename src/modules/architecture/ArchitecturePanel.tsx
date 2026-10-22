@@ -29,6 +29,7 @@ import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPa
 import {
   archguardToPlantUml,
   nodeFileOf,
+  seedMarkerMode,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/archguardToPlantUml';
 import {
@@ -144,8 +145,6 @@ const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
 const FILTER_STORAGE_PREFIX = 'architecture.filter.';
 /** Whether the one-off touch instruction has been dismissed in this browser. */
 const TOUCH_HINT_STORAGE_KEY = 'architecture.touchHint.dismissed';
-/** Whether the right-hand dock was open the last time this browser used it. */
-const DOCK_STORAGE_KEY = 'architecture.dock.open';
 /**
  * How long the dock's open/close animation lasts (matching the 160ms
  * `transform` transition in `ArchitectureDock`). Aspect-driven re-layout stays
@@ -153,26 +152,6 @@ const DOCK_STORAGE_KEY = 'architecture.dock.open';
  * the dock itself is never read as a container shape change.
  */
 const DOCK_LAYOUT_LOCK_MS = 200;
-
-/** Whether the dock is open by default: the design ships it CLOSED. */
-function readStoredDockOpen(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(DOCK_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-/** Remember the dock's open/closed state; a failed write must not break the dock. */
-function writeStoredDockOpen(open: boolean): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(DOCK_STORAGE_KEY, open ? 'true' : 'false');
-  } catch {
-    // Private mode: the state still holds for this session.
-  }
-}
 
 /** The touch instruction is a one-off: a remembered dismissal keeps it off screen. */
 function readStoredTouchHintDismissed(): boolean {
@@ -1184,9 +1163,16 @@ export default function ArchitecturePanel({
   // Whether the selection tray is expanded. The panel owns it because Escape
   // collapses the tray before it clears the selection.
   const [trayExpanded, setTrayExpanded] = useState(false);
-  // Whether the dock is on screen. Remembered per browser, and forced open by a
-  // fresh selection (the gesture that selects is a request to inspect).
-  const [dockOpen, setDockOpen] = useState<boolean>(readStoredDockOpen);
+  // Whether the dock is on screen. It ALWAYS starts closed: the previous
+  // browser-remembered value was the cause of a fresh entry opening a 320px
+  // empty inspector ("Select a node …") and squeezing the canvas. Only a
+  // gesture opens it — a fresh selection, or the toolbar's explicit Text door.
+  const [dockOpen, setDockOpen] = useState(false);
+  // True when the reader opened the dock THEMSELVES while nothing was
+  // selected (the Text button). Only that kind of open may show an empty
+  // inspector page; an open that a selection caused must close as soon as the
+  // selection empties, so an empty dock never claims a column on its own.
+  const [dockExplicitlyOpened, setDockExplicitlyOpened] = useState(false);
   // Which dock page is on screen. The shell owns the tablist; this state is the
   // half that makes a tab click reach the content. A fresh selection does not
   // switch pages: a reader looking at the text of the drawing they just
@@ -1538,7 +1524,9 @@ export default function ArchitecturePanel({
    */
   const changeDockOpen = useCallback((next: boolean): void => {
     setDockOpen(next);
-    writeStoredDockOpen(next);
+    // Closing drops the explicit-open licence; the next open has to earn it
+    // again (a fresh selection, or another press on the Text door).
+    if (!next) setDockExplicitlyOpened(false);
     setDockLayoutLocked(true);
     if (dockLockTimerRef.current !== null) clearTimeout(dockLockTimerRef.current);
     dockLockTimerRef.current = setTimeout(() => {
@@ -1561,6 +1549,24 @@ export default function ArchitecturePanel({
   useEffect(() => {
     if (selection !== null && !dockOpenRef.current) changeDockOpen(true);
   }, [selection, changeDockOpen]);
+
+  // A different session (or project) is a different reading, and the dock's
+  // open state is per reading: it must not travel into a page with nothing
+  // selected in it. This was the "empty 320px inspector on entry" the sessions
+  // showed when they had opened the dock earlier.
+  useEffect(() => {
+    setDockExplicitlyOpened(false);
+    if (dockOpenRef.current) changeDockOpen(false);
+  }, [sessionId, projectId, changeDockOpen]);
+
+  // An open dock whose selection emptied (a filter hid the selected node, a
+  // curation removed it, the scope reducer cleared it) would be an empty
+  // column. Close it — unless the READER opened the dock themselves while
+  // nothing was selected (the Text door), where the empty inspector page is a
+  // page they asked to see.
+  useEffect(() => {
+    if (selection === null && !dockExplicitlyOpened && dockOpenRef.current) changeDockOpen(false);
+  }, [selection, dockExplicitlyOpened, changeDockOpen]);
 
   const selectNodeOnCanvas = useCallback((node: ArchitectureRendererNode): void => {
     dispatchSelection({ type: 'select-entity', nodeId: node.id });
@@ -1896,6 +1902,9 @@ export default function ArchitecturePanel({
           return;
         }
         setDockTab('text');
+        // This is the reader's own door, so the open is explicit: with nothing
+        // selected it may legitimately show the empty inspector page.
+        setDockExplicitlyOpened(true);
         if (!dockOpen) changeDockOpen(true);
       }}
       data-architecture-text-toggle="true"
@@ -1916,6 +1925,11 @@ export default function ArchitecturePanel({
   // function decides which budget layers are named; the panel only renders it.
   const readout = buildReadout({
     detailRetained: detailRanking?.retainedNodeIds.size ?? neighbourhood.nodes.length,
+    // The tier ranked the FILTERED subgraph. Measuring its cut against the
+    // server's returned count instead would read a hidden isolated node (or an
+    // element/relation filter) as a detail-tier fold and light the amber
+    // `Budget-limited` marker on an otherwise untroubled drawing.
+    detailInScope: displayNeighbourhood?.nodes.length ?? neighbourhood.nodes.length,
     drawnBoxes: layoutFit?.graph.nodes ?? [],
     returnedCount: truncation.shown,
     relatedTotal: truncation.total,
@@ -2631,6 +2645,10 @@ export default function ArchitecturePanel({
     </button>
   );
 
+  // The drawing's own seed reading, so the legend states the light marker
+  // exactly when the drawing uses it (seeds at half the drawn entities or
+  // more stop discriminating as a thick frame).
+  const seedMarkerIsLight = seedMarkerMode(drawnGraph.nodes) === 'light';
   // The legend body names every visual vocabulary the drawing uses, including
   // the text form of the old circular fold badge (`+N folded`). It is drawn in
   // the desktop `?` popover and, on the compact tier, directly inside the
@@ -2644,6 +2662,14 @@ export default function ArchitecturePanel({
         defaultValue:
           'Solid line: association or call.\nDashed line: dependency or implementation.\nArrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency.\n«stereotype» marks the entity kind.\n● seed: named in this session.\n+N folded: hidden by the current detail level.',
       })}
+      {seedMarkerIsLight && (
+        <>
+          {'\n'}
+          {t('architecture.legend.seedLight', {
+            defaultValue: 'Many seeds: they are marked with a thin frame and a small dot.',
+          })}
+        </>
+      )}
     </div>
   );
 

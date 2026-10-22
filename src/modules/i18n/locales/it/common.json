@@ -146,7 +146,8 @@
     },
     "legend": {
       "title": "Legenda",
-      "body": "Linea continua: associazione o chiamata. Linea tratteggiata: dipendenza o implementazione. Frecce: △ ereditarietà · △ implementazione · ◆ composizione · ◇ aggregazione · → dipendenza. «stereotipo» indica il tipo di entità. ● seed: menzionato in questa sessione. +N compressi: nascosti dal livello di dettaglio corrente."
+      "body": "Linea continua: associazione o chiamata. Linea tratteggiata: dipendenza o implementazione. Frecce: △ ereditarietà · △ implementazione · ◆ composizione · ◇ aggregazione · → dipendenza. «stereotipo» indica il tipo di entità. ● seed: menzionato in questa sessione. +N compressi: nascosti dal livello di dettaglio corrente.",
+      "seedLight": "Molti semi: sono contrassegnati da un bordo sottile e un piccolo punto."
     },
     "export": {
       "menu": "Esporta ▾",
