@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **状态私有化 + 生命周期显式**：`grep -nE "^(let|var) " src/shared/voiceClientAsrWorker.ts` 计数 = **0**；`grep -nE "class VoiceClientAsrEngine|preload\(\)|dispose\(\)" src/shared/voiceClientAsrWorker.ts` 命中。
-- [ ] (b) **显式单例**：`grep -nE "new VoiceClientAsrEngine" src/shared/voiceClientAsrWorker.ts` 命中。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 voiceClientAsrWorker 的既有 vitest 判据窄跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (d) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **状态私有化 + 生命周期显式**：`grep -nE "^(let|var) " src/shared/voiceClientAsrWorker.ts` 计数 = **0**；`grep -nE "class VoiceClientAsrEngine|preload\(\)|dispose\(\)" src/shared/voiceClientAsrWorker.ts` 命中。
+- [x] (b) **显式单例**：`grep -nE "new VoiceClientAsrEngine" src/shared/voiceClientAsrWorker.ts` 命中。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 voiceClientAsrWorker 的既有 vitest 判据窄跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (d) **静态门**：`npm run typecheck` 退出 0；`npm run lint` 退出 0；`npm run build:client` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
