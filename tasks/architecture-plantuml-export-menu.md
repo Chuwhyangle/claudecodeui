@@ -26,10 +26,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/exportMenu.test.tsx` exit 0（新文件）：菜单含五项且 Mermaid 标「旧格式」排最后；`.puml` 下载内容与桥接对当前视图产出的 puml 逐字相同（分别断言类图/文件、下钻 group/neighborhood 三种视图）；范围/详情变化后导出内容随之变化；复制 PlantUML 调用剪贴板并有成功提示；剪贴板拒绝时走回落路径
-- [ ] 同文件：导出的 puml 经 plantuml-js `checkSyntax` 无 error 级诊断；SVG 导出不含 `arch-dim`/`arch-hl-` 类名；PNG 栅格化的长边不超过 8192 且超限时有提示；`.mmd` 导出与改前逐字相同
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：旧的单独 `Export .mmd` 按钮不再作为独立控件出现；Escape 只关闭菜单、不触发会话 abort（`chat.abort` 调用计数为 0）；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/exportMenu.test.tsx` exit 0（新文件）：菜单含五项且 Mermaid 标「旧格式」排最后；`.puml` 下载内容与桥接对当前视图产出的 puml 逐字相同（分别断言类图/文件、下钻 group/neighborhood 三种视图）；范围/详情变化后导出内容随之变化；复制 PlantUML 调用剪贴板并有成功提示；剪贴板拒绝时走回落路径
+- [x] 同文件：导出的 puml 经 plantuml-js `checkSyntax` 无 error 级诊断；SVG 导出不含 `arch-dim`/`arch-hl-` 类名；PNG 栅格化的长边不超过 8192 且超限时有提示；`.mmd` 导出与改前逐字相同
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：旧的单独 `Export .mmd` 按钮不再作为独立控件出现；Escape 只关闭菜单、不触发会话 abort（`chat.abort` 调用计数为 0）；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -44,6 +44,8 @@ depends_on:
 - src/modules/architecture/tests/exportMenu.test.tsx (new)
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/modules/architecture/tests/mobileGestures.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json

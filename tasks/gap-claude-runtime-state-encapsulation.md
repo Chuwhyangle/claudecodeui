@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **模块级可变容器归零**：`grep -nE "^const (activeSessions|pendingToolApprovals|abortedSessionIds) = new (Map|Set)" server/modules/providers/list/claude/claude-runtime.provider.ts` 计数 = **0**。
-- [ ] (b) **类存在且持有状态**：`grep -nE "class ClaudeRuntimeState" server/modules/providers/list/claude/claude-runtime.provider.ts` 命中。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 claude-runtime 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
-- [ ] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **模块级可变容器归零**：`grep -nE "^const (activeSessions|pendingToolApprovals|abortedSessionIds) = new (Map|Set)" server/modules/providers/list/claude/claude-runtime.provider.ts` 计数 = **0**。
+- [x] (b) **类存在且持有状态**：`grep -nE "class ClaudeRuntimeState" server/modules/providers/list/claude/claude-runtime.provider.ts` 命中。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 claude-runtime 的既有 server 判据单跑退出 0（执行时以实测为准；若文件名漂移用等价判据替换并记录）。
+- [x] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
