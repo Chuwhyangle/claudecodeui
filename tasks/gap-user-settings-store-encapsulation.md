@@ -2,7 +2,7 @@
 id: gap-user-settings-store-encapsulation
 title: UserSettingsStore 封装：userSettings 的 4 个模块级
   let（preferences/pendingServerWrites/serverWriteTimer/hasHydrated）收进带生命周期的类
-status: todo
+status: ready
 labels:
   - gap
 parent: null
