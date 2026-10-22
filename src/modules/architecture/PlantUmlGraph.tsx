@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -30,6 +31,7 @@ import {
   TOUCH_TARGET_STYLE,
   useCompactToolbarSlot,
   useTouchLayout,
+  ZOOM_CLUSTER_TARGET_STYLE,
 } from '@/modules/architecture/hooks/useTouchLayout';
 import {
   buildSeedHierarchy,
@@ -45,6 +47,7 @@ import type {
 } from '@/modules/architecture/rendererContract';
 import {
   centerElementInContainer,
+  createSvgDragPan,
   createSvgTouchGestures,
   createSvgViewport,
   fitZoomScale,
@@ -91,6 +94,9 @@ const DOUBLE_TAP_MS = 350;
 /** The shared look of the diagram toolbar's buttons. */
 const TOOLBAR_BUTTON_CLASS =
   'rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60';
+
+/** How far one arrow-key press pans a focused canvas, in CSS pixels. */
+const KEYBOARD_PAN_STEP = 40;
 
 /**
  * The cross-panel linkage channel. The SVG is the shared surface: a click on an
@@ -537,6 +543,20 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
     return () => gestures.destroy();
   }, [applyZoom]);
 
+  // Mouse/pen panning rides on the same scroll container the touch gestures
+  // pan: left-drag from the blank canvas and middle-drag from anywhere scroll
+  // it. Presses on a node are refused so they stay selection/drill gestures,
+  // and fingers are left to `createSvgTouchGestures` — one pan, two input
+  // families, never two competing drag states.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    const pan = createSvgDragPan(host, {
+      canPanFrom: (target) => !(target instanceof Element && target.closest('[data-entity-id]') !== null),
+    });
+    return () => pan.destroy();
+  }, []);
+
   // The LOD debouncer lives for the mount; a drawing change cancels its pending
   // application through the render effect below.
   useEffect(() => {
@@ -884,16 +904,20 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
     return () => window.removeEventListener(ENTITY_HIGHLIGHT_EVENT, onExternalHighlight);
   }, []);
 
-  // Ctrl/Cmd + wheel zooms around the pointer; a plain wheel is left to the
-  // container so the diagram still scrolls normally (no preventDefault).
+  // The canvas is the wheel's ONLY consumer: a wheel turn zooms around the
+  // pointer, whether or not Ctrl/Cmd is held (a trackpad pinch arrives as a
+  // ctrlKey wheel, so that form keeps working unchanged). A wheel outside the
+  // canvas — the toolbar, the chat behind it — never reaches this listener, so
+  // scrolling the page elsewhere is untouched.
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
 
     const onWheel = (event: WheelEvent): void => {
-      if (!event.ctrlKey && !event.metaKey) return;
       const viewport = viewportRef.current;
       if (viewport === null) return;
+      // The drawing never scrolls under the wheel any more; the zoom below is
+      // the whole response, so the browser's own scroll/page zoom must not run.
       event.preventDefault();
       // deltaMode 1 is lines and 2 is pages; normalise so a mouse wheel and a
       // trackpad zoom at comparable rates.
@@ -1060,6 +1084,50 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
     }
   };
 
+  /**
+   * Keyboard navigation once the canvas has focus: arrows pan, `+`/`-` zoom,
+   * `0` fits and `1` returns to natural size. Escape is deliberately NOT bound
+   * — the chat page uses it globally to abort a running turn, and a focused
+   * diagram must not take it away. Modified presses are left to the browser and
+   * the app's shortcuts (Ctrl/Cmd/Alt + key), so nothing global is shadowed.
+   */
+  const onCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const host = hostRef.current;
+    if (host === null || event.ctrlKey || event.metaKey || event.altKey) return;
+    switch (event.key) {
+      case 'ArrowLeft':
+        host.scrollLeft -= KEYBOARD_PAN_STEP;
+        break;
+      case 'ArrowRight':
+        host.scrollLeft += KEYBOARD_PAN_STEP;
+        break;
+      case 'ArrowUp':
+        host.scrollTop -= KEYBOARD_PAN_STEP;
+        break;
+      case 'ArrowDown':
+        host.scrollTop += KEYBOARD_PAN_STEP;
+        break;
+      case '+':
+      case '=':
+        zoomByStep(ZOOM_STEP);
+        break;
+      case '-':
+      case '_':
+        zoomByStep(1 / ZOOM_STEP);
+        break;
+      case '0':
+        fitDiagram();
+        break;
+      case '1':
+        zoomToScale(1);
+        break;
+      default:
+        // Anything else (Escape included) keeps its default behaviour.
+        return;
+    }
+    event.preventDefault();
+  };
+
   const viewLabel = view.kind === 'overview'
     ? t('architecture.plantuml.overview', { defaultValue: 'Overview' })
     : view.kind === 'group'
@@ -1208,13 +1276,18 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
       </button>
     );
 
+  // The zoom controls live in the on-canvas cluster (bottom right of the
+  // drawing), not in the toolbar: they act on the drawing, so they belong on
+  // it. 32px targets on a fine pointer, 44px on a coarse one.
+  const clusterTargetStyle = touchUi ? TOUCH_TARGET_STYLE : ZOOM_CLUSTER_TARGET_STYLE;
+
   const zoomOutButton = (
     <button
       type="button"
       onClick={() => zoomByStep(1 / ZOOM_STEP)}
       aria-label={t('architecture.plantuml.zoomOut', { defaultValue: 'Zoom out' })}
       data-architecture-zoom-out="true"
-      style={touchTargetStyle}
+      style={clusterTargetStyle}
       className={TOOLBAR_BUTTON_CLASS}
     >
       −
@@ -1227,7 +1300,7 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
       onClick={() => zoomByStep(ZOOM_STEP)}
       aria-label={t('architecture.plantuml.zoomIn', { defaultValue: 'Zoom in' })}
       data-architecture-zoom-in="true"
-      style={touchTargetStyle}
+      style={clusterTargetStyle}
       className={TOOLBAR_BUTTON_CLASS}
     >
       +
@@ -1243,23 +1316,10 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
       // The honest reading of what this control applies. `zoom-mode` above keeps
       // its existing fit/custom vocabulary; this is the view the fit lands on.
       data-architecture-zoom-fit-mode={fitReading.mode}
-      style={touchTargetStyle}
+      style={clusterTargetStyle}
       className={TOOLBAR_BUTTON_CLASS}
     >
       {t(fitReading.labelKey, { defaultValue: fitReading.labelFallback })}
-    </button>
-  );
-
-  const actualSizeButton = (
-    <button
-      type="button"
-      onClick={() => zoomToScale(1)}
-      aria-pressed={zoom.mode === 'custom' && Math.abs(zoom.scale - 1) < 1e-6}
-      data-architecture-zoom-actual="true"
-      style={touchTargetStyle}
-      className={TOOLBAR_BUTTON_CLASS}
-    >
-      {t('architecture.plantuml.zoomActual', { defaultValue: 'Actual size (100%)' })}
     </button>
   );
 
@@ -1319,29 +1379,11 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
               <span data-architecture-view-label>{viewLabel}</span>
               {readableNotice}
               {fitFocusNotice}
-              {/* The semantic-zoom level currently shown. It is the diagram's own
-                  reading of the scale, so it changes only after the debounce. */}
-              {lodDepth !== null && (
-                <span data-architecture-lod-label className="tabular-nums">
-                  {lodDepth === 0
-                    ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
-                    : lodDepth === 1
-                      ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
-                      : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
-                </span>
-              )}
             </span>
             {backButton}
             {explosionButton}
             {readableModeGroup}
             {drillButton}
-            <span role="group" aria-label={zoomGroupLabel} className="flex flex-col gap-1">
-              {zoomOutButton}
-              {zoomInButton}
-              {fitButton}
-              {actualSizeButton}
-            </span>
-            {zoomReadout}
             {exportButton}
             <span data-architecture-visible-summary>
               {t('architecture.visibleNodes', {
@@ -1365,17 +1407,6 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
             {readableModeGroup}
             {readableNotice}
             {fitFocusNotice}
-            {/* The semantic-zoom level currently shown. It is the diagram's own
-                reading of the scale, so it changes only after the debounce. */}
-            {lodDepth !== null && (
-              <span data-architecture-lod-label className="tabular-nums">
-                {lodDepth === 0
-                  ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
-                  : lodDepth === 1
-                    ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
-                    : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
-              </span>
-            )}
             {/* The hover READOUT is the panel's renderer-neutral bar; this is the
                 view's own gesture hint, so it never repeats that reading. On a
                 finger there is no hover, so the wording follows the input. */}
@@ -1391,13 +1422,6 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
           </span>
           <span className="relative flex items-center gap-2">
             {drillButton}
-            <span role="group" aria-label={zoomGroupLabel} className="flex items-center gap-1">
-              {zoomOutButton}
-              {zoomReadout}
-              {zoomInButton}
-              {fitButton}
-              {actualSizeButton}
-            </span>
             <span data-architecture-visible-summary>
               {t('architecture.visibleNodes', {
                 defaultValue: '{{visible}} of {{total}} nodes',
@@ -1408,17 +1432,48 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
           </span>
         </div>
       )}
-      <div
-        ref={hostRef}
-        role="img"
-        aria-label={t('architecture.graphAria', { defaultValue: 'Architecture neighbourhood graph' })}
-        className="min-h-0 flex-1 overflow-auto p-3"
-        // The gestures own every touch on the drawing: without this the browser
-        // would pan/zoom the page and the pinch would never reach the controller.
-        style={{ touchAction: 'none' }}
-        data-testid="plantuml-host"
-        data-architecture-plantuml="true"
-      />
+      <div className="relative min-h-0 flex-1" data-architecture-canvas="true">
+        <div
+          ref={hostRef}
+          role="img"
+          aria-label={t('architecture.graphAria', { defaultValue: 'Architecture neighbourhood graph' })}
+          // The canvas is its own keyboard target: arrows pan, +/- zoom, 0 fits
+          // and 1 is natural size (see `onCanvasKeyDown`). The ring is only drawn
+          // for keyboard focus, so a mouse press does not flash a box.
+          tabIndex={0}
+          className="h-full w-full overflow-auto p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60"
+          // The gestures own every touch on the drawing: without this the browser
+          // would pan/zoom the page and the pinch would never reach the controller.
+          style={{ touchAction: 'none' }}
+          onKeyDown={onCanvasKeyDown}
+          data-testid="plantuml-host"
+          data-architecture-plantuml="true"
+        />
+        {/* The zoom cluster floats at the bottom right OF the drawing: the three
+            controls act on it, so they stay next to it instead of in the
+            toolbar. The semantic-zoom level is the one place that reading is
+            stated, right beside the scale it explains. */}
+        <div
+          role="group"
+          aria-label={zoomGroupLabel}
+          data-architecture-zoom-cluster="true"
+          className="absolute bottom-3 right-3 z-20 flex flex-col items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 shadow-sm"
+        >
+          {zoomInButton}
+          {zoomOutButton}
+          {fitButton}
+          {zoomReadout}
+          {lodDepth !== null && (
+            <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+              {lodDepth === 0
+                ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
+                : lodDepth === 1
+                  ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
+                  : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
+            </span>
+          )}
+        </div>
+      </div>
       {failure !== null && (
         <p data-architecture-plantuml-error="true" role="alert" className="px-4 pb-2 text-xs text-destructive">
           {t('architecture.plantuml.error', { defaultValue: 'The diagram could not be rendered: {{message}}', message: failure })}

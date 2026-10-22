@@ -292,6 +292,17 @@ export function createSvgViewport(container: HTMLElement): SvgViewportController
   };
 }
 
+/**
+ * How far a press must travel before it counts as a drag rather than a click.
+ * A mouse click is never perfectly still, so without a threshold a slightly
+ * shaky click on a node would pan the drawing instead of selecting/drilling.
+ */
+export const PAN_THRESHOLD_PX = 4;
+
+/** The cursor the canvas shows while idle; `grabbing` replaces it during a pan. */
+const PAN_CURSOR = 'grab';
+const PANNING_CURSOR = 'grabbing';
+
 /** One touch pointer's position, in client coordinates. */
 export type SvgTouchPoint = { readonly clientX: number; readonly clientY: number };
 
@@ -452,6 +463,165 @@ export function createSvgTouchGestures(
       window.removeEventListener('pointercancel', onPointerEnd);
       container.removeEventListener('click', onClickCapture, true);
       pointers.clear();
+    },
+  };
+}
+
+/** What a drag-pan owner states about the press that starts a pan. */
+export type SvgDragPanOptions = {
+  /**
+   * Whether a LEFT-button press at `target` may begin a pan. The canvas passes
+   * a predicate that refuses presses on drawn nodes, so a press on a node stays
+   * a selection/drill gesture; the middle button pans from anywhere.
+   */
+  readonly canPanFrom: (target: EventTarget | null) => boolean;
+};
+
+/** The handle a caller keeps to tear the drag listeners down on unmount. */
+export type SvgDragPan = {
+  destroy(): void;
+};
+
+/**
+ * Add pointer-drag panning to the scroll container that already owns an
+ * `SvgViewportController`:
+ *
+ *  · a LEFT-button drag on the blank canvas scrolls the container (the drawing
+ *    is larger than its box, so native scrolling IS the pan);
+ *  · a MIDDLE-button drag pans from anywhere, nodes included;
+ *  · a press only becomes a drag once it travels `PAN_THRESHOLD_PX`, so a
+ *    click — and the second click of a double-click — still reaches the
+ *    drawing's own selection/drill handlers;
+ *  · a press that DID become a drag swallows the release click, so panning
+ *    across a node never selects it;
+ *  · `pointercancel` ends the pan without leaving a half-dragged state behind.
+ *
+ * Touch input is deliberately ignored: `createSvgTouchGestures` owns fingers
+ * (one finger pans, two pinch) through the same controller, so there is one
+ * state, not two. The cursor turns `grabbing` for the duration of a drag and
+ * back to `grab` afterwards. Inertia is deliberately not implemented.
+ */
+export function createSvgDragPan(
+  container: HTMLElement,
+  options: SvgDragPanOptions,
+): SvgDragPan {
+  /** The pointer held down right now, or `null` between gestures. */
+  let active: {
+    pointerId: number;
+    button: number;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+  } | null = null;
+  /** Set once the press travelled past the threshold; reset when it ends. */
+  let dragging = false;
+  /** Set when a drag ended, so the click the browser fires on release is eaten. */
+  let swallowClick = false;
+
+  const setCursor = (cursor: string): void => {
+    container.style.cursor = cursor;
+  };
+  setCursor(PAN_CURSOR);
+
+  /** Pointer capture is a no-op where the platform lacks it (jsdom, detached nodes). */
+  const capture = (pointerId: number, release: boolean): void => {
+    const method = release ? container.releasePointerCapture : container.setPointerCapture;
+    if (typeof method !== 'function') return;
+    try {
+      method.call(container, pointerId);
+    } catch {
+      // A pointer id the element never captured throws on release; the pan
+      // state below is still reset, so nothing is left dragging.
+    }
+  };
+
+  const onPointerDown = (event: PointerEvent): void => {
+    // Fingers belong to the touch gesture layer.
+    if (event.pointerType === 'touch' || active !== null) return;
+    const middleButton = event.button === 1;
+    if (!middleButton && event.button !== 0) return;
+    // A left press on a node is a selection/drill, not the start of a pan.
+    if (!middleButton && !options.canPanFrom(event.target)) return;
+    // Middle-click would otherwise start the platform's autoscroll aid.
+    if (middleButton) event.preventDefault();
+    active = {
+      pointerId: event.pointerId,
+      button: event.button,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
+    dragging = false;
+    // A new press supersedes an unconsumed flag from an earlier gesture.
+    swallowClick = false;
+    capture(event.pointerId, false);
+  };
+
+  const onPointerMove = (event: PointerEvent): void => {
+    if (active === null || event.pointerId !== active.pointerId) return;
+    if (!dragging) {
+      const travelled = Math.hypot(event.clientX - active.startX, event.clientY - active.startY);
+      if (travelled < PAN_THRESHOLD_PX) return;
+      dragging = true;
+      setCursor(PANNING_CURSOR);
+    }
+    const dx = event.clientX - active.lastX;
+    const dy = event.clientY - active.lastY;
+    active.lastX = event.clientX;
+    active.lastY = event.clientY;
+    if (dx === 0 && dy === 0) return;
+    // The pointer owns the gesture now: no text selection, no page scroll.
+    event.preventDefault();
+    container.scrollLeft -= dx;
+    container.scrollTop -= dy;
+  };
+
+  const endPan = (event: PointerEvent, cancelled: boolean): void => {
+    if (active === null || event.pointerId !== active.pointerId) return;
+    const leftButton = active.button === 0;
+    capture(event.pointerId, true);
+    // A cancelled gesture produces no click, so there is nothing to swallow —
+    // and the flag stays clear for the next real click. Only a LEFT release
+    // fires a `click` at all; a middle release fires `auxclick`, which must not
+    // arm a flag that would then eat the user's next genuine click.
+    if (dragging && !cancelled && leftButton) swallowClick = true;
+    active = null;
+    dragging = false;
+    setCursor(PAN_CURSOR);
+  };
+
+  const onPointerUp = (event: PointerEvent): void => endPan(event, false);
+  const onPointerCancel = (event: PointerEvent): void => endPan(event, true);
+
+  const onClickCapture = (event: MouseEvent): void => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  container.addEventListener('pointerdown', onPointerDown);
+  // Move/release are watched on the window (pointer capture keeps delivering
+  // them even when the pointer leaves the canvas), and the click guard is a
+  // window capture listener so the release click never reaches the drawing.
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerCancel);
+  window.addEventListener('click', onClickCapture, true);
+
+  return {
+    destroy(): void {
+      container.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('click', onClickCapture, true);
+      container.style.cursor = '';
+      active = null;
+      dragging = false;
+      swallowClick = false;
     },
   };
 }

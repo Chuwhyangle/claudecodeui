@@ -21,7 +21,8 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
  *    finger); drilling needs an explicit gesture — double-tap or "Drill in";
  *  · a coarse pointer gets 44×44 hit areas and a narrow screen collects the
  *    toolbar into one expandable overflow menu;
- *  · the desktop wheel behaviour is untouched.
+ *  · the canvas owns the wheel (a plain wheel zooms around the cursor), and the
+ *    zoom cluster floats on the drawing rather than in the toolbar.
  */
 
 // The network hop is stubbed; the hook, the panel, the bridge and the real
@@ -324,22 +325,28 @@ test('one finger drags the drawing by panning the scroll container', async () =>
   fireEvent.pointerUp(host, { pointerId: 7, pointerType: 'touch', clientX: 250, clientY: 280 });
 });
 
-test('desktop wheel behaviour is unchanged: plain wheel scrolls, Ctrl+wheel zooms', async () => {
+test('the canvas owns the wheel — a plain wheel zooms too — and Ctrl+wheel keeps working', async () => {
   // Deliberately the desktop setup from beforeEach (fine pointer, 1024px).
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
   const before = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
 
-  fireEvent.wheel(host, { deltaY: -120 });
-  assert.equal(Number(graphRoot().getAttribute('data-architecture-zoom-scale')), before, 'a plain wheel must not zoom');
-  assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'fit');
-
-  fireEvent.wheel(host, { deltaY: -120, ctrlKey: true });
+  // The drawing is the wheel's only consumer now: a plain wheel zooms around
+  // the cursor and is cancelled, so it never scrolls the page or the diagram.
+  assert.equal(fireEvent.wheel(host, { deltaY: -120 }), false, 'the canvas must cancel its wheel');
   assert.ok(
     Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > before,
-    'Ctrl+wheel must still zoom',
+    'a plain wheel must zoom in',
   );
   assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
+
+  // Ctrl+wheel — what a trackpad pinch produces — is the same gesture.
+  const zoomedIn = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.equal(fireEvent.wheel(host, { deltaY: -120, ctrlKey: true }), false);
+  assert.ok(
+    Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > zoomedIn,
+    'Ctrl+wheel must keep zooming',
+  );
 });
 
 test('a touch tap selects without re-laying out; drilling needs Drill in or a double-tap', async () => {
@@ -439,10 +446,15 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
 
+  // The zoom cluster is chrome of the DRAWING, not a toolbar entry: it stays on
+  // the canvas at the bottom right, so it is not part of the single row.
+  const cluster = document.querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(cluster instanceof HTMLElement, 'the zoom controls live on the canvas');
+  assert.equal(cluster.closest('[data-architecture-toolbar]'), null, 'the zoom cluster is not a toolbar entry');
   assert.equal(
-    screen.queryByRole('button', { name: 'Zoom in' }),
+    document.querySelector('[data-architecture-toolbar] [data-architecture-zoom-in]'),
     null,
-    'a narrow screen must not render the individual zoom buttons in the toolbar',
+    'the toolbar must not spend its one row on zoom',
   );
   assert.equal(
     document.querySelector('[data-architecture-export]'),
@@ -458,6 +470,7 @@ test('a narrow screen collects the toolbar entries into one expandable overflow 
   assert.ok(document.querySelector('[data-architecture-overflow-export]'), 'export must be reachable from the menu');
 
   const zoomIn = screen.getByRole('button', { name: 'Zoom in' });
+  assert.ok(cluster.contains(zoomIn), 'the zoom control read by name is the cluster one');
   fireEvent.click(zoomIn);
   assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
   assert.ok(Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > 1);

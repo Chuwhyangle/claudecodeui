@@ -5,12 +5,14 @@ import { beforeEach, test } from 'vitest';
 import {
   applyZoomScale,
   clampZoomScale,
+  createSvgDragPan,
   createSvgViewport,
   fitAllZoomScale,
   fitZoomScale,
   MAX_ZOOM_SCALE,
   MIN_READABLE_ZOOM_SCALE,
   MIN_ZOOM_SCALE,
+  PAN_THRESHOLD_PX,
   readSvgNaturalSize,
   zoomedSvgSize,
 } from '@/modules/architecture/svgViewport';
@@ -57,6 +59,37 @@ function makeContainer(width: number, height: number, svg: SVGSVGElement): HTMLD
 /** The production formatter rounds to hundredths; mirror it when comparing. */
 function rounded(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * jsdom ships no `PointerEvent`. This stand-in extends `MouseEvent` (so
+ * `clientX`/`clientY`/`button` are real) and adds the two fields the drag layer
+ * reads: `pointerId` to follow one gesture and `pointerType` to hand fingers to
+ * the touch gesture layer.
+ */
+class TestPointerEvent extends MouseEvent {
+  readonly pointerId: number;
+  readonly pointerType: string;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? '';
+  }
+}
+
+/** Dispatch one pointer event to `target` (the pan watches moves on the window). */
+function pointer(target: EventTarget, type: string, init: PointerEventInit = {}): MouseEvent {
+  const event = new TestPointerEvent(type, { bubbles: true, cancelable: true, ...init });
+  target.dispatchEvent(event);
+  return event;
+}
+
+/** A click as the browser emits it after a release. */
+function click(target: EventTarget): MouseEvent {
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+  target.dispatchEvent(event);
+  return event;
 }
 
 beforeEach(() => {
@@ -212,4 +245,95 @@ test('the controller clamps zoom-by at the range ends instead of overshooting', 
   viewport.zoomTo(0.05);
   assert.equal(viewport.zoomBy(0.5), MIN_ZOOM_SCALE);
   assert.equal(svg.getAttribute('width'), '50');
+});
+
+test('a drag pans the container only after it travels the 4px threshold', () => {
+  const svg = makeSvg();
+  const container = makeContainer(400, 300, svg);
+  const pan = createSvgDragPan(container, { canPanFrom: () => true });
+  try {
+    assert.equal(PAN_THRESHOLD_PX, 4);
+    assert.equal(container.style.cursor, 'grab', 'the canvas advertises that it can be dragged');
+
+    pointer(container, 'pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 200, clientY: 200 });
+    // Below the threshold: a shaky click must not move the drawing.
+    pointer(window, 'pointermove', { pointerId: 1, pointerType: 'mouse', clientX: 197, clientY: 200 });
+    assert.equal(container.scrollLeft, 0, 'a 3px wobble is still a click');
+    assert.equal(container.style.cursor, 'grab');
+
+    // Past it: the whole delta from the press applies, not just the excess.
+    pointer(window, 'pointermove', { pointerId: 1, pointerType: 'mouse', clientX: 180, clientY: 160 });
+    assert.equal(container.scrollLeft, 20, 'the drawing follows the pointer leftwards');
+    assert.equal(container.scrollTop, 40, 'and upwards');
+    assert.equal(container.style.cursor, 'grabbing');
+
+    pointer(window, 'pointerup', { pointerId: 1, pointerType: 'mouse', clientX: 180, clientY: 160 });
+    assert.equal(container.style.cursor, 'grab', 'the drag state ends with the press');
+  } finally {
+    pan.destroy();
+  }
+});
+
+test('a press on a node is never a pan; a middle-button drag is, and a left drag swallows its click', () => {
+  const svg = makeSvg();
+  const container = makeContainer(400, 300, svg);
+  const node = document.createElementNS(SVG_NS, 'rect');
+  node.setAttribute('data-entity-id', 'src/a.ts');
+  svg.append(node);
+  const pan = createSvgDragPan(container, {
+    canPanFrom: (target) => !(target instanceof Element && target.closest('[data-entity-id]') !== null),
+  });
+  try {
+    // Left button on the node: selection/drill, never a pan.
+    pointer(node, 'pointerdown', { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 100, clientY: 100 });
+    pointer(window, 'pointermove', { pointerId: 2, pointerType: 'mouse', clientX: 50, clientY: 50 });
+    assert.equal(container.scrollLeft, 0, 'a press on a node stays a click');
+    pointer(window, 'pointerup', { pointerId: 2, pointerType: 'mouse', clientX: 50, clientY: 50 });
+    assert.equal(click(node).defaultPrevented, false, 'the node click still reaches the drawing');
+
+    // Middle button pans from anywhere, the node included.
+    pointer(node, 'pointerdown', { pointerId: 3, pointerType: 'mouse', button: 1, clientX: 300, clientY: 300 });
+    pointer(window, 'pointermove', { pointerId: 3, pointerType: 'mouse', clientX: 250, clientY: 300 });
+    assert.equal(container.scrollLeft, 50, 'a middle-button drag pans');
+    pointer(window, 'pointerup', { pointerId: 3, pointerType: 'mouse', clientX: 250, clientY: 300 });
+    assert.equal(
+      click(node).defaultPrevented,
+      false,
+      'a middle release fires auxclick, not click: it must not eat the next left click',
+    );
+
+    // A LEFT drag does produce a click on release, and that one is swallowed.
+    pointer(container, 'pointerdown', { pointerId: 6, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 });
+    pointer(window, 'pointermove', { pointerId: 6, pointerType: 'mouse', clientX: 250, clientY: 300 });
+    pointer(window, 'pointerup', { pointerId: 6, pointerType: 'mouse', clientX: 250, clientY: 300 });
+    assert.equal(click(node).defaultPrevented, true, 'the release click of a pan is swallowed');
+    assert.equal(click(node).defaultPrevented, false, 'only the release click is swallowed');
+  } finally {
+    pan.destroy();
+  }
+});
+
+test('a cancelled drag leaves no drag state behind and touch stays with the gesture layer', () => {
+  const svg = makeSvg();
+  const container = makeContainer(400, 300, svg);
+  const pan = createSvgDragPan(container, { canPanFrom: () => true });
+  try {
+    pointer(container, 'pointerdown', { pointerId: 4, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 });
+    pointer(window, 'pointermove', { pointerId: 4, pointerType: 'mouse', clientX: 200, clientY: 300 });
+    assert.equal(container.scrollLeft, 100);
+
+    pointer(container, 'pointercancel', { pointerId: 4, pointerType: 'mouse', clientX: 200, clientY: 300 });
+    assert.equal(container.style.cursor, 'grab', 'cancel ends the pan');
+    pointer(window, 'pointermove', { pointerId: 4, pointerType: 'mouse', clientX: 100, clientY: 100 });
+    assert.equal(container.scrollLeft, 100, 'a cancelled gesture must not keep panning');
+    assert.equal(click(container).defaultPrevented, false, 'no drag is pending, so the next click is a click');
+
+    // Fingers are the touch gesture layer's input, never the mouse pan's.
+    pointer(container, 'pointerdown', { pointerId: 5, pointerType: 'touch', button: 0, clientX: 300, clientY: 300 });
+    pointer(window, 'pointermove', { pointerId: 5, pointerType: 'touch', clientX: 200, clientY: 300 });
+    assert.equal(container.scrollLeft, 100, 'a finger must not be panned twice');
+    pointer(window, 'pointerup', { pointerId: 5, pointerType: 'touch', clientX: 200, clientY: 300 });
+  } finally {
+    pan.destroy();
+  }
 });
