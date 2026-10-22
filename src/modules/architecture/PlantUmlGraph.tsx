@@ -213,9 +213,33 @@ function restoreEntityIds(host: HTMLElement, aliasOf: ReadonlyMap<string, string
 }
 
 /**
- * The renderer options for one view. The overview and group views are already
- * collapsed by the bridge (directory-only adaptive grouping), so only the
- * neighbourhood view asks the renderer to slice the model.
+ * Whether the graph on screen is the ENTITY (class) graph.
+ *
+ * The panel hands the entity subgraph over with `scope-prefixed` ids and the
+ * file subgraph with `project-relative` ones (see `ArchitectureNodeIdShape`),
+ * so the shape is the discriminator at the renderer boundary. A renderer given
+ * no `idShape` defaults to the entity scheme, which matches the bridge's raw
+ * contract.
+ */
+function isEntityGraph(idShape: ArchitectureNodeIdShape): boolean {
+  return idShape === DEFAULT_NODE_ID_SHAPE;
+}
+
+/**
+ * The view a drawing opens at. The class view opens on the hierarchy, i.e. the
+ * entities themselves inside their package frames: folding them into
+ * `grp::` directory boxes is the FILE overview's job, and doing it to a class
+ * diagram replaced every class the reader asked for with a directory count.
+ * The file view keeps the directory-grouped overview.
+ */
+function defaultViewOf(idShape: ArchitectureNodeIdShape): ArchitectureDiagramView {
+  return isEntityGraph(idShape) ? { kind: 'hierarchy' } : { kind: 'overview' };
+}
+
+/**
+ * The renderer options for one view. The file overview and group views are
+ * already collapsed by the bridge (directory-only adaptive grouping), so only
+ * the neighbourhood view asks the renderer to slice the model.
  */
 function rendererOptionsFor(
   view: ArchitectureDiagramView,
@@ -494,8 +518,11 @@ export function PlantUmlGraph({
   const compactToolbarSlot = useCompactToolbarSlot();
   const touchTargetStyle = touchUi ? TOUCH_TARGET_STYLE : undefined;
   // Which slice of the payload is drawn. Local by construction: the payload is
-  // fetched whole, so switching views must never re-request it.
-  const [view, setView] = useState<ArchitectureDiagramView>({ kind: 'overview' });
+  // fetched whole, so switching views must never re-request it. The class view
+  // starts on the whole hierarchy (entities in package frames); the file view
+  // starts on the directory-grouped overview.
+  const entityGraph = isEntityGraph(idShape);
+  const [view, setView] = useState<ArchitectureDiagramView>(() => defaultViewOf(idShape));
   // What the last render actually drew; drives the visible-count readout and
   // lets a test tell a stale SVG from the new view's SVG.
   const [drawn, setDrawn] = useState<{ view: ArchitectureDiagramView; nodes: number; edges: number } | null>(null);
@@ -818,12 +845,19 @@ export function PlantUmlGraph({
         // of for its own default proportions.
         const drawnAspect = layoutAspect ?? measureLayoutAspect(host);
         const engine = createLayoutEngine({ aspectRatio: drawnAspect, Engine: ElkLayoutEngine });
-        // The panel is the adaptive consumer: the bridge collapses directory
-        // layers itself (the renderer's `groupByPathPrefix` would count a file
-        // name as a layer, which is the bug this view exists to avoid). The
+        // The panel is the adaptive consumer for the FILE graph: the bridge
+        // collapses its directory layers itself (the renderer's
+        // `groupByPathPrefix` would count a file name as a layer, which is the
+        // bug this view exists to avoid). The CLASS graph is never folded: its
+        // entities are what the reader asked to see, and the layout budget —
+        // not a directory fold — keeps the drawing inside the node bound. The
         // panel also states how this subgraph's ids are shaped, so a file graph
         // keeps its top directory in every group prefix and label.
-        const diagram = archguardToPlantUml(graph, { view, grouping: 'adaptive', idShape });
+        const diagram = archguardToPlantUml(graph, {
+          view,
+          grouping: entityGraph ? 'raw' : 'adaptive',
+          idShape,
+        });
         const renderer = createRenderer(rendererOptionsFor(view, diagram, engine));
         // Layout + render is the expensive, blocking part (ELK runs on the main
         // thread); its duration is the DoD's per-view reading.
@@ -885,8 +919,11 @@ export function PlantUmlGraph({
           });
           // A canvas several times wider than its container is a band, not a
           // diagram: collapse it to the directory overview and say so. Only the
-          // explosion view can reach this — the overview IS the fallback.
-          if (view.kind === 'hierarchy' && decision.collapsedForAspect) {
+          // file graph's explosion view can reach this — its overview is the
+          // coarser drawing. The class view has NO coarser drawing to fall back
+          // to (its overview is the same entity document), so it keeps the
+          // hierarchy and lets the readable focus place a legible region.
+          if (view.kind === 'hierarchy' && !entityGraph && decision.collapsedForAspect) {
             setCollapsedNotice(true);
             setView({ kind: 'overview' });
           } else if (view.kind === 'hierarchy') {
@@ -916,9 +953,12 @@ export function PlantUmlGraph({
           }
         }
         // A new drawing gets its LOD applied synchronously, so it never flashes
-        // at the wrong detail before the debouncer fires. The overview — and a
-        // group view that still shows directory groups — has no entities or
-        // package frames to collapse, so it stays out of the LOD.
+        // at the wrong detail before the debouncer fires. The FILE overview —
+        // and a group view that still shows directory groups — has no entities
+        // or package frames to collapse, so it stays out of the LOD. The class
+        // view keeps its LOD in every view kind: even its overview draws the
+        // same entity document, so zooming must still fold entities into the
+        // package counts.
         //
         // A re-layout of the SAME view (the container's shape changed) is not a
         // new drawing in the user's eyes: keep the level they were reading and
@@ -927,7 +967,7 @@ export function PlantUmlGraph({
         const drawingKey = drawingKeyOf(view);
         const carriedDepth = drawingKey === drawnKeyRef.current ? lodDepthRef.current : null;
         drawnKeyRef.current = drawingKey;
-        if (view.kind === 'overview' || diagram.grouped) {
+        if (diagram.grouped || (view.kind === 'overview' && !entityGraph)) {
           lodRef.current = null;
           lodDepthRef.current = null;
           setLodDepth(null);
@@ -984,7 +1024,7 @@ export function PlantUmlGraph({
     return () => {
       cancelled = true;
     };
-  }, [applyZoom, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
+  }, [applyZoom, entityGraph, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1480,12 +1520,18 @@ export function PlantUmlGraph({
     </span>
   );
 
-  const backButton = view.kind === 'overview'
+  // The default drawing of this graph (see `defaultViewOf`): the class view's
+  // hierarchy, or the file overview. "Back" returns HERE, so the entity graph
+  // goes back to the full class drawing rather than to a document it never
+  // renders.
+  const defaultView = defaultViewOf(idShape);
+  const atDefaultView = drawingKeyOf(view) === drawingKeyOf(defaultView);
+  const backButton = atDefaultView
     ? null
     : (
       <button
         type="button"
-        onClick={() => setView({ kind: 'overview' })}
+        onClick={() => setView(defaultView)}
         data-architecture-back="true"
         style={touchTargetStyle}
         className={`${TOOLBAR_BUTTON_CLASS} text-left`}

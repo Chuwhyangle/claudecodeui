@@ -11,7 +11,10 @@ import {
   applyFilter,
   ARCHITECTURE_DEFAULT_FILTER,
 } from '@/modules/architecture/elementRelationFilter';
-import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
+import type {
+  ArchitectureNeighborhood,
+  ArchitectureNeighborhoodNode,
+} from '@/modules/architecture/useArchitectureGraph';
 
 /**
  * The bridge's package emission.
@@ -198,12 +201,130 @@ test('expanding a directory with subdirectories keeps them as boxes and flattens
   assert.match(puml, /n57 \.\.> n1 : <<uses>>/, 'a folded singleton keeps its own alias');
 });
 
+test('the two class-view candidates build the same first-screen document', () => {
+  // The proposal allows either "hierarchy as the class default" or "an overview
+  // with nested package frames". At the bridge these are the SAME document —
+  // both draw the given entities inside their package tree and emit no `grp::`
+  // node — so a first-screen screenshot cannot tell them apart. The choice is
+  // therefore made on what the renderer does AROUND the document: the
+  // `hierarchy` view keeps the semantic zoom, which is what folds entity boxes
+  // into the package counts on zoom-out (the class view's required LOD). The
+  // panel-side test pins that behaviour; this case pins the document identity
+  // that makes the comparison honest.
+  const graph = classViewGraph();
+  const hierarchy = archguardToPlantUml(graph, { view: { kind: 'hierarchy' }, grouping: 'raw' });
+  const overview = archguardToPlantUml(graph, { view: { kind: 'overview' }, grouping: 'raw' });
+
+  assert.equal(hierarchy.puml, overview.puml, 'both candidates lay out the same first screen');
+  assert.equal(hierarchy.grouped, false);
+  assert.equal(overview.grouped, false);
+});
+
 test('an empty graph is still a complete, package-free document', () => {
   const empty = archguardToPlantUml({ nodes: [], edges: [] });
 
   assert.equal(empty.puml, '@startuml\n@enduml');
   assert.equal(empty.rendererEntity, null);
   assert.deepEqual(empty.nodeIds, []);
+});
+
+/**
+ * A real-shape ENTITY graph for the class view: ~150 entities across nested
+ * directories, two of them single-member directories. The kinds cycle through
+ * the vocabulary so the document must carry every box shape.
+ */
+function classViewGraph(): ArchitectureNeighborhood {
+  const layout = [
+    { directory: 'src/modules/alpha', count: 40 },
+    { directory: 'src/modules/beta', count: 25 },
+    { directory: 'src/modules/beta/internal', count: 20 },
+    { directory: 'src/modules/gamma', count: 35 },
+    { directory: 'src/modules/gamma/deep/leaf', count: 28 },
+    // Single-member directories: their one entity must still get its frame.
+    { directory: 'src/modules/solo', count: 1 },
+    { directory: 'src/modules/tiny', count: 1 },
+  ] as const;
+  const kinds = ['class', 'interface', 'function', 'enum', 'abstract'] as const;
+
+  const nodes: ArchitectureNeighborhoodNode[] = [];
+  let index = 0;
+  for (const { directory, count } of layout) {
+    for (let offset = 0; offset < count; offset += 1) {
+      const name = `Entity${String(index).padStart(3, '0')}`;
+      nodes.push({
+        id: `${directory}/file-${String(offset).padStart(2, '0')}.ts.${name}`,
+        label: name,
+        distance: index % 5,
+        kind: kinds[index % kinds.length]!,
+      });
+      index += 1;
+    }
+  }
+  const edges = nodes.slice(1).map((node, edgeIndex) => ({
+    from: node.id,
+    to: nodes[edgeIndex]!.id,
+    relationType: 'dependency' as const,
+  }));
+  return { nodes, edges };
+}
+
+test('the class view draws every entity in nested packages and never a directory group', () => {
+  const graph = classViewGraph();
+  assert.equal(graph.nodes.length, 150, 'the fixture is the ~150-entity class reading');
+
+  // The renderer's class-view options: the hierarchy view (the default) with
+  // raw grouping — the bridge draws the entities it is given, folded into
+  // package frames but never into `grp::` directory boxes.
+  const { puml, nodeIds, grouped } = archguardToPlantUml(graph, {
+    view: { kind: 'hierarchy' },
+    grouping: 'raw',
+    idShape: 'scope-prefixed',
+  });
+
+  assert.equal(grouped, false, 'the class drawing is an entity drawing, not directory scaffolding');
+  assert.doesNotMatch(puml, /grp::/, 'no directory group node may survive into the class view');
+  assert.deepEqual(nodeIds, graph.nodes.map((node) => node.id), 'every laid-out entity is drawn');
+
+  // One declaration per entity — no node is folded into a counting box.
+  const declarations = puml.match(/^\s+(?:abstract class|class|interface|enum) "/gm) ?? [];
+  assert.equal(declarations.length, graph.nodes.length, 'each entity has its own declaration');
+
+  // Nested package frames, with the FULL directory path (never a group label).
+  assert.match(puml, /^package "modules" \{$/m);
+  assert.match(puml, /^  package "modules\/beta" \{$/m);
+  assert.match(puml, /^    package "modules\/beta\/internal" \{$/m);
+  assert.match(puml, /^  package "modules\/gamma" \{$/m);
+  assert.match(puml, /^    package "modules\/gamma\/deep" \{$/m);
+  assert.match(puml, /^      package "modules\/gamma\/deep\/leaf" \{$/m);
+
+  // The single-member directories are FRAMES holding their one entity, not
+  // isolated boxes floating outside any package (and never `(1)` groups).
+  assert.match(
+    puml,
+    /^  package "modules\/solo" \{\n    (?:abstract class|class|interface|enum) "Entity148" as n\d+\n  \}$/m,
+    'the sole entity of a one-member directory is drawn inside its own package',
+  );
+  assert.match(
+    puml,
+    /^  package "modules\/tiny" \{\n    (?:abstract class|class|interface|enum) "Entity149" as n\d+\n  \}$/m,
+  );
+  assert.doesNotMatch(puml, /\(\d+\)"/, 'no class label carries a group count');
+});
+
+test('the file overview still folds directories; the class view change leaves it untouched', () => {
+  // 45 files in one leaf directory: the file Overview collapses them into one
+  // counted group (`grouping: 'adaptive'`, `project-relative` ids).
+  const graph = leafDirectoryGraph('plugin/scripts', 45);
+  const { puml, nodeIds, grouped } = archguardToPlantUml(graph, {
+    view: { kind: 'overview' },
+    grouping: 'adaptive',
+    idShape: 'project-relative',
+  });
+
+  assert.equal(grouped, true, 'the file overview is still the directory fold');
+  assert.deepEqual(nodeIds, ['grp::plugin/scripts'], 'one directory group, not one per file');
+  assert.match(puml, /class "plugin\/scripts \(45\)" as g0/, 'the group carries its count');
+  assert.equal((puml.match(/^class "/gm) ?? []).length, 1, 'no file is drawn as its own box');
 });
 
 /**

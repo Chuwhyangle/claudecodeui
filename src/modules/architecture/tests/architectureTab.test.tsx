@@ -1849,8 +1849,8 @@ test('entity boxes are UML class shapes, and a session seed carries the seed mar
 
   fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
   const host = await waitForDiagram();
-  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="grp::modules/alpha"]')));
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
+  // The class view draws its entities directly inside their package frames —
+  // there is no directory-group box to expand first.
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
 
   const nodeOf = (id: string): Element => {
@@ -1882,6 +1882,60 @@ test('entity boxes are UML class shapes, and a session seed carries the seed mar
   assert.equal(classNode.getAttribute('data-architecture-seed'), null, 'a non-seed node does not');
 });
 
+test('the class view opens on the entities themselves: no directory boxes, readable zoom, LOD intact', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-view'),
+    'hierarchy',
+    'the class view opens on the whole hierarchy drawing',
+  );
+  assert.equal(
+    host.querySelector('[data-entity-id^="grp::"]'),
+    null,
+    'no directory group node is rendered for the class graph',
+  );
+  assert.deepEqual(
+    drawnNodeIds(host),
+    CLASS_DIAGRAM_RESULT.graph.entity.nodes.map((node) => node.id).sort(),
+    'the rendered entity boxes are exactly the laid-out entities',
+  );
+
+  // The readable-zoom policy (not a new threshold) owns the default. With no
+  // container measurement the drawing opens at natural size, which is the
+  // "whole drawing, labels still at least the readable floor" arm of the
+  // policy; the file-graph case covers the focus arm when a fit is below it.
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-readable-mode'),
+    'overview',
+    'an unmeasured container opens at the whole, still-readable natural scale',
+  );
+  assert.ok(
+    Number(graphRoot().getAttribute('data-architecture-zoom-scale')) >= MIN_READABLE_ZOOM_SCALE,
+    'the default scale is never below the readable floor',
+  );
+
+  // Zooming out folds the SAME drawing: entity boxes hide, package frames keep
+  // their entity counts, and the SVG is never replaced.
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+  }
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
+  for (const node of host.querySelectorAll('.uml-node')) {
+    assert.equal((node as HTMLElement).style.display, 'none', 'entity boxes collapse at the package level');
+  }
+  const alphaLabel = [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
+    .map((label) => label.textContent)
+    .join('');
+  assert.match(alphaLabel, /\(4\)$/, 'the collapsed package states its entity count');
+  assert.equal(host.querySelector('svg'), svg, 'the class drawing is toggled, never re-laid out');
+});
+
 test('only a direct mention carries the seed marker; name/file tiers and old payloads are read correctly', async () => {
   rememberShowAllFilter();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(MENTION_TIER_RESULT));
@@ -1890,8 +1944,7 @@ test('only a direct mention carries the seed marker; name/file tiers and old pay
 
   fireEvent.click(screen.getByRole('radio', { name: 'Class diagram' }));
   const host = await waitForDiagram();
-  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="grp::modules/tiers"]')));
-  fireEvent.click(host.querySelector('[data-entity-id="grp::modules/tiers"]') as Element);
+  // The class view draws the entity boxes straight away (no directory fold).
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/tiers/Direct.ts.Direct"]')));
 
   const marker = (id: string): string | null => {
@@ -2102,7 +2155,15 @@ test('activation fetches once; a view switch re-requests because the element axi
   // request follows after the debounce because the element axis now applies.
   const entityHost = await waitForDiagram();
   await waitFor(() => {
-    assert.ok(entityHost.querySelector('[data-entity-id="grp::modules/alpha"]'), 'the entity graph opens at the overview');
+    assert.ok(
+      entityHost.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]'),
+      'the class view draws its entities directly, with no directory fold',
+    );
+    assert.equal(
+      entityHost.querySelector('[data-entity-id^="grp::"]'),
+      null,
+      'a class diagram must never draw a directory group box',
+    );
   });
   await waitFor(() => {
     // The drawing switched immediately; the request follows the debounce.
@@ -2113,16 +2174,15 @@ test('activation fetches once; a view switch re-requests because the element axi
     relations: ['inheritance', 'implementation', 'composition', 'dependency'],
   });
 
-  // Expanding a group proves the entity payload is the one being drawn: its
-  // entity ids are `<scope>/<relpath>.<EntityName>`, unlike the file keys.
-  fireEvent.click(entityHost.querySelector('[data-entity-id="grp::modules/alpha"]') as Element);
-  await waitFor(() => {
-    assert.ok(
-      entityHost.querySelector('[data-entity-id="src/modules/alpha/A.ts.Alpha"]'),
-      'the entity graph is drawn from the arrived payload',
-    );
-  });
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'expanding a group is local');
+  // The drawing proves the entity payload is the one on screen: its ids are
+  // `<scope>/<relpath>.<EntityName>`, unlike the file keys.
+  assert.deepEqual(drawnNodeIds(entityHost), [
+    'src/modules/alpha/A.ts.Alpha',
+    'src/modules/alpha/A2.ts.Alpha2',
+    'src/modules/beta/B.ts.Beta',
+    'src/modules/gamma/C.ts.Gamma',
+  ]);
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'drawing the class graph is local');
 
   fireEvent.click(screen.getByRole('radio', { name: 'File graph' }));
   const fileHost = await waitForDiagram();

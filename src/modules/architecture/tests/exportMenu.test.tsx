@@ -233,13 +233,18 @@ function rememberShowAllFilter(projectId = 'project-1'): void {
   );
 }
 
-/** The exact document the bridge builds for one view of one graph. */
+/**
+ * The exact document the bridge builds for one view of one graph. The file
+ * graph is the adaptive consumer; the class graph is drawn raw (entities in
+ * package frames), matching the default hierarchy drawing.
+ */
 function expectedPuml(
   graph: ArchitectureRendererGraph,
   view: ArchitectureDiagramView,
   idShape: 'project-relative' | 'scope-prefixed',
+  grouping: 'adaptive' | 'raw' = 'adaptive',
 ): string {
-  return archguardToPlantUml(graph, { view, grouping: 'adaptive', idShape }).puml;
+  return archguardToPlantUml(graph, { view, grouping, idShape }).puml;
 }
 
 /** No `error`-severity diagnostic, using the package's own checker. */
@@ -319,7 +324,12 @@ test('the class diagram export is the bridge document for the entity subgraph', 
   await waitFor(() => assert.equal(downloads.length, 1));
 
   const puml = await readLastDownload();
-  assert.equal(puml, expectedPuml(RESULT.graph.entity, { kind: 'overview' }, 'scope-prefixed'));
+  assert.equal(
+    puml,
+    expectedPuml(RESULT.graph.entity, { kind: 'hierarchy' }, 'scope-prefixed', 'raw'),
+    'the class export is the hierarchy drawing on screen, not a directory fold',
+  );
+  assert.doesNotMatch(puml, /grp::/, 'the class diagram document carries no directory group boxes');
   assert.match(downloads[0].filename, /^architecture-class-project-1-\d{8}-\d{4}\.puml$/);
   assertSyntaxOk(puml);
 });

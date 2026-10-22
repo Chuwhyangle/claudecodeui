@@ -998,11 +998,16 @@ export default function ArchitecturePanel({
   // the drawing on screen rather than a re-derivation from the payload.
   const drawnGraph: ArchitectureRendererGraph = layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood;
 
-  /** The PlantUML document for the view on screen, exactly as the bridge builds it. */
+  /**
+   * The PlantUML document for the view on screen, exactly as the bridge builds
+   * it. The file graph is the adaptive consumer (its overview folds directory
+   * layers); the class graph is never folded — its document draws the entities
+   * in package frames, matching the drawing the reader sees.
+   */
   const currentPlantUml = (): string =>
     archguardToPlantUml(drawnGraph, {
       view: diagramView,
-      grouping: 'adaptive',
+      grouping: granularity === 'file' ? 'adaptive' : 'raw',
       idShape: nodeIdShapeOf(granularity),
     }).puml;
 
