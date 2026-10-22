@@ -2,7 +2,7 @@
 id: gap-voice-realtime-ws-proxy-frame-extension-point
 title: voice-realtime-ws-proxy.service.ts 扩展点重构：入站帧路由改成可注册分派（frame registry +
   同目录兄弟文件 + 负对照判据），连接处理只留路由骨架
-status: ready
+status: done
 labels:
   - gap
 parent: null
