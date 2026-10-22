@@ -1,7 +1,7 @@
 ---
 id: architecture-entity-kind-and-members-payload
 title: 服务端把实体 kind（class/interface/function）与成员、按 kind 的统计带进架构图 payload
-status: todo
+status: ready
 labels:
   - feature
 parent: null
