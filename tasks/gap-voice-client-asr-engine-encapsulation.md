@@ -45,3 +45,11 @@ extra:
 
 - `src/shared/voiceClientAsrWorker.ts`（4 个 let → VoiceClientAsrEngine 私有字段 + 生命周期）
 - `tasks/gap-voice-client-asr-engine-encapsulation.md`（自触）
+
+## Blocker
+
+**2026-10-22T09:55:16.400Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：6e8d8520-8148-463f-ac7f-ed1cdea1f748
