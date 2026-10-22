@@ -927,22 +927,60 @@ test('expanding a deep group re-groups its subtree by directory instead of flatt
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 're-grouping is local — never a refetch');
 });
 
-test('a flat directory larger than the group limit stays one counted group when expanded', () => {
-  // File-graph ids: project-relative, so `scripts/` is a real directory and the
-  // group view of it is addressed by that path.
-  const nodes = Array.from({ length: 45 }, (_unused, index) => ({
-    id: `scripts/tool-${String(index).padStart(2, '0')}.ts`,
-    label: `scripts/tool-${String(index).padStart(2, '0')}.ts`,
-    distance: 0,
-  }));
-  const { grouped, nodeIds, puml } = archguardToPlantUml(
-    { nodes, edges: [] },
-    { view: { kind: 'group', prefix: 'scripts' }, grouping: 'adaptive', idShape: 'project-relative' },
-  );
+test('expanding a flat directory larger than the group limit draws its files, not the same box again', async () => {
+  // File-graph ids: project-relative, so `scripts/` is a real directory. 45
+  // files is over `OVERVIEW_GROUP_LIMIT`, which used to keep the expansion a
+  // single `scripts (45)` box — clicking it navigated to itself forever.
+  const nodes = Array.from({ length: 45 }, (_unused, index) => {
+    const name = `tool-${String(index).padStart(2, '0')}.ts`;
+    return { id: `scripts/${name}`, label: name, distance: index % 5 };
+  });
+  const result: ArchitectureGraphResult = {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: {
+      file: { nodes, edges: [] },
+      entity: { nodes: [], edges: [] },
+    },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: 0,
+      entityEdges: 0,
+      fileNodes: 45,
+      fileEdges: 0,
+      truncated: false,
+      entityTruncated: false,
+      nodeCount: 45,
+      edgeCount: 0,
+      unresolved: { files: [], identifiers: [] },
+    },
+    provenance: RESULT.provenance,
+  };
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(result));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
 
-  assert.equal(grouped, true, 'the drawing is directory scaffolding, not 45 entity boxes');
-  assert.deepEqual(nodeIds, ['grp::scripts'], 'the flat directory re-groups to itself instead of flattening');
-  assert.match(puml, /class "scripts \(45\)" as g0/, 'the group keeps its count');
+  // The overview folds the directory into one counted box.
+  assert.deepEqual(drawnNodeIds(host), ['grp::scripts']);
+  assert.match(host.textContent ?? '', /scripts \(45\)/);
+
+  fireEvent.click(host.querySelector('[data-entity-id="grp::scripts"]') as Element);
+
+  await waitFor(() => {
+    assert.equal(
+      document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'),
+      'group',
+    );
+    assert.equal(drawnNodeIds(host).length, 45, 'the expansion draws every file in the directory');
+  });
+  // The drawing is no longer the source box: more than one class, and none of
+  // them is labelled with the group that was clicked.
+  const labels = [...host.querySelectorAll('.uml-node text')].map((label) => label.textContent ?? '');
+  assert.ok(labels.length > 1, `the group view is a real expansion; labels: ${labels.join(' | ')}`);
+  assert.ok(
+    !labels.some((label) => label.trim() === 'scripts (45)'),
+    'the source group label must not survive the expansion',
+  );
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'expanding a group is local — it must not refetch');
 });
 
 test('the overview never draws a (1) group and names an isolated file by its directory', async () => {

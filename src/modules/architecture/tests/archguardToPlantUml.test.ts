@@ -102,6 +102,98 @@ test('the neighbourhood view keeps the full graph and centers the requested enti
   assert.match(centered.puml, /package "a\/b\/c\/d" \{/, 'packages are still emitted for every drawn node');
 });
 
+/**
+ * A real-shape FILE graph: project-relative ids sitting directly inside one
+ * directory. One edge per adjacent pair, so a fold that swallowed a pair would
+ * show up as a missing arrow.
+ */
+function leafDirectoryGraph(directory: string, count: number): ArchitectureNeighborhood {
+  const nodes = Array.from({ length: count }, (_unused, index) => {
+    const name = `file-${String(index).padStart(3, '0')}.ts`;
+    return { id: `${directory}/${name}`, label: name, distance: index % 5 };
+  });
+  const edges = nodes.slice(1).map((node, index) => ({
+    from: node.id,
+    to: nodes[index]!.id,
+    relationType: 'dependency',
+  }));
+  return { nodes, edges };
+}
+
+test('expanding a 229-file leaf directory draws its files, never the same group box again', () => {
+  const graph = leafDirectoryGraph('plugin/scripts', 229);
+  const { grouped, nodeIds, puml } = archguardToPlantUml(graph, {
+    view: { kind: 'group', prefix: 'plugin/scripts' },
+    grouping: 'adaptive',
+    idShape: 'project-relative',
+  });
+
+  // The view prefix is the directory itself: a `grp::plugin/scripts` box would
+  // navigate back to this same view, so the members MUST be entities — the
+  // overview's 40-group bound does not apply to an explicit expansion.
+  assert.equal(grouped, false, 'the expansion is an entity drawing, not directory scaffolding');
+  assert.equal(nodeIds.length, 229, 'every file of the leaf directory is drawn');
+  assert.equal((puml.match(/^\s*class "/gm) ?? []).length, 229, 'one class line per file');
+  assert.doesNotMatch(puml, /grp::/, 'no group node survives into the document');
+  assert.doesNotMatch(puml, /plugin\/scripts \(229\)/, 'the source group label is gone');
+
+  // Folding must not swallow edges: the entity path emits every pair.
+  assert.equal(
+    (puml.match(/\n\S+ \.\.> \S+ : <<uses>>/g) ?? []).length,
+    graph.edges.length,
+    'every edge is drawn between the concrete files',
+  );
+  assert.match(puml, /class "plugin\/scripts\/file-000\.ts" as n0/, 'a file keeps its full path label');
+});
+
+test('expanding a directory with subdirectories keeps them as boxes and flattens its direct files', () => {
+  const direct = Array.from({ length: 55 }, (_unused, index) => {
+    const name = `file-${String(index).padStart(3, '0')}.ts`;
+    return { id: `packages/app/${name}`, label: name, distance: 0 };
+  });
+  const internal = Array.from({ length: 2 }, (_unused, index) => {
+    const name = `inner-${String(index)}.ts`;
+    return { id: `packages/app/internal/${name}`, label: name, distance: 1 };
+  });
+  const solo = { id: 'packages/app/solo/only.ts', label: 'only.ts', distance: 1 };
+  const nodes = [...direct, ...internal, solo];
+  const graph: ArchitectureNeighborhood = {
+    nodes,
+    edges: [
+      // A flattened direct file points into a subdirectory GROUP box.
+      { from: direct[0]!.id, to: internal[0]!.id, relationType: 'dependency' },
+      // The single-member directory's sole file keeps its own alias.
+      { from: solo.id, to: direct[1]!.id, relationType: 'dependency' },
+    ],
+  };
+
+  const { grouped, nodeIds, puml } = archguardToPlantUml(graph, {
+    view: { kind: 'group', prefix: 'packages/app' },
+    grouping: 'adaptive',
+    idShape: 'project-relative',
+  });
+
+  assert.equal(grouped, true, 'the subdirectory layer is still scaffolding');
+  assert.ok(nodeIds.includes('grp::packages/app/internal'), 'the subdirectory keeps its box');
+  assert.ok(!nodeIds.includes('grp::packages/app'), 'the view-prefix group box is gone');
+  assert.match(puml, /class "packages\/app\/internal \(2\)" as g0/, 'the subdirectory box carries its count');
+  assert.doesNotMatch(puml, /class "packages\/app \(\d+\)"/, 'no class carries the source group label');
+
+  // The 55 direct files are entities, in the neighbourhood's own order.
+  assert.equal((puml.match(/class "packages\/app\/file-\d{3}\.ts"/g) ?? []).length, 55);
+  assert.match(puml, /class "packages\/app\/file-000\.ts" as n0/);
+
+  // Single-member directories still fold to their file (the `count < 2` rule),
+  // never to a `(1)` box.
+  assert.match(puml, /class "packages\/app\/solo\/only\.ts" as n57/);
+  assert.doesNotMatch(puml, /\(1\)/);
+
+  // Edges re-land on the concrete endpoints: flattened file → group box, and
+  // entity → entity for the folded singleton.
+  assert.match(puml, /n0 \.\.> g0 : <<uses>>/, 'a flattened file keeps its edge onto the subdirectory box');
+  assert.match(puml, /n57 \.\.> n1 : <<uses>>/, 'a folded singleton keeps its own alias');
+});
+
 test('an empty graph is still a complete, package-free document', () => {
   const empty = archguardToPlantUml({ nodes: [], edges: [] });
 
