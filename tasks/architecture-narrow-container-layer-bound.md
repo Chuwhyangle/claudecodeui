@@ -28,10 +28,10 @@ extra: {}
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：新增用例断言「宽/窄两种容器比例下，叶子层拿到的 layoutOptions 含按比例派生的 `coffmanGraham.layerBound`，复合层不含 `COFFMAN_GRAHAM`」，并保留既有「ratio 到达布局」「结构等价」「15% 阈值 + 250ms debounce」用例不回归
-- [ ] 同文件或新增用例用真实形态 fixture（18 个组框 + 17 条边）断言：ratio=0.4 时渲染 viewBox 宽高比 < 0.9，ratio=null 时与改动前逐字节相同（`1607×582` 或当前真值，实施时以改前实测为准并写进断言消息）；同时断言 crossings 不高于 baseline、totalEdgeLength 不高于 baseline（用 `computeLayoutMetrics`）
-- [ ] 嵌套形态（hierarchy 视图，26 个 package）不加 `COFFMAN_GRAHAM`，且渲染不抛错；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` 与 `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：新增用例断言「宽/窄两种容器比例下，叶子层拿到的 layoutOptions 含按比例派生的 `coffmanGraham.layerBound`，复合层不含 `COFFMAN_GRAHAM`」，并保留既有「ratio 到达布局」「结构等价」「15% 阈值 + 250ms debounce」用例不回归
+- [x] 同文件或新增用例用真实形态 fixture（18 个组框 + 17 条边）断言：ratio=0.4 时渲染 viewBox 宽高比 < 0.9，ratio=null 时与改动前逐字节相同（`1607×582` 或当前真值，实施时以改前实测为准并写进断言消息）；同时断言 crossings 不高于 baseline、totalEdgeLength 不高于 baseline（用 `computeLayoutMetrics`）
+- [x] 嵌套形态（hierarchy 视图，26 个 package）不加 `COFFMAN_GRAHAM`，且渲染不抛错；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` 与 `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
