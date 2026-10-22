@@ -1,7 +1,7 @@
 ---
 id: architecture-class-view-draws-classes-not-groups
 title: 类图视角默认直接画类（带包框），不再折成目录组框；目录组框只留给文件图 Overview；孤零零悬在一侧的单成员节点随之消失
-status: ready
+status: done
 labels:
   - feature
 parent: null
