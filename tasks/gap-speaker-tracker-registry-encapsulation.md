@@ -44,5 +44,6 @@ extra:
 ## Touches
 
 - `server/index.ts`（删除组合根里的 speakerTrackerModels Map，改为装配 registry）
-- `server/modules/voice-realtime/voice-speaker-bank.ts`（或等价 speaker 文件：SpeakerTrackerRegistry 私有字段）
+- `server/modules/voice-realtime/voice-realtime-speaker-seam.ts`（SpeakerTrackerRegistry 类与其私有 speakerTrackerModels Map；模型工厂同文件）
+- `server/modules/voice-realtime/index.ts`（barrel 导出 SpeakerTrackerRegistry）
 - `tasks/gap-speaker-tracker-registry-encapsulation.md`（自触）
