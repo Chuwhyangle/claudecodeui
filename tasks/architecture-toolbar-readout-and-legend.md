@@ -43,6 +43,8 @@ depends_on:
 - src/modules/architecture/svgViewport.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
+- src/modules/architecture/tests/mobileGestures.test.tsx
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/es/common.json
