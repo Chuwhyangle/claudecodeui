@@ -17,6 +17,7 @@ import {
   readableFocusPackage,
   RENDERED_LABEL_FONT_PX,
   seedPackageCount,
+  shortPackageName,
   WIDE_CANVAS_ASPECT_RATIO,
 } from '@/modules/architecture/readableZoom';
 import type { ArchitectureRendererGraph } from '@/modules/architecture/rendererContract';
@@ -245,6 +246,22 @@ test('the fit control is only called "Fit to view" when the fit really contains 
   assert.equal(unmeasured.mode, 'overview');
   assert.equal(unmeasured.labelKey, FIT_CONTROL_WHOLE_KEY);
   assert.equal(unmeasured.pressed, true);
+});
+
+test('the zoom strip names a package by its last two path segments', () => {
+  // The measured long reading: the full path made the strip unusable.
+  assert.equal(
+    shortPackageName('data/home/yale/work/archguard/src/cli/mcp'),
+    'cli/mcp',
+    'only the last two segments are shown in the strip',
+  );
+  // A two-segment id is already short enough and must not lose a segment.
+  assert.equal(shortPackageName('modules/alpha'), 'modules/alpha');
+  // Degenerate ids keep the helper total: no throw, no leading slash.
+  assert.equal(shortPackageName('alpha'), 'alpha');
+  assert.equal(shortPackageName(''), '');
+  assert.equal(shortPackageName('/alpha//beta/'), 'alpha/beta');
+  assert.equal(shortPackageName('a/b/c/d', 3), 'b/c/d');
 });
 
 test('both fit labels ship in every reviewed bundle, and the focused one names Overview', () => {

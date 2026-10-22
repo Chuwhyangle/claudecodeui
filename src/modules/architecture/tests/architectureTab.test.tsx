@@ -1105,7 +1105,16 @@ test('the zoom cluster lives on the canvas, not in the toolbar, with 32px target
   assert.ok(canvas.contains(cluster), 'the cluster must be inside the canvas container');
   assert.equal(cluster.getAttribute('role'), 'group');
   assert.equal(cluster.getAttribute('aria-label'), 'Diagram zoom', 'the cluster carries an accessible name');
-  assert.ok(cluster.querySelector('[data-architecture-zoom-level]'), 'the percentage readout belongs to the cluster');
+  // The scale reading moved UP into the in-flow row above the canvas (it used
+  // to sit inside this floating cluster, which put it over the drawing).
+  const header = document.querySelector('[data-architecture-canvas-header]');
+  assert.ok(header instanceof HTMLElement, 'the readout/tier row must sit above the canvas');
+  assert.ok(header.querySelector('[data-architecture-zoom-level]'), 'the scale reading belongs to the row above the canvas');
+  assert.equal(
+    cluster.querySelector('[data-architecture-zoom-level]'),
+    null,
+    'the floating cluster carries buttons only; the reading is not drawn over the graph',
+  );
   for (const control of ['zoom-in', 'zoom-out', 'zoom-fit']) {
     assert.ok(cluster.querySelector(`[data-architecture-${control}]`), `${control} must be in the cluster`);
   }
@@ -1291,6 +1300,17 @@ test('the readable toggle switches between the focused default and the whole-gra
   assert.ok(hint !== null, 'overview mode must say what the reader is looking at');
   assert.match(hint.textContent ?? '', /modules\/alpha/, 'the hint names the densest seeded package');
   assert.match(hint.textContent ?? '', /0 other package/, 'the hint carries the other-package count');
+  // The strip shows only the last two path segments; the full id is the title.
+  assert.equal(
+    hint.getAttribute('title'),
+    'src/modules/alpha',
+    'the full package id stays available as the title',
+  );
+  assert.doesNotMatch(
+    hint.textContent ?? '',
+    /src\/modules\/alpha/,
+    'the strip must not print the whole path',
+  );
   assert.equal(
     screen.getByRole('button', { name: 'Overview' }).getAttribute('aria-pressed'),
     'true',

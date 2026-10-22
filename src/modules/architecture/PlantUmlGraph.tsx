@@ -32,6 +32,7 @@ import {
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import {
   TOUCH_TARGET_STYLE,
+  useCanvasHeaderSlot,
   useCompactToolbarSlot,
   useTouchLayout,
   ZOOM_CLUSTER_TARGET_STYLE,
@@ -40,6 +41,7 @@ import {
   buildSeedHierarchy,
   decideReadableZoom,
   fitControlReading,
+  shortPackageName,
   type ReadableZoomDecision,
   type ReadableZoomHint,
   type ReadableZoomMode,
@@ -54,12 +56,15 @@ import {
   createSvgDragPan,
   createSvgTouchGestures,
   createSvgViewport,
+  fitAvoidingCorners,
   fitZoomScale,
   measureViewportSize,
   MIN_ZOOM_SCALE,
   readSvgNaturalSize,
   ZOOM_STEP,
+  type SvgCornerRect,
   type SvgViewportController,
+  type SvgViewportSize,
 } from '@/modules/architecture/svgViewport';
 
 /**
@@ -552,6 +557,61 @@ export function PlantUmlGraph({
     setZoom(next);
   }, []);
 
+  // The panel's chrome-row cell this renderer draws the zoom tier into, or null
+  // when the renderer is not inside a panel (see `CanvasHeaderSlotContext`).
+  const canvasHeaderSlot = useCanvasHeaderSlot();
+
+  /**
+   * The floating corner chrome rectangles — the minimap and the zoom cluster —
+   * in the canvas content box's coordinates (the box `measureViewportSize`
+   * returns: host border box minus its padding). An unlaid-out element (jsdom,
+   * a hidden tab) reports a zero-area box and is dropped, so a missing
+   * measurement can never be read as "the chrome covers everything".
+   */
+  const cornerRects = useCallback((): SvgCornerRect[] => {
+    const host = hostRef.current;
+    const canvas = host?.parentElement ?? null;
+    const overlays = canvas?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]') ?? null;
+    if (host === null || overlays === null) return [];
+    const hostRect = host.getBoundingClientRect();
+    const style = typeof getComputedStyle === 'function' ? getComputedStyle(host) : null;
+    const paddingLeft = Number.parseFloat(style?.paddingLeft ?? '') || 0;
+    const paddingTop = Number.parseFloat(style?.paddingTop ?? '') || 0;
+    const originLeft = hostRect.left + paddingLeft;
+    const originTop = hostRect.top + paddingTop;
+    const rects: SvgCornerRect[] = [];
+    for (const child of overlays.children) {
+      const rect = child.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      rects.push({
+        left: rect.left - originLeft,
+        top: rect.top - originTop,
+        width: rect.width,
+        height: rect.height,
+      });
+    }
+    return rects;
+  }, []);
+
+  /**
+   * The scale to write for a readable decision. Overview is a whole-graph fit,
+   * so it is the one that must clear the floating corner chrome; focus is
+   * deliberately larger than its box (a pannable, legible crop), where shrinking
+   * to avoid a fixed corner would undo the readability the mode exists for.
+   */
+  const scaleForDecision = useCallback(
+    (
+      natural: SvgViewportSize | null,
+      box: SvgViewportSize | null,
+      decision: ReadableZoomDecision,
+    ): number => (
+      decision.mode === 'overview' && natural !== null && box !== null
+        ? fitAvoidingCorners(natural, box, cornerRects(), MIN_ZOOM_SCALE)
+        : decision.scale
+    ),
+    [cornerRects],
+  );
+
   // The readable default applied to the drawing on screen: focus or overview,
   // the package focus centres, and the overview hint (if any). Rendering reads
   // it for the toolbar toggle and the two notice lines; the SCALE itself lives
@@ -789,6 +849,16 @@ export function PlantUmlGraph({
         // focuses the densest seeded package at a legible scale instead. The
         // overview toggle still offers the explicit whole-graph fit.
         const drawing = host.querySelector('svg');
+        if (drawing !== null) {
+          // Vertical centring lives here, not in the CSS sheet: the host is a
+          // flex column and the drawing owns the auto block margins, so a short
+          // drawing is centred while a taller one (negative free space) starts
+          // at the top and scrolls. `flex: none` keeps the explicit width/height
+          // the viewport writes from being shrunk along the column's main axis.
+          drawing.style.marginTop = 'auto';
+          drawing.style.marginBottom = 'auto';
+          drawing.style.flex = 'none';
+        }
         const viewport = viewportRef.current;
         let drawnScale = zoomRef.current.scale;
         let readout: ReadableView | null = null;
@@ -822,7 +892,7 @@ export function PlantUmlGraph({
           } else if (view.kind === 'hierarchy') {
             setCollapsedNotice(false);
           }
-          drawnScale = viewport.zoomTo(decision.scale);
+          drawnScale = viewport.zoomTo(scaleForDecision(natural, box, decision));
           applyZoom({ scale: drawnScale, mode: zoomRef.current.mode });
           readout = {
             mode: decision.mode,
@@ -914,7 +984,7 @@ export function PlantUmlGraph({
     return () => {
       cancelled = true;
     };
-  }, [applyZoom, focusNodeId, graph, idShape, layoutAspect, view]);
+  }, [applyZoom, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1128,13 +1198,19 @@ export function PlantUmlGraph({
           ? current
           : { mode: decision.mode, focusPackageId: decision.focusPackageId, hint: decision.overviewHint }
       ));
-      const scale = viewport.zoomTo(decision.scale);
+      const scale = viewport.zoomTo(scaleForDecision(natural, box, decision));
       if (Math.abs(scale - zoomRef.current.scale) < 1e-6) return;
       applyZoom({ scale, mode: 'fit' });
     });
     observer.observe(host);
+    // The corner chrome is measured by the fit, and the minimap mounts a beat
+    // after the drawing does (it needs the drawn node rectangles). Observing
+    // the overlay column re-runs the fit once that chrome has a size, so the
+    // overview clears the map as well as the zoom cluster.
+    const overlays = host.parentElement?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]');
+    if (overlays !== undefined && overlays !== null) observer.observe(overlays);
     return () => observer.disconnect();
-  }, [applyZoom, scheduleAspectRelayout]);
+  }, [applyZoom, scaleForDecision, scheduleAspectRelayout]);
 
   // The zoom is read through `zoomRef` when the debounced application runs, so
   // a burst of wheel/resize updates coalesces into one visibility toggle rather
@@ -1178,7 +1254,7 @@ export function PlantUmlGraph({
       ],
       mode,
     });
-    applyZoom({ scale: viewport.zoomTo(decision.scale), mode: 'fit' });
+    applyZoom({ scale: viewport.zoomTo(scaleForDecision(natural, box, decision)), mode: 'fit' });
     setReadableView({
       mode: decision.mode,
       focusPackageId: decision.focusPackageId,
@@ -1187,7 +1263,7 @@ export function PlantUmlGraph({
     if (decision.mode === 'focus' && decision.focusPackageId !== null) {
       centerOnPackage(host, decision.focusPackageId);
     }
-  }, [applyZoom]);
+  }, [applyZoom, scaleForDecision]);
 
   const fitDiagram = (): void => {
     const host = hostRef.current;
@@ -1217,7 +1293,7 @@ export function PlantUmlGraph({
       ],
       mode: readableModeRef.current ?? undefined,
     });
-    applyZoom({ scale: viewport.zoomTo(decision.scale), mode: 'fit' });
+    applyZoom({ scale: viewport.zoomTo(scaleForDecision(natural, box, decision)), mode: 'fit' });
     setReadableView({
       mode: decision.mode,
       focusPackageId: decision.focusPackageId,
@@ -1347,11 +1423,18 @@ export function PlantUmlGraph({
       })}
     </span>
   ) : readableView?.mode === 'overview' && readableView.hint !== null ? (
-    <span data-architecture-readable-hint="true">
+    // The strip names the package by its last two path segments so the reading
+    // stays short; `title` keeps the full id one hover away. The span truncates
+    // with an ellipsis if even that is too wide for the row.
+    <span
+      data-architecture-readable-hint="true"
+      title={readableView.hint.packageId}
+      className="min-w-0 max-w-full truncate"
+    >
       {t('architecture.plantuml.readable.overviewHint', {
         defaultValue: 'Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)',
         zoom: readableView.hint.zoomPercent,
-        package: readableView.hint.packageId,
+        package: shortPackageName(readableView.hint.packageId),
         count: readableView.hint.packageCount,
       })}
     </span>
@@ -1495,18 +1578,20 @@ export function PlantUmlGraph({
     )
     : null;
 
-  // The single zoom-tier group: the current tier label plus every control that
-  // changes it, in ONE place on the drawing.
+  // The single zoom-tier group: the current tier label, the scale reading, and
+  // every control that changes the tier, in ONE place in the in-flow row above
+  // the drawing.
   const zoomTierGroup = (
     <div
       data-architecture-zoom-tier="true"
       role="group"
       aria-label={t('architecture.plantuml.zoomTier', { defaultValue: 'Zoom level' })}
-      className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
+      className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
     >
       <span data-architecture-zoom-tier-label="true" className="px-1 font-medium text-foreground">
         {zoomTierLabel}
       </span>
+      {zoomReadout}
       {backButton}
       {explosionButton}
       {readableModeGroup}
@@ -1550,6 +1635,18 @@ export function PlantUmlGraph({
     })
   );
 
+  // The row above the canvas: the zoom tier and the scale it is at. The panel
+  // owns the row itself (the one-line readout sits on its left) and hands this
+  // renderer the right-hand cell; standalone, the renderer draws the row.
+  const headerControls = (
+    <span
+      data-architecture-graph-header-controls="true"
+      className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1"
+    >
+      {zoomTierGroup}
+    </span>
+  );
+
   return (
     <div
       className="flex h-full min-h-0 flex-col"
@@ -1566,16 +1663,27 @@ export function PlantUmlGraph({
       data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
+      {canvasHeaderSlot !== null
+        ? createPortal(headerControls, canvasHeaderSlot)
+        : (
+          <div
+            data-architecture-graph-header="true"
+            className="flex shrink-0 flex-wrap items-center justify-end gap-1 px-1 pb-1"
+          >
+            {headerControls}
+          </div>
+        )}
       {compactToolbar ? (
         // On the compact tier the panel already spends the one row it has on
-        // the title, granularity and "…"; everything this renderer owns is
-        // drawn inside that menu, at the same 44px targets. With the menu shut
-        // there is no slot, and drawing no chrome is the point.
+        // the title, granularity and "…"; the rest of this renderer's controls
+        // (view label, export, visible summary) are drawn inside that menu at
+        // the same 44px targets. The zoom tier is NOT here: it lives in the
+        // in-flow row above the canvas on every tier, so no popover floats it
+        // over the drawing.
         compactToolbarSlot !== null && createPortal(
           <span data-architecture-compact-controls="true" className="flex flex-col gap-1">
             <span className="flex flex-wrap items-center gap-2">
               <span data-architecture-view-label>{viewLabel}</span>
-              {zoomTierGroup}
             </span>
             {exportButton}
             <span
@@ -1589,7 +1697,7 @@ export function PlantUmlGraph({
           compactToolbarSlot,
         )
       ) : null}
-      <div className="relative min-h-0 flex-1" data-architecture-canvas="true">
+      <div className="relative flex min-h-0 flex-1 flex-col" data-architecture-canvas="true">
         <div
           ref={hostRef}
           role="img"
@@ -1601,31 +1709,14 @@ export function PlantUmlGraph({
           className="h-full w-full overflow-auto p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60"
           // The gestures own every touch on the drawing: without this the browser
           // would pan/zoom the page and the pinch would never reach the controller.
-          style={{ touchAction: 'none' }}
+          // The flex column is the vertical-centring mechanism: the injected SVG
+          // gets `margin-block: auto` (set where it is inserted), so a drawing
+          // shorter than the canvas sits in the middle instead of hugging the top.
+          style={{ touchAction: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
           onKeyDown={onCanvasKeyDown}
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
-        {/* The drawing's zoom tier, ON the canvas (top-right). One group states
-            and changes Focus/Overview/Explosion; no other row repeats it. */}
-        {!compactToolbar && (
-          <div
-            data-architecture-canvas-view-controls="true"
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-end',
-              rowGap: 4,
-              maxWidth: '70%',
-            }}
-            className="z-20 pointer-events-none"
-          >
-            {zoomTierGroup}
-          </div>
-        )}
         <div
           data-architecture-canvas-overlays="true"
           // The arrangement is stated inline rather than in utility classes:
@@ -1651,10 +1742,10 @@ export function PlantUmlGraph({
             revision={drawn}
             scale={zoom.scale}
           />
-          {/* The zoom cluster floats at the bottom right OF the drawing: the three
-              controls act on it, so they stay next to it instead of in the
-              toolbar. The semantic-zoom level is the one place that reading is
-              stated, right beside the scale it explains. */}
+          {/* The zoom cluster floats at the bottom right OF the drawing: the
+              three controls act on it, so they stay next to it instead of in
+              the toolbar. The scale reading and the semantic tier live in the
+              row above the canvas, not here — the cluster is only buttons. */}
           <div
             role="group"
             aria-label={zoomGroupLabel}
@@ -1664,7 +1755,6 @@ export function PlantUmlGraph({
             {zoomInButton}
             {zoomOutButton}
             {fitButton}
-            {zoomReadout}
             {lodDepth !== null && (
               <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
                 {lodDepth === 0

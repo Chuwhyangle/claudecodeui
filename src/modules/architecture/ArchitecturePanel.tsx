@@ -33,6 +33,7 @@ import {
   serializeSvgForExport,
 } from '@/modules/architecture/exportArtifacts';
 import {
+  CanvasHeaderSlotContext,
   CompactToolbarSlotContext,
   TOUCH_TARGET_STYLE,
   useTouchLayout,
@@ -561,6 +562,10 @@ export default function ArchitecturePanel({
   // `CompactToolbarSlotContext` so the graph's own controls are drawn inside the
   // same menu instead of in a second toolbar row.
   const [compactMenuHost, setCompactMenuHost] = useState<HTMLElement | null>(null);
+  // The right-hand cell of the in-flow row above the canvas. The renderer
+  // portals the zoom tier and its scale reading into it, so that chrome sits in
+  // normal flow instead of floating over the drawing's first row.
+  const [canvasHeaderHost, setCanvasHeaderHost] = useState<HTMLElement | null>(null);
   // A coarse pointer has no hover, so the touch instruction is shown once and
   // then dismissed — either by its close button or by the first node selection.
   // It never becomes a permanent row the way the old gesture line was.
@@ -1152,6 +1157,103 @@ export default function ArchitecturePanel({
 
   );
 
+  /**
+   * The one-line reading. It is the only place the shown/in-scope numbers are
+   * stated, and it lives in the panel's in-flow row ABOVE the drawing (left
+   * cell): as an overlay it covered the first row of the graph.
+   */
+  const readoutPanel = (
+    <div
+      data-architecture-readout="true"
+      aria-live="polite"
+      className="pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+    >
+      <button
+        type="button"
+        aria-expanded={readoutOpen}
+        onClick={() => setReadoutOpen((open) => !open)}
+        data-architecture-readout-toggle="true"
+        style={compactTargetStyle}
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        <span data-architecture-readout-summary={retainedCount} data-architecture-readout-total={inScopeCount}>
+          {readoutSummary}
+        </span>
+        {foldedCount > 0 && (
+          <span data-architecture-folded-badge={foldedCount} className="text-foreground">
+            {t('architecture.readout.folded', { defaultValue: '+{{count}} folded', count: foldedCount })}
+          </span>
+        )}
+        {layoutFit?.limited === true && (
+          // The layout budget is stated, never offered as a "render it all
+          // anyway" escape: the freeze it prevents cannot be interrupted on
+          // the main thread. The number is what the renderer actually draws.
+          <span
+            data-architecture-layout-budget={layoutFit.graph.nodes.length}
+            data-architecture-layout-budget-tier={layoutFit.tier}
+            data-architecture-layout-budget-dropped={layoutFit.droppedCount}
+            className="text-amber-600 dark:text-amber-400"
+          >
+            {t('architecture.readout.layoutBudget', {
+              defaultValue: 'Showing {{count}} within the layout budget; raising detail takes longer',
+              count: layoutFit.graph.nodes.length,
+            })}
+          </span>
+        )}
+        {truncation.truncated && (
+          <span
+            data-architecture-truncated="true"
+            data-architecture-truncated-granularity={granularity}
+            data-architecture-truncated-shown={truncation.shown}
+            data-architecture-truncated-total={truncation.total}
+            data-architecture-truncated-omitted={budgetOmitted}
+            className="text-amber-600 dark:text-amber-400"
+          >
+            {t('architecture.readout.budgetOmitted', {
+              defaultValue: '{{count}} more left out by the node budget',
+              count: budgetOmitted,
+            })}
+          </span>
+        )}
+        <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
+      </button>
+      {readoutOpen && (
+        <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
+          <p>
+            {t('architecture.readout.explanation', {
+              defaultValue:
+                '{{shown}} is what the current detail level keeps; {{total}} is every related entity in the current scope.',
+              shown: retainedCount,
+              total: inScopeCount,
+            })}
+          </p>
+          {kindLine !== null && kindLine.length > 0 && (
+            <p data-architecture-kind-counts="true">{kindLine}</p>
+          )}
+          <span className="flex gap-2">
+            <button
+              type="button"
+              onClick={raiseDetail}
+              data-architecture-raise-detail="true"
+              className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.readout.raiseDetail', { defaultValue: 'Raise detail' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => changeScope(scope - 1)}
+              data-architecture-reduce-scope="true"
+              disabled={scope <= ARCHITECTURE_SCOPE_MIN}
+              className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {t('architecture.readout.reduceScope', { defaultValue: 'Reduce scope' })}
+            </button>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="relative flex h-full flex-col overflow-hidden" data-architecture-panel="true">
       <div
@@ -1275,7 +1377,12 @@ export default function ArchitecturePanel({
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+      {/* The canvas region is a flex COLUMN: every `flex-1` below it needs a
+          flex parent to resolve against, and every `h-full` below it needs a
+          parent with a definite height. As a block container this line let the
+          whole chain fall back to content height (the measured 342px canvas
+          inside a 669px region). */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
           <>
             {coarsePointer && !touchHintDismissed && (
@@ -1300,128 +1407,53 @@ export default function ArchitecturePanel({
                 </button>
               </div>
             )}
-            <div ref={graphAreaRef} className="relative min-h-0 flex-1">
+            {/* ONE in-flow row above the drawing: the readout on the left, the
+                renderer's zoom tier and scale on the right. As an absolutely
+                positioned overlay this chrome covered the graph's first row. */}
+            <div
+              data-architecture-canvas-header="true"
+              className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1"
+            >
+              <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
+              <div
+                ref={setCanvasHeaderHost}
+                data-architecture-canvas-header-actions="true"
+                className="flex min-w-0 max-w-[65%] shrink-0 flex-wrap items-center justify-end gap-1"
+              />
+            </div>
+            <div ref={graphAreaRef} className="relative flex min-h-0 flex-1 flex-col">
               <CompactToolbarSlotContext.Provider value={compactMenuHost}>
-                <Renderer
-                  key={`${sessionId}:${granularity}:${scope}`}
-                  graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
-                  // The detail knob's two numbers, so a renderer that has a
-                  // visible-summary slot can report shown/in-scope rather than
-                  // its own drawn/total reading.
-                  detailReading={detailReading}
-                  // Which subgraph this is decides how ids are read (label and
-                  // group prefixes). The renderer must not have to guess: see
-                  // `nodeIdShapeOf`.
-                  idShape={nodeIdShapeOf(granularity)}
-                  onNodeHover={handleNodeHover}
-                  // Selecting a node is the reader working the drawing; the
-                  // one-off touch instruction has done its job by then.
-                  onNodeClick={() => setTouchHintDismissed(true)}
-                  // The renderer owns the drill-down view; reporting it keeps
-                  // the export menu's PlantUML identical to the drawing.
-                  onViewChange={setDiagramView}
-                  focusNodeId={focusTarget?.id ?? null}
-                  focusToken={focusTarget?.token}
-                />
+                <CanvasHeaderSlotContext.Provider value={canvasHeaderHost}>
+                  <Renderer
+                    key={`${sessionId}:${granularity}:${scope}`}
+                    graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
+                    // The detail knob's two numbers, so a renderer that has a
+                    // visible-summary slot can report shown/in-scope rather than
+                    // its own drawn/total reading.
+                    detailReading={detailReading}
+                    // Which subgraph this is decides how ids are read (label and
+                    // group prefixes). The renderer must not have to guess: see
+                    // `nodeIdShapeOf`.
+                    idShape={nodeIdShapeOf(granularity)}
+                    onNodeHover={handleNodeHover}
+                    // Selecting a node is the reader working the drawing; the
+                    // one-off touch instruction has done its job by then.
+                    onNodeClick={() => setTouchHintDismissed(true)}
+                    // The renderer owns the drill-down view; reporting it keeps
+                    // the export menu's PlantUML identical to the drawing.
+                    onViewChange={setDiagramView}
+                    focusNodeId={focusTarget?.id ?? null}
+                    focusToken={focusTarget?.token}
+                  />
+                </CanvasHeaderSlotContext.Provider>
               </CompactToolbarSlotContext.Provider>
 
-              {/* The one-line reading, ON the drawing's top-left corner. It is
-                  the only place the shown/in-scope numbers are stated. */}
-              <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
-                <div
-                  data-architecture-readout="true"
-                  aria-live="polite"
-                  className="pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
-                >
-                  <button
-                    type="button"
-                    aria-expanded={readoutOpen}
-                    onClick={() => setReadoutOpen((open) => !open)}
-                    data-architecture-readout-toggle="true"
-                    style={compactTargetStyle}
-                    className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                  >
-                    <span data-architecture-readout-summary={retainedCount} data-architecture-readout-total={inScopeCount}>
-                      {readoutSummary}
-                    </span>
-                    {foldedCount > 0 && (
-                      <span data-architecture-folded-badge={foldedCount} className="text-foreground">
-                        {t('architecture.readout.folded', { defaultValue: '+{{count}} folded', count: foldedCount })}
-                      </span>
-                    )}
-                    {layoutFit?.limited === true && (
-                      // The layout budget is stated, never offered as a "render
-                      // it all anyway" escape: the freeze it prevents cannot be
-                      // interrupted on the main thread. The number is what the
-                      // renderer actually draws.
-                      <span
-                        data-architecture-layout-budget={layoutFit.graph.nodes.length}
-                        data-architecture-layout-budget-tier={layoutFit.tier}
-                        data-architecture-layout-budget-dropped={layoutFit.droppedCount}
-                        className="text-amber-600 dark:text-amber-400"
-                      >
-                        {t('architecture.readout.layoutBudget', {
-                          defaultValue: 'Showing {{count}} within the layout budget; raising detail takes longer',
-                          count: layoutFit.graph.nodes.length,
-                        })}
-                      </span>
-                    )}
-                    {truncation.truncated && (
-                      <span
-                        data-architecture-truncated="true"
-                        data-architecture-truncated-granularity={granularity}
-                        data-architecture-truncated-shown={truncation.shown}
-                        data-architecture-truncated-total={truncation.total}
-                        data-architecture-truncated-omitted={budgetOmitted}
-                        className="text-amber-600 dark:text-amber-400"
-                      >
-                        {t('architecture.readout.budgetOmitted', {
-                          defaultValue: '{{count}} more left out by the node budget',
-                          count: budgetOmitted,
-                        })}
-                      </span>
-                    )}
-                    <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
-                  </button>
-                  {readoutOpen && (
-                    <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
-                      <p>
-                        {t('architecture.readout.explanation', {
-                          defaultValue:
-                            '{{shown}} is what the current detail level keeps; {{total}} is every related entity in the current scope.',
-                          shown: retainedCount,
-                          total: inScopeCount,
-                        })}
-                      </p>
-                      {kindLine !== null && kindLine.length > 0 && (
-                        <p data-architecture-kind-counts="true">{kindLine}</p>
-                      )}
-                      <span className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={raiseDetail}
-                          data-architecture-raise-detail="true"
-                          className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-                        >
-                          {t('architecture.readout.raiseDetail', { defaultValue: 'Raise detail' })}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => changeScope(scope - 1)}
-                          data-architecture-reduce-scope="true"
-                          disabled={scope <= ARCHITECTURE_SCOPE_MIN}
-                          className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {t('architecture.readout.reduceScope', { defaultValue: 'Reduce scope' })}
-                        </button>
-                      </span>
-                    </div>
-                  )}
-                </div>
-                {/* The hover relation reading replaces the two duplicated
-                    standing instructions: it only exists while a node is under
-                    the pointer, so the page has no permanent hint sentence. */}
-                {visibleHover !== null && (
+              {/* The hover relation reading replaces the two duplicated
+                  standing instructions: it only exists while a node is under
+                  the pointer, so the page has no permanent hint sentence. It
+                  stays a transient overlay; the readout above does not. */}
+              {visibleHover !== null && (
+                <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
                   <span
                     data-architecture-hover={visibleHover.node.id}
                     data-architecture-hover-relations={visibleHover.relations.join(',')}
@@ -1436,8 +1468,8 @@ export default function ArchitecturePanel({
                           : visibleHover.relations.join(', '),
                     })}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
 
               {sourceLine}
             </div>
