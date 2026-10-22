@@ -21,10 +21,21 @@
  * descriptors through `REALTIME_TOOLS` and drive the executor over fake
  * services.
  */
+import { registerVoiceRule } from '@shared/voice/voiceSettingsRegistry.js';
+
 import { installVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
 
 import { isVoiceSessionActive } from './voice-realtime-active.js';
-import { rulesFor } from './voice-mode-rules.js';
+import { VOICE_MODE_RULE_REGISTRATIONS, rulesFor } from './voice-mode-rules.js';
+
+// THE RULES ARE REGISTERED WHERE THE MODULE IS ASSEMBLED, not as a side effect of importing the
+// table that declares them. This barrel is the one assembly point every consumer already enters,
+// so registering here is the step that says "these Live Voice rules exist in this process"; the
+// shared address book (`shared/voice/voiceSettingsRegistry.ts`) is the one place a consumer can
+// then resolve them from.
+for (const rule of VOICE_MODE_RULE_REGISTRATIONS) {
+  registerVoiceRule(rule);
+}
 
 // THE LIVE VOICE DISPATCH SEAM, installed where its two halves are in scope.
 // The resident launch's `UserPromptSubmit` callback needs "is this session in

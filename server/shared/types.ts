@@ -1,6 +1,12 @@
 import type { IncomingMessage } from 'node:http';
 import type { Readable } from 'node:stream';
 
+// The user's voice settings document is declared once, in the shared contract both compiler
+// configurations compile: the browser's copy and this one have to name the same fields, and a
+// second declaration here is what used to let them drift. Re-exported below where the backend's
+// type contract has always published it, so every Voice module keeps its import path.
+import type { VoiceSettings } from '@shared/voice/voiceSettingsRegistry.js';
+
 // The capability declaration the health payload republishes. Imported as a type from the
 // repository-root shared tree rather than restated here: the whole point of the payload is
 // that it carries the registry's own declaration, so a restatement could drift from it
@@ -1978,77 +1984,20 @@ export type VoiceSpeechPayload = {
 /**
  * One user's Voice backend settings as they are stored server-side.
  *
- * The first six fields are the ones the settings tab has always edited; the empty string is the
- * "unset" value for every one of them, which is what a user who has never saved anything reads back
- * as. Declared here rather than in the Voice module because both the database repository (which
- * persists a row) and the Voice service (which validates and returns it) speak this shape.
+ * THE DECLARATION IS THE SHARED CONTRACT'S, NOT THIS FILE'S. Every field — the six the settings tab
+ * has always edited, the provider-owned four, and the two user-data switches — is named once in
+ * `shared/voice/voiceSettingsRegistry.ts`, the module both compiler configurations compile, so the
+ * browser's copy and this one cannot drift field by field. It is re-exported here because this file
+ * is the backend's type-contract barrel and every Voice module already reads its types from it; the
+ * source of truth moved, the import path did not.
  *
- * `baseUrl` is only stored, never fetched by the server: a client-configured backend is called
- * directly from the browser, so this value never becomes SSRF input on this side.
- *
- * THE LAST FOUR ARE OPTIONAL, AND EACH ONE IS OWNED BY A PROVIDER RATHER THAN BY THE SERVER. A
- * recogniser whose credential is the user's own — a workspace endpoint that only that user has, a
- * key that may only be presented server-side — cannot be reached through `baseUrl`/`apiKey`, which
- * describe the browser's own backend and are deliberately control-able from a header. Which fields
- * carry such a credential is DECLARED BY THE PROVIDER (`AsrAdapter.credentials`,
- * `AsrCredentialFields` in `shared/asr/asrRegistry.ts`) rather than fixed here, so this type does
- * not have to grow a branch per provider and the server never indexes anything by an id: it reads
- * the field names off whichever adapter it selected.
- *
- * OPTIONAL RATHER THAN REQUIRED, even though a stored document always carries all four (the
- * repository fills an absent one with the empty string). A required field would make every existing
- * caller that speaks the six-field document a compile error, and the ones that matter are outside
- * the change that adds these: a settings document read from a row written by an older build has no
- * such fields at all, and that state is exactly what "unset" means. Absent and empty are the same
- * reading here, on purpose.
- *
- * `providerId` is the one exception in kind: it selects WHICH adapter serves the user's audio, so it
- * is the user-level half of the precedence `effectiveProviderId` applies (user's choice, then the
- * deployment's environment, then the registry's first row). An id no adapter claims is still
- * refused rather than replaced.
+ * `baseUrl` is still only stored, never fetched by the server: a client-configured backend is called
+ * directly from the browser, so this value never becomes SSRF input on this side. The provider-owned
+ * fields are still optional — a row written by an older build carries none of them, and absent means
+ * "unset" — and which fields those are is still declared by the provider (`AsrCredentialFields` in
+ * `shared/asr/asrRegistry.ts`) rather than by this type.
  */
-export type VoiceSettings = {
-  baseUrl: string;
-  apiKey: string;
-  sttModel: string;
-  ttsModel: string;
-  ttsVoice: string;
-  ttsFormat: string;
-  /** The recogniser this user selected, as it is spelled in user-level configuration. */
-  providerId?: string;
-  /** A provider-declared endpoint field: the address a `'proxy-only'` recogniser is reached at. */
-  dashscopeEndpoint?: string;
-  /** A provider-declared credential field: a key the server holds and the browser must never see. */
-  dashscopeApiKey?: string;
-  /** A provider-declared model field: the model the user selected for that recogniser. */
-  dashscopeModel?: string;
-  /**
-   * The Live Voice realtime relay's own DashScope credential — INDEPENDENT of the voice-input
-   * `dashscopeApiKey` above (that one is the dashscope-omni RECOGNISER's key). The realtime relay is
-   * a different service (the WebSocket speech model), so it carries its own key rather than re-using
-   * the recogniser's. Server-held, masked on readback exactly like the provider-declared credentials.
-   */
-  liveVoiceDashscopeApiKey?: string;
-  /**
-   * Whether this user's dictation is kept on this machine as a voice record. Default `true`.
-   *
-   * THE USER-DATA SWITCH, AND NOT THE DIAGNOSTIC ONE. `VOICE_CAPTURE` is a deployment property read
-   * once at start-up, defaults off and fails closed; this is a per-user preference that defaults ON,
-   * which is what the D1 promise — recordings stay local, and can be cleared — rests on. Optional
-   * like the provider-owned fields above, and for the same reason: a document written before this
-   * setting existed carries no key, and absent has to read as the default rather than as "off".
-   * Only the literal `false` turns recording off, so a document that never named the key records.
-   */
-  voiceDataRecording?: boolean;
-  /**
-   * The ceiling, in bytes, on the voice-data directory. Absent means the shipped default (2 GiB).
-   *
-   * ONLY A BOUND ON THE STORE. When a write pushes the directory past it, the oldest records are
-   * removed first (see `voice-data.ts`); it never refuses a transcription and is not the per-request
-   * upload limit — that is the provider's own budget. The user may change it from the settings page.
-   */
-  voiceDataMaxBytes?: number;
-};
+export type { VoiceSettings };
 
 /**
  * Explicit service result used by Voice routes instead of transport-aware

@@ -10,7 +10,14 @@
     // include the "server/" prefix to match that layout.
     "baseUrl": "..",
     "paths": {
-      "@/*": ["server/*"]
+      "@/*": ["server/*"],
+      // The repository-root `shared/` tree — the modules BOTH compiler configurations compile
+      // (ADR-004 decision 2). It had no server-side alias because server code reached it by
+      // relative path; the settings/rules contract
+      // (`shared/voice/voiceSettingsRegistry.ts`) is read by BOTH ends by DESIGN, so naming it
+      // through the same alias the browser uses keeps the two imports visibly the same module
+      // rather than two relative spellings that happen to land on it.
+      "@shared/*": ["shared/*"]
     },
     // The backend is still mostly JavaScript today, so allowJs lets us add a real
     // TypeScript build without forcing a large rename before the tooling is usable.

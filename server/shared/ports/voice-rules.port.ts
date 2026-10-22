@@ -28,42 +28,18 @@
  *
  * Consumers: `modules/providers/list/claude/claude-host-driver.provider.ts`
  * (the callback) and `modules/voice-realtime/index.ts` (the owner that installs
- * the implementation). This file imports nothing.
- */
-
-/**
- * The two voice-realtime functions the dispatch hook needs.
+ * the implementation).
  *
- * `isSessionActive` is `voice-realtime-active.ts`'s process-state read;
- * `rulesFor` is `voice-mode-rules.ts`'s rule-table selection. Naming them as a
- * port keeps the driver from importing either module.
+ * THE STORAGE NOW LIVES IN THE SHARED SETTINGS/RULES CONTRACT. `installVoiceRules` and
+ * `readVoiceRules` (with the port type) are declared in
+ * `shared/voice/voiceSettingsRegistry.ts` and re-exported here under this module's long-standing
+ * names, so the voice rules and the settings they select travel through ONE address book rather
+ * than two registries. The re-exported names are unchanged on purpose: every call site names the
+ * port, and a rename would be churn without a behavioural reason. The contract module imports
+ * nothing, so this file still cannot close a loop of its own.
  */
-export type VoiceRulesPort = {
-  isSessionActive(sessionId: string): boolean;
-  rulesFor(variant: string | undefined): string;
-};
-
-/** The installed voice rules, or null before the voice-realtime barrel evaluates. */
-let installedVoiceRules: VoiceRulesPort | null = null;
-
-/**
- * Installs the process's voice-rules reader.
- *
- * Called by `voice-realtime/index.ts` next to the functions it exposes, and by
- * `server/index.ts`. Re-installing the same object is a no-op.
- */
-export function installVoiceRulesPort(port: VoiceRulesPort): void {
-  installedVoiceRules = port;
-}
-
-/**
- * Reads the installed voice rules, or null when the voice-realtime module has
- * not been loaded in this process.
- *
- * Null is the documented "no Live Voice connection" answer: the caller gates on
- * it exactly as it gates on an inactive session, rather than treating a missing
- * module as an error.
- */
-export function readVoiceRulesPort(): VoiceRulesPort | null {
-  return installedVoiceRules;
-}
+export type { VoiceRulesPort } from '@shared/voice/voiceSettingsRegistry.js';
+export {
+  installVoiceRules as installVoiceRulesPort,
+  readVoiceRules as readVoiceRulesPort,
+} from '@shared/voice/voiceSettingsRegistry.js';

@@ -83,6 +83,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
+  VOICE_REALTIME_CONTEXT_VARIABLE,
+  VOICE_REALTIME_CONTEXT_VARIABLE_NAME,
+  type VoiceRealtimeSettingsFileKey,
+} from '@shared/voice/voiceSettingsRegistry.js';
+
+import {
   ANNOUNCE_PHRASES,
   resolveAnnouncePhrases,
 } from './voice-realtime-announce-phrases.js';
@@ -157,12 +163,29 @@ export const VOICE_REALTIME_STATUS_STALE_MS = 4000;
 export const VOICE_REALTIME_STATUS_STALENESS_RULE =
   '该行的 ageMs 是这条状态的年龄；ageMs > 4000 的状态已过期，不得当作现状复述。';
 
-/** The name `{{…}}` carries in {@link VOICE_REALTIME_CONTEXT_VARIABLE}; kept beside it so the two
- * cannot drift. */
-const CONTEXT_VARIABLE_NAME = 'context';
+/** The name `{{…}}` carries in {@link VOICE_REALTIME_CONTEXT_VARIABLE}, read from the shared
+ * settings contract so the name and the braces cannot drift. */
+const CONTEXT_VARIABLE_NAME = VOICE_REALTIME_CONTEXT_VARIABLE_NAME;
 
-/** The ONE template variable a settings file may use. Anything else in braces is refused. */
-export const VOICE_REALTIME_CONTEXT_VARIABLE = `{{${CONTEXT_VARIABLE_NAME}}}`;
+/**
+ * The ONE template variable a settings file may use. Anything else in braces is refused.
+ *
+ * DECLARED IN THE SHARED CONTRACT and re-exported here: the variable is what a settings file (an
+ * operator-facing artifact) and the composer below agree on, and that agreement is a contract
+ * rather than an implementation detail of this loader.
+ */
+export { VOICE_REALTIME_CONTEXT_VARIABLE };
+
+/**
+ * A parsed settings file, as far as the contract is concerned: the nine top-level keys
+ * `shared/voice/voiceSettingsRegistry.ts` declares, each optional, and nothing else.
+ *
+ * THE TYPE IS THE POINT OF THE SHARED KEY LIST, not a convenience alias. The loader below reads
+ * keys by name off this record, so a key that is not in the contract is a compile error rather than
+ * a keyword the loader happens to know; and a key retired from the contract stops compiling here
+ * instead of lingering as a silently ignored line.
+ */
+type VoiceRealtimeSettingsFile = Partial<Record<VoiceRealtimeSettingsFileKey, unknown>>;
 
 /** Where a reading came from: the shipped defaults, or a file that was read and accepted. */
 export type VoiceRealtimeSettingsSource = 'default' | 'file';
@@ -639,7 +662,7 @@ export function loadVoiceRealtimeSettings(options: {
     return refuse(`${filePath} must contain a JSON object`);
   }
 
-  const record = parsed as Record<string, unknown>;
+  const record = parsed as VoiceRealtimeSettingsFile;
   let version: string | null = null;
   if (record.version !== undefined) {
     if (typeof record.version !== 'string' || record.version.trim() === '') {

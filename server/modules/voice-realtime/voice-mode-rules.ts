@@ -15,7 +15,16 @@
  *
  * `VOICE_MODE_RULES_VARIANT` and `VOICE_MODE_HOOK_FORCE` are read by the CALLER, not here: this
  * module is a pure function of its argument so the experimental arms stay a property of the launch.
+ *
+ * WHERE THE ARMS LIVE NOW. The three texts are still written here — this is the module that owns
+ * the rules — but they are handed out as REGISTRATIONS rather than read directly: the module
+ * barrel (`./index.ts`, the assembly point) registers each row in the shared rules address book
+ * (`shared/voice/voiceSettingsRegistry.ts`) and `rulesFor` resolves through it by id. That is the
+ * same shape `shared/asr/asrRegistry.ts` gives providers: an owner declares a row, an assembly
+ * point registers it, a consumer names an id, and no consumer keeps a copy of the text.
  */
+import { tryResolveVoiceRule, type VoiceRule } from '@shared/voice/voiceSettingsRegistry.js';
+
 export const VOICE_MODE_RULES = [
   '[Live Voice 模式] 用户正在用语音和你对话，随时会接着说下一句。前台被你占住的每一秒，他新说的话都要排队等你。所以：',
   '1. 预计本轮要超过约 20 秒才能给出结果的工作——调查、读多份文件或日志、跑测试/构建/实验、写长分析或长文档——第一步就派给后台 Agent（run_in_background: true），不要先在前台查一圈再派。派完用一两句话告诉用户派了什么，然后结束本轮。',
@@ -38,9 +47,53 @@ const FAST_DISPATCH_LINE =
  */
 const FRAGMENT_LINE =
   '7. 语音会分段到达：一句话常被拆成几条消息，中间隔几秒。一条消息看起来没说完——比如半个问句、只有半个条件（「如果……」）、以「是」「还是」「然后」这类词收尾、或明显在列举中——就只简短应一声（例如「嗯，你接着说」）或不回应，不要据此行动、下结论或修正你之前的理解；等后续消息到了，把几段合起来一起理解再处理。';
-export const rulesFor = (variant: string | undefined): string =>
-  variant === 'fast'
-    ? VOICE_MODE_RULES.replace('\n2. ', `\n${FAST_DISPATCH_LINE}\n2. `)
-    : variant === 'fragments'
-      ? `${VOICE_MODE_RULES}\n${FRAGMENT_LINE}`
-      : VOICE_MODE_RULES;
+/** The `fast` arm: the default rules with the planning line inserted before rule 2. */
+const VOICE_MODE_FAST_RULES = VOICE_MODE_RULES.replace('\n2. ', `\n${FAST_DISPATCH_LINE}\n2. `);
+
+/** The `fragments` arm: the default rules plus the segmentation rule. */
+const VOICE_MODE_FRAGMENT_RULES = `${VOICE_MODE_RULES}\n${FRAGMENT_LINE}`;
+
+/**
+ * The three arms, as the rows the assembly point registers in the shared address book.
+ *
+ * A VARIANT THAT IS NOT ONE OF THE THREE IS THE DEFAULT ARM, which is the behaviour this function
+ * has always had: an unset `VOICE_MODE_RULES_VARIANT`, a typo, and an empty string all read the
+ * shipped rules rather than an error. `voice-mode` is the shipped arm's id rather than a variant
+ * spelling so the default cannot be selected by a value an experiment happens to use.
+ */
+const VOICE_MODE_RULE_IDS = {
+  base: 'voice-mode',
+  fast: 'voice-mode:fast',
+  fragments: 'voice-mode:fragments',
+} as const;
+
+/**
+ * The rules rows this module owns, for the assembly point to register.
+ *
+ * A DATA EXPORT RATHER THAN A SIDE EFFECT OF LOADING THIS FILE. Registration belongs to assembly —
+ * it is the step that says "these rules exist in this process" — and keeping this module a pure
+ * declaration means importing it to read something else cannot silently decide what is registered.
+ */
+export const VOICE_MODE_RULE_REGISTRATIONS: readonly VoiceRule[] = [
+  { id: VOICE_MODE_RULE_IDS.base, text: VOICE_MODE_RULES },
+  { id: VOICE_MODE_RULE_IDS.fast, text: VOICE_MODE_FAST_RULES },
+  { id: VOICE_MODE_RULE_IDS.fragments, text: VOICE_MODE_FRAGMENT_RULES },
+];
+
+/**
+ * The rules text for one variant, resolved through the shared registry.
+ *
+ * The fallback is the shipped arm rather than an error, for the reason above: a caller's variant is
+ * an experiment switch, and an unknown spelling has always meant "the shipped rules". The registry
+ * is populated by the assembly point that imports this module, so the fallback is only reachable if
+ * the two ever drift — which is exactly the state the registered ids are there to make impossible.
+ */
+export const rulesFor = (variant: string | undefined): string => {
+  const id =
+    variant === 'fast'
+      ? VOICE_MODE_RULE_IDS.fast
+      : variant === 'fragments'
+        ? VOICE_MODE_RULE_IDS.fragments
+        : VOICE_MODE_RULE_IDS.base;
+  return tryResolveVoiceRule(id)?.text ?? VOICE_MODE_RULES;
+};
