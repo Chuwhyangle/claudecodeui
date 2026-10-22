@@ -92,6 +92,20 @@ function readListenIdField(request: express.Request): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 }
 
+/**
+ * The optional conversation pack a relay-mode upload carries.
+ *
+ * MULTER HAS ALREADY PARSED IT: like `listenId`, it arrives as a multipart text field. The route
+ * does not inspect the text — which provider acknowledges it is the adapter's declaration, and how
+ * large a request it makes is the adapter's budget — so this is transport parsing only. A blank
+ * field is no context rather than an empty one, the same absence-not-placeholder rule the id
+ * field follows.
+ */
+function readContextField(request: express.Request): string | undefined {
+  const value = (request.body as Record<string, unknown> | undefined)?.context;
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+}
+
 function sendFailure<TValue>(
   response: express.Response,
   result: VoiceServiceResult<TValue>,
@@ -314,6 +328,7 @@ export function createVoiceRouter(dependencies: VoiceRouterDependencies): expres
         // row has no `listenId` key at all rather than an empty one — the module's own convention,
         // applied at the one place the field could enter the row. It does not change this response.
         const listenId = readListenIdField(request);
+        const context = readContextField(request);
         const result = await dependencies.voiceService.transcribe({
           audio: {
             bytes: request.file.buffer,
@@ -323,6 +338,7 @@ export function createVoiceRouter(dependencies: VoiceRouterDependencies): expres
           overrides: parseVoiceOverrides(request),
           settings: dependencies.voiceSettingsService.getSettings(readUserId(request)),
           ...(listenId === undefined ? {} : { listenId }),
+          ...(context === undefined ? {} : { hints: { context } }),
         });
 
         if (sendFailure(response, result)) {

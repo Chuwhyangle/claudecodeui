@@ -115,9 +115,11 @@ test('the provider declares its default, and the health payload republishes it',
 
 test('control: a provider that declares no default keeps falling back to the shared sttModel', () => {
   const declared = listProviders().filter((provider) => provider.credentials?.defaultModel !== undefined);
+  // The relay provider is the same service and model, so it declares the same default. Both
+  // rows must keep the shared backend's Whisper id off this service.
   assert.deepEqual(
     declared.map((provider) => provider.id),
-    ['dashscope-omni'],
-    'only the provider whose model name is not the shared one declares a default',
+    ['dashscope-omni', 'dashscope-omni-relay'],
+    'only the providers whose model name is not the shared one declare a default',
   );
 });

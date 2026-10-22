@@ -1410,6 +1410,10 @@ export function createVoiceService(dependencies: VoiceServiceDependencies): Voic
               mimeType: input.audio.mimeType,
               fileName: input.audio.fileName,
             },
+            // The adapter's declaration decides whether this reaches the wire. Passing it through
+            // is the whole seam: a provider that does not honor context ignores it, and the
+            // relay provider places it in the system turn.
+            ...(input.hints === undefined ? {} : { hints: input.hints }),
           },
           {
             baseUrl: config.baseUrl,

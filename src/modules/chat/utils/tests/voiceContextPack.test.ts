@@ -38,7 +38,16 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, test } from 'vitest';
 
 import { shouldHideToolResult } from '@/modules/chat/tools';
-import { buildVoiceContextPack, isVoiceContextRow, VOICE_CONTEXT_BUDGET_CHARS, VOICE_CONTEXT_ROW_CAP_CHARS } from '@/modules/chat/utils/voice/voiceContextPack';
+import {
+  buildVoiceContextPack,
+  buildVoiceInputContextPack,
+  isVoiceContextRow,
+  VOICE_CONTEXT_BUDGET_CHARS,
+  VOICE_CONTEXT_ROW_CAP_CHARS,
+  VOICE_INPUT_DRAFT_AFTER_HEADING,
+  VOICE_INPUT_DRAFT_BEFORE_HEADING,
+  VOICE_INPUT_VOICE_SO_FAR_HEADING,
+} from '@/modules/chat/utils/voice/voiceContextPack';
 import type { VoiceContextPack } from '@/modules/chat/utils/voice/voiceContextPack';
 import { groupWorkSegments, isWorkSegmentMember } from '@/modules/chat/utils/transcript/workSegments';
 import type { ChatMessage } from '@/shared/types';
@@ -536,4 +545,160 @@ test('③ the filter is falsifiable: with tool rows admitted, case ① goes red'
       assert.equal(pack.text.includes('ROW-result-bash'), false);
     },
   );
+});
+
+// ── 4. The one-shot dictation's pack: the box around the caret, then the conversation ────────
+
+/**
+ * WHAT THIS SECTION PINS. One-shot dictation (`useVoiceInput`) hands the recogniser more than the
+ * conversation: the composer's own draft on both sides of the caret, and the text this listen has
+ * already committed. Three readings, matching the three AC clauses:
+ *
+ *   · the three blocks go in by PRIORITY — draft-before, draft-after, voice-so-far — and the
+ *     conversation comes after all of them, because a spoken 「这段」 points at the box first;
+ *   · an empty block renders NO heading, so a listen in an empty box says nothing about a draft
+ *     it did not have;
+ *   · the whole pack is still ONE budget of 2000, and the conversation is built with exactly the
+ *     room the draft blocks left — asserted by building the two halves separately and comparing
+ *     the concatenation, which a pack that gave the conversation its own budget could not satisfy.
+ */
+
+const DRAFT_BEFORE_MARKER = 'DRAFT-BEFORE-用户此前打的';
+const DRAFT_AFTER_MARKER = 'DRAFT-AFTER-光标后面的';
+const VOICE_SO_FAR_MARKER = 'VOICE-SO-FAR-已经说出来的';
+
+test('④ the draft blocks go in before the conversation, in the order the caret splits them', () => {
+  const pack = buildVoiceInputContextPack({
+    messages: MESSAGES,
+    draftBefore: DRAFT_BEFORE_MARKER,
+    draftAfter: DRAFT_AFTER_MARKER,
+    voiceSoFar: VOICE_SO_FAR_MARKER,
+    now: NOW,
+  });
+
+  const at = (marker: string) => pack.text.indexOf(marker);
+  assert.ok(at(DRAFT_BEFORE_MARKER) >= 0, 'the caret-before block is missing');
+  assert.ok(at(DRAFT_AFTER_MARKER) >= 0, 'the caret-after block is missing');
+  assert.ok(at(VOICE_SO_FAR_MARKER) >= 0, 'the voice-so-far block is missing');
+
+  // Priority, not merely presence: the box's two sides, then what this listen said, then the
+  // conversation — which must contain the fixture's visible rows.
+  assert.ok(at(DRAFT_BEFORE_MARKER) < at(DRAFT_AFTER_MARKER), 'the caret-before block is not first');
+  assert.ok(at(DRAFT_AFTER_MARKER) < at(VOICE_SO_FAR_MARKER), 'the voice-so-far block is out of order');
+  assert.ok(at(VOICE_SO_FAR_MARKER) < at('ROW-user-1'), 'the conversation was placed above the draft');
+
+  // Each heading appears exactly once, on its own block.
+  for (const heading of [
+    VOICE_INPUT_DRAFT_BEFORE_HEADING,
+    VOICE_INPUT_DRAFT_AFTER_HEADING,
+    VOICE_INPUT_VOICE_SO_FAR_HEADING,
+  ]) {
+    assert.equal(pack.text.split(heading).length - 1, 1, `heading ${heading} is not exactly once`);
+  }
+  assert.equal(pack.text.split('ROW-user-1').length - 1, 1, 'a conversation row was duplicated');
+});
+
+test('④ an empty draft or an empty voice-so-far section renders no heading at all', () => {
+  const draftOnly = buildVoiceInputContextPack({
+    messages: MESSAGES,
+    draftBefore: '   ',
+    draftAfter: '',
+    voiceSoFar: '',
+    now: NOW,
+  });
+
+  for (const heading of [
+    VOICE_INPUT_DRAFT_BEFORE_HEADING,
+    VOICE_INPUT_DRAFT_AFTER_HEADING,
+    VOICE_INPUT_VOICE_SO_FAR_HEADING,
+  ]) {
+    assert.equal(draftOnly.text.includes(heading), false, `an empty block still announced ${heading}`);
+  }
+
+  // With nothing but whitespace the pack IS the conversation pack — byte for byte, because the
+  // whole-budget and remaining-budget calls must agree when nothing was spent first.
+  assert.equal(draftOnly.text, buildVoiceContextPack(MESSAGES, { now: NOW }).text);
+
+  const empty = buildVoiceInputContextPack({ now: NOW });
+  assert.equal(empty.text, '', 'an empty pack rendered text');
+  assert.equal(empty.chars, 0);
+  assert.equal(empty.rows, 0);
+});
+
+test('④ each draft side is elided AWAY from the caret, so the words it points at survive', () => {
+  // The far end of a long draft is not what 「这段」 refers to; the text beside the caret is.
+  const longBefore = `BEFORE-FAR${'x'.repeat(3000)}BEFORE-NEAR`;
+  const beforePack = buildVoiceInputContextPack({ draftBefore: longBefore, budgetChars: 2000 });
+  assert.equal(beforePack.text.includes('BEFORE-FAR'), false, 'the caret-before block kept the far end');
+  assert.equal(
+    beforePack.text.endsWith('BEFORE-NEAR'),
+    true,
+    'the caret-before block lost the text closest to the caret',
+  );
+
+  const longAfter = `AFTER-NEAR${'x'.repeat(3000)}AFTER-FAR`;
+  const afterPack = buildVoiceInputContextPack({ draftAfter: longAfter, budgetChars: 2000 });
+  assert.equal(afterPack.text.includes('AFTER-NEAR'), true, 'the caret-after block lost the text closest to the caret');
+  assert.equal(afterPack.text.includes('AFTER-FAR'), false, 'the caret-after block kept the far end');
+});
+
+test('④ the conversation is built with exactly the room the draft blocks left, and never more', () => {
+  const draft = `ROOM-DRAFT${'d'.repeat(500)}`;
+  const draftOnly = buildVoiceInputContextPack({ draftBefore: draft, budgetChars: VOICE_CONTEXT_BUDGET_CHARS });
+  assert.ok(draftOnly.chars > 0 && draftOnly.chars < VOICE_CONTEXT_BUDGET_CHARS, 'the draft fixture does not leave room');
+
+  // The separator between the draft blocks and the conversation is inside the same budget.
+  const remaining = VOICE_CONTEXT_BUDGET_CHARS - draftOnly.chars - 2;
+  const conversation = buildVoiceContextPack(BUDGET_ROWS, { budgetChars: remaining, now: NOW });
+  const combined = buildVoiceInputContextPack({
+    messages: BUDGET_ROWS,
+    draftBefore: draft,
+    budgetChars: VOICE_CONTEXT_BUDGET_CHARS,
+    now: NOW,
+  });
+
+  assert.equal(
+    combined.text,
+    `${draftOnly.text}\n\n${conversation.text}`,
+    'the conversation did not get exactly the remaining budget',
+  );
+  assert.ok(combined.chars <= VOICE_CONTEXT_BUDGET_CHARS);
+  assert.equal(combined.chars, combined.text.length);
+});
+
+test('④ the whole pack stays within its budget over ≥200 seeded inputs, every block counted', () => {
+  let withConversation = 0;
+
+  for (let seed = 1; seed <= RANDOM_SEEDS; seed++) {
+    const rng = mulberry32(seed);
+    const budget = BUDGETS[Math.floor(rng() * BUDGETS.length)];
+    const piece = (marker: string) => (rng() < 0.2 ? '' : marker + 'x'.repeat(Math.floor(rng() * 400)));
+    const messages: ChatMessage[] = Array.from({ length: Math.floor(rng() * 8) }, (_, index) => ({
+      type: index % 2 === 0 ? 'user' : 'assistant',
+      content: `row-${index} ${'y'.repeat(Math.floor(rng() * 80))}`,
+      timestamp: FRESH,
+    }));
+
+    const draftBefore = piece('B-');
+    const draftAfter = piece('A-');
+    const voiceSoFar = piece('V-');
+    const pack = buildVoiceInputContextPack({ messages, draftBefore, draftAfter, voiceSoFar, budgetChars: budget, now: NOW });
+
+    assert.ok(pack.chars <= budget, `seed ${seed}: chars ${pack.chars} exceeded budget ${budget}`);
+    assert.equal(pack.chars, pack.text.length, `seed ${seed}: chars is not the rendered length`);
+    assert.equal(pack.rows, pack.entries.length, `seed ${seed}: rows and entries disagree`);
+    for (const [body, heading] of [
+      [draftBefore, VOICE_INPUT_DRAFT_BEFORE_HEADING],
+      [draftAfter, VOICE_INPUT_DRAFT_AFTER_HEADING],
+      [voiceSoFar, VOICE_INPUT_VOICE_SO_FAR_HEADING],
+    ] as const) {
+      if (body.trim() === '') {
+        assert.equal(pack.text.includes(heading), false, `seed ${seed}: an empty block rendered ${heading}`);
+      }
+    }
+    if (pack.text.includes('row-')) withConversation++;
+  }
+
+  // Positive control: "≤ budget" is also satisfied by a pack that never includes the conversation.
+  assert.ok(withConversation > RANDOM_SEEDS / 4, `only ${withConversation} seeds reached the conversation`);
 });

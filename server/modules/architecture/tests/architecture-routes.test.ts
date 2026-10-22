@@ -21,7 +21,7 @@
  */
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -337,11 +337,14 @@ test('an empty transcript yields empty seeds and never calls the generator', asy
  *
  * The JSON-reading criterion needs a fixture it can shape per case (a two-hop
  * chain; a 300-node fan), so this helper only owns the manifest and leaves the
- * index body to the caller.
+ * index body to the caller. `archive` (optional) is written as the scope's
+ * sibling `arch.json`, in ArchGuard's real shape — omitting it is exactly the
+ * "no archive" degradation the criteria read.
  */
 function createIndexProject(
   t: { after(callback: () => void): void },
   index: ScopeIndexFixture,
+  archive?: unknown,
 ): { root: string } {
   const root = mkdtempSync(path.join(tmpdir(), 'arch-neighborhood-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -361,14 +364,36 @@ function createIndexProject(
     language: 'typescript',
     ...index,
   });
+  if (archive !== undefined) {
+    writeJson(path.join(root, '.archguard', 'query', 'scope-src', 'arch.json'), archive);
+  }
   return { root };
+}
+
+/**
+ * The `arch.json` sibling for a scope, carrying only the fields this module
+ * reads (`entities[].id/type/isAbstract/members`) and spelling them exactly as
+ * ArchGuard does: `property` for an interface/class field, `constructor` for a
+ * constructor, `fieldType`/`returnType` for type annotations.
+ */
+function archiveWith(entities: readonly unknown[]): unknown {
+  return { version: '1.0', language: 'typescript', entities };
 }
 
 /** The subset of the response body the neighbourhood-JSON criteria read. */
 type NeighborhoodBody = {
   graph: {
     file: { nodes: { id: string; label: string; distance: number }[]; edges: { from: string; to: string; relationType: string }[] };
-    entity: { nodes: { id: string; label: string; distance: number }[]; edges: { from: string; to: string; relationType: string }[] };
+    entity: {
+      nodes: {
+        id: string;
+        label: string;
+        distance: number;
+        kind?: string;
+        members?: { name: string; kind: string; visibility?: string; signature?: string }[];
+      }[];
+      edges: { from: string; to: string; relationType: string }[];
+    };
   };
   stats: Record<string, unknown> & {
     truncated: boolean;
@@ -380,8 +405,14 @@ type NeighborhoodBody = {
     fileTruncated?: boolean;
     entityTotal?: number;
     fileTotal?: number;
+    kindCounts?: Record<string, number>;
+    membersPerEntity?: number;
+    membersTruncated?: boolean;
   };
-  provenance: { cacheHit: boolean };
+  provenance: {
+    cacheHit: boolean;
+    diagnostics?: { scope: string; code: string; message: string }[];
+  };
 };
 
 /** Run one graph request against a temp project and return its parsed body. */
@@ -632,6 +663,221 @@ test('the file graph has its own budget: an entity cut does not shorten the file
   // The legacy boolean stays the OR of the two granularities, so pre-existing
   // `truncated` consumers still see "something was cut".
   assert.equal(body.stats.truncated, true);
+});
+
+/*
+ * The entity-detail criteria (kind/members/kindCounts) drive the same real
+ * filesystem path as the rest of this file: a scope index plus the sibling
+ * `arch.json` ArchGuard writes next to it. Four entities in a chain, so a node
+ * budget can cut the graph while the kind counts still describe the full set.
+ */
+const DETAIL_CHAIN = {
+  fileToIds: { 'k0.ts': ['k0.ts.Seed'], 'k1.ts': ['k1.ts.Middle'], 'k2.ts': ['k2.ts.Leaf'], 'k3.ts': ['k3.ts.Deep'] },
+  nameToIds: { Seed: ['k0.ts.Seed'], Middle: ['k1.ts.Middle'], Leaf: ['k2.ts.Leaf'], Deep: ['k3.ts.Deep'] },
+  idToFile: { 'k0.ts.Seed': 'k0.ts', 'k1.ts.Middle': 'k1.ts', 'k2.ts.Leaf': 'k2.ts', 'k3.ts.Deep': 'k3.ts' },
+  idToName: { 'k0.ts.Seed': 'Seed', 'k1.ts.Middle': 'Middle', 'k2.ts.Leaf': 'Leaf', 'k3.ts.Deep': 'Deep' },
+  dependencies: {
+    'k0.ts.Seed': ['k1.ts.Middle'],
+    'k1.ts.Middle': ['k2.ts.Leaf'],
+    'k2.ts.Leaf': ['k3.ts.Deep'],
+    'k3.ts.Deep': [],
+  },
+  dependents: {
+    'k0.ts.Seed': [],
+    'k1.ts.Middle': ['k0.ts.Seed'],
+    'k2.ts.Leaf': ['k1.ts.Middle'],
+    'k3.ts.Deep': ['k2.ts.Leaf'],
+  },
+};
+
+/** The chain's real-shape `arch.json`, with 25 members on the seed class. */
+function detailArchive(seedType: string, seedIsAbstract = false): unknown {
+  const seedMembers = [
+    {
+      name: 'constructor',
+      type: 'constructor',
+      visibility: 'public',
+      parameters: [{ name: 'a', type: 'number', isOptional: false }],
+    },
+    { name: 'count', type: 'property', visibility: 'private', fieldType: 'number' },
+    ...Array.from({ length: 23 }, (_, index) => ({
+      name: `run${index}`,
+      type: 'method',
+      visibility: 'public',
+      parameters: [{ name: 'input', type: 'string', isOptional: true }],
+      returnType: 'Promise<void>',
+    })),
+  ];
+  return archiveWith([
+    { id: 'k0.ts.Seed', name: 'Seed', type: seedType, isAbstract: seedIsAbstract, members: seedMembers },
+    {
+      id: 'k1.ts.Middle',
+      name: 'Middle',
+      type: 'interface',
+      members: [{ name: 'id', type: 'property', visibility: 'public', fieldType: 'string' }],
+    },
+    { id: 'k2.ts.Leaf', name: 'Leaf', type: 'function', members: [] },
+    { id: 'k3.ts.Deep', name: 'Deep', type: 'class', isAbstract: true, members: [] },
+  ]);
+}
+
+const DETAIL_TRANSCRIPT = [
+  message({ id: 'text-1', kind: 'text', role: 'assistant', content: 'Start at `Seed`.' }),
+];
+
+test('entity nodes carry the arch.json kind and members, with kindCounts over the pre-budget set', async (t) => {
+  const { root } = createIndexProject(t, DETAIL_CHAIN, detailArchive('class'));
+  const body = await readGraphBody(root, DETAIL_TRANSCRIPT, { hops: 3, maxNodes: 2 });
+
+  console.log(
+    `architecture detail reading: nodes=${JSON.stringify(body.graph.entity.nodes.map((node) => [node.id, node.kind, node.members?.length ?? 0]))} ` +
+      `kindCounts=${JSON.stringify(body.stats.kindCounts)} membersPerEntity=${String(body.stats.membersPerEntity)} ` +
+      `membersTruncated=${String(body.stats.membersTruncated)}`,
+  );
+
+  const seedNode = body.graph.entity.nodes.find((node) => node.id === 'scope-src/k0.ts.Seed');
+  const middleNode = body.graph.entity.nodes.find((node) => node.id === 'scope-src/k1.ts.Middle');
+  assert.ok(seedNode !== undefined && middleNode !== undefined, 'the retained nodes must be in the payload');
+  assert.equal(body.graph.entity.nodes.length, 2, 'the node budget still cuts the graph');
+
+  // ① kind comes from arch.json and is normalised onto the wire vocabulary.
+  assert.equal(seedNode.kind, 'class');
+  assert.equal(middleNode.kind, 'interface');
+
+  // ② members are normalised from ArchGuard's spelling: constructor → method,
+  //    property → field, with a display-ready signature; the 25-member class is
+  //    cut at the shipped cap and the cut is reported.
+  assert.equal(body.stats.membersPerEntity, 20);
+  assert.equal(body.stats.membersTruncated, true);
+  assert.equal(seedNode.members?.length, 20, 'the class ships exactly the shipped cap');
+  assert.deepEqual(seedNode.members?.[0], {
+    name: 'constructor',
+    kind: 'method',
+    visibility: 'public',
+    signature: 'constructor(a: number)',
+  });
+  assert.deepEqual(seedNode.members?.[1], {
+    name: 'count',
+    kind: 'field',
+    visibility: 'private',
+    signature: 'number',
+  });
+  assert.deepEqual(seedNode.members?.[2], {
+    name: 'run0',
+    kind: 'method',
+    visibility: 'public',
+    signature: 'run0(input?: string): Promise<void>',
+  });
+  assert.deepEqual(middleNode.members, [
+    { name: 'id', kind: 'field', visibility: 'public', signature: 'string' },
+  ]);
+
+  // ③ kindCounts describes the PRE-budget reachable set — all four entities,
+  //    including the two the node budget cut — and `abstract` is derived from
+  //    the class's isAbstract flag, not a separate ArchGuard type.
+  assert.deepEqual(body.stats.kindCounts, { class: 1, interface: 1, function: 1, abstract: 1 });
+  assert.equal(body.stats.entityTotal, 4);
+  assert.equal(body.stats.entityNodes, 2);
+
+  // ④ the file graph is untouched by the detail path.
+  for (const node of body.graph.file.nodes) {
+    assert.deepEqual(Object.keys(node).sort(), ['distance', 'id', 'label']);
+  }
+  assert.equal(body.provenance.diagnostics, undefined, 'a readable archive produces no diagnostic');
+});
+
+test('a scope without arch.json keeps the legacy node shape and names the degradation in provenance', async (t) => {
+  const { root } = createIndexProject(t, DETAIL_CHAIN);
+  const body = await readGraphBody(root, DETAIL_TRANSCRIPT, { hops: 3 });
+
+  assert.equal(body.graph.entity.nodes.length, 4);
+  for (const node of body.graph.entity.nodes) {
+    assert.deepEqual(
+      Object.keys(node).sort(),
+      ['distance', 'id', 'label'],
+      `a node from a scope without arch.json must keep the legacy shape; got ${JSON.stringify(node)}`,
+    );
+  }
+  assert.equal('kindCounts' in body.stats, false, 'no readable detail ⇒ no kind counts');
+
+  // The degradation is VISIBLE, not swallowed: one diagnostic names the scope
+  // and the reason, so a caller can tell "no classes here" from "no archive".
+  assert.equal(body.provenance.diagnostics?.length, 1);
+  assert.equal(body.provenance.diagnostics?.[0]?.scope, 'scope-src');
+  assert.equal(body.provenance.diagnostics?.[0]?.code, 'ARCH_JSON_MISSING');
+  assert.match(body.provenance.diagnostics?.[0]?.message ?? '', /arch\.json/);
+});
+
+test('an unparseable arch.json degrades to the legacy shape with an ARCH_JSON_INVALID diagnostic', async (t) => {
+  const { root } = createIndexProject(t, DETAIL_CHAIN);
+  // A truncated write is the shape this degradation exists for: the analysis
+  // tree exists, but the sibling archive is not JSON.
+  writeFileSync(path.join(root, '.archguard', 'query', 'scope-src', 'arch.json'), '{"entities": [');
+
+  const body = await readGraphBody(root, DETAIL_TRANSCRIPT, { hops: 3 });
+  for (const node of body.graph.entity.nodes) {
+    assert.deepEqual(Object.keys(node).sort(), ['distance', 'id', 'label']);
+  }
+  assert.equal(body.provenance.diagnostics?.[0]?.code, 'ARCH_JSON_INVALID');
+  assert.equal(body.provenance.diagnostics?.[0]?.scope, 'scope-src');
+});
+
+test('a changed archJsonHash rebuilds kind/members and an unchanged one performs no second archive read', async (t) => {
+  const { root } = createIndexProject(t, DETAIL_CHAIN, detailArchive('class'));
+  // Production reads the archive through `fs.promises`; this seam records every
+  // read so "the second request does no disk work" is a reading, not a belief.
+  const archiveReads: string[] = [];
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/api/architecture',
+    createArchitectureRoutes(
+      createArchitectureService({
+        resolveProjectPath: () => root,
+        readSessionHistory: async () => DETAIL_TRANSCRIPT,
+        readArchiveFile: async (filePath) => {
+          archiveReads.push(filePath);
+          return readFileSync(filePath, 'utf8');
+        },
+      }),
+    ),
+  );
+  app.use(errorMiddleware);
+
+  const indexPath = path.join(root, '.archguard', 'query', 'scope-src', 'arch-index.json');
+  const archivePath = path.join(root, '.archguard', 'query', 'scope-src', 'arch.json');
+
+  await withServer(app, async (baseUrl) => {
+    const first = (await (await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, hops: 3 })).json()) as NeighborhoodBody;
+    assert.equal(archiveReads.length, 1, 'the first request reads the archive exactly once');
+    assert.equal(first.graph.entity.nodes.find((node) => node.id === 'scope-src/k0.ts.Seed')?.kind, 'class');
+
+    const second = (await (await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, hops: 3 })).json()) as NeighborhoodBody;
+    assert.equal(second.provenance.cacheHit, true, 'an identical request is a result-cache hit');
+    assert.equal(archiveReads.length, 1, 'an unchanged fingerprint performs no second archive read');
+
+    // Re-analysis: the index reports a new archJsonHash and the archive now
+    // types the seed as a function. The mtime bump is what a real rewrite does.
+    const index = JSON.parse(readFileSync(indexPath, 'utf8')) as Record<string, unknown>;
+    index.archJsonHash = 'd'.repeat(64);
+    writeJson(indexPath, index);
+    writeJson(archivePath, detailArchive('function'));
+    const bumped = new Date(Date.now() + 5_000);
+    utimesSync(indexPath, bumped, bumped);
+
+    const third = (await (await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, hops: 3 })).json()) as NeighborhoodBody;
+    assert.equal(third.provenance.cacheHit, false, 'a new fingerprint is a cache miss by construction');
+    assert.equal(archiveReads.length, 2, 'the new fingerprint re-reads the archive');
+    assert.equal(
+      third.graph.entity.nodes.find((node) => node.id === 'scope-src/k0.ts.Seed')?.kind,
+      'function',
+      'the node detail was rebuilt from the new archive, not served from the old one',
+    );
+
+    const fourth = (await (await postGraph(baseUrl, { projectId: 'project-1', sessionId: SESSION_ID, hops: 3 })).json()) as NeighborhoodBody;
+    assert.equal(fourth.provenance.cacheHit, true);
+    assert.equal(archiveReads.length, 2, 'the rebuilt reading is memoised too');
+  });
 });
 
 test('a missing project or a malformed body is refused with the transport code, not a 500', async (t) => {

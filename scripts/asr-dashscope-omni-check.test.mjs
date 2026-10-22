@@ -60,6 +60,9 @@ const SHIPPING_FILES = [
   'shared/asr/list/multimodal/multimodal.asr-provider.ts',
   'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts',
   'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts',
+  // The relay row shares this adapter's helpers and is imported by the registry, so it has to be
+  // in the fixture or the registry cannot load at all.
+  'shared/asr/list/dashscope-omni-relay/dashscope-omni-relay.asr-provider.ts',
   'shared/asr/list/sensevoice-local/sensevoice-local.asr-provider.ts',
   // THE CLIENT ADAPTER'S MODULE IS PART OF THE FIXTURE, not an optional extra: the registry imports
   // this module at load time to build its `REGISTERED` row, so a fixture without it cannot load the
