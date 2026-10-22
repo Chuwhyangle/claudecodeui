@@ -1,7 +1,7 @@
 ---
 id: gap-codex-runtime-state-encapsulation
 title: CodexRuntimeState 封装：codex-runtime 的 activeCodexSessions Map 收进带私有字段的类
-status: ready
+status: done
 labels:
   - gap
 parent: null

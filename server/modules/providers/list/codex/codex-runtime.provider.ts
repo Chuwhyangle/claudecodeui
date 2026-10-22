@@ -32,7 +32,84 @@ type ActiveCodexSession = {
   startedAt: string;
 };
 
-const activeCodexSessions = new Map<string, ActiveCodexSession>();
+/**
+ * Owns the Codex runtime's in-flight sessions.
+ *
+ * The session map used to be a module-level `const ... = new Map` mutated from
+ * five places: a global mutable singleton with no owner and no lifecycle. It is
+ * a private field now, and the class exposes only the transitions the runtime
+ * actually performs — register a run, read it back while streaming, abort it,
+ * mark it finished, and sweep finished entries. The module exports one instance
+ * ({@link codexRuntimeState}) used by `queryCodex`, `abortCodexSession` and the
+ * cleanup timer.
+ */
+class CodexRuntimeState {
+  /**
+   * Keyed by the app session id when the caller supplied one, else by the
+   * provider-native thread id once captured (legacy/direct API callers).
+   */
+  private readonly activeCodexSessions = new Map<string, ActiveCodexSession>();
+
+  /** Adds (or refreshes) the session map entry for a run that just started. */
+  register(id: string, session: ActiveCodexSession): void {
+    this.activeCodexSessions.set(id, session);
+  }
+
+  /** The live entry for a run, or undefined once it was swept. */
+  get(id: string): ActiveCodexSession | undefined {
+    return this.activeCodexSessions.get(id);
+  }
+
+  /**
+   * Marks a run finished. An abort recorded while it was streaming wins: the
+   * terminal status stays `aborted` rather than being overwritten as completed.
+   */
+  finish(id: string): void {
+    const session = this.activeCodexSessions.get(id);
+    if (session) {
+      session.status = session.status === 'aborted' ? 'aborted' : 'completed';
+    }
+  }
+
+  /**
+   * Marks a run aborted and cancels its stream. Returns false when the id is
+   * unknown, which callers surface as "nothing to abort".
+   */
+  abort(id: string): boolean {
+    const session = this.activeCodexSessions.get(id);
+
+    if (!session) {
+      return false;
+    }
+
+    session.status = 'aborted';
+    try {
+      session.abortController?.abort();
+    } catch (error) {
+      console.warn(`[Codex] Failed to abort session ${id}:`, error);
+    }
+
+    return true;
+  }
+
+  /**
+   * Deletes entries that have not been running for longer than `maxAgeMs`.
+   * Running sessions are never swept, however old they are.
+   */
+  purgeFinished(maxAgeMs: number, now = Date.now()): void {
+    for (const [id, session] of this.activeCodexSessions.entries()) {
+      if (session.status !== 'running') {
+        const startedAt = new Date(session.startedAt).getTime();
+        if (now - startedAt > maxAgeMs) {
+          this.activeCodexSessions.delete(id);
+        }
+      }
+    }
+  }
+}
+
+/** The module's one session owner; see {@link CodexRuntimeState}. */
+const codexRuntimeState = new CodexRuntimeState();
 
 // Codex CLI requires non-whitespace stdin even when --image arguments are
 // present, so attachment-only turns need a small text instruction.
@@ -329,7 +406,7 @@ async function queryCodex(
       if (!id) {
         return;
       }
-      activeCodexSessions.set(id, {
+      codexRuntimeState.register(id, {
         thread,
         codex,
         status: 'running',
@@ -380,7 +457,7 @@ async function queryCodex(
         break;
       }
       if (sessionKey()) {
-        const session = activeCodexSessions.get(sessionKey() || '');
+        const session = codexRuntimeState.get(sessionKey() || '');
         if (session?.status === 'aborted') {
           break;
         }
@@ -434,7 +511,7 @@ async function queryCodex(
 
     // Send the terminal completion event — skipped for aborted runs, whose
     // terminal `complete` (aborted: true) was already sent by abort-session.
-    const runSession = activeCodexSessions.get(sessionKey() || '');
+    const runSession = codexRuntimeState.get(sessionKey() || '');
     const runAborted = runSession?.status === 'aborted' || abortController.signal.aborted;
     if (!runAborted) {
       sendMessage(ws, createCompleteMessage({
@@ -455,7 +532,7 @@ async function queryCodex(
     }
 
   } catch (error) {
-    const session = activeCodexSessions.get(sessionKey() || '');
+    const session = codexRuntimeState.get(sessionKey() || '');
     const runError = error instanceof Error ? error : new Error(String(error));
     const wasAborted =
       session?.status === 'aborted' ||
@@ -492,11 +569,9 @@ async function queryCodex(
 
   } finally {
     // Update session status
-    if (sessionKey()) {
-      const session = activeCodexSessions.get(sessionKey() || '');
-      if (session) {
-        session.status = session.status === 'aborted' ? 'aborted' : 'completed';
-      }
+    const finishedKey = sessionKey();
+    if (finishedKey) {
+      codexRuntimeState.finish(finishedKey);
     }
   }
 }
@@ -507,20 +582,7 @@ async function queryCodex(
  * @returns {boolean} - Whether abort was successful
  */
 function abortCodexSession(sessionId: string) {
-  const session = activeCodexSessions.get(sessionId);
-
-  if (!session) {
-    return false;
-  }
-
-  session.status = 'aborted';
-  try {
-    session.abortController?.abort();
-  } catch (error) {
-    console.warn(`[Codex] Failed to abort session ${sessionId}:`, error);
-  }
-
-  return true;
+  return codexRuntimeState.abort(sessionId);
 }
 
 /** Used by the providers module's CodexProvider to run and abort SDK turns. */
@@ -550,17 +612,8 @@ function sendMessage(ws: ProviderRuntimeWriter, data: unknown) {
 
 // Clean up old completed sessions periodically
 const completedSessionCleanupTimer = setInterval(() => {
-  const now = Date.now();
   const maxAge = 30 * 60 * 1000; // 30 minutes
-
-  for (const [id, session] of activeCodexSessions.entries()) {
-    if (session.status !== 'running') {
-      const startedAt = new Date(session.startedAt).getTime();
-      if (now - startedAt > maxAge) {
-        activeCodexSessions.delete(id);
-      }
-    }
-  }
+  codexRuntimeState.purgeFinished(maxAge);
 }, 5 * 60 * 1000); // Every 5 minutes
 
 // Runtime cleanup should not keep focused tests or one-off scripts alive after
