@@ -375,10 +375,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // the 55 s single-file default. Re-measured 2026-10-23 with the text-selection
   // legs (three canvas gestures + the dock leg in the PC main arm, and control
   // arm E's inject/restore round trip): `8 passed (54.2s)`, still inside the
-  // entry below. 120_000 is what the sibling interaction-heavy entries below
-  // declare, and it keeps a load-slowed fan-in run from being killed mid-case by
-  // the watchdog while still landing the line inside the goal gate's 60 s kill
-  // for a healthy run.
+  // entry below. Re-measured again 2026-10-23 with the semantic-zoom polish
+  // (title collision, ghost-label, `×N` halo and stroke-width readings, plus
+  // control arm F's avoidance-off injection): `9 passed (1.0m)`. 120_000 is what
+  // the sibling interaction-heavy entries below declare, and it keeps a
+  // load-slowed fan-in run from being killed mid-case by the watchdog while
+  // still landing the line inside the goal gate's 60 s kill for a healthy run.
   'architecture-canvas-layout.spec.ts': 120_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s

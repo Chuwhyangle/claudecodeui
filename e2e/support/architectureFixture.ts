@@ -151,13 +151,20 @@ function buildEntities(): FixtureEntity[] {
     GRANDCHILDREN_PER_CHILD.forEach((grandchildCount, childIndex) => {
       const childName = `${family.stem}${childIndex}`;
       const childId = `${family.dir}/${childName}.ts.${childName}`;
+      // One extra dependency across the SAME family pair as the seed chain:
+      // ui/panels → core/layout then carries two relations, which is what makes
+      // the collapsed package edge a weighted `×N` line the LOD criterion can
+      // read (a fixture of single relations would leave that leg vacuous).
+      const extraParent = familyIndex === 0 && childIndex === 0
+        ? [`${FAMILIES[1].dir}/${FAMILIES[1].seed}.ts.${FAMILIES[1].seed}`]
+        : [];
       entities.push({
         id: childId,
         name: childName,
         file: `${family.dir}/${childName}.ts`,
         type: kindAt(childIndex),
         isAbstract: false,
-        parents: [seedId],
+        parents: [seedId, ...extraParent],
       });
 
       for (let stepIndex = 0; stepIndex < grandchildCount; stepIndex += 1) {

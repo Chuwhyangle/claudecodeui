@@ -15,6 +15,7 @@ import {
   LOD_DEBOUNCE_MS,
   LOD_DEADZONE_RATIO,
   LOD_LABEL_BASE_FONT_PX,
+  LOD_LABEL_COLLISION_MARGIN_PX,
   LOD_LABEL_MAX_SCREEN_PX,
   LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX,
   LOD_LABEL_MIN_SCREEN_PX,
@@ -24,7 +25,7 @@ import {
   orthogonalConnector,
   PACKAGE_LEVEL_MAX_DEPTH,
   PACKAGE_LOD_DEPTH,
-  planPackageTitles,
+  planLodLabels,
   polylineFromPathData,
   resolveLodDepth,
   SUBPACKAGE_LOD_DEPTH,
@@ -471,7 +472,7 @@ test('package titles are counter-scaled: readable at low zoom and never enlarged
 });
 
 test('an overlapping inner title yields to the outer frame, and a narrow frame gets no title', () => {
-  const plans = planPackageTitles(
+  const plans = planLodLabels(
     [
       { packageId: 'outer', text: 'outer (12)', box: { x: 0, y: 0, width: 400, height: 300 } },
       // Nested at the outer frame's top-left: its title would collide.
@@ -486,14 +487,104 @@ test('an overlapping inner title yields to the outer frame, and a narrow frame g
   assert.ok(!ids.includes('inner'), 'the inner title is omitted where it cannot fit');
   assert.ok(!ids.includes('narrow'), 'a frame narrower than the 60px floor gets no title');
   assert.equal(LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX, 60);
+});
 
-  // A long title is truncated with an ellipsis rather than overflowing.
-  const truncated = planPackageTitles(
-    [{ packageId: 'long', text: 'modules/chat/hooks/very/deep (12)', box: { x: 0, y: 0, width: 400, height: 300 } }],
+test('a title too long for its frame falls back to its leaf name plus count, then to an ellipsis', () => {
+  // `modules/chat/hooks/very/deep (12)` does not fit a 400-unit frame at 33%;
+  // the leaf form keeps the part that names the package, where `modules/ch…`
+  // would not.
+  const compacted = planLodLabels(
+    [{ packageId: 'deep', text: 'modules/chat/hooks/very/deep (12)', box: { x: 0, y: 0, width: 400, height: 300 } }],
     0.33,
   )[0];
-  assert.ok(truncated !== undefined, 'the long title still draws');
-  assert.ok(truncated.text.endsWith('…'), `the title truncates with an ellipsis, got ${truncated.text}`);
+  assert.ok(compacted !== undefined, 'the long title still draws');
+  assert.equal(compacted.text, 'deep (12)', 'the truncated title shows the last segment plus its count');
+
+  // A leaf name that STILL does not fit is ellipsised rather than overflowing.
+  const ellipsised = planLodLabels(
+    [{ packageId: 'long', text: 'modules/chat/reallylongleafname (12)', box: { x: 0, y: 0, width: 300, height: 300 } }],
+    0.33,
+  )[0];
+  assert.ok(ellipsised !== undefined);
+  assert.ok(ellipsised.text.endsWith('…'), `the leaf name truncates with an ellipsis, got ${ellipsised.text}`);
+});
+
+test('a candidate that would cover an edge weight label is omitted', () => {
+  const frames = [
+    { packageId: 'big', text: 'big (4)', box: { x: 0, y: 0, width: 400, height: 300 } },
+    { packageId: 'small', text: 'small (2)', box: { x: 200, y: 150, width: 200, height: 100 } },
+  ];
+  // The `small` title's own screen rect (frame top-left + inset), used to place
+  // the obstacle exactly on it.
+  const withoutObstacle = planLodLabels(frames, 0.5);
+  const smallPlan = withoutObstacle.find((plan) => plan.packageId === 'small');
+  assert.ok(smallPlan !== undefined, 'the small frame is planned when nothing blocks it');
+  const obstacle = smallPlan.screenRect;
+
+  const blocked = planLodLabels(frames, 0.5, null, [obstacle]);
+  assert.ok(
+    !blocked.some((plan) => plan.packageId === 'small'),
+    'a title that would cover a ×N weight label yields to the label',
+  );
+  assert.ok(
+    blocked.some((plan) => plan.packageId === 'big'),
+    'the unrelated title is still planned',
+  );
+  // The same input also ignores obstacles that are nowhere near a title.
+  const farAway = planLodLabels(frames, 0.5, null, [{ x: 10_000, y: 10_000, width: 20, height: 12 }]);
+  assert.ok(farAway.some((plan) => plan.packageId === 'small'), 'a distant obstacle blocks nothing');
+});
+
+test('titles keep a 4px screen margin; a gap of exactly the margin is not a collision', () => {
+  const zoom = 0.5;
+  const first = planLodLabels(
+    [{ packageId: 'first', text: 'first (3)', box: { x: 0, y: 0, width: 400, height: 300 } }],
+    zoom,
+  )[0];
+  assert.ok(first !== undefined);
+  // Both titles get the same inset, so the screen gap between them is
+  // `secondBox.x * zoom - firstRect.width`.
+  const boxXForGap = (gap: number): number => (first.screenRect.width + gap) / zoom;
+
+  const exactly = planLodLabels([
+    { packageId: 'first', text: 'first (3)', box: { x: 0, y: 0, width: 400, height: 300 } },
+    { packageId: 'second', text: 'second (3)', box: { x: boxXForGap(LOD_LABEL_COLLISION_MARGIN_PX), y: 0, width: 400, height: 100 } },
+  ], zoom);
+  assert.ok(
+    exactly.some((plan) => plan.packageId === 'second'),
+    'two titles exactly one margin apart are both drawn',
+  );
+
+  const tooClose = planLodLabels([
+    { packageId: 'first', text: 'first (3)', box: { x: 0, y: 0, width: 400, height: 300 } },
+    { packageId: 'second', text: 'second (3)', box: { x: boxXForGap(LOD_LABEL_COLLISION_MARGIN_PX - 1), y: 0, width: 400, height: 100 } },
+  ], zoom);
+  assert.ok(
+    !tooClose.some((plan) => plan.packageId === 'second'),
+    'a title one pixel inside the margin is omitted',
+  );
+});
+
+test('the title plan is deterministic: same frames and scale give the same plans', () => {
+  const frames = [
+    { packageId: 'a/b', text: 'a/b (3)', box: { x: 0, y: 0, width: 400, height: 300 } },
+    { packageId: 'a/c', text: 'a/c (2)', box: { x: 120, y: 20, width: 260, height: 120 } },
+    { packageId: 'd/e', text: 'd/e (1)', box: { x: 900, y: 400, width: 300, height: 200 } },
+  ];
+  const obstacles = [{ x: 900, y: 400, width: 24, height: 14 }];
+  const first = planLodLabels(frames, 0.33, { x: 0, y: 0, width: 900, height: 700 }, obstacles);
+  const second = planLodLabels(frames, 0.33, { x: 0, y: 0, width: 900, height: 700 }, obstacles);
+  assert.deepEqual(first, second);
+  assert.ok(first.length > 0, 'the fixture plans at least one title');
+});
+
+test('a title entirely outside the viewport is not planned', () => {
+  const frames = [
+    { packageId: 'seen', text: 'seen (3)', box: { x: 0, y: 0, width: 400, height: 300 } },
+    { packageId: 'off', text: 'off (3)', box: { x: 4000, y: 3000, width: 400, height: 300 } },
+  ];
+  const plans = planLodLabels(frames, 0.5, { x: 0, y: 0, width: 800, height: 600 });
+  assert.deepEqual(plans.map((plan) => plan.packageId), ['seen']);
 });
 
 test('the clipping function preserves orthogonality and ends on both frame boundaries', () => {
