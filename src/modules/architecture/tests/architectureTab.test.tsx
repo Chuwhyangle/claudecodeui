@@ -486,6 +486,10 @@ function drawnEdge(host: HTMLElement, from: string, to: string): Element {
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  // jsdom has no canvas: an un-stubbed `getContext('2d')` answers null AND logs
+  // a "Not implemented" error on every paint. The minimap paints on a frame, so
+  // answer null directly — it is the component's documented "cannot draw" path.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 });
 
 const projectWithArchguard = (hasArchguardCache: boolean): Project => ({
@@ -1033,6 +1037,103 @@ test('the zoom cluster lives on the canvas, not in the toolbar, with 32px target
       `the toolbar must not keep the ${control} control`,
     );
   }
+});
+
+/**
+ * jsdom performs no layout, so every `getBoundingClientRect` is a zero-area box
+ * at the origin and a literal intersection test would be vacuously green. This
+ * lays the canvas's two chrome boxes out the way the CSS column does — anchored
+ * at the bottom-right, stacked with the declared row gap, sized by their own
+ * declared boxes — so the intersection assertion has real numbers behind it.
+ */
+function chromeBoxes(overlays: HTMLElement, map: HTMLElement, cluster: HTMLElement) {
+  const gap = Number.parseFloat(getComputedStyle(overlays).rowGap);
+  const mapCanvas = map.querySelector('canvas');
+  assert.ok(mapCanvas instanceof HTMLCanvasElement);
+  const width = Number.parseFloat(mapCanvas.style.width);
+  const mapHeight = Number.parseFloat(mapCanvas.style.height);
+  const clusterHeight = [...cluster.querySelectorAll('button')].reduce(
+    (total, button) => total + Number.parseFloat(button.style.minHeight || '0'),
+    0,
+  );
+  const right = 1000;
+  const bottom = 800;
+  return {
+    map: { left: right - width, top: bottom - clusterHeight - gap - mapHeight, right, bottom: bottom - clusterHeight - gap },
+    cluster: { left: right - width, top: bottom - clusterHeight, right, bottom },
+  };
+}
+
+test('the minimap sits in the canvas beside the zoom cluster and remembers being collapsed', async () => {
+  window.localStorage.removeItem('architecture.minimap.collapsed');
+  const { unmount } = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await screen.findByTestId('plantuml-host');
+  sizeHost(host, 160, 120);
+  await waitFor(() => assert.ok(host.querySelector('svg')));
+  triggerResize();
+
+  const canvas = canvasOf(host);
+  const minimap = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-minimap]');
+    assert.ok(node instanceof HTMLElement, 'a drawing bigger than the canvas gets a minimap');
+    return node;
+  });
+  const cluster = zoomCluster();
+
+  // Containment: the map is chrome OF the canvas, so it lives inside it.
+  assert.ok(canvas.contains(minimap), 'the minimap belongs to the canvas container');
+  const overlays = minimap.closest('[data-architecture-canvas-overlays]');
+  assert.ok(overlays instanceof HTMLElement, 'the map is drawn in the canvas overlay column');
+  assert.equal(
+    cluster.closest('[data-architecture-canvas-overlays]'),
+    overlays,
+    'the map and the zoom cluster share ONE column, so neither can cover the other',
+  );
+  assert.equal(overlays.parentElement, canvas, 'the column is anchored in the canvas, not the toolbar');
+
+  // The arrangement that makes the boxes disjoint: an absolutely positioned
+  // column, a positive gap, and the map BEFORE the cluster.
+  const overlayStyle = getComputedStyle(overlays);
+  assert.equal(overlayStyle.position, 'absolute');
+  assert.equal(overlayStyle.flexDirection, 'column');
+  assert.ok(Number.parseFloat(overlayStyle.rowGap) > 0, 'the two chrome boxes are separated by a gap');
+  assert.ok(
+    (minimap.compareDocumentPosition(cluster) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    'the column stacks the map above the cluster',
+  );
+  const boxes = chromeBoxes(overlays, minimap, cluster);
+  assert.ok(
+    boxes.map.bottom <= boxes.cluster.top,
+    `the minimap and the zoom cluster must not intersect: ${JSON.stringify(boxes)}`,
+  );
+
+  // Collapsing leaves only the 44px button, and the choice is remembered.
+  fireEvent.click(document.querySelector('[data-architecture-minimap-collapse]') as Element);
+  assert.equal(document.querySelector('[data-architecture-minimap-canvas]'), null, 'the map collapses');
+  unmount();
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const reopenedHost = await screen.findByTestId('plantuml-host');
+  sizeHost(reopenedHost, 160, 120);
+  await waitFor(() => assert.ok(reopenedHost.querySelector('svg')));
+  triggerResize();
+  const expand = await waitFor(() => {
+    const button = document.querySelector('[data-architecture-minimap-expand]');
+    assert.ok(button instanceof HTMLElement, 'a new mount reads the remembered choice');
+    return button;
+  });
+  assert.equal(document.querySelector('[data-architecture-minimap-canvas]'), null, 'still collapsed after remount');
+  assert.equal(getComputedStyle(expand).minHeight, '44px', 'the collapsed form keeps a 44px target');
+
+  fireEvent.click(expand);
+  await waitFor(() =>
+    assert.ok(document.querySelector('[data-architecture-minimap-canvas]'), 'expanding restores the map'),
+  );
+  assert.equal(
+    window.localStorage.getItem('architecture.minimap.collapsed'),
+    'expanded',
+    'the expanded choice is remembered too',
+  );
 });
 
 test('the zoom cluster grows to 44px targets on a coarse pointer', async () => {

@@ -55,6 +55,11 @@
         "overviewHint": "Zoom {{zoom}} % · amplía {{package}} y {{count}} paquete(s) más",
         "collapsed": "El gráfico es demasiado ancho, así que se plegó a la vista general por directorios.",
         "focusedFitHint": "El zoom legible está activo, así que esta vista es un enfoque; elige «Vista general» para ver todo el gráfico."
+      },
+      "minimap": {
+        "label": "Vista general del diagrama: {{percent}} % del dibujo visible",
+        "show": "Mostrar la vista general del diagrama",
+        "hide": "Contraer la vista general del diagrama"
       }
     },
     "title": "Arquitectura",

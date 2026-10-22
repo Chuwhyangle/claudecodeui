@@ -55,6 +55,11 @@
         "overviewHint": "Zoom {{zoom}} % · zoomez sur {{package}} et {{count}} autre(s) paquet(s)",
         "collapsed": "Le graphe est trop large ; il a donc été replié sur la vue d'ensemble par répertoires.",
         "focusedFitHint": "Le zoom lisible est actif : cette vue est focalisée, pas le graphe entier — choisissez « Vue d'ensemble » pour tout voir."
+      },
+      "minimap": {
+        "label": "Aperçu du diagramme : {{percent}} % du dessin visible",
+        "show": "Afficher l’aperçu du diagramme",
+        "hide": "Réduire l’aperçu du diagramme"
       }
     },
     "title": "Architecture",

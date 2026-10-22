@@ -55,6 +55,11 @@
         "overviewHint": "缩放 {{zoom}}% · 放大查看 {{package}} 等 {{count}} 个包",
         "collapsed": "图过宽，已折叠为目录全貌。",
         "focusedFitHint": "已按可读缩放聚焦，点“全貌”查看整图。"
+      },
+      "minimap": {
+        "label": "图概览，当前视野占 {{percent}}%",
+        "show": "显示图概览",
+        "hide": "收起图概览"
       }
     },
     "title": "架构",

@@ -82,6 +82,11 @@
         "overviewHint": "Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)",
         "collapsed": "The graph is too wide, so it was collapsed to the directory overview.",
         "focusedFitHint": "Readable zoom is on, so this is a focus view — choose Overview to see the whole graph."
+      },
+      "minimap": {
+        "label": "Graph overview, showing {{percent}}% of the drawing",
+        "show": "Show graph overview",
+        "hide": "Collapse graph overview"
       }
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
