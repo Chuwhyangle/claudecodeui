@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import { useAuth } from '@/modules/auth';
+import { continuousAudioFrame, frameLevel } from '@/modules/chat/voice-realtime/audioFrameEncoding';
 import {
   fileAudioSource,
   microphoneAudioSource,
@@ -9,6 +10,19 @@ import {
   type VoiceRealtimeAudioFrame,
   type VoiceRealtimeAudioSource,
 } from '@/modules/chat/voice-realtime/audioSource';
+import {
+  claimThrough,
+  sortCaptionsInSpokenOrder,
+  unclaimedSegment,
+} from '@/modules/chat/voice-realtime/captionOrdering';
+import {
+  concatNarratorBytes,
+  narratorBase64Bytes,
+  parseNarratorWavHeader,
+  releaseNarratorStream,
+  type NarratorStream,
+  type NarratorWavHeader,
+} from '@/modules/chat/voice-realtime/narratorWav';
 // The count a close leaves behind is the row algebra's own question — which utterances a shown
 // delivery accounts for — so it is asked through the same shared rule the fold removes words by, not
 // a second copy of it that could drift.
@@ -202,163 +216,6 @@ type NarratorTtsBuffer = {
 
 /** The narrator utterance whose `<audio>` element is playing now. */
 type NarratorPlaying = { utteranceId: string; url: string };
-
-/**
- * The fields of a RIFF/WAVE header streaming playback needs.
- *
- * Streaming playback starts before `tts_done`, so the page has to read the container itself: the
- * `fmt ` chunk says how to turn PCM bytes into samples, and `dataStart` is where the first PCM byte
- * lives (everything before it is the header frame a media element would need to decode the file).
- */
-type NarratorWavHeader = {
-  sampleRate: number;
-  channels: number;
-  /** Always 16 for the streaming path; any other depth falls back to the element path. */
-  bitsPerSample: number;
-  dataStart: number;
-};
-
-/**
- * One narrator utterance being scheduled through an `AudioContext`.
- *
- * `fallback` is the whole safety valve: no `AudioContext`, a non-WAV container, an unreadable
- * header, or a `resume()` rejected by the autoplay policy all set it, and `tts_done` then plays the
- * assembled Blob exactly as the pre-streaming page did. The slices keep being collected in
- * {@link NarratorTtsBuffer} while streaming, so that fallback is always possible.
- */
-type NarratorStream = {
-  utteranceId: string;
-  format: string;
-  header: NarratorWavHeader | null;
-  context: AudioContext | null;
-  fallback: boolean;
-  /** Decoded PCM bytes that do not yet complete a sample frame. */
-  pending: Uint8Array;
-  /** The context time the next scheduled source starts at, keeping slices contiguous. */
-  nextStartTime: number;
-  sources: AudioBufferSourceNode[];
-  lastSource: AudioBufferSourceNode | null;
-  lastEnded: boolean;
-  /** `tts_done` has arrived; the last source's `ended` is what acks. */
-  done: boolean;
-  stopped: boolean;
-  acked: boolean;
-};
-
-/** Decodes one base64 slice, or `null` when it is not base64 at all. */
-function narratorBase64Bytes(payload: string): Uint8Array | null {
-  try {
-    const raw = atob(payload);
-    const bytes = new Uint8Array(raw.length);
-    for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
-    return bytes;
-  } catch {
-    return null;
-  }
-}
-
-/** Four ASCII bytes as a chunk id, or `null` when the range is short. */
-function narratorAscii(bytes: Uint8Array, offset: number): string | null {
-  if (offset + 4 > bytes.length) return null;
-  return String.fromCharCode(bytes[offset]!, bytes[offset + 1]!, bytes[offset + 2]!, bytes[offset + 3]!);
-}
-
-function narratorUint16LE(bytes: Uint8Array, offset: number): number | null {
-  if (offset + 2 > bytes.length) return null;
-  return bytes[offset]! | (bytes[offset + 1]! << 8);
-}
-
-function narratorUint32LE(bytes: Uint8Array, offset: number): number | null {
-  if (offset + 4 > bytes.length) return null;
-  return (
-    (bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16) | (bytes[offset + 3]! << 24)) >>> 0
-  );
-}
-
-/** Joins two byte slices without mutating either. */
-function concatNarratorBytes(head: Uint8Array, tail: Uint8Array): Uint8Array {
-  if (head.length === 0) return tail;
-  if (tail.length === 0) return head;
-  const merged = new Uint8Array(head.length + tail.length);
-  merged.set(head, 0);
-  merged.set(tail, head.length);
-  return merged;
-}
-
-/**
- * Reads the PCM format out of a WAV header, or `null` when it is not a shape this page can schedule.
- *
- * `seq: 0` carries the header (the new producer sends exactly the header bytes; the pre-streaming
- * producer's first frame was 16 KiB, so the header may sit at the front of a slice that also
- * contains PCM — `dataStart` is what lets both shapes work).
- */
-function parseNarratorWavHeader(bytes: Uint8Array): NarratorWavHeader | null {
-  if (bytes.length < 12) return null;
-  if (narratorAscii(bytes, 0) !== 'RIFF' || narratorAscii(bytes, 8) !== 'WAVE') return null;
-
-  let audioFormat: number | null = null;
-  let channels: number | null = null;
-  let sampleRate: number | null = null;
-  let bitsPerSample: number | null = null;
-  let offset = 12;
-  while (offset + 8 <= bytes.length) {
-    const id = narratorAscii(bytes, offset);
-    const size = narratorUint32LE(bytes, offset + 4);
-    if (id === null || size === null) return null;
-    const bodyStart = offset + 8;
-    if (id === 'data') {
-      if (
-        audioFormat !== 1 ||
-        channels === null ||
-        channels < 1 ||
-        sampleRate === null ||
-        sampleRate <= 0 ||
-        bitsPerSample !== 16
-      ) {
-        return null;
-      }
-      return { sampleRate, channels, bitsPerSample, dataStart: bodyStart };
-    }
-    if (size === 0xffff_ffff || bodyStart + size > bytes.length) return null;
-    if (id === 'fmt ' && size >= 16) {
-      audioFormat = narratorUint16LE(bytes, bodyStart);
-      channels = narratorUint16LE(bytes, bodyStart + 2);
-      sampleRate = narratorUint32LE(bytes, bodyStart + 4);
-      bitsPerSample = narratorUint16LE(bytes, bodyStart + 14);
-    }
-    offset = bodyStart + size + (size % 2);
-  }
-  return null;
-}
-
-/**
- * Stops every source this stream scheduled and closes its context.
- *
- * Used by `narrator_stop`, by a replaced connection and by `end()`: none of those may ack, because
- * the server has already cleared the utterance and is not waiting for this id.
- */
-function releaseNarratorStream(stream: NarratorStream): void {
-  stream.stopped = true;
-  for (const source of stream.sources) {
-    source.onended = null;
-    try {
-      source.stop();
-    } catch {
-      /* a source that already ended cannot be stopped again */
-    }
-  }
-  stream.sources.length = 0;
-  stream.lastSource = null;
-  const context = stream.context;
-  stream.context = null;
-  if (context !== null) {
-    try {
-      void context.close();
-    } catch {
-      /* an already-closed context */
-    }
-  }
-}
 
 /**
  * The MIME type one TTS container is decoded as.
@@ -824,18 +681,6 @@ function voiceLog(message: string): void {
   console.info(`[voice-realtime] ${message}`);
 }
 
-/** Peak-ish loudness of one frame, 0..1: RMS scaled so ordinary speech fills most of the range. */
-function frameLevel(samples: Float32Array): number {
-  let sum = 0;
-  for (let index = 0; index < samples.length; index += 1) {
-    sum += samples[index] * samples[index];
-  }
-  return Math.min(1, Math.sqrt(sum / Math.max(1, samples.length)) * 4);
-}
-
-/** The rate the Realtime transport's `pcm16` input expects. */
-const TARGET_SAMPLE_RATE = 16_000;
-
 /**
  * How long a committed segment is given to produce a transcript before the page stops waiting and
  * marks the words as not recognised.
@@ -856,115 +701,6 @@ const TARGET_SAMPLE_RATE = 16_000;
  * about to send.
  */
 const SEGMENT_TRANSCRIPT_GRACE_MS = 6_000;
-
-/** A caption's spoken-order key: its own segment, and `Infinity` for one that belongs to no segment. */
-function captionOrderKey(caption: VoiceRealtimeCaption): number {
-  return typeof caption.seq === 'number' && Number.isInteger(caption.seq) ? caption.seq : Number.POSITIVE_INFINITY;
-}
-
-/**
- * The captions in the order they were SPOKEN, which is not the order they arrived in.
- *
- * The endpoint answers its commits in whatever order it finishes, so a transcript for an earlier
- * segment regularly lands after a later one's (journal `ef9daacd`: seq2's after seq3's, seq4's after
- * seq5's). Appending on arrival — what this did — therefore read the person their own sentences out
- * of order, and the composer's leave-backlog in that order too. Sorting by the segment each caption
- * was spoken in is what puts both right, and the sort is STABLE: captions that belong to no segment
- * (`Infinity`) keep their arrival order among themselves, so a connection with no seq information at
- * all is ordered exactly as it was before.
- */
-function sortCaptionsInSpokenOrder(captions: readonly VoiceRealtimeCaption[]): VoiceRealtimeCaption[] {
-  return [...captions].sort((left, right) => {
-    const a = captionOrderKey(left);
-    const b = captionOrderKey(right);
-    if (a === b) return 0;
-    return a < b ? -1 : 1;
-  });
-}
-
-/**
- * The segment a caption with no `seq` of its own belongs to: the OLDEST segment this connection has
- * committed that no other utterance accounts for, or `null` when there is none to be had.
- *
- * WHY A CAPTION THE PROXY COULD NOT PLACE STILL GETS PLACED. `seq` is the client's own segment number,
- * echoed back on the frames the proxy can attribute — and there is one utterance it cannot attribute:
- * the one whose item the ENDPOINT's own detector created. The 2026-10-12 journal's seq1 was refused a
- * commit ("buffer too small") precisely because the deployment's VAD had already taken that audio as an
- * item of its own, and the words of that utterance came back during seq2 carrying `seq: null` — read
- * off the replay's own recording: `{"itemId":"A_B","text":"现在是第二句话。","seq":null}`. Placement by
- * speech had nothing to place by, so the sentence fell past the end of the transcript, BELOW the
- * answers it preceded, and the leave-backlog (which reads the captions in this same order) was read
- * back to front with it. The person's own second sentence was the one sentence the screen got wrong.
- *
- * THE OLDEST UNCLAIMED SEGMENT, NOT THE ACTIVE ONE. A segment is claimed by the utterance whose `seq`
- * names it; the ones left over are the segments still waiting for their words, and the earliest of
- * those is the earliest place the words can have been spoken — so nothing already on screen is pushed
- * below a sentence that may have been said after it. Reading the segment that happened to be active
- * when the endpoint finally answered would be a coin toss the page cannot see the result of: for the
- * journal's caption the two candidates are 34 ms apart (`segment_ack seq=2` at …550906, the caption at
- * …551206, `segment_ack seq=3` at …551240) and both are "the segment in flight", so the client would be
- * choosing by clock skew rather than by anything it knows.
- *
- * A GUESSED SEGMENT IS NOT A SECOND HOLE. The refusal that preceded such a caption says no transcript is
- * coming for that COMMIT — not that the audio was lost: the same audio was transcribed under the item the
- * detector made instead (the journal's item B is created during seq1's own turn, which is why seq1's
- * commit was refused). So a guessed segment is settled like an attributed one
- * ({@link settleSegmentTranscript} retracts the not-recognised line the refusal drew), and the guess never
- * ADDS a line to the transcript: the segments that really produced no words keep theirs, and the one the
- * words came back to stops claiming to be one.
- *
- * `null` for a connection that has committed no segment at all (continuous mode, whose captions carry
- * no seq either) or for a caption that arrives before the first commit: those keep the placement this
- * module has always had, with no position to place by.
- */
-function unclaimedSegment(captions: readonly VoiceRealtimeCaption[], segmentsSent: number): number | null {
-  const claimed = new Set<number>();
-  for (const caption of captions) {
-    const key = captionOrderKey(caption);
-    if (Number.isFinite(key)) claimed.add(key);
-  }
-  for (let seq = 0; seq < segmentsSent; seq += 1) {
-    if (!claimed.has(seq)) return seq;
-  }
-  return null;
-}
-
-/**
- * Encodes one captured Float32 frame as base64 little-endian PCM16.
- *
- * The Realtime session's `input_audio_format` is `pcm16` at 16 kHz, while the
- * audio graph runs at whatever the capture device picked (48 kHz in most
- * browsers), so the frame is decimated by nearest-neighbour before it is
- * quantised. Nearest-neighbour is enough here: this is speech headed for an
- * ASR-grade model, and the alternative — a windowed resampler — buys nothing
- * the recogniser can hear.
- */
-function encodePcm16Base64(samples: Float32Array, sourceRate: number): string {
-  const step = sourceRate > TARGET_SAMPLE_RATE ? sourceRate / TARGET_SAMPLE_RATE : 1;
-  const count = step > 1 ? Math.floor(samples.length / step) : samples.length;
-  const bytes = new Uint8Array(count * 2);
-  const view = new DataView(bytes.buffer);
-  for (let index = 0; index < count; index += 1) {
-    const sample = step > 1 ? samples[Math.floor(index * step)] : samples[index];
-    const clamped = sample < -1 ? -1 : sample > 1 ? 1 : sample;
-    view.setInt16(index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
-  }
-  let binary = '';
-  for (let index = 0; index < bytes.length; index += 1) {
-    binary += String.fromCharCode(bytes[index]);
-  }
-  return btoa(binary);
-}
-
-/**
- * One `audio` frame on the CONTINUOUS path — the shipped behaviour, and the fallback for
- * every connection whose server never declares the segmented relay. Its bytes are the
- * pre-P1c client's exactly: the segmented path must be additive, so a connection that
- * negotiates nothing (or negotiates against an older proxy) still sends what it always did.
- */
-function continuousAudioFrame(frame: VoiceRealtimeAudioFrame): string {
-  return JSON.stringify({ type: 'audio', audio: encodePcm16Base64(frame.samples, frame.sourceRate) });
-}
 
 /**
  * The `queuedMessageUuid` a `sent` frame's `result` carries, or `null` when it carries none.
@@ -990,24 +726,6 @@ function readQueuedMessageUuid(result: unknown): string | null {
 function readCoveredThroughItemId(frame: { coveredThroughItemId?: unknown }): string | null {
   const value = frame.coveredThroughItemId;
   return typeof value === 'string' && value !== '' ? value : null;
-}
-
-/**
- * The pending captions one delivery answers, up to and including the item it reports covering.
- *
- * The watermark is a boundary the ENDPOINT moved — the commit that created the item — so everything
- * at or before it was in the model's conversation when this delivery was produced. Captions the page
- * holds that the watermark does not name are all EARLIER than it (an item is committed before it is
- * transcribed, and captions arrive in that order), so an unmatched watermark covers them too: the
- * alternative is leaving a sentence on screen as never-handled for the one reason that it was the
- * last thing said, which is exactly the bubble this attribution exists to stop drawing.
- */
-function claimThrough(
-  pending: readonly VoiceRealtimeCaption[],
-  coveredThroughItemId: string,
-): VoiceRealtimeCaption[] {
-  const boundary = pending.findIndex((caption) => caption.itemId === coveredThroughItemId);
-  return boundary === -1 ? [...pending] : pending.slice(0, boundary + 1);
 }
 
 /**
