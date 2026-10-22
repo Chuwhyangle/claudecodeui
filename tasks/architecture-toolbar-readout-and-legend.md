@@ -26,10 +26,10 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：头部只有一行（工具栏元素的 `offsetTop` 相同，jsdom 以 DOM 结构断言：工具栏容器内无换行容器）；默认视角是类图；页面不再出现重复的 Hover 提示句；读数含「显示 N 个类 · 共 M 个相关」且 N/M 与过滤结果一致；截断时同一读数追加「另有 K 个」；不再渲染 `2000 of` 之类预算数字
-- [ ] 同文件新增用例：`stats.kindCounts` 存在时读数展开处显示 `805 函数 · 300 接口 · 5 类` 形态的一行，缺失则不显示；未解析种子可展开并列出名字；时间显示为相对时间且 `title` 为本地精确时间
-- [ ] 同文件新增用例：搜索命中后目标节点被居中并带选中标记；范围外命中带「不在当前范围」且点击后范围/焦点更新
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：头部只有一行（工具栏元素的 `offsetTop` 相同，jsdom 以 DOM 结构断言：工具栏容器内无换行容器）；默认视角是类图；页面不再出现重复的 Hover 提示句；读数含「显示 N 个类 · 共 M 个相关」且 N/M 与过滤结果一致；截断时同一读数追加「另有 K 个」；不再渲染 `2000 of` 之类预算数字
+- [x] 同文件新增用例：`stats.kindCounts` 存在时读数展开处显示 `805 函数 · 300 接口 · 5 类` 形态的一行，缺失则不显示；未解析种子可展开并列出名字；时间显示为相对时间且 `title` 为本地精确时间
+- [x] 同文件新增用例：搜索命中后目标节点被居中并带选中标记；范围外命中带「不在当前范围」且点击后范围/焦点更新
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
