@@ -1,7 +1,7 @@
 ---
 id: architecture-readout-numbers-and-locale
 title: 读数口径统一：一句话只说「显示 N 个类 · 共 M 个相关」，两层预算收进展开说明；相对时间跟界面语言走
-status: todo
+status: ready
 labels:
   - feature
 parent: null
