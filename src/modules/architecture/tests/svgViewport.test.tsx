@@ -340,9 +340,10 @@ test('a cancelled drag leaves no drag state behind and touch stays with the gest
 });
 
 /**
- * The fitted drawing's box as the layout draws it: left-aligned, vertically
- * centred (auto block margins), and top-aligned once it is taller than the box.
- * Mirrors the CSS the host uses, so an "intersection" here is the browser's.
+ * The fitted drawing's box as the layout draws it: horizontally and vertically
+ * centred (`margin: 0 auto` + auto block margins), and top-aligned once it is
+ * taller than the box. Mirrors the CSS the host uses, so an "intersection" here
+ * is the browser's.
  */
 function fittedDrawingRect(
   natural: { width: number; height: number },
@@ -352,8 +353,8 @@ function fittedDrawingRect(
   const width = natural.width * scale;
   const height = natural.height * scale;
   return {
-    left: 0,
-    right: width,
+    left: (host.width - width) / 2,
+    right: (host.width + width) / 2,
     top: height <= host.height ? (host.height - height) / 2 : 0,
     bottom: height <= host.height ? (host.height + height) / 2 : height,
   };
@@ -412,12 +413,18 @@ test('fitAvoidingCorners shrinks to the largest scale that clears an intersectin
 });
 
 test('fitAvoidingCorners takes the most conservative limit across several corners', () => {
-  const loose = { left: 700, top: 460, width: 100, height: 140 };   // clears at 0.7
+  // The drawing is horizontally centred, so a corner's horizontal limit is
+  // (2·left − host.width)/natural.width: loose 600/1000 = 0.6, tight 400/1000 =
+  // 0.4. The vertical route is cheaper for each (bottom ≤ top: 0.64 and 0.6),
+  // so the largest clearing scale is 0.64 and 0.6 respectively.
+  const loose = { left: 700, top: 460, width: 100, height: 140 };   // clears at 0.64
   const tight = { left: 600, top: 450, width: 200, height: 150 };   // clears at 0.6
   const looseScale = fitAvoidingCorners(NATURAL, HOST, [loose]);
   const tightScale = fitAvoidingCorners(NATURAL, HOST, [tight]);
-  assert.equal(looseScale, 0.7);
+  assert.equal(looseScale, 0.64);
   assert.equal(tightScale, 0.6);
+  assert.ok(!intersects(fittedDrawingRect(NATURAL, HOST, looseScale), loose), 'loose corner is cleared');
+  assert.ok(!intersects(fittedDrawingRect(NATURAL, HOST, tightScale), tight), 'tight corner is cleared');
   assert.equal(
     fitAvoidingCorners(NATURAL, HOST, [loose, tight]),
     Math.min(looseScale, tightScale),

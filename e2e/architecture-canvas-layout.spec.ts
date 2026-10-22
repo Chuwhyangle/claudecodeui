@@ -636,7 +636,22 @@ async function openArchitectureTab(page: Page, sessionId: string): Promise<void>
     page.locator('[data-workspace-view="architecture"] [data-architecture-panel]'),
     'the architecture tab must open for a project carrying an .archguard cache',
   ).toBeVisible({ timeout: 30_000 });
+
+  // The canvas-layout readings in this file are specified on the FILE overview:
+  // it is the drawing that fills the canvas with box nodes at a whole-graph fit
+  // (directory groups), which is what the chrome/readout readings measure. The
+  // class view now opens on its semantic-zoom hierarchy, whose whole-graph fit
+  // deliberately hides the entity boxes into package counts — there is no box
+  // reading to take there. The class drawing has its own criteria (the panel's
+  // architectureTab tests and the task's browser record); this guard keeps
+  // measuring the drawing it was written against.
+  await page.locator('[data-architecture-view-option="file"]').first().click();
   await waitForDrawing(page);
+  // The file drawing is a SECOND drawing in this page: the corner chrome (the
+  // zoom cluster, and the minimap where the tier shows one) is re-measured and
+  // the fit re-run a beat after it mounts, so give that re-fit its frame before
+  // the arms read the layout.
+  await settle(page, 1200);
 }
 
 /**
@@ -721,11 +736,18 @@ async function scrollDrawingToFirstRow(page: Page): Promise<void> {
  * Reading 3 compares N with the entities the layout DREW; on the grouped
  * overview that number is a box count, not an entity count, so the comparison
  * would be between two different quantities.
+ *
+ * The CLASS graph already opens on that drawing (hierarchy is its default, so
+ * the "Explosion view" control is not offered there); only the FILE graph's
+ * overview needs the explicit switch. The wait below is the common contract.
  */
 async function showExplosionView(page: Page): Promise<void> {
-  const explosion = page.locator(SEL.explosion);
-  expect(await explosion.count(), 'the panel must offer the explosion view this reading draws').toBeGreaterThan(0);
-  await explosion.first().click();
+  const alreadyExploded = await page.locator(SEL.graphRoot).getAttribute('data-architecture-view') === 'hierarchy';
+  if (!alreadyExploded) {
+    const explosion = page.locator(SEL.explosion);
+    expect(await explosion.count(), 'the panel must offer the explosion view this reading draws').toBeGreaterThan(0);
+    await explosion.first().click();
+  }
   await page.waitForFunction(
     (sel) => {
       const root = document.querySelector(sel.graphRoot);

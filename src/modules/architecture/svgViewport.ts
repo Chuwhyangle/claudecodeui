@@ -128,24 +128,29 @@ function limitScale(limitPx: number, naturalPx: number): number {
 }
 
 /**
- * The largest scale at which the drawing — left-aligned and vertically centred
- * in the content box — does not overlap `corner`. The drawing's geometry at
- * scale `s` is `width = natural.width · s`, `height = natural.height · s`,
- * anchored at x = 0 and at y = (host.height − height) / 2 (auto block margins
+ * The largest scale at which the drawing — horizontally CENTRED and vertically
+ * centred in the content box — does not overlap `corner`. The drawing's
+ * geometry at scale `s` is `width = natural.width · s`, `height =
+ * natural.height · s`, anchored at x = (host.width − width) / 2 (the SVG's
+ * `margin: 0 auto`) and at y = (host.height − height) / 2 (auto block margins
  * centre a short drawing; a drawing taller than the box starts at 0 and scrolls).
  *
  * Non-overlap can be reached on either axis: the drawing can end LEFT of the
- * corner (its whole width at or before the corner's left edge), or ABOVE /
- * BELOW it (its centred band at or outside one of the corner's horizontal
- * edges). The largest usable scale is the largest of those limits; -Infinity
- * means no positive scale avoids this corner.
+ * corner (its centred right edge at or before the corner's left edge), or
+ * ABOVE / BELOW it (its centred band at or outside one of the corner's
+ * horizontal edges). The largest usable scale is the largest of those limits;
+ * -Infinity means no positive scale avoids this corner.
  */
 function scaleAvoidingCorner(
   natural: SvgViewportSize,
   viewport: SvgViewportSize,
   corner: SvgCornerRect,
 ): number {
-  const horizontal = limitScale(corner.left, natural.width);
+  // Right edge = (host.width + width) / 2, so "right edge ≤ corner.left" means
+  // width ≤ 2·corner.left − host.width. (Measuring the right edge from a
+  // left-aligned x = 0 was off by exactly the centring offset: a drawing whose
+  // right edge really ran under a bottom-right corner was reported as clear.)
+  const horizontal = limitScale(2 * corner.left - viewport.width, natural.width);
   // Centred band: bottom = (host.height + height) / 2, so "bottom ≤ corner.top"
   // means height ≤ 2·corner.top − host.height.
   const verticalBelow = limitScale(2 * corner.top - viewport.height, natural.height);
