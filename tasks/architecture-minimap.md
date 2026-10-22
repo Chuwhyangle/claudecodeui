@@ -1,7 +1,7 @@
 ---
 id: architecture-minimap
 title: 画布角落缩略图：全图缩影 + 当前可见范围框，点击/拖框快速定位
-status: todo
+status: ready
 labels:
   - feature
 parent: null
