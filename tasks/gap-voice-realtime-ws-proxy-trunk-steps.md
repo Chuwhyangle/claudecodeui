@@ -38,13 +38,13 @@ extra:
 
 ## AC
 
-- [ ] (a) **步骤注册表存在且 ws-proxy 经它遍历**：`test -f server/modules/voice-realtime/voice-realtime-trunk-steps.ts` 退出 0；`grep -q "voice-realtime-trunk-steps" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 退出 0。
-- [ ] (b) **判据存在且跑通（正臂恰好 1 次）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-trunk-steps.test.ts` 退出 0；其打印读数显示「注册自非 ws-proxy 文件的步骤在对应时机被调用**恰好 1 次**」（计数断言，非存在性）。
-- [ ] (c) **负臂 0 次 + 注入泄漏臂**：同一判据含「未注册的步骤被调用 0 次」断言；且内存注入形态（去掉注册检查的 dispatcher）打红同一条断言函数（证负臂不真空）。
-- [ ] (d) **中心文件瘦身 + 静态门**：`test "$(wc -l < server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts)" -lt 6576` 退出 0（基线=立案实测 6576）；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **既有行为判据不改一字仍绿**：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-scripted-scenarios.test.ts` 各自单跑退出 0。
-- [ ] (f) **collateral**：新增一个 `server/**/*.test.ts` ⇒ quay-test-script 两条 pin 各 +1 及注释算术；覆盖率地板跌破 90% 才追加 suite-duration-baseline 行；单文件复跑 quay-test-script.test.ts 退出 0。
-- [ ] (g) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **步骤注册表存在且 ws-proxy 经它遍历**：`test -f server/modules/voice-realtime/voice-realtime-trunk-steps.ts` 退出 0；`grep -q "voice-realtime-trunk-steps" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 退出 0。
+- [x] (b) **判据存在且跑通（正臂恰好 1 次）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/voice-realtime/tests/voice-realtime-trunk-steps.test.ts` 退出 0；其打印读数显示「注册自非 ws-proxy 文件的步骤在对应时机被调用**恰好 1 次**」（计数断言，非存在性）。
+- [x] (c) **负臂 0 次 + 注入泄漏臂**：同一判据含「未注册的步骤被调用 0 次」断言；且内存注入形态（去掉注册检查的 dispatcher）打红同一条断言函数（证负臂不真空）。
+- [x] (d) **中心文件瘦身 + 静态门**：`test "$(wc -l < server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts)" -lt 6576` 退出 0（基线=立案实测 6576）；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **既有行为判据不改一字仍绿**：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-scripted-scenarios.test.ts` 各自单跑退出 0。
+- [x] (f) **collateral**：新增一个 `server/**/*.test.ts` ⇒ quay-test-script 两条 pin 各 +1 及注释算术；覆盖率地板跌破 90% 才追加 suite-duration-baseline 行；单文件复跑 quay-test-script.test.ts 退出 0。
+- [x] (g) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
@@ -59,3 +59,65 @@ extra:
 - `server/shared/tests/quay-test-script.test.ts`（collateral：两条 pin 各 +1 及注释算术）
 - `scripts/suite-duration-baseline.tsv`（collateral：仅当覆盖率地板跌破 90%）
 - `tasks/gap-voice-realtime-ws-proxy-trunk-steps.md`（自触）
+
+## Verification
+
+实现提交 `e3559bcb8`（task branch，develop 已 merge 进来，合并提交 `cdf0226f8`）。
+
+### 形态
+
+六个主干时机 `after-handshake` / `before-frame` / `after-frame` / `interrupt-decision` / `status-injection` / `before-close`，`VoiceRealtimeTrunkStepRegistry` 每个时机持**有序数组**（register 追加或同名原位替换、unregister 移除、`run` 按序执行并返回实际跑过的步骤；空时机跑 0 个、不抛、不回退内建体）。连接经可选 seam `trunkSteps` 注入，缺省 `createDefaultVoiceRealtimeTrunkSteps()`。
+
+### ① (b) 正臂原样读数（每时机恰好 1 次，来源=判据文件≠proxy）
+
+```
+(b) positive-arm: wsProxySource=/…/server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts testSource=/…/server/modules/voice-realtime/tests/voice-realtime-trunk-steps.test.ts steps=5 tableTimings=6
+(b) positive-arm: timing=after-handshake step=criterion.probe.after-handshake source=/…/voice-realtime-trunk-steps.test.ts triggered=1
+(b) positive-arm: timing=before-frame step=criterion.probe.before-frame source=/…/voice-realtime-trunk-steps.test.ts triggered=1
+(b) positive-arm: timing=after-frame step=criterion.probe.after-frame source=/…/voice-realtime-trunk-steps.test.ts triggered=1
+(b) positive-arm: timing=status-injection step=criterion.probe.status-injection source=/…/voice-realtime-trunk-steps.test.ts triggered=1
+(b) positive-arm: timing=before-close step=criterion.probe.before-close source=/…/voice-realtime-trunk-steps.test.ts triggered=1
+(b) positive-arm: statusInjections=22 chars
+```
+
+驱动的是真连接（fake browser socket + fake upstream transport）：握手落地触发 `after-handshake`（其 shipped 步骤的 `advertiseInstructions` 触发 `status-injection`），一帧 `narrator_done` 触发 `before-frame`+`after-frame`，`socket.close()` 触发 `before-close`。
+
+### ② 正/负/注入三臂
+
+```
+(c) negative-arm(table): triggered=0 registered=false
+(c) negative-arm(injected): red=yes triggered=1 message=unregistered trunk step criterion.probe.after-frame was invoked (0 -> 1)
+(c) negative-arm(restored): triggered=2 registered=true
+```
+
+注入臂打红的就是同一个 `assertTrunkStepNotInvoked`（`1 !== 0` 是 node:assert/strict 对被捕获的 AssertionError 打的差分）。三臂终值 = 注入 1 + 恢复臂 1，未注册臂 0。
+
+### ③ (e) 三条既有判据单跑
+
+- `voice-realtime-ws-proxy.protocol-simulation.test.ts`：tests 24 / pass 24 / fail 0（exit 0）
+- `voice-realtime-bridge.test.ts`：tests 16 / pass 16 / fail 0（exit 0）
+- `voice-realtime-scripted-scenarios.test.ts`：tests 31 / pass 31 / fail 0（exit 0）
+- 另跑：`voice-realtime-interrupt-fence.test.ts` 6/6、`voice-realtime-frame-registry.test.ts` 4/4、`voice-realtime-segmented-protocol.test.ts` 21/21、`voice-realtime-trunk-steps.test.ts` 5/5。
+
+### ④ (d) 瘦身与静态门
+
+- `wc -l` 前后：6576 → **6512**（< 6576，exit 0）。
+- `npx tsc --noEmit -p server/tsconfig.json` exit 0。
+- `npm run lint` exit 0（oxlint 无新增 error/warning 落在本条文件上）。
+- (f) quay-test-script：401 - 3 = 398 / 401 - 1 = 400（两 pin 各 +1 及注释算术），单文件复跑 14/14 绿；基线覆盖率 361/401 = **90.0%** ≥ 90% ⇒ 不追加 suite-duration-baseline 行。
+
+### ⑤ 纯位移核对
+
+逐字迁出：`readVoiceRealtimeInboundFrame`（before-frame 步骤体，含 raw→frame 收敛）、`decideModelInterrupt`（interrupt-decision 步骤体）、`whenConnected().then` 的 open/失败分支（after-handshake）、`bridge.sendSessionUpdate(composeVoiceRealtimeInstructions(...))`（status-injection）、`seams.audioCapture?.finalize()`（before-close）。两个对外导出的纯函数由 ws-proxy re-export，调用方路径不变。顺序不变：默认表按生命周期声明顺序注册，各时机内 shipped 步骤先于判据追加的探针。
+
+无法原样迁、仍留在中心的段（逐条）：
+1. `advertiseInstructions` 的 dedup key 计算、`context injected`/`status injected` 日志与 `onExecStatus` 回调仍在中心 —— 步骤只拿最终的注入动作，组合与日志是读数不是动作。
+2. 中断路径中 `refreshInterruptCovers()`、covered 分支的 audit/日志/回执仍在中心 —— 步骤只做判决，不做回报。
+3. teardown 的定时器清理、`flushOpenSegment`/`flushCoalesced`、speaker/uplink VAD 汇总行仍在中心 —— 它们读的是该函数自己的局部账本，不是横切步骤。
+4. `after-frame` 刻意**无** shipped 步骤：它是纯扩展时机，判据探针是唯一注册者，用来证明「外部注册即生效、未注册即 0 次」。
+
+### ⑥ 范围
+
+`anti-drift-touches-check --train` 对 develop：`ANTI-DRIFT OK — 5 actual file(s), all within declared Touches (7 glob(s))`；实际 5 个文件 = 4 个实现/判据文件 + quay-test-script.test.ts。
+
+不重启 :3001、不发布。
