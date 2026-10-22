@@ -2,7 +2,7 @@
 id: gap-voice-config-store-encapsulation
 title: VoiceConfigStore 封装：voiceConfig 的 8 个模块级
   let（config/hasHydrated/hydrationRequest/pendingWriteTimer/rawCapture*）收进带生命周期的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
