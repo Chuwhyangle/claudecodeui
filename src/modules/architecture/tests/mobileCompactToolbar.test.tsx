@@ -235,13 +235,13 @@ afterEach(() => {
 
 test('the compact tier spends its only toolbar row on the title, granularity and "…"', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const row = toolbarRow();
   assert.match(row.textContent ?? '', /Architecture/, 'the row carries the title');
   assert.ok(
-    within(row).getByRole('group', { name: 'Graph granularity' }),
+    within(row).getByRole('radiogroup', { name: 'Graph granularity' }),
     'the granularity switch stays on the row',
   );
   assert.ok(within(row).getByRole('button', { name: 'More actions' }), 'the "…" toggle is the row\'s last entry');
@@ -264,14 +264,18 @@ test('the compact tier spends its only toolbar row on the title, granularity and
   assert.equal(row.contains(cluster), false, 'the zoom cluster must not be part of the row');
 });
 
-test('the "…" menu holds the two knobs, the honesty readings and export — the canvas owns the zoom', async () => {
+test('the "…" menu holds the two knobs and export — the readout and zoom live on the canvas', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const menu = openMenu();
 
-  assert.ok(menu.querySelector('[data-architecture-honesty]'), 'the honesty readings live in the menu');
+  // The honesty readings became the on-canvas readout and source line; the menu
+  // no longer repeats them (there is no second reading surface).
+  assert.equal(menu.querySelector('[data-architecture-honesty]'), null);
+  assert.ok(document.querySelector('[data-architecture-readout]'), 'the one-line readout sits on the canvas');
+  assert.ok(document.querySelector('[data-architecture-source-line]'), 'the source line sits on the canvas');
   const scope = menu.querySelector('[data-architecture-scope-control]');
   assert.ok(scope instanceof HTMLElement, 'the scope stepper lives in the menu');
   assert.ok(menu.querySelector('[data-architecture-scope-decrease]'), 'the stepper offers −');
@@ -309,7 +313,7 @@ test('the "…" menu holds the two knobs, the honesty readings and export — th
 
 test('the menu stepper reports the +N scope and re-requests the selected depth', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const menu = openMenu();
@@ -339,7 +343,7 @@ test('the menu stepper reports the +N scope and re-requests the selected depth',
 
 test('a coarse pointer renders no hover hint, and the touch hint is dismissible', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   assert.equal(
@@ -362,7 +366,7 @@ test('a coarse pointer renders no hover hint, and the touch hint is dismissible'
 
 test('the touch hint is a row above the drawing, never an overlay on its top nodes', async () => {
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const hint = document.querySelector('[data-architecture-touch-hint]');
@@ -406,51 +410,52 @@ test('the touch hint is a row above the drawing, never an overlay on its top nod
   assert.equal(style.minWidth, '44px', 'the dismiss target must be 44px wide');
 });
 
-test('a truncated graph keeps a compact badge in the row while the menu is shut', async () => {  apiMock.architectureGraph.mockResolvedValue(jsonResponse(TRUNCATED_RESULT));
+test('a truncated graph keeps a compact "+N folded" badge in the row while the menu is shut', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(TRUNCATED_RESULT));
   usePhone();
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const row = toolbarRow();
   const badge = row.querySelector('[data-architecture-truncated-badge]');
   assert.ok(badge instanceof HTMLElement, 'a real cut must stay visible without opening the menu');
-  assert.match(badge.textContent ?? '', /3\s*\/\s*9/, 'the badge states the retained and total counts');
+  // The old ``shown/total`` numbers became a text badge: 9 reachable, 3 kept.
+  assert.equal(badge.getAttribute('data-architecture-truncated-omitted'), '6');
+  assert.match(badge.textContent ?? '', /\+6 folded/, 'the badge states how many the budget left out');
   assert.equal(
     document.querySelector('[data-architecture-overflow-menu]'),
     null,
     'the badge is what makes the cut visible while the menu is shut',
   );
 
-  // The full honesty reading (with the numbers) is in the menu as well.
-  const menu = openMenu();
-  const truncated = menu.querySelector('[data-architecture-truncated]');
+  // The full reading is the on-canvas readout, not a second menu row.
+  const truncated = document.querySelector('[data-architecture-readout] [data-architecture-truncated]');
   assert.ok(truncated instanceof HTMLElement);
   assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '3');
   assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
+  assert.match(truncated.textContent ?? '', /6 more left out by the node budget/);
 });
 
-test('desktop keeps the hover readout and its multi-control header', async () => {
+test('the desktop header is ONE row and the graph draws no toolbar of its own', async () => {
   // Deliberately the desktop setup from beforeEach (fine pointer, 1024px).
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
   const row = panelToolbar();
+  assert.ok(row.querySelector('[data-architecture-view-control]'), 'the view radiogroup lives in the header');
   assert.ok(row.querySelector('[data-architecture-scope-control]'), 'desktop keeps the scope stepper in the header');
   assert.ok(row.querySelector('[data-architecture-detail-control]'), 'desktop keeps the detail presets in the header');
   assert.ok(row.querySelector('[data-architecture-export]'), 'desktop keeps the export button in the header');
-  assert.ok(document.querySelector('[data-architecture-honesty]'), 'desktop keeps the honesty bar');
+  assert.ok(row.querySelector('[data-architecture-legend-toggle]'), 'the legend entry lives in the header');
+  assert.equal(document.querySelectorAll('[data-architecture-toolbar]').length, 1, 'one row, not two');
+  assert.equal(document.querySelector('[data-architecture-honesty]'), null, 'the honesty bar is gone');
   assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'desktop has no compact menu');
-  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'desktop gets the hover wording');
+  assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'desktop gets no standing hint');
 
-  // The desktop graph toolbar is its own row (the pre-compact layout); the zoom
-  // controls are no longer in it — they float on the drawing as the cluster.
-  const graphToolbar = graphRoot().querySelector('[data-architecture-toolbar]');
-  assert.ok(graphToolbar instanceof HTMLElement);
-  assert.equal(
-    graphToolbar.querySelector('[data-architecture-zoom-in]'),
-    null,
-    'the zoom controls left the toolbar for the canvas cluster',
-  );
+  // The graph's zoom tier floats on the canvas; nothing repeats it in a row.
+  const tier = graphRoot().querySelector('[data-architecture-zoom-tier]');
+  assert.ok(tier instanceof HTMLElement, 'the tier indicator sits on the canvas');
+  assert.equal(graphRoot().querySelector('[data-architecture-toolbar]'), null);
   const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
   assert.ok(cluster instanceof HTMLElement, 'the desktop canvas carries the zoom cluster');
   assert.ok(cluster.querySelector('[data-architecture-zoom-in]'));

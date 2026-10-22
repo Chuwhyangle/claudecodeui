@@ -60,7 +60,8 @@
         "label": "图概览，当前视野占 {{percent}}%",
         "show": "显示图概览",
         "hide": "收起图概览"
-      }
+      },
+      "zoomTier": "缩放档位"
     },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",
@@ -80,7 +81,8 @@
       "detailCore": "核心",
       "detailCommon": "常用",
       "detailAll": "全部",
-      "detailReading": "显示 {{shown}} 个类 · 共 {{total}} 个相关"
+      "detailReading": "显示 {{shown}} 个类 · 共 {{total}} 个相关",
+      "classView": "类图"
     },
     "exportMmd": "导出 .mmd",
     "expandHint": "悬停节点查看关系类型；点击节点展开下一跳。",
@@ -99,6 +101,35 @@
       "entityTruncated": "实体图已被截断 — 显示 {{shown}} / {{total}} 个实体（节点预算 {{limit}}）。",
       "fileTruncated": "文件图已被截断 — 显示 {{shown}} / {{total}} 个文件（节点预算 {{limit}}）。",
       "lowerHops": "{{hops}} 跳超出节点预算 — 降低跳数即可查看完整邻域。"
+    },
+    "legend": {
+      "title": "图例",
+      "body": "实线：关联或调用。虚线：依赖或实现。箭头：△ 继承 · △ 实现 · ◆ 组合 · ◇ 聚合 · → 依赖。«构造型» 标记实体种类。● 种子：本次会话中提到的。+N 已折叠：被当前详情档位隐藏。"
+    },
+    "export": {
+      "menu": "导出 ▾"
+    },
+    "search": {
+      "label": "搜索实体或文件",
+      "placeholder": "搜索实体或文件…",
+      "noMatches": "无匹配项",
+      "outOfRange": "不在当前范围"
+    },
+    "readout": {
+      "classSummary": "显示 {{shown}} 个类 · 共 {{total}} 个相关",
+      "fileSummary": "显示 {{shown}} 个文件 · 共 {{total}} 个相关",
+      "folded": "+{{count}} 已折叠",
+      "explanation": "{{shown}} 是当前详情档位保留的数量；{{total}} 是当前范围内全部相关实体。",
+      "raiseDetail": "提高详情",
+      "reduceScope": "减小范围",
+      "budgetOmitted": "另有 {{count}} 个因预算未纳入",
+      "kindFunction": "{{count}} 个函数",
+      "kindInterface": "{{count}} 个接口",
+      "kindClass": "{{count}} 个类"
+    },
+    "source": {
+      "unresolved": "本次会话中提到的 {{count}} 个名字未在分析缓存中找到",
+      "listLabel": "未解析的名字"
     }
   },
   "status": {

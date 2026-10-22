@@ -49,6 +49,20 @@ extra:
 
 真实落地的标准是「契约类型真的**住进了独立契约模块**、叶子模块不再为拿类型而 import god 文件」，不是「多了一个类型文件」。必须贴出：①(a)(b) 的 grep 计数与契约模块的导出清单；②(c) 5 个叶子改指后的 import 行原文（改前改后各一份）；③(d) 三条判据单跑退出码；④(e) tsc/lint；⑤纯搬迁核对（`git diff` 对契约类型是纯移动，公开签名/re-export 面未变；无法搬的类型逐条列出原因）；⑥`git diff` 只含 Touches。运行结束不重启 :3001、不发布。
 
+## Evidence
+
+**2026-10-22 — 续做轮（exited-not-landed 修复 + 全量复核）**
+
+- 前轮 suite 红：`server/modules/providers/tests/provider-capabilities-cancel-queued.test.ts` AC2（"the byte budget must still say why it cannot be a cancellation"）。单跑复现（确定性，非环境抖动）。成因是本任务的搬迁：`VOICE_QUEUE_MAX_BYTES` 的文档段（含 `cancelQueuedInput` 引用）随常量迁到 `voice-realtime-contract.ts`，而该判据按固定路径读 `voice-realtime-ws-proxy.service.ts`。
+- 修法（不改兄弟判据、不降其 pin）：在 ws-proxy 既有 re-export 注释里保留一行**修正后的指针**——`cancelQueuedInput` 为 `true`（E9/E10/U4），ADMISSION 理由见契约模块。修复后该文件单跑 2/2 绿（`[cancel-queued] ws-proxy: 1 line(s) cite the slot, 0 tie it to false`）。散文本身没有被删除，仍与常量同住契约模块。
+- (a) `test -f voice-realtime-contract.ts` exit 0；四类类型名 grep exit 0。
+- (b) ws-proxy 中 8 类契约类型的 `^export type` 计数 = **0**。
+- (c) 5 个非 barrel 叶子从 `./voice-realtime-ws-proxy.service.js` import 的文件数 = **0**。
+- (d) 各自单跑：protocol-simulation 24/24、bridge 16/16、scripted-scenarios 31/31，退出码均 0。
+- (e) `npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0（仅既有 warning）。
+- (f) delta 7 个文件 ⊆ Touches；anti-drift-touches-check：`ANTI-DRIFT OK — 7 actual file(s), all within declared Touches (10 glob(s))`。
+- develop 已合入（merge 干净、无冲突）；本任务先前 2 个提交未重做。
+
 ## Touches
 
 - `server/modules/voice-realtime/voice-realtime-contract.ts` (new)（帧 / exec status / seam 契约类型，纯类型）

@@ -60,7 +60,8 @@
         "label": "圖概覽，目前視野佔 {{percent}}%",
         "show": "顯示圖概覽",
         "hide": "收合圖概覽"
-      }
+      },
+      "zoomTier": "縮放層級"
     },
     "title": "架構",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",
@@ -80,7 +81,8 @@
       "detailCore": "核心",
       "detailCommon": "常用",
       "detailAll": "全部",
-      "detailReading": "顯示 {{shown}} 個類 · 共 {{total}} 個相關"
+      "detailReading": "顯示 {{shown}} 個類 · 共 {{total}} 個相關",
+      "classView": "類別圖"
     },
     "exportMmd": "匯出 .mmd",
     "expandHint": "懸停節點檢視關聯類型；點擊節點展開下一跳。",
@@ -99,6 +101,35 @@
       "entityTruncated": "實體圖已被截斷 — 顯示 {{shown}} / {{total}} 個實體（節點預算 {{limit}}）。",
       "fileTruncated": "檔案圖已被截斷 — 顯示 {{shown}} / {{total}} 個檔案（節點預算 {{limit}}）。",
       "lowerHops": "{{hops}} 跳超出節點預算 — 降低跳數即可檢視完整鄰域。"
+    },
+    "legend": {
+      "title": "圖例",
+      "body": "實線：關聯或呼叫。虛線：依賴或實作。箭頭：△ 繼承 · △ 實作 · ◆ 組合 · ◇ 聚合 · → 依賴。«構造型» 標記實體種類。● 種子：本次工作階段中提到的。+N 已摺疊：被目前詳細層級隱藏。"
+    },
+    "export": {
+      "menu": "匯出 ▾"
+    },
+    "search": {
+      "label": "搜尋實體或檔案",
+      "placeholder": "搜尋實體或檔案…",
+      "noMatches": "沒有相符項目",
+      "outOfRange": "不在目前範圍"
+    },
+    "readout": {
+      "classSummary": "顯示 {{shown}} 個類別 · 共 {{total}} 個相關",
+      "fileSummary": "顯示 {{shown}} 個檔案 · 共 {{total}} 個相關",
+      "folded": "+{{count}} 已摺疊",
+      "explanation": "{{shown}} 是目前詳細層級保留的數量；{{total}} 是目前範圍內全部相關實體。",
+      "raiseDetail": "提高詳細度",
+      "reduceScope": "縮小範圍",
+      "budgetOmitted": "另有 {{count}} 個因預算未納入",
+      "kindFunction": "{{count}} 個函式",
+      "kindInterface": "{{count}} 個介面",
+      "kindClass": "{{count}} 個類別"
+    },
+    "source": {
+      "unresolved": "本次工作階段中提到的 {{count}} 個名稱未在分析快取中找到",
+      "listLabel": "未解析的名稱"
     }
   },
   "status": {

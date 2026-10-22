@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { type ComponentType, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
@@ -18,9 +18,9 @@ import {
 } from '@/modules/architecture/hooks/useTouchLayout';
 import type {
   ArchitectureDetailReading,
-  ArchitectureGraphRenderer,
   ArchitectureNodeIdShape,
   ArchitectureRendererHover,
+  ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 
@@ -58,6 +58,13 @@ type ArchitectureDisplaySettings = {
   readonly projectId: string | null;
   readonly scope: number;
   readonly detail: ArchitectureDetailTier;
+};
+
+/** A node the reader asked the graph to reveal (search hit or out-of-range jump). */
+type ArchitectureFocusTarget = {
+  readonly id: string;
+  /** Bumped on every request so choosing the same node twice re-centres it. */
+  readonly token: number;
 };
 
 /** Read one project's remembered scope, clamped into the stepper's range. */
@@ -132,6 +139,43 @@ function truncationReading(result: ArchitectureGraphResult, granularity: Archite
   };
 }
 
+/**
+ * Render an analysis timestamp as a relative reading ("3 hours ago").
+ *
+ * The panel used to print the raw UTC ISO string, which a reader had to
+ * translate in their head. The precision stays available in `title` (the local
+ * `toLocaleString()`), while the visible text answers the only question the
+ * source line asks: how old is this analysis?
+ */
+function formatRelativeTime(iso: string | null): string {
+  if (iso === null) return 'unknown';
+  const analysed = Date.parse(iso);
+  if (Number.isNaN(analysed)) return 'unknown';
+  const seconds = Math.round((analysed - Date.now()) / 1000);
+  const steps: readonly [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31536000],
+    ['month', 2592000],
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+    ['second', 1],
+  ];
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  for (const [unit, size] of steps) {
+    if (Math.abs(seconds) >= size || unit === 'second') {
+      return formatter.format(Math.round(seconds / size), unit);
+    }
+  }
+  return formatter.format(seconds, 'second');
+}
+
+/** The precise local instant behind a relative reading; the `<time>` title. */
+function formatAbsoluteTime(iso: string | null): string | undefined {
+  if (iso === null) return undefined;
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString();
+}
+
 type ArchitecturePanelProps = {
   /** The selected project's DB id; the endpoint resolves it to a project root. */
   projectId: string | null;
@@ -143,8 +187,26 @@ type ArchitecturePanelProps = {
    * without the panel knowing which library draws the graph; tests pass a
    * stand-in to prove exactly that.
    */
-  renderer?: ArchitectureGraphRenderer;
+  renderer?: ArchitecturePanelRenderer;
+  /**
+   * Which subgraph opens first. The shipped default is the class (entity)
+   * diagram; sibling callers that want the file graph (and the existing test
+   * fixtures that encode file ids) can ask for it explicitly without a toggle.
+   */
+  initialGranularity?: ArchitectureGranularity;
 };
+
+/**
+ * The renderer plus the two optional focus props this panel adds on top of the
+ * shared contract. They stay optional so a stand-in written against
+ * `ArchitectureRendererProps` alone is still a valid `renderer`.
+ */
+type ArchitecturePanelRenderer = ComponentType<
+  ArchitectureRendererProps & {
+    readonly focusNodeId?: string | null;
+    readonly focusToken?: number;
+  }
+>;
 
 /**
  * Save a Mermaid document as a `.mmd` file.
@@ -162,134 +224,12 @@ function downloadMermaid(contents: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-/**
- * The honesty bar (ADR-005 decision 7): the analysis time, how many seeds could
- * not be placed in the ArchGuard index, and whether the CURRENT granularity was
- * cut by its node budget. The notice is deliberately per-granularity: the file
- * graph has its own budget, so an entity cut must not claim the file view is
- * truncated. It carries the shown/total counts so the reader can see what was
- * cut, and suggests lowering the hops when the depth is the cause.
- */
-function ArchitectureHonestyBar({
-  result,
-  granularity,
-  hops,
-  compact = false,
-}: {
-  result: ArchitectureGraphResult;
-  granularity: ArchitectureGranularity;
-  hops: number;
-  /**
-   * The compact tier draws this bar inside the overflow menu instead of under
-   * the toolbar, so it stacks in a narrow column and drops the full-width rule.
-   * The truncation badge in the toolbar row is what keeps a real cut visible
-   * while the menu is shut.
-   */
-  compact?: boolean;
-}) {
-  const { t } = useTranslation();
-  const { stats, provenance } = result;
-  const unresolvedCount = stats.unresolved.files.length + stats.unresolved.identifiers.length;
-  const cut = truncationReading(result, granularity);
-
-  return (
-    <div
-      data-architecture-honesty="true"
-      className={
-        compact
-          ? 'flex flex-col items-start gap-1 text-[11px] text-muted-foreground'
-          : 'flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border/60 bg-muted/30 px-4 py-1.5 text-[11px] text-muted-foreground'
-      }
-    >
-      <span>
-        {t('architecture.honesty.analysis', { defaultValue: 'Analysis' })}:{' '}
-        {provenance.generatedAt ? (
-          <time data-architecture-generated-at dateTime={provenance.generatedAt}>
-            {provenance.generatedAt}
-          </time>
-        ) : (
-          <span data-architecture-generated-at>unknown</span>
-        )}
-      </span>
-      <span data-architecture-unresolved={unresolvedCount}>
-        {t('architecture.honesty.unresolved', {
-          defaultValue: '{{count}} unresolved seed(s)',
-          count: unresolvedCount,
-        })}
-      </span>
-      {cut.truncated && (
-        <span
-          data-architecture-truncated
-          data-architecture-truncated-granularity={granularity}
-          data-architecture-truncated-shown={cut.shown}
-          data-architecture-truncated-total={cut.total}
-          className="text-amber-600 dark:text-amber-400"
-        >
-          {granularity === 'file'
-            ? t('architecture.honesty.fileTruncated', {
-                defaultValue: 'File graph truncated — showing {{shown}} of {{total}} files (node budget {{limit}}).',
-                shown: cut.shown,
-                total: cut.total,
-                limit: cut.shown,
-              })
-            : t('architecture.honesty.entityTruncated', {
-                defaultValue: 'Entity graph truncated — showing {{shown}} of {{total}} entities (node budget {{limit}}).',
-                shown: cut.shown,
-                total: cut.total,
-                limit: cut.shown,
-              })}
-        </span>
-      )}
-      {cut.truncated && hops > 1 && (
-        <span data-architecture-hops-advice className="text-amber-600 dark:text-amber-400">
-          {t('architecture.honesty.lowerHops', {
-            defaultValue: '{{hops}} hops exceed the node budget — lower the hops to see the whole neighbourhood.',
-            hops,
-          })}
-        </span>
-      )}
-    </div>
-  );
-}
-
 /** The panel's empty state, for both "no session selected" and "no seeds found". */
 function ArchitectureEmptyState({ message }: { message: string }) {
   return (
     <p data-architecture-empty="true" className="p-6 text-sm text-muted-foreground">
       {message}
     </p>
-  );
-}
-
-/**
- * The renderer-neutral hover readout. Every renderer reports the hovered node
- * and its visible relation kinds through `onNodeHover`, so this bar looks the
- * same whichever library draws the graph; `data-architecture-hover` is present
- * only while a node is under the pointer.
- */
-function ArchitectureHoverBar({ hover }: { hover: ArchitectureRendererHover | null }) {
-  const { t } = useTranslation();
-  const relationsText = hover === null || hover.relations.length === 0
-    ? t('architecture.hover.none', { defaultValue: 'no outgoing/incoming relation' })
-    : hover.relations.join(', ');
-
-  return (
-    <div className="flex flex-wrap items-center border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground">
-      <span
-        data-architecture-hover={hover?.node.id}
-        data-architecture-hover-relations={hover?.relations.join(',')}
-      >
-        {hover === null
-          ? t('architecture.expandHint', {
-              defaultValue: 'Hover a node for its relation types; click a node to expand its next hop.',
-            })
-          : t('architecture.hover.relations', {
-              defaultValue: '{{node}} — relations: {{relations}}',
-              node: hover.node.id,
-              relations: relationsText,
-            })}
-      </span>
-    </div>
   );
 }
 
@@ -305,11 +245,19 @@ function ArchitectureHoverBar({ hover }: { hover: ArchitectureRendererHover | nu
  * detail presets rank the arrived payload locally instead, so they cut the
  * drawing without ever re-entering the fetch. The Mermaid documents stay in hand
  * for the `.mmd` export.
+ *
+ * Layout: ONE toolbar row, then the drawing. Everything that used to be a
+ * second or third row (honesty bar, hover instruction, graph toolbar) is either
+ * folded into the panel's overlays on the drawing or removed. The two readings
+ * the reader actually asked for live ON the canvas: the one-line "showing N of
+ * M" readout at the top-left, and the analysis/seed source line at the
+ * bottom-left.
  */
 export default function ArchitecturePanel({
   projectId,
   sessionId,
-  renderer: Renderer = PlantUmlGraph,
+  renderer: Renderer = PlantUmlGraph as ArchitecturePanelRenderer,
+  initialGranularity = 'entity',
 }: ArchitecturePanelProps) {
   const { t } = useTranslation();
   // The pointer/size tier. On a narrow screen the export action moves into the
@@ -323,8 +271,10 @@ export default function ArchitecturePanel({
   // reading must not depend on the stylesheet (see TOUCH_TARGET_STYLE).
   const compactTargetStyle = coarsePointer ? TOUCH_TARGET_STYLE : undefined;
   // Which of the two server subgraphs is on screen. Purely local state: both
-  // arrive in one response, so this must never re-enter the fetch.
-  const [granularity, setGranularity] = useState<ArchitectureGranularity>('file');
+  // arrive in one response, so this must never re-enter the fetch. The class
+  // diagram is the shipped default (the entity subgraph is the one that has
+  // entity kinds and members).
+  const [granularity, setGranularity] = useState<ArchitectureGranularity>(initialGranularity);
   // The two display knobs, remembered per project (localStorage). `scope` is
   // the requested BFS depth — a server generation parameter and part of the
   // result cache's key, so changing it refetches; `detail` only ranks the
@@ -388,6 +338,57 @@ export default function ArchitecturePanel({
   // then dismissed — either by its close button or by the first node selection.
   // It never becomes a permanent row the way the old gesture line was.
   const [touchHintDismissed, setTouchHintDismissed] = useState(false);
+  // The node the reader asked to see, and the token that re-triggers the same
+  // request. The renderer navigates to it and centres it; the panel only holds
+  // the request so a search hit survives the renderer's own navigation state.
+  const [focusTarget, setFocusTarget] = useState<ArchitectureFocusTarget | null>(null);
+  // The one-line readout's expanded state: the explanation and the two knobs
+  // ("raise detail", "reduce scope") live behind this toggle.
+  const [readoutOpen, setReadoutOpen] = useState(false);
+  // The `?` legend popover; shut by default so the drawing owns the canvas.
+  const [legendOpen, setLegendOpen] = useState(false);
+  // The source line's unresolved-names list, expanded on demand rather than
+  // printing every unresolved identifier as a permanent row.
+  const [unresolvedOpen, setUnresolvedOpen] = useState(false);
+  // The search box's text. It is local because it only filters the payload in
+  // hand; selecting a result is what changes the graph.
+  const [searchQuery, setSearchQuery] = useState('');
+  // Whether the match list is open. Focus loss is deliberately not a close
+  // trigger (a click on a result would blur the input first); selecting a
+  // result, pressing Escape, or clearing the box closes it.
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const changeScope = (next: number): void => {
+    const clamped = clampArchitectureScope(next);
+    setDisplaySettings((current) => ({ ...current, scope: clamped }));
+    writeStoredScope(projectId, clamped);
+  };
+  const changeDetail = (next: ArchitectureDetailTier): void => {
+    setDisplaySettings((current) => ({ ...current, detail: next }));
+    writeStoredDetail(projectId, next);
+  };
+
+  // Search the CURRENT subgraph before the detail cut, so a node the tier
+  // folded away is still findable and can be reported as out of range.
+  const searchMatches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (query.length === 0 || activeNeighbourhood === null) return [];
+    return activeNeighbourhood.nodes
+      .filter((node) => node.id.toLowerCase().includes(query) || node.label.toLowerCase().includes(query))
+      .slice(0, 8)
+      .map((node) => ({
+        node,
+        inRange: detailRanking?.retainedNodeIds.has(node.id) ?? false,
+      }));
+  }, [activeNeighbourhood, detailRanking, searchQuery]);
+
+  const revealNode = (nodeId: string, outOfRange: boolean): void => {
+    // A folded node is only out of range because of the detail tier: raise it
+    // to the identity tier before asking the renderer to show the node.
+    if (outOfRange) changeDetail('all');
+    setFocusTarget((current) => ({ id: nodeId, token: (current?.token ?? 0) + 1 }));
+    setSearchOpen(false);
+  };
 
   if (!sessionId) {
     return (
@@ -425,21 +426,11 @@ export default function ArchitecturePanel({
   }
 
   const { result } = view;
-  const { stats, mmd } = result;
+  const { stats, mmd, provenance } = result;
   const hasSeeds = stats.seedFiles > 0 || stats.seedIdentifiers > 0;
   const neighbourhood = result.graph[granularity];
   // A reading from the previous graph is not shown against this one.
   const visibleHover = hovered !== null && hovered.key === hoverKey ? hovered.hover : null;
-
-  const changeScope = (next: number): void => {
-    const clamped = clampArchitectureScope(next);
-    setDisplaySettings((current) => ({ ...current, scope: clamped }));
-    writeStoredScope(projectId, clamped);
-  };
-  const changeDetail = (next: ArchitectureDetailTier): void => {
-    setDisplaySettings((current) => ({ ...current, detail: next }));
-    writeStoredDetail(projectId, next);
-  };
 
   const exportMmd = (): void => {
     downloadMermaid(
@@ -455,35 +446,47 @@ export default function ArchitecturePanel({
   };
 
   const truncation = truncationReading(result, granularity);
+  // How many nodes the server's node budget left out of this subgraph. The
+  // readout answers this inline instead of printing a budget number.
+  const budgetOmitted = Math.max(0, truncation.total - truncation.shown);
+  const retainedCount = detailRanking?.retainedNodeIds.size ?? neighbourhood.nodes.length;
+  const inScopeCount = activeNeighbourhood?.nodes.length ?? neighbourhood.nodes.length;
+  const foldedCount = detailRanking?.foldedCount ?? 0;
 
   // Both subgraphs are in hand; toggling only picks one, so it must not refetch.
+  // The two options are a radiogroup because exactly one graph is on screen.
   const granularityGroup = (
     <div
-      role="group"
+      role="radiogroup"
       aria-label={t('architecture.granularity', { defaultValue: 'Graph granularity' })}
+      data-architecture-view-control="true"
       className="flex items-center gap-1 rounded-lg border border-border/60 p-0.5"
     >
       <button
         type="button"
-        aria-pressed={granularity === 'file'}
+        role="radio"
+        aria-checked={granularity === 'entity'}
+        onClick={() => setGranularity('entity')}
+        data-architecture-view-option="entity"
+        style={compactTargetStyle}
+        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+          granularity === 'entity' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        {t('architecture.controls.classView', { defaultValue: 'Class diagram' })}
+      </button>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={granularity === 'file'}
         onClick={() => setGranularity('file')}
+        data-architecture-view-option="file"
         style={compactTargetStyle}
         className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
           granularity === 'file' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
         }`}
       >
         {t('architecture.fileGraph', { defaultValue: 'File graph' })}
-      </button>
-      <button
-        type="button"
-        aria-pressed={granularity === 'entity'}
-        onClick={() => setGranularity('entity')}
-        style={compactTargetStyle}
-        className={`${headerButtonClass} outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-          granularity === 'entity' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        {t('architecture.entityGraph', { defaultValue: 'Entity graph' })}
       </button>
     </div>
   );
@@ -608,6 +611,8 @@ export default function ArchitecturePanel({
     </div>
   );
 
+  // The export slot is a menu-shaped button (`Export ▾`); the menu itself is a
+  // sibling task's scope, so for now it writes the current subgraph's `.mmd`.
   const exportButton = (
     <button
       type="button"
@@ -618,81 +623,261 @@ export default function ArchitecturePanel({
         coarsePointer ? 'px-3 text-sm' : 'px-2 py-0.5 text-xs'
       }`}
     >
-      {t('architecture.exportMmd', { defaultValue: 'Export .mmd' })}
+      {t('architecture.export.menu', { defaultValue: 'Export ▾' })}
     </button>
+  );
+
+  // The search box. Its matches are drawn in a listbox under the input; an
+  // out-of-range match is labelled so the reader knows the detail level folded
+  // it, and choosing it raises the tier and reveals it.
+  const searchBox = (
+    <div className="relative">
+      <input
+        type="search"
+        value={searchQuery}
+        aria-label={t('architecture.search.label', { defaultValue: 'Search entities or files' })}
+        placeholder={t('architecture.search.placeholder', { defaultValue: 'Search entities or files…' })}
+        data-architecture-search="true"
+        onChange={(event) => {
+          setSearchQuery(event.target.value);
+          setSearchOpen(true);
+        }}
+        onFocus={() => setSearchOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setSearchOpen(false);
+          } else if (event.key === 'Enter' && searchMatches.length > 0) {
+            const first = searchMatches[0];
+            revealNode(first.node.id, !first.inRange);
+          }
+        }}
+        className="w-40 rounded-md border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      />
+      {searchOpen && searchQuery.trim().length > 0 && (
+        <div
+          data-architecture-search-results="true"
+          className="absolute left-0 top-full z-30 mt-1 max-h-64 w-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
+        >
+          {searchMatches.length === 0 ? (
+            <p className="px-2 py-1 text-[11px] text-muted-foreground">
+              {t('architecture.search.noMatches', { defaultValue: 'No matches' })}
+            </p>
+          ) : (
+            searchMatches.map((match) => (
+              <button
+                key={match.node.id}
+                type="button"
+                data-architecture-search-result={match.node.id}
+                data-architecture-search-in-range={match.inRange}
+                onClick={() => revealNode(match.node.id, !match.inRange)}
+                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+              >
+                <span className="min-w-0 truncate">{match.node.label}</span>
+                {!match.inRange && (
+                  <span className="shrink-0 text-amber-600 dark:text-amber-400">
+                    {t('architecture.search.outOfRange', { defaultValue: 'Not in current range' })}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // `?` opens the legend: the place the two duplicated hover instructions and
+  // the meaning of every line, arrow, stereotype, seed marker and folded badge
+  // now live.
+  const legendButton = (
+    <button
+      type="button"
+      aria-haspopup="true"
+      aria-expanded={legendOpen}
+      aria-label={t('architecture.legend.title', { defaultValue: 'Legend' })}
+      onClick={() => setLegendOpen((open) => !open)}
+      data-architecture-legend-toggle="true"
+      style={compactTargetStyle}
+      className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+        coarsePointer ? 'px-3 text-sm' : 'px-2 py-0.5 text-xs'
+      }`}
+    >
+      ?
+    </button>
+  );
+
+  // The legend body names every visual vocabulary the drawing uses, including
+  // the text form of the old circular fold badge (`+N folded`).
+  const legend = (
+    <div
+      data-architecture-legend="true"
+      role="dialog"
+      aria-label={t('architecture.legend.title', { defaultValue: 'Legend' })}
+      className="absolute right-2 top-11 z-40 w-80 whitespace-pre-line rounded-lg border border-border bg-popover p-3 text-[11px] text-muted-foreground shadow-lg"
+    >
+      {t('architecture.legend.body', {
+        defaultValue:
+          'Solid line: association or call.\nDashed line: dependency or implementation.\nArrows: △ inheritance · △ implementation · ◆ composition · ◇ aggregation · → dependency.\n«stereotype» marks the entity kind.\n● seed: named in this session.\n+N folded: hidden by the current detail level.',
+      })}
+    </div>
+  );
+
+  const unresolvedNames = [...stats.unresolved.files, ...stats.unresolved.identifiers];
+  const unresolvedCount = unresolvedNames.length;
+  // The kind tally is a factual reading of what the analysis contains, NOT a
+  // judgement about the drawing. `class` folds the UML flavours the class
+  // diagram draws the same way (class/abstract/enum).
+  const kindCounts = stats.kindCounts;
+  const kindLine = kindCounts === undefined
+    ? null
+    : [
+        { count: kindCounts.function ?? 0, key: 'kindFunction', defaultValue: '{{count}} functions' },
+        { count: kindCounts.interface ?? 0, key: 'kindInterface', defaultValue: '{{count}} interfaces' },
+        {
+          count: (kindCounts.class ?? 0) + (kindCounts.abstract ?? 0) + (kindCounts.enum ?? 0),
+          key: 'kindClass',
+          defaultValue: '{{count}} classes',
+        },
+      ]
+        .filter((part) => part.count > 0)
+        .map((part) => t(`architecture.readout.${part.key}`, { defaultValue: part.defaultValue, count: part.count }))
+        .join(' · ');
+
+  const classNoun = granularity === 'entity' ? 'class' : 'file';
+  const readoutSummary = classNoun === 'class'
+    ? t('architecture.readout.classSummary', {
+        defaultValue: 'Showing {{shown}} classes · {{total}} related',
+        shown: retainedCount,
+        total: inScopeCount,
+      })
+    : t('architecture.readout.fileSummary', {
+        defaultValue: 'Showing {{shown}} files · {{total}} related',
+        shown: retainedCount,
+        total: inScopeCount,
+      });
+
+  const raiseDetail = (): void => {
+    const index = ARCHITECTURE_DETAIL_TIERS.indexOf(detail);
+    changeDetail(ARCHITECTURE_DETAIL_TIERS[Math.min(index + 1, ARCHITECTURE_DETAIL_TIERS.length - 1)]);
+  };
+
+  /** The analysis/seed source line ... */
+  /**
+   * The analysis/seed source line, bottom-left. Relative time on the surface,
+   * the exact local instant in `title`. Extracted so the empty-reading state
+   * shows it too (the provenance exists even when no seed resolved).
+   */
+  const sourceLine = (
+    <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex flex-col items-start gap-1 text-[11px] text-muted-foreground">
+      <span
+        data-architecture-source-line="true"
+        className="pointer-events-auto rounded-md border border-border/60 bg-background/90 px-2 py-1 shadow-sm"
+      >
+        {t('architecture.honesty.analysis', { defaultValue: 'Analysis' })}:{' '}
+        {provenance.generatedAt ? (
+          <time
+            data-architecture-generated-at
+            dateTime={provenance.generatedAt}
+            title={formatAbsoluteTime(provenance.generatedAt)}
+          >
+            {formatRelativeTime(provenance.generatedAt)}
+          </time>
+        ) : (
+          <span data-architecture-generated-at>unknown</span>
+        )}
+        {' · '}
+        <button
+          type="button"
+          aria-expanded={unresolvedOpen}
+          data-architecture-unresolved={unresolvedCount}
+          onClick={() => setUnresolvedOpen((open) => !open)}
+          style={compactTargetStyle}
+          className="underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {t('architecture.source.unresolved', {
+            defaultValue: '{{count}} names mentioned in this session were not found in the analysis cache',
+            count: unresolvedCount,
+          })}
+          <span aria-hidden="true">{unresolvedOpen ? ' ▾' : ' ▸'}</span>
+        </button>
+      </span>
+      {unresolvedOpen && (
+        <ul
+          data-architecture-unresolved-list="true"
+          aria-label={t('architecture.source.listLabel', { defaultValue: 'Unresolved names' })}
+          className="pointer-events-auto max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
+        >
+          {unresolvedNames.map((name) => (
+            <li key={name}>{name}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+
   );
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden" data-architecture-panel="true">
-      {compactToolbar ? (
-        // ONE row. A phone has no room for a header row plus a diagram toolbar
-        // row: the title, the granularity switch and the "…" toggle are all the
-        // chrome that stays; scope, detail, the honesty readings, export and every zoom
-        // action live in the menu below. A real truncation still surfaces as a
-        // compact badge here, so a cut is never hidden behind a closed menu.
-        <div
-          data-architecture-toolbar="true"
-          className="flex items-center gap-2 border-b border-border/60 px-2 py-1"
-        >
-          <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-            {t('architecture.title', { defaultValue: 'Architecture' })}
-          </h3>
-          {granularityGroup}
-          {truncation.truncated && (
-            <span
-              data-architecture-truncated-badge="true"
-              data-architecture-truncated-granularity={granularity}
-              data-architecture-truncated-shown={truncation.shown}
-              data-architecture-truncated-total={truncation.total}
-              title={t('architecture.honesty.truncated', {
-                defaultValue: 'Node budget reached — this graph is truncated.',
-              })}
-              className="whitespace-nowrap text-[11px] font-medium text-amber-600 dark:text-amber-400"
+      <div
+        data-architecture-toolbar="true"
+        // ONE row on every tier: no wrapping container is allowed here, so the
+        // header can never grow into the two/three rows the review measured.
+        className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border/60 px-3 py-1.5"
+      >
+        {compactToolbar ? (
+          <>
+            <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+              {t('architecture.title', { defaultValue: 'Architecture' })}
+            </h3>
+            {granularityGroup}
+            {truncation.truncated && (
+              <span
+                data-architecture-truncated-badge="true"
+                data-architecture-truncated-granularity={granularity}
+                data-architecture-truncated-omitted={budgetOmitted}
+                title={t('architecture.readout.budgetOmitted', {
+                  defaultValue: '{{count}} more left out by the node budget',
+                  count: budgetOmitted,
+                })}
+                className="whitespace-nowrap text-[11px] font-medium text-amber-600 dark:text-amber-400"
+              >
+                +{budgetOmitted} folded
+              </span>
+            )}
+            <button
+              type="button"
+              aria-haspopup="true"
+              aria-expanded={compactMenuOpen}
+              aria-label={t('architecture.plantuml.moreActions', { defaultValue: 'More actions' })}
+              onClick={() => setCompactMenuOpen((open) => !open)}
+              data-architecture-overflow-toggle="true"
+              style={compactTargetStyle}
+              className="rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
             >
-              ⚠ {truncation.shown}/{truncation.total}
-            </span>
-          )}
-          <button
-            type="button"
-            aria-haspopup="true"
-            aria-expanded={compactMenuOpen}
-            aria-label={t('architecture.plantuml.moreActions', { defaultValue: 'More actions' })}
-            onClick={() => setCompactMenuOpen((open) => !open)}
-            data-architecture-overflow-toggle="true"
-            style={compactTargetStyle}
-            className="rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-          >
-            ⋯
-          </button>
-        </div>
-      ) : (
-        <>
-          <div
-            data-architecture-toolbar="true"
-            className="flex flex-wrap items-center gap-3 border-b border-border/60 px-4 py-2"
-          >
-            <h3 className="text-sm font-semibold text-foreground">
+              ⋯
+            </button>
+          </>
+        ) : (
+          <>
+            <h3 className="shrink-0 text-sm font-semibold text-foreground">
               {t('architecture.title', { defaultValue: 'Architecture' })}
             </h3>
             {granularityGroup}
             {scopeGroup}
             {detailGroup}
-            {/* On the compact tier the export action lives in the overflow menu
-                instead (a second tiny button here would defeat the touch target
-                work). */}
+            {searchBox}
+            <span className="flex-1" />
             {exportButton}
-          </div>
-
-          <ArchitectureHonestyBar result={result} granularity={granularity} hops={scope} />
-        </>
-      )}
+            {legendButton}
+          </>
+        )}
+      </div>
 
       {compactToolbar && compactMenuOpen && (
         <div
           data-architecture-overflow-menu="true"
           className="absolute right-2 top-12 z-30 flex max-h-[70%] w-72 flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-lg"
         >
-          <ArchitectureHonestyBar result={result} granularity={granularity} hops={scope} compact />
           {scopeGroup}
           {detailGroup}
           {/* The renderer's own controls (view navigation, readable mode, drill,
@@ -707,17 +892,9 @@ export default function ArchitecturePanel({
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
         {hasSeeds ? (
           <>
-            {/* A coarse pointer cannot hover, so the hover readout is not
-                rendered at all on that tier — the touch instruction below is
-                the only input guidance. It is a normal-flow row ABOVE the
-                drawing, not an overlay: an absolutely placed hint covered the
-                top row of nodes on a phone, which is the content the reader
-                opened the tab for. It still costs only its own height and the
-                drawing keeps `flex-1` of the rest. */}
-            {!coarsePointer && <ArchitectureHoverBar hover={visibleHover} />}
             {coarsePointer && !touchHintDismissed && (
               <div
                 data-architecture-touch-hint="true"
@@ -745,9 +922,9 @@ export default function ArchitecturePanel({
                 <Renderer
                   key={`${sessionId}:${granularity}:${scope}`}
                   graph={detailRanking?.graph ?? neighbourhood}
-                  // The detail knob's two numbers, so the renderer's
-                  // visible-summary slot reports shown/in-scope rather than its
-                  // own drawn/total reading.
+                  // The detail knob's two numbers, so a renderer that has a
+                  // visible-summary slot can report shown/in-scope rather than
+                  // its own drawn/total reading.
                   detailReading={detailReading}
                   // Which subgraph this is decides how ids are read (label and
                   // group prefixes). The renderer must not have to guess: see
@@ -758,17 +935,123 @@ export default function ArchitecturePanel({
                   // one-off touch instruction has done its job by then.
                   onNodeClick={() => setTouchHintDismissed(true)}
                   onExport={exportFromMenu}
+                  focusNodeId={focusTarget?.id ?? null}
+                  focusToken={focusTarget?.token}
                 />
               </CompactToolbarSlotContext.Provider>
+
+              {/* The one-line reading, ON the drawing's top-left corner. It is
+                  the only place the shown/in-scope numbers are stated. */}
+              <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
+                <div
+                  data-architecture-readout="true"
+                  aria-live="polite"
+                  className="pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+                >
+                  <button
+                    type="button"
+                    aria-expanded={readoutOpen}
+                    onClick={() => setReadoutOpen((open) => !open)}
+                    data-architecture-readout-toggle="true"
+                    style={compactTargetStyle}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    <span data-architecture-readout-summary={retainedCount} data-architecture-readout-total={inScopeCount}>
+                      {readoutSummary}
+                    </span>
+                    {foldedCount > 0 && (
+                      <span data-architecture-folded-badge={foldedCount} className="text-foreground">
+                        {t('architecture.readout.folded', { defaultValue: '+{{count}} folded', count: foldedCount })}
+                      </span>
+                    )}
+                    {truncation.truncated && (
+                      <span
+                        data-architecture-truncated="true"
+                        data-architecture-truncated-granularity={granularity}
+                        data-architecture-truncated-shown={truncation.shown}
+                        data-architecture-truncated-total={truncation.total}
+                        data-architecture-truncated-omitted={budgetOmitted}
+                        className="text-amber-600 dark:text-amber-400"
+                      >
+                        {t('architecture.readout.budgetOmitted', {
+                          defaultValue: '{{count}} more left out by the node budget',
+                          count: budgetOmitted,
+                        })}
+                      </span>
+                    )}
+                    <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
+                  </button>
+                  {readoutOpen && (
+                    <div data-architecture-readout-detail="true" className="mt-1 flex flex-col gap-1">
+                      <p>
+                        {t('architecture.readout.explanation', {
+                          defaultValue:
+                            '{{shown}} is what the current detail level keeps; {{total}} is every related entity in the current scope.',
+                          shown: retainedCount,
+                          total: inScopeCount,
+                        })}
+                      </p>
+                      {kindLine !== null && kindLine.length > 0 && (
+                        <p data-architecture-kind-counts="true">{kindLine}</p>
+                      )}
+                      <span className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={raiseDetail}
+                          data-architecture-raise-detail="true"
+                          className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                        >
+                          {t('architecture.readout.raiseDetail', { defaultValue: 'Raise detail' })}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => changeScope(scope - 1)}
+                          data-architecture-reduce-scope="true"
+                          disabled={scope <= ARCHITECTURE_SCOPE_MIN}
+                          className="rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {t('architecture.readout.reduceScope', { defaultValue: 'Reduce scope' })}
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {/* The hover relation reading replaces the two duplicated
+                    standing instructions: it only exists while a node is under
+                    the pointer, so the page has no permanent hint sentence. */}
+                {visibleHover !== null && (
+                  <span
+                    data-architecture-hover={visibleHover.node.id}
+                    data-architecture-hover-relations={visibleHover.relations.join(',')}
+                    className="pointer-events-none rounded bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm"
+                  >
+                    {t('architecture.hover.relations', {
+                      defaultValue: '{{node}} — relations: {{relations}}',
+                      node: visibleHover.node.id,
+                      relations:
+                        visibleHover.relations.length === 0
+                          ? t('architecture.hover.none', { defaultValue: 'no outgoing/incoming relation' })
+                          : visibleHover.relations.join(', '),
+                    })}
+                  </span>
+                )}
+              </div>
+
+              {sourceLine}
             </div>
           </>
         ) : (
-          <ArchitectureEmptyState
-            message={t('architecture.noSeeds', {
-              defaultValue: 'This session has not referenced any file or identifier that the analysis can place.',
-            })}
-          />
+          <>
+            <ArchitectureEmptyState
+              message={t('architecture.noSeeds', {
+                defaultValue: 'This session has not referenced any file or identifier that the analysis can place.',
+              })}
+            />
+            {sourceLine}
+          </>
         )}
+
+        {legendOpen && legend}
       </div>
     </div>
   );

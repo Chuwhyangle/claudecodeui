@@ -151,7 +151,16 @@ const HIGHLIGHT_STYLE = `
  * is visible from the graph itself, which is this renderer's replacement for
  * the old maxHops/maxNodes truncation.
  */
-type PlantUmlGraphProps = ArchitectureRendererProps;
+type PlantUmlGraphProps = ArchitectureRendererProps & {
+  /**
+   * A node the panel asked this renderer to reveal (a search hit, or a match
+   * that was outside the current detail range). The renderer opens that node's
+   * neighbourhood and centres the drawn box on it.
+   */
+  readonly focusNodeId?: string | null;
+  /** Bumped on every request, so asking for the same node twice re-centres it. */
+  readonly focusToken?: number;
+};
 
 /**
  * The diagram's presentation scale and why it has that value: `fit` follows the
@@ -446,7 +455,16 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
  * nothing here re-enters the fetch. The renderer package is imported
  * dynamically, so elkjs never enters the first-screen bundle.
  */
-export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailReading, onNodeClick, onNodeHover, onExport }: PlantUmlGraphProps) {
+export function PlantUmlGraph({
+  graph,
+  idShape = DEFAULT_NODE_ID_SHAPE,
+  detailReading,
+  onNodeClick,
+  onNodeHover,
+  onExport,
+  focusNodeId = null,
+  focusToken,
+}: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
@@ -550,6 +568,21 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
     const id = selectedRef.current;
     if (id !== null) drillInto(id);
   }, [drillInto]);
+
+  /**
+   * A panel-level focus request (search hit / out-of-range jump) navigates the
+   * drawing to the named node's neighbourhood. This is a deliberate exception
+   * to "selection never re-lays out": the node may not be in the current view
+   * at all, so the only honest way to show it is to open its own view. The
+   * request is keyed by `focusToken` so choosing the same node again works.
+   */
+  useEffect(() => {
+    if (focusNodeId === null) return;
+    selectedRef.current = focusNodeId;
+    setSelectedId(focusNodeId);
+    setSelectedByTouch(false);
+    setView({ kind: 'neighborhood', entityId: focusNodeId, hops: DEFAULT_NEIGHBORHOOD_HOPS });
+  }, [focusNodeId, focusToken]);
 
   // The hierarchy of the drawing on screen (entities → packages) and the zoom
   // level currently displayed. The level is applied imperatively (display
@@ -826,6 +859,18 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
         if (matchReading !== null && matchReading.mode === 'focus' && readout !== null && readout.focusPackageId !== null) {
           centerOnPackage(host, readout.focusPackageId);
         }
+        // A focus request (search hit) is centred LAST, after the readable
+        // default's package jump: the reader asked for THIS node, so it wins.
+        // The marker is what tests and sibling panels read; the scroll is the
+        // actual "jump to it".
+        if (focusNodeId !== null) {
+          const focused = nodeElement(host, focusNodeId);
+          if (focused !== null) {
+            focused.classList.add('arch-focus');
+            focused.setAttribute('data-architecture-focus-target', focusNodeId);
+            centerElementInContainer(host, focused);
+          }
+        }
         setDrawn({
           view,
           nodes: host.querySelectorAll('[data-entity-id]').length,
@@ -842,7 +887,7 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
     return () => {
       cancelled = true;
     };
-  }, [applyZoom, graph, idShape, layoutAspect, view]);
+  }, [applyZoom, focusNodeId, graph, idShape, layoutAspect, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1306,6 +1351,18 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
     </span>
   ) : null;
 
+  /**
+   * The ONE place the drawing's zoom tier is stated and changed. The review
+   * found "Explosion view", "Overview" and "Focus" each expressing the same
+   * thing in a different row; they are now a single on-canvas group whose
+   * leading label is the current tier. Nothing outside this group names a tier.
+   */
+  const zoomTierLabel = view.kind === 'hierarchy'
+    ? t('architecture.plantuml.explosion', { defaultValue: 'Explosion view' })
+    : activeReadableMode === 'overview'
+      ? t('architecture.plantuml.readable.overview', { defaultValue: 'Overview' })
+      : t('architecture.plantuml.readable.focus', { defaultValue: 'Focus' });
+
   /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
   const zoomReadout = (
     <span data-architecture-zoom-level className="min-w-9 text-center tabular-nums">
@@ -1391,7 +1448,9 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
       style={clusterTargetStyle}
       className={TOOLBAR_BUTTON_CLASS}
     >
-      {t(fitReading.labelKey, { defaultValue: fitReading.labelFallback })}
+      {/* The scale action is named "Fit", not after the tier it lands on: the
+          tier is stated once, by the zoom-tier group above. */}
+      {t('architecture.plantuml.zoomFit', { defaultValue: 'Fit to view' })}
     </button>
   );
 
@@ -1408,6 +1467,27 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
       </button>
     )
     : null;
+
+  // The single zoom-tier group: the current tier label plus every control that
+  // changes it, in ONE place on the drawing.
+  const zoomTierGroup = (
+    <div
+      data-architecture-zoom-tier="true"
+      role="group"
+      aria-label={t('architecture.plantuml.zoomTier', { defaultValue: 'Zoom level' })}
+      className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
+    >
+      <span data-architecture-zoom-tier-label="true" className="px-1 font-medium text-foreground">
+        {zoomTierLabel}
+      </span>
+      {backButton}
+      {explosionButton}
+      {readableModeGroup}
+      {drillButton}
+      {readableNotice}
+      {fitFocusNotice}
+    </div>
+  );
 
   const exportButton = onExport === undefined
     ? null
@@ -1467,13 +1547,8 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
           <span data-architecture-compact-controls="true" className="flex flex-col gap-1">
             <span className="flex flex-wrap items-center gap-2">
               <span data-architecture-view-label>{viewLabel}</span>
-              {readableNotice}
-              {fitFocusNotice}
+              {zoomTierGroup}
             </span>
-            {backButton}
-            {explosionButton}
-            {readableModeGroup}
-            {drillButton}
             {exportButton}
             <span
               data-architecture-visible-summary
@@ -1485,43 +1560,7 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
           </span>,
           compactToolbarSlot,
         )
-      ) : (
-        <div
-          data-architecture-toolbar="true"
-          className="relative flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-1 text-[11px] text-muted-foreground"
-        >
-          <span className="flex items-center gap-2">
-            {backButton}
-            {explosionButton}
-            <span data-architecture-view-label>{viewLabel}</span>
-            {readableModeGroup}
-            {readableNotice}
-            {fitFocusNotice}
-            {/* The hover READOUT is the panel's renderer-neutral bar; this is the
-                view's own gesture hint, so it never repeats that reading. On a
-                finger there is no hover, so the wording follows the input. */}
-            <span>
-              {touchUi
-                ? t('architecture.plantuml.touchHint', {
-                    defaultValue: 'Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.',
-                  })
-                : t('architecture.plantuml.hint', {
-                    defaultValue: 'Hover a node to highlight its relations; click a group to expand it, or a node to drill into its neighbourhood.',
-                  })}
-            </span>
-          </span>
-          <span className="relative flex items-center gap-2">
-            {drillButton}
-            <span
-              data-architecture-visible-summary
-              data-architecture-detail-shown={detailReading?.shown}
-              data-architecture-detail-total={detailReading?.totalInScope}
-            >
-              {visibleSummary}
-            </span>
-          </span>
-        </div>
-      )}
+      ) : null}
       <div className="relative min-h-0 flex-1" data-architecture-canvas="true">
         <div
           ref={hostRef}
@@ -1539,12 +1578,26 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, detailRe
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
-        {/* The canvas's own chrome, stacked in ONE bottom-right column: the
-            minimap above, the zoom cluster below. Keeping them as flex
-            siblings is what makes "the map never covers the cluster"
-            structural rather than a pair of offsets that have to be kept in
-            sync; on a phone the map starts collapsed to a 44px button, so the
-            column still costs almost nothing. */}
+        {/* The drawing's zoom tier, ON the canvas (top-right). One group states
+            and changes Focus/Overview/Explosion; no other row repeats it. */}
+        {!compactToolbar && (
+          <div
+            data-architecture-canvas-view-controls="true"
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              rowGap: 4,
+              maxWidth: '70%',
+            }}
+            className="z-20 pointer-events-none"
+          >
+            {zoomTierGroup}
+          </div>
+        )}
         <div
           data-architecture-canvas-overlays="true"
           // The arrangement is stated inline rather than in utility classes:

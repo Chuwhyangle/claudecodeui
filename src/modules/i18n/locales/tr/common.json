@@ -60,7 +60,8 @@
         "label": "Diyagram genel görünümü, çizimin %{{percent}} kadarı görünür",
         "show": "Diyagram genel görünümünü göster",
         "hide": "Diyagram genel görünümünü daralt"
-      }
+      },
+      "zoomTier": "Yakınlaştırma düzeyi"
     },
     "title": "Mimari",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",
@@ -80,7 +81,8 @@
       "detailCore": "Çekirdek",
       "detailCommon": "Yaygın",
       "detailAll": "Tümü",
-      "detailReading": "İlgili {{total}} düğümden {{shown}} tanesi gösteriliyor"
+      "detailReading": "İlgili {{total}} düğümden {{shown}} tanesi gösteriliyor",
+      "classView": "Sınıf diyagramı"
     },
     "exportMmd": ".mmd dışa aktar",
     "expandHint": "İlişki türleri için bir düğümün üzerine gelin; sonraki atlamayı genişletmek için düğüme tıklayın.",
@@ -99,6 +101,35 @@
       "entityTruncated": "Varlık grafiği kısaltıldı — {{total}} varlığın {{shown}} tanesi gösteriliyor (düğüm bütçesi {{limit}}).",
       "fileTruncated": "Dosya grafiği kısaltıldı — {{total}} dosyanın {{shown}} tanesi gösteriliyor (düğüm bütçesi {{limit}}).",
       "lowerHops": "{{hops}} atlama düğüm bütçesini aşıyor — tüm komşuluğu görmek için atlamaları azaltın."
+    },
+    "legend": {
+      "title": "Gösterge",
+      "body": "Düz çizgi: ilişkilendirme veya çağrı. Kesikli çizgi: bağımlılık veya gerçekleme. Oklar: △ kalıtım · △ gerçekleme · ◆ kompozisyon · ◇ toplama · → bağımlılık. «stereotype» varlık türünü belirtir. ● seed: bu oturumda adı geçti. +N katlandı: geçerli ayrıntı düzeyince gizlendi."
+    },
+    "export": {
+      "menu": "Dışa aktar ▾"
+    },
+    "search": {
+      "label": "Varlık veya dosya ara",
+      "placeholder": "Varlık veya dosya ara…",
+      "noMatches": "Eşleşme yok",
+      "outOfRange": "Geçerli aralığın dışında"
+    },
+    "readout": {
+      "classSummary": "{{shown}} sınıf gösteriliyor · {{total}} ilgili",
+      "fileSummary": "{{shown}} dosya gösteriliyor · {{total}} ilgili",
+      "folded": "+{{count}} katlandı",
+      "explanation": "{{shown}} geçerli ayrıntı düzeyinin tuttuklarıdır; {{total}} geçerli kapsamdaki tüm ilgili varlıklardır.",
+      "raiseDetail": "Ayrıntıyı artır",
+      "reduceScope": "Kapsamı azalt",
+      "budgetOmitted": "Düğüm bütçesi nedeniyle {{count}} tane daha dahil edilmedi",
+      "kindFunction": "{{count}} işlev",
+      "kindInterface": "{{count}} arayüz",
+      "kindClass": "{{count}} sınıf"
+    },
+    "source": {
+      "unresolved": "Bu oturumda adı geçen {{count}} ad analiz önbelleğinde bulunamadı",
+      "listLabel": "Çözülemeyen adlar"
     }
   },
   "status": {

@@ -60,7 +60,8 @@
         "label": "Aperçu du diagramme : {{percent}} % du dessin visible",
         "show": "Afficher l’aperçu du diagramme",
         "hide": "Réduire l’aperçu du diagramme"
-      }
+      },
+      "zoomTier": "Niveau de zoom"
     },
     "title": "Architecture",
     "noSession": "Sélectionnez une session pour voir l'architecture des fichiers qu'elle a touchés.",
@@ -80,7 +81,8 @@
       "detailCore": "Essentiel",
       "detailCommon": "Courant",
       "detailAll": "Tout",
-      "detailReading": "Affichage de {{shown}} sur {{total}} nœuds liés"
+      "detailReading": "Affichage de {{shown}} sur {{total}} nœuds liés",
+      "classView": "Diagramme de classes"
     },
     "exportMmd": "Exporter .mmd",
     "expandHint": "Survolez un nœud pour voir ses types de relation ; cliquez sur un nœud pour étendre son saut suivant.",
@@ -99,6 +101,35 @@
       "entityTruncated": "Graphe des entités tronqué — {{shown}} entités affichées sur {{total}} (budget de nœuds {{limit}}).",
       "fileTruncated": "Graphe des fichiers tronqué — {{shown}} fichiers affichés sur {{total}} (budget de nœuds {{limit}}).",
       "lowerHops": "{{hops}} sauts dépassent le budget de nœuds — réduisez les sauts pour voir tout le voisinage."
+    },
+    "legend": {
+      "title": "Légende",
+      "body": "Ligne continue : association ou appel. Ligne pointillée : dépendance ou implémentation. Flèches : △ héritage · △ implémentation · ◆ composition · ◇ agrégation · → dépendance. «stéréotype» indique le type d’entité. ● graine : mentionnée dans cette session. +N repliés : masqués par le niveau de détail actuel."
+    },
+    "export": {
+      "menu": "Exporter ▾"
+    },
+    "search": {
+      "label": "Rechercher des entités ou des fichiers",
+      "placeholder": "Rechercher des entités ou des fichiers…",
+      "noMatches": "Aucun résultat",
+      "outOfRange": "Hors de la plage actuelle"
+    },
+    "readout": {
+      "classSummary": "Affichage de {{shown}} classes · {{total}} liées",
+      "fileSummary": "Affichage de {{shown}} fichiers · {{total}} liés",
+      "folded": "+{{count}} repliés",
+      "explanation": "{{shown}} correspond au niveau de détail actuel ; {{total}} regroupe toutes les entités liées dans la portée actuelle.",
+      "raiseDetail": "Augmenter le détail",
+      "reduceScope": "Réduire la portée",
+      "budgetOmitted": "{{count}} de plus omis par le budget de nœuds",
+      "kindFunction": "{{count}} fonctions",
+      "kindInterface": "{{count}} interfaces",
+      "kindClass": "{{count}} classes"
+    },
+    "source": {
+      "unresolved": "{{count}} noms mentionnés dans cette session n’ont pas été trouvés dans le cache d’analyse",
+      "listLabel": "Noms non résolus"
     }
   },
   "status": {
