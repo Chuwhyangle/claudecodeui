@@ -64,6 +64,19 @@ extra:
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/architecture-mobile-default-fit-and-density.md
 
+## Evidence
+
+2026-10-23 续做轮：复用既有 worktree 与既有实现提交 `2d16730b9`（未重做实现），在合并 develop 后的树上逐条复跑每个 AC。
+
+- `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` → 22 passed（手机几何 366×505、~1.05:1、右下 44×44 按钮：fit ≥ 理论最大值 95%，角落靠平移清除；任何摆放都相交时才缩小；桌面 fit 不回归）
+- `npx vitest run …/mobileCompactToolbar.test.tsx …/mobileGestures.test.tsx …/architectureTab.test.tsx` → 3 files / 118 passed（折叠读数 44px 单行、展开区在文档流；缩放簇 52px 横排、44×44 目标、8px 间距；fit<12% 提示行；点 package 放大 +「返回全图」；手势与 LOD 不回归）
+- `npx vitest run …/canvasLayoutContract.test.tsx` → 3 passed
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts` → **10 passed (1.1m)**（手机密度腿：读数 44px、缩放簇 52px、图区占 tab 高度 100%、fit<12% 时提示行、package 点按放大后经「返回全图」回到 fit）
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` → **7 passed (44.6s)**（控制臂 G：把缩放簇强制成竖列后 cluster.h > 52px，与主臂共用同一读取函数）
+- `npx vitest run …/i18nArchitectureTabCompleteness.test.ts` → 6 passed；`npm run typecheck`、`npm run build` 均通过
+
+AC4 的「图宽 ≥ 画布宽 95%」在 e2e 夹具上几何不可满足，已如实记为放宽并说明了钉子所在：夹具的整图自然尺寸只有 256×384（fit 封顶 1、不放大），explosion 图 2101.5×4564 是竖构图、以高度为绑定轴（620px 画布下 fit=0.121 vs 理论 0.134，右下 44px 缩略图按钮只能靠让出约 10% 高度清除），故该腿断言「绑定轴 ≥ 85% + 图区 ≥ 70% + 读数 ≤ 44 + 簇 ≤ 52 + 提示行存在」；AC 的 95% 精确值由 `svgViewport.test.tsx` 在任务指定的真实手机几何（366×505、~1.05:1、44×44 按钮，平移清除、fit = 理论值 100%）上钉死。DoD 要求的真机会话截图（390×844 打开实盘会话）本会话没有可驱动的真机，需人工补拍。
+
 ## Blocker
 
 **2026-10-22T23:50:23.420Z — worker 未落地（exited-not-landed）**
