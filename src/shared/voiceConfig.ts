@@ -79,29 +79,6 @@ const VOICE_CONFIG_FIELDS = VOICE_SETTINGS_STRING_FIELDS;
  */
 const SERVER_WRITE_DEBOUNCE_MS = 400;
 
-let config: VoiceConfig = { ...VOICE_CONFIG_DEFAULTS };
-let hasHydrated = false;
-let hydrationRequest: Promise<void> | null = null;
-/** Which session the in-memory copy belongs to, so a user switch can be noticed. */
-let hydratedForToken: string | null = null;
-let pendingWriteTimer: ReturnType<typeof setTimeout> | null = null;
-
-/**
- * The deployment's raw (pre-VAD) capture switch, and the once-per-token read that answers it.
- *
- * IT IS NOT PART OF `VoiceConfig`. That document is the user's own backend settings and is saved
- * whole back to the server; this is a READ-ONLY fact about the PROCESS's environment, so folding it
- * into the saved document would make a save carry a field the user never chose. It lives here only
- * because this module already owns the once-per-session-token read the value needs.
- *
- * `false` until a server answer arrives, which is the safe reading: an unresolved capability must
- * never make the recording path upload pre-VAD audio — the audio a VAD deliberately removed is more
- * sensitive than what it kept, so "unknown" has to mean "do not send".
- */
-let rawCaptureEnabled = false;
-let rawCaptureToken: string | null = null;
-let rawCaptureRequest: Promise<void> | null = null;
-
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 );
@@ -146,13 +123,6 @@ function readCurrentToken(): string | null {
   }
 }
 
-function applyConfig(next: VoiceConfig): void {
-  config = { ...next };
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(VOICE_CONFIG_SYNC_EVENT));
-  }
-}
-
 /**
  * Reads the pre-server `voiceConfig` key, or null when it is not there.
  *
@@ -191,13 +161,342 @@ function clearLegacyVoiceConfig(): void {
 }
 
 /**
+ * The one in-memory voice-settings store for this tab.
+ *
+ * WHY A CLASS RATHER THAN MODULE-SCOPE BINDINGS: the fields below are one lifecycle — hydrate the
+ * server's copy, read it synchronously, save whole documents back through one debounced path, and
+ * drop the copy when the signed-in user changes. As module-level `let`s that lifecycle was implicit:
+ * every function in the file could touch any field, and resetting the store was a list of
+ * assignments rather than a named operation. As private fields behind
+ * `hydrate()/read()/write()/dispose()` the state has a single owner and the write path is named
+ * rather than scattered.
+ *
+ * The module's public functions stay where they are — consumers keep calling them — and are thin
+ * adapters onto the explicit singleton below.
+ */
+class VoiceConfigStore {
+  /** The browser's runtime copy of the document; always the complete shape. */
+  private config: VoiceConfig = { ...VOICE_CONFIG_DEFAULTS };
+  /** True once the server's copy has been read at least once this session. */
+  private hasHydrated = false;
+  /** The in-flight hydration, shared by every concurrent caller. */
+  private hydrationRequest: Promise<void> | null = null;
+  /** Which session the in-memory copy belongs to, so a user switch can be noticed. */
+  private hydratedForToken: string | null = null;
+  /** The debounce timer for the whole-document save. */
+  private pendingWriteTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * The deployment's raw (pre-VAD) capture switch, and the once-per-token read that answers it.
+   *
+   * IT IS NOT PART OF `VoiceConfig`. That document is the user's own backend settings and is saved
+   * whole back to the server; this is a READ-ONLY fact about the PROCESS's environment, so folding it
+   * into the saved document would make a save carry a field the user never chose. It lives here only
+   * because this module already owns the once-per-session-token read the value needs.
+   *
+   * `false` until a server answer arrives, which is the safe reading: an unresolved capability must
+   * never make the recording path upload pre-VAD audio — the audio a VAD deliberately removed is more
+   * sensitive than what it kept, so "unknown" has to mean "do not send".
+   */
+  private rawCaptureEnabled = false;
+  private rawCaptureToken: string | null = null;
+  private rawCaptureRequest: Promise<void> | null = null;
+
+  /**
+   * Reads the current settings.
+   *
+   * Returns its own object every time, because callers treat it as a value and a
+   * shared reference would let one of them edit the live configuration.
+   */
+  read(): VoiceConfig {
+    return { ...this.config };
+  }
+
+  /** True once the server's copy has been read at least one time this session. */
+  hasHydratedOnce(): boolean {
+    return this.hasHydrated;
+  }
+
+  /**
+   * Applies a patch from the Settings tab and schedules the save.
+   *
+   * This is the store's single write path: the in-memory copy and the debounced
+   * whole-document save are updated together, so no caller can change one
+   * without the other following.
+   *
+   * Only string fields are accepted, so a stray `undefined` from a partially
+   * built patch cannot blank a field the user did not touch.
+   */
+  write(patch: Partial<VoiceConfig>): void {
+    const next = { ...this.config };
+    for (const field of VOICE_CONFIG_FIELDS) {
+      const value = patch[field];
+      if (typeof value === 'string') {
+        next[field] = value;
+      }
+    }
+    // The recording switch and the capacity, applied only when the patch carries the right type: a
+    // stray `undefined` from a partially built patch must not blank a field the user did not touch,
+    // which is the same rule the string loop above follows. The capacity is required to be a positive
+    // finite number here so a form mid-edit cannot store a zero the store would then re-normalise.
+    if (typeof patch.voiceDataRecording === 'boolean') {
+      next.voiceDataRecording = patch.voiceDataRecording;
+    }
+    if (
+      typeof patch.voiceDataMaxBytes === 'number' &&
+      Number.isFinite(patch.voiceDataMaxBytes) &&
+      patch.voiceDataMaxBytes > 0
+    ) {
+      next.voiceDataMaxBytes = patch.voiceDataMaxBytes;
+    }
+    this.applyConfig(next);
+    this.queueServerWrite();
+  }
+
+  /** Makes `next` the settings, and lets open voice consumers re-read in this tab. */
+  private applyConfig(next: VoiceConfig): void {
+    this.config = { ...next };
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(VOICE_CONFIG_SYNC_EVENT));
+    }
+  }
+
+  /** Collapses successive edits into one save, which is the whole document each time. */
+  private queueServerWrite(): void {
+    if (this.pendingWriteTimer !== null) {
+      clearTimeout(this.pendingWriteTimer);
+    }
+    this.pendingWriteTimer = setTimeout(() => {
+      this.pendingWriteTimer = null;
+      void this.flushServerWrite();
+    }, SERVER_WRITE_DEBOUNCE_MS);
+  }
+
+  private async flushServerWrite(): Promise<void> {
+    const snapshot = { ...this.config };
+    try {
+      const response = await api.voice.saveConfig(snapshot);
+      if (!response.ok) {
+        // A refused save is not a saved setting. The in-memory copy is right and
+        // the legacy key — if this was the migration's own write — stays behind so
+        // a later load can retry it.
+        console.error(`Failed to save voice settings (${response.status}).`);
+        return;
+      }
+      // The values are server-side now, so the migration source is spent.
+      clearLegacyVoiceConfig();
+    } catch (error) {
+      // The in-memory copy is already right, and the next edit re-sends the whole
+      // document, so a dropped save costs this change rather than the setting.
+      console.error('Failed to save voice settings:', error);
+    }
+  }
+
+  /**
+   * Adopts the server's copy as the source of truth, importing the legacy
+   * localStorage key on the one load where the server has nothing yet.
+   *
+   * Never rejects: a failed hydration must degrade to "no server configuration",
+   * not to a rejected promise on the voice-call path.
+   */
+  private async runHydration(): Promise<void> {
+    const serverConfig = await loadServerConfig();
+    if (serverConfig === null) {
+      // The server never answered. Whatever is in memory stays; the legacy key is
+      // left alone so the next load can retry importing it.
+      return;
+    }
+
+    if (!isEmptyConfig(serverConfig)) {
+      // The server already knows this user's settings, so they win — including
+      // over a legacy key on this device, which would otherwise push this
+      // profile's older values over the ones saved somewhere else.
+      clearLegacyVoiceConfig();
+      this.applyConfig(serverConfig);
+      return;
+    }
+
+    const legacyConfig = readLegacyVoiceConfig();
+    if (legacyConfig === null) {
+      this.applyConfig(serverConfig);
+      return;
+    }
+
+    if (isEmptyConfig(legacyConfig)) {
+      // Present but unusable (blank, or JSON that is not a settings object).
+      clearLegacyVoiceConfig();
+      this.applyConfig(serverConfig);
+      return;
+    }
+
+    try {
+      const response = await api.voice.saveConfig(legacyConfig);
+      if (!response.ok) {
+        throw new Error(`the server answered ${response.status}`);
+      }
+      clearLegacyVoiceConfig();
+    } catch (error) {
+      // The key stays behind so a later load can retry the import. The values are
+      // still adopted in memory, so voice keeps working in the meantime.
+      console.error('Failed to import legacy voice settings:', error);
+    }
+    this.applyConfig(legacyConfig);
+  }
+
+  /**
+   * Loads the settings for the current session, at most one request at a time.
+   *
+   * Safe to call from anywhere and more than once: concurrent callers share the
+   * in-flight request, and once it has settled the copy is only re-fetched when
+   * the session it belongs to changes.
+   */
+  hydrate(): Promise<void> {
+    if (this.hydrationRequest) {
+      return this.hydrationRequest;
+    }
+
+    const token = readCurrentToken();
+    const request = this.runHydration()
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          console.error('Failed to hydrate voice settings:', error);
+        },
+      )
+      .finally(() => {
+        this.hydrationRequest = null;
+        this.hasHydrated = true;
+        this.hydratedForToken = token;
+      });
+
+    this.hydrationRequest = request;
+    return request;
+  }
+
+  /**
+   * Resolves once the settings for the session that is active *now* are loaded.
+   *
+   * A voice call awaits this before choosing between the user's own backend and
+   * the proxy: reading an un-hydrated copy would look exactly like "no backend
+   * configured" and quietly route the recording through the server instead of the
+   * endpoint the user set up.
+   *
+   * A session change — a second user signing in on this tab, or the first one
+   * signing out — discards the in-memory copy first, so nothing can read or send
+   * the previous user's key while the new fetch is in flight.
+   */
+  whenReady(): Promise<void> {
+    const token = readCurrentToken();
+    if (this.hasHydrated && this.hydratedForToken === token) {
+      return Promise.resolve();
+    }
+
+    if (this.hasHydrated) {
+      this.applyConfig({ ...VOICE_CONFIG_DEFAULTS });
+      this.hasHydrated = false;
+    }
+
+    return this.hydrate();
+  }
+
+  /**
+   * Drops the in-memory copy and any scheduled save, so a different user on this device never
+   * starts out holding the previous user's key. Awaited by nothing: the next
+   * `whenVoiceConfigReady()` re-fetches for whoever is signed in.
+   */
+  dispose(): void {
+    if (this.pendingWriteTimer !== null) {
+      clearTimeout(this.pendingWriteTimer);
+      this.pendingWriteTimer = null;
+    }
+    this.config = { ...VOICE_CONFIG_DEFAULTS };
+    this.hasHydrated = false;
+    this.hydratedForToken = null;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(VOICE_CONFIG_SYNC_EVENT));
+    }
+  }
+
+  /** Reads the cached raw-capture switch. `false` until `hydrateRawCapture` has a server answer. */
+  isRawCaptureEnabled(): boolean {
+    return this.rawCaptureEnabled;
+  }
+
+  /**
+   * Loads the deployment's raw-capture switch for the session active now, at most once per token.
+   *
+   * THE TOKEN KEYING IS THE SAME DISCIPLINE `whenReady` USES: a second user on this tab gets
+   * a fresh read rather than the previous session's answer, and every listen in one session reuses
+   * the one answer instead of putting a request in front of each recording. A call for a token
+   * already being read returns the in-flight request; a call after it settled returns at once.
+   *
+   * NEVER REJECTS, for the reason `hydrate` does not: a failed read has to degrade to "raw
+   * capture is off" — the safe reading — rather than to a rejected promise on the recording path.
+   */
+  hydrateRawCapture(): Promise<void> {
+    const token = readCurrentToken();
+    if (this.rawCaptureToken === token) {
+      return this.rawCaptureRequest ?? Promise.resolve();
+    }
+
+    this.rawCaptureToken = token;
+    this.rawCaptureEnabled = false;
+    const request = this.loadRawCaptureState().finally(() => {
+      if (this.rawCaptureRequest === request) {
+        this.rawCaptureRequest = null;
+      }
+    });
+    this.rawCaptureRequest = request;
+    return request;
+  }
+
+  /** Reads `GET /api/voice/capture` and records whether this deployment collects raw audio. */
+  private async loadRawCaptureState(): Promise<void> {
+    try {
+      const response = await api.voice.capture();
+      if (!response.ok) {
+        return;
+      }
+      const body: unknown = await response.json();
+      this.rawCaptureEnabled =
+        body !== null && typeof body === 'object' && (body as { raw?: unknown }).raw === true;
+    } catch (error) {
+      console.error('Failed to load raw capture state:', error);
+    }
+  }
+}
+
+/**
+ * The single store instance the public functions below delegate to.
+ *
+ * Exported rather than created inline so the lifecycle has an address: `hydrate`, `write` and
+ * `dispose` are operations on one object, and "this tab holds one copy" is a property of the
+ * module rather than a rule each call site would have to remember.
+ */
+export const voiceConfigStore = new VoiceConfigStore();
+
+/** Reads the server's copy, or null when the request did not produce one. */
+async function loadServerConfig(): Promise<VoiceConfig | null> {
+  try {
+    const response = await api.voice.config();
+    if (!response.ok) {
+      return null;
+    }
+    return coerceConfig(await response.json());
+  } catch (error) {
+    console.error('Failed to load voice settings:', error);
+    return null;
+  }
+}
+
+/**
  * Reads the current settings.
  *
  * Returns its own object every time, because callers treat it as a value and a
  * shared reference would let one of them edit the live configuration.
  */
 export function readVoiceConfig(): VoiceConfig {
-  return { ...config };
+  return voiceConfigStore.read();
 }
 
 /**
@@ -291,13 +590,7 @@ export function readVoiceConfigField(candidate: VoiceConfig, field: string): str
  * answer has not arrived yet" without awaiting.
  */
 export function hasHydratedVoiceConfig(): boolean {
-  return hasHydrated;
-}
-
-/** Makes `value` the settings, and pushes the whole document to the server. */
-function writeAndPersist(next: VoiceConfig): void {
-  applyConfig(next);
-  queueServerWrite();
+  return voiceConfigStore.hasHydratedOnce();
 }
 
 /**
@@ -307,123 +600,7 @@ function writeAndPersist(next: VoiceConfig): void {
  * built patch cannot blank a field the user did not touch.
  */
 export function updateVoiceConfig(patch: Partial<VoiceConfig>): void {
-  const next = { ...config };
-  for (const field of VOICE_CONFIG_FIELDS) {
-    const value = patch[field];
-    if (typeof value === 'string') {
-      next[field] = value;
-    }
-  }
-  // The recording switch and the capacity, applied only when the patch carries the right type: a
-  // stray `undefined` from a partially built patch must not blank a field the user did not touch,
-  // which is the same rule the string loop above follows. The capacity is required to be a positive
-  // finite number here so a form mid-edit cannot store a zero the store would then re-normalise.
-  if (typeof patch.voiceDataRecording === 'boolean') {
-    next.voiceDataRecording = patch.voiceDataRecording;
-  }
-  if (
-    typeof patch.voiceDataMaxBytes === 'number' &&
-    Number.isFinite(patch.voiceDataMaxBytes) &&
-    patch.voiceDataMaxBytes > 0
-  ) {
-    next.voiceDataMaxBytes = patch.voiceDataMaxBytes;
-  }
-  writeAndPersist(next);
-}
-
-function queueServerWrite(): void {
-  if (pendingWriteTimer !== null) {
-    clearTimeout(pendingWriteTimer);
-  }
-  pendingWriteTimer = setTimeout(() => {
-    pendingWriteTimer = null;
-    void flushServerWrite();
-  }, SERVER_WRITE_DEBOUNCE_MS);
-}
-
-async function flushServerWrite(): Promise<void> {
-  const snapshot = { ...config };
-  try {
-    const response = await api.voice.saveConfig(snapshot);
-    if (!response.ok) {
-      // A refused save is not a saved setting. The in-memory copy is right and
-      // the legacy key — if this was the migration's own write — stays behind so
-      // a later load can retry it.
-      console.error(`Failed to save voice settings (${response.status}).`);
-      return;
-    }
-    // The values are server-side now, so the migration source is spent.
-    clearLegacyVoiceConfig();
-  } catch (error) {
-    // The in-memory copy is already right, and the next edit re-sends the whole
-    // document, so a dropped save costs this change rather than the setting.
-    console.error('Failed to save voice settings:', error);
-  }
-}
-
-/** Reads the server's copy, or null when the request did not produce one. */
-async function loadServerConfig(): Promise<VoiceConfig | null> {
-  try {
-    const response = await api.voice.config();
-    if (!response.ok) {
-      return null;
-    }
-    return coerceConfig(await response.json());
-  } catch (error) {
-    console.error('Failed to load voice settings:', error);
-    return null;
-  }
-}
-
-/**
- * Adopts the server's copy as the source of truth, importing the legacy
- * localStorage key on the one load where the server has nothing yet.
- *
- * Never rejects: a failed hydration must degrade to "no server configuration",
- * not to a rejected promise on the voice-call path.
- */
-async function runHydration(): Promise<void> {
-  const serverConfig = await loadServerConfig();
-  if (serverConfig === null) {
-    // The server never answered. Whatever is in memory stays; the legacy key is
-    // left alone so the next load can retry importing it.
-    return;
-  }
-
-  if (!isEmptyConfig(serverConfig)) {
-    // The server already knows this user's settings, so they win — including
-    // over a legacy key on this device, which would otherwise push this
-    // profile's older values over the ones saved somewhere else.
-    clearLegacyVoiceConfig();
-    applyConfig(serverConfig);
-    return;
-  }
-
-  const legacyConfig = readLegacyVoiceConfig();
-  if (legacyConfig === null) {
-    applyConfig(serverConfig);
-    return;
-  }
-
-  if (isEmptyConfig(legacyConfig)) {
-    // Present but unusable (blank, or JSON that is not a settings object).
-    clearLegacyVoiceConfig();
-    applyConfig(serverConfig);
-    return;
-  }
-
-  try {
-    const response = await api.voice.saveConfig(legacyConfig);
-    if (!response.ok) {
-      throw new Error(`the server answered ${response.status}`);
-    }
-    clearLegacyVoiceConfig();
-  } catch (error) {
-    // The key stays behind so a later load can retry the import. The values are
-    // still adopted in memory, so voice keeps working in the meantime.
-    console.error('Failed to import legacy voice settings:', error);
-  }
-  applyConfig(legacyConfig);
+  voiceConfigStore.write(patch);
 }
 
 /**
@@ -434,26 +611,7 @@ async function runHydration(): Promise<void> {
  * the session it belongs to changes.
  */
 export function hydrateVoiceConfig(): Promise<void> {
-  if (hydrationRequest) {
-    return hydrationRequest;
-  }
-
-  const token = readCurrentToken();
-  const request = runHydration()
-    .then(
-      () => undefined,
-      (error: unknown) => {
-        console.error('Failed to hydrate voice settings:', error);
-      },
-    )
-    .finally(() => {
-      hydrationRequest = null;
-      hasHydrated = true;
-      hydratedForToken = token;
-    });
-
-  hydrationRequest = request;
-  return request;
+  return voiceConfigStore.hydrate();
 }
 
 /**
@@ -469,17 +627,7 @@ export function hydrateVoiceConfig(): Promise<void> {
  * the previous user's key while the new fetch is in flight.
  */
 export function whenVoiceConfigReady(): Promise<void> {
-  const token = readCurrentToken();
-  if (hasHydrated && hydratedForToken === token) {
-    return Promise.resolve();
-  }
-
-  if (hasHydrated) {
-    applyConfig({ ...VOICE_CONFIG_DEFAULTS });
-    hasHydrated = false;
-  }
-
-  return hydrateVoiceConfig();
+  return voiceConfigStore.whenReady();
 }
 
 /**
@@ -488,66 +636,29 @@ export function whenVoiceConfigReady(): Promise<void> {
  * `whenVoiceConfigReady()` re-fetches for whoever is signed in.
  */
 export function resetVoiceConfig(): void {
-  if (pendingWriteTimer !== null) {
-    clearTimeout(pendingWriteTimer);
-    pendingWriteTimer = null;
-  }
-  config = { ...VOICE_CONFIG_DEFAULTS };
-  hasHydrated = false;
-  hydratedForToken = null;
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event(VOICE_CONFIG_SYNC_EVENT));
-  }
+  voiceConfigStore.dispose();
 }
 
 /**
  * Reads the cached raw-capture switch. `false` until `hydrateVoiceRawCapture` has a server answer.
  */
 export function isVoiceRawCaptureEnabled(): boolean {
-  return rawCaptureEnabled;
+  return voiceConfigStore.isRawCaptureEnabled();
 }
 
 /**
  * Loads the deployment's raw-capture switch for the session active now, at most once per token.
  *
  * THE TOKEN KEYING IS THE SAME DISCIPLINE `whenVoiceConfigReady` USES: a second user on this tab gets
- * a fresh read rather than the previous session's answer, and every listen in one session reuses the
- * one answer instead of putting a request in front of each recording. A call for a token already
+ * a fresh read rather than the previous session's answer, and every listen in one session reuses
+ * the one answer instead of putting a request in front of each recording. A call for a token already
  * being read returns the in-flight request; a call after it settled returns at once.
  *
  * NEVER REJECTS, for the reason `hydrateVoiceConfig` does not: a failed read has to degrade to "raw
  * capture is off" — the safe reading — rather than to a rejected promise on the recording path.
  */
 export function hydrateVoiceRawCapture(): Promise<void> {
-  const token = readCurrentToken();
-  if (rawCaptureToken === token) {
-    return rawCaptureRequest ?? Promise.resolve();
-  }
-
-  rawCaptureToken = token;
-  rawCaptureEnabled = false;
-  const request = loadRawCaptureState().finally(() => {
-    if (rawCaptureRequest === request) {
-      rawCaptureRequest = null;
-    }
-  });
-  rawCaptureRequest = request;
-  return request;
-}
-
-/** Reads `GET /api/voice/capture` and records whether this deployment collects raw audio. */
-async function loadRawCaptureState(): Promise<void> {
-  try {
-    const response = await api.voice.capture();
-    if (!response.ok) {
-      return;
-    }
-    const body: unknown = await response.json();
-    rawCaptureEnabled =
-      body !== null && typeof body === 'object' && (body as { raw?: unknown }).raw === true;
-  } catch (error) {
-    console.error('Failed to load raw capture state:', error);
-  }
+  return voiceConfigStore.hydrateRawCapture();
 }
 
 // Headers the voice proxy reads to target a per-user OpenAI-compatible backend.

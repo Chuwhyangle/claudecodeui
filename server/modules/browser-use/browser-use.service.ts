@@ -20,14 +20,14 @@ const SESSION_TTL_MS = Number.parseInt(process.env.CLOUDCLI_BROWSER_USE_SESSION_
 const BROWSER_USE_SETTINGS_KEY = 'browser_use_settings';
 const BROWSER_USE_MCP_TOKEN_KEY = 'browser_use_mcp_token';
 
-type BrowserUseRuntime = ReturnType<typeof getBrowserUseRuntime>;
+type BrowserUseRuntimeLabel = ReturnType<typeof getBrowserUseRuntime>;
 type BrowserUseSessionStatus = 'ready' | 'stopped' | 'unavailable';
 
 type BrowserUseSession = {
   id: string;
   ownerId: string;
   createdBy: 'agent';
-  runtime: BrowserUseRuntime;
+  runtime: BrowserUseRuntimeLabel;
   status: BrowserUseSessionStatus;
   url: string | null;
   title: string | null;
@@ -71,11 +71,13 @@ type RuntimeReadiness = {
 
 type RuntimeProbe = Omit<RuntimeReadiness, 'installInProgress' | 'installMessage'>;
 
+type RuntimeInstallResult = {
+  success: boolean;
+  message: string;
+};
+
 const sessions = new Map<string, BrowserUseSession>();
 const handles = new Map<string, RuntimeHandle>();
-let installPromise: Promise<{ success: boolean; message: string }> | null = null;
-let lastInstallMessage: string | null = null;
-let runtimeProbeCache: { value: RuntimeProbe; updatedAt: number } | null = null;
 
 const DEFAULT_SETTINGS: BrowserUseSettings = {
   enabled: false,
@@ -220,25 +222,92 @@ function probeRuntime(): RuntimeProbe {
   return readiness;
 }
 
-function getRuntimeReadiness(options: { force?: boolean } = {}): RuntimeReadiness {
-  const now = Date.now();
-  const cachedProbe = runtimeProbeCache;
-  const canUseCache = !options.force
-    && !installPromise
-    && cachedProbe
-    && now - cachedProbe.updatedAt < RUNTIME_READINESS_CACHE_TTL_MS;
-  const probe = canUseCache ? cachedProbe.value : probeRuntime();
+/**
+ * Owns the browser-use runtime lifecycle: the cached readiness probe and the install job.
+ * The Browser Use service reaches it through the `browserUseRuntime` singleton below.
+ */
+class BrowserUseRuntime {
+  private installPromise: Promise<RuntimeInstallResult> | null = null;
+  private lastInstallMessage: string | null = null;
+  private runtimeProbeCache: { value: RuntimeProbe; updatedAt: number } | null = null;
 
-  if (!canUseCache && !installPromise) {
-    runtimeProbeCache = { value: probe, updatedAt: now };
+  /**
+   * Returns runtime readiness from the probe cache when it is younger than the TTL, unless `force`
+   * is set or an install is in flight (an install invalidates the cache on both ends).
+   */
+  probe(options: { force?: boolean } = {}): RuntimeReadiness {
+    const now = Date.now();
+    const cachedProbe = this.runtimeProbeCache;
+    const canUseCache = !options.force
+      && !this.installPromise
+      && cachedProbe
+      && now - cachedProbe.updatedAt < RUNTIME_READINESS_CACHE_TTL_MS;
+    const probe = canUseCache ? cachedProbe.value : probeRuntime();
+
+    if (!canUseCache && !this.installPromise) {
+      this.runtimeProbeCache = { value: probe, updatedAt: now };
+    }
+
+    return {
+      ...probe,
+      installInProgress: Boolean(this.installPromise),
+      installMessage: this.lastInstallMessage,
+    };
   }
 
-  return {
-    ...probe,
-    installInProgress: Boolean(installPromise),
-    installMessage: lastInstallMessage,
-  };
+  /**
+   * Installs the Playwright package and the Chromium runtime. Concurrent callers share the
+   * in-flight promise; the probe cache is dropped before and after so readiness re-probes.
+   */
+  async install(): Promise<RuntimeInstallResult> {
+    if (this.installPromise) {
+      return this.installPromise;
+    }
+
+    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    this.runtimeProbeCache = null;
+    this.installPromise = (async () => {
+      try {
+        this.lastInstallMessage = 'Installing Playwright package...';
+        await runCommand(npmCommand, ['install', '--no-save', '--no-package-lock', 'playwright']);
+
+        if (process.platform === 'linux') {
+          this.lastInstallMessage = 'Installing Chromium system dependencies...';
+          await runCommand(npmCommand, ['exec', '--', 'playwright', 'install-deps', 'chromium']);
+        }
+
+        this.lastInstallMessage = 'Installing Chromium runtime...';
+        await runCommand(npmCommand, ['exec', '--', 'playwright', 'install', 'chromium']);
+
+        this.lastInstallMessage = 'Browser runtime installed.';
+        return { success: true, message: this.lastInstallMessage };
+      } catch (error) {
+        this.lastInstallMessage = formatInstallError(error);
+        return { success: false, message: this.lastInstallMessage };
+      }
+    })();
+
+    try {
+      return await this.installPromise;
+    } finally {
+      this.installPromise = null;
+      this.runtimeProbeCache = null;
+    }
+  }
+
+  /** Drops all in-memory install/probe state so a fresh lifecycle starts clean. */
+  dispose(): void {
+    this.installPromise = null;
+    this.lastInstallMessage = null;
+    this.runtimeProbeCache = null;
+  }
 }
+
+/**
+ * browserUseRuntime: the single process-wide runtime owner consumed by the Browser Use service
+ * for status reporting, agent-session creation, and runtime installation.
+ */
+export const browserUseRuntime = new BrowserUseRuntime();
 
 const INSTALL_COMMAND_TIMEOUT_MS = Number.parseInt(
   process.env.CLOUDCLI_BROWSER_USE_INSTALL_TIMEOUT_MS || String(10 * 60 * 1000),
@@ -294,42 +363,6 @@ function formatInstallError(error: unknown): string {
     return 'Installing Chromium system dependencies requires administrator privileges. Run `npx playwright install-deps chromium` on the machine where CloudCLI runs, then try again.';
   }
   return message || 'Failed to install Browser runtime.';
-}
-
-async function installRuntime(): Promise<{ success: boolean; message: string }> {
-  if (installPromise) {
-    return installPromise;
-  }
-
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  runtimeProbeCache = null;
-  installPromise = (async () => {
-    try {
-      lastInstallMessage = 'Installing Playwright package...';
-      await runCommand(npmCommand, ['install', '--no-save', '--no-package-lock', 'playwright']);
-
-      if (process.platform === 'linux') {
-        lastInstallMessage = 'Installing Chromium system dependencies...';
-        await runCommand(npmCommand, ['exec', '--', 'playwright', 'install-deps', 'chromium']);
-      }
-
-      lastInstallMessage = 'Installing Chromium runtime...';
-      await runCommand(npmCommand, ['exec', '--', 'playwright', 'install', 'chromium']);
-
-      lastInstallMessage = 'Browser runtime installed.';
-      return { success: true, message: lastInstallMessage };
-    } catch (error) {
-      lastInstallMessage = formatInstallError(error);
-      return { success: false, message: lastInstallMessage };
-    }
-  })();
-
-  try {
-    return await installPromise;
-  } finally {
-    installPromise = null;
-    runtimeProbeCache = null;
-  }
 }
 
 function normalizeUrl(rawUrl: string): string {
@@ -442,7 +475,7 @@ export const browserUseService = {
 
   async getStatus() {
     const settings = readSettings();
-    const readiness = getRuntimeReadiness();
+    const readiness = browserUseRuntime.probe();
     const available = settings.enabled && readiness.playwrightInstalled && readiness.chromiumInstalled;
 
     return {
@@ -488,7 +521,7 @@ export const browserUseService = {
   },
 
   async installRuntime() {
-    const result = await installRuntime();
+    const result = await browserUseRuntime.install();
     return {
       ...result,
       status: await this.getStatus(),
@@ -535,7 +568,7 @@ export const browserUseService = {
       throw new Error(`Browser is limited to ${MAX_SESSIONS_PER_OWNER} active agent sessions.`);
     }
 
-    const readiness = getRuntimeReadiness();
+    const readiness = browserUseRuntime.probe();
     if (!settings.enabled || !readiness.playwrightInstalled || !readiness.chromiumInstalled || !readiness.playwright) {
       session.message = getSetupMessage(settings, readiness);
       sessions.set(session.id, session);
