@@ -41,4 +41,16 @@ depends_on:
 - src/modules/architecture/tests/plantUmlText.test.ts
 - src/modules/architecture/tests/textPanel.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
+- src/modules/i18n/locales/de/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
 - tasks/architecture-text-from-rendered-model.md
