@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { checkSyntax } from '@yalehwang/plantuml-js';
@@ -558,4 +560,54 @@ test('filename pieces are safe and stamped with the export minute', () => {
     architectureExportFilename('file', 'project-1', at, 'svg'),
     'architecture-file-project-1-20261022-1821.svg',
   );
+});
+
+test('the text page downloads the same document under the same filename as the export menu', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  // The menu's .puml item states the document the drawing shows.
+  openExportMenu();
+  clickExportItem('puml');
+  await waitFor(() => assert.equal(downloads.length, 1));
+  const menuDocument = await readLastDownload();
+  const menuFilename = downloads[0].filename;
+
+  // The text page is entered from the toolbar and downloads the same drawing.
+  fireEvent.click(document.querySelector('[data-architecture-text-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-text-download]')));
+  fireEvent.click(document.querySelector('[data-architecture-text-download]') as Element);
+  await waitFor(() => assert.equal(downloads.length, 2));
+
+  assert.equal(await readLastDownload(), menuDocument, 'one document, two doors to it');
+  assert.equal(downloads[1].filename, menuFilename, 'the text page reuses the export filename');
+  assert.match(downloads[1].filename, /^architecture-file-project-1-\d{8}-\d{4}\.puml$/);
+});
+
+test('the filename and download mechanics exist once in the architecture module', () => {
+  const moduleDir = resolve(process.cwd(), 'src', 'modules', 'architecture');
+  const sources = readdirSync(moduleDir).filter((file) => /\.tsx?$/.test(file));
+  const withDefinition = (needle: string): string[] => sources
+    .filter((file) => readFileSync(join(moduleDir, file), 'utf8').includes(needle))
+    .sort();
+
+  // The two consumer files must IMPORT the shared helpers; neither may define
+  // its own copy of the scheme.
+  assert.deepEqual(withDefinition('function architectureExportFilename'), ['exportArtifacts.ts']);
+  assert.deepEqual(withDefinition('function downloadTextFile'), ['exportArtifacts.ts']);
+  assert.deepEqual(withDefinition('function downloadBlob'), ['exportArtifacts.ts']);
+
+  for (const consumer of ['ArchitecturePanel.tsx', 'ArchitectureTextPanel.tsx']) {
+    const source = readFileSync(join(moduleDir, consumer), 'utf8');
+    assert.match(
+      source,
+      /import \{[^}]*\barchitectureExportFilename\b[^}]*\} from '@\/modules\/architecture\/exportArtifacts'/s,
+      `${consumer} must import the shared filename scheme`,
+    );
+    assert.match(
+      source,
+      /import \{[^}]*\bdownloadTextFile\b[^}]*\} from '@\/modules\/architecture\/exportArtifacts'/s,
+      `${consumer} must import the shared download helper`,
+    );
+  }
 });

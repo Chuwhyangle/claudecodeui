@@ -14,6 +14,7 @@ import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
 import { ArchitectureDock } from '@/modules/architecture/ArchitectureDock';
 import { ArchitectureInspector } from '@/modules/architecture/ArchitectureInspector';
 import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
+import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPanel';
 import {
   archguardToPlantUml,
   type ArchitectureDiagramView,
@@ -81,6 +82,12 @@ import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
 type ArchitectureGranularity = 'file' | 'entity';
+
+/**
+ * The dock's pages. `inspector` is the selection reading; `text` is the
+ * PlantUML page registered by the text-page task on the same shell.
+ */
+type ArchitectureDockTabId = 'inspector' | 'text';
 
 /**
  * The id scheme the server used for a subgraph. File ids ARE project-relative
@@ -867,6 +874,11 @@ export default function ArchitecturePanel({
   // Whether the dock is on screen. Remembered per browser, and forced open by a
   // fresh selection (the gesture that selects is a request to inspect).
   const [dockOpen, setDockOpen] = useState<boolean>(readStoredDockOpen);
+  // Which dock page is on screen. The shell owns the tablist; this state is the
+  // half that makes a tab click reach the content. A fresh selection does not
+  // switch pages: a reader looking at the text of the drawing they just
+  // selected in keeps that page.
+  const [dockTab, setDockTab] = useState<ArchitectureDockTabId>('inspector');
   // True while the dock's 160ms open/close transition runs. The renderer freezes
   // aspect-driven re-layout for that window (the dock narrows the canvas), then
   // re-bases without a layout — the toggle is never counted as a shape change.
@@ -1246,6 +1258,47 @@ export default function ArchitecturePanel({
       onExportMermaid={exportMermaid}
       onAction={() => setSheetOpen(false)}
     />
+  );
+
+  /**
+   * The text page's header facts, stated once here so the dock page and the
+   * copy header cannot disagree: the view axis is the granularity switch, and
+   * the filter axis is the same reading the filter popover prints (how many
+   * functions it hid and which relation preset is on).
+   */
+  const textViewLabel = granularity === 'entity'
+    ? t('architecture.controls.classView', { defaultValue: 'Class diagram' })
+    : t('architecture.fileGraph', { defaultValue: 'File graph' });
+  const textFilterSummary = t('architecture.text.filterSummary', {
+    defaultValue: '{{hiddenFunctions}} functions hidden; relations: {{relations}}',
+    hiddenFunctions: String(hiddenReading.byKind.function ?? 0),
+    relations: relationPresetLabel(filter.relations),
+  });
+
+  /**
+   * The toolbar's door to the text page. The dock otherwise opens only on a
+   * selection, but the whole-graph text is exactly what a reader wants with
+   * nothing selected — so the page gets its own entry, and it toggles: while
+   * the dock shows this page, pressing it closes the dock.
+   */
+  const textToggle = (
+    <button
+      type="button"
+      aria-expanded={dockOpen && dockTab === 'text'}
+      onClick={() => {
+        if (dockOpen && dockTab === 'text') {
+          changeDockOpen(false);
+          return;
+        }
+        setDockTab('text');
+        if (!dockOpen) changeDockOpen(true);
+      }}
+      data-architecture-text-toggle="true"
+      style={compactTargetStyle}
+      className={`${headerButtonClass} border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+    >
+      {t('architecture.text.open', { defaultValue: 'Text' })}
+    </button>
   );
 
   const truncation = truncationReading(result, granularity);
@@ -2076,6 +2129,7 @@ export default function ArchitecturePanel({
           <>
             {granularityGroup}
             <span className="flex-1" />
+            {textToggle}
             <button
               ref={sheetTriggerRef}
               type="button"
@@ -2101,6 +2155,7 @@ export default function ArchitecturePanel({
             {filterDisclosure}
             {searchBox}
             <span className="flex-1" />
+            {textToggle}
             {exportMenu}
             {legendButton}
           </>
@@ -2388,9 +2443,29 @@ export default function ArchitecturePanel({
                 />
               ),
             },
+            {
+              id: 'text',
+              label: t('architecture.text.tab', { defaultValue: 'Text' }),
+              content: (
+                <ArchitectureTextPanel
+                  graph={drawnGraph}
+                  idShape={nodeIdShapeOf(granularity)}
+                  granularity={granularity}
+                  view={diagramView}
+                  grouping={granularity === 'file' ? 'adaptive' : 'raw'}
+                  selection={selection}
+                  projectId={projectId}
+                  sessionId={sessionId}
+                  analyzedAt={provenance.generatedAt}
+                  viewLabel={textViewLabel}
+                  filterSummary={textFilterSummary}
+                  canvasRef={graphAreaRef}
+                />
+              ),
+            },
           ]}
-          activeTabId="inspector"
-          onTabChange={() => undefined}
+          activeTabId={dockTab}
+          onTabChange={(tabId) => setDockTab(tabId === 'text' ? 'text' : 'inspector')}
           onClose={() => changeDockOpen(false)}
           collapsedSummary={dockSummary}
           snapLabels={{
