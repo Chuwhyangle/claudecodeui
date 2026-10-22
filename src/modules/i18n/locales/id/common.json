@@ -55,6 +55,11 @@
         "overviewHint": "Zoom {{zoom}}% · perbesar {{package}} dan {{count}} paket lainnya",
         "collapsed": "Graf terlalu lebar, jadi dilipat ke ikhtisar direktori.",
         "focusedFitHint": "Zoom terbaca aktif, jadi tampilan ini terfokus — pilih “Ikhtisar” untuk melihat seluruh graf."
+      },
+      "minimap": {
+        "label": "Ringkasan diagram, menampilkan {{percent}}% gambar",
+        "show": "Tampilkan ringkasan diagram",
+        "hide": "Ciutkan ringkasan diagram"
       }
     },
     "title": "Arsitektur",

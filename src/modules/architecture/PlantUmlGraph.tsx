@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/adaptiveGrouping';
+import { ArchitectureMinimap } from '@/modules/architecture/ArchitectureMinimap';
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
@@ -1520,29 +1521,61 @@ export function PlantUmlGraph({ graph, idShape = DEFAULT_NODE_ID_SHAPE, onNodeCl
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
-        {/* The zoom cluster floats at the bottom right OF the drawing: the three
-            controls act on it, so they stay next to it instead of in the
-            toolbar. The semantic-zoom level is the one place that reading is
-            stated, right beside the scale it explains. */}
+        {/* The canvas's own chrome, stacked in ONE bottom-right column: the
+            minimap above, the zoom cluster below. Keeping them as flex
+            siblings is what makes "the map never covers the cluster"
+            structural rather than a pair of offsets that have to be kept in
+            sync; on a phone the map starts collapsed to a 44px button, so the
+            column still costs almost nothing. */}
         <div
-          role="group"
-          aria-label={zoomGroupLabel}
-          data-architecture-zoom-cluster="true"
-          className="absolute bottom-3 right-3 z-20 flex flex-col items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 shadow-sm"
+          data-architecture-canvas-overlays="true"
+          // The arrangement is stated inline rather than in utility classes:
+          // "one absolute column, positive gap, map before cluster" is what
+          // makes the two boxes unable to intersect, and a test can read it
+          // without a laid-out browser (the same reason the zoom targets carry
+          // inline sizes).
+          style={{
+            position: 'absolute',
+            bottom: 12,
+            right: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            rowGap: 8,
+          }}
+          className="z-20 pointer-events-none"
         >
-          {zoomInButton}
-          {zoomOutButton}
-          {fitButton}
-          {zoomReadout}
-          {lodDepth !== null && (
-            <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-              {lodDepth === 0
-                ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
-                : lodDepth === 1
-                  ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
-                  : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
-            </span>
-          )}
+          <ArchitectureMinimap
+            hostRef={hostRef}
+            // A new drawing is a new set of node rectangles; the same drawing
+            // re-fitted or re-zoomed only moves the range frame.
+            revision={drawn}
+            scale={zoom.scale}
+          />
+          {/* The zoom cluster floats at the bottom right OF the drawing: the three
+              controls act on it, so they stay next to it instead of in the
+              toolbar. The semantic-zoom level is the one place that reading is
+              stated, right beside the scale it explains. */}
+          <div
+            role="group"
+            aria-label={zoomGroupLabel}
+            data-architecture-zoom-cluster="true"
+            className="pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border/60 bg-background/90 p-1 shadow-sm"
+          >
+            {zoomInButton}
+            {zoomOutButton}
+            {fitButton}
+            {zoomReadout}
+            {lodDepth !== null && (
+              <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                {lodDepth === 0
+                  ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
+                  : lodDepth === 1
+                    ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
+                    : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
+              </span>
+            )}
+          </div>
         </div>
       </div>
       {failure !== null && (

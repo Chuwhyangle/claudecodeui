@@ -55,6 +55,11 @@
         "overviewHint": "Yakınlaştırma %{{zoom}} · {{package}} ve {{count}} diğer paketi yakınlaştır",
         "collapsed": "Graf çok geniş olduğu için dizin genel görünümüne katlandı.",
         "focusedFitHint": "Okunabilir yakınlaştırma açık olduğundan bu görünüm odaklıdır — tüm grafiği görmek için “Genel görünüm”ü seçin."
+      },
+      "minimap": {
+        "label": "Diyagram genel görünümü, çizimin %{{percent}} kadarı görünür",
+        "show": "Diyagram genel görünümünü göster",
+        "hide": "Diyagram genel görünümünü daralt"
       }
     },
     "title": "Mimari",

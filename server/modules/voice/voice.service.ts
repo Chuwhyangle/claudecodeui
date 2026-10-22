@@ -1,11 +1,4 @@
-import { statSync } from 'node:fs';
-import { join } from 'node:path';
-
 import type {
-  VoiceClientAssetFile,
-  VoiceClientAssetFileRef,
-  VoiceClientAssetsReading,
-  VoiceClientAssetsService,
   VoiceLogPort,
   VoiceRequestOverrides,
   VoiceService,
@@ -54,6 +47,25 @@ import type { VoiceCapturePort, VoiceCaptureRawReturn } from './voice-capture.js
 // criterion that rebuilds this path in a temp tree (copying this file and the `shared/asr` tree and
 // nothing else) would then import a module that tree does not carry.
 import type { VoiceDataStore } from './voice-data.js';
+// THE CAPTURE FACE, as a VALUE import: this module builds the four seam methods it returns and
+// spreads them into the service below. It is a sibling module and not four more methods here
+// because those methods share one subject — the two injected stores — and none of the reading
+// paths' state; see `voice-service-capture.ts`.
+import { createVoiceCaptureSeam } from './voice-service-capture.js';
+// THE BROWSER RECOGNISER'S ASSET SURFACE, re-exported so every existing consumer keeps the import
+// it has always had (`voice.module.ts`, `voice.routes.ts`, and the health criterion). The
+// declarations and their bodies live in the sibling; this is the forwarding half of the split.
+export {
+  createVoiceClientAssetsService,
+  resolveVoiceClientModelDir,
+  unconfiguredVoiceClientAssetsReading,
+  VOICE_CLIENT_MODEL_BYTES,
+  VOICE_CLIENT_MODEL_DIR_ENV,
+  VOICE_CLIENT_MODEL_FILE_NAME,
+  VOICE_CLIENT_ORT_FILE_NAMES,
+  VOICE_CLIENT_TOKENS_FILE_NAME,
+  SENSEVOICE_MODEL_DIR_ENV,
+} from './voice-service-transcribe.js';
 
 /**
  * The ONE line a refused recording is allowed to write, and the whole of it.
@@ -87,17 +99,6 @@ const VOICE_CAPTURE_FAILED_LINE = 'voice.capture failed';
  * process's output, and the line exists to say only that the write did not happen.
  */
 const VOICE_DATA_FAILED_LINE = 'voice.data failed';
-
-/**
- * The ONE message a label write-back owes a client whose recording is no longer there.
- *
- * A single literal for the two ways the record can be missing — an id the store holds nothing for,
- * and a deployment with no store at all — because they are one sentence from the caller's side: the
- * listen this correction belongs to cannot be found. Keeping them one string is what stops a client
- * having to branch on a difference it cannot act on, and it names no id and no path (the same rule
- * `VOICE_DATA_FAILED_LINE` follows).
- */
-const LABEL_MISSING_RECORD = 'No such recording.';
 
 type VoiceServiceDependencies = {
   defaults: {
@@ -1544,62 +1545,11 @@ export function createVoiceService(dependencies: VoiceServiceDependencies): Voic
       }
     },
 
-    captureRaw({ listenId, audio }) {
-      // THE GATE IS THE PORT'S OWN SWITCH, read as absent when off — the same shape `recording`
-      // uses for the mode. A deployment that does not collect raw records nothing and says so
-      // (`stored: false`) rather than failing: the request is well-formed, the capability is absent.
-      const port = dependencies.capture?.raw === true ? dependencies.capture : null;
-      if (port?.recordRaw === undefined) {
-        return { ok: true, value: { stored: false } };
-      }
-
-      // THE SAME LOCAL GUARD the attempt recorder has, and for the same reason: the port is an
-      // injected seam, and a deployment's own port may throw where this module's answers. A throw
-      // here must not escape as a rejected handler — it becomes a refusal, and the file the caller
-      // was told about is not written.
-      try {
-        port.recordRaw({ listenId, bytes: audio.bytes });
-      } catch {
-        return { ok: false, status: 500, error: 'Raw capture failed.' };
-      }
-
-      return { ok: true, value: { stored: true } };
-    },
-
-    captureState() {
-      return { raw: dependencies.capture?.raw === true };
-    },
-
-    // THE CLEAR HALF OF THE USER-DATA STORE, and for the same reason `captureState` reads the port
-    // rather than the environment: the store IS the port, so a caller that wired none — a probe, a
-    // test — answers "nothing to clear" rather than failing, which is the same success a user who
-    // never recorded gets. The count is whatever the store removed; this path never invents one.
-    clearVoiceData() {
-      return dependencies.voiceData?.clear() ?? { deleted: 0 };
-    },
-
-    // THE OTHER HALF OF THE SAME PORT, and the one that makes a record worth keeping: the text the
-    // user sent and the pairs their edit produced, written back onto the listen they came from.
-    //
-    // A MISS IS A REFUSAL, NOT A THROW. The store answers `false` for an id it holds no record for,
-    // and that becomes the `404` the client is owed — the record may have been evicted by the
-    // capacity ceiling or removed by the user since the transcription, and neither is a failure of
-    // this request. A store that THROWS is the bug path the transcribe route already guards, and it
-    // is answered the same way here: a `500` rather than a rejected handler.
-    labelVoiceData(input) {
-      const store = dependencies.voiceData;
-      if (store === undefined) {
-        return { ok: false, status: 404, error: LABEL_MISSING_RECORD };
-      }
-
-      try {
-        return store.label(input)
-          ? { ok: true, value: { recordId: input.recordId } }
-          : { ok: false, status: 404, error: LABEL_MISSING_RECORD };
-      } catch {
-        return { ok: false, status: 500, error: 'Writing the correction labels failed.' };
-      }
-    },
+    // THE CAPTURE FACE, composed rather than re-declared: the four methods over the injected
+    // capture and voice-data ports live in `voice-service-capture.ts` and are spread back here, so
+    // this object remains the composition of the reading paths plus that seam. Semantics are
+    // unchanged — the bodies are the shipping text.
+    ...createVoiceCaptureSeam(dependencies),
 
     async synthesizeSpeech(input) {
       const config = resolveVoiceConfig(dependencies.defaults, input.overrides);
@@ -1893,184 +1843,6 @@ export function createVoiceSettingsService(store: VoiceSettingsStore): VoiceSett
       const value = unmaskMaskedCredentials(parsed.value, stored);
       store.saveSettings(userId, value);
       return { ok: true, value: parsed.value };
-    },
-  };
-}
-
-// ── client assets: the directory the browser recogniser is served from ───────────────────────────
-
-/**
- * The variable naming the directory the browser-side recogniser's model files live in.
- *
- * IT IS THE ONE A DEPLOYMENT SETS FOR THIS FEATURE. `SENSEVOICE_MODEL_DIR` is the fallback (see
- * `resolveVoiceClientModelDir`), because a deployment that already runs the on-host recogniser
- * already holds the same two files in a directory it has already configured. Read at composition
- * time and handed in as a value — this module reads no environment itself, so a test can ask what a
- * given pair of values means without mutating the process.
- */
-export const VOICE_CLIENT_MODEL_DIR_ENV = 'VOICE_CLIENT_MODEL_DIR';
-
-/** The on-host recogniser's directory, reused as this feature's fallback. See `VOICE_CLIENT_MODEL_DIR_ENV`. */
-export const SENSEVOICE_MODEL_DIR_ENV = 'SENSEVOICE_MODEL_DIR';
-
-/** The checkpoint's file name inside the model directory. */
-export const VOICE_CLIENT_MODEL_FILE_NAME = 'model.int8.onnx';
-
-/** The token list's file name inside the model directory. */
-export const VOICE_CLIENT_TOKENS_FILE_NAME = 'tokens.txt';
-
-/**
- * The checkpoint's pinned length, in bytes.
- *
- * THE SAME FIGURE THE CLIENT PINS (`VOICE_CLIENT_MODEL_BYTES` in `voiceClientAsrWorker.ts`), and it
- * has to be: the reading exists to tell a browser that the file it would download is not the file
- * this front end implements. A truncated or wrong checkpoint is refused HERE, before any download.
- */
-export const VOICE_CLIENT_MODEL_BYTES = 239_233_841;
-
-/**
- * The three files of the pinned onnxruntime-web distribution.
- *
- * A WHITELIST, and the only names `/voice-client/ort/:file` will serve. The runtime is a dependency
- * of this repo (`package.json` pins `onnxruntime-web@1.30.0`), so these are read out of
- * `node_modules` rather than hosted by the deployment — see `createVoiceClientAssetsService`.
- */
-export const VOICE_CLIENT_ORT_FILE_NAMES: readonly string[] = [
-  'ort.wasm.min.mjs',
-  'ort-wasm-simd-threaded.mjs',
-  'ort-wasm-simd-threaded.wasm',
-];
-
-/**
- * The reading owed a deployment that configured no model directory at all.
- *
- * DECLARED ONCE AND EXPORTED because two callers need the same shape: the service below, and the
- * readiness route's fallback for a router built without one (a leaf test, or a caller that composes
- * the voice router itself). A second literal in the route would be a second definition of "no
- * directory", and the client's sentence is built from this reading.
- */
-export function unconfiguredVoiceClientAssetsReading(): VoiceClientAssetsReading {
-  return {
-    configured: false,
-    directory: null,
-    source: null,
-    model: {
-      name: VOICE_CLIENT_MODEL_FILE_NAME,
-      present: false,
-      bytes: null,
-      expectedBytes: VOICE_CLIENT_MODEL_BYTES,
-    },
-    tokens: { name: VOICE_CLIENT_TOKENS_FILE_NAME, present: false, bytes: null, expectedBytes: null },
-    ready: false,
-  };
-}
-
-/**
- * Which directory supplies the model files, and which variable named it.
- *
- * `VOICE_CLIENT_MODEL_DIR` WINS WHEN BOTH ARE SET, and the fallback is the whole reason the two are
- * read together: `SENSEVOICE_MODEL_DIR` already holds these two files on a deployment that runs the
- * on-host recogniser, so an operator who has configured that one has configured this one. Both
- * values are trimmed; an all-blank value is the same as an unset one.
- */
-export function resolveVoiceClientModelDir(
-  voiceClientModelDir: string | undefined,
-  sensevoiceModelDir: string | undefined,
-): { directory: string | null; source: 'VOICE_CLIENT_MODEL_DIR' | 'SENSEVOICE_MODEL_DIR' | null } {
-  const preferred = (voiceClientModelDir ?? '').trim();
-  if (preferred !== '') return { directory: preferred, source: 'VOICE_CLIENT_MODEL_DIR' };
-  const fallback = (sensevoiceModelDir ?? '').trim();
-  if (fallback !== '') return { directory: fallback, source: 'SENSEVOICE_MODEL_DIR' };
-  return { directory: null, source: null };
-}
-
-/** One file's reading: a regular file of this name's length, or the absent form. */
-function readClientAssetFile(directory: string, name: string, expectedBytes: number | null): VoiceClientAssetFile {
-  try {
-    const stats = statSync(join(directory, name));
-    if (!stats.isFile()) {
-      return { name, present: false, bytes: null, expectedBytes };
-    }
-    return { name, present: true, bytes: stats.size, expectedBytes };
-  } catch {
-    // A missing file and a directory that cannot be read are the same reading to the operator: the
-    // artifact named is not there. Distinguishing an EACCES here would name a filesystem detail the
-    // caller cannot act on differently, and the remedy — put the file in this directory — is one.
-    return { name, present: false, bytes: null, expectedBytes };
-  }
-}
-
-/** The whitelisted file's reference, or `null` when the name is not in `names` or is not a regular file. */
-function resolveWhitelistedFile(
-  directory: string,
-  names: readonly string[],
-  name: string,
-): VoiceClientAssetFileRef | null {
-  // The membership test IS the path-safety rule: only an exact pinned name survives it, so a
-  // `../` or `%2e%2e` argument can never reach `join`.
-  if (!names.includes(name)) return null;
-  const path = join(directory, name);
-  try {
-    const stats = statSync(path);
-    if (!stats.isFile()) return null;
-    return { path, size: stats.size };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Creates the service behind the client-asset routes.
- *
- * THE DIRECTORY IS RESOLVED ONCE, at composition time, for the same reason the recording mode is:
- * "where are the browser recogniser's files" is a property of the DEPLOYMENT, not of a request, and
- * a value re-resolved per request could change under a download already in flight. The resolvers
- * stat on demand — a file an operator drops in after start-up becomes servable without a restart —
- * but the directory they stat within never moves.
- *
- * THE RUNTIME FILES ARE READ OUT OF `node_modules` rather than from a configurable directory: this
- * repo pins `onnxruntime-web@1.30.0`, so the exact distribution the front end was validated against
- * is the one an `npm install` produces. A deployment that vendored its own copy would be serving a
- * runtime this front end was not tested with, which is the thing the pin exists to prevent.
- */
-export function createVoiceClientAssetsService(options: {
-  voiceClientModelDir?: string;
-  sensevoiceModelDir?: string;
-  ortDistDir: string;
-}): VoiceClientAssetsService {
-  const resolved = resolveVoiceClientModelDir(options.voiceClientModelDir, options.sensevoiceModelDir);
-
-  return {
-    readiness(): VoiceClientAssetsReading {
-      if (resolved.directory === null) return unconfiguredVoiceClientAssetsReading();
-
-      const model = readClientAssetFile(resolved.directory, VOICE_CLIENT_MODEL_FILE_NAME, VOICE_CLIENT_MODEL_BYTES);
-      const tokens = readClientAssetFile(resolved.directory, VOICE_CLIENT_TOKENS_FILE_NAME, null);
-      // The byte check is part of readiness rather than a separate reading: a checkpoint of the wrong
-      // length cannot be the model this front end implements, so "ready" without it would promise a
-      // download guaranteed to fail verification.
-      const ready = model.present && model.bytes === VOICE_CLIENT_MODEL_BYTES && tokens.present;
-      return {
-        configured: true,
-        directory: resolved.directory,
-        source: resolved.source,
-        model,
-        tokens,
-        ready,
-      };
-    },
-
-    resolveModelFile(name: string): VoiceClientAssetFileRef | null {
-      if (resolved.directory === null) return null;
-      return resolveWhitelistedFile(
-        resolved.directory,
-        [VOICE_CLIENT_MODEL_FILE_NAME, VOICE_CLIENT_TOKENS_FILE_NAME],
-        name,
-      );
-    },
-
-    resolveOrtFile(name: string): VoiceClientAssetFileRef | null {
-      return resolveWhitelistedFile(options.ortDistDir, VOICE_CLIENT_ORT_FILE_NAMES, name);
     },
   };
 }
