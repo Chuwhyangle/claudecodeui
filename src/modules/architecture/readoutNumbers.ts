@@ -12,9 +12,10 @@
  *    the detail tier AND the layout budget — a group box counts every member it
  *    stands for, so N is never a box count.
  *  · M ("M related") is every related entity in the current scope: the server's
- *    pre-budget total, minus whatever the CURRENT display filter removed from
- *    the payload in hand, so the same filter over the same response always
- *    reads the same number (see `relatedScopeTotal`).
+ *    pre-budget total, minus whatever the CURRENT element selection (kinds +
+ *    "keep mentioned") removed from the payload in hand, so the same selection
+ *    over the same response always reads the same number (see
+ *    `relatedScopeTotal`).
  *  · each budget layer gets at most one explanation line, and only the layers
  *    that actually cut something are named.
  */
@@ -67,10 +68,13 @@ export type ArchitectureReadoutInputs = {
    */
   readonly relatedTotal?: number;
   /**
-   * Entities the CURRENT display filter leaves in the payload in hand.
+   * Entities the CURRENT element selection (kinds + "keep mentioned") leaves
+   * in the payload in hand.
    *
-   * Pass it whenever a display filter ran over the arrived subgraph. Omit it
-   * when the arrived set IS the scope — the two readings then coincide.
+   * Pass it whenever the element selection can narrow an arrived payload —
+   * that is the axis a widening request changed. Omit it when the arrived set
+   * IS the scope. The isolated/relation axes deliberately do not come here:
+   * they decide what is DRAWN, not what is related, and keep their own line.
    */
   readonly filteredCount?: number;
   /** Locale for thousands separators; defaults to English so tests are stable. */
@@ -188,19 +192,23 @@ function entityCountOf(boxes: readonly ArchitectureReadoutDrawnBox[]): number {
 }
 
 /**
- * M under the CURRENT display filter: the server's pre-budget total minus the
- * entities the display filter removed from the payload in hand.
+ * M under the CURRENT element selection: the server's pre-budget total minus
+ * the entities that selection removed from the payload in hand.
  *
  * M used to be the server's total alone. A widening request replaces the
  * payload, and a later local narrowing keeps the WIDER payload's `entityTotal`,
  * so the same filter read `5 related` on the first visit and `40 related` after
- * opening and closing a "keep mentioned" switch. Subtracting the filter's own
- * removals makes M a function of the response set and the filter only — never of
- * the route that produced them.
+ * opening and closing a "keep mentioned" switch. Subtracting the element
+ * selection's own removals makes M a function of the response set and that
+ * selection only — never of the route that produced them.
  *
- * The filter's removals are measured on the arrived set (`returnedCount` minus
+ * Only the ELEMENT axis is subtracted (`filteredCount` comes from the nodes the
+ * element selection removed). Isolated/relation removals are drawing decisions
+ * and were never part of the server's total, so they must not move M.
+ *
+ * The removals are measured on the arrived set (`returnedCount` minus
  * `filteredCount`); entities the server's own budget never served stay counted,
- * because no display filter removed them.
+ * because the element selection did not remove them.
  */
 export function relatedScopeTotal(
   returnedCount: number,
@@ -237,8 +245,8 @@ export function buildReadout(inputs: ArchitectureReadoutInputs): ArchitectureRea
   const shown = entityCountOf(inputs.drawnBoxes);
   // M is the pre-budget total when the payload carries one; an older payload
   // (or an impossible smaller total) falls back to what actually arrived. When
-  // the caller names the filtered set, the display filter's own removals are
-  // taken off that total (see `relatedScopeTotal`).
+  // the caller names the element-scoped set, that selection's own removals are
+  // taken off the total (see `relatedScopeTotal`).
   const related = inputs.filteredCount === undefined
     ? Math.max(returned, normaliseCount(inputs.relatedTotal ?? returned))
     : relatedScopeTotal(returned, inputs.filteredCount, inputs.relatedTotal);

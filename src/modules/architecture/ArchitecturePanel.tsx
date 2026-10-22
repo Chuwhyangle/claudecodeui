@@ -2167,6 +2167,18 @@ export default function ArchitecturePanel({
   // compact toolbar badge and the marker's data attributes read it; the
   // expanded explanation states it as one of its layers.
   const budgetOmitted = Math.max(0, truncation.total - truncation.shown);
+  // Entities the ELEMENT selection (kinds + "keep mentioned") removes from the
+  // payload in hand. That is the axis a widening request changed, so it is the
+  // only one M has to subtract: the isolated/relation axes decide what is DRAWN
+  // and keep their own readout line ("1 isolated nodes"), and the server's total
+  // never reflected them (the live-voice 19 → 18 reading stays 19).
+  const locallyHiddenKindCount = filteredGraph === null
+    ? 0
+    : Object.values(filteredGraph.hidden.byKind).reduce((sum, count) => sum + (count ?? 0), 0);
+  const elementScopeCount = Math.max(
+    0,
+    (rawNeighbourhood?.nodes.length ?? neighbourhood.nodes.length) - locallyHiddenKindCount,
+  );
   // The ONE reading the reader gets: N is what the layout was handed (group
   // boxes count their members), M is the server's pre-budget total. The pure
   // function decides which budget layers are named; the panel only renders it.
@@ -2180,10 +2192,12 @@ export default function ArchitecturePanel({
     drawnBoxes: layoutFit?.graph.nodes ?? [],
     returnedCount: truncation.shown,
     relatedTotal: truncation.total,
-    // M follows the CURRENT display filter over the response in hand: a local
-    // narrowing must not keep reading the wider payload's `entityTotal` (that
-    // made the same filter read 5 related, then 40, after a widening detour).
-    filteredCount: displayNeighbourhood?.nodes.length ?? neighbourhood.nodes.length,
+    // M follows the CURRENT element selection over the response in hand: a
+    // local narrowing must not keep reading the wider payload's `entityTotal`
+    // (that made the same filter read 5 related, then 40, after a widening
+    // detour). Isolated/relation removals stay out of it — they are the
+    // drawing's own filter line, not a change of scope.
+    filteredCount: elementScopeCount,
     locale: i18n.language,
   });
 
