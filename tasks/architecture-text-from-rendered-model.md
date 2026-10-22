@@ -23,9 +23,9 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0：新增用例——全图文本等于 `toPlantUml(renderDetailed(...).model)` 逐字相同；对含聚合边与 `<<function>>`/成员分栏的 fixture，文本经 `parsePlantUml` 再 `toPlantUml` 稳定且 `checkSyntax` 无 error；「视野内」与「选中 +1」两种范围的节点集合正确；上游函数抛错时回落到桥接层文本并带「回退」标记；既有用例（范围、体量、分级）不回归
-- [ ] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：页内不再出现「按桥接层输出」；回退时出现回退标注；既有用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0：新增用例——全图文本等于 `toPlantUml(renderDetailed(...).model)` 逐字相同；对含聚合边与 `<<function>>`/成员分栏的 fixture，文本经 `parsePlantUml` 再 `toPlantUml` 稳定且 `checkSyntax` 无 error；「视野内」与「选中 +1」两种范围的节点集合正确；上游函数抛错时回落到桥接层文本并带「回退」标记；既有用例（范围、体量、分级）不回归
+- [x] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：页内不再出现「按桥接层输出」；回退时出现回退标注；既有用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -37,6 +37,7 @@ depends_on:
 - src/modules/architecture/PlantUmlGraph.tsx
 - src/modules/architecture/ArchitectureTextPanel.tsx
 - src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/architecture/rendererContract.ts
 - src/modules/architecture/tests/plantUmlText.test.ts
 - src/modules/architecture/tests/textPanel.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
