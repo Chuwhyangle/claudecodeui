@@ -170,7 +170,9 @@ import type {
 // The wire contract (frames, execution-status reading, seams) moved into
 // `voice-realtime-contract.js` so a leaf that needs one shape does not have to import this handler.
 // It is re-exported from here so every existing `…ws-proxy.service.js` import path keeps resolving;
-// the handler keeps only the behaviour.
+// the handler keeps only the behaviour. The relay queue's byte budget moved with it: the reason it
+// is an ADMISSION axis and cannot be a cancellation — `cancelQueuedInput` is `true` for the Claude
+// provider, measured by E9 and E10/U4 — is documented on `VOICE_QUEUE_MAX_BYTES` there, not here.
 export { VOICE_QUEUE_MAX_BYTES } from './voice-realtime-contract.js';
 export type {
   HostCommandLifecycleReading,
