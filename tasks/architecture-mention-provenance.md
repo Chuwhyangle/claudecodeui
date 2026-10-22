@@ -42,11 +42,11 @@ depends_on:
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/seed-extraction.test.ts` exit 0：`extractSeeds` 的既有断言逐字不变；`extractSeedMentions` 返回出处（`messageId`/`role`/`kind`/`excerpt`），每个种子上限 20 并置 `truncated`；`tool_result` 与 Bash 默认不产生出处，`includeToolResults: true` 时才产生且标 `kind: 'tool_result'`
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：用真实形态 fixture（`main` 对应 ≥ 5 个实体；唯一名字；同一文件 ≥ 8 个实体）断言三档：多候选同名为 `name`、唯一名字为 `direct`、仅文件被提为 `file`、同消息含该文件路径则升为 `direct`；节点带 `mentionTier/mentionCount`，`stats.seedTiers` 计数与节点一致；不带出处的旧 fixture 响应逐字节沿用既有断言
-- [ ] 同上命令中 `/mentions` 用例：对唯一名字返回命中且 `messageId` 都存在于 fixture 历史；对多候选名字 `ambiguous === true` 且 `candidateCount` 正确；边查询返回两端共现的消息；`includeToolResults` 缺省为假、为真时多出 `tool_result` 命中；超过扫描上限置 `truncated`；同一历史上第二次相同请求不重建倒排索引（构建计数读数）；未登录 401，缺参数 400
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：只有 `mentionTier === 'direct'` 的节点带种子标记，`name`/`file` 档的 `distance === 0` 节点没有；缺 `mentionTier` 的旧 payload 仍按旧行为带标记；既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/seed-extraction.test.ts` exit 0：`extractSeeds` 的既有断言逐字不变；`extractSeedMentions` 返回出处（`messageId`/`role`/`kind`/`excerpt`），每个种子上限 20 并置 `truncated`；`tool_result` 与 Bash 默认不产生出处，`includeToolResults: true` 时才产生且标 `kind: 'tool_result'`
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：用真实形态 fixture（`main` 对应 ≥ 5 个实体；唯一名字；同一文件 ≥ 8 个实体）断言三档：多候选同名为 `name`、唯一名字为 `direct`、仅文件被提为 `file`、同消息含该文件路径则升为 `direct`；节点带 `mentionTier/mentionCount`，`stats.seedTiers` 计数与节点一致；不带出处的旧 fixture 响应逐字节沿用既有断言
+- [x] 同上命令中 `/mentions` 用例：对唯一名字返回命中且 `messageId` 都存在于 fixture 历史；对多候选名字 `ambiguous === true` 且 `candidateCount` 正确；边查询返回两端共现的消息；`includeToolResults` 缺省为假、为真时多出 `tool_result` 命中；超过扫描上限置 `truncated`；同一历史上第二次相同请求不重建倒排索引（构建计数读数）；未登录 401，缺参数 400
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0：只有 `mentionTier === 'direct'` 的节点带种子标记，`name`/`file` 档的 `distance === 0` 节点没有；缺 `mentionTier` 的旧 payload 仍按旧行为带标记；既有 hover/缩放/爆炸/下钻用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
