@@ -2126,6 +2126,12 @@ test('the truncation reading follows the current granularity and appends the omi
   assert.equal(truncated.getAttribute('data-architecture-truncated-shown'), '4');
   assert.equal(truncated.getAttribute('data-architecture-truncated-total'), '9');
   assert.equal(truncated.getAttribute('data-architecture-truncated-omitted'), '5');
+  // N is the drawn entity count and M is the pre-budget total, not the
+  // returned count the old readout used for its second number.
+  const summary = document.querySelector('[data-architecture-readout-summary]');
+  assert.equal(summary?.getAttribute('data-architecture-readout-summary'), '4');
+  assert.equal(summary?.getAttribute('data-architecture-readout-total'), '9');
+  assert.match(summary?.textContent ?? '', /Showing 4 classes · 9 related/);
   // The collapsed line is the two numbers plus ONE marker: the old
   // per-budget sentences moved into the expanded explanation.
   assert.match(truncated.textContent ?? '', /Budget-limited/);
