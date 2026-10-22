@@ -15,6 +15,7 @@ import { AppError, findApplicationRoot, getModuleDirectory, IS_PLATFORM, termina
 import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRuntimeWriter } from '@/shared/types.js';
 import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
 import { installConnectedClientsPort } from '@/shared/ports/connected-clients.port.js';
+import { installProjectsSessionFetchPort } from '@/shared/ports/projects-session-fetch.port.js';
 import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import { installVoiceLexiconPort } from '@/shared/ports/voice-lexicon.port.js';
 import { installVoiceRulesPort } from '@/shared/ports/voice-rules.port.js';
@@ -29,13 +30,14 @@ import {
     readClaudeSessionOccupancy,
     resolveResidentScopeSweepEnabled,
     sessionConversationsSearchService,
+    sessionSynchronizerService,
     sessionsService,
     setActivityChangeNotifier,
     stopClaudeSessionScopes,
     sweepOrphanClaudeSessionScopes,
     uiLastOpenedSessionService,
 } from '@/modules/providers/index.js';
-import { activityStore, BOOT_ID, broadcastHostsChanged, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService } from '@/modules/websocket/index.js';
+import { activityStore, BOOT_ID, broadcastHostsChanged, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
 import { createSessionHostsRouter, sessionHostManager } from '@/modules/session-hosts/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
@@ -157,6 +159,8 @@ import { configureWebPush } from './modules/notifications/index.js';
 //   connected-clients  <- the websocket module's live connection set
 //   voice-rules        <- the voice-realtime in-process active-session set and rules table
 //   voice-lexicon      <- the sessions service's history reader (keeps modules/voice out of the provider cycle)
+//   projects-session-fetch <- the provider synchronizer + the websocket module's OPEN-connection broadcast
+//                             (keeps modules/projects out of the provider/websocket cycle)
 //
 // Re-installing the same objects is idempotent; nothing here constructs a second
 // registry. The install functions are imported with the rest of the shared
@@ -167,6 +171,16 @@ installChatRunRegistryPort(chatRunRegistry);
 installConnectedClientsPort({ count: () => connectedClients.size });
 installVoiceRulesPort({ isSessionActive: isVoiceSessionActive, rulesFor });
 installVoiceLexiconPort({ fetchHistory: (sessionId, options) => sessionsService.fetchHistory(sessionId, options) });
+installProjectsSessionFetchPort({
+    synchronizeSessions: async () => {
+        await sessionSynchronizerService.synchronizeSessions();
+    },
+    broadcast: (message) => {
+        connectedClients.forEach((client) => {
+            if (client.readyState === WS_OPEN_STATE) client.send(message);
+        });
+    },
+});
 
 const __dirname = getModuleDirectory(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.
