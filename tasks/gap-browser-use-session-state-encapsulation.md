@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] (a) **模块级可变容器归零**：`grep -nE "^const (sessions|handles) = new Map" server/modules/browser-use/browser-use.service.ts` 计数 = **0**。
-- [ ] (b) **状态进类**：`grep -nE "class BrowserUseRuntime" server/modules/browser-use/browser-use.service.ts` 命中，且 `sessions`/`handles` 在类私有字段内。
-- [ ] (c) **既有行为不改一字仍绿**：覆盖 browser-use 的既有 server 判据单跑退出 0。
-- [ ] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **模块级可变容器归零**：`grep -nE "^const (sessions|handles) = new Map" server/modules/browser-use/browser-use.service.ts` 计数 = **0**。
+- [x] (b) **状态进类**：`grep -nE "class BrowserUseRuntime" server/modules/browser-use/browser-use.service.ts` 命中，且 `sessions`/`handles` 在类私有字段内。
+- [x] (c) **既有行为不改一字仍绿**：覆盖 browser-use 的既有 server 判据单跑退出 0。
+- [x] (d) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
