@@ -39,9 +39,9 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/readoutNumbers.test.ts` exit 0（新文件，纯函数 `buildReadout(inputs)`）：给定「详情保留 2000、布局预算后 556、服务端预算前总数 2449、返回 2000」，N = 556、M = 2449、预算说明三层各一行且各自带数字；三层都未触发时不出现预算标记与说明；只触发服务端预算或只触发布局预算时只出现对应一行；折成组框时 N 按成员数计；缺 `entityTotal` 时 M 回落到返回节点数；数字带千分位
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：折叠行只含 N、M 与「受预算限制」标记（不再同时出现 `layout budget` 与 `node budget` 两句）；展开后出现分层说明；`data-architecture-readout-summary` 等读数属性与新口径一致；界面语言为 `zh-CN` 时分析时间含「小时前」、为 `en` 时含「ago」，且二者都不依赖 `navigator.language`（把浏览器语言设成另一种仍按界面语言显示）；既有读数用例不回归（口径变化涉及的断言逐处列在实施记录）
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/readoutNumbers.test.ts` exit 0（新文件，纯函数 `buildReadout(inputs)`）：给定「详情保留 2000、布局预算后 556、服务端预算前总数 2449、返回 2000」，N = 556、M = 2449、预算说明三层各一行且各自带数字；三层都未触发时不出现预算标记与说明；只触发服务端预算或只触发布局预算时只出现对应一行；折成组框时 N 按成员数计；缺 `entityTotal` 时 M 回落到返回节点数；数字带千分位
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：折叠行只含 N、M 与「受预算限制」标记（不再同时出现 `layout budget` 与 `node budget` 两句）；展开后出现分层说明；`data-architecture-readout-summary` 等读数属性与新口径一致；界面语言为 `zh-CN` 时分析时间含「小时前」、为 `en` 时含「ago」，且二者都不依赖 `navigator.language`（把浏览器语言设成另一种仍按界面语言显示）；既有读数用例不回归（口径变化涉及的断言逐处列在实施记录）
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
@@ -54,6 +54,7 @@ depends_on:
 - src/modules/architecture/layoutBudget.ts
 - src/modules/architecture/tests/readoutNumbers.test.ts (new)
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/de/common.json
