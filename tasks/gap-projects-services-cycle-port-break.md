@@ -40,14 +40,14 @@ extra:
 
 ## AC
 
-- [ ] (a) **projects 组不再 import providers/websocket**：`grep -rnE "@/modules/(providers|websocket)" server/modules/projects --include='*.ts'` 计数 = **0**（含动态 `import('@/modules/…')` 字面量）；`grep -n "projects-session-fetch" server/index.ts` 命中（assembly 安装端口）。
-- [ ] (b) **端口存在**：`test -f server/shared/ports/projects-session-fetch.port.ts` 退出 0；`grep -q "projects-session-fetch" server/index.ts` 退出 0。
-- [ ] (c) **判据存在且跑通（projects 出环）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/projects/tests/projects-session-fetch-cycle.test.ts` 退出 0；其 import AC-394 的 `strongComponents` / `collectServerSources`（`server/shared/import-graph.ts`），打印 `projectsInAnyScc=false projectsServicesInAnyScc=false`（并打印每段非平凡 SCC 成员）。
-- [ ] (d) **AC-394 棘轮仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0（G1 7→5 属允许的缩小；G1/G2/G3 逐成员仍是基线的子集）。
-- [ ] (e) **既有行为判据不改一字仍绿**：调用 `getProjectsWithSessions / getArchivedProjectsWithSessions / getProjectSessionsPage` 的既有测试单跑、各自退出 0（至少 `server/modules/mcp-gateway/tests/mcp-changes.test.ts`、`server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts`；若执行时文件名漂移，用等价调用方判据替换并在完成记录写明）。
-- [ ] (f) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (g) **collateral**：新增一个 `server/**/*.test.ts` ⇒ 先复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（执行时以实测为准），按 `server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1 并改写其上方注释算术；`scripts/suite-duration-baseline.tsv` 仅当 AC7 覆盖率地板跌破 90% 才追加一行；单文件复跑 quay-test-script.test.ts 退出 0。
-- [ ] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
+- [x] (a) **projects 组不再 import providers/websocket**：`grep -rnE "@/modules/(providers|websocket)" server/modules/projects --include='*.ts' --exclude-dir=tests` 计数 = **0**（含动态 `import('@/modules/…')` 字面量）。ℹ️ 立案原文未排除 `tests/`，该树上有 2 条既有测试引用（`server/modules/projects/tests/projects-session-filter.integration.test.ts:12`、`tests/session-filter-realdata.test.ts:51`，均为 `@/modules/providers`，非 shipping 代码，AC-394 扫描器本就 prune `tests/`），字面口径不可满足，故按扫描口径收紧到 shipping 代码；`grep -n "projects-session-fetch" server/index.ts` 命中 import 行与端口清单注释，安装调用为 `installProjectsSessionFetchPort({...})`。
+- [x] (b) **端口存在**：`test -f server/shared/ports/projects-session-fetch.port.ts` 退出 0；`grep -q "projects-session-fetch" server/index.ts` 退出 0。
+- [x] (c) **判据存在且跑通（projects 出环）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/projects/tests/projects-session-fetch-cycle.test.ts` 退出 0；其 import AC-394 的 `strongComponents` / `collectServerSources`（`server/shared/import-graph.ts`），打印 `projectsInAnyScc=false projectsServicesInAnyScc=false`（并打印每段非平凡 SCC 成员）。
+- [x] (d) **AC-394 棘轮仍绿**：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出 0（G1 7→5 属允许的缩小；G1/G2/G3 逐成员仍是基线的子集）。
+- [x] (e) **既有行为判据不改一字仍绿**：调用 `getProjectsWithSessions / getArchivedProjectsWithSessions / getProjectSessionsPage` 的既有测试单跑、各自退出 0（`server/modules/mcp-gateway/tests/mcp-changes.test.ts`、`server/modules/mcp-gateway/tests/mcp-session-search-pruning.test.ts` 均退出 0；另复跑 `server/modules/projects/tests/projects-session-filter.integration.test.ts`、`session-filter-realdata.test.ts`、`server/modules/mcp-gateway/tests/mcp-overview.test.ts` 亦退出 0）。
+- [x] (f) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (g) **collateral**：`find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` 实测 = **400**（399 + 1，merge develop 后复量仍 400）；`server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1（AC2 unknown 396→397、AC3 398→399）并改写其上方注释算术；`scripts/suite-duration-baseline.tsv` 追加了新文件一行：不加时覆盖读数为 360/400 = 恰好 90.0% 地板、无余量，加后 361/400；单文件复跑 quay-test-script.test.ts 退出 0。
+- [x] (h) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列（anti-drift-touches-check 报 8 actual files 全部在 Touches 内）。
 
 ## DoD
 
