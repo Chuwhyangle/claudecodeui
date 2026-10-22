@@ -1,7 +1,7 @@
 ---
 id: architecture-class-diagram-rendering
 title: Entity 图按 UML 类图画：构造型 + 成员分栏 + 纯类名标签；边标签默认隐藏、会话种子高亮
-status: todo
+status: ready
 labels:
   - feature
 parent: null
