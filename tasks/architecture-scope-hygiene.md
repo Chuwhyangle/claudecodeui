@@ -38,11 +38,11 @@ archguard 一侧确认：每个 diagram 源目录各存一个 scope、与项目�
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts server/modules/architecture/tests/cache-invalidation.test.ts` exit 0：用仿照 archguard 清单的 fixture（三个嵌套来源 + 项目外来源（claudecodeui 形与 `/tmp` 形各一）+ 一个绝对路径 id 的 scope；放在 `server/modules/architecture/tests/fixtures` 下）断言：同一规范键的实体合并后只剩一个 id、保留的是最靠外 scope 的那个；指向被丢弃 id 的边已改指向保留 id、无自环无重复边、边总数不少于「按规范键去重后」应有的数；只在内层出现的实体仍在；绝对路径 id 归一化后不含 `//`、不以 `/` 开头；项目外 scope 贡献 0 个实体且出现在诊断里；诊断计数（total/kept/droppedOutsideRoot/subsumed/normalizedAbsoluteIds）与 fixture 构造一致；同一输入多次输出逐字节相同
-- [ ] 同上命令：符号链接别名用例——项目根经符号链接访问（清单里的 `sources` 用另一条指向同一目录的路径）时，本项目的 scope **不**被误判为项目外；清单项带 `outsideProjectRoot: true` 时被丢弃而不做路径比较，带 `parentScopeKey` 时按它判定外层，两个字段都缺失时回落到启发式且结果与只用启发式一致
-- [ ] 同上命令：「单 scope、相对路径 id、无重叠」的既有 fixture 响应与改前逐字节相同；合并规则版本进入缓存键（同一份 fixture 在规则版本变化后不命中旧缓存）；`entityDetails`（kind/members）随保留的 id 正确挂接；`unresolved` 的语义不变
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：`provenance.scopeHygiene` 存在时来源行出现可展开的「scope 清理」并列出各项计数与项目外 scope 的标签；缺失时不出现；既有用例不回归；12 个 locale 文案键齐全
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts server/modules/architecture/tests/cache-invalidation.test.ts` exit 0：用仿照 archguard 清单的 fixture（三个嵌套来源 + 项目外来源（claudecodeui 形与 `/tmp` 形各一）+ 一个绝对路径 id 的 scope；放在 `server/modules/architecture/tests/fixtures` 下）断言：同一规范键的实体合并后只剩一个 id、保留的是最靠外 scope 的那个；指向被丢弃 id 的边已改指向保留 id、无自环无重复边、边总数不少于「按规范键去重后」应有的数；只在内层出现的实体仍在；绝对路径 id 归一化后不含 `//`、不以 `/` 开头；项目外 scope 贡献 0 个实体且出现在诊断里；诊断计数（total/kept/droppedOutsideRoot/subsumed/normalizedAbsoluteIds）与 fixture 构造一致；同一输入多次输出逐字节相同
+- [x] 同上命令：符号链接别名用例——项目根经符号链接访问（清单里的 `sources` 用另一条指向同一目录的路径）时，本项目的 scope **不**被误判为项目外；清单项带 `outsideProjectRoot: true` 时被丢弃而不做路径比较，带 `parentScopeKey` 时按它判定外层，两个字段都缺失时回落到启发式且结果与只用启发式一致
+- [x] 同上命令：「单 scope、相对路径 id、无重叠」的既有 fixture 响应与改前逐字节相同；合并规则版本进入缓存键（同一份 fixture 在规则版本变化后不命中旧缓存）；`entityDetails`（kind/members）随保留的 id 正确挂接；`unresolved` 的语义不变
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：`provenance.scopeHygiene` 存在时来源行出现可展开的「scope 清理」并列出各项计数与项目外 scope 的标签；缺失时不出现；既有用例不回归；12 个 locale 文案键齐全
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
