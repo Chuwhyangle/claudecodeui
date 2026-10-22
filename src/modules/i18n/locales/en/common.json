@@ -129,6 +129,7 @@
       "raiseDetail": "Raise detail",
       "reduceScope": "Reduce scope",
       "budgetOmitted": "{{count}} more left out by the node budget",
+      "layoutBudget": "Showing {{count}} within the layout budget; raising detail takes longer",
       "kindFunction": "{{count}} functions",
       "kindInterface": "{{count}} interfaces",
       "kindClass": "{{count}} classes"

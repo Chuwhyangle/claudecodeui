@@ -123,6 +123,7 @@
       "raiseDetail": "提高詳細度",
       "reduceScope": "縮小範圍",
       "budgetOmitted": "另有 {{count}} 個因預算未納入",
+      "layoutBudget": "已按版面預算顯示 {{count}} 個，調高詳情會更慢",
       "kindFunction": "{{count}} 個函式",
       "kindInterface": "{{count}} 個介面",
       "kindClass": "{{count}} 個類別"

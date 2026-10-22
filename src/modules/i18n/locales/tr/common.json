@@ -123,6 +123,7 @@
       "raiseDetail": "Ayrıntıyı artır",
       "reduceScope": "Kapsamı azalt",
       "budgetOmitted": "Düğüm bütçesi nedeniyle {{count}} tane daha dahil edilmedi",
+      "layoutBudget": "Düzen bütçesi içinde {{count}} gösteriliyor; ayrıntıyı artırmak daha uzun sürer",
       "kindFunction": "{{count}} işlev",
       "kindInterface": "{{count}} arayüz",
       "kindClass": "{{count}} sınıf"

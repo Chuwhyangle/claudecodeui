@@ -123,6 +123,7 @@
       "raiseDetail": "Aumentar detalle",
       "reduceScope": "Reducir ámbito",
       "budgetOmitted": "{{count}} más quedaron fuera por el presupuesto de nodos",
+      "layoutBudget": "Mostrando {{count}} dentro del presupuesto de diseño; subir el detalle tarda más",
       "kindFunction": "{{count}} funciones",
       "kindInterface": "{{count}} interfaces",
       "kindClass": "{{count}} clases"

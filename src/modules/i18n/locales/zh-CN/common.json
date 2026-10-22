@@ -123,6 +123,7 @@
       "raiseDetail": "提高详情",
       "reduceScope": "减小范围",
       "budgetOmitted": "另有 {{count}} 个因预算未纳入",
+      "layoutBudget": "已按布局预算显示 {{count}} 个，调高详情会更慢",
       "kindFunction": "{{count}} 个函数",
       "kindInterface": "{{count}} 个接口",
       "kindClass": "{{count}} 个类"
