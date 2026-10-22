@@ -120,13 +120,3 @@ explicitly. The `mobileCompactToolbar.test.tsx` scope-stepper case now compares
 the first three request arguments, because the filter query is the fourth (the
 same rule the other scope-stepper cases already follow). Verified individually:
 3 files / 25 tests pass, `npm run lint` exit 0, `npm run typecheck` exit 0.
-
-## Blocker
-
-**2026-10-22T11:33:45.189Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/architecture-element-and-relation-filters.md）⇒ 判惰性，⛔ 未调分类器
-fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
-fan-in-ff-merge: measure ff_only_locked=false
-- run_id：wk-prod-anchor
-- session_id：20cc0df6-703c-4498-ad26-c0f2633112dd
