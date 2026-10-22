@@ -71,6 +71,8 @@ const WS_PROXY_SOURCE = fileURLToPath(new URL('../voice-realtime-ws-proxy.servic
 
 /** The step file, for the "every shipped step is registered from there" reading. */
 const STEPS_REL = 'server/modules/voice-realtime/voice-realtime-trunk-step-handlers.ts';
+/** Its basename as a definite string — `split('/').pop()` is `string | undefined` under strict. */
+const STEPS_BASENAME = STEPS_REL.slice(STEPS_REL.lastIndexOf('/') + 1);
 
 /**
  * A minimal stand-in for the browser's `ws.WebSocket`, satisfying exactly the surface
@@ -421,7 +423,7 @@ test('every shipped step is registered from the sibling step file, not the proxy
   for (const step of VOICE_REALTIME_TRUNK_STEPS) {
     console.log(`(d) shipped-step: ${step.timing}/${step.name}<-${step.label}@${step.source}`);
     assert.notEqual(step.source, WS_PROXY_SOURCE, `${step.name} must not be defined in the proxy`);
-    assert.ok(step.source.endsWith(STEPS_REL.split('/').pop()), `${step.name} must be defined in ${STEPS_REL}`);
+    assert.ok(step.source.endsWith(STEPS_BASENAME), `${step.name} must be defined in ${STEPS_REL}`);
   }
   const table = createDefaultVoiceRealtimeTrunkSteps();
   const registered: string[] = [];
