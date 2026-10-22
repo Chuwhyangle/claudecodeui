@@ -79,6 +79,8 @@
       "zoomFit": "An Ansicht anpassen",
       "zoomFocus": "Fokus",
       "zoomActual": "Originalgröße (100%)",
+      "classDiagram": "Klassendiagramm",
+      "backTo": "Zurück zu {{view}}",
       "lod": {
         "packages": "Pakete",
         "subpackages": "Unterpakete",
@@ -95,7 +97,9 @@
         "focusHint": "Fokussiert auf {{package}}",
         "overviewHint": "Zoom {{zoom}} % · zoomen Sie auf {{package}} und {{count}} weitere(s) Paket(e)",
         "collapsed": "Der Graph ist zu breit und wurde daher auf die Verzeichnisübersicht reduziert.",
-        "focusedFitHint": "Der lesbare Zoom ist aktiv, daher zeigt diese Ansicht einen Fokus – wählen Sie „Übersicht“, um den ganzen Graphen zu sehen."
+        "focusedFitHint": "Der lesbare Zoom ist aktiv, daher zeigt diese Ansicht einen Fokus – wählen Sie „Übersicht“, um den ganzen Graphen zu sehen.",
+        "focusSummary": "Lesbarer Zoom ist aktiv: Fokus auf {{package}} bei {{zoom}}% — wähle Übersicht, um das ganze Diagramm zu sehen ({{count}} weitere Pakete).",
+        "focusOnly": "Lesbarer Zoom ist aktiv — wähle Übersicht, um das ganze Diagramm zu sehen."
       },
       "minimap": {
         "label": "Diagrammübersicht, {{percent}} % der Zeichnung sichtbar",
@@ -169,6 +173,11 @@
       "placeholder": "Entitäten oder Dateien suchen…",
       "noMatches": "Keine Treffer",
       "outOfRange": "Nicht im aktuellen Bereich",
+      "hiddenByFilter": "Durch den aktuellen Filter ausgeblendet",
+      "viewNeighbourhood": "Nachbarschaft von {{name}} anzeigen",
+      "viewNeighbourhoodShort": "Nachbarschaft",
+      "showIt": "Anzeigen",
+      "notInGraph": "Nicht im aktuellen Diagramm",
       "inGraph": "Im Diagramm",
       "other": "Anderswo im Projekt",
       "retry": "Erneut versuchen",

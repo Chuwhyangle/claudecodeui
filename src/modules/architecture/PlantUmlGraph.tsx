@@ -153,9 +153,16 @@ type EntitySelection = {
   readonly outgoing: readonly string[];
 };
 
+/**
+ * The dim strength applied to everything that is NOT part of a highlight.
+ * Kept at 0.4 (not the old 0.15): the unselected boxes stay readable, which is
+ * what the interaction review asked for after a dimmed drawing looked blank.
+ */
+const DIM_OPACITY = 0.4;
+
 /** Diagram chrome: dim everything not on the hovered node's edges. */
 const HIGHLIGHT_STYLE = `
-  [data-architecture-plantuml] .arch-dim { opacity: 0.15; }
+  [data-architecture-plantuml] .arch-dim { opacity: ${DIM_OPACITY}; }
   [data-architecture-plantuml] .arch-hl-in rect,
   [data-architecture-plantuml] .arch-hl-out rect { stroke: #2563eb; stroke-width: 2.5; }
   [data-architecture-plantuml] .arch-hl-in polyline,
@@ -249,12 +256,21 @@ function localReadableStorage(): {
 type PlantUmlGraphProps = ArchitectureRendererProps & {
   /**
    * A node the panel asked this renderer to reveal (a search hit, or a match
-   * that was outside the current detail range). The renderer opens that node's
-   * neighbourhood and centres the drawn box on it.
+   * that was outside the current detail range). The renderer centres the drawn
+   * box on it and selects it. It does NOT change the view unless `focusDrill`
+   * is set: the interaction review found that pressing Enter in the search box
+   * replaced the whole drawing with the entity's neighbourhood, losing the
+   * context the reader was searching in.
    */
   readonly focusNodeId?: string | null;
   /** Bumped on every request, so asking for the same node twice re-centres it. */
   readonly focusToken?: number;
+  /**
+   * Whether this focus request also opens the node's neighbourhood. Only the
+   * explicit "view neighbourhood" command (Shift+Enter, or the result row's
+   * secondary button) sets it.
+   */
+  readonly focusDrill?: boolean;
   /**
    * Reports the view currently drawn (overview/group/neighbourhood/hierarchy)
    * so the panel's export menu can rebuild the document that is on screen.
@@ -501,19 +517,30 @@ function clearHighlight(host: HTMLElement): void {
 function highlightRelations(host: HTMLElement, id: string): void {
   clearHighlight(host);
   const neighbours = new Set<string>([id]);
+  const highlighted: Element[] = [];
+  const dimmed: Element[] = [];
   for (const edge of host.querySelectorAll('.uml-edge')) {
     const from = edge.getAttribute('data-edge-source');
     const to = edge.getAttribute('data-edge-target');
     if (from === id) {
       edge.classList.add('arch-hl-out');
+      highlighted.push(edge);
       if (to !== null) neighbours.add(to);
     } else if (to === id) {
       edge.classList.add('arch-hl-in');
+      highlighted.push(edge);
       if (from !== null) neighbours.add(from);
     } else {
-      edge.classList.add('arch-dim');
+      dimmed.push(edge);
     }
   }
+  // A node whose relations were all filtered away (e.g. a function whose call
+  // edges are hidden) has NOTHING to highlight. Dimming the rest of the drawing
+  // in that state painted the whole graph translucent with no reading to
+  // compensate — so the dim is only applied alongside at least one highlighted
+  // relation.
+  if (highlighted.length === 0) return;
+  for (const edge of dimmed) edge.classList.add('arch-dim');
   for (const node of host.querySelectorAll('.uml-node')) {
     const nodeId = node.getAttribute('data-entity-id');
     if (nodeId !== null && !neighbours.has(nodeId)) node.classList.add('arch-dim');
@@ -846,6 +873,7 @@ export function PlantUmlGraph({
   onDrawnPlantUmlChange,
   focusNodeId = null,
   focusToken,
+  focusDrill = false,
   onViewChange,
   canCurate = false,
   pinnedNodeIds = [],
@@ -1155,19 +1183,31 @@ export function PlantUmlGraph({
   }, [drillInto]);
 
   /**
-   * A panel-level focus request (search hit / out-of-range jump) navigates the
-   * drawing to the named node's neighbourhood. This is a deliberate exception
-   * to "selection never re-lays out": the node may not be in the current view
-   * at all, so the only honest way to show it is to open its own view. The
-   * request is keyed by `focusToken` so choosing the same node again works.
+   * A panel-level focus request (a search hit / an inspector "centre" action).
+   * It selects the named node and centres it — the drawing stays on the view
+   * the reader was working in, so the context a search was asked from survives.
+   * Only an explicit `focusDrill` (Shift+Enter / "View neighbourhood") opens the
+   * node's own neighbourhood. Keyed by `focusToken` so choosing the same node
+   * twice re-centres it.
    */
   useEffect(() => {
     if (focusNodeId === null) return;
     selectedRef.current = focusNodeId;
     setSelectedId(focusNodeId);
     setSelectedByTouch(false);
-    setView({ kind: 'neighborhood', entityId: focusNodeId, hops: DEFAULT_NEIGHBORHOOD_HOPS });
-  }, [focusNodeId, focusToken]);
+    if (focusDrill) setView({ kind: 'neighborhood', entityId: focusNodeId, hops: DEFAULT_NEIGHBORHOOD_HOPS });
+  }, [focusNodeId, focusToken, focusDrill]);
+
+  // Switching the class/file subgraph is a new drawing, so a drill-down state
+  // from the previous one must not be carried over: a neighbourhood opened in
+  // the class diagram used to reappear after switching to the file graph and
+  // back. The default view is the discriminator (hierarchy vs. overview).
+  const previousIdShapeRef = useRef(idShape);
+  useEffect(() => {
+    if (previousIdShapeRef.current === idShape) return;
+    previousIdShapeRef.current = idShape;
+    setView(defaultViewOf(idShape));
+  }, [idShape]);
 
   // The hierarchy of the drawing on screen (entities → packages) and the zoom
   // level currently displayed. The level is applied imperatively (display
@@ -2380,71 +2420,41 @@ export function PlantUmlGraph({
   );
 
   /**
-   * The honest reading of the DEFAULT view: either the aspect fallback notice,
-   * the overview's "this is N% — zoom into <package>" hint, or the package the
-   * readable default focused. Only one line is shown at a time.
+   * The tier bar's ONE explanatory sentence. The review found the same reading
+   * split across two sentences — a "Readable zoom is on … choose Overview"
+   * escape notice and a "Zoom N% · zoom in on <package> and N other
+   * package(s)" hint — which could appear together and repeat the tier label
+   * a third time. They are merged here, and only the Focus tier shows them:
+   * Overview needs no explanation because it already is the whole graph. The
+   * percentage is the same `zoom.scale` reading the tier's `zoomReadout`
+   * prints, never the decision's unconstrained fit.
    */
+  const focusPackage = readableView?.focusPackageId ?? readableView?.hint?.packageId ?? null;
   const readableNotice = collapsedNotice ? (
     <span data-architecture-readable-collapsed="true" className="text-amber-600 dark:text-amber-400">
       {t('architecture.plantuml.readable.collapsed', {
         defaultValue: 'The graph is too wide, so it was collapsed to the directory overview.',
       })}
     </span>
-  ) : readableView?.mode === 'overview' && readableView.hint !== null ? (
-    // The strip names the package by its last two path segments so the reading
-    // stays short; `title` keeps the full id one hover away. The span truncates
-    // with an ellipsis if even that is too wide for the row.
+  ) : activeReadableMode === 'focus' ? (
     <span
-      data-architecture-readable-hint="true"
-      title={readableView.hint.packageId}
+      data-architecture-readable-focus-summary="true"
+      title={focusPackage ?? undefined}
       className="min-w-0 max-w-full truncate"
     >
-      {t('architecture.plantuml.readable.overviewHint', {
-        defaultValue: 'Zoom {{zoom}}% · zoom in on {{package}} and {{count}} other package(s)',
-        // The percentage is the SAME reading the zoom tier's own `zoomReadout`
-        // prints: both are derived from `zoom.scale`, never from the decision's
-        // unconstrained fit. The two used to disagree (the tier said the true
-        // fit, the readout the corner-avoiding one) whenever the chrome forced
-        // a smaller scale.
-        zoom: Math.round(zoom.scale * 100),
-        package: shortPackageName(readableView.hint.packageId),
-        count: readableView.hint.packageCount,
-      })}
-    </span>
-  ) : readableView?.mode === 'focus' && readableView.focusPackageId !== null ? (
-    <span data-architecture-readable-focus="true">
-      {t('architecture.plantuml.readable.focusHint', {
-        defaultValue: 'Focused on {{package}}',
-        package: readableView.focusPackageId,
-      })}
+      {focusPackage === null
+        ? t('architecture.plantuml.readable.focusOnly', {
+            defaultValue: 'Readable zoom is on — choose Overview to see the whole graph.',
+          })
+        : t('architecture.plantuml.readable.focusSummary', {
+            defaultValue:
+              'Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).',
+            package: shortPackageName(focusPackage),
+            zoom: Math.round(zoom.scale * 100),
+            count: readableView?.hint?.packageCount ?? 0,
+          })}
     </span>
   ) : null;
-
-  /**
-   * The readable focus is not the whole drawing, and the fit control no longer
-   * says otherwise — so say where the whole drawing is. It sits beside the
-   * focus reading rather than replacing it: the package and the escape are two
-   * different facts.
-   */
-  const fitFocusNotice = fitReading.focusNotice ? (
-    <span data-architecture-readable-fit-notice="true">
-      {t('architecture.plantuml.readable.focusedFitHint', {
-        defaultValue: 'Readable zoom is on, so this is a focus view — choose Overview to see the whole graph.',
-      })}
-    </span>
-  ) : null;
-
-  /**
-   * The ONE place the drawing's zoom tier is stated and changed. The review
-   * found "Explosion view", "Overview" and "Focus" each expressing the same
-   * thing in a different row; they are now a single on-canvas group whose
-   * leading label is the current tier. Nothing outside this group names a tier.
-   */
-  const zoomTierLabel = view.kind === 'hierarchy'
-    ? t('architecture.plantuml.explosion', { defaultValue: 'Explosion view' })
-    : activeReadableMode === 'overview'
-      ? t('architecture.plantuml.readable.overview', { defaultValue: 'Overview' })
-      : t('architecture.plantuml.readable.focus', { defaultValue: 'Focus' });
 
   /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
   const zoomReadout = (
@@ -2458,10 +2468,16 @@ export function PlantUmlGraph({
   // goes back to the full class drawing rather than to a document it never
   // renders.
   const defaultView = defaultViewOf(idShape);
-  const atDefaultView = drawingKeyOf(view) === drawingKeyOf(defaultView);
-  const backButton = atDefaultView
-    ? null
-    : (
+  // The breadcrumb is offered ONLY from a real drill-down (a neighbourhood or
+  // an expanded group). It used to follow `!atDefaultView`, which also counted
+  // the explosion view — so "Back to overview" appeared when nothing had been
+  // drilled at all.
+  const inDrillView = view.kind === 'neighborhood' || view.kind === 'group';
+  const backTargetLabel = isEntityGraph(idShape)
+    ? t('architecture.plantuml.classDiagram', { defaultValue: 'Class diagram' })
+    : t('architecture.plantuml.overview', { defaultValue: 'Overview' });
+  const backButton = inDrillView
+    ? (
       <button
         type="button"
         onClick={() => setView(defaultView)}
@@ -2469,9 +2485,13 @@ export function PlantUmlGraph({
         style={touchTargetStyle}
         className={`${TOOLBAR_BUTTON_CLASS} text-left`}
       >
-        {t('architecture.plantuml.back', { defaultValue: 'Back to overview' })}
+        {t('architecture.plantuml.backTo', {
+          defaultValue: 'Back to {{view}}',
+          view: backTargetLabel,
+        })}
       </button>
-    );
+    )
+    : null;
 
   // The explosion view draws the whole graph as one nested hierarchy; zooming it
   // then switches visibility levels instead of re-laying it.
@@ -2557,9 +2577,10 @@ export function PlantUmlGraph({
     )
     : null;
 
-  // The single zoom-tier group: the current tier label, the scale reading, and
-  // every control that changes the tier, in ONE place in the in-flow row above
-  // the drawing.
+  // The single zoom-tier group. It carries ONE Focus | Overview segmented
+  // control plus ONE scale reading — the review found the tier stated three
+  // times (a label, the toggle, and a sentence). A breadcrumb appears only
+  // from a real drill-down, and the focus explanation only in the Focus tier.
   const zoomTierGroup = (
     <div
       data-architecture-zoom-tier="true"
@@ -2568,16 +2589,12 @@ export function PlantUmlGraph({
       style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
       className="pointer-events-auto flex max-w-full flex-wrap items-center rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
     >
-      <span data-architecture-zoom-tier-label="true" className="px-1 font-medium text-foreground">
-        {zoomTierLabel}
-      </span>
+      {readableModeGroup}
       {zoomReadout}
       {backButton}
       {explosionButton}
-      {readableModeGroup}
       {drillButton}
       {readableNotice}
-      {fitFocusNotice}
     </div>
   );
 
@@ -2857,6 +2874,15 @@ export function PlantUmlGraph({
             {zoomInButton}
             {zoomOutButton}
             {fitButton}
+            {/* The cluster states the same scale reading as the tier bar above
+                the canvas: both are `zoom.scale`, so a reader never sees two
+                percentages for one drawing. */}
+            <span
+              data-architecture-zoom-cluster-level="true"
+              className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground"
+            >
+              {Math.round(zoom.scale * 100)}%
+            </span>
             {lodDepth !== null && (
               <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
                 {lodDepth === 0

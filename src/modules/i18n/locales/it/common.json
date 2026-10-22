@@ -79,6 +79,8 @@
       "zoomFit": "Adatta alla vista",
       "zoomFocus": "Focalizza",
       "zoomActual": "Dimensioni reali (100%)",
+      "classDiagram": "Diagramma delle classi",
+      "backTo": "Torna a {{view}}",
       "lod": {
         "packages": "Pacchetti",
         "subpackages": "Sottopacchetti",
@@ -95,7 +97,9 @@
         "focusHint": "In focus su {{package}}",
         "overviewHint": "Zoom {{zoom}}% · ingrandisci {{package}} e altri {{count}} pacchetti",
         "collapsed": "Il grafo è troppo largo, quindi è stato ripiegato nella panoramica per directory.",
-        "focusedFitHint": "Lo zoom leggibile è attivo, quindi questa vista è focalizzata — scegli «Panoramica» per vedere tutto il grafo."
+        "focusedFitHint": "Lo zoom leggibile è attivo, quindi questa vista è focalizzata — scegli «Panoramica» per vedere tutto il grafo.",
+        "focusSummary": "Lo zoom leggibile è attivo: focus su {{package}} al {{zoom}}% — scegli Panoramica per vedere tutto il grafo ({{count}} altri pacchetti).",
+        "focusOnly": "Lo zoom leggibile è attivo — scegli Panoramica per vedere tutto il grafo."
       },
       "minimap": {
         "label": "Panoramica del diagramma: {{percent}}% del disegno visibile",
@@ -169,6 +173,11 @@
       "placeholder": "Cerca entità o file…",
       "noMatches": "Nessuna corrispondenza",
       "outOfRange": "Fuori dall'intervallo corrente",
+      "hiddenByFilter": "Nascosto dal filtro corrente",
+      "viewNeighbourhood": "Vedi il vicinato di {{name}}",
+      "viewNeighbourhoodShort": "Vicinato",
+      "showIt": "Mostra",
+      "notInGraph": "Non è nel grafico corrente",
       "inGraph": "Nel grafico",
       "other": "Altrove nel progetto",
       "retry": "Riprova",

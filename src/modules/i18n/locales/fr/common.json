@@ -79,6 +79,8 @@
       "zoomFit": "Ajuster à la vue",
       "zoomFocus": "Focus",
       "zoomActual": "Taille réelle (100 %)",
+      "classDiagram": "Diagramme de classes",
+      "backTo": "Retour à {{view}}",
       "lod": {
         "packages": "Paquets",
         "subpackages": "Sous-paquets",
@@ -95,7 +97,9 @@
         "focusHint": "Focalisé sur {{package}}",
         "overviewHint": "Zoom {{zoom}} % · zoomez sur {{package}} et {{count}} autre(s) paquet(s)",
         "collapsed": "Le graphe est trop large ; il a donc été replié sur la vue d'ensemble par répertoires.",
-        "focusedFitHint": "Le zoom lisible est actif : cette vue est focalisée, pas le graphe entier — choisissez « Vue d'ensemble » pour tout voir."
+        "focusedFitHint": "Le zoom lisible est actif : cette vue est focalisée, pas le graphe entier — choisissez « Vue d'ensemble » pour tout voir.",
+        "focusSummary": "Le zoom lisible est actif : focus sur {{package}} à {{zoom}} % — choisissez Vue d’ensemble pour voir tout le graphe ({{count}} autre(s) paquet(s)).",
+        "focusOnly": "Le zoom lisible est actif — choisissez Vue d’ensemble pour voir tout le graphe."
       },
       "minimap": {
         "label": "Aperçu du diagramme : {{percent}} % du dessin visible",
@@ -169,6 +173,11 @@
       "placeholder": "Rechercher des entités ou des fichiers…",
       "noMatches": "Aucun résultat",
       "outOfRange": "Hors de la plage actuelle",
+      "hiddenByFilter": "Masqué par le filtre actuel",
+      "viewNeighbourhood": "Voir le voisinage de {{name}}",
+      "viewNeighbourhoodShort": "Voisinage",
+      "showIt": "Afficher",
+      "notInGraph": "Absent du graphe actuel",
       "inGraph": "Dans le graphique",
       "other": "Ailleurs dans le projet",
       "retry": "Réessayer",
