@@ -2,7 +2,7 @@
 id: gap-providers-websocket-cycle-port-break
 title: 把 websocket 组拉出 5 成员依赖环：providers/services 的 2 处 websocket
   import（broadcastSessionUpserted/Batch + chatRunRegistry）改经端口注入，环缩为 3
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -79,11 +79,3 @@ extra:
 - `server/shared/tests/server-import-cycle-budget.baseline.json`（棘轮：G1 去掉 websocket 组）
 - `scripts/suite-duration-baseline.tsv`（collateral：仅当覆盖率地板跌破 90%）
 - `tasks/gap-providers-websocket-cycle-port-break.md`（自触）
-
-## Blocker
-
-**2026-10-22T22:42:19.054Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/modules/debug-agent/tests/debug-agent-external-write.test.ts:   AssertionError [ERR_ASSERTION]: the load event must have been observed for the drain to mean anything (saw 0)
-- run_id：wk-prod-anchor
-- session_id：9cc0d8d2-66c2-454a-8a70-7e5da01bffc2
