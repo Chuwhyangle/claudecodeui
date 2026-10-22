@@ -1,7 +1,7 @@
 ---
 id: architecture-canvas-no-text-selection
 title: 画布内不支持文本选择：拖动平移与双击下钻不再选中文字
-status: ready
+status: done
 labels:
   - feature
 parent: null
