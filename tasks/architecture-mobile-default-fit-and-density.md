@@ -22,12 +22,12 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：新增用例用手机几何（画布 366×505，自然 5116×2910 经窄容器布局后约 1.05:1，缩略图按钮 44×44 在右下）断言 fit ≥ 理论最大值的 95%，且图与角落矩形不相交（通过平移）；任何摆放都必然相交时才缩小；既有桌面 fit 用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：手机读数折叠态单行且高度 ≤ 44px、点开展开且展开区在文档流里；缩放簇一行横排且 ≤ 52px 高、控件 ≥ 44×44、间距 ≥ 8px；fit 低于阈值时出现提示行；点按 package 框后视口以该 package 为中心放大、出现「返回全图」且点击后恢复；既有手势与 LOD 用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/canvasLayoutContract.test.tsx` exit 0（结构不变量不回归：`flex-1` 的父级是 flex、读数与页脚在文档流）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加手机视口断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：手机视口下图宽 ≥ 画布宽的 95%、图区高度占比 ≥ 70%、读数折叠态高度 ≤ 44px、缩放簇高度 ≤ 52px；低于阈值时提示行存在
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——把缩放簇强制为竖列后高度读数落到 52px 以上（证明守卫能取假），主臂与控制臂用同一读取函数
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：新增用例用手机几何（画布 366×505，自然 5116×2910 经窄容器布局后约 1.05:1，缩略图按钮 44×44 在右下）断言 fit ≥ 理论最大值的 95%，且图与角落矩形不相交（通过平移）；任何摆放都必然相交时才缩小；既有桌面 fit 用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/mobileCompactToolbar.test.tsx src/modules/architecture/tests/mobileGestures.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：手机读数折叠态单行且高度 ≤ 44px、点开展开且展开区在文档流里；缩放簇一行横排且 ≤ 52px 高、控件 ≥ 44×44、间距 ≥ 8px；fit 低于阈值时出现提示行；点按 package 框后视口以该 package 为中心放大、出现「返回全图」且点击后恢复；既有手势与 LOD 用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/canvasLayoutContract.test.tsx` exit 0（结构不变量不回归：`flex-1` 的父级是 flex、读数与页脚在文档流）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加手机视口断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：手机视口下图宽 ≥ 画布宽的 95%、图区高度占比 ≥ 70%、读数折叠态高度 ≤ 44px、缩放簇高度 ≤ 52px；低于阈值时提示行存在
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——把缩放簇强制为竖列后高度读数落到 52px 以上（证明守卫能取假），主臂与控制臂用同一读取函数
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
