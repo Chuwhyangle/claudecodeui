@@ -49,6 +49,19 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../../..');
 
 const SERVICE_REL = 'server/modules/voice/voice.service.ts';
+/**
+ * The service's own siblings that the criterion's import graph now reaches.
+ *
+ * `voice.service.ts` composes the capture seam and re-exports the browser-recogniser asset surface
+ * from two named siblings (the concern split in `gap-voice-service-concern-split`), so a temp tree
+ * built from the service alone would fail to resolve them — a setup red that says nothing about the
+ * dispatch. They are the service's runtime graph exactly as `shared/asr` is; the criterion and its
+ * mutations are unchanged.
+ */
+const SERVICE_SIBLINGS_REL = [
+  'server/modules/voice/voice-service-capture.ts',
+  'server/modules/voice/voice-service-transcribe.ts',
+] as const;
 const CRITERION_REL = 'server/modules/voice/tests/voice-provider-dispatch.test.ts';
 const TSCONFIG_REL = 'server/tsconfig.json';
 const BASELINE_REL = 'scripts/__fixtures__/asr-extraction-parity-baseline.json';
@@ -130,6 +143,9 @@ function buildTree(mutation: (typeof MUTATIONS)[number] | null): {
   copyInto(tree, SHARED_ASR_REL);
   copyInto(tree, TSCONFIG_REL);
   copyInto(tree, SERVICE_REL);
+  for (const sibling of SERVICE_SIBLINGS_REL) {
+    copyInto(tree, sibling);
+  }
   copyInto(tree, CRITERION_REL);
   copyInto(tree, BASELINE_REL);
   writeFileSync(path.join(tree, PACKAGE_JSON_REL), PACKAGE_JSON_BODY);
