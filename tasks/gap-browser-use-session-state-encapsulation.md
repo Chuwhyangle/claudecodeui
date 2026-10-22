@@ -45,3 +45,11 @@ extra:
 
 - `server/modules/browser-use/browser-use.service.ts`（2 个 const Map → BrowserUseRuntime 私有字段）
 - `tasks/gap-browser-use-session-state-encapsulation.md`（自触）
+
+## Blocker
+
+**2026-10-22T10:12:05.340Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：6da9f738-d171-49cb-9439-8b47b5f05fd6
