@@ -29,7 +29,7 @@ import {
   useEnsureArchitectureTabVisible,
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
-import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
+import type { ArchitectureRendererGraph, ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
 import {
   archguardToPlantUml,
@@ -37,7 +37,15 @@ import {
   MAX_DISPLAY_DIR_SEGMENTS,
 } from '@/modules/architecture/archguardToPlantUml';
 import {
+  applyExplosionLod,
+  buildExplosionHierarchy,
+  ENTITY_LOD_DEPTH,
   ENTITY_MIN_SCALE,
+  lodEdgeScreenWidth,
+  LOD_EDGE_MAX_SCREEN_PX,
+  LOD_EDGE_MIN_SCREEN_PX,
+  LOD_EMPTY_FRAME_CLASS,
+  PACKAGE_LOD_DEPTH,
   SUBPACKAGE_MIN_SCALE,
 } from '@/modules/architecture/explosionLod';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
@@ -1915,6 +1923,208 @@ test('the explosion view lays the whole hierarchy out once and zoom reveals its 
   ]);
   assert.equal(host.querySelector('svg'), svg, 'zooming back in still uses the same drawing');
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the explosion view never refetches');
+});
+
+/** Normalise a drawn package id the way the hierarchy index does, for comparison. */
+function normalizedPackageId(raw: string | null): string {
+  return (raw ?? '').trim().split('/').filter(Boolean).join('/');
+}
+
+/** A frame's own renderer label: its first direct `<text>` child. */
+function frameTextOf(frame: Element): Element | undefined {
+  return [...frame.children].find((child) => child.tagName.toLowerCase() === 'text');
+}
+
+/** The LOD edge width grows with weight and never leaves the 1–2.5px screen band. */
+test('the LOD edge width grows with weight and stays inside the screen band', () => {
+  const widths = [1, 4, 16, 1000].map((weight) => lodEdgeScreenWidth(weight));
+  assert.equal(widths[0], 1, 'a single relation is drawn 1px wide');
+  for (const width of widths) {
+    assert.ok(
+      width >= LOD_EDGE_MIN_SCREEN_PX && width <= LOD_EDGE_MAX_SCREEN_PX,
+      `every weight must stay inside the 1–2.5px screen band; got ${width}`,
+    );
+  }
+  for (let index = 1; index < widths.length; index += 1) {
+    assert.ok(
+      widths[index] >= widths[index - 1],
+      `the width must not shrink as weight grows: ${widths.join(', ')}`,
+    );
+  }
+  assert.equal(LOD_EDGE_MAX_SCREEN_PX, 2.5);
+  assert.equal(lodEdgeScreenWidth(16), 2.5, 'the log curve is capped at the band');
+});
+
+/**
+ * The ghosting fix read from the real renderer's own frames: a frame whose
+ * title the overlay draws must NOT also show the renderer's small label at the
+ * same corner (that is the doubled title), a frame whose title the plan omitted
+ * keeps its label, and the entity level restores every label and clears the
+ * empty-frame class. The overlay edge furniture is read on the same drawing.
+ */
+test('semantic zoom hides the label under its overlay title and restores it at the entity level', async () => {
+  rememberShowAllFilter();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+  fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
+
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+  }
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
+
+  const titles = [...host.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')];
+  assert.ok(titles.length > 0, 'the package level draws overlay titles to read');
+  const titled = new Set(titles.map((group) => normalizedPackageId(group.getAttribute('data-lod-label-package'))));
+
+  let untitledFrames = 0;
+  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
+    if ((frame as HTMLElement).style.display === 'none') continue;
+    const packageId = normalizedPackageId(frame.getAttribute('data-package-id'));
+    const label = frameTextOf(frame);
+    assert.ok(label !== undefined, `frame ${packageId} keeps its label element`);
+    if (titled.has(packageId)) {
+      assert.equal(
+        (label as HTMLElement).style.visibility,
+        'hidden',
+        `frame ${packageId} must not paint its own label under the overlay title`,
+      );
+      assert.ok(label.isConnected, 'the label is hidden, never removed — data-package-id stays intact');
+    } else {
+      untitledFrames += 1;
+      assert.notEqual(
+        (label as HTMLElement).style.visibility,
+        'hidden',
+        `frame ${packageId} got no overlay title, so its own label must stay readable`,
+      );
+    }
+  }
+  assert.ok(untitledFrames > 0, 'the fixture must exercise a frame whose title the plan omitted');
+
+  const edges = [...host.querySelectorAll('[data-architecture-lod-edges] path.arch-lod-package-edge')];
+  assert.ok(edges.length > 0, 'the package level draws its relation paths');
+  for (const edge of edges) {
+    assert.equal(
+      edge.getAttribute('vector-effect'),
+      'non-scaling-stroke',
+      'the LOD line width is a screen reading, not a world-unit one',
+    );
+    const width = Number(edge.getAttribute('stroke-width'));
+    assert.ok(
+      width >= LOD_EDGE_MIN_SCREEN_PX && width <= LOD_EDGE_MAX_SCREEN_PX,
+      `the LOD line must stay inside the screen band; got ${width}px`,
+    );
+  }
+
+  // Back at the entity level the renderer's own labels are the only labels
+  // again: every visibility override is gone and no frame stays de-emphasised.
+  for (let step = 0; step < 8; step += 1) {
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+  }
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
+  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
+    const label = frameTextOf(frame);
+    assert.ok(label !== undefined);
+    assert.equal((label as HTMLElement).style.visibility, '', 'the entity level restores the renderer label');
+    assert.equal(
+      frame.classList.contains(LOD_EMPTY_FRAME_CLASS),
+      false,
+      'the empty-frame class is removed when entities fill the frames again',
+    );
+  }
+});
+
+/**
+ * The weight label's halo and the empty-frame rule, on a synthetic drawing whose
+ * geometry is stated rather than laid out: two entities in `src/a` both point at
+ * `src/b`, so the collapsed edge is a ×2 line, and `src/a` contains a subpackage
+ * frame while `src/b` is a leaf.
+ */
+test('a collapsed ×N edge gets a background halo and only empty leaf frames are de-emphasised', () => {
+  const frame = (packageId: string, x: number, y: number, width: number, height: number): string =>
+    `<g class="uml-package" data-package-id="${packageId}">`
+    + `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="none" stroke="#333333"/>`
+    + `<text x="${x + 6}" y="${y + 13}" font-size="12">${packageId}</text>`
+    + '</g>';
+  const host = document.createElement('div');
+  host.innerHTML = `<svg viewBox="0 0 1600 800" width="1600" height="800">${
+    frame('src/a', 0, 0, 800, 600)
+  }${frame('src/a/deep', 20, 20, 300, 200)
+  }${frame('src/b', 1000, 0, 300, 200)
+  }<g class="uml-node" data-entity-id="src/a/x.ts" data-package-id="src/a">`
+    + '<rect x="40" y="40" width="100" height="40"/></g>'
+    + '<g class="uml-node" data-entity-id="src/a/y.ts" data-package-id="src/a">'
+    + '<rect x="40" y="100" width="100" height="40"/></g>'
+    + '<g class="uml-node" data-entity-id="src/b/z.ts" data-package-id="src/b">'
+    + '<rect x="1040" y="40" width="100" height="40"/></g>'
+    + '</svg>';
+  document.body.append(host);
+  const graph: ArchitectureRendererGraph = {
+    nodes: [
+      { id: 'src/a/x.ts', label: 'x', distance: 0 },
+      { id: 'src/a/y.ts', label: 'y', distance: 1 },
+      { id: 'src/b/z.ts', label: 'z', distance: 2 },
+    ],
+    edges: [
+      { from: 'src/a/x.ts', to: 'src/b/z.ts', relationType: 'call' },
+      { from: 'src/a/y.ts', to: 'src/b/z.ts', relationType: 'call' },
+    ],
+  };
+
+  try {
+    const hierarchy = buildExplosionHierarchy(host, graph);
+    applyExplosionLod({ host, hierarchy, edges: graph.edges, depth: PACKAGE_LOD_DEPTH, scale: 0.2 });
+
+    const overlay = [...host.querySelectorAll('[data-architecture-lod-edges] path.arch-lod-package-edge')];
+    assert.equal(overlay.length, 1, 'the two relations collapse onto one package pair');
+    assert.equal(overlay[0].getAttribute('data-lod-edge-weight'), '2');
+    assert.equal(overlay[0].getAttribute('vector-effect'), 'non-scaling-stroke');
+    assert.equal(
+      overlay[0].getAttribute('stroke-width'),
+      String(lodEdgeScreenWidth(2)),
+      'the drawn width is the weight curve, in screen px',
+    );
+
+    const weight = host.querySelector('.arch-lod-package-weight');
+    assert.ok(weight instanceof SVGElement, 'a weighted edge carries its ×N label');
+    assert.equal(weight.textContent, '×2');
+    assert.equal((weight as unknown as HTMLElement).style.paintOrder, 'stroke', 'the halo paints behind the glyphs');
+    assert.equal((weight as unknown as HTMLElement).style.strokeWidth, '3px', 'the halo is 3px wide');
+    assert.match(
+      (weight as unknown as HTMLElement).style.stroke,
+      /var\(--background/,
+      'the halo uses the canvas background colour',
+    );
+
+    // The frame carrying a visible subpackage frame keeps its weight; the two
+    // leaves, whose interiors are blank at this level, are de-emphasised.
+    const frameOf = (packageId: string): Element => {
+      const found = [...host.querySelectorAll('.uml-package[data-package-id]')]
+        .find((candidate) => candidate.getAttribute('data-package-id') === packageId);
+      assert.ok(found !== undefined, `frame ${packageId} must be drawn`);
+      return found;
+    };
+    assert.equal(frameOf('src/a').classList.contains(LOD_EMPTY_FRAME_CLASS), false,
+      'a frame that still contains a subpackage frame is not empty');
+    assert.equal(frameOf('src/a/deep').classList.contains(LOD_EMPTY_FRAME_CLASS), true,
+      'a leaf frame with no visible entity inside is empty');
+    assert.equal(frameOf('src/b').classList.contains(LOD_EMPTY_FRAME_CLASS), true,
+      'the other leaf is empty too');
+
+    // The ghosting rule on the same drawing: `src/a` got a title, `src/a/deep`
+    // did not (it would overlap), so exactly one of the two labels is hidden.
+    assert.equal((frameTextOf(frameOf('src/a')) as HTMLElement).style.visibility, 'hidden');
+    assert.notEqual((frameTextOf(frameOf('src/a/deep')) as HTMLElement).style.visibility, 'hidden');
+
+    applyExplosionLod({ host, hierarchy, edges: graph.edges, depth: ENTITY_LOD_DEPTH, scale: 1 });
+    for (const each of host.querySelectorAll('.uml-package[data-package-id]')) {
+      assert.equal(each.classList.contains(LOD_EMPTY_FRAME_CLASS), false);
+      assert.equal((frameTextOf(each) as HTMLElement).style.visibility, '');
+    }
+  } finally {
+    host.remove();
+  }
 });
 
 test('overview folds the graph into path groups; double-clicking a group expands it locally', async () => {

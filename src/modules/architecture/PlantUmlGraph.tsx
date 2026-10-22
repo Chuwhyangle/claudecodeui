@@ -194,6 +194,12 @@ const HIGHLIGHT_STYLE = `
   /* Directory groups are scaffolding, not entities: same dashed, grey frame the
      renderer's own overview stubs use, so a collapsed overview reads as a map. */
   [data-architecture-plantuml] [data-entity-id^="grp::"] rect { fill: #f6f8fa; stroke-dasharray: 5,3; }
+  /* At the collapsed LOD levels a package frame whose interior shows nothing
+     (no visible entity box, no visible subpackage frame) is background, not
+     content: the fill fades and the border halves, so the packages that DO
+     carry something keep the reader's attention. The class is toggled with the
+     level by applyExplosionLod, never baked into the drawing. */
+  [data-architecture-plantuml] .arch-lod-empty-frame > rect { fill-opacity: 0.4; stroke-width: 0.5; }
   /* The inspector's selection: a heavier frame plus the check badge the helper
      appends, so the reading never depends on colour alone. */
   [data-architecture-plantuml] .arch-selected > rect { stroke: #1d4ed8; stroke-width: 2.5; }

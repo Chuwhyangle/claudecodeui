@@ -804,6 +804,9 @@ const assertReadoutAgreesWithLayout = (reading: LayoutReading, label: string): v
 
 /* ── semantic zoom: readable titles + orthogonal package edges ───────────────────────────── */
 
+/** A rectangle in CSS px, as the browser paints it. */
+type LodRect = { x: number; y: number; width: number; height: number };
+
 /** The package-level state the LOD criterion reads. */
 type LodReading = {
   /** The level on screen: `'0'` is the package level. */
@@ -818,9 +821,29 @@ type LodReading = {
     screenFontPx: number;
     /** The text's painted box height, reported beside it as evidence. */
     rectHeight: number;
+    /** The title's painted screen box, the collision reading. */
+    rect: LodRect;
+    /** Whether the frame's OWN `.uml-package > text` is still visible under the overlay. */
+    originalLabelVisible: boolean;
+  }[];
+  /** The `×N` weight labels the reader must be able to read. */
+  weightLabels: {
+    text: string;
+    rect: LodRect;
+    /** `stroke` when the background halo paints behind the glyphs. */
+    paintOrder: string;
+    strokeWidth: string;
   }[];
   /** Every package-level relation path and whether all its segments are orthogonal. */
-  edges: { source: string | null; target: string | null; orthogonal: boolean; segments: number }[];
+  edges: {
+    source: string | null;
+    target: string | null;
+    orthogonal: boolean;
+    segments: number;
+    /** The declared stroke width; `non-scaling-stroke` makes it CSS px. */
+    strokeWidth: number | null;
+    vectorEffect: string | null;
+  }[];
   /** `arch-lod-package-edge` `<line>` elements. The shipped defect drew these. */
   lineCount: number;
 };
@@ -829,6 +852,42 @@ type LodReading = {
 const LOD_TITLE_FONT_PX = 12;
 /** The smallest on-screen title height the criterion accepts. */
 const LOD_TITLE_MIN_PX = 11;
+/** The largest screen stroke width the collapsed relations may paint. */
+const LOD_EDGE_MAX_SCREEN_PX = 2.5;
+/** The halo width the weight label declares. */
+const LOD_WEIGHT_HALO_PX = '3px';
+
+/** Do two painted rectangles cover any common area? */
+const rectanglesOverlap = (a: LodRect, b: LodRect): boolean =>
+  a.width > 0 && b.width > 0
+  && a.x < b.x + b.width && b.x < a.x + a.width
+  && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/** The title pairs whose painted boxes cover each other, named for the red. */
+const overlappingTitlePairs = (reading: LodReading): string[] => {
+  const pairs: string[] = [];
+  for (let left = 0; left < reading.titles.length; left += 1) {
+    for (let right = left + 1; right < reading.titles.length; right += 1) {
+      const a = reading.titles[left];
+      const b = reading.titles[right];
+      if (rectanglesOverlap(a.rect, b.rect)) pairs.push(`${a.packageId} ∩ ${b.packageId}`);
+    }
+  }
+  return pairs;
+};
+
+/** The titles that paint into a `×N` weight label's box. */
+const titlesOverWeightLabels = (reading: LodReading): string[] => {
+  const collisions: string[] = [];
+  for (const title of reading.titles) {
+    for (const weight of reading.weightLabels) {
+      if (rectanglesOverlap(title.rect, weight.rect)) {
+        collisions.push(`${title.packageId} ∩ ${JSON.stringify(weight.text)}`);
+      }
+    }
+  }
+  return collisions;
+};
 
 /**
  * Read the semantic-zoom state in ONE round trip.
@@ -839,6 +898,12 @@ const LOD_TITLE_MIN_PX = 11;
  * which removes the inverse scaling — read a genuinely smaller value. The
  * package relation lines are parsed from their own `d` and every consecutive
  * pair must differ on one axis only.
+ *
+ * The collision readings are the browser's own `getBoundingClientRect()` boxes,
+ * so "no two titles overlap" is measured on what is painted, not on what the
+ * placer believed it was painting. `originalLabelVisible` reads the frame's own
+ * label with the same style resolution a reader's eye gets (visibility,
+ * opacity and display), which is what makes the ghosting leg able to fail.
  */
 const readLod = (page: Page): Promise<LodReading> =>
   page.evaluate(({ sel, titleFontPx }) => {
@@ -848,6 +913,28 @@ const readLod = (page: Page): Promise<LodReading> =>
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : null;
     };
+    const normalizeId = (raw: string | null): string =>
+      (raw ?? '').trim().split('/').filter(Boolean).join('/');
+    const rectOf = (element: Element | null): { x: number; y: number; width: number; height: number } => {
+      const rect = element === null ? null : element.getBoundingClientRect();
+      return rect === null
+        ? { x: 0, y: 0, width: 0, height: 0 }
+        : { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    };
+    const isPainted = (element: Element | null): boolean => {
+      if (element === null) return false;
+      const style = getComputedStyle(element);
+      return style.visibility !== 'hidden' && style.opacity !== '0' && style.display !== 'none';
+    };
+    const frames = [...document.querySelectorAll('.uml-package[data-package-id]')];
+    const frameOf = (packageId: string): Element | null => frames.find(
+      (frame) => normalizeId(frame.getAttribute('data-package-id')) === packageId,
+    ) ?? null;
+    const ownLabelOf = (frame: Element | null): Element | null => {
+      if (frame === null) return null;
+      return [...frame.children].find((child) => child.tagName.toLowerCase() === 'text') ?? null;
+    };
+
     const titles = [...document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')]
       .map((group) => {
         const text = group.querySelector('text') as SVGGraphicsElement | null;
@@ -855,14 +942,26 @@ const readLod = (page: Page): Promise<LodReading> =>
         // `c`/`d` are the y-basis of the element→screen matrix, so their length
         // is exactly the CSS-px scale applied to a user-unit font size.
         const scaleY = matrix === null ? 0 : Math.hypot(matrix.c, matrix.d);
+        const packageId = group.getAttribute('data-lod-label-package') ?? '';
         return {
-          packageId: group.getAttribute('data-lod-label-package') ?? '',
+          packageId,
           text: text?.textContent ?? '',
           screenFontPx: titleFontPx * scaleY,
           rectHeight: text?.getBoundingClientRect().height ?? 0,
+          rect: rectOf(text ?? group),
+          originalLabelVisible: isPainted(ownLabelOf(frameOf(packageId))),
         };
       })
       .sort((a, b) => a.packageId.localeCompare(b.packageId));
+    const weightLabels = [...document.querySelectorAll('.arch-lod-package-weight')].map((element) => {
+      const style = getComputedStyle(element);
+      return {
+        text: element.textContent ?? '',
+        rect: rectOf(element),
+        paintOrder: style.paintOrder,
+        strokeWidth: style.strokeWidth,
+      };
+    });
     const edges = [...document.querySelectorAll('path.arch-lod-package-edge')].map((path) => {
       const points: { x: number; y: number }[] = [];
       for (const command of (path.getAttribute('d') ?? '').match(/[ML][^MLQZz]*/g) ?? []) {
@@ -877,12 +976,15 @@ const readLod = (page: Page): Promise<LodReading> =>
         target: path.getAttribute('data-lod-edge-target'),
         orthogonal,
         segments: Math.max(0, points.length - 1),
+        strokeWidth: number(path.getAttribute('stroke-width')),
+        vectorEffect: path.getAttribute('vector-effect'),
       };
     });
     return {
       depth: root?.getAttribute('data-architecture-lod-depth') ?? '<none>',
       zoomScale: number(root?.getAttribute('data-architecture-zoom-scale') ?? null),
       titles,
+      weightLabels,
       edges,
       lineCount: document.querySelectorAll('line.arch-lod-package-edge').length,
     };
@@ -892,14 +994,17 @@ const readLod = (page: Page): Promise<LodReading> =>
 const printLod = (label: string, reading: LodReading): void => {
   console.log(`[architecture-lod] ${label}.depth=${reading.depth} zoom=${formatNumber(reading.zoomScale)}`);
   console.log(`[architecture-lod] ${label}.titles=${JSON.stringify(reading.titles)}`);
+  console.log(`[architecture-lod] ${label}.weights=${JSON.stringify(reading.weightLabels)}`);
   console.log(`[architecture-lod] ${label}.edges=${JSON.stringify(reading.edges)}`);
   console.log(`[architecture-lod] ${label}.line.count=${reading.lineCount}`);
+  console.log(`[architecture-lod] ${label}.overlaps=${JSON.stringify(overlappingTitlePairs(reading))}`);
 };
 
 /**
- * The criterion: at the package level the visible titles are readable and every
- * relation line is the orthogonal family line, never a centre-to-centre
- * diagonal.
+ * The criterion: at the package level the visible titles are readable, they
+ * never overlap each other or a `×N` label, no package shows its own small
+ * label underneath its overlay title, and every relation line is a thin,
+ * screen-constant orthogonal path.
  */
 const assertLodReadable = (reading: LodReading, label: string): void => {
   expect.soft(reading.depth, `${label}: the package level must be on screen`).toBe('0');
@@ -915,6 +1020,25 @@ const assertLodReadable = (reading: LodReading, label: string): void => {
         + `text ${JSON.stringify(title.text)}`,
     ).toBeGreaterThanOrEqual(LOD_TITLE_MIN_PX);
   }
+  const overlaps = overlappingTitlePairs(reading);
+  expect.soft(
+    overlaps,
+    `${label}: visible package titles must not overlap each other; colliding pairs=${JSON.stringify(overlaps)}`,
+  ).toEqual([]);
+  const weightCollisions = titlesOverWeightLabels(reading);
+  expect.soft(
+    weightCollisions,
+    `${label}: a package title must not cover a ×N weight label; collisions=${JSON.stringify(weightCollisions)}`,
+  ).toEqual([]);
+  expect.soft(
+    reading.weightLabels.length,
+    `${label}: the fixture must draw a weighted (×N) package edge so the halo leg is measured, not vacuous`,
+  ).toBeGreaterThan(0);
+  const ghosted = reading.titles.filter((title) => title.originalLabelVisible).map((title) => title.packageId);
+  expect.soft(
+    ghosted,
+    `${label}: a package with an overlay title must hide its own renderer label; still visible=${JSON.stringify(ghosted)}`,
+  ).toEqual([]);
   expect.soft(
     reading.lineCount,
     `${label}: no arch-lod-package-edge <line> may be drawn — the relation is a clipped path`,
@@ -929,6 +1053,25 @@ const assertLodReadable = (reading: LodReading, label: string): void => {
       `${label}: relation ${edge.source} → ${edge.target} must be orthogonal `
         + `(every segment horizontal or vertical); ${edge.segments} segment(s)`,
     ).toBe(true);
+    expect.soft(
+      edge.vectorEffect,
+      `${label}: relation ${edge.source} → ${edge.target} must keep a screen-constant stroke`,
+    ).toBe('non-scaling-stroke');
+    expect.soft(
+      edge.strokeWidth,
+      `${label}: relation ${edge.source} → ${edge.target} must not paint wider than ${LOD_EDGE_MAX_SCREEN_PX}px; `
+        + `declared ${formatNumber(edge.strokeWidth)}px`,
+    ).toBeLessThanOrEqual(LOD_EDGE_MAX_SCREEN_PX);
+  }
+  for (const weight of reading.weightLabels) {
+    expect.soft(
+      weight.paintOrder,
+      `${label}: the ×N label ${JSON.stringify(weight.text)} must paint its halo behind the glyphs`,
+    ).toBe('stroke');
+    expect.soft(
+      weight.strokeWidth,
+      `${label}: the ×N label ${JSON.stringify(weight.text)} must declare the ${LOD_WEIGHT_HALO_PX} halo`,
+    ).toBe(LOD_WEIGHT_HALO_PX);
   }
 };
 
@@ -1834,6 +1977,70 @@ test('control arm D — a non-counter-scaled title overlay reads below the 11px 
 });
 
 /* ── the control arms, continued ─────────────────────────────────────────────────────────── */
+
+/**
+ * Control arm F: the title avoidance switched off.
+ *
+ * The main arm reads every title's painted box and requires the boxes to be
+ * pairwise disjoint. Re-anchoring every planned title at the drawing's origin
+ * is what the drawing looks like when the avoidance has not run: the titles
+ * pile onto each other. The SAME `readLod` and the SAME
+ * `overlappingTitlePairs` reading used by the main arm must see those
+ * collisions, which proves the guard can return a false. The original anchors
+ * are restored and the passing reading asserted again.
+ */
+test('control arm F — titles without avoidance overlap in the same reading', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showExplosionView(page);
+    await zoomOutToPackageLevel(page);
+
+    const before = await readLod(page);
+    printLod('controlF.before', before);
+    assertLodReadable(before, 'controlF.before');
+    expect(
+      overlappingTitlePairs(before).length,
+      'controlF.before: the shipped planning must leave no colliding title pair',
+    ).toBe(0);
+
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
+        group.setAttribute('data-control-f-transform', group.getAttribute('transform') ?? '');
+        // Dropping the translate puts every title on the drawing's origin: the
+        // state the collision planner exists to prevent.
+        group.setAttribute('transform', 'scale(1)');
+      }
+    });
+
+    const injected = await readLod(page);
+    printLod('controlF.injected', injected);
+    const injectedPairs = overlappingTitlePairs(injected);
+    expect.soft(
+      injectedPairs.length,
+      `controlF.injected: without the avoidance the titles must overlap — pairs=${JSON.stringify(injectedPairs)}`,
+    ).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
+        const original = group.getAttribute('data-control-f-transform');
+        if (original !== null) group.setAttribute('transform', original);
+        group.removeAttribute('data-control-f-transform');
+      }
+    });
+
+    const restored = await readLod(page);
+    printLod('controlF.restored', restored);
+    assertLodReadable(restored, 'controlF.restored');
+    expect(overlappingTitlePairs(restored).length, 'controlF.restored: the fix restores clean titles').toBe(0);
+  } finally {
+    await context.close();
+  }
+});
 
 /**
  * Control arm A: the shipped collapse, injected.

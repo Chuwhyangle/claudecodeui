@@ -107,6 +107,35 @@ export const LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX = 60;
 const LOD_LABEL_CHAR_WIDTH_RATIO = 0.6;
 /** Inset of a title from its frame's top-left corner. */
 const LOD_LABEL_INSET_PX = 3;
+/**
+ * The clearance kept between a planned title and anything it must not cover —
+ * another title already placed, or an edge's `×N` weight label. Two rectangles
+ * separated by LESS than this are treated as colliding; a gap of exactly the
+ * margin is not a collision, which is the boundary the plan test pins.
+ */
+export const LOD_LABEL_COLLISION_MARGIN_PX = 4;
+/**
+ * The screen width the LOD package edges grow to with their weight. The line is
+ * drawn with `vector-effect: non-scaling-stroke`, so this is CSS px at every
+ * zoom: 1px for a single relation, 2px for four, and capped at 2.5px so a
+ * heavily aggregated pair never turns into a thick band.
+ */
+export const LOD_EDGE_MIN_SCREEN_PX = 1;
+export const LOD_EDGE_MAX_SCREEN_PX = 2.5;
+export const LOD_EDGE_WEIGHT_WIDTH_FACTOR = 0.5;
+/**
+ * The `×N` weight label's halo width, in CSS px. The halo is painted in the
+ * canvas background colour behind the glyphs (`paint-order: stroke`) so the
+ * label stays readable where it crosses a frame border or an edge.
+ */
+export const LOD_EDGE_WEIGHT_HALO_PX = 3;
+/**
+ * Marks a package frame that draws nothing but its own border at the current
+ * LOD: no visible entity box and no visible subpackage frame inside it. The
+ * framework class is styled with a fainter fill and a thinner border so a large
+ * blank rectangle stops competing with the packages that carry content.
+ */
+export const LOD_EMPTY_FRAME_CLASS = 'arch-lod-empty-frame';
 
 /**
  * The level-of-detail depth for a zoom scale, ignoring any history. Non-finite
@@ -366,6 +395,27 @@ export function lodLabelTransformScale(
   return lodLabelScreenFontPx(zoom, baseFontPx) / (baseFontPx * zoom);
 }
 
+/**
+ * The on-screen stroke width of a collapsed package edge for `weight`.
+ *
+ * Logarithmic so the first few counts are distinguished (1 → 1px, 4 → 2px)
+ * while a heavily traversed pair does not keep growing; the result is clamped
+ * to the proposal's 1–2.5px screen range. The drawn path carries
+ * `vector-effect: non-scaling-stroke`, so this value is CSS px at every zoom.
+ *
+ * Consumers: `renderPackageEdgeLayer` and the LOD tests.
+ */
+export function lodEdgeScreenWidth(weight: number): number {
+  const safeWeight = Number.isFinite(weight) && weight > 1 ? weight : 1;
+  return Math.min(
+    LOD_EDGE_MAX_SCREEN_PX,
+    Math.max(
+      LOD_EDGE_MIN_SCREEN_PX,
+      LOD_EDGE_MIN_SCREEN_PX + Math.log2(safeWeight) * LOD_EDGE_WEIGHT_WIDTH_FACTOR,
+    ),
+  );
+}
+
 function approximateTextWidthPx(text: string, screenFontPx: number): number {
   return text.length * screenFontPx * LOD_LABEL_CHAR_WIDTH_RATIO;
 }
@@ -386,12 +436,60 @@ export function truncatePackageTitle(
   return `${text.slice(0, maxChars - 1)}…`;
 }
 
+/**
+ * The leaf-name form of a package title, count suffix preserved:
+ * `modules/chat/audio (1)` → `audio (1)`. This is what a title falls back to
+ * when the full path does not fit — the leaf name tells the reader which
+ * package they are looking at, while `modules/ch…` does not.
+ */
+export function compactLodLabelText(text: string): string {
+  const trimmed = text.trim();
+  const match = /^(.*?)(\s*\(\d+\))?$/.exec(trimmed);
+  const body = (match?.[1] ?? trimmed).trim();
+  const suffix = match?.[2] ?? '';
+  const segments = body.split('/').filter(Boolean);
+  if (segments.length < 2) return trimmed;
+  return `${segments[segments.length - 1]}${suffix}`;
+}
+
+/**
+ * Fit a title into `availableScreenPx`: the full text first, then its leaf name
+ * plus count, and only then a hard ellipsis truncation of that leaf form.
+ */
+export function fitLodLabelText(
+  text: string,
+  availableScreenPx: number,
+  screenFontPx: number,
+): string | null {
+  if (text.length === 0 || !(availableScreenPx > 0) || !(screenFontPx > 0)) return null;
+  if (approximateTextWidthPx(text, screenFontPx) <= availableScreenPx) return text;
+  const compact = compactLodLabelText(text);
+  if (compact !== text && approximateTextWidthPx(compact, screenFontPx) <= availableScreenPx) {
+    return compact;
+  }
+  return truncatePackageTitle(compact, availableScreenPx, screenFontPx);
+}
+
 /** One frame that may carry a counter-scaled title. */
 export type PackageTitleFrame = {
   readonly packageId: string;
   readonly text: string;
   readonly box: FrameBox;
 };
+
+/** A screen-space rectangle, in CSS px of the drawing as it is displayed. */
+export type LodScreenRect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+/**
+ * The visible part of the drawing, in the same screen units as the title plans:
+ * the scroll container's CSS-px window into the scaled SVG.
+ */
+export type LodViewportRect = LodScreenRect;
 
 /** A title to draw, with its user-space anchor and inverse-scale factor. */
 export type PackageTitlePlan = {
@@ -404,31 +502,53 @@ export type PackageTitlePlan = {
   /** User-space anchor of the title's top-left. */
   readonly x: number;
   readonly y: number;
+  /** The title's on-screen box, the reading collision planning is built on. */
+  readonly screenRect: LodScreenRect;
 };
 
-type ScreenRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+type ScreenRect = LodScreenRect;
 
 function intersects(a: ScreenRect, b: ScreenRect): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
+/** The rect grown by `margin` on every side (the collision clearance). */
+function paddedRect(rect: ScreenRect, margin: number): ScreenRect {
+  return {
+    x: rect.x - margin,
+    y: rect.y - margin,
+    width: rect.width + margin * 2,
+    height: rect.height + margin * 2,
+  };
+}
+
 /**
- * Plan the counter-scaled package titles for one zoom level.
+ * Plan the counter-scaled package titles for one zoom level, avoiding the
+ * titles already placed and the edge weight labels the reader must be able to
+ * read.
  *
- * Pure geometry: it takes the frames' user-unit boxes and returns the titles
- * that fit. Outer frames (larger area) are placed first, and an inner title
- * that would overlap one already placed is dropped — the outer package is the
- * one that tells the reader where they are. A frame narrower than
- * {@link LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX} on screen gets no title.
+ * Pure geometry: frames arrive in user units, every comparison happens in the
+ * screen units the reader actually sees. Outer frames (larger area) are placed
+ * first, and a candidate is omitted when its box — grown by
+ * {@link LOD_LABEL_COLLISION_MARGIN_PX} — intersects a placed title or an
+ * `edgeLabels` box. A candidate with no part inside `viewport` cannot collide
+ * with anything on screen and is skipped; `null` (a container jsdom cannot
+ * measure) plans every title.
+ *
+ * A frame narrower than {@link LOD_LABEL_MIN_FRAME_SCREEN_WIDTH_PX} on screen
+ * gets no title at all.
+ *
+ * Consumers: `renderLodLabelLayer` and the LOD tests.
  */
-export function planPackageTitles(
+export function planLodLabels(
   frames: readonly PackageTitleFrame[],
   scale: number,
-  baseFontPx: number = LOD_LABEL_BASE_FONT_PX,
+  viewport: LodViewportRect | null = null,
+  edgeLabels: readonly LodScreenRect[] = [],
 ): PackageTitlePlan[] {
   const zoom = zoomOf(scale);
-  const screenFontPx = lodLabelScreenFontPx(zoom, baseFontPx);
-  const transformScale = lodLabelTransformScale(zoom, baseFontPx);
+  const screenFontPx = lodLabelScreenFontPx(zoom);
+  const transformScale = lodLabelTransformScale(zoom);
   const ordered = frames
     .map((frame) => ({
       ...frame,
@@ -443,17 +563,20 @@ export function planPackageTitles(
   const plans: PackageTitlePlan[] = [];
   for (const frame of ordered) {
     const available = frame.screenWidth - LOD_LABEL_INSET_PX * 2;
-    const text = truncatePackageTitle(frame.text, available, screenFontPx);
+    const text = fitLodLabelText(frame.text, available, screenFontPx);
     if (text === null) continue;
-    const screenX = frame.box.x * zoom + LOD_LABEL_INSET_PX;
-    const screenY = frame.box.y * zoom + LOD_LABEL_INSET_PX;
     const rect: ScreenRect = {
-      x: screenX,
-      y: screenY,
+      x: frame.box.x * zoom + LOD_LABEL_INSET_PX,
+      y: frame.box.y * zoom + LOD_LABEL_INSET_PX,
       width: approximateTextWidthPx(text, screenFontPx),
       height: screenFontPx * 1.25,
     };
-    if (placed.some((other) => intersects(rect, other))) continue;
+    // An off-screen title has nothing on screen to collide with; planning it
+    // anyway would let it evict a title the reader can actually see.
+    if (viewport !== null && !intersects(rect, viewport)) continue;
+    const padded = paddedRect(rect, LOD_LABEL_COLLISION_MARGIN_PX);
+    if (placed.some((other) => intersects(padded, other))) continue;
+    if (edgeLabels.some((label) => intersects(padded, label))) continue;
     placed.push(rect);
     plans.push({
       packageId: frame.packageId,
@@ -462,6 +585,7 @@ export function planPackageTitles(
       transformScale,
       x: rect.x / zoom,
       y: rect.y / zoom,
+      screenRect: rect,
     });
   }
   return plans.sort((a, b) => a.packageId.localeCompare(b.packageId));
@@ -804,6 +928,12 @@ function arrowHeadPath(points: readonly PolyPoint[], zoom: number): string | nul
  * never a diagonal. Coordinates come from the frames' own `rect` attributes
  * (SVG user units), so the overlay stays attached to the frames at every zoom
  * scale without measuring the browser.
+ *
+ * The stroke width comes from {@link lodEdgeScreenWidth} and the path carries
+ * `vector-effect: non-scaling-stroke`, so a low zoom never paints the 4px band
+ * the world-unit formula used to produce. Each `×N` label gets a background
+ * halo and its screen-space box is returned, so title planning can keep the
+ * readable labels clear of them.
  */
 function renderPackageEdgeLayer(
   host: ParentNode,
@@ -811,10 +941,11 @@ function renderPackageEdgeLayer(
   edges: readonly ArchitectureRendererEdge[],
   depth: ExplosionLodDepth,
   zoom: number,
-): void {
+): LodScreenRect[] {
   const svg = host.querySelector('svg');
-  if (svg === null) return;
+  if (svg === null) return [];
 
+  const weightLabelRects: LodScreenRect[] = [];
   const maxDepth = depth === PACKAGE_LOD_DEPTH ? PACKAGE_LEVEL_MAX_DEPTH : null;
   const layer = svg.ownerDocument.createElementNS(SVG_NS, 'g');
   layer.setAttribute(LOD_EDGE_LAYER_ATTRIBUTE, 'true');
@@ -836,7 +967,7 @@ function renderPackageEdgeLayer(
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', stroke);
     if (route?.dash !== null && route?.dash !== undefined) path.setAttribute('stroke-dasharray', route.dash);
-    path.setAttribute('stroke-width', String(Math.min(1 + (packageEdge.weight - 1) * 0.5, 4)));
+    path.setAttribute('stroke-width', String(lodEdgeScreenWidth(packageEdge.weight)));
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('vector-effect', 'non-scaling-stroke');
     path.setAttribute('data-lod-edge-source', packageEdge.from);
@@ -857,36 +988,64 @@ function renderPackageEdgeLayer(
 
     if (packageEdge.weight > 1) {
       const midpoint = longestSegmentMidpoint(points);
+      const screenFontPx = LOD_LABEL_MIN_SCREEN_PX;
+      const weightText = `×${packageEdge.weight}`;
       const weight = svg.ownerDocument.createElementNS(SVG_NS, 'text');
       weight.setAttribute('class', 'arch-lod-package-weight');
       weight.setAttribute('x', String(midpoint.x));
       weight.setAttribute('y', String(midpoint.y - 6 / zoom));
       weight.setAttribute('text-anchor', 'middle');
-      weight.setAttribute('font-size', String(LOD_LABEL_MIN_SCREEN_PX / zoom));
+      weight.setAttribute('font-size', String(screenFontPx / zoom));
       weight.setAttribute('fill', stroke);
-      weight.textContent = `×${packageEdge.weight}`;
+      // The halo is painted BEHIND the glyphs in the canvas colour, so the
+      // count stays readable where it crosses a frame border or its own line.
+      // `non-scaling-stroke` keeps the halo 3px at every zoom (CSS px in SVG
+      // otherwise scale with the drawing).
+      weight.style.paintOrder = 'stroke';
+      weight.style.stroke = 'hsl(var(--background, 44 22% 96%))';
+      weight.style.strokeWidth = `${LOD_EDGE_WEIGHT_HALO_PX}px`;
+      weight.setAttribute('vector-effect', 'non-scaling-stroke');
+      weight.textContent = weightText;
       layer.append(weight);
+      // The label's screen box, grown by half the halo so a title planned next
+      // to it never paints into the halo.
+      const width = approximateTextWidthPx(weightText, screenFontPx);
+      const baseline = midpoint.y * zoom - 6;
+      weightLabelRects.push(paddedRect({
+        x: midpoint.x * zoom - width / 2,
+        y: baseline - screenFontPx,
+        width,
+        height: screenFontPx * 1.25,
+      }, LOD_EDGE_WEIGHT_HALO_PX / 2));
     }
   }
 
   svg.append(layer);
+  return weightLabelRects;
 }
 
 /**
  * Draw the counter-scaled title overlay for the visible package frames.
  *
- * The renderer's own label stays where it is (a 12px text at natural size);
- * this layer is the readable copy, anchored at the same top-left corner but
- * inverse-scaled so its screen height is at least {@link LOD_LABEL_MIN_SCREEN_PX}.
- * The entity level draws no overlay: its labels are the entity boxes' own.
+ * The renderer's own label is hidden underneath the copy (see
+ * `applyExplosionLod`) — drawing both at the same corner is what produced the
+ * doubled title. This layer is the readable copy, anchored at the same
+ * top-left corner but inverse-scaled so its screen height is at least
+ * {@link LOD_LABEL_MIN_SCREEN_PX}. The entity level draws no overlay: its
+ * labels are the entity boxes' own.
+ *
+ * Returns the package ids that actually got a title, so the caller can hide
+ * exactly those renderer labels and restore the rest.
  */
 function renderLodLabelLayer(
   host: ParentNode,
   depth: ExplosionLodDepth,
   zoom: number,
-): void {
+  viewport: LodViewportRect | null,
+  edgeLabels: readonly LodScreenRect[],
+): Set<string> {
   const svg = host.querySelector('svg');
-  if (svg === null) return;
+  if (svg === null) return new Set();
 
   const frames: PackageTitleFrame[] = [];
   for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
@@ -902,7 +1061,8 @@ function renderLodLabelLayer(
 
   const layer = svg.ownerDocument.createElementNS(SVG_NS, 'g');
   layer.setAttribute(LOD_LABELS_LAYER_ATTRIBUTE, 'true');
-  for (const plan of planPackageTitles(frames, zoom)) {
+  const titled = new Set<string>();
+  for (const plan of planLodLabels(frames, zoom, viewport, edgeLabels)) {
     const group = svg.ownerDocument.createElementNS(SVG_NS, 'g');
     group.setAttribute('class', 'arch-lod-package-label');
     group.setAttribute('data-lod-label-package', plan.packageId);
@@ -917,9 +1077,11 @@ function renderLodLabelLayer(
     text.textContent = plan.text;
     group.append(text);
     layer.append(group);
+    titled.add(plan.packageId);
   }
 
   svg.append(layer);
+  return titled;
 }
 
 /** The focus package for a selection: the selected entity's, else the centre's. */
@@ -954,6 +1116,75 @@ export type ExplosionLodOptions = {
   readonly scale?: number;
 };
 
+/** The visible window into the scaled drawing, or `null` when unmeasured (jsdom). */
+function viewportOf(host: HTMLElement): LodViewportRect | null {
+  const width = host.clientWidth;
+  const height = host.clientHeight;
+  if (!(width > 0) || !(height > 0)) return null;
+  return { x: host.scrollLeft, y: host.scrollTop, width, height };
+}
+
+/** Show or hide a frame's own renderer label without removing it from the DOM. */
+function setFrameLabelShown(label: Element, shown: boolean): void {
+  (label as HTMLElement).style.visibility = shown ? '' : 'hidden';
+}
+
+/** Whether `inner` sits strictly inside `outer` (a subpackage frame / entity box). */
+function boxContainsBox(outer: FrameBox, inner: FrameBox): boolean {
+  if (inner.width * inner.height >= outer.width * outer.height) return false;
+  const center: PolyPoint = { x: inner.x + inner.width / 2, y: inner.y + inner.height / 2 };
+  return pointInsideBox(center, outer);
+}
+
+/**
+ * Mark the package frames that draw nothing but their own border at this
+ * level: no visible entity box and no visible subpackage frame inside them.
+ * A frame that still contains subpackage frames is NOT empty — those frames
+ * are what the reader sees in its interior.
+ *
+ * The class is a presentation hint only (fainter fill, thinner border); it is
+ * added and removed on every LOD application, and the entity level clears it
+ * everywhere because entity boxes fill every frame there.
+ */
+function markEmptyFrames(
+  host: ParentNode,
+  frames: readonly Element[],
+  entityLevel: boolean,
+): void {
+  for (const frame of frames) frame.classList.remove(LOD_EMPTY_FRAME_CLASS);
+  if (entityLevel) return;
+
+  const visibleFrames = frames.filter(
+    (frame) => (frame as HTMLElement).style.display !== 'none',
+  );
+  const boxes = new Map<Element, FrameBox>();
+  for (const frame of visibleFrames) {
+    const box = frameBox(frame);
+    if (box !== null) boxes.set(frame, box);
+  }
+  const entities = [...host.querySelectorAll('.uml-node[data-entity-id]')];
+
+  for (const frame of visibleFrames) {
+    const box = boxes.get(frame);
+    if (box === undefined) continue;
+    const hasChildFrame = visibleFrames.some((other) => {
+      if (other === frame) return false;
+      const otherBox = boxes.get(other);
+      return otherBox !== undefined && boxContainsBox(box, otherBox);
+    });
+    if (hasChildFrame) continue;
+    const hasVisibleEntity = entities.some((entity) => {
+      if ((entity as HTMLElement).style.display === 'none') return false;
+      // A node group's first `rect` is its own box, the same reading the
+      // frame/label code uses.
+      const entityBox = frameBox(entity);
+      return entityBox !== null && boxContainsBox(box, entityBox);
+    });
+    if (hasVisibleEntity) continue;
+    frame.classList.add(LOD_EMPTY_FRAME_CLASS);
+  }
+}
+
 /**
  * Apply one level of detail to the already-drawn SVG.
  *
@@ -969,6 +1200,7 @@ export function applyExplosionLod(options: ExplosionLodOptions): void {
   const { host, hierarchy, edges, depth } = options;
   const entityLevel = depth === ENTITY_LOD_DEPTH;
   const zoom = zoomOf(options.scale);
+  const frames = [...host.querySelectorAll('.uml-package[data-package-id]')];
 
   for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
     setShown(node, entityLevel);
@@ -977,7 +1209,7 @@ export function applyExplosionLod(options: ExplosionLodOptions): void {
     setShown(edge, entityLevel);
   }
 
-  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
+  for (const frame of frames) {
     const packageId = normalizePackageId(frame.getAttribute('data-package-id'));
     const visibleAtDepth = depth !== PACKAGE_LOD_DEPTH || packageDepth(packageId) <= PACKAGE_LEVEL_MAX_DEPTH;
     setShown(frame, visibleAtDepth);
@@ -986,10 +1218,27 @@ export function applyExplosionLod(options: ExplosionLodOptions): void {
 
   removePackageEdgeLayer(host);
   removeLodLabelLayer(host);
+  let titledPackages = new Set<string>();
   if (!entityLevel) {
-    renderPackageEdgeLayer(host, hierarchy, edges, depth, zoom);
-    renderLodLabelLayer(host, depth, zoom);
+    const weightLabels = renderPackageEdgeLayer(host, hierarchy, edges, depth, zoom);
+    titledPackages = renderLodLabelLayer(host, depth, zoom, viewportOf(host), weightLabels);
   }
+
+  // The renderer's own small label sits at the same corner as the
+  // counter-scaled copy, which is what drew every title twice. Hide it only
+  // where the overlay actually drew a title (a label the plan omitted must
+  // still name its frame), and restore it at the entity level. The element is
+  // never removed — `data-package-id` and the label text stay the contract.
+  for (const frame of frames) {
+    const packageId = normalizePackageId(frame.getAttribute('data-package-id'));
+    const label = frameLabel(frame);
+    if (label === null) continue;
+    setFrameLabelShown(label, !titledPackages.has(packageId));
+  }
+
+  // A frame whose interior is blank at this level is de-emphasised; frames
+  // carrying visible subpackages keep their full weight (see markEmptyFrames).
+  markEmptyFrames(host, frames, entityLevel);
 
   const focus = options.focusPackageId ?? null;
   if (options.centerFocus === true && focus !== null) {
