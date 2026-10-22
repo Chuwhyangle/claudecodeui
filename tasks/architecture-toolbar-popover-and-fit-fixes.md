@@ -35,11 +35,11 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：新增用例用实测形态（自然 4395.67×1943.7、画布 1151×615、角落浮层 166×106 与 77×133 在右下）断言 fit 缩放 ≥ 理论最大值（0.256）的 95%；存在不相交摆放时图与所有角落矩形不相交；任何摆放都必然相交时才低于该比例；既有 fit 用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/canvasLayoutContract.test.tsx src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：搜索结果框不在带 `overflow` 的祖先内（或经 portal 渲染并为 `position: fixed`）；输入框有 combobox 语义，方向键与 Enter 工作；筛选/Adjusted/图例弹层点外面关闭、Escape 先关弹层且 `chat.abort` 调用计数为 0、关闭后焦点回到触发按钮；缩放簇的缩放读数与档位文字的「Zoom N%」来自同一个值；来源行与「Scope cleanup」位于画布之后的文档流页脚且不是 `position: absolute`；手机读数卡不是浮层；Adjust 面板每组有标题，步进器按钮 ≥ 44×44
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有守卫文件里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：搜索结果框完整位于视口内且在其中心 `elementFromPoint` 命中的是选项；Fit 后缩放 ≥ 理论最大值的 95%；页脚与缩略图、缩放簇两两不相交（PC 与手机视口都断言）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——对工具栏行注入 `overflow-x:auto; height:39px` 后搜索结果框的可见高度读数落到阈值以下（证明守卫能取假），主臂读取函数与控制臂完全相同
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/svgViewport.test.tsx` exit 0：新增用例用实测形态（自然 4395.67×1943.7、画布 1151×615、角落浮层 166×106 与 77×133 在右下）断言 fit 缩放 ≥ 理论最大值（0.256）的 95%；存在不相交摆放时图与所有角落矩形不相交；任何摆放都必然相交时才低于该比例；既有 fit 用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/canvasLayoutContract.test.tsx src/modules/architecture/tests/mobileCompactToolbar.test.tsx` exit 0：搜索结果框不在带 `overflow` 的祖先内（或经 portal 渲染并为 `position: fixed`）；输入框有 combobox 语义，方向键与 Enter 工作；筛选/Adjusted/图例弹层点外面关闭、Escape 先关弹层且 `chat.abort` 调用计数为 0、关闭后焦点回到触发按钮；缩放簇的缩放读数与档位文字的「Zoom N%」来自同一个值；来源行与「Scope cleanup」位于画布之后的文档流页脚且不是 `position: absolute`；手机读数卡不是浮层；Adjust 面板每组有标题，步进器按钮 ≥ 44×44
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有守卫文件里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它加条目并写明实测）：搜索结果框完整位于视口内且在其中心 `elementFromPoint` 命中的是选项；Fit 后缩放 ≥ 理论最大值的 95%；页脚与缩略图、缩放簇两两不相交（PC 与手机视口都断言）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——对工具栏行注入 `overflow-x:auto; height:39px` 后搜索结果框的可见高度读数落到阈值以下（证明守卫能取假），主臂读取函数与控制臂完全相同
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
