@@ -20,9 +20,9 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：多个轻形式种子节点的圆点各自位于所属节点矩形内（不同节点的圆点坐标不同），节点组的包围盒不延伸到 SVG 原点；pin 角标位于所属节点内；「会话里提到的」复选框的 `aria-label` 以可见文字开头；同一筛选下「打开再关闭保持显示」前后读数里的相关数相同；打开「保持显示」后角标的隐藏数不增加且保持显示数被单独表达
-- [ ] `npx vitest run src/modules/architecture/tests/elementRelationFilter.test.ts src/modules/architecture/tests/readoutNumbers.test.ts` exit 0：`activeFilterCount` 在 `keepMentionedKinds` 非空时与为空时的隐藏数相同；`markerAnchor` 纯函数用例；相关数由「响应节点集合经筛选」决定的用例（先全量后收窄与直接取同一筛选的读数一致）
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：多个轻形式种子节点的圆点各自位于所属节点矩形内（不同节点的圆点坐标不同），节点组的包围盒不延伸到 SVG 原点；pin 角标位于所属节点内；「会话里提到的」复选框的 `aria-label` 以可见文字开头；同一筛选下「打开再关闭保持显示」前后读数里的相关数相同；打开「保持显示」后角标的隐藏数不增加且保持显示数被单独表达
+- [x] `npx vitest run src/modules/architecture/tests/elementRelationFilter.test.ts src/modules/architecture/tests/readoutNumbers.test.ts` exit 0：`activeFilterCount` 在 `keepMentionedKinds` 非空时与为空时的隐藏数相同；`markerAnchor` 纯函数用例；相关数由「响应节点集合经筛选」决定的用例（先全量后收窄与直接取同一筛选的读数一致）
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0（12 个 locale 文案键齐全）；`npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
