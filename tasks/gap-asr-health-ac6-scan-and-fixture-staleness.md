@@ -85,3 +85,45 @@ failure=reading: the reader produced no reading (exit 1): } |  | Node.js v24.21.
 - scripts/asr-health-provider-check.mjs
 - scripts/asr-health-provider-check.test.mjs
 - tasks/gap-asr-health-ac6-scan-and-fixture-staleness.md
+
+## Evidence
+
+主判据在出货树上逐字变绿（`node scripts/asr-config-resolution-check.mjs`，exit 0）：
+
+```
+landing=shared/asr
+landing-candidate=a
+server-compiles-landing=yes
+registry-providers=openai-compatible,multimodal,dashscope-omni,sensevoice-local,sensevoice-wasm,dashscope-omni-relay
+health-user-configured=true
+health-empty-configured=false
+health-providers-match-registry=yes
+health-unknown-provider=refused-503
+proxy-unknown-provider=refused-400-no-fetch
+proxy-registered-provider=sent-1
+configured-field-present=yes
+client-capability-table=none
+client-read-points=voiceProviderProfile,setVoiceProviderProfile
+verdict=pass
+```
+
+控制面恢复可运行（`node --test scripts/asr-health-provider-check.test.mjs`，exit 0，`fail 0`）：
+
+```
+✔ AC7/AC8: the landing reading is candidate (a), and a frontend-tree landing is refused
+✔ AC1/AC8: a health reading that only looks at the server environment is reported
+✔ AC3/AC8: an unregistered provider id that silently falls back is reported
+✔ AC4/AC8: a renamed `configured` field is reported, not merely un-flagged
+✔ AC6/AC8: a second capability declaration in the client is reported
+✔ AC6/AC8: a capability name in a comment is prose, but the same text as code is a declaration
+✔ AC6/AC8: a client that no longer asks the registry is reported
+✔ AC6/AC8: a client whose capability read points moved is reported
+ℹ tests 8
+ℹ pass 8
+ℹ fail 0
+```
+
+AC3 假形态：从 `FIXTURE_FILES` 删掉 `shared/voice/voiceSettingsRegistry.ts` ⇒ 未变异夹具基线红（`behavioural-reading=unavailable`，exit 1）；加回后复绿（8/8）。
+
+AC7：`git diff --name-only $(git merge-base HEAD develop) HEAD -- server shared src` 输出为空；改动只落在 `scripts/asr-health-provider-check.mjs` 与 `scripts/asr-health-provider-check.test.mjs`，无新增生产文件。
+AC8：`node --check` 两个文件均 exit 0。
