@@ -84,6 +84,11 @@ const SHIPPING_FILES = [
   'src/shared/utils.ts',
   'src/shared/voiceConfig.ts',
   'server/modules/voice/voice.service.ts',
+  // The service's runtime siblings (the concern split in `gap-voice-service-concern-split`): the
+  // service composes the capture seam and re-exports the browser recogniser's asset surface from
+  // these two, so a fixture copied without them cannot load the module under test.
+  'server/modules/voice/voice-service-capture.ts',
+  'server/modules/voice/voice-service-transcribe.ts',
   // The records the probe's addresses come from. Without them the probe reports EMPTY_READING —
   // which is exactly what AC1's empty-directory case reads, one root over.
   'docs/proposals/voice-dashscope-omni-written-instruction.md',

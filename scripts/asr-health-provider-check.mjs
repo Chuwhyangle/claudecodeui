@@ -89,6 +89,12 @@ export const FIXTURE_FILES = [
   SERVER_TSCONFIG,
   TYPES_MODULE,
   SERVICE_MODULE,
+  // The service's runtime siblings: it composes the capture seam and re-exports the browser
+  // recogniser's asset surface from these two named modules (the concern split in
+  // `gap-voice-service-concern-split`). A fixture without them cannot load the service at all, so
+  // every reading would come back empty rather than measured.
+  'server/modules/voice/voice-service-capture.ts',
+  'server/modules/voice/voice-service-transcribe.ts',
   LANDING_MODULE,
   OPENAI_COMPATIBLE_MODULE,
   MULTIMODAL_MODULE,
