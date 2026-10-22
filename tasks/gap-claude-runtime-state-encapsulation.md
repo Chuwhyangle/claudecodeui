@@ -2,7 +2,7 @@
 id: gap-claude-runtime-state-encapsulation
 title: ClaudeRuntimeState 封装：claude-runtime 的 3 个模块级 const
   Map/Set（activeSessions/pendingToolApprovals/abortedSessionIds）收进带私有字段的类
-status: todo
+status: ready
 labels:
   - gap
 parent: null
