@@ -36,6 +36,10 @@ goal_ac: AC-323
 
 `gap-ac323-composer-embedded-disconnect-draft-carry-hides-entry`（done，`goal_ac: AC-323`）在退出前加了「等交付」；后续 `03e8f425b` 把它改成按 transcript 行数 `rowsCarrying(PROPOSED_TEXT)` 计数。两者读的都是「投递行已经落屏」，而不是「这条 caption 已被某个 delivery 的 `itemIds` 认领」。失败跑同时满足两点：行已落屏（通知音 22517），caption 仍未认领（22578 的 1 unshown）。**等待是必要的，但不充分——缺口在归属，不在时长。** 本任务不再加等待、不放大任何超时。
 
+### 实现时对根因的修正（本轮实读 01:48 数据目录后的偏差记录）
+
+失败跑的 proxy journal（`quay-e2e-52IzO3/voice-realtime-log/ae5a192a-…jsonl`）显示 01:48 那次的真实时序与上面第 5 点不同：`transcription.completed` 在 `01:46:22.363`（投递之前 3.4 s）就已送达浏览器，`teardown: the browser sent a close frame` 在 `25.798`，而 `to-browser sent` 在 `25.802` —— **是 `sent` 帧晚于浏览器的离开**，不是 caption 晚于 `sent`。两种顺序都会让 caption 无人认领，且根因同族（投递边界与转写/确认的时钟不同步），因此两条都修：晚到 final 的按 item 认领 + `queued` 已接受但 `sent` 未到时的在途认领。e2e 的假形态仍按 Proposal 的「call 先、转写后」固定下来（这是可确定性复现的那一支）。
+
 ### AC 文本漂移（别改错方向）
 
 AC-323 的 `expect` 第三节仍写着 `voice-realtime-retry`，但 2026-10-14 的人裁定（`gap-voice-ui-strip-to-caption-and-connection-state`，commit `da36d28d4`）已删除重连控件、不加自动重连；spec 现在以 `a disconnected bar must offer no way back`（`e2e/voice-realtime-composer-embedded.spec.ts:1025`）断言 shipped 语义。⛔ 不恢复 retry、不改那段断言、不改 `criterion`/`expect`。本任务只让同一条命令在 shipped 语义下稳定 exit 0。
@@ -58,14 +62,14 @@ AC-323 的 `expect` 第三节仍写着 `voice-realtime-retry`，但 2026-10-14 �
 
 ## AC
 
-- [ ] AC1 **取假形态先红**：给 fake upstream 加「call 先于 `transcription.completed`」的顺序后，修复前同用例稳定红，原文形如 `Error: expect(locator).toBeVisible() failed / Locator: getByTestId('live-voice-button') / Error: element(s) not found`，且该次运行 console 出现 `exit with 1 unshown utterance(s)`；贴命令、逐字失败行与 console 原始行。
-- [ ] AC2 **修后同顺序绿**：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（默认 continuous）exit 0、`0 failed`、`0 skipped`，贴 `N passed (time)` 摘要，且该次运行 console 不含 `unshown utterance`。
-- [ ] AC3 **归属单测**：`npx vitest run src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` exit 0；新增用例断言「窗口内晚到的 final caption 被投递认领 ⇒ `collectUndeliveredUtterances` 返回 `''`、`countUnshownUtterances` 为 0」，反向用例断言「窗口外未投递的 final caption 仍返回原话」；`gap-live-voice-caption-attribution-swallows-undelivered` 的 4 条形状不改一字仍绿。
-- [ ] AC4 **CMD1**：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` exit 0、`0 failed`，贴摘要与墙钟。
-- [ ] AC5 **CMD2/CMD3**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` 与 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` 均 exit 0，贴 `Test Files N passed` / `N passed` 原文。
-- [ ] AC6 **判据与契约未动**：`git diff --exit-code <基线>..HEAD -- goals/` 为空（`criterion`/`expect` 逐字节不变）；`grep -rn "voice-realtime-retry" src/ e2e/` 只剩反断言（`src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx:352` 的 `toBeNull`），没有任何「存在」断言；不新增 `test.fail` / `test.skip`。
-- [ ] AC7 **闸自证**：`quay goal gate AC-323 --dry-run --root <工作树>` exit 0 且 stdout `verdict == "pass"`；贴原文与三段实测墙钟（应小于记录的 `timeoutMs: 480000`）。
-- [ ] AC8 **静态门**：`npm run typecheck` exit 0；`npm run lint` 无 `: error `。
+- [x] AC1 **取假形态先红**：给 fake upstream 加「call 先于 `transcription.completed`」的顺序后，修复前同用例稳定红，原文形如 `Error: expect(locator).toBeVisible() failed / Locator: getByTestId('live-voice-button') / Error: element(s) not found`，且该次运行 console 出现 `exit with 1 unshown utterance(s)`；贴命令、逐字失败行与 console 原始行。
+- [x] AC2 **修后同顺序绿**：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（默认 continuous）exit 0、`0 failed`、`0 skipped`，贴 `N passed (time)` 摘要，且该次运行 console 不含 `unshown utterance`。
+- [x] AC3 **归属单测**：`npx vitest run src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` exit 0；新增用例断言「窗口内晚到的 final caption 被投递认领 ⇒ `collectUndeliveredUtterances` 返回 `''`、`countUnshownUtterances` 为 0」，反向用例断言「窗口外未投递的 final caption 仍返回原话」；`gap-live-voice-caption-attribution-swallows-undelivered` 的 4 条形状不改一字仍绿。
+- [x] AC4 **CMD1**：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` exit 0、`0 failed`，贴摘要与墙钟。
+- [x] AC5 **CMD2/CMD3**：`npx vitest run src/modules/chat/tests/composerCompactTier.test.tsx src/modules/chat/voice-realtime` 与 `npx playwright test e2e/mobile-workspace-composer-layout.spec.ts -g " idle "` 均 exit 0，贴 `Test Files N passed` / `N passed` 原文。
+- [x] AC6 **判据与契约未动**：`git diff --exit-code <基线>..HEAD -- goals/` 为空（`criterion`/`expect` 逐字节不变）；`grep -rn "voice-realtime-retry" src/ e2e/` 只剩反断言（`src/modules/chat/voice-realtime/tests/voiceSegmentLostState.test.tsx:352` 的 `toBeNull`），没有任何「存在」断言；不新增 `test.fail` / `test.skip`。
+- [x] AC7 **闸自证**：`quay goal gate AC-323 --dry-run --root <工作树>` exit 0 且 stdout `verdict == "pass"`；贴原文与三段实测墙钟（应小于记录的 `timeoutMs: 480000`）。
+- [x] AC8 **静态门**：`npm run typecheck` exit 0；`npm run lint` 无 `: error `。
 
 ## DoD
 
@@ -74,6 +78,12 @@ AC-323 的 `expect` 第三节仍写着 `voice-realtime-retry`，但 2026-10-14 �
 - 修复前那次运行的 console `exit with 1 unshown utterance(s)` 与 textarea = `SEED_USER_TEXT` 的原文；
 - 修复后同一步的 textarea 值 `''`、`live-voice-button` visible、console 无 `unshown utterance`；
 - `quay goal gate AC-323`（非 dry-run）返回 `verdict: "pass"` 的 GateEvent 原文，AC-323 台账尾随之翻 pass。
+
+**实测记录（2026-10-22，本工作树）**
+
+- 修复前：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts -g "re-dials nothing"` ⇒ 1 failed（23.8s）。原文 `Error: expect(locator).toBeVisible() failed / Locator: getByTestId('live-voice-button') / Expected: visible / Timeout: 15000ms / Error: element(s) not found`（spec:1078）；console 原始行 `[voice-realtime] end(): releasing capture and closing the connection` → `[voice-realtime] exit with 1 unshown utterance(s): leaving does not deliver them`；页面快照 textarea = `seeded user turn for the composer-embedded bar criterion`，底栏只有 `Voice input` 与 `Send`。
+- 修复后：同命令 ⇒ `1 passed (15.1s)`；该用例新增的 console 断言（`unshown utterance` 行为空）通过；整文件 `7 passed (1.8m)`，0 failed / 0 skipped。`live-voice-button` 可见、草稿为空 ⇒ 断线分支随后仍读 `disconnected`、无 retry 控件、6s 不重拨（原断言不改）。
+- `quay goal gate AC-323 --dry-run --root <worktree>` ⇒ `"verdict": "pass"`（`3m58.4s` < `timeoutMs: 480000`）。非 dry-run 的 GateEvent 由落地后的 driver 轮次写。
 
 不放水：不删/跳过任何用例、不放大等待、不以清空草稿或换向断言代替归属修复、不改 `criterion`/`expect`、不恢复 retry。
 
