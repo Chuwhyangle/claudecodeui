@@ -76,9 +76,6 @@ type RuntimeInstallResult = {
   message: string;
 };
 
-const sessions = new Map<string, BrowserUseSession>();
-const handles = new Map<string, RuntimeHandle>();
-
 const DEFAULT_SETTINGS: BrowserUseSettings = {
   enabled: false,
 };
@@ -223,13 +220,63 @@ function probeRuntime(): RuntimeProbe {
 }
 
 /**
- * Owns the browser-use runtime lifecycle: the cached readiness probe and the install job.
- * The Browser Use service reaches it through the `browserUseRuntime` singleton below.
+ * Owns the browser-use runtime lifecycle: the cached readiness probe, the install job, and the
+ * process-wide session/handle registry. The Browser Use service reaches it through the
+ * `browserUseRuntime` singleton below.
  */
 class BrowserUseRuntime {
   private installPromise: Promise<RuntimeInstallResult> | null = null;
   private lastInstallMessage: string | null = null;
   private runtimeProbeCache: { value: RuntimeProbe; updatedAt: number } | null = null;
+  /** Live browser sessions keyed by session id. */
+  private sessions = new Map<string, BrowserUseSession>();
+  /** Playwright handles for ready sessions, keyed by the same session id. */
+  private handles = new Map<string, RuntimeHandle>();
+
+  /** Number of tracked sessions, including stopped sessions not yet deleted. */
+  get sessionCount(): number {
+    return this.sessions.size;
+  }
+
+  /** Returns every tracked session in insertion order. */
+  allSessions(): BrowserUseSession[] {
+    return [...this.sessions.values()];
+  }
+
+  /** Returns the ids of every tracked session in insertion order. */
+  sessionIds(): string[] {
+    return [...this.sessions.keys()];
+  }
+
+  /** Looks up a tracked session; undefined when the id is unknown. */
+  getSession(sessionId: string): BrowserUseSession | undefined {
+    return this.sessions.get(sessionId);
+  }
+
+  /** Tracks a session under its own id, replacing any entry with that id. */
+  storeSession(session: BrowserUseSession): void {
+    this.sessions.set(session.id, session);
+  }
+
+  /** Forgets a session entry without touching its runtime handle. */
+  forgetSession(sessionId: string): void {
+    this.sessions.delete(sessionId);
+  }
+
+  /** Looks up the runtime handle for a session; undefined when none was stored. */
+  getHandle(sessionId: string): RuntimeHandle | undefined {
+    return this.handles.get(sessionId);
+  }
+
+  /** Tracks (or replaces) the runtime handle for a session id. */
+  storeHandle(sessionId: string, handle: RuntimeHandle): void {
+    this.handles.set(sessionId, handle);
+  }
+
+  /** Forgets the runtime handle for a session id without closing it. */
+  forgetHandle(sessionId: string): void {
+    this.handles.delete(sessionId);
+  }
 
   /**
    * Returns runtime readiness from the probe cache when it is younger than the TTL, unless `force`
@@ -388,18 +435,18 @@ function publicSession(session: BrowserUseSession): PublicBrowserUseSession {
 }
 
 function ownerSessions(ownerId: string): BrowserUseSession[] {
-  return [...sessions.values()].filter((session) => session.ownerId === ownerId);
+  return browserUseRuntime.allSessions().filter((session) => session.ownerId === ownerId);
 }
 
 async function closeHandle(sessionId: string): Promise<void> {
-  const handle = handles.get(sessionId);
-  handles.delete(sessionId);
+  const handle = browserUseRuntime.getHandle(sessionId);
+  browserUseRuntime.forgetHandle(sessionId);
   await handle?.context?.close?.().catch(() => undefined);
   await handle?.browser?.close().catch(() => undefined);
 }
 
 async function expireStaleSessions(now = Date.now()): Promise<void> {
-  await Promise.all([...sessions.values()].map(async (session) => {
+  await Promise.all(browserUseRuntime.allSessions().map(async (session) => {
     if (session.status !== 'ready') {
       return;
     }
@@ -485,7 +532,7 @@ export const browserUseService = {
       playwrightInstalled: readiness.playwrightInstalled,
       chromiumInstalled: readiness.chromiumInstalled,
       installInProgress: readiness.installInProgress,
-      sessionCount: sessions.size,
+      sessionCount: browserUseRuntime.sessionCount,
       message: available
         ? 'Browser runtime is available.'
         : getSetupMessage(settings, readiness),
@@ -530,7 +577,7 @@ export const browserUseService = {
 
   async listSessions() {
     await expireStaleSessions();
-    return [...sessions.values()]
+    return browserUseRuntime.allSessions()
       .filter((session) => session.ownerId === AGENT_OWNER_ID)
       .map(publicSession);
   },
@@ -571,7 +618,7 @@ export const browserUseService = {
     const readiness = browserUseRuntime.probe();
     if (!settings.enabled || !readiness.playwrightInstalled || !readiness.chromiumInstalled || !readiness.playwright) {
       session.message = getSetupMessage(settings, readiness);
-      sessions.set(session.id, session);
+      browserUseRuntime.storeSession(session);
       return publicSession(session);
     }
 
@@ -601,8 +648,8 @@ export const browserUseService = {
     }
     session.status = 'ready';
     session.message = 'Browser session is ready.';
-    sessions.set(session.id, session);
-    handles.set(session.id, { browser, context, page });
+    browserUseRuntime.storeSession(session);
+    browserUseRuntime.storeHandle(session.id, { browser, context, page });
     await captureSession(session, page);
     return publicSession(session);
   },
@@ -613,7 +660,7 @@ export const browserUseService = {
       return [];
     }
     await expireStaleSessions();
-    return [...sessions.values()]
+    return browserUseRuntime.allSessions()
       .filter((session) => session.ownerId === AGENT_OWNER_ID)
       .map(publicSession);
   },
@@ -623,7 +670,7 @@ export const browserUseService = {
     if (!settings.enabled) {
       throw new Error('Browser agent tools are disabled.');
     }
-    const session = sessions.get(sessionId);
+    const session = browserUseRuntime.getSession(sessionId);
     if (!session || session.ownerId !== AGENT_OWNER_ID) {
       throw new Error('Browser session not found.');
     }
@@ -634,7 +681,7 @@ export const browserUseService = {
     await this.getAgentSession(sessionId);
     await expireStaleSessions();
 
-    const session = sessions.get(sessionId);
+    const session = browserUseRuntime.getSession(sessionId);
     if (!session || session.ownerId !== AGENT_OWNER_ID) {
       throw new Error('Browser session not found.');
     }
@@ -643,7 +690,7 @@ export const browserUseService = {
       throw new Error(session.message || 'Browser session is not available.');
     }
 
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -658,7 +705,7 @@ export const browserUseService = {
 
   async agentSnapshot(sessionId: string) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -672,7 +719,7 @@ export const browserUseService = {
 
   async agentClick(sessionId: string, input: { selector?: string; text?: string; x?: number; y?: number }) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -696,7 +743,7 @@ export const browserUseService = {
 
   async agentType(sessionId: string, input: { selector?: string; text: string; submit?: boolean }) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -720,7 +767,7 @@ export const browserUseService = {
 
   async agentFillForm(sessionId: string, fields: Array<{ selector: string; value: string }>) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -739,7 +786,7 @@ export const browserUseService = {
 
   async agentPressKey(sessionId: string, key: string) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -751,7 +798,7 @@ export const browserUseService = {
 
   async agentSelectOption(sessionId: string, selector: string, values: string[]) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -766,7 +813,7 @@ export const browserUseService = {
 
   async agentWaitFor(sessionId: string, input: { text?: string; url?: string; timeoutMs?: number }) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
@@ -785,14 +832,14 @@ export const browserUseService = {
 
   async agentTabs(sessionId: string, input: { action?: 'list' | 'new' | 'select' | 'close'; index?: number; url?: string }) {
     const session = await this.getAgentSession(sessionId);
-    const handle = handles.get(sessionId);
+    const handle = browserUseRuntime.getHandle(sessionId);
     if (!handle?.context || !handle?.page) {
       throw new Error('Browser runtime handle is not available.');
     }
     const action = input.action || 'list';
     if (action === 'new') {
       const page = await handle.context.newPage();
-      handles.set(sessionId, { ...handle, page });
+      browserUseRuntime.storeHandle(sessionId, { ...handle, page });
       if (input.url) {
         await this.agentNavigate(sessionId, input.url);
       }
@@ -801,7 +848,7 @@ export const browserUseService = {
       if (!page) {
         throw new Error('Tab not found.');
       }
-      handles.set(sessionId, { ...handle, page });
+      browserUseRuntime.storeHandle(sessionId, { ...handle, page });
     } else if (action === 'close') {
       const pages = handle.context.pages();
       const page = pages[input.index ?? pages.indexOf(handle.page)];
@@ -809,9 +856,9 @@ export const browserUseService = {
         throw new Error('Tab not found.');
       }
       await page.close();
-      handles.set(sessionId, { ...handle, page: handle.context.pages()[0] || await handle.context.newPage() });
+      browserUseRuntime.storeHandle(sessionId, { ...handle, page: handle.context.pages()[0] || await handle.context.newPage() });
     }
-    const updatedHandle = handles.get(sessionId);
+    const updatedHandle = browserUseRuntime.getHandle(sessionId);
     await captureSession(session, updatedHandle?.page || handle.page);
     return {
       session: publicSession(session),
@@ -824,7 +871,7 @@ export const browserUseService = {
   },
 
   async stopSession(sessionId: string) {
-    const session = sessions.get(sessionId);
+    const session = browserUseRuntime.getSession(sessionId);
     if (!session || session.ownerId !== AGENT_OWNER_ID) {
       return { stopped: false };
     }
@@ -839,13 +886,13 @@ export const browserUseService = {
   },
 
   async deleteSession(sessionId: string) {
-    const session = sessions.get(sessionId);
+    const session = browserUseRuntime.getSession(sessionId);
     if (!session || session.ownerId !== AGENT_OWNER_ID) {
       return { deleted: false };
     }
 
     await closeHandle(sessionId);
-    sessions.delete(sessionId);
+    browserUseRuntime.forgetSession(sessionId);
     return { deleted: true, sessionId };
   },
 
@@ -855,9 +902,9 @@ export const browserUseService = {
   },
 
   async stopAllSessions() {
-    await Promise.all([...sessions.keys()].map(async (sessionId) => {
+    await Promise.all(browserUseRuntime.sessionIds().map(async (sessionId) => {
       await closeHandle(sessionId);
-      const session = sessions.get(sessionId);
+      const session = browserUseRuntime.getSession(sessionId);
       if (session) {
         session.status = 'stopped';
         session.updatedAt = new Date().toISOString();

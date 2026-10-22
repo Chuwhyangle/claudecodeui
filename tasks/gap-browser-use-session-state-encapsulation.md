@@ -2,7 +2,7 @@
 id: gap-browser-use-session-state-encapsulation
 title: BrowserUseSessionRegistry 封装：browser-use 的 2 个模块级 const
   Map（sessions/handles）收进 BrowserUseRuntime 私有字段
-status: ready
+status: done
 labels:
   - gap
 parent: null
