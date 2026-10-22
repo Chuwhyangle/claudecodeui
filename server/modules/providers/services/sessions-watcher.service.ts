@@ -6,7 +6,7 @@ import chokidar, { type FSWatcher } from 'chokidar';
 
 import { DEBUG_AGENT_PROVIDER_ID, getDebugAgentProjectsRoot } from '@/modules/debug-agent/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
-import { broadcastSessionUpsertedBatch } from '@/modules/websocket/index.js';
+import { readSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
 import type { LLMProvider } from '@/shared/types.js';
 
 type WatcherEventType = 'add' | 'change';
@@ -750,7 +750,14 @@ class SessionsWatcher {
       // Per-session deltas instead of full project snapshots: an upsert of one
       // session can never clobber unrelated client state, so the frontend needs
       // no "suppress updates while a run is active" protection logic.
-      await broadcastSessionUpsertedBatch(queuedUpdate.updatedSessionIds);
+      //
+      // Read through the shared port rather than importing the websocket barrel:
+      // the watcher lives in `modules/providers`, and that import was one of the
+      // two edges that put the providers group inside the provider/websocket
+      // import cycle. An uninstalled port means no websocket module was ever
+      // assembled in this process, so there is no OPEN connection to announce to
+      // — the same no-op the websocket broadcaster takes with an empty client set.
+      await readSessionBroadcastPort()?.broadcastSessionUpsertedBatch(queuedUpdate.updatedSessionIds);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('Session watcher refresh failed while broadcasting session_upserted', { error: message });

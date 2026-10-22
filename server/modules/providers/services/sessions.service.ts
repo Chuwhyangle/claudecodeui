@@ -3,7 +3,6 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { broadcastSessionUpserted, chatRunRegistry } from '@/modules/websocket/index.js';
 import { compileStoredSessionFilter } from '@/modules/projects/index.js';
 import { quayService } from '@/modules/quay/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
@@ -11,6 +10,8 @@ import { providerCapabilitiesService } from '@/modules/providers/services/provid
 import { sessionHistoryCache } from '@/modules/providers/services/session-history-cache.service.js';
 import { sessionHostManager } from '@/modules/session-hosts/index.js';
 import type { SessionLifecycleReading } from '@/modules/session-hosts/index.js';
+import { readChatRunRegistryPort, type ChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
+import { readSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
 import type {
   FetchHistoryOptions,
   FetchHistoryResult,
@@ -54,6 +55,44 @@ type RecentSessionsPage = {
   total: number;
   hasMore: boolean;
 };
+
+/** One processing session, in the shape the sidebar activity indicator reads. */
+type RunningSessionSummary = {
+  sessionId: string;
+  provider: LLMProvider;
+  startedAt: number;
+  lastSeq: number;
+};
+
+/**
+ * The chat-run registry's live reads, through the shared port.
+ *
+ * `modules/providers` must not import `modules/websocket`: that edge (this
+ * service's `chatRunRegistry` import plus the sessions watcher's broadcast
+ * import) is what put the providers group inside the provider/websocket import
+ * cycle. The registry needs to be read only when a request asks for activity or
+ * history, never while this module evaluates, so it is installed by the
+ * composition root instead. The read is per call, not hoisted, because a
+ * criterion can install a fixture registry after this module has loaded.
+ *
+ * The fallback is the documented registry-less degradation: no runs to list and
+ * no session processing. It is not a second implementation of the reads — it is
+ * the empty answer a process that never assembled the websocket module has.
+ */
+function readChatRunLiveness(): ChatRunRegistryPort<unknown, unknown, RunningSessionSummary, unknown> {
+  return readChatRunRegistryPort<unknown, unknown, RunningSessionSummary, unknown>({
+    getRun: () => undefined,
+    isProcessing: () => false,
+    listRunningRuns: () => [],
+    getRunById: () => ({ status: 'unknown', reason: 'unknown' }),
+    getRunBootId: () => null,
+  });
+}
+
+/** Session-addressed "is a run still owed?" — the port's optional read, degraded to false. */
+function isSessionProcessing(sessionId: string): boolean {
+  return readChatRunLiveness().isProcessing?.(sessionId) ?? false;
+}
 
 type SessionDetails = {
   /** Canonical app-facing session id (may differ from the looked-up id when a provider-native id was given). */
@@ -316,13 +355,8 @@ export const sessionsService = {
    * This is intentionally status-only: callers that only need sidebar activity
    * indicators should not attach to chat streams or request replayed messages.
    */
-  listRunningSessions(): Array<{
-    sessionId: string;
-    provider: LLMProvider;
-    startedAt: number;
-    lastSeq: number;
-  }> {
-    return chatRunRegistry.listRunningRuns();
+  listRunningSessions(): RunningSessionSummary[] {
+    return readChatRunLiveness().listRunningRuns();
   },
 
   /**
@@ -530,7 +564,7 @@ export const sessionsService = {
       lifecycleMode: sessionsDb.getSessionLifecycleMode(sessionId),
     });
 
-    await broadcastSessionUpserted(forkSessionId);
+    await readSessionBroadcastPort()?.broadcastSessionUpserted(forkSessionId);
     // The session-hosts listing's `sessions[]` half gained this row (and its
     // resident mark is read from there), so its readers are told to re-read the
     // listing rather than waiting for the fallback poll.
@@ -685,7 +719,7 @@ export const sessionsService = {
     // Whether the run is in flight rides every read: the readers withhold the
     // last turn's `forkAnchorId` while it is, and the cache keys on it so a
     // running read is never served back as an idle one.
-    const running = chatRunRegistry.isProcessing(sessionId);
+    const running = isSessionProcessing(sessionId);
     const fullHistory = await sessionHistoryCache.getFullHistory({
       sessionId,
       transcriptPath,
@@ -778,7 +812,7 @@ export const sessionsService = {
       : null;
     // The same running signal as `fetchHistory`, so both share one cache entry
     // rather than thrashing it: the window draws the same rows, anchor included.
-    const running = chatRunRegistry.isProcessing(sessionId);
+    const running = isSessionProcessing(sessionId);
     const loadFull = () => providerSessions.fetchHistory(sessionId, {
       limit: null,
       offset: 0,
@@ -865,7 +899,7 @@ export const sessionsService = {
     const transcriptPath = provider === 'claude' || provider === 'codex'
       ? session.jsonl_path
       : null;
-    const running = chatRunRegistry.isProcessing(sessionId);
+    const running = isSessionProcessing(sessionId);
     const loadFull = () => providerSessions.fetchHistory(sessionId, {
       limit: null,
       offset: 0,
@@ -1118,7 +1152,7 @@ export const sessionsService = {
     }
 
     sessionsDb.updateSessionCustomName(sessionId, storedName);
-    await broadcastSessionUpserted(sessionId);
+    await readSessionBroadcastPort()?.broadcastSessionUpserted(sessionId);
     // The listing names this session on its resident-mark row, so a rename is a
     // change to it too — announced here for the same reason a creation is.
     sessionHostManager.notifyHostsChanged();

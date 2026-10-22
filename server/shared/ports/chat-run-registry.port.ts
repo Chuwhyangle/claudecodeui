@@ -18,8 +18,13 @@
  * and answers every run lookup as a miss, instead of throwing at mount time.
  *
  * Consumers: `modules/mcp-gateway/mcp-gateway.transport.ts` (the `runs` seam of
- * its read/write tool bags). This file imports no module, only shared
- * vocabulary.
+ * its read/write tool bags) and `modules/providers/services/sessions.service.ts`
+ * (the run-liveness reads behind `listRunningSessions` / `fetchHistory` and the
+ * window readers). The providers reader is why {@link ChatRunRegistryPort}
+ * carries the optional `isProcessing` member: it is the session-addressed
+ * "is a run owed?" read those three call sites make, and it was the providers
+ * group's other outgoing edge into the websocket module. This file imports no
+ * module, only shared vocabulary.
  */
 
 /**
@@ -35,7 +40,10 @@
  * `getRun` is the session-addressed liveness read; the two stamping members are
  * optional for the same reason they are optional on `McpRunReader` (a mount
  * without a registry stamps nothing); `getRunById` / `getRunBootId` are the
- * `run_get` seam's two reads.
+ * `run_get` seam's two reads. `isProcessing` is OPTIONAL and answers the
+ * providers service's "is work owed on this session?" question: a registry-less
+ * mount answers it as `false` at the call site, which is the same degradation
+ * `listRunningRuns` takes when it has no runs to report.
  */
 export type ChatRunRegistryPort<
   RunRecord = unknown,
@@ -44,6 +52,7 @@ export type ChatRunRegistryPort<
   RecentRun = unknown,
 > = {
   getRun(sessionId: string): RunRecord | undefined;
+  isProcessing?(sessionId: string): boolean;
   listRunningRuns(): RunningRun[];
   listRecentRuns?(): RecentRun[];
   setRunCorrelationId?(runId: string, correlationId: string): void;

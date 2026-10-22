@@ -3,6 +3,7 @@ import path from 'node:path';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
+import { installSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
 import type { SessionUpsertedEvent } from '@/shared/types.js';
 
 /**
@@ -106,3 +107,13 @@ export async function broadcastSessionUpsertedBatch(
 
 /** @internal Exported for the broadcast tests, which assert the payload shape directly. */
 export { buildSessionUpsertedEvent };
+
+// Install the real broadcaster into the shared port at the bottom of this
+// module's body, next to the `connectedClients` set it writes to — the same
+// pattern `websocket-state.service.ts` (connected-clients) and
+// `chat-run-registry.service.ts` (chat-run-registry) use. `server/index.ts`
+// names the installation explicitly too; this one is what makes a process (or a
+// criterion) that loaded only the websocket barrel still announce upserts to
+// the providers services, which now read the port instead of importing this
+// module.
+installSessionBroadcastPort({ broadcastSessionUpserted, broadcastSessionUpsertedBatch });
