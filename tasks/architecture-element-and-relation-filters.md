@@ -70,6 +70,9 @@ depends_on:
 - src/modules/architecture/rendererContract.ts
 - src/modules/architecture/tests/elementRelationFilter.test.ts (new)
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/exportMenu.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
+- src/modules/architecture/tests/mobileGestures.test.tsx
 - src/modules/architecture/tests/archguardToPlantUml.test.ts
 - src/modules/architecture/tests/detailRanking.test.ts
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
@@ -101,3 +104,27 @@ depends_on:
 **File view.** File edges DO carry `relationType`, so the relation axis applies to the file view; only the element axis is class-only (a file has no kind), and the popover omits the element section there.
 
 **Existing assertions rewritten (no assertion weakened).** Every case that draws/asserts a function box or a `call` edge now states the "show everything" filter explicitly through `rememberShowAllFilter()` (per-project `architecture.filter.*` storage): *the entity detail fields pass through the renderer contract unchanged*, *the renderer draws the neighbourhood as an SVG*, *semantic zoom toggles the drawn hierarchy without re-laying it out*, *the explosion view lays the whole hierarchy out once and zoom reveals its levels*, *expanding a deep group re-groups its subtree by directory instead of flattening its files*, *expanding a flat directory larger than the group limit draws its files, not the same box again*, *the overview never draws a (1) group and names an isolated file by its directory*, *clicking an entity drills into its neighbourhood, and the centre click adds a hop*, *edge relation labels stay hidden until a node is hovered, then leave with the pointer*, *only a direct mention carries the seed marker; name/file tiers and old payloads are read correctly*, *hovering a node highlights its in/out edges and dims the rest*, *the drawn SVG carries the stable ids sibling panels query*, *clicking an entity pins its in/out highlight and announces it to sibling panels*, *a sibling panel selects an entity by its stable id and the graph drills to it*, *an over-budget graph is capped before layout, and the readout says so with no render-all escape*. Two further cases changed because the PROPOSAL changes their behaviour, not to accommodate a weaker assertion: *activating the panel fetches once and the file/entity toggle never refetches* became *activation fetches once; a view switch re-requests because the element axis is class-only* (the proposal's "换视角：重新请求"), and the scope-stepper / remembered-knobs cases compare the first three request arguments because a fourth (filter) argument now rides along.
+
+**Sibling tests swept for the new default (second round).** Three existing cases
+failed the fan-in suite because the shipped default legitimately narrows their
+drawing; all three were reproduced against a pure-develop baseline (green there,
+red with this delta), so they belong to this task, not to an environmental red.
+`exportMenu.test.tsx` exports the graph as it arrived, so it now states
+`rememberShowAllFilter()` in `beforeEach` (the same explicit selection the other
+swept cases use); the same edit replaces its pre-existing `typeof import(...)`
+type annotation with `import type * as ExportArtifactsModule`, the tree has no
+other `consistent-type-imports` error. The `mobileGestures.test.tsx` tap/drill
+case reads the UNFILTERED three-file chain its own fixture comment describes
+(`beta/b.ts` arrives through a `call` edge), so it states the show-all filter
+explicitly. The `mobileCompactToolbar.test.tsx` scope-stepper case now compares
+the first three request arguments, because the filter query is the fourth (the
+same rule the other scope-stepper cases already follow). Verified individually:
+3 files / 25 tests pass, `npm run lint` exit 0, `npm run typecheck` exit 0.
+
+## Blocker
+
+**2026-10-22T11:23:31.984Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/exportMenu.test.tsx: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+- run_id：wk-prod-anchor
+- session_id：bd8b33b6-f7d2-4dca-9131-0bf2624b996c
