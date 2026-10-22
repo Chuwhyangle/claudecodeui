@@ -1,7 +1,7 @@
 ---
 id: architecture-toolbar-readout-and-legend
 title: 单行工具栏 + 一句话读数 + 类/文件视角（默认类图）+ 种类统计 + 搜索 + 图例，图区占满剩余高度
-status: ready
+status: done
 labels:
   - feature
 parent: null
