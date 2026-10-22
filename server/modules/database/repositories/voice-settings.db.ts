@@ -1,3 +1,7 @@
+import {
+  VOICE_SETTINGS_EMPTY_DOCUMENT,
+  VOICE_SETTINGS_STRING_FIELDS,
+} from '@shared/voice/voiceSettingsRegistry.js';
 import { getConnection } from '@/modules/database/core/index.js';
 import type { VoiceSettings } from '@/shared/types.js';
 
@@ -8,47 +12,24 @@ type VoiceSettingsRow = {
 /**
  * Every field of a settings document, in one place so readers and writers agree.
  *
- * WHY THE FOUR PROVIDER-OWNED FIELDS ARE LISTED HERE TOO. This array is what `decodeSettings` reads
- * a stored document through, so a field missing from it is silently DROPPED on the way back out —
- * a user would save a workspace address and their key, read the document back, and find both gone,
- * with nothing anywhere reporting it. The list is therefore exhaustive over `VoiceSettings` and not
- * over "the fields this module happens to care about", and adding a field to the type without
- * adding it here is a bug this file is arranged to make visible rather than quiet.
+ * THE LIST IS THE SHARED CONTRACT'S, NOT A COPY. This array is what `decodeSettings` reads a
+ * stored document through, so a field missing from it is silently DROPPED on the way back out — a
+ * user would save a workspace address and their key, read the document back, and find both gone,
+ * with nothing anywhere reporting it. Keeping it in the same module that declares the type (and
+ * that the browser reads its own field list from) is what makes adding a field a one-place change
+ * instead of a field that exists in the type and nowhere in the storage loop.
  */
-const VOICE_SETTINGS_FIELDS = [
-  'baseUrl',
-  'apiKey',
-  'sttModel',
-  'ttsModel',
-  'ttsVoice',
-  'ttsFormat',
-  'providerId',
-  'dashscopeEndpoint',
-  'dashscopeApiKey',
-  'dashscopeModel',
-  'liveVoiceDashscopeApiKey',
-] as const satisfies readonly (keyof VoiceSettings)[];
+const VOICE_SETTINGS_FIELDS = VOICE_SETTINGS_STRING_FIELDS;
 
 /**
- * What a user who has never saved voice settings reads back as.
+ * What a user who has never saved voice settings reads back as, from the contract's own empty
+ * document.
  *
- * The provider-owned fields are present and empty here for the same reason the six are: a document
+ * The provider-owned fields are present and empty there for the same reason the six are: a document
  * that omits them and one that carries the empty string mean the same thing to every reader, and
  * having exactly one shape cross the wire is what lets a client compare whole documents.
  */
-const EMPTY_VOICE_SETTINGS: VoiceSettings = {
-  baseUrl: '',
-  apiKey: '',
-  sttModel: '',
-  ttsModel: '',
-  ttsVoice: '',
-  ttsFormat: '',
-  providerId: '',
-  dashscopeEndpoint: '',
-  dashscopeApiKey: '',
-  dashscopeModel: '',
-  liveVoiceDashscopeApiKey: '',
-};
+const EMPTY_VOICE_SETTINGS: VoiceSettings = VOICE_SETTINGS_EMPTY_DOCUMENT;
 
 /**
  * Coerces one stored document into a complete `VoiceSettings`.

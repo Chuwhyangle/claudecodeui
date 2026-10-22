@@ -24,60 +24,30 @@
 // adapter reaches back into the registry, so importing the adapter here would enter it first and
 // leave the registry reading a binding that is still uninitialised.
 import { clientAsrProviderId } from '@shared/asr/asrRegistry';
+import type { VoiceSettings } from '@shared/voice/voiceSettingsRegistry';
+import {
+  VOICE_SETTINGS_DEFAULTS,
+  VOICE_SETTINGS_STRING_FIELDS,
+} from '@shared/voice/voiceSettingsRegistry';
 import { getStoredAuthToken } from '@/shared/authToken';
 import { api } from '@/shared/api';
 
-export type VoiceConfig = {
-  baseUrl: string;
-  apiKey: string;
-  sttModel: string;
-  ttsModel: string;
-  ttsVoice: string;
-  ttsFormat: string;
-  /**
-   * The recogniser the user selected, and the fields that recogniser declared as its own.
-   *
-   * THEY ARE PART OF THIS DOCUMENT RATHER THAN A STORE OF THEIR OWN, and that is the whole
-   * point: the settings are saved as ONE document (`flushServerWrite` sends the whole thing,
-   * never a patch), so a field the client does not know about is a field the next save deletes —
-   * the server reads an absent one as the empty string. Listing them here is what makes the
-   * settings page's own writes preserve them, and it is the same reason the client has to know
-   * the names at all: the form is what a user types them into.
-   *
-   * The three `dashscope*` names are the ones the recogniser in this checkout declares (see the
-   * health payload's `credentialFields`), not a table the client keeps: which of them the form
-   * shows is decided by the selected provider's own declaration. The names are fixed here because
-   * the STORAGE is fixed here — one document, one set of columns — while the form is not.
-   */
-  providerId: string;
-  dashscopeEndpoint: string;
-  dashscopeApiKey: string;
-  dashscopeModel: string;
-  /**
-   * The Live Voice realtime relay's own DashScope credential — INDEPENDENT of the voice-input
-   * `dashscopeApiKey` above. Server-held, masked on readback; the settings form edits it in its own
-   * "Live Voice" section, never under the recogniser's provider fields.
-   */
-  liveVoiceDashscopeApiKey: string;
-  /**
-   * Whether this user's recordings are KEPT on the machine that runs the server (D1).
-   *
-   * THE USER-DATA SWITCH, and the other half of the promise the settings page shows: default ON,
-   * stored with the rest of this one document, and turned off by the user alone. It is a BOOLEAN
-   * rather than a header like the fields above because nothing about it configures a backend — it
-   * decides whether the server writes a record for a transcription at all.
-   */
-  voiceDataRecording: boolean;
-  /**
-   * How many bytes of recordings are kept before the store evicts the oldest.
-   *
-   * A NUMBER the form edits and the store enforces. The default is the store's own shipped ceiling
-   * (2 GiB), so a user who never touched it reads the same figure the server would apply by
-   * default. It is not a `VOICE_CONFIG_FIELDS` member: that list is the string fields whose blank
-   * value means "unset", while this one is always a number.
-   */
-  voiceDataMaxBytes: number;
-};
+/**
+ * The browser's copy of the user's voice settings document.
+ *
+ * THE SHAPE IS THE CONTRACT'S, NOT THIS MODULE'S. `shared/voice/voiceSettingsRegistry.ts` names
+ * every field once — the same declaration the server's `VoiceSettings`, the store's field list and
+ * its empty row are read from — so a field added there reaches both ends rather than being written
+ * down a second time here. What this module owns is the browser's RUNTIME copy: the in-memory
+ * document, its hydration from the server and its whole-document saves.
+ *
+ * `Required` IS THE ONE DIFFERENCE FROM THE SERVER'S VIEW, and it is a real one rather than a
+ * convenience: a stored row may omit the provider-owned and user-data fields (absent means
+ * "unset", which the store resolves to its own default), while the browser always holds the
+ * complete document it sends back whole. So the type is the same declaration read with the
+ * optionality resolved, not a second list of fields.
+ */
+export type VoiceConfig = Required<VoiceSettings>;
 
 /** The localStorage key the six fields lived under before they moved server-side. */
 export const VOICE_CONFIG_STORAGE_KEY = 'voiceConfig';
@@ -85,46 +55,23 @@ export const VOICE_CONFIG_STORAGE_KEY = 'voiceConfig';
 /** Emitted on write, so open voice consumers re-read in the same tab. */
 export const VOICE_CONFIG_SYNC_EVENT = 'voice-config:sync';
 
-export const VOICE_CONFIG_DEFAULTS: VoiceConfig = {
-  baseUrl: '',
-  apiKey: '',
-  sttModel: '',
-  ttsModel: '',
-  ttsVoice: '',
-  ttsFormat: '',
-  providerId: '',
-  dashscopeEndpoint: '',
-  dashscopeApiKey: '',
-  dashscopeModel: '',
-  liveVoiceDashscopeApiKey: '',
-  // D1: recording on, at the store's own 2 GiB ceiling. The two figures live beside the store's
-  // defaults rather than being invented here — a fresh user and a fresh deployment agree.
-  voiceDataRecording: true,
-  voiceDataMaxBytes: 2147483648,
-};
+/**
+ * What a user who has never saved voice settings holds, from the contract's own defaults table.
+ *
+ * One table rather than a second one here: a fresh user and a fresh deployment have to agree, and
+ * the deployment's side reads the same `VOICE_SETTINGS_DEFAULTS` through its own store.
+ */
+export const VOICE_CONFIG_DEFAULTS: VoiceConfig = VOICE_SETTINGS_DEFAULTS;
 
 /**
  * The STRING fields of the document, the ones a blank value means "unset" for.
  *
- * THE TWO USER-DATA FIELDS ARE DELIBERATELY ABSENT, and the `satisfies` below is what keeps that
- * honest: this list drives `isEmptyConfig` and `readVoiceConfigField`, both of which call `.trim()`
- * on the values they read, so a boolean in it would not compile. The union derived from it is the
- * set of fields `coerceConfig` and `updateVoiceConfig` treat as strings; the typed fields are read
- * and written beside that loop.
+ * THE TWO USER-DATA FIELDS ARE DELIBERATELY ABSENT from the contract's list: `isEmptyConfig` and
+ * `readVoiceConfigField` call `.trim()` on the values they read, so a boolean in it would not
+ * compile. The union derived from it is the set of fields `coerceConfig` and `updateVoiceConfig`
+ * treat as strings; the typed fields are read and written beside that loop.
  */
-const VOICE_CONFIG_FIELDS = [
-  'baseUrl',
-  'apiKey',
-  'sttModel',
-  'ttsModel',
-  'ttsVoice',
-  'ttsFormat',
-  'providerId',
-  'dashscopeEndpoint',
-  'dashscopeApiKey',
-  'dashscopeModel',
-  'liveVoiceDashscopeApiKey',
-] as const satisfies readonly (keyof VoiceConfig)[];
+const VOICE_CONFIG_FIELDS = VOICE_SETTINGS_STRING_FIELDS;
 
 /**
  * Long enough to collapse typing in the settings fields into one request,
