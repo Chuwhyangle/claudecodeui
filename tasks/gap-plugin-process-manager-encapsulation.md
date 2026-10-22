@@ -45,3 +45,11 @@ extra:
 
 - `server/modules/plugins/plugin-process.service.ts`（2 个 const Map → PluginProcessManager 私有字段 + 生命周期）
 - `tasks/gap-plugin-process-manager-encapsulation.md`（自触）
+
+## Blocker
+
+**2026-10-22T10:28:10.102Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/layoutAspect.test.tsx: AssertionError [ERR_ASSERTION]: aspectRatio 0.53 must fold the flat overview into a portrait canvas; got 3.266 (0 0 1789.96 548) [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=- changed=src/modules/architecture/tests/layoutAspect.test.tsx]
+- run_id：wk-prod-anchor
+- session_id：80ecd2d0-e507-4c25-8a61-e94e49ba90b1
