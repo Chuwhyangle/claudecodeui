@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "このセッションで言及された {{count}} 個の名前は分析キャッシュに見つかりませんでした",
       "listLabel": "未解決の名前"
+    },
+    "scopeHygiene": {
+      "summary": "スコープの整理",
+      "detailLabel": "スコープ整理の詳細",
+      "scopeCount": "{{total}} 個のスコープ、{{kept}} 個を保持",
+      "subsumed": "{{count}} 個を外側のスコープに統合（重複エンティティ {{entities}} 個を破棄）",
+      "outside": "プロジェクトディレクトリ外の {{count}} 個を無視しました",
+      "normalized": "{{count}} 個の絶対パス id を正規化しました",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

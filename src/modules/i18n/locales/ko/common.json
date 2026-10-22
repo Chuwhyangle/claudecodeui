@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "이 세션에서 언급된 이름 {{count}}개를 분석 캐시에서 찾지 못했습니다",
       "listLabel": "미해결 이름"
+    },
+    "scopeHygiene": {
+      "summary": "스코프 정리",
+      "detailLabel": "스코프 정리 세부 정보",
+      "scopeCount": "스코프 {{total}}개, {{kept}}개 유지",
+      "subsumed": "{{count}}개가 외부 스코프로 병합됨(중복 엔티티 {{entities}}개 제거)",
+      "outside": "프로젝트 디렉터리 밖의 {{count}}개를 무시함",
+      "normalized": "절대 경로 id {{count}}개를 정규화함",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

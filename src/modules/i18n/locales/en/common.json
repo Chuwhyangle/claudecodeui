@@ -157,6 +157,15 @@
     "source": {
       "unresolved": "{{count}} names mentioned in this session were not found in the analysis cache",
       "listLabel": "Unresolved names"
+    },
+    "scopeHygiene": {
+      "summary": "Scope cleanup",
+      "detailLabel": "Scope cleanup details",
+      "scopeCount": "{{total}} scopes, kept {{kept}}",
+      "subsumed": "{{count}} merged into an outer scope ({{entities}} duplicate entities dropped)",
+      "outside": "{{count}} outside the project directory were ignored",
+      "normalized": "{{count}} absolute-path ids normalised",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

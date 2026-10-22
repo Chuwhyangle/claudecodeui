@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "本次会话中提到的 {{count}} 个名字未在分析缓存中找到",
       "listLabel": "未解析的名字"
+    },
+    "scopeHygiene": {
+      "summary": "scope 清理",
+      "detailLabel": "scope 清理详情",
+      "scopeCount": "{{total}} 个 scope，保留 {{kept}} 个",
+      "subsumed": "{{count}} 个因与外层重叠合并（去掉 {{entities}} 个重复实体）",
+      "outside": "{{count}} 个在项目目录之外已忽略",
+      "normalized": "{{count}} 个绝对路径 id 已规范",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

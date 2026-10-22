@@ -477,6 +477,43 @@ const EMPTY_RESULT: ArchitectureGraphResult = {
   provenance: { generatedAt: GENERATED_AT, fingerprints: [], cacheHit: false },
 };
 
+/**
+ * The reading from a manifest with the real archguard pathologies: nested
+ * scopes over the same files, absolute-path ids, and scopes belonging to other
+ * projects. The server reports what it cleaned in `provenance.scopeHygiene`.
+ */
+const SCOPE_HYGIENE_RESULT: ArchitectureGraphResult = {
+  ...RESULT,
+  provenance: {
+    ...RESULT.provenance,
+    scopeHygiene: {
+      total: 28,
+      kept: 16,
+      droppedOutsideRoot: [
+        {
+          scope: '93e0a992',
+          label: 'claudecodeui (typescript)',
+          sources: ['/data/home/yale/work/claudecodeui'],
+        },
+        {
+          scope: 'ab4fee8d',
+          label: 'quay (typescript)',
+          sources: ['/data/home/yale/work/quay'],
+        },
+      ],
+      subsumed: [
+        {
+          scope: '465376a8',
+          label: 'src (typescript)',
+          intoScope: '8f71319d',
+          droppedEntities: 514,
+        },
+      ],
+      normalizedAbsoluteIds: 159,
+    },
+  },
+};
+
 /** A Response stand-in: only `ok` and `json` are read by `readApiJson`. */
 function jsonResponse(result: ArchitectureGraphResult): Response {
   return {
@@ -2682,6 +2719,58 @@ test('unresolved names expand into a list, and the analysis time is relative wit
   });
   const names = [...list.querySelectorAll('li')].map((item) => item.textContent);
   assert.deepEqual(names, ['src/unknown.ts', 'NoSuchThing']);
+});
+
+test('scope hygiene shows only when the server cleaned up, and expands to its counts and outside scopes', async () => {
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  assert.equal(
+    document.querySelector('[data-architecture-scope-hygiene]'),
+    null,
+    'a project whose merge changed nothing shows no cleanup row',
+  );
+  first.unmount();
+
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(SCOPE_HYGIENE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  const toggle = document.querySelector('[data-architecture-scope-hygiene]');
+  assert.ok(toggle instanceof HTMLElement, 'the source line carries an expandable cleanup item');
+  assert.match(toggle.textContent ?? '', /Scope cleanup/);
+  assert.equal(toggle.getAttribute('data-architecture-scope-hygiene-total'), '28');
+  assert.equal(toggle.getAttribute('data-architecture-scope-hygiene-kept'), '16');
+  assert.equal(
+    document.querySelector('[data-architecture-scope-hygiene-detail]'),
+    null,
+    'the counts stay collapsed until the reader expands the row',
+  );
+
+  const callsBeforeExpand = apiMock.architectureGraph.mock.calls.length;
+  fireEvent.click(toggle);
+  const detail = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-scope-hygiene-detail]');
+    assert.ok(node instanceof HTMLElement, 'expanding lists what was cleaned');
+    return node;
+  });
+  const text = detail.textContent ?? '';
+  assert.match(text, /28 scopes, kept 16/);
+  assert.match(text, /1 merged into an outer scope \(514 duplicate entities dropped\)/);
+  assert.match(text, /2 outside the project directory were ignored/);
+  assert.match(text, /159 absolute-path ids normalised/);
+
+  const outside = [...detail.querySelectorAll('[data-architecture-scope-hygiene-outside-scope]')].map(
+    (node) => node.textContent,
+  );
+  assert.deepEqual(outside, [
+    'claudecodeui (typescript) — /data/home/yale/work/claudecodeui',
+    'quay (typescript) — /data/home/yale/work/quay',
+  ]);
+  assert.equal(
+    apiMock.architectureGraph.mock.calls.length,
+    callsBeforeExpand,
+    'expanding the row is local — never a refetch',
+  );
 });
 
 test('the analysis time follows the interface language, not the browser language', async () => {

@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "{{count}} noms mentionnés dans cette session n’ont pas été trouvés dans le cache d’analyse",
       "listLabel": "Noms non résolus"
+    },
+    "scopeHygiene": {
+      "summary": "Nettoyage des scopes",
+      "detailLabel": "Détails du nettoyage des scopes",
+      "scopeCount": "{{total}} scopes, {{kept}} conservés",
+      "subsumed": "{{count}} fusionnés dans un scope externe ({{entities}} entités en double supprimées)",
+      "outside": "{{count}} hors du répertoire du projet ont été ignorés",
+      "normalized": "{{count}} ids de chemin absolu normalisés",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

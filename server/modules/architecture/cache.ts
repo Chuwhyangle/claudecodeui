@@ -75,6 +75,17 @@ export type ArchitectureReadingKey<TParams = unknown> = {
   readonly seeds: ArchitectureSeeds;
   readonly params: TParams;
   readonly indexes: readonly ArchitectureIndexRef[];
+  /**
+   * Version of the MERGE rules that produced the reading (see
+   * `scope-hygiene.ts`'s `SCOPE_HYGIENE_RULES_VERSION`).
+   *
+   * The merged index is not part of the key — only the scopes' fingerprints
+   * are — so a rule change that leaves every `.archguard` byte unchanged would
+   * otherwise keep serving a reading merged by the old rules. Bumping the
+   * version is what makes that a miss. Optional so a caller with no merge step
+   * (and every pre-existing key) keeps its exact old digest.
+   */
+  readonly rulesVersion?: string;
 };
 
 /**
@@ -175,7 +186,20 @@ function canonicalize(value: unknown): string {
 }
 
 function readingKeyDigest(key: ArchitectureReadingKey<unknown>): string {
-  return createHash('sha256').update(canonicalize(key)).digest('hex');
+  return createHash('sha256')
+    .update(
+      canonicalize({
+        projectId: key.projectId,
+        sessionId: key.sessionId,
+        seeds: key.seeds,
+        params: key.params,
+        indexes: key.indexes,
+        // `null`, not `undefined`: a key without a version must hash the same
+        // way whether the caller omitted the field or set it to `undefined`.
+        rulesVersion: key.rulesVersion ?? null,
+      }),
+    )
+    .digest('hex');
 }
 
 /**
@@ -256,6 +280,7 @@ export function createArchitectureCache<
       seeds: key.seeds,
       params: key.params,
       indexes,
+      ...(key.rulesVersion === undefined ? {} : { rulesVersion: key.rulesVersion }),
     });
 
     if (readingCache.has(digest)) {

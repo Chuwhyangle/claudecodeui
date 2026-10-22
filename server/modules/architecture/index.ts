@@ -52,6 +52,19 @@ export type {
   ArchguardManifest,
   ArchguardManifestScope,
 } from './service.js';
+// consumer: server/modules/architecture/tests/architecture-routes.test.ts (the
+// scope-hygiene criteria); service.ts re-exports the provenance field as a type
+export { SCOPE_HYGIENE_RULES_VERSION, mergeScopesWithHygiene } from './scope-hygiene.js';
+// consumer: server/modules/architecture/tests/architecture-routes.test.ts, and
+// `ArchitectureProvenance.scopeHygiene` below
+export type {
+  DroppedOutsideRootScope,
+  HygieneScope,
+  ScopeHygiene,
+  ScopeHygieneOptions,
+  ScopeHygieneResult,
+  SubsumedScope,
+} from './scope-hygiene.js';
 // consumer: server/index.ts (mounts the router under /api/architecture)
 export { createArchitectureModule } from './module.js';
 export type { ArchitectureModuleDeps } from './module.js';

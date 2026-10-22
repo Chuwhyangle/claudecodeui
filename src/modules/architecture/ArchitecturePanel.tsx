@@ -610,6 +610,9 @@ export default function ArchitecturePanel({
   // The source line's unresolved-names list, expanded on demand rather than
   // printing every unresolved identifier as a permanent row.
   const [unresolvedOpen, setUnresolvedOpen] = useState(false);
+  // Expansion state for the scope-cleanup row; it only exists for readings the
+  // server reported a cleanup for, so a healthy project renders nothing here.
+  const [scopeHygieneOpen, setScopeHygieneOpen] = useState(false);
   // The search box's text. It is local because it only filters the payload in
   // hand; selecting a result is what changes the graph.
   const [searchQuery, setSearchQuery] = useState('');
@@ -1078,6 +1081,12 @@ export default function ArchitecturePanel({
 
   const unresolvedNames = [...stats.unresolved.files, ...stats.unresolved.identifiers];
   const unresolvedCount = unresolvedNames.length;
+  // The server's scope hygiene reading. Absent = the merge changed nothing, and
+  // the source line then shows no cleanup affordance at all.
+  const scopeHygiene = provenance.scopeHygiene;
+  const subsumedEntityCount = scopeHygiene === undefined
+    ? 0
+    : scopeHygiene.subsumed.reduce((total, entry) => total + entry.droppedEntities, 0);
   // The kind tally is a factual reading of what the analysis contains, NOT a
   // judgement about the drawing. `class` folds the UML flavours the class
   // diagram draws the same way (class/abstract/enum).
@@ -1175,6 +1184,75 @@ export default function ArchitecturePanel({
         >
           {unresolvedNames.map((name) => (
             <li key={name}>{name}</li>
+          ))}
+        </ul>
+      )}
+      {/* Scope cleanup: what the server dropped or rewrote before drawing. It
+          sits after the analysis/seed line because it explains that line's
+          numbers, and it is absent entirely when the merge changed nothing. */}
+      {scopeHygiene !== undefined && (
+        <button
+          type="button"
+          aria-expanded={scopeHygieneOpen}
+          data-architecture-scope-hygiene="true"
+          data-architecture-scope-hygiene-total={scopeHygiene.total}
+          data-architecture-scope-hygiene-kept={scopeHygiene.kept}
+          onClick={() => setScopeHygieneOpen((open) => !open)}
+          style={compactTargetStyle}
+          className="pointer-events-auto rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {t('architecture.scopeHygiene.summary', { defaultValue: 'Scope cleanup' })}
+          <span aria-hidden="true">{scopeHygieneOpen ? ' ▾' : ' ▸'}</span>
+        </button>
+      )}
+      {scopeHygiene !== undefined && scopeHygieneOpen && (
+        <ul
+          data-architecture-scope-hygiene-detail="true"
+          aria-label={t('architecture.scopeHygiene.detailLabel', {
+            defaultValue: 'Scope cleanup details',
+          })}
+          className="pointer-events-auto max-h-40 max-w-xs overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
+        >
+          <li data-architecture-scope-hygiene-counts="true">
+            {t('architecture.scopeHygiene.scopeCount', {
+              defaultValue: '{{total}} scopes, kept {{kept}}',
+              total: scopeHygiene.total,
+              kept: scopeHygiene.kept,
+            })}
+          </li>
+          {scopeHygiene.subsumed.length > 0 && (
+            <li data-architecture-scope-hygiene-subsumed={scopeHygiene.subsumed.length}>
+              {t('architecture.scopeHygiene.subsumed', {
+                defaultValue: '{{count}} merged into an outer scope ({{entities}} duplicate entities dropped)',
+                count: scopeHygiene.subsumed.length,
+                entities: subsumedEntityCount,
+              })}
+            </li>
+          )}
+          {scopeHygiene.droppedOutsideRoot.length > 0 && (
+            <li data-architecture-scope-hygiene-outside={scopeHygiene.droppedOutsideRoot.length}>
+              {t('architecture.scopeHygiene.outside', {
+                defaultValue: '{{count}} outside the project directory were ignored',
+                count: scopeHygiene.droppedOutsideRoot.length,
+              })}
+            </li>
+          )}
+          {scopeHygiene.normalizedAbsoluteIds > 0 && (
+            <li data-architecture-scope-hygiene-normalized={scopeHygiene.normalizedAbsoluteIds}>
+              {t('architecture.scopeHygiene.normalized', {
+                defaultValue: '{{count}} absolute-path ids normalised',
+                count: scopeHygiene.normalizedAbsoluteIds,
+              })}
+            </li>
+          )}
+          {scopeHygiene.droppedOutsideRoot.map((entry) => (
+            <li key={entry.scope} data-architecture-scope-hygiene-outside-scope={entry.scope}>
+              {t('architecture.scopeHygiene.outsideItem', {
+                defaultValue: '{{label}} — {{sources}}',
+                label: entry.label,
+                sources: entry.sources.join(', '),
+              })}
+            </li>
           ))}
         </ul>
       )}

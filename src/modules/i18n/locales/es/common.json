@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "{{count}} nombres mencionados en esta sesión no se encontraron en la caché de análisis",
       "listLabel": "Nombres sin resolver"
+    },
+    "scopeHygiene": {
+      "summary": "Limpieza de scopes",
+      "detailLabel": "Detalles de la limpieza de scopes",
+      "scopeCount": "{{total}} scopes, {{kept}} conservados",
+      "subsumed": "{{count}} fusionados con un scope externo ({{entities}} entidades duplicadas descartadas)",
+      "outside": "{{count}} fuera del directorio del proyecto fueron ignorados",
+      "normalized": "{{count}} ids de ruta absoluta normalizados",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

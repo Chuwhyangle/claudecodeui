@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "{{count}} in dieser Sitzung genannte Namen wurden nicht im Analyse-Cache gefunden",
       "listLabel": "Ungelöste Namen"
+    },
+    "scopeHygiene": {
+      "summary": "Scope-Bereinigung",
+      "detailLabel": "Details zur Scope-Bereinigung",
+      "scopeCount": "{{total}} Scopes, {{kept}} behalten",
+      "subsumed": "{{count}} mit einem äußeren Scope zusammengeführt ({{entities}} doppelte Entitäten verworfen)",
+      "outside": "{{count}} außerhalb des Projektverzeichnisses wurden ignoriert",
+      "normalized": "{{count}} absolute Pfad-IDs normalisiert",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

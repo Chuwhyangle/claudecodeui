@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "Bu oturumda adı geçen {{count}} ad analiz önbelleğinde bulunamadı",
       "listLabel": "Çözülemeyen adlar"
+    },
+    "scopeHygiene": {
+      "summary": "Scope temizliği",
+      "detailLabel": "Scope temizliği ayrıntıları",
+      "scopeCount": "{{total}} scope, {{kept}} korundu",
+      "subsumed": "{{count}} dış scope ile birleştirildi ({{entities}} yinelenen varlık atıldı)",
+      "outside": "Proje dizini dışındaki {{count}} kapsam yoksayıldı",
+      "normalized": "{{count}} mutlak yol id'si normalleştirildi",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

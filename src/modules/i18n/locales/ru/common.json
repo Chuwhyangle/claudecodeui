@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "{{count}} имён, упомянутых в этой сессии, не найдено в кэше анализа",
       "listLabel": "Нераспознанные имена"
+    },
+    "scopeHygiene": {
+      "summary": "Очистка scope",
+      "detailLabel": "Подробности очистки scope",
+      "scopeCount": "{{total}} scope, сохранено {{kept}}",
+      "subsumed": "{{count}} объединены с внешним scope (удалено {{entities}} дублирующихся сущностей)",
+      "outside": "{{count}} вне каталога проекта проигнорированы",
+      "normalized": "{{count}} абсолютных id путей нормализовано",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

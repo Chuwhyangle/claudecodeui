@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "{{count}} nama yang disebut dalam sesi ini tidak ditemukan di cache analisis",
       "listLabel": "Nama belum terselesaikan"
+    },
+    "scopeHygiene": {
+      "summary": "Pembersihan scope",
+      "detailLabel": "Detail pembersihan scope",
+      "scopeCount": "{{total}} scope, {{kept}} dipertahankan",
+      "subsumed": "{{count}} digabungkan ke scope luar ({{entities}} entitas duplikat dibuang)",
+      "outside": "{{count}} di luar direktori proyek diabaikan",
+      "normalized": "{{count}} id jalur absolut dinormalisasi",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {

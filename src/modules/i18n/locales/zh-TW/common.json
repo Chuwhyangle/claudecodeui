@@ -151,6 +151,15 @@
     "source": {
       "unresolved": "本次工作階段中提到的 {{count}} 個名稱未在分析快取中找到",
       "listLabel": "未解析的名稱"
+    },
+    "scopeHygiene": {
+      "summary": "scope 清理",
+      "detailLabel": "scope 清理詳情",
+      "scopeCount": "{{total}} 個 scope，保留 {{kept}} 個",
+      "subsumed": "{{count}} 個因與外層重疊合併（去掉 {{entities}} 個重複實體）",
+      "outside": "{{count}} 個在專案目錄之外已忽略",
+      "normalized": "{{count}} 個絕對路徑 id 已規範",
+      "outsideItem": "{{label}} — {{sources}}"
     }
   },
   "status": {
