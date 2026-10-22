@@ -31,7 +31,7 @@ import {
   routeClientAsrSegment,
   type VoiceClientFallbackReason,
 } from '@/shared/voiceClientAsrWorker';
-import { api, captureRawVoice, effectivePauseCuesDeclaration, transcribeVoice } from '@/shared/api';
+import { api, captureRawVoice, effectivePauseCuesDeclaration, readVoiceRuntimeConfig, transcribeVoice } from '@/shared/api';
 import type { VoiceUploadAddress } from '@/shared/api';
 import {
   hydrateVoiceRawCapture,
@@ -955,11 +955,16 @@ export function useVoiceInput(
       // upload time, so a turn that landed while the user was speaking is included. An empty pack
       // is `undefined` rather than an empty string, so a provider with context support sees the
       // no-context request exactly as it would have without this parameter.
+      // The deployment's effective pack size, published by `useVoiceAvailable`; `null` is the
+      // shipped default. The server trims `hints.context` again, so an edit that lands after this
+      // reading is still enforced on the one-shot path.
+      const packRuntime = readVoiceRuntimeConfig();
       const context = buildVoiceInputContextPack({
         messages: contextMessagesRef.current,
         draftBefore: session.draft === null ? '' : session.draft.text.slice(0, session.draft.cursor),
         draftAfter: session.draft === null ? '' : session.draft.text.slice(session.draft.cursor),
         voiceSoFar: session.committed,
+        ...(packRuntime === null ? {} : packRuntime),
       }).text;
       const response = await transcribeVoice(
         job.blob,

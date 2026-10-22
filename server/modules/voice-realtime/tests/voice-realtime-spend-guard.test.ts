@@ -2,11 +2,12 @@
  * The spend guard: a connection that is spending at a runaway rate is ended, and one behaving normally
  * is never touched. The numbers come from the owner's October 2026 bill and from recorded sessions.
  *
- * As of 2026-10-11 the guard's WINDOW threshold is no longer defaulted on the production path: it
- * exists only when a deployment names one (`VOICE_REALTIME_MAX_CNY_PER_30S`) or a caller passes an
- * override (the HTTP diagnosis route's ¥0.05). The criterion for that change lives here too, in the
- * "AC1…AC4" cases, because no new test file may be added (`scripts/test.sh` pins the server test
- * file count).
+ * As of 2026-10-23 the guard's WINDOW threshold defaults to ¥0.05/30 s
+ * (`DEFAULT_SPEND_WINDOW_LIMIT_CNY`); a deployment may override it through
+ * `VOICE_REALTIME_MAX_CNY_PER_30S`, and the HTTP diagnosis route passes its own ¥0.05. A refused
+ * value is reported but resolves to the default, so a typo cannot silently disarm the guard. The
+ * criterion for that change lives here too, in the "AC1…AC4" cases, because no new test file may be
+ * added (`scripts/test.sh` pins the server test file count).
  */
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -18,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket as WS } from 'ws';
 
 import {
+  DEFAULT_SPEND_WINDOW_LIMIT_CNY,
   VOICE_REALTIME_MAX_CNY_PER_30S_ENV,
   createDashscopeTransport,
   describeSpendWindowLimit,
@@ -79,7 +81,7 @@ test('real sessions sit well below the window limit: the recorded one, and the c
   // The current build's measured run — 3,686 input (259 audio) / 91 output for the same 12 s clip:
   const current = estimateRealtimeCostCny(usage(3_686, 259, 91));
   assert.ok(current < 0.008, `the current build spends about ¥${current.toFixed(4)} on that clip`);
-  assert.ok(current < 0.015, 'and that is inside the window limit with a wide margin');
+  assert.ok(current < DEFAULT_SPEND_WINDOW_LIMIT_CNY, 'and that is inside the default window limit with a wide margin');
 });
 
 function build(
@@ -108,10 +110,11 @@ const responseDone = (upstream: ReturnType<typeof createFakeDashscopeServer>, u:
   upstream.peerSend({ type: 'response.done', response: { id, status: 'completed', usage: u } });
 
 test('a runaway rate ends the session within a few responses, and tells the person why', async () => {
-  const { upstream, socket } = build({ windowMs: 30_000, maxCnyPerWindow: 0.015 });
+  const { upstream, socket } = build({ windowMs: 30_000, maxCnyPerWindow: DEFAULT_SPEND_WINDOW_LIMIT_CNY });
   await waitFor(() => opened(socket));
-  // The observed loop: ~5.6k-token responses, one every 0.65 s (¥0.0084 each).
-  for (let index = 0; index < 5; index += 1) {
+  // The observed loop: ~5.6k-token responses, one every 0.65 s (≈¥0.0090 each). Seven of them
+  // cross the ¥0.05 default (≈¥0.0629); the first five (≈¥0.0449) deliberately do not.
+  for (let index = 0; index < 7; index += 1) {
     responseDone(upstream, usage(5_600, 100, 30), `r${index}`);
   }
   await waitFor(() => socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT'));
@@ -125,7 +128,7 @@ test('a runaway rate ends the session within a few responses, and tells the pers
 });
 
 test('ordinary use, however long, is not touched', async () => {
-  const { upstream, socket } = build({ windowMs: 200, maxCnyPerWindow: 0.015 });
+  const { upstream, socket } = build({ windowMs: 200, maxCnyPerWindow: DEFAULT_SPEND_WINDOW_LIMIT_CNY });
   await waitFor(() => opened(socket));
   // Ten responses of ~0.8k tokens (¥0.0013 each), spread out so no window holds more than a few.
   for (let index = 0; index < 10; index += 1) {
@@ -157,59 +160,66 @@ test('the whole-connection total is a backstop for a slow leak', async () => {
 // `process.env`, which is the whole reason the resolution is a pure function.
 // ---------------------------------------------------------------------------
 
-test('AC1 the window cap resolves from an override, or the environment, or neither — and never a default', () => {
+test('AC1 the window cap resolves from an override, or the environment, or the ¥0.05 default', () => {
   const fromNothing = resolveSpendWindowLimit({}, undefined);
-  const fromOverride = resolveSpendWindowLimit({}, 0.05);
+  const fromOverride = resolveSpendWindowLimit({}, 0.07);
   const fromEnv = resolveSpendWindowLimit({ [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' }, undefined);
-  const fromBoth = resolveSpendWindowLimit({ [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' }, 0.05);
+  const fromBoth = resolveSpendWindowLimit({ [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' }, 0.07);
 
   console.log(
     `AC1 (a) env={} override=undefined  => maxCnyPerWindow=${fromNothing.maxCnyPerWindow} invalid=${JSON.stringify(fromNothing.invalid)}`,
   );
-  console.log(`AC1 (b) env={} override=0.05       => maxCnyPerWindow=${fromOverride.maxCnyPerWindow}`);
+  console.log(`AC1 (b) env={} override=0.07       => maxCnyPerWindow=${fromOverride.maxCnyPerWindow}`);
   console.log(`AC1 (c) env={'0.02'} override=undefined => maxCnyPerWindow=${fromEnv.maxCnyPerWindow}`);
-  console.log(`AC1 (d) env={'0.02'} override=0.05 => maxCnyPerWindow=${fromBoth.maxCnyPerWindow} (the override wins)`);
+  console.log(`AC1 (d) env={'0.02'} override=0.07 => maxCnyPerWindow=${fromBoth.maxCnyPerWindow} (the override wins)`);
 
-  // (a) is the shipped production state: nothing named a cap, so there ISN'T one — not a fallback.
-  assert.equal(fromNothing.maxCnyPerWindow, undefined);
+  // (a) is the shipped production state: the default cap applies, and saying nothing is not a
+  // misconfiguration.
+  assert.equal(fromNothing.maxCnyPerWindow, DEFAULT_SPEND_WINDOW_LIMIT_CNY);
+  assert.equal(fromNothing.maxCnyPerWindow, 0.05);
   assert.equal(fromNothing.invalid, null, 'saying nothing is not a misconfiguration');
-  assert.equal(fromOverride.maxCnyPerWindow, 0.05);
+  assert.equal(fromOverride.maxCnyPerWindow, 0.07);
   assert.equal(fromEnv.maxCnyPerWindow, 0.02);
-  // (d) the override is the authority for its run — the diagnosis route's 0.05 must not be
+  // (d) the override is the authority for its run — the diagnosis route's value must not be
   // overridden BY the deployment's own variable.
-  assert.equal(fromBoth.maxCnyPerWindow, 0.05);
+  assert.equal(fromBoth.maxCnyPerWindow, 0.07);
   assert.notEqual(fromBoth.maxCnyPerWindow, fromEnv.maxCnyPerWindow, 'if these matched, (d) would be vacuous');
   // Purity, stated as a reading: the same arguments give the same answer, and the env is not
   // consulted for anything but this ONE variable.
   assert.deepEqual(resolveSpendWindowLimit({}, undefined), fromNothing);
-  assert.equal(resolveSpendWindowLimit({ SOME_OTHER_VAR: '0.02' }, undefined).maxCnyPerWindow, undefined);
+  assert.equal(
+    resolveSpendWindowLimit({ SOME_OTHER_VAR: '0.02' }, undefined).maxCnyPerWindow,
+    DEFAULT_SPEND_WINDOW_LIMIT_CNY,
+  );
 });
 
-test('AC2 a mistyped window cap is refused AND reported, never silently turned into "no cap"', () => {
+test('AC2 a mistyped window cap is refused AND reported, while the ¥0.05 default stays armed', () => {
   for (const raw of ['abc', '0', '-1', '  ']) {
     const resolution = resolveSpendWindowLimit({ [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: raw }, undefined);
     const report = describeSpendWindowLimit(resolution);
     console.log(
       `AC2 env=${JSON.stringify(raw)} => maxCnyPerWindow=${resolution.maxCnyPerWindow} invalid=${JSON.stringify(resolution.invalid)} report=${JSON.stringify(report)}`,
     );
-    assert.equal(resolution.maxCnyPerWindow, undefined, `${JSON.stringify(raw)} must not become a cap`);
+    assert.equal(resolution.maxCnyPerWindow, DEFAULT_SPEND_WINDOW_LIMIT_CNY, `${JSON.stringify(raw)} must not become a cap, but the default stays`);
     assert.ok(
       resolution.invalid !== null && resolution.invalid.length > 0,
       `${JSON.stringify(raw)} was refused, so the resolution must carry a printable report`,
     );
     assert.ok(report !== null && report.length > 0, 'describeSpendWindowLimit must render that report');
     assert.match(report, /spend window limit/);
+    assert.match(report, /default applies/);
   }
   // WHY the reporting matters, made executable: `Number('abc')` is NaN and a comparison against NaN
-  // is false for EVERY spend, so an unvalidated typo produces a guard that can never fire — the same
-  // behaviour as a deliberately-unset cap, with nothing in the log to tell them apart.
-  assert.equal(Number('abc') > 0.015, false, 'NaN compares false: a typo would silently disarm the guard');
+  // is false for EVERY spend, so an unvalidated typo produces a guard that can never fire. With the
+  // default in place the guard still fires at ¥0.05; the report is how the operator learns their
+  // intended value was not applied.
+  assert.equal(Number('abc') > DEFAULT_SPEND_WINDOW_LIMIT_CNY, false, 'NaN compares false, so the default is what keeps the guard armed');
   assert.equal(0.5 > Number('abc'), false, 'and it does so on the wrong side too');
-  // A refused override does not silently fall through to the environment either: substituting one cap
-  // for another would hide the misconfiguration.
+  // A refused override does not silently fall through to the environment either: substituting one
+  // explicit cap for another would hide the misconfiguration. It lands on the default instead.
   const refusedOverride = resolveSpendWindowLimit({ [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' }, 0);
   console.log(`AC2 override=0 with env={'0.02'} => maxCnyPerWindow=${refusedOverride.maxCnyPerWindow} invalid=${JSON.stringify(refusedOverride.invalid)}`);
-  assert.equal(refusedOverride.maxCnyPerWindow, undefined);
+  assert.equal(refusedOverride.maxCnyPerWindow, DEFAULT_SPEND_WINDOW_LIMIT_CNY);
   assert.ok(refusedOverride.invalid !== null);
 });
 
@@ -229,7 +239,7 @@ function objectLiteralAt(source: string, marker: string): string {
   throw new Error(`unbalanced braces after ${marker}`);
 }
 
-test('AC3 the assembly point carries no default window cap, calls the resolver exactly once, and leaves the diagnosis route and the total opt-in alone', () => {
+test('AC3 the assembly point carries the default window cap, calls the resolver exactly once, and leaves the diagnosis route and the total opt-in alone', () => {
   // Source reading, the house's established way of pinning a composition-root decision: the seams
   // are assembled at boot inside a function no unit test can call (it needs the whole MCP surface),
   // so the assertion is on the source the process actually runs.
@@ -242,85 +252,161 @@ test('AC3 the assembly point carries no default window cap, calls the resolver e
   // and `\b` keeps a future `resolveSpendWindowLimitFor…` from being counted as this one.
   const resolverCalls = (source.match(/\bresolveSpendWindowLimit\s*\(/g) ?? []).length;
   const resolverMentions = (source.match(/\bresolveSpendWindowLimit\b/g) ?? []).length;
-  const overridePlumbed = /\bresolveSpendWindowLimit\(\s*process\.env\s*,\s*input\.spendWindowLimitCny\s*\)/.test(source);
+  const overridePlumbed = /\bresolveSpendWindowLimit\(\s*process\.env\s*,\s*input\.spendWindowLimitCny\s*,/.test(source);
+  // The file source is the third argument and must be THIS connection's reading, while the default
+  // window travels with the cap from the same resolution.
+  const filePlumbed = /\bresolveSpendWindowLimit\(\s*process\.env\s*,\s*input\.spendWindowLimitCny\s*,\s*voiceRealtimeSettings\.spendGuard\s*,?\s*\)/.test(source);
+  const windowFromResolution = /\bwindowMs:\s*spendWindowLimit\.windowMs\b/.test(spendGuard);
   const barrelImport = source
     .split('\n')
     .find((line) => line.includes("from './modules/voice-realtime/index.js'"));
   const diagnoseLimit = /spendWindowLimitCny:\s*([\d.]+)/.exec(source)?.[1];
-  // `maxCnyTotal` appears exactly once, inside the `...(process.env.VOICE_REALTIME_MAX_CNY_PER_CONNECTION
-  // ? { maxCnyTotal: … } : {})` spread — i.e. still reachable only when that variable is set.
+  // The assembled guard is unconditionally armed: `maxCnyPerWindow` appears exactly once and is the
+  // resolver's number, not a conditional spread. `maxCnyTotal` remains the sole opt-in.
+  const windowMentions = (spendGuard.match(/maxCnyPerWindow\s*:/g) ?? []).length;
+  const defaultPlumbed = /\bmaxCnyPerWindow:\s*spendWindowLimit\.maxCnyPerWindow\b/.test(spendGuard);
   const totalMentions = (spendGuard.match(/maxCnyTotal/g) ?? []).length;
   const totalOptIn = /\.\.\.\(\s*process\.env\.VOICE_REALTIME_MAX_CNY_PER_CONNECTION\b[\s\S]*?maxCnyTotal/.test(spendGuard) && totalMentions === 1;
 
   console.log(
-    `AC3 literalGone=${literalGone} resolverCalls=${resolverCalls} diagnoseLimit=${diagnoseLimit} totalOptIn=${totalOptIn}`,
+    `AC3 literalGone=${literalGone} resolverCalls=${resolverCalls} diagnoseLimit=${diagnoseLimit} defaultPlumbed=${defaultPlumbed} filePlumbed=${filePlumbed} windowFromResolution=${windowFromResolution} totalOptIn=${totalOptIn}`,
   );
   console.log(
-    `AC3 (extras) literalGoneFileWide=${literalGoneFileWide} resolverMentions=${resolverMentions} overridePlumbed=${overridePlumbed} barrelImport=${barrelImport?.includes('resolveSpendWindowLimit') === true} totalMentions=${totalMentions}`,
+    `AC3 (extras) literalGoneFileWide=${literalGoneFileWide} resolverMentions=${resolverMentions} overridePlumbed=${overridePlumbed} barrelImport=${barrelImport?.includes('resolveSpendWindowLimit') === true} windowMentions=${windowMentions} totalMentions=${totalMentions}`,
   );
 
-  // (a) the removed production default cannot come back through the assembled guard.
+  // (a) the old ¥0.015 default cannot come back through the assembled guard.
   assert.ok(literalGone, 'the spendGuard literal must not carry the removed ¥0.015 default');
   assert.ok(literalGoneFileWide, 'and nothing else in server/index.ts should carry it either');
-  // (b) exactly ONE call site, and it is the assembly point's, reading the environment and the
-  // route's override — resolved once, not per connection.
+  // (b) exactly ONE call site, and it is the assembly point's, reading the environment, the
+  // route's override and THIS connection's settings reading — resolved once, not per knob.
   assert.equal(resolverCalls, 1);
-  assert.ok(overridePlumbed, 'the resolver must be called with (process.env, input.spendWindowLimitCny)');
+  assert.ok(overridePlumbed, 'the resolver must be called with (process.env, input.spendWindowLimitCny, …)');
+  assert.ok(filePlumbed, 'the resolver must be handed this connection\'s settings reading as the file source');
   assert.ok(resolverMentions >= 2, 'the single call must also be imported');
   assert.ok(barrelImport?.includes('resolveSpendWindowLimit') === true, 'and imported through the module barrel');
-  // (c) the HTTP diagnosis route's own window is untouched.
+  // (c) the guard is armed by default: the resolver's numeric answer is passed unconditionally, and
+  // the window comes from the same resolution (so a file can change both together).
+  assert.equal(windowMentions, 1);
+  assert.ok(defaultPlumbed, 'maxCnyPerWindow must be the resolver\'s value, not a conditional spread');
+  assert.ok(windowFromResolution, 'windowMs must come from the resolution, not a hard-coded 30_000');
+  // (d) the HTTP diagnosis route's own window is untouched.
   assert.equal(diagnoseLimit, '0.05');
-  // (d) the whole-connection total is still an explicit opt-in.
+  // (e) the whole-connection total is still an explicit opt-in.
   assert.ok(totalOptIn, 'maxCnyTotal must stay gated on VOICE_REALTIME_MAX_CNY_PER_CONNECTION');
 });
 
-test('AC4 with NO window cap the same runaway string is not ended — and with one it still is', async () => {
-  // The observed runaway string: five ~5.6k-token responses (the loop's own shape, one every 0.65 s).
+test('AC4 the ¥0.05 default leaves a five-response burst alone and ends a seven-response one', async () => {
+  // The observed runaway string: ~5.6k-token responses (the loop's own shape, one every 0.65 s).
   const perResponse = estimateRealtimeCostCny(usage(5_600, 100, 30));
-  const total = perResponse * 5;
+  const normal = perResponse * 5;
+  const runaway = perResponse * 7;
+  const defaultCap = resolveSpendWindowLimit({}, undefined).maxCnyPerWindow;
   console.log(
-    `AC4 Σcost of usage(5600,100,30) × 5 = ¥${total.toFixed(4)} (¥${perResponse.toFixed(4)} each), vs the removed default ¥0.015`,
+    `AC4 per-response=¥${perResponse.toFixed(4)}; 5 responses=¥${normal.toFixed(4)}; 7 responses=¥${runaway.toFixed(4)}; default cap=¥${defaultCap}`,
   );
-  assert.ok(total > 0.015, 'the string has to exceed the removed default or the positive control proves nothing');
+  assert.equal(defaultCap, DEFAULT_SPEND_WINDOW_LIMIT_CNY);
+  assert.ok(normal < defaultCap, 'five responses must sit below the default, or (i) proves nothing');
+  assert.ok(runaway > defaultCap, 'seven responses must exceed it, or (ii) proves nothing');
 
-  // (i) NO `maxCnyPerWindow` key at all — the shape the production path now assembles.
+  // (i) Five responses — the old ¥0.015 default ended this string; the new ¥0.05 default does not.
   let seen = 0;
-  const uncapped = build({ windowMs: 30_000 }, (observation) => {
+  const under = build({ windowMs: 30_000, maxCnyPerWindow: defaultCap }, (observation) => {
     if (observation.direction === 'received' && (observation.wire as { type?: string }).type === 'response.done') seen += 1;
   });
-  await waitFor(() => opened(uncapped.socket));
-  for (let index = 0; index < 5; index += 1) responseDone(uncapped.upstream, usage(5_600, 100, 30), `u${index}`);
+  await waitFor(() => opened(under.socket));
+  for (let index = 0; index < 5; index += 1) responseDone(under.upstream, usage(5_600, 100, 30), `u${index}`);
   // A POSITIVE signal that all five were charged, rather than a blind sleep: the transport observes
   // each received frame immediately before it charges the guard, so 5 seen + a tick means 5 charged.
   await waitFor(() => seen === 5);
   await sleep(50);
-  const uncappedTrip = uncapped.socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT');
+  const underTrip = under.socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT');
   console.log(
-    `AC4 (i) spendGuard={windowMs:30000} (no maxCnyPerWindow): charged=${seen}, SPEND_LIMIT=${uncappedTrip !== undefined}, readyState=${uncapped.socket.readyState} (OPEN=${WS.OPEN} CLOSED=${WS.CLOSED})`,
+    `AC4 (i) 5 responses under the ¥${defaultCap} default: charged=${seen}, SPEND_LIMIT=${underTrip !== undefined}, readyState=${under.socket.readyState} (OPEN=${WS.OPEN} CLOSED=${WS.CLOSED})`,
   );
-  assert.equal(uncappedTrip, undefined, 'no configured cap means no SPEND_LIMIT frame');
-  assert.notEqual(uncapped.socket.readyState, WS.CLOSED, 'and the connection stays open');
-  uncapped.socket.close();
+  assert.equal(underTrip, undefined, 'the default must not end a five-response burst');
+  assert.notEqual(under.socket.readyState, WS.CLOSED, 'and the connection stays open');
+  under.socket.close();
 
-  // (ii) Positive control — the SAME string under a cap that is below its total must end the session,
-  // so (i) is "the default is gone", not "the guard is broken". The contrast arm takes its number from
-  // the resolver (no hand-copied literal that could drift): ¥0.015 was the removed production default.
-  const removedDefault = resolveSpendWindowLimit({}, 0.015).maxCnyPerWindow ?? 0;
-  assert.equal(removedDefault, 0.015, 'the contrast arm must be the literal the production path used to carry');
+  // (ii) Seven responses — the same shape, one more than the old five-response runaway witness,
+  // crosses the default and must end the session. This is the positive control: (i) is "the default
+  // is wide enough", not "the guard is broken".
+  const over = build({ windowMs: 30_000, maxCnyPerWindow: defaultCap });
+  await waitFor(() => opened(over.socket));
+  for (let index = 0; index < 7; index += 1) responseDone(over.upstream, usage(5_600, 100, 30), `c${index}`);
+  await waitFor(() => over.socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT'));
+  const overTrip = over.socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT');
+  assert.ok(overTrip && overTrip.type === 'error');
+  const spentAtTrip = Number(/used about ¥([\d.]+)/.exec(overTrip.message)?.[1]);
   console.log(
-    `AC4 (ii) contrast arm uses the removed default ¥${removedDefault} (AC1(d)'s override resolves to ¥${resolveSpendWindowLimit({ [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' }, 0.05).maxCnyPerWindow}, which is ABOVE this string's ¥${total.toFixed(4)} and so cannot serve as the contrast arm)`,
-  );
-  const capped = build({ windowMs: 30_000, maxCnyPerWindow: removedDefault });
-  await waitFor(() => opened(capped.socket));
-  for (let index = 0; index < 5; index += 1) responseDone(capped.upstream, usage(5_600, 100, 30), `c${index}`);
-  await waitFor(() => capped.socket.outbound.some((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT'));
-  const cappedTrip = capped.socket.outbound.find((frame) => frame.type === 'error' && frame.code === 'SPEND_LIMIT');
-  assert.ok(cappedTrip && cappedTrip.type === 'error');
-  const spentAtTrip = Number(/used about ¥([\d.]+)/.exec(cappedTrip.message)?.[1]);
-  console.log(
-    `AC4 (ii) same string with maxCnyPerWindow=¥${removedDefault}: SPEND_LIMIT cny=¥${spentAtTrip.toFixed(4)} message=${JSON.stringify(cappedTrip.message)}`,
+    `AC4 (ii) 7 responses under the ¥${defaultCap} default: SPEND_LIMIT cny=¥${spentAtTrip.toFixed(4)} message=${JSON.stringify(overTrip.message)}`,
   );
   assert.ok(Number.isFinite(spentAtTrip), 'the frame must name the spend that tripped it');
-  assert.ok(spentAtTrip > removedDefault && spentAtTrip <= total, 'it tripped inside the string, part-way through');
-  await waitFor(() => capped.socket.readyState === WS.CLOSED);
+  assert.ok(spentAtTrip > defaultCap && spentAtTrip <= runaway, 'it tripped inside the seven-response string');
+  await waitFor(() => over.socket.readyState === WS.CLOSED);
+});
+
+// ---------------------------------------------------------------------------
+// The settings-file source and its precedence: override > environment > file > default. The file
+// block is fed as an ARGUMENT (the resolver is pure), so this leg reads the same function the
+// assembly point calls rather than a copy of its rules.
+// ---------------------------------------------------------------------------
+
+test('AC2 the file is a source; override > environment > file > default, and windowMs comes from the file', () => {
+  const fromFile = resolveSpendWindowLimit({}, undefined, { maxCnyPerWindow: 0.1, windowMs: 45_000 });
+  console.log(
+    `AC2 file=0.1 => maxCnyPerWindow=${fromFile.maxCnyPerWindow} windowMs=${fromFile.windowMs} source=${fromFile.source}`,
+  );
+  assert.equal(fromFile.maxCnyPerWindow, 0.1, 'file=0.1 must reach the resolution');
+  assert.equal(fromFile.source, 'file');
+  assert.equal(fromFile.windowMs, 45_000, 'windowMs comes from the file');
+
+  const envOverFile = resolveSpendWindowLimit(
+    { [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' },
+    undefined,
+    { maxCnyPerWindow: 0.1, windowMs: 45_000 },
+  );
+  console.log(
+    `AC2 env=0.02 压过 file=0.1 => maxCnyPerWindow=${envOverFile.maxCnyPerWindow} windowMs=${envOverFile.windowMs} source=${envOverFile.source}`,
+  );
+  assert.equal(envOverFile.maxCnyPerWindow, 0.02, 'the environment escape hatch wins over the file');
+  assert.equal(envOverFile.windowMs, 45_000, 'the file still decides the window it named');
+  assert.equal(envOverFile.source, 'environment');
+
+  const overrideOverBoth = resolveSpendWindowLimit(
+    { [VOICE_REALTIME_MAX_CNY_PER_30S_ENV]: '0.02' },
+    0.07,
+    { maxCnyPerWindow: 0.1, windowMs: 45_000 },
+  );
+  console.log(
+    `AC2 override=0.07 压过 env/file => maxCnyPerWindow=${overrideOverBoth.maxCnyPerWindow} windowMs=${overrideOverBoth.windowMs} source=${overrideOverBoth.source}`,
+  );
+  assert.equal(overrideOverBoth.maxCnyPerWindow, 0.07, 'the per-run override is the authority');
+  assert.equal(overrideOverBoth.source, 'override');
+
+  const invalidFile = resolveSpendWindowLimit({}, undefined, { maxCnyPerWindow: 'abc' as unknown as number });
+  console.log(
+    `AC2 invalid file -> 0.05 + invalid report => maxCnyPerWindow=${invalidFile.maxCnyPerWindow} invalid=${JSON.stringify(invalidFile.invalid)}`,
+  );
+  assert.equal(invalidFile.maxCnyPerWindow, DEFAULT_SPEND_WINDOW_LIMIT_CNY, 'a refused file value keeps the default armed');
+  assert.equal(invalidFile.maxCnyPerWindow, 0.05);
+  assert.ok(invalidFile.invalid !== null && invalidFile.invalid.includes('settings file'), 'the report names the file source');
+  assert.equal(invalidFile.windowMs, 30_000, 'no usable window in the block keeps the default window');
+
+  // A refused WINDOW is reported while the file's cap still applies: one bad field must not discard
+  // the other, and it must never disarm the guard.
+  const invalidWindow = resolveSpendWindowLimit({}, undefined, { maxCnyPerWindow: 0.1, windowMs: 100 });
+  console.log(
+    `AC2 invalid windowMs=100 => maxCnyPerWindow=${invalidWindow.maxCnyPerWindow} windowMs=${invalidWindow.windowMs} invalid=${JSON.stringify(invalidWindow.invalid)}`,
+  );
+  assert.equal(invalidWindow.maxCnyPerWindow, 0.1);
+  assert.equal(invalidWindow.windowMs, 30_000);
+  assert.ok(invalidWindow.invalid !== null && invalidWindow.invalid.includes('windowMs'));
+
+  // No file block at all is the shipped state, not an error.
+  const noFile = resolveSpendWindowLimit({}, undefined, null);
+  assert.equal(noFile.maxCnyPerWindow, 0.05);
+  assert.equal(noFile.windowMs, 30_000);
+  assert.equal(noFile.source, 'default');
+  assert.equal(noFile.invalid, null);
 });

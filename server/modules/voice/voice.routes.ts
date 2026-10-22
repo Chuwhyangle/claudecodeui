@@ -3,6 +3,10 @@ import { Readable } from 'node:stream';
 
 import express from 'express';
 
+import {
+  VOICE_RUNTIME_DEFAULTS,
+  type VoiceContextPackRuntimeSettings,
+} from '@shared/voice/voiceSettingsRegistry.js';
 import type {
   VoiceClientAssetFileRef,
   VoiceClientAssetsService,
@@ -13,9 +17,22 @@ import type {
   VoiceServiceResult,
   VoiceSettingsService,
 } from '@/shared/types.js';
-import { asyncHandler } from '@/shared/utils.js';
+import { asyncHandler, readInstalledVoiceRuntimeConfig } from '@/shared/utils.js';
 
 import { unconfiguredVoiceClientAssetsReading } from './voice.service.js';
+
+/**
+ * The deployment-level runtime knobs the browser needs in order to BUILD its context pack.
+ *
+ * A deliberately narrow shape: only the pack's three numbers cross this boundary. The reading's
+ * provenance and warnings ride beside them for an operator reading the response, and nothing else
+ * (the spend guard's threshold is not the browser's business).
+ */
+type VoiceRuntimeConfigReading = {
+  contextPack: VoiceContextPackRuntimeSettings;
+  source?: 'default' | 'file';
+  warnings?: readonly string[];
+};
 
 type VoiceRouterDependencies = {
   voiceService: VoiceService;
@@ -46,6 +63,17 @@ type VoiceRouterDependencies = {
    * shipping composition root always supplies it.
    */
   voiceClientAssets?: VoiceClientAssetsService;
+  /**
+   * The deployment's effective context-pack size, read per request.
+   *
+   * A READER, not a value: an operator's edit to the settings file reaches the next page load (the
+   * next request), with no restart. The shipping composition root wires the real file reader; a
+   * router built without one (a leaf test, a probe) answers the shipped defaults, which is the
+   * honest reading for a deployment that configured nothing. It is deliberately NOT tied to
+   * `/health`: that route is a per-user PROVIDER reading and can legitimately 503, while this one
+   * describes the process and has an answer even when no recogniser is configured.
+   */
+  voiceRuntimeConfig?: () => VoiceRuntimeConfigReading;
 };
 
 type AuthenticatedRequest = express.Request & { user?: { id?: number | string } };
@@ -269,6 +297,33 @@ export function createVoiceRouter(dependencies: VoiceRouterDependencies): expres
     }
 
     response.json(result.value);
+  });
+
+  // THE DEPLOYMENT'S RUNTIME KNOBS, for the page that BUILDS the context pack.
+  //
+  // Its own route rather than fields on `/health` for the same reason `/capture` is: `/health` is a
+  // per-user PROVIDER reading that can legitimately answer 503 when no recogniser is registered,
+  // while this route describes the process and must answer even then. It reads the settings file
+  // PER REQUEST, so an operator's edit reaches the next page load with no restart; a missing or
+  // malformed file is answered with the shipped defaults plus a readable warning, never a 5xx.
+  //
+  // The values are EFFECTIVE: `environment > settings file > default`, already range-checked by the
+  // reader, so the browser does not re-apply a precedence of its own (it only enforces its ceiling).
+  router.get('/runtime-config', (_request, response) => {
+    // The injected reader wins (a criterion points it at a file it owns); otherwise the port the
+    // composition root installed; otherwise the shipped defaults.
+    const read: () => VoiceRuntimeConfigReading | null =
+      dependencies.voiceRuntimeConfig ?? readInstalledVoiceRuntimeConfig;
+    const reading: VoiceRuntimeConfigReading = read() ?? {
+      contextPack: { ...VOICE_RUNTIME_DEFAULTS.contextPack },
+      source: 'default',
+      warnings: [],
+    };
+    response.json({
+      contextPack: reading.contextPack,
+      source: reading.source ?? 'default',
+      warnings: [...(reading.warnings ?? [])],
+    });
   });
 
   // The user's own backend settings. Reading them back is what lets a second

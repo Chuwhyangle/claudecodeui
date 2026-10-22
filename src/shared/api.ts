@@ -22,6 +22,9 @@ import {
 // The provider address book, the same table the server's health reading republishes. The
 // browser asks it whether an id exists rather than keeping its own list of the ids it knows.
 import type { AsrCapabilities, AsrErrorCode, PauseCuesDeclaration } from '@shared/asr/asrRegistry';
+// The runtime knobs' shape is the SHARED voice contract: the server's settings loader fills the
+// same type, so the browser's cache and the deployment's reading cannot drift apart.
+import type { VoiceContextPackRuntimeSettings } from '@shared/voice/voiceSettingsRegistry';
 import {
   baseMimeType,
   classifyUpstreamFailure,
@@ -938,6 +941,10 @@ export const api = {
     writeLabels: (recordId: string, body: { finalText: string; labels: VoiceEditLabel[] }) =>
       patch(`/api/voice/data/${encodeURIComponent(recordId)}`, body),
     tts: (text: string, options: ApiRequestOptions = {}) => post('/api/voice/tts', { text }, options),
+    // The deployment's runtime knobs for the context pack (rows / character budget / per-row cap).
+    // Its own endpoint rather than a field on `health`, which is a per-user provider reading that
+    // can 503; this one describes the process and always answers.
+    runtimeConfig: () => get('/api/voice/runtime-config'),
     // The user's own backend settings, stored per user so they follow the
     // account rather than the browser profile they were typed in.
     config: () => get('/api/voice/config'),
@@ -1012,6 +1019,32 @@ export function setVoiceProviderRows(rows: VoiceProviderRow[]): void {
 /** The published rows, for a caller that has to reason about more than the effective provider. */
 export function readVoiceProviderRows(): VoiceProviderRow[] {
   return voiceProviderRows;
+}
+
+/**
+ * The deployment's effective context-pack size, as the last `GET /api/voice/runtime-config`
+ * answered it, or `null` before any reading arrived.
+ *
+ * A SYNCHRONOUS SLOT beside `voiceProviderProfile`, for the same reason that one exists: the pack
+ * is built inside a socket callback (the first `context` frame goes out on `open`) where awaiting a
+ * request is not possible, so the reading has to have been published ahead of it. `null` means "no
+ * reading yet", and every caller treats it as the shipped defaults — the browser never invents a
+ * value when the server has not said one.
+ */
+let voiceRuntimeConfig: VoiceContextPackRuntimeSettings | null = null;
+
+/**
+ * Publishes the runtime-config reading. Called by the chat module's `useVoiceAvailable`, which is
+ * the one place the payload is fetched; nothing else writes it. `null` clears it (a failed fetch
+ * leaves the defaults in force rather than keeping a stale reading).
+ */
+export function setVoiceRuntimeConfig(config: VoiceContextPackRuntimeSettings | null): void {
+  voiceRuntimeConfig = config;
+}
+
+/** The published runtime-config reading, or `null` before one arrived. */
+export function readVoiceRuntimeConfig(): VoiceContextPackRuntimeSettings | null {
+  return voiceRuntimeConfig;
 }
 
 /**

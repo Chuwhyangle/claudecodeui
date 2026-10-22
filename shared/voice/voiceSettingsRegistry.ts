@@ -171,10 +171,97 @@ export const VOICE_REALTIME_SETTINGS_FILE_KEYS = [
   'runEndAck',
   'summaryModel',
   'speakerTracking',
+  'contextPack',
+  'spendGuard',
 ] as const;
 
 /** One top-level key of a Live Voice settings file. */
 export type VoiceRealtimeSettingsFileKey = (typeof VOICE_REALTIME_SETTINGS_FILE_KEYS)[number];
+
+// ── the runtime knobs: the pack's size, and the spend guard's threshold ────────────────────────
+
+/**
+ * The context pack's size knobs, as one effective reading.
+ *
+ * `maxRows` bounds how many conversation rows a pack may carry; `budgetChars` bounds the rendered
+ * text; `rowCapChars` bounds one row before its elision. The browser and the server both read this
+ * shape — the browser to BUILD a pack, the server to TRUNCATE one it was handed — so the two ends
+ * cannot disagree about which numbers describe one pack.
+ */
+export type VoiceContextPackRuntimeSettings = {
+  maxRows: number;
+  budgetChars: number;
+  rowCapChars: number;
+};
+
+/**
+ * The spend guard's threshold, as one effective reading.
+ *
+ * `maxCnyPerWindow` is a positive number in CNY; `windowMs` is the sliding window it applies over.
+ * Zero and negative values are NOT "off": the guard's off state does not exist, and an operator who
+ * wants a wider cap names a larger positive number (see `voice-realtime-spend-guard.ts`).
+ */
+export type VoiceSpendGuardRuntimeSettings = {
+  maxCnyPerWindow: number;
+  windowMs: number;
+};
+
+/**
+ * The shipped runtime values — the ONE place the defaults are written down.
+ *
+ * Both ends read them: the server's settings loader fills a missing (or refused) file block with
+ * these, and the browser's builder falls back to them when no runtime-config reading arrived. A
+ * tuning change therefore moves the browser's default and the server's default together.
+ */
+export const VOICE_RUNTIME_DEFAULTS = {
+  contextPack: { maxRows: 4, budgetChars: 1200, rowCapChars: 600 },
+  spendGuard: { maxCnyPerWindow: 0.05, windowMs: 30_000 },
+} as const satisfies {
+  contextPack: VoiceContextPackRuntimeSettings;
+  spendGuard: VoiceSpendGuardRuntimeSettings;
+};
+
+/**
+ * The accepted range of every runtime knob, as `[minimum, maximum]`.
+ *
+ * A settings file or an environment override outside its range is REFUSED (the default replaces it
+ * and the reason is reported); it is never clamped silently, because "I asked for 0 rows" and "you
+ * gave me 1" must not look the same to the operator. The browser applies its own ceiling on top
+ * ({@link VOICE_CONTEXT_PACK_BROWSER_CEILING}) so a compromised or older server cannot enlarge the
+ * pack beyond what the browser was built for.
+ */
+export const VOICE_RUNTIME_BOUNDS = {
+  contextPack: {
+    maxRows: [1, 12],
+    budgetChars: [200, 4000],
+    rowCapChars: [100, 2000],
+  },
+  spendGuard: {
+    maxCnyPerWindow: [0.001, 10],
+    windowMs: [5000, 60_000],
+  },
+} as const satisfies {
+  contextPack: Readonly<Record<keyof VoiceContextPackRuntimeSettings, readonly [number, number]>>;
+  spendGuard: Readonly<Record<keyof VoiceSpendGuardRuntimeSettings, readonly [number, number]>>;
+};
+
+/**
+ * The browser's own hard ceiling on a pack.
+ *
+ * The file values only take effect INSIDE this range; the builder clamps a larger runtime value
+ * down to it rather than trusting the server's answer. The numbers are the URL/serialization
+ * envelope the Live Voice socket was validated at — a pack past it is not a conversation any more.
+ */
+export const VOICE_CONTEXT_PACK_BROWSER_CEILING = {
+  maxRows: 12,
+  budgetChars: 4000,
+  rowCapChars: 2000,
+} as const satisfies VoiceContextPackRuntimeSettings;
+
+/** The environment escape hatch for a runtime knob; unset means the file (or default) decides. */
+export const VOICE_REALTIME_CONTEXT_MAX_ROWS_ENV = 'VOICE_REALTIME_CONTEXT_MAX_ROWS';
+export const VOICE_REALTIME_CONTEXT_BUDGET_CHARS_ENV = 'VOICE_REALTIME_CONTEXT_BUDGET_CHARS';
+export const VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS_ENV = 'VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS';
 
 /** The name `{{…}}` carries in a settings file's `contextTemplate`. */
 export const VOICE_REALTIME_CONTEXT_VARIABLE_NAME = 'context';

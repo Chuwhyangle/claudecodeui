@@ -18,19 +18,87 @@ import type { ChatMessage } from '@/shared/types';
  * ({@link isWorkSegmentMember}, `shouldHideToolResult`). A second implementation
  * would drift the moment either side changed.
  *
- * NO "LAST N TURNS". The budget is characters, taken newest-first until the next
- * row would not fit; a turn count would silently change what the model sees when
- * turns get longer, which is exactly what the SPEC rejects (D5).
+ * TWO BOUNDS, ONE PACK. The character budget remains the hard cap; a row cap (4 by default) limits
+ * how many separate utterances the pack can carry, so four very long rows cannot crowd out the most
+ * recent one. The row cap is calibrated from the 24 real C2 packs (2026-10-23) and is a ROW COUNT,
+ * not a turn count: D5's objection to a turn window is that turns get longer, and the character
+ * budget still does the length limiting. Both bounds are runtime knobs now (the deployment's
+ * settings file, delivered through `GET /api/voice/runtime-config`); the constants below are the
+ * shipped defaults and {@link VOICE_CONTEXT_PACK_CEILING} is the browser's hard limit.
  */
 
-/** The SPEC's hard cap on a pack's length, in UTF-16 code units (`String.length`). */
-export const VOICE_CONTEXT_BUDGET_CHARS = 2000;
+/**
+ * The shipped hard cap on a pack's length, in UTF-16 code units (`String.length`).
+ *
+ * 1,200 from 2026-10-23: the 24 real C2 packs averaged 1,822 chars / ~9 rows; taking the newest 4
+ * rows under 1,200 chars averages 873 chars and retains every observed Latin/number anchor. The
+ * deployment can retune this through the settings file; the browser applies
+ * {@link VOICE_CONTEXT_PACK_CEILING} on top.
+ */
+export const VOICE_CONTEXT_BUDGET_CHARS = 1200;
 
 /** The budget for one run's own output — the run-end summary's source. */
 export const VOICE_RUN_OUTPUT_BUDGET_CHARS = 2000;
 
-/** The SPEC's cap on one row, before elision. The elision keeps the row within it. */
+/** The shipped cap on one row, before elision. The elision keeps the row within it. */
 export const VOICE_CONTEXT_ROW_CAP_CHARS = 600;
+
+/**
+ * The shipped cap on how many conversation rows one pack may carry, newest first.
+ *
+ * A second bound beside {@link VOICE_CONTEXT_BUDGET_CHARS}: four rows keep the recent-turn structure
+ * the referent/term cases use, while the character budget keeps any four rows from becoming
+ * arbitrarily long. Not applied to {@link buildVoiceRunOutput}, which is one run's own output
+ * rather than a conversation pack.
+ */
+export const VOICE_CONTEXT_MAX_ROWS = 4;
+
+/**
+ * The browser's own hard ceiling on a runtime-configured pack.
+ *
+ * THE FILE VALUES ONLY TAKE EFFECT INSIDE THIS RANGE, and that is a security property rather than a
+ * taste: the page is what renders and sends the pack, so a bogus or compromised reading must not be
+ * able to make it build something the protocol was never sized for. A value past the ceiling is
+ * clamped here (never silently enlarged); the server's loader/endpoint already rejects such values
+ * and answers with the defaults, so this is the second line of the same defence.
+ */
+export const VOICE_CONTEXT_PACK_CEILING = {
+  maxRows: 12,
+  budgetChars: 4000,
+  rowCapChars: 2000,
+} as const;
+
+/** The shipped runtime values, used when no server reading arrived. */
+export const VOICE_CONTEXT_PACK_DEFAULTS = {
+  maxRows: VOICE_CONTEXT_MAX_ROWS,
+  budgetChars: VOICE_CONTEXT_BUDGET_CHARS,
+  rowCapChars: VOICE_CONTEXT_ROW_CAP_CHARS,
+} as const;
+
+/**
+ * A runtime reading from `GET /api/voice/runtime-config`, with every value clamped to the
+ * browser's ceiling.
+ *
+ * Callers pass the cached reading straight through; a missing reading (or any field) falls back to
+ * the shipped value. The clamp is the reason a test can hand `99 / 99999` in and read back the
+ * ceiling instead of a pack three times the protocol's size.
+ */
+export type VoiceContextPackRuntime = {
+  maxRows: number;
+  budgetChars: number;
+  rowCapChars: number;
+};
+
+/** Resolves one runtime reading against the shipped defaults and the browser ceiling. */
+export function resolveVoiceContextPackRuntime(
+  values?: Partial<VoiceContextPackRuntime> | null,
+): VoiceContextPackRuntime {
+  return {
+    maxRows: Math.min(values?.maxRows ?? VOICE_CONTEXT_PACK_DEFAULTS.maxRows, VOICE_CONTEXT_PACK_CEILING.maxRows),
+    budgetChars: Math.min(values?.budgetChars ?? VOICE_CONTEXT_PACK_DEFAULTS.budgetChars, VOICE_CONTEXT_PACK_CEILING.budgetChars),
+    rowCapChars: Math.min(values?.rowCapChars ?? VOICE_CONTEXT_PACK_DEFAULTS.rowCapChars, VOICE_CONTEXT_PACK_CEILING.rowCapChars),
+  };
+}
 
 /** How many lines of a fenced code block a row keeps before its elision marker (SPEC: `codeHeadLines`). */
 export const VOICE_CONTEXT_CODE_HEAD_LINES = 3;
@@ -75,6 +143,8 @@ export type VoiceContextPack = {
 export type VoiceContextPackOptions = {
   budgetChars?: number;
   rowCapChars?: number;
+  /** The newest-N conversation rows the pack may carry; defaults to {@link VOICE_CONTEXT_MAX_ROWS}. */
+  maxRows?: number;
   codeHeadLines?: number;
   /** The clock the relative times are read against. Injected so a test's pack is deterministic. */
   now?: number;
@@ -105,6 +175,10 @@ export type VoiceInputContextPackOptions = {
   /** What this listen has already committed. */
   voiceSoFar?: string;
   budgetChars?: number;
+  /** One row's own cap before elision; defaults to {@link VOICE_CONTEXT_ROW_CAP_CHARS}. */
+  rowCapChars?: number;
+  /** The newest-N conversation rows the pack may carry; defaults to {@link VOICE_CONTEXT_MAX_ROWS}. */
+  maxRows?: number;
   /** The clock the conversation rows' relative times are read against; injected for deterministic tests. */
   now?: number;
 };
@@ -135,7 +209,16 @@ export type VoiceInputContextPackOptions = {
 export function buildVoiceInputContextPack(
   options: VoiceInputContextPackOptions = {},
 ): VoiceContextPack {
-  const budgetChars = options.budgetChars ?? VOICE_CONTEXT_BUDGET_CHARS;
+  // ONE resolution for the whole pack: the draft blocks and the conversation share a budget, and a
+  // caller's runtime reading (from `GET /api/voice/runtime-config`) is clamped here, before either
+  // side spends it. `rowCapChars` is forwarded to the conversation builder so the two entries of
+  // the voice feature fold rows the same way.
+  const runtime = resolveVoiceContextPackRuntime({
+    ...(options.maxRows === undefined ? {} : { maxRows: options.maxRows }),
+    ...(options.budgetChars === undefined ? {} : { budgetChars: options.budgetChars }),
+    ...(options.rowCapChars === undefined ? {} : { rowCapChars: options.rowCapChars }),
+  });
+  const budgetChars = runtime.budgetChars;
   const parts: string[] = [];
   const entries: VoiceContextPackEntry[] = [];
   let chars = 0;
@@ -176,6 +259,8 @@ export function buildVoiceInputContextPack(
   if (remaining > 0 && (options.messages?.length ?? 0) > 0) {
     const conversation = buildVoiceContextPack(options.messages ?? [], {
       budgetChars: remaining,
+      maxRows: runtime.maxRows,
+      rowCapChars: runtime.rowCapChars,
       ...(options.now === undefined ? {} : { now: options.now }),
     });
     if (conversation.text !== '') {
@@ -226,8 +311,14 @@ export function buildVoiceContextPack(
   messages: readonly ChatMessage[],
   options: VoiceContextPackOptions = {},
 ): VoiceContextPack {
-  const budgetChars = options.budgetChars ?? VOICE_CONTEXT_BUDGET_CHARS;
-  const rowCapChars = options.rowCapChars ?? VOICE_CONTEXT_ROW_CAP_CHARS;
+  const runtime = resolveVoiceContextPackRuntime({
+    ...(options.maxRows === undefined ? {} : { maxRows: options.maxRows }),
+    ...(options.budgetChars === undefined ? {} : { budgetChars: options.budgetChars }),
+    ...(options.rowCapChars === undefined ? {} : { rowCapChars: options.rowCapChars }),
+  });
+  const budgetChars = runtime.budgetChars;
+  const rowCapChars = runtime.rowCapChars;
+  const maxRows = runtime.maxRows;
   const codeHeadLines = options.codeHeadLines ?? VOICE_CONTEXT_CODE_HEAD_LINES;
   const now = options.now ?? Date.now();
 
@@ -236,6 +327,9 @@ export function buildVoiceContextPack(
   let chars = 0;
 
   for (let index = messages.length - 1; index >= 0; index -= 1) {
+    // The row cap is checked before the visibility walk: once the newest visible rows are in, no
+    // older row may displace them, whether or not it is visible.
+    if (taken.length >= maxRows) break;
     const message = messages[index];
     if (!isVoiceContextRow(message)) continue;
 

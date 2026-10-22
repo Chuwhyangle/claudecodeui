@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { AsrCapabilities, AsrRuntimeStatus } from '@shared/asr/asrRegistry';
+import type { VoiceContextPackRuntimeSettings } from '@shared/voice/voiceSettingsRegistry';
 
 import {
   installVoiceClientAsrEngine,
   voiceClientAsrReadiness,
 } from '@/shared/voiceClientAsrWorker';
-import { api, setVoiceProviderProfile, setVoiceProviderRows } from '@/shared/api';
+import { api, setVoiceProviderProfile, setVoiceProviderRows, setVoiceRuntimeConfig } from '@/shared/api';
 import { useUiPreferences } from '@/shared/context/UiPreferencesContext';
 import type { VoiceProviderRow } from '@/shared/types';
 import {
@@ -113,6 +114,52 @@ function checkVoiceHealth(): Promise<boolean> {
   return request;
 }
 
+/** One in-flight runtime-config request, shared by every caller of {@link checkVoiceRuntimeConfig}. */
+let runtimeConfigRequest: Promise<void> | null = null;
+
+/**
+ * The payload's `contextPack` block, read leniently, or `null` for a payload this client cannot use.
+ *
+ * Lenient on purpose: a server that predates the endpoint, or a proxy that answered HTML, must leave
+ * the builder on its shipped defaults rather than fail a hook whose job is availability. The three
+ * numbers are the only fields read — the endpoint's `source`/`warnings` are for an operator, not for
+ * the decision this cache feeds.
+ */
+function readRuntimeConfig(payload: unknown): VoiceContextPackRuntimeSettings | null {
+  const block = (payload as { contextPack?: unknown } | null)?.contextPack;
+  if (!block || typeof block !== 'object' || Array.isArray(block)) return null;
+  const { maxRows, budgetChars, rowCapChars } = block as Record<string, unknown>;
+  if (typeof maxRows !== 'number' || typeof budgetChars !== 'number' || typeof rowCapChars !== 'number') {
+    return null;
+  }
+  return { maxRows, budgetChars, rowCapChars };
+}
+
+/**
+ * Fetches the deployment's runtime knobs and publishes them for the context-pack builders.
+ *
+ * DECOUPLED FROM HEALTH, deliberately: `/health` is a per-user provider reading that can 503 while
+ * the deployment's own settings file is perfectly readable, and the pack budget must not disappear
+ * with the recogniser. A failed fetch publishes `null`, which every builder reads as the shipped
+ * defaults — never as a value this client invented.
+ */
+function checkVoiceRuntimeConfig(): Promise<void> {
+  if (runtimeConfigRequest) return runtimeConfigRequest;
+  const request = api.voice.runtimeConfig()
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Voice runtime config failed (${response.status})`);
+      setVoiceRuntimeConfig(readRuntimeConfig(await response.json()));
+    })
+    .catch(() => {
+      setVoiceRuntimeConfig(null);
+    })
+    .finally(() => {
+      runtimeConfigRequest = null;
+    });
+  runtimeConfigRequest = request;
+  return request;
+}
+
 export function useVoiceAvailable(): boolean {
   // Read through the shared preferences owner. This used to re-parse the
   // preferences blob and register its own storage + sync listeners, once per
@@ -163,6 +210,9 @@ export function useVoiceAvailable(): boolean {
           const [reading] = await Promise.all([
             voiceClientAsrReadiness(),
             checkVoiceHealth().catch(() => false),
+            // The pack budget describes the deployment, not the recogniser, so it is asked beside
+            // the provider reading rather than after it — and its failure is already swallowed.
+            checkVoiceRuntimeConfig(),
           ]);
           if (active && id === requestId) setAvailable(reading?.ready === true);
           return;
@@ -184,10 +234,13 @@ export function useVoiceAvailable(): boolean {
           // server can be reached. A server that cannot answer leaves the profile unpublished,
           // which is the "do not trim" answer this path gave before — never a broken mic.
           await checkVoiceHealth().catch(() => {});
+          // Same reason as the client path above: the pack budget is a deployment reading and does
+          // not depend on the user's own endpoint answering.
+          await checkVoiceRuntimeConfig();
           return;
         }
 
-        const result = await checkVoiceHealth();
+        const [result] = await Promise.all([checkVoiceHealth(), checkVoiceRuntimeConfig()]);
         if (active && id === requestId) setAvailable(result);
       } catch {
         if (active && id === requestId) setAvailable(false);

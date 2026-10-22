@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,6 +40,7 @@ delete process.env.VITE_IS_PLATFORM;
 const { closeConnection, getConnection, initializeDatabase, voiceSettingsDb } = await import('@/modules/database/index.js');
 const { createVoiceRouter } = await import('@/modules/voice/voice.routes.js');
 const { createVoiceSettingsService } = await import('@/modules/voice/voice.service.js');
+const { readVoiceRealtimeRuntimeConfig } = await import('@/modules/voice-realtime/index.js');
 const { userRoutes } = await import('@/modules/user/index.js');
 const { authenticateToken } = await import('@/modules/auth/index.js');
 const { AppError } = await import('@/shared/utils.js');
@@ -148,7 +149,16 @@ function addUser(id: number, username: string): string {
   return signToken({ userId: id, username });
 }
 
-async function withServer(run: (context: ServerContext) => Promise<void>): Promise<void> {
+type RuntimeConfigDependency = {
+  contextPack: { maxRows: number; budgetChars: number; rowCapChars: number };
+  source?: 'default' | 'file';
+  warnings?: readonly string[];
+};
+
+async function withServer(
+  run: (context: ServerContext) => Promise<void>,
+  options: { voiceRuntimeConfig?: () => RuntimeConfigDependency } = {},
+): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;
   const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'voice-config-routes-'));
   closeConnection();
@@ -177,6 +187,7 @@ async function withServer(run: (context: ServerContext) => Promise<void>): Promi
     parseAudioUpload: (_request, _response, next) => next(),
     // Likewise for the raw-corpus endpoint's own parser: this surface serves neither upload route.
     parseRawAudioUpload: (_request, _response, next) => next(),
+    ...(options.voiceRuntimeConfig === undefined ? {} : { voiceRuntimeConfig: options.voiceRuntimeConfig }),
   }));
   app.use('/api/user', authenticateToken, userRoutes);
   app.use((error: unknown, _request: ExpressRequest, response: ExpressResponse, _next: NextFunction) => {
@@ -490,3 +501,90 @@ test('a server-held credential is masked on the readback while the browser-held 
   });
 });
 
+
+// ── the deployment-level runtime knobs: `GET /api/voice/runtime-config` ─────────────────────────
+
+test('the runtime config is the effective contextPack from the settings file, independent of provider health', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'voice-runtime-config-'));
+  const settingsPath = path.join(directory, 'settings.json');
+  try {
+    await writeFile(
+      settingsPath,
+      JSON.stringify({ contextPack: { maxRows: 2, budgetChars: 400, rowCapChars: 300 } }),
+      'utf8',
+    );
+
+    // The router's voice service THROWS on every method; a 200 here proves the route never asks it.
+    // That is the "provider unknown" leg: the deployment reading answers regardless of the
+    // per-user recogniser that `/health` would refuse.
+    await withServer(
+      async (context) => {
+        const response = await send(context, 'GET', '/api/voice/runtime-config');
+        assert.equal(response.status, 200);
+        const body = await readJson(response);
+        console.log(`runtime-config from file => ${JSON.stringify(body)}`);
+        assert.deepEqual(body.contextPack, { maxRows: 2, budgetChars: 400, rowCapChars: 300 });
+        assert.equal(body.source, 'file');
+        assert.deepEqual(body.warnings, []);
+      },
+      {
+        voiceRuntimeConfig: () =>
+          readVoiceRealtimeRuntimeConfig({ settingsPath, env: {} }),
+      },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a missing settings file answers the defaults plus a readable warning, never a 5xx', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'voice-runtime-config-missing-'));
+  const settingsPath = path.join(directory, 'does-not-exist.json');
+  try {
+    await withServer(
+      async (context) => {
+        const response = await send(context, 'GET', '/api/voice/runtime-config');
+        assert.equal(response.status, 200);
+        const body = await readJson(response);
+        console.log(`runtime-config missing file => ${JSON.stringify(body)}`);
+        assert.deepEqual(body.contextPack, { maxRows: 4, budgetChars: 1200, rowCapChars: 600 });
+        assert.equal(body.source, 'default');
+        assert.ok(Array.isArray(body.warnings) && body.warnings.length > 0, 'the reason must be readable');
+      },
+      { voiceRuntimeConfig: () => readVoiceRealtimeRuntimeConfig({ settingsPath, env: {} }) },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a malformed settings file answers the defaults plus the parse reason', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'voice-runtime-config-bad-'));
+  const settingsPath = path.join(directory, 'settings.json');
+  try {
+    await writeFile(settingsPath, '{ this is not JSON', 'utf8');
+    await withServer(
+      async (context) => {
+        const response = await send(context, 'GET', '/api/voice/runtime-config');
+        assert.equal(response.status, 200);
+        const body = await readJson(response);
+        console.log(`runtime-config bad file => ${JSON.stringify(body)}`);
+        assert.deepEqual(body.contextPack, { maxRows: 4, budgetChars: 1200, rowCapChars: 600 });
+        assert.ok(Array.isArray(body.warnings) && body.warnings.length > 0);
+      },
+      { voiceRuntimeConfig: () => readVoiceRealtimeRuntimeConfig({ settingsPath, env: {} }) },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('a router built with no runtime reader answers the shipped defaults', async () => {
+  await withServer(async (context) => {
+    const response = await send(context, 'GET', '/api/voice/runtime-config');
+    assert.equal(response.status, 200);
+    const body = await readJson(response);
+    assert.deepEqual(body.contextPack, { maxRows: 4, budgetChars: 1200, rowCapChars: 600 });
+    assert.equal(body.source, 'default');
+  });
+});

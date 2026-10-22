@@ -15,7 +15,7 @@
  * it, because the Realtime model's behaviour is the thing being tuned and a mid-session swap makes
  * the change unattributable.
  *
- * THE KEY SET. NINE top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly
+ * THE KEY SET. ELEVEN top-level keys are read, and NO OTHERS are — an unknown key is ignored, exactly
  * as it always has been, rather than refused:
  *
  *   · `version`         — a non-empty string, logged beside every injection so an edit is visible.
@@ -68,6 +68,20 @@
  *                         model path, or an out-of-range/non-finite number refuses the WHOLE block
  *                         (and, like every other shape error here, the whole reading), so a
  *                         half-valid observer can never run.
+ *   · `contextPack`   — the C2 pack's size knobs, as one object
+ *                         (`{ "maxRows": 4, "budgetChars": 1200, "rowCapChars": 600 }`). This is
+ *                         the normal entry; the `VOICE_REALTIME_CONTEXT_*` variables are escape
+ *                         hatches applied over it. Every field is optional and omitted fields keep
+ *                         the shipped default; an out-of-range or non-numeric KNOWN key refuses the
+ *                         WHOLE block (and therefore the reading), so a typo cannot enlarge the pack
+ *                         silently. Unknown sub-keys are ignored.
+ *   · `spendGuard`    — the per-window spend cap
+ *                         (`{ "maxCnyPerWindow": 0.05, "windowMs": 30000 }`). `maxCnyPerWindow` is
+ *                         the normal entry for the guard's threshold; `VOICE_REALTIME_MAX_CNY_PER_30S`
+ *                         remains the escape hatch and the diagnosis route's override outranks both.
+ *                         `windowMs` has no environment spelling — the file is its only deployment
+ *                         knob. A refused field leaves the default in force (the guard is NEVER
+ *                         disabled) and lands in `problems`.
  *
  * FAIL OPEN ON I/O, FAIL CLOSED ON SHAPE. A missing, unreadable or unparseable file falls back to
  * the shipped defaults with the reason in {@link VoiceRealtimeSettings.problems}; a file that
@@ -83,10 +97,22 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
+  VOICE_REALTIME_CONTEXT_BUDGET_CHARS_ENV,
+  VOICE_REALTIME_CONTEXT_MAX_ROWS_ENV,
+  VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS_ENV,
   VOICE_REALTIME_CONTEXT_VARIABLE,
   VOICE_REALTIME_CONTEXT_VARIABLE_NAME,
+  VOICE_RUNTIME_BOUNDS,
+  VOICE_RUNTIME_DEFAULTS,
+  type VoiceContextPackRuntimeSettings,
   type VoiceRealtimeSettingsFileKey,
+  type VoiceSpendGuardRuntimeSettings,
 } from '@shared/voice/voiceSettingsRegistry.js';
+
+import {
+  resolveSpendWindowLimit,
+  type SpendWindowLimitResolution,
+} from './voice-realtime-spend-guard.js';
 
 import {
   ANNOUNCE_PHRASES,
@@ -248,6 +274,24 @@ export type VoiceRealtimeSettings = {
    * configured an observer.
    */
   speakerTracking: SpeakerTrackingSettingsBlock | null;
+  /**
+   * The C2 pack's size knobs, VALIDATED and default-filled.
+   *
+   * Always concrete: a file that named nothing (or whose block was refused) yields
+   * {@link VOICE_RUNTIME_DEFAULTS.contextPack}. `server/index.ts` and the proxy apply the
+   * environment escape hatch over this reading (`environment > settings file > default`), so both
+   * ends of one connection describe the same pack.
+   */
+  contextPack: VoiceContextPackRuntimeSettings;
+  /**
+   * The spend guard's threshold, VALIDATED and default-filled.
+   *
+   * Always concrete and always armed: `maxCnyPerWindow` is a positive number, never absent, so a
+   * typo in the file cannot disable the guard. `maxCnyPerWindow` is the FILE source; the
+   * environment and the diagnosis override outrank it in
+   * {@link resolveSpendWindowLimit} at the assembly point.
+   */
+  spendGuard: VoiceSpendGuardRuntimeSettings;
   /** The compiled-in values, or the file's. */
   source: VoiceRealtimeSettingsSource;
   /** The file's own `version`, logged beside every injection so an edit is visible in the log. */
@@ -272,6 +316,8 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
   runEndAck: readonly string[];
   summaryModel: string | null;
   speakerTracking: SpeakerTrackingSettingsBlock | null;
+  contextPack: VoiceContextPackRuntimeSettings;
+  spendGuard: VoiceSpendGuardRuntimeSettings;
 } {
   return {
     instructions: baseInstructions,
@@ -290,6 +336,10 @@ export function defaultVoiceRealtimeSettings(baseInstructions: string): {
     summaryModel: null,
     // No file, no observer: speaker tracking stays off unless the environment escape hatch asks.
     speakerTracking: null,
+    // No file, no tuning: the pack is the shipped 4 rows / 1,200 chars / 600 per row.
+    contextPack: { ...VOICE_RUNTIME_DEFAULTS.contextPack },
+    // No file, no tuning: the ¥0.05 / 30 s guard is what ships, and it is always armed.
+    spendGuard: { ...VOICE_RUNTIME_DEFAULTS.spendGuard },
   };
 }
 
@@ -619,6 +669,133 @@ function validateSpeakerTracking(value: unknown): {
 }
 
 /**
+ * The result of validating one runtime-knob block: the values the file's block resolves to, and the
+ * reasons anything in it was refused.
+ *
+ * A refused KNOWN key makes the whole block fall back to `defaults` (the caller receives the
+ * defaults and a non-empty `problems`), which is the same all-or-nothing rule the sibling blocks
+ * follow. Unknown sub-keys are ignored: the file is a forward-compatibility surface, and a key this
+ * build does not read is not a typo in a key it does.
+ */
+type RuntimeBlockValidation<T> = {
+  values: T;
+  problems: string[];
+};
+
+/**
+ * Reads one field of a runtime-knob block, recording a problem instead of guessing when it is out
+ * of shape.
+ *
+ * `integer` is true for a count (`maxRows`): a fractional row count is not "almost one more row",
+ * it is a value this knob cannot mean, so it is refused rather than rounded.
+ */
+function runtimeNumber(
+  value: unknown,
+  label: string,
+  bounds: readonly [number, number],
+  integer: boolean,
+  problems: string[],
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    problems.push(`\`${label}\` must be a finite number`);
+    return undefined;
+  }
+  if (integer && !Number.isInteger(value)) {
+    problems.push(`\`${label}\` must be an integer`);
+    return undefined;
+  }
+  const [minimum, maximum] = bounds;
+  if (value < minimum || value > maximum) {
+    problems.push(`\`${label}\` must be between ${minimum} and ${maximum}`);
+    return undefined;
+  }
+  return value;
+}
+
+/**
+ * Validates a settings file's `contextPack` block.
+ *
+ * The block is DEFAULT-FILLED field by field: a file naming only `budgetChars` keeps the shipped
+ * row count and per-row cap. A known key with the wrong type or an out-of-range value refuses the
+ * WHOLE block (and, at the caller, the whole reading), so a typo cannot half-apply a pack budget.
+ *
+ * Consumers: {@link loadVoiceRealtimeSettings} only.
+ */
+function validateContextPack(value: unknown, filePath: string): RuntimeBlockValidation<VoiceContextPackRuntimeSettings> {
+  const defaults = VOICE_RUNTIME_DEFAULTS.contextPack;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {
+      values: { ...defaults },
+      problems: [`${filePath}: \`contextPack\` must be a JSON object`],
+    };
+  }
+  const record = value as Record<string, unknown>;
+  const problems: string[] = [];
+  const bounds = VOICE_RUNTIME_BOUNDS.contextPack;
+  const maxRows = record.maxRows === undefined
+    ? defaults.maxRows
+    : runtimeNumber(record.maxRows, 'contextPack.maxRows', bounds.maxRows, true, problems);
+  const budgetChars = record.budgetChars === undefined
+    ? defaults.budgetChars
+    : runtimeNumber(record.budgetChars, 'contextPack.budgetChars', bounds.budgetChars, true, problems);
+  const rowCapChars = record.rowCapChars === undefined
+    ? defaults.rowCapChars
+    : runtimeNumber(record.rowCapChars, 'contextPack.rowCapChars', bounds.rowCapChars, true, problems);
+
+  if (problems.length > 0) {
+    return { values: { ...defaults }, problems };
+  }
+  return {
+    values: {
+      maxRows: maxRows ?? defaults.maxRows,
+      budgetChars: budgetChars ?? defaults.budgetChars,
+      rowCapChars: rowCapChars ?? defaults.rowCapChars,
+    },
+    problems: [],
+  };
+}
+
+/**
+ * Validates a settings file's `spendGuard` block.
+ *
+ * The guard is NEVER disabled: a field that is out of shape refuses the whole block, and the
+ * shipped default (`¥0.05 / 30 s`) replaces it. There is deliberately no `null`/`0` spelling for
+ * "off" — an operator who wants a wider cap names a larger positive number, so a typo cannot
+ * silently remove the guard.
+ *
+ * Consumers: {@link loadVoiceRealtimeSettings} only.
+ */
+function validateSpendGuard(value: unknown, filePath: string): RuntimeBlockValidation<VoiceSpendGuardRuntimeSettings> {
+  const defaults = VOICE_RUNTIME_DEFAULTS.spendGuard;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return {
+      values: { ...defaults },
+      problems: [`${filePath}: \`spendGuard\` must be a JSON object`],
+    };
+  }
+  const record = value as Record<string, unknown>;
+  const problems: string[] = [];
+  const bounds = VOICE_RUNTIME_BOUNDS.spendGuard;
+  const maxCnyPerWindow = record.maxCnyPerWindow === undefined
+    ? defaults.maxCnyPerWindow
+    : runtimeNumber(record.maxCnyPerWindow, 'spendGuard.maxCnyPerWindow', bounds.maxCnyPerWindow, false, problems);
+  const windowMs = record.windowMs === undefined
+    ? defaults.windowMs
+    : runtimeNumber(record.windowMs, 'spendGuard.windowMs', bounds.windowMs, true, problems);
+
+  if (problems.length > 0) {
+    return { values: { ...defaults }, problems };
+  }
+  return {
+    values: {
+      maxCnyPerWindow: maxCnyPerWindow ?? defaults.maxCnyPerWindow,
+      windowMs: windowMs ?? defaults.windowMs,
+    },
+    problems: [],
+  };
+}
+
+/**
  * Reads the settings for ONE connection.
  *
  * `baseInstructions` is the shipped prompt (`VoiceRealtimeProxySeams.instructions`) and is what the
@@ -762,6 +939,27 @@ export function loadVoiceRealtimeSettings(options: {
     problems.push(...validated.problems);
   }
 
+  // The C2 pack's size knobs. The file is the normal entry; the `VOICE_REALTIME_CONTEXT_*`
+  // variables are escape hatches applied over this reading by `resolveContextPackRuntimeSettings`.
+  // A refused block contributes to `problems`, which refuses the whole reading below — the same
+  // all-or-nothing rule every other key here follows.
+  let contextPack: VoiceContextPackRuntimeSettings = defaults.contextPack;
+  if (record.contextPack !== undefined) {
+    const validated = validateContextPack(record.contextPack, filePath);
+    contextPack = validated.values;
+    problems.push(...validated.problems);
+  }
+
+  // The spend guard's threshold. Always concrete and always armed: a refused block falls back to
+  // the default rather than to "no cap". The environment and the diagnosis override outrank the
+  // file inside `resolveSpendWindowLimit` at the assembly point.
+  let spendGuard: VoiceSpendGuardRuntimeSettings = defaults.spendGuard;
+  if (record.spendGuard !== undefined) {
+    const validated = validateSpendGuard(record.spendGuard, filePath);
+    spendGuard = validated.values;
+    problems.push(...validated.problems);
+  }
+
   // The shape of the block is a contract, not a preference: the pack has to reach the model, and a
   // template that never mentions the variable — or mentions one nobody defined — would either drop
   // the pack or send the model a literal `{{something}}`.
@@ -777,7 +975,155 @@ export function loadVoiceRealtimeSettings(options: {
   if (problems.length > 0) {
     return { ...defaults, source: 'default', version, path: filePath, problems };
   }
-  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, runEndAck, summaryModel, speakerTracking, source: 'file', version, path: filePath, problems: [] };
+  return { instructions, contextTemplate, turnDetection, omissionFill, announcePhrases, runEndAck, summaryModel, speakerTracking, contextPack, spendGuard, source: 'file', version, path: filePath, problems: [] };
+}
+
+/** Which source decided one context-pack knob. Same vocabulary the other knobs' logs use. */
+export type VoiceRuntimeValueSource = 'environment' | 'settings file' | 'default';
+
+/**
+ * The context pack's effective values and where each came from.
+ *
+ * `values` is what every consumer uses (the browser builder via the HTTP endpoint, the proxy's
+ * truncation, the one-shot path's truncation). `sources` makes "which knob won" answerable in the
+ * same way the speaker-tracking reading does, and `problems` carries a refused environment spelling
+ * so the operator learns their escape hatch did not apply.
+ */
+export type VoiceContextPackRuntimeResolution = {
+  values: VoiceContextPackRuntimeSettings;
+  sources: Record<keyof VoiceContextPackRuntimeSettings, VoiceRuntimeValueSource>;
+  problems: string[];
+};
+
+/** Reads one context-pack knob from the environment, or `undefined` when the variable is absent. */
+function contextPackEnvValue(
+  raw: string | undefined,
+  label: string,
+  bounds: readonly [number, number],
+  integer: boolean,
+  problems: string[],
+): number | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    problems.push(`${label}=${JSON.stringify(raw)} must be a number between ${bounds[0]} and ${bounds[1]}`);
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    problems.push(`${label}=${JSON.stringify(raw)} must be a number between ${bounds[0]} and ${bounds[1]}`);
+    return undefined;
+  }
+  if (integer && !Number.isInteger(parsed)) {
+    problems.push(`${label}=${JSON.stringify(raw)} must be an integer between ${bounds[0]} and ${bounds[1]}`);
+    return undefined;
+  }
+  if (parsed < bounds[0] || parsed > bounds[1]) {
+    problems.push(`${label}=${JSON.stringify(raw)} must be between ${bounds[0]} and ${bounds[1]}`);
+    return undefined;
+  }
+  return parsed;
+}
+
+/**
+ * Applies `environment > settings file > default` to the context pack's three knobs.
+ *
+ * Pure: the environment and the file reading arrive as ARGUMENTS. A refused environment value is
+ * reported and the next source decides — unlike the spend guard, where a refused explicit cap must
+ * not fall through to another explicit cap; here the file is the normal entry and the environment
+ * is the escape hatch, so a bad escape hatch leaves the deployment's own configured value in force.
+ *
+ * Consumers: the proxy (per connection), the one-shot transcription path (per request), and the
+ * `GET /api/voice/runtime-config` route.
+ */
+export function resolveContextPackRuntimeSettings(
+  env: Readonly<Record<string, string | undefined>>,
+  file: VoiceContextPackRuntimeSettings,
+  fileSource: VoiceRealtimeSettingsSource = 'file',
+): VoiceContextPackRuntimeResolution {
+  const bounds = VOICE_RUNTIME_BOUNDS.contextPack;
+  const problems: string[] = [];
+
+  const envMaxRows = contextPackEnvValue(
+    env[VOICE_REALTIME_CONTEXT_MAX_ROWS_ENV],
+    VOICE_REALTIME_CONTEXT_MAX_ROWS_ENV,
+    bounds.maxRows,
+    true,
+    problems,
+  );
+  const envBudgetChars = contextPackEnvValue(
+    env[VOICE_REALTIME_CONTEXT_BUDGET_CHARS_ENV],
+    VOICE_REALTIME_CONTEXT_BUDGET_CHARS_ENV,
+    bounds.budgetChars,
+    true,
+    problems,
+  );
+  const envRowCapChars = contextPackEnvValue(
+    env[VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS_ENV],
+    VOICE_REALTIME_CONTEXT_ROW_CAP_CHARS_ENV,
+    bounds.rowCapChars,
+    true,
+    problems,
+  );
+
+  const fileSourceLabel: VoiceRuntimeValueSource = fileSource === 'file' ? 'settings file' : 'default';
+  return {
+    values: {
+      maxRows: envMaxRows ?? file.maxRows,
+      budgetChars: envBudgetChars ?? file.budgetChars,
+      rowCapChars: envRowCapChars ?? file.rowCapChars,
+    },
+    sources: {
+      maxRows: envMaxRows === undefined ? fileSourceLabel : 'environment',
+      budgetChars: envBudgetChars === undefined ? fileSourceLabel : 'environment',
+      rowCapChars: envRowCapChars === undefined ? fileSourceLabel : 'environment',
+    },
+    problems,
+  };
+}
+
+/** One deployment-level reading of the runtime knobs, plus every reason a source was refused. */
+export type VoiceRealtimeRuntimeConfigReading = {
+  contextPack: VoiceContextPackRuntimeSettings;
+  spendGuard: VoiceSpendGuardRuntimeSettings;
+  /** Whether the settings file was read and accepted (`file`) or the defaults stood (`default`). */
+  source: VoiceRealtimeSettingsSource;
+  /** Readable warnings, oldest first. Empty on a clean reading. */
+  warnings: string[];
+};
+
+/**
+ * Reads the deployment's effective runtime knobs, for callers that are not a Live Voice connection:
+ * the browser's `GET /api/voice/runtime-config` and the one-shot transcription path.
+ *
+ * READ PER CALL, never cached here: an operator's edit reaches the next request / next connection,
+ * which is the same hot-update contract the per-connection loader has. `settingsPath` is a
+ * criterion's override; a deployment names {@link VOICE_REALTIME_SETTINGS_ENV} instead.
+ *
+ * Never throws: a missing or malformed file yields the shipped defaults with the reason in
+ * `warnings`. The spend guard is always concrete and always armed.
+ */
+export function readVoiceRealtimeRuntimeConfig(options: {
+  settingsPath?: string | undefined;
+  env?: Readonly<Record<string, string | undefined>>;
+} = {}): VoiceRealtimeRuntimeConfigReading {
+  const env = options.env ?? process.env;
+  const settings = loadVoiceRealtimeSettings({
+    baseInstructions: '',
+    ...(options.settingsPath === undefined ? {} : { settingsPath: options.settingsPath }),
+  });
+  const contextPack = resolveContextPackRuntimeSettings(env, settings.contextPack, settings.source);
+  const spendGuard: SpendWindowLimitResolution = resolveSpendWindowLimit(env, undefined, settings.spendGuard);
+  const warnings = [...settings.problems, ...contextPack.problems];
+  if (spendGuard.invalid !== null) {
+    warnings.push(`spend window limit: ${spendGuard.invalid}`);
+  }
+  return {
+    contextPack: contextPack.values,
+    spendGuard: { maxCnyPerWindow: spendGuard.maxCnyPerWindow, windowMs: spendGuard.windowMs },
+    source: settings.source,
+    warnings,
+  };
 }
 
 /**
