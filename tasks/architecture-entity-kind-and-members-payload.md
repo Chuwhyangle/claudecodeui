@@ -21,10 +21,10 @@ extra: {}
 
 ## AC
 
-- [ ] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：用真实形态 fixture（function/interface/class 混合，含成员）断言节点带 `kind`，`members` 受上限截断并带 `membersTruncated`，`kindCounts` 统计的是预算前的全体相关实体
-- [ ] 同上命令中新增用例：`arch.json` 缺失时节点无 `kind`、响应仍 200 且 provenance 带诊断；旧形态（无 `arch.json` 的 fixture）逐字节沿用既有断言不回归
-- [ ] 同上命令中新增用例：`archJsonHash` 变化后 `kind/members` 随缓存失效重建（内容寻址缓存读数），未变化时第二次请求不再读 `arch.json`
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（可选字段透传，既有用例不回归）；`npm run typecheck` 通过
+- [x] `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/generator.test.ts server/modules/architecture/tests/architecture-routes.test.ts` exit 0：用真实形态 fixture（function/interface/class 混合，含成员）断言节点带 `kind`，`members` 受上限截断并带 `membersTruncated`，`kindCounts` 统计的是预算前的全体相关实体
+- [x] 同上命令中新增用例：`arch.json` 缺失时节点无 `kind`、响应仍 200 且 provenance 带诊断；旧形态（无 `arch.json` 的 fixture）逐字节沿用既有断言不回归
+- [x] 同上命令中新增用例：`archJsonHash` 变化后 `kind/members` 随缓存失效重建（内容寻址缓存读数），未变化时第二次请求不再读 `arch.json`
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0（可选字段透传，既有用例不回归）；`npm run typecheck` 通过
 
 ## DoD
 
@@ -41,3 +41,11 @@ extra: {}
 - src/modules/architecture/useArchitectureGraph.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/architecture-entity-kind-and-members-payload.md
+
+## Blocker
+
+**2026-10-22T07:26:48.850Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/4，剩余未勾 4）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：848b5a5f-533f-44d7-8540-3e074ae6a16e
