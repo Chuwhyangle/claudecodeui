@@ -1,7 +1,7 @@
 ---
 id: architecture-leaf-group-expansion-draws-files
 title: 展开叶目录组时画出组内文件（不再回显同一个组框，229 个文件目前完全不可达）
-status: todo
+status: ready
 labels:
   - feature
 parent: null

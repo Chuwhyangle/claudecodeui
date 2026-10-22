@@ -1,7 +1,7 @@
 ---
 id: architecture-narrow-container-layer-bound
 title: 窄容器用 layerBound 收窄 flat 布局（elk.aspectRatio 在单连通 flat 图上是空操作，实测逐像素相同）
-status: todo
+status: ready
 labels:
   - feature
 parent: null
