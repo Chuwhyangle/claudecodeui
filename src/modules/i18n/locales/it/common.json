@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Messaggio",
       "mentionFileOnly": "menziona il file, non il nome"
     },
-    "tray":     {
+    "tray": {
       "region": "Selezione",
       "pill": "{{count}} selezionati ▴",
       "expand": "Espandi la barra di selezione",
@@ -123,7 +123,9 @@
         "collapsed": "Il grafo è troppo largo, quindi è stato ripiegato nella panoramica per directory.",
         "focusedFitHint": "Lo zoom leggibile è attivo, quindi questa vista è focalizzata — scegli «Panoramica» per vedere tutto il grafo.",
         "focusSummary": "Lo zoom leggibile è attivo: focus su {{package}} al {{zoom}}% — scegli Panoramica per vedere tutto il grafo ({{count}} altri pacchetti).",
-        "focusOnly": "Lo zoom leggibile è attivo — scegli Panoramica per vedere tutto il grafo."
+        "focusOnly": "Lo zoom leggibile è attivo — scegli Panoramica per vedere tutto il grafo.",
+        "overviewTooSmall": "Grafo completo al {{zoom}}% — tocca un pacchetto per ingrandire",
+        "backToWhole": "Torna al grafo completo"
       },
       "minimap": {
         "label": "Panoramica del diagramma: {{percent}}% del disegno visibile",

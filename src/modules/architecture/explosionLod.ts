@@ -359,6 +359,21 @@ function frameBox(frame: Element): FrameBox | null {
   return null;
 }
 
+/**
+ * The drawn geometry of one package frame, in drawing user units, or `null`
+ * when the drawing has no frame for that package (a renderer without package
+ * frames, or a package folded into a `grp::` node instead).
+ *
+ * Exported for the overview hint's "tap a package" zoom: `PlantUmlGraph` needs
+ * the frame's size to choose a legible scale and its position to centre it,
+ * without re-reading the renderer's SVG contract itself. Consumers:
+ * `PlantUmlGraph.tsx`.
+ */
+export function packageFrameBox(host: ParentNode, packageId: string): FrameBox | null {
+  const frame = packageFrame(host, packageId);
+  return frame === null ? null : frameBox(frame);
+}
+
 /* ── counter-scaled package titles ─────────────────────────────────────────────────────────── */
 
 /** Normalise a zoom reading; a not-yet-measured scale means natural size. */

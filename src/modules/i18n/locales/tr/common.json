@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Mesaj",
       "mentionFileOnly": "adı değil dosyayı belirtti"
     },
-    "tray":     {
+    "tray": {
       "region": "Seçim",
       "pill": "{{count}} seçili ▴",
       "expand": "Seçim tepsisini genişlet",
@@ -123,7 +123,9 @@
         "collapsed": "Graf çok geniş olduğu için dizin genel görünümüne katlandı.",
         "focusedFitHint": "Okunabilir yakınlaştırma açık olduğundan bu görünüm odaklıdır — tüm grafiği görmek için “Genel görünüm”ü seçin.",
         "focusSummary": "Okunabilir yakınlaştırma açık: {{package}} odakta, %{{zoom}} — tüm grafiği görmek için Genel görünüm’ü seçin ({{count}} diğer paket).",
-        "focusOnly": "Okunabilir yakınlaştırma açık — tüm grafiği görmek için Genel görünüm’ü seçin."
+        "focusOnly": "Okunabilir yakınlaştırma açık — tüm grafiği görmek için Genel görünüm’ü seçin.",
+        "overviewTooSmall": "Tüm grafik %{{zoom}} — yakınlaştırmak için bir pakete dokunun",
+        "backToWhole": "Tüm grafiğe dön"
       },
       "minimap": {
         "label": "Diyagram genel görünümü, çizimin %{{percent}} kadarı görünür",

@@ -5264,3 +5264,76 @@ test('the neighbourhood view keeps edge labels hidden, like every other view', a
   assert.ok(host.querySelectorAll('.uml-edge text').length > 0, 'the renderer still draws the labels');
   assert.deepEqual(visibleEdgeLabels(host), [], 'no label is visible until the reader hovers an edge endpoint');
 });
+
+test('a whole graph below the useful scale offers a hint; tapping a package zooms in and back', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  const svg = host.querySelector('svg');
+  assert.ok(svg !== null);
+  const natural = svgViewBoxSize(svg);
+  // A phone-shaped canvas that is deliberately narrower than the drawing: the
+  // whole-graph fit lands under the 12% useful-scale floor, which is exactly
+  // the state the task says must not leave the reader with a grey smear.
+  sizeHost(host, Math.max(8, Math.round(natural.width * 0.05)), 505);
+  triggerResize();
+  await waitFor(() => {
+    const scale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+    assert.ok(scale > 0 && scale < 0.12, `the fit must land below the hint threshold; got ${scale}`);
+  });
+
+  const hint = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-readable-hint]');
+    assert.ok(node instanceof HTMLElement, 'a too-small whole graph states so');
+    return node;
+  });
+  assert.equal(hint.getAttribute('role'), 'status', 'the hint is announced without stealing focus');
+  assert.match(hint.textContent ?? '', /tap a package to zoom in/i);
+  assert.equal(
+    document.querySelector('[data-architecture-readable-back]'),
+    null,
+    'there is nothing to go back to before a package is chosen',
+  );
+
+  // The far zoom settles at the package level, where the frames are visible.
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
+  const frame = host.querySelector('.uml-package[data-package-id]');
+  assert.ok(frame instanceof Element, 'the package level must draw package frames');
+  const before = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  fireEvent.click(frame);
+  await waitFor(() => {
+    const scale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+    assert.ok(scale > before, `tapping a package must zoom in; ${before} -> ${scale}`);
+    assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
+  });
+  const back = document.querySelector('[data-architecture-readable-back]');
+  assert.ok(back instanceof HTMLElement, 'the hint row now offers the way back');
+  assert.match(hint.textContent ?? '', /Focused on/i);
+
+  // The zoom is CENTRED on that package: the scroll offsets are the frame's
+  // centre at the applied scale, brought to the middle of the content box.
+  const applied = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  const frameRect = [...frame.children].find((child) => child.tagName.toLowerCase() === 'rect');
+  assert.ok(frameRect instanceof Element, 'the package frame carries its geometry on a rect');
+  const [fx, fy, fw, fh] = ['x', 'y', 'width', 'height']
+    .map((name) => Number(frameRect.getAttribute(name)));
+  const originParts = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+  const originX = Number.isFinite(originParts[0]) ? originParts[0] : 0;
+  const originY = Number.isFinite(originParts[1]) ? originParts[1] : 0;
+  const expectedLeft = Math.max(0, (fx - originX) * applied + (fw * applied) / 2 - host.clientWidth / 2);
+  const expectedTop = Math.max(0, (fy - originY) * applied + (fh * applied) / 2 - host.clientHeight / 2);
+  assert.ok(
+    Math.abs(host.scrollLeft - expectedLeft) < 0.5,
+    `the package must be centred horizontally; got ${host.scrollLeft}, expected ${expectedLeft}`,
+  );
+  assert.ok(
+    Math.abs(host.scrollTop - expectedTop) < 0.5,
+    `the package must be centred vertically; got ${host.scrollTop}, expected ${expectedTop}`,
+  );
+
+  // "Back to whole graph" restores the whole-graph fit.
+  fireEvent.click(back);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'fit'));
+  const restored = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.ok(restored < before * 1.001, `the whole-graph fit must be restored; got ${restored} vs ${before}`);
+  assert.equal(document.querySelector('[data-architecture-readable-back]'), null, 'the back action is gone');
+});

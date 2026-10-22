@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Pesan",
       "mentionFileOnly": "menyebut berkasnya, bukan namanya"
     },
-    "tray":     {
+    "tray": {
       "region": "Seleksi",
       "pill": "{{count}} dipilih ▴",
       "expand": "Bentangkan baki seleksi",
@@ -123,7 +123,9 @@
         "collapsed": "Graf terlalu lebar, jadi dilipat ke ikhtisar direktori.",
         "focusedFitHint": "Zoom terbaca aktif, jadi tampilan ini terfokus — pilih “Ikhtisar” untuk melihat seluruh graf.",
         "focusSummary": "Zoom terbaca aktif: fokus pada {{package}} di {{zoom}}% — pilih Ikhtisar untuk melihat seluruh grafik ({{count}} paket lain).",
-        "focusOnly": "Zoom terbaca aktif — pilih Ikhtisar untuk melihat seluruh grafik."
+        "focusOnly": "Zoom terbaca aktif — pilih Ikhtisar untuk melihat seluruh grafik.",
+        "overviewTooSmall": "Grafik keseluruhan pada {{zoom}}% — ketuk sebuah paket untuk memperbesar",
+        "backToWhole": "Kembali ke grafik keseluruhan"
       },
       "minimap": {
         "label": "Ringkasan diagram, menampilkan {{percent}}% gambar",

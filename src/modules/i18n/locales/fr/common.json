@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Message",
       "mentionFileOnly": "mentionne le fichier, pas le nom"
     },
-    "tray":     {
+    "tray": {
       "region": "Sélection",
       "pill": "{{count}} sélectionnés ▴",
       "expand": "Développer le panneau de sélection",
@@ -123,7 +123,9 @@
         "collapsed": "Le graphe est trop large ; il a donc été replié sur la vue d'ensemble par répertoires.",
         "focusedFitHint": "Le zoom lisible est actif : cette vue est focalisée, pas le graphe entier — choisissez « Vue d'ensemble » pour tout voir.",
         "focusSummary": "Le zoom lisible est actif : focus sur {{package}} à {{zoom}} % — choisissez Vue d’ensemble pour voir tout le graphe ({{count}} autre(s) paquet(s)).",
-        "focusOnly": "Le zoom lisible est actif — choisissez Vue d’ensemble pour voir tout le graphe."
+        "focusOnly": "Le zoom lisible est actif — choisissez Vue d’ensemble pour voir tout le graphe.",
+        "overviewTooSmall": "Graphe complet à {{zoom}} % — touchez un paquet pour zoomer",
+        "backToWhole": "Retour au graphe complet"
       },
       "minimap": {
         "label": "Aperçu du diagramme : {{percent}} % du dessin visible",

@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Nachricht",
       "mentionFileOnly": "nannte die Datei, nicht den Namen"
     },
-    "tray":     {
+    "tray": {
       "region": "Auswahl",
       "pill": "{{count}} ausgewählt ▴",
       "expand": "Auswahlleiste ausklappen",
@@ -123,7 +123,9 @@
         "collapsed": "Der Graph ist zu breit und wurde daher auf die Verzeichnisübersicht reduziert.",
         "focusedFitHint": "Der lesbare Zoom ist aktiv, daher zeigt diese Ansicht einen Fokus – wählen Sie „Übersicht“, um den ganzen Graphen zu sehen.",
         "focusSummary": "Lesbarer Zoom ist aktiv: Fokus auf {{package}} bei {{zoom}}% — wähle Übersicht, um das ganze Diagramm zu sehen ({{count}} weitere Pakete).",
-        "focusOnly": "Lesbarer Zoom ist aktiv — wähle Übersicht, um das ganze Diagramm zu sehen."
+        "focusOnly": "Lesbarer Zoom ist aktiv — wähle Übersicht, um das ganze Diagramm zu sehen.",
+        "overviewTooSmall": "Gesamter Graph bei {{zoom}}% — tippe auf ein Paket, um zu zoomen",
+        "backToWhole": "Zurück zum Gesamtgraphen"
       },
       "minimap": {
         "label": "Diagrammübersicht, {{percent}} % der Zeichnung sichtbar",

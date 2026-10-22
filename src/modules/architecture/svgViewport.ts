@@ -47,6 +47,18 @@ export const MAX_ZOOM_SCALE = 4;
  */
 export const MIN_READABLE_ZOOM_SCALE = READABLE_ZOOM_SCALE;
 
+/**
+ * The scale below which a whole-graph overview stops being an overview: the
+ * drawing is complete but its package labels are too small to aim at, so the
+ * canvas offers the "tap a package to zoom in" hint instead of leaving the
+ * reader with a grey smear. 0.12 is the calibrated starting point (a phone
+ * overview measured 6%–10% on four sessions; a 366 px canvas at 12% still draws
+ * the package titles as reasonably sized text once the LOD layer counter-scales
+ * them). It is a presentation threshold, not a zoom limit: manual zoom-out may
+ * still go to `MIN_ZOOM_SCALE`.
+ */
+export const MIN_USEFUL_OVERVIEW_SCALE = 0.12;
+
 /** The multiplicative step one `+` / `−` press applies. */
 export const ZOOM_STEP = 1.25;
 
@@ -382,6 +394,29 @@ export function centeredScrollOffsets(
   return {
     left: current.left + (target.left + target.width / 2) - (viewport.left + viewport.width / 2),
     top: current.top + (target.top + target.height / 2) - (viewport.top + viewport.height / 2),
+  };
+}
+
+/**
+ * The scroll offsets that put a rectangle of the drawing in the middle of the
+ * content box, given the uniform `scale` the viewport applied.
+ *
+ * Unlike {@link centeredScrollOffsets}, this works on the drawing's own user
+ * units (`left`/`top` measured from the viewBox origin) rather than client
+ * rects, so it is usable before layout and in a headless browser. Used by the
+ * overview hint's "tap a package" zoom, where the target is a package frame the
+ * renderer drew but nothing has scrolled to yet. Offsets are clamped at zero:
+ * a drawing smaller than the box cannot be scrolled further than its origin.
+ */
+export function centeredScrollForDrawingRect(
+  viewport: SvgViewportSize,
+  rect: { readonly left: number; readonly top: number; readonly width: number; readonly height: number },
+  scale: number,
+): { left: number; top: number } {
+  const applied = clampZoomScale(scale);
+  return {
+    left: Math.max(0, rect.left * applied + (rect.width * applied) / 2 - viewport.width / 2),
+    top: Math.max(0, rect.top * applied + (rect.height * applied) / 2 - viewport.height / 2),
   };
 }
 

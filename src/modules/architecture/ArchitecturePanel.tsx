@@ -3341,7 +3341,15 @@ export default function ArchitecturePanel({
     <div
       data-architecture-readout="true"
       aria-live="polite"
-      className="pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+      // On the compact tier the collapsed card is ONE line in a 44px box: a
+      // phone spends its scarce height on the drawing, and the second/third
+      // lines (plus the "show mentioned" actions) live in the expanded area
+      // below the toggle, which stays in document flow. The desktop card keeps
+      // its bordered, two-line form.
+      style={compactToolbar && !readoutOpen ? { height: '44px' } : undefined}
+      className={compactToolbar
+        ? 'pointer-events-auto max-w-full overflow-hidden rounded-md bg-background/90 px-2 text-[11px] text-muted-foreground'
+        : 'pointer-events-auto max-w-full rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm'}
     >
       <button
         type="button"
@@ -3349,9 +3357,15 @@ export default function ArchitecturePanel({
         onClick={() => setReadoutOpen((open) => !open)}
         data-architecture-readout-toggle="true"
         style={compactTargetStyle}
-        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        className={compactToolbar
+          ? 'flex h-full w-full flex-nowrap items-center gap-x-2 overflow-hidden text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60'
+          : 'flex flex-wrap items-center gap-x-2 gap-y-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60'}
       >
-        <span data-architecture-readout-summary={readout.shown} data-architecture-readout-total={readout.related}>
+        <span
+          data-architecture-readout-summary={readout.shown}
+          data-architecture-readout-total={readout.related}
+          className={compactToolbar ? 'min-w-0 truncate whitespace-nowrap' : undefined}
+        >
           {readoutSummary}
         </span>
         {compactToolbar && truncation.truncated && (
@@ -3399,8 +3413,10 @@ export default function ArchitecturePanel({
         <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
       </button>
       {/* A scope step that found entities and then hid all of them: state the
-          delta and offer the one click that brings them back. */}
-      {scopeHiddenDelta !== null && (
+          delta and offer the one click that brings them back. On the compact
+          tier this is part of the EXPANDED area — the collapsed card is one
+          line by contract (see the card's style above). */}
+      {scopeHiddenDelta !== null && (!compactToolbar || readoutOpen) && (
         <div
           data-architecture-scope-hidden={scopeHiddenDelta.found}
           data-architecture-scope-hidden-scope={scopeHiddenDelta.scope}
@@ -3435,8 +3451,9 @@ export default function ArchitecturePanel({
       )}
       {/* The filter's second line: what the element/relation selection is
           hiding, and the one-click reset. Deliberately separate from the
-          detail sentence above — the two knobs must not share a number. */}
-      {hiddenCount > 0 && (
+          detail sentence above — the two knobs must not share a number. On the
+          compact tier it lives in the expanded area, never in the one line. */}
+      {hiddenCount > 0 && (!compactToolbar || readoutOpen) && (
         <div
           data-architecture-filter-hidden={hiddenCount}
           data-architecture-filter-hidden-kinds={JSON.stringify(hiddenReading.byKind)}

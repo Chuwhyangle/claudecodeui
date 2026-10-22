@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Mensaje",
       "mentionFileOnly": "menciona el archivo, no el nombre"
     },
-    "tray":     {
+    "tray": {
       "region": "Selección",
       "pill": "{{count}} seleccionados ▴",
       "expand": "Expandir la bandeja de selección",
@@ -123,7 +123,9 @@
         "collapsed": "El gráfico es demasiado ancho, así que se plegó a la vista general por directorios.",
         "focusedFitHint": "El zoom legible está activo, así que esta vista es un enfoque; elige «Vista general» para ver todo el gráfico.",
         "focusSummary": "El zoom legible está activo: enfoque en {{package}} al {{zoom}}% — elige Vista general para ver todo el grafo ({{count}} paquete(s) más).",
-        "focusOnly": "El zoom legible está activo — elige Vista general para ver todo el grafo."
+        "focusOnly": "El zoom legible está activo — elige Vista general para ver todo el grafo.",
+        "overviewTooSmall": "Grafo completo al {{zoom}}% — toca un paquete para ampliar",
+        "backToWhole": "Volver al grafo completo"
       },
       "minimap": {
         "label": "Vista general del diagrama: {{percent}} % del dibujo visible",
