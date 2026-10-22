@@ -66,196 +66,275 @@ type SessionHostsStoreState = {
   loading: boolean;
 };
 
-let state: SessionHostsStoreState = { snapshot: null, error: null, loading: false };
-
-const listeners = new Set<() => void>();
-
-/** The one fallback poller, started by the first subscriber and stopped by the last. */
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-/** The in-flight read, so overlapping refreshes collapse into one request. */
-let inFlight: Promise<void> | null = null;
-
-/** The pending coalesced read, or null when none is scheduled. */
-let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
-
 /**
- * The highest `hosts_changed` revision already applied, or null when none has
- * been — the cursor that makes the push idempotent.
+ * Owns the page's one resident-process snapshot and the polling lifecycle that
+ * keeps it current.
  *
- * It is reset whenever a connection is (re)established: a revision is only
- * meaningful against one server run, and a reconnected socket may be talking to
- * a process whose listing started counting again from one. Keeping the old
- * cursor across a reconnect would then drop every frame the new server sent,
- * which is the exact failure the reconnect pull is there to prevent.
+ * These six fields used to be module-level `let`s operated on by module-level
+ * functions: a global mutable singleton with no owner, no lifecycle, and no way
+ * to instantiate or inject it. They are a class now, so the state has one
+ * explicit owner — the store — and an explicit lifetime: {@link start} begins
+ * the fallback poller, {@link stop} ends it, and {@link subscribe} drives both
+ * from the number of readers. The module exports one instance
+ * ({@link sessionHostsStore}); the exported functions below are thin entry
+ * points onto it for callers that cannot hold a reference (the websocket
+ * bridge).
+ *
+ * Used by `useSessionHosts`, which subscribes through {@link sessionHostsStore},
+ * and by the websocket bridge through {@link invalidateSessionHosts} and
+ * {@link setSessionHostsConnection}.
  */
-let appliedRev: number | null = null;
+export class SessionHostsStore {
+  /**
+   * The reading every subscriber renders. Replaced wholesale on every change so
+   * `useSyncExternalStore` sees a new reference; the snapshot is kept across a
+   * failed read while `error` names the failure.
+   */
+  private state: SessionHostsStoreState = { snapshot: null, error: null, loading: false };
 
-/** Whether the websocket is currently up; picks the fallback interval. */
-let connected = false;
+  /** The components subscribed through `useSyncExternalStore`. */
+  private readonly listeners = new Set<() => void>();
 
-function emit(next: SessionHostsStoreState): void {
-  state = next;
-  for (const listener of listeners) {
-    listener();
+  /** The one fallback poller, running between {@link start} and {@link stop}. */
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** The in-flight read, so overlapping refreshes collapse into one request. */
+  private inFlight: Promise<void> | null = null;
+
+  /** The pending coalesced read, or null when none is scheduled. */
+  private coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * The highest `hosts_changed` revision already applied, or null when none has
+   * been — the cursor that makes the push idempotent.
+   *
+   * It is reset whenever a connection is (re)established: a revision is only
+   * meaningful against one server run, and a reconnected socket may be talking to
+   * a process whose listing started counting again from one. Keeping the old
+   * cursor across a reconnect would then drop every frame the new server sent,
+   * which is the exact failure the reconnect pull is there to prevent.
+   */
+  private appliedRev: number | null = null;
+
+  /** Whether the websocket is currently up; picks the fallback interval. */
+  private connected = false;
+
+  /**
+   * Begins the store's lifetime: reads the listing once, then keeps the
+   * fallback poller running. The first subscriber calls this.
+   */
+  start(): void {
+    void this.refresh();
+    this.startFallbackPoll();
   }
-}
 
-async function readSnapshot(): Promise<void> {
-  try {
-    const response = await api.sessionHosts.list();
-    const body = await readApiJson<{ data?: SessionHostsSnapshot }>(response);
-    emit({ snapshot: body.data ?? { hosts: [], sessions: [] }, error: null, loading: false });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    // The previous snapshot is kept *as data* — a single failed poll is not
-    // evidence that every process went away, and throwing the listing out would
-    // make the next successful read rebuild it from nothing. It is not kept as
-    // the *reading*, though: the `error` on this state is what
-    // `readResidentProcessState` folds into `unknown`, so a consumer sees "not
-    // known" rather than the stale word the kept snapshot would otherwise
-    // repeat. Re-emitting the same message would re-render every subscriber for
-    // nothing, so it is not.
-    if (message !== state.error) {
-      emit({ ...state, error: message, loading: false });
+  /**
+   * Ends the store's lifetime: stops the fallback poller and drops any read a
+   * burst of frames had scheduled. The last unsubscribe calls this.
+   */
+  stop(): void {
+    this.stopFallbackPoll();
+    this.clearCoalescedRefresh();
+  }
+
+  /**
+   * Subscribes one reader and returns its unsubscribe. The first subscriber
+   * starts the store; the last one stops it, so nothing polls while the page
+   * has no listener.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+
+    if (this.listeners.size === 1) {
+      this.start();
     }
-  }
-}
 
-/**
- * Re-reads the snapshot. Concurrent callers share one request.
- *
- * Any coalesced read still waiting is dropped first: this read answers the same
- * question the burst of frames asked, so letting the timer fire afterwards would
- * be a second request for a listing that was just read. That is what keeps a
- * reconnect — which arrives as both a connection edge and a frame — to one read.
- */
-function refreshSessionHosts(): Promise<void> {
-  clearCoalescedRefresh();
-
-  if (!inFlight) {
-    inFlight = readSnapshot().finally(() => {
-      inFlight = null;
-    });
+    return () => {
+      this.listeners.delete(listener);
+      if (this.listeners.size === 0) {
+        this.stop();
+      }
+    };
   }
 
-  return inFlight;
-}
-
-function stopFallbackPoll(): void {
-  if (pollTimer !== null) {
-    clearInterval(pollTimer);
-    pollTimer = null;
+  /** The current reading, in the shape `useSyncExternalStore` reads. */
+  readState(): SessionHostsStoreState {
+    return this.state;
   }
-}
 
-/** (Re)starts the fallback poller on the interval the connection state selects. */
-function startFallbackPoll(): void {
-  stopFallbackPoll();
-  pollTimer = setInterval(() => {
-    if (typeof document !== 'undefined' && document.hidden) {
+  /**
+   * Re-reads the snapshot. Concurrent callers share one request.
+   *
+   * Any coalesced read still waiting is dropped first: this read answers the same
+   * question the burst of frames asked, so letting the timer fire afterwards would
+   * be a second request for a listing that was just read. That is what keeps a
+   * reconnect — which arrives as both a connection edge and a frame — to one read.
+   */
+  refresh(): Promise<void> {
+    this.clearCoalescedRefresh();
+
+    if (!this.inFlight) {
+      this.inFlight = this.readSnapshot().finally(() => {
+        this.inFlight = null;
+      });
+    }
+
+    return this.inFlight;
+  }
+
+  /**
+   * Announces that the listing changed, and re-reads it.
+   *
+   * `rev` is the frame's revision when the frame carries one; a caller with no
+   * revision (the synthetic reconnect event) passes none and the read is
+   * scheduled unconditionally. When a revision is given, one at or below {@link
+   * appliedRev} is dropped: the server hands revisions out in order and never
+   * reuses one, so seeing an old revision again means the frame was re-delivered
+   * or overtaken, and reading again would report the same listing a second time.
+   *
+   * Nothing is done before the store has its first subscriber: the frames arrive
+   * for the page as a whole, but a read with no reader is a request nobody asked
+   * for. The first subscriber reads the listing itself, so no change is missed.
+   */
+  invalidate(rev?: number): void {
+    if (this.listeners.size === 0) {
       return;
     }
-    void refreshSessionHosts();
-  }, connected ? CONNECTED_REFRESH_INTERVAL_MS : DISCONNECTED_REFRESH_INTERVAL_MS);
-}
 
-/** Schedules the one read a burst of frames is folded into. */
-function scheduleCoalescedRefresh(): void {
-  if (coalesceTimer !== null) {
-    return;
+    if (typeof rev === 'number') {
+      if (this.appliedRev !== null && rev <= this.appliedRev) {
+        return;
+      }
+      this.appliedRev = rev;
+    }
+
+    this.scheduleCoalescedRefresh();
   }
-  coalesceTimer = setTimeout(() => {
-    coalesceTimer = null;
-    void refreshSessionHosts();
-  }, INVALIDATE_COALESCE_MS);
-}
 
-function clearCoalescedRefresh(): void {
-  if (coalesceTimer !== null) {
-    clearTimeout(coalesceTimer);
-    coalesceTimer = null;
+  /**
+   * Tells the store whether the websocket is up, which selects the fallback
+   * interval — and, on (re)connecting, re-reads at once.
+   *
+   * The immediate read is the point of the connect edge: everything that happened
+   * while the socket was down produced frames that were never delivered, and a
+   * client that waited for the next fallback tick would show a stale listing for
+   * up to the connected interval after coming back. The revision cursor is reset
+   * on the same edge, for the reason given on {@link appliedRev}.
+   */
+  setConnection(isConnected: boolean): void {
+    if (this.connected === isConnected) {
+      return;
+    }
+    this.connected = isConnected;
+
+    if (this.connected) {
+      this.appliedRev = null;
+    }
+
+    if (this.listeners.size === 0) {
+      return;
+    }
+
+    this.startFallbackPoll();
+    if (this.connected) {
+      void this.refresh();
+    }
+  }
+
+  private emit(next: SessionHostsStoreState): void {
+    this.state = next;
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
+  private async readSnapshot(): Promise<void> {
+    try {
+      const response = await api.sessionHosts.list();
+      const body = await readApiJson<{ data?: SessionHostsSnapshot }>(response);
+      this.emit({ snapshot: body.data ?? { hosts: [], sessions: [] }, error: null, loading: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // The previous snapshot is kept *as data* — a single failed poll is not
+      // evidence that every process went away, and throwing the listing out would
+      // make the next successful read rebuild it from nothing. It is not kept as
+      // the *reading*, though: the `error` on this state is what
+      // `readResidentProcessState` folds into `unknown`, so a consumer sees "not
+      // known" rather than the stale word the kept snapshot would otherwise
+      // repeat. Re-emitting the same message would re-render every subscriber for
+      // nothing, so it is not.
+      if (message !== this.state.error) {
+        this.emit({ ...this.state, error: message, loading: false });
+      }
+    }
+  }
+
+  private stopFallbackPoll(): void {
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  /** (Re)starts the fallback poller on the interval the connection state selects. */
+  private startFallbackPoll(): void {
+    this.stopFallbackPoll();
+    this.pollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return;
+      }
+      void this.refresh();
+    }, this.connected ? CONNECTED_REFRESH_INTERVAL_MS : DISCONNECTED_REFRESH_INTERVAL_MS);
+  }
+
+  /** Schedules the one read a burst of frames is folded into. */
+  private scheduleCoalescedRefresh(): void {
+    if (this.coalesceTimer !== null) {
+      return;
+    }
+    this.coalesceTimer = setTimeout(() => {
+      this.coalesceTimer = null;
+      void this.refresh();
+    }, INVALIDATE_COALESCE_MS);
+  }
+
+  private clearCoalescedRefresh(): void {
+    if (this.coalesceTimer !== null) {
+      clearTimeout(this.coalesceTimer);
+      this.coalesceTimer = null;
+    }
   }
 }
 
 /**
- * Announces that the listing changed, and re-reads it.
+ * The page's single `SessionHostsStore` instance — the one place the shared
+ * snapshot lives, and the store `useSessionHosts` subscribes to.
  *
- * `rev` is the frame's revision when the frame carries one; a caller with no
- * revision (the synthetic reconnect event) passes none and the read is
- * scheduled unconditionally. When a revision is given, one at or below {@link
- * appliedRev} is dropped: the server hands revisions out in order and never
- * reuses one, so seeing an old revision again means the frame was re-delivered
- * or overtaken, and reading again would report the same listing a second time.
- *
- * Nothing is done before the store has its first subscriber: the frames arrive
- * for the page as a whole, but a read with no reader is a request nobody asked
- * for. The first subscriber reads the listing itself, so no change is missed.
+ * Used by `useSessionHosts` and, through the two entry points below, by the
+ * websocket bridge.
  */
+export const sessionHostsStore = new SessionHostsStore();
+
+/** Entry point for the websocket bridge's `hosts_changed` frames. */
 export function invalidateSessionHosts(rev?: number): void {
-  if (listeners.size === 0) {
-    return;
-  }
-
-  if (typeof rev === 'number') {
-    if (appliedRev !== null && rev <= appliedRev) {
-      return;
-    }
-    appliedRev = rev;
-  }
-
-  scheduleCoalescedRefresh();
+  sessionHostsStore.invalidate(rev);
 }
 
-/**
- * Tells the store whether the websocket is up, which selects the fallback
- * interval — and, on (re)connecting, re-reads at once.
- *
- * The immediate read is the point of the connect edge: everything that happened
- * while the socket was down produced frames that were never delivered, and a
- * client that waited for the next fallback tick would show a stale listing for
- * up to the connected interval after coming back. The revision cursor is reset
- * on the same edge, for the reason given on {@link appliedRev}.
- */
+/** Entry point for the websocket bridge's connect/disconnect edges. */
 export function setSessionHostsConnection(isConnected: boolean): void {
-  if (connected === isConnected) {
-    return;
-  }
-  connected = isConnected;
+  sessionHostsStore.setConnection(isConnected);
+}
 
-  if (connected) {
-    appliedRev = null;
-  }
-
-  if (listeners.size === 0) {
-    return;
-  }
-
-  startFallbackPoll();
-  if (connected) {
-    void refreshSessionHosts();
-  }
+function refreshSessionHosts(): Promise<void> {
+  return sessionHostsStore.refresh();
 }
 
 function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-
-  if (listeners.size === 1) {
-    void refreshSessionHosts();
-    startFallbackPoll();
-  }
-
-  return () => {
-    listeners.delete(listener);
-    if (listeners.size === 0) {
-      stopFallbackPoll();
-      clearCoalescedRefresh();
-    }
-  };
+  return sessionHostsStore.subscribe(listener);
 }
 
 function readState(): SessionHostsStoreState {
-  return state;
+  return sessionHostsStore.readState();
 }
 
 /**

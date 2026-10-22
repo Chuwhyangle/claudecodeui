@@ -3,7 +3,7 @@ id: gap-session-hosts-store-encapsulation
 title: SessionHostsStore 封装：useSessionHosts 的 6 个模块级
   let（state/pollTimer/inFlight/coalesceTimer/appliedRev/connected）收进带生命周期的类，hook
   改为订阅显式单例
-status: ready
+status: done
 labels:
   - gap
 parent: null
