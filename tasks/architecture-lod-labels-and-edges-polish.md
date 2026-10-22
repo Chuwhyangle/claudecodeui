@@ -41,10 +41,16 @@ extra:
 - playwright.config.ts
 - tasks/architecture-lod-labels-and-edges-polish.md
 
-## Blocker
+## Evidence
 
-**2026-10-22T23:17:35.201Z — worker 未落地（exited-not-landed）**
+2026-10-23 continuation round — the implementation was already on the branch (1 commit); this round verified every AC, re-merged develop, and re-synced the task file's ticks:
 
-- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：c72dfdf5-b00a-4803-994b-6aa29fac354a
+- `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx` → 20 passed (51 ms).
+- `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → 98 passed (11.9 s).
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts` → 9 passed (1.0 m), matching the `SPEC_BUDGET_MS` 120_000 entry's re-measurement.
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` → 6 passed (42.7 s), control arm F included (avoidance off ⇒ intersecting title pairs in the same reading).
+- `npm run typecheck` (client + server + scripts tsconfigs) and `npm run build` (client + server) exit 0.
+- `git merge develop` clean; the worktree task file now carries 5/5 ticks (develop already had them).
+- anti-drift-touches-check: 7 actual files, all inside the 8 declared Touches globs.
+
+The DoD's real-browser screenshots at 1440×765 / 390×844 (19 %, 32 %) remain a human visual review step; the rectangle-intersection readings it asks for are asserted mechanically by the e2e geometry guard.
