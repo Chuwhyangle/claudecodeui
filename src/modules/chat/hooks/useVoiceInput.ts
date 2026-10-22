@@ -65,7 +65,7 @@ import {
 // The read point that turns a recogniser's declared `pauseCues` into the one answer to 裁不裁.
 // The capability itself arrives through the health reading's accessor (see `gapFilterSecForCapture`),
 // so this hook holds no table of its own — it asks the recogniser that will transcribe the audio.
-import { trimDecisionFor } from '@/shared/voiceTrim';
+import { trimDecisionFor, trimSilenceEdges } from '@/shared/voiceTrim';
 // The recogniser's answer is read by the same module that built the request — the
 // repository-root shared tree the server and the CLI compile.
 import { parseTranscriptionResponse } from '@shared/asr/transcriptionWire';
@@ -459,6 +459,35 @@ function wholeBufferSegment(samples: Float32Array, sampleRate: number): LiveSegm
 /** The duration of a segment's own uploaded audio, in seconds, read off the WAV it built. */
 function segmentWavSec(wav: Uint8Array): number {
   return (wav.length - WAV_HEADER_BYTES) / 2 / UPLOAD_SAMPLE_RATE;
+}
+
+/**
+ * Removes only the empty edges of one segment's WAV before it is uploaded.
+ *
+ * WHY AT THIS LAYER. The segmenter's flush can leave several seconds of silence at the tail of a
+ * push-to-talk segment (the real 2026-10-22 recording: 2 s of speech, then 8 s of near-silence).
+ * That silence costs upload bytes, gives the recogniser no words, and — as the same recording
+ * showed — gives a model with little to tidy a chance to answer with nearby instruction text. The
+ * trim is the ordinary VAD splice with every internal pause kept whole (`trimSilenceEdges`), so the
+ * recogniser still sees its punctuation cues; only the head/tail outside the first/last speech
+ * region is dropped.
+ *
+ * FALLBACK IS THE SEGMENT AS RECORDED. A short buffer, an unsupported rate or a detector that finds
+ * no speech returns the input unchanged; losing a dictation is worse than sending its silence.
+ */
+function trimSegmentEdges(wav: Uint8Array): Uint8Array {
+  const pcm = wavPcm16(wav);
+  if (pcm.length < 2) return wav;
+
+  const samples = new Float32Array(pcm.length / 2);
+  const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+  for (let i = 0; i < samples.length; i += 1) {
+    samples[i] = view.getInt16(i * 2, true) / 32_768;
+  }
+
+  const trimmed = trimSilenceEdges(samples, UPLOAD_SAMPLE_RATE);
+  if (trimmed.stats.fallback || trimmed.samples.length >= samples.length) return wav;
+  return encodePcm16Wav(trimmed.samples, UPLOAD_SAMPLE_RATE);
 }
 
 /**
@@ -1105,8 +1134,12 @@ export function useVoiceInput(
   const enqueueSegment = (session: CaptureSession, segment: LiveSegment) => {
     const index = session.nextIndex;
     session.nextIndex += 1;
+    // The edge-trimmed bytes are what is uploaded AND what the replay track holds: the silence this
+    // removes was never going to reach the recogniser, so keeping it in the replay would show audio
+    // this listen did not actually send.
+    const wav = trimSegmentEdges(segment.wav);
     // The filtered replay track is every segment's own audio, in order.
-    const pcm = wavPcm16(segment.wav);
+    const pcm = wavPcm16(wav);
     session.filteredChunks.push(pcm);
     session.filteredSamples += pcm.length / 2;
     const sentAt = Date.now();
@@ -1116,7 +1149,7 @@ export function useVoiceInput(
     // own start, real-time on the mic and zero for a file, whose spans are not wall time) and that
     // this was the first cut. The request count and latency are filled in when it settles.
     session.readings[index] = {
-      sentSec: segmentWavSec(segment.wav),
+      sentSec: segmentWavSec(wav),
       requests: 1,
       latencyMs: 0,
       waitSec:
@@ -1132,7 +1165,7 @@ export function useVoiceInput(
       endSec: segment.endSec,
       // Copied into a fresh buffer: a `Blob` part must be backed by a plain `ArrayBuffer`, and the
       // segmenter's `Uint8Array` is not typed to promise that.
-      blob: new Blob([new Uint8Array(segment.wav)], { type: 'audio/wav' }),
+      blob: new Blob([new Uint8Array(wav)], { type: 'audio/wav' }),
     };
     session.pending += 1;
     setPendingRequests((n) => n + 1);

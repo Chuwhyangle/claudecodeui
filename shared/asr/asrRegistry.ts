@@ -121,6 +121,17 @@ export type AsrCapabilities = {
    * no context has nowhere to place one.
    */
   contextPlacement?: 'user' | 'system';
+  /**
+   * Where the adapter's own task turn sits on the `chat-audio` wire.
+   *
+   * ABSENT MEANS `'user'`, the shape every earlier chat adapter uses: a text part beside the audio
+   * that tells the model what to do with it. `'system'` moves that instruction into the system turn
+   * and leaves the user turn carrying the recording alone — the position a dictation relay needs,
+   * because a task sentence sitting next to the audio is text the model can echo back as if the
+   * person had said it. The distinction is DECLARED so the contract board knows which golden body
+   * to build; it is optional and has no runtime meaning without the adapter honoring it.
+   */
+  taskPlacement?: 'user' | 'system';
   /** Billing unit. Decides how a saved-second reading converts into money. */
   billing: 'audio-seconds' | 'audio-tokens' | 'request';
   /** What trimming does to this recogniser's accuracy: pauses are punctuation cues (ADR-004 §二). */

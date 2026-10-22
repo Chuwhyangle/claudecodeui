@@ -216,6 +216,8 @@ const speakInto = async (
   transcript: string,
   onVoiceTranscript: (text: string, send?: boolean) => void,
   contextMessages?: readonly ChatMessage[],
+  speechSec = 3,
+  silenceSec = 0,
 ) => {
   const fetchesBefore = getFileIndex.mock.calls.length;
   const capture = createFakeVoiceCapture();
@@ -247,10 +249,11 @@ const speakInto = async (
     'the recorder has to really be running, or the stop below uploads nothing',
   );
 
-  // Three seconds of speech: below the segmenter's minimum, so the stop flushes it as the single
-  // trailing segment — the shape a press-and-release dictation has always had.
+  // Speech plus an optional silent tail: the stop flushes it as the single trailing segment — the
+  // shape a press-and-release dictation has always had. The tail is what the edge trim is for.
   await act(async () => {
-    capture.speak(3);
+    capture.speak(speechSec);
+    if (silenceSec > 0) capture.push(silenceSec, 0);
   });
 
   await act(async () => {
@@ -292,6 +295,22 @@ test('a listen carries the visible conversation as the relay context', async () 
     'the relay context must be the visible conversation the composer was handed',
   );
   view.unmount();
+});
+
+test('a long silent tail is trimmed before the segment is uploaded', async () => {
+  transcribeVoice.mockResolvedValue({ ok: true, json: async () => ({ text: PLAIN_EN }) });
+
+  await speakInto('project-tail-trim', PLAIN_EN, vi.fn(), undefined, 1, 3);
+
+  const blob = transcribeVoice.mock.calls[0]?.[0] as Blob | undefined;
+  assert.ok(blob, 'nothing reached the recogniser');
+  // 4 s of 16 kHz mono 16-bit WAV is ~128 KB; the speech is the first second, so the edge trim
+  // must leave a small fraction of that. The bound is deliberately loose — this is a wiring test,
+  // not a DSP reading (the exact policy is pinned in voiceTrim.test.ts).
+  assert.ok(
+    blob.size < 80_000,
+    `the silent tail reached the recogniser: ${blob.size} bytes for a 1 s speech + 3 s silence segment`,
+  );
 });
 
 test('a sentence carrying no identifier arrives character for character', async () => {

@@ -322,6 +322,39 @@ export function trimDecisionFor(capability: PauseCues): TrimDecision {
 }
 
 /**
+ * The pause policy for a dictation segment's EDGES: keep every internal gap whole.
+ *
+ * A relay recogniser declares `pauseCues: 'neutral'`, so the ordinary trim (which caps long gaps)
+ * is deliberately not applied to its audio. This table lets {@link trimSilenceEdges} use the same
+ * VAD/splice implementation for the head and tail while leaving every pause between two speech
+ * regions exactly as recorded.
+ */
+const KEEP_ALL_PAUSES = [{ belowSec: Number.POSITIVE_INFINITY, keepSec: null }] as const;
+
+/**
+ * Trims only the silence before the first speech region and after the last one, leaving every
+ * internal pause untouched.
+ *
+ * WHY THIS EXISTS. A push-to-talk segment can contain the whole tail of a think-pause: the real
+ * 2026-10-22 recording that exposed the relay's task-echo bug was 10.2 s long with speech in the
+ * first 2 s and near-silence for the remaining 8 s. Sending that silence is both wasteful and
+ * dangerous — with nothing to tidy, the model may treat nearby instruction text as content. This
+ * wrapper keeps the speech, adds the same short lead-in/out the ordinary trim uses, and removes
+ * the empty edges; internal pauses stay whole so the recogniser still sees its punctuation cues.
+ *
+ * FALLBACK IS THE INPUT, sample for sample, exactly as {@link trimVoiceAudio} promises. A segment
+ * whose detector finds no speech is returned unchanged rather than shortened to an empty upload;
+ * the caller's request-level silence handling (and the model's empty answer) decide that case.
+ */
+export function trimSilenceEdges(
+  samples: Float32Array,
+  sampleRate: number,
+  opts: Omit<TrimOptions, 'caps'> = {},
+): TrimResult {
+  return trimVoiceAudio(samples, sampleRate, { ...opts, caps: KEEP_ALL_PAUSES });
+}
+
+/**
  * Trim the silence out of `samples`, keeping every speech sample.
  *
  * Returns `{ samples, stats }`. On any guard the input is returned unchanged,

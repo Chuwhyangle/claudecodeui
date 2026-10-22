@@ -667,11 +667,15 @@ function chatGoldenBody(capabilities: AsrCapabilities, model: string): string {
       type: 'input_audio',
       input_audio: { data: INVARIANT_CHAT_AUDIO_URI, format: CHAT_AUDIO_FORMAT },
     },
-    { type: 'text', text: INVARIANT_JSON_TASK_TOKEN },
   ];
+  // A task placed in the system turn is part of the system string the board tokenises, so it must
+  // NOT also appear as a user part here. The declaration says which position the adapter promises;
+  // the recorded body is canonicalised into the same shape either way.
+  if (capabilities.taskPlacement !== 'system') {
+    parts.push({ type: 'text', text: INVARIANT_JSON_TASK_TOKEN });
+  }
   // A context placed in the system turn is part of the system string the board tokenises, so it
-  // must NOT also appear as a user part here. The declaration says which position the adapter
-  // promises; the recorded body is canonicalised into the same shape either way.
+  // must NOT also appear as a user part here.
   if (capabilities.honors.context && capabilities.contextPlacement !== 'system') {
     parts.push({ type: 'text', text: INVARIANT_CONTEXT });
   }
