@@ -39,13 +39,13 @@ extra:
 
 ## AC
 
-- [ ] (a) **扩展点存在且 driver 经它分派**：`test -f server/modules/providers/list/claude/claude-resident-lifecycle-outcome-registry.ts` 退出 0；`grep -q "claude-resident-lifecycle-outcome-registry" server/modules/providers/list/claude/claude-host-driver.provider.ts` 退出 0。
-- [ ] (b) **判据存在且跑通（正臂）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-lifecycle-outcome-registry.test.ts` 退出 0；其打印读数显示「注册自非 `claude-host-driver.provider.ts` 文件的 handler 在对应 run/turn 结局上被触发」。
-- [ ] (c) **负对照**：同一判据含「未注册的 handler 不被触发」断言，且该断言在内存注入形态下打红同一条断言函数（判据单跑自动执行并打印读数）。
-- [ ] (d) **中心文件瘦身 + 静态门**：`test "$(wc -l < server/modules/providers/list/claude/claude-host-driver.provider.ts)" -lt 6559` 退出 0（基线=立案实测 6559）；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (e) **既有行为判据不改一字仍绿**：四个文件各自单跑、各自退出 0（命令一律 `npx tsx --tsconfig server/tsconfig.json --test <file>`）：`server/modules/providers/tests/claude-resident-outcome-registry.test.ts`、`claude-resident-reconcile.test.ts`、`claude-resident-busy-input.test.ts`、`claude-resident-idle.test.ts`。
-- [ ] (f) **collateral**：新增一个 `server/**/*.test.ts` ⇒ 先复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（执行时以实测为准），按 `server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1 并改写其上方注释算术；`scripts/suite-duration-baseline.tsv` 仅当 AC7 覆盖率地板跌破 90% 才追加一行；单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
-- [ ] (g) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
+- [x] (a) **扩展点存在且 driver 经它分派**：`test -f server/modules/providers/list/claude/claude-resident-lifecycle-outcome-registry.ts` 退出 0；`grep -q "claude-resident-lifecycle-outcome-registry" server/modules/providers/list/claude/claude-host-driver.provider.ts` 退出 0。
+- [x] (b) **判据存在且跑通（正臂）**：`npx tsx --tsconfig server/tsconfig.json --test server/modules/providers/tests/claude-resident-lifecycle-outcome-registry.test.ts` 退出 0；其打印读数显示「注册自非 `claude-host-driver.provider.ts` 文件的 handler 在对应 run/turn 结局上被触发」。
+- [x] (c) **负对照**：同一判据含「未注册的 handler 不被触发」断言，且该断言在内存注入形态下打红同一条断言函数（判据单跑自动执行并打印读数）。
+- [x] (d) **中心文件瘦身 + 静态门**：`test "$(wc -l < server/modules/providers/list/claude/claude-host-driver.provider.ts)" -lt 6559` 退出 0（基线=立案实测 6559）；`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (e) **既有行为判据不改一字仍绿**：四个文件各自单跑、各自退出 0（命令一律 `npx tsx --tsconfig server/tsconfig.json --test <file>`）：`server/modules/providers/tests/claude-resident-outcome-registry.test.ts`、`claude-resident-reconcile.test.ts`、`claude-resident-busy-input.test.ts`、`claude-resident-idle.test.ts`。
+- [x] (f) **collateral**：新增一个 `server/**/*.test.ts` ⇒ 先复量 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l`（执行时以实测为准），按 `server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1 并改写其上方注释算术；`scripts/suite-duration-baseline.tsv` 仅当 AC7 覆盖率地板跌破 90% 才追加一行；单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出 0。
+- [x] (g) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches` 所列。
 
 ## DoD
 
@@ -60,3 +60,82 @@ extra:
 - `server/shared/tests/quay-test-script.test.ts`（collateral：两条计数 pin 各 +1 及注释算术）
 - `scripts/suite-duration-baseline.tsv`（collateral：仅当覆盖率地板跌破 90%）
 - `tasks/gap-claude-host-driver-lifecycle-extension-point.md`（自触）
+
+## Evidence
+
+执行实例：worktree `/data/home/yale/work/claudecodeui-worktrees/gap-claude-host-driver-lifecycle-extension-point`，分支 `task/gap-claude-host-driver-lifecycle-extension-point`，实现提交 `ac019922e`。
+
+### ① (b) 判据原样输出（正臂）
+
+```
+(b) positive-arm: handler=criterion.probe.finish-unattended-turn source=/data/home/yale/work/claudecodeui-worktrees/gap-claude-host-driver-lifecycle-extension-point/server/modules/providers/tests/claude-resident-lifecycle-outcome-registry.test.ts driverSource=/data/home/yale/work/claudecodeui-worktrees/gap-claude-host-driver-lifecycle-extension-point/server/modules/providers/list/claude/claude-host-driver.provider.ts
+(b) positive-arm: outcome=finishUnattendedTurn triggered=1 session=session-1 unattendedStillOpen=true
+```
+
+`source` 是判据文件本身、`driverSource` 是 driver；两者不同，且 `triggered=1`，即 driver 的 `finishUnattendedTurn` 入口确实分派给了从 driver 之外注册的 handler。
+
+### ② 正臂 / 负臂逐字读数
+
+正臂如上（`triggered=1`）。负臂：
+
+```
+(c) negative-arm(registry): triggered=0 handlerRegistered=false unattendedStillOpen=true
+(c) negative-arm(injected): red=yes triggered=1 message=unregistered handler criterion.probe.finish-unattended-turn was invoked (0 -> 1)
+(c) negative-arm(restored): triggered=1 handlerRegistered=true
+```
+
+`negative-arm(registry)`＝未注册不触发；`negative-arm(injected)`＝同一断言函数被内存注入形态（去掉注册检查的 dispatcher）打红，红读数原文 `unregistered handler criterion.probe.finish-unattended-turn was invoked (0 -> 1)`；`restored` 为还原 shipped handler 后的绿读数。
+
+### ③ (e) 四条既有判据各自单跑退出码
+
+命令一律 `npx tsx --tsconfig server/tsconfig.json --test <file>`：
+
+| file | exit |
+| --- | --- |
+| `server/modules/providers/tests/claude-resident-outcome-registry.test.ts` | 0 |
+| `server/modules/providers/tests/claude-resident-reconcile.test.ts` | 0 |
+| `server/modules/providers/tests/claude-resident-busy-input.test.ts` | 0 |
+| `server/modules/providers/tests/claude-resident-idle.test.ts` | 0 |
+
+新判据 `claude-resident-lifecycle-outcome-registry.test.ts` 单跑 exit 0（4 tests）。
+
+### ④ (d) 中央文件与静态门
+
+`wc -l server/modules/providers/list/claude/claude-host-driver.provider.ts`：
+
+- 立案基线：6559
+- 实现后：5811（-748 行）
+
+`npx tsc --noEmit -p server/tsconfig.json` → exit 0。
+`npm run lint` → exit 0（仅既有 warning，新文件零 finding）。
+
+### ⑤ 纯位移核对
+
+迁出并在 `claude-resident-lifecycle-outcome-handlers.ts` 逐字落地的 react 侧方法：
+
+`dropRound`、`endWithdrawnRun`、`settleCrons`、`settleBackgroundTasks`、`reconcileHeldWork`、`observeHeldWorkEvent`、`inferHeldWork`、`reconcileTick`、`emitLedgerLines`、`boundDeliveryCount`、`writeLogLine`、`writeReconcileLine`、`startIdentityReadback`、`publishIdentity`、`refreshIdentityAfterRename`、`stopTitleMirror`、`scheduleTitleMirror`、`readSettledTitle`、`mirrorResidentTitle`、`finishUnattendedTurn`、`abandonUnattendedTurn`，以及模块级 helper `sameLeases`、`cronsFromStopList`、`tasksFromStopList`、`tasksFromChangedFrame`、`taskIdOf`、`claudeProjectTranscriptPath`。
+
+driver 侧公开签名全部未动；私有方法改为一行委托（`reconcileTick` 保留 `liveStateFor` 查找，因为「无 live host ⇒ null」是 driver 自己的保守读数）。机械替换仅三类，均不改变语义：
+
+1. `this.<method>(...)` → 同文件 handler 函数调用（或 `context.<seam>`）。
+2. `this.now/logSink/notifyUnattendedWork/reconcileMode/quiesceMs/runRegistry/provider` → `context` 上的同名注入 seam。
+3. `CRON_MAX_AGE_MS` / `RESIDENT_RECONCILED_REASON` / `readCliSessionRegistration` / identity 与 title-mirror 轮询窗口 → `context` 传入（避免 handlers→driver 的运行时模块环）。
+
+未发现无法原样迁移的逻辑；无一行业务语义被改写。
+
+### ⑥ (f) collateral
+
+- 实测 `find server -name '*.test.ts' -o -name '*.test.js' | grep -v node_modules | wc -l` = **397**（新增本判据后）。
+- `server/shared/tests/quay-test-script.test.ts` 两条计数 pin 各 +1 并改写注释算术：`396 → 397`，`known=3 unknown=393 → 394`，`known=1 unknown=395 → 396`。
+- 覆盖率地板复量：baseline 已知 357 / 397 = 89.92% < 90%，按 AC(f) 向 `scripts/suite-duration-baseline.tsv` 追加 `2000<TAB>server/modules/providers/tests/claude-resident-lifecycle-outcome-registry.test.ts`。
+- 单文件复跑 `npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → exit 0（14 tests）。
+
+### ⑦ (g) 范围
+
+`git diff --name-only $(git merge-base HEAD develop) HEAD` 的集合 ⊆ `## Touches`；`anti-drift-touches-check` 读数：
+
+```
+ANTI-DRIFT OK: task gap-claude-host-driver-lifecycle-extension-point — 6 actual file(s), all within declared Touches (7 glob(s))
+```
+
+运行结束未重启 :3001、未发布。
