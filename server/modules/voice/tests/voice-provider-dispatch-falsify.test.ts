@@ -8,8 +8,8 @@
  * provider, so the two shapes could both be produced by the same code path. What makes the reading
  * mean something is a case that BREAKS the dispatch and shows the criterion noticing:
  *
- *   1. a temporary tree built from the SHIPPING files (`voice.service.ts` and the `shared/asr`
- *      graph it reaches), with the criterion itself copied in beside them;
+ *   1. a temporary tree built from the SHIPPING files (`voice.service.ts` and the `shared/asr` /
+ *      `shared/voice` graphs it reaches), with the criterion itself copied in beside them;
  *   2. the same driver run on that tree UNMUTATED — the positive control, first, so the red below
  *      cannot be a broken tree, a missing file or a driver that never ran;
  *   3. the same tree with one line changed, once per entry in `MUTATIONS`: the adapter that serves
@@ -27,7 +27,8 @@
  * dependent on crashing the run that is executing it, and a failure halfway would leave the tree
  * mutated. The copy is built out of the shipping files by `cpSync`, never re-typed, so there is no
  * second implementation here to drift — and because the service's whole runtime graph is the
- * `shared/asr` tree (its other imports are type-only, which the loader erases), the tree needs no
+ * `shared/asr` tree plus the settings contract it reads by value (its other imports are type-only,
+ * which the loader erases), the tree needs no
  * `node_modules` and no network.
  *
  * The subprocess lives HERE and not in the criterion: a criterion that spawns a copy of itself is
@@ -81,6 +82,15 @@ const PACKAGE_JSON_REL = 'package.json';
 const PACKAGE_JSON_BODY = '{"type":"module"}\n';
 /** The service's whole runtime graph: everything else it imports is a type, erased by the loader. */
 const SHARED_ASR_REL = 'shared/asr';
+/**
+ * The settings/rules contract the service reads BY VALUE (`VOICE_SETTINGS_EMPTY_DOCUMENT`,
+ * `VOICE_SETTINGS_MAX_LENGTHS`, `VOICE_SETTINGS_STRING_FIELDS`), reachable through the `@shared/*`
+ * alias the tree's `server/tsconfig.json` carries. Without it the control dies in resolution
+ * (`Cannot find package '@shared/voice'`) before any criterion case runs — a setup red that says
+ * nothing about the dispatch. It imports nothing itself, so copying the directory adds no edge the
+ * tree has to satisfy.
+ */
+const SHARED_VOICE_REL = 'shared/voice';
 
 /**
  * The lines a mutation changes, and why each one is a thing the criterion must be reading.
@@ -127,7 +137,8 @@ function copyInto(tree: string, relativePath: string): void {
 }
 
 /**
- * A throwaway tree holding the shipping service, the wire graph it reaches, the baseline fixture
+ * A throwaway tree holding the shipping service, the wire graph it reaches (the `shared/asr` tree
+ * and the `shared/voice` settings contract it reads by value), the baseline fixture
  * the criterion compares against, the criterion itself, and a one-line module marker — laid out at
  * the same relative depths, so the criterion's own relative imports resolve inside the tree and its
  * readings are taken on the tree's `voice.service.ts` rather than on this checkout's.
@@ -141,6 +152,7 @@ function buildTree(mutation: (typeof MUTATIONS)[number] | null): {
 } {
   const tree = mkdtempSync(path.join(tmpdir(), 'quay-asr-dispatch-falsify-'));
   copyInto(tree, SHARED_ASR_REL);
+  copyInto(tree, SHARED_VOICE_REL);
   copyInto(tree, TSCONFIG_REL);
   copyInto(tree, SERVICE_REL);
   for (const sibling of SERVICE_SIBLINGS_REL) {

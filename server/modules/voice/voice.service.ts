@@ -1,3 +1,9 @@
+import {
+  VOICE_SETTINGS_EMPTY_DOCUMENT,
+  VOICE_SETTINGS_MAX_LENGTHS,
+  VOICE_SETTINGS_STRING_FIELDS,
+  type VoiceSettingsStringField,
+} from '@shared/voice/voiceSettingsRegistry.js';
 import type {
   VoiceLogPort,
   VoiceRequestOverrides,
@@ -1593,61 +1599,19 @@ export function createVoiceService(dependencies: VoiceServiceDependencies): Voic
 /**
  * Every field of a settings document, so validation cannot miss one by accident.
  *
- * THE PROVIDER-OWNED FIELDS BELONG ON THIS LIST even though the headers above say the browser calls
- * the backend itself: these are the fields the SERVER presents upstream when the selected provider
- * is one whose transport is `proxy-only`, so they are stored through this same document and have to
- * survive the same validation. Leaving them off would not make them unreachable — the store's own
- * field list would still carry them — it would make them the one part of the document a request
- * could set to a non-string or to megabytes of text, which is exactly what this list exists to
- * prevent.
- */
-const VOICE_SETTINGS_FIELDS = [
-  'baseUrl',
-  'apiKey',
-  'sttModel',
-  'ttsModel',
-  'ttsVoice',
-  'ttsFormat',
-  'providerId',
-  'dashscopeEndpoint',
-  'dashscopeApiKey',
-  'dashscopeModel',
-  'liveVoiceDashscopeApiKey',
-] as const satisfies readonly (keyof VoiceSettings)[];
-
-/**
- * The STRING fields of the document, as a union derived from the list above.
+ * THE LIST AND THE BOUNDS ARE THE SHARED CONTRACT'S. The provider-owned fields belong on the list
+ * even though the headers above say the browser calls the backend itself: these are the fields the
+ * SERVER presents upstream when the selected provider is one whose transport is `proxy-only`, so
+ * they are stored through this same document and have to survive the same validation. The contract
+ * module declares them once for both ends; what stays here is the reading — this file validates a
+ * request against that declaration rather than against a second copy of it.
  *
- * `VoiceSettings` has grown non-string members (`voiceDataRecording`, `voiceDataMaxBytes`), so the
- * length table below cannot be keyed by `keyof VoiceSettings` any more: an entry for a boolean would
- * be a character limit that means nothing. Deriving the union from `VOICE_SETTINGS_FIELDS` instead
- * keeps the table exhaustive over exactly the fields `readSettingsField` reads, and keeps the two
- * from drifting — a field added to the list is a compile error in the table until it is bounded.
+ * `VoiceSettings` has non-string members (`voiceDataRecording`, `voiceDataMaxBytes`), so the length
+ * table cannot be keyed by `keyof VoiceSettings`: an entry for a boolean would be a character limit
+ * that means nothing. `VoiceSettingsStringField` is derived from the string-field tuple, which
+ * keeps the table exhaustive over exactly the fields `readSettingsField` reads.
  */
-type VoiceSettingsStringField = (typeof VOICE_SETTINGS_FIELDS)[number];
-
-/**
- * The longest value each field accepts. Generous for any real endpoint, key or
- * model name, and small enough that one request cannot park megabytes in the
- * settings row and have every later read pay for it.
- *
- * The provider-owned entries are the same generous bounds as their counterparts above rather than
- * new policy: an endpoint is an endpoint and a key is a key, and a bound that differed by field
- * would be a second, silent rule about which provider's address is the longer one.
- */
-const VOICE_SETTINGS_MAX_LENGTHS: Record<VoiceSettingsStringField, number> = {
-  baseUrl: 2048,
-  apiKey: 4096,
-  sttModel: 256,
-  ttsModel: 256,
-  ttsVoice: 256,
-  ttsFormat: 64,
-  providerId: 128,
-  dashscopeEndpoint: 2048,
-  dashscopeApiKey: 4096,
-  dashscopeModel: 256,
-  liveVoiceDashscopeApiKey: 4096,
-};
+const VOICE_SETTINGS_FIELDS = VOICE_SETTINGS_STRING_FIELDS;
 
 /**
  * Reads one settings field from an untrusted body.
@@ -1756,19 +1720,7 @@ function parseVoiceSettingsInput(input: unknown): VoiceServiceResult<VoiceSettin
   }
 
   const source = input as Record<string, unknown>;
-  const settings: VoiceSettings = {
-    baseUrl: '',
-    apiKey: '',
-    sttModel: '',
-    ttsModel: '',
-    ttsVoice: '',
-    ttsFormat: '',
-    providerId: '',
-    dashscopeEndpoint: '',
-    dashscopeApiKey: '',
-    dashscopeModel: '',
-    liveVoiceDashscopeApiKey: '',
-  };
+  const settings: VoiceSettings = { ...VOICE_SETTINGS_EMPTY_DOCUMENT };
 
   for (const field of VOICE_SETTINGS_FIELDS) {
     const read = readSettingsField(source, field);

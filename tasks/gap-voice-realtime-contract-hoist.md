@@ -38,12 +38,12 @@ extra:
 
 ## AC
 
-- [ ] (a) **契约模块存在且承载类型**：`test -f server/modules/voice-realtime/voice-realtime-contract.ts` 退出 0；`grep -qE "VoiceRealtimeInboundFrame|VoiceRealtimeOutboundFrame|VoiceRealtimeNarratorTtsSeam|VoiceRealtimeProxySeams" server/modules/voice-realtime/voice-realtime-contract.ts` 退出 0。
-- [ ] (b) **类型定义不再留在 ws-proxy**：`grep -cE "^export type VoiceRealtime(InboundFrame|OutboundFrame|ExecStatus|NarratorTtsSeam|NarratorSeams|RunEndSummarySeams|RunEndAckSeam|ProxySeams)" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 计数 = **0**（ws-proxy 只允许 re-export，不允许再定义）。
-- [ ] (c) **6 个叶子不再从 ws-proxy import 契约**：`grep -rln "from './voice-realtime-ws-proxy.service.js'" server/modules/voice-realtime/voice-realtime-tts-local.ts server/modules/voice-realtime/voice-realtime-narrator.ts server/modules/voice-realtime/voice-realtime-live-executor.ts server/modules/voice-realtime/voice-realtime-frame-registry.ts server/modules/voice-realtime/voice-realtime-diagnose.service.ts` 计数 = **0**（这 5 个非 barrel 叶子的契约 import 全改指契约模块；barrel `index.ts` 允许 re-export 面保留）。
-- [ ] (d) **既有行为判据不改一字仍绿**：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-scripted-scenarios.test.ts` 各自单跑退出 0。
-- [ ] (e) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
-- [ ] (f) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
+- [x] (a) **契约模块存在且承载类型**：`test -f server/modules/voice-realtime/voice-realtime-contract.ts` 退出 0；`grep -qE "VoiceRealtimeInboundFrame|VoiceRealtimeOutboundFrame|VoiceRealtimeNarratorTtsSeam|VoiceRealtimeProxySeams" server/modules/voice-realtime/voice-realtime-contract.ts` 退出 0。
+- [x] (b) **类型定义不再留在 ws-proxy**：`grep -cE "^export type VoiceRealtime(InboundFrame|OutboundFrame|ExecStatus|NarratorTtsSeam|NarratorSeams|RunEndSummarySeams|RunEndAckSeam|ProxySeams)" server/modules/voice-realtime/voice-realtime-ws-proxy.service.ts` 计数 = **0**（ws-proxy 只允许 re-export，不允许再定义）。
+- [x] (c) **6 个叶子不再从 ws-proxy import 契约**：`grep -rln "from './voice-realtime-ws-proxy.service.js'" server/modules/voice-realtime/voice-realtime-tts-local.ts server/modules/voice-realtime/voice-realtime-narrator.ts server/modules/voice-realtime/voice-realtime-live-executor.ts server/modules/voice-realtime/voice-realtime-frame-registry.ts server/modules/voice-realtime/voice-realtime-diagnose.service.ts` 计数 = **0**（这 5 个非 barrel 叶子的契约 import 全改指契约模块；barrel `index.ts` 允许 re-export 面保留）。
+- [x] (d) **既有行为判据不改一字仍绿**：`server/modules/voice-realtime/tests/voice-realtime-ws-proxy.protocol-simulation.test.ts`、`voice-realtime-bridge.test.ts`、`voice-realtime-scripted-scenarios.test.ts` 各自单跑退出 0。
+- [x] (e) **静态门**：`npx tsc --noEmit -p server/tsconfig.json` 退出 0；`npm run lint` 退出 0。
+- [x] (f) **范围受控**：`git diff --name-only $(git merge-base HEAD develop) HEAD` ⊆ `## Touches`。
 
 ## DoD
 
