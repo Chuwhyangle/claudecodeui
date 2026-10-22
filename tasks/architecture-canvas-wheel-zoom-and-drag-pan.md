@@ -1,7 +1,7 @@
 ---
 id: architecture-canvas-wheel-zoom-and-drag-pan
 title: 画布交互：滚轮直接缩放、左键/中键拖动平移、键盘平移缩放、缩放簇移进画布右下角
-status: ready
+status: done
 labels:
   - feature
 parent: null

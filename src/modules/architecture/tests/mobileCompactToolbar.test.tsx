@@ -16,8 +16,8 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
  *  · the whole chrome is ONE row — title, granularity switch, "…" — including
  *    the graph's own controls, which are portaled into that row's menu instead
  *    of taking a second diagram toolbar row;
- *  · that menu holds the hops switch, the honesty readings, export, and every
- *    zoom action;
+ *  · that menu holds the hops switch, the honesty readings, and export; the
+ *    zoom cluster is NOT a toolbar entry — it floats on the drawing itself;
  *  · a coarse pointer has no hover, so the hover readout is not rendered at
  *    all and the touch instruction is a dismissible one-off;
  *  · the hops options name themselves in words ("Hops 1" / 「跳数 1」) and carry
@@ -252,10 +252,14 @@ test('the compact tier spends its only toolbar row on the title, granularity and
     null,
     'the graph renders no toolbar of its own in compact mode',
   );
-  assert.equal(screen.queryByRole('button', { name: 'Zoom in' }), null, 'zoom waits inside the menu');
+  // The zoom cluster is drawn ON the canvas (bottom right) on every tier; it is
+  // not a toolbar entry, so the single row still carries only title/granularity/"…".
+  const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(cluster instanceof HTMLElement, 'the zoom controls live on the drawing');
+  assert.equal(row.contains(cluster), false, 'the zoom cluster must not be part of the row');
 });
 
-test('the "…" menu holds hops, the honesty readings, export and every zoom control', async () => {
+test('the "…" menu holds hops, the honesty readings and export — the canvas owns the zoom', async () => {
   usePhone();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   await waitForDiagram();
@@ -268,21 +272,25 @@ test('the "…" menu holds hops, the honesty readings, export and every zoom con
   assert.equal(hops.querySelectorAll('[data-architecture-hops-option]').length, 3);
   assert.ok(menu.querySelector('[data-architecture-overflow-export]'), 'export is reachable from the menu');
 
-  for (const control of ['zoom-out', 'zoom-in', 'zoom-fit', 'zoom-actual']) {
-    assert.ok(
+  // The zoom controls are the drawing's own chrome now: they float on the
+  // canvas, so the menu must not repeat them.
+  for (const control of ['zoom-out', 'zoom-in', 'zoom-fit']) {
+    assert.equal(
       menu.querySelector(`[data-architecture-${control}]`),
-      `the ${control} control must be in the menu`,
+      null,
+      `the ${control} control belongs to the canvas cluster, not the menu`,
     );
   }
 
-  // The portaled controls are the graph's real ones, not a copy: zooming from
-  // the menu moves the same viewport scale the desktop toolbar drives.
+  // The cluster drives the same viewport scale the toolbar used to.
+  const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(cluster instanceof HTMLElement, 'the cluster is on the drawing');
   const before = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  fireEvent.click(menu.querySelector('[data-architecture-zoom-in]') as Element);
+  fireEvent.click(cluster.querySelector('[data-architecture-zoom-in]') as Element);
   await waitFor(() => {
     assert.ok(
       Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > before,
-      'the menu zoom must reach the drawing',
+      'the cluster zoom must reach the drawing',
     );
   });
   assert.equal(graphRoot().getAttribute('data-architecture-zoom-mode'), 'custom');
@@ -421,9 +429,16 @@ test('desktop keeps the hover readout and its multi-control header', async () =>
   assert.equal(document.querySelector('[data-architecture-overflow-menu]'), null, 'desktop has no compact menu');
   assert.equal(document.querySelector('[data-architecture-touch-hint]'), null, 'desktop gets the hover wording');
 
-  // The desktop graph toolbar is its own row (the pre-compact layout) and still
-  // renders the zoom controls inline.
+  // The desktop graph toolbar is its own row (the pre-compact layout); the zoom
+  // controls are no longer in it — they float on the drawing as the cluster.
   const graphToolbar = graphRoot().querySelector('[data-architecture-toolbar]');
   assert.ok(graphToolbar instanceof HTMLElement);
-  assert.ok(graphToolbar.querySelector('[data-architecture-zoom-in]'));
+  assert.equal(
+    graphToolbar.querySelector('[data-architecture-zoom-in]'),
+    null,
+    'the zoom controls left the toolbar for the canvas cluster',
+  );
+  const cluster = graphRoot().querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(cluster instanceof HTMLElement, 'the desktop canvas carries the zoom cluster');
+  assert.ok(cluster.querySelector('[data-architecture-zoom-in]'));
 });
