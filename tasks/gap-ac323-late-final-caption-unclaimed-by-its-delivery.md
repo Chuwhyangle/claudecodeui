@@ -58,7 +58,7 @@ AC-323 的 `expect` 第三节仍写着 `voice-realtime-retry`，但 2026-10-14 �
 
 ## AC
 
-- [ ] AC1 **取假形态先红**：给 fake upstream 加「call 先于 `transcription.completed`」的顺序后，修复前同用例稳定红，原文形如 `Error: expect(locator).toBeVisible() failed / Locator: getByTestId('live-voice-button') / Error: element(s) not found`，且该次运行 console 出现 `exit with 1 unshown utterance(s)`；贴命令、逐字失败行与 consoLe 原始行。
+- [ ] AC1 **取假形态先红**：给 fake upstream 加「call 先于 `transcription.completed`」的顺序后，修复前同用例稳定红，原文形如 `Error: expect(locator).toBeVisible() failed / Locator: getByTestId('live-voice-button') / Error: element(s) not found`，且该次运行 console 出现 `exit with 1 unshown utterance(s)`；贴命令、逐字失败行与 console 原始行。
 - [ ] AC2 **修后同顺序绿**：`npx playwright test e2e/voice-realtime-composer-embedded.spec.ts`（默认 continuous）exit 0、`0 failed`、`0 skipped`，贴 `N passed (time)` 摘要，且该次运行 console 不含 `unshown utterance`。
 - [ ] AC3 **归属单测**：`npx vitest run src/modules/chat/voice-realtime/tests/voiceStopVsExit.test.tsx` exit 0；新增用例断言「窗口内晚到的 final caption 被投递认领 ⇒ `collectUndeliveredUtterances` 返回 `''`、`countUnshownUtterances` 为 0」，反向用例断言「窗口外未投递的 final caption 仍返回原话」；`gap-live-voice-caption-attribution-swallows-undelivered` 的 4 条形状不改一字仍绿。
 - [ ] AC4 **CMD1**：`npx playwright test e2e/voice-realtime-live-session-send.spec.ts e2e/voice-realtime-upload-fixture.spec.ts e2e/voice-realtime-composer-embedded.spec.ts` exit 0、`0 failed`，贴摘要与墙钟。
