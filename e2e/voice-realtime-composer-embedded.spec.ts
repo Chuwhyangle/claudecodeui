@@ -124,6 +124,16 @@ const SPEECH_SECONDS = 0.6;
 const SEND_WAIT_SECONDS = 2.5;
 
 /**
+ * How late the stand-in's transcription lands in {@link FakeUpstream.setTranscriptionAfterCall}.
+ *
+ * IT HAS TO OUTLAST THE DELIVERY. The `sent` frame is sent after the proxy's 1 s coalescing window
+ * plus the send's own `SEND_WAIT_SECONDS`; under the load of a whole spec run that is 4–5 s. 8 s
+ * leaves the ordering this arm exists to pin — delivery first, caption after — with seconds of
+ * headroom, and the case itself WAITS for the caption, so the ordering is read rather than slept to.
+ */
+const LATE_TRANSCRIPTION_MS = 8_000;
+
+/**
  * The over-long interim caption of case (c): the same sentence repeated past the
  * 400 characters the criterion names. Built rather than typed so the length is a
  * fact the spec can assert instead of a number a reader has to count.
@@ -179,6 +189,17 @@ type FakeUpstream = {
    * path the requirement's own words describe.
    */
   setRefusing(refusing: boolean): void;
+  /**
+   * Makes the stand-in transcribe the user's item AFTER the model's call instead of before it.
+   *
+   * The real endpoint commits an input item when speech ends and then transcribes it on its own,
+   * slower clock; the model's response is driven by the COMMIT, so it can reach the relay before
+   * that item's transcription does. This file's default order sends `completed` first, which is the
+   * order the defect never appears in; with this on, the model's `session_send` is emitted first and
+   * the transcription `completed` follows {@link LATE_TRANSCRIPTION_MS} later — after the delivery
+   * that answered the item has already been confirmed.
+   */
+  setTranscriptionAfterCall(after: boolean): void;
   /** One interim transcription of the user's audio, carrying the text this file chooses. */
   emitInterimCaption(text: string): void;
   /** How many upstream handshakes have COMPLETED (a refused one is not a connection). */
@@ -210,6 +231,7 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
   const server = new WebSocketServer({ noServer: true });
   let boundSessionId = '';
   let refusing = false;
+  let transcriptionAfterCall = false;
   let connections = 0;
   let calls = 0;
   let audioFrames = 0;
@@ -263,31 +285,54 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         // but empty) and `completed` carries the final text in `transcript`, both
         // grouped by `item_id`.
         const itemId = `item_bar_${calls}`;
-        socket.send(
-          JSON.stringify({
-            type: 'conversation.item.input_audio_transcription.delta',
-            item_id: itemId,
-            stash: SEED_USER_TEXT,
-            text: '',
-          }),
-        );
-        socket.send(
-          JSON.stringify({
-            type: 'conversation.item.input_audio_transcription.completed',
-            item_id: itemId,
-            transcript: SEED_USER_TEXT,
-          }),
-        );
-        socket.send(
-          JSON.stringify({
-            type: 'response.function_call_arguments.done',
-            call_id: `call_bar_${calls}`,
-            name: 'session_send',
-            // NO `session`: the instructions tell the model "the session is fixed by the
-            // connection; never name one", and the real model obeys.
-            arguments: JSON.stringify({ message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
-          }),
-        );
+        // THE COMMIT COMES FIRST, because that is what the real endpoint does: `server_vad` closes
+        // the utterance into an input item here, and the model's response is produced from the
+        // COMMIT — which is why a response can precede the item's transcription. The proxy reads
+        // this event as its conversation boundary and reports it to the page as the delivery's
+        // `coveredThroughItemId`, the one name that lets a caption landing later still be claimed.
+        socket.send(JSON.stringify({ type: 'input_audio_buffer.committed', item_id: itemId }));
+        const interim = JSON.stringify({
+          type: 'conversation.item.input_audio_transcription.delta',
+          item_id: itemId,
+          stash: SEED_USER_TEXT,
+          text: '',
+        });
+        const completed = JSON.stringify({
+          type: 'conversation.item.input_audio_transcription.completed',
+          item_id: itemId,
+          transcript: SEED_USER_TEXT,
+        });
+        const call = JSON.stringify({
+          type: 'response.function_call_arguments.done',
+          call_id: `call_bar_${calls}`,
+          name: 'session_send',
+          // NO `session`: the instructions tell the model "the session is fixed by the
+          // connection; never name one", and the real model obeys.
+          arguments: JSON.stringify({ message: PROPOSED_TEXT, waitSeconds: SEND_WAIT_SECONDS }),
+        });
+        if (!transcriptionAfterCall) {
+          socket.send(interim);
+          socket.send(completed);
+          socket.send(call);
+          return;
+        }
+        // THE LATE-ORDER ARM (this task): the model answers the committed item before its
+        // transcription exists. The delay is longer than the delivery's own wait — the 1 s
+        // coalescing window plus the send's `waitSeconds` — so the `sent` frame has been on the
+        // wire for seconds when the transcription finally arrives, which is the ordering the
+        // defect needs and the one the real endpoint produces under load.
+        //
+        // THE INTERIM IS DELAYED WITH IT. A non-final caption still fills the bar's caption cell
+        // (the page shows what it has), so an early interim would let a reader mistake the running
+        // text for the final one — and the defect is about the FINAL caption's arrival, not the
+        // interim's. Holding both back means the only caption on screen is the final one, which is
+        // exactly the reading the case waits for below.
+        socket.send(call);
+        setTimeout(() => {
+          if (socket.readyState !== socket.OPEN) return;
+          socket.send(interim);
+          socket.send(completed);
+        }, LATE_TRANSCRIPTION_MS);
       }
     });
   });
@@ -303,6 +348,9 @@ function startFakeUpstream(port: number): Promise<FakeUpstream> {
         getBoundSessionId: () => boundSessionId,
         setRefusing: (value: boolean) => {
           refusing = value;
+        },
+        setTranscriptionAfterCall: (after: boolean) => {
+          transcriptionAfterCall = after;
         },
         emitInterimCaption: (text: string) => {
           captions += 1;
@@ -972,6 +1020,23 @@ test.describe('voice realtime composer embedded bar', () => {
   });
 
   test('1280px: a socket the server closed reads disconnected, offers no way back, and re-dials nothing', async () => {
+    // THE ORDER THE REAL ENDPOINT CAN PRODUCE, AND THE DEFECT LIVES IN (this task). The model's call
+    // answers the item the endpoint COMMITTED; the transcription of that item is a separate, slower
+    // read that can land AFTER the delivery has been confirmed. The `sent` handler claims what is
+    // pending at that instant, so a caption still being transcribed is claimed by nobody — and the
+    // leave below then offered it back to the composer as a draft, which took the Live Voice entry
+    // away and red the visibility assertion further down. Fixed on the client by the delivery's
+    // `coveredThroughItemId` claim, and pinned here by this arm rather than left to run-to-run luck.
+    upstream.setTranscriptionAfterCall(true);
+
+    // The page's own close-trace records, collected from here to the leave below: a line naming an
+    // unshown utterance is the client saying part of what was just said never reached the screen.
+    const unshownLogs: string[] = [];
+    const onConsole = (message: { text(): string }): void => {
+      if (message.text().includes('unshown utterance')) unshownLogs.push(message.text());
+    };
+    page.on('console', onConsole);
+
     // A healthy connection first, so the drop below is a connection that really opened and then
     // ended, not one that never started.
     await expect(page.locator(COMPOSER_TEXTAREA)).toBeVisible({ timeout: 30_000 });
@@ -980,6 +1045,11 @@ test.describe('voice realtime composer embedded bar', () => {
     const proposedRowsOnHealthy = await rowsCarrying(page, PROPOSED_TEXT);
     await speak(page, SPEECH_SECONDS);
     await expect.poll(() => upstream.audioFrameCount(), { timeout: 20_000 }).toBe(framesOnHealthy + 1);
+    // The proxy ACCEPTED the instruction (its coalescing window opened) — the window the delivery is
+    // in while the caption below is still being transcribed.
+    await expect(page.getByTestId('voice-realtime-status')).toHaveAttribute('data-queued-depth', '1', {
+      timeout: 25_000,
+    });
     // Wait for THIS case's delivery before leaving. `handleVoiceExit` hands every final caption no
     // delivery claims to the composer as a draft (`collectUndeliveredUtterances` → `setInput`).
     // Exiting while the confirmation is still in flight therefore puts `SEED_USER_TEXT` into the
@@ -991,7 +1061,24 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect
       .poll(() => rowsCarrying(page, PROPOSED_TEXT), { timeout: 25_000 })
       .toBe(proposedRowsOnHealthy + 1);
+    // AND THE DELIVERY IS CONFIRMED, not merely on screen: the coalescing window closes with the
+    // `sent` frame, which carries the depth the proxy reads AFTER the send — 0 for a send that
+    // started the run. The row above can be written by the run a beat BEFORE that frame, so leaving
+    // on the row alone is the race the 01:48 run lost.
+    await expect(page.getByTestId('voice-realtime-status')).toHaveAttribute('data-queued-depth', '0', {
+      timeout: 25_000,
+    });
+    // THE LATE CAPTION, read on screen before the exit: with this arm it becomes final seconds after
+    // the `sent`, so the delivery above could not have claimed it from its pending set. The bar shows
+    // the live caption, so its text is the proof the transcription has landed.
+    await expect(page.getByTestId('voice-realtime-caption')).toHaveText(SEED_USER_TEXT, { timeout: 25_000 });
     await leaveLiveVoice(page);
+    // AND THE LEAVE FOUND NOTHING LOST. The hook writes `exit with N unshown utterance(s)` when a
+    // FINAL caption is claimed by no SHOWN delivery; the sentence the model received must not be one
+    // of them. Read off the page's own console, which is where that reading goes (the close trace is
+    // not drawn in the conversation).
+    expect(unshownLogs, 'the delivered words were claimed: the leave must not report them as unshown').toEqual([]);
+    page.off('console', onConsole);
 
     // The endpoint goes unreachable: the app server's dial fails, its connect budget is
     // spent, and it closes the browser's socket — the server-side close the criterion names.
@@ -1037,6 +1124,9 @@ test.describe('voice realtime composer embedded bar', () => {
     await expect(page.getByTestId('voice-realtime-status')).toContainText(/disconnected/i);
 
     upstream.setRefusing(false);
+    // The late-order arm belongs to this case: the cases after it read the shipping order, and a
+    // mode left on would silently change the ordering they were written against.
+    upstream.setTranscriptionAfterCall(false);
     await leaveLiveVoice(page);
   });
 

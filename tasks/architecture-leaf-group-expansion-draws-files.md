@@ -1,7 +1,7 @@
 ---
 id: architecture-leaf-group-expansion-draws-files
 title: 展开叶目录组时画出组内文件（不再回显同一个组框，229 个文件目前完全不可达）
-status: ready
+status: done
 labels:
   - feature
 parent: null
@@ -28,16 +28,29 @@ extra: {}
 
 ## AC
 
-- [ ] 新增用例（真实形态 fixture：file 图 id 为项目相对路径）钉住：叶目录 229 个文件、prefix 等于该目录时，group 视图产出 229 条 `class` 行、0 条 `grp::` 行、`grouped === false`，且边数不被折叠吞掉；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0
-- [ ] 反向用例：目录**既有子目录又有 50+ 个直接文件**时，子目录仍是组框，而视图前缀对应的组框消失（产物中不存在 `grp::<视图前缀>` 行、也不存在文本等于 `<前缀> (N)` 的 class 行），直接文件以实体出现；单成员组折叠规则（`adaptiveGrouping.ts` 的 `count < 2` 分支）不回归
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：overview 点击组框进入 group 视图后，组框不再与来源相同（读数：group 视图里 `class` 数 > 1 且没有任何 class 文本等于来源组标签），既有 hover/缩放/爆炸/下钻用例不回归
-- [ ] `npm run typecheck` 与 `npm run build` 通过
+- [x] 新增用例（真实形态 fixture：file 图 id 为项目相对路径）钉住：叶目录 229 个文件、prefix 等于该目录时，group 视图产出 229 条 `class` 行、0 条 `grp::` 行、`grouped === false`，且边数不被折叠吞掉；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` exit 0
+- [x] 反向用例：目录**既有子目录又有 50+ 个直接文件**时，子目录仍是组框，而视图前缀对应的组框消失（产物中不存在 `grp::<视图前缀>` 行、也不存在文本等于 `<前缀> (N)` 的 class 行），直接文件以实体出现；单成员组折叠规则（`adaptiveGrouping.ts` 的 `count < 2` 分支）不回归
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：overview 点击组框进入 group 视图后，组框不再与来源相同（读数：group 视图里 `class` 数 > 1 且没有任何 class 文本等于来源组标签），既有 hover/缩放/爆炸/下钻用例不回归
+- [x] `npm run typecheck` 与 `npm run build` 通过
 
 ## DoD
 
 真实浏览器（默认与 390×844 移动视口各一次）打开 quay 会话 `/session/e2dd27de-3257-44ab-8209-4f5ac6858459` 的 architecture tab：Overview 点击 `plugin/scripts (229)` 后图上是该目录的 229 个文件（或按节点预算截断并显示既有截断提示），不再是同一个组框；选择 `packages/quay/src (12)` 这类**有子目录**的组展开后，子目录仍是组框、本层直接文件画平、再点任一子目录组仍能继续下钻（不原地打转）；返回 Overview 再进一次仍成立。证据是浏览器截图/快照里的 class 数量与标签，不是「测试绿了」。
 
 不放水：不提高 `OVERVIEW_GROUP_LIMIT` 来绕过（那只会把 Overview 本身弄乱）、不删组框、不把 229 改成采样显示而不告知。
+
+## Evidence
+
+实现：`adaptiveGroupViewDocument` 先按 `group.prefix === view.prefix` 把该组从 `groups` 中取出，其成员加入 `ungroupedNodeIds`（按 neighborhood 的 `(distance, id)` 顺序），再交给既有的 `emitGroupedDocument`。边因此不需要新逻辑：`emitGroupedDocument` 的 `aliasFor` 对未分组 id 回落到 `aliasOf`，于是「指向原前缀组框」的边自动落到具体实体上，折叠/聚合规则原样保留（唯一前缀组时 `groups` 为空 ⇒ 直接走 `emitEntityDocument`，每条边逐条画出）。
+
+真实浏览器读数（Chromium headless，真实 `/tmp/quay-arch-graph.json` 的 321 file 节点，真实 `@yalehwang/plantuml-js/elk` 渲染器；桌面 1280×800 与移动 390×844 各一遍，0 个 pageerror；截图 `/tmp/arch-probe/plugin-scripts-{desktop,mobile}.png`）：
+
+- Overview：18 个框，其中 `plugin/scripts (229)`。
+- 展开 `plugin/scripts`：**229** 个 node，源组标签不存在；桌面/移动一致。
+- 展开 `packages/quay/src`：17 个 node = 4 个子目录框（`cli (12)`、`core (11)`、`kernel (12)`、`serve (2)`）+ 13 个本层直接文件实体；无 `packages/quay/src (N)` 框。
+- 再展开其中的 `packages/quay/src/cli`：**12** 个实体，无框 ⇒ 不原地打转。
+
+偏离：没有驱动 `/session/e2dd27de…` 的 React 页面（:3001 上的服务跑的是 main checkout 的改前构建，从会话内部重启它被禁止），改用同一份真实图的 view 文档在真实浏览器里由真渲染器出 SVG 后读 class 数量与标签；`data-entity-id`/`data-package-id` 的 DOM 契约未改。
 
 ## Touches
 

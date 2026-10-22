@@ -383,9 +383,21 @@ function adaptiveOverviewDocument(
 /**
  * The group view's document. Expanding a directory re-applies the same
  * directory-only rule to its subtree: a directory that still has subdirectories
- * shows them as groups instead of flattening every file. A small leaf directory
- * (no subdirectory to group, and no more entities than the group limit) falls
- * back to the entity drawing the view has always shown.
+ * shows them as groups instead of flattening every file.
+ *
+ * The one group that can never stay a box is the one whose prefix IS the view
+ * prefix: clicking it addresses `{ kind: 'group', prefix }` again, so the view
+ * would not change. Its members are always drawn flat — the entity path — and
+ * the `OVERVIEW_GROUP_LIMIT` that guards the overview does not apply to them,
+ * because an expansion is the user explicitly asking to see inside. The
+ * server-side node budget (`maxNodes` / its "Node budget reached" notice) is
+ * what bounds a huge leaf directory; no group box is invented to hide it.
+ *
+ * With the prefix group flattened, the remaining subdirectory groups still get
+ * their boxes. Edge aggregation keeps the "folding must not drop an edge" rule:
+ * the flattened members lose only their group alias and fall back to their own
+ * entity aliases, so a former group→group edge becomes entity→group (or
+ * entity→entity) on the same pair of endpoints.
  */
 function adaptiveGroupViewDocument(
   graph: ArchitectureNeighborhood,
@@ -400,16 +412,30 @@ function adaptiveGroupViewDocument(
     maxGroups: OVERVIEW_GROUP_LIMIT,
     idShape,
   });
-  const onlyGroup = grouping.groups.length === 1 ? grouping.groups[0] : undefined;
-  if (onlyGroup !== undefined && onlyGroup.prefix === prefix && onlyGroup.count <= OVERVIEW_GROUP_LIMIT) {
+
+  const flatGroup = grouping.groups.find((group) => group.prefix === prefix);
+  const groups = grouping.groups.filter((group) => group.prefix !== prefix);
+  // No subdirectory group left: the whole subtree is entities (a leaf directory
+  // of any size). Reuse the caller's alias map and the entity drawing.
+  if (groups.length === 0) {
     const raw = emitEntityDocument(drawn, aliasOf, idShape);
     return { ...raw, aliasOf, rendererEntity: null, grouped: false };
   }
-  if (grouping.groups.length === 0) {
-    const raw = emitEntityDocument(drawn, aliasOf, idShape);
-    return { ...raw, aliasOf, rendererEntity: null, grouped: false };
-  }
-  return emitGroupedDocument(drawn, grouping, aliasOf, idShape);
+
+  // Flat members join the ungrouped set in the neighbourhood's own order, so
+  // the document stays deterministic in the server's `(distance, id)` order.
+  const flatIds = new Set(flatGroup?.nodeIds ?? []);
+  const ungroupedIds = new Set(grouping.ungroupedNodeIds);
+  const ungroupedNodeIds = drawn.nodes
+    .map((node) => node.id)
+    .filter((id) => flatIds.has(id) || ungroupedIds.has(id));
+
+  return emitGroupedDocument(
+    drawn,
+    { depth: grouping.depth, groups, ungroupedNodeIds },
+    aliasOf,
+    idShape,
+  );
 }
 
 /**
