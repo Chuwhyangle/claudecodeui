@@ -62,17 +62,49 @@ export function clampArchitectureScope(value: number): number {
 }
 
 /**
- * Order the non-seed nodes by importance and keep the tier's prefix.
+ * In-degree over the supplied edges: how many relations point at each node.
+ *
+ * Computed over the graph the caller handed over, so the count is the one a
+ * reader would compute from what is on screen — not a global analysis reading.
+ */
+function inDegreeOf(edges: readonly ArchitectureRendererEdge[]): Map<string, number> {
+  const inDegree = new Map<string, number>();
+  for (const edge of edges) {
+    inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
+  }
+  return inDegree;
+}
+
+/**
+ * The documented importance order, exposed so the layout budget's truncation
+ * cuts in exactly the same order the detail tiers do.
  *
  * Ordering: hop distance from the seeds ascending (nearer is more important),
  * then in-degree descending (a class more of the graph depends on is more
  * important than one nothing points at), then id ascending only as a
- * deterministic tie-break, so the same payload always yields the same graph.
+ * deterministic tie-break, so the same payload always yields the same order.
+ */
+export function orderArchitectureNodesByImportance(
+  nodes: readonly ArchitectureRendererNode[],
+  edges: readonly ArchitectureRendererEdge[],
+): ArchitectureRendererNode[] {
+  const inDegree = inDegreeOf(edges);
+  return [...nodes].sort((left, right) => {
+    if (left.distance !== right.distance) return left.distance - right.distance;
+    const degreeDelta = (inDegree.get(right.id) ?? 0) - (inDegree.get(left.id) ?? 0);
+    if (degreeDelta !== 0) return degreeDelta;
+    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+  });
+}
+
+/**
+ * Order the non-seed nodes by importance and keep the tier's prefix.
  *
  * Seeds (`distance === 0`, the entities the transcript mentioned) are NEVER
  * folded, even when their distance would otherwise make them compete for the
- * prefix. Edges are kept only when both endpoints are retained: an edge that
- * lost one end has nothing to connect and would otherwise draw a dangling line.
+ * prefix. The remaining nodes follow {@link orderArchitectureNodesByImportance}.
+ * Edges are kept only when both endpoints are retained: an edge that lost one
+ * end has nothing to connect and would otherwise draw a dangling line.
  *
  * `all` is the identity: the input arrays are returned as-is, so a reading
  * taken in that tier is exactly the pre-existing graph.
@@ -91,14 +123,6 @@ export function rankArchitectureDetail(
     };
   }
 
-  // In-degree over the graph the caller handed over. Callers pass the scope's
-  // graph, so the count is the one a reader would compute from what is on
-  // screen — not a global analysis reading.
-  const inDegree = new Map<string, number>();
-  for (const edge of edges) {
-    inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
-  }
-
   const retainedNodeIds = new Set<string>();
   const candidates: ArchitectureRendererNode[] = [];
   for (const node of nodes) {
@@ -109,15 +133,8 @@ export function rankArchitectureDetail(
     }
   }
 
-  candidates.sort((left, right) => {
-    if (left.distance !== right.distance) return left.distance - right.distance;
-    const degreeDelta = (inDegree.get(right.id) ?? 0) - (inDegree.get(left.id) ?? 0);
-    if (degreeDelta !== 0) return degreeDelta;
-    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-  });
-
   const keepCount = Math.ceil(candidates.length * DETAIL_TIER_KEEP_RATIO[tier]);
-  for (const node of candidates.slice(0, keepCount)) {
+  for (const node of orderArchitectureNodesByImportance(candidates, edges).slice(0, keepCount)) {
     retainedNodeIds.add(node.id);
   }
 

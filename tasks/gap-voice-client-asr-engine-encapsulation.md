@@ -2,7 +2,7 @@
 id: gap-voice-client-asr-engine-encapsulation
 title: VoiceClientAsrEngine 封装：voiceClientAsrWorker 的 4 个模块级
   let（installedEngine/preloadPromise/readinessRequest/lastProgress）收进带生命周期的类
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -81,11 +81,3 @@ extra:
 - 驱动同款防漂移门：`anti-drift-touches-check --task gap-voice-client-asr-engine-encapsulation --worktree … --merge-target develop` → `ANTI-DRIFT OK: 1 actual file(s), all within declared Touches (2 glob(s))`，退出 0。
 
 **运行环境**：未重启 :3001、未发布。
-
-## Blocker
-
-**2026-10-22T09:55:16.400Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：6e8d8520-8148-463f-ac7f-ed1cdea1f748

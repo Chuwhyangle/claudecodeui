@@ -123,6 +123,7 @@
       "raiseDetail": "Detail erhöhen",
       "reduceScope": "Bereich verkleinern",
       "budgetOmitted": "{{count}} weitere durch das Knotenbudget ausgelassen",
+      "layoutBudget": "{{count}} innerhalb des Layout-Budgets angezeigt; mehr Detail dauert länger",
       "kindFunction": "{{count}} Funktionen",
       "kindInterface": "{{count}} Schnittstellen",
       "kindClass": "{{count}} Klassen"
