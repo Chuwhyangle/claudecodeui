@@ -1,7 +1,7 @@
 ---
 id: architecture-mobile-sheet-layout
 title: 手机布局：单行头部 + 底部抽屉承载范围/详情/搜索/导出 + 画布内缩放簇与缩略图开关
-status: ready
+status: done
 labels:
   - feature
 parent: null
