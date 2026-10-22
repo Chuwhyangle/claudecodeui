@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { beforeAll, beforeEach, test, vi } from 'vitest';
@@ -45,13 +45,20 @@ import type * as SharedApiModule from '@/shared/api';
 
 // The whole network hop is stubbed; the hook, the panel, the bridge and the
 // real PlantUML/ELK renderer are real.
-const apiMock = vi.hoisted(() => ({ architectureGraph: vi.fn() }));
+const apiMock = vi.hoisted(() => ({
+  architectureGraph: vi.fn(),
+  architectureMentions: vi.fn(),
+}));
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof SharedApiModule>();
   return {
     ...actual,
-    api: { ...actual.api, architectureGraph: apiMock.architectureGraph },
+    api: {
+      ...actual.api,
+      architectureGraph: apiMock.architectureGraph,
+      architectureMentions: apiMock.architectureMentions,
+    },
   };
 });
 
@@ -268,6 +275,13 @@ async function settleAspectRelayout(): Promise<void> {
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(chainResult()));
+  apiMock.architectureMentions.mockReset();
+  apiMock.architectureMentions.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ mentions: [], truncated: false }),
+  } as unknown as Response);
+  window.localStorage.removeItem('architecture.dock.open');
 });
 
 test('the container ratio reaches the engine CONSTRUCTOR, and only the ratio', () => {
@@ -417,6 +431,56 @@ test('the ratio policy is a pure reading: threshold, null handling, and the clam
   assert.equal(clampAspectRatio(0.1), MIN_LAYOUT_ASPECT_RATIO);
   assert.equal(clampAspectRatio(10), MAX_LAYOUT_ASPECT_RATIO);
   assert.equal(clampAspectRatio(Number.NaN), DEFAULT_LAYOUT_ASPECT_RATIO);
+
+  // The relayout LOCK is a pure argument: while a dock open/close (or a live
+  // split drag) is in progress, even a ratio far past the threshold re-fits
+  // only. Lifting the lock re-enables the ordinary rule.
+  assert.equal(
+    shouldRelayoutForAspect(threshold, threshold * 0.5, { locked: true }),
+    false,
+    'a locked reading never earns a re-layout',
+  );
+  assert.equal(
+    shouldRelayoutForAspect(threshold, threshold * 0.5, { locked: false }),
+    true,
+    'the same shape change earns a layout once the lock lifts',
+  );
+  assert.equal(shouldRelayoutForAspect(threshold, threshold, { locked: true }), false);
+});
+
+test('the dock opening freezes aspect re-layout, and the toggle itself is not a shape change', async () => {
+  pinContainerBox(1200, 900); // ratio 1.333
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  const drawings = countDrawings(host);
+
+  // Selecting a node opens the dock. That is the gesture whose 160ms transition
+  // freezes aspect-driven re-layout.
+  const node = host.querySelector('[data-entity-id]');
+  assert.ok(node !== null, 'the class view must draw an entity to select');
+  fireEvent.click(node);
+  assert.ok(document.querySelector('[data-architecture-dock]'), 'the dock must open on a selection');
+
+  // The dock narrows the canvas from 1200 to 880: ratio 1.333 → 0.978, far past
+  // the 15% threshold. While the lock holds, this must only re-fit.
+  pinContainerBox(880, 900);
+  triggerResize();
+  await settleAspectRelayout();
+  assert.equal(drawings(), 0, 'a locked (dock-transition) shape change must not re-lay out the graph');
+
+  // The lock has lifted (its 200ms window is shorter than the debounce wait).
+  // The SAME ratio must still not re-lay out: the dock toggle was never a shape
+  // change, so it must not be counted as one after the fact either.
+  triggerResize();
+  await settleAspectRelayout();
+  assert.equal(drawings(), 0, 'the dock toggle must not become a shape change once the lock lifts');
+
+  // A genuine later shape change still earns exactly one layout.
+  pinContainerBox(600, 900);
+  triggerResize();
+  await waitFor(() => assert.equal(drawings(), 1, 'a real resize after the dock settles re-lays out once'), {
+    timeout: 4000,
+  });
 });
 
 test('the layout engine is constructed in exactly one factory, through the public option', () => {

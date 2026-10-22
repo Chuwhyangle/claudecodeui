@@ -89,8 +89,22 @@ export function clampAspectRatio(ratio: number): number {
  * screen was laid out with to earn a re-layout. `drawn` is `null` for a drawing
  * made before the container could be measured — it used the engine default, so
  * that is the ratio it is compared against.
+ *
+ * `locked` freezes the decision while a layout change is IN PROGRESS (the
+ * inspector dock opening/closing, or a split being dragged): the container
+ * changes shape, but re-laying the whole graph mid-transition is both expensive
+ * and visually wrong, so the caller re-fits only. A locked reading is always
+ * `false`; the caller re-bases its `drawn` reading when the lock lifts, so the
+ * transition itself never counts as a shape change. The flag is an ARGUMENT,
+ * not module state: the dock's lifecycle belongs to the panel, and a pure
+ * function keeps it testable.
  */
-export function shouldRelayoutForAspect(drawn: number | null, measured: number | null): boolean {
+export function shouldRelayoutForAspect(
+  drawn: number | null,
+  measured: number | null,
+  options?: { readonly locked?: boolean },
+): boolean {
+  if (options?.locked === true) return false;
   if (measured === null || !Number.isFinite(measured) || measured <= 0) return false;
   const base = drawn === null ? DEFAULT_LAYOUT_ASPECT_RATIO : clampAspectRatio(drawn);
   return Math.abs(clampAspectRatio(measured) - base) / base > ASPECT_RELAYOUT_THRESHOLD;

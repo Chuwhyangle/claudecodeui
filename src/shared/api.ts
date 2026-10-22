@@ -378,6 +378,32 @@ export const api = {
       ...(filter?.kinds === undefined ? {} : { kinds: filter.kinds }),
       ...(filter?.relations === undefined ? {} : { relations: filter.relations }),
     }),
+  /**
+   * The on-demand mention provenance for one graph selection: where in the
+   * session's transcript the selected entity — or the two entities of a
+   * relation — were named. `includeToolResults` opts into the noisy tool-output
+   * tier for THIS query only; the graph's own extraction is unchanged. The
+   * response body is the result itself (`{ mentions, edge?, truncated }`), not a
+   * `{ success, data }` envelope.
+   */
+  architectureMentions: (
+    projectId: string,
+    sessionId: string,
+    target: {
+      readonly entityIds?: readonly string[];
+      readonly edge?: { readonly from: string; readonly to: string };
+      readonly includeToolResults?: boolean;
+      readonly limit?: number;
+    },
+  ) =>
+    post('/api/architecture/mentions', {
+      projectId,
+      sessionId,
+      ...(target.entityIds === undefined ? {} : { entityIds: target.entityIds }),
+      ...(target.edge === undefined ? {} : { edge: target.edge }),
+      ...(target.includeToolResults === undefined ? {} : { includeToolResults: target.includeToolResults }),
+      ...(target.limit === undefined ? {} : { limit: target.limit }),
+    }),
   renameProject: (projectId: string, displayName: string) =>
     put(`/api/projects/${projectId}/rename`, { displayName }),
   restoreProject: (projectId: string) =>

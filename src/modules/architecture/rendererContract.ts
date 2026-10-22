@@ -148,9 +148,31 @@ export type ArchitectureRendererHover = {
  *
  * `onNodeHover` reports the hovered node and its visible relation kinds (null
  * when the pointer leaves); the panel renders the readout, so it looks the same
- * for every renderer. `onNodeClick` reports a clicked node to whichever consumer
- * needs selection; a renderer may additionally expand the clicked node's next
- * hop locally, which is why the click never re-enters the fetch.
+ * for every renderer. `onNodeClick` reports a SINGLE click on a node — the
+ * selection gesture that opens the inspector. Drilling one hop deeper is a
+ * separate gesture (a double click / double tap, or the renderer's own explicit
+ * control) and stays inside the renderer that owns the view.
+ *
+ * `onEdgeClick` reports a clicked relation with the payload's own
+ * from/to/relationType, so the panel can open the relation inspector without
+ * knowing how the renderer draws or enlarges its hit area. `onSelectionClear`
+ * is the background-click gesture — a renderer reports it when the reader
+ * clicks the empty canvas, and the panel drops the selection with it.
+ *
+ * `selectedNodeId`/`selectedRelation` are the panel's selection, handed back to
+ * the renderer for styling (the ring and the bold relation line). They are
+ * optional so a stand-in renderer can ignore them.
+ *
+ * `onEscapeSelection` lets the canvas own Escape while a selection exists: the
+ * panel closes the dock first, then clears the selection, and the key never
+ * reaches the chat page's global abort. A renderer without a selection does not
+ * intercept Escape at all.
+ *
+ * `relayoutLocked` freezes aspect-driven re-layout (a dock opening or a drag
+ * resize changes the container by more than the ratio threshold). While locked
+ * the renderer only re-fits; when the lock lifts it re-bases the comparison to
+ * the current measurement WITHOUT a layout, so the dock toggle itself is never
+ * counted as a shape change.
  *
  * `onExport` is optional: a renderer that collects its controls into an
  * overflow menu on narrow screens (PlantUmlGraph does) can offer the panel's
@@ -175,7 +197,17 @@ export type ArchitectureRendererProps = {
   readonly maxNodes?: number;
   readonly detailReading?: ArchitectureDetailReading;
   readonly onNodeClick?: (node: ArchitectureRendererNode) => void;
+  readonly onEdgeClick?: (edge: ArchitectureRendererEdge) => void;
+  readonly onSelectionClear?: () => void;
   readonly onNodeHover?: (hover: ArchitectureRendererHover | null) => void;
+  readonly onEscapeSelection?: () => void;
+  readonly selectedNodeId?: string | null;
+  readonly selectedRelation?: {
+    readonly from: string;
+    readonly to: string;
+    readonly relationType: string;
+  } | null;
+  readonly relayoutLocked?: boolean;
   readonly onExport?: () => void;
 };
 

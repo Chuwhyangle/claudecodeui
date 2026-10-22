@@ -189,6 +189,51 @@
       "title": "Ajustar",
       "close": "Cerrar panel de ajustes",
       "dragHandle": "Arrastra para cerrar"
+    },
+    "dock": {
+      "title": "Inspector",
+      "close": "Cerrar el inspector",
+      "empty": "Selecciona un nodo o una relación en el dibujo.",
+      "snapCollapsed": "Contraído",
+      "snapHalf": "Medio",
+      "snapFull": "Completo"
+    },
+    "inspector": {
+      "overview": "Resumen",
+      "sessions": "Sesiones",
+      "kind": "Tipo",
+      "degree": "Relaciones",
+      "inDegree": "{{count}} entrantes",
+      "outDegree": "{{count}} salientes",
+      "members": "Miembros",
+      "showAllMembers": "Mostrar los {{count}}",
+      "showFewerMembers": "Mostrar menos",
+      "related": "Relacionado",
+      "noRelated": "No hay relaciones dibujadas",
+      "relationType": "Tipo",
+      "underlyingEdges": "Aristas subyacentes",
+      "noUnderlyingEdges": "No hay aristas subyacentes en esta vista",
+      "coMentions": "Mensajes que mencionan ambos"
+    },
+    "relation": {
+      "inheritance": "Herencia",
+      "implementation": "Implementación",
+      "composition": "Composición",
+      "aggregation": "Agregación",
+      "dependency": "Dependencia",
+      "call": "Llamada"
+    },
+    "mentions": {
+      "error": "No se pudieron cargar las menciones.",
+      "retry": "Reintentar",
+      "ambiguous": "El nombre {{name}} coincide con {{count}} entidades, así que una coincidencia puede apuntar a cualquiera de ellas.",
+      "truncated": "Solo se muestran las primeras {{count}}.",
+      "empty": "La conversación nunca lo nombra directamente. Está en el gráfico porque está a {{count}} salto(s) de la mención más cercana.",
+      "roleUser": "Usuario",
+      "roleAssistant": "Asistente",
+      "roleTool": "Salida de herramienta",
+      "includeToolResults": "Incluir salida de herramienta",
+      "locate": "Localizar este mensaje"
     }
   },
   "status": {

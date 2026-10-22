@@ -189,6 +189,51 @@
       "title": "Regola",
       "close": "Chiudi pannello di regolazione",
       "dragHandle": "Trascina per chiudere"
+    },
+    "dock": {
+      "title": "Ispettore",
+      "close": "Chiudi l’ispettore",
+      "empty": "Seleziona un nodo o una relazione nel disegno.",
+      "snapCollapsed": "Ridotto",
+      "snapHalf": "Metà",
+      "snapFull": "Intero"
+    },
+    "inspector": {
+      "overview": "Panoramica",
+      "sessions": "Sessioni",
+      "kind": "Tipo",
+      "degree": "Relazioni",
+      "inDegree": "{{count}} in entrata",
+      "outDegree": "{{count}} in uscita",
+      "members": "Membri",
+      "showAllMembers": "Mostra tutti i {{count}}",
+      "showFewerMembers": "Mostra meno",
+      "related": "Correlati",
+      "noRelated": "Nessuna relazione disegnata",
+      "relationType": "Tipo",
+      "underlyingEdges": "Archi sottostanti",
+      "noUnderlyingEdges": "Nessun arco sottostante in questa vista",
+      "coMentions": "Messaggi che citano entrambi"
+    },
+    "relation": {
+      "inheritance": "Ereditarietà",
+      "implementation": "Implementazione",
+      "composition": "Composizione",
+      "aggregation": "Aggregazione",
+      "dependency": "Dipendenza",
+      "call": "Chiamata"
+    },
+    "mentions": {
+      "error": "Impossibile caricare le menzioni.",
+      "retry": "Riprova",
+      "ambiguous": "Il nome {{name}} corrisponde a {{count}} entità, quindi un risultato può indicarne una qualsiasi.",
+      "truncated": "Solo i primi {{count}} sono mostrati.",
+      "empty": "La conversazione non lo nomina mai direttamente. È nel grafo perché dista {{count}} salto/i dalla menzione più vicina.",
+      "roleUser": "Utente",
+      "roleAssistant": "Assistente",
+      "roleTool": "Output dello strumento",
+      "includeToolResults": "Includi output dello strumento",
+      "locate": "Individua questo messaggio"
     }
   },
   "status": {

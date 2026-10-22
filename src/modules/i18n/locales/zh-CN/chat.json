@@ -436,5 +436,6 @@
     "settingsHint": "后两项会修改本设备设置",
     "alwaysAccept": "总是接受",
     "alwaysReject": "总是拒绝"
-  }
+  },
+  "messageNotFound": "没有找到这条消息。"
 }

@@ -403,5 +403,6 @@
     "settingsHint": "Die letzten beiden ändern die Einstellung dieses Geräts",
     "alwaysAccept": "Immer akzeptieren",
     "alwaysReject": "Immer ablehnen"
-  }
+  },
+  "messageNotFound": "Es wurde keine Nachricht mit dieser ID gefunden."
 }

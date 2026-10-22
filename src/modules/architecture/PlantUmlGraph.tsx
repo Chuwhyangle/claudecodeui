@@ -52,6 +52,7 @@ import type {
   ArchitectureRendererGraph,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
+import { cycleNodeFocus } from '@/modules/architecture/selectionModel';
 import {
   centerElementInContainer,
   createSvgDragPan,
@@ -149,6 +150,20 @@ const HIGHLIGHT_STYLE = `
   /* Directory groups are scaffolding, not entities: same dashed, grey frame the
      renderer's own overview stubs use, so a collapsed overview reads as a map. */
   [data-architecture-plantuml] [data-entity-id^="grp::"] rect { fill: #f6f8fa; stroke-dasharray: 5,3; }
+  /* The inspector's selection: a heavier frame plus the check badge the helper
+     appends, so the reading never depends on colour alone. */
+  [data-architecture-plantuml] .arch-selected > rect { stroke: #1d4ed8; stroke-width: 2.5; }
+  [data-architecture-plantuml] .arch-selected polygon { stroke: #1d4ed8; }
+  [data-architecture-plantuml] .arch-selected-check { fill: #1d4ed8; font-weight: 700; }
+  /* A selected relation: a bolder line and its type label made visible. */
+  [data-architecture-plantuml] .arch-edge-selected path { stroke-width: 2.5; }
+  [data-architecture-plantuml] .arch-edge-selected text { display: block; }
+  /* The keyboard focus cursor ([ / ] while the canvas is focused). */
+  [data-architecture-plantuml] .arch-keyboard-focus > rect { stroke: #1d4ed8; stroke-dasharray: 3,2; }
+  /* The invisible hit band laid over each relation. It is a separate path, so
+     the renderer's data-edge-* contract is untouched; 12 CSS px on a fine
+     pointer, 44 on a coarse one, written by the helper. */
+  [data-architecture-plantuml] .arch-edge-hit { fill: none; stroke: transparent; pointer-events: stroke; }
   [data-architecture-plantuml] svg { display: block; margin: 0 auto; }
 `;
 
@@ -383,6 +398,28 @@ function highlightRelations(host: HTMLElement, id: string): void {
 }
 
 /**
+ * Pin a SELECTED relation: dim everything except the two endpoints and that
+ * one edge, and reveal the edge's own type label. Used by the click handler
+ * (immediate feedback) and restored after a redraw by the selection effect.
+ */
+function highlightEdge(host: HTMLElement, edge: Element | null): void {
+  clearHighlight(host);
+  if (edge === null) return;
+  const from = edge.getAttribute('data-edge-source');
+  const to = edge.getAttribute('data-edge-target');
+  const keep = new Set<string>([from, to].filter((id): id is string => id !== null));
+  for (const other of host.querySelectorAll('.uml-edge')) {
+    if (other === edge) other.classList.add('arch-hl-out');
+    else other.classList.add('arch-dim');
+  }
+  for (const node of host.querySelectorAll('.uml-node')) {
+    const id = node.getAttribute('data-entity-id');
+    if (id !== null && !keep.has(id)) node.classList.add('arch-dim');
+  }
+  for (const label of edge.querySelectorAll('text')) label.removeAttribute('display');
+}
+
+/**
  * Annotate the freshly drawn SVG with the two readings the node boxes no longer
  * carry themselves:
  *  · the hover `<title>` names the FILE the entity lives in — the box label is
@@ -481,6 +518,96 @@ function nodeElement(host: HTMLElement, id: string): Element | null {
 }
 
 /**
+ * Enlarge every relation's clickable band WITHOUT touching the renderer's
+ * `data-edge-*` contract: each drawn edge gets one extra transparent stroke
+ * path with the same geometry, 12 CSS px wide on a fine pointer and 44 on a
+ * coarse one. The clone carries `data-architecture-edge-*` names instead of the
+ * `data-edge-*` ones, so every existing reading (drawn-edge counts, hover
+ * highlights) keeps seeing exactly one element per relation.
+ */
+function addEdgeHitTargets(host: HTMLElement, coarsePointer: boolean): void {
+  const width = coarsePointer ? 44 : 12;
+  for (const edge of host.querySelectorAll('.uml-edge')) {
+    const source = edge.getAttribute('data-edge-source');
+    const target = edge.getAttribute('data-edge-target');
+    if (source === null || target === null) continue;
+    // The renderer draws the line as the edge's first path; the arrow is a
+    // separate polygon and needs no hit band of its own.
+    const line = edge.querySelector('path');
+    if (line === null) continue;
+    const hit = line.cloneNode(false) as SVGPathElement;
+    hit.removeAttribute('class');
+    hit.setAttribute('class', 'arch-edge-hit');
+    hit.setAttribute('data-architecture-edge-hit', 'true');
+    hit.setAttribute('data-architecture-edge-source', source);
+    hit.setAttribute('data-architecture-edge-target', target);
+    hit.setAttribute('data-architecture-edge-type', edge.getAttribute('data-edge-type') ?? '');
+    hit.setAttribute('fill', 'none');
+    hit.setAttribute('stroke', 'transparent');
+    hit.setAttribute('stroke-width', String(width));
+    hit.setAttribute('vector-effect', 'non-scaling-stroke');
+    hit.setAttribute('pointer-events', 'stroke');
+    edge.appendChild(hit);
+  }
+}
+
+/** The drawn edge group between `from` and `to`, if this view draws one. */
+function edgeElement(host: HTMLElement, from: string, to: string): Element | null {
+  for (const edge of host.querySelectorAll('.uml-edge')) {
+    if (edge.getAttribute('data-edge-source') === from && edge.getAttribute('data-edge-target') === to) {
+      return edge;
+    }
+  }
+  return null;
+}
+
+/**
+ * Draw the panel's selection on the freshly rendered (or re-rendered) SVG: a
+ * heavier frame plus a check badge on the selected node, or a bolder line and
+ * its visible type label on the selected relation. Cleared first, so a
+ * selection that is no longer drawn leaves no residue.
+ */
+function applySelectionStyles(
+  host: HTMLElement,
+  nodeId: string | null,
+  relation: { readonly from: string; readonly to: string } | null,
+): void {
+  for (const element of host.querySelectorAll('.arch-selected, .arch-edge-selected')) {
+    element.classList.remove('arch-selected', 'arch-edge-selected');
+  }
+  for (const badge of host.querySelectorAll('.arch-selected-check')) badge.remove();
+
+  if (nodeId !== null) {
+    const node = nodeElement(host, nodeId);
+    if (node !== null) {
+      node.classList.add('arch-selected');
+      const rect = node.querySelector('rect');
+      if (rect !== null) {
+        const badge = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        const x = Number(rect.getAttribute('x') ?? '0') + Number(rect.getAttribute('width') ?? '0') - 4;
+        const y = Number(rect.getAttribute('y') ?? '0') + 11;
+        badge.setAttribute('x', String(x));
+        badge.setAttribute('y', String(y));
+        badge.setAttribute('text-anchor', 'end');
+        badge.setAttribute('font-size', '11');
+        badge.setAttribute('class', 'arch-selected-check');
+        badge.setAttribute('data-architecture-selected-check', nodeId);
+        badge.textContent = '✓';
+        node.appendChild(badge);
+      }
+    }
+  }
+
+  if (relation !== null) {
+    const edge = edgeElement(host, relation.from, relation.to);
+    if (edge !== null) {
+      edge.classList.add('arch-edge-selected');
+      for (const label of edge.querySelectorAll('text')) label.removeAttribute('display');
+    }
+  }
+}
+
+/**
  * Renders one architecture neighbourhood as a lazily loaded PlantUML/ELK
  * layered diagram.
  *
@@ -502,7 +629,13 @@ export function PlantUmlGraph({
   idShape = DEFAULT_NODE_ID_SHAPE,
   detailReading,
   onNodeClick,
+  onEdgeClick,
+  onSelectionClear,
   onNodeHover,
+  onEscapeSelection,
+  selectedNodeId = null,
+  selectedRelation = null,
+  relayoutLocked = false,
   onExport,
   focusNodeId = null,
   focusToken,
@@ -512,7 +645,7 @@ export function PlantUmlGraph({
   const hostRef = useRef<HTMLDivElement | null>(null);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
   // collect the toolbar into one overflow menu (see `useTouchLayout`).
-  const { touchUi, compactToolbar } = useTouchLayout();
+  const { touchUi, coarsePointer, compactToolbar } = useTouchLayout();
   // On the compact tier the panel owns the single toolbar row and lends its
   // overflow menu as the slot these controls are drawn into; `null` (menu shut)
   // means this renderer has no chrome on screen at all.
@@ -540,6 +673,18 @@ export function PlantUmlGraph({
   const graphRef = useRef(graph);
   const hoverCallbackRef = useRef(onNodeHover);
   const clickCallbackRef = useRef(onNodeClick);
+  const edgeClickCallbackRef = useRef(onEdgeClick);
+  const selectionClearCallbackRef = useRef(onSelectionClear);
+  const escapeSelectionCallbackRef = useRef(onEscapeSelection);
+  // The panel's selection, readable from the delegated listeners and the async
+  // draw without re-registering either. It is also what the draw re-applies
+  // after replacing the SVG.
+  const selectedNodeIdRef = useRef<string | null>(selectedNodeId);
+  const selectedRelationRef = useRef<PlantUmlGraphProps['selectedRelation']>(selectedRelation);
+  // The node the `[`/`]` keyboard cursor sits on. A ref (not state): moving the
+  // cursor only touches SVG classes, so it must not re-render (and never
+  // re-layout) the drawing.
+  const keyboardFocusRef = useRef<string | null>(null);
   // The entity the user clicked (or a sibling panel asked for). Unlike the
   // hover reading it survives leaving the node and being re-rendered, so the
   // dependency/reverse-dependency highlight stays pinned until the selection is
@@ -563,7 +708,24 @@ export function PlantUmlGraph({
     graphRef.current = graph;
     hoverCallbackRef.current = onNodeHover;
     clickCallbackRef.current = onNodeClick;
-  }, [view, graph, onNodeHover, onNodeClick]);
+    edgeClickCallbackRef.current = onEdgeClick;
+    selectionClearCallbackRef.current = onSelectionClear;
+    escapeSelectionCallbackRef.current = onEscapeSelection;
+    selectedNodeIdRef.current = selectedNodeId;
+    selectedRelationRef.current = selectedRelation;
+  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, selectedNodeId, selectedRelation]);
+
+  // Repaint the selection whenever the panel changes it. The draw effect below
+  // applies the same styles to a fresh SVG; this one covers a selection made
+  // without a re-layout.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    applySelectionStyles(host, selectedNodeId, selectedRelation ?? null);
+    selectedRef.current = selectedNodeId;
+    if (selectedNodeId !== null) highlightSelection(host, selectedNodeId);
+    else if (selectedRelation === null) clearHighlight(host);
+  }, [selectedNodeId, selectedRelation]);
 
   // Tell the panel which slice is on screen. The export menu rebuilds exactly
   // this view; a remount (session/scope change resets `view`) reports the
@@ -796,6 +958,21 @@ export function PlantUmlGraph({
   const drawnKeyRef = useRef<string | null>(null);
   // Pending debounced re-layout (one timer: the latest reading wins).
   const aspectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether aspect-driven re-layout is frozen (see `relayoutLocked`). The lock
+  // lives in the panel; here it only suppresses the schedule. When it LIFTS,
+  // the current container ratio becomes the new comparison base WITHOUT a
+  // layout, so the dock opening/closing is never itself a shape change.
+  const relayoutLockedRef = useRef(relayoutLocked);
+  const wasRelayoutLockedRef = useRef(relayoutLocked);
+  useEffect(() => {
+    relayoutLockedRef.current = relayoutLocked;
+    if (wasRelayoutLockedRef.current && !relayoutLocked) {
+      const host = hostRef.current;
+      const measured = host === null ? null : measureLayoutAspect(host);
+      if (measured !== null) drawnAspectRef.current = measured;
+    }
+    wasRelayoutLockedRef.current = relayoutLocked;
+  }, [relayoutLocked]);
   const scheduleAspectRelayout = useCallback((aspect: number): void => {
     if (aspectTimerRef.current !== null) clearTimeout(aspectTimerRef.current);
     aspectTimerRef.current = setTimeout(() => {
@@ -875,6 +1052,10 @@ export function PlantUmlGraph({
         // box carries its source file + seed marker (see `annotateNodes`).
         hideEdgeLabels(host);
         annotateNodes(host, graph, idShape);
+        // Relations get their enlarged, invisible hit bands; the panel's
+        // selection is repainted on top of the fresh drawing.
+        addEdgeHitTargets(host, coarsePointer);
+        applySelectionStyles(host, selectedNodeIdRef.current, selectedRelationRef.current ?? null);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
         // observer keeps following the container only for a fit user.
@@ -1025,7 +1206,7 @@ export function PlantUmlGraph({
     return () => {
       cancelled = true;
     };
-  }, [applyZoom, entityGraph, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
+  }, [applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, scaleForDecision, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1079,6 +1260,28 @@ export function PlantUmlGraph({
     const onClick = (event: MouseEvent): void => {
       const isTouchTap = lastPointerTypeRef.current === 'touch';
       lastPointerTypeRef.current = null;
+
+      // A relation's enlarged hit band sits ON TOP of the drawing, so it is
+      // checked before the node lookup: clicking a line selects the relation,
+      // not whatever box the line starts on.
+      const edgeHit = event.target instanceof Element
+        ? event.target.closest('[data-architecture-edge-hit]')
+        : null;
+      if (edgeHit !== null) {
+        const from = edgeHit.getAttribute('data-architecture-edge-source');
+        const to = edgeHit.getAttribute('data-architecture-edge-target');
+        const relationType = edgeHit.getAttribute('data-architecture-edge-type') ?? '';
+        if (from === null || to === null) return;
+        const edge = { from, to, relationType };
+        selectedRelationRef.current = edge;
+        selectedRef.current = null;
+        setSelectedId(null);
+        setSelectedByTouch(false);
+        highlightEdge(host, edgeElement(host, from, to));
+        edgeClickCallbackRef.current?.(edge);
+        return;
+      }
+
       const id = nodeFrom(event.target)?.getAttribute('data-entity-id') ?? null;
       if (id === null) {
         // Clicking the background is the "clear the pinned selection" gesture.
@@ -1087,6 +1290,7 @@ export function PlantUmlGraph({
         setSelectedByTouch(false);
         clearHighlight(host);
         hoverCallbackRef.current?.(null);
+        selectionClearCallbackRef.current?.();
         return;
       }
       if (id.startsWith(STUB_PREFIX)) return;
@@ -1104,8 +1308,8 @@ export function PlantUmlGraph({
       setSelectedByTouch(isTouchTap);
 
       if (!isTouchTap) {
-        // Desktop: one click is both the selection and the navigation.
-        drillInto(id);
+        // Desktop: a single click only SELECTS and opens the inspector. Drilling
+        // one hop deeper is the double-click gesture below.
         return;
       }
       // Touch: the first tap only selects — the drawing must not re-lay out
@@ -1119,15 +1323,25 @@ export function PlantUmlGraph({
       }
     };
 
+    // Desktop drill-down: two clicks on the same node. The click handler above
+    // has already selected it (and opened the inspector); this only navigates.
+    const onDoubleClick = (event: MouseEvent): void => {
+      const id = nodeFrom(event.target)?.getAttribute('data-entity-id') ?? null;
+      if (id === null || id.startsWith(STUB_PREFIX)) return;
+      drillInto(id);
+    };
+
     host.addEventListener('pointerdown', onPointerDown);
     host.addEventListener('mouseover', onMouseOver);
     host.addEventListener('mouseout', onMouseOut);
     host.addEventListener('click', onClick);
+    host.addEventListener('dblclick', onDoubleClick);
     return () => {
       host.removeEventListener('pointerdown', onPointerDown);
       host.removeEventListener('mouseover', onMouseOver);
       host.removeEventListener('mouseout', onMouseOut);
       host.removeEventListener('click', onClick);
+      host.removeEventListener('dblclick', onDoubleClick);
     };
   }, [drillInto]);
 
@@ -1204,7 +1418,7 @@ export function PlantUmlGraph({
     if (host === null || typeof ResizeObserver !== 'function') return;
     const observer = new ResizeObserver(() => {
       const measured = measureLayoutAspect(host);
-      if (shouldRelayoutForAspect(drawnAspectRef.current, measured) && measured !== null) {
+      if (shouldRelayoutForAspect(drawnAspectRef.current, measured, { locked: relayoutLockedRef.current }) && measured !== null) {
         scheduleAspectRelayout(measured);
       }
       if (zoomRef.current.mode !== 'fit') return;
@@ -1347,14 +1561,67 @@ export function PlantUmlGraph({
 
   /**
    * Keyboard navigation once the canvas has focus: arrows pan, `+`/`-` zoom,
-   * `0` fits and `1` returns to natural size. Escape is deliberately NOT bound
-   * — the chat page uses it globally to abort a running turn, and a focused
-   * diagram must not take it away. Modified presses are left to the browser and
-   * the app's shortcuts (Ctrl/Cmd/Alt + key), so nothing global is shadowed.
+   * `0` fits and `1` returns to natural size.
+   *
+   * The selection keys follow the inspector task: `]`/`[` move a visible cursor
+   * through the drawing's node order (wrapping), `Enter` selects the cursor's
+   * node, `Alt+Enter` drills into it, and `Escape` — ONLY while something is
+   * selected — closes the dock / clears the selection. That Escape branch calls
+   * `stopPropagation`, so the chat page's global abort never sees it; with no
+   * selection the key keeps its default behaviour. Modified presses are left to
+   * the browser and the app's shortcuts (Ctrl/Cmd + key).
    */
   const onCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const host = hostRef.current;
-    if (host === null || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (host === null || event.ctrlKey || event.metaKey) return;
+
+    if (event.key === 'Escape') {
+      if (selectedRef.current === null && selectedRelationRef.current === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      escapeSelectionCallbackRef.current?.();
+      return;
+    }
+
+    if (event.key === ']' || event.key === '[') {
+      event.preventDefault();
+      const drawnIds = graphRef.current.nodes
+        .map((node) => node.id)
+        .filter((id) => nodeElement(host, id) !== null);
+      const nextId = cycleNodeFocus(drawnIds, keyboardFocusRef.current, event.key === ']' ? 1 : -1);
+      if (nextId === null) return;
+      keyboardFocusRef.current = nextId;
+      for (const element of host.querySelectorAll('.arch-keyboard-focus')) {
+        element.classList.remove('arch-keyboard-focus');
+        element.removeAttribute('data-architecture-keyboard-focus');
+      }
+      const focused = nodeElement(host, nextId);
+      if (focused !== null) {
+        focused.classList.add('arch-keyboard-focus');
+        focused.setAttribute('data-architecture-keyboard-focus', 'true');
+      }
+      host.setAttribute('data-architecture-keyboard-focus-id', nextId);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      const id = keyboardFocusRef.current;
+      if (id === null) return;
+      event.preventDefault();
+      if (event.altKey) {
+        drillInto(id);
+        return;
+      }
+      const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
+      if (node === undefined) return;
+      selectedRef.current = id;
+      highlightRelations(host, id);
+      announceSelection(graphRef.current, id);
+      clickCallbackRef.current?.(node);
+      return;
+    }
+
+    if (event.altKey) return;
     switch (event.key) {
       case 'ArrowLeft':
         host.scrollLeft -= KEYBOARD_PAN_STEP;
@@ -1383,7 +1650,7 @@ export function PlantUmlGraph({
         zoomToScale(1);
         break;
       default:
-        // Anything else (Escape included) keeps its default behaviour.
+        // Anything else keeps its default behaviour.
         return;
     }
     event.preventDefault();

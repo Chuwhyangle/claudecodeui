@@ -495,5 +495,6 @@
     "settingsHint": "Dua tombol terakhir mengubah pengaturan perangkat ini",
     "alwaysAccept": "Selalu terima",
     "alwaysReject": "Selalu tolak"
-  }
+  },
+  "messageNotFound": "Tidak ada pesan dengan id itu."
 }

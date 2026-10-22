@@ -390,5 +390,6 @@
     "settingsHint": "最後の 2 つはこのデバイスの設定を変更します",
     "alwaysAccept": "常に許可",
     "alwaysReject": "常に拒否"
-  }
+  },
+  "messageNotFound": "その ID のメッセージは見つかりませんでした。"
 }

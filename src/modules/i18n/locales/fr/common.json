@@ -189,6 +189,51 @@
       "title": "Ajuster",
       "close": "Fermer le panneau de réglage",
       "dragHandle": "Faire glisser pour fermer"
+    },
+    "dock": {
+      "title": "Inspecteur",
+      "close": "Fermer l’inspecteur",
+      "empty": "Sélectionnez un nœud ou une relation sur le dessin.",
+      "snapCollapsed": "Réduit",
+      "snapHalf": "Moitié",
+      "snapFull": "Plein"
+    },
+    "inspector": {
+      "overview": "Aperçu",
+      "sessions": "Sessions",
+      "kind": "Type",
+      "degree": "Relations",
+      "inDegree": "{{count}} entrantes",
+      "outDegree": "{{count}} sortantes",
+      "members": "Membres",
+      "showAllMembers": "Afficher les {{count}}",
+      "showFewerMembers": "Afficher moins",
+      "related": "Liés",
+      "noRelated": "Aucune relation dessinée",
+      "relationType": "Type",
+      "underlyingEdges": "Arêtes sous-jacentes",
+      "noUnderlyingEdges": "Aucune arête sous-jacente dans cette vue",
+      "coMentions": "Messages mentionnant les deux"
+    },
+    "relation": {
+      "inheritance": "Héritage",
+      "implementation": "Implémentation",
+      "composition": "Composition",
+      "aggregation": "Agrégation",
+      "dependency": "Dépendance",
+      "call": "Appel"
+    },
+    "mentions": {
+      "error": "Les mentions n’ont pas pu être chargées.",
+      "retry": "Réessayer",
+      "ambiguous": "Le nom {{name}} correspond à {{count}} entités, une occurrence peut donc désigner n’importe laquelle.",
+      "truncated": "Affichage des {{count}} premières seulement.",
+      "empty": "La conversation ne le nomme jamais directement. Il figure dans le graphe car il est à {{count}} saut(s) de la mention la plus proche.",
+      "roleUser": "Utilisateur",
+      "roleAssistant": "Assistant",
+      "roleTool": "Sortie d’outil",
+      "includeToolResults": "Inclure la sortie d’outil",
+      "locate": "Localiser ce message"
     }
   },
   "status": {

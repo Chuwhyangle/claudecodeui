@@ -416,6 +416,10 @@ function WorkspaceMain({
               <ArchitecturePanel
                 projectId={selectedProject.projectId}
                 sessionId={selectedSession?.id ?? null}
+                // The inspector's mention hits switch the workspace to Chat
+                // after asking the shared locator seam to centre the message;
+                // the architecture module never imports the chat module.
+                onOpenChat={() => setActiveTab('chat')}
               />
             </div>
           )}

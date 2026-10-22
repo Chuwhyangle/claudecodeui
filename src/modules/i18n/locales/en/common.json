@@ -195,6 +195,51 @@
       "title": "Adjust",
       "close": "Close adjust panel",
       "dragHandle": "Drag to close"
+    },
+    "dock": {
+      "title": "Inspector",
+      "close": "Close inspector",
+      "empty": "Select a node or a relation on the drawing.",
+      "snapCollapsed": "Collapsed",
+      "snapHalf": "Half",
+      "snapFull": "Full"
+    },
+    "inspector": {
+      "overview": "Overview",
+      "sessions": "Sessions",
+      "kind": "Kind",
+      "degree": "Relations",
+      "inDegree": "{{count}} in",
+      "outDegree": "{{count}} out",
+      "members": "Members",
+      "showAllMembers": "Show all {{count}}",
+      "showFewerMembers": "Show fewer",
+      "related": "Related",
+      "noRelated": "No drawn relations",
+      "relationType": "Type",
+      "underlyingEdges": "Underlying edges",
+      "noUnderlyingEdges": "No underlying edges in this view",
+      "coMentions": "Messages mentioning both"
+    },
+    "relation": {
+      "inheritance": "Inheritance",
+      "implementation": "Implementation",
+      "composition": "Composition",
+      "aggregation": "Aggregation",
+      "dependency": "Dependency",
+      "call": "Call"
+    },
+    "mentions": {
+      "error": "The mentions could not be loaded.",
+      "retry": "Retry",
+      "ambiguous": "The name {{name}} matches {{count}} entities, so a hit may point at any of them.",
+      "truncated": "Showing only the first {{count}}.",
+      "empty": "The conversation never names it directly. It is in the graph because it is {{count}} hop(s) from the nearest mention.",
+      "roleUser": "User",
+      "roleAssistant": "Assistant",
+      "roleTool": "Tool output",
+      "includeToolResults": "Include tool output",
+      "locate": "Locate this message"
     }
   },
   "status": {

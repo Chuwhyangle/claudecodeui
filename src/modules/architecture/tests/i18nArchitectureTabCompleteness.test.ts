@@ -23,7 +23,16 @@ import { describe, expect, it } from 'vitest';
  */
 const REPO_ROOT = process.cwd();
 const LOCALES_DIR = resolve(REPO_ROOT, 'src', 'modules', 'i18n', 'locales');
-const PANEL_SOURCE = resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitecturePanel.tsx');
+/**
+ * Every architecture source that draws translated chrome. The dock and the
+ * inspector were split out of the panel, so their keys must be part of the same
+ * completeness reading rather than escaping it by living in a new file.
+ */
+const ARCHITECTURE_SOURCES = [
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitecturePanel.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureDock.tsx'),
+  resolve(REPO_ROOT, 'src', 'modules', 'architecture', 'ArchitectureInspector.tsx'),
+];
 const TABS_SOURCE = resolve(REPO_ROOT, 'src', 'modules', 'project-workspace', 'WorkspaceTabs.tsx');
 
 /** The shape this test reads back out of a locale bundle — deliberately loose. */
@@ -87,7 +96,9 @@ describe('every locale carries the architecture tab label and panel text', () =>
     .sort();
   const bundleFiles = globSync('*/common.json', { cwd: LOCALES_DIR }).sort();
 
-  const panelKeys = architectureKeysInPanel(readFileSync(PANEL_SOURCE, 'utf8'));
+  const panelKeys = [...new Set(
+    ARCHITECTURE_SOURCES.flatMap((file) => architectureKeysInPanel(readFileSync(file, 'utf8'))),
+  )].sort();
   const tabLabelKey = architectureTabLabelKey(readFileSync(TABS_SOURCE, 'utf8'));
 
   it('covers every language directory on disk (the 12-locale glob, not a sampled subset)', () => {

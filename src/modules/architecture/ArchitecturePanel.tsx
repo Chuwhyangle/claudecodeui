@@ -4,12 +4,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
+import { ArchitectureDock } from '@/modules/architecture/ArchitectureDock';
+import { ArchitectureInspector } from '@/modules/architecture/ArchitectureInspector';
 import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
 import {
   archguardToPlantUml,
@@ -60,12 +63,21 @@ import { buildReadout } from '@/modules/architecture/readoutNumbers';
 import type {
   ArchitectureDetailReading,
   ArchitectureNodeIdShape,
+  ArchitectureRendererEdge,
   ArchitectureRendererGraph,
   ArchitectureRendererHover,
+  ArchitectureRendererNode,
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
 import { readSvgNaturalSize } from '@/modules/architecture/svgViewport';
+import {
+  createSelectionState,
+  reduceSelection,
+  selectionInScope,
+  type ArchitectureSelectionScope,
+} from '@/modules/architecture/selectionModel';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
+import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 
 /** The two subgraphs the endpoint returns together; switching between them is local. */
 type ArchitectureGranularity = 'file' | 'entity';
@@ -107,6 +119,35 @@ const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
 const FILTER_STORAGE_PREFIX = 'architecture.filter.';
 /** Whether the one-off touch instruction has been dismissed in this browser. */
 const TOUCH_HINT_STORAGE_KEY = 'architecture.touchHint.dismissed';
+/** Whether the right-hand dock was open the last time this browser used it. */
+const DOCK_STORAGE_KEY = 'architecture.dock.open';
+/**
+ * How long the dock's open/close animation lasts (matching the 160ms
+ * `transform` transition in `ArchitectureDock`). Aspect-driven re-layout stays
+ * frozen for the duration, plus a frame of slack, so the width change caused by
+ * the dock itself is never read as a container shape change.
+ */
+const DOCK_LAYOUT_LOCK_MS = 200;
+
+/** Whether the dock is open by default: the design ships it CLOSED. */
+function readStoredDockOpen(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(DOCK_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/** Remember the dock's open/closed state; a failed write must not break the dock. */
+function writeStoredDockOpen(open: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(DOCK_STORAGE_KEY, open ? 'true' : 'false');
+  } catch {
+    // Private mode: the state still holds for this session.
+  }
+}
 
 /** The touch instruction is a one-off: a remembered dismissal keeps it off screen. */
 function readStoredTouchHintDismissed(): boolean {
@@ -284,47 +325,6 @@ function truncationReading(result: ArchitectureGraphResult, granularity: Archite
   };
 }
 
-/**
- * Render an analysis timestamp as a relative reading ("3 hours ago").
- *
- * The panel used to print the raw UTC ISO string, which a reader had to
- * translate in their head. The precision stays available in `title` (the local
- * `toLocaleString()`), while the visible text answers the only question the
- * source line asks: how old is this analysis?
- *
- * `locale` is the INTERFACE language (`i18n.language`), not the browser's:
- * the rest of the UI is already in that language, so a "10 hours ago" next to
- * Chinese labels (or the reverse) is a bug the reader sees.
- */
-function formatRelativeTime(iso: string | null, locale: string): string {
-  if (iso === null) return 'unknown';
-  const analysed = Date.parse(iso);
-  if (Number.isNaN(analysed)) return 'unknown';
-  const seconds = Math.round((analysed - Date.now()) / 1000);
-  const steps: readonly [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 31536000],
-    ['month', 2592000],
-    ['day', 86400],
-    ['hour', 3600],
-    ['minute', 60],
-    ['second', 1],
-  ];
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-  for (const [unit, size] of steps) {
-    if (Math.abs(seconds) >= size || unit === 'second') {
-      return formatter.format(Math.round(seconds / size), unit);
-    }
-  }
-  return formatter.format(seconds, 'second');
-}
-
-/** The precise local instant behind a relative reading; the `<time>` title. */
-function formatAbsoluteTime(iso: string | null, locale: string): string | undefined {
-  if (iso === null) return undefined;
-  const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString(locale);
-}
-
 type ArchitecturePanelProps = {
   /** The selected project's DB id; the endpoint resolves it to a project root. */
   projectId: string | null;
@@ -337,6 +337,12 @@ type ArchitecturePanelProps = {
    * stand-in to prove exactly that.
    */
   renderer?: ArchitecturePanelRenderer;
+  /**
+   * Switches the workspace to the Chat tab. The inspector's mention hits call
+   * it after asking the shared locator seam to centre the message; the panel
+   * does not know how the chat is implemented.
+   */
+  onOpenChat?: () => void;
   /**
    * Which subgraph opens first. The shipped default is the class (entity)
    * diagram; sibling callers that want the file graph (and the existing test
@@ -615,6 +621,7 @@ export default function ArchitecturePanel({
   sessionId,
   renderer: Renderer = PlantUmlGraph as ArchitecturePanelRenderer,
   initialGranularity = 'entity',
+  onOpenChat,
 }: ArchitecturePanelProps) {
   // `i18n` is the readout's locale (locale-aware times); `t` labels both knobs.
   const { t, i18n } = useTranslation();
@@ -843,6 +850,31 @@ export default function ArchitecturePanel({
     () => (focusTarget === null ? [] : [focusTarget.id]),
     [focusTarget],
   );
+  // The ONE selection (an entity, a relation, or nothing) plus the scope it was
+  // made in. The scope is part of the state so switching the file/class view or
+  // the session clears it in the same transition — no effect can race a render
+  // and briefly draw the previous view's inspector.
+  const selectionScope = useMemo<ArchitectureSelectionScope>(
+    () => ({ projectId, sessionId, view: granularity }),
+    [projectId, sessionId, granularity],
+  );
+  const [selectionState, dispatchSelection] = useReducer(
+    reduceSelection,
+    selectionScope,
+    createSelectionState,
+  );
+  const selection = selectionInScope(selectionState, selectionScope);
+  // Whether the dock is on screen. Remembered per browser, and forced open by a
+  // fresh selection (the gesture that selects is a request to inspect).
+  const [dockOpen, setDockOpen] = useState<boolean>(readStoredDockOpen);
+  // True while the dock's 160ms open/close transition runs. The renderer freezes
+  // aspect-driven re-layout for that window (the dock narrows the canvas), then
+  // re-bases without a layout — the toggle is never counted as a shape change.
+  const [dockLayoutLocked, setDockLayoutLocked] = useState(false);
+  const dockLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether the sessions page searches tool output too. Off by default: the
+  // tool-output tier is the noisy one, and the reader opts in per inspection.
+  const [includeToolResults, setIncludeToolResults] = useState(false);
   // The graph the renderer actually receives: the detail tier's cut, then the
   // layout budget's cut. PlantUML/ELK runs on the main thread and its layout
   // cost grows super-linearly with the node count, so an over-budget drawing
@@ -989,6 +1021,76 @@ export default function ArchitecturePanel({
     setSearchOpen(false);
   };
 
+  // A scope change (view or session) clears the selection through the reducer.
+  useEffect(() => {
+    dispatchSelection({ type: 'sync-scope', scope: selectionScope });
+  }, [selectionScope]);
+
+  /**
+   * Open or close the dock and freeze aspect re-layout for the transition.
+   * The lock is a plain boolean handed to the renderer; the panel owns its
+   * lifetime because the panel owns the dock.
+   */
+  const changeDockOpen = useCallback((next: boolean): void => {
+    setDockOpen(next);
+    writeStoredDockOpen(next);
+    setDockLayoutLocked(true);
+    if (dockLockTimerRef.current !== null) clearTimeout(dockLockTimerRef.current);
+    dockLockTimerRef.current = setTimeout(() => {
+      dockLockTimerRef.current = null;
+      setDockLayoutLocked(false);
+    }, DOCK_LAYOUT_LOCK_MS);
+  }, []);
+  useEffect(() => () => {
+    if (dockLockTimerRef.current !== null) clearTimeout(dockLockTimerRef.current);
+  }, []);
+
+  // Selecting anything is a request to inspect it: a NEW selection opens the
+  // dock. Keyed on the selection alone — closing the dock must keep the
+  // selection without the effect immediately reopening it (Escape's first press
+  // closes the dock, its second clears the selection).
+  const dockOpenRef = useRef(dockOpen);
+  useEffect(() => {
+    dockOpenRef.current = dockOpen;
+  }, [dockOpen]);
+  useEffect(() => {
+    if (selection !== null && !dockOpenRef.current) changeDockOpen(true);
+  }, [selection, changeDockOpen]);
+
+  const selectNodeOnCanvas = useCallback((node: ArchitectureRendererNode): void => {
+    dispatchSelection({ type: 'select-entity', nodeId: node.id });
+  }, []);
+  const selectRelationOnCanvas = useCallback((edge: ArchitectureRendererEdge): void => {
+    dispatchSelection({
+      type: 'select-relation',
+      from: edge.from,
+      to: edge.to,
+      relationType: edge.relationType,
+    });
+  }, []);
+  /**
+   * Escape, while the canvas owns the key: the first press closes the dock
+   * (the selection survives), the next clears the selection. `stopPropagation`
+   * happens in the renderer, so the chat page's global abort never fires.
+   */
+  const escapeSelection = useCallback((): void => {
+    if (dockOpen) {
+      changeDockOpen(false);
+      return;
+    }
+    dispatchSelection({ type: 'clear' });
+  }, [dockOpen, changeDockOpen]);
+  /** A click on the empty canvas clears the selection AND closes the dock. */
+  const clearSelectionOnCanvas = useCallback((): void => {
+    dispatchSelection({ type: 'clear' });
+    if (dockOpen) changeDockOpen(false);
+  }, [dockOpen, changeDockOpen]);
+  /** Selecting a related node from the inspector also centres it in the drawing. */
+  const inspectRelatedNode = useCallback((nodeId: string): void => {
+    dispatchSelection({ type: 'select-entity', nodeId });
+    revealNode(nodeId, false);
+  }, []);
+
   if (!sessionId) {
     return (
       <ArchitectureEmptyState
@@ -1035,6 +1137,22 @@ export default function ArchitecturePanel({
   // layout budget's. The export rebuilds from the SAME graph, so the file is
   // the drawing on screen rather than a re-derivation from the payload.
   const drawnGraph: ArchitectureRendererGraph = layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood;
+  // The selection as the renderer and the inspector need it: separate readings,
+  // so neither has to narrow the union itself.
+  const selectedNodeId = selection?.kind === 'entity' ? selection.nodeId : null;
+  const selectedRelation = selection?.kind === 'relation'
+    ? { from: selection.from, to: selection.to, relationType: selection.relationType }
+    : null;
+  // The coarse drawer's collapsed (96px) reading: what is selected, in one line.
+  const dockSummary: string | null = selection === null
+    ? null
+    : selection.kind === 'entity'
+      ? (() => {
+        const node = drawnGraph.nodes.find((candidate) => candidate.id === selection.nodeId);
+        if (node === undefined) return selection.nodeId;
+        return `${node.label.trim() === '' ? node.id : node.label} · ${node.kind ?? 'other'}`;
+      })()
+      : `${selection.from} → ${selection.to}`;
 
   /**
    * The PlantUML document for the view on screen, exactly as the bridge builds
@@ -2077,11 +2195,12 @@ export default function ArchitecturePanel({
         </ArchitectureSheet>
       )}
 
-      {/* The canvas region is a flex COLUMN: every `flex-1` below it needs a
-          flex parent to resolve against, and every `h-full` below it needs a
-          parent with a definite height. As a block container this line let the
-          whole chain fall back to content height (the measured 342px canvas
-          inside a 669px region). */}
+      {/* The canvas and the dock share one flex ROW: opening the dock takes
+          width from the drawing (320px) instead of covering it, which is why
+          its open/close has to freeze aspect re-layout. On a coarse pointer the
+          dock renders itself as an absolutely positioned bottom drawer inside
+          this relative parent. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
           <>
@@ -2104,6 +2223,9 @@ export default function ArchitecturePanel({
             )}
             <div
               ref={graphAreaRef}
+              // Focus returns here when the dock closes (see ArchitectureDock's
+              // focus management); a programmatic focus target needs a tabindex.
+              tabIndex={-1}
               aria-busy={refreshing}
               data-architecture-refreshing={refreshing ? 'true' : undefined}
               data-architecture-canvas-region="true"
@@ -2166,9 +2288,21 @@ export default function ArchitecturePanel({
                     // `nodeIdShapeOf`.
                     idShape={nodeIdShapeOf(granularity)}
                     onNodeHover={handleNodeHover}
-                    // Selecting a node is the reader working the drawing; the
-                    // one-off touch instruction has done its job by then.
-                    onNodeClick={dismissTouchHint}
+                    // A SINGLE click only selects: the inspector opens on the
+                    // right and the drawing must not re-lay out. Drilling is the
+                    // renderer's own double-click / double-tap gesture.
+                    onNodeClick={(node) => {
+                      dismissTouchHint();
+                      selectNodeOnCanvas(node);
+                    }}
+                    onEdgeClick={selectRelationOnCanvas}
+                    onSelectionClear={clearSelectionOnCanvas}
+                    onEscapeSelection={escapeSelection}
+                    selectedNodeId={selectedNodeId}
+                    selectedRelation={selectedRelation}
+                    // The dock narrows the canvas; its transition must not be
+                    // read as a container shape change.
+                    relayoutLocked={dockLayoutLocked}
                     // The renderer owns the drill-down view; reporting it keeps
                     // the export menu's PlantUML identical to the drawing.
                     onViewChange={setDiagramView}
@@ -2216,6 +2350,51 @@ export default function ArchitecturePanel({
         )}
 
         {legendOpen && legend}
+      </div>
+
+      {hasSeeds && (
+        <ArchitectureDock
+          open={dockOpen}
+          title={t('architecture.dock.title', { defaultValue: 'Inspector' })}
+          closeLabel={t('architecture.dock.close', { defaultValue: 'Close inspector' })}
+          returnFocusRef={graphAreaRef}
+          tabs={[
+            {
+              id: 'inspector',
+              label: t('architecture.dock.title', { defaultValue: 'Inspector' }),
+              content: selection === null ? (
+                <p data-architecture-dock-empty="true" className="text-xs text-muted-foreground">
+                  {t('architecture.dock.empty', {
+                    defaultValue: 'Select a node or a relation on the drawing.',
+                  })}
+                </p>
+              ) : (
+                <ArchitectureInspector
+                  selection={selection}
+                  graph={drawnGraph}
+                  idShape={nodeIdShapeOf(granularity)}
+                  projectId={projectId}
+                  sessionId={sessionId}
+                  includeToolResults={includeToolResults}
+                  onIncludeToolResultsChange={setIncludeToolResults}
+                  onSelectNode={(nodeId) => dispatchSelection({ type: 'select-entity', nodeId })}
+                  onCenterNode={inspectRelatedNode}
+                  onOpenChat={onOpenChat}
+                />
+              ),
+            },
+          ]}
+          activeTabId="inspector"
+          onTabChange={() => undefined}
+          onClose={() => changeDockOpen(false)}
+          collapsedSummary={dockSummary}
+          snapLabels={{
+            collapsed: t('architecture.dock.snapCollapsed', { defaultValue: 'Collapsed' }),
+            half: t('architecture.dock.snapHalf', { defaultValue: 'Half' }),
+            full: t('architecture.dock.snapFull', { defaultValue: 'Full' }),
+          }}
+        />
+      )}
       </div>
     </div>
   );

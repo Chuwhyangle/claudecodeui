@@ -405,5 +405,6 @@
     "settingsHint": "Les deux derniers modifient le réglage de cet appareil",
     "alwaysAccept": "Toujours accepter",
     "alwaysReject": "Toujours refuser"
-  }
+  },
+  "messageNotFound": "Aucun message avec cet identifiant n’a été trouvé."
 }

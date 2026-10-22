@@ -189,6 +189,51 @@
       "title": "调节",
       "close": "关闭调节面板",
       "dragHandle": "拖动关闭"
+    },
+    "dock": {
+      "title": "检查器",
+      "close": "关闭检查器",
+      "empty": "在图上选择节点或关系。",
+      "snapCollapsed": "收起",
+      "snapHalf": "半屏",
+      "snapFull": "全屏"
+    },
+    "inspector": {
+      "overview": "概览",
+      "sessions": "会话",
+      "kind": "种类",
+      "degree": "关系",
+      "inDegree": "入度 {{count}}",
+      "outDegree": "出度 {{count}}",
+      "members": "成员",
+      "showAllMembers": "展开全部 {{count}} 个",
+      "showFewerMembers": "收起",
+      "related": "关联",
+      "noRelated": "没有画出的关系",
+      "relationType": "类型",
+      "underlyingEdges": "底层边",
+      "noUnderlyingEdges": "当前视图没有底层边",
+      "coMentions": "同时提及两者的消息"
+    },
+    "relation": {
+      "inheritance": "继承",
+      "implementation": "实现",
+      "composition": "组合",
+      "aggregation": "聚合",
+      "dependency": "依赖",
+      "call": "调用"
+    },
+    "mentions": {
+      "error": "无法加载提及记录。",
+      "retry": "重试",
+      "ambiguous": "名字 {{name}} 对应 {{count}} 个实体，命中可能指向其中任意一个。",
+      "truncated": "仅显示前 {{count}} 条。",
+      "empty": "会话里没有直接提到它。它在图中，是因为它距离最近的提及 {{count}} 跳。",
+      "roleUser": "用户",
+      "roleAssistant": "助手",
+      "roleTool": "工具输出",
+      "includeToolResults": "包含工具输出",
+      "locate": "定位这条消息"
     }
   },
   "status": {

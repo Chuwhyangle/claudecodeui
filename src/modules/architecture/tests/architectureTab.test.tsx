@@ -613,6 +613,18 @@ function drawnEdge(host: HTMLElement, from: string, to: string): Element {
   throw new Error(`no drawn edge ${from} → ${to}`);
 }
 
+/**
+ * The drill gesture since the inspector task: a SINGLE click only selects (and
+ * announces the entity), while a DOUBLE click opens its neighbourhood. Cases
+ * that assert both fire both events, in that order.
+ */
+function drillNode(host: HTMLElement, id: string): void {
+  const node = host.querySelector(`[data-entity-id="${id}"]`);
+  assert.ok(node !== null, `node ${id} must be drawn`);
+  fireEvent.click(node);
+  fireEvent.doubleClick(node);
+}
+
 beforeEach(() => {
   apiMock.architectureGraph.mockReset();
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
@@ -1059,13 +1071,14 @@ test('a left drag on the blank canvas pans, while a press on a node never does',
   );
   assert.equal(host.style.cursor, 'grab', 'the drag state ends with the release');
 
-  // A press ON a node is a click, not the start of a pan — and it still drills.
+  // A press ON a node is a click, not the start of a pan — and a DOUBLE click
+  // still drills.
   const scrolledLeft = host.scrollLeft;
   fireEvent.pointerDown(groupNode, { pointerId: 22, pointerType: 'mouse', button: 0, clientX: 250, clientY: 280 });
   fireEvent.pointerMove(groupNode, { pointerId: 22, pointerType: 'mouse', clientX: 180, clientY: 200 });
   assert.equal(host.scrollLeft, scrolledLeft, 'a press on a node stays a click');
   fireEvent.pointerUp(groupNode, { pointerId: 22, pointerType: 'mouse', clientX: 180, clientY: 200 });
-  fireEvent.click(groupNode);
+  fireEvent.doubleClick(groupNode);
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-view'), 'group'));
 });
 
@@ -1083,7 +1096,7 @@ test('a middle-button drag pans too, and a sub-4px press is still a click', asyn
   host.scrollLeft = 0;
   host.scrollTop = 0;
   // A 3px wobble is below the 4px threshold: it is a click, so the release
-  // click still reaches the drawing.
+  // click still reaches the drawing (here: the double click drills).
   fireEvent.pointerDown(host, { pointerId: 24, pointerType: 'mouse', button: 0, clientX: 300, clientY: 300 });
   fireEvent.pointerMove(host, { pointerId: 24, pointerType: 'mouse', clientX: 303, clientY: 300 });
   assert.equal(host.scrollLeft, 0, 'less than 4px is not a drag');
@@ -1091,7 +1104,7 @@ test('a middle-button drag pans too, and a sub-4px press is still a click', asyn
 
   const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
   assert.ok(groupNode !== null);
-  fireEvent.click(groupNode);
+  fireEvent.doubleClick(groupNode);
   await waitFor(
     () => assert.equal(root.getAttribute('data-architecture-view'), 'group'),
     { timeout: 2000 },
@@ -1112,10 +1125,11 @@ test('a cancelled drag leaves no drag state behind', async () => {
   fireEvent.pointerMove(host, { pointerId: 25, pointerType: 'mouse', clientX: 100, clientY: 100 });
   assert.equal(host.scrollLeft, 100, 'a cancelled pointer must not keep panning');
 
-  // The next click is a click again: a released selection gesture drills.
+  // The next activation is a double click again: a released selection gesture
+  // still drills.
   const groupNode = host.querySelector('[data-entity-id="grp::src/modules/alpha"]');
   assert.ok(groupNode !== null);
-  fireEvent.click(groupNode);
+  fireEvent.doubleClick(groupNode);
   await waitFor(() => assert.equal(root.getAttribute('data-architecture-view'), 'group'));
 });
 
@@ -1418,7 +1432,7 @@ test('redrawing a view re-derives the scale from the new drawing and keeps the f
 
   // Expand a group; the new drawing has a new natural size, so the scale is
   // re-derived. Fit mode is preserved.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+  drillNode(host, 'grp::src/modules/alpha');
   await waitFor(() => {
     assert.deepEqual(drawnNodeIds(host), ['src/modules/alpha/a.ts', 'src/modules/alpha/a2.ts']);
   });
@@ -1437,9 +1451,9 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
 
   // Drill to a neighbourhood that spans two packages, so it has a real
   // package-level edge once the entities collapse.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+  drillNode(host, 'grp::src/modules/alpha');
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
-  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  drillNode(host, 'src/modules/alpha/a2.ts');
   await waitFor(() => {
     assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
     assert.deepEqual(drawnNodeIds(host), [
@@ -1581,7 +1595,7 @@ test('the explosion view lays the whole hierarchy out once and zoom reveals its 
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the explosion view never refetches');
 });
 
-test('overview folds the graph into path groups; clicking a group expands it locally', async () => {
+test('overview folds the graph into path groups; double-clicking a group expands it locally', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
@@ -1592,7 +1606,7 @@ test('overview folds the graph into path groups; clicking a group expands it loc
     'the overview groups by directory layer, never by file name; a one-file directory keeps its file as a node',
   );
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+  drillNode(host, 'grp::src/modules/alpha');
 
   await waitFor(() => {
     assert.equal(
@@ -1622,7 +1636,7 @@ test('expanding a deep group re-groups its subtree by directory instead of flatt
 
   // Expanding one package must apply the SAME directory rule to its subtree:
   // four unit groups, not the 20 file nodes inside it.
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/packages/mod-0"]') as Element);
+  drillNode(host, 'grp::src/packages/mod-0');
   await waitFor(() => {
     assert.equal(
       document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'),
@@ -1680,7 +1694,7 @@ test('expanding a flat directory larger than the group limit draws its files, no
   assert.deepEqual(drawnNodeIds(host), ['grp::scripts']);
   assert.match(host.textContent ?? '', /scripts \(45\)/);
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::scripts"]') as Element);
+  drillNode(host, 'grp::scripts');
 
   await waitFor(() => {
     assert.equal(
@@ -1755,17 +1769,17 @@ test('the display name keeps a file graph\'s first directory and strips only an 
   assert.equal(displayName('scripts/stamp-version.ts', MAX_DISPLAY_DIR_SEGMENTS, 'scope-prefixed'), 'stamp-version.ts');
 });
 
-test('clicking an entity drills into its neighbourhood, and the centre click adds a hop', async () => {
+test('double-clicking an entity drills into its neighbourhood, and double-clicking the centre adds a hop', async () => {
   rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+  drillNode(host, 'grp::src/modules/alpha');
   await waitFor(() => {
     assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]'));
   });
 
-  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  drillNode(host, 'src/modules/alpha/a2.ts');
 
   await waitFor(() => {
     assert.equal(
@@ -1784,14 +1798,14 @@ test('clicking an entity drills into its neighbourhood, and the centre click add
     'the drilled entity is marked as the neighbourhood centre',
   );
 
-  // Clicking the centred entity again is the "drill one hop deeper" gesture.
-  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  // Double-clicking the centred entity again is the "drill one hop deeper" gesture.
+  drillNode(host, 'src/modules/alpha/a2.ts');
 
   await waitFor(() => {
     assert.equal(
       document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'),
       '2',
-      'clicking the centre again must add exactly one hop',
+      'double-clicking the centre again must add exactly one hop',
     );
     assert.deepEqual(
       drawnNodeIds(host),
@@ -1967,9 +1981,9 @@ test('hovering a node highlights its in/out edges and dims the rest', async () =
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+  drillNode(host, 'grp::src/modules/alpha');
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
-  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  drillNode(host, 'src/modules/alpha/a2.ts');
   await waitFor(() => {
     assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
     assert.deepEqual(drawnNodeIds(host), [
@@ -1978,7 +1992,7 @@ test('hovering a node highlights its in/out edges and dims the rest', async () =
       'src/modules/beta/b.ts',
     ]);
   });
-  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  drillNode(host, 'src/modules/alpha/a2.ts');
   await waitFor(() => {
     assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '2');
     assert.deepEqual(drawnNodeIds(host), [
@@ -2015,9 +2029,9 @@ test('the drawn SVG carries the stable ids sibling panels query', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
-  fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+  drillNode(host, 'grp::src/modules/alpha');
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
-  fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+  drillNode(host, 'src/modules/alpha/a2.ts');
   await waitFor(() => {
     assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
     // Wait for the neighbourhood SVG itself, not just the view attribute React
@@ -2050,9 +2064,9 @@ test('clicking an entity pins its in/out highlight and announces it to sibling p
     render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
     const host = await waitForDiagram();
 
-    fireEvent.click(host.querySelector('[data-entity-id="grp::src/modules/alpha"]') as Element);
+    drillNode(host, 'grp::src/modules/alpha');
     await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
-    fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+    drillNode(host, 'src/modules/alpha/a2.ts');
     await waitFor(() => {
       assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '1');
       assert.deepEqual(drawnNodeIds(host), [
@@ -2063,7 +2077,7 @@ test('clicking an entity pins its in/out highlight and announces it to sibling p
     });
     // A second click on the centre deepens the neighbourhood; the gamma edge is
     // then drawn and must be the one left dimmed.
-    fireEvent.click(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]') as Element);
+    drillNode(host, 'src/modules/alpha/a2.ts');
     await waitFor(() => {
       assert.equal(document.querySelector('[data-architecture-hops]')?.getAttribute('data-architecture-hops'), '2');
       assert.deepEqual(drawnNodeIds(host), [

@@ -37,6 +37,10 @@ import {
 import { useResidentProviders } from '@/shared/hooks/useProviderCapabilities';
 import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { readSelectedProvider } from '@/shared/selectedProvider';
+import {
+  consumePendingLocateRequest,
+  subscribeToLocateRequests,
+} from '@/shared/chatMessageLocator';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
@@ -301,6 +305,34 @@ function ChatInterface({
     resolveSessionTitle: resolveUiNavigateSessionTitle,
     revealTarget: onRevealNavigate,
   });
+
+  // A "locate this message" request from another module (the architecture
+  // inspector's mention hits). The subscription only bumps a counter; the
+  // request is CONSUMED once this pane is active, because centring a message in
+  // a hidden pane does nothing (`WorkspaceMain` keeps Chat mounted behind the
+  // architecture tab). A request made while hidden therefore waits in the
+  // shared store until the tab becomes visible.
+  const [locateSignal, setLocateSignal] = useState(0);
+  // The id of the last locate request that found no message. `null` hides the
+  // light status line; a new request clears it before the jump is attempted.
+  const [locateMissId, setLocateMissId] = useState<string | null>(null);
+  useEffect(
+    () => subscribeToLocateRequests(() => setLocateSignal((signal) => signal + 1)),
+    [],
+  );
+  useEffect(() => {
+    if (!isActive) return undefined;
+    const request = consumePendingLocateRequest();
+    if (request === null) return undefined;
+    let cancelled = false;
+    setLocateMissId(null);
+    void jumpToMessage(request.messageId).then((found) => {
+      if (!cancelled && !found) setLocateMissId(request.messageId);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, locateSignal, jumpToMessage]);
 
   // How many of this session's messages are still waiting to be sent, read off the
   // transcript the chat state owns. The conversation's live state — the open
@@ -983,6 +1015,18 @@ function ChatInterface({
             onAlwaysAccept={uiNavigate.alwaysAccept}
             onAlwaysReject={uiNavigate.alwaysReject}
           />
+        )}
+
+        {/* A locate request that found no message must not fail silently: the
+            reader asked for a specific message and gets a status line instead. */}
+        {locateMissId !== null && (
+          <p
+            role="status"
+            data-chat-locate-notice={locateMissId}
+            className="shrink-0 border-b border-border/60 bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
+          >
+            {t('messageNotFound', { defaultValue: 'No message with that id was found.' })}
+          </p>
         )}
 
         <MarkdownWorkspaceContext.Provider value={markdownWorkspaceValue}>

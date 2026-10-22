@@ -424,5 +424,6 @@
     "settingsHint": "Los dos últimos cambian la configuración de este dispositivo",
     "alwaysAccept": "Aceptar siempre",
     "alwaysReject": "Rechazar siempre"
-  }
+  },
+  "messageNotFound": "No se encontró ningún mensaje con ese id."
 }

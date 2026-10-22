@@ -189,6 +189,51 @@
       "title": "調節",
       "close": "關閉調節面板",
       "dragHandle": "拖動關閉"
+    },
+    "dock": {
+      "title": "檢查器",
+      "close": "關閉檢查器",
+      "empty": "在圖上選擇節點或關係。",
+      "snapCollapsed": "收合",
+      "snapHalf": "半螢幕",
+      "snapFull": "全螢幕"
+    },
+    "inspector": {
+      "overview": "概觀",
+      "sessions": "工作階段",
+      "kind": "種類",
+      "degree": "關係",
+      "inDegree": "入度 {{count}}",
+      "outDegree": "出度 {{count}}",
+      "members": "成員",
+      "showAllMembers": "展開全部 {{count}} 個",
+      "showFewerMembers": "收合",
+      "related": "關聯",
+      "noRelated": "沒有畫出的關係",
+      "relationType": "類型",
+      "underlyingEdges": "底層邊",
+      "noUnderlyingEdges": "目前檢視沒有底層邊",
+      "coMentions": "同時提及兩者的訊息"
+    },
+    "relation": {
+      "inheritance": "繼承",
+      "implementation": "實作",
+      "composition": "組合",
+      "aggregation": "聚合",
+      "dependency": "相依",
+      "call": "呼叫"
+    },
+    "mentions": {
+      "error": "無法載入提及記錄。",
+      "retry": "重試",
+      "ambiguous": "名稱 {{name}} 對應 {{count}} 個實體，命中可能指向其中任一個。",
+      "truncated": "僅顯示前 {{count}} 筆。",
+      "empty": "工作階段裡沒有直接提到它。它在圖中，是因為它距離最近的提及 {{count}} 跳。",
+      "roleUser": "使用者",
+      "roleAssistant": "助理",
+      "roleTool": "工具輸出",
+      "includeToolResults": "包含工具輸出",
+      "locate": "定位這則訊息"
     }
   },
   "status": {

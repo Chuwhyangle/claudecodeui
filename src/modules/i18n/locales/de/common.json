@@ -189,6 +189,51 @@
       "title": "Anpassen",
       "close": "Anpassungsbereich schließen",
       "dragHandle": "Zum Schließen ziehen"
+    },
+    "dock": {
+      "title": "Inspektor",
+      "close": "Inspektor schließen",
+      "empty": "Wähle einen Knoten oder eine Beziehung in der Zeichnung.",
+      "snapCollapsed": "Eingeklappt",
+      "snapHalf": "Halb",
+      "snapFull": "Voll"
+    },
+    "inspector": {
+      "overview": "Übersicht",
+      "sessions": "Sitzungen",
+      "kind": "Art",
+      "degree": "Beziehungen",
+      "inDegree": "{{count}} eingehend",
+      "outDegree": "{{count}} ausgehend",
+      "members": "Mitglieder",
+      "showAllMembers": "Alle {{count}} anzeigen",
+      "showFewerMembers": "Weniger anzeigen",
+      "related": "Verwandt",
+      "noRelated": "Keine gezeichneten Beziehungen",
+      "relationType": "Typ",
+      "underlyingEdges": "Zugrunde liegende Kanten",
+      "noUnderlyingEdges": "Keine zugrunde liegenden Kanten in dieser Ansicht",
+      "coMentions": "Nachrichten, die beide erwähnen"
+    },
+    "relation": {
+      "inheritance": "Vererbung",
+      "implementation": "Implementierung",
+      "composition": "Komposition",
+      "aggregation": "Aggregation",
+      "dependency": "Abhängigkeit",
+      "call": "Aufruf"
+    },
+    "mentions": {
+      "error": "Die Erwähnungen konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "ambiguous": "Der Name {{name}} trifft auf {{count}} Entitäten zu, ein Treffer kann auf jede davon zeigen.",
+      "truncated": "Nur die ersten {{count}} werden angezeigt.",
+      "empty": "Das Gespräch nennt es nie direkt. Es ist im Diagramm, weil es {{count}} Sprung/Sprünge von der nächsten Erwähnung entfernt ist.",
+      "roleUser": "Benutzer",
+      "roleAssistant": "Assistent",
+      "roleTool": "Tool-Ausgabe",
+      "includeToolResults": "Tool-Ausgabe einschließen",
+      "locate": "Diese Nachricht lokalisieren"
     }
   },
   "status": {

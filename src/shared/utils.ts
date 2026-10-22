@@ -306,3 +306,48 @@ export function voiceClientAssetPaths(baseUrl: string | undefined): VoiceClientA
 }
 
 // ---------------------------
+
+//----------------- TIMESTAMP FORMATTING ------------
+
+/**
+ * Renders an ISO timestamp as a locale-aware relative reading ("3 hours ago").
+ *
+ * Use it wherever an absolute instant would make the reader do the arithmetic — the architecture
+ * panel's analysis time and the mention hits' message times. `locale` is the INTERFACE language
+ * (`i18n.language`), not the browser's, so the reading matches the surrounding labels. An
+ * unparseable or missing timestamp reads `unknown` rather than throwing.
+ */
+export function formatRelativeTime(iso: string | null, locale: string): string {
+  if (iso === null) return 'unknown';
+  const analysed = Date.parse(iso);
+  if (Number.isNaN(analysed)) return 'unknown';
+  const seconds = Math.round((analysed - Date.now()) / 1000);
+  const steps: readonly [Intl.RelativeTimeFormatUnit, number][] = [
+    ['year', 31536000],
+    ['month', 2592000],
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+    ['second', 1],
+  ];
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  for (const [unit, size] of steps) {
+    if (Math.abs(seconds) >= size || unit === 'second') {
+      return formatter.format(Math.round(seconds / size), unit);
+    }
+  }
+  return formatter.format(seconds, 'second');
+}
+
+/**
+ * The precise local instant behind a relative reading, for a `<time>` element's title attribute.
+ *
+ * Returns `undefined` for a missing or unparseable timestamp so callers can omit the attribute.
+ */
+export function formatAbsoluteTime(iso: string | null, locale: string): string | undefined {
+  if (iso === null) return undefined;
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed.toLocaleString(locale);
+}
+
+// ---------------------------

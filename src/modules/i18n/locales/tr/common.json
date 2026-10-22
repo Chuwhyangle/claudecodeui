@@ -189,6 +189,51 @@
       "title": "Ayarla",
       "close": "Ayar panelini kapat",
       "dragHandle": "Kapatmak için sürükleyin"
+    },
+    "dock": {
+      "title": "Denetçi",
+      "close": "Denetçiyi kapat",
+      "empty": "Çizimde bir düğüm veya ilişki seçin.",
+      "snapCollapsed": "Daraltılmış",
+      "snapHalf": "Yarım",
+      "snapFull": "Tam"
+    },
+    "inspector": {
+      "overview": "Genel bakış",
+      "sessions": "Oturumlar",
+      "kind": "Tür",
+      "degree": "İlişkiler",
+      "inDegree": "{{count}} gelen",
+      "outDegree": "{{count}} giden",
+      "members": "Üyeler",
+      "showAllMembers": "{{count}} öğenin tümünü göster",
+      "showFewerMembers": "Daha az göster",
+      "related": "İlgili",
+      "noRelated": "Çizilmiş ilişki yok",
+      "relationType": "Tür",
+      "underlyingEdges": "Alt kenarlar",
+      "noUnderlyingEdges": "Bu görünümde alt kenar yok",
+      "coMentions": "Her ikisinden de söz eden mesajlar"
+    },
+    "relation": {
+      "inheritance": "Kalıtım",
+      "implementation": "Uygulama",
+      "composition": "Bileşim",
+      "aggregation": "Kümelenme",
+      "dependency": "Bağımlılık",
+      "call": "Çağrı"
+    },
+    "mentions": {
+      "error": "Bahsetmeler yüklenemedi.",
+      "retry": "Yeniden dene",
+      "ambiguous": "{{name}} adı {{count}} varlıkla eşleşiyor, bu yüzden bir sonuç bunlardan herhangi birini gösterebilir.",
+      "truncated": "Yalnızca ilk {{count}} gösteriliyor.",
+      "empty": "Konuşma ondan doğrudan hiç söz etmiyor. Grafikte, en yakın bahsetmeye {{count}} atlama uzaklıkta olduğu için yer alıyor.",
+      "roleUser": "Kullanıcı",
+      "roleAssistant": "Asistan",
+      "roleTool": "Araç çıktısı",
+      "includeToolResults": "Araç çıktısını dahil et",
+      "locate": "Bu mesaja git"
     }
   },
   "status": {

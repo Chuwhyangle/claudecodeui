@@ -189,6 +189,51 @@
       "title": "Sesuaikan",
       "close": "Tutup panel penyesuaian",
       "dragHandle": "Seret untuk menutup"
+    },
+    "dock": {
+      "title": "Inspektur",
+      "close": "Tutup inspektur",
+      "empty": "Pilih simpul atau relasi pada gambar.",
+      "snapCollapsed": "Diciutkan",
+      "snapHalf": "Setengah",
+      "snapFull": "Penuh"
+    },
+    "inspector": {
+      "overview": "Ringkasan",
+      "sessions": "Sesi",
+      "kind": "Jenis",
+      "degree": "Relasi",
+      "inDegree": "{{count}} masuk",
+      "outDegree": "{{count}} keluar",
+      "members": "Anggota",
+      "showAllMembers": "Tampilkan semua {{count}}",
+      "showFewerMembers": "Tampilkan lebih sedikit",
+      "related": "Terkait",
+      "noRelated": "Tidak ada relasi yang digambar",
+      "relationType": "Jenis",
+      "underlyingEdges": "Sisi dasar",
+      "noUnderlyingEdges": "Tidak ada sisi dasar pada tampilan ini",
+      "coMentions": "Pesan yang menyebut keduanya"
+    },
+    "relation": {
+      "inheritance": "Pewarisan",
+      "implementation": "Implementasi",
+      "composition": "Komposisi",
+      "aggregation": "Agregasi",
+      "dependency": "Ketergantungan",
+      "call": "Panggilan"
+    },
+    "mentions": {
+      "error": "Sebutan tidak dapat dimuat.",
+      "retry": "Coba lagi",
+      "ambiguous": "Nama {{name}} cocok dengan {{count}} entitas, jadi satu temuan bisa menunjuk ke salah satunya.",
+      "truncated": "Hanya menampilkan {{count}} pertama.",
+      "empty": "Percakapan tidak pernah menyebutnya secara langsung. Ia ada di graf karena berjarak {{count}} lompatan dari sebutan terdekat.",
+      "roleUser": "Pengguna",
+      "roleAssistant": "Asisten",
+      "roleTool": "Keluaran alat",
+      "includeToolResults": "Sertakan keluaran alat",
+      "locate": "Temukan pesan ini"
     }
   },
   "status": {

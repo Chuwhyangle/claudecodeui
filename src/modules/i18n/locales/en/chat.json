@@ -519,5 +519,6 @@
     "settingsHint": "The last two change this device's setting",
     "alwaysAccept": "Always accept",
     "alwaysReject": "Always reject"
-  }
+  },
+  "messageNotFound": "No message with that id was found."
 }

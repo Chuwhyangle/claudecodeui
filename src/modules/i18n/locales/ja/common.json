@@ -189,6 +189,51 @@
       "title": "調整",
       "close": "調整パネルを閉じる",
       "dragHandle": "ドラッグして閉じる"
+    },
+    "dock": {
+      "title": "インスペクター",
+      "close": "インスペクターを閉じる",
+      "empty": "図上のノードまたは関係を選択してください。",
+      "snapCollapsed": "折りたたみ",
+      "snapHalf": "半分",
+      "snapFull": "全画面"
+    },
+    "inspector": {
+      "overview": "概要",
+      "sessions": "セッション",
+      "kind": "種類",
+      "degree": "関係",
+      "inDegree": "入力 {{count}}",
+      "outDegree": "出力 {{count}}",
+      "members": "メンバー",
+      "showAllMembers": "{{count}} 件すべて表示",
+      "showFewerMembers": "折りたたむ",
+      "related": "関連",
+      "noRelated": "描画された関係はありません",
+      "relationType": "種類",
+      "underlyingEdges": "基になるエッジ",
+      "noUnderlyingEdges": "このビューに基になるエッジはありません",
+      "coMentions": "両方を言及したメッセージ"
+    },
+    "relation": {
+      "inheritance": "継承",
+      "implementation": "実装",
+      "composition": "コンポジション",
+      "aggregation": "集約",
+      "dependency": "依存",
+      "call": "呼び出し"
+    },
+    "mentions": {
+      "error": "言及を読み込めませんでした。",
+      "retry": "再試行",
+      "ambiguous": "名前 {{name}} は {{count}} 個のエンティティに一致するため、ヒットはそのいずれかを指す可能性があります。",
+      "truncated": "最初の {{count}} 件のみ表示しています。",
+      "empty": "会話が直接名前を出したことはありません。最も近い言及から {{count}} ホップ離れているため、グラフに表示されています。",
+      "roleUser": "ユーザー",
+      "roleAssistant": "アシスタント",
+      "roleTool": "ツール出力",
+      "includeToolResults": "ツール出力を含める",
+      "locate": "このメッセージへ移動"
     }
   },
   "status": {

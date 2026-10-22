@@ -449,5 +449,6 @@
     "settingsHint": "後兩項會修改本裝置設定",
     "alwaysAccept": "總是接受",
     "alwaysReject": "總是拒絕"
-  }
+  },
+  "messageNotFound": "找不到這則訊息。"
 }

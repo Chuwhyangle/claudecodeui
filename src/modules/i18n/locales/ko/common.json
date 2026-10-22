@@ -189,6 +189,51 @@
       "title": "조정",
       "close": "조정 패널 닫기",
       "dragHandle": "끌어서 닫기"
+    },
+    "dock": {
+      "title": "검사기",
+      "close": "검사기 닫기",
+      "empty": "도면에서 노드나 관계를 선택하세요.",
+      "snapCollapsed": "접힘",
+      "snapHalf": "절반",
+      "snapFull": "전체"
+    },
+    "inspector": {
+      "overview": "개요",
+      "sessions": "세션",
+      "kind": "종류",
+      "degree": "관계",
+      "inDegree": "들어옴 {{count}}",
+      "outDegree": "나감 {{count}}",
+      "members": "멤버",
+      "showAllMembers": "{{count}}개 모두 표시",
+      "showFewerMembers": "접기",
+      "related": "관련",
+      "noRelated": "그려진 관계 없음",
+      "relationType": "종류",
+      "underlyingEdges": "기저 간선",
+      "noUnderlyingEdges": "이 보기에는 기저 간선이 없습니다",
+      "coMentions": "둘 다 언급한 메시지"
+    },
+    "relation": {
+      "inheritance": "상속",
+      "implementation": "구현",
+      "composition": "구성",
+      "aggregation": "집합",
+      "dependency": "의존",
+      "call": "호출"
+    },
+    "mentions": {
+      "error": "언급을 불러오지 못했습니다.",
+      "retry": "다시 시도",
+      "ambiguous": "이름 {{name}}이(가) {{count}}개 엔터티와 일치하므로, 결과는 그중 어느 것을 가리킬 수 있습니다.",
+      "truncated": "처음 {{count}}개만 표시합니다.",
+      "empty": "대화가 직접 이름을 언급한 적은 없습니다. 가장 가까운 언급에서 {{count}}홉 떨어져 있어 그래프에 표시됩니다.",
+      "roleUser": "사용자",
+      "roleAssistant": "어시스턴트",
+      "roleTool": "도구 출력",
+      "includeToolResults": "도구 출력 포함",
+      "locate": "이 메시지로 이동"
     }
   },
   "status": {

@@ -418,5 +418,6 @@
     "settingsHint": "마지막 두 항목은 이 기기의 설정을 변경합니다",
     "alwaysAccept": "항상 허용",
     "alwaysReject": "항상 거부"
-  }
+  },
+  "messageNotFound": "해당 id의 메시지를 찾지 못했습니다."
 }
