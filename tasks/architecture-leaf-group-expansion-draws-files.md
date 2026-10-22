@@ -39,6 +39,19 @@ extra: {}
 
 不放水：不提高 `OVERVIEW_GROUP_LIMIT` 来绕过（那只会把 Overview 本身弄乱）、不删组框、不把 229 改成采样显示而不告知。
 
+## Evidence
+
+实现：`adaptiveGroupViewDocument` 先按 `group.prefix === view.prefix` 把该组从 `groups` 中取出，其成员加入 `ungroupedNodeIds`（按 neighborhood 的 `(distance, id)` 顺序），再交给既有的 `emitGroupedDocument`。边因此不需要新逻辑：`emitGroupedDocument` 的 `aliasFor` 对未分组 id 回落到 `aliasOf`，于是「指向原前缀组框」的边自动落到具体实体上，折叠/聚合规则原样保留（唯一前缀组时 `groups` 为空 ⇒ 直接走 `emitEntityDocument`，每条边逐条画出）。
+
+真实浏览器读数（Chromium headless，真实 `/tmp/quay-arch-graph.json` 的 321 file 节点，真实 `@yalehwang/plantuml-js/elk` 渲染器；桌面 1280×800 与移动 390×844 各一遍，0 个 pageerror；截图 `/tmp/arch-probe/plugin-scripts-{desktop,mobile}.png`）：
+
+- Overview：18 个框，其中 `plugin/scripts (229)`。
+- 展开 `plugin/scripts`：**229** 个 node，源组标签不存在；桌面/移动一致。
+- 展开 `packages/quay/src`：17 个 node = 4 个子目录框（`cli (12)`、`core (11)`、`kernel (12)`、`serve (2)`）+ 13 个本层直接文件实体；无 `packages/quay/src (N)` 框。
+- 再展开其中的 `packages/quay/src/cli`：**12** 个实体，无框 ⇒ 不原地打转。
+
+偏离：没有驱动 `/session/e2dd27de…` 的 React 页面（:3001 上的服务跑的是 main checkout 的改前构建，从会话内部重启它被禁止），改用同一份真实图的 view 文档在真实浏览器里由真渲染器出 SVG 后读 class 数量与标签；`data-entity-id`/`data-package-id` 的 DOM 契约未改。
+
 ## Touches
 
 - src/modules/architecture/archguardToPlantUml.ts
