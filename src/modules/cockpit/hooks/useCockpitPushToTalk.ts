@@ -112,12 +112,15 @@ export function useCockpitPushToTalk({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || event.repeat) return;
+      if (event.code !== 'Space') return;
       // A focused text field keeps Space: it types a space and must not open the microphone.
       if (isEditableTarget(event.target)) return;
       if (!enabledRef.current) return;
-      // Space is the cockpit's push-to-talk, so the page must not scroll while it is held.
+      // Space is the cockpit's push-to-talk, so the page must not scroll while it is held. Held
+      // keys repeat, and a repeated keydown must keep suppressing the scroll without re-toggling
+      // the recorder.
       event.preventDefault();
+      if (event.repeat) return;
       startHold();
     };
     const handleKeyUp = (event: KeyboardEvent) => {
