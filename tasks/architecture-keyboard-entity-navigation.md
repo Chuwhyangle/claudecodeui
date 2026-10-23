@@ -1,7 +1,7 @@
 ---
 id: architecture-keyboard-entity-navigation
 title: 架构图键盘可达：画布内用方向键在实体间移动，Enter 选中，Shift+Enter 多选
-status: todo
+status: ready
 labels:
   - feature
 parent: null
