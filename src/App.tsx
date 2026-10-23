@@ -11,7 +11,7 @@ import { WebSocketProvider } from '@/shared/context/WebSocketContext';
 import { PluginsProvider } from '@/modules/plugins';
 import { ProjectWorkspaceRoute } from '@/modules/project-workspace';
 import { OAuthConsentRoute } from '@/modules/oauth-consent';
-import { CockpitPage } from '@/modules/cockpit';
+import { CockpitPage, CockpitRemote } from '@/modules/cockpit';
 import { i18n } from '@/modules/i18n';
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
@@ -144,6 +144,10 @@ export default function App() {
                           of the project workspace rather than a tab inside one. It is behind the
                           same ProtectedRoute, so it reads the fleet only for a signed-in user. */}
                       <Route path="/cockpit" element={<CockpitPage />} />
+                      {/* The phone remote: the input half of the same hub, opened by scanning
+                          the code the stage draws. Same ProtectedRoute, so it binds to the
+                          signed-in user's hub with no extra token or pairing step. */}
+                      <Route path="/cockpit/remote" element={<CockpitRemote />} />
                       {/* The OAuth consent screen: a full-page surface of its own, NOT
                           inside the project workspace shell, so an authorization request
                           never mounts the sidebar, tabs or chat pane behind it. It is
