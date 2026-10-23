@@ -1,7 +1,7 @@
 ---
 id: quay-uri-resolve-project-not-registered-reason
 title: 解引用区分 project-not-registered：fleet summary 对未登记项目的拒绝现被误报为 reader-unavailable
-status: ready
+status: done
 labels:
   - wall
   - contract
