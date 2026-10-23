@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { QuayDriverState, QuayFocusableObject, QuayObjectUri } from '@/shared/types';
 import { cn } from '@/shared/utils';
-import { QuayPanel } from '@/modules/quay';
+import { QuayPanel, parseQuayUri } from '@/modules/quay';
 import type { QuayPanelView } from '@/modules/quay';
 import type { CockpitProject, CockpitView } from '@/modules/cockpit/cockpitView';
 
@@ -23,6 +23,15 @@ const DRIVER_LABEL_KEYS: Record<QuayDriverState, string> = {
   'not-configured': 'cockpit.driverNotConfigured',
   unavailable: 'cockpit.driverUnavailable',
 };
+
+/**
+ * A driver badge is only drawn when the driver is NOT running.
+ *
+ * An always-present "DRIVER RUNNING" badge is identical on every tile, so it occupies the most
+ * prominent position in every tile to say nothing. A badge that appears only when the driver is
+ * stopped, stale or unreadable is information: it is the one tile where something needs attention.
+ */
+const DRIVER_IS_NORMAL = (state: QuayDriverState): boolean => state === 'running';
 
 export type CockpitFleetStatus = 'loading' | 'loaded' | 'error';
 
@@ -140,6 +149,10 @@ function FleetView({
           return null;
         }
         const isFocused = focusable.uri === focusUri;
+        // 「需要人」 is the one coloured element in the fleet view: the only state that asks the
+        // person to act must be visible at a glance without reading the counts line. The marker is
+        // a data attribute as well as a border so the emphasis is addressable without CSS.
+        const needsHuman = project.tasks.needsHuman > 0;
 
         return (
           <li
@@ -148,34 +161,58 @@ function FleetView({
             tabIndex={-1}
             onClick={() => onFocusObject(focusable.uri)}
             className={cn(
-              'cursor-pointer rounded-lg border border-border/50 bg-card p-3 text-left transition-shadow focus:outline-none',
+              'cursor-pointer rounded-lg border bg-card p-3 text-left transition-shadow focus:outline-none',
+              needsHuman
+                ? 'border-amber-500 ring-1 ring-amber-500/40 dark:border-amber-400 dark:ring-amber-400/40'
+                : 'border-border/50',
               isFocused && 'ring-2 ring-primary',
             )}
             data-testid="cockpit-fleet-tile"
             data-quay-uri={focusable.uri}
             data-quay-label={focusable.label}
             data-quay-display={JSON.stringify(focusable.display)}
+            data-needs-human={needsHuman ? 'true' : undefined}
             data-focused={isFocused ? 'true' : undefined}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="text-[11px] text-muted-foreground" data-testid="cockpit-fleet-tile-label">
+                {/* The ordinal is the spoken handle AND the place a pointer lands: it is drawn at
+                    body size in the foreground colour, never as dim decorative small print. */}
+                <span
+                  className="shrink-0 text-sm font-semibold tabular-nums text-foreground"
+                  data-testid="cockpit-fleet-tile-label"
+                >
                   {focusable.label}
                 </span>
-                <span className="truncate text-sm font-semibold text-foreground" title={project.projectPath}>
+                <span
+                  className="truncate text-sm font-medium text-foreground"
+                  title={project.projectPath}
+                  data-testid="cockpit-fleet-tile-name"
+                >
                   {project.name}
                 </span>
               </span>
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                {t(DRIVER_LABEL_KEYS[project.driverState])}
-              </span>
+              {!DRIVER_IS_NORMAL(project.driverState) && (
+                <span
+                  className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground"
+                  data-testid="cockpit-fleet-tile-driver"
+                  data-driver-state={project.driverState}
+                >
+                  {t(DRIVER_LABEL_KEYS[project.driverState])}
+                </span>
+              )}
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground" data-testid="cockpit-fleet-tile-counts">
               {t('cockpit.tasksCount', { total: project.tasks.total })}
               {' · '}
               {t('cockpit.readyCount', { n: project.tasks.ready })}
               {' · '}
-              {t('cockpit.needsHumanCount', { n: project.tasks.needsHuman })}
+              <span
+                className={cn(needsHuman && 'font-semibold text-amber-700 dark:text-amber-300')}
+                data-testid="cockpit-fleet-tile-needs-human"
+              >
+                {t('cockpit.needsHumanCount', { n: project.tasks.needsHuman })}
+              </span>
             </p>
             {project.error !== null && (
               <p className="mt-1 truncate text-[11px] text-amber-700 dark:text-amber-300" data-testid="cockpit-fleet-tile-error">
@@ -207,6 +244,16 @@ function BoardView({
 }) {
   const { t } = useTranslation();
 
+  // The task's human-readable title, when the snapshot's recent-tasks reading carries one. The
+  // rail's title is the task id; the subtitle is this. A missing entry (the task is older than the
+  // ten most recently updated) leaves the subtitle out rather than inventing one.
+  const taskTitles = new Map<string, string>();
+  if (boardView.status === 'loaded') {
+    for (const task of boardView.snapshot.tasks?.recent ?? []) {
+      taskTitles.set(task.id, task.title);
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="cockpit-board">
       <div className="border-b border-border/40 p-3" data-cockpit-focusables={JSON.stringify(focusables)}>
@@ -221,6 +268,16 @@ function BoardView({
           <ul className="flex flex-wrap gap-2" data-testid="cockpit-board-rail">
             {focusables.map((focusable) => {
               const isFocused = focusable.uri === focusUri;
+              // An in-flight tile is named the way a person names it: the task id as the title,
+              // its title as the subtitle. The raw `quay://` address belongs to the status bar,
+              // which is where the focus reading lives — it is not a headline and cannot be spoken.
+              const parsed = parseQuayUri(focusable.uri);
+              const taskId =
+                parsed.ok && parsed.object.type === 'task' ? parsed.object.id : focusable.display.status;
+              const taskTitle = parsed.ok && parsed.object.type === 'task'
+                ? taskTitles.get(parsed.object.id)
+                : undefined;
+
               return (
                 <li key={focusable.uri}>
                   <button
@@ -236,8 +293,29 @@ function BoardView({
                     data-quay-display={JSON.stringify(focusable.display)}
                     data-focused={isFocused ? 'true' : undefined}
                   >
-                    <span className="text-[11px] text-muted-foreground">{focusable.label}</span>
-                    <span className="max-w-md truncate font-mono text-[11px]">{focusable.uri}</span>
+                    <span
+                      className="shrink-0 text-sm font-semibold tabular-nums text-foreground"
+                      data-testid="cockpit-board-object-label"
+                    >
+                      {focusable.label}
+                    </span>
+                    <span className="flex min-w-0 flex-col text-left">
+                      <span
+                        className="truncate text-xs font-semibold text-foreground"
+                        title={taskId}
+                        data-testid="cockpit-board-object-title"
+                      >
+                        {taskId}
+                      </span>
+                      {taskTitle !== undefined && (
+                        <span
+                          className="truncate text-[11px] text-muted-foreground"
+                          data-testid="cockpit-board-object-subtitle"
+                        >
+                          {taskTitle}
+                        </span>
+                      )}
+                    </span>
                     <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
                       {focusable.display.status}
                     </span>
