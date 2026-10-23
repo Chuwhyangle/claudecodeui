@@ -42,5 +42,5 @@
 - 档位切换没有滞回，边界附近缩放可能来回跳档，需加死区（沿用现有 8% 死区与 200ms 防抖的做法）。
 - 手机 17% 的粘性包名偶尔盖住上方类名。
 - 原型是对 SVG 的覆盖重画；产品里要重写几何，命中测试、拖拽、小地图、选择、置顶 / 排除徽标都要经这套映射。
-- 属性 / 方法分格目前靠成员文本里是否含 `(` 推断；plantuml-js 若输出分格元素，应改读它们（plantuml-js 已立案 `gap-render-uml-compartments-tab-geometry`，计划随 0.4.0：`uml-compartment-rule`（`data-rule="title|ops"`）、成员 `uml-attr` / `uml-op`、闭合的 `uml-package-tab` 并导出标签宽高、`uml-node` / `uml-package` 的 `data-x/y/w/h` 与 `data-title-h/attrs-h/ops-h`、`data-tab-w/h`；0.3.1 只含超线性布局修复。本任务不等它，发版后只把近似函数换成读新类名）。
+- plantuml-js 0.4.0（2026-10-23 发布）已提供分格与几何：`uml-compartment-rule`（`data-rule="title|ops"`，接口只有 title 一条）、成员 `uml-attr` / `uml-op`、闭合的 `uml-package-tab`、`uml-node` 的 `data-x/y/w/h` 与 `data-title-h/attrs-h/ops-h`、`uml-package` 的 `data-x/y/w/h` 与 `data-tab-w/h`、聚合边 `uml-edge-bundle`（`data-bundle-size`）。实现直接读这些，不再用「成员文本含 `(`」推断；`reference/prototype-v14.js` 是在 0.3.1 的 SVG 上写的，仍含这类推断，仅作行为参照。
 - 「单调映射 + 约束求解 + 降档」本身暂不进 plantuml-js `/ui`（plantuml-js 会话意见：先在应用侧落地验证，若成为通用需求再把纯函数原型整理给它）。
