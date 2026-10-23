@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-mobile-default-readable-focus
 title: 架构图手机端默认进可读的 Focus 模式：总览缩放低于可读下限时不再默认 25% 总览
-status: ready
+status: done
 labels:
   - gap
 parent: null
