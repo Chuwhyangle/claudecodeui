@@ -701,6 +701,10 @@ export default function CockpitPage() {
           The confirmation card. It shows the destination in the person's own words — project,
           conversation, text, and the references that will ride along — and nothing is sent until
           the button (or Enter) is pressed. 「取消」 and Backspace abandon it.
+
+          `data-cockpit-send-pack` publishes the exact reference pack the message carries, for the
+          same reason the timings are published: a browser check reads what will leave rather than
+          inferring it from the rendered sentence.
         */}
         {pendingSend !== null && (
           <div
@@ -708,6 +712,7 @@ export default function CockpitPage() {
             data-testid="cockpit-send-preview"
             data-cockpit-session={pendingSend.sessionId}
             data-cockpit-send-source={pendingSend.source}
+            data-cockpit-send-pack={JSON.stringify(pendingSend.pack)}
           >
             <p className="text-xs" data-testid="cockpit-send-preview-line">
               {t('cockpit.sendPreview', {
