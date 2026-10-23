@@ -30,11 +30,11 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/cockpitIntent.test.ts` exit 0——「看 claudecodeui」「打开 quay-fleet 任务板」→ board 视图且 project 正确；「第二个」「②」在给定可见集上命中唯一对象；「放大」「返回」「全部项目」各自映射正确；不在项目列表中的名字、闲聊句返回 `unmatched`；整个函数无网络 / LLM 调用。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——fleet 视图对每个项目声明 `quay://<project>/board` 可聚焦元素，带序号标签；方向键移动焦点按空间序吸附且不越界；Enter 在项目上进入该项目的 board 视图；返回键回到 fleet；视图描述与 URL 互相往返一致。
-- [ ] AC3: 同一测试文件——board 视图里在途任务按 `quay://<project>/task/<id>` 声明；快照请求失败时舞台显示错误状态而不是空白，且焦点不丢失到页面外。
-- [ ] AC4: 同一测试文件——输入框由 chat 模块的 `PromptInput` 组件组成（从 `@/modules/chat` 导入）；输入框聚焦时方向键不移动舞台焦点；在输入框提交「看 <项目>」切到该项目的 board 视图。
-- [ ] AC5: `npm run typecheck` 通过；quay 模块既有测试（`src/modules/quay/tests/QuayPanel.test.tsx`）原样通过。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/cockpitIntent.test.ts` exit 0——「看 claudecodeui」「打开 quay-fleet 任务板」→ board 视图且 project 正确；「第二个」「②」在给定可见集上命中唯一对象；「放大」「返回」「全部项目」各自映射正确；不在项目列表中的名字、闲聊句返回 `unmatched`；整个函数无网络 / LLM 调用。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——fleet 视图对每个项目声明 `quay://<project>/board` 可聚焦元素，带序号标签；方向键移动焦点按空间序吸附且不越界；Enter 在项目上进入该项目的 board 视图；返回键回到 fleet；视图描述与 URL 互相往返一致。
+- [x] AC3: 同一测试文件——board 视图里在途任务按 `quay://<project>/task/<id>` 声明；快照请求失败时舞台显示错误状态而不是空白，且焦点不丢失到页面外。
+- [x] AC4: 同一测试文件——输入框由 chat 模块的 `PromptInput` 组件组成（从 `@/modules/chat` 导入）；输入框聚焦时方向键不移动舞台焦点；在输入框提交「看 <项目>」切到该项目的 board 视图。
+- [x] AC5: `npm run typecheck` 通过；quay 模块既有测试（`src/modules/quay/tests/QuayPanel.test.tsx`）原样通过。
 
 ## DoD
 
