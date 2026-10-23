@@ -58,3 +58,10 @@ depends_on:
 - server/modules/quay/quay-uri-resolve.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
 - tasks/quay-wall-uri-dereference-with-snapshot-fallback.md
+
+
+2026-10-23 读口实测形状（fleet 已落地，按此接线）。fleet 读口是 `quay-fleet` CLI 的只读子命令（`../quay-fleet/bin/quay-fleet.mjs`），不是 HTTP：
+- L1：`quay-fleet wall resolve <uri> --json` → `{"ok":true,"uri","type","label","actions":[…]}`；带 `#ac-<n>` 时 actions=["read","check","edit"]，并附 `fragment:{kind:"ac",index:n}`；畸形或未知 URI 以 exit 2 退出并给出具名 reason。
+- L2：`quay-fleet wall summary <uri> --root <项目检出根> --json` → `{"state":"absent",…}` 或 `{"state":"ok","summary","generatedAt","sourceEventId",…}`。
+- **`state:"absent"` 不等于读口故障**：fleet 的写路径还没接进 observe 循环，所以目前所有 URI 都返回 absent。absent ⇒ L2 为 absent，task 字段走 snapshot 并标 `source:"snapshot-fallback"`、reason `no-summary`；CLI 不存在、非零退出或 JSON 解析失败 ⇒ 同样回落，但 reason 为 `reader-unavailable`。两种 reason 必须区分，并各有测试用例。
+- **⚠️ URI 语法分歧（已报 fleet 侧修正）**：fleet 落地的是不带项目段的 `quay://task/<id>`、`quay://board/<id>`；CloudCLI 已落地的、双方约定的语法是 `quay://<project>/task/<id>`、`quay://<project>/board`。fleet 现在会以 unknown-type 拒绝带项目段的 URI。本任务**只在一个适配函数里**把 CloudCLI 的 URI 转成 fleet 当前的形式（去掉项目段，项目段映射为 `--root`），并注释为临时措施；不得在其他地方出现无项目段的 URI；对外（输入包、API 返回）一律保留带项目段的原 URI。
