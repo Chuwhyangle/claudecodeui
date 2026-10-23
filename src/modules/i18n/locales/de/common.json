@@ -106,9 +106,9 @@
       "classDiagram": "Klassendiagramm",
       "backTo": "Zurück zu {{view}}",
       "lod": {
-        "packages": "Pakete",
-        "subpackages": "Unterpakete",
-        "entities": "Entitäten"
+        "tierNames": "Namen",
+        "tierFrames": "Rahmen",
+        "tierPackages": "Pakete"
       },
       "explosion": "Explosionsansicht",
       "drillIn": "Öffnen",

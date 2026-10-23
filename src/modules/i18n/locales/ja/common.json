@@ -106,9 +106,9 @@
       "classDiagram": "クラス図",
       "backTo": "{{view}} に戻る",
       "lod": {
-        "packages": "パッケージ",
-        "subpackages": "サブパッケージ",
-        "entities": "エンティティ"
+        "tierNames": "名前",
+        "tierFrames": "フレーム",
+        "tierPackages": "パッケージ"
       },
       "explosion": "爆発ビュー",
       "drillIn": "開く",

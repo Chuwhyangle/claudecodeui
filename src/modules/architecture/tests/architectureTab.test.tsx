@@ -36,18 +36,6 @@ import {
   displayName,
   MAX_DISPLAY_DIR_SEGMENTS,
 } from '@/modules/architecture/archguardToPlantUml';
-import {
-  applyExplosionLod,
-  buildExplosionHierarchy,
-  ENTITY_LOD_DEPTH,
-  ENTITY_MIN_SCALE,
-  lodEdgeScreenWidth,
-  LOD_EDGE_MAX_SCREEN_PX,
-  LOD_EDGE_MIN_SCREEN_PX,
-  LOD_EMPTY_FRAME_CLASS,
-  PACKAGE_LOD_DEPTH,
-  SUBPACKAGE_MIN_SCALE,
-} from '@/modules/architecture/explosionLod';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 
 /**
@@ -718,6 +706,16 @@ async function waitForFit(host: HTMLElement): Promise<number> {
   await waitFor(() => {
     const svg = host.querySelector('svg');
     assert.ok(svg !== null);
+    // A semantically rewritten drawing is sized 1:1 to its mapped viewBox; the
+    // zoom scale lives in the geometry, not in the element's width.
+    if (svg.getAttribute('data-architecture-semantic') !== null) {
+      assert.equal(
+        Number(svg.getAttribute('width')),
+        svgViewBoxSize(svg).width,
+        'a semantic drawing is shown 1:1 with its mapped layout',
+      );
+      return;
+    }
     assert.equal(Number(svg.getAttribute('width')), fittedWidthIn(host, svg));
   });
   return svgWidth(host);
@@ -1770,17 +1768,14 @@ test('redrawing a view re-derives the scale from the new drawing and keeps the f
   await waitForFit(host);
 });
 
-test('semantic zoom toggles the drawn hierarchy without re-laying it out', async () => {
+test('semantic zoom rewrites the drawn geometry without replacing the drawing', async () => {
   rememberShowAllFilter();
-  // AC: the far level shows package frames with (N) counts and aggregated
-  // package edges; the near level shows the entity UML edges again. Both come
-  // from ONE layout — the SVG element the renderer emitted must never be
-  // replaced while zooming across levels.
+  // AC: zooming re-applies the semantic layout to the SAME SVG element; the
+  // data-entity-id / data-package-id / data-edge-* contract survives at every
+  // tier, and the retired overlay title layer never appears.
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
 
-  // Drill to a neighbourhood that spans two packages, so it has a real
-  // package-level edge once the entities collapse.
   drillNode(host, 'grp::src/modules/alpha');
   await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a2.ts"]')));
   drillNode(host, 'src/modules/alpha/a2.ts');
@@ -1793,84 +1788,50 @@ test('semantic zoom toggles the drawn hierarchy without re-laying it out', async
     ]);
   });
 
-  // The near level is the initial fit: entities and their UML edges are shown.
-  await waitFor(() => {
-    assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2');
-  });
   const svg = host.querySelector('svg');
   assert.ok(svg !== null);
   svg.setAttribute('data-lod-sentinel', 'kept');
-  const entityEdges = [...host.querySelectorAll('.uml-edge')];
-  assert.ok(entityEdges.length >= 2);
-  for (const edge of entityEdges) {
-    assert.equal((edge as HTMLElement).style.display, '', 'entity edges are drawn at the near level');
-  }
+  const entityIds = drawnNodeIds(host);
+  assert.ok(entityIds.length >= 3);
 
-  // Zoom out until the package level is crossed; the readout follows the
-  // debounced level, not every wheel tick.
+  // Zoom out until the drawing is at a deep semantic tier. The debounced
+  // application rewrites the geometry in place; it never swaps the SVG.
   for (let step = 0; step < 8; step += 1) {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
   }
   const scale = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  assert.ok(scale < SUBPACKAGE_MIN_SCALE, `the scale must reach the far band; got ${scale}`);
-  await waitFor(() => {
-    assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0');
-  });
+  assert.ok(scale < 0.6, `the scale must reach a semantic tier; got ${scale}`);
+  await waitFor(() => assert.ok(graphRoot().getAttribute('data-architecture-lod-depth') !== null));
 
-  for (const node of host.querySelectorAll('.uml-node')) {
-    assert.equal((node as HTMLElement).style.display, 'none', 'entities collapse at the package level');
-  }
-  for (const edge of host.querySelectorAll('.uml-edge')) {
-    assert.equal((edge as HTMLElement).style.display, 'none', 'entity UML edges are hidden at the package level');
-  }
-  const alphaLabel = [...host.querySelectorAll('.uml-package[data-package-id="src/modules/alpha"] text')]
-    .map((label) => label.textContent)
-    .join('');
-  assert.match(alphaLabel, /\(2\)$/, 'a collapsed package frame states its entity count');
-  const overlayEdges = [...host.querySelectorAll('[data-architecture-lod-edges] path.arch-lod-package-edge')];
-  assert.equal(overlayEdges.length, 1, 'the beta → alpha entity edge aggregates into one package edge');
-  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-source'), 'src/modules/beta');
-  assert.equal(overlayEdges[0].getAttribute('data-lod-edge-target'), 'src/modules/alpha');
-  assert.equal(
-    host.querySelector('svg'),
-    svg,
-    'crossing the level must only toggle display — never re-render the drawing',
-  );
+  assert.equal(host.querySelector('svg'), svg, 'the drawing element is the same one');
   assert.equal(svg.getAttribute('data-lod-sentinel'), 'kept');
+  assert.equal(
+    host.querySelector('[data-architecture-lod-labels]'),
+    null,
+    'the retired overlay title layer is gone',
+  );
+  // Every drawn entity keeps its stable id at every tier (tier C only hides
+  // the box; the contract element remains).
+  for (const id of entityIds) {
+    assert.ok(host.querySelector(`[data-entity-id="${id}"]`), `entity ${id} keeps its data-entity-id`);
+  }
+  assert.ok(host.querySelectorAll('.uml-package[data-package-id]').length >= 2);
 
-  // Zoom back in past the dead band: the same SVG expands back to entities.
+  // Zoom back in: the same drawing element, the same entity ids, and the
+  // package labels still carry their aggregate counts.
   for (let step = 0; step < 8; step += 1) {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
   }
-  assert.ok(Number(graphRoot().getAttribute('data-architecture-zoom-scale')) >= ENTITY_MIN_SCALE);
-  await waitFor(() => {
-    assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2');
-  });
-  assert.equal(host.querySelector('[data-architecture-lod-edges]'), null, 'the package overlay is removed');
-  for (const node of host.querySelectorAll('.uml-node')) {
-    assert.equal((node as HTMLElement).style.display, '', 'entities are visible again');
-  }
-  for (const edge of host.querySelectorAll('.uml-edge')) {
-    assert.equal((edge as HTMLElement).style.display, '', 'entity UML edges are visible again');
-  }
-  assert.equal(
-    [...host.querySelectorAll('.uml-package[data-package-id="src/modules/alpha"] text')]
-      .map((label) => label.textContent)
-      .join(''),
-    'src/modules/alpha',
-    'the collapsed count is restored',
-  );
-  assert.equal(host.querySelector('svg'), svg, 'still the same drawing after the round trip');
+  assert.ok(Number(graphRoot().getAttribute('data-architecture-zoom-scale')) >= 0.9);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
+  assert.equal(host.querySelector('svg'), svg, 'zooming back in still uses the same drawing');
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'zooming never refetches');
 });
 
-test('the explosion view lays the whole hierarchy out once and zoom reveals its levels', async () => {
+test('the semantic tier name changes with the zoom, and the package tabs carry counts', async () => {
   rememberShowAllFilter();
-  // The DoD gesture: one full-graph layout, then zoom alone moves from the
-  // package level to subpackages and entities — no re-layout in between.
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
-
   fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
   await waitFor(() => {
     assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy');
@@ -1881,251 +1842,71 @@ test('the explosion view lays the whole hierarchy out once and zoom reveals its 
       'src/modules/gamma/c.ts',
     ], 'the explosion view draws the whole graph, not one group');
   });
-
-  // The initial fit is the near level: entities and their UML edges are drawn,
-  // inside the package frames the same layout emitted.
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
-  for (const packageId of ['src/modules/alpha', 'src/modules/beta', 'src/modules/gamma']) {
-    assert.ok(host.querySelector(`.uml-package[data-package-id="${packageId}"]`), `frame ${packageId} is drawn`);
-  }
-  const svg = host.querySelector('svg');
-  assert.ok(svg !== null);
-  svg.setAttribute('data-lod-sentinel', 'kept');
+  const tierNames = new Set<string>();
+  const readTier = (): string => {
+    const label = host.parentElement?.querySelector('[data-architecture-lod-label]')
+      ?? document.querySelector('[data-architecture-lod-label]');
+    return label?.textContent ?? '';
+  };
+  tierNames.add(readTier());
+  assert.notEqual([...tierNames][0], '', 'the zoom readout states its tier');
 
   for (let step = 0; step < 8; step += 1) {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
   }
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
+  tierNames.add(readTier());
+  assert.ok(tierNames.size >= 2, `the tier name follows the zoom; saw ${[...tierNames].join(', ')}`);
 
-  // The three packages now show their counts and the two cross-package edges;
-  // the intra-alpha edge is not a package boundary.
-  const labels = [...host.querySelectorAll('.uml-package[data-package-id="src/modules/alpha"] text')]
+  // A package tab is the LAST path segment plus its entity count — the
+  // information the collapsed tier would otherwise hide.
+  const labels = [...host.querySelectorAll('.uml-package[data-package-id] text')]
     .map((label) => label.textContent)
-    .join('');
-  assert.match(labels, /\(2\)$/, 'the alpha frame states its two entities');
-  const packageEdges = [...host.querySelectorAll('[data-architecture-lod-edges] path.arch-lod-package-edge')]
-    .map((line) => `${line.getAttribute('data-lod-edge-source')}->${line.getAttribute('data-lod-edge-target')}`)
-    .sort();
-  assert.deepEqual(packageEdges, ['src/modules/beta->src/modules/alpha', 'src/modules/gamma->src/modules/beta']);
-  assert.equal(host.querySelector('svg'), svg, 'the explosion layout survives the level change');
-  assert.equal(svg.getAttribute('data-lod-sentinel'), 'kept');
-
-  for (let step = 0; step < 8; step += 1) {
-    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
-  }
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
-  assert.equal(host.querySelector('[data-architecture-lod-edges]'), null);
-  assert.deepEqual(drawnNodeIds(host), [
-    'src/modules/alpha/a.ts',
-    'src/modules/alpha/a2.ts',
-    'src/modules/beta/b.ts',
-    'src/modules/gamma/c.ts',
-  ]);
-  assert.equal(host.querySelector('svg'), svg, 'zooming back in still uses the same drawing');
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the explosion view never refetches');
-});
-
-/** Normalise a drawn package id the way the hierarchy index does, for comparison. */
-function normalizedPackageId(raw: string | null): string {
-  return (raw ?? '').trim().split('/').filter(Boolean).join('/');
-}
-
-/** A frame's own renderer label: its first direct `<text>` child. */
-function frameTextOf(frame: Element): Element | undefined {
-  return [...frame.children].find((child) => child.tagName.toLowerCase() === 'text');
-}
-
-/** The LOD edge width grows with weight and never leaves the 1–2.5px screen band. */
-test('the LOD edge width grows with weight and stays inside the screen band', () => {
-  const widths = [1, 4, 16, 1000].map((weight) => lodEdgeScreenWidth(weight));
-  assert.equal(widths[0], 1, 'a single relation is drawn 1px wide');
-  for (const width of widths) {
-    assert.ok(
-      width >= LOD_EDGE_MIN_SCREEN_PX && width <= LOD_EDGE_MAX_SCREEN_PX,
-      `every weight must stay inside the 1–2.5px screen band; got ${width}`,
-    );
-  }
-  for (let index = 1; index < widths.length; index += 1) {
-    assert.ok(
-      widths[index] >= widths[index - 1],
-      `the width must not shrink as weight grows: ${widths.join(', ')}`,
-    );
-  }
-  assert.equal(LOD_EDGE_MAX_SCREEN_PX, 2.5);
-  assert.equal(lodEdgeScreenWidth(16), 2.5, 'the log curve is capped at the band');
+    .join('|');
+  assert.match(labels, /alpha \(\d+\)/, 'the alpha tab states its entity count');
 });
 
 /**
- * The ghosting fix read from the real renderer's own frames: a frame whose
- * title the overlay draws must NOT also show the renderer's small label at the
- * same corner (that is the doubled title), a frame whose title the plan omitted
- * keeps its label, and the entity level restores every label and clears the
- * empty-frame class. The overlay edge furniture is read on the same drawing.
+ * The selection survives a semantic rewrite: the rewrite replaces the node
+ * GROUP'S children, so the panel must re-pin `arch-selected` on the same
+ * data-entity-id after every application. This is the "selection still targets
+ * the right entity after zooming" reading.
  */
-test('semantic zoom hides the label under its overlay title and restores it at the entity level', async () => {
+test('a pinned selection still marks the same entity after the geometry is rewritten', async () => {
   rememberShowAllFilter();
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   fireEvent.click(screen.getByRole('button', { name: 'Explosion view' }));
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/a.ts"]')));
+
+  const target = host.querySelector('[data-entity-id="src/modules/alpha/a.ts"]');
+  assert.ok(target !== null);
+  fireEvent.click(target);
+  await waitFor(() => assert.ok(
+    host.querySelector('.uml-node.arch-selected[data-entity-id="src/modules/alpha/a.ts"]'),
+    'the selected entity is marked',
+  ));
 
   for (let step = 0; step < 8; step += 1) {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
   }
   await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
-
-  const titles = [...host.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')];
-  assert.ok(titles.length > 0, 'the package level draws overlay titles to read');
-  const titled = new Set(titles.map((group) => normalizedPackageId(group.getAttribute('data-lod-label-package'))));
-
-  let untitledFrames = 0;
-  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
-    if ((frame as HTMLElement).style.display === 'none') continue;
-    const packageId = normalizedPackageId(frame.getAttribute('data-package-id'));
-    const label = frameTextOf(frame);
-    assert.ok(label !== undefined, `frame ${packageId} keeps its label element`);
-    if (titled.has(packageId)) {
-      assert.equal(
-        (label as HTMLElement).style.visibility,
-        'hidden',
-        `frame ${packageId} must not paint its own label under the overlay title`,
-      );
-      assert.ok(label.isConnected, 'the label is hidden, never removed — data-package-id stays intact');
-    } else {
-      untitledFrames += 1;
-      assert.notEqual(
-        (label as HTMLElement).style.visibility,
-        'hidden',
-        `frame ${packageId} got no overlay title, so its own label must stay readable`,
-      );
-    }
-  }
-  assert.ok(untitledFrames > 0, 'the fixture must exercise a frame whose title the plan omitted');
-
-  const edges = [...host.querySelectorAll('[data-architecture-lod-edges] path.arch-lod-package-edge')];
-  assert.ok(edges.length > 0, 'the package level draws its relation paths');
-  for (const edge of edges) {
-    assert.equal(
-      edge.getAttribute('vector-effect'),
-      'non-scaling-stroke',
-      'the LOD line width is a screen reading, not a world-unit one',
-    );
-    const width = Number(edge.getAttribute('stroke-width'));
-    assert.ok(
-      width >= LOD_EDGE_MIN_SCREEN_PX && width <= LOD_EDGE_MAX_SCREEN_PX,
-      `the LOD line must stay inside the screen band; got ${width}px`,
-    );
-  }
-
-  // Back at the entity level the renderer's own labels are the only labels
-  // again: every visibility override is gone and no frame stays de-emphasised.
   for (let step = 0; step < 8; step += 1) {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
   }
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '2'));
-  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
-    const label = frameTextOf(frame);
-    assert.ok(label !== undefined);
-    assert.equal((label as HTMLElement).style.visibility, '', 'the entity level restores the renderer label');
-    assert.equal(
-      frame.classList.contains(LOD_EMPTY_FRAME_CLASS),
-      false,
-      'the empty-frame class is removed when entities fill the frames again',
-    );
-  }
+  // Eight steps of 1.25× may still be below the top tier; the reading under
+  // test is the selection, not the exact tier.
+  assert.ok(
+    Number(graphRoot().getAttribute('data-architecture-zoom-scale')) > 0.5,
+    'the zoom returned to a readable scale',
+  );
+  assert.ok(
+    host.querySelector('.uml-node.arch-selected[data-entity-id="src/modules/alpha/a.ts"]'),
+    'the selection is re-pinned on the SAME entity after the rewrite',
+  );
 });
 
-/**
- * The weight label's halo and the empty-frame rule, on a synthetic drawing whose
- * geometry is stated rather than laid out: two entities in `src/a` both point at
- * `src/b`, so the collapsed edge is a ×2 line, and `src/a` contains a subpackage
- * frame while `src/b` is a leaf.
- */
-test('a collapsed ×N edge gets a background halo and only empty leaf frames are de-emphasised', () => {
-  const frame = (packageId: string, x: number, y: number, width: number, height: number): string =>
-    `<g class="uml-package" data-package-id="${packageId}">`
-    + `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="none" stroke="#333333"/>`
-    + `<text x="${x + 6}" y="${y + 13}" font-size="12">${packageId}</text>`
-    + '</g>';
-  const host = document.createElement('div');
-  host.innerHTML = `<svg viewBox="0 0 1600 800" width="1600" height="800">${
-    frame('src/a', 0, 0, 800, 600)
-  }${frame('src/a/deep', 20, 20, 300, 200)
-  }${frame('src/b', 1000, 0, 300, 200)
-  }<g class="uml-node" data-entity-id="src/a/x.ts" data-package-id="src/a">`
-    + '<rect x="40" y="40" width="100" height="40"/></g>'
-    + '<g class="uml-node" data-entity-id="src/a/y.ts" data-package-id="src/a">'
-    + '<rect x="40" y="100" width="100" height="40"/></g>'
-    + '<g class="uml-node" data-entity-id="src/b/z.ts" data-package-id="src/b">'
-    + '<rect x="1040" y="40" width="100" height="40"/></g>'
-    + '</svg>';
-  document.body.append(host);
-  const graph: ArchitectureRendererGraph = {
-    nodes: [
-      { id: 'src/a/x.ts', label: 'x', distance: 0 },
-      { id: 'src/a/y.ts', label: 'y', distance: 1 },
-      { id: 'src/b/z.ts', label: 'z', distance: 2 },
-    ],
-    edges: [
-      { from: 'src/a/x.ts', to: 'src/b/z.ts', relationType: 'call' },
-      { from: 'src/a/y.ts', to: 'src/b/z.ts', relationType: 'call' },
-    ],
-  };
-
-  try {
-    const hierarchy = buildExplosionHierarchy(host, graph);
-    applyExplosionLod({ host, hierarchy, edges: graph.edges, depth: PACKAGE_LOD_DEPTH, scale: 0.2 });
-
-    const overlay = [...host.querySelectorAll('[data-architecture-lod-edges] path.arch-lod-package-edge')];
-    assert.equal(overlay.length, 1, 'the two relations collapse onto one package pair');
-    assert.equal(overlay[0].getAttribute('data-lod-edge-weight'), '2');
-    assert.equal(overlay[0].getAttribute('vector-effect'), 'non-scaling-stroke');
-    assert.equal(
-      overlay[0].getAttribute('stroke-width'),
-      String(lodEdgeScreenWidth(2)),
-      'the drawn width is the weight curve, in screen px',
-    );
-
-    const weight = host.querySelector('.arch-lod-package-weight');
-    assert.ok(weight instanceof SVGElement, 'a weighted edge carries its ×N label');
-    assert.equal(weight.textContent, '×2');
-    assert.equal((weight as unknown as HTMLElement).style.paintOrder, 'stroke', 'the halo paints behind the glyphs');
-    assert.equal((weight as unknown as HTMLElement).style.strokeWidth, '3px', 'the halo is 3px wide');
-    assert.match(
-      (weight as unknown as HTMLElement).style.stroke,
-      /var\(--background/,
-      'the halo uses the canvas background colour',
-    );
-
-    // The frame carrying a visible subpackage frame keeps its weight; the two
-    // leaves, whose interiors are blank at this level, are de-emphasised.
-    const frameOf = (packageId: string): Element => {
-      const found = [...host.querySelectorAll('.uml-package[data-package-id]')]
-        .find((candidate) => candidate.getAttribute('data-package-id') === packageId);
-      assert.ok(found !== undefined, `frame ${packageId} must be drawn`);
-      return found;
-    };
-    assert.equal(frameOf('src/a').classList.contains(LOD_EMPTY_FRAME_CLASS), false,
-      'a frame that still contains a subpackage frame is not empty');
-    assert.equal(frameOf('src/a/deep').classList.contains(LOD_EMPTY_FRAME_CLASS), true,
-      'a leaf frame with no visible entity inside is empty');
-    assert.equal(frameOf('src/b').classList.contains(LOD_EMPTY_FRAME_CLASS), true,
-      'the other leaf is empty too');
-
-    // The ghosting rule on the same drawing: `src/a` got a title, `src/a/deep`
-    // did not (it would overlap), so exactly one of the two labels is hidden.
-    assert.equal((frameTextOf(frameOf('src/a')) as HTMLElement).style.visibility, 'hidden');
-    assert.notEqual((frameTextOf(frameOf('src/a/deep')) as HTMLElement).style.visibility, 'hidden');
-
-    applyExplosionLod({ host, hierarchy, edges: graph.edges, depth: ENTITY_LOD_DEPTH, scale: 1 });
-    for (const each of host.querySelectorAll('.uml-package[data-package-id]')) {
-      assert.equal(each.classList.contains(LOD_EMPTY_FRAME_CLASS), false);
-      assert.equal((frameTextOf(each) as HTMLElement).style.visibility, '');
-    }
-  } finally {
-    host.remove();
-  }
-});
 
 test('overview folds the graph into path groups; double-clicking a group expands it locally', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
@@ -2466,22 +2247,31 @@ test('the class view opens on the entities themselves: no directory boxes, reada
     'the unmeasured default is natural size',
   );
 
-  // Zooming out folds the SAME drawing: entity boxes hide, package frames keep
+  // Zooming out folds the SAME drawing: the tier is decided by the stretch
+  // budget (B keeps the frames, C keeps only packages), package tabs keep
   // their entity counts, and the SVG is never replaced.
   const svg = host.querySelector('svg');
   assert.ok(svg !== null);
   for (let step = 0; step < 8; step += 1) {
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
   }
-  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-lod-depth'), '0'));
-  for (const node of host.querySelectorAll('.uml-node')) {
-    assert.equal((node as HTMLElement).style.display, 'none', 'entity boxes collapse at the package level');
+  await waitFor(() => assert.ok(graphRoot().getAttribute('data-architecture-lod-depth') !== null));
+  const deepDepth = graphRoot().getAttribute('data-architecture-lod-depth');
+  // The tier is decided by the STRETCH BUDGET, not by a scale threshold: a
+  // small drawing whose boxes still fit their floor text stays at tier A even
+  // at a deep zoom, and that is correct — the old depth-triggered hiding is
+  // what this task removes.
+  assert.ok(deepDepth === '0' || deepDepth === '1' || deepDepth === '2');
+  if (deepDepth === '0') {
+    for (const node of host.querySelectorAll('.uml-node')) {
+      assert.equal((node as HTMLElement).style.display, 'none', 'entity boxes collapse at the package tier');
+    }
   }
   const alphaLabel = [...host.querySelectorAll('.uml-package[data-package-id="modules/alpha"] text')]
     .map((label) => label.textContent)
     .join('');
-  assert.match(alphaLabel, /\(4\)$/, 'the collapsed package states its entity count');
-  assert.equal(host.querySelector('svg'), svg, 'the class drawing is toggled, never re-laid out');
+  assert.match(alphaLabel, /\(4\)/, 'the package tab states its entity count');
+  assert.equal(host.querySelector('svg'), svg, 'the class drawing is rewritten, never re-laid out');
 });
 
 test('only a direct mention carries the seed marker; name/file tiers and old payloads are read correctly', async () => {
@@ -5312,15 +5102,27 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
   // The zoom is CENTRED on that package: the scroll offsets are the frame's
   // centre at the applied scale, brought to the middle of the content box.
   const applied = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
-  const frameRect = [...frame.children].find((child) => child.tagName.toLowerCase() === 'rect');
+  // The semantic rewrite replaces the frame's SVG element, so re-read it from
+  // the drawing that is now on screen (same package id, new geometry).
+  const frameNow = host.querySelector(`.uml-package[data-package-id="${frame.getAttribute('data-package-id')}"]`);
+  assert.ok(frameNow instanceof Element, 'the tapped package is still drawn after the rewrite');
+  const frameRect = [...frameNow.children].find((child) => child.tagName.toLowerCase() === 'rect');
   assert.ok(frameRect instanceof Element, 'the package frame carries its geometry on a rect');
   const [fx, fy, fw, fh] = ['x', 'y', 'width', 'height']
     .map((name) => Number(frameRect.getAttribute(name)));
   const originParts = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
   const originX = Number.isFinite(originParts[0]) ? originParts[0] : 0;
   const originY = Number.isFinite(originParts[1]) ? originParts[1] : 0;
-  const expectedLeft = Math.max(0, (fx - originX) * applied + (fw * applied) / 2 - host.clientWidth / 2);
-  const expectedTop = Math.max(0, (fy - originY) * applied + (fh * applied) / 2 - host.clientHeight / 2);
+  // In semantic mode the frame's attributes are ALREADY screen units (the map
+  // is baked into the geometry and the SVG is shown 1:1), so the expected
+  // scroll is the frame centre without applying the zoom factor again.
+  const semantic = svg.getAttribute('data-architecture-semantic') !== null;
+  const expectedLeft = semantic
+    ? Math.max(0, fx - originX + fw / 2 - host.clientWidth / 2)
+    : Math.max(0, (fx - originX) * applied + (fw * applied) / 2 - host.clientWidth / 2);
+  const expectedTop = semantic
+    ? Math.max(0, fy - originY + fh / 2 - host.clientHeight / 2)
+    : Math.max(0, (fy - originY) * applied + (fh * applied) / 2 - host.clientHeight / 2);
   assert.ok(
     Math.abs(host.scrollLeft - expectedLeft) < 0.5,
     `the package must be centred horizontally; got ${host.scrollLeft}, expected ${expectedLeft}`,

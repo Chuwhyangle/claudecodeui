@@ -106,9 +106,9 @@
       "classDiagram": "Sınıf diyagramı",
       "backTo": "{{view}} görünümüne dön",
       "lod": {
-        "packages": "Paketler",
-        "subpackages": "Alt paketler",
-        "entities": "Varlıklar"
+        "tierNames": "Adlar",
+        "tierFrames": "Çerçeveler",
+        "tierPackages": "Paketler"
       },
       "explosion": "Patlama görünümü",
       "drillIn": "İçine gir",

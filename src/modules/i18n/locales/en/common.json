@@ -142,9 +142,9 @@
       "back": "Back to overview",
       "error": "The diagram could not be rendered: {{message}}",
       "lod": {
-        "packages": "Packages",
-        "subpackages": "Subpackages",
-        "entities": "Entities"
+        "tierNames": "Names",
+        "tierFrames": "Frames",
+        "tierPackages": "Packages"
       },
       "explosion": "Explosion view",
       "drillIn": "Drill in",

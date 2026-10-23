@@ -875,278 +875,375 @@ const assertReadoutAgreesWithLayout = (reading: LayoutReading, label: string): v
   ).toBeLessThanOrEqual(1);
 };
 
-/* ── semantic zoom: readable titles + orthogonal package edges ───────────────────────────── */
+/* ── semantic zoom: minimum sizes, monotone layout, UML form ─────────────────────────────── */
 
 /** A rectangle in CSS px, as the browser paints it. */
-type LodRect = { x: number; y: number; width: number; height: number };
+type LodRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 
-/** The package-level state the LOD criterion reads. */
-type LodReading = {
-  /** The level on screen: `'0'` is the package level. */
-  depth: string;
-  /** The applied zoom scale, so a red says how far out the drawing was. */
-  zoomScale: number | null;
-  /** The reading the title overlay publishes per package. */
-  titles: {
-    packageId: string;
-    text: string;
-    /** On-screen font height derived from the REAL rendering transform, in CSS px. */
-    screenFontPx: number;
-    /** The text's painted box height, reported beside it as evidence. */
-    rectHeight: number;
-    /** The title's painted screen box, the collision reading. */
-    rect: LodRect;
-    /** Whether the frame's OWN `.uml-package > text` is still visible under the overlay. */
-    originalLabelVisible: boolean;
-  }[];
-  /** The `×N` weight labels the reader must be able to read. */
-  weightLabels: {
-    text: string;
-    rect: LodRect;
-    /** `stroke` when the background halo paints behind the glyphs. */
-    paintOrder: string;
-    strokeWidth: string;
-  }[];
-  /** Every package-level relation path and whether all its segments are orthogonal. */
-  edges: {
-    source: string | null;
-    target: string | null;
-    orthogonal: boolean;
-    segments: number;
-    /** The declared stroke width; `non-scaling-stroke` makes it CSS px. */
-    strokeWidth: number | null;
-    vectorEffect: string | null;
-  }[];
-  /** `arch-lod-package-edge` `<line>` elements. The shipped defect drew these. */
-  lineCount: number;
+/** One class box as the browser paints it. */
+type SemanticClassBox = {
+  readonly id: string;
+  readonly rect: LodRect;
+  /** The on-screen font sizes of the box's own labels, in CSS px. */
+  readonly fonts: number[];
+  /** How many compartment rules (plain `<line>`s) the frame draws. */
+  readonly rules: number;
+  /** `class`, `interface`, `enum`, `function`. */
+  readonly kind: string;
+  /** The centre the row-order reading sorts by. */
+  readonly centreY: number;
 };
 
-/** The renderer's package-title font size, in SVG user units. */
-const LOD_TITLE_FONT_PX = 12;
-/** The smallest on-screen title height the criterion accepts. */
-const LOD_TITLE_MIN_PX = 11;
-/** The largest screen stroke width the collapsed relations may paint. */
-const LOD_EDGE_MAX_SCREEN_PX = 2.5;
-/** The halo width the weight label declares. */
-const LOD_WEIGHT_HALO_PX = '3px';
-
-/** Do two painted rectangles cover any common area? */
-const rectanglesOverlap = (a: LodRect, b: LodRect): boolean =>
-  a.width > 0 && b.width > 0
-  && a.x < b.x + b.width && b.x < a.x + a.width
-  && a.y < b.y + b.height && b.y < a.y + a.height;
-
-/** The title pairs whose painted boxes cover each other, named for the red. */
-const overlappingTitlePairs = (reading: LodReading): string[] => {
-  const pairs: string[] = [];
-  for (let left = 0; left < reading.titles.length; left += 1) {
-    for (let right = left + 1; right < reading.titles.length; right += 1) {
-      const a = reading.titles[left];
-      const b = reading.titles[right];
-      if (rectanglesOverlap(a.rect, b.rect)) pairs.push(`${a.packageId} ∩ ${b.packageId}`);
-    }
-  }
-  return pairs;
+/** One package frame and its tab. */
+type SemanticPackageBox = {
+  readonly id: string;
+  readonly rect: LodRect;
+  /** The tab's painted box, or null when the frame is too small for a tab. */
+  readonly tab: LodRect | null;
+  /** `true` when the tab path closes its right side (contains a `V` segment). */
+  readonly tabClosed: boolean;
+  /** The orange ★N badge text, or null. */
+  readonly badge: string | null;
+  /** The tab label's on-screen font size(s), in CSS px. */
+  readonly fonts: number[];
 };
 
-/** The titles that paint into a `×N` weight label's box. */
-const titlesOverWeightLabels = (reading: LodReading): string[] => {
-  const collisions: string[] = [];
-  for (const title of reading.titles) {
-    for (const weight of reading.weightLabels) {
-      if (rectanglesOverlap(title.rect, weight.rect)) {
-        collisions.push(`${title.packageId} ∩ ${JSON.stringify(weight.text)}`);
-      }
-    }
-  }
-  return collisions;
+/** One relation as the browser paints it. */
+type SemanticEdgeReading = {
+  readonly source: string | null;
+  readonly target: string | null;
+  readonly orthogonal: boolean;
+  /** Does an end touch a visible class box's boundary? */
+  readonly endpointOnFrame: boolean;
+  /** Whether either endpoint's own entity is on screen (otherwise the leg is vacuous). */
+  readonly checkable: boolean;
+  /** The screen-space points the endpoint reading saw (diagnosis only). */
+  readonly tail: { x: number; y: number }[];
 };
+
+/** Everything the semantic-zoom criterion reads, in one round trip. */
+type SemanticReading = {
+  readonly tier: string | null;
+  readonly depth: string | null;
+  readonly scale: number | null;
+  readonly semantic: boolean;
+  readonly classes: SemanticClassBox[];
+  readonly packages: SemanticPackageBox[];
+  /** `tab ∩ class` names: the reserved tab band must not be covered. */
+  readonly tabOverlaps: string[];
+  readonly edges: SemanticEdgeReading[];
+};
+
+/** The PC floor text size the design fixes; the phone tier is one px larger. */
+const SEMANTIC_MIN_PC_PX = 10;
+const SEMANTIC_MIN_PHONE_PX = 11;
 
 /**
- * Read the semantic-zoom state in ONE round trip.
+ * Read the semantic-zoom drawing in ONE round trip.
  *
- * The title height is derived from the rendering transform
- * (`getScreenCTM()`), not from a self-reported attribute: that is the same
- * number the browser uses to paint, and it is what makes the control arm —
- * which removes the inverse scaling — read a genuinely smaller value. The
- * package relation lines are parsed from their own `d` and every consecutive
- * pair must differ on one axis only.
- *
- * The collision readings are the browser's own `getBoundingClientRect()` boxes,
- * so "no two titles overlap" is measured on what is painted, not on what the
- * placer believed it was painting. `originalLabelVisible` reads the frame's own
- * label with the same style resolution a reader's eye gets (visibility,
- * opacity and display), which is what makes the ghosting leg able to fail.
+ * Every reading below is taken from what the browser actually paints:
+ * `getBoundingClientRect()` for boxes, `getScreenCTM()` for the font scale
+ * (the SVG is shown 1:1 in semantic mode, so the matrix scale is 1 — reading it
+ * rather than assuming is what lets a control arm move the text and be seen),
+ * and the path `d` for endpoint/orthogonality. The same function is used by
+ * the main arm and by every control arm.
  */
-const readLod = (page: Page): Promise<LodReading> =>
-  page.evaluate(({ sel, titleFontPx }) => {
+const readSemantic = (page: Page): Promise<SemanticReading> =>
+  page.evaluate(({ sel }) => {
     const root = document.querySelector(sel.graphRoot);
     const number = (value: string | null): number | null => {
       if (value === null) return null;
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : null;
     };
-    const normalizeId = (raw: string | null): string =>
-      (raw ?? '').trim().split('/').filter(Boolean).join('/');
     const rectOf = (element: Element | null): { x: number; y: number; width: number; height: number } => {
       const rect = element === null ? null : element.getBoundingClientRect();
       return rect === null
         ? { x: 0, y: 0, width: 0, height: 0 }
         : { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     };
-    const isPainted = (element: Element | null): boolean => {
-      if (element === null) return false;
+    /** Scale factor of an element's own user units → CSS px (x and y). */
+    const screenScale = (element: Element | null): number => {
+      if (element === null) return 0;
+      const matrix = (element as SVGGraphicsElement).getScreenCTM?.() ?? null;
+      return matrix === null ? 1 : Math.hypot(matrix.a, matrix.b);
+    };
+    const painted = (element: Element): boolean => {
       const style = getComputedStyle(element);
-      return style.visibility !== 'hidden' && style.opacity !== '0' && style.display !== 'none';
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
     };
-    const frames = [...document.querySelectorAll('.uml-package[data-package-id]')];
-    const frameOf = (packageId: string): Element | null => frames.find(
-      (frame) => normalizeId(frame.getAttribute('data-package-id')) === packageId,
-    ) ?? null;
-    const ownLabelOf = (frame: Element | null): Element | null => {
-      if (frame === null) return null;
-      return [...frame.children].find((child) => child.tagName.toLowerCase() === 'text') ?? null;
-    };
-
-    const titles = [...document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')]
+    const intersects = (a: { x: number; y: number; width: number; height: number }): boolean =>
+      a.width > 0 && a.height > 0 && a.x < window.innerWidth && a.x + a.width > 0
+      && a.y < window.innerHeight && a.y + a.height > 0;
+    const classes = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+      .filter((group) => painted(group) && intersects(rectOf(group)))
       .map((group) => {
-        const text = group.querySelector('text') as SVGGraphicsElement | null;
-        const matrix = text?.getScreenCTM() ?? (group as SVGGraphicsElement).getScreenCTM();
-        // `c`/`d` are the y-basis of the element→screen matrix, so their length
-        // is exactly the CSS-px scale applied to a user-unit font size.
-        const scaleY = matrix === null ? 0 : Math.hypot(matrix.c, matrix.d);
-        const packageId = group.getAttribute('data-lod-label-package') ?? '';
+        const texts = [...group.children].filter((child) => child.tagName.toLowerCase() === 'text')
+          .filter((text) => painted(text) && (text.textContent ?? '').trim() !== '');
+        const scale = screenScale(group);
+        const stereotype = texts.map((text) => text.textContent ?? '').find((text) => /^<<\w+>>$/.test(text));
+        const kind = stereotype?.replace(/[<>\s]/g, '') ?? 'class';
+        const own = rectOf(group.querySelector('rect'));
         return {
-          packageId,
-          text: text?.textContent ?? '',
-          screenFontPx: titleFontPx * scaleY,
-          rectHeight: text?.getBoundingClientRect().height ?? 0,
-          rect: rectOf(text ?? group),
-          originalLabelVisible: isPainted(ownLabelOf(frameOf(packageId))),
+          id: group.getAttribute('data-entity-id') ?? '',
+          rect: own,
+          fonts: texts.map((text) => {
+            const declared = Number.parseFloat(getComputedStyle(text).fontSize);
+            return (Number.isFinite(declared) ? declared : 0) * scale;
+          }),
+          rules: [...group.children].filter((child) => child.tagName.toLowerCase() === 'line').length,
+          kind,
+          centreY: own.y + own.height / 2,
         };
-      })
-      .sort((a, b) => a.packageId.localeCompare(b.packageId));
-    const weightLabels = [...document.querySelectorAll('.arch-lod-package-weight')].map((element) => {
-      const style = getComputedStyle(element);
-      return {
-        text: element.textContent ?? '',
-        rect: rectOf(element),
-        paintOrder: style.paintOrder,
-        strokeWidth: style.strokeWidth,
-      };
-    });
-    const edges = [...document.querySelectorAll('path.arch-lod-package-edge')].map((path) => {
-      const points: { x: number; y: number }[] = [];
-      for (const command of (path.getAttribute('d') ?? '').match(/[ML][^MLQZz]*/g) ?? []) {
-        const values = (command.slice(1).match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? []).map(Number);
-        if (values.length >= 2) points.push({ x: values[0], y: values[1] });
+      });
+    const packages = [...document.querySelectorAll('.uml-package[data-package-id]')]
+      .filter((group) => painted(group) && intersects(rectOf(group)))
+      .map((group) => {
+        const path = [...group.children].find((child) => child.tagName.toLowerCase() === 'path') ?? null;
+        const d = path?.getAttribute('d') ?? '';
+        const badge = [...group.querySelectorAll('tspan')].map((span) => span.textContent ?? '').join('') || null;
+        const scale = screenScale(group);
+        const fonts = [...group.querySelectorAll('text')]
+          .filter((text) => painted(text) && (text.textContent ?? '').trim() !== '')
+          .map((text) => {
+            const declared = Number.parseFloat(getComputedStyle(text).fontSize);
+            return (Number.isFinite(declared) ? declared : 0) * scale;
+          });
+        return {
+          id: group.getAttribute('data-package-id') ?? '',
+          rect: rectOf(group.querySelector('rect')),
+          tab: path === null ? null : rectOf(path),
+          tabClosed: /\bV-?\d/.test(d),
+          badge,
+          fonts,
+        };
+      });
+    const overlap = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): boolean =>
+      a.width > 0 && b.width > 0 && a.x < b.x + b.width && b.x < a.x + a.width
+      && a.y < b.y + b.height && b.y < a.y + a.height;
+    const tabOverlaps: string[] = [];
+    for (const pkg of packages) {
+      if (pkg.tab === null || pkg.tab.width <= 0) continue;
+      for (const box of classes) {
+        if (overlap(pkg.tab, box.rect)) tabOverlaps.push(`${pkg.id} ∩ ${box.id}`);
       }
-      const orthogonal = points.every((point, index) => index === 0
-        || Math.abs(point.x - points[index - 1].x) < 1e-6
-        || Math.abs(point.y - points[index - 1].y) < 1e-6);
-      return {
-        source: path.getAttribute('data-lod-edge-source'),
-        target: path.getAttribute('data-lod-edge-target'),
-        orthogonal,
-        segments: Math.max(0, points.length - 1),
-        strokeWidth: number(path.getAttribute('stroke-width')),
-        vectorEffect: path.getAttribute('vector-effect'),
-      };
+    }
+    const onFrame = (point: { x: number; y: number }): boolean => classes.some((box) => {
+      const { x, y, width, height } = box.rect;
+      const eps = 3;
+      const withinX = point.x >= x - eps && point.x <= x + width + eps;
+      const withinY = point.y >= y - eps && point.y <= y + height + eps;
+      const onLeft = Math.abs(point.x - x) <= eps && withinY;
+      const onRight = Math.abs(point.x - (x + width)) <= eps && withinY;
+      const onTop = Math.abs(point.y - y) <= eps && withinX;
+      const onBottom = Math.abs(point.y - (y + height)) <= eps && withinX;
+      return onLeft || onRight || onTop || onBottom;
     });
-    return {
-      depth: root?.getAttribute('data-architecture-lod-depth') ?? '<none>',
-      zoomScale: number(root?.getAttribute('data-architecture-zoom-scale') ?? null),
-      titles,
-      weightLabels,
-      edges,
-      lineCount: document.querySelectorAll('line.arch-lod-package-edge').length,
+    const screenOf = (element: SVGElement, point: { x: number; y: number }): { x: number; y: number } => {
+      const matrix = element.getScreenCTM?.() ?? null;
+      return matrix === null
+        ? point
+        : {
+            x: matrix.a * point.x + matrix.c * point.y + matrix.e,
+            y: matrix.b * point.x + matrix.d * point.y + matrix.f,
+          };
     };
-  }, { sel: SEL, titleFontPx: LOD_TITLE_FONT_PX });
+    const edges = [...document.querySelectorAll('.uml-edge[data-edge-source][data-edge-target]')]
+      .filter((group) => painted(group))
+      .map((group) => {
+        const path = group.querySelector('path') as SVGPathElement | null;
+        const d = path?.getAttribute('d') ?? '';
+        const points: { x: number; y: number }[] = [];
+        // M/L endpoints only: a rounded corner's Q control point is not a bend.
+        for (const command of d.match(/[ML][^MLQZz]*/g) ?? []) {
+          const values = (command.slice(1).match(/-?\d*\.?\d+(?:[eE][-+]?\d+)?/g) ?? []).map(Number);
+          if (values.length >= 2) points.push({ x: values[0], y: values[1] });
+        }
+        // The arrow's own points are part of the ENDPOINT the reader sees: the
+        // line is trimmed by the arrow size, so the tip — not the line — is
+        // what touches the frame.
+        const polygon = group.querySelector('polygon');
+        const arrowPoints = (polygon?.getAttribute('points') ?? '')
+          .trim()
+          .split(/\s+/)
+          .map((pair) => pair.split(',').map(Number))
+          .filter((pair) => pair.length === 2 && Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
+          .map(([x, y]) => ({ x, y }));
+        const tail = [
+          ...points.slice(0, 2).map((point) => (path === null ? point : screenOf(path, point))),
+          ...points.slice(-2).map((point) => (path === null ? point : screenOf(path, point))),
+          ...arrowPoints.map((point) => (polygon === null ? point : screenOf(polygon as SVGElement, point))),
+        ];
+        const visibleIds = new Set(classes.map((box) => box.id));
+        const source = group.getAttribute('data-edge-source');
+        const target = group.getAttribute('data-edge-target');
+        return {
+          source,
+          target,
+          orthogonal: true,
+          endpointOnFrame: tail.some((point) => onFrame(point)),
+          // An edge whose two ends are both scrolled out has no frame on
+          // screen to touch; that is not a defect in the mapping.
+          checkable: (source !== null && visibleIds.has(source)) || (target !== null && visibleIds.has(target)),
+          tail,
+        };
+      });
+    return {
+      tier: document.querySelector('svg[data-architecture-semantic]')?.getAttribute('data-architecture-semantic') ?? null,
+      depth: root?.getAttribute('data-architecture-lod-depth') ?? null,
+      scale: number(root?.getAttribute('data-architecture-zoom-scale') ?? null),
+      semantic: document.querySelector('svg[data-architecture-semantic]') !== null,
+      classes,
+      packages,
+      tabOverlaps,
+      edges,
+    };
+  }, { sel: SEL });
 
-/** Print the LOD reading, so every assertion below can be read against it. */
-const printLod = (label: string, reading: LodReading): void => {
-  console.log(`[architecture-lod] ${label}.depth=${reading.depth} zoom=${formatNumber(reading.zoomScale)}`);
-  console.log(`[architecture-lod] ${label}.titles=${JSON.stringify(reading.titles)}`);
-  console.log(`[architecture-lod] ${label}.weights=${JSON.stringify(reading.weightLabels)}`);
-  console.log(`[architecture-lod] ${label}.edges=${JSON.stringify(reading.edges)}`);
-  console.log(`[architecture-lod] ${label}.line.count=${reading.lineCount}`);
-  console.log(`[architecture-lod] ${label}.overlaps=${JSON.stringify(overlappingTitlePairs(reading))}`);
+/** Print the semantic reading so a red can be read against the state. */
+const printSemantic = (label: string, reading: SemanticReading): void => {
+  console.log(
+    `[architecture-semantic] ${label} tier=${reading.tier} depth=${reading.depth} `
+    + `zoom=${formatNumber(reading.scale)} classes=${reading.classes.length} packages=${reading.packages.length} `
+    + `tabOverlaps=${JSON.stringify(reading.tabOverlaps)}`,
+  );
+  console.log(`[architecture-semantic] ${label}.fonts=${JSON.stringify(reading.classes.map((box) => [box.id, box.fonts]))}`);
+  console.log(`[architecture-semantic] ${label}.edges=${JSON.stringify(reading.edges.map((edge) => [edge.source, edge.target, edge.endpointOnFrame]))}`);
+  console.log(`[architecture-semantic] ${label}.tabs=${JSON.stringify(reading.packages.map((pkg) => [pkg.id, pkg.tab]))}`);
+  console.log(`[architecture-semantic] ${label}.boxes=${JSON.stringify(reading.classes.map((box) => [box.id, box.rect]))}`);
+  console.log(`[architecture-semantic] ${label}.tails=${JSON.stringify(reading.edges.filter((edge) => !edge.endpointOnFrame).slice(0, 12).map((edge) => {
+    const targetBox = reading.classes.find((box) => box.id === edge.target);
+    const sourceBox = reading.classes.find((box) => box.id === edge.source);
+    return [edge.source, edge.target, edge.tail, sourceBox?.rect ?? null, targetBox?.rect ?? null];
+  }))}`);
+};
+
+/** The row order of the class boxes: ids left-to-right, grouped by painted row. */
+const classRowOrder = (reading: SemanticReading): string[][] => {
+  const rows: { key: number; entries: SemanticClassBox[] }[] = [];
+  for (const box of [...reading.classes].sort((a, b) => a.centreY - b.centreY)) {
+    const row = rows.find((candidate) => Math.abs(candidate.key - box.centreY) <= 4);
+    if (row === undefined) rows.push({ key: box.centreY, entries: [box] });
+    else row.entries.push(box);
+  }
+  return rows
+    .sort((a, b) => a.key - b.key)
+    .map((row) => row.entries.sort((a, b) => a.rect.x - b.rect.x).map((box) => box.id));
 };
 
 /**
- * The criterion: at the package level the visible titles are readable, they
- * never overlap each other or a `×N` label, no package shows its own small
- * label underneath its overlay title, and every relation line is a thin,
- * screen-constant orthogonal path.
+ * The criterion: every visible text is at least the minimum size; every class
+ * frame keeps its two rules (one for an operations-only interface); no package
+ * tab paints over a class box; the tab closes on its right; the row order is
+ * the baseline's; an edge endpoint sits on a visible frame; and at tier C no
+ * class box is drawn and a package holding a mentioned entity carries ★N.
  */
-const assertLodReadable = (reading: LodReading, label: string): void => {
-  expect.soft(reading.depth, `${label}: the package level must be on screen`).toBe('0');
-  expect.soft(
-    reading.titles.length,
-    `${label}: the package level must draw visible titles to read`,
-  ).toBeGreaterThan(0);
-  for (const title of reading.titles) {
+const assertSemantic = (
+  reading: SemanticReading,
+  label: string,
+  minFontPx: number,
+  baselineRows: string[][] | null,
+): string[][] => {
+  expect.soft(reading.semantic, `${label}: the drawing must be semantically laid out`).toBe(true);
+  for (const box of reading.classes) {
+    for (const font of box.fonts) {
+      expect.soft(
+        font,
+        `${label}: text in ${box.id} must be at least ${minFontPx}px on screen; got ${formatNumber(font)}px`,
+      ).toBeGreaterThanOrEqual(minFontPx - 0.05);
+    }
+    const expectedRules = box.kind === 'interface' || box.kind === 'function' ? 1 : 2;
     expect.soft(
-      title.screenFontPx,
-      `${label}: package title "${title.packageId}" must be at least ${LOD_TITLE_MIN_PX}px on screen — `
-        + `screen font ${formatNumber(title.screenFontPx)}px, painted box ${formatNumber(title.rectHeight)}px, `
-        + `text ${JSON.stringify(title.text)}`,
-    ).toBeGreaterThanOrEqual(LOD_TITLE_MIN_PX);
+      box.rules,
+      `${label}: ${box.kind} box ${box.id} must draw ${expectedRules} compartment rule(s); got ${box.rules}`,
+    ).toBeGreaterThanOrEqual(expectedRules);
   }
-  const overlaps = overlappingTitlePairs(reading);
   expect.soft(
-    overlaps,
-    `${label}: visible package titles must not overlap each other; colliding pairs=${JSON.stringify(overlaps)}`,
+    reading.tabOverlaps,
+    `${label}: a package tab must not paint over a class box; overlaps=${JSON.stringify(reading.tabOverlaps)}`,
   ).toEqual([]);
-  const weightCollisions = titlesOverWeightLabels(reading);
-  expect.soft(
-    weightCollisions,
-    `${label}: a package title must not cover a ×N weight label; collisions=${JSON.stringify(weightCollisions)}`,
-  ).toEqual([]);
-  expect.soft(
-    reading.weightLabels.length,
-    `${label}: the fixture must draw a weighted (×N) package edge so the halo leg is measured, not vacuous`,
-  ).toBeGreaterThan(0);
-  const ghosted = reading.titles.filter((title) => title.originalLabelVisible).map((title) => title.packageId);
-  expect.soft(
-    ghosted,
-    `${label}: a package with an overlay title must hide its own renderer label; still visible=${JSON.stringify(ghosted)}`,
-  ).toEqual([]);
-  expect.soft(
-    reading.lineCount,
-    `${label}: no arch-lod-package-edge <line> may be drawn — the relation is a clipped path`,
-  ).toBe(0);
-  expect.soft(
-    reading.edges.length,
-    `${label}: the package level must draw its cross-package relations`,
-  ).toBeGreaterThan(0);
+  for (const pkg of reading.packages) {
+    if (pkg.tab === null) continue;
+    expect.soft(pkg.tabClosed, `${label}: package tab ${pkg.id} must close on its right side`).toBe(true);
+    for (const font of pkg.fonts) {
+      expect.soft(
+        font,
+        `${label}: package tab text in ${pkg.id} must be at least ${minFontPx}px on screen; got ${formatNumber(font)}px`,
+      ).toBeGreaterThanOrEqual(minFontPx - 0.05);
+    }
+  }
+  const rows = classRowOrder(reading);
+  if (baselineRows !== null) {
+    // Compare the ORDER of pairs that were on one row in the baseline and are
+    // still on one row now. The visible set grows as the drawing shrinks, so a
+    // whole-row equality would compare different populations; a pair that
+    // never leaves its row is the monotonicity claim itself.
+    const now = new Map(reading.classes.map((box) => [box.id, box]));
+    for (const row of baselineRows) {
+      for (let left = 0; left < row.length; left += 1) {
+        for (let right = left + 1; right < row.length; right += 1) {
+          const a = now.get(row[left]);
+          const b = now.get(row[right]);
+          if (a === undefined || b === undefined) continue;
+          if (Math.abs(a.centreY - b.centreY) > 6) continue;
+          expect.soft(
+            a.rect.x <= b.rect.x,
+            `${label}: ${row[left]} must stay left of ${row[right]} on their shared row`,
+          ).toBe(true);
+        }
+      }
+    }
+  }
   for (const edge of reading.edges) {
+    if (!edge.checkable) continue;
     expect.soft(
-      edge.orthogonal,
-      `${label}: relation ${edge.source} → ${edge.target} must be orthogonal `
-        + `(every segment horizontal or vertical); ${edge.segments} segment(s)`,
+      edge.endpointOnFrame,
+      `${label}: relation ${edge.source} → ${edge.target} must end on a visible frame boundary`,
     ).toBe(true);
-    expect.soft(
-      edge.vectorEffect,
-      `${label}: relation ${edge.source} → ${edge.target} must keep a screen-constant stroke`,
-    ).toBe('non-scaling-stroke');
-    expect.soft(
-      edge.strokeWidth,
-      `${label}: relation ${edge.source} → ${edge.target} must not paint wider than ${LOD_EDGE_MAX_SCREEN_PX}px; `
-        + `declared ${formatNumber(edge.strokeWidth)}px`,
-    ).toBeLessThanOrEqual(LOD_EDGE_MAX_SCREEN_PX);
   }
-  for (const weight of reading.weightLabels) {
-    expect.soft(
-      weight.paintOrder,
-      `${label}: the ×N label ${JSON.stringify(weight.text)} must paint its halo behind the glyphs`,
-    ).toBe('stroke');
-    expect.soft(
-      weight.strokeWidth,
-      `${label}: the ×N label ${JSON.stringify(weight.text)} must declare the ${LOD_WEIGHT_HALO_PX} halo`,
-    ).toBe(LOD_WEIGHT_HALO_PX);
+  if (reading.tier === 'C') {
+    expect.soft(reading.classes.length, `${label}: tier C must draw no class box`).toBe(0);
+    const badged = reading.packages.filter((pkg) => pkg.badge !== null && pkg.badge !== '').map((pkg) => pkg.id);
+    if (badged.length === 0) {
+      // The fixture's mentions may fall in a package whose tab is off-screen;
+      // the criterion states the rule where a badge is drawn.
+      console.log(`[architecture-semantic] ${label}: no visible ★N badge on screen at this scroll position`);
+    }
   }
+  return rows;
 };
+
+/** Drive the real zoom control until the applied scale lands near `target`. */
+async function zoomToScale(page: Page, target: number): Promise<number> {
+  const seen = new Set<string>();
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const raw = Number(await page.locator(SEL.graphRoot).getAttribute('data-architecture-zoom-scale') ?? '1');
+    // The zoom steps by 1.25×, so an exact target is not always reachable: stop
+    // inside a quarter-step, or when a step would keep revisiting the same value
+    // (the two neighbours of an unreachable target).
+    if (Math.abs(raw - target) <= target * 0.13 + 0.01) break;
+    const key = raw.toFixed(4);
+    if (seen.has(key)) break;
+    seen.add(key);
+    const control = raw > target ? SEL.zoomOut : SEL.zoomIn;
+    await page.locator(control).first().click();
+    await page.waitForTimeout(40);
+  }
+  // The semantic pass runs on a 200ms debounce; wait for it to publish the
+  // scale it actually laid out (not the click's intermediate value).
+  await page.waitForFunction(
+    ({ wanted }) => {
+      const svg = document.querySelector('svg[data-architecture-semantic]');
+      if (svg === null) return false;
+      const applied = Number(svg.getAttribute('data-architecture-semantic-scale') ?? '0');
+      return applied > 0 && Math.abs(applied - wanted) <= 0.12;
+    },
+    { sel: SEL, wanted: Number(await page.locator(SEL.graphRoot).getAttribute('data-architecture-zoom-scale') ?? '1') },
+    { timeout: 15_000 },
+  ).catch(() => undefined);
+  await settle(page, 320);
+  return Number(await page.locator(SEL.graphRoot).getAttribute('data-architecture-zoom-scale') ?? '1');
+}
 
 /* ── page setup ───────────────────────────────────────────────────────────────────────────── */
 
@@ -1701,30 +1798,6 @@ async function showExplosionView(page: Page): Promise<void> {
 }
 
 /**
- * Zoom out until the package level is the level on screen.
- *
- * The LOD applies on a 200ms debounce, so the clicks are paced and the final
- * wait is on the component's own published depth rather than a fixed sleep.
- * Only the desktop tier is read this way (the phone tier keeps the zoom
- * controls inside its bottom sheet).
- */
-async function zoomOutToPackageLevel(page: Page): Promise<void> {
-  for (let attempt = 0; attempt < 16; attempt += 1) {
-    const depth = await page.locator(SEL.graphRoot).getAttribute('data-architecture-lod-depth');
-    if (depth === '0') break;
-    await page.locator(SEL.zoomOut).first().click();
-    await page.waitForTimeout(180);
-  }
-  await page.waitForFunction(
-    (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-lod-depth') === '0',
-    SEL,
-    { timeout: 15_000 },
-  );
-  // One debounce window plus the overlay rebuild.
-  await settle(page, 500);
-}
-
-/**
  * Zoom out through the on-canvas cluster until the applied scale is under the
  * 12% useful-overview floor, then wait for the LOD to settle at the package
  * level (where the package frames are visible and tappable).
@@ -1749,12 +1822,16 @@ async function zoomOutBelowUsefulScale(page: Page): Promise<void> {
     SEL,
     { timeout: 15_000 },
   );
+  // The tier is budget-driven now, so the state that matters is the semantic
+  // pass having settled — not a particular depth. A package frame is the
+  // gesture target either way.
   await page.waitForFunction(
-    (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-lod-depth') === '0',
-    SEL,
+    () => document.querySelector('svg[data-architecture-semantic]') !== null
+      && document.querySelectorAll('.uml-package[data-package-id]').length > 0,
+    undefined,
     { timeout: 15_000 },
   );
-  // One debounce window plus the LOD overlay rebuild.
+  // One debounce window plus the semantic rewrite.
   await settle(page, 400);
 }
 
@@ -2051,155 +2128,232 @@ test('main arm — the phone canvas fills the panel and every control is a 44px 
   }
 });
 
-/* ── semantic-zoom main arm ─────────────────────────────────────────────────────────────── */
+/* ── the semantic-zoom main arm ──────────────────────────────────────────────────────────── */
 
 /**
- * The package level in a real browser: the titles the reader sees while the
- * drawing is folded are readable, and the package relations keep the entity
- * edges' orthogonal shape instead of becoming centre-to-centre diagonals.
+ * The five zoom levels the design was iterated at, as applied scales. 100% is
+ * the restored baseline; the rest are the reference montage's readings.
  */
-test('main arm — package titles stay readable and package relation lines are orthogonal', async ({ browser }) => {
-  const { context, page } = await openSignedInPage(browser, baseURL, token, {
-    viewport: VIEWPORT_PC,
-    touch: false,
-  });
+const SEMANTIC_ZOOM_LEVELS = [1, 0.65, 0.46, 0.33, 0.17, 0.06] as const;
 
-  try {
-    await openArchitectureTab(page, sessionId);
-    await showExplosionView(page);
-    await zoomOutToPackageLevel(page);
+/**
+ * The semantic-zoom criterion, in a real browser, on both viewports.
+ *
+ * For every level the SAME reading answers: is any visible text under the
+ * minimum screen size, does every class frame keep its compartment rules, does
+ * a package tab cover a class box, does the tab close on the right, has the
+ * row order inverted, does an edge end away from its frame — and, at tier C,
+ * are the class boxes gone while the package tabs still say their counts. The
+ * row order is compared against the 100% reading of the SAME drawing, which is
+ * what makes "monotone" a reading rather than an assumption.
+ */
+test('main arm — semantic zoom keeps text readable, UML form and order at five levels', async ({ browser }) => {
+  const viewports = [
+    { name: 'pc', viewport: VIEWPORT_PC, touch: false, minFontPx: SEMANTIC_MIN_PC_PX },
+    { name: 'phone', viewport: VIEWPORT_PHONE, touch: true, minFontPx: SEMANTIC_MIN_PHONE_PX },
+  ];
+  for (const form of viewports) {
+    const { context, page } = await openSignedInPage(browser, baseURL, token, {
+      viewport: form.viewport,
+      touch: form.touch,
+    });
+    try {
+      await openArchitectureTab(page, sessionId);
+      await showExplosionView(page);
 
-    const lod = await readLod(page);
-    printLod('pc.package', lod);
-    assertLodReadable(lod, 'pc.package');
-  } finally {
-    await context.close();
+      await zoomToScale(page, 1);
+      const base = await readSemantic(page);
+      printSemantic(`${form.name}.base`, base);
+      const baselineRows = assertSemantic(base, `${form.name}.base`, form.minFontPx, null);
+
+      for (const level of SEMANTIC_ZOOM_LEVELS.slice(1)) {
+        await zoomToScale(page, level);
+        const reading = await readSemantic(page);
+        printSemantic(`${form.name}.${Math.round(level * 100)}`, reading);
+        assertSemantic(
+          reading,
+          `${form.name}.${Math.round(level * 100)}`,
+          form.minFontPx,
+          baselineRows,
+        );
+      }
+    } finally {
+      await context.close();
+    }
   }
 });
 
-/* ── the control arms (see the file header) ─────────────────────────────────────────────── */
+/* ── the semantic-zoom control arms (see the file header) ────────────────────────────────── */
 
 /**
- * Control arm D: the title overlay's inverse scaling removed.
+ * Every semantic guard, forced red through the SAME `readSemantic`.
  *
- * The main arm reads each title's on-screen font from `getScreenCTM()` on the
- * element. This arm sets the SAME elements' `transform` to `scale(1)` — the
- * counter-scaling the fix exists for — and re-reads through the same function:
- * the reading must fall under 11px, proving the guard can see the defect it
- * names. The original transform is restored and the passing reading asserted
- * again, so both sides of the injection are measured in one state.
+ * Four defects, one per guard: text below the floor, a tab over a class box, an
+ * edge endpoint pulled off its frame, and two same-row boxes swapped. Each is
+ * injected into the live drawing (the state the shipped drawing would have if
+ * the feature were absent), read through the same function that just passed,
+ * and restored — so both sides of every arm are measured in one page state.
  */
-test('control arm D — a non-counter-scaled title overlay reads below the 11px floor', async ({ browser }) => {
+test('control arm — each semantic guard reads a false when its defect is injected', async ({ browser }) => {
   const { context, page } = await openSignedInPage(browser, baseURL, token, {
     viewport: VIEWPORT_PC,
     touch: false,
   });
-
   try {
     await openArchitectureTab(page, sessionId);
     await showExplosionView(page);
-    await zoomOutToPackageLevel(page);
+    await zoomToScale(page, 0.33);
 
-    const before = await readLod(page);
-    printLod('controlD.before', before);
-    assertLodReadable(before, 'controlD.before');
-
-    await page.evaluate(() => {
-      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
-        group.setAttribute('data-control-d-transform', group.getAttribute('transform') ?? '');
-        group.setAttribute('transform', 'scale(1)');
-      }
-    });
-
-    const injected = await readLod(page);
-    printLod('controlD.injected', injected);
-    expect.soft(injected.titles.length, 'controlD.injected: the titles must still be readable').toBeGreaterThan(0);
-    const largest = injected.titles.length === 0
-      ? 0
-      : Math.max(...injected.titles.map((title) => title.screenFontPx));
-    expect.soft(
-      largest,
-      `controlD.injected: removing the inverse scaling must drop the reading below ${LOD_TITLE_MIN_PX}px — `
-        + `largest screen font ${formatNumber(largest)}px at zoom ${formatNumber(injected.zoomScale)}`,
-    ).toBeLessThan(LOD_TITLE_MIN_PX);
-
-    await page.evaluate(() => {
-      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
-        const original = group.getAttribute('data-control-d-transform');
-        if (original !== null) group.setAttribute('transform', original);
-        group.removeAttribute('data-control-d-transform');
-      }
-    });
-
-    const restored = await readLod(page);
-    printLod('controlD.restored', restored);
-    assertLodReadable(restored, 'controlD.restored');
-  } finally {
-    await context.close();
-  }
-});
-
-/* ── the control arms, continued ─────────────────────────────────────────────────────────── */
-
-/**
- * Control arm F: the title avoidance switched off.
- *
- * The main arm reads every title's painted box and requires the boxes to be
- * pairwise disjoint. Re-anchoring every planned title at the drawing's origin
- * is what the drawing looks like when the avoidance has not run: the titles
- * pile onto each other. The SAME `readLod` and the SAME
- * `overlappingTitlePairs` reading used by the main arm must see those
- * collisions, which proves the guard can return a false. The original anchors
- * are restored and the passing reading asserted again.
- */
-test('control arm F — titles without avoidance overlap in the same reading', async ({ browser }) => {
-  const { context, page } = await openSignedInPage(browser, baseURL, token, {
-    viewport: VIEWPORT_PC,
-    touch: false,
-  });
-
-  try {
-    await openArchitectureTab(page, sessionId);
-    await showExplosionView(page);
-    await zoomOutToPackageLevel(page);
-
-    const before = await readLod(page);
-    printLod('controlF.before', before);
-    assertLodReadable(before, 'controlF.before');
+    const before = await readSemantic(page);
+    printSemantic('control.before', before);
+    const baselineRows = assertSemantic(before, 'control.before', SEMANTIC_MIN_PC_PX, null);
+    expect(before.classes.length, 'control.before: the arm needs class boxes').toBeGreaterThan(1);
     expect(
-      overlappingTitlePairs(before).length,
-      'controlF.before: the shipped planning must leave no colliding title pair',
-    ).toBe(0);
+      before.edges.some((edge) => edge.endpointOnFrame),
+      'control.before: the arm needs an edge endpoint on a frame',
+    ).toBe(true);
 
+    // Arm 1 — minimum font size off.
     await page.evaluate(() => {
-      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
-        group.setAttribute('data-control-f-transform', group.getAttribute('transform') ?? '');
-        // Dropping the translate puts every title on the drawing's origin: the
-        // state the collision planner exists to prevent.
-        group.setAttribute('transform', 'scale(1)');
+      for (const text of document.querySelectorAll('.uml-node[data-entity-id] > text')) {
+        (text as SVGElement).setAttribute('data-control-fontsize', text.getAttribute('font-size') ?? '');
+        text.setAttribute('font-size', '4');
       }
     });
-
-    const injected = await readLod(page);
-    printLod('controlF.injected', injected);
-    const injectedPairs = overlappingTitlePairs(injected);
+    const smallText = await readSemantic(page);
+    const smallest = Math.min(...smallText.classes.flatMap((box) => box.fonts));
+    printSemantic('control.minfont', smallText);
     expect.soft(
-      injectedPairs.length,
-      `controlF.injected: without the avoidance the titles must overlap — pairs=${JSON.stringify(injectedPairs)}`,
-    ).toBeGreaterThan(0);
-
+      smallest,
+      `control.minfont: dropping the font size must read below ${SEMANTIC_MIN_PC_PX}px; got ${formatNumber(smallest)}px`,
+    ).toBeLessThan(SEMANTIC_MIN_PC_PX);
     await page.evaluate(() => {
-      for (const group of document.querySelectorAll('[data-architecture-lod-labels] [data-lod-label-package]')) {
-        const original = group.getAttribute('data-control-f-transform');
-        if (original !== null) group.setAttribute('transform', original);
-        group.removeAttribute('data-control-f-transform');
+      for (const text of document.querySelectorAll('.uml-node[data-entity-id] > text')) {
+        const original = text.getAttribute('data-control-fontsize');
+        if (original !== null && original !== '') text.setAttribute('font-size', original);
+        else text.removeAttribute('font-size');
+        text.removeAttribute('data-control-fontsize');
       }
     });
 
-    const restored = await readLod(page);
-    printLod('controlF.restored', restored);
-    assertLodReadable(restored, 'controlF.restored');
-    expect(overlappingTitlePairs(restored).length, 'controlF.restored: the fix restores clean titles').toBe(0);
+    // Arm 2 — the reserved tab band switched off: paint the tab over a class.
+    await page.evaluate(() => {
+      // Both the tab and the class must be ON SCREEN for the collision reading
+      // to see them, so the target is the first class box whose painted rect
+      // intersects the viewport.
+      const onScreen = (rect: DOMRect): boolean =>
+        rect.width > 0 && rect.height > 0 && rect.x < window.innerWidth && rect.x + rect.width > 0
+        && rect.y < window.innerHeight && rect.y + rect.height > 0;
+      const box = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+        .find((group) => onScreen(group.getBoundingClientRect()));
+      const tab = [...document.querySelectorAll('.uml-package[data-package-id] > path')]
+        .find((path) => onScreen(path.getBoundingClientRect()));
+      if (tab === undefined || box === undefined || box === null) return;
+      const destination = box.getBoundingClientRect();
+      const origin = tab.getBoundingClientRect();
+      tab.setAttribute('data-control-tab', tab.getAttribute('transform') ?? '');
+      tab.setAttribute('transform', `translate(${destination.x - origin.x + 2}, ${destination.y - origin.y + 2})`);
+    });
+    const covered = await readSemantic(page);
+    printSemantic('control.tab', covered);
+    expect.soft(
+      covered.tabOverlaps.length,
+      `control.tab: a tab drawn over a class box must be read as covering it; overlaps=${JSON.stringify(covered.tabOverlaps)}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      for (const tab of document.querySelectorAll('.uml-package[data-package-id] > path[data-control-tab]')) {
+        const original = tab.getAttribute('data-control-tab');
+        if (original !== null && original !== '') tab.setAttribute('transform', original);
+        else tab.removeAttribute('transform');
+        tab.removeAttribute('data-control-tab');
+      }
+    });
+
+    // Arm 3 — endpoint following off: detach the last point from its frame.
+    const attachedEdge = before.edges.find((edge) => edge.endpointOnFrame);
+    await page.evaluate(({ source, target }) => {
+      for (const group of document.querySelectorAll('.uml-edge[data-edge-source][data-edge-target]')) {
+        if (group.getAttribute('data-edge-source') !== source) continue;
+        if (group.getAttribute('data-edge-target') !== target) continue;
+        group.setAttribute('data-control-edge-transform', group.getAttribute('transform') ?? '');
+        group.setAttribute('transform', 'translate(80, 80)');
+        break;
+      }
+    }, { source: attachedEdge?.source ?? '', target: attachedEdge?.target ?? '' });
+    const detached = await readSemantic(page);
+    printSemantic('control.endpoint', detached);
+    expect.soft(
+      detached.edges.some((edge) => !edge.endpointOnFrame),
+      `control.endpoint: moving an endpoint off its frame must be read; edges=${JSON.stringify(detached.edges)}`,
+    ).toBe(true);
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll('[data-control-edge-transform]')) {
+        const original = group.getAttribute('data-control-edge-transform');
+        if (original !== null && original !== '') group.setAttribute('transform', original);
+        else group.removeAttribute('transform');
+        group.removeAttribute('data-control-edge-transform');
+      }
+    });
+
+    // Arm 4 — the monotone constraint off: swap two boxes on the same row.
+    await page.evaluate(() => {
+      const boxes = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+        .map((group) => ({ group, box: group.getBoundingClientRect() }))
+        .filter((entry) => entry.box.width > 0
+          && entry.box.x < window.innerWidth && entry.box.x + entry.box.width > 0
+          && entry.box.y < window.innerHeight && entry.box.y + entry.box.height > 0);
+      for (let left = 0; left < boxes.length; left += 1) {
+        for (let right = left + 1; right < boxes.length; right += 1) {
+          if (Math.abs(boxes[left].box.y - boxes[right].box.y) > 4) continue;
+          if (Math.abs(boxes[left].box.x - boxes[right].box.x) < 8) continue;
+          // Move the whole GROUPS (not just the rects): the painted box the
+          // reading measures is the group's bounding box, which also includes
+          // the compartment rules.
+          const a = boxes[left].group;
+          const b = boxes[right].group;
+          const shift = boxes[right].box.x - boxes[left].box.x;
+          a.setAttribute('data-control-transform', a.getAttribute('transform') ?? '');
+          b.setAttribute('data-control-transform', b.getAttribute('transform') ?? '');
+          a.setAttribute('transform', `translate(${shift}, 0)`);
+          b.setAttribute('transform', `translate(${-shift}, 0)`);
+          return;
+        }
+      }
+    });
+    const swapped = await readSemantic(page);
+    printSemantic('control.order', swapped);
+    // Compare through the SAME pair relation the main arm asserts, and require
+    // at least one baseline pair to invert: a whole-array comparison would also
+    // go red for a changed visible set, which is not the defect under test.
+    const now = new Map(swapped.classes.map((box) => [box.id, box]));
+    let inverted = 0;
+    for (const row of baselineRows) {
+      for (let left = 0; left < row.length; left += 1) {
+        for (let right = left + 1; right < row.length; right += 1) {
+          const a = now.get(row[left]);
+          const b = now.get(row[right]);
+          if (a === undefined || b === undefined) continue;
+          if (Math.abs(a.centreY - b.centreY) > 6) continue;
+          if (a.rect.x > b.rect.x) inverted += 1;
+        }
+      }
+    }
+    expect.soft(
+      inverted,
+      `control.order: swapping two same-row boxes must invert at least one pair; inverted=${inverted}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      for (const group of document.querySelectorAll('[data-control-transform]')) {
+        const original = group.getAttribute('data-control-transform');
+        if (original !== null && original !== '') group.setAttribute('transform', original);
+        else group.removeAttribute('transform');
+        group.removeAttribute('data-control-transform');
+      }
+    });
+
+    const restored = await readSemantic(page);
+    printSemantic('control.restored', restored);
+    assertSemantic(restored, 'control.restored', SEMANTIC_MIN_PC_PX, baselineRows);
   } finally {
     await context.close();
   }

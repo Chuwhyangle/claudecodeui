@@ -106,9 +106,9 @@
       "classDiagram": "類別圖",
       "backTo": "返回{{view}}",
       "lod": {
-        "packages": "套件",
-        "subpackages": "子套件",
-        "entities": "實體"
+        "tierNames": "類名",
+        "tierFrames": "類框",
+        "tierPackages": "套件"
       },
       "explosion": "爆炸圖",
       "drillIn": "進入",

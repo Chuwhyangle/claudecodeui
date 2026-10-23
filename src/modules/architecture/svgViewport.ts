@@ -484,6 +484,18 @@ export type SvgViewportController = {
   zoomTo(scale: number): number;
   /** Multiply the current scale by `factor`, keeping the point under `anchor` fixed. */
   zoomBy(factor: number, anchor?: SvgViewportAnchor): number;
+  /**
+   * Switch to (or away from) semantic-zoom mode.
+   *
+   * In semantic mode the SVG on screen is NOT the renderer's drawing scaled by
+   * CSS: `semanticZoomLayout` has already rewritten its geometry and sized it
+   * 1:1 for the requested scale, so the controller only records the scale and
+   * never touches `width`/`height`. `base` is the renderer's original drawing
+   * size, which is what fit/fitAll still measure against.
+   */
+  setSemanticMode(base: SvgViewportSize | null): void;
+  /** The semantic base size in force, or `null` in the ordinary scaled mode. */
+  semanticBaseSize(): SvgViewportSize | null;
 };
 
 /**
@@ -494,43 +506,61 @@ export type SvgViewportController = {
 export function createSvgViewport(container: HTMLElement): SvgViewportController {
   let svg: SVGSVGElement | null = null;
   let scale = 1;
+  let semanticBase: SvgViewportSize | null = null;
+
+  /** Write the scale to the SVG, or record it alone when semantic layout owns the size. */
+  const write = (next: number): number => {
+    scale = clampZoomScale(next);
+    if (svg === null || semanticBase !== null) return scale;
+    scale = applyZoomScale(svg, scale);
+    return scale;
+  };
 
   return {
     attach(next: SVGSVGElement): number {
       svg = next;
       // A fresh SVG arrives at natural size; re-apply whatever the caller had
-      // so the element never flashes at the wrong size between effects.
+      // so the element never flashes at the wrong size between effects. In
+      // semantic mode the geometry pass owns the element's size, so recording
+      // the scale is all that happens here.
+      if (semanticBase !== null) {
+        scale = clampZoomScale(scale);
+        return scale;
+      }
       scale = applyZoomScale(next, scale);
       return scale;
     },
 
     fit(): number {
-      if (svg === null) return scale;
-      const natural = readSvgNaturalSize(svg);
+      const natural = semanticBase ?? (svg === null ? null : readSvgNaturalSize(svg));
       const viewport = measureViewportSize(container);
-      scale = natural === null || viewport === null
-        ? applyZoomScale(svg, 1)
-        : applyZoomScale(svg, fitZoomScale(natural, viewport));
-      return scale;
+      const next = natural === null || viewport === null
+        ? 1
+        : fitZoomScale(natural, viewport);
+      return write(next);
     },
 
     fitAll(): number {
-      if (svg === null) return scale;
-      const natural = readSvgNaturalSize(svg);
+      const natural = semanticBase ?? (svg === null ? null : readSvgNaturalSize(svg));
       const viewport = measureViewportSize(container);
-      scale = natural === null || viewport === null
-        ? applyZoomScale(svg, 1)
-        : applyZoomScale(svg, fitAllZoomScale(natural, viewport));
-      return scale;
+      const next = natural === null || viewport === null
+        ? 1
+        : fitAllZoomScale(natural, viewport);
+      return write(next);
     },
 
     zoomTo(next: number): number {
-      scale = svg === null ? clampZoomScale(next) : applyZoomScale(svg, next);
-      return scale;
+      return write(next);
     },
 
     zoomBy(factor: number, anchor?: SvgViewportAnchor): number {
       const next = clampZoomScale(scale * factor);
+      if (semanticBase !== null) {
+        // The semantic pass re-anchors the drawing on the densest window after
+        // every settled zoom, so the controller only records the new scale.
+        scale = next;
+        return scale;
+      }
       if (svg === null || next === scale) {
         scale = next;
         return scale;
@@ -548,6 +578,14 @@ export function createSvgViewport(container: HTMLElement): SvgViewportController
         container.scrollTop += after.top + userY * scale - anchor.clientY;
       }
       return scale;
+    },
+
+    setSemanticMode(base: SvgViewportSize | null): void {
+      semanticBase = base === null ? null : { width: base.width, height: base.height };
+    },
+
+    semanticBaseSize(): SvgViewportSize | null {
+      return semanticBase === null ? null : { ...semanticBase };
     },
   };
 }

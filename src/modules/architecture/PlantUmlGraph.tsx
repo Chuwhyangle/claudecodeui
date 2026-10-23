@@ -17,14 +17,7 @@ import {
 } from '@/modules/architecture/archguardToPlantUml';
 import { standardiseDrawnStereotypes } from '@/modules/architecture/plantUmlText';
 import {
-  applyExplosionLod,
-  buildExplosionHierarchy,
   createExplosionLodScheduler,
-  focusPackageOf,
-  packageFrameBox,
-  PACKAGE_LOD_DEPTH,
-  resolveLodDepth,
-  type ExplosionLodDepth,
   type ExplosionLodScheduler,
 } from '@/modules/architecture/explosionLod';
 import {
@@ -35,7 +28,24 @@ import {
   type ArchitectureLayoutEngine,
   type ArchitectureLayoutEngineClass,
 } from '@/modules/architecture/elkAspectEngine';
-import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';import {
+import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
+import { readSemanticDrawingGeometry, type SemanticEntityKind } from '@/modules/architecture/semanticZoomRead';
+import {
+  semanticCompartmentRules,
+  solveSemanticZoom,
+  lodDepthForTier,
+  type SemanticDrawingGeometry,
+  type SemanticTier,
+  type SemanticZoomLayout,
+} from '@/modules/architecture/semanticZoomLayout';
+import {
+  planMemberRows,
+  planStickyLabels,
+  PACKAGE_TAB_INSET_PX,
+  SEMANTIC_MIN_FONT_MOBILE_PX,
+  SEMANTIC_MIN_FONT_PX,
+  type PlanPoint,
+} from '@/modules/architecture/semanticZoomPlan';import {
   TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useCanvasHeaderSlot,
@@ -816,9 +826,495 @@ function markDrawingUnselectable(host: HTMLElement): void {
   }
 }
 
+/**
+ * One drawing captured for semantic zoom.
+ *
+ * `inner` is the annotated SVG BEFORE any semantic rewrite (labels hidden,
+ * entity ids restored, seed markers added, edge hit bands present). Every
+ * application restores it first, so rewriting is idempotent and the ≥ 90 %
+ * view is the renderer's own drawing times the scale. `geometry` holds the
+ * same rectangles read in user units; the engine never reads a rewritten DOM.
+ */
+type SemanticCapture = {
+  readonly svg: SVGSVGElement;
+  readonly inner: string;
+  readonly geometry: SemanticDrawingGeometry;
+  readonly baseSize: SvgViewportSize;
+  readonly titles: ReadonlyMap<string, string | null>;
+};
+
+/** Capture the drawing that was just injected. */
+function captureSemanticDrawing(
+  host: HTMLElement,
+  graph: ArchitectureRendererGraph,
+): SemanticCapture | null {
+  const svg = host.querySelector('svg');
+  if (!(svg instanceof SVGSVGElement)) return null;
+  // 0.4.0 publishes compartments but not the entity KIND (function vs class)
+  // and its member parser calls a field whose type contains `(` a method, so
+  // the payload's authoritative kinds are handed to the read layer as hints.
+  const kindById = new Map<string, SemanticEntityKind>(graph.nodes.map((node) => {
+    const kind = node.kind;
+    const mapped: SemanticEntityKind = kind === 'interface' || kind === 'enum' || kind === 'function'
+      ? kind
+      : 'class';
+    return [node.id, mapped];
+  }));
+  const memberKindsById = new Map<string, readonly ('field' | 'method')[]>(
+    graph.nodes
+      .filter((node) => (node.members?.length ?? 0) > 0)
+      .map((node) => [
+        node.id,
+        (node.members ?? []).map((member) => (member.kind === 'method' ? 'method' : 'field')),
+      ]),
+  );
+  const geometry = readSemanticDrawingGeometry(svg, { kindById, memberKindsById });
+  const titles = new Map<string, string | null>();
+  for (const node of svg.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = node.getAttribute('data-entity-id');
+    if (id === null) continue;
+    const title = [...node.children].find((child) => child.tagName.toLowerCase() === 'title');
+    titles.set(id, title?.textContent ?? null);
+  }
+  const baseSize = readSvgNaturalSize(svg) ?? { width: geometry.width, height: geometry.height };
+  return { svg, inner: svg.innerHTML, geometry, baseSize, titles };
+}
+
+/** Create an SVG element with presentation attributes. */
+function svgElement<K extends keyof SVGElementTagNameMap>(
+  name: K,
+  attributes: Record<string, string | number>,
+  parent: Element,
+): SVGElementTagNameMap[K] {
+  const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+  parent.appendChild(element);
+  return element;
+}
+
+/** Rewrite a path's coordinate pairs through `map`, pinning its two ends. */
+function rewritePathData(
+  d: string,
+  map: (x: number, y: number) => PlanPoint,
+  ends: { readonly first: PlanPoint | null; readonly last: PlanPoint | null },
+): string {
+  const pairs = [...d.matchAll(/(-?\d*\.?\d+(?:e[-+]?\d+)?)[\s,]+(-?\d*\.?\d+(?:e[-+]?\d+)?)/gi)];
+  let index = 0;
+  return d.replace(
+    /(-?\d*\.?\d+(?:e[-+]?\d+)?)[\s,]+(-?\d*\.?\d+(?:e[-+]?\d+)?)/gi,
+    (_match, x: string, y: string) => {
+      let point = map(Number(x), Number(y));
+      if (index === 0 && ends.first !== null) point = ends.first;
+      else if (index === pairs.length - 1 && ends.last !== null) point = ends.last;
+      index += 1;
+      return `${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+    },
+  );
+}
+
+/** The fill/stroke palette the semantic renderer draws class boxes with. */
+const SEMANTIC_NODE_STYLE: Record<string, readonly [string, string]> = {
+  class: ['#ffffff', '#64748b'],
+  interface: ['#e0f2fe', '#0284c7'],
+  enum: ['#fef3c7', '#d97706'],
+  function: ['#f1f5f9', '#64748b'],
+};
+/** Nested package fills, pale so the tab text stays readable. */
+const SEMANTIC_PACKAGE_FILLS = ['#f1f5f9', '#e7edf5', '#dde6f1', '#d3deec', '#c9d7e7'];
+const SEMANTIC_MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const SEMANTIC_SANS = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif';
+/** The accent the design uses for a session-mentioned entity and its ★N badge. */
+const SEMANTIC_SEED_COLOR = '#ea580c';
+
+/**
+ * Draw one semantic layout over the captured drawing.
+ *
+ * Every element the renderer emitted is rewritten in place and keeps its
+ * contract attributes (`data-entity-id`, `data-package-id`, `data-edge-source`,
+ * `data-edge-target`); only the geometry and the text plan change. The SVG is
+ * then sized 1:1 for the mapped layout, which is what lets the minimum font
+ * size be a real screen reading instead of a CSS-scaled one.
+ */
+function drawSemanticLayout(
+  host: HTMLElement,
+  capture: SemanticCapture,
+  layout: SemanticZoomLayout,
+  fontPx: number,
+): void {
+  const svg = capture.svg;
+  // Restoring the annotated drawing first makes every application independent
+  // of the previous one (and keeps the ≥ 90 % view byte-identical to the
+  // renderer's own output).
+  svg.innerHTML = capture.inner;
+  const offsetX = -layout.content.x;
+  const offsetY = -layout.content.y;
+  const width = Math.max(1, Math.ceil(layout.content.width));
+  const height = Math.max(1, Math.ceil(layout.content.height));
+  const mapPoint = (x: number, y: number): PlanPoint => ({
+    x: layout.x.map(x) + offsetX,
+    y: layout.y.map(y) + offsetY,
+  });
+
+  // The canvas background follows the mapped extent.
+  const canvas = svg.querySelector('.uml-canvas');
+  if (canvas !== null) {
+    canvas.setAttribute('width', String(width));
+    canvas.setAttribute('height', String(height));
+  }
+
+  // ---- edges (mapped first; the class boxes are drawn on top of them)
+  for (const group of svg.querySelectorAll('.uml-edge[data-edge-source]')) {
+    if (layout.tier === 'C') {
+      // Tier C draws packages only: the entity relations are hidden, not left
+      // mapped at their old coordinates.
+      (group as SVGGElement).style.display = 'none';
+      continue;
+    }
+    (group as SVGGElement).style.display = '';
+    const edge = layout.edges.find(
+      (candidate) => candidate.source === group.getAttribute('data-edge-source')
+        && candidate.target === group.getAttribute('data-edge-target'),
+    );
+    const ends = edge === undefined
+      ? { first: null, last: null }
+      : {
+          // The engine works in absolute mapped units; the drawing is
+          // translated so its content starts at the origin. The endpoints must
+          // get that same translation as every other mapped point.
+          first: edge.points[0] === undefined
+            ? null
+            : { x: edge.points[0].x + offsetX, y: edge.points[0].y + offsetY },
+          last: edge.points[edge.points.length - 1] === undefined
+            ? null
+            : {
+                x: edge.points[edge.points.length - 1].x + offsetX,
+                y: edge.points[edge.points.length - 1].y + offsetY,
+              },
+        };
+    for (const path of group.querySelectorAll('path')) {
+      const d = path.getAttribute('d');
+      if (d !== null) path.setAttribute('d', rewritePathData(d, mapPoint, ends));
+    }
+    for (const polygon of group.querySelectorAll('polygon')) {
+      const points = (polygon.getAttribute('points') ?? '')
+        .trim()
+        .split(/\s+/)
+        .map((pair) => pair.split(',').map(Number))
+        .filter((pair) => pair.length === 2 && Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
+      if (points.length === 0) continue;
+      // The marker keeps its drawn SIZE and is translated so its vertex nearest
+      // the line's end lands exactly on that end (which the engine snapped onto
+      // the frame). This is what keeps the arrowhead attached to the line at
+      // every tier, including a compacted one.
+      const centroid = {
+        x: points.reduce((total, point) => total + point[0], 0) / points.length,
+        y: points.reduce((total, point) => total + point[1], 0) / points.length,
+      };
+      const mappedCentroid = mapPoint(centroid.x, centroid.y);
+      const toTarget = ends.last !== null
+        && (Math.hypot(mappedCentroid.x - ends.last.x, mappedCentroid.y - ends.last.y)
+          <= Math.hypot(
+            mappedCentroid.x - (ends.first?.x ?? mappedCentroid.x),
+            mappedCentroid.y - (ends.first?.y ?? mappedCentroid.y),
+          ));
+      const reference = toTarget ? ends.last : ends.first;
+      let dx = 0;
+      let dy = 0;
+      if (reference !== null) {
+        let nearest = mapPoint(points[0][0], points[0][1]);
+        let best = Math.hypot(nearest.x - reference.x, nearest.y - reference.y);
+        for (const point of points) {
+          const mapped = mapPoint(point[0], point[1]);
+          const distance = Math.hypot(mapped.x - reference.x, mapped.y - reference.y);
+          if (distance < best) {
+            best = distance;
+            nearest = mapped;
+          }
+        }
+        dx = reference.x - nearest.x;
+        dy = reference.y - nearest.y;
+      }
+      polygon.setAttribute('points', points
+        .map((point) => {
+          const mapped = mapPoint(point[0], point[1]);
+          return `${(mapped.x + dx).toFixed(1)},${(mapped.y + dy).toFixed(1)}`;
+        })
+        .join(' '));
+    }
+    for (const text of group.querySelectorAll('text')) {
+      const x = Number(text.getAttribute('x'));
+      const y = Number(text.getAttribute('y'));
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const mapped = mapPoint(x, y);
+      text.setAttribute('x', mapped.x.toFixed(1));
+      text.setAttribute('y', mapped.y.toFixed(1));
+    }
+    if (edge !== undefined) {
+      (group as SVGGElement).style.opacity = String(edge.opacity);
+    }
+  }
+
+  // ---- package frames + tabs
+  for (const packageLayout of layout.packages) {
+    const group = [...svg.querySelectorAll('.uml-package[data-package-id]')].find(
+      (candidate) => candidate.getAttribute('data-package-id') === packageLayout.id,
+    );
+    if (group === undefined) continue;
+    while (group.firstChild !== null) group.removeChild(group.firstChild);
+    const frame = packageLayout.frame;
+    const x = frame.x + offsetX;
+    const y = frame.y + offsetY;
+    const w = Math.max(0, frame.width);
+    const h = Math.max(0, frame.height);
+    svgElement('rect', {
+      x,
+      y,
+      width: w,
+      height: h,
+      rx: 3,
+      fill: SEMANTIC_PACKAGE_FILLS[Math.min(packageLayout.depth, SEMANTIC_PACKAGE_FILLS.length - 1)],
+      stroke: '#94a3b8',
+      'stroke-width': 1,
+    }, group);
+    if (packageLayout.tabRect === null) continue;
+    const tabX = x + PACKAGE_TAB_INSET_PX - 1;
+    const tabTop = y;
+    const tabWidth = packageLayout.tab.width;
+    const tabHeight = packageLayout.tab.height;
+    // The tab is a complete little rectangle closed on its right side: top
+    // edge, right cap and underline. It is what makes a package frame read as
+    // UML rather than as a plain box.
+    svgElement('path', {
+      d: `M${tabX.toFixed(1)},${tabTop.toFixed(1)} H${(tabX + tabWidth).toFixed(1)}`
+        + ` V${(tabTop + tabHeight).toFixed(1)} H${tabX.toFixed(1)}`,
+      fill: 'none',
+      stroke: '#94a3b8',
+      'stroke-width': 1,
+    }, group);
+    const label = svgElement('text', {
+      x: tabX + 3,
+      y: tabTop + tabHeight / 2 + fontPx * 0.36,
+      'font-family': SEMANTIC_SANS,
+      'font-size': fontPx,
+      'font-weight': 600,
+      fill: '#334155',
+    }, group);
+    label.textContent = packageLayout.tab.text;
+    if (packageLayout.tab.badge !== '') {
+      const badge = svgElement('tspan', { fill: SEMANTIC_SEED_COLOR }, label);
+      badge.textContent = packageLayout.tab.badge;
+    }
+  }
+
+  // ---- class boxes
+  const lineHeight = fontPx * 1.25;
+  const drawnNodeIds = new Set(layout.nodes.map((node) => node.id));
+  // Tier C draws no class box at all: the entity groups must be hidden, not
+  // merely left out of the draw loop.
+  for (const group of svg.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = group.getAttribute('data-entity-id') ?? '';
+    if (!drawnNodeIds.has(id)) (group as SVGGElement).style.display = 'none';
+  }
+  for (const nodeLayout of layout.nodes) {
+    const group = [...svg.querySelectorAll('.uml-node[data-entity-id]')].find(
+      (candidate) => candidate.getAttribute('data-entity-id') === nodeLayout.id,
+    );
+    if (group === undefined) continue;
+    if (nodeLayout.hidden) {
+      (group as SVGGElement).style.display = 'none';
+      continue;
+    }
+    (group as SVGGElement).style.display = '';
+    while (group.firstChild !== null) group.removeChild(group.firstChild);
+    const drawn = nodeLayout.drawn;
+    const x = drawn.x + offsetX;
+    const y = drawn.y + offsetY;
+    const w = Math.max(0, drawn.width);
+    const h = Math.max(0, drawn.height);
+    const style = SEMANTIC_NODE_STYLE[nodeLayout.plan.kind] ?? SEMANTIC_NODE_STYLE.class;
+    const title = capture.titles.get(nodeLayout.id);
+    if (title !== null && title !== undefined) {
+      const titleElement = svgElement('title', {}, group);
+      titleElement.textContent = title;
+    }
+    const seed = capture.geometry.nodes.find((node) => node.id === nodeLayout.id)?.seed === true;
+    svgElement('rect', {
+      x,
+      y,
+      width: w,
+      height: h,
+      rx: 2,
+      fill: seed ? '#fff7ed' : style[0],
+      stroke: seed ? SEMANTIC_SEED_COLOR : style[1],
+      'stroke-width': seed ? 2 : 1,
+    }, group);
+    // UML form never degrades: the compartment rules are drawn even when the
+    // member text is hidden, and an operations-only interface keeps one.
+    for (const rule of semanticCompartmentRules(nodeLayout)) {
+      svgElement('line', {
+        x1: x,
+        x2: x + w,
+        y1: y + rule,
+        y2: y + rule,
+        stroke: seed ? SEMANTIC_SEED_COLOR : style[1],
+        'stroke-width': 1,
+      }, group);
+    }
+    if (nodeLayout.showName) {
+      const lines = nodeLayout.plan.name.lines;
+      const centreX = x + w / 2;
+      const stereotypeHeight = nodeLayout.plan.stereotype === null ? 0 : fontPx * 0.9;
+      if (nodeLayout.plan.stereotype !== null) {
+        const stereotype = svgElement('text', {
+          x: centreX,
+          y: y + fontPx * 0.85,
+          'text-anchor': 'middle',
+          'font-family': SEMANTIC_SANS,
+          'font-size': fontPx * 0.8,
+          'font-style': 'italic',
+          fill: '#475569',
+        }, group);
+        stereotype.textContent = `<<${nodeLayout.plan.stereotype}>>`;
+      }
+      const baseY = y + nodeLayout.drawnTitleHeight / 2 - (lines.length * lineHeight) / 2
+        + fontPx * 0.9 + stereotypeHeight / 2;
+      lines.forEach((line, index) => {
+        const text = svgElement('text', {
+          x: centreX,
+          y: baseY + index * lineHeight,
+          'text-anchor': 'middle',
+          'font-family': SEMANTIC_MONO,
+          'font-size': fontPx,
+          'font-weight': 700,
+          'font-style': nodeLayout.plan.kind === 'interface' ? 'italic' : 'normal',
+          fill: nodeLayout.plan.kind === 'interface' ? '#075985' : '#1e293b',
+        }, group);
+        text.textContent = line;
+      });
+    }
+    if (nodeLayout.showMembers) {
+      const rows = planMemberRows({
+        members: (capture.geometry.nodes.find((node) => node.id === nodeLayout.id)?.members ?? [])
+          .map((member) => member.text),
+        height: h,
+        titleHeight: nodeLayout.drawnTitleHeight,
+        fontPx,
+        maxWidth: Math.max(0, w - 10),
+        moreLine: null,
+      });
+      rows.rows.forEach((row, index) => {
+        const text = svgElement('text', {
+          x: x + 5,
+          y: y + nodeLayout.drawnTitleHeight + (index + 1) * lineHeight - 2,
+          'font-family': SEMANTIC_MONO,
+          'font-size': fontPx,
+          fill: '#475569',
+        }, group);
+        text.textContent = row;
+      });
+      if (rows.moreLabel !== null) {
+        const text = svgElement('text', {
+          x: x + 5,
+          y: y + nodeLayout.drawnTitleHeight + (rows.rows.length + 1) * lineHeight - 2,
+          'font-family': SEMANTIC_MONO,
+          'font-size': fontPx,
+          'font-style': 'italic',
+          fill: '#64748b',
+        }, group);
+        text.textContent = rows.moreLabel;
+      }
+    }
+    if (capture.geometry.nodes.find((node) => node.id === nodeLayout.id)?.mentionTier === 'pinned') {
+      const badge = svgElement('text', {
+        x: x + 4,
+        y: y + 12,
+        'font-size': 11,
+        class: 'arch-pinned-badge',
+        'data-architecture-pinned-badge': 'true',
+      }, group);
+      badge.textContent = '📌';
+    } else if (group.classList.contains('arch-seed-light')) {
+      // The light seed marker is a DOT beside the label (a shape reading, not
+      // colour alone); it is re-drawn because wiping the group's children also
+      // removed the one annotateNodes inserted.
+      svgElement('circle', {
+        cx: x + 4,
+        cy: y + 4,
+        r: 2.5,
+        class: 'arch-seed-dot',
+        'data-architecture-seed-dot': 'true',
+        fill: SEMANTIC_SEED_COLOR,
+        'pointer-events': 'none',
+      }, group);
+    }
+  }
+
+  // ---- sticky package names (at most two, see planStickyLabels)
+  const stickies = planStickyLabels(
+    layout.packages.map((entry) => ({
+      id: entry.id,
+      depth: entry.depth,
+      top: entry.frame.y + offsetY,
+      bottom: entry.frame.y + offsetY + entry.frame.height,
+    })),
+    host.scrollTop,
+  );
+  stickies.forEach((sticky, index) => {
+    const entry = layout.packages.find((candidate) => candidate.id === sticky.id);
+    if (entry === undefined) return;
+    const y = host.scrollTop + 2 + index * (entry.tab.height + 1);
+    const x = Math.max(entry.frame.x + offsetX + PACKAGE_TAB_INSET_PX, 4);
+    if (entry.tabRect === null) return;
+    svgElement('rect', {
+      x: x - 3,
+      y,
+      width: entry.tab.width,
+      height: entry.tab.height,
+      rx: 3,
+      fill: 'rgba(248,250,252,.92)',
+    }, svg);
+    const text = svgElement('text', {
+      x: x + 1,
+      y: y + entry.tab.height / 2 + fontPx * 0.36,
+      'font-family': SEMANTIC_SANS,
+      'font-size': fontPx,
+      fill: '#334155',
+    }, svg);
+    text.textContent = entry.tab.text;
+  });
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
+  // The reading tests (and the E2E guard) can tell a semantically rewritten
+  // drawing from a CSS-scaled one: in this mode width/height are the mapped
+  // layout at 1:1 and the scale is carried by the geometry itself.
+  svg.setAttribute('data-architecture-semantic', layout.tier);
+  svg.setAttribute('data-architecture-semantic-scale', String(layout.scale));
+}
+
+/**
+ * The on-screen frame rect of a drawn package, in drawing user units. Read from
+ * the SVG that is on screen NOW (after the semantic pass rewrote it), so a
+ * "tap a package" zoom centres the frame the reader is looking at.
+ */
+function drawnPackageFrame(
+  host: ParentNode,
+  packageId: string,
+): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null {
+  const frame = [...host.querySelectorAll('.uml-package[data-package-id]')]
+    .find((candidate) => candidate.getAttribute('data-package-id') === packageId);
+  const rect = frame?.querySelector('rect');
+  if (rect === undefined || rect === null) return null;
+  const read = (name: string): number => {
+    const value = Number(rect.getAttribute(name));
+    return Number.isFinite(value) ? value : 0;
+  };
+  return { x: read('x'), y: read('y'), width: read('width'), height: read('height') };
+}
+
 /** The drawn edge group between `from` and `to`, if this view draws one. */
-function edgeElement(host: HTMLElement, from: string, to: string): Element | null {
-  for (const edge of host.querySelectorAll('.uml-edge')) {
+function edgeElement(host: HTMLElement, from: string, to: string): Element | null {  for (const edge of host.querySelectorAll('.uml-edge')) {
     if (edge.getAttribute('data-edge-source') === from && edge.getAttribute('data-edge-target') === to) {
       return edge;
     }
@@ -960,6 +1456,10 @@ export function PlantUmlGraph({
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
   // collect the toolbar into one overflow menu (see `useTouchLayout`).
   const { touchUi, coarsePointer, compactToolbar } = useTouchLayout();
+  // The semantic layout runs from imperative callbacks, so the pointer tier
+  // that picks the minimum font size is mirrored into a ref.
+  const coarsePointerRef = useRef(coarsePointer);
+  coarsePointerRef.current = coarsePointer;
   // On the compact tier the panel owns the single toolbar row and lends its
   // overflow menu as the slot these controls are drawn into; `null` (menu shut)
   // means this renderer has no chrome on screen at all.
@@ -1108,21 +1608,33 @@ export function PlantUmlGraph({
   // outside the render that last committed the state.
   const zoomRef = useRef(zoom);
   const viewportRef = useRef<SvgViewportController | null>(null);
+  /**
+   * The drawing's ORIGINAL size for every fit computation.
+   *
+   * Semantic zoom rewrites the SVG's width/height to the mapped layout's size,
+   * so `readSvgNaturalSize` would feed the fit a size that already contains the
+   * zoom and the stretch — a feedback loop. The controller keeps the base size
+   * the engine was built from; the ordinary scaled mode has none and reads the
+   * element as before.
+   */
+  const naturalOfDrawing = useCallback((drawing: SVGSVGElement | null): SvgViewportSize | null => {
+    const semanticBase = viewportRef.current?.semanticBaseSize() ?? null;
+    if (semanticBase !== null) return semanticBase;
+    return drawing === null ? null : readSvgNaturalSize(drawing);
+  }, []);
   const applyZoom = useCallback((next: DiagramZoom): void => {
     zoomRef.current = next;
     setZoom(next);
   }, []);
 
-  // The package the reader zoomed into from the too-small overview hint (the
-  // "tap a package" gesture), or `null` while the whole graph is on screen. It
+  // The package the reader zoomed into from the too-small overview hint (the  // "tap a package" gesture), or `null` while the whole graph is on screen. It
   // is what keeps the hint row visible after the zoom and gives that row its
   // "back to whole graph" action; a fit or an explicit readable-mode switch
   // clears it.
   const [packageFocus, setPackageFocus] = useState<string | null>(null);
 
   /** The viewBox origin of the drawing on screen, in user units (usually 0,0). */
-  const drawingOrigin = useCallback((): { x: number; y: number } => {
-    const parts = (hostRef.current?.querySelector('svg')?.getAttribute('viewBox') ?? '')
+  const drawingOrigin = useCallback((): { x: number; y: number } => {    const parts = (hostRef.current?.querySelector('svg')?.getAttribute('viewBox') ?? '')
       .trim().split(/[\s,]+/).map(Number);
     return parts.length === 4 && parts.every(Number.isFinite)
       ? { x: parts[0], y: parts[1] }
@@ -1223,7 +1735,7 @@ export function PlantUmlGraph({
     const host = hostRef.current;
     const viewport = viewportRef.current;
     if (host === null || viewport === null) return;
-    const frame = packageFrameBox(host, packageId);
+    const frame = drawnPackageFrame(host, packageId);
     const box = measureViewportSize(host);
     if (frame === null || box === null) return;
     const fitToFrame = Math.min(
@@ -1236,6 +1748,15 @@ export function PlantUmlGraph({
     // The fit placement pins explicit margins; a zoomed package is centred by
     // the scroll offsets below instead, so hand the drawing back to `auto`.
     applyPlacement(host.querySelector('svg'), null);
+    if (semanticCaptureRef.current !== null) {
+      // The geometry is about to be rewritten for the new scale; apply it now
+      // (the debounced pass would otherwise fire 200 ms later) and let the
+      // semantic pass centre the requested frame once it has the mapped rect.
+      centerPackageOnApplyRef.current = packageId;
+      applyLodRef.current?.(applied);
+      setPackageFocus(packageId);
+      return;
+    }
     const origin = drawingOrigin();
     const offsets = centeredScrollForDrawingRect(box, {
       left: frame.x - origin.x,
@@ -1327,44 +1848,79 @@ export function PlantUmlGraph({
     setView(defaultViewOf(idShape));
   }, [idShape]);
 
-  // The hierarchy of the drawing on screen (entities → packages) and the zoom
-  // level currently displayed. The level is applied imperatively (display
-  // toggles, label rewrites, edge overlay) so crossing it never replaces the
-  // SVG; the state copy exists only for the toolbar readout.
-  const lodRef = useRef<{
-    hierarchy: ArchitectureHierarchyIndex;
-    edges: ArchitectureRendererGraph['edges'];
-  } | null>(null);
-  const lodDepthRef = useRef<ExplosionLodDepth | null>(null);
+  // The drawing captured for semantic zoom: its annotated inner SVG, the
+  // geometry read once, and the tooltips annotateNodes added. `null` for views
+  // that are not semantically zoomed (the grouped file overview).
+  const semanticCaptureRef = useRef<SemanticCapture | null>(null);
+  const semanticTierRef = useRef<SemanticTier | null>(null);
+  // A package the reader asked to zoom into; the next semantic application
+  // centres THIS frame instead of the densest window.
+  const centerPackageOnApplyRef = useRef<string | null>(null);
+  // The neighbourhood's centre entity, re-marked after every rewrite (the
+  // rewrite rebuilds the node groups' children from the captured drawing).
+  const neighborCenterRef = useRef<string | null>(null);
+  // The settled-zoom application, reachable from `zoomToPackage` (defined
+  // above it) so the "tap a package" gesture rewrites and centres in one go.
+  const applyLodRef = useRef<((scale: number) => void) | null>(null);
   const lodSchedulerRef = useRef<ExplosionLodScheduler | null>(null);
-  // The neighbourhood centre, kept outside the render so a level cross can
-  // recentre the package it belongs to even when nothing is clicked.
-  const centerEntityRef = useRef<string | null>(null);
-  const [lodDepth, setLodDepth] = useState<ExplosionLodDepth | null>(null);
+  const [lodDepth, setLodDepth] = useState<0 | 1 | 2 | null>(null);
+  // Bumped whenever the semantic pass rewrites the geometry, so the minimap
+  // re-reads its boxes instead of blitting the previous scale's bitmap.
+  const [drawnRevision, setDrawnRevision] = useState(0);
 
-  // Re-evaluate the level after the zoom settles; the focus package is scrolled
-  // back only when the level actually changes, not on every wheel tick.
+  // Re-evaluate the semantic layout after the zoom settles; the previous tier
+  // is passed so the 8 % dead band applies at the boundary.
   const applyLod = useCallback((scale: number): void => {
     const host = hostRef.current;
-    const drawing = lodRef.current;
-    if (host === null || drawing === null) return;
-    const depth = resolveLodDepth(scale, lodDepthRef.current);
-    const crossed = depth !== lodDepthRef.current;
-    lodDepthRef.current = depth;
-    applyExplosionLod({
-      host,
-      hierarchy: drawing.hierarchy,
-      edges: drawing.edges,
-      depth,
-      focusPackageId: focusPackageOf(drawing.hierarchy, [selectedRef.current, centerEntityRef.current]),
-      centerFocus: crossed,
-      // The settled scale drives the counter-scaled title overlay and the
-      // screen-constant edge furniture; re-applied only on the debounced tick.
+    const capture = semanticCaptureRef.current;
+    if (host === null || capture === null) return;
+    const box = measureViewportSize(host);
+    const layout = solveSemanticZoom(capture.geometry, {
       scale,
+      viewport: box,
+      previousTier: semanticTierRef.current,
+      minFontPx: coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
     });
-    setLodDepth(depth);
+    semanticTierRef.current = layout.tier;
+    drawSemanticLayout(
+      host,
+      capture,
+      layout,
+      coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
+    );
+    // A rewritten SVG is a fresh set of elements: re-pin the selection and the
+    // unselectable declaration, exactly as the render effect does.
+    applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
+    highlightSelection(host, selectedRef.current);
+    markDrawingUnselectable(host);
+    if (neighborCenterRef.current !== null) {
+      nodeElement(host, neighborCenterRef.current)?.classList.add('arch-center');
+    }
+    setLodDepth(lodDepthForTier(layout.tier));
+    setDrawnRevision((revision) => revision + 1);
+    // The zoom anchor is the densest window of the mapped layout, not the
+    // bounding-box centre: on a sparse drawing the centre is blank space. A
+    // "tap a package" request overrides it with that package's frame.
+    const width = host.clientWidth;
+    const height = host.clientHeight;
+    if (width > 0 && height > 0) {
+      const requested = centerPackageOnApplyRef.current;
+      centerPackageOnApplyRef.current = null;
+      const target = requested === null
+        ? null
+        : layout.packages.find((entry) => entry.id === requested) ?? null;
+      if (target === null) {
+        host.scrollLeft = Math.max(0, layout.anchor.x - width / 2);
+        host.scrollTop = Math.max(0, layout.anchor.y - height / 2);
+      } else {
+        const centreX = target.frame.x - layout.content.x + target.frame.width / 2;
+        const centreY = target.frame.y - layout.content.y + target.frame.height / 2;
+        host.scrollLeft = Math.max(0, centreX - width / 2);
+        host.scrollTop = Math.max(0, centreY - height / 2);
+      }
+    }
   }, []);
-
+  applyLodRef.current = applyLod;
   // One controller per mount: it survives the renderer replacing the SVG (each
   // render re-attaches), so the mode and scale outlive a single drawing.
   useEffect(() => {
@@ -1694,6 +2250,16 @@ export function PlantUmlGraph({
         // Relations get their enlarged, invisible hit bands; the panel's
         // selection is repainted on top of the fresh drawing.
         addEdgeHitTargets(host, coarsePointer);
+        // A drawing that is semantically zoomed is captured BEFORE any
+        // selection decoration: every later application restores this snapshot,
+        // so no decoration can accumulate. The grouped overview (a directory
+        // map, not a UML drawing) keeps the ordinary CSS-scaled viewport.
+        const semanticEligible = !diagram.grouped && !(view.kind === 'overview' && !entityGraph);
+        const capture = semanticEligible ? captureSemanticDrawing(host, graph) : null;
+        semanticCaptureRef.current = capture;
+        semanticTierRef.current = null;
+        const viewportForMode = viewportRef.current;
+        viewportForMode?.setSemanticMode(capture?.baseSize ?? null);
         applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
@@ -1722,7 +2288,7 @@ export function PlantUmlGraph({
           viewport.attach(drawing);
           const seedHierarchy = buildSeedHierarchy(graph, idShape);
           seedHierarchyRef.current = seedHierarchy;
-          const natural = readSvgNaturalSize(drawing);
+          const natural = naturalOfDrawing(drawing);
           const box = measureViewportSize(host);
           const fitScale = natural !== null && box !== null
             ? fitZoomScale(natural, box, MIN_ZOOM_SCALE)
@@ -1767,54 +2333,53 @@ export function PlantUmlGraph({
         }
         // A fresh SVG has no highlight classes; re-pin the current selection.
         highlightSelection(host, selectedRef.current);
-        centerEntityRef.current = null;
+        neighborCenterRef.current = null;
         if (view.kind === 'neighborhood') {
           const center = diagram.rendererEntity;
           if (center !== null) {
             const id = reverseAliases(diagram.aliasOf).get(center);
             if (id !== undefined) {
-              centerEntityRef.current = id;
+              neighborCenterRef.current = id;
               nodeElement(host, id)?.classList.add('arch-center');
             }
           }
         }
-        // A new drawing gets its LOD applied synchronously, so it never flashes
-        // at the wrong detail before the debouncer fires. The FILE overview —
-        // and a group view that still shows directory groups — has no entities
-        // or package frames to collapse, so it stays out of the LOD. The class
-        // view keeps its LOD in every view kind: even its overview draws the
-        // same entity document, so zooming must still fold entities into the
-        // package counts.
-        //
-        // A re-layout of the SAME view (the container's shape changed) is not a
-        // new drawing in the user's eyes: keep the level they were reading and
-        // re-centre the package they were focused on. Any other drawing derives
-        // both from the fresh fit scale.
+        // A new drawing gets its semantic layout applied synchronously, so it
+        // never flashes at the wrong detail before the debouncer fires. A
+        // re-layout of the SAME view (the container's shape changed) is not a
+        // new drawing in the reader's eyes: keep the tier they were reading.
+        // Any other drawing derives the tier from the fresh fit scale.
         const drawingKey = drawingKeyOf(view);
-        const carriedDepth = drawingKey === drawnKeyRef.current ? lodDepthRef.current : null;
+        const carriedTier = drawingKey === drawnKeyRef.current ? semanticTierRef.current : null;
         drawnKeyRef.current = drawingKey;
-        if (diagram.grouped || (view.kind === 'overview' && !entityGraph)) {
-          lodRef.current = null;
-          lodDepthRef.current = null;
+        if (capture === null) {
+          semanticTierRef.current = null;
           setLodDepth(null);
         } else {
-          const hierarchy = buildExplosionHierarchy(host, graph, idShape);
-          lodRef.current = { hierarchy, edges: graph.edges };
-          const depth = carriedDepth ?? resolveLodDepth(drawnScale, null);
-          lodDepthRef.current = depth;
-          applyExplosionLod({
-            host,
-            hierarchy,
-            edges: graph.edges,
-            depth,
-            focusPackageId: focusPackageOf(hierarchy, [selectedRef.current, centerEntityRef.current]),
-            // A fresh drawing was just fitted; scrolling it would fight the
-            // fit rather than preserve a focus across a level cross. A carried
-            // level is exactly the case where the focus should be restored.
-            centerFocus: carriedDepth !== null,
+          semanticTierRef.current = carriedTier;
+          const layout = solveSemanticZoom(capture.geometry, {
             scale: drawnScale,
+            viewport: measureViewportSize(host),
+            previousTier: carriedTier,
+            minFontPx: coarsePointer ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
           });
-          setLodDepth(depth);
+          semanticTierRef.current = layout.tier;
+          const fontPx = coarsePointer ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
+          drawSemanticLayout(host, capture, layout, fontPx);
+          applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
+          highlightSelection(host, selectedRef.current);
+          markDrawingUnselectable(host);
+          if (neighborCenterRef.current !== null) {
+            nodeElement(host, neighborCenterRef.current)?.classList.add('arch-center');
+          }
+          setLodDepth(lodDepthForTier(layout.tier));
+          setDrawnRevision((revision) => revision + 1);
+          const hostWidth = host.clientWidth;
+          const hostHeight = host.clientHeight;
+          if (hostWidth > 0 && hostHeight > 0) {
+            host.scrollLeft = Math.max(0, layout.anchor.x - hostWidth / 2);
+            host.scrollTop = Math.max(0, layout.anchor.y - hostHeight / 2);
+          }
         }
         // The readable default's focus jump runs AFTER the LOD application:
         // the LOD only recentres on a level cross, so this is the one scroll
@@ -1862,7 +2427,7 @@ export function PlantUmlGraph({
       drawnLayoutRef.current = null;
       drawnCallbackRef.current?.(null);
     };
-  }, [applyPlacement, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, placementForDecision, projectId, view]);
+  }, [applyPlacement, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, placementForDecision, projectId, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -2005,7 +2570,7 @@ export function PlantUmlGraph({
       // the too-small overview hint offers, on every pointer tier. This runs
       // before the background-clear branch because a frame carries no
       // `data-entity-id` of its own.
-      if (lodDepthRef.current === PACKAGE_LOD_DEPTH) {
+      if (semanticTierRef.current === 'C') {
         const frame = event.target instanceof Element
           ? event.target.closest('.uml-package[data-package-id]')
           : null;
@@ -2203,7 +2768,7 @@ export function PlantUmlGraph({
       const viewport = viewportRef.current;
       if (viewport === null) return;
       const drawing = host.querySelector('svg');
-      const natural = drawing === null ? null : readSvgNaturalSize(drawing);
+      const natural = naturalOfDrawing(drawing);
       const box = measureViewportSize(host);
       if (natural === null || box === null) return;
       const currentView = viewRef.current;
@@ -2245,7 +2810,7 @@ export function PlantUmlGraph({
     const overlays = host.parentElement?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]');
     if (overlays !== undefined && overlays !== null) observer.observe(overlays);
     return () => observer.disconnect();
-  }, [applyPlacement, applyZoom, placementForDecision, scheduleAspectRelayout]);
+  }, [applyPlacement, applyZoom, naturalOfDrawing, placementForDecision, scheduleAspectRelayout]);
 
   // The zoom is read through `zoomRef` when the debounced application runs, so
   // a burst of wheel/resize updates coalesces into one visibility toggle rather
@@ -2278,7 +2843,7 @@ export function PlantUmlGraph({
     const viewport = viewportRef.current;
     if (host === null || viewport === null) return;
     const drawing = host.querySelector('svg');
-    const natural = drawing === null ? null : readSvgNaturalSize(drawing);
+    const natural = naturalOfDrawing(drawing);
     const box = measureViewportSize(host);
     if (natural === null || box === null) return;
     const currentView = viewRef.current;
@@ -2304,7 +2869,7 @@ export function PlantUmlGraph({
     if (decision.mode === 'focus' && decision.focusPackageId !== null) {
       centerOnPackage(host, decision.focusPackageId);
     }
-  }, [applyPlacement, applyZoom, placementForDecision, projectId]);
+  }, [applyPlacement, applyZoom, naturalOfDrawing, placementForDecision, projectId]);
 
   const fitDiagram = (): void => {
     const host = hostRef.current;
@@ -2319,7 +2884,7 @@ export function PlantUmlGraph({
     // "Fit to view" follows the readable mode in force: the whole-graph fit in
     // overview, the readable fit (plus its focus) in focus mode.
     const drawing = host.querySelector('svg');
-    const natural = drawing === null ? null : readSvgNaturalSize(drawing);
+    const natural = naturalOfDrawing(drawing);
     const box = measureViewportSize(host);
     if (natural === null || box === null) {
       applyZoom({ scale: viewport.fit(), mode: 'fit' });
@@ -3061,10 +3626,14 @@ export function PlantUmlGraph({
         >
           <ArchitectureMinimap
             hostRef={hostRef}
-            // A new drawing is a new set of node rectangles; the same drawing
-            // re-fitted or re-zoomed only moves the range frame.
-            revision={drawn}
-            scale={zoom.scale}
+            // A new drawing, and every semantic rewrite, is a new set of node
+            // rectangles; the same drawing re-fitted or panned only moves the
+            // range frame.
+            revision={`${drawnRevision}:${semanticTierRef.current ?? ''}`}
+            // In semantic mode the SVG is already sized in mapped screen
+            // units, so the drawing's scale is 1 — the non-linear map lives in
+            // the geometry, not in the minimap's arithmetic.
+            scale={semanticCaptureRef.current !== null ? 1 : zoom.scale}
           />
           {/* The zoom cluster floats at the bottom right OF the drawing: the
               three controls act on it, so they stay next to it instead of in
@@ -3099,11 +3668,11 @@ export function PlantUmlGraph({
             </span>
             {lodDepth !== null && (
               <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
-                {lodDepth === 0
-                  ? t('architecture.plantuml.lod.packages', { defaultValue: 'Packages' })
+                {lodDepth === 2
+                  ? t('architecture.plantuml.lod.tierNames', { defaultValue: 'Names' })
                   : lodDepth === 1
-                    ? t('architecture.plantuml.lod.subpackages', { defaultValue: 'Subpackages' })
-                    : t('architecture.plantuml.lod.entities', { defaultValue: 'Entities' })}
+                    ? t('architecture.plantuml.lod.tierFrames', { defaultValue: 'Frames' })
+                    : t('architecture.plantuml.lod.tierPackages', { defaultValue: 'Packages' })}
               </span>
             )}
           </div>

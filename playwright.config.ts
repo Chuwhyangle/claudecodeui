@@ -384,7 +384,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // interaction-heavy entries below declare; it keeps a load-slowed fan-in run
   // from being killed mid-case by the watchdog while leaving ~50% headroom over
   // the measured wall clock (boot, both servers and the browser launch included).
-  'architecture-canvas-layout.spec.ts': 120_000,
+  // Raised to 240_000 for the semantic-zoom rewrite (2026-10-23): the main arm
+  // now walks five zoom levels on BOTH viewports and the control arm injects
+  // four defects, which adds two real pages and ten readings to the same
+  // invocation. 240_000 is the value the other interaction-heavy entries below
+  // declare; the measured wall clock is recorded in the task's Evidence.
+  'architecture-canvas-layout.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
