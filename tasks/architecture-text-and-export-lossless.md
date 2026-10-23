@@ -37,7 +37,7 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0：新增用例——用 41、150、600 个实体的夹具，Text 面板三个范围的文本、Copy、Download、"Copy as session context" 与托盘附件文本都不含匹配 `… \+?\d+ more` 或 `\(\d+ members\)` 的行；每个实体块里的成员行数等于夹具里该实体的成员数；`renderDetailed` 被调用时带 `detail: 'full'`；Text 面板「Whole filtered graph」文本与 Export 菜单的 .puml 文本逐行相等（同一来源）；既有用例不回归
+- [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0：新增用例——用 41、150、600 个实体的夹具，Text 面板三个范围的文本、Copy、Download、"Copy as session context" 与托盘附件文本都不含匹配 `… \+\d+ more` 或 `\(\d+ members\)` 的行；每个实体块里的成员行数等于夹具里该实体的成员数；`renderDetailed` 被调用时带 `detail: 'full'`；Text 面板「Whole filtered graph」文本与 Export 菜单的 .puml 文本逐行相等（同一来源）；既有用例不回归
 - [ ] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx src/modules/architecture/tests/selectionTray.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：Text 面板的字符数、行数读数随之变为完整文本的读数；托盘附件的体量分档（normal / large / huge）按完整文本重新计算；既有用例不回归
 - [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用 ≥ 41 个实体的夹具，在真实页面里读出 Text 面板的完整文本，不含 `… +N more` 行，成员行数与夹具一致
 - [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——恢复默认 detail（不传 `detail`）时 ≥ 41 个实体夹具里出现标记行、读数变红，主臂与控制臂用同一读取函数
