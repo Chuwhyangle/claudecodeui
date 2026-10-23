@@ -266,8 +266,11 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // architecture-graph-endpoint's route criterion) brought the collection to 395 files.
     // Then gap-claude-host-driver-extension-point added its criterion
     // server/modules/providers/tests/claude-resident-outcome-registry.test.ts (395 + 1 = 396).
-    // This fixture names 3 known files, so 404 - 3 = 401.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=401$/);
+    // Then cockpit-hub-cross-device-state added its two criteria
+    // server/modules/cockpit/tests/cockpit-reducer.test.ts and cockpit-hub.test.ts
+    // (404 + 2 = 406 collected server test files).
+    // This fixture names 3 known files, so 406 - 3 = 403.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=403$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -316,9 +319,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 404 files on this tree — but this fixture names ONE known file,
-    // so 404 - 1 = 403 (AC2 reads 401 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=403$/);
+    // same collection as AC2 — 406 files on this tree — but this fixture names ONE known file,
+    // so 406 - 1 = 405 (AC2 reads 403 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=405$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

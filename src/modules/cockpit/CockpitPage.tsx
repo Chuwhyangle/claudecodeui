@@ -3,26 +3,20 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '@/shared/api';
-import { useWebSocketOptional } from '@/shared/context/WebSocketContext';
-import type { QuayFleetSummary, QuayFocusableObject, VoiceFailureReport } from '@/shared/types';
-import { buildQuayInFlightContract, parseQuayUri, useQuayStatus } from '@/modules/quay';
+import type {
+  CockpitHubView,
+  CockpitPendingSend,
+  QuayFleetSummary,
+  QuayFocusableObject,
+  QuayObjectUri,
+  VoiceFailureReport,
+} from '@/shared/types';
+import { buildQuayInFlightContract, useQuayStatus } from '@/modules/quay';
 import CockpitInput from '@/modules/cockpit/CockpitInput';
 import CockpitStage from '@/modules/cockpit/CockpitStage';
 import type { CockpitFleetStatus } from '@/modules/cockpit/CockpitStage';
-import type { CockpitIntent } from '@/modules/cockpit/cockpitIntent';
-import {
-  openCockpitSendGate,
-  cockpitProjectForUri,
-  pinCockpitTargetSession,
-  routeCockpitText,
-} from '@/modules/cockpit/cockpitRouting';
-import type {
-  CockpitFleetPort,
-  CockpitFleetReading,
-  CockpitFleetWriteResult,
-  CockpitSendGate,
-  CockpitSendPreview,
-} from '@/modules/cockpit/cockpitRouting';
+import { pinCockpitTargetSession } from '@/modules/cockpit/cockpitRouting';
+import type { CockpitFleetPort, CockpitFleetReading, CockpitFleetWriteResult } from '@/modules/cockpit/cockpitRouting';
 import {
   buildCockpitFleetContract,
   cockpitViewPath,
@@ -31,16 +25,23 @@ import {
   projectNameFromPath,
 } from '@/modules/cockpit/cockpitView';
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
-import { useCockpitFocus } from '@/modules/cockpit/hooks/useCockpitFocus';
+import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
 
 /**
- * The cockpit's top-level page (`/cockpit`): a read-only stage over the quay fleet.
+ * The cockpit's top-level page (`/cockpit`): a stage over the quay fleet whose focus, view and
+ * confirmation card are owned by the SERVER-SIDE cockpit hub.
  *
- * It owns the three pieces of state the stage is built from — the fleet reading, the current
- * view (carried in the URL, so it is linkable and reloadable) and focus over the view's
- * declared objects — and it is the one place that turns a key press or a submitted phrase into
- * one of them. Nothing here mutates quay; the page only reads and points.
+ * WHY THE PAGE OWNS NO TRANSITIONS. The desktop browser is a display: a global hotkey, or any
+ * key pressed while its window is in the background, never reaches the page. The input comes
+ * from a device that is always in hand, so the two roles talk through one shared state — the
+ * hub — and this page only (a) renders the state it was last broadcast, (b) turns a key press
+ * or a submitted phrase into an EVENT, and (c) reports what it is showing so the hub's input
+ * pack describes the display rather than the device that happened to speak.
+ *
+ * Nothing here mutates quay. The only write the page performs is the user's explicit 「钉选」
+ * action; a confirmed message is sent by the hub through the same session-send service the
+ * chat composer uses.
  */
 
 /** One fleet reading; the discriminated union keeps a failed read from being drawn as empty. */
@@ -49,12 +50,11 @@ type FleetReading =
   | { status: 'loaded'; projects: CockpitProject[] }
   | { status: 'error'; message: string };
 
-/** A view change whose intent → first-frame latency is still being measured. `startedAt` is
- * absent for a change triggered from a click, where the measurement starts at the handler. */
+/** A view change whose intent → first-frame latency is still being measured. */
 type PendingTiming = {
   source: CockpitTiming['source'];
   input: string;
-  startedAt?: number;
+  startedAt: number;
 };
 
 /**
@@ -65,16 +65,8 @@ type PendingTiming = {
 const PAGE_LOADED_AT = performance.now();
 
 /**
- * Why a phrase produced no action: the parser matched no view command and the cockpit found no
- * conversation to route it to. `text` is the phrase verbatim, so the notice can quote what it
- * could not place instead of guessing at a nearby object.
- */
-type IntentFeedback = { text: string; reason: 'no-focus' | 'no-session' };
-
-/**
  * True when the focused element owns keyboard input. The stage must not steal arrows or Enter
- * while the cockpit's own input (or any other field) has focus — that is the whole point of
- * AC4's split.
+ * while the cockpit's own input (or any other field) has focus.
  */
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -88,11 +80,30 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 /**
- * Normalizes a pending timing, stamping the start at handler time when the caller did not
- * capture one (a click has no earlier "parse" instant to measure from).
+ * The hub's view → the page's view. The hub speaks in `quay://` project segments (fleet
+ * registry ids); the page fetches and links by CloudCLI project id. An unregistered segment
+ * has no board to show, so it stays on the fleet rather than inventing a URL.
  */
-function stampTiming(timing: PendingTiming): PendingTiming {
-  return { ...timing, startedAt: timing.startedAt ?? performance.now() };
+function cockpitViewForHubView(
+  projects: readonly CockpitProject[],
+  hubView: CockpitHubView,
+): CockpitView {
+  if (hubView.type === 'fleet') return { type: 'fleet' };
+  const segment = hubView.project.toLowerCase();
+  const project =
+    projects.find((candidate) => (candidate.fleetProjectId ?? '').toLowerCase() === segment) ??
+    projects.find((candidate) => candidate.name.toLowerCase() === segment);
+  return project === undefined ? { type: 'fleet' } : { type: 'board', project: project.projectId };
+}
+
+/** The fleet registry segment a page view addresses, or null (fleet / unregistered project). */
+function fleetSegmentForView(
+  projects: readonly CockpitProject[],
+  view: CockpitView,
+): string | null {
+  if (view.type === 'fleet') return null;
+  const project = projects.find((candidate) => candidate.projectId === view.project);
+  return project?.fleetProjectId ?? null;
 }
 
 /** Rendered by `App` for the `/cockpit` route. */
@@ -100,42 +111,34 @@ export default function CockpitPage() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
+  const hub = useCockpitHub();
+  const hubState = hub.state;
 
   // The fleet reading behind the project strip and the fleet tiles (`GET /api/quay/fleet-summary`).
   const [fleet, setFleet] = useState<FleetReading>({ status: 'loading' });
-  // The submitted phrase's unmatched feedback; `null` means the last phrase resolved or nothing
-  // was submitted yet. Kept as state because the UI must state "not recognised" verbatim.
+  // The input box's draft. The only page-local state the stage cannot derive: it is text being
+  // typed, not cockpit state, and it must survive the round trip that follows submission.
   const [intentText, setIntentText] = useState('');
-  const [intentFeedback, setIntentFeedback] = useState<IntentFeedback | null>(null);
-  // Every measured intent → first-frame latency, oldest first. Rendered as JSON on the root so
-  // the future scenario runner can read it without another interface.
+  // Every measured intent → first-frame latency, oldest first, published on the root for the
+  // scenario runner. A measurement, not cockpit state.
   const [timings, setTimings] = useState<CockpitTiming[]>([]);
-  // The confirmation card for one routed phrase. Non-null means NOTHING has been sent yet: the
-  // gate below owns the single transition, and this state is what draws the preview.
-  const [pendingSend, setPendingSend] = useState<CockpitSendPreview | null>(null);
-  // The project whose target conversation just received a message. Shown on the project strip
-  // until the next submission; the conversation's own status change is the session's business.
+  // The project whose target conversation just received a message, shown on the strip until the
+  // next submission. UI feedback for the person; the hub's `pendingSend` is the real card.
   const [sentProjectId, setSentProjectId] = useState<string | null>(null);
-  // The result of the last pin attempt, shown beside the preview. `null` means no attempt.
+  // The result of the last pin attempt, shown beside the card. `null` means no attempt.
   const [pinNotice, setPinNotice] = useState<string | null>(null);
   // The dictation chain's own failure sentence, shown where the cockpit's other notices are.
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
-  // The open confirmation gate. A ref, not state: it is a one-shot transition, not something the
-  // UI renders, and re-creating it on a render would re-open a gate the person already closed.
-  const gateRef = useRef<CockpitSendGate | null>(null);
 
-  // The views already shown, newest last. Backspace pops this rather than trusting the browser
-  // history stack, so a deep link (`?view=board&...`) still has a defined "back" (the fleet).
-  const viewHistoryRef = useRef<CockpitView[]>([]);
   // The change whose first committed render has not been observed yet; consumed by the effect
-  // below exactly once, so a latency is recorded once per real view change and never leaks into
-  // a later one.
+  // below exactly once, so a latency is recorded once per real view change.
   const pendingTimingRef = useRef<PendingTiming | null>(null);
   // The address the page opened on. A ref, not a reactive read: the mount-only effect below
   // must record the ORIGINAL URL, not whichever one a later view change navigated to.
   const initialUrlRef = useRef<string>(`${location.pathname}${location.search}`);
-
-  const view = useMemo(() => parseCockpitView(location.search), [location.search]);
+  // A deep link (`?view=board&project=…`) is restored into the hub ONCE, after the fleet reads,
+  // because the fleet registry id that addresses the hub is only known then.
+  const seededRef = useRef(false);
 
   const loadFleet = useCallback(async () => {
     setFleet({ status: 'loading' });
@@ -204,52 +207,15 @@ export default function CockpitPage() {
     [],
   );
 
-  /**
-   * The last-opened session, but only when it belongs to the project being addressed — the pointer
-   * is global, and routing a phrase about project A into project B's conversation would be the
-   * wrong-object failure this whole surface exists to prevent.
-   */
-  const readRecentSessionForProject = useCallback(async (projectId: string) => {
-    const response = await api.quayLastOpenedSession();
-    if (!response.ok) return null;
-    const pointer = (await response.json()) as { sessionId?: unknown };
-    const sessionId =
-      typeof pointer.sessionId === 'string' && pointer.sessionId !== '' ? pointer.sessionId : null;
-    if (sessionId === null) return null;
-    const detailsResponse = await api.sessionDetails(sessionId);
-    if (!detailsResponse.ok) return null;
-    const details = (await detailsResponse.json()) as {
-      data?: { project?: { projectId?: string } | null };
-    };
-    return details.data?.project?.projectId === projectId ? sessionId : null;
-  }, []);
-
-  /** One conversation's title for the preview bar; absent or unreadable falls back to its id. */
-  const readSessionTitle = useCallback(async (sessionId: string) => {
-    try {
-      const response = await api.sessionDetails(sessionId);
-      if (!response.ok) return null;
-      const details = (await response.json()) as { data?: { summary?: unknown } };
-      const summary = details.data?.summary;
-      return typeof summary === 'string' && summary.trim() !== '' ? summary.trim() : null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  /**
-   * Where a confirmed message goes: the chat websocket the whole app shares, addressing the
-   * target session by id. This is the same `chat.send` frame the composer sends and the same
-   * control service the MCP gateway's `session_send` uses — the cockpit opens no second path.
-   * `null` outside a provider (a standalone render) simply sends nothing.
-   */
-  const socket = useWebSocketOptional();
-  const sendToSession = useCallback(
-    (sessionId: string, content: string) => {
-      socket?.sendMessage({ type: 'chat.send', sessionId, content });
-    },
-    [socket],
+  const urlView = useMemo(() => parseCockpitView(location.search), [location.search]);
+  // The view the hub describes, translated into the page's vocabulary.
+  const hubView = useMemo(
+    () => cockpitViewForHubView(projects, hubState.view),
+    [hubState.view, projects],
   );
+  // Before the hub's first event the page honours its own URL: that is what makes a deep link
+  // open the board it names instead of flashing the fleet.
+  const view = hubState.rev === 0 ? urlView : hubView;
 
   const boardProjectId = view.type === 'board' ? view.project : null;
   // The board reads through the Quay module's own hook — the same snapshot request, cache
@@ -265,9 +231,7 @@ export default function CockpitPage() {
     [fleet],
   );
 
-  // The board's project segment: the fleet registry id, never the CloudCLI project id. The
-  // fleet summary and the board snapshot carry the same server join, so either is a valid
-  // source; `null` means the project is not registered and has no addressable objects.
+  // The board's project segment: the fleet registry id, never the CloudCLI project id.
   const boardFleetProjectId: string | null = view.type === 'board'
     ? projects.find((project) => project.projectId === view.project)?.fleetProjectId
       ?? (boardView.status === 'loaded' ? boardView.snapshot.fleetProjectId ?? null : null)
@@ -281,194 +245,110 @@ export default function CockpitPage() {
   }, [view, boardView, boardFleetProjectId]);
 
   const focusables = view.type === 'fleet' ? fleetFocusables : boardFocusables;
-  const focusState = useCockpitFocus(focusables);
-  const moveFocus = focusState.move;
-  const focusOn = focusState.focus;
-
-  const showView = useCallback(
-    (next: CockpitView, timing?: PendingTiming) => {
-      const unchanged =
-        next.type === view.type &&
-        (next.type === 'fleet' || (view.type === 'board' && next.project === view.project));
-      if (unchanged) {
-        return;
-      }
-      viewHistoryRef.current.push(view);
-      pendingTimingRef.current = timing === undefined ? null : stampTiming(timing);
-      navigate(cockpitViewPath(next));
-    },
-    [navigate, view],
+  // Focus is the hub's: the page only looks the address up in the set it is drawing. An address
+  // the current view does not declare renders as "no focus" (never as a local fallback).
+  const focusObject = useMemo(
+    () =>
+      hubState.focusUri === null
+        ? null
+        : focusables.find((object) => object.uri === hubState.focusUri) ?? null,
+    [focusables, hubState.focusUri],
   );
 
-  const goBack = useCallback(
-    (timing?: PendingTiming) => {
-      const previous = viewHistoryRef.current.pop();
-      const next: CockpitView = previous ?? (view.type === 'board' ? { type: 'fleet' } : view);
-      const unchanged =
-        next.type === view.type &&
-        (next.type === 'fleet' || (view.type === 'board' && next.project === view.project));
-      if (unchanged) {
-        return;
-      }
-      pendingTimingRef.current = timing === undefined ? null : stampTiming(timing);
-      // Replace rather than push: "back" must not grow the browser stack it is walking.
-      navigate(cockpitViewPath(next), { replace: true });
-    },
-    [navigate, view],
-  );
+  // Restore a deep-linked view into the hub once the fleet roster can translate it.
+  useEffect(() => {
+    if (seededRef.current || fleet.status !== 'loaded') return;
+    seededRef.current = true;
+    if (urlView.type === 'fleet') return;
+    // The hub already has a view (another display drove it): the URL is stale, the hub wins.
+    if (hubState.rev !== 0 || hubState.view.type !== 'fleet') return;
+    const segment = fleetSegmentForView(projects, urlView);
+    if (segment !== null) {
+      hub.dispatch({ type: 'setView', view: { type: 'board', project: segment } });
+    }
+  }, [fleet.status, hub, hubState.rev, hubState.view, projects, urlView]);
 
-  const zoomIn = useCallback(
-    (timing?: PendingTiming) => {
-      const focused = focusState.focusObject;
-      if (focused === null) {
-        return;
-      }
-      const parsed = parseQuayUri(focused.uri);
-      // This stage ships project → board. Task → task detail belongs to the wall's later work,
-      // so a task focus is a stated no-op rather than an invented sub-view.
-      if (!parsed.ok || parsed.object.type !== 'board') {
-        return;
-      }
-      // The address's project segment is the fleet registry id, while the view description
-      // (and the snapshot route behind it) is keyed by the CloudCLI project id — resolve the
-      // one to the other rather than writing a fleet id into the URL.
-      const project = cockpitProjectForUri(projects, focused.uri);
-      if (project === null) {
-        return;
-      }
-      showView({ type: 'board', project: project.projectId }, timing);
-    },
-    [focusState.focusObject, projects, showView],
-  );
-
-  /** Applies a recognised intent to the stage. Routing decisions never reach here. */
-  const applyIntent = useCallback(
-    (intent: CockpitIntent, text: string, startedAt: number) => {
-      switch (intent.kind) {
-        case 'view':
-          showView(intent.view, { source: 'intent', input: text, startedAt });
-          break;
-        case 'focus':
-          focusOn(intent.uri);
-          break;
-        case 'zoom-in':
-          zoomIn({ source: 'intent', input: text, startedAt });
-          break;
-        case 'back':
-          goBack({ source: 'intent', input: text, startedAt });
-          break;
-        case 'unmatched':
-          // `routeCockpitText` never returns this arm; kept exhaustive on purpose so a new intent
-          // kind cannot be added without this switch being visited.
-          setIntentFeedback({ text: intent.text, reason: 'no-focus' });
-          break;
-      }
-    },
-    [focusOn, goBack, showView, zoomIn],
-  );
-
-  /**
-   * The ONE submit path for typed and dictated text.
-   *
-   * The parser decides the destination: a recognised phrase changes the view (reversible), and
-   * anything else is routed to the focused project's target conversation — as a PREVIEW, never
-   * as a send. Nothing leaves until {@link confirmSend}; that is the whole point of the gate.
-   */
-  const handleSubmit = useCallback(
-    async (text: string) => {
-      const startedAt = performance.now();
-      setIntentText('');
-      setVoiceNotice(null);
-      setPinNotice(null);
-
-      const decision = await routeCockpitText({
-        text,
-        visible: focusables,
-        projects,
-        focusUri: focusState.focusUri,
-        fleet: fleetPort,
-        recentSessionId: readRecentSessionForProject,
-        sessionTitle: readSessionTitle,
-      });
-
-      switch (decision.kind) {
-        case 'intent':
-          setIntentFeedback(null);
-          applyIntent(decision.intent, text, startedAt);
-          break;
-        case 'preview': {
-          setIntentFeedback(null);
-          gateRef.current = openCockpitSendGate(decision.preview, sendToSession);
-          setPendingSend(decision.preview);
-          break;
-        }
-        case 'no-target':
-          // No guess, no send: the notice quotes the phrase and says what was missing.
-          setIntentFeedback({ text: decision.text, reason: decision.reason });
-          break;
-      }
-    },
-    [
-      applyIntent,
-      fleetPort,
-      focusState.focusUri,
+  // The display's report: exactly what this page is drawing, published to the hub so the input
+  // pack is built from the screen the person is looking at. Serialized as the effect key so a
+  // re-render with identical content does not send a duplicate frame.
+  const visibleReport = useMemo(
+    () => ({
+      viewUri: cockpitViewUri(view, boardFleetProjectId),
       focusables,
-      projects,
-      readRecentSessionForProject,
-      readSessionTitle,
-      sendToSession,
-    ],
+      projects: projects.map((project) => ({
+        projectId: project.projectId,
+        fleetProjectId: project.fleetProjectId ?? null,
+        name: project.name,
+        projectPath: project.projectPath,
+      })),
+    }),
+    [boardFleetProjectId, focusables, projects, view],
   );
+  const visibleReportKey = JSON.stringify(visibleReport);
+  // True when the hub's view is the one this page is drawing. A deep link to a project the
+  // fleet has not registered has no hub address, so the page keeps rendering its URL view and
+  // does NOT report a stage the hub cannot describe (reporting would flip the hub to `fleet`
+  // and take the board away with it).
+  const hubDescribesView = useMemo(() => {
+    if (view.type === 'fleet') return hubState.view.type === 'fleet';
+    const segment = fleetSegmentForView(projects, view);
+    return (
+      segment !== null &&
+      hubState.view.type === 'board' &&
+      hubState.view.project.toLowerCase() === segment.toLowerCase()
+    );
+  }, [hubState.view, projects, view]);
+  // The latest report, kept in a ref so the send effect can key on the SERIALIZED value: a new
+  // hub frame re-creates the object identities, and depending on them would report in a loop.
+  const visibleReportRef = useRef(visibleReport);
+  useEffect(() => {
+    visibleReportRef.current = visibleReport;
+  });
+  const reportVisible = hub.reportVisible;
+  useEffect(() => {
+    // Nothing to report until the roster is known: an early report would describe a fleet that
+    // has not loaded, and the hub would build packs from it.
+    if (fleet.status !== 'loaded' || !hub.connected || !seededRef.current) return;
+    if (!hubDescribesView) return;
+    reportVisible(visibleReportRef.current);
+  }, [fleet.status, hub.connected, hubDescribesView, reportVisible, visibleReportKey]);
 
-  /** Sends the preview that is on screen, exactly once, and records「已发送」 on its project. */
-  const confirmSend = useCallback(() => {
-    const gate = gateRef.current;
-    if (gate === null) return;
-    gateRef.current = null;
-    gate.confirm();
-    setPendingSend(null);
-    setPinNotice(null);
-    setSentProjectId(gate.preview.projectId);
-  }, []);
-
-  /** Abandons the preview without sending. */
-  const cancelSend = useCallback(() => {
-    gateRef.current?.cancel();
-    gateRef.current = null;
-    setPendingSend(null);
-    setPinNotice(null);
-  }, []);
+  // The URL follows the hub's view, so a view is linkable and a reload restores it. Replace,
+  // not push: the browser's back stack is not this stage's history (the hub's stack is).
+  // Compared as VIEWS, not as strings: `/cockpit` and `?view=fleet` are the same stage, and
+  // rewriting an empty query to an explicit one would be a navigation nobody asked for.
+  const viewPath = cockpitViewPath(view);
+  useEffect(() => {
+    const current = parseCockpitView(location.search);
+    const alreadyThere =
+      current.type === view.type &&
+      (view.type === 'fleet' ||
+        (current.type === 'board' && current.project === view.project));
+    if (alreadyThere) return;
+    navigate(viewPath, { replace: true });
+  }, [location.search, navigate, view, viewPath]);
 
   /**
-   * 「钉选为目标会话」: writes the preview's target into the fleet registry, then marks the
-   * preview as pinned. The fleet's own refusal reason is shown verbatim — the dev-session
-   * refusal is actionable, so paraphrasing it would hide the fix.
+   * The send seam's explicit 「钉选」 action. It writes to the fleet registry, then tells the hub
+   * the card is pinned; the hub is the one place the card's source is recorded.
    */
   const pinTarget = useCallback(async () => {
-    const preview = pendingSend;
-    if (preview === null) return;
-    const result = await pinCockpitTargetSession(fleetPort, preview.projectId, preview.sessionId);
+    const target = hubState.pendingSend?.target;
+    if (target == null || target.projectId === null) return;
+    const result = await pinCockpitTargetSession(fleetPort, target.projectId, target.sessionId);
     if (!result.ok) {
       setPinNotice(t('cockpit.pinRefused', { reason: result.reason }));
       return;
     }
-    const pinned: CockpitSendPreview = {
-      ...preview,
-      source: 'pinned',
-      fleetUnavailableReason: null,
-    };
-    gateRef.current = openCockpitSendGate(pinned, sendToSession);
-    setPendingSend(pinned);
+    hub.dispatch({ type: 'pinTarget' });
     setPinNotice(t('cockpit.pinned'));
-  }, [fleetPort, pendingSend, sendToSession, t]);
+  }, [fleetPort, hub, hubState.pendingSend, t]);
 
-  // The value the dictation is committed into: the box as it stood when THIS listen opened, so
-  // segments committed one after another replace the listen's own text instead of stacking it.
+  // The value the dictation is committed into: the box as it stood when THIS listen opened.
   const voiceBaseRef = useRef('');
   const previousVoiceStateRef = useRef<'idle' | 'recording' | 'transcribing'>('idle');
 
-  // Dictation lands in the input box and nowhere else. The hook's `send` flag is deliberately
-  // dropped: confirming a send is a separate, explicit act.
+  // Dictation lands in the input box and nowhere else. Confirming a send is a separate act.
   const pushToTalk = useCockpitPushToTalk({
     onTranscript: useCallback((text: string) => {
       const base = voiceBaseRef.current.trim();
@@ -477,7 +357,7 @@ export default function CockpitPage() {
     onError: useCallback((failure: VoiceFailureReport) => {
       setVoiceNotice(typeof failure === 'string' ? failure : failure.code ?? 'VOICE_FAILED');
     }, []),
-    // The recogniser's hotwords: what the stage shows, plus the project names the person can say.
+    // The recogniser's hotwords: what the stage shows, plus the project names a person can say.
     candidates: useMemo(
       () => [
         ...projects.map((project) => project.name),
@@ -486,7 +366,7 @@ export default function CockpitPage() {
       [focusables, projects],
     ),
     // While a confirmation is open, Space belongs to the confirmation, not to a new listen.
-    enabled: pendingSend === null,
+    enabled: hubState.pendingSend === null,
   });
 
   useEffect(() => {
@@ -498,12 +378,55 @@ export default function CockpitPage() {
     }
   }, [intentText, pushToTalk.state]);
 
+  /** The ONE submit path: the phrase becomes an event; the hub decides intent vs. a send card. */
+  const handleSubmit = useCallback(
+    (text: string) => {
+      if (text.trim() === '') return;
+      setIntentText('');
+      setVoiceNotice(null);
+      setPinNotice(null);
+      pendingTimingRef.current = {
+        source: 'intent',
+        input: text,
+        startedAt: performance.now(),
+      };
+      hub.dispatch({ type: 'utterance', text });
+    },
+    [hub],
+  );
+
+  const confirmSend = useCallback(() => {
+    const target = hubState.pendingSend?.target;
+    hub.dispatch({ type: 'confirm' });
+    setPinNotice(null);
+    if (target?.projectId != null) setSentProjectId(target.projectId);
+  }, [hub, hubState.pendingSend]);
+
+  const cancelSend = useCallback(() => {
+    hub.dispatch({ type: 'cancel' });
+    setPinNotice(null);
+  }, [hub]);
+
+  /** The hub's view, from a pointer on a fleet tile: address it and let the hub stack it. */
+  const openProject = useCallback(
+    (project: CockpitProject) => {
+      const segment = project.fleetProjectId ?? null;
+      if (segment === null) return;
+      pendingTimingRef.current = {
+        source: 'pointer',
+        input: project.name,
+        startedAt: performance.now(),
+      };
+      hub.dispatch({ type: 'setView', view: { type: 'board', project: segment } });
+    },
+    [hub],
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // A confirmation owns Enter and Backspace wherever focus is: Enter sends the preview,
-      // Backspace abandons it. Without this, Enter in the (now empty) box would submit nothing
-      // and Backspace would walk the view history out from under the pending message.
-      if (pendingSend !== null) {
+      // A confirmation owns Enter and Backspace wherever focus is: Enter sends the card,
+      // Backspace abandons it.
+      if (hubState.pendingSend !== null) {
         if (event.key === 'Enter') {
           event.preventDefault();
           confirmSend();
@@ -524,27 +447,37 @@ export default function CockpitPage() {
       switch (event.key) {
         case 'ArrowDown':
           event.preventDefault();
-          moveFocus('down');
+          hub.dispatch({ type: 'move', direction: 'down' });
           break;
         case 'ArrowUp':
           event.preventDefault();
-          moveFocus('up');
+          hub.dispatch({ type: 'move', direction: 'up' });
           break;
         case 'ArrowRight':
           event.preventDefault();
-          moveFocus('right');
+          hub.dispatch({ type: 'move', direction: 'right' });
           break;
         case 'ArrowLeft':
           event.preventDefault();
-          moveFocus('left');
+          hub.dispatch({ type: 'move', direction: 'left' });
           break;
         case 'Enter':
           event.preventDefault();
-          zoomIn({ source: 'key', input: 'Enter', startedAt: performance.now() });
+          pendingTimingRef.current = {
+            source: 'key',
+            input: 'Enter',
+            startedAt: performance.now(),
+          };
+          hub.dispatch({ type: 'zoom', direction: 'in' });
           break;
         case 'Backspace':
           event.preventDefault();
-          goBack({ source: 'key', input: 'Backspace', startedAt: performance.now() });
+          pendingTimingRef.current = {
+            source: 'key',
+            input: 'Backspace',
+            startedAt: performance.now(),
+          };
+          hub.dispatch({ type: 'back' });
           break;
         default:
           // Escape is deliberately NOT handled: it aborts a running session turn elsewhere in
@@ -555,7 +488,7 @@ export default function CockpitPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cancelSend, confirmSend, moveFocus, goBack, pendingSend, zoomIn]);
+  }, [cancelSend, confirmSend, hub, hubState.pendingSend]);
 
   // One reading for the initial URL-driven mount: how long the first stage took to appear.
   useEffect(() => {
@@ -563,14 +496,18 @@ export default function CockpitPage() {
     setTimings([{ source: 'url', input: initialUrlRef.current, ms }]);
   }, []);
 
+  // An unmatched phrase is not a view change: drop the pending measurement rather than
+  // attributing it to whichever view change happens next.
+  useEffect(() => {
+    if (hubState.pendingSend !== null) pendingTimingRef.current = null;
+  }, [hubState.pendingSend]);
+
   const viewKey = view.type === 'board' ? `board:${view.project}` : 'fleet';
   useEffect(() => {
     const pending = pendingTimingRef.current;
-    if (pending === null) {
-      return;
-    }
+    if (pending === null) return;
     pendingTimingRef.current = null;
-    const ms = performance.now() - (pending.startedAt ?? performance.now());
+    const ms = performance.now() - pending.startedAt;
     setTimings((previous) => [...previous, { source: pending.source, input: pending.input, ms }]);
   }, [viewKey]);
 
@@ -579,16 +516,16 @@ export default function CockpitPage() {
   const lastTiming = timings.length > 0 ? timings[timings.length - 1] : null;
   const viewUri = cockpitViewUri(view, boardFleetProjectId);
   const focusedProjectName =
-    focusState.focusObject === null
+    focusObject === null
       ? null
-      : cockpitProjectForUri(projects, focusState.focusObject.uri)?.name ?? null;
+      : projects.find((project) => {
+          const segment = project.fleetProjectId ?? null;
+          return segment !== null &&
+            focusObject.uri.toLowerCase().startsWith(`quay://${segment.toLowerCase()}/`);
+        })?.name ?? null;
 
-  const openProject = (project: CockpitProject) => {
-    showView(
-      { type: 'board', project: project.projectId },
-      { source: 'pointer', input: project.name },
-    );
-  };
+  const pendingSend: CockpitPendingSend | null = hubState.pendingSend;
+  const pendingTarget = pendingSend?.target ?? null;
 
   return (
     <div
@@ -596,6 +533,8 @@ export default function CockpitPage() {
       data-testid="cockpit-page"
       data-cockpit-view={view.type}
       data-cockpit-timings={JSON.stringify(timings)}
+      data-cockpit-hub-rev={hubState.rev}
+      data-cockpit-hub-view={JSON.stringify(hubState.view)}
     >
       <header className="flex items-center justify-between gap-3 border-b border-border/40 px-4 py-2">
         <div className="flex items-center gap-2">
@@ -665,8 +604,8 @@ export default function CockpitPage() {
           fleetStatus={fleetStatus}
           fleetError={fleetError}
           focusables={focusables}
-          focusUri={focusState.focusUri}
-          onFocusObject={focusState.focus}
+          focusUri={focusObject?.uri ?? null}
+          onFocusObject={(uri) => hub.dispatch({ type: 'focus', uri: uri as QuayObjectUri })}
           boardProjectId={boardProjectId}
           boardView={boardView}
           onRefreshBoard={refreshBoard}
@@ -675,17 +614,17 @@ export default function CockpitPage() {
 
       <footer className="border-t border-border/40 px-4 py-2" data-testid="cockpit-status">
         <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-          <span data-testid="cockpit-focus" data-cockpit-focus={focusState.focusUri ?? undefined}>
-            {t('cockpit.focus')}: {focusState.focusUri ?? t('cockpit.noFocus')}
+          <span data-testid="cockpit-focus" data-cockpit-focus={focusObject?.uri ?? undefined}>
+            {t('cockpit.focus')}: {focusObject?.uri ?? t('cockpit.noFocus')}
           </span>
           {focusedProjectName !== null && (
             <span data-testid="cockpit-focus-name">
-              {focusState.focusObject?.label} · {focusedProjectName}
+              {focusObject?.label} · {focusedProjectName}
             </span>
           )}
-          {focusState.focusObject !== null && focusedProjectName === null && (
+          {focusObject !== null && focusedProjectName === null && (
             <span data-testid="cockpit-focus-name">
-              {focusState.focusObject.label} · {focusState.focusObject.display.status}
+              {focusObject.label} · {focusObject.display.status}
             </span>
           )}
           <span data-testid="cockpit-view-uri" data-cockpit-view-uri={viewUri ?? undefined}>
@@ -696,13 +635,32 @@ export default function CockpitPage() {
               {t('cockpit.timingLast', { ms: Math.round(lastTiming.ms) })}
             </span>
           )}
+          {/*
+            「来自手机」: which device produced the last event. The name is the browser's own
+            announcement, and the arrow is language-neutral, so this needs no translated
+            sentence to stay readable in every locale.
+          */}
+          {hubState.lastEventSource !== null && (
+            <span
+              data-testid="cockpit-event-source"
+              data-cockpit-source-role={hubState.lastEventSource.role}
+              data-cockpit-source-device={hubState.lastEventSource.deviceId}
+              title={hubState.lastEventSource.deviceId}
+            >
+              ← {hubState.lastEventSource.deviceName ?? hubState.lastEventSource.deviceId}
+            </span>
+          )}
         </div>
 
-        {intentFeedback !== null && (
+        {/*
+          A phrase the hub could not place is stated verbatim rather than guessed at. When the
+          hub found no destination it is a notice, not a confirmation card: nothing will be sent.
+        */}
+        {pendingSend !== null && pendingTarget === null && (
           <p className="mb-2 text-xs text-amber-700 dark:text-amber-300" data-testid="cockpit-intent-unmatched">
-            {intentFeedback.reason === 'no-focus'
-              ? t('cockpit.noFocusTarget', { text: intentFeedback.text })
-              : t('cockpit.noTargetSession', { text: intentFeedback.text })}
+            {pendingSend.reason === 'no-focus'
+              ? t('cockpit.noFocusTarget', { text: pendingSend.text })
+              : t('cockpit.noTargetSession', { text: pendingSend.text })}
           </p>
         )}
 
@@ -713,43 +671,41 @@ export default function CockpitPage() {
         )}
 
         {/*
-          The confirmation card. It shows the destination in the person's own words — project,
-          conversation, text, and the references that will ride along — and nothing is sent until
-          the button (or Enter) is pressed. 「取消」 and Backspace abandon it.
-
-          `data-cockpit-send-pack` publishes the exact reference pack the message carries, for the
-          same reason the timings are published: a browser check reads what will leave rather than
-          inferring it from the rendered sentence.
+          The confirmation card, built by the hub from the DISPLAY's visible set. It shows the
+          destination in the person's own words — the text it will send, project, conversation
+          and the references that ride along — and nothing leaves until the button (or Enter) is
+          pressed. 「取消」 and Backspace abandon it.
         */}
-        {pendingSend !== null && (
+        {pendingSend !== null && pendingTarget !== null && (
           <div
             className="mb-2 rounded border border-border/60 bg-muted/40 px-2 py-1.5"
             data-testid="cockpit-send-preview"
-            data-cockpit-session={pendingSend.sessionId}
-            data-cockpit-send-source={pendingSend.source}
-            data-cockpit-send-pack={JSON.stringify(pendingSend.pack)}
+            data-cockpit-session={pendingTarget.sessionId}
+            data-cockpit-send-source={pendingTarget.source}
+            data-cockpit-send-refs={JSON.stringify([
+              ...(pendingSend.focusUri === null ? [] : [pendingSend.focusUri]),
+              ...pendingSend.visible.map((object) => object.uri),
+            ])}
           >
             <p className="text-xs" data-testid="cockpit-send-preview-line">
               {t('cockpit.sendPreview', {
-                project: pendingSend.projectName,
-                session: pendingSend.sessionTitle ?? pendingSend.sessionId,
+                project: pendingTarget.projectName ?? pendingTarget.projectId ?? '',
+                session: pendingTarget.sessionTitle ?? pendingTarget.sessionId,
                 text: pendingSend.text,
               })}
             </p>
             <p className="text-[11px] text-muted-foreground" data-testid="cockpit-send-references">
               {t('cockpit.sendReferences', {
                 refs: [
-                  ...(pendingSend.pack.focus === null
-                    ? []
-                    : [`${pendingSend.pack.focus.label} → ${pendingSend.pack.focus.uri}`]),
-                  ...pendingSend.pack.visible.map((object) => `${object.label} → ${object.uri}`),
+                  ...(pendingSend.focusUri === null ? [] : [pendingSend.focusUri]),
+                  ...pendingSend.visible.map((object) => `${object.label} → ${object.uri}`),
                 ].join('；'),
               })}
             </p>
             <p className="text-[11px] text-muted-foreground" data-testid="cockpit-send-source">
-              {pendingSend.source === 'pinned'
+              {pendingTarget.source === 'pinned'
                 ? t('cockpit.sendTargetPinned')
-                : pendingSend.fleetUnavailableReason !== null
+                : pendingTarget.fleetUnavailableReason !== null
                   ? t('cockpit.sendTargetRecentUnavailable')
                   : t('cockpit.sendTargetRecent')}
             </p>
@@ -774,15 +730,11 @@ export default function CockpitPage() {
                 type="button"
                 data-testid="cockpit-pin-target"
                 onClick={() => void pinTarget()}
-                disabled={pendingSend.fleetUnavailableReason !== null}
-                title={
-                  pendingSend.fleetUnavailableReason === null
-                    ? t('cockpit.pinTarget')
-                    : t('cockpit.pinUnavailable')
-                }
+                disabled={pendingTarget.projectId === null}
+                title={t('cockpit.pinTarget')}
                 className="rounded border border-border/60 px-2 py-0.5 text-[11px] disabled:opacity-50"
               >
-                {pendingSend.source === 'pinned' ? t('cockpit.pinned') : t('cockpit.pinTarget')}
+                {pendingTarget.source === 'pinned' ? t('cockpit.pinned') : t('cockpit.pinTarget')}
               </button>
               {pinNotice !== null && (
                 <span className="text-[11px] text-muted-foreground" data-testid="cockpit-pin-notice">
@@ -796,7 +748,7 @@ export default function CockpitPage() {
         <CockpitInput
           value={intentText}
           onValueChange={setIntentText}
-          onSubmit={(text) => void handleSubmit(text)}
+          onSubmit={handleSubmit}
           voiceState={pushToTalk.state}
           onVoiceToggle={pushToTalk.toggle}
           voiceInFlight={pushToTalk.inFlight}
