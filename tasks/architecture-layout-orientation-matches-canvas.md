@@ -31,15 +31,27 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：新增用例——宽画布（1151×578）加两实体依赖链夹具选 RIGHT 且适应缩放更大；窄画布（390×620）选向下；两种方向适应缩放相差不到 5% 时保持向下；实体数超过 150 或第一次布局耗时超过预算时不做第二次布局并给出原因；同输入同输出；缓存命中时不重复布局（计数）
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩放读数与布局读数包含所选方向与理由；既有用例不回归
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用两实体依赖链夹具，1440×765 视口下缺省图的面积填充率（图缩放后面积 / 画布面积）≥ 0.6，390×844 视口下 ≥ 0.6（修复前分别约 0.53 与 0.45）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——强制只用向下布局时 PC 视口的填充率读数越界变红，主臂与控制臂用同一读取函数
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：新增用例——宽画布（1151×578）加两实体依赖链夹具选 RIGHT 且适应缩放更大；窄画布（390×620）选向下；两种方向适应缩放相差不到 5% 时保持向下；实体数超过 150 或第一次布局耗时超过预算时不做第二次布局并给出原因；同输入同输出；缓存命中时不重复布局（计数）
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩放读数与布局读数包含所选方向与理由；既有用例不回归
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用两实体依赖链夹具，1440×765 视口下缺省图的面积填充率（图缩放后面积 / 画布面积）≥ 0.6，390×844 视口下 ≥ 0.6（修复前分别约 0.53 与 0.45）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——强制只用向下布局时 PC 视口的填充率读数越界变红，主臂与控制臂用同一读取函数
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
 真实浏览器里打开本项目任一含有两个以上实体的会话（例如本会话）的 Architecture 标签，PC 1440×765 与手机 390×844 各截一张缺省图，读出画布尺寸、图尺寸、填充率与所选方向（修复前 PC 0.53、手机 0.45）；再用较宽的 1920×900 视口看一遍。另在一个大图会话（实体数超过 150，例如 Quay OO 的 Show all 状态）确认没有变慢、方向保持向下。截图存 `tmp/` 并贴进 Evidence；过程中做过的任何改动必须还原。
+
+## Evidence
+
+实现与读数（2026-10-23，任务 worktree）：
+
+- 单元：`layoutAspect.test.tsx` 14 passed；`architectureTab.test.tsx` 112 passed；architecture 目录 29 files / 505 tests passed。
+- 真实浏览器（`e2e/architecture-canvas-layout.spec.ts`）：`29 passed (6.8m)`；`--grep "control arm"` `15 passed (2.3m)`；`playwright.config.ts` 的 `SPEC_BUDGET_MS` 已记录本次 6.8m 实测（660_000 仍有约 1.6x 余量）。
+- 两实体依赖链夹具（`orientation-chain`）：PC 1440×765 画布 1151×551，方向 RIGHT（`horizontal-fit-larger`），图 936×424，填充率 0.626；手机 390×844 画布 390×568，方向 DOWN（`canvas-not-wide`），图 389×435，填充率 0.758。
+- 控制臂（DEV-only `architecture-layout-orientation=down`）：同一夹具同一切手，强制 DOWN 填充率 0.422（低于 0.6，红）；换一张不带杠杆的页面恢复 RIGHT / 0.626。
+- 更宽视口 1920×900：画布 1631×719，仍选 RIGHT。大图（functions-384 Show all，396 实体）：方向 DOWN，`entity-budget-exceeded`（未做第二次布局），填充率 0.862。
+- 截图存 `tmp/`：`arch-chrome-orientation-pc.png`、`arch-chrome-orientation-phone.png`、`arch-chrome-orientation-control-down.png`、`arch-chrome-orientation-control-restored.png`、`arch-chrome-orientation-1920x900.png`、`arch-chrome-orientation-large-graph.png`。
+- 环境修复：共享 `node_modules` 原为 plantuml-js 0.4.0（package.json/lock 为 0.5.2），`architecture-node-size` 的既有断言因此基线红；按 lock 安装 0.5.2，未改 package.json / package-lock.json。
 
 ## Touches
 
