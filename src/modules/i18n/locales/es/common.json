@@ -635,5 +635,34 @@
       "updateAvailable": "Actualización disponible",
       "closeSidebar": "Cerrar barra lateral"
     }
+  },
+  "cockpit": {
+    "title": "Cabina",
+    "readOnly": "solo lectura",
+    "projectStrip": "Proyectos",
+    "fleetView": "Todos los proyectos",
+    "boardView": "Tablero",
+    "focus": "Foco",
+    "noFocus": "ninguno",
+    "loading": "Cargando…",
+    "projectsError": "No se pudo leer la flota de quay: {{message}}",
+    "retry": "Reintentar",
+    "emptyProjects": "No se informaron proyectos de quay.",
+    "driverRunning": "driver en ejecución",
+    "driverIdle": "driver inactivo",
+    "driverStale": "driver obsoleto",
+    "driverNotConfigured": "no configurado",
+    "driverUnavailable": "driver no disponible",
+    "tasksCount": "{{total}} tareas",
+    "readyCount": "{{n}} listas",
+    "needsHumanCount": "{{n}} necesitan ayuda",
+    "inFlight": "En curso",
+    "inFlightEmpty": "No se declararon tareas en curso.",
+    "intentPlaceholder": "Di qué quieres ver — p. ej. ver claudecodeui, el segundo, ampliar, volver, todos los proyectos",
+    "intentHint": "Enter ejecuta la frase · las flechas mueven el foco · Retroceso vuelve",
+    "intentSubmit": "Ejecutar",
+    "intentUnmatched": "No reconocido: «{{text}}». No se adivinó nada.",
+    "timingLast": "intención → primer fotograma {{ms}} ms",
+    "keyHint": "Flechas mueven el foco · Enter amplía · Retroceso vuelve"
   }
 }

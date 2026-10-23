@@ -635,5 +635,34 @@
       "updateAvailable": "Aggiornamento disponibile",
       "closeSidebar": "Chiudi barra laterale"
     }
+  },
+  "cockpit": {
+    "title": "Cabina",
+    "readOnly": "sola lettura",
+    "projectStrip": "Progetti",
+    "fleetView": "Tutti i progetti",
+    "boardView": "Bacheca",
+    "focus": "Fuoco",
+    "noFocus": "nessuno",
+    "loading": "Caricamento…",
+    "projectsError": "Impossibile leggere la flotta quay: {{message}}",
+    "retry": "Riprova",
+    "emptyProjects": "Nessun progetto quay segnalato.",
+    "driverRunning": "driver in esecuzione",
+    "driverIdle": "driver inattivo",
+    "driverStale": "driver obsoleto",
+    "driverNotConfigured": "non configurato",
+    "driverUnavailable": "driver non disponibile",
+    "tasksCount": "{{total}} attività",
+    "readyCount": "{{n}} pronte",
+    "needsHumanCount": "{{n}} richiedono una persona",
+    "inFlight": "In corso",
+    "inFlightEmpty": "Nessuna attività in corso dichiarata.",
+    "intentPlaceholder": "Di' cosa vuoi vedere — ad es. vedi claudecodeui, il secondo, ingrandisci, indietro, tutti i progetti",
+    "intentHint": "Invio esegue la frase · le frecce spostano il fuoco · Backspace torna indietro",
+    "intentSubmit": "Esegui",
+    "intentUnmatched": "Non riconosciuto: «{{text}}». Nessuna ipotesi.",
+    "timingLast": "intento → primo fotogramma {{ms}} ms",
+    "keyHint": "Frecce spostano il fuoco · Invio ingrandisce · Backspace torna indietro"
   }
 }

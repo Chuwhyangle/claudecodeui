@@ -724,5 +724,34 @@
     "closeLoginModal": "Close login modal",
     "pluginLoadFailed": "Plugin failed to load: {{error}}"
   },
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "cockpit": {
+    "title": "Cockpit",
+    "readOnly": "read-only",
+    "projectStrip": "Projects",
+    "fleetView": "All projects",
+    "boardView": "Board",
+    "focus": "Focus",
+    "noFocus": "none",
+    "loading": "Loading…",
+    "projectsError": "Could not read the quay fleet: {{message}}",
+    "retry": "Retry",
+    "emptyProjects": "No quay projects reported.",
+    "driverRunning": "driver running",
+    "driverIdle": "driver idle",
+    "driverStale": "driver stale",
+    "driverNotConfigured": "not configured",
+    "driverUnavailable": "driver unavailable",
+    "tasksCount": "{{total}} tasks",
+    "readyCount": "{{n}} ready",
+    "needsHumanCount": "{{n}} needs human",
+    "inFlight": "In flight",
+    "inFlightEmpty": "No in-flight tasks declared.",
+    "intentPlaceholder": "Say what to look at — e.g. view claudecodeui, the second one, zoom in, back, all projects",
+    "intentHint": "Enter runs the phrase · arrows move focus · Backspace goes back",
+    "intentSubmit": "Run",
+    "intentUnmatched": "Not recognised: “{{text}}”. No guess was made.",
+    "timingLast": "intent → first frame {{ms}} ms",
+    "keyHint": "Arrows move focus · Enter zooms in · Backspace goes back"
+  }
 }

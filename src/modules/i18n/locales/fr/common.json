@@ -635,5 +635,34 @@
       "updateAvailable": "Mise à jour disponible",
       "closeSidebar": "Masquer la barre latérale"
     }
+  },
+  "cockpit": {
+    "title": "Cockpit",
+    "readOnly": "lecture seule",
+    "projectStrip": "Projets",
+    "fleetView": "Tous les projets",
+    "boardView": "Tableau",
+    "focus": "Focus",
+    "noFocus": "aucun",
+    "loading": "Chargement…",
+    "projectsError": "Impossible de lire la flotte quay : {{message}}",
+    "retry": "Réessayer",
+    "emptyProjects": "Aucun projet quay signalé.",
+    "driverRunning": "driver en marche",
+    "driverIdle": "driver inactif",
+    "driverStale": "driver obsolète",
+    "driverNotConfigured": "non configuré",
+    "driverUnavailable": "driver indisponible",
+    "tasksCount": "{{total}} tâches",
+    "readyCount": "{{n}} prêtes",
+    "needsHumanCount": "{{n}} à traiter",
+    "inFlight": "En cours",
+    "inFlightEmpty": "Aucune tâche en cours déclarée.",
+    "intentPlaceholder": "Dites ce que vous voulez voir — par ex. voir claudecodeui, le deuxième, zoomer, retour, tous les projets",
+    "intentHint": "Entrée exécute la phrase · les flèches déplacent le focus · Retour arrière revient",
+    "intentSubmit": "Exécuter",
+    "intentUnmatched": "Non reconnu : « {{text}} ». Aucune supposition.",
+    "timingLast": "intention → première image {{ms}} ms",
+    "keyHint": "Flèches déplacent le focus · Entrée zoome · Retour arrière revient"
   }
 }

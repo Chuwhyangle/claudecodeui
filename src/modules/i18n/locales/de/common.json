@@ -605,5 +605,34 @@
       "updateAvailable": "Update verfügbar",
       "closeSidebar": "Seitenleiste schließen"
     }
+  },
+  "cockpit": {
+    "title": "Cockpit",
+    "readOnly": "schreibgeschützt",
+    "projectStrip": "Projekte",
+    "fleetView": "Alle Projekte",
+    "boardView": "Board",
+    "focus": "Fokus",
+    "noFocus": "keiner",
+    "loading": "Wird geladen…",
+    "projectsError": "Quay-Flotte konnte nicht gelesen werden: {{message}}",
+    "retry": "Erneut versuchen",
+    "emptyProjects": "Keine Quay-Projekte gemeldet.",
+    "driverRunning": "Treiber läuft",
+    "driverIdle": "Treiber inaktiv",
+    "driverStale": "Treiber veraltet",
+    "driverNotConfigured": "nicht konfiguriert",
+    "driverUnavailable": "Treiber nicht verfügbar",
+    "tasksCount": "{{total}} Aufgaben",
+    "readyCount": "{{n}} bereit",
+    "needsHumanCount": "{{n}} brauchen Menschen",
+    "inFlight": "In Bearbeitung",
+    "inFlightEmpty": "Keine laufenden Aufgaben gemeldet.",
+    "intentPlaceholder": "Sagen Sie, was Sie sehen wollen — z. B. claudecodeui anzeigen, das zweite, vergrößern, zurück, alle Projekte",
+    "intentHint": "Enter führt den Satz aus · Pfeile bewegen den Fokus · Backspace geht zurück",
+    "intentSubmit": "Ausführen",
+    "intentUnmatched": "Nicht erkannt: „{{text}}“. Es wurde nichts geraten.",
+    "timingLast": "Absicht → erster Frame {{ms}} ms",
+    "keyHint": "Pfeile bewegen den Fokus · Enter vergrößert · Backspace geht zurück"
   }
 }
