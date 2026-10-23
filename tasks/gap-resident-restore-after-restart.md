@@ -46,4 +46,14 @@ extra:
 - server/modules/session-hosts/index.ts
 - server/modules/database/repositories/sessions.db.ts
 - server/modules/session-hosts/tests/resident-restore.service.test.ts
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-resident-restore-after-restart.md
+
+## Blocker
+
+**2026-10-23T06:19:19.002Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=83320 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792735952063
+- run_id：wk-prod-anchor
+- session_id：5f6f36c6-67d8-42ad-b174-26157bb97c82
