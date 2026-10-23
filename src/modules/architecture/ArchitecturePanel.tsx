@@ -3,6 +3,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -50,7 +51,6 @@ import {
   ARCHITECTURE_RELATION_PRESETS,
   filtersEqual,
   hiddenTotal,
-  isFilterNarrower,
   keptMentionedCount,
   relationsForPreset,
   resetFilter,
@@ -76,6 +76,11 @@ import {
 } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/layoutBudget';
 import { buildReadout, drawnKindCounts } from '@/modules/architecture/readoutNumbers';
+import {
+  HOVER_HINT_MARGIN_PX,
+  placeHoverHint,
+  type ArchitectureHintRect,
+} from '@/modules/architecture/hoverHintPlacement';
 import type {
   ArchitectureDetailReading,
   ArchitectureDrawnPlantUml,
@@ -483,6 +488,59 @@ export default function ArchitecturePanel({
     (hover: ArchitectureRendererHover | null) => setHovered({ key: hoverKey, hover }),
     [hoverKey],
   );
+  // The hint element whose size the placement measures, and the position it
+  // settled on (`null` until measured). Essential state: the position is a
+  // MEASURED relation between the hint and the drawing's package tabs, so it
+  // cannot be derived from props during render.
+  const hoverHintRef = useRef<HTMLSpanElement | null>(null);
+  // The canvas region that holds the drawing. Declared here (not with the other
+  // refs below) because the hover-hint effect reads it from this render on.
+  const graphAreaRef = useRef<HTMLDivElement | null>(null);
+  const [hoverHintPosition, setHoverHintPosition] = useState<{ left: number; top: number } | null>(null);
+  // What the measured position belongs to. The hint's own text (and therefore
+  // its width) changes with the hovered entity and its relation kinds, so the
+  // placement is recomputed whenever any of those move.
+  const hoverHintSignature = hovered !== null && hovered.key === hoverKey && hovered.hover !== null
+    ? `${hoverKey}\u0000${hovered.hover.node.id}\u0000${hovered.hover.relations.join(',')}`
+    : null;
+  // The hint may not cover the drawing's own labels: package tabs are painted
+  // along the top edge of every frame, and class names sit inside them. The
+  // candidate walk and the avoidance live in `placeHoverHint`; this effect only
+  // turns the live DOM into the rectangles it reads. It runs before paint, so
+  // the hint never flashes at the pinned corner first.
+  useLayoutEffect(() => {
+    if (hoverHintSignature === null) {
+      setHoverHintPosition(null);
+      return;
+    }
+    const container = graphAreaRef.current;
+    const hint = hoverHintRef.current;
+    if (container === null || hint === null) return;
+    const containerBox = container.getBoundingClientRect();
+    const hintBox = hint.getBoundingClientRect();
+    const rectsOf = (selector: string): ArchitectureHintRect[] => [...container.querySelectorAll(selector)]
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }));
+    const placement = placeHoverHint({
+      container: {
+        left: containerBox.left,
+        top: containerBox.top,
+        right: containerBox.right,
+        bottom: containerBox.bottom,
+      },
+      hint: { width: hintBox.width, height: hintBox.height },
+      obstacles: [
+        // The package tabs (each frame's own `path`) and the class-name text.
+        ...rectsOf('.uml-package[data-package-id] > path'),
+        ...rectsOf('[data-architecture-node-name]'),
+        // The canvas's own corner chrome, for the same reason the fit avoids it.
+        ...rectsOf('[data-architecture-minimap]'),
+        ...rectsOf('[data-architecture-zoom-cluster]'),
+      ],
+    });
+    setHoverHintPosition({ left: placement.left, top: placement.top });
+  }, [hoverHintSignature]);
   // The request the server is asked for. `kinds` rides only on the entity view
   // (a file has no element kind); `relations` rides on both views. The
   // "keep mentioned" switches are part of `kinds`' own axis, so they ride only
@@ -770,9 +828,6 @@ export default function ArchitecturePanel({
     drawnPlantUmlRef.current = drawn;
     setDrawnPlantUml(drawn);
   }, []);
-  // The rendered drawing's container, so the export actions can read the live
-  // SVG without the renderer having to hand its host ref up the tree.
-  const graphAreaRef = useRef<HTMLDivElement | null>(null);
   // The overlay root is the panel's own element: fullscreen restyles it in
   // place rather than mounting a second copy, so the renderer keeps its zoom
   // and the panel keeps every filter/scope/selection reading.
@@ -852,29 +907,31 @@ export default function ArchitecturePanel({
   };
 
   /**
-   * Apply a new selection.
+   * Apply a new selection: show it now, then let the SERVER settle it.
    *
-   * A NARROWER selection is answered from the payload in hand — that is the
-   * whole "收窄即时" half of the design — with one exception: if the arrived
-   * reading was truncated, the freed budget may have exposed more nodes than
-   * this payload carries, so it asks the server in the background. A WIDER (or
-   * incomparable) selection cannot be reconstructed from a payload that already
-   * had it cut away, so it always re-requests; the old drawing stays on screen
-   * (`refreshing`) until the answer arrives.
+   * Both halves matter. The selection is written to state immediately, and
+   * `displayFilter` below cuts the payload in hand, so the drawing narrows in
+   * the same frame as the click — that is the "收窄即时" half of the design and
+   * it stays.
+   *
+   * The request that follows is NOT optional, and it used to be skipped for a
+   * narrowing. A locally narrowed payload cannot reproduce the server's own
+   * reading of the narrower state: the server runs its BFS and its node budget
+   * ON the filtered graph, so a node reachable only through a filtered-away
+   * edge is absent from its answer, while the wider payload in hand still
+   * carries it (and then counts it, or counts its isolated removal). The
+   * summary therefore drifted from what a reload of the same state printed —
+   * "9 related · 1 call relations · 11 isolated nodes" against "5 related ·
+   * 601 call relations · 6 isolated nodes" — and stayed wrong until the page
+   * was reloaded. Every settled selection now ends on a server reading; the
+   * debounce still collapses a walk through the presets into one round trip.
    */
   const changeFilter = (next: ArchitectureElementRelationFilter): void => {
     setFilterSettings((current) => ({ ...current, filter: next }));
     writeStoredFilter(projectId, next);
     if (filtersEqual(next, requestFilter)) {
+      // Already the request's own selection: the payload in hand IS this state.
       cancelScheduledRequest();
-      return;
-    }
-    if (isFilterNarrower(next, requestFilter)) {
-      const truncated = view.status === 'loaded'
-        && (granularity === 'file'
-          ? (view.result.stats.fileTruncated ?? view.result.stats.truncated)
-          : (view.result.stats.entityTruncated ?? view.result.stats.truncated));
-      if (truncated) scheduleRequest(next, requestGranularity);
       return;
     }
     scheduleRequest(next, requestGranularity);
@@ -2761,9 +2818,16 @@ export default function ArchitecturePanel({
    * seed resolved).
    */
   const sourceFooter = (
+    // NO `overflow-hidden` on this row. Both of its disclosures (`names
+    // mentioned …` and `Scope cleanup`) open UPWARDS out of it
+    // (`absolute bottom-full`), and the clipping footer cut them down to a
+    // zero-height sliver: the toggle flipped to ▾ while nothing appeared. The
+    // row cannot overflow on its own — the source line is `min-w-0 truncate`
+    // (which clips itself) and the cleanup pill is `shrink-0` — so the clip
+    // bought nothing and cost both panels.
     <div
       data-architecture-source-footer="true"
-      className="relative z-20 flex shrink-0 items-center gap-2 overflow-hidden border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
+      className="relative z-20 flex shrink-0 items-center gap-2 border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
     >
       <span
         data-architecture-source-line="true"
@@ -3525,10 +3589,23 @@ export default function ArchitecturePanel({
               {/* The hover relation reading replaces the two duplicated
                   standing instructions: it only exists while a node is under
                   the pointer, so the page has no permanent hint sentence. It
-                  stays a transient overlay; the readout above does not. */}
+                  stays a transient overlay; the readout above does not.
+
+                  Its position is MEASURED, never pinned: the drawing paints a
+                  package tab (and the class names) along its top edge, and the
+                  old fixed `left-3 top-3` covered exactly that row. The panel's
+                  layout effect hands the hint the first free candidate. */}
               {hoverReading !== null && (
-                <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
+                <div
+                  data-architecture-hover-hint="true"
+                  style={{
+                    left: hoverHintPosition?.left ?? HOVER_HINT_MARGIN_PX,
+                    top: hoverHintPosition?.top ?? HOVER_HINT_MARGIN_PX,
+                  }}
+                  className="pointer-events-none absolute z-20 flex max-w-[85%] flex-col items-start gap-1"
+                >
                   <span
+                    ref={hoverHintRef}
                     data-architecture-hover={hoverReading.id}
                     data-architecture-hover-name={hoverReading.label}
                     data-architecture-hover-relations={visibleHover?.relations.join(',') ?? ''}

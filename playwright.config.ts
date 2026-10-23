@@ -409,8 +409,15 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // control arm. MEASURED twice: `19 passed (4.1m)` and `19 passed (3.8m)` for
   // the whole invocation, and `11 passed (1.4m)` for the `--grep "control arm"`
   // selection. 480_000 keeps ~2.1x over the slower reading — the headroom the
-  // 360_000 entry held, which a load-slowed fan-in lane needs.
-  'architecture-canvas-layout.spec.ts': 480_000,
+  // 360_000 entry held, which a load-slowed fan-in reload needs.
+  // Re-measured 2026-10-23 with the panel-visibility legs (an expanded Scope
+  // cleanup panel in its own fixture workspace, three hover readings, three
+  // preset switches plus a page reload, and a drill round trip; the control arm
+  // replays a stale graph body through `page.route` and toggles a kind): the
+  // whole invocation is `21 passed (5.1m)` and the `--grep "control arm"`
+  // selection is `12 passed (2.0m)`. The two new cases are 34.5 s and 32.5 s of
+  // that. 660_000 restores the ~2.1x headroom over the whole-file reading.
+  'architecture-canvas-layout.spec.ts': 660_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear

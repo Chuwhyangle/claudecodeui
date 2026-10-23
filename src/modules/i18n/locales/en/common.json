@@ -161,6 +161,7 @@
       "overview": "Overview",
       "group": "Group: {{group}}",
       "neighborhood": "{{entity}} · {{hops}} hop(s)",
+      "neighbourhoodStatus": "Neighbourhood of {{entity}} · {{hops}} hop(s)",
       "back": "Back to overview",
       "error": "The diagram could not be rendered: {{message}}",
       "lod": {
@@ -169,6 +170,7 @@
         "tierPackages": "Packages"
       },
       "explosion": "Explosion view",
+      "explosionHint": "Draw every entity as its own box, the whole graph at once",
       "layoutProgress": "Laying out {{count}} entities…",
       "drillIn": "Drill in",
       "moreActions": "More actions",

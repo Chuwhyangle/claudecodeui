@@ -10,6 +10,7 @@ import {
   ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS,
   ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED,
   ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER,
+  ARCHITECTURE_FIXTURE_WORKSPACE_SCOPE_HYGIENE,
   writeArchitectureFixture,
   type ArchitectureFixtureReading,
   type FixtureMemberKind,
@@ -146,9 +147,20 @@ const SEL = {
   filterMenu: '[data-architecture-filter-menu]',
   relationDependency: '[data-architecture-filter-relation="dependency"]',
   relationCall: '[data-architecture-filter-relation="call"]',
+  relationStructural: '[data-architecture-filter-relation="structural"]',
   filterShowAll: '[data-architecture-filter-show-all]',
   // The on-canvas zoom cluster's Fit control.
   zoomFit: '[data-architecture-zoom-fit]',
+  // The transient hover reading and the wrapper whose inline position the
+  // placement rule writes.
+  hoverChip: '[data-architecture-hover]',
+  hoverHint: '[data-architecture-hover-hint]',
+  // The provenance footer's cleanup disclosure and its detail panel.
+  scopeHygiene: '[data-architecture-scope-hygiene]',
+  scopeHygieneDetail: '[data-architecture-scope-hygiene-detail]',
+  // The drilled-view status and the breadcrumb back to the class drawing.
+  neighbourhoodStatus: '[data-architecture-neighbourhood-status]',
+  back: '[data-architecture-back]',
 } as const;
 
 /* ── the server's own faces ────────────────────────────────────────────────────────────────── */
@@ -2466,6 +2478,9 @@ let perimeterFixture: ArchitectureFixtureReading | null = null;
 let interleavedSessionId = '';
 /** The function-heavy fixture the Show-all / folded-fit legs drive. */
 let functionsSessionId = '';
+/** The workspace whose manifest also lists a scope from outside the project root. */
+let scopeHygieneSessionId = '';
+let scopeHygieneFixture: ArchitectureFixtureReading | null = null;
 let functionsFixture: ArchitectureFixtureReading | null = null;
 let interleavedFixture: ArchitectureFixtureReading | null = null;
 
@@ -2491,6 +2506,12 @@ test.beforeAll(async () => {
   interleavedFixture = writeArchitectureFixture(interleavedWorkspace, { variant: 'interleaved-members' });
   const functionsWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS);
   functionsFixture = writeArchitectureFixture(functionsWorkspace, { variant: 'functions-384' });
+  const scopeHygieneWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_SCOPE_HYGIENE);
+  scopeHygieneFixture = writeArchitectureFixture(scopeHygieneWorkspace, {
+    variant: 'quay-oo',
+    // The "Scope cleanup" row only exists when the merge cleaned something up.
+    outsideScope: true,
+  });
 
   const bootstrap = await request.newContext({ baseURL });
   token = await createAccount(bootstrap);
@@ -2538,6 +2559,9 @@ test.beforeAll(async () => {
     functionsUserText,
     functionsFixture.seedIdentifiers[0],
   );
+  // Same project shape and the same seeded names: only the extra manifest scope
+  // (and therefore the cleanup reading) differs.
+  scopeHygieneSessionId = await armScenario(api, scopeHygieneWorkspace, userText, fixture.seedIdentifiers[0]);
   await api.dispose();
 
   console.log(`[architecture-layout] fixture.entities=${fixture.entityTotal} variant=${fixture.variant}`);
@@ -2555,6 +2579,9 @@ test.beforeAll(async () => {
   console.log(`[architecture-layout] functions.entities=${functionsFixture.entityTotal} variant=${functionsFixture.variant}`);
   console.log(`[architecture-layout] functions.workspace=${functionsWorkspace}`);
   console.log(`[architecture-layout] functions.session=${functionsSessionId}`);
+  console.log(`[architecture-layout] scopeHygiene.entities=${scopeHygieneFixture.entityTotal}`);
+  console.log(`[architecture-layout] scopeHygiene.workspace=${scopeHygieneWorkspace}`);
+  console.log(`[architecture-layout] scopeHygiene.session=${scopeHygieneSessionId}`);
 });
 
 /* ── lossless text: one reading, two arms ────────────────────────────────────────────────── */
@@ -4776,6 +4803,500 @@ test('control arm — restoring the shipped Show-all defect moves the preset, an
       'control arm B: removing the injection must put the reading back on the passing side',
     ).toBeLessThanOrEqual(restored.clientWidth + 2);
     await page.screenshot({ path: 'tmp/show-all-control-arm-restored.png', fullPage: false });
+  } finally {
+    await context.close();
+  }
+});
+
+/* ── panel visibility and readout fixes (2026-10-23) ─────────────────────────────────────────── */
+
+/** The numbers the one-line readout and its filter line state, exactly as the DOM holds them. */
+type SummaryNumbers = {
+  readonly shown: number | null;
+  readonly related: number | null;
+  readonly hidden: number | null;
+  readonly hiddenKinds: string | null;
+  readonly hiddenRelations: string | null;
+  readonly hiddenIsolated: string | null;
+};
+
+/**
+ * Read the summary in ONE round trip.
+ *
+ * The three numbers the criterion compares are N (`readout-summary`), M
+ * (`readout-total`) and the filter line's own removals. `hidden` is the total
+ * the panel prints; the per-axis attributes are read beside it so a red names
+ * WHICH number moved instead of only "the line changed".
+ */
+const readSummaryNumbers = (page: Page): Promise<SummaryNumbers> => page.evaluate(() => {
+  const summary = document.querySelector('[data-architecture-readout-summary]');
+  const hidden = document.querySelector('[data-architecture-filter-hidden]');
+  const number = (raw: string | null | undefined): number | null => {
+    if (raw === null || raw === undefined || raw === '') return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  return {
+    shown: number(summary?.getAttribute('data-architecture-readout-summary')),
+    related: number(summary?.getAttribute('data-architecture-readout-total')),
+    hidden: number(hidden?.getAttribute('data-architecture-filter-hidden')),
+    hiddenKinds: hidden?.getAttribute('data-architecture-filter-hidden-kinds') ?? null,
+    hiddenRelations: hidden?.getAttribute('data-architecture-filter-hidden-relations') ?? null,
+    hiddenIsolated: hidden?.getAttribute('data-architecture-filter-hidden-isolated') ?? null,
+  };
+});
+
+/**
+ * What an expanded disclosure really shows: its own box, the area left after
+ * intersecting the viewport and EVERY clipping ancestor, and its row count.
+ *
+ * `getBoundingClientRect` ignores ancestor clipping, so a panel cut to nothing
+ * still reports its full height. That difference is the defect being measured.
+ */
+type DisclosureReading = {
+  readonly expanded: string | null;
+  readonly box: Box | null;
+  readonly boxArea: number;
+  readonly visibleArea: number;
+  readonly insideViewport: boolean;
+  readonly rows: number;
+};
+
+const readCleanupDisclosure = (page: Page): Promise<DisclosureReading> => page.evaluate(() => {
+  const toggle = document.querySelector('[data-architecture-scope-hygiene]');
+  const detail = document.querySelector('[data-architecture-scope-hygiene-detail]');
+  if (!(detail instanceof HTMLElement)) {
+    return {
+      expanded: toggle?.getAttribute('aria-expanded') ?? null,
+      box: null,
+      boxArea: 0,
+      visibleArea: 0,
+      insideViewport: false,
+      rows: 0,
+    };
+  }
+  const rect = detail.getBoundingClientRect();
+  let clip = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+  for (let ancestor = detail.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+    const style = window.getComputedStyle(ancestor);
+    if (!/(auto|scroll|hidden)/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) continue;
+    const box = ancestor.getBoundingClientRect();
+    clip = {
+      left: Math.max(clip.left, box.left),
+      top: Math.max(clip.top, box.top),
+      right: Math.min(clip.right, box.right),
+      bottom: Math.min(clip.bottom, box.bottom),
+    };
+  }
+  const width = Math.max(0, Math.min(rect.right, clip.right) - Math.max(rect.left, clip.left));
+  const height = Math.max(0, Math.min(rect.bottom, clip.bottom) - Math.max(rect.top, clip.top));
+  return {
+    expanded: toggle?.getAttribute('aria-expanded') ?? null,
+    box: { x: rect.x, y: rect.y, w: rect.width, h: rect.height, x2: rect.right, y2: rect.bottom },
+    boxArea: rect.width * rect.height,
+    visibleArea: width * height,
+    insideViewport: rect.left >= 0 && rect.top >= 0
+      && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight,
+    rows: detail.querySelectorAll('li').length,
+  };
+});
+
+/** What the hover reading covers: its own box against every package tab and class name. */
+type HoverClearance = {
+  readonly name: string | null;
+  readonly hint: Box | null;
+  readonly tabCount: number;
+  readonly nodeNameCount: number;
+  readonly overlapping: number;
+  /** The obstacles it covers, so a red says what it landed on. */
+  readonly hits: readonly string[];
+};
+
+const readHoverClearance = (page: Page): Promise<HoverClearance> => page.evaluate(() => {
+  const chip = document.querySelector('[data-architecture-hover]');
+  if (!(chip instanceof Element)) {
+    return { name: null, hint: null, tabCount: 0, nodeNameCount: 0, overlapping: 0, hits: [] };
+  }
+  const rect = chip.getBoundingClientRect();
+  const hint = { x: rect.x, y: rect.y, w: rect.width, h: rect.height, x2: rect.right, y2: rect.bottom };
+  const overlaps = (a: Box, b: Box): boolean => a.x < b.x2 && b.x < a.x2 && a.y < b.y2 && b.y < a.y2;
+  const obstacles: { label: string; box: Box }[] = [];
+  for (const tab of document.querySelectorAll('.uml-package[data-package-id] > path')) {
+    const box = tab.getBoundingClientRect();
+    obstacles.push({
+      label: `tab:${tab.parentElement?.getAttribute('data-package-id') ?? '?'}`,
+      box: { x: box.x, y: box.y, w: box.width, h: box.height, x2: box.right, y2: box.bottom },
+    });
+  }
+  for (const name of document.querySelectorAll('[data-architecture-node-name]')) {
+    const box = name.getBoundingClientRect();
+    obstacles.push({
+      label: `name:${(name.textContent ?? '').trim().slice(0, 24)}`,
+      box: { x: box.x, y: box.y, w: box.width, h: box.height, x2: box.right, y2: box.bottom },
+    });
+  }
+  const drawn = obstacles.filter((obstacle) => obstacle.box.w > 0 && obstacle.box.h > 0);
+  const hit = drawn.filter((obstacle) => overlaps(hint, obstacle.box));
+  return {
+    name: chip.getAttribute('data-architecture-hover-name'),
+    hint,
+    tabCount: [...document.querySelectorAll('.uml-package[data-package-id] > path')].length,
+    nodeNameCount: document.querySelectorAll('[data-architecture-node-name]').length,
+    overlapping: hit.length,
+    hits: hit.map((entry) => `${entry.label}@${Math.round(entry.box.x)},${Math.round(entry.box.y)},${Math.round(entry.box.w)},${Math.round(entry.box.h)}`),
+  };
+});
+
+/** Wait until the drawing is on screen AND no request is in flight over it. */
+async function waitForSettledSummary(page: Page): Promise<void> {
+  await page.waitForFunction(
+    (sel) => {
+      const root = document.querySelector(sel.graphRoot);
+      return root !== null
+        && Number(root.getAttribute('data-architecture-visible-nodes') ?? '0') > 0
+        && document.querySelector('[data-architecture-refreshing="true"]') === null;
+    },
+    SEL,
+    { timeout: 90_000 },
+  );
+  // The debounce (250 ms) plus the answer's commit.
+  await settle(page, 700);
+}
+
+/** Choose one relation preset through the drawer the reader uses, then let it settle. */
+async function setRelationPreset(page: Page, preset: 'structural' | 'dependency' | 'call'): Promise<void> {
+  const toggle = page.locator(SEL.filterToggle).first();
+  await toggle.click();
+  const menu = page.locator(SEL.filterMenu).first();
+  await expect(menu, 'the filter drawer must open').toBeVisible({ timeout: 10_000 });
+  await page.locator(`[data-architecture-filter-relation="${preset}"]`).first().click();
+  await toggle.click();
+  await expect(menu).toHaveCount(0, { timeout: 10_000 });
+  await waitForSettledSummary(page);
+}
+
+/** Reload the page, reopen the tab in the same state, and read the summary. */
+async function reloadAndReadSummary(page: Page, sessionId: string): Promise<SummaryNumbers> {
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await openArchitectureTab(page, sessionId);
+  await openEntityDrawing(page);
+  await waitForSettledSummary(page);
+  return readSummaryNumbers(page);
+}
+
+test('main arm — the panel states what it expanded, what it hid and where it drilled (1440x765)', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    // ── ① Scope cleanup opens into a panel that is really on screen ────────
+    await openArchitectureTab(page, scopeHygieneSessionId);
+    const cleanupToggle = page.locator(SEL.scopeHygiene).first();
+    await expect(
+      cleanupToggle,
+      'the fixture merge dropped a scope, so the cleanup row must exist',
+    ).toHaveCount(1, { timeout: 20_000 });
+    await expect(cleanupToggle).toHaveAttribute('aria-expanded', 'false');
+    await cleanupToggle.click();
+    await expect(cleanupToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(SEL.scopeHygieneDetail).first()).toHaveCount(1, { timeout: 10_000 });
+    await settle(page, 300);
+    const cleanup = await readCleanupDisclosure(page);
+    console.log(`[architecture-layout] cleanup.expanded=${JSON.stringify(cleanup)}`);
+    expect(cleanup.box, 'expanding the row must draw its panel').not.toBeNull();
+    expect(cleanup.boxArea, 'the panel must have a real area').toBeGreaterThan(0);
+    expect(
+      cleanup.visibleArea,
+      'the panel must not be clipped away by the footer it opens out of',
+    ).toBeGreaterThan(0);
+    expect(cleanup.insideViewport, `the panel must lie inside the viewport: ${formatBox(cleanup.box)}`).toBe(true);
+    expect(cleanup.rows, 'the panel lists what the merge cleaned').toBeGreaterThan(0);
+    await page.screenshot({ path: 'tmp/panel-cleanup-open-pc.png' });
+    await cleanupToggle.click();
+    await expect(page.locator(SEL.scopeHygieneDetail)).toHaveCount(0, { timeout: 10_000 });
+
+    // ── ② The hover reading never covers a package tab or a class name ──────
+    await openArchitectureTab(page, sessionId);
+    await openEntityDrawing(page);
+    await waitForSettledSummary(page);
+    const hovered: string[] = [];
+    for (const index of [0, 1, 2]) {
+      const node = page.locator(SEL.node).nth(index);
+      if ((await node.count()) === 0) continue;
+      await node.hover({ force: true, timeout: 15_000 });
+      await expect(page.locator(SEL.hoverChip).first(), 'hovering a node draws its reading').toHaveCount(1, {
+        timeout: 15_000,
+      });
+      await settle(page, 200);
+      const clearance = await readHoverClearance(page);
+      console.log(`[architecture-layout] hover.${index}=${JSON.stringify(clearance)}`);
+      hovered.push(clearance.name ?? '<none>');
+      expect(clearance.hint, 'the reading must be drawn').not.toBeNull();
+      expect(
+        clearance.tabCount,
+        'the drawing must paint package tabs, or this reading proves nothing',
+      ).toBeGreaterThan(0);
+      expect(
+        clearance.overlapping,
+        `the reading must not cover a package tab or a class name: ${JSON.stringify(clearance.hits)}`,
+      ).toBe(0);
+    }
+    await page.screenshot({ path: 'tmp/panel-hover-hint-pc.png' });
+    await page.mouse.move(2, 2);
+    await settle(page, 200);
+
+    // ── ③ Three preset switches settle on the numbers a reload prints ───────
+    await setRelationPreset(page, 'call');
+    await setRelationPreset(page, 'dependency');
+    await setRelationPreset(page, 'call');
+    const inSession = await readSummaryNumbers(page);
+    console.log(`[architecture-layout] summary.inSession=${JSON.stringify(inSession)}`);
+    await page.screenshot({ path: 'tmp/panel-summary-after-presets-pc.png' });
+    const reloaded = await reloadAndReadSummary(page, sessionId);
+    console.log(`[architecture-layout] summary.reloaded=${JSON.stringify(reloaded)}`);
+    expect(inSession.shown, 'N must equal the reloaded reading').toBe(reloaded.shown);
+    expect(inSession.related, 'M must equal the reloaded reading').toBe(reloaded.related);
+    expect(inSession.hidden, 'the hidden total must equal the reloaded reading').toBe(reloaded.hidden);
+    expect(inSession.hiddenRelations).toBe(reloaded.hiddenRelations);
+    expect(inSession.hiddenIsolated).toBe(reloaded.hiddenIsolated);
+
+    // ── ④ A drilled neighbourhood names itself and keeps the zoom ───────────
+    // The percentage the reader sees is the FOLD's adaptation factor in the
+    // folded tier, not the reader's zoom (see `displayScale`): the two are
+    // different quantities, and comparing them across a view change would
+    // measure the fold rather than the drill. So the drill is read from an
+    // unfolded drawing — which is also the state the reported 72% → 75% jump
+    // was measured in.
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const fold = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-fold-depth');
+      if (fold === null) break;
+      await page.locator(SEL.zoomIn).first().click();
+      await settle(page, 400);
+    }
+    const foldBefore = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-fold-depth');
+    console.log(`[architecture-layout] drill.fold.before=${JSON.stringify(foldBefore)}`);
+    expect(foldBefore, 'the drill reading needs an unfolded drawing on both sides').toBeNull();
+    const zoomBefore = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-zoom-scale');
+    expect(zoomBefore, 'the drawing must publish its scale before the drill').not.toBeNull();
+    await page.locator(SEL.node).first().dblclick({ timeout: 15_000 });
+    await expect(page.locator(SEL.graphRoot).first()).toHaveAttribute('data-architecture-view', 'neighborhood', {
+      timeout: 40_000,
+    });
+    await waitForSettledSummary(page);
+    await settle(page, 700);
+    const status = await page.locator(SEL.neighbourhoodStatus).first().textContent();
+    const zoomAfter = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-zoom-scale');
+    const foldAfter = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-fold-depth');
+    console.log(
+      `[architecture-layout] drill.zoom=${JSON.stringify(zoomBefore)} -> ${JSON.stringify(zoomAfter)} `
+        + `fold=${JSON.stringify(foldBefore)} -> ${JSON.stringify(foldAfter)} status=${JSON.stringify(status)}`,
+    );
+    expect(foldAfter, 'the neighbourhood must be read unfolded too, or the two numbers are different quantities').toBeNull();
+    expect(status ?? '', 'the toolbar must say what the reader is looking at').toMatch(/Neighbourhood of /);
+    expect(zoomAfter, 'entering the neighbourhood must not move the zoom').toBe(zoomBefore);
+    const explosionHint = await page.locator('[data-architecture-explosion]').first().getAttribute('title');
+    expect(explosionHint ?? '', 'the explosion control explains what the view is').not.toBe('');
+    await page.screenshot({ path: 'tmp/panel-neighbourhood-pc.png' });
+
+    await page.locator(SEL.back).first().click();
+    await expect(page.locator(SEL.graphRoot).first()).toHaveAttribute('data-architecture-view', 'hierarchy', {
+      timeout: 40_000,
+    });
+    await waitForSettledSummary(page);
+    await settle(page, 700);
+    const zoomBack = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-zoom-scale');
+    console.log(`[architecture-layout] drill.back.zoom=${JSON.stringify(zoomBack)}`);
+    expect(zoomBack, 'leaving the neighbourhood must not move the zoom either').toBe(zoomBefore);
+    await page.screenshot({ path: 'tmp/panel-neighbourhood-back-pc.png' });
+  } finally {
+    await context.close();
+  }
+});
+
+test('control arm — each restored panel defect turns its own reading red', async ({ browser }) => {
+  test.setTimeout(300_000);
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    // ── arm A: a clipping footer hides the Scope cleanup panel again ────────
+    await openArchitectureTab(page, scopeHygieneSessionId);
+    const cleanupToggle = page.locator(SEL.scopeHygiene).first();
+    await expect(cleanupToggle, 'the cleanup row must exist before its reading can be measured').toHaveCount(1, {
+      timeout: 20_000,
+    });
+    await cleanupToggle.click();
+    await expect(page.locator(SEL.scopeHygieneDetail).first()).toHaveCount(1, { timeout: 10_000 });
+    await settle(page, 300);
+    const cleanupGreen = await readCleanupDisclosure(page);
+    expect(cleanupGreen.visibleArea, 'arm A baseline: the expanded panel is visible').toBeGreaterThan(0);
+    await page.evaluate(() => {
+      const footer = document.querySelector('[data-architecture-source-footer]');
+      if (!(footer instanceof HTMLElement)) throw new Error('the panel must draw the provenance footer');
+      footer.setAttribute('data-control-arm-overflow', footer.style.overflow);
+      footer.style.overflow = 'hidden';
+    });
+    await settle(page, 250);
+    const cleanupRed = await readCleanupDisclosure(page);
+    console.log(
+      `[architecture-layout] controlArmA green=${JSON.stringify(cleanupGreen)} red=${JSON.stringify(cleanupRed)}`,
+    );
+    expect(
+      cleanupRed.visibleArea,
+      'arm A: a clipping footer must hide the panel it opens out of',
+    ).toBe(0);
+    await page.evaluate(() => {
+      const footer = document.querySelector('[data-architecture-source-footer]');
+      if (!(footer instanceof HTMLElement)) return;
+      footer.style.overflow = footer.getAttribute('data-control-arm-overflow') ?? '';
+      footer.removeAttribute('data-control-arm-overflow');
+    });
+    await settle(page, 250);
+    expect(
+      (await readCleanupDisclosure(page)).visibleArea,
+      'arm A: removing the injected clip puts the reading back on the passing side',
+    ).toBeGreaterThan(0);
+
+    // ── arm B: the shipped pinned corner covers a package tab ───────────────
+    await openArchitectureTab(page, sessionId);
+    await openEntityDrawing(page);
+    await waitForSettledSummary(page);
+    await page.locator(SEL.node).first().hover({ force: true, timeout: 15_000 });
+    await expect(page.locator(SEL.hoverChip).first()).toHaveCount(1, { timeout: 15_000 });
+    await settle(page, 200);
+    const hoverGreen = await readHoverClearance(page);
+    expect(hoverGreen.overlapping, 'arm B baseline: the measured hint covers nothing').toBe(0);
+    expect(hoverGreen.tabCount, 'arm B needs painted package tabs').toBeGreaterThan(0);
+    const shippedPosition = await page.evaluate(() => {
+      const wrapper = document.querySelector('[data-architecture-hover-hint]');
+      if (!(wrapper instanceof HTMLElement)) throw new Error('the hover reading must have a wrapper');
+      const measured = { left: wrapper.style.left, top: wrapper.style.top };
+      // The shipped layout pinned it to the canvas's top-left corner.
+      wrapper.style.left = '12px';
+      wrapper.style.top = '12px';
+      return measured;
+    });
+    await settle(page, 250);
+    const hoverRed = await readHoverClearance(page);
+    console.log(
+      `[architecture-layout] controlArmB green=${JSON.stringify(hoverGreen)} red=${JSON.stringify(hoverRed)}`,
+    );
+    expect(
+      hoverRed.overlapping,
+      `arm B: the pinned corner must cover a package tab or class name: ${JSON.stringify(hoverRed.hits)}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate((measured) => {
+      const wrapper = document.querySelector('[data-architecture-hover-hint]');
+      if (!(wrapper instanceof HTMLElement)) return;
+      wrapper.style.left = measured.left;
+      wrapper.style.top = measured.top;
+    }, shippedPosition);
+    await settle(page, 250);
+    expect(
+      (await readHoverClearance(page)).overlapping,
+      'arm B: restoring the measured position puts the reading back on the passing side',
+    ).toBe(0);
+    await page.mouse.move(2, 2);
+
+    // ── arm C: a superseded body replayed for a new state ───────────────────
+    // The panel used to adopt whatever arrived last and then cut it locally, so
+    // a stale answer stayed on screen until the page was reloaded. The arm
+    // replays exactly that: capture the body of one filter state, then serve it
+    // for the NEXT state's request.
+    await waitForSettledSummary(page);
+    let staleBody: string | null = null;
+    const capture = async (response: import('@playwright/test').Response): Promise<void> => {
+      if (!response.url().includes('/api/architecture/graph') || !response.ok()) return;
+      staleBody = await response.text().catch(() => staleBody);
+    };
+    page.on('response', capture);
+    // Switch the class kind OFF: a real filter change whose true answer differs
+    // from the body captured just before it.
+    const classKind = page.locator('[data-architecture-filter-kind="class"]').first();
+    const toggleClassKind = async (): Promise<void> => {
+      await page.locator(SEL.filterToggle).first().click();
+      await expect(page.locator(SEL.filterMenu).first()).toBeVisible({ timeout: 10_000 });
+      await page.locator('[data-architecture-filter-kind="class"]').first().click();
+      await page.locator(SEL.filterToggle).first().click();
+      await expect(page.locator(SEL.filterMenu).first()).toHaveCount(0, { timeout: 10_000 });
+      await waitForSettledSummary(page);
+    };
+    // A state whose body will be captured, and whose numbers differ from the
+    // one the replay is then shown under.
+    await toggleClassKind();
+    const staleStateSummary = await readSummaryNumbers(page);
+    expect(staleBody, 'arm C needs a captured body to replay').not.toBeNull();
+    await page.route('**/api/architecture/graph', async (route) => {
+      if (staleBody === null) {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: staleBody });
+    });
+    await toggleClassKind();
+    const tampered = await readSummaryNumbers(page);
+    await page.unroute('**/api/architecture/graph');
+    page.off('response', capture);
+    console.log(
+      `[architecture-layout] controlArmC stale=${JSON.stringify(staleStateSummary)} `
+        + `tampered=${JSON.stringify(tampered)}`,
+    );
+    expect(classKind, 'the class-kind switch must exist').not.toBeNull();
+    // The replay served the PREVIOUS state's body, so the panel is showing that
+    // state's numbers under the new selection.
+    expect(
+      tampered,
+      `arm C: the replayed body must be the one captured before the switch: `
+        + `stale=${JSON.stringify(staleStateSummary)} tampered=${JSON.stringify(tampered)}`,
+    ).toEqual(staleStateSummary);
+    // The reload prints the TRUE numbers for the state on screen, and they
+    // differ from the tampered reading — the comparison the main arm asserts
+    // equal, here reading red.
+    const trueAfterReload = await reloadAndReadSummary(page, sessionId);
+    console.log(`[architecture-layout] controlArmC true=${JSON.stringify(trueAfterReload)}`);
+    expect(
+      tampered,
+      `arm C: the tampered summary must not equal the reloaded one: `
+        + `tampered=${JSON.stringify(tampered)} reloaded=${JSON.stringify(trueAfterReload)}`,
+    ).not.toEqual(trueAfterReload);
+    // Removing the injection: the same state, reached again without the replay,
+    // settles on the true numbers and agrees with the reload (the passing side).
+    await toggleClassKind();
+    await toggleClassKind();
+    expect(
+      await readSummaryNumbers(page),
+      'arm C: without the replay the same state reads the reloaded numbers',
+    ).toEqual(trueAfterReload);
+
+    // ── arm D: the zoom reading catches a jump ──────────────────────────────
+    const zoomBefore = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-zoom-scale');
+    await page.locator(SEL.zoomIn).first().click();
+    await settle(page, 300);
+    const zoomRed = await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-zoom-scale');
+    console.log(`[architecture-layout] controlArmD ${JSON.stringify(zoomBefore)} -> ${JSON.stringify(zoomRed)}`);
+    expect(
+      zoomRed,
+      'arm D: the zoom reading must move when the scale really moves — the same relation a '
+        + 're-fit on entering a neighbourhood produced on its own',
+    ).not.toBe(zoomBefore);
+    await page.locator(SEL.zoomOut).first().click();
+    await settle(page, 300);
+    const zoomRestored = Number(
+      await page.locator(SEL.graphRoot).first().getAttribute('data-architecture-zoom-scale'),
+    );
+    // Zoom in/out is a multiply/divide round trip, so the restored value is the
+    // original within float noise (not bit-identical).
+    expect(
+      Math.abs(zoomRestored - Number(zoomBefore)),
+      `arm D: undoing the change puts the reading back on the passing side `
+        + `(${JSON.stringify(zoomBefore)} -> ${zoomRestored})`,
+    ).toBeLessThan(1e-9);
+    await page.screenshot({ path: 'tmp/panel-control-arms-pc.png' });
   } finally {
     await context.close();
   }

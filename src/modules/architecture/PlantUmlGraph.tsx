@@ -921,6 +921,18 @@ export function PlantUmlGraph({
   // The seed hierarchy of the payload on screen, so a resize or a mode switch
   // can re-decide the focus without rebuilding the tree.
   const seedHierarchyRef = useRef<ArchitectureHierarchyIndex | null>(null);
+  /**
+   * The reader's scale, carried across a drill transition (into an entity's
+   * neighbourhood and back out of it).
+   *
+   * A ref rather than a value read at the drill itself because the transition
+   * often takes TWO layout runs: the drill's own run can be cancelled by the
+   * re-layout its new drawing schedules (the aspect debounce), and the run that
+   * finally draws would then see "same drawing" and re-fit — the jump this task
+   * removes. The scale is consumed by the first run that actually applies it,
+   * so a later Fit or zoom is never overridden by it.
+   */
+  const drillScaleRef = useRef<number | null>(null);
   // Set when a drawing was too wide for its container and was collapsed to the
   // directory overview; the notice stays until the user asks for the explosion
   // view again.
@@ -1433,6 +1445,22 @@ export function PlantUmlGraph({
       && previousLayoutInput.viewKey === viewKey
       && previousLayoutInput.idShape === idShape
       && previousLayoutInput.entityGraph === entityGraph;
+    // Drilling into an entity's neighbourhood (and stepping back out of it) is
+    // the same mental place — the reader is looking at the same entities, one
+    // hop narrower or wider — so it is the one view change that must not
+    // re-derive the zoom. Re-fitting there moved the percentage from 72% to
+    // 75% over a drawing that had barely changed, which read as an unexplained
+    // jump (the same complaint the "Back" breadcrumb already answers).
+    const wasNeighbourhood = previousLayoutInput?.viewKey.startsWith('neighborhood:') ?? false;
+    const isNeighbourhood = viewKey.startsWith('neighborhood:');
+    const drillTransition = previousLayoutInput !== null && wasNeighbourhood !== isNeighbourhood;
+    if (drillTransition) {
+      drillScaleRef.current = zoomRef.current.scale > 0 ? zoomRef.current.scale : null;
+    } else if (!sameDrawing) {
+      // A new drawing that is not part of a drill (another session, the
+      // explosion view, an expanded group) has its own natural size.
+      drillScaleRef.current = null;
+    }
     layoutInputRef.current = { graph, viewKey, idShape, entityGraph };
     // A pending application belongs to the drawing being replaced; the new one
     // is applied synchronously below.
@@ -1636,11 +1664,22 @@ export function PlantUmlGraph({
           // An aspect re-layout keeps the scale the reader chose; a new
           // drawing re-derives it from its own natural size. `applyPlacement`
           // still re-centres the drawing inside the new container.
-          drawnScale = sameDrawing && zoomRef.current.mode === 'custom'
-            ? zoomRef.current.scale
-            : viewport.zoomTo(placement?.scale ?? decision.scale);
+          //
+          // A drill transition is the exception: it keeps the reader's scale
+          // ACROSS the new drawing (see `drillScaleRef`), and the mode becomes
+          // `custom` so the tier stops claiming the new drawing is fitted — the
+          // reader can still ask for Fit explicitly.
+          const carried = drillScaleRef.current;
+          const keepReaderScale = carried !== null && carried > 0;
+          drawnScale = keepReaderScale
+            ? viewport.zoomTo(carried)
+            : sameDrawing && zoomRef.current.mode === 'custom'
+              ? zoomRef.current.scale
+              : viewport.zoomTo(placement?.scale ?? decision.scale);
+          // Consumed: only the drawing the drill carried it INTO keeps it.
+          if (keepReaderScale) drillScaleRef.current = null;
           applyPlacement(drawing, placement);
-          applyZoom({ scale: drawnScale, mode: zoomRef.current.mode });
+          applyZoom({ scale: drawnScale, mode: keepReaderScale ? 'custom' : zoomRef.current.mode });
           readout = {
             mode: decision.mode,
             focusPackageId: decision.focusPackageId,
@@ -2761,6 +2800,30 @@ export function PlantUmlGraph({
             entity: view.entityId,
             hops: view.hops,
           });
+  /**
+   * What the reader is looking at while a neighbourhood is open, said in the
+   * toolbar on BOTH tiers.
+   *
+   * Double-clicking an entity replaces the drawing with a smaller one and used
+   * to state nothing: the only new chrome was "Back to Class diagram" and
+   * "Explosion view", which name where the reader could go, never where they
+   * were. The status names the entity — and the entity is named the way the
+   * panel names it everywhere else: the payload's own label, falling back to
+   * the id's last segment so an opaque scope prefix never reaches a reader.
+   */
+  const neighbourhoodStatus = (() => {
+    if (view.kind !== 'neighborhood') return null;
+    const node = graph.nodes.find((candidate) => candidate.id === view.entityId);
+    const label = node === undefined ? '' : node.label.trim();
+    const name = label !== '' && label !== view.entityId
+      ? label
+      : view.entityId.slice(view.entityId.lastIndexOf('.') + 1);
+    return t('architecture.plantuml.neighbourhoodStatus', {
+      defaultValue: 'Neighbourhood of {{entity}} · {{hops}} hop(s)',
+      entity: name,
+      hops: view.hops,
+    });
+  })();
 
   // The explicit drill command is offered only for a touch selection that has
   // not already opened its own view: a desktop click navigated on its own, and
@@ -2911,6 +2974,11 @@ export function PlantUmlGraph({
           setView({ kind: 'hierarchy' });
         }}
         data-architecture-explosion="true"
+        // The label alone never said what the view is; the tooltip does, in the
+        // same words a hover anywhere else on this canvas would use.
+        title={t('architecture.plantuml.explosionHint', {
+          defaultValue: 'Draw every entity as its own box, the whole graph at once',
+        })}
         style={touchTargetStyle}
         className={`${TOOLBAR_BUTTON_CLASS} text-left`}
       >
@@ -3035,6 +3103,14 @@ export function PlantUmlGraph({
     >
       {readableModeGroup}
       {zoomReadout}
+      {neighbourhoodStatus !== null && (
+        <span
+          data-architecture-neighbourhood-status="true"
+          className="min-w-0 max-w-full truncate"
+        >
+          {neighbourhoodStatus}
+        </span>
+      )}
       {backButton}
       {explosionButton}
       {drillButton}

@@ -44,6 +44,7 @@ import {
   standardiseDrawnStereotypes,
 } from '@/modules/architecture/plantUmlText';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
+import { placeHoverHint } from '@/modules/architecture/hoverHintPlacement';
 
 /**
  * The architecture tab's wiring, end to end at the component seam:
@@ -4390,7 +4391,7 @@ test('the readout’s "show mentioned" opens exactly the kinds the reading hides
   );
 });
 
-test('closing a mention switch is a narrowing answered from the payload, with no request', async () => {
+test('closing a mention switch narrows at once and asks the server for the settled reading', async () => {
   rememberFilter('project-1', {
     kinds: ['class', 'interface', 'enum', 'abstract'],
     relations: 'dependency',
@@ -4415,8 +4416,15 @@ test('closing a mention switch is a narrowing answered from the payload, with no
   await openFilterMenu();
   fireEvent.click(document.querySelector('[data-architecture-filter-mentioned-kind="function"]') as Element);
   await waitFor(() => assert.equal(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn), false));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the narrower drawing is shown before any request');
   await new Promise((resolve) => setTimeout(resolve, 400));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'narrowing is answered from the payload in hand');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the settled selection is confirmed by the server');
+  assert.equal(
+    ((apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as { keepMentionedKinds?: readonly string[] })
+      .keepMentionedKinds,
+    undefined,
+    'the closed switch leaves the request entirely (no kind is kept mentioned)',
+  );
 });
 
 test('the mention switches are remembered per project and isolated from another', async () => {
@@ -4553,7 +4561,7 @@ test('the filter popover carries element counts, the three relation presets and 
   );
 });
 
-test('narrowing filters the payload in hand; widening re-requests and keeps the old drawing busy', async () => {
+test('a narrowing draws from the payload at once and is then settled by the server', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
   const seen: ArchitectureRendererProps[] = [];
   function StandInRenderer(props: ArchitectureRendererProps) {
@@ -4570,16 +4578,30 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
   };
 
   // Narrowing: the relation preset moves to `structural`, which keeps only the
-  // composition edge. No request may follow.
+  // composition edge. The drawing narrows from the payload IN HAND, in the same
+  // frame as the click — no round trip is needed to SHOW it.
   await openFilterMenu();
   fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
   await waitFor(() => assert.equal(latest().graph.edges.length, 1));
   assert.equal(latest().graph.edges[0]?.relationType, 'composition');
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'narrowing is answered from the payload in hand');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the narrower drawing is shown before any request');
 
-  // Give the debounce more than its window: a narrowing must not schedule one.
+  // …and the SETTLED reading still comes from the server. The server runs its
+  // BFS and its node budget ON the filtered graph, so a local cut of a wider
+  // payload is a different reading: it still carries entities reachable only
+  // through the edges the narrower preset drops, and it counts the removals
+  // against a different denominator (most call edges vanish with the element
+  // cut and are never counted as relation-hidden). Skipping this request is
+  // exactly what made the summary disagree with a reload of the same state:
+  // "9 related · 1 call relations · 11 isolated nodes" against "5 related ·
+  // 601 call relations · 6 isolated nodes".
   await new Promise((resolve) => setTimeout(resolve, 350));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no deferred request either');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the settled selection is confirmed by the server');
+  assert.deepEqual(
+    ((apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as { relations?: readonly string[] }).relations,
+    ['inheritance', 'implementation', 'composition'],
+    'the confirming request carries the narrowed relation axis',
+  );
 
   // Widening: "Show all" restores every KIND — and, by design, leaves the
   // relation preset exactly where the reader put it (`structural` here, not
@@ -4597,7 +4619,7 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
   // `act` wrapper handles badly, and these readings are about the window's
   // CONTENT, not about whether polling can observe it.
   await new Promise((resolve) => setTimeout(resolve, 400));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the widened selection was requested');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 3, 'the widened selection was requested');
   const busy = document.querySelector('[data-architecture-refreshing="true"]');
   assert.ok(busy instanceof HTMLElement, 'the drawing is marked busy while the widened reading is computed');
   assert.equal(busy.getAttribute('aria-busy'), 'true');
@@ -4618,7 +4640,7 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
   assert.equal(latest().graph.edges[0]?.relationType, 'composition');
 });
 
-test('a truncated reading makes a narrowing re-fetch in the background (budget may have freed up)', async () => {
+test('a truncated reading settles on the server like any other selection', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse({
     ...FILTER_RESULT,
     stats: { ...FILTER_RESULT.stats, entityTruncated: true, truncated: true, entityTotal: 9 },
@@ -4630,12 +4652,13 @@ test('a truncated reading makes a narrowing re-fetch in the background (budget m
   await openFilterMenu();
   fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
 
-  // Narrowing still renders from the payload at once. A sleep rather than
+  // The narrowing renders from the payload at once. A sleep rather than
   // `waitFor`: the request it also schedules puts the drawing in the in-flight
   // state, which a polling `act` wrapper handles badly.
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.equal(apiMock.architectureGraph.mock.calls.length, 2);
-  // …and asks the server because the arrived reading was cut.
+  // …and settles on the server. A cut reading is no longer special: the freed
+  // budget is one more reason the payload in hand cannot speak for the state.
   assert.ok(
     (apiMock.architectureGraph.mock.calls[1] as unknown[])[3],
     'a truncated narrowing sends its filter to the server',
@@ -5668,4 +5691,277 @@ test('a drawing expected to be slow announces its layout, and one the package ti
     'the percentage the reader sees is the size actually drawn over the drawing\'s own size',
   );
   assert.ok(stated > 0.05, `a folded drawing is not shown at the 5 % floor; got ${stated}`);
+});
+
+/* ── panel visibility and readout fixes (2026-10-23) ──────────────────────────────────────── */
+
+/**
+ * Reading: an expanded Scope cleanup panel is really on screen.
+ *
+ * The row's detail opens UPWARDS out of the provenance footer (`absolute
+ * bottom-full`), and the footer used to clip (`overflow-hidden`): the toggle
+ * flipped `aria-expanded` to true and its arrow to ▾ while nothing appeared.
+ * jsdom has no layout engine, so this reading is the ancestor chain that
+ * decides the clip — the browser-side box reading (area > 0, fully inside the
+ * viewport) lives in `e2e/architecture-canvas-layout.spec.ts`.
+ */
+test('an expanded Scope cleanup panel is not clipped by the footer it opens out of', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(SCOPE_HYGIENE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  fireEvent.click(document.querySelector('[data-architecture-scope-hygiene]') as Element);
+  const detail = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-scope-hygiene-detail]');
+    assert.ok(node instanceof HTMLElement, 'expanding the row draws its detail');
+    return node;
+  });
+
+  // The detail opens ABOVE the footer, i.e. outside the footer's own box, so the
+  // footer (and everything between) is the clip that can cut it. Ancestors above
+  // the footer hold the whole panel column, and the detail stays inside that.
+  const clipClasses = /^overflow-(hidden|auto|scroll|clip)$/;
+  const clippedBy: string[] = [];
+  for (let ancestor = detail.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+    const declarations = [...ancestor.classList].filter((name) => clipClasses.test(name));
+    if (declarations.length > 0) {
+      clippedBy.push(`${ancestor.tagName.toLowerCase()}.${declarations.join('.')}`);
+    }
+    if (ancestor.hasAttribute('data-architecture-source-footer')) break;
+  }
+  assert.ok(
+    detail.closest('[data-architecture-source-footer]') !== null,
+    'the detail belongs to the provenance footer this case is about',
+  );
+  assert.deepEqual(clippedBy, [], 'no ancestor up to the footer may clip the panel it opens out of');
+  assert.notEqual(window.getComputedStyle(detail).display, 'none', 'the detail is drawn, not display:none');
+  const rows = [...detail.querySelectorAll('li')].filter((row) => (row.textContent ?? '').trim().length > 0);
+  assert.ok(rows.length >= 4, `the detail must carry its rows; got ${rows.length}`);
+});
+
+/**
+ * Reading: the hover hint never covers the drawing's own labels.
+ *
+ * The hint was pinned to the canvas's top-left corner, which is exactly where a
+ * package frame paints its tab and its class names. The rule is pure
+ * (`placeHoverHint`); the panel-level half proves the panel MEASURES the live
+ * canvas and feeds that rule, rather than only calling it in isolation.
+ */
+test('the hover hint is placed clear of the package tabs and class names', async () => {
+  type Rect = { left: number; top: number; right: number; bottom: number };
+  const overlaps = (a: Rect, b: Rect): boolean =>
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+  // ── the rule itself ───────────────────────────────────────────────────────
+  const container = { left: 0, top: 0, right: 900, bottom: 600 };
+  const hint = { width: 420, height: 22 };
+  // A package frame's tab spans the whole canvas width at its top edge, and a
+  // class name sits a little below it.
+  const tabBand = { left: 0, top: 0, right: 900, bottom: 40 };
+  const className = { left: 40, top: 70, right: 300, bottom: 88 };
+  const placement = placeHoverHint({ container, hint, obstacles: [tabBand, className] });
+  const placed = {
+    left: placement.left,
+    top: placement.top,
+    right: placement.left + hint.width,
+    bottom: placement.top + hint.height,
+  };
+  assert.equal(placement.overlapsObstacle, false, 'a free band exists, so none may be claimed');
+  assert.equal(overlaps(placed, tabBand), false, `the hint must clear the tab band; got ${JSON.stringify(placed)}`);
+  assert.equal(overlaps(placed, className), false, `the hint must clear the class name; got ${JSON.stringify(placed)}`);
+  // Positive control: the pinned corner the panel shipped DOES intersect both,
+  // so the reading above is able to go red on the defect it replaces.
+  const pinnedCorner = { left: 8, top: 8, right: 428, bottom: 30 };
+  assert.equal(overlaps(pinnedCorner, tabBand), true, 'the shipped corner overlapped the tab band');
+
+  // ── the panel's own measurement ───────────────────────────────────────────
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  const originalRect = Element.prototype.getBoundingClientRect;
+  const box = (left: number, top: number, width: number, height: number): DOMRect => ({
+    left, top, width, height, right: left + width, bottom: top + height, x: left, y: top,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+    if (this.hasAttribute('data-architecture-canvas-region')) return box(0, 0, 900, 600);
+    if (this.matches('.uml-package[data-package-id] > path')) return box(0, 0, 900, 40);
+    if (this.hasAttribute('data-architecture-node-name')) return box(0, 70, 260, 18);
+    if (this.hasAttribute('data-architecture-hover')) return box(0, 0, 420, 22);
+    return box(0, 0, 0, 0);
+  };
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    const host = await waitForDiagram();
+    assert.ok(
+      host.querySelector('.uml-package[data-package-id] > path') !== null,
+      'this case needs the drawing to paint package tabs, or it proves nothing',
+    );
+    const node = host.querySelector('[data-entity-id]');
+    assert.ok(node instanceof Element, 'the drawing must offer a node to hover');
+    fireEvent.mouseOver(node);
+    const hintElement = await waitFor(() => {
+      const wrapper = document.querySelector('[data-architecture-hover-hint]');
+      assert.ok(wrapper instanceof HTMLElement, 'hovering a node draws the reading');
+      return wrapper;
+    });
+    const left = Number.parseFloat(hintElement.style.left);
+    const top = Number.parseFloat(hintElement.style.top);
+    assert.ok(
+      top >= tabBand.bottom,
+      `the measured hint must sit below the tab band; top=${hintElement.style.top} left=${hintElement.style.left}`,
+    );
+    assert.equal(
+      overlaps({ left, top, right: left + 420, bottom: top + 22 }, tabBand),
+      false,
+      'the drawn hint must not intersect the tabs it was moved off',
+    );
+  } finally {
+    Element.prototype.getBoundingClientRect = originalRect;
+  }
+});
+
+/**
+ * Reading: a settled filter change prints the numbers a reload prints.
+ *
+ * The fake request sequence is the defect itself: the widening's answer is held
+ * back, the reader returns to the narrower preset, and the held-back (now
+ * SUPERSEDED) answer lands after the current one. The summary must keep the
+ * current state's numbers — the panel used to adopt the late answer and stay
+ * wrong until the page was reloaded.
+ */
+test('a preset change settles on the numbers a reload prints, even when the superseded result lands late', async () => {
+  const callResult: ArchitectureGraphResult = {
+    ...FILTER_RESULT,
+    stats: {
+      ...FILTER_RESULT.stats,
+      entityTotal: 9,
+      relationCounts: { dependency: 1, composition: 1 },
+      hidden: { byKind: { function: 4 }, byRelation: {}, isolated: 11 },
+    },
+  };
+  let resolveCall: ((response: Response) => void) | null = null;
+  let resolveDependency: ((response: Response) => void) | null = null;
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(FILTER_RESULT));
+  apiMock.architectureGraph.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+    resolveCall = resolve;
+  }));
+  apiMock.architectureGraph.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+    resolveDependency = resolve;
+  }));
+
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+
+  /** The three numbers the AC names, read off the DOM the reader reads. */
+  const reading = (): Record<string, string | null | undefined> => {
+    const summary = document.querySelector('[data-architecture-readout-summary]');
+    const hidden = document.querySelector('[data-architecture-filter-hidden]');
+    return {
+      shown: summary?.getAttribute('data-architecture-readout-summary'),
+      related: summary?.getAttribute('data-architecture-readout-total'),
+      hiddenTotal: hidden?.getAttribute('data-architecture-filter-hidden'),
+      hiddenRelations: hidden?.getAttribute('data-architecture-filter-hidden-relations'),
+      hiddenIsolated: hidden?.getAttribute('data-architecture-filter-hidden-isolated'),
+    };
+  };
+  const settled = reading();
+  assert.equal(settled.related, '3', 'the dependency reading names its related count');
+
+  // +Calls widens: the request goes out and is held in flight.
+  await openFilterMenu();
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="call"]') as Element);
+  await new Promise((resolve) => setTimeout(resolve, 350));
+
+  // Back to +Dependencies: narrower, drawn at once, and requested.
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="dependency"]') as Element);
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.equal(
+    apiMock.architectureGraph.mock.calls.length,
+    3,
+    'the narrowing is settled by the server, not only by the local cut',
+  );
+
+  // The CURRENT reading lands first; the superseded (wider) one arrives after.
+  assert.ok(resolveCall !== null && resolveDependency !== null);
+  await act(async () => resolveDependency?.(jsonResponse(FILTER_RESULT)));
+  await act(async () => resolveCall?.(jsonResponse(callResult)));
+
+  const afterLate = reading();
+  assert.deepEqual(afterLate, settled, 'the superseded result must not overwrite the settled reading');
+  first.unmount();
+
+  // The reference: the SAME state, read fresh (what reloading the page prints).
+  apiMock.architectureGraph.mockReset();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-readout-summary]') !== null));
+  assert.deepEqual(reading(), afterLate, 'the settled numbers equal a reload of the same state');
+});
+
+/**
+ * Reading: a drilled neighbourhood says what it is, and the zoom does not move.
+ *
+ * Double-clicking an entity replaced the drawing and stated nothing: the new
+ * chrome named only where the reader could go ("Back to Class diagram",
+ * "Explosion view"), and the re-fit moved the percentage from 72% to 75% over a
+ * drawing that had barely changed.
+ */
+test('drilling into a neighbourhood names it and keeps the zoom', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 160, 120);
+  triggerResize();
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  assert.equal(
+    document.querySelector('[data-architecture-neighbourhood-status]'),
+    null,
+    'the default drawing is not a neighbourhood and states none',
+  );
+  const scaleBefore = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.ok(scaleBefore > 0, `the drawing is at a real scale before the drill; got ${scaleBefore}`);
+
+  drillNode(host, 'src/modules/alpha/A.ts.Alpha');
+  // The view attribute flips with the state; the drawing follows one async
+  // layout later, and THAT is the commit whose zoom the reader sees.
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+  await waitFor(() =>
+    assert.ok(
+      Number(graphRoot().getAttribute('data-architecture-visible-nodes') ?? '0') > 0,
+      'the neighbourhood drawing must be on screen before its zoom is read',
+    ));
+
+  const status = document.querySelector('[data-architecture-neighbourhood-status]');
+  assert.ok(status instanceof HTMLElement, 'the toolbar states what the reader is looking at');
+  assert.match(status.textContent ?? '', /Neighbourhood of Alpha/, `got "${status.textContent}"`);
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-zoom-scale'),
+    String(scaleBefore),
+    'entering the neighbourhood must not move the zoom',
+  );
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-zoom-mode'),
+    'custom',
+    'the tier stops claiming the new drawing is fitted',
+  );
+  const explosion = document.querySelector('[data-architecture-explosion]');
+  assert.ok(explosion instanceof HTMLElement, 'the explosion control is offered from the neighbourhood');
+  assert.ok((explosion.getAttribute('title') ?? '').length > 0, 'the control explains what the view is');
+
+  // …and stepping back out keeps the same scale.
+  fireEvent.click(document.querySelector('[data-architecture-back]') as Element);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  await waitFor(() =>
+    assert.ok(
+      Number(graphRoot().getAttribute('data-architecture-visible-nodes') ?? '0') > 0,
+      'the class drawing must be back on screen before its zoom is read',
+    ));
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-zoom-scale'),
+    String(scaleBefore),
+    'leaving the neighbourhood must not move the zoom either',
+  );
 });

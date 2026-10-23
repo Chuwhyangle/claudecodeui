@@ -53,6 +53,17 @@ export const ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED = 'architecture-canvas-l
 /** The function-heavy workspace the "Show all" / folded-fit legs drive. */
 export const ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS = 'architecture-canvas-layout-workspace-functions';
 
+/**
+ * The workspace whose manifest ALSO lists a scope indexed from outside the
+ * project root.
+ *
+ * The panel's "Scope cleanup" row only exists when the server's scope merge
+ * actually cleaned something up (`provenance.scopeHygiene`); a healthy
+ * single-scope project reports nothing and draws no row. This is the fixture
+ * shape that makes the row exist on a real page.
+ */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_SCOPE_HYGIENE = 'architecture-canvas-layout-workspace-scope-hygiene';
+
 /** Which project shape to write. */
 export type ArchitectureFixtureVariant =
   | 'quay-oo'
@@ -74,6 +85,9 @@ export type ArchitectureFixtureVariant =
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
+
+/** The second, out-of-root scope the `outsideScope` option adds to the manifest. */
+const OUTSIDE_SCOPE_KEY = 'scope-vendor';
 
 /**
  * A fixed fingerprint for the scope index.
@@ -538,6 +552,13 @@ function writeJson(filePath: string, value: unknown): void {
 export type ArchitectureFixtureOptions = {
   readonly variant?: ArchitectureFixtureVariant;
   readonly generatedAt?: string;
+  /**
+   * Also list a SECOND scope — indexed from outside the project root — in the
+   * manifest, and write its index. The server drops it from the merge and
+   * reports it in `provenance.scopeHygiene`, which is the only way the panel's
+   * "Scope cleanup" disclosure exists at all.
+   */
+  readonly outsideScope?: boolean;
 };
 
 /**
@@ -574,12 +595,26 @@ export function writeArchitectureFixture(
   const srcDir = path.join(workspaceDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
 
+  // The out-of-root scope's sources sit beside the workspace, never inside it:
+  // the containment check is what marks the scope as "outside the project".
+  const outsideSources = [path.join(path.dirname(workspaceDir), `${path.basename(workspaceDir)}-vendor`)];
   writeJson(path.join(workspaceDir, '.archguard', 'query', 'manifest.json'), {
     version: '1.0',
     generatedAt,
     globalScopeKey: SCOPE_KEY,
     scopes: [
       { key: SCOPE_KEY, label: 'src (typescript)', language: 'typescript', sources: [srcDir] },
+      ...(options.outsideScope === true
+        ? [{
+            key: OUTSIDE_SCOPE_KEY,
+            label: 'vendor (typescript)',
+            language: 'typescript',
+            sources: outsideSources,
+            // Upstream metadata is trusted over the heuristic (see
+            // `server/modules/architecture/scope-hygiene.ts`).
+            outsideProjectRoot: true,
+          }]
+        : []),
     ],
   });
   writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch-index.json'), {
@@ -590,6 +625,26 @@ export function writeArchitectureFixture(
     path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch.json'),
     buildArchive(entities, classMembers),
   );
+  if (options.outsideScope === true) {
+    // One entity of its own: the scope is DROPPED by the merge either way, and
+    // an index with no entity would never become a candidate `total` counts.
+    const outsideEntities: FixtureEntity[] = [{
+      id: 'vendor/dep.ts.Vendor',
+      name: 'Vendor',
+      file: 'vendor/dep.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: [],
+    }];
+    writeJson(
+      path.join(workspaceDir, '.archguard', 'query', OUTSIDE_SCOPE_KEY, 'arch-index.json'),
+      { ...buildIndex(outsideEntities), generatedAt },
+    );
+    writeJson(
+      path.join(workspaceDir, '.archguard', 'query', OUTSIDE_SCOPE_KEY, 'arch.json'),
+      buildArchive(outsideEntities, 1),
+    );
+  }
 
   const seedIdentifiers = losslessCount !== null
     // Every entity is named in the session text: a bounded hop expansion from
