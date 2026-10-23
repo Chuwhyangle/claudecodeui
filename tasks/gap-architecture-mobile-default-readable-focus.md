@@ -23,10 +23,10 @@ extra:
 
 ## AC
 
-- [ ] `readableZoom.ts` 导出的缺省模式判定有单测：`fitScale` 小于 `READABLE_ZOOM_SCALE` 且无持久化选择时返回 `focus`；`fitScale` 不小于它时返回 `overview`；有持久化选择时以持久化为准（`npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` 退出码 0，含这三个用例）。
-- [ ] 渲染一个 120 节点量级的文件图夹具：初始 `data-architecture-readable-overview-mode` 元素 `aria-pressed` 为 `false`，且渲染的节点标题字号不小于 `MIN_READABLE_FONT_PX`（vitest 断言）。
-- [ ] 画布上存在聚焦/总览切换，点击切到总览后 `aria-pressed` 为 `true` 并写入持久化键；刷新（重新渲染）后保持。
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` 与 `src/modules/architecture/tests/mobileGestures.test.tsx` 退出码 0。
+- [x] `readableZoom.ts` 导出的缺省模式判定有单测：`fitScale` 小于 `READABLE_ZOOM_SCALE` 且无持久化选择时返回 `focus`；`fitScale` 不小于它时返回 `overview`；有持久化选择时以持久化为准（`npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` 退出码 0，含这三个用例）。
+- [x] 渲染一个 120 节点量级的文件图夹具：初始 `data-architecture-readable-overview-mode` 元素 `aria-pressed` 为 `false`，且渲染的节点标题字号不小于 `MIN_READABLE_FONT_PX`（vitest 断言）。
+- [x] 画布上存在聚焦/总览切换，点击切到总览后 `aria-pressed` 为 `true` 并写入持久化键；刷新（重新渲染）后保持。
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` 与 `src/modules/architecture/tests/mobileGestures.test.tsx` 退出码 0。
 
 ## DoD
 
@@ -41,3 +41,15 @@ extra:
 - src/modules/architecture/tests/architectureTab.test.tsx
 - src/modules/architecture/tests/mobileGestures.test.tsx
 - tasks/gap-architecture-mobile-default-readable-focus.md
+
+## Evidence
+
+2026-10-23 worker 轮：实现 + 逐条 AC 复验。
+
+- `npx vitest run src/modules/architecture/tests/readableZoom.test.tsx` → **14 passed**：`defaultReadableMode` 三臂（fit < 可读下限 ⇒ focus；= 下限与 0.9 ⇒ overview）＋ `resolveReadableMode` 持久化优先；`decideReadableZoom` 同规则。
+- `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` → **114 passed**：新增 40 包 × 3 文件 = 120 节点夹具，390×780 画布默认 `focus`、`data-architecture-readable-overview-mode` 初始 `aria-pressed=false`、节点标题 13 × 0.6923 = 9.0px ≥ `MIN_READABLE_FONT_PX`；点 Overview 后 `aria-pressed=true`、localStorage `architecture.readableMode.v1:project-1=overview`，卸载重挂后保持。
+- `npx vitest run src/modules/architecture/tests/mobileGestures.test.tsx` → **8 passed**。
+- 架构目录全套（`src/modules/architecture/tests`，`--maxWorkers=2`，6G cap）→ **29 files / 508 passed**；`npm run typecheck` 通过；`npx oxlint` 改动文件 exit 0（仅既有 warning）。
+- DoD 真机等价验证（本会话无 MCP 浏览器；按 `no-mcp-browser-use-throwaway-playwright-spec` 用隔离实例 + 一次性 Playwright 驱动，未触碰 3001 上的实盘服务）：隔离 HOME/DB 起本 worktree 的 server :3101 与 Vite :5199，390×844 `hasTouch` 打开会话 `45ac161a-6452-462b-8dda-401f6759d88e` 的 File graph，读数：默认 `readable-mode=focus`、`zoom-scale=0.6923`、节点标题实测 9.0px、Overview `aria-pressed=false`、胶囊在画布上且未开 Adjust；点 Overview 后 `readable-mode=overview`、`zoom-scale=0.2439`（即审查中的 24–25%）、标题 3.17px、Overview `aria-pressed=true`、Fit 按钮不再 pressed；再点 Focus 回到 0.6923/9.0px。截图：`tmp/arch-mobile-focus.png`、`tmp/arch-mobile-overview.png`、`tmp/arch-mobile-focus-back.png`；读数 JSON：`tmp/arch-mobile-report.json`。
+- 场景运行器：仓库仅有 `e2e/scenarios/quay-wall-focus-pin-utter.json`（quay-panel opener），无 architecture 可用场景，故本任务不适用。
+- 遗留：`e2e/architecture-canvas-layout.spec.ts` 的 `assertDefaultWholeGraph` 仍断言旧契约「默认必为 overview 整图」，本任务改默认后该 e2e 腿会红；该文件不在本任务 Touches、亦不在 fan-in 的 e2e lane（`scripts/test.sh` 只跑 `session-lifecycle-scenario.spec.ts`），需后续任务把守卫改成「可读即 overview / 不可读即 focus」。
