@@ -1,6 +1,6 @@
 ---
 id: quay-wall-addressable-view-and-input-package
-title: "墙视图 + 视图契约 + 引用式输入包（CloudCLI 侧契约 #2/#3，依赖 fleet 对象 URI 契约）"
+title: 墙：视图契约 + quay:// 地址工具 + 引用式输入包 + 确定性指涉解析（零 fleet 依赖，A/B 片）
 status: ready
 labels:
   - wall
@@ -12,35 +12,45 @@ extra: {}
 ---
 ## Proposal
 
-决策出处：与 quay-fleet 协作会话对齐的「墙」方向（2026-10-23）。按职责切：quay-fleet 拥有状态模型/事件流/写路径摘要并提供 quay:// 对象端点；CloudCLI 拥有渲染/焦点/输入（语音、手柄）与输入托盘。本任务 = CloudCLI 侧两份契约：视图描述格式 + 视图契约（该会话 §5 第 2 条）、输入包格式（第 3 条）。依赖 fleet 侧对象 URI 契约（quay-fleet 的 fleet-wall-object-uri-address-space，先钉）。
+决策出处：与 quay-fleet 协作会话对齐的「墙」方向（2026-10-23）。按职责切：quay-fleet 拥有状态模型 / 事件流 / 写路径摘要，并提供 `quay://` 对象读口（fleet 任务 `fleet-wall-object-uri-address-space`）；CloudCLI 拥有渲染 / 焦点 / 输入（语音、手柄）/ 输入托盘。
+
+**2026-10-23 收窄（用户已确认拆分）**：本任务只做**零 fleet 依赖**的两片——视图契约 + `quay://` 地址工具（A）、引用式输入包（B），外加确定性的显示属性解析（D 的确定性部分）。「下游按 URI 读回真实数据」拆到 `quay-wall-uri-dereference-with-snapshot-fallback`（C），本任务**不做解引用、不调 fleet 端点**。
 
 现状实读（2026-10-23）：
-- QuayPanel（src/modules/quay/QuayPanel.tsx）渲染 typed QuaySnapshot 只读镜像（QuayListItem/QuayInFlightTask/QuayTimelineWindow/gantt），完整任务板 link-out 到 quay serve。
-- voiceContextPack.ts（C2 ContextPack）已是「把可见内容带进语音输入」的实现，但为 角色：文本 的字符预算行，非对象引用。
-- server/.../claude-resident-addressable.test.ts 说明「可寻址对象」底座已有一半。
+- QuayPanel（src/modules/quay/QuayPanel.tsx）渲染 typed QuaySnapshot 只读镜像，完整任务板 link-out 到 quay serve。
+- voiceContextPack.ts（C2 ContextPack）是 `角色：文本` 的字符预算行，非对象引用。
 
 方案：
-1. 墙视图：QuayPanel 每个磁贴渲染成可寻址对象（quay:// URI + 显示属性：颜色/状态/序号标签/位置）。
-2. 视图契约：每个视图组件声明可聚焦子元素（空间序 + URI + 短口语标签 ①②③ + 显示属性）；放大=进入焦点对象子视图，缩小=回父视图。
-3. 输入包升级：voiceContextPack 从文本行升级为引用包（utterance + focus + visible(带显示属性) + history + tray），送引用不送内容。
+1. **URI 语法（与 fleet 一致，带项目段）**：`quay://<project>/task/<id>`、`quay://<project>/task/<id>#ac-<n>`、`quay://<project>/goal/<id>`、`quay://<project>/ledger/<name>/<eventId>`、`quay://<project>/board`。纯函数 parse/format，往返一致；缺项目段的 `quay://task/<id>` 视为非法。L1 的 `type`/`actions` 枚举**以 fleet 为唯一来源**，本侧只消费、不另立动作集（本任务可只落 `type`，`actions` 留给 C 从 fleet 读）。
+2. **视图契约**：可聚焦子元素 = `{uri, label, display:{status,color,ordinal,pos}}`，空间序。第一块落地 = QuayPanel 的在途任务磁贴。类型放 src 侧（`src/shared/types.ts`），不放仓库根 shared。
+3. **引用式输入包**：`{utterance, focus, visible, history, tray, text}`——
+   - `focus`：焦点对象引用或 null；`visible`：可见集引用（带显示属性），空间序。
+   - `history`：最近看过的**视图/对象引用**（URI 数组），不是 C2 对话文本。
+   - `tray`：用户钉进输入托盘的**对象引用**（URI 数组），不是草稿文本。
+   - `text`：既有 C2 对话包 + 草稿/已说块原样，作为降级路径与 ASR 热词来源；字节级等同现有输出。
+   - 只有 `text` 携带文本；`focus/visible/history/tray` 只携带 `{uri,label,display}`，不携带标题、正文、摘要。
+4. **确定性显示属性解析**：「第二个 / ② / 红的那个 / 左上那个」按 ordinal / label / color / pos 在 `visible` 上精确匹配；有歧义（如两个红的）或无匹配就返回 ambiguous / none，不猜。自由形式的说法不在本任务范围。
 
 ## AC
 
-- [ ] AC1: 视图契约类型落 shared/types：可聚焦子元素 = {uri, label, display}；QuayPanel 至少一块 tile 按契约声明可聚焦子元素。
-- [ ] AC2: 输入包带对象引用：夹具证明一条语音的上下文里含 focus 对象 URI，且下游按 URI 读回真实数据（非转述文本）。
-- [ ] AC3: 显示属性可指涉：可见集元素带颜色/状态/序号/位置，解析「红的那个/第二个」按显示属性匹配。
-- [ ] AC4: 既有判据原样通过：QuayPanel / voiceContextPack 既有测试绿（不弱化断言）。
+- [ ] AC1: `npx vitest run src/modules/quay/tests/quayUri.test.ts` exit 0——五种 URI 形态 parse→format 往返一致；缺项目段、未知类型、空 id 都被拒绝。
+- [ ] AC2: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——在途任务磁贴按视图契约声明可聚焦子元素，URI 为 `quay://<project>/task/<id>`，带序号标签与 status/color 显示属性；既有用例不弱化。
+- [ ] AC3: `npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts` exit 0——引用包夹具：`focus` 为焦点磁贴 URI；`focus/visible/history/tray` 中不出现任务标题或正文文本；`history`/`tray` 为 URI 数组；`text` 与既有 C2 输出逐字相等；focusUri 不在可见集时 `focus` 为 null；既有 C2 用例不弱化。
+- [ ] AC4: 同一测试文件中的解析用例——「第二个」「②」「红的那个」「左上那个」各自命中唯一对象；两个同色对象时「红的那个」返回 ambiguous；「一起」「十二点」不被当成序号。
+- [ ] AC5: `npm run typecheck` 通过。
 
 ## DoD
 
-- 一块真实 QuayPanel tile 经 quay:// 地址被输入包按引用带入语音上下文，且下游读回真实任务数据。
-- 如实写明与 C2 ContextPack 的兼容边界（文本行降级路径），以及 quay:// 端点缺失时的行为。
+- 在真实运行的 CloudCLI 上打开 Quay 面板，在途任务磁贴带可见序号标签；在开发者控制台或测试夹具中对一条语音构建引用包，包内 focus 为该磁贴的 `quay://<project>/task/<id>`。
+- 如实写明：本任务不解引用（交给 C）；`text` 降级路径的兼容边界。
 
 ## Touches
 
 - src/shared/types.ts
+- src/modules/quay/quayUri.ts
+- src/modules/quay/tests/quayUri.test.ts
 - src/modules/quay/QuayPanel.tsx
-- src/modules/chat/utils/voice/voiceContextPack.ts
 - src/modules/quay/tests/QuayPanel.test.tsx
+- src/modules/chat/utils/voice/voiceContextPack.ts
 - src/modules/chat/utils/tests/voiceContextPack.test.ts
 - tasks/quay-wall-addressable-view-and-input-package.md
