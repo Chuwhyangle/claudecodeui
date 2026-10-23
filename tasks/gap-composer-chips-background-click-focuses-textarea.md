@@ -1,7 +1,7 @@
 ---
 id: gap-composer-chips-background-click-focuses-textarea
 title: 输入框建议 chip 条的空白处点击不聚焦 textarea：listbox 只占 chip 宽度，缝隙与周边空白的按下事件转交给 textarea
-status: todo
+status: ready
 labels:
   - gap
   - defect
