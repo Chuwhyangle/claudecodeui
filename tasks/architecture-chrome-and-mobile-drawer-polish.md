@@ -1,7 +1,7 @@
 ---
 id: architecture-chrome-and-mobile-drawer-polish
 title: 架构 tab 手机抽屉与画布外观：档位按钮文字、重复关闭、托盘避让、Focus 按下态、画布底色、Focus 横幅
-status: todo
+status: ready
 labels:
   - feature
 parent: null
