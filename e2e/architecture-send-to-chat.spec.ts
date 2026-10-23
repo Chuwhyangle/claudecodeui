@@ -533,6 +533,99 @@ async function walkFourDoors(
   await assertMessageAndClear(page, project, `${form.label}.text-panel`);
 }
 
+/** The two-entity message: both names, the relation between them, no UUID. */
+async function assertPairMessageAndClear(
+  page: Page,
+  projectRow: { displayName: string; projectId: string },
+  arm: string,
+): Promise<void> {
+  await expect(page.locator(SEL.chatTab), `${arm}: the workspace switches to Chat`).toHaveCount(1, {
+    timeout: 20_000,
+  });
+  const text = await readComposedMessage(page);
+  const reading = analyzeMessage(text, projectRow.displayName, SEED_NAME);
+  console.log(`[architecture-send-to-chat] ${arm} reading=${JSON.stringify(reading)} text=${JSON.stringify(text.slice(0, 400))}`);
+  expect(reading.hasProjectName, `${arm}: the message names the project`).toBe(true);
+  expect(reading.hasEntity, `${arm}: the message names ${SEED_NAME}`).toBe(true);
+  expect(reading.hasSecondEntity, `${arm}: the message names ${SECOND_NAME}`).toBe(true);
+  expect(reading.hasRelationLine, `${arm}: the pair's relation is stated`).toBe(true);
+  expect(reading.hasUuid, `${arm}: the message carries no UUID-shaped id`).toBe(false);
+  lastMessageText = text;
+  await shot(page, `${arm}.composer`);
+  await clearDraft(page);
+}
+
+/**
+ * The DoD's second half: two entities through the entity-shaped doors.
+ *
+ * The inspector's multi-selection summary carries its own count button, the
+ * context menu sends the whole set when the right-clicked entity is a member,
+ * and the tray sends both. Each leg ends by emptying the composer.
+ */
+async function walkTwoEntities(page: Page, label: string): Promise<void> {
+  if (project === null) throw new Error('project row missing');
+  const selectPair = async (): Promise<void> => {
+    await enterArchitecture(page);
+    await showEntityBoxes(page);
+    await entityBox(page, SEED_NAME).click();
+    await entityBox(page, SECOND_NAME).click({ modifiers: ['Shift'] });
+  };
+
+  // 1. The inspector's multi-selection button.
+  await selectPair();
+  const countButton = page.locator('[data-architecture-inspector-put-count-in-chat="2"]');
+  await expect(countButton, `${label}: the multi-selection summary carries the action`).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(countButton).toContainText('Put 2 in chat input');
+  await settle(page, 400);
+  await countButton.scrollIntoViewIfNeeded();
+  await shot(page, `${label}.multi-inspector-open`);
+  await countButton.click();
+  await assertPairMessageAndClear(page, project, `${label}.multi-inspector`);
+
+  // 2. The context menu, right-clicking a MEMBER of the selection.
+  await selectPair();
+  await entityBox(page, SEED_NAME).click({ button: 'right' });
+  const contextItem = page.locator(SEL.contextPut);
+  await expect(contextItem, `${label}: the context menu offers the action`).toBeVisible({ timeout: 10_000 });
+  await shot(page, `${label}.multi-context-menu-open`);
+  await contextItem.first().click();
+  await assertPairMessageAndClear(page, project, `${label}.multi-context-menu`);
+
+  // 3. The tray.
+  await selectPair();
+  const pill = page.locator(SEL.trayPill);
+  await expect(pill).toContainText(/2 selected · Send to chat/);
+  await pill.first().click();
+  await expect(page.locator(SEL.trayCompose)).toBeVisible({ timeout: 10_000 });
+  await shot(page, `${label}.multi-tray-open`);
+  await page.locator(SEL.trayCompose).first().click();
+  await assertPairMessageAndClear(page, project, `${label}.multi-tray`);
+}
+
+test('two entities reach the chat from the inspector, the context menu and the tray (PC)', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, { viewport: VIEWPORT_PC, touch: false });
+  try {
+    await page.goto(`/session/${sessionId}`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+    await awaitClientMounted(page, ARCHITECTURE_TAB_LANDING, 25_000, startupEvidence);
+    await walkTwoEntities(page, 'pc');
+  } finally {
+    await context.close();
+  }
+});
+
+test('two entities reach the chat from the inspector, the context menu and the tray (phone)', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, { viewport: VIEWPORT_PHONE, touch: true });
+  try {
+    await page.goto(`/session/${sessionId}`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
+    await awaitClientMounted(page, ARCHITECTURE_TAB_LANDING, 25_000, startupEvidence);
+    await walkTwoEntities(page, 'phone');
+  } finally {
+    await context.close();
+  }
+});
+
 test('four doors send the selection to the chat on the PC viewport (1440x765)', async ({ browser }) => {
   const { context, page } = await openSignedInPage(browser, baseURL, token, { viewport: VIEWPORT_PC, touch: false });
   try {

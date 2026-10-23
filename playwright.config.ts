@@ -400,10 +400,11 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear
-  // between each. MEASURED 2026-10-23 on this worktree: `2 passed (20.5s)` for
+  // between each. MEASURED 2026-10-23 on this worktree: `4 passed (35.8s)` for
   // the whole invocation — config evaluation, both webServers' boot, the
-  // browser launch, the fixture and both viewports included; the two cases
-  // themselves took 8.5 s and 6.8 s. 240_000 is what the sibling architecture
+  // browser launch, the fixture and both viewports included; the four cases
+  // (four doors and the two-entity legs, PC and phone) took 7.7 s, 8.1 s,
+  // 7.6 s and 6.3 s. 240_000 is what the sibling architecture
   // entry above declares and clears that measurement more than tenfold, which
   // leaves room for a load-slowed fan-in run without changing what is measured.
   'architecture-send-to-chat.spec.ts': 240_000,
