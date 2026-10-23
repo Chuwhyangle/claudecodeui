@@ -31,11 +31,11 @@ extra:
 
 ## AC
 
-- [ ] `npm ls @yalehwang/plantuml-js --depth=0` 输出的版本 ≥ 0.5.0 且 exit 0；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts src/modules/architecture/tests/architectureTab.test.tsx` exit 0：新增用例——渲染入口被调用时带 `memberMaxChars: 48` 与 `memberMaxRows: 6`；用含 105 个字符签名的成员的夹具渲染后，画出的成员文字不超过 48 个字符且以 `…` 结尾，成员超过 6 个的实体只画 6 行加一行 `… +N more (M members)`（N、M 数值正确）；`renderDetailed().model` 里该成员的 `raw` 仍是完整 105 字符，Text 面板与 Copy PlantUML 的文本里仍含完整签名；不超限的实体不变；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：用 plantuml-js 对夹具实际布局，含超长签名的类的 `data-w` 不超过 `1.35 × 最长可见文字宽度 + 24`（最长可见文字取自画出的成员行与类名）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用上述夹具，在 1440×765 与 390×844 两个视口下，每个实体框的世界宽度与其最长画出文字的世界宽度之比 ≤ 1.35 加 24 的绝对余量；390×844 视口的缺省缩放 ≥ 60%（修复前该夹具约 38%）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——不传这两个选项时同一读数里节点宽度比与手机缺省缩放同时越界变红，主臂与控制臂用同一读取函数
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npm ls @yalehwang/plantuml-js --depth=0` 输出的版本 ≥ 0.5.0 且 exit 0；`npx vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts src/modules/architecture/tests/architectureTab.test.tsx` exit 0：新增用例——渲染入口被调用时带 `memberMaxChars: 48` 与 `memberMaxRows: 6`；用含 105 个字符签名的成员的夹具渲染后，画出的成员文字不超过 48 个字符且以 `…` 结尾，成员超过 6 个的实体只画 6 行加一行 `… +N more (M members)`（N、M 数值正确）；`renderDetailed().model` 里该成员的 `raw` 仍是完整 105 字符，Text 面板与 Copy PlantUML 的文本里仍含完整签名；不超限的实体不变；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/layoutAspect.test.tsx` exit 0：用 plantuml-js 对夹具实际布局，含超长签名的类的 `data-w` 不超过 `1.35 × 最长可见文字宽度 + 24`（最长可见文字取自画出的成员行与类名）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用上述夹具，在 1440×765 与 390×844 两个视口下，每个实体框的世界宽度与其最长画出文字的世界宽度之比 ≤ 1.35 加 24 的绝对余量；390×844 视口的缺省缩放 ≥ 60%（修复前该夹具约 38%）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——不传这两个选项时同一读数里节点宽度比与手机缺省缩放同时越界变红，主臂与控制臂用同一读取函数
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
@@ -54,3 +54,11 @@ extra:
 - e2e/support/architectureFixture.ts
 - playwright.config.ts
 - tasks/architecture-node-size-from-drawn-content.md
+
+## Blocker
+
+**2026-10-23T08:16:45.332Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：c1850c92-abff-4b18-9b7e-3231865d37ca
