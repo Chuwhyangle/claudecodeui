@@ -65,6 +65,7 @@ depends_on:
 - `server/modules/quay/quay.module.ts`：生产组合根，把 registry join 注入 `createQuayService`。
 - `server/shared/types.ts`：后端镜像的 `QuaySnapshot` 也要带 `fleetProjectId`（与 `src/shared/types.ts` 成对声明；AC5 的后端 typecheck 需要它）。
 - `server/shared/tests/quay-test-script.test.ts`：新增一个 server 测试文件把采集数 403→404，dispatch 顺序 pin 重测（known=3/unknown=401、known=1/unknown=403）。
+- `scripts/suite-duration-baseline.tsv`：同一个新测试文件把采集数顶到 404，baseline 覆盖率降到 363/404=89.85%，低于 AC7 的 90% 地板（fan-in 复现的红）。单文件实测（`bash scripts/test.sh server/modules/quay/tests/quay-fleet-project-id.test.ts`，dur=1653ms）追加一行，并按文件头既有惯例记录来源；覆盖率回到 364/404=90.1%。
 - `src/modules/cockpit/cockpitIntent.ts` / `cockpitRouting.ts`：方案 5——口语句里的项目名与 URI 项目段改用同一个 registry id。
 - `src/modules/ui-scenario/tests/scenarioSurface.test.ts`：场景面的发布 gate 依赖 `fleetProjectId`，其逐字夹具随新的 URI 项目段更新。
 
@@ -79,6 +80,7 @@ depends_on:
 - server/modules/quay/tests/quay-uri-resolve.test.ts
 - server/shared/types.ts
 - server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - src/modules/quay/QuayPanel.tsx
 - src/modules/quay/hooks/useQuayStatus.ts
 - src/modules/quay/tests/QuayPanel.test.tsx
