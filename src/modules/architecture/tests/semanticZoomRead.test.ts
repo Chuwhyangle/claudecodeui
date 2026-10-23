@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { beforeAll, test } from 'vitest';
+import { beforeAll, describe, test } from 'vitest';
 
 import {
   pathPointsOf,
@@ -26,12 +26,14 @@ import {
 
 type PlantUmlElkModule = {
   ElkLayoutEngine: new () => unknown;
-  createRenderer: (options: { layout: unknown }) => {
+  createRenderer: (options: { layout: unknown; detail?: 'full' | 'compact' | 'names' }) => {
     render: (puml: string) => Promise<{ svg: string }>;
   };
 };
 
 let render: (puml: string) => Promise<string>;
+/** The same renderer at the compact detail level (the one that adds an overflow row). */
+let renderCompact: (puml: string) => Promise<string>;
 
 /** Parse a rendered SVG string into an element the reader can walk. */
 function intoSvg(svg: string): Element {
@@ -47,6 +49,10 @@ beforeAll(async () => {
   const { ElkLayoutEngine, createRenderer } = (await import('@yalehwang/plantuml-js/elk')) as unknown as PlantUmlElkModule;
   const renderer = createRenderer({ layout: new ElkLayoutEngine() });
   render = async (puml: string): Promise<string> => (await renderer.render(puml)).svg;
+  // `compact` is the level the real canvas uses past 40 entities: it keeps four
+  // member rows and appends its own truncation row when a class has more.
+  const compact = createRenderer({ layout: new ElkLayoutEngine(), detail: 'compact' });
+  renderCompact = async (puml: string): Promise<string> => (await compact.render(puml)).svg;
 });
 
 const EXAMPLE = `@startuml
@@ -117,8 +123,7 @@ test('a field whose TYPE has parentheses is an attribute, not a method', async (
   );
 });
 
-test('an interface with only operations carries exactly one compartment rule', async () => {
-  const { geometry } = await exampleGeometry();
+test('an interface with only operations carries exactly one compartment rule', async () => {  const { geometry } = await exampleGeometry();
   const runner = geometry.nodes.find((candidate) => candidate.id === 'r1');
   assert.ok(runner !== undefined);
   assert.equal(runner.kind, 'interface', 'the italic title names the interface');
@@ -150,4 +155,82 @@ test('path points are read in order, including a rounded corner', () => {
     { x: 35, y: 25 },
     { x: 35, y: 40 },
   ]);
+});
+
+describe('title text is read by ROLE, not by child order (defect 6)', () => {
+  test('a pinned node’s name is not the badge even when the badge is the first text', () => {
+    // The graph annotator inserts the pin badge BEFORE the title; taking the
+    // first `<text>` made the label `📌` and the entity lost its name.
+    const svg = intoSvg(`<svg viewBox="0 0 200 80" width="200" height="80">
+      <g class="uml-node" data-entity-id="cursor" data-architecture-pinned="true"
+         data-x="0" data-y="0" data-w="200" data-h="80">
+        <text class="arch-pinned-badge" data-architecture-pinned-badge="true" font-size="11">📌</text>
+        <text font-style="italic">«interface»</text>
+        <text font-style="italic">CursorProvider</text>
+        <text class="uml-attr">+ id: string</text>
+      </g>
+    </svg>`);
+    const geometry = readSemanticDrawingGeometry(svg);
+    const node = geometry.nodes.find((candidate) => candidate.id === 'cursor');
+    assert.ok(node !== undefined);
+    assert.equal(node.label, 'CursorProvider', 'the entity label, not the badge glyph');
+    assert.notEqual(node.label, '📌');
+    assert.equal(node.stereotype, 'interface', 'the standalone stereotype line is read as the kind token');
+    assert.equal(node.kind, 'interface');
+    assert.equal(
+      svg.querySelectorAll('.arch-pinned-badge').length,
+      1,
+      'the fixture carries exactly one badge',
+    );
+  });
+});
+
+describe('upstream compact-detail overflow row', () => {
+  const FIVE_MEMBERS = `@startuml
+class "Big" as big {
+  - a: string
+  - b: string
+  - c: string
+  - d: string
+  - e: string
+}
+@enduml`;
+
+  test('a class past the renderer’s compact limit reports its total, not the truncation row', async () => {
+    const svg = intoSvg(await renderCompact(FIVE_MEMBERS));
+    const geometry = readSemanticDrawingGeometry(svg);
+    const big = geometry.nodes.find((node) => node.id === 'big');
+    assert.ok(big !== undefined);
+    // The renderer keeps COMPACT_MEMBER_ROWS = 4 rows and appends
+    // `+ … +1 more (5 members)`. The row is a paging hint, not a member.
+    const rawTexts = [...svg.querySelectorAll('.uml-node[data-entity-id="big"] text')]
+      .map((text) => text.textContent ?? '');
+    assert.ok(
+      rawTexts.some((text) => /more \(\d+ members\)/.test(text)),
+      'the real renderer must have emitted its truncation row for this case to mean anything',
+    );
+    assert.equal(big.members.length, 4, 'only the real member rows are kept');
+    assert.ok(
+      big.members.every((member) => !/more \(\d+ members\)/.test(member.text)),
+      'the upstream overflow row must not appear in the member list',
+    );
+    assert.equal(big.memberTotal, 5, 'the total is the row’s `(N members)`, not the kept row count');
+    assert.equal(big.upstreamOverflow, true);
+  });
+
+  test('a class whose only row is the truncation row reads no members and the upstream total', () => {
+    // The boundary the renderer cannot produce (it always keeps four rows):
+    // read directly from the shape, so the strip rule is exercised on its own.
+    const svg = intoSvg(`<svg viewBox="0 0 120 40" width="120" height="40">
+      <g class="uml-node" data-entity-id="only" data-x="0" data-y="0" data-w="120" data-h="40">
+        <text class="uml-attr">+ … +3 more (7 members)</text>
+      </g>
+    </svg>`);
+    const geometry = readSemanticDrawingGeometry(svg);
+    const only = geometry.nodes.find((node) => node.id === 'only');
+    assert.ok(only !== undefined);
+    assert.deepEqual(only.members, [], 'the truncation row is not a member');
+    assert.equal(only.memberTotal, 7);
+    assert.equal(only.upstreamOverflow, true);
+  });
 });

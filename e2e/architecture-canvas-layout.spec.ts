@@ -5,6 +5,7 @@ import type { APIRequestContext, Browser, BrowserContext, Page } from '@playwrig
 
 import {
   ARCHITECTURE_FIXTURE_WORKSPACE,
+  ARCHITECTURE_FIXTURE_WORKSPACE_CUI,
   writeArchitectureFixture,
   type ArchitectureFixtureReading,
 } from './support/architectureFixture';
@@ -120,6 +121,10 @@ const SEL = {
   zoomOut: '[data-architecture-zoom-out]',
   overviewMode: '[data-architecture-readable-overview-mode]',
   explosion: '[data-architecture-explosion]',
+  // The class (entity) diagram's granularity radio. The semantic readings are
+  // specified on THIS graph: file nodes carry no kinds or members.
+  viewEntity: '[data-architecture-view-option="entity"]',
+  viewFile: '[data-architecture-view-option="file"]',
   // The provenance/cleanup row: a FOOTER under the canvas on every tier.
   footer: '[data-architecture-source-footer]',
   sourceLine: '[data-architecture-source-line]',
@@ -921,6 +926,41 @@ type SemanticEdgeReading = {
   readonly tail: { x: number; y: number }[];
 };
 
+/** One sticky package label as the browser paints it. */
+type SemanticStickyLabel = {
+  readonly id: string;
+  readonly rect: LodRect;
+  /** The label's on-screen font size(s), in CSS px. */
+  readonly fonts: number[];
+};
+
+/** One drawn class name, read by ROLE (never by child order). */
+type SemanticNameReading = {
+  readonly id: string;
+  /** The entity label the role-selected text says it belongs to. */
+  readonly label: string | null;
+  /** The role-selected name text's content. */
+  readonly text: string;
+  /** All name lines' text concatenated (wrapped names join back to the label). */
+  readonly joined: string;
+  /** How many name lines the frame draws. */
+  readonly lines: number;
+  /** The frame's painted width, for the "wide enough for one line" rule. */
+  readonly boxWidth: number;
+  /** The full label's measured width at the drawn font size. */
+  readonly labelWidth: number;
+  /** `true` when the wide-box rule requires a single line. */
+  readonly oneLineRequired: boolean;
+};
+
+/** The pinned-entity reading. */
+type SemanticPinnedReading = {
+  readonly id: string;
+  readonly name: string;
+  readonly label: string | null;
+  readonly badgeCount: number;
+};
+
 /** Everything the semantic-zoom criterion reads, in one round trip. */
 type SemanticReading = {
   readonly tier: string | null;
@@ -932,6 +972,28 @@ type SemanticReading = {
   /** `tab ∩ class` names: the reserved tab band must not be covered. */
   readonly tabOverlaps: string[];
   readonly edges: SemanticEdgeReading[];
+  /** Sticky package labels, with their fonts. */
+  readonly stickyLabels: SemanticStickyLabel[];
+  /** Sticky labels whose own package tab is still visible on screen. */
+  readonly stickyOwnTabVisible: string[];
+  /** Sticky labels covering a visible class-name text. */
+  readonly stickyNameOverlaps: string[];
+  /** Sticky labels clipped by the viewport edge. */
+  readonly stickyClipped: string[];
+  /** Class names read by role, with their line counts. */
+  readonly names: SemanticNameReading[];
+  /** The overview hint pill, when drawn. */
+  readonly hint: { readonly rect: LodRect; readonly text: string } | null;
+  /** `hint ∩ tab` names: the pill must not cover a package tab. */
+  readonly hintTabOverlaps: string[];
+  /** `class rule ∩ member text` names: the split rule must not cross a row. */
+  readonly memberRuleOverlaps: string[];
+  /** Member-area texts that are the renderer's own compact truncation row. */
+  readonly upstreamOverflowRows: string[];
+  /** Pinned entities: name (by role) and badge count. */
+  readonly pinned: SemanticPinnedReading[];
+  /** Diagnostic: the renderer's own compartment heights per drawn class. */
+  readonly memberShapes: { readonly id: string; readonly attrsH: number; readonly opsH: number; readonly drawnH: number }[];
 };
 
 /** The PC floor text size the design fixes; the phone tier is one px larger. */
@@ -1088,6 +1150,181 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
           tail,
         };
       });
+    // ---- role-based name reading (defect 6)
+    const isStereotype = (value: string): boolean => /^(?:<<\s*\w+\s*>>|«\s*\w+\s*»)$/.test(value.trim());
+    const isAuxiliary = (text: Element): boolean => {
+      const cls = text.getAttribute('class') ?? '';
+      if (/arch-pinned-badge|arch-selected-check|uml-(attr|op|edge-label)/.test(cls)) return true;
+      if (text.getAttribute('data-architecture-pinned-badge') === 'true') return true;
+      if (text.hasAttribute('data-architecture-node-member') || text.hasAttribute('data-architecture-node-more')) return true;
+      return isStereotype(text.textContent ?? '');
+    };
+    const svgElement = document.querySelector('svg[data-architecture-semantic]')
+      ?? document.querySelector(`${sel.host} svg`);
+    const measureLabel = (like: Element | null, label: string): number => {
+      if (like === null || svgElement === null) return 0;
+      const style = getComputedStyle(like);
+      const clone = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      clone.setAttribute('font-family', style.fontFamily);
+      clone.setAttribute('font-size', style.fontSize);
+      clone.setAttribute('font-weight', style.fontWeight);
+      clone.setAttribute('visibility', 'hidden');
+      clone.textContent = label;
+      svgElement.appendChild(clone);
+      try {
+        return clone.getComputedTextLength();
+      } finally {
+        clone.remove();
+      }
+    };
+    const names: {
+      id: string;
+      label: string | null;
+      text: string;
+      joined: string;
+      lines: number;
+      boxWidth: number;
+      labelWidth: number;
+      oneLineRequired: boolean;
+    }[] = [];
+    for (const group of document.querySelectorAll('.uml-node[data-entity-id]')) {
+      if (!painted(group) || !intersects(rectOf(group))) continue;
+      const texts = [...group.children].filter((child) => child.tagName.toLowerCase() === 'text');
+      const roleName = texts.find((text) => !isAuxiliary(text) && painted(text)
+        && (text.textContent ?? '').trim() !== '') ?? null;
+      const label = roleName?.getAttribute('data-architecture-label') ?? null;
+      const nameLines = texts.filter((text) => text.hasAttribute('data-architecture-node-name') && painted(text));
+      const boxWidth = rectOf(group.querySelector('rect')).width;
+      const labelWidth = label === null ? 0 : measureLabel(roleName, label);
+      names.push({
+        id: group.getAttribute('data-entity-id') ?? '',
+        label,
+        text: roleName?.textContent ?? '',
+        joined: nameLines.map((text) => text.textContent ?? '').join(''),
+        lines: nameLines.length,
+        boxWidth,
+        labelWidth,
+        oneLineRequired: label !== null && labelWidth > 0 && labelWidth + 20 <= boxWidth,
+      });
+    }
+
+    // ---- sticky labels (defects 2 and 3)
+    // "Visible" means visible INSIDE the scroll host's content box, not merely
+    // somewhere in the window: the SVG is taller than the host and the host
+    // clips it, so `getBoundingClientRect` of a scrolled-out tab still reports a
+    // window coordinate. Reading the window was the bug that made the shipped
+    // ghost look like "its own tab is visible".
+    const hostElement = document.querySelector(sel.host);
+    const hostBox = hostElement === null ? null : hostElement.getBoundingClientRect();
+    const insideHost = (rect: { x: number; y: number; width: number; height: number }): boolean =>
+      rect.width > 0 && rect.height > 0 && hostBox !== null
+      && rect.x < hostBox.right && rect.x + rect.width > hostBox.left
+      && rect.y < hostBox.bottom && rect.y + rect.height > hostBox.top;
+    const fullyInsideHost = (rect: { x: number; y: number; width: number; height: number }): boolean =>
+      rect.width > 0 && rect.height > 0 && hostBox !== null
+      && rect.x >= hostBox.left - 0.5 && rect.x + rect.width <= hostBox.right + 0.5
+      && rect.y >= hostBox.top - 0.5 && rect.y + rect.height <= hostBox.bottom + 0.5;
+    const allPackages = [...document.querySelectorAll('.uml-package[data-package-id]')];
+    const tabOfPackage = (id: string): { x: number; y: number; width: number; height: number } | null => {
+      const group = allPackages.find((candidate) => candidate.getAttribute('data-package-id') === id);
+      const path = group?.querySelector('path') ?? null;
+      return path === null ? null : rectOf(path);
+    };
+    const stickyGroups = [...document.querySelectorAll('[data-architecture-sticky-package]')].filter(painted);
+    const stickyLabels = stickyGroups.map((group) => ({
+      id: group.getAttribute('data-architecture-sticky-package') ?? '',
+      rect: rectOf(group),
+      fonts: [...group.querySelectorAll('text')].map((text) => {
+        const declared = Number.parseFloat(getComputedStyle(text).fontSize);
+        return (Number.isFinite(declared) ? declared : 0) * screenScale(group);
+      }),
+    }));
+    const nameElements = [...document.querySelectorAll('[data-architecture-node-name]')].filter(painted);
+    const stickyOwnTabVisible: string[] = [];
+    const stickyNameOverlaps: string[] = [];
+    const stickyClipped: string[] = [];
+    for (const sticky of stickyLabels) {
+      const tab = tabOfPackage(sticky.id);
+      if (tab !== null && insideHost(tab)) stickyOwnTabVisible.push(sticky.id);
+      if (!fullyInsideHost(sticky.rect)) stickyClipped.push(sticky.id);
+      for (const name of nameElements) {
+        if (overlap(sticky.rect, rectOf(name))) {
+          stickyNameOverlaps.push(`${sticky.id} ∩ ${name.closest('[data-entity-id]')?.getAttribute('data-entity-id') ?? '?'}`);
+        }
+      }
+    }
+
+    // ---- the overview hint pill vs package tabs (defect 2)
+    const hintElement = document.querySelector('[data-architecture-readable-hint]');
+    const hintRect = hintElement === null ? null : rectOf(hintElement);
+    const hint = hintElement !== null && hintRect !== null && hintRect.width > 0 && hintRect.height > 0
+      ? { rect: hintRect, text: (hintElement.textContent ?? '').trim() }
+      : null;
+    const hintTabOverlaps: string[] = [];
+    if (hint !== null) {
+      for (const pkg of packages) {
+        if (pkg.tab === null || !insideHost(pkg.tab)) continue;
+        if (overlap(hint.rect, pkg.tab)) hintTabOverlaps.push(`hint ∩ ${pkg.id}`);
+      }
+    }
+
+    // ---- the second compartment rule vs member text (defect 5)
+    const memberRuleOverlaps: string[] = [];
+    const upstreamOverflowRows: string[] = [];
+    for (const group of document.querySelectorAll('.uml-node[data-entity-id]')) {
+      if (!painted(group) || !intersects(rectOf(group))) continue;
+      const id = group.getAttribute('data-entity-id') ?? '';
+      const members = [...group.querySelectorAll('[data-architecture-node-member], [data-architecture-node-more]')]
+        .filter(painted);
+      for (const member of members) {
+        const value = member.textContent ?? '';
+        if (/…\s*\+\d+\s+more\s*\(\d+\s+members\)/.test(value)) upstreamOverflowRows.push(`${id}: ${value}`);
+      }
+      const rules = [...group.children].filter((child) => child.tagName.toLowerCase() === 'line');
+      if (rules.length < 2 || members.length === 0) continue;
+      const ruleRect = rectOf(rules[1]);
+      const rule = {
+        x: ruleRect.x,
+        y: ruleRect.y + ruleRect.height / 2 - 0.5,
+        width: ruleRect.width,
+        height: 1,
+      };
+      for (const member of members) {
+        if (overlap(rule, rectOf(member))) memberRuleOverlaps.push(`${id} rule ∩ ${(member.textContent ?? '').trim()}`);
+      }
+    }
+
+    // ---- pinned entity: name by role, exactly one badge (defect 6)
+    const pinned = [...document.querySelectorAll('.uml-node[data-architecture-pinned="true"]')]
+      .filter(painted)
+      .map((group) => {
+        const texts = [...group.children].filter((child) => child.tagName.toLowerCase() === 'text');
+        const roleName = texts.find((text) => !isAuxiliary(text) && painted(text)
+          && (text.textContent ?? '').trim() !== '') ?? null;
+        const labels = new Set([
+          ...group.querySelectorAll('[data-architecture-pinned-badge]'),
+          ...group.querySelectorAll('.arch-pinned-badge'),
+        ]);
+        return {
+          id: group.getAttribute('data-entity-id') ?? '',
+          name: roleName?.textContent ?? '',
+          label: roleName?.getAttribute('data-architecture-label') ?? null,
+          badgeCount: labels.size,
+        };
+      });
+
+    const memberShapes: { id: string; attrsH: number; opsH: number; drawnH: number }[] = [];
+    for (const group of document.querySelectorAll('.uml-node[data-entity-id]')) {
+      if (!painted(group) || !intersects(rectOf(group))) continue;
+      const id = group.getAttribute('data-entity-id') ?? '';
+      memberShapes.push({
+        id,
+        attrsH: Number(group.getAttribute('data-attrs-h') ?? '0'),
+        opsH: Number(group.getAttribute('data-ops-h') ?? '0'),
+        drawnH: rectOf(group.querySelector('rect')).height,
+      });
+    }
+
     return {
       tier: document.querySelector('svg[data-architecture-semantic]')?.getAttribute('data-architecture-semantic') ?? null,
       depth: root?.getAttribute('data-architecture-lod-depth') ?? null,
@@ -1097,6 +1334,17 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
       packages,
       tabOverlaps,
       edges,
+      stickyLabels,
+      stickyOwnTabVisible,
+      stickyNameOverlaps,
+      stickyClipped,
+      names,
+      hint,
+      hintTabOverlaps,
+      memberRuleOverlaps,
+      upstreamOverflowRows,
+      pinned,
+      memberShapes,
     };
   }, { sel: SEL });
 
@@ -1110,6 +1358,22 @@ const printSemantic = (label: string, reading: SemanticReading): void => {
   console.log(`[architecture-semantic] ${label}.fonts=${JSON.stringify(reading.classes.map((box) => [box.id, box.fonts]))}`);
   console.log(`[architecture-semantic] ${label}.edges=${JSON.stringify(reading.edges.map((edge) => [edge.source, edge.target, edge.endpointOnFrame]))}`);
   console.log(`[architecture-semantic] ${label}.tabs=${JSON.stringify(reading.packages.map((pkg) => [pkg.id, pkg.tab]))}`);
+  console.log(
+    `[architecture-semantic] ${label}.polish=`
+    + JSON.stringify({
+      stickies: reading.stickyLabels.map((sticky) => [sticky.id, sticky.rect, sticky.fonts]),
+      ownTabVisible: reading.stickyOwnTabVisible,
+      stickyNameOverlaps: reading.stickyNameOverlaps,
+      stickyClipped: reading.stickyClipped,
+      hint: reading.hint,
+      hintTabOverlaps: reading.hintTabOverlaps,
+      memberRuleOverlaps: reading.memberRuleOverlaps,
+      upstreamOverflowRows: reading.upstreamOverflowRows,
+      names: reading.names.map((name) => [name.id, name.label, name.text, name.joined, name.lines, name.oneLineRequired]),
+      pinned: reading.pinned,
+      memberShapes: reading.memberShapes.slice(0, 8),
+    }),
+  );
   console.log(`[architecture-semantic] ${label}.boxes=${JSON.stringify(reading.classes.map((box) => [box.id, box.rect]))}`);
   console.log(`[architecture-semantic] ${label}.tails=${JSON.stringify(reading.edges.filter((edge) => !edge.endpointOnFrame).slice(0, 12).map((edge) => {
     const targetBox = reading.classes.find((box) => box.id === edge.target);
@@ -1170,6 +1434,68 @@ const assertSemantic = (
         font,
         `${label}: package tab text in ${pkg.id} must be at least ${minFontPx}px on screen; got ${formatNumber(font)}px`,
       ).toBeGreaterThanOrEqual(minFontPx - 0.05);
+    }
+  }
+  // A sticky label is visible text too.
+  for (const sticky of reading.stickyLabels) {
+    for (const font of sticky.fonts) {
+      expect.soft(
+        font,
+        `${label}: sticky label ${sticky.id} must be at least ${minFontPx}px on screen; got ${formatNumber(font)}px`,
+      ).toBeGreaterThanOrEqual(minFontPx - 0.05);
+    }
+  }
+  expect.soft(
+    reading.stickyOwnTabVisible,
+    `${label}: a sticky label must not be shown while its own package tab is on screen; ${JSON.stringify(reading.stickyOwnTabVisible)}`,
+  ).toEqual([]);
+  expect.soft(
+    reading.stickyNameOverlaps,
+    `${label}: a sticky label must not cover a visible class name; overlaps=${JSON.stringify(reading.stickyNameOverlaps)}`,
+  ).toEqual([]);
+  expect.soft(
+    reading.stickyClipped,
+    `${label}: a sticky label must be fully inside the viewport; clipped=${JSON.stringify(reading.stickyClipped)}`,
+  ).toEqual([]);
+  expect.soft(
+    reading.hintTabOverlaps,
+    `${label}: the overview hint must not cover a package tab; overlaps=${JSON.stringify(reading.hintTabOverlaps)}`,
+  ).toEqual([]);
+  expect.soft(
+    reading.upstreamOverflowRows,
+    `${label}: the member area must not contain the renderer’s own overflow row; rows=${JSON.stringify(reading.upstreamOverflowRows)}`,
+  ).toEqual([]);
+  expect.soft(
+    reading.memberRuleOverlaps,
+    `${label}: the attribute/operation rule must not cross a member row; overlaps=${JSON.stringify(reading.memberRuleOverlaps)}`,
+  ).toEqual([]);
+  for (const name of reading.names) {
+    if (name.lines === 0) continue;
+    // Role-based reading: the name is the first text that is NOT a badge,
+    // check, stereotype or member, and it must carry its entity's label.
+    expect.soft(
+      name.text,
+      `${label}: ${name.id}'s name must not be a decoration glyph (got ${JSON.stringify(name.text)})`,
+    ).not.toBe('📌');
+    expect.soft(
+      name.label,
+      `${label}: the role-selected name text of ${name.id} must carry its entity label`,
+    ).not.toBeNull();
+    if (name.label !== null) {
+      const plain = name.joined === name.label;
+      const elided = name.joined.includes('…')
+        && name.label.startsWith(name.joined.split('…')[0] ?? '')
+        && name.label.endsWith(name.joined.split('…')[1] ?? '');
+      expect.soft(
+        plain || elided,
+        `${label}: ${name.id}'s name text ${JSON.stringify(name.joined)} must be its label ${JSON.stringify(name.label)} (or a middle ellipsis of it)`,
+      ).toBe(true);
+      if (name.oneLineRequired) {
+        expect.soft(
+          name.lines,
+          `${label}: ${name.id}'s box (${formatNumber(name.boxWidth)}px) fits the label (${formatNumber(name.labelWidth)}px), so the name must be one line; got ${name.lines}`,
+        ).toBe(1);
+      }
     }
   }
   const rows = classRowOrder(reading);
@@ -1764,6 +2090,43 @@ async function scrollDrawingToFirstRow(page: Page): Promise<void> {
 }
 
 /**
+ * Switch the panel to the CLASS (entity) diagram.
+ *
+ * The semantic-zoom defects are properties of ENTITY boxes: kinds, stereotypes,
+ * members and class names. The file graph draws plain file nodes (no kind, no
+ * members), so a reading taken there cannot see any of them.
+ */
+async function showClassDiagram(page: Page): Promise<void> {
+  const option = page.locator(SEL.viewEntity);
+  if ((await option.count()) === 0 || !(await option.first().isVisible())) {
+    // On the phone tier the granularity radio lives inside the bottom sheet.
+    await openControlSheet(page);
+    await page.locator(`[role="dialog"] ${SEL.viewEntity}`).first().click();
+    await closeControlSheet(page);
+  } else {
+    await option.first().click();
+  }
+  // Wait on the DRAWING, not on the radio: the phone tier unmounts the radio
+  // when its sheet closes, while the entity ids are on screen on every tier.
+  // An entity id carries the `.ts.<Name>` suffix the file graph never has.
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.uml-node[data-entity-id]')]
+      .some((node) => /\.ts\.[^./]+$/.test(node.getAttribute('data-entity-id') ?? '')),
+    undefined,
+    { timeout: 40_000 },
+  );
+  await page.waitForFunction(
+    (sel) => {
+      const root = document.querySelector(sel.graphRoot);
+      return Number(root?.getAttribute('data-architecture-visible-nodes') ?? '0') > 0;
+    },
+    SEL,
+    { timeout: 40_000 },
+  );
+  await settle(page, 800);
+}
+
+/**
  * Switch the panel to the explosion view, where every entity is drawn as its
  * own box rather than folded into a directory group.
  *
@@ -1841,6 +2204,11 @@ let baseURL = '';
 let sessionId = '';
 let token = '';
 let fixture: ArchitectureFixtureReading | null = null;
+// The claudecodeui-shaped second fixture: same criterion, a different drawing
+// size / nesting / label length, so the polish guards are not tuned to one
+// project's geometry.
+let cuiSessionId = '';
+let cuiFixture: ArchitectureFixtureReading | null = null;
 
 test.beforeAll(async () => {
   baseURL = test.info().project.use.baseURL ?? '';
@@ -1855,7 +2223,9 @@ test.beforeAll(async () => {
   }
 
   const workspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE);
-  fixture = writeArchitectureFixture(workspace);
+  fixture = writeArchitectureFixture(workspace, { variant: 'quay-oo' });
+  const cuiWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_CUI);
+  cuiFixture = writeArchitectureFixture(cuiWorkspace, { variant: 'claudecodeui' });
 
   const bootstrap = await request.newContext({ baseURL });
   token = await createAccount(bootstrap);
@@ -1872,11 +2242,18 @@ test.beforeAll(async () => {
     'Please review the layout budget and the readout numbers. '
     + `Start at ${fixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
   sessionId = await armScenario(api, workspace, userText, fixture.seedIdentifiers[0]);
+  const cuiUserText =
+    'Please review the voice pipeline and the frame budget. '
+    + `Start at ${cuiFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
+  cuiSessionId = await armScenario(api, cuiWorkspace, cuiUserText, cuiFixture.seedIdentifiers[0]);
   await api.dispose();
 
-  console.log(`[architecture-layout] fixture.entities=${fixture.entityTotal}`);
+  console.log(`[architecture-layout] fixture.entities=${fixture.entityTotal} variant=${fixture.variant}`);
   console.log(`[architecture-layout] fixture.workspace=${workspace}`);
   console.log(`[architecture-layout] session=${sessionId}`);
+  console.log(`[architecture-layout] cui.entities=${cuiFixture.entityTotal} variant=${cuiFixture.variant}`);
+  console.log(`[architecture-layout] cui.workspace=${cuiWorkspace}`);
+  console.log(`[architecture-layout] cui.session=${cuiSessionId}`);
 });
 
 /* ── the main arm ────────────────────────────────────────────────────────────────────────── */
@@ -2152,39 +2529,133 @@ test('main arm — semantic zoom keeps text readable, UML form and order at five
     { name: 'pc', viewport: VIEWPORT_PC, touch: false, minFontPx: SEMANTIC_MIN_PC_PX },
     { name: 'phone', viewport: VIEWPORT_PHONE, touch: true, minFontPx: SEMANTIC_MIN_PHONE_PX },
   ];
-  for (const form of viewports) {
-    const { context, page } = await openSignedInPage(browser, baseURL, token, {
-      viewport: form.viewport,
-      touch: form.touch,
-    });
-    try {
-      await openArchitectureTab(page, sessionId);
-      await showExplosionView(page);
+  // Both project shapes. The defects were found on two real projects whose
+  // drawings differ, so a guard tuned to one geometry is not enough.
+  const projects = [
+    { name: 'quay', session: (): string => sessionId },
+    { name: 'cui', session: (): string => cuiSessionId },
+  ];
+  for (const project of projects) {
+    for (const form of viewports) {
+      const { context, page } = await openSignedInPage(browser, baseURL, token, {
+        viewport: form.viewport,
+        touch: form.touch,
+      });
+      try {
+        await openArchitectureTab(page, project.session());
+        await showClassDiagram(page);
+        await showExplosionView(page);
 
-      await zoomToScale(page, 1);
-      const base = await readSemantic(page);
-      printSemantic(`${form.name}.base`, base);
-      const baselineRows = assertSemantic(base, `${form.name}.base`, form.minFontPx, null);
+        await zoomToScale(page, 1);
+        const base = await readSemantic(page);
+        const baseLabel = `${project.name}.${form.name}.base`;
+        printSemantic(baseLabel, base);
+        const baselineRows = assertSemantic(base, baseLabel, form.minFontPx, null);
 
-      for (const level of SEMANTIC_ZOOM_LEVELS.slice(1)) {
-        await zoomToScale(page, level);
-        const reading = await readSemantic(page);
-        printSemantic(`${form.name}.${Math.round(level * 100)}`, reading);
-        assertSemantic(
-          reading,
-          `${form.name}.${Math.round(level * 100)}`,
-          form.minFontPx,
-          baselineRows,
-        );
+        for (const level of SEMANTIC_ZOOM_LEVELS.slice(1)) {
+          await zoomToScale(page, level);
+          const reading = await readSemantic(page);
+          const label = `${project.name}.${form.name}.${Math.round(level * 100)}`;
+          printSemantic(label, reading);
+          assertSemantic(reading, label, form.minFontPx, baselineRows);
+        }
+      } finally {
+        await context.close();
       }
-    } finally {
-      await context.close();
     }
   }
 });
 
-/* ── the semantic-zoom control arms (see the file header) ────────────────────────────────── */
+/**
+ * Defect 6, in the real page: pin an entity and read its TITLE.
+ *
+ * The graph annotator inserts the `📌` badge before the title, so a reader that
+ * takes "the first `<text>`" returns the glyph and the class loses its name.
+ * The same `readSemantic` that the main arm uses reads the name by ROLE and
+ * counts the badges; this case pins through the real search control, then puts
+ * the pin back so the drawing is left as it was found.
+ */
+test('main arm — a pinned entity keeps its name and exactly one badge', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
+    await showExplosionView(page);
+    await zoomToScale(page, 1);
 
+    // Pin through the node's own context menu. The project-search pin only
+    // exists for entities OUTSIDE the current graph, and the fixture's graph is
+    // the whole fixture — so the node menu is the honest route here.
+    const target = await page.evaluate((sel) => {
+      const host = document.querySelector(sel.host);
+      const hostRect = host === null ? null : host.getBoundingClientRect();
+      if (hostRect === null) return null;
+      for (const node of document.querySelectorAll('.uml-node[data-entity-id]')) {
+        const id = node.getAttribute('data-entity-id') ?? '';
+        if (!/\.ts\.[^./]+$/.test(id)) continue;
+        const rect = node.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) continue;
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        if (x < hostRect.left + 4 || x > hostRect.right - 4) continue;
+        if (y < hostRect.top + 4 || y > hostRect.bottom - 4) continue;
+        return { id, x, y };
+      }
+      return null;
+    }, SEL);
+    expect(target, 'the class drawing must offer an on-screen entity to pin').not.toBeNull();
+    const pinnedNode = target as { id: string; x: number; y: number };
+    await page.mouse.click(pinnedNode.x, pinnedNode.y, { button: 'right' });
+    const pinItem = page.locator('[data-architecture-context-pin]');
+    await expect(pinItem, 'a node context menu must offer Pin to graph').toBeVisible({ timeout: 10_000 });
+    await pinItem.first().click();
+    await page.waitForFunction(
+      () => document.querySelector('.uml-node[data-architecture-pinned="true"]') !== null,
+      undefined,
+      { timeout: 30_000 },
+    );
+    // The pin re-requests the graph and the fresh drawing refits; a refit of a
+    // 120-entity drawing is a package-only tier, where the class box (and its
+    // title) is not drawn. Read the title at the level that draws it.
+    await showExplosionView(page);
+    await zoomToScale(page, 1);
+    await settle(page, 600);
+
+    const reading = await readSemantic(page);
+    printSemantic('pinned', reading);
+    expect(reading.pinned.length, 'a pinned entity must be drawn with its marker').toBeGreaterThan(0);
+    for (const entry of reading.pinned) {
+      expect.soft(entry.badgeCount, `${entry.id}: exactly one pin badge`).toBe(1);
+      expect.soft(entry.name, `${entry.id}: the title must not be the pin glyph`).not.toBe('📌');
+      expect.soft(entry.name, `${entry.id}: the title must be the entity label`).toBe(entry.label);
+    }
+    assertSemantic(reading, 'pinned', SEMANTIC_MIN_PC_PX, null);
+
+    // Put the page back: unpin the entity the menu pinned, so the drawing ends
+    // in its initial state (the DoD asks for the same round trip).
+    const pinnedAgain = await page.evaluate((id) => {
+      const node = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+        .find((candidate) => candidate.getAttribute('data-entity-id') === id);
+      if (node === null || node === undefined) return null;
+      const rect = node.getBoundingClientRect();
+      if (!(rect.width > 0) || !(rect.height > 0)) return null;
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }, pinnedNode.id);
+    if (pinnedAgain !== null) {
+      await page.mouse.click(pinnedAgain.x, pinnedAgain.y, { button: 'right' });
+      const unpin = page.locator(`[data-architecture-context-unpin="${pinnedNode.id}"]`);
+      if ((await unpin.count()) > 0) await unpin.first().click();
+      await settle(page, 400);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+/* ── the semantic-zoom control arms (see the file header) ────────────────────────────────── */
 /**
  * Every semantic guard, forced red through the SAME `readSemantic`.
  *
@@ -2201,6 +2672,7 @@ test('control arm — each semantic guard reads a false when its defect is injec
   });
   try {
     await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
     await showExplosionView(page);
     await zoomToScale(page, 0.33);
 
@@ -2354,6 +2826,380 @@ test('control arm — each semantic guard reads a false when its defect is injec
     const restored = await readSemantic(page);
     printSemantic('control.restored', restored);
     assertSemantic(restored, 'control.restored', SEMANTIC_MIN_PC_PX, baselineRows);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * The three polish readings from defects 5–7, forced red through the SAME
+ * `readSemantic` the main arms use.
+ *
+ * Each arm injects the DEFECT, not a different reader:
+ *  · the compartment rule back at a proportional position (crossing a member);
+ *  · the title back to "the first `<text>`" (the pin badge, a bare `📌`);
+ *  · the old fixed-cap wrap (a second name line in a box wide enough for one).
+ * Every injection is undone before the next arm and the restored state is
+ * re-asserted green.
+ */
+test('control arm — the rule, name-role and one-line readings read a false when their defect returns', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
+    await showExplosionView(page);
+    await zoomToScale(page, 1);
+
+    const before = await readSemantic(page);
+    printSemantic('controlPolish.before', before);
+    assertSemantic(before, 'controlPolish.before', SEMANTIC_MIN_PC_PX, null);
+
+    // Arm 1 — the compartment rule back at a proportional position.
+    const crossedRule = await page.evaluate(() => {
+      const groups = [...document.querySelectorAll('.uml-node[data-entity-id]')].filter((group) => {
+        const rect = group.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0
+          && rect.x < window.innerWidth && rect.x + rect.width > 0
+          && rect.y < window.innerHeight && rect.y + rect.height > 0;
+      });
+      for (const group of groups) {
+        const members = [...group.querySelectorAll('[data-architecture-node-member]')];
+        const lines = [...group.children].filter((child) => child.tagName.toLowerCase() === 'line');
+        if (members.length === 0 || lines.length < 2) continue;
+        const rule = lines[1];
+        const ruleRect = rule.getBoundingClientRect();
+        const memberRect = members[0].getBoundingClientRect();
+        const dy = (memberRect.top + memberRect.height / 2) - (ruleRect.top + ruleRect.height / 2);
+        rule.setAttribute('data-control-rule', rule.getAttribute('transform') ?? '');
+        rule.setAttribute('transform', `translate(0, ${dy})`);
+        return group.getAttribute('data-entity-id');
+      }
+      return null;
+    });
+    expect(crossedRule, 'controlPolish.rule: the page needs a member-bearing class box').not.toBeNull();
+    const crossed = await readSemantic(page);
+    printSemantic('controlPolish.rule', crossed);
+    expect.soft(
+      crossed.memberRuleOverlaps.length,
+      `controlPolish.rule: a rule through a member row must be read; overlaps=${JSON.stringify(crossed.memberRuleOverlaps)}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      for (const rule of document.querySelectorAll('[data-control-rule]')) {
+        const original = rule.getAttribute('data-control-rule');
+        if (original !== null && original !== '') rule.setAttribute('transform', original);
+        else rule.removeAttribute('transform');
+        rule.removeAttribute('data-control-rule');
+      }
+    });
+
+    // Arm 2 — the title read as "the first `<text>`": a bare pin glyph first.
+    const injectedGlyph = await page.evaluate(() => {
+      // The reading only includes boxes that intersect the viewport, so inject
+      // into one of those — an off-screen defect would prove nothing.
+      const group = [...document.querySelectorAll('.uml-node[data-entity-id]')].find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) return false;
+        if (rect.x >= window.innerWidth || rect.x + rect.width <= 0) return false;
+        if (rect.y >= window.innerHeight || rect.y + rect.height <= 0) return false;
+        return candidate.querySelector('[data-architecture-node-name]') !== null;
+      });
+      if (group === undefined) return false;
+      const glyph = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      glyph.setAttribute('data-control-name', 'true');
+      glyph.setAttribute('font-size', '11');
+      glyph.textContent = '📌';
+      group.insertBefore(glyph, group.firstChild);
+      return true;
+    });
+    expect(injectedGlyph, 'controlPolish.name: the page needs a named class box').toBe(true);
+    const misread = await readSemantic(page);
+    printSemantic('controlPolish.name', misread);
+    expect.soft(
+      misread.names.some((name) => name.lines > 0 && name.label === null),
+      `controlPolish.name: taking the first text as the title must read the glyph; names=${JSON.stringify(misread.names.map((name) => [name.id, name.text, name.label]))}`,
+    ).toBe(true);
+    await page.evaluate(() => {
+      for (const glyph of document.querySelectorAll('[data-control-name]')) glyph.remove();
+    });
+
+    // Arm 3 — the fixed-130px decision: a second name line in a wide box.
+    const wrapped = await page.evaluate(() => {
+      const names = [...document.querySelectorAll('[data-architecture-node-name]')]
+        .filter((candidate) => {
+          const rect = candidate.getBoundingClientRect();
+          const group = candidate.closest('[data-entity-id]');
+          if (group === null) return false;
+          const groupRect = group.getBoundingClientRect();
+          // Same population the reading sees: a box inside the viewport.
+          if (!(groupRect.width > 0) || !(groupRect.height > 0)) return false;
+          if (groupRect.x >= window.innerWidth || groupRect.x + groupRect.width <= 0) return false;
+          if (groupRect.y >= window.innerHeight || groupRect.y + groupRect.height <= 0) return false;
+          const box = group.querySelector('rect')?.getBoundingClientRect();
+          return rect.width > 0 && box !== undefined && box !== null && box.width > 0;
+        });
+      for (const name of names) {
+        const full = (name.textContent ?? '').trim();
+        if (full.length < 8) continue;
+        const group = name.closest('[data-entity-id]');
+        const box = group?.querySelector('rect')?.getBoundingClientRect();
+        if (group === null || box === undefined || box === null) continue;
+        // Only a box that comfortably fits the whole label makes the wrap wrong.
+        const fontSize = Number.parseFloat(getComputedStyle(name).fontSize);
+        const fullWidth = full.length * fontSize * 0.6;
+        if (fullWidth + 20 > box.width) continue;
+        const split = Math.ceil(full.length / 2);
+        name.setAttribute('data-control-wrap', 'true');
+        name.setAttribute('data-control-original', full);
+        name.setAttribute('data-control-y', name.getAttribute('y') ?? '');
+        const second = name.cloneNode(false) as SVGTextElement;
+        // The clone copies the original's restore records too — mark it so the
+        // restore removes it instead of treating it as a second original.
+        second.setAttribute('data-control-wrap', 'true');
+        second.setAttribute('data-control-clone', 'true');
+        second.textContent = full.slice(split);
+        name.textContent = full.slice(0, split);
+        const y = Number(name.getAttribute('y') ?? '0');
+        name.setAttribute('y', String(y - 4));
+        second.setAttribute('y', String(y + 8));
+        group.appendChild(second);
+        return group.getAttribute('data-entity-id');
+      }
+      return null;
+    });
+    expect(wrapped, 'controlPolish.wrap: a box wide enough for one line must exist').not.toBeNull();
+    const wrappedReading = await readSemantic(page);
+    printSemantic('controlPolish.wrap', wrappedReading);
+    expect.soft(
+      wrappedReading.names.some((name) => name.oneLineRequired && name.lines > 1),
+      `controlPolish.wrap: a two-line name in a wide box must be read; names=${JSON.stringify(wrappedReading.names.map((name) => [name.id, name.oneLineRequired, name.lines]))}`,
+    ).toBe(true);
+    await page.evaluate(() => {
+      for (const second of [...document.querySelectorAll('[data-control-wrap]')]) {
+        if (second.hasAttribute('data-control-clone')) {
+          second.remove();
+          continue;
+        }
+        if (second.hasAttribute('data-control-original')) {
+          second.textContent = second.getAttribute('data-control-original') ?? '';
+          const y = second.getAttribute('data-control-y');
+          if (y !== null && y !== '') second.setAttribute('y', y);
+          else second.removeAttribute('y');
+          second.removeAttribute('data-control-original');
+          second.removeAttribute('data-control-y');
+          second.removeAttribute('data-control-wrap');
+        } else {
+          second.remove();
+        }
+      }
+    });
+
+    const restored = await readSemantic(page);
+    printSemantic('controlPolish.restored', restored);
+    assertSemantic(restored, 'controlPolish.restored', SEMANTIC_MIN_PC_PX, null);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * The four readings added for defects 1–4, forced red through the SAME
+ * `readSemantic`.
+ *
+ * The shipped features are switched off one at a time in the live drawing:
+ * the stereotype drops to 4px (font rule off), a ghost is painted over its own
+ * visible tab (appearance condition off), a ghost is painted over a class name
+ * (avoidance off), and the renderer's own `… +1 more (5 members)` row is put
+ * back into a member area (strip off).
+ */
+test('control arm — the stereotype, sticky and overflow readings read a false when their defect returns', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
+    await showExplosionView(page);
+    await zoomToScale(page, 1);
+
+    const before = await readSemantic(page);
+    printSemantic('controlPolish2.before', before);
+    assertSemantic(before, 'controlPolish2.before', SEMANTIC_MIN_PC_PX, null);
+
+    // Arm 1 — the stereotype font rule off.
+    const stereotyped = await page.evaluate(() => {
+      const texts = [...document.querySelectorAll('[data-architecture-node-stereotype]')];
+      for (const text of texts) {
+        text.setAttribute('data-control-fontsize', text.getAttribute('font-size') ?? '');
+        text.setAttribute('font-size', '4');
+      }
+      return texts.length;
+    });
+    expect(stereotyped, 'controlPolish2.stereotype: the drawing needs a stereotype line').toBeGreaterThan(0);
+    const smallStereotype = await readSemantic(page);
+    printSemantic('controlPolish2.stereotype', smallStereotype);
+    const smallestFont = Math.min(...smallStereotype.classes.flatMap((box) => box.fonts));
+    expect.soft(
+      smallestFont,
+      `controlPolish2.stereotype: shrinking only the stereotype must read below ${SEMANTIC_MIN_PC_PX}px; got ${formatNumber(smallestFont)}px`,
+    ).toBeLessThan(SEMANTIC_MIN_PC_PX);
+    await page.evaluate(() => {
+      for (const text of document.querySelectorAll('[data-architecture-node-stereotype]')) {
+        const original = text.getAttribute('data-control-fontsize');
+        if (original !== null && original !== '') text.setAttribute('font-size', original);
+        else text.removeAttribute('font-size');
+        text.removeAttribute('data-control-fontsize');
+      }
+    });
+
+    // Arm 2 — a ghost label over its OWN visible tab (appearance condition off).
+    // At 100 % the class drawing is taller than its host and a package tab can
+    // sit outside the visible box; scroll one into view first, then let the
+    // scroll-driven sticky redraw finish before injecting (that redraw owns the
+    // `data-architecture-sticky-package` elements).
+    await page.evaluate((sel) => {
+      const host = document.querySelector(sel.host);
+      if (host === null) return;
+      const hostRect = host.getBoundingClientRect();
+      for (const group of document.querySelectorAll('.uml-package[data-package-id]')) {
+        const path = group.querySelector('path');
+        if (path === null) continue;
+        const rect = path.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) continue;
+        const visible = rect.left < hostRect.right && rect.right > hostRect.left
+          && rect.top < hostRect.bottom && rect.bottom > hostRect.top;
+        if (visible) return;
+        // Bring this tab just inside the host's top-left corner.
+        host.scrollLeft += rect.left - hostRect.left - 4;
+        host.scrollTop += rect.top - hostRect.top - 4;
+        return;
+      }
+    }, SEL);
+    await page.waitForTimeout(160);
+    const ghostOverTab = await page.evaluate((sel) => {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.querySelector('svg[data-architecture-semantic]');
+      const host = document.querySelector(sel.host);
+      const hostRect = host === null ? null : host.getBoundingClientRect();
+      if (svg === null || hostRect === null) return false;
+      const svgRect = svg.getBoundingClientRect();
+      for (const group of document.querySelectorAll('.uml-package[data-package-id]')) {
+        const path = group.querySelector('path');
+        if (path === null) continue;
+        const rect = path.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) continue;
+        // A tab is VISIBLE when it intersects the scroll host (the host clips
+        // the taller SVG); the ghost covers that visible part.
+        const left = Math.max(rect.left, hostRect.left);
+        const top = Math.max(rect.top, hostRect.top);
+        const right = Math.min(rect.right, hostRect.right);
+        const bottom = Math.min(rect.bottom, hostRect.bottom);
+        if (right - left <= 0 || bottom - top <= 0) continue;
+        const id = group.getAttribute('data-package-id') ?? '';
+        const ghost = document.createElementNS(ns, 'g');
+        ghost.setAttribute('data-architecture-sticky-package', id);
+        ghost.setAttribute('data-control-sticky', 'tab');
+        const pill = document.createElementNS(ns, 'rect');
+        const x = left - svgRect.left;
+        const y = top - svgRect.top;
+        pill.setAttribute('x', String(x));
+        pill.setAttribute('y', String(y));
+        pill.setAttribute('width', String(right - left));
+        pill.setAttribute('height', String(bottom - top));
+        pill.setAttribute('fill', 'rgba(248,250,252,.92)');
+        const text = document.createElementNS(ns, 'text');
+        text.setAttribute('x', String(x + 2));
+        text.setAttribute('y', String(y + (bottom - top) / 2 + 4));
+        text.setAttribute('font-size', '10');
+        text.textContent = 'ghost';
+        ghost.append(pill, text);
+        svg.appendChild(ghost);
+        return true;
+      }
+      return false;
+    }, SEL);
+    expect(ghostOverTab, 'controlPolish2.ghost: a package tab must be visible in the scroll host').toBe(true);
+    const ghostReading = await readSemantic(page);
+    printSemantic('controlPolish2.ghost', ghostReading);
+    expect.soft(
+      ghostReading.stickyOwnTabVisible.length,
+      `controlPolish2.ghost: a ghost over its own visible tab must be read; ${JSON.stringify(ghostReading.stickyOwnTabVisible)}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      for (const ghost of document.querySelectorAll('[data-control-sticky]')) ghost.remove();
+    });
+
+    // Arm 3 — a ghost label over a visible class name (avoidance off).
+    const ghostOverName = await page.evaluate(() => {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.querySelector('svg[data-architecture-semantic]');
+      const name = [...document.querySelectorAll('[data-architecture-node-name]')].find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      if (svg === null || name === undefined) return false;
+      const svgRect = svg.getBoundingClientRect();
+      const rect = name.getBoundingClientRect();
+      const ghost = document.createElementNS(ns, 'g');
+      ghost.setAttribute('data-architecture-sticky-package', 'control-name');
+      ghost.setAttribute('data-control-sticky', 'name');
+      const pill = document.createElementNS(ns, 'rect');
+      pill.setAttribute('x', String(rect.left - svgRect.left));
+      pill.setAttribute('y', String(rect.top - svgRect.top));
+      pill.setAttribute('width', String(rect.width));
+      pill.setAttribute('height', String(rect.height));
+      pill.setAttribute('fill', 'rgba(248,250,252,.92)');
+      const text = document.createElementNS(ns, 'text');
+      text.setAttribute('x', String(rect.left - svgRect.left + 2));
+      text.setAttribute('y', String(rect.top - svgRect.top + rect.height / 2 + 4));
+      text.setAttribute('font-size', '10');
+      text.textContent = 'ghost';
+      ghost.append(pill, text);
+      svg.appendChild(ghost);
+      return true;
+    });
+    expect(ghostOverName, 'controlPolish2.avoid: the drawing needs a visible name').toBe(true);
+    const coverReading = await readSemantic(page);
+    printSemantic('controlPolish2.avoid', coverReading);
+    expect.soft(
+      coverReading.stickyNameOverlaps.length,
+      `controlPolish2.avoid: a ghost over a class name must be read; ${JSON.stringify(coverReading.stickyNameOverlaps)}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      for (const ghost of document.querySelectorAll('[data-control-sticky]')) ghost.remove();
+    });
+
+    // Arm 4 — the upstream overflow row put back into a member area (strip off).
+    const overflowInjected = await page.evaluate(() => {
+      const ns = 'http://www.w3.org/2000/svg';
+      const group = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+        .find((candidate) => candidate.querySelector('[data-architecture-node-member]') !== null);
+      if (group === null || group === undefined) return false;
+      const text = document.createElementNS(ns, 'text');
+      text.setAttribute('data-architecture-node-member', 'true');
+      text.setAttribute('data-control-overflow', 'true');
+      text.setAttribute('font-size', '10');
+      text.textContent = '+ … +1 more (5 members)';
+      group.appendChild(text);
+      return true;
+    });
+    expect(overflowInjected, 'controlPolish2.overflow: the drawing needs a member row').toBe(true);
+    const overflowReading = await readSemantic(page);
+    printSemantic('controlPolish2.overflow', overflowReading);
+    expect.soft(
+      overflowReading.upstreamOverflowRows.length,
+      `controlPolish2.overflow: the renderer's own truncation row must be read; ${JSON.stringify(overflowReading.upstreamOverflowRows)}`,
+    ).toBeGreaterThan(0);
+    await page.evaluate(() => {
+      for (const text of document.querySelectorAll('[data-control-overflow]')) text.remove();
+    });
+
+    const restored = await readSemantic(page);
+    printSemantic('controlPolish2.restored', restored);
+    assertSemantic(restored, 'controlPolish2.restored', SEMANTIC_MIN_PC_PX, null);
   } finally {
     await context.close();
   }

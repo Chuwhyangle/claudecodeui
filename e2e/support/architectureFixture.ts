@@ -1,5 +1,5 @@
 /**
- * The `.archguard` cache the architecture-layout criterion measures.
+ * The `.archguard` caches the architecture-layout criterion measures.
  *
  * WHY IT IS BUILT HERE RATHER THAN COMMITTED. The criterion needs a drawing big
  * enough to have geometry worth reading — a dozen boxes fit anywhere and would
@@ -12,14 +12,21 @@
  * fixture in one place, the way `server/modules/architecture/tests` does with
  * its own temp projects.
  *
- * SHAPE. 120 entities — the size the task names — spread across five nested
- * directory families, chained into one dependency ladder. Every family's seed
- * is one of the transcript's SEEDS (`distance 0`): camelCase function names the
- * session's user text mentions, so the server's seed extractor resolves them by
- * exact `nameToIds` match. Each seed owns three children (`distance 1`) and its
- * children own twenty grandchildren between them (`distance 2`), so the default
- * two-hop scope reaches exactly the whole fixture — there is no node the
- * reading cannot see and no node that arrives without the graph.
+ * TWO VARIANTS. The semantic-zoom defects were reproduced on two real
+ * projects (Quay OO and claudecodeui) whose drawings differ in size, nesting
+ * and label lengths, so the guard runs both:
+ *
+ *  · `quay-oo` — five shallow directory families (120 entities), short
+ *    camel-case class names;
+ *  · `claudecodeui` — four deeper families (96 entities) whose first stem is
+ *    the long `VoiceFrameProcessor`, the name the fixed 130px planning cap used
+ *    to wrap inside a box wide enough for one line.
+ *
+ * Both variants keep their class member lists past the renderer's compact
+ * limit (`COMPACT_MEMBER_ROWS = 4`), including rows long enough to widen the
+ * boxes: that is what makes the renderer emit its own `… +K more (N members)`
+ * row (defect 4) and what makes a wide box available for the one-line name
+ * reading (defect 7).
  *
  * KINDS. Classes, interfaces and functions all appear, and one class is
  * abstract, because the drawing is supposed to carry the entity-detail payload
@@ -28,8 +35,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** The workspace directory the criterion creates under `QUAY_E2E_DEBUG_AGENT_HOME`. */
+/** The Quay OO-shaped workspace under `QUAY_E2E_DEBUG_AGENT_HOME`. */
 export const ARCHITECTURE_FIXTURE_WORKSPACE = 'architecture-canvas-layout-workspace';
+
+/** The claudecodeui-shaped workspace beside it. */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_CUI = 'architecture-canvas-layout-workspace-cui';
+
+/** Which project shape to write. */
+export type ArchitectureFixtureVariant = 'quay-oo' | 'claudecodeui';
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
@@ -44,42 +57,54 @@ const SCOPE_KEY = 'scope-src';
  */
 const ARCH_JSON_HASH = 'a7c1f0d4b8e29365f0d4b8e29365a7c1f0d4b8e29365a7c1f0d4b8e29365a7c1';
 
-/**
- * One directory family: its scope-relative directory, the directory its
- * grandchildren live in (a nested one for the first family, so the fixture
- * keeps a real hierarchy), its seed name and its entity-name stem.
- *
- * The families are kept FEW on purpose. The panel's overview folds entities
- * into one box per directory, so this list is what decides how many boxes the
- * drawing has — and the drawing has to stay small enough that the floating
- * corner chrome (the minimap and the zoom cluster) is not over it. On a 390 px
- * phone the cluster occupies the bottom-right fifth of the canvas; a drawing
- * that fills that canvas is under it, because the panel's corner-avoiding fit
- * models a left-aligned drawing while the canvas centres it horizontally. Five
- * families keep this fixture's drawing inside the corner-free area on both
- * viewports while the 120 entities still make the entity view a real drawing.
- */
-const FAMILIES = [
-  { dir: 'core/layout', deepDir: 'core/layout/steps', seed: 'layoutPlanner', stem: 'LayoutStage' },
-  { dir: 'ui/panels', deepDir: 'ui/panels', seed: 'panelPlanner', stem: 'PanelStage' },
-  { dir: 'adapters/io', deepDir: 'adapters/io', seed: 'ioPlanner', stem: 'IoStage' },
-  { dir: 'domain/model', deepDir: 'domain/model', seed: 'modelPlanner', stem: 'ModelStage' },
-  { dir: 'app/shell', deepDir: 'app/shell', seed: 'shellPlanner', stem: 'ShellStage' },
-] as const;
+/** One directory family: its directories, seed name and child-name stem. */
+type Family = {
+  readonly dir: string;
+  readonly deepDir: string;
+  readonly seed: string;
+  readonly stem: string;
+  /** Grandchildren owned by each of the three children. */
+  readonly children: readonly [number, number, number];
+};
 
-/** Children per seed, and how many grandchildren each child owns. */
-const GRANDCHILDREN_PER_CHILD = [7, 7, 6] as const;
+/**
+ * Quay OO: five shallow families. Kept FEW on purpose — the panel's overview
+ * folds entities into one box per directory, so this list decides how many
+ * boxes the file drawing has, and the chrome-clearance reading needs the whole
+ * drawing on screen at once.
+ */
+const QUAY_FAMILIES: readonly Family[] = [
+  { dir: 'core/layout', deepDir: 'core/layout/steps', seed: 'layoutPlanner', stem: 'LayoutStage', children: [7, 7, 6] },
+  { dir: 'ui/panels', deepDir: 'ui/panels', seed: 'panelPlanner', stem: 'PanelStage', children: [7, 7, 6] },
+  { dir: 'adapters/io', deepDir: 'adapters/io', seed: 'ioPlanner', stem: 'IoStage', children: [7, 7, 6] },
+  { dir: 'domain/model', deepDir: 'domain/model', seed: 'modelPlanner', stem: 'ModelStage', children: [7, 7, 6] },
+  { dir: 'app/shell', deepDir: 'app/shell', seed: 'shellPlanner', stem: 'ShellStage', children: [7, 7, 6] },
+];
+
+/**
+ * claudecodeui: four deeper families. `VoiceFrameProcessor` is the class the
+ * fixed-cap name planner wrapped; its long member list is what makes the box
+ * wide enough that wrapping it is visibly wrong.
+ */
+const CUI_FAMILIES: readonly Family[] = [
+  { dir: 'cursor/providers', deepDir: 'cursor/providers/handlers', seed: 'cursorPlanner', stem: 'VoiceFrameProcessor', children: [7, 7, 6] },
+  { dir: 'modules/chat', deepDir: 'modules/chat/hooks', seed: 'chatPlanner', stem: 'ChatStage', children: [7, 7, 6] },
+  { dir: 'ui/list', deepDir: 'ui/list/rows', seed: 'listPlanner', stem: 'ListStage', children: [7, 7, 6] },
+  { dir: 'runtime/vad', deepDir: 'runtime/vad/frames', seed: 'vadPlanner', stem: 'StreamingVad', children: [7, 7, 6] },
+];
 
 /** What a caller needs to state its fixture and to read the graph back. */
 export type ArchitectureFixtureReading = {
   /** Absolute workspace path handed to the debug agent as the scenario's `projectPath`. */
   readonly workspaceDir: string;
-  /** Every entity the graph will draw (120). */
+  /** Every entity the graph will draw. */
   readonly entityTotal: number;
   /** The raw entity ids, in the order the index lists them. */
   readonly entityIds: readonly string[];
   /** The identifiers the session's transcript must mention, one per family. */
   readonly seedIdentifiers: readonly string[];
+  /** Which project shape this fixture represents. */
+  readonly variant: ArchitectureFixtureVariant;
 };
 
 /** One entity as this fixture writes it into both `arch-index.json` and `arch.json`. */
@@ -92,20 +117,27 @@ type FixtureEntity = {
   readonly parents: readonly string[];
 };
 
-/** The members a class or interface box carries; a function carries none. */
-const membersFor = (type: FixtureEntity['type']): unknown[] => {
+/**
+ * The members a class or interface box carries.
+ *
+ * Past four rows the renderer's compact detail replaces the tail with its own
+ * `… +K more (N members)` row. The names are deliberately long: the member
+ * text is what widens a class box, so a wide box exists for the one-line name
+ * reading.
+ */
+const membersFor = (type: FixtureEntity['type'], classMembers: number): unknown[] => {
   if (type === 'function') return [];
   if (type === 'interface') {
     return [{ name: 'id', type: 'property', visibility: 'public', fieldType: 'string' }];
   }
-  return [
+  const base: unknown[] = [
     {
       name: 'constructor',
       type: 'constructor',
       visibility: 'public',
       parameters: [{ name: 'seed', type: 'number', isOptional: false }],
     },
-    { name: 'weight', type: 'property', visibility: 'private', fieldType: 'number' },
+    { name: 'forceCutSearchFrames', type: 'property', visibility: 'private', fieldType: 'number' },
     {
       name: 'measure',
       type: 'method',
@@ -114,6 +146,16 @@ const membersFor = (type: FixtureEntity['type']): unknown[] => {
       returnType: 'number',
     },
   ];
+  const extras = ['pendingCount', 'noise', 'windowSize', 'frameBudget'];
+  for (let index = 0; base.length < classMembers; index += 1) {
+    base.push({
+      name: extras[index % extras.length],
+      type: 'property',
+      visibility: 'private',
+      fieldType: 'number',
+    });
+  }
+  return base.slice(0, classMembers);
 };
 
 /** The kind rotation the fixture uses, so all three kinds appear at every depth. */
@@ -131,11 +173,11 @@ const kindAt = (index: number, forcedAbstract = false): FixtureEntity['type'] =>
  * of unrelated boxes. The chain keeps the drawing a real architectural diagram
  * while the small family count keeps it inside the corner-free canvas area.
  */
-function buildEntities(): FixtureEntity[] {
+function buildEntities(families: readonly Family[], classMembers: number): FixtureEntity[] {
   const entities: FixtureEntity[] = [];
-  FAMILIES.forEach((family, familyIndex) => {
+  families.forEach((family, familyIndex) => {
     const seedId = `${family.dir}/${family.seed}.ts.${family.seed}`;
-    const nextFamily = FAMILIES[familyIndex + 1];
+    const nextFamily = families[familyIndex + 1];
     entities.push({
       id: seedId,
       name: family.seed,
@@ -148,15 +190,11 @@ function buildEntities(): FixtureEntity[] {
         : [`${nextFamily.dir}/${nextFamily.seed}.ts.${nextFamily.seed}`],
     });
 
-    GRANDCHILDREN_PER_CHILD.forEach((grandchildCount, childIndex) => {
+    family.children.forEach((grandchildCount, childIndex) => {
       const childName = `${family.stem}${childIndex}`;
       const childId = `${family.dir}/${childName}.ts.${childName}`;
-      // One extra dependency across the SAME family pair as the seed chain:
-      // ui/panels → core/layout then carries two relations, which is what makes
-      // the collapsed package edge a weighted `×N` line the LOD criterion can
-      // read (a fixture of single relations would leave that leg vacuous).
       const extraParent = familyIndex === 0 && childIndex === 0
-        ? [`${FAMILIES[1].dir}/${FAMILIES[1].seed}.ts.${FAMILIES[1].seed}`]
+        ? [`${families[1].dir}/${families[1].seed}.ts.${families[1].seed}`]
         : [];
       entities.push({
         id: childId,
@@ -226,7 +264,7 @@ function buildIndex(entities: readonly FixtureEntity[]): Record<string, unknown>
 }
 
 /** The sibling `arch.json` ArchGuard writes: one entity per class/interface/function. */
-function buildArchive(entities: readonly FixtureEntity[]): Record<string, unknown> {
+function buildArchive(entities: readonly FixtureEntity[], classMembers: number): Record<string, unknown> {
   return {
     version: '1.0',
     language: 'typescript',
@@ -235,7 +273,7 @@ function buildArchive(entities: readonly FixtureEntity[]): Record<string, unknow
       name: entity.name,
       type: entity.type,
       isAbstract: entity.isAbstract,
-      members: membersFor(entity.type),
+      members: membersFor(entity.type, classMembers),
     })),
   };
 }
@@ -245,6 +283,12 @@ function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
+
+/** What one `writeArchitectureFixture` call accepts. */
+export type ArchitectureFixtureOptions = {
+  readonly variant?: ArchitectureFixtureVariant;
+  readonly generatedAt?: string;
+};
 
 /**
  * Write the fixture under `workspaceDir` and answer what the criterion needs.
@@ -258,9 +302,15 @@ function writeJson(filePath: string, value: unknown): void {
  */
 export function writeArchitectureFixture(
   workspaceDir: string,
-  generatedAt = new Date().toISOString(),
+  options: ArchitectureFixtureOptions = {},
 ): ArchitectureFixtureReading {
-  const entities = buildEntities();
+  const variant = options.variant ?? 'quay-oo';
+  const generatedAt = options.generatedAt ?? new Date().toISOString();
+  const families = variant === 'claudecodeui' ? CUI_FAMILIES : QUAY_FAMILIES;
+  // Both stay past `COMPACT_MEMBER_ROWS` (4); the second shape adds one more row
+  // so its upstream `(N members)` reading differs from the first's.
+  const classMembers = variant === 'claudecodeui' ? 6 : 5;
+  const entities = buildEntities(families, classMembers);
   const srcDir = path.join(workspaceDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
 
@@ -278,13 +328,14 @@ export function writeArchitectureFixture(
   });
   writeJson(
     path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch.json'),
-    buildArchive(entities),
+    buildArchive(entities, classMembers),
   );
 
   return {
     workspaceDir,
     entityTotal: entities.length,
     entityIds: entities.map((entity) => entity.id),
-    seedIdentifiers: FAMILIES.map((family) => family.seed),
+    seedIdentifiers: families.map((family) => family.seed),
+    variant,
   };
 }

@@ -34,6 +34,15 @@ export type SemanticMember = {
   readonly compartment: 'attr' | 'op';
 };
 
+/**
+ * The renderer's own compact-detail truncation row, e.g.
+ * `+ … +1 more (5 members)` (`foundation/layout.ts` emits it once a class has
+ * more members than `COMPACT_MEMBER_ROWS`). The optional leading visibility
+ * symbol is what `serialize.ts` prefixes to keep the row parseable.
+ */
+const UPSTREAM_OVERFLOW_MEMBER_ROW =
+  /^\s*(?:[+\-#~]\s*)?(?:…|\.\.\.)\s*\+\s*(\d+)\s+more\s*\(\s*(\d+)\s+members\s*\)\s*$/;
+
 /** One entity as the renderer drew it. */
 export type SemanticNodeGeometry = {
   readonly id: string;
@@ -42,7 +51,20 @@ export type SemanticNodeGeometry = {
   readonly kind: SemanticEntityKind;
   /** The `<<kind>>` token the renderer drew (if any). */
   readonly stereotype: string | null;
+  /**
+   * The real member rows, in drawing order. The renderer's own truncation row
+   * is NOT a member: it is stripped here and reported by `memberTotal` instead.
+   */
   readonly members: readonly SemanticMember[];
+  /**
+   * The member total the renderer counted. When it emitted a compact-detail
+   * truncation row this is the row's `(N members)`; otherwise it is
+   * `members.length`. Optional so hand-built fixtures that predate the
+   * truncation reading stay valid.
+   */
+  readonly memberTotal?: number;
+  /** Whether a compact-detail truncation row was found and stripped. */
+  readonly upstreamOverflow?: boolean;
   readonly seed: boolean;
   readonly mentionTier: string | null;
   /** The title compartment's height, from `data-title-h`. */
@@ -122,6 +144,28 @@ function numericAttribute(element: Element, name: string): number | null {
 }
 
 /**
+ * Whether a text is FURNITURE rather than the entity's title.
+ *
+ * The renderer and the graph annotator both insert text into a node group, and
+ * `annotateNodes` puts the pinned `📌` badge BEFORE the title, so "the first
+ * text" is not the name (it read as `📌` after a pin). Roles, not order:
+ * the pin badge and selection check are decorations, the stereotype is its own
+ * field, and members/edge labels are not the title.
+ */
+function isAuxiliaryText(text: Element): boolean {
+  const classes = text.getAttribute('class') ?? '';
+  if (/arch-pinned-badge|arch-selected-check|uml-(attr|op|edge-label)/.test(classes)) return true;
+  if (text.getAttribute('data-architecture-pinned-badge') === 'true') return true;
+  if (text.getAttribute('data-architecture-node-member') === 'true') return true;
+  if (text.getAttribute('data-architecture-node-more') === 'true') return true;
+  const value = (text.textContent ?? '').trim();
+  if (value === '📌' || value === '✓') return true;
+  // A standalone `<<kind>>` / `«kind»` line is the stereotype field, never the
+  // title, even when it is the first text in the group.
+  return /^(?:<<\s*[\w]+\s*>>|«\s*[\w]+\s*»)$/.test(value);
+}
+
+/**
  * The entity's drawn label and kind.
  *
  * 0.4.0 marks an interface/abstract title with `font-style: italic`; the
@@ -136,23 +180,31 @@ function entityLabelOf(group: Element): {
   stereotype: string | null;
 } {
   const texts = directChildren(group, 'text');
-  const first = texts.find((text) => !/uml-(attr|op|edge-label)/.test(text.getAttribute('class') ?? ''))
-    ?? texts[0];
+  const first = texts.find((text) => !isAuxiliaryText(text)) ?? texts[0];
   const text = first?.textContent ?? group.getAttribute('data-entity-id') ?? '';
   const match = /^(?:<<\s*([\w]+)\s*>>|«\s*([\w]+)\s*»)\s*/.exec(text);
   const stereotype = match?.[1] ?? match?.[2] ?? null;
+  // A standalone stereotype line was filtered out above; read it from the
+  // sibling text so the drawing still knows the kind.
+  const explicit = texts.find((candidate) => /^(?:<<\s*[\w]+\s*>>|«\s*[\w]+\s*»)$/.test(
+    (candidate.textContent ?? '').trim(),
+  ));
+  const explicitMatch = /^(?:<<\s*([\w]+)\s*>>|«\s*([\w]+)\s*»)$/.exec(
+    (explicit?.textContent ?? '').trim(),
+  );
+  const resolvedStereotype = stereotype ?? explicitMatch?.[1] ?? explicitMatch?.[2] ?? null;
   const italic = /italic/.test(first?.getAttribute('font-style') ?? '');
-  const kind: SemanticEntityKind = stereotype === 'interface' || (stereotype === null && italic)
+  const kind: SemanticEntityKind = resolvedStereotype === 'interface' || (resolvedStereotype === null && italic)
     ? 'interface'
-    : stereotype === 'enum'
+    : resolvedStereotype === 'enum'
       ? 'enum'
-      : stereotype === 'function'
+      : resolvedStereotype === 'function'
         ? 'function'
         : 'class';
   return {
     kind,
     label: text.replace(/^(?:<<\s*[\w]+\s*>>|«\s*[\w]+\s*»)\s*/, ''),
-    stereotype,
+    stereotype: resolvedStereotype,
   };
 }
 
@@ -164,30 +216,59 @@ function nodeIsSeed(group: Element): boolean {
     || group.classList.contains('arch-seed-light');
 }
 
-/** The members the renderer classified, in drawing order. */
+/**
+ * The members the renderer classified, in drawing order, with its own
+ * compact-detail truncation row removed.
+ *
+ * The truncation row is a RENDERER paging hint, not a member: leaving it in the
+ * list makes the semantic plan draw it as a real row and then add its own
+ * `… +N more`, so the same class shows two overflow lines (the shipped defect).
+ * Its `(N members)` is the authoritative total, because the renderer already
+ * dropped the rows past its compact limit.
+ */
 function membersOf(
   group: Element,
   kinds: readonly ('field' | 'method')[] | undefined,
-): SemanticMember[] {
-  return directChildren(group, 'text')
+): { members: SemanticMember[]; memberTotal: number; upstreamOverflow: boolean } {
+  const rows = directChildren(group, 'text')
     .map((text) => {
       const classes = text.getAttribute('class') ?? '';
       if (!/\buml-(attr|op)\b/.test(classes)) return null;
+      const value = text.textContent ?? '';
+      const overflow = UPSTREAM_OVERFLOW_MEMBER_ROW.exec(value);
       return {
-        text: text.textContent ?? '',
-        // The payload's own kind wins when present (a field whose type has
-        // parentheses is a `field` there); the renderer class is the fallback.
-        compartment: 'attr' as const,
+        text: value,
         drawnAsOperation: /\buml-op\b/.test(classes),
+        overflowTotal: overflow === null ? null : Number(overflow[2]),
       };
     })
-    .filter((member): member is { text: string; compartment: 'attr'; drawnAsOperation: boolean } => member !== null)
-    .map((member, index) => {
-      const payloadKind = kinds?.[index];
-      const asOperation = payloadKind === 'method'
-        || (payloadKind === undefined && member.drawnAsOperation);
-      return { text: member.text, compartment: asOperation ? 'op' : 'attr' } as const;
-    });
+    .filter((member): member is {
+      text: string;
+      drawnAsOperation: boolean;
+      overflowTotal: number | null;
+    } => member !== null);
+
+  // At most one truncation row is emitted per entity; if a renderer ever draws
+  // more, the last one wins because it is the one that counted the full list.
+  const overflowRow = rows.filter((row) => row.overflowTotal !== null).pop() ?? null;
+  const kept = rows.filter((row) => row.overflowTotal === null);
+  // The payload's kinds are an INDEX-ALIGNED hint. That only holds when the
+  // renderer kept every member: a compacted list is a different (and shorter)
+  // sequence, so index-mapping it would scramble attributes into operations and
+  // draw the compartment rule between the wrong rows. In that case the
+  // renderer's own `uml-attr` / `uml-op` classes are the honest reading.
+  const payloadKinds = kinds !== undefined && kinds.length === kept.length ? kinds : undefined;
+  const members = kept.map((member, index) => {
+    const payloadKind = payloadKinds?.[index];
+    const asOperation = payloadKind === 'method'
+      || (payloadKind === undefined && member.drawnAsOperation);
+    return { text: member.text, compartment: asOperation ? 'op' as const : 'attr' as const };
+  });
+  return {
+    members,
+    memberTotal: overflowRow?.overflowTotal ?? members.length,
+    upstreamOverflow: overflowRow !== null,
+  };
 }
 
 /** The entity box: published data attributes first, the rect element as fallback. */
@@ -241,13 +322,16 @@ export function readSemanticDrawingGeometry(
     const rule = [...group.querySelectorAll('.uml-compartment-rule')]
       .find((line) => line.getAttribute('data-rule') === 'title');
     const ruleY = rule === undefined ? Number.NaN : Number(rule.getAttribute('y1'));
+    const memberInfo = membersOf(group, hints.memberKindsById?.get(group.getAttribute('data-entity-id') ?? ''));
     nodes.push({
       id: group.getAttribute('data-entity-id') ?? '',
       rect,
       label: labelled.label,
       kind,
       stereotype: labelled.stereotype,
-      members: membersOf(group, hints.memberKindsById?.get(group.getAttribute('data-entity-id') ?? '')),
+      members: memberInfo.members,
+      memberTotal: memberInfo.memberTotal,
+      upstreamOverflow: memberInfo.upstreamOverflow,
       seed: nodeIsSeed(group),
       mentionTier: group.getAttribute('data-architecture-pinned') === 'true' ? 'pinned' : null,
       titleHeight: numericAttribute(group, 'data-title-h') ?? 0,

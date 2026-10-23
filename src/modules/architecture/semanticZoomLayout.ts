@@ -39,6 +39,7 @@ import {
   planCompartmentRules,
   planEdgeOpacity,
   planEntityContent,
+  planEntityNameForWidth,
   planMemberRows,
   planPackageTab,
   planStickyLabels,
@@ -49,6 +50,7 @@ import {
   SEMANTIC_STRETCH_LIMIT,
   SEMANTIC_TIER_DEADZONE_RATIO,
   type PlannedEntityContent,
+  type PlannedMemberRows,
   type PlannedPackageTab,
   type PlanPoint,
   type PlanRect,
@@ -145,6 +147,11 @@ export type SemanticNodeLayout = {
   readonly drawnTitleHeight: number;
   /** Member text is visible (tier A and the cell has room). */
   readonly showMembers: boolean;
+  /**
+   * The member rows actually drawn, grouped attrs → ops. `null` when the
+   * member text is hidden (the compact frame keeps the proportional rule).
+   */
+  readonly memberRows: PlannedMemberRows | null;
   /** The name is visible (tier A). */
   readonly showName: boolean;
   /** The frame is too small to draw at all (rule 1). */
@@ -364,6 +371,8 @@ function evaluateTier(
     // rows at the floor font; a compacted frame (alpha > 0) drops them.
     const rows = planMemberRows({
       members: node.members.map((member) => member.text),
+      compartments: node.members.map((member) => member.compartment),
+      totalMembers: node.memberTotal,
       height: node.rect.height * scale,
       titleHeight: plan.titleHeight,
       fontPx,
@@ -507,23 +516,52 @@ function evaluateTier(
       height: y.map(rect.y + rect.height) - y.map(rect.y),
     };
     const hidden = cell.width < CLASS_HIDDEN_WIDTH_PX || cell.height < CLASS_HIDDEN_HEIGHT_PX;
+    // The planning pass had to pick a name fallback before the solver knew the
+    // mapped box. Now it does: re-plan for the REAL width so a wide box draws
+    // the name on one line (and its title band grows/shrinks to that choice).
+    const name = tier === 'A' && !hidden
+      ? planEntityNameForWidth(entry.plan.name.label, cell.width, fontPx, entry.geometry.seed)
+      : entry.plan.name;
+    const plan: PlannedEntityContent = name === entry.plan.name
+      ? entry.plan
+      : {
+          ...entry.plan,
+          name,
+          titleHeight: name.titleHeight + (entry.plan.stereotype === null ? 0 : fontPx * 1.25),
+        };
     if (entry.showMembers) {
-      return {
-        id: entry.geometry.id,
-        plan: entry.plan,
-        cell,
-        drawn: cell,
-        drawnTitleHeight: entry.plan.titleHeight,
-        showMembers: true,
-        showName: true,
-        hidden,
-      };
+      const memberRows = planMemberRows({
+        members: entry.geometry.members.map((member) => member.text),
+        compartments: entry.geometry.members.map((member) => member.compartment),
+        totalMembers: entry.geometry.memberTotal,
+        height: cell.height,
+        titleHeight: plan.titleHeight,
+        fontPx,
+        maxWidth: Math.max(0, cell.width - 10),
+        moreLine: null,
+      });
+      // The tier-A threshold is re-checked against the FINAL cell: the title may
+      // have grown by the width-based re-plan, and a frame that no longer has
+      // room for two rows must compact instead of drawing one lonely row.
+      if (memberRows.rows.length >= 2) {
+        return {
+          id: entry.geometry.id,
+          plan,
+          cell,
+          drawn: cell,
+          drawnTitleHeight: plan.titleHeight,
+          showMembers: true,
+          memberRows,
+          showName: true,
+          hidden,
+        };
+      }
     }
     // A text-hidden frame may be drawn shorter than its cell. The cell stays the
     // layout unit (packages contain it, edges leave it), which is what keeps the
     // containment relation intact while the blank space disappears.
-    const titleHeight = tier === 'A' ? entry.plan.titleHeight : 7;
-    const body = entry.plan.kind === 'interface' && !entry.plan.hasAttributes ? 7 : 13;
+    const titleHeight = tier === 'A' ? plan.titleHeight : 7;
+    const body = plan.kind === 'interface' && !plan.hasAttributes ? 7 : 13;
     const originalRuleOffset = entry.geometry.titleRuleY === null
       ? null
       : y.map(entry.geometry.titleRuleY) - cell.y;
@@ -536,11 +574,12 @@ function evaluateTier(
       : cell.height;
     return {
       id: entry.geometry.id,
-      plan: entry.plan,
+      plan,
       cell,
       drawn: { ...cell, height },
       drawnTitleHeight: baselineTitle,
       showMembers: false,
+      memberRows: null,
       showName: tier === 'A',
       hidden,
     };
@@ -764,10 +803,23 @@ export function solveSemanticZoom(
       depth: entry.depth,
       top: entry.frame.y - minY,
       bottom: entry.frame.y - minY + entry.frame.height,
+      // The tab plan is in the same content space the viewport starts at (0,0);
+      // a package whose tab is still in view is not a sticky candidate.
+      tab: entry.tabRect === null
+        ? null
+        : {
+            x: entry.tabRect.x - minX,
+            y: entry.tabRect.y - minY,
+            w: entry.tabRect.w,
+            h: entry.tabRect.h,
+          },
     })),
     // Without a laid-out viewport the sticky rule has no scroll to read; an
     // empty candidate set keeps the caller's draw path simple.
     options.viewport === null || options.viewport === undefined ? Number.NEGATIVE_INFINITY : 0,
+    options.viewport === null || options.viewport === undefined
+      ? null
+      : { x: 0, y: 0, w: options.viewport.width, h: options.viewport.height },
   );
 
   return {
@@ -800,5 +852,14 @@ export function semanticCompartmentRules(layout: SemanticNodeLayout): readonly n
     hasAttributes: layout.plan.hasAttributes,
     hasOperations: layout.plan.hasOperations,
     kind: layout.plan.kind,
+    // Visibly drawn member rows position the rule themselves. `showMembers`
+    // nodes carry the grouped plan; a null plan means the compact proportional
+    // rule (the pre-existing behaviour) applies.
+    memberLines: layout.showMembers && layout.memberRows !== null
+      ? {
+          linesBeforeRule: layout.memberRows.linesBeforeRule,
+          lineHeight: layout.memberRows.lineHeight,
+        }
+      : null,
   });
 }

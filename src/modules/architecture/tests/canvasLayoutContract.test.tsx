@@ -9,6 +9,7 @@ import type * as SharedApiModule from '@/shared/api';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
+import { planHintPlacement, planRectsIntersect } from '@/modules/architecture/semanticZoomPlan';
 
 /**
  * The architecture canvas's layout contract, read structurally.
@@ -259,8 +260,7 @@ test('the readout and the zoom tier share one in-flow row above the canvas', asy
   }
 });
 
-test('the minimap and the zoom cluster remain absolute corner overlays', async () => {
-  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+test('the minimap and the zoom cluster remain absolute corner overlays', async () => {  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
   // A drawing larger than the canvas is what gives it a minimap.
   sizeHost(host, 160, 120);
@@ -285,4 +285,52 @@ test('the minimap and the zoom cluster remain absolute corner overlays', async (
   assert.ok(overlays.contains(cluster), 'the zoom cluster is a corner overlay');
   assert.equal(header?.contains(minimap) ?? false, false, 'the minimap must not move into the in-flow row');
   assert.equal(header?.contains(cluster) ?? false, false, 'the cluster must not move into the in-flow row');
+});
+
+/**
+ * Defect 2: the overview hint pill covered the `modules`/`chat` package tabs at
+ * the 6 % phone level.
+ *
+ * jsdom performs no layout, so the SCREEN-RECT part is pinned through the same
+ * planner the browser path uses: at the phone viewport the old fixed top-left
+ * position intersects the first tab, and the chosen position does not. The
+ * rendered pill is also pinned as an absolute overlay (not an in-flow row),
+ * which is what makes moving it free of layout consequences.
+ */
+test('the overview hint is placed off every package tab', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  const viewport = { x: 0, y: 0, w: 390, h: 844 };
+  // The defect's reading: two tabs at the top edge and one at the bottom, with
+  // the shipped 78%-wide pill at its old top-left corner.
+  const tabs = [
+    { x: 8, y: 8, w: 92, h: 17 },
+    { x: 128, y: 8, w: 64, h: 17 },
+    { x: 8, y: 790, w: 78, h: 17 },
+  ];
+  const oldHint = { x: 8, y: 8, w: 300, h: 26 };
+  assert.equal(
+    tabs.some((tab) => planRectsIntersect(oldHint, tab)),
+    true,
+    'the case only means something if the old fixed corner really covered a tab',
+  );
+  const placement = planHintPlacement({ width: oldHint.w, height: oldHint.h, viewport, obstacles: tabs });
+  const hint = { x: placement.x, y: placement.y, w: oldHint.w, h: oldHint.h };
+  for (const tab of tabs) {
+    assert.equal(
+      planRectsIntersect(hint, tab),
+      false,
+      `the hint must not cover a package tab (tab ${JSON.stringify(tab)})`,
+    );
+  }
+  assert.ok(hint.x >= viewport.x && hint.x + hint.w <= viewport.x + viewport.w);
+  assert.ok(hint.y >= viewport.y && hint.y + hint.h <= viewport.y + viewport.h);
+
+  // The rendered pill, when this drawing shows one, is an absolute overlay
+  // inside the canvas — the element the browser reading measures.
+  const element = document.querySelector('[data-architecture-readable-hint]');
+  if (element instanceof HTMLElement) {
+    assert.equal(element.style.position, 'absolute');
+  }
 });

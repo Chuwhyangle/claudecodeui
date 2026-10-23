@@ -39,13 +39,17 @@ import {
   type SemanticZoomLayout,
 } from '@/modules/architecture/semanticZoomLayout';
 import {
-  planMemberRows,
+  placeStickyLabels,
+  planHintPlacement,
+  planRectsIntersect,
   planStickyLabels,
   PACKAGE_TAB_INSET_PX,
   SEMANTIC_MIN_FONT_MOBILE_PX,
   SEMANTIC_MIN_FONT_PX,
   type PlanPoint,
-} from '@/modules/architecture/semanticZoomPlan';import {
+  type PlanRect,
+} from '@/modules/architecture/semanticZoomPlan';
+import {
   TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useCanvasHeaderSlot,
@@ -1163,15 +1167,19 @@ function drawSemanticLayout(
     if (nodeLayout.showName) {
       const lines = nodeLayout.plan.name.lines;
       const centreX = x + w / 2;
-      const stereotypeHeight = nodeLayout.plan.stereotype === null ? 0 : fontPx * 0.9;
+      const stereotypeHeight = nodeLayout.plan.stereotype === null ? 0 : fontPx;
       if (nodeLayout.plan.stereotype !== null) {
+        // The stereotype is drawn at the SAME floor font as every other visible
+        // label: the old 0.8× drew 8px on the PC tier, under the 10px floor.
+        // The plan already grew the title compartment by a full line for it.
         const stereotype = svgElement('text', {
           x: centreX,
           y: y + fontPx * 0.85,
           'text-anchor': 'middle',
           'font-family': SEMANTIC_SANS,
-          'font-size': fontPx * 0.8,
+          'font-size': fontPx,
           'font-style': 'italic',
+          'data-architecture-node-stereotype': 'true',
           fill: '#475569',
         }, group);
         stereotype.textContent = `<<${nodeLayout.plan.stereotype}>>`;
@@ -1187,38 +1195,53 @@ function drawSemanticLayout(
           'font-size': fontPx,
           'font-weight': 700,
           'font-style': nodeLayout.plan.kind === 'interface' ? 'italic' : 'normal',
+          'data-architecture-node-name': 'true',
+          // The full label, so a reading can tell a wrapped/ellipsized name
+          // from one that lost its title to a decoration.
+          'data-architecture-label': nodeLayout.plan.name.label,
           fill: nodeLayout.plan.kind === 'interface' ? '#075985' : '#1e293b',
         }, group);
         text.textContent = line;
       });
     }
-    if (nodeLayout.showMembers) {
-      const rows = planMemberRows({
-        members: (capture.geometry.nodes.find((node) => node.id === nodeLayout.id)?.members ?? [])
-          .map((member) => member.text),
-        height: h,
-        titleHeight: nodeLayout.drawnTitleHeight,
-        fontPx,
-        maxWidth: Math.max(0, w - 10),
-        moreLine: null,
-      });
+    if (nodeLayout.showMembers && nodeLayout.memberRows !== null) {
+      const rows = nodeLayout.memberRows;
+      // The operations block starts BELOW the member-positioned rule, so the
+      // rule can never cut through a row (the proportional rule did).
+      const split = semanticCompartmentRules(nodeLayout);
+      const splitY = split.length > 1 ? split[1] : null;
+      let attrIndex = 0;
+      let opIndex = 0;
       rows.rows.forEach((row, index) => {
+        const inAttributes = index < rows.attrCount;
+        const baseline = y + (inAttributes
+          ? nodeLayout.drawnTitleHeight + (attrIndex + 1) * lineHeight - 2
+          : (splitY ?? nodeLayout.drawnTitleHeight) + (opIndex + 1) * lineHeight - 2);
         const text = svgElement('text', {
           x: x + 5,
-          y: y + nodeLayout.drawnTitleHeight + (index + 1) * lineHeight - 2,
+          y: baseline,
           'font-family': SEMANTIC_MONO,
           'font-size': fontPx,
+          'data-architecture-node-member': 'true',
+          'data-architecture-member-compartment': inAttributes ? 'attr' : 'op',
           fill: '#475569',
         }, group);
         text.textContent = row;
+        if (inAttributes) attrIndex += 1;
+        else opIndex += 1;
       });
       if (rows.moreLabel !== null) {
+        const inAttributes = rows.moreCompartment === 'attr';
+        const baseline = y + (inAttributes
+          ? nodeLayout.drawnTitleHeight + (rows.attrCount + 1) * lineHeight - 2
+          : (splitY ?? nodeLayout.drawnTitleHeight) + (opIndex + 1) * lineHeight - 2);
         const text = svgElement('text', {
           x: x + 5,
-          y: y + nodeLayout.drawnTitleHeight + (rows.rows.length + 1) * lineHeight - 2,
+          y: baseline,
           'font-family': SEMANTIC_MONO,
           'font-size': fontPx,
           'font-style': 'italic',
+          'data-architecture-node-more': 'true',
           fill: '#64748b',
         }, group);
         text.textContent = rows.moreLabel;
@@ -1249,39 +1272,10 @@ function drawSemanticLayout(
     }
   }
 
-  // ---- sticky package names (at most two, see planStickyLabels)
-  const stickies = planStickyLabels(
-    layout.packages.map((entry) => ({
-      id: entry.id,
-      depth: entry.depth,
-      top: entry.frame.y + offsetY,
-      bottom: entry.frame.y + offsetY + entry.frame.height,
-    })),
-    host.scrollTop,
-  );
-  stickies.forEach((sticky, index) => {
-    const entry = layout.packages.find((candidate) => candidate.id === sticky.id);
-    if (entry === undefined) return;
-    const y = host.scrollTop + 2 + index * (entry.tab.height + 1);
-    const x = Math.max(entry.frame.x + offsetX + PACKAGE_TAB_INSET_PX, 4);
-    if (entry.tabRect === null) return;
-    svgElement('rect', {
-      x: x - 3,
-      y,
-      width: entry.tab.width,
-      height: entry.tab.height,
-      rx: 3,
-      fill: 'rgba(248,250,252,.92)',
-    }, svg);
-    const text = svgElement('text', {
-      x: x + 1,
-      y: y + entry.tab.height / 2 + fontPx * 0.36,
-      'font-family': SEMANTIC_SANS,
-      'font-size': fontPx,
-      fill: '#334155',
-    }, svg);
-    text.textContent = entry.tab.text;
-  });
+  // ---- sticky package names
+  // Drawn by `drawStickyLabels` AFTER the caller has applied the scroll offset:
+  // a sticky label's position is a reading of where the viewport is, and the
+  // offset this draw computes is only written back afterwards.
 
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('width', String(width));
@@ -1291,6 +1285,204 @@ function drawSemanticLayout(
   // layout at 1:1 and the scale is carried by the geometry itself.
   svg.setAttribute('data-architecture-semantic', layout.tier);
   svg.setAttribute('data-architecture-semantic-scale', String(layout.scale));
+}
+
+/** A CSS length read out of a computed style, in px (0 when absent). */
+function stylePx(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * The reader's visible content box, in the drawing SVG's own user units.
+ *
+ * Semantic mode shows the SVG 1:1 (its width/height attributes equal its
+ * viewBox), so a screen-pixel offset relative to the SVG's own box IS a user
+ * unit. The host's padding is excluded: that band is not where the drawing is
+ * visible, and a sticky label placed into it would sit under the border.
+ */
+function visibleViewportInSvg(host: HTMLElement, svg: SVGSVGElement): PlanRect | null {
+  const hostRect = host.getBoundingClientRect();
+  const svgRect = svg.getBoundingClientRect();
+  let paddingLeft = 0;
+  let paddingTop = 0;
+  let paddingX = 0;
+  let paddingY = 0;
+  if (typeof getComputedStyle === 'function') {
+    const style = getComputedStyle(host);
+    paddingLeft = stylePx(style.paddingLeft);
+    paddingTop = stylePx(style.paddingTop);
+    paddingX = paddingLeft + stylePx(style.paddingRight);
+    paddingY = paddingTop + stylePx(style.paddingBottom);
+  }
+  const width = host.clientWidth - paddingX;
+  const height = host.clientHeight - paddingY;
+  if (!(width > 0) || !(height > 0)) return null;
+  return {
+    x: hostRect.left + paddingLeft - svgRect.left,
+    y: hostRect.top + paddingTop - svgRect.top,
+    w: width,
+    h: height,
+  };
+}
+
+/** One element's painted rectangle in the SVG's user units, or null when it has none. */
+function rectInSvg(element: Element, svgRect: DOMRect): PlanRect | null {
+  const rect = element.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return null;
+  return { x: rect.left - svgRect.left, y: rect.top - svgRect.top, w: rect.width, h: rect.height };
+}
+
+/**
+ * Draw the sticky package names at the viewport's top edge, after the caller
+ * has applied the scroll offset this layout was solved for.
+ *
+ * A sticky label appears ONLY for a package whose own tab has scrolled out of
+ * view (a visible tab is already the label), never over a visible class name or
+ * another package's tab, and always fully inside the viewport. The rules are in
+ * `planStickyLabels` / `placeStickyLabels`; this function only converts the
+ * live DOM to their coordinate space and draws the result.
+ *
+ * Consumers: the semantic application paths and the host's scroll listener.
+ */
+function drawStickyLabels(host: HTMLElement, layout: SemanticZoomLayout, fontPx: number): void {
+  const svg = host.querySelector('svg');
+  if (!(svg instanceof SVGSVGElement)) return;
+  // Every pass rebuilds the ghosts; a previous pass's labels would otherwise
+  // survive a scroll and be read at the old viewport position.
+  for (const stale of [...svg.querySelectorAll('[data-architecture-sticky-package]')]) stale.remove();
+  const viewport = visibleViewportInSvg(host, svg);
+  if (viewport === null) return;
+  const svgRect = svg.getBoundingClientRect();
+  const offsetX = -layout.content.x;
+  const offsetY = -layout.content.y;
+
+  // Prefer the PAINTED tab rect over the planned one: the plan is a user-unit
+  // rectangle, while the reading that decides "is my own tab on screen" uses
+  // the path the browser actually painted (a 1px difference at the viewport
+  // edge would otherwise show a ghost beside a visible tab).
+  const paintedTabs = new Map<string, PlanRect>();
+  for (const group of svg.querySelectorAll('.uml-package[data-package-id]')) {
+    const path = [...group.children].find((child) => child.tagName.toLowerCase() === 'path');
+    const rect = path === undefined ? null : rectInSvg(path, svgRect);
+    if (rect !== null) paintedTabs.set(group.getAttribute('data-package-id') ?? '', rect);
+  }
+
+  const candidates = layout.packages
+    .filter((entry) => entry.tabRect !== null)
+    .map((entry) => {
+      const tab = entry.tabRect;
+      const planned = tab === null
+        ? null
+        : { x: tab.x + offsetX, y: tab.y + offsetY, w: tab.w, h: tab.h };
+      const painted = paintedTabs.get(entry.id) ?? planned;
+      return {
+        id: entry.id,
+        depth: entry.depth,
+        top: entry.frame.y + offsetY,
+        bottom: entry.frame.y + offsetY + entry.frame.height,
+        tab: painted,
+        anchorX: painted?.x ?? 0,
+        width: painted?.w ?? entry.tab.width,
+        height: painted?.h ?? entry.tab.height,
+      };
+    });
+  const stickyFrames = planStickyLabels(candidates, viewport.y, viewport);
+  if (stickyFrames.length === 0) return;
+
+  // A ghost may cover neither a visible class name (rule 3) nor a real tab
+  // (rule 2), so both are obstacles in the same user-unit space.
+  const obstacles: PlanRect[] = [];
+  for (const text of svg.querySelectorAll('[data-architecture-node-name]')) {
+    const rect = rectInSvg(text, svgRect);
+    if (rect !== null) obstacles.push(rect);
+  }
+  for (const tab of svg.querySelectorAll('.uml-package[data-package-id] > path')) {
+    const rect = rectInSvg(tab, svgRect);
+    if (rect !== null) obstacles.push(rect);
+  }
+  const hint = host.parentElement?.querySelector('[data-architecture-readable-hint]');
+  if (hint !== undefined && hint !== null) {
+    const rect = rectInSvg(hint, svgRect);
+    if (rect !== null) obstacles.push(rect);
+  }
+
+  const placements = placeStickyLabels({
+    candidates: stickyFrames.map((frame) => ({
+      id: frame.id,
+      anchorX: frame.anchorX,
+      width: frame.width,
+      height: frame.height,
+    })),
+    viewport,
+    obstacles,
+  });
+  for (const placement of placements) {
+    const entry = layout.packages.find((candidate) => candidate.id === placement.id);
+    if (entry === undefined) continue;
+    const group = svgElement('g', {
+      'data-architecture-sticky-package': placement.id,
+    }, svg);
+    svgElement('rect', {
+      x: placement.rect.x,
+      y: placement.rect.y,
+      width: placement.rect.w,
+      height: placement.rect.h,
+      rx: 3,
+      fill: 'rgba(248,250,252,.92)',
+    }, group);
+    const text = svgElement('text', {
+      x: placement.rect.x + 3,
+      y: placement.rect.y + placement.rect.h / 2 + fontPx * 0.36,
+      'font-family': SEMANTIC_SANS,
+      'font-size': fontPx,
+      fill: '#334155',
+    }, group);
+    text.textContent = entry.tab.text;
+    if (entry.tab.badge !== '') {
+      const badge = svgElement('tspan', { fill: SEMANTIC_SEED_COLOR }, text);
+      badge.textContent = entry.tab.badge;
+    }
+  }
+}
+
+/**
+ * Place the overview hint pill where it cannot cover a package tab.
+ *
+ * The pill is an HTML overlay in the canvas's own coordinate space; the tab
+ * rects are converted from screen to canvas-local coordinates. When the layout
+ * has not been measured (jsdom) the declared top-left position is left alone.
+ */
+function positionOverviewHint(host: HTMLElement): void {
+  const canvas = host.closest('[data-architecture-canvas]');
+  if (!(canvas instanceof HTMLElement)) return;
+  const hint = canvas.querySelector('[data-architecture-readable-hint]');
+  if (!(hint instanceof HTMLElement)) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  const hintRect = hint.getBoundingClientRect();
+  const viewport: PlanRect = { x: 0, y: 0, w: canvas.clientWidth, h: canvas.clientHeight };
+  if (!(viewport.w > 0) || !(viewport.h > 0)) return;
+  if (!(hintRect.width > 0) || !(hintRect.height > 0)) return;
+  const obstacles: PlanRect[] = [];
+  for (const tab of host.querySelectorAll('.uml-package[data-package-id] > path')) {
+    const rect = tab.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0)) continue;
+    const local: PlanRect = {
+      x: rect.left - canvasRect.left,
+      y: rect.top - canvasRect.top,
+      w: rect.width,
+      h: rect.height,
+    };
+    if (planRectsIntersect(local, viewport)) obstacles.push(local);
+  }
+  const placement = planHintPlacement({
+    width: hintRect.width,
+    height: hintRect.height,
+    viewport,
+    obstacles,
+  });
+  hint.style.left = `${Math.round(placement.x)}px`;
+  hint.style.top = `${Math.round(placement.y)}px`;
 }
 
 /**
@@ -1853,6 +2045,11 @@ export function PlantUmlGraph({
   // that are not semantically zoomed (the grouped file overview).
   const semanticCaptureRef = useRef<SemanticCapture | null>(null);
   const semanticTierRef = useRef<SemanticTier | null>(null);
+  // The last layout applied to the captured drawing, plus the font it was
+  // planned at. The scroll listener re-reads them to keep the sticky package
+  // names at the viewport's top edge as the reader pans.
+  const appliedLayoutRef = useRef<SemanticZoomLayout | null>(null);
+  const appliedFontRef = useRef<number>(SEMANTIC_MIN_FONT_PX);
   // A package the reader asked to zoom into; the next semantic application
   // centres THIS frame instead of the densest window.
   const centerPackageOnApplyRef = useRef<string | null>(null);
@@ -1882,6 +2079,8 @@ export function PlantUmlGraph({
       minFontPx: coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
     });
     semanticTierRef.current = layout.tier;
+    appliedLayoutRef.current = layout;
+    appliedFontRef.current = coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
     drawSemanticLayout(
       host,
       capture,
@@ -1919,6 +2118,12 @@ export function PlantUmlGraph({
         host.scrollTop = Math.max(0, centreY - height / 2);
       }
     }
+    // The sticky labels and the hint are POSITIONED FROM the applied scroll
+    // offset, so they are drawn after it is written. Drawing them inside the
+    // layout pass measured the previous offset and left the ghosts one zoom
+    // behind (the defect this task fixes).
+    drawStickyLabels(host, layout, appliedFontRef.current);
+    positionOverviewHint(host);
   }, []);
   applyLodRef.current = applyLod;
   // One controller per mount: it survives the renderer replacing the SVG (each
@@ -1929,6 +2134,36 @@ export function PlantUmlGraph({
     viewportRef.current = createSvgViewport(host);
     return () => {
       viewportRef.current = null;
+    };
+  }, []);
+
+  // A sticky package name belongs to the VIEWPORT, not to the drawing: panning
+  // must move the ghost labels with the reader, and must never leave one over a
+  // class name it no longer clears. Re-place them (and the hint) on the settled
+  // frame after each scroll, from the layout last applied.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    let frame: number | null = null;
+    const repaint = (): void => {
+      frame = null;
+      const layout = appliedLayoutRef.current;
+      if (layout === null || semanticCaptureRef.current === null) return;
+      drawStickyLabels(host, layout, appliedFontRef.current);
+      positionOverviewHint(host);
+    };
+    const onScroll = (): void => {
+      if (frame !== null) return;
+      if (typeof window.requestAnimationFrame !== 'function') {
+        repaint();
+        return;
+      }
+      frame = window.requestAnimationFrame(repaint);
+    };
+    host.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      host.removeEventListener('scroll', onScroll);
+      if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, []);
 
@@ -2354,6 +2589,7 @@ export function PlantUmlGraph({
         drawnKeyRef.current = drawingKey;
         if (capture === null) {
           semanticTierRef.current = null;
+          appliedLayoutRef.current = null;
           setLodDepth(null);
         } else {
           semanticTierRef.current = carriedTier;
@@ -2365,6 +2601,8 @@ export function PlantUmlGraph({
           });
           semanticTierRef.current = layout.tier;
           const fontPx = coarsePointer ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
+          appliedLayoutRef.current = layout;
+          appliedFontRef.current = fontPx;
           drawSemanticLayout(host, capture, layout, fontPx);
           applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
           highlightSelection(host, selectedRef.current);
@@ -2398,6 +2636,13 @@ export function PlantUmlGraph({
             focused.setAttribute('data-architecture-focus-target', focusNodeId);
             centerElementInContainer(host, focused);
           }
+        }
+        // Every scroll above has landed: place the sticky package names and the
+        // overview hint against the viewport the reader will actually see.
+        const appliedLayout = appliedLayoutRef.current;
+        if (appliedLayout !== null && semanticCaptureRef.current !== null) {
+          drawStickyLabels(host, appliedLayout, appliedFontRef.current);
+          positionOverviewHint(host);
         }
         setDrawn({
           view,
@@ -3252,6 +3497,14 @@ export function PlantUmlGraph({
         defaultValue: 'Focused on {{package}}',
         package: shortPackageName(packageFocus),
       });
+  // The pill may only cover the drawing where no package tab is painted. It is
+  // measured after every commit that can move either side (the drawing was
+  // rewritten, the pill's wording changed, or a package zoom re-scrolled).
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || !showOverviewHint) return;
+    positionOverviewHint(host);
+  }, [showOverviewHint, drawnRevision, zoom.scale, packageFocus, readableView]);
 
   const zoomOutButton = (
     <button
@@ -3472,10 +3725,12 @@ export function PlantUmlGraph({
             data-architecture-readable-hint="true"
             role="status"
             // An overlay pill, not a row: it must never take height from the
-            // drawing (which would move the very fit it is talking about). It
-            // sits at the canvas's top-left, clear of the top-right touch hint
-            // and of the bottom-right corner chrome.
-            style={{ position: 'absolute', left: 8, top: 8, zIndex: 25, maxWidth: '78%' }}
+            // drawing (which would move the very fit it is talking about). Its
+            // left/top are written by `positionOverviewHint` after the drawing
+            // is laid out, so it never covers a package tab; leaving them out of
+            // the style object keeps React from resetting the placement on a
+            // later render.
+            style={{ position: 'absolute', zIndex: 25, maxWidth: '78%' }}
             className="pointer-events-auto flex items-center gap-2 rounded-md border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
           >
             <span className="min-w-0 truncate">{overviewHintText}</span>

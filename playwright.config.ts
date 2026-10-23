@@ -389,6 +389,13 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // four defects, which adds two real pages and ten readings to the same
   // invocation. 240_000 is the value the other interaction-heavy entries below
   // declare; the measured wall clock is recorded in the task's Evidence.
+  // Re-measured 2026-10-23 after the semantic-polish defects: the main arm reads
+  // the CLASS diagram for two fixture shapes on both viewports at six zoom
+  // levels, plus the pinned-entity round trip and two new control arms:
+  // `12 passed (2.2m)` for the whole invocation (boot + both servers + browser
+  // launch included), and `8 passed (58.0s)` for the `--grep "control arm"`
+  // selection. 240_000 still clears the full-file measurement ~1.8x, so the
+  // entry stays; the numbers above are the readings it was checked against.
   'architecture-canvas-layout.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
