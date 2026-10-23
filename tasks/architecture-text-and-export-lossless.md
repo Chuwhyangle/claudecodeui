@@ -1,7 +1,7 @@
 ---
 id: architecture-text-and-export-lossless
 title: 架构图文本与导出无损：显式 detail:full，Text 面板与托盘附件与 Export 菜单读同一完整来源
-status: todo
+status: ready
 labels:
   - feature
   - defect
