@@ -1,7 +1,7 @@
 ---
 id: architecture-semantic-zoom-layout
 title: 架构图语义缩放：单调拉伸布局 + 最小字号 + UML 形态不退化（替换现有按层隐藏的 LOD）
-status: ready
+status: done
 labels:
   - feature
 parent: null
