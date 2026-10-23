@@ -29,10 +29,10 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/CockpitRemote.test.tsx` exit 0——方向键、放大、返回、钉托盘各发出对应语义事件（假中枢连接计数）；输入框提交发 `utterance`；有 `pendingSend` 时显示预览与确认 / 取消，点确认发 `confirm` 恰好一次；无 `pendingSend` 时确认按钮不可用；非安全上下文时说话按钮禁用且显示原因，打字仍可提交。
-- [ ] AC2: 同一测试文件——遥控器使用 `@/modules/chat` 导出的 `useVoiceInput`（假语音引擎）；口述文字进入输入框而非直接发送；`candidates` 来自中枢 state 的可见集标签。
-- [ ] AC3: `npx playwright test e2e/cockpit-remote.spec.ts` exit 0（在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——同一用户两个页面：桌面视口 `/cockpit` + 手机视口 `/cockpit/remote`；在 remote 点方向键与提交「看 <项目>」后，桌面页焦点与视图随之变化；控制臂：remote 以另一用户登录时桌面页不变。
-- [ ] AC4: `npm run typecheck` 通过；文案覆盖 12 个 locale 并扩展驾驶舱文案完整性测试。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/CockpitRemote.test.tsx` exit 0——方向键、放大、返回、钉托盘各发出对应语义事件（假中枢连接计数）；输入框提交发 `utterance`；有 `pendingSend` 时显示预览与确认 / 取消，点确认发 `confirm` 恰好一次；无 `pendingSend` 时确认按钮不可用；非安全上下文时说话按钮禁用且显示原因，打字仍可提交。
+- [x] AC2: 同一测试文件——遥控器使用 `@/modules/chat` 导出的 `useVoiceInput`（假语音引擎）；口述文字进入输入框而非直接发送；`candidates` 来自中枢 state 的可见集标签。
+- [x] AC3: `npx playwright test e2e/cockpit-remote.spec.ts` exit 0（在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——同一用户两个页面：桌面视口 `/cockpit` + 手机视口 `/cockpit/remote`；在 remote 点方向键与提交「看 <项目>」后，桌面页焦点与视图随之变化；控制臂：remote 以另一用户登录时桌面页不变。
+- [x] AC4: `npm run typecheck` 通过；文案覆盖 12 个 locale 并扩展驾驶舱文案完整性测试。
 
 ## DoD
 
