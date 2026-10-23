@@ -11,6 +11,12 @@ type InputSuggestionChipsProps = {
   selectedIndex: number | null;
   /** Fills the draft with the chip's text. Never sends. */
   onAccept: (index: number) => void;
+  /**
+   * Called when the strip's own background — the gaps between chips or the
+   * space past the last one — is pressed. The composer focuses its textarea
+   * here so a click aimed at the input is never swallowed by the listbox.
+   */
+  onBackgroundPress?: () => void;
 };
 
 /**
@@ -18,11 +24,13 @@ type InputSuggestionChipsProps = {
  * PromptInputBody on top of the (empty) textarea.
  *
  * Absolutely positioned against the body so it adds no row: the body measures
- * the same height whether or not a chip is showing. Only the chips themselves
- * take pointer events — the rest of the strip stays transparent to clicks aimed
- * at the textarea — and `mousedown` is cancelled so clicking a chip neither
- * moves the caret nor steals focus from the textarea. Selection itself is owned
- * by the composer's keydown and mirrored through `aria-activedescendant`.
+ * the same height whether or not a chip is showing. The listbox hugs its chips
+ * (`flex: 0 1 auto`) rather than filling the row, so it only covers the chips
+ * and their gaps; a press on its own background is cancelled and handed to
+ * `onBackgroundPress` so focus still reaches the textarea underneath. A press
+ * on a chip is cancelled too, so clicking a chip neither moves the caret nor
+ * steals focus from the textarea. Selection itself is owned by the composer's
+ * keydown and mirrored through `aria-activedescendant`.
  *
  * Below 480px the chips stay one line and scroll horizontally, and the key
  * hint is not shown (there is no keyboard to name keys for).
@@ -32,6 +40,7 @@ export function InputSuggestionChips({
   suggestions,
   selectedIndex,
   onAccept,
+  onBackgroundPress,
 }: InputSuggestionChipsProps) {
   const { t } = useTranslation('chat');
 
@@ -48,7 +57,21 @@ export function InputSuggestionChips({
         id={listId}
         role="listbox"
         aria-label={t('input.suggestions.listLabel', { defaultValue: 'Frequent inputs' })}
-        className="pointer-events-auto flex min-w-0 flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none]"
+        // `flex-[0_1_auto]` instead of `flex-1`: the listbox may shrink below
+        // its content (so a long row scrolls) but never grows past the chips,
+        // so it does not lay a transparent full-row hit target over the
+        // textarea. `mousedown` on that background is handed to the composer.
+        className="pointer-events-auto flex min-w-0 flex-[0_1_auto] items-center gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none]"
+        onMouseDown={(event) => {
+          // Chips and their gaps bubble here; only a press on the listbox
+          // itself is background. Never let it swallow the click: cancel the
+          // default and let the composer put focus back in the textarea.
+          if (event.target !== event.currentTarget) {
+            return;
+          }
+          event.preventDefault();
+          onBackgroundPress?.();
+        }}
       >
         {suggestions.map((text, index) => (
           <button

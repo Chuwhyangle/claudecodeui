@@ -976,6 +976,9 @@ export default function ChatComposer({
                 suggestions={inputSuggestionCandidates}
                 selectedIndex={selectedInputSuggestionIndex}
                 onAccept={onAcceptInputSuggestion ?? (() => undefined)}
+                // The strip's background sits over the textarea; a press there
+                // must focus the input instead of being eaten by the listbox.
+                onBackgroundPress={() => textareaRef.current?.focus()}
               />
             )}
             {/* Inline tier only: the row below is a sibling of this body, and the form is a row on
