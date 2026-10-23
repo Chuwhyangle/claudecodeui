@@ -8,8 +8,11 @@ import {
   evaluateSemanticTiers,
   lodDepthForTier,
   semanticCompactionAlpha,
+  semanticContentBounds,
+  SEMANTIC_CONTENT_MARGIN_PX,
   solveSemanticZoom,
   type SemanticDrawingGeometry,
+  type SemanticRect,
   type SemanticTier,
   type SemanticZoomLayout,
 } from '@/modules/architecture/semanticZoomLayout';
@@ -264,5 +267,218 @@ describe('determinism and the anchor (principles 3 and 6)', () => {
       previousTier: first.ratio <= 1.8 * 1.04 ? first.tier : (second.tier as SemanticTier),
     });
     assert.ok(kept.tier === 'B' || kept.tier === 'C');
+  });
+});
+
+/* ── the content boundary: relations routed outside the frames ─────────────────────────── */
+
+/**
+ * A drawing whose relations ELK routes ALONG THE OUTSIDE of the outermost package
+ * frames: eight packages in a chain, plus back edges from the last one to five
+ * earlier packages. The long back edges are what make the router place bends
+ * outside the package union — the same shape the real claudecodeui graph had
+ * (five relations up to 9 px outside the viewBox). Every geometry below is read
+ * back out of the real renderer, never hand-written.
+ */
+const OUTER_PERIMETER_EDGES = `@startuml
+package "p/p0" {
+  class "P0" as p0
+  class "Q0" as q0
+}
+package "p/p1" {
+  class "P1" as p1
+  class "Q1" as q1
+}
+package "p/p2" {
+  class "P2" as p2
+  class "Q2" as q2
+}
+package "p/p3" {
+  class "P3" as p3
+  class "Q3" as q3
+}
+package "p/p4" {
+  class "P4" as p4
+  class "Q4" as q4
+}
+package "p/p5" {
+  class "P5" as p5
+  class "Q5" as q5
+}
+package "p/p6" {
+  class "P6" as p6
+  class "Q6" as q6
+}
+package "p/p7" {
+  class "P7" as p7
+  class "Q7" as q7
+}
+p0 ..> p1
+q0 ..> q1
+p1 ..> p2
+q1 ..> q2
+p2 ..> p3
+q2 ..> q3
+p3 ..> p4
+q3 ..> q4
+p4 ..> p5
+q4 ..> q5
+p5 ..> p6
+q5 ..> q6
+p6 ..> p7
+q6 ..> q7
+p7 ..> p0
+p7 ..> p1
+p7 ..> p2
+p7 ..> p3
+p7 ..> p4
+@enduml`;
+
+/** The union of every package's rectangle, in the given drawing. */
+function packageUnion(drawing: SemanticDrawingGeometry): SemanticRect {
+  const left = Math.min(...drawing.packages.map((pkg) => pkg.rect.x));
+  const top = Math.min(...drawing.packages.map((pkg) => pkg.rect.y));
+  const right = Math.max(...drawing.packages.map((pkg) => pkg.rect.x + pkg.rect.width));
+  const bottom = Math.max(...drawing.packages.map((pkg) => pkg.rect.y + pkg.rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/** Whether `point` is inside `rect` (a boundary point counts as inside). */
+function insideRect(rect: SemanticRect, point: { x: number; y: number }, eps = 0.75): boolean {
+  return point.x >= rect.x - eps && point.x <= rect.x + rect.width + eps
+    && point.y >= rect.y - eps && point.y <= rect.y + rect.height + eps;
+}
+
+describe('the content boundary counts the relations that run outside the frames', () => {
+  let perimeter: SemanticDrawingGeometry;
+
+  beforeAll(async () => {
+    await import('@yalehwang/plantuml-js/elk');
+    const { ElkLayoutEngine, createRenderer } = (await import('@yalehwang/plantuml-js/elk')) as unknown as PlantUmlElkModule;
+    const engine = createLayoutEngine({ aspectRatio: 1.6, Engine: ElkLayoutEngine });
+    const { svg } = await createRenderer({ layout: engine }).render(OUTER_PERIMETER_EDGES);
+    const host = document.createElement('div');
+    host.innerHTML = svg;
+    const element = host.querySelector('svg');
+    assert.ok(element !== null, 'the real renderer produced an SVG');
+    perimeter = readSemanticDrawingGeometry(element);
+  });
+
+  test('the fixture really routes at least five relations outside the package union', () => {
+    const union = packageUnion(perimeter);
+    const outside = perimeter.edges.filter((edge) => edge.points.some((point) => !insideRect(union, point)));
+    assert.ok(
+      outside.length >= 5,
+      `the fixture must exercise perimeter routing; got ${outside.length} outside edges `
+        + `(union=${JSON.stringify(union)})`,
+    );
+    assert.ok(
+      perimeter.edges.some((edge) => (edge.arrowPoints?.length ?? 0) > 0),
+      'the renderer must publish arrowhead polygons for the arrow leg to mean anything',
+    );
+  });
+
+  test('every polyline point and arrowhead is inside the content boundary, ≥ packages + 12 px', () => {
+    const layout = solveSemanticZoom(perimeter, { scale: 0.92, forceTier: 'A', viewport: null });
+    assert.ok(layout.edges.length > 0, 'the fixture draws its relations');
+    for (const edge of layout.edges) {
+      for (const point of edge.points) {
+        assert.ok(
+          insideRect(layout.content, point),
+          `${edge.source} → ${edge.target}: point ${JSON.stringify(point)} outside the content boundary `
+            + `${JSON.stringify(layout.content)}`,
+        );
+      }
+    }
+    // Arrowheads are mapped through the same axes the rewrite uses; at ≥ 90 %
+    // that map is the identity times the scale.
+    const rawEdgesByPair = new Map(perimeter.edges.map((edge) => [`${edge.source}->${edge.target}`, edge]));
+    for (const edge of layout.edges) {
+      const raw = rawEdgesByPair.get(`${edge.source}->${edge.target}`);
+      for (const arrow of raw?.arrowPoints ?? []) {
+        const mapped = { x: layout.x.map(arrow.x), y: layout.y.map(arrow.y) };
+        assert.ok(
+          insideRect(layout.content, mapped),
+          `arrowhead point of ${edge.source} → ${edge.target} (${JSON.stringify(mapped)}) outside `
+            + `${JSON.stringify(layout.content)}`,
+        );
+      }
+    }
+    const framesLeft = Math.min(...layout.packages.map((pkg) => pkg.frame.x));
+    const framesTop = Math.min(...layout.packages.map((pkg) => pkg.frame.y));
+    const framesRight = Math.max(...layout.packages.map((pkg) => pkg.frame.x + pkg.frame.width));
+    const framesBottom = Math.max(...layout.packages.map((pkg) => pkg.frame.y + pkg.frame.height));
+    const eps = 0.75;
+    assert.ok(
+      layout.content.x <= framesLeft - SEMANTIC_CONTENT_MARGIN_PX + eps
+        && layout.content.y <= framesTop - SEMANTIC_CONTENT_MARGIN_PX + eps
+        && layout.content.x + layout.content.width
+          >= framesRight + SEMANTIC_CONTENT_MARGIN_PX - eps
+        && layout.content.y + layout.content.height
+          >= framesBottom + SEMANTIC_CONTENT_MARGIN_PX - eps,
+      `the boundary must keep the fixed ${SEMANTIC_CONTENT_MARGIN_PX}px margin around the package union; `
+        + `content=${JSON.stringify(layout.content)} frames=${JSON.stringify({
+          x: framesLeft, y: framesTop, w: framesRight - framesLeft, h: framesBottom - framesTop,
+        })}`,
+    );
+  });
+
+  test('without the relations the boundary collapses back to the frames', () => {
+    const noEdges: SemanticDrawingGeometry = { ...perimeter, edges: [] };
+    const without = solveSemanticZoom(noEdges, { scale: 0.92, forceTier: 'A', viewport: null });
+    const frameMinX = Math.min(...without.packages.map((pkg) => pkg.frame.x));
+    const frameMinY = Math.min(...without.packages.map((pkg) => pkg.frame.y));
+    const frameMaxX = Math.max(...without.packages.map((pkg) => pkg.frame.x + pkg.frame.width));
+    const frameMaxY = Math.max(...without.packages.map((pkg) => pkg.frame.y + pkg.frame.height));
+    assert.ok(
+      Math.abs(without.content.x - (frameMinX - SEMANTIC_CONTENT_MARGIN_PX)) < 1e-6
+        && Math.abs(without.content.y - (frameMinY - SEMANTIC_CONTENT_MARGIN_PX)) < 1e-6
+        && Math.abs(without.content.width - (frameMaxX - frameMinX + 2 * SEMANTIC_CONTENT_MARGIN_PX)) < 1e-6
+        && Math.abs(without.content.height - (frameMaxY - frameMinY + 2 * SEMANTIC_CONTENT_MARGIN_PX)) < 1e-6,
+      `with no relations the boundary is the frame union plus the fixed margin; got `
+        + `${JSON.stringify(without.content)} frames=${JSON.stringify({
+          x: frameMinX, y: frameMinY, w: frameMaxX - frameMinX, h: frameMaxY - frameMinY,
+        })}`,
+    );
+    // And the full drawing is genuinely wider — the reading depends on the edges.
+    const withEdges = solveSemanticZoom(perimeter, { scale: 0.92, forceTier: 'A', viewport: null });
+    assert.ok(
+      withEdges.content.x < without.content.x - 0.5 || withEdges.content.y < without.content.y - 0.5,
+      `the perimeter relations must widen the boundary: with=${JSON.stringify(withEdges.content)} `
+        + `without=${JSON.stringify(without.content)}`,
+    );
+  });
+
+  test('at ≥ 90 % the boundary reads the identity layout, and the standalone helper agrees', () => {
+    const layout = solveSemanticZoom(perimeter, { scale: 0.92, forceTier: 'A', viewport: null });
+    assert.ok(Math.abs(layout.x.ratio - 1) < 1e-9, 'no horizontal stretch');
+    assert.ok(Math.abs(layout.y.ratio - 1) < 1e-9, 'no vertical stretch');
+    // The identity map is `original × scale` up to the layout's own origin
+    // translation (the first breakpoint maps to 0), so offsets are preserved,
+    // not absolute values. Endpoints may be snapped onto a drawn frame; interior
+    // points are exactly the scaled original.
+    for (const edge of layout.edges) {
+      const raw = perimeter.edges.find((candidate) => candidate.source === edge.source && candidate.target === edge.target);
+      assert.ok(raw !== undefined);
+      for (let index = 1; index < raw.points.length - 1; index += 1) {
+        const mapped = edge.points[index];
+        const origin = edge.points[0];
+        const rawOrigin = raw.points[0];
+        assert.ok(
+          Math.abs((mapped.x - origin.x) - (raw.points[index].x - rawOrigin.x) * 0.92) < 1e-6
+            && Math.abs((mapped.y - origin.y) - (raw.points[index].y - rawOrigin.y) * 0.92) < 1e-6,
+          `edge ${edge.source} → ${edge.target} point ${index} left the identity map: `
+            + `${JSON.stringify(mapped)} vs ${JSON.stringify(raw.points[index])}`,
+        );
+      }
+    }
+    // The identity boundary is what the fit/minimap consumer measures. Only its
+    // EXTENT is consumer-visible (the fit reads a width/height, and the solve
+    // translates the layout so its first breakpoint sits at 0), so compare the
+    // same boundary by size.
+    const identity = semanticContentBounds(perimeter);
+    const unit = solveSemanticZoom(perimeter, { scale: 1, forceTier: 'A', viewport: null });
+    assert.ok(Math.abs(unit.content.width - identity.width) < 1e-6);
+    assert.ok(Math.abs(unit.content.height - identity.height) < 1e-6);
   });
 });

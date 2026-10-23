@@ -60,6 +60,19 @@ import {
 /** The three content tiers, from richest to sparsest. */
 export type SemanticTier = 'A' | 'B' | 'C';
 
+/**
+ * The fixed outer margin the semantic canvas reserves around its content.
+ *
+ * The content boundary includes the package and class frames, every edge
+ * polyline point and the arrowhead polygons; this margin then covers the line
+ * stroke width and any marker geometry the reading does not enumerate. Without
+ * it the SVG's `overflow: hidden` clips relations that ELK routes along the
+ * outside of the outermost frames — the renderer's own viewBox keeps a margin
+ * there, and the semantic canvas must not be tighter than the drawing it
+ * replaces.
+ */
+export const SEMANTIC_CONTENT_MARGIN_PX = 12;
+
 /** The tier order the budget walks: names/members → frames → packages. */
 export const SEMANTIC_TIERS: readonly SemanticTier[] = ['A', 'B', 'C'];
 
@@ -722,8 +735,75 @@ export function densestWindowAnchor(
   return best?.anchor ?? fallback;
 }
 
+/** The union of every drawn extent, before the outer margin is applied. */
+type ContentExtent = {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+};
+
+/** Grow an extent by one point. */
+function extendExtent(extent: ContentExtent | null, x: number, y: number): ContentExtent {
+  return extent === null
+    ? { minX: x, minY: y, maxX: x, maxY: y }
+    : {
+        minX: Math.min(extent.minX, x),
+        minY: Math.min(extent.minY, y),
+        maxX: Math.max(extent.maxX, x),
+        maxY: Math.max(extent.maxY, y),
+      };
+}
+
 /**
- * Evaluate every tier (or the forced one) at one scale, in A → B → C order.
+ * The drawing's content boundary: frames, node cells, edge polyline points and
+ * arrowhead polygons, expanded by {@link SEMANTIC_CONTENT_MARGIN_PX}.
+ *
+ * ONE function decides the boundary so the canvas fill, the SVG `viewBox`, the
+ * minimap's drawing box and the fit reading cannot each derive their own. An
+ * empty drawing answers a zero rect (no phantom margin to scroll through).
+ */
+function contentBoundaryOf(
+  rects: Iterable<SemanticRect>,
+  edgePoints: Iterable<PlanPoint>,
+): SemanticRect {
+  let extent: ContentExtent | null = null;
+  for (const rect of rects) {
+    extent = extendExtent(extent, rect.x, rect.y);
+    extent = extendExtent(extent, rect.x + rect.width, rect.y + rect.height);
+  }
+  for (const point of edgePoints) extent = extendExtent(extent, point.x, point.y);
+  if (extent === null) return { x: 0, y: 0, width: 0, height: 0 };
+  return {
+    x: extent.minX - SEMANTIC_CONTENT_MARGIN_PX,
+    y: extent.minY - SEMANTIC_CONTENT_MARGIN_PX,
+    width: extent.maxX - extent.minX + 2 * SEMANTIC_CONTENT_MARGIN_PX,
+    height: extent.maxY - extent.minY + 2 * SEMANTIC_CONTENT_MARGIN_PX,
+  };
+}
+
+/**
+ * The drawing's content boundary at identity (scale 1), in the renderer's own
+ * user units.
+ *
+ * Consumers: `PlantUmlGraph.tsx` hands this to the viewport controller as the
+ * semantic base size, so a fit/minimap reading measures the SAME boundary the
+ * canvas draws — not the renderer's pre-semantic viewBox, which is a different
+ * rectangle.
+ */
+export function semanticContentBounds(geometry: SemanticDrawingGeometry): SemanticRect {
+  const rects = [
+    ...geometry.packages.map((pkg) => pkg.rect),
+    ...geometry.nodes.map((node) => node.rect),
+  ];
+  const edgePoints = [
+    ...geometry.edges.flatMap((edge) => edge.points),
+    ...geometry.edges.flatMap((edge) => edge.arrowPoints ?? []),
+  ];
+  return contentBoundaryOf(rects, edgePoints);
+}
+
+/** Evaluate every tier (or the forced one) at one scale, in A → B → C order.
  * Exported so the tier-budget criterion can read the ratios the engine actually
  * used instead of re-deriving them, and so the caller can keep the previous
  * tier inside the dead band.
@@ -761,28 +841,33 @@ export function solveSemanticZoom(
       });
 
   const layoutsById = chosen.layoutsById;
-  const edges = chosen.tier === 'C'
+  const drawnEdges = chosen.tier === 'C'
     ? []
-    : geometry.edges
-      .filter((edge) => layoutsById.has(edge.source) && layoutsById.has(edge.target))
-      .map((edge) => ({
-        source: edge.source,
-        target: edge.target,
-        points: mapEdge(edge, chosen.x, chosen.y, layoutsById),
-        opacity: 0,
-      }));
+    : geometry.edges.filter((edge) => layoutsById.has(edge.source) && layoutsById.has(edge.target));
+  const edges = drawnEdges.map((edge) => ({
+    source: edge.source,
+    target: edge.target,
+    points: mapEdge(edge, chosen.x, chosen.y, layoutsById),
+    opacity: 0,
+  }));
   const opacity = planEdgeOpacity(edges.length);
 
-  // Content bounds: every package frame (the drawing's outermost objects) plus
-  // any node the renderer drew outside them.
-  const rects = [
-    ...chosen.packages.map((entry) => entry.frame),
-    ...chosen.nodes.map((entry) => entry.cell),
-  ];
-  const minX = rects.length === 0 ? 0 : Math.min(...rects.map((rect) => rect.x));
-  const minY = rects.length === 0 ? 0 : Math.min(...rects.map((rect) => rect.y));
-  const maxX = rects.length === 0 ? 0 : Math.max(...rects.map((rect) => rect.x + rect.width));
-  const maxY = rects.length === 0 ? 0 : Math.max(...rects.map((rect) => rect.y + rect.height));
+  // Content bounds: the class boxes, every package frame, ALL edge polyline
+  // points and the arrowhead polygons — the drawing's whole painted extent. A
+  // relation ELK routes along the outside of the outermost frame is part of the
+  // drawing; leaving it out makes the clipped viewBox cut it in half.
+  const mappedArrowPoints = drawnEdges.flatMap((edge) => (edge.arrowPoints ?? [])
+    .map((point) => ({ x: chosen.x.map(point.x), y: chosen.y.map(point.y) })));
+  const content = contentBoundaryOf(
+    [
+      ...chosen.packages.map((entry) => entry.frame),
+      ...chosen.nodes.map((entry) => entry.cell),
+    ],
+    [...edges.flatMap((edge) => edge.points), ...mappedArrowPoints],
+  );
+  // The translation puts the content boundary's own origin at 0, margin included.
+  const minX = content.x;
+  const minY = content.y;
 
   const centres: PlanPoint[] = (chosen.tier === 'C' ? [] : chosen.nodes.filter((node) => !node.hidden))
     .map((node) => ({ x: node.cell.x - minX + node.cell.width / 2, y: node.cell.y - minY + node.cell.height / 2 }));
@@ -794,7 +879,7 @@ export function solveSemanticZoom(
   const anchor = densestWindowAnchor(
     centres.length > 0 ? centres : packageCentres,
     options.viewport ?? null,
-    { x: (maxX - minX) / 2, y: (maxY - minY) / 2 },
+    { x: content.width / 2, y: content.height / 2 },
   );
 
   const stickies = planStickyLabels(
@@ -832,12 +917,7 @@ export function solveSemanticZoom(
     nodes: chosen.nodes,
     packages: chosen.packages,
     edges: edges.map((edge) => ({ ...edge, opacity })),
-    content: {
-      x: minX,
-      y: minY,
-      width: Math.max(0, maxX - minX),
-      height: Math.max(0, maxY - minY),
-    },
+    content,
     anchor,
     visibleEdges: edges.length,
     stickies,

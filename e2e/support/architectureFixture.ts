@@ -41,8 +41,21 @@ export const ARCHITECTURE_FIXTURE_WORKSPACE = 'architecture-canvas-layout-worksp
 /** The claudecodeui-shaped workspace beside it. */
 export const ARCHITECTURE_FIXTURE_WORKSPACE_CUI = 'architecture-canvas-layout-workspace-cui';
 
+/**
+ * A drawing whose relations ELK routes along the OUTSIDE of the outermost
+ * package frames (the semantic viewBox used to clip them).
+ */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER = 'architecture-canvas-layout-workspace-perimeter';
+
+/** A drawing whose class payload interleaves fields and methods. */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED = 'architecture-canvas-layout-workspace-interleaved';
+
 /** Which project shape to write. */
-export type ArchitectureFixtureVariant = 'quay-oo' | 'claudecodeui';
+export type ArchitectureFixtureVariant =
+  | 'quay-oo'
+  | 'claudecodeui'
+  | 'outer-perimeter'
+  | 'interleaved-members';
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
@@ -105,6 +118,19 @@ export type ArchitectureFixtureReading = {
   readonly seedIdentifiers: readonly string[];
   /** Which project shape this fixture represents. */
   readonly variant: ArchitectureFixtureVariant;
+  /**
+   * The member rows a drawn class must show, with the TRUE kind each row has in
+   * the payload (the interleaved fixture only). Keyed by entity id, then by the
+   * member's declared name; the E2E reading matches a drawn row by that token.
+   */
+  readonly memberKindsById?: Readonly<Record<string, readonly FixtureMemberKind[]>>;
+};
+
+/** One payload member and the kind the drawing must place it in. */
+export type FixtureMemberKind = {
+  /** The member's declared name — the token a drawn row starts with. */
+  readonly token: string;
+  readonly kind: 'field' | 'method';
 };
 
 /** One entity as this fixture writes it into both `arch-index.json` and `arch.json`. */
@@ -115,6 +141,8 @@ type FixtureEntity = {
   readonly type: 'class' | 'interface' | 'function';
   readonly isAbstract: boolean;
   readonly parents: readonly string[];
+  /** Overrides the shared member recipe when a variant states its own rows. */
+  readonly members?: readonly unknown[];
 };
 
 /**
@@ -229,6 +257,101 @@ function emptyRecord(ids: readonly string[]): Record<string, string[]> {
   return record;
 }
 
+/**
+ * The outer-perimeter fixture: eight directory families, two classes each, a
+ * forward chain per class family, plus FIVE back edges from the last family to
+ * earlier ones.
+ *
+ * Shape, not decoration: the long back edges are what make ELK's orthogonal
+ * router place bends OUTSIDE the union of the package frames (measured on this
+ * fixture: six relations up to ~35 px outside). That is the state the shipped
+ * semantic canvas clipped, because its viewBox was the package union.
+ */
+function buildPerimeterEntities(): FixtureEntity[] {
+  // SINGLE-SEGMENT directories on purpose: a shared parent directory would draw
+  // a root package frame around every family, and ELK keeps the perimeter
+  // routing inside THAT frame. The defect needs the union of the leaf frames to
+  // be the outermost object.
+  const idOf = (stem: 'P' | 'Q', index: number): string => `p${index}/${stem}${index}.ts.${stem}${index}`;
+  const entities: FixtureEntity[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    for (const stem of ['P', 'Q'] as const) {
+      const name = `${stem}${index}`;
+      const parents: string[] = [];
+      // `parents` means "this entity depends on …", so a parent becomes an
+      // outgoing edge FROM the parent: P(i-1) → P(i).
+      if (index > 0) parents.push(idOf(stem, index - 1));
+      // Five back edges from the last P: P7 → P0 … P4.
+      if (stem === 'P' && index <= 4) parents.push(idOf('P', 7));
+      entities.push({
+        id: idOf(stem, index),
+        name,
+        file: `p${index}/${name}.ts`,
+        // Member-free class boxes are the same boxes the unit-test fixture
+        // lays out, so the routing measured there holds here.
+        type: 'class',
+        isAbstract: false,
+        parents,
+        members: [],
+      });
+    }
+  }
+  return entities;
+}
+
+/**
+ * The interleaved-member fixture: one class whose PAYLOAD members alternate
+ * field → method → field → method, inside two packages.
+ *
+ * The renderer groups fields before methods when it draws, so the drawn order
+ * differs from the payload order. The read layer must classify each row from
+ * the renderer's own compartment class; the indexed payload overlay put the
+ * methods in the attributes compartment (the shipped defect).
+ */
+function buildInterleavedEntities(): FixtureEntity[] {
+  const mixedMembers = [
+    { name: 'alphaField', type: 'field', visibility: 'private', fieldType: 'string' },
+    {
+      name: 'deltaMethod',
+      type: 'method',
+      visibility: 'public',
+      parameters: [{ name: 'input', type: 'number', isOptional: false }],
+      returnType: 'boolean',
+    },
+    { name: 'betaField', type: 'field', visibility: 'private', fieldType: 'number' },
+    { name: 'gammaMethod', type: 'method', visibility: 'public', parameters: [], returnType: 'void' },
+  ];
+  return [
+    {
+      id: 'interleaved/core/Mixed.ts.Mixed',
+      name: 'Mixed',
+      file: 'interleaved/core/Mixed.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: [],
+      members: mixedMembers,
+    },
+    {
+      id: 'interleaved/core/Helper.ts.Helper',
+      name: 'Helper',
+      file: 'interleaved/core/Helper.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: ['interleaved/core/Mixed.ts.Mixed'],
+      members: [],
+    },
+    {
+      id: 'interleaved/util/Util.ts.Util',
+      name: 'Util',
+      file: 'interleaved/util/Util.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: ['interleaved/core/Mixed.ts.Mixed'],
+      members: [],
+    },
+  ];
+}
+
 /** Build the index body's adjacency maps from each entity's parents. */
 function buildIndex(entities: readonly FixtureEntity[]): Record<string, unknown> {
   const ids = entities.map((entity) => entity.id);
@@ -273,7 +396,7 @@ function buildArchive(entities: readonly FixtureEntity[], classMembers: number):
       name: entity.name,
       type: entity.type,
       isAbstract: entity.isAbstract,
-      members: membersFor(entity.type, classMembers),
+      members: entity.members ?? membersFor(entity.type, classMembers),
     })),
   };
 }
@@ -307,10 +430,15 @@ export function writeArchitectureFixture(
   const variant = options.variant ?? 'quay-oo';
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const families = variant === 'claudecodeui' ? CUI_FAMILIES : QUAY_FAMILIES;
-  // Both stay past `COMPACT_MEMBER_ROWS` (4); the second shape adds one more row
-  // so its upstream `(N members)` reading differs from the first's.
+  // Both family shapes stay past `COMPACT_MEMBER_ROWS` (4); the second shape
+  // adds one more row so its upstream `(N members)` reading differs from the
+  // first's. The dedicated variants state their own shapes below.
   const classMembers = variant === 'claudecodeui' ? 6 : 5;
-  const entities = buildEntities(families, classMembers);
+  const entities = variant === 'outer-perimeter'
+    ? buildPerimeterEntities()
+    : variant === 'interleaved-members'
+      ? buildInterleavedEntities()
+      : buildEntities(families, classMembers);
   const srcDir = path.join(workspaceDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
 
@@ -331,11 +459,33 @@ export function writeArchitectureFixture(
     buildArchive(entities, classMembers),
   );
 
+  const seedIdentifiers = variant === 'outer-perimeter'
+    // EVERY entity is a seed: the class graph expands a bounded number of hops
+    // from the mentioned names, and a chain seeded only at its head would be
+    // drawn three packages deep — the back edges that route around the outside
+    // would never reach the canvas.
+    ? buildPerimeterEntities().map((entity) => entity.name)
+    : variant === 'interleaved-members'
+      ? ['Mixed', 'Util']
+      : families.map((family) => family.seed);
+
   return {
     workspaceDir,
     entityTotal: entities.length,
     entityIds: entities.map((entity) => entity.id),
-    seedIdentifiers: families.map((family) => family.seed),
+    seedIdentifiers,
     variant,
+    ...(variant === 'interleaved-members'
+      ? {
+          memberKindsById: {
+            'interleaved/core/Mixed.ts.Mixed': [
+              { token: 'alphaField', kind: 'field' as const },
+              { token: 'betaField', kind: 'field' as const },
+              { token: 'deltaMethod', kind: 'method' as const },
+              { token: 'gammaMethod', kind: 'method' as const },
+            ],
+          },
+        }
+      : {}),
   };
 }

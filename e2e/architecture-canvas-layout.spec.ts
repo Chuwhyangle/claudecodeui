@@ -6,8 +6,11 @@ import type { APIRequestContext, Browser, BrowserContext, Page } from '@playwrig
 import {
   ARCHITECTURE_FIXTURE_WORKSPACE,
   ARCHITECTURE_FIXTURE_WORKSPACE_CUI,
+  ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED,
+  ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER,
   writeArchitectureFixture,
   type ArchitectureFixtureReading,
+  type FixtureMemberKind,
 } from './support/architectureFixture';
 import {
   awaitClientMounted,
@@ -893,6 +896,10 @@ type SemanticClassBox = {
   readonly fonts: number[];
   /** How many compartment rules (plain `<line>`s) the frame draws. */
   readonly rules: number;
+  /** The screen y of every compartment rule, sorted top to bottom. */
+  readonly ruleYs: number[];
+  /** The drawn member rows, with the screen y each one paints at. */
+  readonly memberRows: { readonly text: string; readonly y: number }[];
   /** `class`, `interface`, `enum`, `function`. */
   readonly kind: string;
   /** The centre the row-order reading sorts by. */
@@ -920,6 +927,12 @@ type SemanticEdgeReading = {
   readonly orthogonal: boolean;
   /** Does an end touch a visible class box's boundary? */
   readonly endpointOnFrame: boolean;
+  /**
+   * Does ANY of the relation's polyline points or arrowhead points fall outside
+   * the SVG element's own box (tolerance 0.5 px)? A point outside the viewBox
+   * is clipped by `overflow: hidden`, so this is the clipped-relation reading.
+   */
+  readonly outsideSvgBox: boolean;
   /** Whether either endpoint's own entity is on screen (otherwise the leg is vacuous). */
   readonly checkable: boolean;
   /** The screen-space points the endpoint reading saw (diagnosis only). */
@@ -1046,6 +1059,24 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
         const stereotype = texts.map((text) => text.textContent ?? '').find((text) => /^<<\w+>>$/.test(text));
         const kind = stereotype?.replace(/[<>\s]/g, '') ?? 'class';
         const own = rectOf(group.querySelector('rect'));
+        // The compartment rules are the frame's own `<line>` children; their
+        // screen y is what splits the attributes band from the operations band.
+        const ruleYs = [...group.children]
+          .filter((child) => child.tagName.toLowerCase() === 'line')
+          .map((line) => {
+            const lineRect = rectOf(line);
+            return lineRect.y + lineRect.height / 2;
+          })
+          .sort((a, b) => a - b);
+        // The semantic pass draws one text per member row and tags it; reading
+        // the PAINTED position (not the tag) is what makes the compartment
+        // assertion a reading of the drawing.
+        const memberRows = [...group.querySelectorAll('[data-architecture-node-member]')]
+          .filter((member) => painted(member))
+          .map((member) => {
+            const memberRect = rectOf(member);
+            return { text: (member.textContent ?? '').trim(), y: memberRect.y + memberRect.height / 2 };
+          });
         return {
           id: group.getAttribute('data-entity-id') ?? '',
           rect: own,
@@ -1053,7 +1084,9 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
             const declared = Number.parseFloat(getComputedStyle(text).fontSize);
             return (Number.isFinite(declared) ? declared : 0) * scale;
           }),
-          rules: [...group.children].filter((child) => child.tagName.toLowerCase() === 'line').length,
+          rules: ruleYs.length,
+          ruleYs,
+          memberRows,
           kind,
           centreY: own.y + own.height / 2,
         };
@@ -1110,6 +1143,18 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
             y: matrix.b * point.x + matrix.d * point.y + matrix.f,
           };
     };
+    // The SVG element's own painted box: in semantic mode its viewBox IS the
+    // content boundary, so a relation point outside this rect is clipped by
+    // the root's `overflow: hidden`.
+    const semanticSvgElement = document.querySelector('svg[data-architecture-semantic]')
+      ?? document.querySelector(`${sel.host} svg`);
+    const svgPaintedBox = semanticSvgElement === null ? null : rectOf(semanticSvgElement);
+    const SVG_BOX_TOLERANCE_PX = 0.5;
+    const insideSvgBox = (point: { x: number; y: number }): boolean => svgPaintedBox === null
+      || (point.x >= svgPaintedBox.x - SVG_BOX_TOLERANCE_PX
+        && point.x <= svgPaintedBox.x + svgPaintedBox.width + SVG_BOX_TOLERANCE_PX
+        && point.y >= svgPaintedBox.y - SVG_BOX_TOLERANCE_PX
+        && point.y <= svgPaintedBox.y + svgPaintedBox.height + SVG_BOX_TOLERANCE_PX);
     const edges = [...document.querySelectorAll('.uml-edge[data-edge-source][data-edge-target]')]
       .filter((group) => painted(group))
       .map((group) => {
@@ -1123,18 +1168,25 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
         }
         // The arrow's own points are part of the ENDPOINT the reader sees: the
         // line is trimmed by the arrow size, so the tip — not the line — is
-        // what touches the frame.
-        const polygon = group.querySelector('polygon');
-        const arrowPoints = (polygon?.getAttribute('points') ?? '')
+        // what touches the frame. A bundled relation keeps one polygon per
+        // member inside its head groups, so read every polygon.
+        const polygonElements = [...group.querySelectorAll('polygon')];
+        const screenOfPolygon = (polygon: Element, point: { x: number; y: number }): { x: number; y: number } =>
+          screenOf(polygon as SVGElement, point);
+        const arrowPoints = polygonElements.flatMap((polygon) => (polygon.getAttribute('points') ?? '')
           .trim()
           .split(/\s+/)
           .map((pair) => pair.split(',').map(Number))
           .filter((pair) => pair.length === 2 && Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
-          .map(([x, y]) => ({ x, y }));
+          .map(([x, y]) => screenOfPolygon(polygon, { x, y })));
+        const screenPoints = [
+          ...points.map((point) => (path === null ? point : screenOf(path, point))),
+          ...arrowPoints,
+        ];
         const tail = [
-          ...points.slice(0, 2).map((point) => (path === null ? point : screenOf(path, point))),
-          ...points.slice(-2).map((point) => (path === null ? point : screenOf(path, point))),
-          ...arrowPoints.map((point) => (polygon === null ? point : screenOf(polygon as SVGElement, point))),
+          ...points.slice(0, 1).map((point) => (path === null ? point : screenOf(path, point))),
+          ...points.slice(-1).map((point) => (path === null ? point : screenOf(path, point))),
+          ...arrowPoints,
         ];
         const visibleIds = new Set(classes.map((box) => box.id));
         const source = group.getAttribute('data-edge-source');
@@ -1144,6 +1196,7 @@ const readSemantic = (page: Page): Promise<SemanticReading> =>
           target,
           orthogonal: true,
           endpointOnFrame: tail.some((point) => onFrame(point)),
+          outsideSvgBox: screenPoints.some((point) => !insideSvgBox(point)),
           // An edge whose two ends are both scrolled out has no frame on
           // screen to touch; that is not a defect in the mapping.
           checkable: (source !== null && visibleIds.has(source)) || (target !== null && visibleIds.has(target)),
@@ -1375,6 +1428,18 @@ const printSemantic = (label: string, reading: SemanticReading): void => {
     }),
   );
   console.log(`[architecture-semantic] ${label}.boxes=${JSON.stringify(reading.classes.map((box) => [box.id, box.rect]))}`);
+  console.log(
+    `[architecture-semantic] ${label}.clip=`
+    + JSON.stringify({
+      edges: reading.edges.length,
+      outside: reading.edges.filter((edge) => edge.outsideSvgBox).map((edge) => [edge.source, edge.target]),
+      memberRows: reading.classes.map((box) => [
+        box.id,
+        box.ruleYs,
+        box.memberRows.map((row) => [memberTokenOf(row.text), Math.round(row.y)]),
+      ]),
+    }),
+  );
   console.log(`[architecture-semantic] ${label}.tails=${JSON.stringify(reading.edges.filter((edge) => !edge.endpointOnFrame).slice(0, 12).map((edge) => {
     const targetBox = reading.classes.find((box) => box.id === edge.target);
     const sourceBox = reading.classes.find((box) => box.id === edge.source);
@@ -1537,6 +1602,104 @@ const assertSemantic = (
     }
   }
   return rows;
+};
+
+/**
+ * The relations whose polyline or arrowhead leaves the SVG box.
+ *
+ * `readSemantic` maps every M/L point and every arrow polygon vertex through the
+ * element's own `getScreenCTM`, so this is the CLIPPED-relation reading: the
+ * root SVG keeps `overflow: hidden`, and a point outside its painted box does
+ * not reach the reader.
+ */
+const edgesOutsideSvgBox = (reading: SemanticReading): string[] =>
+  reading.edges
+    .filter((edge) => edge.outsideSvgBox)
+    .map((edge) => `${edge.source} -> ${edge.target}`);
+
+/** Assert every relation point and arrowhead is inside the SVG box (0.5 px). */
+const assertEdgesInsideSvgBox = (reading: SemanticReading, label: string): void => {
+  const outside = edgesOutsideSvgBox(reading);
+  expect.soft(
+    outside,
+    `${label}: every relation polyline point and arrowhead must be inside the SVG box; outside=${JSON.stringify(outside)}`,
+  ).toEqual([]);
+};
+
+/** The drawn member row's declared name: the token a payload member is matched by. */
+function memberTokenOf(text: string): string | null {
+  return /^(?:[+\-#~]\s*)?([A-Za-z_$][\w$]*)/.exec(text)?.[1] ?? null;
+}
+
+/**
+ * The payload rows for one drawn entity id.
+ *
+ * The drawing prefixes a scope key to every id (`scope-src/interleaved/…`),
+ * while the fixture states the analysis index's own ids; matching by the
+ * index-relative suffix keeps the expectation tied to the fixture rather than
+ * to a prefix the panel may add.
+ */
+const expectedMemberKindsFor = (
+  expectedById: Readonly<Record<string, readonly FixtureMemberKind[]>>,
+  drawnId: string,
+): readonly FixtureMemberKind[] | undefined => {
+  if (expectedById[drawnId] !== undefined) return expectedById[drawnId];
+  const match = Object.keys(expectedById)
+    .find((candidate) => drawnId === candidate || drawnId.endsWith(`/${candidate}`));
+  return match === undefined ? undefined : expectedById[match];
+};
+
+/**
+ * The drawn member rows that sit in the WRONG compartment for their payload
+ * kind.
+ *
+ * The split is geometric: rows above the SECOND compartment rule are the
+ * attributes, rows below it are the operations. The expected kind is the
+ * fixture's own payload kind, matched by the member's name — never by row
+ * order, because the renderer groups fields before methods while the payload
+ * keeps source order.
+ */
+const memberCompartmentViolations = (
+  reading: SemanticReading,
+  expectedById: Readonly<Record<string, readonly FixtureMemberKind[]>>,
+): string[] => {
+  const violations: string[] = [];
+  for (const box of reading.classes) {
+    const expected = expectedMemberKindsFor(expectedById, box.id);
+    if (expected === undefined || box.memberRows.length === 0) continue;
+    if (box.ruleYs.length < 2) {
+      violations.push(`${box.id}: the second compartment rule is missing`);
+      continue;
+    }
+    const splitY = box.ruleYs[1];
+    for (const row of box.memberRows) {
+      const token = memberTokenOf(row.text);
+      const kind = expected.find((candidate) => candidate.token === token)?.kind;
+      if (kind === undefined) continue;
+      const drawn = row.y < splitY ? 'field' : 'method';
+      if (drawn !== kind) {
+        violations.push(`${box.id}: ${token} drawn as ${drawn}, payload says ${kind}`);
+      }
+    }
+  }
+  return violations;
+};
+
+/** How many payload member rows the drawing currently shows (non-vacuity reading). */
+const matchedMemberRowCount = (
+  reading: SemanticReading,
+  expectedById: Readonly<Record<string, readonly FixtureMemberKind[]>>,
+): number => {
+  let matched = 0;
+  for (const box of reading.classes) {
+    const expected = expectedMemberKindsFor(expectedById, box.id);
+    if (expected === undefined) continue;
+    for (const row of box.memberRows) {
+      const token = memberTokenOf(row.text);
+      if (token !== null && expected.some((candidate) => candidate.token === token)) matched += 1;
+    }
+  }
+  return matched;
 };
 
 /** Drive the real zoom control until the applied scale lands near `target`. */
@@ -2209,6 +2372,12 @@ let fixture: ArchitectureFixtureReading | null = null;
 // project's geometry.
 let cuiSessionId = '';
 let cuiFixture: ArchitectureFixtureReading | null = null;
+// The two render-regression fixtures: relations routed outside the frames, and
+// a class whose payload interleaves fields and methods.
+let perimeterSessionId = '';
+let perimeterFixture: ArchitectureFixtureReading | null = null;
+let interleavedSessionId = '';
+let interleavedFixture: ArchitectureFixtureReading | null = null;
 
 test.beforeAll(async () => {
   baseURL = test.info().project.use.baseURL ?? '';
@@ -2226,6 +2395,10 @@ test.beforeAll(async () => {
   fixture = writeArchitectureFixture(workspace, { variant: 'quay-oo' });
   const cuiWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_CUI);
   cuiFixture = writeArchitectureFixture(cuiWorkspace, { variant: 'claudecodeui' });
+  const perimeterWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER);
+  perimeterFixture = writeArchitectureFixture(perimeterWorkspace, { variant: 'outer-perimeter' });
+  const interleavedWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED);
+  interleavedFixture = writeArchitectureFixture(interleavedWorkspace, { variant: 'interleaved-members' });
 
   const bootstrap = await request.newContext({ baseURL });
   token = await createAccount(bootstrap);
@@ -2246,6 +2419,24 @@ test.beforeAll(async () => {
     'Please review the voice pipeline and the frame budget. '
     + `Start at ${cuiFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
   cuiSessionId = await armScenario(api, cuiWorkspace, cuiUserText, cuiFixture.seedIdentifiers[0]);
+  const perimeterUserText =
+    'Please review the layout budget and the readout numbers. '
+    + `Start at ${perimeterFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
+  perimeterSessionId = await armScenario(
+    api,
+    perimeterWorkspace,
+    perimeterUserText,
+    perimeterFixture.seedIdentifiers[0],
+  );
+  const interleavedUserText =
+    'Please review the voice pipeline and the frame budget. '
+    + `Start at ${interleavedFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
+  interleavedSessionId = await armScenario(
+    api,
+    interleavedWorkspace,
+    interleavedUserText,
+    interleavedFixture.seedIdentifiers[0],
+  );
   await api.dispose();
 
   console.log(`[architecture-layout] fixture.entities=${fixture.entityTotal} variant=${fixture.variant}`);
@@ -2254,6 +2445,12 @@ test.beforeAll(async () => {
   console.log(`[architecture-layout] cui.entities=${cuiFixture.entityTotal} variant=${cuiFixture.variant}`);
   console.log(`[architecture-layout] cui.workspace=${cuiWorkspace}`);
   console.log(`[architecture-layout] cui.session=${cuiSessionId}`);
+  console.log(`[architecture-layout] perimeter.entities=${perimeterFixture.entityTotal} variant=${perimeterFixture.variant}`);
+  console.log(`[architecture-layout] perimeter.workspace=${perimeterWorkspace}`);
+  console.log(`[architecture-layout] perimeter.session=${perimeterSessionId}`);
+  console.log(`[architecture-layout] interleaved.entities=${interleavedFixture.entityTotal} variant=${interleavedFixture.variant}`);
+  console.log(`[architecture-layout] interleaved.workspace=${interleavedWorkspace}`);
+  console.log(`[architecture-layout] interleaved.session=${interleavedSessionId}`);
 });
 
 /* ── the main arm ────────────────────────────────────────────────────────────────────────── */
@@ -2563,6 +2760,253 @@ test('main arm — semantic zoom keeps text readable, UML form and order at five
         await context.close();
       }
     }
+  }
+});
+
+/**
+ * The two render regressions, on the fixtures that reproduce them.
+ *
+ * Fixture 1 (`outer-perimeter`) is a drawing whose relations ELK routes along
+ * the OUTSIDE of the outermost package frames. The shipped content boundary was
+ * the package/class frame union, so the clipped viewBox cut those relations.
+ * Fixture 2 (`interleaved-members`) is a class whose PAYLOAD members alternate
+ * field → method → field → method; the shipped reader index-mapped the payload
+ * kinds onto the renderer's grouped order and swapped the compartments.
+ *
+ * The criterion uses the SAME `readSemantic` round trip as every other leg:
+ * every relation polyline point and arrowhead lies inside the SVG box (0.5 px),
+ * and every drawn member row lies above the second rule iff its payload kind is
+ * `field` (and below it iff `method`), asserted row by row.
+ */
+test('main arm — perimeter relations stay inside the canvas and member rows keep their compartments', async ({ browser }) => {
+  const viewports = [
+    { name: 'pc', viewport: VIEWPORT_PC, touch: false, minFontPx: SEMANTIC_MIN_PC_PX },
+    { name: 'phone', viewport: VIEWPORT_PHONE, touch: true, minFontPx: SEMANTIC_MIN_PHONE_PX },
+  ];
+  const fixtures: {
+    readonly name: string;
+    readonly session: () => string;
+    readonly expected: Readonly<Record<string, readonly FixtureMemberKind[]>> | null;
+  }[] = [
+    { name: 'perimeter', session: () => perimeterSessionId, expected: null },
+    {
+      name: 'interleaved',
+      session: () => interleavedSessionId,
+      expected: interleavedFixture?.memberKindsById ?? {},
+    },
+  ];
+  for (const project of fixtures) {
+    for (const form of viewports) {
+      const { context, page } = await openSignedInPage(browser, baseURL, token, {
+        viewport: form.viewport,
+        touch: form.touch,
+      });
+      try {
+        await openArchitectureTab(page, project.session());
+        await showClassDiagram(page);
+        await showExplosionView(page);
+        let checkedEdges = 0;
+        let matchedMembers = 0;
+        // The negotiated five levels, plus the 100 % baseline: the baseline is
+        // where the frame has room for every member row, so the compartment
+        // reading is a row-by-row check rather than the two rows a compressed
+        // frame can still show.
+        for (const level of SEMANTIC_ZOOM_LEVELS) {
+          await zoomToScale(page, level);
+          const reading = await readSemantic(page);
+          const label = `${project.name}.${form.name}.${Math.round(level * 100)}`;
+          printSemantic(label, reading);
+          assertSemantic(reading, label, form.minFontPx, null);
+          checkedEdges += reading.edges.length;
+          assertEdgesInsideSvgBox(reading, label);
+          if (project.expected !== null) {
+            expect.soft(
+              memberCompartmentViolations(reading, project.expected),
+              `${label}: every drawn member row must sit above the second rule iff its payload kind is field`,
+            ).toEqual([]);
+            matchedMembers += matchedMemberRowCount(reading, project.expected);
+          }
+        }
+        if (project.name === 'perimeter') {
+          expect(
+            checkedEdges,
+            'the perimeter fixture must actually draw relations across the five levels',
+          ).toBeGreaterThan(0);
+        } else {
+          expect(
+            matchedMembers,
+            'the interleaved fixture must draw its four payload member rows at least once',
+          ).toBeGreaterThanOrEqual(4);
+        }
+      } finally {
+        await context.close();
+      }
+    }
+  }
+});
+
+/**
+ * Both render guards, forced red through the SAME `readSemantic`.
+ *
+ * Arm 1 reproduces the clipped boundary: the SVG's own box is shrunk to the
+ * union of the package frames (exactly what the shipped content computation
+ * did), and the relation reading must see points outside it. Arm 2 reproduces
+ * the index-mapped member kind: an attribute row is moved below the compartment
+ * split (and an operation row above it), the grouping the indexed overlay
+ * produced, and the row-by-row compartment reading must see it.
+ */
+test('control arm — a frame-only boundary and a re-indexed member kind each read red', async ({ browser }) => {
+  // Arm 1 — the clipped boundary, on the perimeter fixture.
+  const { context: perimeterContext, page: perimeterPage } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openArchitectureTab(perimeterPage, perimeterSessionId);
+    await showClassDiagram(perimeterPage);
+    await showExplosionView(perimeterPage);
+    await zoomToScale(perimeterPage, 0.65);
+    const before = await readSemantic(perimeterPage);
+    printSemantic('control.clip.before', before);
+    assertEdgesInsideSvgBox(before, 'control.clip.before');
+    expect(
+      before.edges.length,
+      'control.clip.before: the perimeter fixture must draw relations for the arm to mean anything',
+    ).toBeGreaterThan(0);
+
+    await perimeterPage.evaluate(() => {
+      const svg = document.querySelector('svg[data-architecture-semantic]') as SVGSVGElement | null;
+      if (svg === null) return;
+      const rects = [...svg.querySelectorAll('.uml-package[data-package-id] > rect')]
+        .map((rect) => ({
+          x: Number(rect.getAttribute('x') ?? '0'),
+          y: Number(rect.getAttribute('y') ?? '0'),
+          w: Number(rect.getAttribute('width') ?? '0'),
+          h: Number(rect.getAttribute('height') ?? '0'),
+        }))
+        .filter((rect) => Number.isFinite(rect.x) && rect.w > 0 && rect.h > 0);
+      if (rects.length === 0) return;
+      const left = Math.min(...rects.map((rect) => rect.x));
+      const top = Math.min(...rects.map((rect) => rect.y));
+      const right = Math.max(...rects.map((rect) => rect.x + rect.w));
+      const bottom = Math.max(...rects.map((rect) => rect.y + rect.h));
+      // Store the shipped geometry so the arm restores the drawing exactly.
+      svg.setAttribute('data-control-viewbox', svg.getAttribute('viewBox') ?? '');
+      svg.setAttribute('data-control-width', svg.getAttribute('width') ?? '');
+      svg.setAttribute('data-control-height', svg.getAttribute('height') ?? '');
+      // The shipped defect: the canvas is cut down to the frame union.
+      svg.setAttribute('viewBox', `${left} ${top} ${right - left} ${bottom - top}`);
+      svg.setAttribute('width', String(right - left));
+      svg.setAttribute('height', String(bottom - top));
+    });
+    const cropped = await readSemantic(perimeterPage);
+    printSemantic('control.clip.cropped', cropped);
+    expect.soft(
+      edgesOutsideSvgBox(cropped),
+      'control.clip: a package-and-class-only boundary must read relations outside the SVG box',
+    ).not.toEqual([]);
+    await perimeterPage.evaluate(() => {
+      const svg = document.querySelector('svg[data-architecture-semantic]') as SVGSVGElement | null;
+      if (svg === null) return;
+      const viewBox = svg.getAttribute('data-control-viewbox');
+      if (viewBox !== null) svg.setAttribute('viewBox', viewBox);
+      const width = svg.getAttribute('data-control-width');
+      if (width !== null) svg.setAttribute('width', width);
+      const height = svg.getAttribute('data-control-height');
+      if (height !== null) svg.setAttribute('height', height);
+      svg.removeAttribute('data-control-viewbox');
+      svg.removeAttribute('data-control-width');
+      svg.removeAttribute('data-control-height');
+    });
+    const restored = await readSemantic(perimeterPage);
+    printSemantic('control.clip.restored', restored);
+    assertEdgesInsideSvgBox(restored, 'control.clip.restored');
+  } finally {
+    await perimeterContext.close();
+  }
+
+  // Arm 2 — the re-indexed member kind, on the interleaved fixture.
+  const { context: interleavedContext, page: interleavedPage } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openArchitectureTab(interleavedPage, interleavedSessionId);
+    await showClassDiagram(interleavedPage);
+    await showExplosionView(interleavedPage);
+    // 100 % is where the frame holds all four rows; the defect's grouping is
+    // the same at every level, but a compressed frame only draws a prefix.
+    await zoomToScale(interleavedPage, 1);
+    const expected = interleavedFixture?.memberKindsById ?? {};
+    const before = await readSemantic(interleavedPage);
+    printSemantic('control.compartment.before', before);
+    expect.soft(
+      memberCompartmentViolations(before, expected),
+      'control.compartment.before: the shipped drawing must keep every row in its true compartment',
+    ).toEqual([]);
+    expect(
+      matchedMemberRowCount(before, expected),
+      'control.compartment.before: the arm needs the four payload rows drawn',
+    ).toBeGreaterThanOrEqual(4);
+
+    const moved = await interleavedPage.evaluate(() => {
+      // The drawing prefixes the scope key to every id; the fixture states the
+      // index-relative id, so match by that suffix.
+      const group = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+        .find((candidate) => {
+          const id = candidate.getAttribute('data-entity-id') ?? '';
+          return id === 'interleaved/core/Mixed.ts.Mixed' || id.endsWith('/interleaved/core/Mixed.ts.Mixed');
+        });
+      if (group === null || group === undefined) return false;
+      const rules = [...group.children]
+        .filter((child) => child.tagName.toLowerCase() === 'line')
+        .map((line) => line.getBoundingClientRect())
+        .map((rect) => rect.y + rect.height / 2)
+        .sort((a, b) => a - b);
+      if (rules.length < 2) return false;
+      const splitY = rules[1];
+      const rows = [...group.querySelectorAll('[data-architecture-node-member]')];
+      const above = rows.find((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.y + rect.height / 2 < splitY;
+      });
+      const below = rows.find((row) => {
+        const rect = row.getBoundingClientRect();
+        return rect.y + rect.height / 2 > splitY;
+      });
+      if (above === undefined || below === undefined) return false;
+      // The indexed overlay put operations in the attribute band and vice
+      // versa; swapping these two rows is that grouping, drawn.
+      const aboveY = above.getAttribute('y') ?? '0';
+      const belowY = below.getAttribute('y') ?? '0';
+      above.setAttribute('data-control-row-y', aboveY);
+      below.setAttribute('data-control-row-y', belowY);
+      above.setAttribute('y', belowY);
+      below.setAttribute('y', aboveY);
+      return true;
+    });
+    expect(moved, 'control.compartment: the arm must find an attribute and an operation row to swap').toBe(true);
+    const swapped = await readSemantic(interleavedPage);
+    printSemantic('control.compartment.swapped', swapped);
+    expect.soft(
+      memberCompartmentViolations(swapped, expected),
+      'control.compartment: a row drawn in the wrong compartment must read red',
+    ).not.toEqual([]);
+    await interleavedPage.evaluate(() => {
+      for (const row of document.querySelectorAll('[data-control-row-y]')) {
+        const original = row.getAttribute('data-control-row-y');
+        if (original !== null) row.setAttribute('y', original);
+        row.removeAttribute('data-control-row-y');
+      }
+    });
+    const restored = await readSemantic(interleavedPage);
+    printSemantic('control.compartment.restored', restored);
+    expect.soft(
+      memberCompartmentViolations(restored, expected),
+      'control.compartment.restored: restoring the rows must read green again',
+    ).toEqual([]);
+  } finally {
+    await interleavedContext.close();
   }
 });
 

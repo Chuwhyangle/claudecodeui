@@ -18,10 +18,14 @@ import {
  * `.uml-compartment-rule[data-rule]`, and a bundled edge as `uml-edge-bundle`
  * with `data-bundle-size`. This criterion reads exactly those facts back.
  *
- * The decisive leg is the member classification: a field whose TYPE contains
- * parentheses (`- map: (A) => B`) must stay an attribute, and a method must stay
- * an operation — which is only possible because the kind comes from the
- * renderer's class, not from the text.
+ * The decisive leg is the member classification: 0.4.0 writes every member row
+ * with the compartment its MODEL gave it (`uml-attr` / `uml-op`), and the read
+ * layer must take that class verbatim. It never overlays the payload's member
+ * order: the renderer groups fields before methods while the payload keeps the
+ * source order, so an index-aligned overlay lands attributes in the operations
+ * compartment. The corner case this guards is a field whose declared TYPE
+ * contains a parenthesis — the reader must still call it an attribute when the
+ * renderer classed it as one.
  */
 
 type PlantUmlElkModule = {
@@ -64,6 +68,12 @@ package "modules/alpha" {
   interface "Runner" as r1 {
     + run(): void
   }
+  class "Mixed" as mix {
+    + firstMethod(): void
+    - alpha: string
+    + secondMethod(input: number): boolean
+    - beta: number
+  }
 }
 package "modules/beta" {
   class "Beta" as b1
@@ -104,22 +114,61 @@ test('entity and package boxes come from the published data attributes', async (
   assert.equal(frame.tabClosed, true, 'the 0.4.0 tab is a Z-closed rectangle');
 });
 
-test('a field whose TYPE has parentheses is an attribute, not a method', async () => {
-  // The payload is authoritative: the renderer's own parser calls a field with
-  // a function type a method, and the hint corrects that without inspecting the
-  // member text.
-  const { geometry } = await exampleGeometry({
-    memberKindsById: new Map([['a1', ['field', 'method'] as const]]),
-  });
-  const alpha = geometry.nodes.find((candidate) => candidate.id === 'a1');
-  assert.ok(alpha !== undefined);
+test('a class whose members interleave fields and methods keeps each row in its true compartment', async () => {
+  // The payload (this source) authors the rows INTERLEAVED: field, method,
+  // field, method. The renderer groups fields before methods, so the drawn
+  // order is NOT the payload order. Reading the renderer's own `uml-attr` /
+  // `uml-op` class is therefore the only honest classification; an index-aligned
+  // overlay of the payload's kinds would swap the two compartments.
+  const { geometry } = await exampleGeometry();
+  const mixed = geometry.nodes.find((candidate) => candidate.id === 'mix');
+  assert.ok(mixed !== undefined);
   assert.deepEqual(
-    alpha.members.map((member) => [member.text, member.compartment]),
+    mixed.members.map((member) => [member.text, member.compartment]),
+    [
+      ['- alpha: string', 'attr'],
+      ['- beta: number', 'attr'],
+      ['+ firstMethod(): void', 'op'],
+      ['+ secondMethod(input: number): boolean', 'op'],
+    ],
+    'every row’s compartment is its own kind, asserted member by member',
+  );
+});
+
+test('a field whose TYPE contains parentheses stays an attribute (the reader never parses the text)', () => {
+  // 0.4.0 publishes the compartment of every row from the model's member kind,
+  // so the class is the model's answer. The hand-built shape states that answer
+  // directly: the reader must believe the class and must not re-infer a member's
+  // kind from the `(` in its text (it has no payload hint to fall back on).
+  const svg = intoSvg(`<svg viewBox="0 0 220 60" width="220" height="60">
+    <g class="uml-node" data-entity-id="holder" data-x="0" data-y="0" data-w="220" data-h="60">
+      <text class="uml-attr">- map: (A) => B</text>
+      <text class="uml-op">+ run(input: (A|B)): void</text>
+    </g>
+  </svg>`);
+  const geometry = readSemanticDrawingGeometry(svg);
+  const holder = geometry.nodes.find((candidate) => candidate.id === 'holder');
+  assert.ok(holder !== undefined);
+  assert.deepEqual(
+    holder.members.map((member) => [member.text, member.compartment]),
     [
       ['- map: (A) => B', 'attr'],
       ['+ run(input: (A|B)): void', 'op'],
     ],
     'a parenthesised TYPE stays an attribute; a method stays an operation',
+  );
+});
+
+test('the read function takes no payload member-kind parameter (the index overlay is gone)', () => {
+  const source = readSemanticDrawingGeometry.toString();
+  assert.ok(
+    !/memberKindsById|\bkinds\b/.test(source),
+    `the read function must not thread payload member kinds (source: ${source.slice(0, 200)}…)`,
+  );
+  assert.equal(
+    readSemanticDrawingGeometry.length,
+    1,
+    'only the SVG is required; the hints bag is optional and carries no member kinds',
   );
 });
 
