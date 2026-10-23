@@ -9,6 +9,7 @@ import test from 'node:test';
 import express from 'express';
 
 import { createQuayRouter } from '../quay.routes.js';
+import type { QuayFleetProjectIdResolver } from '../quay-fleet-project-id.js';
 import {
   createQuayFleetCliWallReader,
   createQuayUriResolver,
@@ -21,23 +22,33 @@ import {
 import { createQuayService } from '../quay.service.js';
 
 /**
- * The wall's dereference contract (quay-wall-uri-dereference-with-snapshot-fallback).
+ * The wall's dereference contract (quay-wall-uri-dereference-with-snapshot-fallback), now with
+ * the project segment resolved through the quay-fleet REGISTRY ID.
  *
  * The resolver is driven through its REAL factory and the same snapshot seam the service
  * composes, so the assertions measure the production read path rather than a reimplementation
  * of it. The fleet side is a stub whose payloads use quay-fleet's v0 enum
  * (`config/object-uri.types.v0.json`) verbatim.
  *
+ * THE TWO IDENTITIES ARE DELIBERATELY DIFFERENT. `CLOUD_PROJECT_ID` is what CloudCLI's database
+ * keys the project by; `FLEET_PROJECT_ID` is the registry id a `quay://` reference carries. A
+ * UUID-shaped project segment must NOT resolve (it is the shape this task removed), and the
+ * snapshot fallback must still be read through the CloudCLI id — the join is what proves both.
+ *
  * RUNNER NOTE: this is a server test, so it runs under the repository's canonical server
  * runner (`tsx --test`, `scripts/test.sh`), not vitest — vitest's `include` is `src/**` only
  * and would report "No test files found" for this path.
  */
 
-const PROJECT = 'wall-proj';
-const TASK_URI = 'quay://wall-proj/task/T-42';
-const AC_URI = 'quay://wall-proj/task/T-42#ac-3';
-const GOAL_URI = 'quay://wall-proj/goal/G-1';
-const PROJECT_ROOT = '/workspace/wall-proj';
+const CLOUD_PROJECT_ID = '86168fbf-16c9-4178-b23b-36b74c2eb695';
+const FLEET_PROJECT_ID = 'claudecodeui';
+const TASK_URI = `quay://${FLEET_PROJECT_ID}/task/T-42`;
+const AC_URI = `quay://${FLEET_PROJECT_ID}/task/T-42#ac-3`;
+const GOAL_URI = `quay://${FLEET_PROJECT_ID}/goal/G-1`;
+const PROJECT_ROOT = '/workspace/claudecodeui';
+
+/** A project segment in the shape the removed mapping used to accept: CloudCLI's own UUID. */
+const UUID_URI = `quay://${CLOUD_PROJECT_ID}/task/T-42`;
 
 /** quay-fleet's v0 action enum, copied from its `config/object-uri.types.v0.json` fixture. */
 const V0_ACTIONS = {
@@ -132,16 +143,38 @@ function createStubFleet(available = true, calls: string[] = []): QuayFleetWallR
   };
 }
 
-/** Resolves the one fixture project (and nothing else) to its workspace root. */
-function resolveProjectRoot(projectId: string): string | null {
-  return projectId === PROJECT ? PROJECT_ROOT : null;
+/**
+ * Resolves the one fixture fleet project to its registered root and CloudCLI project.
+ *
+ * Only the fleet REGISTRY id resolves; the CloudCLI project id (a UUID) is deliberately absent,
+ * which is what makes a UUID-shaped project segment an `unknown-project`.
+ */
+function resolveFleetProject(
+  projectSegment: string,
+): Promise<{ fleetProjectId: string; root: string; projectId: string | null } | null> {
+  return Promise.resolve(
+    projectSegment === FLEET_PROJECT_ID
+      ? { fleetProjectId: FLEET_PROJECT_ID, root: PROJECT_ROOT, projectId: CLOUD_PROJECT_ID }
+      : null,
+  );
 }
+
+/**
+ * The project-id seam the service composes: the CloudCLI id joins to the fleet registry id
+ * only through the registry, and the fleet id joins back to this fixture's root + CloudCLI id.
+ */
+const fleetProjectIdResolver: QuayFleetProjectIdResolver = {
+  async resolveFleetProjectId(projectId) {
+    return projectId === CLOUD_PROJECT_ID ? FLEET_PROJECT_ID : null;
+  },
+  resolveFleetProject,
+};
 
 test('AC1: fleet L1/L2 documents pass through, including the #ac-<n> fragment', async () => {
   const fleetCalls: string[] = [];
   const resolver = createQuayUriResolver({
     fleetWallReader: createStubFleet(true, fleetCalls),
-    resolveProjectRoot,
+    resolveFleetProject,
     readSnapshot: async () => {
       throw new Error('the fallback snapshot must not be read while the fleet port answers');
     },
@@ -192,7 +225,7 @@ test('AC1: fleet L1/L2 documents pass through, including the #ac-<n> fragment', 
   assert.ok(fleetCalls.includes('summary quay://task/T-42'));
   assert.ok(fleetCalls.includes('summary quay://goal/G-1'));
   assert.ok(
-    fleetCalls.every((call) => !call.includes(`/${PROJECT}/`)),
+    fleetCalls.every((call) => !call.includes(`/${FLEET_PROJECT_ID}/`)),
     'no project segment may leak into a fleet call',
   );
 });
@@ -200,7 +233,7 @@ test('AC1: fleet L1/L2 documents pass through, including the #ac-<n> fragment', 
 test('AC2: an unavailable fleet port reads a task back from the snapshot fixture', async () => {
   const resolver = createQuayUriResolver({
     fleetWallReader: null,
-    resolveProjectRoot,
+    resolveFleetProject,
     readSnapshot: async () => SNAPSHOT,
   });
 
@@ -261,11 +294,11 @@ test('fallback reason no-summary: the fleet answered L1 but has stored no L2 row
   };
   const resolver = createQuayUriResolver({
     fleetWallReader: noSummaryFleet,
-    resolveProjectRoot,
+    resolveFleetProject,
     readSnapshot: async () => snapshot,
   });
 
-  const resolved = await resolver.resolve('quay://wall-proj/task/T-99');
+  const resolved = await resolver.resolve(`quay://${FLEET_PROJECT_ID}/task/T-99`);
   assert.equal(resolved.ok, true);
   if (!resolved.ok) return;
   assert.equal(resolved.source, 'snapshot-fallback');
@@ -275,7 +308,7 @@ test('fallback reason no-summary: the fleet answered L1 but has stored no L2 row
   assert.equal(resolved.task?.title, '无摘要任务的真实标题');
   assert.equal(resolved.task?.status, 'todo');
 
-  const summarized = await resolver.summary('quay://wall-proj/task/T-99');
+  const summarized = await resolver.summary(`quay://${FLEET_PROJECT_ID}/task/T-99`);
   assert.equal(summarized.ok, true);
   if (!summarized.ok) return;
   assert.equal(summarized.state, 'absent');
@@ -296,7 +329,7 @@ test('fallback reason reader-unavailable: a configured-but-failing read port is 
   };
   const resolver = createQuayUriResolver({
     fleetWallReader: failingFleet,
-    resolveProjectRoot,
+    resolveFleetProject,
     readSnapshot: async () => SNAPSHOT,
   });
 
@@ -382,7 +415,7 @@ test('AC3: invalid references are named failures (never throws) and nothing gene
 
   const resolver = createQuayUriResolver({
     fleetWallReader: fleet,
-    resolveProjectRoot,
+    resolveFleetProject,
     readSnapshot: async () => SNAPSHOT,
   });
 
@@ -390,11 +423,11 @@ test('AC3: invalid references are named failures (never throws) and nothing gene
     // The project-less draft form.
     { uri: 'quay://task/T-42', code: 'missing-project' },
     // An invented object kind.
-    { uri: 'quay://wall-proj/widget/T-42', code: 'unknown-type' },
+    { uri: `quay://${FLEET_PROJECT_ID}/widget/T-42`, code: 'unknown-type' },
     // Not a quay:// reference at all.
     { uri: 'https://example.test/task/T-42', code: 'not-a-quay-uri' },
     // A known kind with an empty id.
-    { uri: 'quay://wall-proj/task/', code: 'empty-id' },
+    { uri: `quay://${FLEET_PROJECT_ID}/task/`, code: 'empty-id' },
   ];
 
   for (const { uri, code } of cases) {
@@ -413,10 +446,50 @@ test('AC3: invalid references are named failures (never throws) and nothing gene
   assert.deepEqual(generationCalls, []);
 });
 
+test('AC4: the project segment is a fleet registry id, and a UUID segment is unknown-project', async () => {
+  const roots: string[] = [];
+  const fleet: QuayFleetWallReader = {
+    async resolve(uri: string): Promise<QuayFleetL1 | null> {
+      return { uri, type: 'task', label: 'T-42', actions: V0_ACTIONS.task };
+    },
+    async summary(uri: string, projectRoot: string): Promise<QuayFleetL2 | null> {
+      // The registered root is the fleet's `--root`: the project segment selects it and is
+      // never part of the fleet's own address.
+      roots.push(projectRoot);
+      return { state: 'absent', uri };
+    },
+  };
+  const resolver = createQuayUriResolver({
+    fleetWallReader: fleet,
+    resolveFleetProject,
+    readSnapshot: async (projectId) => {
+      // The snapshot is read through the CLOUDCLI project id the registry id joined to.
+      assert.equal(projectId, CLOUD_PROJECT_ID);
+      return SNAPSHOT;
+    },
+  });
+
+  const resolved = await resolver.resolve(TASK_URI);
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.uri, TASK_URI);
+  assert.deepEqual(roots, [PROJECT_ROOT], 'the fleet summary must be called with the registered root');
+
+  // The removed shape: a CloudCLI UUID as the project segment. The registry does not know it,
+  // so the reference is named `unknown-project` and no fleet read is attempted for it.
+  const before = roots.length;
+  for (const result of [await resolver.resolve(UUID_URI), await resolver.summary(UUID_URI)]) {
+    assert.equal(result.ok, false, 'a UUID-shaped project segment must not resolve');
+    if (result.ok) continue;
+    assert.equal(result.error.code, 'unknown-project');
+  }
+  assert.equal(roots.length, before, 'an unregistered segment must not reach the fleet read port');
+});
+
 test('AC3: the routes answer invalid references with 4xx and no read port with 503, never 500', async () => {
   const service = createQuayService({
     fileExists: () => true,
-    resolveProjectPathById: (projectId) => (projectId === PROJECT ? PROJECT_ROOT : null),
+    resolveProjectPathById: (projectId) => (projectId === CLOUD_PROJECT_ID ? PROJECT_ROOT : null),
     listProjects: () => [],
     runCommand: async () => ({ ok: true, code: 0, stdout: '', stderr: '' }),
     readFile: {
@@ -431,6 +504,7 @@ test('AC3: the routes answer invalid references with 4xx and no read port with 5
     snapshotTtlMs: 30_000,
     commandTimeoutMs: 8_000,
     fleetWallReader: null,
+    fleetProjectIdResolver,
   });
 
   const app = express();
@@ -458,6 +532,13 @@ test('AC3: the routes answer invalid references with 4xx and no read port with 5
     assert.equal(unavailable.status, 503);
     const unavailableBody = (await unavailable.json()) as { error: { code: string } };
     assert.equal(unavailableBody.error.code, 'fleet-unavailable');
+
+    // A project segment the fleet does not register (CloudCLI's UUID, the removed shape) is
+    // a 404 naming `unknown-project` — never a UUID-addressed read.
+    const unknown = await fetch(`${base}/resolve?uri=${encodeURIComponent(UUID_URI)}`);
+    assert.equal(unknown.status, 404);
+    const unknownBody = (await unknown.json()) as { error: { code: string } };
+    assert.equal(unknownBody.error.code, 'unknown-project');
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()));
@@ -468,7 +549,7 @@ test('AC3: the routes answer invalid references with 4xx and no read port with 5
 test('AC1: the service composes the injected fleet reader into its dereference method', async () => {
   const service = createQuayService({
     fileExists: () => true,
-    resolveProjectPathById: (projectId) => (projectId === PROJECT ? PROJECT_ROOT : null),
+    resolveProjectPathById: (projectId) => (projectId === CLOUD_PROJECT_ID ? PROJECT_ROOT : null),
     listProjects: () => [],
     runCommand: async () => ({ ok: true, code: 0, stdout: '', stderr: '' }),
     readFile: {
@@ -483,6 +564,7 @@ test('AC1: the service composes the injected fleet reader into its dereference m
     snapshotTtlMs: 30_000,
     commandTimeoutMs: 8_000,
     fleetWallReader: createStubFleet(),
+    fleetProjectIdResolver,
   });
 
   const resolved = await service.resolveQuayUri(TASK_URI);
@@ -490,4 +572,10 @@ test('AC1: the service composes the injected fleet reader into its dereference m
   if (!resolved.ok) return;
   assert.deepEqual(resolved.actions, V0_ACTIONS.task);
   assert.equal(resolved.source, 'fleet');
+
+  // The Tier-2 snapshot carries the same join: its project segment is the registry id, never
+  // the CloudCLI id the request was keyed by.
+  const snapshot = await service.getQuaySnapshot(CLOUD_PROJECT_ID);
+  assert.equal(snapshot?.projectId, CLOUD_PROJECT_ID);
+  assert.equal(snapshot?.fleetProjectId, FLEET_PROJECT_ID);
 });

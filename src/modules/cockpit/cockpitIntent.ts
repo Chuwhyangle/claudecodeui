@@ -54,9 +54,10 @@ const BOARD_NOUN_PATTERN = /(任务板|看板|board)/;
  * Finds the project a phrase names, preferring the longest match so a name that is a prefix
  * of another ("quay" vs "quay-fleet") never wins by accident.
  *
- * Only the display NAME is matched, not the database id: ids are opaque (some are bare
- * numerals), and a substring match on `1` would turn almost any sentence into "open project 1".
- * A non-numeric id is matched as a fallback because a deployment can name projects after it.
+ * The display NAME and the quay-fleet REGISTRY ID are matched — the same segment a `quay://`
+ * address carries, so 「看 claudecodeui」 and `quay://claudecodeui/board` name one project. The
+ * CloudCLI project id is deliberately NOT matched: a UUID is not pronounceable (and matching it
+ * would let a stray hex fragment in a sentence open a project nobody named).
  */
 function namedProject(
   projects: readonly CockpitProject[],
@@ -65,13 +66,13 @@ function namedProject(
   const candidates = projects
     .map((project) => {
       const name = project.name.trim().toLowerCase();
-      const id = project.projectId.trim().toLowerCase();
+      const fleetId = (project.fleetProjectId ?? '').trim().toLowerCase();
       const nameMatches = name !== '' && normalized.includes(name);
-      const idMatches = id !== '' && !/^\d+$/.test(id) && normalized.includes(id);
-      if (!nameMatches && !idMatches) {
+      const fleetIdMatches = fleetId !== '' && !/^\d+$/.test(fleetId) && normalized.includes(fleetId);
+      if (!nameMatches && !fleetIdMatches) {
         return null;
       }
-      return { project, matchedLength: nameMatches ? name.length : id.length };
+      return { project, matchedLength: nameMatches ? name.length : fleetId.length };
     })
     .filter((candidate): candidate is { project: CockpitProject; matchedLength: number } => candidate !== null)
     .sort((left, right) => right.matchedLength - left.matchedLength);

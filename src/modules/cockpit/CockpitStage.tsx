@@ -143,12 +143,19 @@ function FleetView({
       // reads the same declaration the renderer drew.
       data-cockpit-focusables={JSON.stringify(focusables)}
     >
-      {projects.map((project, index) => {
-        const focusable = focusables[index];
-        if (focusable === undefined) {
-          return null;
-        }
-        const isFocused = focusable.uri === focusUri;
+      {projects.map((project) => {
+        // The fleet view's focusable objects are addressed by the fleet REGISTRY id. A project
+        // whose root is not registered has no such id, so it is absent from the declared set
+        // and its tile declares no address (「不可被引用」) — the counts still render.
+        const fleetProjectId = project.fleetProjectId ?? null;
+        const fleetProjectUri =
+          fleetProjectId === null ? null : `quay://${fleetProjectId}/board`;
+        const focusable =
+          fleetProjectUri === null
+            ? undefined
+            : focusables.find((object) => object.uri === fleetProjectUri);
+        const registered = focusable !== undefined;
+        const isFocused = focusable !== undefined && focusable.uri === focusUri;
         // 「需要人」 is the one coloured element in the fleet view: the only state that asks the
         // person to act must be visible at a glance without reading the counts line. The marker is
         // a data attribute as well as a border so the emphasis is addressable without CSS.
@@ -157,20 +164,22 @@ function FleetView({
         return (
           <li
             key={project.projectId}
-            role="button"
-            tabIndex={-1}
-            onClick={() => onFocusObject(focusable.uri)}
+            role={registered ? 'button' : undefined}
+            tabIndex={registered ? -1 : undefined}
+            onClick={focusable === undefined ? undefined : () => onFocusObject(focusable.uri)}
             className={cn(
-              'cursor-pointer rounded-lg border bg-card p-3 text-left transition-shadow focus:outline-none',
+              'rounded-lg border bg-card p-3 text-left transition-shadow focus:outline-none',
+              registered ? 'cursor-pointer' : 'border-dashed',
               needsHuman
                 ? 'border-amber-500 ring-1 ring-amber-500/40 dark:border-amber-400 dark:ring-amber-400/40'
                 : 'border-border/50',
               isFocused && 'ring-2 ring-primary',
             )}
             data-testid="cockpit-fleet-tile"
-            data-quay-uri={focusable.uri}
-            data-quay-label={focusable.label}
-            data-quay-display={JSON.stringify(focusable.display)}
+            data-fleet-registered={registered ? 'true' : 'false'}
+            data-quay-uri={focusable?.uri}
+            data-quay-label={focusable?.label}
+            data-quay-display={focusable === undefined ? undefined : JSON.stringify(focusable.display)}
             data-needs-human={needsHuman ? 'true' : undefined}
             data-focused={isFocused ? 'true' : undefined}
           >
@@ -178,12 +187,14 @@ function FleetView({
               <span className="flex min-w-0 items-center gap-2">
                 {/* The ordinal is the spoken handle AND the place a pointer lands: it is drawn at
                     body size in the foreground colour, never as dim decorative small print. */}
-                <span
-                  className="shrink-0 text-sm font-semibold tabular-nums text-foreground"
-                  data-testid="cockpit-fleet-tile-label"
-                >
-                  {focusable.label}
-                </span>
+                {focusable !== undefined && (
+                  <span
+                    className="shrink-0 text-sm font-semibold tabular-nums text-foreground"
+                    data-testid="cockpit-fleet-tile-label"
+                  >
+                    {focusable.label}
+                  </span>
+                )}
                 <span
                   className="truncate text-sm font-medium text-foreground"
                   title={project.projectPath}

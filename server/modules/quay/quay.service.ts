@@ -27,6 +27,7 @@ import {
   createQuayUriResolver,
   type QuayFleetWallReader,
 } from './quay-uri-resolve.js';
+import type { QuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 
 export type {
   QuayAdrCounts,
@@ -245,6 +246,13 @@ export type QuayFleetTaskCounts = {
 export type QuayFleetProjectSummary = {
   projectId: string;
   projectPath: string;
+  /**
+   * The project's quay-fleet REGISTRY id — the only project segment a `quay://` reference may
+   * mint. `null` means the root is not registered in the fleet, so this project declares no
+   * addressable objects (falling back to the CloudCLI UUID would mint a reference the fleet
+   * cannot dereference).
+   */
+  fleetProjectId: string | null;
   /**
    * The worker driver reading, or `{ state: 'unavailable' }` when that command did not
    * answer. `unavailable` is deliberately its own state rather than `stale`: a failed
@@ -501,6 +509,14 @@ type QuayServiceDependencies = {
    * the snapshot); an injected reader is the seam the dereference criteria use.
    */
   fleetWallReader?: QuayFleetWallReader | null;
+  /**
+   * The CloudCLI project id → quay-fleet registry id join (`quay-fleet-project-id.ts`), behind
+   * the wall's project segment and the per-project `fleetProjectId` reading. OPTIONAL so a
+   * composition that does not run a fleet still works: absent means every project is
+   * unregistered (`fleetProjectId: null`), which the UI renders as 「未登记到 quay-fleet」
+   * rather than guessing an identity.
+   */
+  fleetProjectIdResolver?: QuayFleetProjectIdResolver | null;
 };
 
 type QuaySnapshotOptions = {
@@ -1108,6 +1124,16 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   const ganttCache = new Map<string, { expiresAt: number; gantt: QuayGanttLanes | null; unavailable: QuayGanttUnavailableReason | null }>();
   const inFlightGantt = new Map<string, Promise<{ gantt: QuayGanttLanes | null; unavailable: QuayGanttUnavailableReason | null }>>();
 
+  /**
+   * The CloudCLI project id → fleet registry id join. A composition without a fleet answers
+   * `null` for every project — the honest "nothing is registered here" reading that makes the
+   * UI render 「未登记到 quay-fleet」 instead of minting a UUID reference the fleet cannot read.
+   */
+  const fleetProjectIds: QuayFleetProjectIdResolver = dependencies.fleetProjectIdResolver ?? {
+    resolveFleetProjectId: async () => null,
+    resolveFleetProject: async () => null,
+  };
+
   /** Tier-1 detection: a pure path check, never a subprocess. */
   const detectQuayConfig = (projectPath: string): boolean =>
     dependencies.fileExists(path.join(projectPath, '.quay', 'config.yml'));
@@ -1552,7 +1578,12 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     return { gantt: read.gantt, unavailable: read.unavailable, cached: false };
   };
 
-  const getQuaySnapshot = async (
+  /**
+   * The snapshot itself, WITHOUT the fleet registry join. Kept separate so every branch above
+   * (cache hit, in-flight join, window-switch reuse, full pass) is stamped with
+   * `fleetProjectId` exactly once, in {@link getQuaySnapshot}.
+   */
+  const readQuaySnapshot = async (
     projectId: string,
     options: QuaySnapshotOptions = {},
   ): Promise<QuaySnapshot | null> => {
@@ -1606,6 +1637,26 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     }
 
     return loadSnapshot(projectId, projectPath, windowHours);
+  };
+
+  /**
+   * The Tier-2 snapshot as `GET /api/quay/:projectId/snapshot` answers it: the stored reading
+   * plus the project's `fleetProjectId`. The join is stamped here, on every branch, because it
+   * is what the wall mints its project segment from — a cached snapshot body carrying a stale
+   * (or absent) join would let the renderer fall back to the CloudCLI id.
+   */
+  const getQuaySnapshot = async (
+    projectId: string,
+    options: QuaySnapshotOptions = {},
+  ): Promise<QuaySnapshot | null> => {
+    const snapshot = await readQuaySnapshot(projectId, options);
+    if (snapshot === null) {
+      return null;
+    }
+    const fleetProjectId = await fleetProjectIds.resolveFleetProjectId(projectId);
+    // Omitted rather than `null` when unregistered: the shared type documents absent and null
+    // as the same reading, and an older snapshot shape stays byte-comparable.
+    return fleetProjectId === null ? snapshot : { ...snapshot, fleetProjectId };
   };
 
   /**
@@ -1677,9 +1728,12 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   ): Promise<QuayFleetProjectSummary> => {
     await acquireFleetSlot();
     try {
-      const [tasksRead, driverRead] = await Promise.all([
+      const [tasksRead, driverRead, fleetProjectId] = await Promise.all([
         runQuayCommand(candidate.projectPath, QUAY_FLEET_TASKS_COMMAND),
         runQuayCommand(candidate.projectPath, QUAY_FLEET_DRIVER_COMMAND),
+        // The registry reading is cached per TTL, so this is one `quay-fleet` call per window
+        // for the whole fan-out rather than one per project.
+        fleetProjectIds.resolveFleetProjectId(candidate.projectId),
       ]);
 
       const failures: string[] = [];
@@ -1713,6 +1767,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       return {
         projectId: candidate.projectId,
         projectPath: candidate.projectPath,
+        fleetProjectId,
         driver,
         tasks: tasks ?? EMPTY_FLEET_TASK_COUNTS,
         cached: false,
@@ -1791,7 +1846,10 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
 
   const quayUriResolver = createQuayUriResolver({
     fleetWallReader,
-    resolveProjectRoot: (projectId) => dependencies.resolveProjectPathById(projectId),
+    // The project segment is a quay-fleet REGISTRY ID. The join names the registered root the
+    // fleet read port is called with, and the CloudCLI project (if any) whose snapshot can
+    // supplement a task reference.
+    resolveFleetProject: (projectSegment) => fleetProjectIds.resolveFleetProject(projectSegment),
     // Cached first, so dereferencing a URI the panel just rendered spawns nothing. A cold
     // cache loads the same snapshot the panel loads; the TTL then serves both surfaces.
     readSnapshot: async (projectId) => getCachedSnapshot(projectId) ?? getQuaySnapshot(projectId),

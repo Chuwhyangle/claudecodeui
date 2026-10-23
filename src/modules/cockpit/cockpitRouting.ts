@@ -182,10 +182,10 @@ export type CockpitRouteInput = {
 /**
  * Resolves the project a `quay://` address belongs to.
  *
- * The project segment is matched against the CloudCLI id and the display name: the wall's
- * registry-id form (`quay://claudecodeui/...`) and the current UUID form both have to name the
- * same project, and matching both here is what keeps the address grammar from leaking into the
- * routing rules.
+ * The project segment is the project's quay-fleet REGISTRY ID; the display name is accepted as
+ * a spoken alias because both name the same project to the person. The CloudCLI project id is
+ * NOT matched — no address carries it any more, and treating a UUID as a handle is exactly the
+ * drift this mapping exists to remove.
  */
 export function cockpitProjectForUri(
   projects: readonly CockpitProject[],
@@ -195,7 +195,10 @@ export function cockpitProjectForUri(
   if (!parsed.ok) return null;
   const segment = parsed.object.project.toLowerCase();
   return (
-    projects.find((project) => project.projectId.toLowerCase() === segment) ??
+    projects.find((project) => {
+      const fleetProjectId = project.fleetProjectId ?? null;
+      return fleetProjectId !== null && fleetProjectId.toLowerCase() === segment;
+    }) ??
     projects.find((project) => project.name.toLowerCase() === segment) ??
     null
   );

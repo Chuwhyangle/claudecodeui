@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import { projectsDb, uiLastOpenedDb } from '@/modules/database/index.js';
 
+import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 import { createQuayFleetRegistry } from './quay-fleet-registry.js';
 import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process.js';
 import { createQuayRouter } from './quay.routes.js';
@@ -71,6 +72,21 @@ const probeWebService = async (host: string, port: number): Promise<boolean> => 
   }
 };
 
+/**
+ * The CloudCLI project id → quay-fleet registry id join behind every `quay://` project segment.
+ * The fleet is the authority for project identity: a reference must say `quay://claudecodeui/…`,
+ * never the CloudCLI UUID, so the registry id is looked up per registered root and cached for a
+ * short TTL. A host without the fleet CLI reads every project as unregistered instead of failing.
+ */
+export const quayFleetProjectIds = createQuayFleetProjectIdResolver({
+  resolveProjectPathById: (projectId) => projectsDb.getProjectPathById(projectId),
+  listProjects: () =>
+    projectsDb.getProjectPaths().map((project) => ({
+      projectId: project.project_id,
+      projectPath: project.project_path,
+    })),
+});
+
 /** The single quay display service instance; also used by the projects module for Tier-1 detection. */
 export const quayService = createQuayService({
   fileExists: (filePath) => fs.existsSync(filePath),
@@ -95,6 +111,7 @@ export const quayService = createQuayService({
   now: () => Date.now(),
   snapshotTtlMs: SNAPSHOT_TTL_MS,
   commandTimeoutMs: QUAY_COMMAND_TIMEOUT_MS,
+  fleetProjectIdResolver: quayFleetProjectIds,
 });
 
 /**

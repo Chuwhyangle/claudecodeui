@@ -24,9 +24,19 @@ beforeEach(() => {
 
 const DASHBOARD_URL = 'http://172.28.0.1:3651/';
 
+/**
+ * The two project identities, deliberately different shapes: CloudCLI keys its database by a
+ * UUID, while a `quay://` reference must carry the quay-fleet REGISTRY id. The panel receives
+ * the CloudCLI id as its prop and the fleet id inside the snapshot; every address it mints has
+ * to use the latter, and a UUID project segment in a declared URI is the drift this guards.
+ */
+const CLOUD_PROJECT_ID = '86168fbf-16c9-4178-b23b-36b74c2eb695';
+const FLEET_PROJECT_ID = 'claudecodeui';
+
 const SNAPSHOT: QuaySnapshot = {
-  projectId: 'project-1',
+  projectId: CLOUD_PROJECT_ID,
   projectPath: '/workspace/project-1',
+  fleetProjectId: FLEET_PROJECT_ID,
   generatedAt: '2026-10-02T00:00:00.000Z',
   cached: false,
   driver: { state: 'running', alive: true, running: true, lastRecordAt: '2026-10-01T23:59:00.000Z' },
@@ -88,7 +98,7 @@ const SNAPSHOT: QuaySnapshot = {
 };
 
 const renderView = (view: QuayPanelView, dashboardUrl: string | null = null) =>
-  render(<QuayPanel projectId="project-1" view={view} onRefresh={() => {}} dashboardUrl={dashboardUrl} />);
+  render(<QuayPanel projectId={CLOUD_PROJECT_ID} view={view} onRefresh={() => {}} dashboardUrl={dashboardUrl} />);
 
 test('QuayPanel renders the not-configured state without any counts', () => {
   const { container, getByTestId } = renderView({ status: 'not-configured' });
@@ -430,7 +440,7 @@ test('the in-flight reading reaches QuayPanel through the real useQuayStatus hoo
   };
   apiMock.quaySnapshot.mockResolvedValue({ ok: true, json: async () => hookSnapshot });
 
-  const { result } = renderHook(() => useQuayStatus('project-1', true, true));
+  const { result } = renderHook(() => useQuayStatus(CLOUD_PROJECT_ID, true, true));
   await waitFor(() => assert.equal(result.current.view.status, 'loaded'));
 
   const view = result.current.view;
@@ -439,7 +449,7 @@ test('the in-flight reading reaches QuayPanel through the real useQuayStatus hoo
   }
 
   const { container } = render(
-    <QuayPanel projectId="project-1" view={view} onRefresh={() => {}} dashboardUrl={null} />,
+    <QuayPanel projectId={CLOUD_PROJECT_ID} view={view} onRefresh={() => {}} dashboardUrl={null} />,
   );
   assert.match(container.textContent ?? '', /gap-hook-task/);
 });
@@ -687,10 +697,10 @@ test('a window change re-reads in place — the panel and its selector stay moun
   // The host wires the real hook to the panel and records every requested window.
   const requested: number[] = [];
   const Harness = () => {
-    const { view, refresh, windowHours, setWindowHours, ganttRefreshing } = useQuayStatus('project-1', true, true);
+    const { view, refresh, windowHours, setWindowHours, ganttRefreshing } = useQuayStatus(CLOUD_PROJECT_ID, true, true);
     return (
       <QuayPanel
-        projectId="project-1"
+        projectId={CLOUD_PROJECT_ID}
         view={view}
         onRefresh={refresh}
         dashboardUrl={null}
@@ -748,7 +758,7 @@ test('QuayPanel keeps the Loop pulse selector, disabled and with a reason, when 
   const requested: number[] = [];
   const { getByTestId, container } = render(
     <QuayPanel
-      projectId="project-1"
+      projectId={CLOUD_PROJECT_ID}
       view={{ status: 'loaded', snapshot: { ...SNAPSHOT, gantt: null } }}
       onRefresh={() => {}}
       dashboardUrl={null}
@@ -778,7 +788,7 @@ test('QuayPanel states the snapshot’s own unavailable reason, and the two reas
   const reasonFor = (ganttUnavailable: 'plugin-lacks-lanes-verb' | 'lanes-read-failed') => {
     const { container } = render(
       <QuayPanel
-        projectId="project-1"
+        projectId={CLOUD_PROJECT_ID}
         view={{ status: 'loaded', snapshot: { ...SNAPSHOT, gantt: null, ganttUnavailable } }}
         onRefresh={() => {}}
         dashboardUrl={null}
@@ -800,7 +810,7 @@ test('QuayPanel states the snapshot’s own unavailable reason, and the two reas
 test('the Loop pulse window is persisted to the URL, restored on mount, and a non-offered value falls back', async () => {
   apiMock.quaySnapshot.mockResolvedValue({ ok: true, json: async () => SNAPSHOT });
 
-  const first = renderHook(() => useQuayStatus('project-1', true, true));
+  const first = renderHook(() => useQuayStatus(CLOUD_PROJECT_ID, true, true));
   await waitFor(() => assert.equal(first.result.current.view.status, 'loaded'));
   assert.equal(first.result.current.windowHours, 3, 'the default window is the starting point');
 
@@ -809,14 +819,14 @@ test('the Loop pulse window is persisted to the URL, restored on mount, and a no
   first.unmount();
 
   // A fresh mount is what a page reload does: it reads the window back from the URL.
-  const second = renderHook(() => useQuayStatus('project-1', true, true));
+  const second = renderHook(() => useQuayStatus(CLOUD_PROJECT_ID, true, true));
   assert.equal(second.result.current.windowHours, 12, 'a reload must restore the selected window');
   second.unmount();
 
   // A value outside the offered set is not honoured — it falls back to the default rather than
   // driving a read the card has no button for.
   window.history.replaceState({}, '', '/?quayWindow=5');
-  const third = renderHook(() => useQuayStatus('project-1', true, true));
+  const third = renderHook(() => useQuayStatus(CLOUD_PROJECT_ID, true, true));
   assert.equal(third.result.current.windowHours, 3);
 });
 
@@ -970,7 +980,8 @@ test('a round and a fan-in attempt outside the shared window are not drawn', () 
  * AC2 of quay-wall-addressable-view-and-input-package: a focusable child is exactly
  * `{uri, label, display}` and at least one real QuayPanel tile — here the in-flight tile —
  * declares them. Each row's URI is the project-segmented task form
- * `quay://<project>/task/<id>`, and its display attributes are derived from the SAME reading
+ * `quay://<fleetProjectId>/task/<id>` — the segment is the quay-fleet registry id, NOT the
+ * CloudCLI project UUID the panel is keyed by — and its display attributes are derived from the SAME reading
  * the row draws: the phase's status, the phase marker's colour, the spatial ordinal and its
  * top-left position. The tile publishes the contract once as JSON and once per row; both
  * must describe the same objects, or the wall advertises addresses its rows do not answer.
@@ -978,7 +989,7 @@ test('a round and a fan-in attempt outside the shared window are not drawn', () 
  * The ordinal is also VISIBLE (`quay-panel-inflight-label`), because the declaimed label is
  * what a person reads as ①② when they say 「第二个」.
  */
-test('the In-flight tile declares each row as a focusable quay://<project>/task/<id> object', () => {
+test('the In-flight tile declares each row as a focusable quay://<fleet-project-id>/task/<id> object', () => {
   const snapshot: QuaySnapshot = {
     ...SNAPSHOT,
     inFlight: [
@@ -997,17 +1008,17 @@ test('the In-flight tile declares each row as a focusable quay://<project>/task/
 
   assert.deepEqual(
     declared,
-    buildQuayInFlightContract('project-1', snapshot.inFlight).focusables,
+    buildQuayInFlightContract(FLEET_PROJECT_ID, snapshot.inFlight)?.focusables,
     'the tile and the exported contract disagree',
   );
   assert.deepEqual(declared, [
     {
-      uri: 'quay://project-1/task/gap-wall-a',
+      uri: `quay://${FLEET_PROJECT_ID}/task/gap-wall-a`,
       label: '①',
       display: { status: 'implementing', color: 'blue', ordinal: 1, pos: { row: 1, column: 1 } },
     },
     {
-      uri: 'quay://project-1/task/gap-wall-b',
+      uri: `quay://${FLEET_PROJECT_ID}/task/gap-wall-b`,
       label: '②',
       display: { status: 'fan-in', color: 'violet', ordinal: 2, pos: { row: 2, column: 1 } },
     },
@@ -1047,3 +1058,78 @@ test('an unread In-flight tile declares nothing, while an empty reading declares
   // `[]` is a reading that answered with nothing: it declares an empty focusable set.
   assert.equal(tileOf(empty)?.getAttribute('data-quay-focusables'), '[]');
 });
+
+/* ── the project segment is the fleet registry id ───────────────────────────────────────────
+ *
+ * AC1 of quay-uri-project-segment-is-fleet-registry-id. The panel is keyed by CloudCLI's
+ * project id (a UUID) because that is what its snapshot route takes, but every `quay://`
+ * address it mints must carry the quay-fleet REGISTRY id: the fleet dereferences by its own
+ * id, so a UUID segment reads `unknown-project` there. A project the fleet does not register
+ * has no honest address at all, and the tile says so instead of falling back to the UUID.
+ */
+
+/** A project segment in CloudCLI's own identity shape; it must never appear in an address. */
+const UUID_SEGMENT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** Every declared reference in a rendered panel (the tile contract and each row's own). */
+function declaredUris(container: HTMLElement): string[] {
+  const uris: string[] = [];
+  for (const element of container.querySelectorAll('[data-quay-uri], [data-quay-focusables]')) {
+    const uri = element.getAttribute('data-quay-uri');
+    if (uri !== null) uris.push(uri);
+    const contract = element.getAttribute('data-quay-focusables');
+    if (contract !== null) {
+      for (const object of JSON.parse(contract) as { uri: string }[]) {
+        uris.push(object.uri);
+      }
+    }
+  }
+  return uris;
+}
+
+test('AC1: the declared task URIs carry the fleet registry id, never the CloudCLI UUID', () => {
+  const snapshot: QuaySnapshot = {
+    ...SNAPSHOT,
+    inFlight: [
+      { taskId: 'gap-seg-a', phase: 'implementing', startedAt: '2026-10-01T23:50:00.000Z', lastHeartbeat: '2026-10-02T00:00:00.000Z', workerPid: 1 },
+    ],
+  };
+  const { container, getByTestId } = renderView({ status: 'loaded', snapshot }, null);
+
+  const declared = JSON.parse(
+    getByTestId('quay-panel-inflight').getAttribute('data-quay-focusables') ?? '[]',
+  ) as { uri: string }[];
+  assert.equal(declared[0]?.uri, `quay://${FLEET_PROJECT_ID}/task/gap-seg-a`);
+
+  const uris = declaredUris(container);
+  assert.ok(uris.length > 0, 'the panel must declare at least one reference');
+  for (const uri of uris) {
+    assert.doesNotMatch(uri, UUID_SEGMENT, `an address must not carry a UUID project segment: ${uri}`);
+  }
+});
+
+test('AC1: an unregistered project declares no focusable element and says so', () => {
+  // The snapshot's join is the only source of the project segment; absent (an older backend)
+  // and null (registered-root miss) are the same reading.
+  const snapshot: QuaySnapshot = {
+    ...SNAPSHOT,
+    fleetProjectId: null,
+    inFlight: [
+      { taskId: 'gap-unregistered', phase: 'fan-in', startedAt: '2026-10-01T23:50:00.000Z', lastHeartbeat: '2026-10-02T00:00:00.000Z', workerPid: 1 },
+    ],
+  };
+  const { container, getByTestId, getAllByTestId } = renderView({ status: 'loaded', snapshot }, null);
+
+  // No focusable set at all — not an empty one, and never a UUID-addressed one.
+  assert.equal(getByTestId('quay-panel-inflight').getAttribute('data-quay-focusables'), null);
+  for (const row of getAllByTestId('quay-panel-inflight-row')) {
+    assert.equal(row.getAttribute('data-quay-uri'), null);
+    assert.equal(row.getAttribute('data-quay-label'), null);
+  }
+  assert.match(getByTestId('quay-panel-inflight-unregistered').textContent ?? '', /quay-fleet/);
+  assert.equal(declaredUris(container).length, 0);
+
+  // The task itself is still shown: losing the address must not lose the reading.
+  assert.match(container.textContent ?? '', /gap-unregistered/);
+});
+

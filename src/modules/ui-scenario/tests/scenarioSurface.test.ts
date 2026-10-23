@@ -33,6 +33,9 @@ import type { QuayInFlightTask, QuaySnapshot } from '@/shared/types';
  */
 
 const PROJECT_ID = 'project-1';
+// The `quay://` project segment is the quay-fleet registry id the snapshot carries, not the
+// CloudCLI id the panel is keyed by.
+const FLEET_PROJECT_ID = 'claudecodeui';
 
 const IN_FLIGHT: QuayInFlightTask[] = [
   {
@@ -54,6 +57,7 @@ const IN_FLIGHT: QuayInFlightTask[] = [
 const SNAPSHOT: QuaySnapshot = {
   projectId: PROJECT_ID,
   projectPath: '/workspace/project-1',
+  fleetProjectId: FLEET_PROJECT_ID,
   generatedAt: '2026-10-02T00:00:00.000Z',
   cached: false,
   driver: { state: 'running', alive: true, running: true, lastRecordAt: '2026-10-01T23:59:00.000Z' },
@@ -78,12 +82,12 @@ const SNAPSHOT: QuaySnapshot = {
  */
 const DECLARED_FOCUSABLES = [
   {
-    uri: 'quay://project-1/task/gap-wall-a',
+    uri: `quay://${FLEET_PROJECT_ID}/task/gap-wall-a`,
     label: '①',
     display: { status: 'implementing', color: 'blue', ordinal: 1, pos: { row: 1, column: 1 } },
   },
   {
-    uri: 'quay://project-1/task/gap-wall-b',
+    uri: `quay://${FLEET_PROJECT_ID}/task/gap-wall-b`,
     label: '②',
     display: { status: 'fan-in', color: 'violet', ordinal: 2, pos: { row: 2, column: 1 } },
   },
@@ -132,8 +136,8 @@ test('AC1: read/drive address the view contract, and utter builds the real ASR i
 
   // ── the registry is the view's declaration, item for item ────────────────────────────────
   assert.deepEqual(surface.read().focusables, DECLARED_FOCUSABLES);
-  assert.deepEqual(surface.read().views, [`quay://${PROJECT_ID}/board`]);
-  assert.equal(surface.read().activeView, `quay://${PROJECT_ID}/board`);
+  assert.deepEqual(surface.read().views, [`quay://${FLEET_PROJECT_ID}/board`]);
+  assert.equal(surface.read().activeView, `quay://${FLEET_PROJECT_ID}/board`);
 
   // ── focus by the label a person says ────────────────────────────────────────────────────
   surface.drive({ focus: '②' });

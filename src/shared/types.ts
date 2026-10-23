@@ -373,6 +373,15 @@ export type QuayTimelineWindow = {
 export type QuaySnapshot = {
   projectId: string;
   projectPath: string;
+  /**
+   * The project's quay-fleet registry id, read from the fleet registry by matching the project
+   * root. It is the ONLY project segment a `quay://` reference may carry, because the fleet
+   * dereferences references by its own registry id and a CloudCLI UUID reads `unknown-project`
+   * there. `null` means the root is not registered with quay-fleet: the panel then declares no
+   * addressable objects and says so, rather than minting a UUID reference. Absent is the same
+   * reading as `null` (a snapshot from an older backend).
+   */
+  fleetProjectId?: string | null;
   generatedAt: string;
   /** True when the snapshot was served from the backend's TTL cache rather than a fresh CLI pass. */
   cached: boolean;
@@ -544,6 +553,12 @@ export type QuayFleetTaskCounts = {
 export type QuayFleetProjectSummary = {
   projectId: string;
   projectPath: string;
+  /**
+   * The project's quay-fleet registry id — the `quay://` project segment. `null` (or absent)
+   * means its root is not registered with quay-fleet, so the project declares no addressable
+   * objects. Never fall back to `projectId`: a CloudCLI UUID is not a fleet handle.
+   */
+  fleetProjectId?: string | null;
   /** The worker driver reading; `unavailable` means the status command did not answer. */
   driver: { state: QuayDriverState };
   tasks: QuayFleetTaskCounts;

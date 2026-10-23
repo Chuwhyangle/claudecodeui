@@ -4261,6 +4261,14 @@ export type QuayConfigIssueCounts = {
 export type QuaySnapshot = {
   projectId: string;
   projectPath: string;
+  /**
+   * The project's quay-fleet registry id, joined from the fleet registry by matching the
+   * project root. It is the ONLY project segment a `quay://` reference may carry: the fleet
+   * dereferences by its own registry id, so CloudCLI's project UUID would read `unknown-project`
+   * there. `null` means the root is not registered with quay-fleet, and the panel then declares
+   * no addressable objects (「未登记到 quay-fleet」) rather than minting a UUID reference.
+   */
+  fleetProjectId?: string | null;
   generatedAt: string;
   cached: boolean;
   driver: QuayDriverSummary | null;
