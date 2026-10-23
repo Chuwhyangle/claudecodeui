@@ -31,10 +31,10 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-project-id.test.ts` exit 0——fleet CLI 不存在时 `fleet-summary` 顶层 `fleet.available === false` 且带 reason；CLI 可用但项目无匹配时 `fleet.available === true` 且该项目 `fleetProjectId: null`。
-- [ ] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/cockpit/tests/cockpit-reducer.test.ts` exit 0——3 列网格夹具：(1,1) 按 → 到 (1,2)、按 ↓ 到 (2,1)；(1,2) 按 ← 回 (1,1)；最后一行不满时 ↓ 取最近列；越界不动。
-- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——加载后输入框不是 activeElement，第一次按 → 即移动焦点；`fleet.available === false` 时显示一行 CLI 缺失提示且不逐个显示「未登记」；预览显示会话标题与来源标签，不出现 UUID 形态的会话 id（无标题时只出现短 id）。
-- [ ] AC4: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-project-id.test.ts` exit 0——fleet CLI 不存在时 `fleet-summary` 顶层 `fleet.available === false` 且带 reason；CLI 可用但项目无匹配时 `fleet.available === true` 且该项目 `fleetProjectId: null`。
+- [x] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/cockpit/tests/cockpit-reducer.test.ts` exit 0——3 列网格夹具：(1,1) 按 → 到 (1,2)、按 ↓ 到 (2,1)；(1,2) 按 ← 回 (1,1)；最后一行不满时 ↓ 取最近列；越界不动。
+- [x] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——加载后输入框不是 activeElement，第一次按 → 即移动焦点；`fleet.available === false` 时显示一行 CLI 缺失提示且不逐个显示「未登记」；预览显示会话标题与来源标签，不出现 UUID 形态的会话 id（无标题时只出现短 id）。
+- [x] AC4: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -49,6 +49,7 @@ depends_on:
 - server/modules/cockpit/cockpit.reducer.ts
 - server/modules/cockpit/cockpit-hub.service.ts
 - server/modules/cockpit/tests/cockpit-reducer.test.ts
+- server/index.ts
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/CockpitStage.tsx
 - src/modules/cockpit/CockpitInput.tsx
@@ -56,6 +57,8 @@ depends_on:
 - src/modules/cockpit/hooks/useCockpitHub.ts
 - src/modules/cockpit/tests/CockpitStage.test.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
+- src/shared/types.ts
+- e2e/cockpit-remote.spec.ts
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
