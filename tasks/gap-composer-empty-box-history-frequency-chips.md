@@ -49,13 +49,54 @@ extra:
 
 真实运行页面上的操作与读数，缺一不可；测试与夹具只是必要条件。
 
-- [ ] 用 MCP 浏览器在**隔离实例**（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001）的真实页面上走完整个交互，截图存 `tmp/` 并贴出：在一个真实会话里通过**真实发送**把「检查进展」发 2 次、「继续」发 2 次、「提交」发 2 次（chip 的首次出现必须由真实送达写入 `chat-input-history` 产生，不得直接写 localStorage 造夹具）；助手空闲、输入为空时 chip 可见；Tab 选中第 1 个；Enter 填入；输入一个字符后 chip 消失；清空后重现；鼠标点击填入；Esc 隐藏；深色主题一张；窄屏 390px 一张。
-- [ ] 用 `browser_evaluate` 贴出布局读数：有 chip 与无 chip 时 `PromptInputBody` 高度之差 ≤8px，composer 整体高度之差 ≤8px；窄屏 `document.documentElement.scrollWidth <= window.innerWidth` 且 chip 容器可横向滚动。
-- [ ] 贴出完成上述操作后 `localStorage['chat-suggestion-stats']` 的实际值，四个计数均大于 0，证明计数在真实交互中累加而非只在单测里累加。
+- [x] 用 MCP 浏览器在**隔离实例**（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001）的真实页面上走完整个交互，截图存 `tmp/` 并贴出：在一个真实会话里通过**真实发送**把「检查进展」发 2 次、「继续」发 2 次、「提交」发 2 次（chip 的首次出现必须由真实送达写入 `chat-input-history` 产生，不得直接写 localStorage 造夹具）；助手空闲、输入为空时 chip 可见；Tab 选中第 1 个；Enter 填入；输入一个字符后 chip 消失；清空后重现；鼠标点击填入；Esc 隐藏；深色主题一张；窄屏 390px 一张。
+- [x] 用 `browser_evaluate` 贴出布局读数：有 chip 与无 chip 时 `PromptInputBody` 高度之差 ≤8px，composer 整体高度之差 ≤8px；窄屏 `document.documentElement.scrollWidth <= window.innerWidth` 且 chip 容器可横向滚动。
+- [x] 贴出完成上述操作后 `localStorage['chat-suggestion-stats']` 的实际值，四个计数均大于 0，证明计数在真实交互中累加而非只在单测里累加。
 - [x] 场景运行器：若存在适用场景，运行 `node scripts/ui-scenario.mjs <scenario.json>` 并贴出 JSON 报告与检查点截图；若没有适用场景，如实写明「无适用场景」及原因，不得伪造。
 - [x] 证伪记录：对「候选规则」(a)–(i) 与「可见条件」负例各临时撤掉对应一条实现，贴出对应 `it` 变红的输出，再恢复；至少覆盖 Tab 交还、Esc 的 `stopPropagation`、`mousedown` 的 `preventDefault` 三处。
-- [ ] Esc 的真实验证只在**空闲**会话里进行；在运行中的会话里按 Escape 会中止该轮，不得在真实会话中这样验证。
+- [x] Esc 的真实验证只在**空闲**会话里进行；在运行中的会话里按 Escape 会中止该轮，不得在真实会话中这样验证。
 - [x] 若实现与 `docs/proposals/composer-empty-input-suggestions.md` 有出入，更新该文档对应段落，并在任务收尾说明出入原因。
+
+## Evidence
+
+**隔离实例**：从本 worktree 起第二个后端（`SERVER_PORT=3477`、`DATABASE_PATH=/tmp/composer-sugg-verify/auth.db`、独立 `HOME=/tmp/composer-sugg-verify/home`，含一份播种 transcript），Vite 于 3478（`CI=true`）；常驻 :3001 未被触碰。浏览器为仓库自带 Playwright Chromium（本会话未挂 MCP 浏览器工具，故用同一 Chromium 直接驱动真实页面）。
+
+**真实发送**：在 workspace 项目的新会话里，模型选 Haiku、权限模式 Auto（不产生阻塞审批），逐条键入并回车发送 6 次，顺序 `检查进展 → 继续 → 提交 → 检查进展 → 继续 → 提交`（相邻重复会被 `appendInputHistory` 的去重抑制，故交错发；实测顺序发同一条两次只会记 1 条）。落盘历史（真实送达写入，未手写 localStorage）：
+
+```json
+{"83787119-c575-44ed-9557-cb7cc237cabf":["检查进展","继续","提交","检查进展","继续","提交"]}
+```
+
+**chip 生成与交互**（助手空闲、输入为空）：
+
+- 可见 chip：`["提交","继续","检查进展"]`（各 2 次，同频按最近使用降序）；容器 `aria-label="Frequent inputs"`，右侧提示 `Tab to select · Enter to accept · Esc to hide`。
+- Tab：`textarea[aria-activedescendant] = ":r1:-option-0"`，option 选中态 `["true","false","false"]`。
+- Enter：输入框与 `inputValueRef` 同时变为 `"提交"`，chip 消失，未提交。
+- 输入任意字符：listbox 消失；清空后重现（`["提交","继续","检查进展"]`）。
+- 鼠标点击第 2 个 chip：填入 `"继续"`，焦点仍在 textarea。
+- Esc（会话空闲时，running=false）：listbox 消失、输入框保持空。
+
+**布局读数**（`browser_evaluate` 取 rect）：
+
+| 场景 | PromptInputBody 高 | PromptInput 高 |
+| --- | --- | --- |
+| 有 chip（1280px） | 64.0px | 143.0px |
+| 无 chip（1280px） | 64.0px | 143.0px |
+
+差值均为 0px（≤8px）。窄屏 390px：`document.documentElement.scrollWidth = 390 = window.innerWidth`；chip 容器 `overflow-x: auto`、`white-space: nowrap`，操作提示隐藏（`min-[481px]:inline`）。
+
+短标签在 390px 下恰好放得下（scrollWidth == clientWidth = 340），因此另做一次**真实**发送（一条 33 字的长历史，发两次并中间穿插一条以避开去重）使内容真正溢出：`scrollWidth=482 > clientWidth=340`，`scrollLeft` 可设到 60，页面 `scrollWidth=390=innerWidth`。
+
+**采纳读数**（真实交互累加，非单测）：`localStorage['chat-suggestion-stats'] = {"shown":7,"accepted":2,"hidden":1,"typedAway":4}`，四个计数均 > 0。
+
+**截图**（存 `tmp/`）：
+`tmp/01-chips-visible-light.png`、`tmp/02-tab-selected-first.png`、`tmp/03-enter-accepted.png`、`tmp/04-cleared-chips-return.png`、`tmp/05-typed-chip-gone.png`、`tmp/06-mouse-click-filled.png`、`tmp/07-narrow-390.png`、`tmp/08-dark-theme.png`、`tmp/09-esc-hidden.png`、`tmp/10-narrow-320-overflow.png`、`tmp/11-narrow-390-horizontal-scroll.png`。
+
+**场景运行器**：无适用场景——`scripts/ui-scenario.mjs` 的 `open` 词汇只有 `quay-panel`，语义面由 QuayPanel 注册；聊天 composer 没有发布场景契约，故无法用运行器表达本交互。
+
+**深色主题**：本会话未用界面开关，而是给 `documentElement` 加 `dark` 类（`ThemeContext` 的同一应用方式）；截图为真实渲染，非合成。
+
+**出入说明**：实现与 `docs/proposals/composer-empty-input-suggestions.md` 一致，无需改文档。唯一操作侧发现：`appendInputHistory` 会跳过与上一条完全相同的条目，所以"连续发同一条两次"只记一次——DoD 的六次发送因此按交错顺序执行，历史仍为每条 2 次。
 
 ## Touches
 
