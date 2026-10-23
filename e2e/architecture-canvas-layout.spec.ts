@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { expect, request, test } from '@playwright/test';
@@ -6,6 +7,9 @@ import type { APIRequestContext, Browser, BrowserContext, Page } from '@playwrig
 import {
   ARCHITECTURE_FIXTURE_WORKSPACE,
   ARCHITECTURE_FIXTURE_WORKSPACE_CUI,
+  ARCHITECTURE_FIXTURE_WORKSPACE_NODE_SIZE,
+  NODE_SIZE_ENTITIES,
+  nodeSizeMemberSignature,
   writeArchitectureFixture,
   type ArchitectureFixtureReading,
 } from './support/architectureFixture';
@@ -1597,7 +1601,17 @@ async function openSignedInPage(
   browser: Browser,
   baseURL: string,
   token: string,
-  form: { viewport: { width: number; height: number }; touch: boolean },
+  form: {
+    viewport: { width: number; height: number };
+    touch: boolean;
+    /**
+     * Draw without the member caps. This is the DEV-only lever the control arm
+     * pulls (`drawnMemberLimits` in PlantUmlGraph.tsx) so the same reading can
+     * be taken on the genuine defect — options absent — rather than on an
+     * injected box that only imitates it.
+     */
+    memberLimitsOff?: boolean;
+  },
 ): Promise<{ context: BrowserContext; page: Page }> {
   const dataDir = process.env.QUAY_E2E_DATA_DIR;
   if (!dataDir) throw new Error('playwright.config.ts must publish QUAY_E2E_DATA_DIR');
@@ -1616,6 +1630,11 @@ async function openSignedInPage(
     },
     { authKey: 'auth-token', authToken: token, language: 'en' },
   );
+  if (form.memberLimitsOff === true) {
+    await context.addInitScript(() => {
+      window.localStorage.setItem('architecture-member-limits', 'off');
+    });
+  }
   const page = await context.newPage();
   page.on('pageerror', (error) => startupEvidence.pageErrors.push(String(error)));
   page.on('console', (message) => {
@@ -2198,6 +2217,120 @@ async function zoomOutBelowUsefulScale(page: Page): Promise<void> {
   await settle(page, 400);
 }
 
+/* ── the drawn box vs the text it shows (node-size criterion) ────────────────────────────── */
+
+/**
+ * How much wider than its longest visible line a class box may be, plus an
+ * absolute pad. The task states both numbers: a box sized from text it does
+ * not draw is the defect, so the relation is `box ≤ 1.35 × line + 24`.
+ */
+const NODE_SIZE_MAX_RATIO = 1.35;
+const NODE_SIZE_MAX_PAD = 24;
+
+/** The phone default fit the fixed two-entity fixture must reach (the defect: ~38 %). */
+const NODE_SIZE_MIN_PHONE_ZOOM = 0.6;
+
+/** One drawn entity box, in the drawing's own user units. */
+type NodeSizeBox = {
+  readonly id: string;
+  /** The box's world width: the drawn rect's width, in SVG user units. */
+  readonly boxWidth: number;
+  /** The longest member/name line the box actually paints, in user units. */
+  readonly textWidth: number;
+  /** `boxWidth ÷ textWidth` (`null` when nothing is painted). */
+  readonly ratio: number | null;
+  /** The drawn member/name lines, so a red names what it measured. */
+  readonly lines: readonly string[];
+};
+
+/** Everything the node-size criterion reads, in one round trip. */
+type NodeSizeReading = {
+  /** The fit scale the graph reports (`data-architecture-zoom-scale`). */
+  readonly zoomScale: number | null;
+  /** The drawing's natural size (the SVG `viewBox`), in user units. */
+  readonly natural: { readonly width: number; readonly height: number } | null;
+  readonly nodes: readonly NodeSizeBox[];
+  /** The box that misses the ratio rule by the most, or `null` when all pass. */
+  readonly worst: NodeSizeBox | null;
+};
+
+/**
+ * Read every drawn entity box against the longest line it paints.
+ *
+ * Both numbers are in the drawing's OWN user units: the rect's `width`
+ * attribute (the semantic pass rewrites the rect and leaves the group's stale
+ * `data-w` behind, so the rect is the drawing, not the metadata) and
+ * `getComputedTextLength()` for the painted `<text>` advance. A ratio of two
+ * user-unit lengths is scale-free, so a zoomed or mapped drawing is measured
+ * by the same rule as an identity one.
+ *
+ * The SAME function measures the main arm and the control arm.
+ */
+const readNodeSize = (page: Page): Promise<NodeSizeReading> =>
+  page.evaluate(({ sel, maxRatio, maxPad }) => {
+    const parse = (value: string | null): number | null => {
+      if (value === null) return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const root = document.querySelector(sel.graphRoot);
+    const svg = document.querySelector(`${sel.host} svg`);
+    const viewBox = (svg?.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+    const natural = viewBox.length === 4 && viewBox.every(Number.isFinite)
+      ? { width: viewBox[2], height: viewBox[3] }
+      : null;
+    const painted = (element: Element): boolean => {
+      const style = getComputedStyle(element);
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+    };
+    const nodes = [...document.querySelectorAll('.uml-node[data-entity-id]')]
+      .filter((group) => painted(group))
+      .map((group) => {
+        const rect = group.querySelector('rect');
+        const boxWidth = parse(rect?.getAttribute('width') ?? null) ?? parse(group.getAttribute('data-w'));
+        const lines: string[] = [];
+        let textWidth = 0;
+        for (const text of group.querySelectorAll('text')) {
+          const content = (text.textContent ?? '').trim();
+          if (content === '' || !painted(text)) continue;
+          const advance = typeof (text as SVGTextContentElement).getComputedTextLength === 'function'
+            ? (text as SVGTextContentElement).getComputedTextLength()
+            : Number.NaN;
+          if (!Number.isFinite(advance) || advance <= 0) continue;
+          lines.push(content);
+          textWidth = Math.max(textWidth, advance);
+        }
+        return {
+          id: group.getAttribute('data-entity-id') ?? '',
+          boxWidth: boxWidth ?? 0,
+          textWidth,
+          ratio: boxWidth !== null && textWidth > 0 ? boxWidth / textWidth : null,
+          lines,
+        };
+      })
+      .filter((node) => node.boxWidth > 0 && node.textWidth > 0);
+    const violations = nodes.filter((node) => node.boxWidth > maxRatio * node.textWidth + maxPad);
+    const worst = [...nodes].sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0))[0] ?? null;
+    return {
+      zoomScale: parse(root?.getAttribute('data-architecture-zoom-scale') ?? null),
+      natural,
+      nodes,
+      worst: violations.length === 0 ? null : worst,
+    };
+  }, { sel: SEL, maxRatio: NODE_SIZE_MAX_RATIO, maxPad: NODE_SIZE_MAX_PAD });
+
+/** Assert every drawn box is proportional to the longest line it paints. */
+function assertBoxesProportional(reading: NodeSizeReading, label: string): void {
+  expect(reading.nodes.length, `${label}: the drawing must show entity boxes to measure`).toBeGreaterThan(0);
+  for (const node of reading.nodes) {
+    expect.soft(
+      node.boxWidth,
+      `${label}: ${node.id} box ${node.boxWidth} must be ≤ ${NODE_SIZE_MAX_RATIO} × longest line `
+        + `${node.textWidth} + ${NODE_SIZE_MAX_PAD}; lines=${JSON.stringify(node.lines)}`,
+    ).toBeLessThanOrEqual(NODE_SIZE_MAX_RATIO * node.textWidth + NODE_SIZE_MAX_PAD);
+  }
+}
+
 /* ── the fixture, built once per worker ──────────────────────────────────────────────────── */
 
 let baseURL = '';
@@ -2209,6 +2342,10 @@ let fixture: ArchitectureFixtureReading | null = null;
 // project's geometry.
 let cuiSessionId = '';
 let cuiFixture: ArchitectureFixtureReading | null = null;
+// The two-entity fixture the node-size criterion measures: the only drawing
+// whose boxes can be widened by member text alone.
+let nodeSizeSessionId = '';
+let nodeSizeFixture: ArchitectureFixtureReading | null = null;
 
 test.beforeAll(async () => {
   baseURL = test.info().project.use.baseURL ?? '';
@@ -2226,6 +2363,8 @@ test.beforeAll(async () => {
   fixture = writeArchitectureFixture(workspace, { variant: 'quay-oo' });
   const cuiWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_CUI);
   cuiFixture = writeArchitectureFixture(cuiWorkspace, { variant: 'claudecodeui' });
+  const nodeSizeWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_NODE_SIZE);
+  nodeSizeFixture = writeArchitectureFixture(nodeSizeWorkspace, { variant: 'node-size' });
 
   const bootstrap = await request.newContext({ baseURL });
   token = await createAccount(bootstrap);
@@ -2246,6 +2385,10 @@ test.beforeAll(async () => {
     'Please review the voice pipeline and the frame budget. '
     + `Start at ${cuiFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
   cuiSessionId = await armScenario(api, cuiWorkspace, cuiUserText, cuiFixture.seedIdentifiers[0]);
+  const nodeSizeUserText =
+    'Please review the frame processor and its ledger. '
+    + `Start at ${nodeSizeFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
+  nodeSizeSessionId = await armScenario(api, nodeSizeWorkspace, nodeSizeUserText, nodeSizeFixture.seedIdentifiers[0]);
   await api.dispose();
 
   console.log(`[architecture-layout] fixture.entities=${fixture.entityTotal} variant=${fixture.variant}`);
@@ -2254,6 +2397,9 @@ test.beforeAll(async () => {
   console.log(`[architecture-layout] cui.entities=${cuiFixture.entityTotal} variant=${cuiFixture.variant}`);
   console.log(`[architecture-layout] cui.workspace=${cuiWorkspace}`);
   console.log(`[architecture-layout] cui.session=${cuiSessionId}`);
+  console.log(`[architecture-layout] nodeSize.entities=${nodeSizeFixture.entityTotal} variant=${nodeSizeFixture.variant}`);
+  console.log(`[architecture-layout] nodeSize.workspace=${nodeSizeWorkspace}`);
+  console.log(`[architecture-layout] nodeSize.session=${nodeSizeSessionId}`);
 });
 
 /* ── the main arm ────────────────────────────────────────────────────────────────────────── */
@@ -2563,6 +2709,142 @@ test('main arm — semantic zoom keeps text readable, UML form and order at five
         await context.close();
       }
     }
+  }
+});
+
+/**
+ * The node-size criterion, on the two-entity fixture, in both viewports.
+ *
+ * The defect it exists for: `estimateEntitySize` sized a class box from ALL
+ * its members while the drawing showed only part of them, so
+ * `VoiceFrameProcessor` measured 856 user units wide next to 241 px of visible
+ * text and the phone fitted the whole drawing at ~38 %. With the renderer's
+ * member caps the box follows the text it paints: every drawn box stays within
+ * 1.35 × its longest visible line + 24, and the phone default fit clears 60 %.
+ *
+ * The `data-w` of the class the task names is logged, and a screenshot of each
+ * viewport's default drawing is written under `tmp/` for the DoD evidence.
+ */
+test('main arm — a class box is no wider than the text it draws (1440x765 and 390x844)', async ({ browser }) => {
+  const viewports = [
+    { name: 'pc', viewport: VIEWPORT_PC, touch: false },
+    { name: 'phone', viewport: VIEWPORT_PHONE, touch: true },
+  ];
+  for (const form of viewports) {
+    const { context, page } = await openSignedInPage(browser, baseURL, token, form);
+    try {
+      await openArchitectureTab(page, nodeSizeSessionId);
+      await showClassDiagram(page);
+
+      const reading = await readNodeSize(page);
+      console.log(`[architecture-layout] nodeSize.${form.name}=${JSON.stringify(reading)}`);
+      assertBoxesProportional(reading, `nodeSize.${form.name}`);
+
+      // The class the task measured by name, so a regression is reported in
+      // that class's own units rather than as a ratio nobody can re-derive.
+      const processor = reading.nodes.find((node) => node.id.includes('VoiceFrameProcessor'));
+      expect.soft(processor, `nodeSize.${form.name}: the long-signature class must be drawn`).toBeDefined();
+      if (processor !== undefined) {
+        console.log(
+          `[architecture-layout] nodeSize.${form.name}.VoiceFrameProcessor `
+            + `box=${processor.boxWidth} longestLine=${processor.textWidth} ratio=${processor.ratio}`,
+        );
+      }
+
+      if (form.name === 'phone') {
+        expect.soft(
+          reading.zoomScale,
+          `nodeSize.phone: the default fit must clear ${NODE_SIZE_MIN_PHONE_ZOOM * 100} %; `
+            + `read ${reading.zoomScale} (the defect fitted this fixture at ~38 %)`,
+        ).toBeGreaterThanOrEqual(NODE_SIZE_MIN_PHONE_ZOOM);
+      }
+
+      const shotDir = path.join(process.cwd(), 'tmp');
+      fs.mkdirSync(shotDir, { recursive: true });
+      await page.screenshot({ path: path.join(shotDir, `architecture-node-size-${form.name}.png`) });
+
+      // The DoD's other half, on the PC page: the caps are a DRAWING choice.
+      // Selecting the long-signature class keeps its full declaration in the
+      // Inspector, and the Text page still serializes the untruncated model.
+      if (form.name === 'pc') {
+        const layout = await readLayout(page);
+        console.log(
+          `[architecture-layout] nodeSize.pc.canvasFill=${layout.fillRatio} `
+            + `readout="${layout.readoutText}" zoom=${layout.zoomScale} mode=${layout.zoomMode}`,
+        );
+        await page.locator(SEL.search).first().fill('VoiceFrameProcessor');
+        await expect(page.locator(SEL.searchResults).first()).toBeVisible({ timeout: 10_000 });
+        await page.locator(SEL.searchOption).first().click();
+        const members = page.locator('[data-architecture-inspector-members]').first();
+        await expect(members).toBeVisible({ timeout: 15_000 });
+        const inspectorText = (await members.textContent()) ?? '';
+        const fullSignature = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[4]);
+        expect(
+          inspectorText,
+          `the Inspector must keep the full 105-character declaration; got ${JSON.stringify(inspectorText)}`,
+        ).toContain(fullSignature);
+        console.log(`[architecture-layout] nodeSize.pc.inspector=${JSON.stringify(inspectorText)}`);
+        await page.screenshot({ path: path.join(shotDir, 'architecture-node-size-pc-inspector.png') });
+
+        await page.locator('[data-architecture-text-toggle]').first().click();
+        const preview = page.locator('[data-architecture-text-preview]').first();
+        await expect(preview).toBeVisible({ timeout: 15_000 });
+        const documentText = (await preview.textContent()) ?? '';
+        expect(
+          documentText,
+          'the Text page must keep the full declaration too',
+        ).toContain(fullSignature);
+        console.log(`[architecture-layout] nodeSize.pc.textHasFullSignature=${documentText.includes(fullSignature)}`);
+        // Leave the page as it was found: the search box is cleared, and the
+        // context (with the selection and the Text page) is closed below.
+        await page.locator(SEL.search).first().fill('');
+      }
+    } finally {
+      await context.close();
+    }
+  }
+});
+
+/**
+ * Control arm: the same reading, on the genuine defect.
+ *
+ * The two options are made absent by the DEV-only lever the renderer reads
+ * (`architecture-member-limits=off`) — not by widening a rect after the fact.
+ * On the phone viewport both legs of the SAME reading go red: the box ratio
+ * misses the 1.35 + 24 rule and the default fit falls back under 60 %.
+ */
+test('control arm — without the member caps the box ratio and the phone default zoom both read a false', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE,
+    touch: true,
+    memberLimitsOff: true,
+  });
+  try {
+    await openArchitectureTab(page, nodeSizeSessionId);
+    await showClassDiagram(page);
+
+    const reading = await readNodeSize(page);
+    console.log(`[architecture-layout] nodeSize.control=${JSON.stringify(reading)}`);
+    expect(reading.nodes.length, 'nodeSize.control: the defect drawing must still show boxes').toBeGreaterThan(0);
+
+    // Leg 1 — the box is wider than the text it draws.
+    const violations = reading.nodes.filter(
+      (node) => node.boxWidth > NODE_SIZE_MAX_RATIO * node.textWidth + NODE_SIZE_MAX_PAD,
+    );
+    expect.soft(
+      violations.length,
+      `nodeSize.control: without the caps at least one box must miss the ratio rule; got `
+        + `${JSON.stringify(reading.nodes.map((node) => ({ id: node.id, box: node.boxWidth, text: node.textWidth, ratio: node.ratio })))}`,
+    ).toBeGreaterThan(0);
+
+    // Leg 2 — the same reading's fit scale is under the phone floor.
+    expect.soft(
+      reading.zoomScale,
+      `nodeSize.control: without the caps the phone fit must fall under `
+        + `${NODE_SIZE_MIN_PHONE_ZOOM * 100} %; read ${reading.zoomScale}`,
+    ).toBeLessThan(NODE_SIZE_MIN_PHONE_ZOOM);
+  } finally {
+    await context.close();
   }
 });
 

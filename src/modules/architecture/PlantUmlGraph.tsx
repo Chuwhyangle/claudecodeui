@@ -8,6 +8,7 @@ import { ArchitectureMinimap } from '@/modules/architecture/ArchitectureMinimap'
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
+  memberDisplayLimits,
   parserSafePlantUml,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/archguardToPlantUml';
@@ -135,6 +136,31 @@ import {
  * where a reader (and the geometry test) expects to find it.
  */
 export { markerAnchor } from '@/modules/architecture/graphDom';
+
+/**
+ * The DEV-only lever a control arm pulls to draw the SAME document with the
+ * member caps genuinely ABSENT.
+ *
+ * `e2e/architecture-canvas-layout.spec.ts` has to prove its node-size guard can
+ * go red on the defect it watches. Injecting a wide rect into the live SVG
+ * would only imitate the symptom: the box was wide because the renderer's
+ * layout used the untruncated member text, so the honest lever is to not pass
+ * the options. DEV-gated exactly like the `?ui-scenario=1` semantic surface —
+ * a production build does not contain this branch.
+ */
+const MEMBER_LIMITS_STORAGE_KEY = 'architecture-member-limits';
+
+/** The member caps to hand the renderer: the shipped ones, or none for the control arm. */
+function drawnMemberLimits(): { memberMaxChars?: number; memberMaxRows?: number } {
+  if (import.meta.env.DEV) {
+    try {
+      if (window.localStorage.getItem(MEMBER_LIMITS_STORAGE_KEY) === 'off') return {};
+    } catch {
+      // Private mode: the store is unreadable, so the shipped caps apply.
+    }
+  }
+  return memberDisplayLimits();
+}
 
 /** The real browser store, or `null` where accessing it throws (private mode). */
 function localReadableStorage(): {
@@ -1112,7 +1138,15 @@ export function PlantUmlGraph({
           // spelling. `standardiseDrawnStereotypes` reverses it when the drawn
           // model is serialized for the text page.
           parserSafePlantUml(diagram.puml),
-          rendererOptionsFor(view, diagram, engine),
+          {
+            ...rendererOptionsFor(view, diagram, engine),
+            // The box is sized from the text the renderer will PAINT: a member
+            // line longer than MEMBER_MAX_CHARS is drawn with a trailing `…`,
+            // and rows past MEMBER_MAX_ROWS collapse into the renderer's own
+            // `… +N more (M members)` row — both BEFORE layout. `raw` keeps the
+            // full declaration for the Text page, copy and Inspector.
+            ...drawnMemberLimits(),
+          },
         );
         const elapsedMs = Math.round(performance.now() - renderStartedAt);
         if (cancelled) return;

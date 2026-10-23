@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
+import type * as PlantUmlElkModule from '@yalehwang/plantuml-js/elk';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { beforeAll, beforeEach, test, vi } from 'vitest';
@@ -35,7 +36,14 @@ import {
   archguardToPlantUml,
   displayName,
   MAX_DISPLAY_DIR_SEGMENTS,
+  MEMBER_MAX_CHARS,
+  MEMBER_MAX_ROWS,
 } from '@/modules/architecture/archguardToPlantUml';
+import {
+  NODE_SIZE_ENTITIES,
+  nodeSizeEntityGraph,
+  nodeSizeMemberSignature,
+} from '@/../e2e/support/architectureFixture';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 
 /**
@@ -80,6 +88,26 @@ vi.mock('@/shared/api', async (importOriginal) => {
       ...actual.api,
       architectureGraph: apiMock.architectureGraph,
       architectureSearch: apiMock.architectureSearch,
+    },
+  };
+});
+
+/**
+ * Every `renderDetailed` call the panel makes, kept so a case can read the
+ * OPTIONS the drawing asked the renderer for — not just what it produced.
+ *
+ * The factory passes through to the real module (the drawing under test is the
+ * real one); only the arguments are recorded.
+ */
+const renderCalls = vi.hoisted(() => [] as { input: unknown; options: Record<string, unknown> | undefined }[]);
+
+vi.mock('@yalehwang/plantuml-js/elk', async (importOriginal) => {
+  const actual = await importOriginal<typeof PlantUmlElkModule>();
+  return {
+    ...actual,
+    renderDetailed: (input: Parameters<typeof actual.renderDetailed>[0], options?: Parameters<typeof actual.renderDetailed>[1]) => {
+      renderCalls.push({ input, options: options as Record<string, unknown> | undefined });
+      return actual.renderDetailed(input, options);
     },
   };
 });
@@ -285,6 +313,44 @@ const CLASS_DIAGRAM_RESULT: ArchitectureGraphResult = {
   },
   provenance: RESULT.provenance,
 };
+
+/**
+ * The two-entity node-size fixture through the panel: one class with seven
+ * members (two of them 100+ character signatures) and one with twenty short
+ * ones. This is the shape the drawn-box criterion measures.
+ */
+const NODE_SIZE_RESULT: ArchitectureGraphResult = (() => {
+  const graph = nodeSizeEntityGraph();
+  const nodes = graph.nodes.map((node) => ({ ...node, members: [...node.members] }));
+  const edges = graph.edges.map((edge) => ({ ...edge }));
+  return {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: {
+      file: { nodes, edges },
+      entity: { nodes, edges },
+    },
+    stats: {
+      entityNodes: nodes.length,
+      fileNodes: nodes.length,
+      entityEdges: edges.length,
+      fileEdges: edges.length,
+      truncated: false,
+      nodeCount: nodes.length * 2,
+      edgeCount: edges.length * 2,
+      seedFiles: 1,
+      seedIdentifiers: NODE_SIZE_ENTITIES.length,
+      unresolved: { files: [], identifiers: [] },
+    },
+    provenance: {
+      generatedAt: GENERATED_AT,
+      fingerprints: [{ scope: 'scope-src', archJsonHash: 'b'.repeat(64) }],
+      cacheHit: false,
+    },
+  };
+})();
+
+/** The 105-character declaration the node-size fixture carries. */
+const LONG_SIGNATURE = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[4]);
 
 /**
  * Three direct session seeds among four drawn entities (75%), all in one
@@ -5138,4 +5204,79 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
   const restored = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
   assert.ok(restored < before * 1.001, `the whole-graph fit must be restored; got ${restored} vs ${before}`);
   assert.equal(document.querySelector('[data-architecture-readable-back]'), null, 'the back action is gone');
+});
+
+/**
+ * The member caps, read at the component seam.
+ *
+ * The drawing must ASK the renderer for `memberMaxChars: 48` and
+ * `memberMaxRows: 6`, draw the truncated rows and the renderer's own fold row,
+ * and still hand the Text page the untruncated declarations — the trade the
+ * task writes down (six rows on the canvas, everything in the Inspector/Text).
+ */
+test('the drawing asks for the member caps, and the Text page keeps the full declaration', async () => {
+  renderCalls.length = 0;
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(NODE_SIZE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+
+  const processorId = NODE_SIZE_ENTITIES[0].id;
+  const ledgerId = NODE_SIZE_ENTITIES[1].id;
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector(`[data-entity-id="${processorId}"]`), 'the long-signature class is drawn'));
+  await waitFor(() => assert.ok(host.querySelector(`[data-entity-id="${ledgerId}"]`), 'the twenty-member class is drawn'));
+
+  // 1. The render ENTRY carries the caps. This is the call the canvas makes,
+  //    read from the options object rather than inferred from the drawing.
+  const capped = renderCalls.filter((call) => call.options?.memberMaxChars !== undefined);
+  assert.ok(capped.length > 0, 'the drawing must call renderDetailed with memberMaxChars set');
+  const last = capped[capped.length - 1];
+  assert.equal(last.options?.memberMaxChars, MEMBER_MAX_CHARS);
+  assert.equal(last.options?.memberMaxRows, MEMBER_MAX_ROWS);
+  assert.equal(MEMBER_MAX_CHARS, 48);
+  assert.equal(MEMBER_MAX_ROWS, 6);
+
+  // 2. What is drawn: no member line longer than the cap, and the folded tail
+  //    is the renderer's own row with the right counts.
+  const processor = host.querySelector(`[data-entity-id="${processorId}"]`) as Element;
+  const rows = [...processor.querySelectorAll('text')]
+    .map((text) => text.textContent ?? '')
+    .filter((text) => text.startsWith('+ ') || text.startsWith('- ') || text.startsWith('… +'));
+  assert.ok(rows.length >= MEMBER_MAX_ROWS, `the box draws its rows, got ${JSON.stringify(rows)}`);
+  const memberRows = rows.filter((row) => !row.startsWith('… +'));
+  assert.equal(memberRows.length, MEMBER_MAX_ROWS, 'exactly six member rows are drawn');
+  for (const row of memberRows) {
+    assert.ok(row.length <= MEMBER_MAX_CHARS, `a drawn row is at most ${MEMBER_MAX_CHARS} characters: ${row}`);
+  }
+  // The READ layer strips the renderer's `… +N more (M members)` row and
+  // reports the total instead, so the canvas keeps ONE marker and draws it
+  // itself with the upstream count (the task's rule 4: never a second marker).
+  assert.ok(
+    processor.textContent?.includes('… +1 more'),
+    `the fold row must name the hidden member: ${processor.textContent}`,
+  );
+  assert.equal(
+    (processor.textContent?.match(/… \+\d+ more/g) ?? []).length,
+    1,
+    'exactly one fold marker is drawn, not the renderer row plus the app row',
+  );
+  const ledger = host.querySelector(`[data-entity-id="${ledgerId}"]`) as Element;
+  assert.ok(
+    ledger.textContent?.includes('… +14 more'),
+    `the twenty-member class folds fourteen: ${ledger.textContent}`,
+  );
+
+  // 3. The Text page still serializes the UNTRUNCATED model.
+  fireEvent.click(document.querySelector('[data-architecture-text-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-text-preview]'), 'the Text page must open'));
+  const preview = document.querySelector('[data-architecture-text-preview]') as Element;
+  await waitFor(() => {
+    assert.ok(
+      (preview.textContent ?? '').includes(LONG_SIGNATURE),
+      'the copied/Text document keeps the full 105-character signature',
+    );
+  });
+  assert.ok(
+    !(preview.textContent ?? '').includes('…\n'),
+    'the document is not the truncated drawing text',
+  );
 });

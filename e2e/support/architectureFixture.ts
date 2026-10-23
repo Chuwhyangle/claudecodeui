@@ -41,8 +41,18 @@ export const ARCHITECTURE_FIXTURE_WORKSPACE = 'architecture-canvas-layout-worksp
 /** The claudecodeui-shaped workspace beside it. */
 export const ARCHITECTURE_FIXTURE_WORKSPACE_CUI = 'architecture-canvas-layout-workspace-cui';
 
+/**
+ * The two-entity workspace the node-size criterion measures.
+ *
+ * The other two variants are big enough that the DRAWING is what decides the
+ * reading. This one is the opposite: two classes and one edge, so the only
+ * thing that can make a box wide is the member text inside it — the defect
+ * `architecture-node-size-from-drawn-content` fixes.
+ */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_NODE_SIZE = 'architecture-canvas-layout-workspace-node-size';
+
 /** Which project shape to write. */
-export type ArchitectureFixtureVariant = 'quay-oo' | 'claudecodeui';
+export type ArchitectureFixtureVariant = 'quay-oo' | 'claudecodeui' | 'node-size';
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
@@ -278,6 +288,233 @@ function buildArchive(entities: readonly FixtureEntity[], classMembers: number):
   };
 }
 
+/* ── the two-entity node-size fixture ─────────────────────────────────────── */
+
+/**
+ * One member exactly as ArchGuard writes it into `arch.json`.
+ *
+ * The unit test and the e2e leg read the SAME records: the criterion is about
+ * what the renderer does with a long declaration, so the fixture that states
+ * the long signature must be one file, not two drifting copies.
+ */
+export type NodeSizeMemberRecord =
+  | {
+      readonly name: string;
+      readonly type: 'field';
+      readonly visibility: string;
+      readonly fieldType: string;
+    }
+  | {
+      readonly name: string;
+      readonly type: 'method';
+      readonly visibility: string;
+      readonly parameters: readonly {
+        readonly name: string;
+        readonly type: string;
+        readonly isOptional: boolean;
+      }[];
+      readonly returnType: string;
+    };
+
+/** One class of the node-size fixture, as `arch.json` describes it. */
+export type NodeSizeEntityRecord = {
+  readonly id: string;
+  readonly name: string;
+  readonly file: string;
+  readonly type: 'class';
+  readonly isAbstract: boolean;
+  /** Entity ids this class depends on. */
+  readonly dependsOn: readonly string[];
+  readonly members: readonly NodeSizeMemberRecord[];
+};
+
+/**
+ * The class the defect was measured on: seven members, two of them signatures
+ * long enough to widen a box past anything the screen shows.
+ *
+ * The 105-character `process` signature is the exact shape the task quotes. It
+ * sits in the sixth drawn row (fields are drawn before methods), so the cap
+ * truncates it to 48 characters plus `…`; `reset` (114 characters) is dropped
+ * into the fold row along with `flush`.
+ */
+const VOICE_FRAME_PROCESSOR: NodeSizeEntityRecord = {
+  id: 'src/runtime/voice/VoiceFrameProcessor.ts.VoiceFrameProcessor',
+  name: 'VoiceFrameProcessor',
+  file: 'src/runtime/voice/VoiceFrameProcessor.ts',
+  type: 'class',
+  isAbstract: false,
+  dependsOn: [],
+  members: [
+    { name: 'windowSize', type: 'field', visibility: 'private', fieldType: 'number' },
+    { name: 'frameBudget', type: 'field', visibility: 'private', fieldType: 'number' },
+    { name: 'carryOver', type: 'field', visibility: 'private', fieldType: 'number' },
+    { name: 'pendingFrames', type: 'field', visibility: 'private', fieldType: 'number' },
+    {
+      name: 'process',
+      type: 'method',
+      visibility: 'public',
+      parameters: [
+        { name: 'inputs', type: 'Float32Array<ArrayBufferLike>[][]', isOptional: true },
+        { name: 'outputs', type: 'Float32Array<ArrayBufferLike>[][]', isOptional: true },
+      ],
+      returnType: 'boolean',
+    },
+    {
+      name: 'reset',
+      type: 'method',
+      visibility: 'public',
+      parameters: [
+        { name: 'frameBudget', type: 'ArrayBufferLike[][]', isOptional: false },
+        { name: 'carryOver', type: 'Float32Array<ArrayBufferLike>[]', isOptional: false },
+      ],
+      returnType: 'Float32Array<ArrayBufferLike>',
+    },
+    {
+      name: 'flush',
+      type: 'method',
+      visibility: 'public',
+      parameters: [],
+      returnType: 'void',
+    },
+  ],
+};
+
+/**
+ * Twenty members — the server's per-entity cap, so nothing is cut upstream.
+ * Every row is short on purpose: this class must NOT be what widens the
+ * drawing, or the criterion would stop isolating the long-signature box.
+ */
+const FRAME_BUDGET_LEDGER: NodeSizeEntityRecord = {
+  id: 'src/runtime/voice/FrameBudgetLedger.ts.FrameBudgetLedger',
+  name: 'FrameBudgetLedger',
+  file: 'src/runtime/voice/FrameBudgetLedger.ts',
+  type: 'class',
+  isAbstract: false,
+  dependsOn: [VOICE_FRAME_PROCESSOR.id],
+  members: [
+    // One long-but-drawn row: the box must follow a line the canvas keeps
+    // verbatim (45 characters with its symbol, inside the 48-character cap), so the criterion
+    // measures the member text rather than the class title.
+    {
+      name: 'frameBudgetWindowInMillisecondsPerFrames',
+      type: 'field',
+      visibility: 'private',
+      fieldType: 'int',
+    },
+    ...Array.from({ length: 19 }, (_, index) => ({
+      name: `n${String(index + 1).padStart(2, '0')}`,
+      type: 'field' as const,
+      visibility: 'private',
+      fieldType: 'int',
+    })),
+  ],
+};
+
+/** Both classes, in the order the index lists them (the seed arrives first). */
+export const NODE_SIZE_ENTITIES: readonly NodeSizeEntityRecord[] = [
+  VOICE_FRAME_PROCESSOR,
+  FRAME_BUDGET_LEDGER,
+];
+
+/** The entity whose name the session text must mention to seed the drawing. */
+export const NODE_SIZE_SEED_IDENTIFIERS: readonly string[] = ['VoiceFrameProcessor', 'FrameBudgetLedger'];
+
+/** The signature the task quotes, as the server renders it (`name(params): return`). */
+export function nodeSizeMemberSignature(member: NodeSizeMemberRecord): string {
+  if (member.type === 'field') return member.fieldType;
+  const parameters = member.parameters
+    .map((parameter) => `${parameter.name}${parameter.isOptional ? '?' : ''}: ${parameter.type}`)
+    .join(', ');
+  return `${member.name}(${parameters}): ${member.returnType}`;
+}
+
+/**
+ * The same two classes in the shape the PANEL receives: the server's `kind` +
+ * `members` detail, with each member's `signature` rendered exactly as the
+ * server renders it. Unit tests draw this through the real renderer.
+ */
+export function nodeSizeEntityGraph(): {
+  readonly nodes: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly distance: number;
+    readonly kind: 'class';
+    readonly members: readonly {
+      readonly name: string;
+      readonly kind: 'field' | 'method';
+      readonly visibility: string;
+      readonly signature: string;
+    }[];
+  }[];
+  readonly edges: readonly { readonly from: string; readonly to: string; readonly relationType: 'dependency' }[];
+} {
+  return {
+    nodes: NODE_SIZE_ENTITIES.map((entity) => ({
+      id: entity.id,
+      label: entity.name,
+      distance: 0,
+      kind: 'class' as const,
+      members: entity.members.map((member) => ({
+        name: member.name,
+        kind: member.type,
+        visibility: member.visibility,
+        signature: nodeSizeMemberSignature(member),
+      })),
+    })),
+    edges: NODE_SIZE_ENTITIES.flatMap((entity) => entity.dependsOn.map((dependency) => ({
+      from: entity.id,
+      to: dependency,
+      relationType: 'dependency' as const,
+    }))),
+  };
+}
+
+/** Write the two-entity workspace and answer the reading the criterion uses. */
+function writeNodeSizeFixture(workspaceDir: string, generatedAt: string): ArchitectureFixtureReading {
+  const fixtures: FixtureEntity[] = NODE_SIZE_ENTITIES.map((entity) => ({
+    id: entity.id,
+    name: entity.name,
+    file: entity.file,
+    type: entity.type,
+    isAbstract: entity.isAbstract,
+    parents: entity.dependsOn,
+  }));
+  const srcDir = path.join(workspaceDir, 'src');
+  fs.mkdirSync(srcDir, { recursive: true });
+
+  writeJson(path.join(workspaceDir, '.archguard', 'query', 'manifest.json'), {
+    version: '1.0',
+    generatedAt,
+    globalScopeKey: SCOPE_KEY,
+    scopes: [
+      { key: SCOPE_KEY, label: 'src (typescript)', language: 'typescript', sources: [srcDir] },
+    ],
+  });
+  writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch-index.json'), {
+    ...buildIndex(fixtures),
+    generatedAt,
+  });
+  writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch.json'), {
+    version: '1.0',
+    language: 'typescript',
+    entities: NODE_SIZE_ENTITIES.map((entity) => ({
+      id: entity.id,
+      name: entity.name,
+      type: entity.type,
+      isAbstract: entity.isAbstract,
+      members: entity.members,
+    })),
+  });
+
+  return {
+    workspaceDir,
+    entityTotal: NODE_SIZE_ENTITIES.length,
+    entityIds: NODE_SIZE_ENTITIES.map((entity) => entity.id),
+    seedIdentifiers: NODE_SIZE_SEED_IDENTIFIERS,
+    variant: 'node-size',
+  };
+}
+
 /** Write one JSON file, creating its directory. */
 function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -306,6 +543,9 @@ export function writeArchitectureFixture(
 ): ArchitectureFixtureReading {
   const variant = options.variant ?? 'quay-oo';
   const generatedAt = options.generatedAt ?? new Date().toISOString();
+  // The node-size variant is not a family shape: it states its two classes
+  // directly, because the criterion is about one box's member text.
+  if (variant === 'node-size') return writeNodeSizeFixture(workspaceDir, generatedAt);
   const families = variant === 'claudecodeui' ? CUI_FAMILIES : QUAY_FAMILIES;
   // Both stay past `COMPACT_MEMBER_ROWS` (4); the second shape adds one more row
   // so its upstream `(N members)` reading differs from the first's.

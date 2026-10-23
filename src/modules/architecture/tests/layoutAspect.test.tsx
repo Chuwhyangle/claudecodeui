@@ -9,6 +9,12 @@ import { beforeAll, beforeEach, test, vi } from 'vitest';
 
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import { ArchitecturePanel } from '@/modules/architecture';
+import { archguardToPlantUml, memberDisplayLimits } from '@/modules/architecture/archguardToPlantUml';
+import {
+  NODE_SIZE_ENTITIES,
+  nodeSizeEntityGraph,
+  nodeSizeMemberSignature,
+} from '@/../e2e/support/architectureFixture';
 import {
   ASPECT_RELAYOUT_DEBOUNCE_MS,
   ASPECT_RELAYOUT_THRESHOLD,
@@ -533,4 +539,82 @@ test('the layout engine is constructed in exactly one factory, through the publi
     0,
     'the package is still reached only through the dynamic import, never a static one',
   );
+});
+
+/* ── a class box is as wide as the text the drawing shows ─────────────────── */
+
+/** The 105-character declaration the two-entity fixture carries. */
+const LONG_SIGNATURE = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[4]);
+
+/**
+ * The width the renderer's own text table gives one line, read through it.
+ *
+ * `measureTextWidth` is internal, but a box whose TITLE is the line is sized
+ * by exactly `snapUp(max(60, width(line) + 2 × paddingX))` — the same formula
+ * `estimateEntitySize` applies to a member row. `paddingX = 10` and the snap
+ * grid is 8, so subtracting 28 is a guaranteed LOWER bound on the line's real
+ * width: a check against that bound is stricter than the criterion, never
+ * looser.
+ */
+async function drawnLineWidth(line: string): Promise<number> {
+  const { renderDetailed, ElkLayoutEngine } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+    renderDetailed: (input: string, options?: unknown) => Promise<{ layout: { nodes: { width: number }[] } }>;
+    ElkLayoutEngine: new () => unknown;
+  };
+  const puml = `@startuml\nclass "${line.replace(/"/g, "'")}" as p0\n@enduml`;
+  const detailed = await renderDetailed(puml, { layout: new ElkLayoutEngine() });
+  return detailed.layout.nodes[0].width - 28;
+}
+
+test('a long-signature class is sized by the member text the drawing shows', async () => {
+  const { renderDetailed, ElkLayoutEngine, toPlantUml } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+    renderDetailed: (
+      input: string,
+      options?: unknown,
+    ) => Promise<{
+      svg: string;
+      model: { entities: { id: string; members: { raw: string; display?: string }[] }[] };
+      layout: { nodes: { id: string; width: number }[] };
+    }>;
+    toPlantUml: (model: unknown) => string;
+    ElkLayoutEngine: new () => unknown;
+  };
+  const diagram = archguardToPlantUml(nodeSizeEntityGraph() as never);
+  const detailed = await renderDetailed(diagram.puml, {
+    layout: createLayoutEngine({
+      aspectRatio: null,
+      Engine: ElkLayoutEngine as unknown as ArchitectureLayoutEngineClass,
+    }),
+    ...memberDisplayLimits(),
+  });
+  const alias = diagram.aliasOf.get(NODE_SIZE_ENTITIES[0].id) as string;
+  const node = detailed.layout.nodes.find((candidate) => candidate.id === alias);
+  assert.ok(node !== undefined);
+  // The criterion reads `data-w`, so read the attribute the SVG actually carries.
+  const svgWidth = Number(
+    detailed.svg.match(new RegExp(`data-entity-id="${alias}"[^>]*data-w="([\\d.]+)"`))?.[1] ?? 'NaN',
+  );
+  assert.equal(svgWidth, node.width, 'the data-w the canvas reads is the layout width');
+
+  const entity = detailed.model.entities.find((candidate) => candidate.id === alias);
+  assert.ok(entity !== undefined);
+  // "可见文字" is the class name plus the rows the renderer PAINTS (display).
+  const visible = [NODE_SIZE_ENTITIES[0].name, ...entity.members.map((member) => member.display ?? member.raw)];
+  let longest = 0;
+  for (const line of visible) longest = Math.max(longest, await drawnLineWidth(line));
+  assert.ok(longest > 0, 'the fixture has text to measure');
+  assert.ok(
+    svgWidth <= 1.35 * longest + 24,
+    `data-w ${svgWidth} must stay within 1.35 × the longest visible line (${longest}) + 24`,
+  );
+
+  // The discriminating half: the box the 105-character RAW declaration would
+  // have sized is far wider, and the drawing does not carry it.
+  const rawWidth = await drawnLineWidth(`+ ${LONG_SIGNATURE}`);
+  assert.ok(
+    rawWidth > svgWidth * 1.5,
+    `the capped box (${svgWidth}) must be well under the uncapped one (${rawWidth})`,
+  );
+  assert.ok(!toPlantUml(detailed.model).includes('data-w'), 'the copied document is text, not geometry');
+  assert.ok(toPlantUml(detailed.model).includes(LONG_SIGNATURE), 'and it keeps the full declaration');
 });

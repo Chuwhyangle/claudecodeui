@@ -396,7 +396,14 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // launch included), and `8 passed (58.0s)` for the `--grep "control arm"`
   // selection. 240_000 still clears the full-file measurement ~1.8x, so the
   // entry stays; the numbers above are the readings it was checked against.
-  'architecture-canvas-layout.spec.ts': 240_000,
+  // Re-measured 2026-10-23 with the node-size legs (a main arm at both viewports
+  // that also opens the Inspector and the Text page, and a control arm drawing
+  // the same fixture WITHOUT the member caps through the DEV-only lever):
+  // `14 passed (3.1m)` for the whole invocation and `9 passed (1.1m)` for
+  // `--grep "control arm"`. 3.1m = 186s left only 1.29x over the old 240_000 —
+  // too thin for a load-slowed fan-in run — so the entry is raised to 300_000
+  // (~1.6x the measured wall clock, boot and both servers included).
+  'architecture-canvas-layout.spec.ts': 300_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear
