@@ -2,7 +2,7 @@
 id: gap-use-chat-composer-state-concern-split
 title: useChatComposerState 按关注点切分：10 个关注点（草稿/附件/命令/语音插入/投递/文本框交互…）拆成 6 个内聚
   hook（以 useInputHistory 为样板），只留组合
-status: todo
+status: ready
 labels:
   - gap
 parent: null
