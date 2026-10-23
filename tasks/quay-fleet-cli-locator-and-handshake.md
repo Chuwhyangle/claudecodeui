@@ -43,6 +43,16 @@ depends_on:
 - **MCP 浏览器（或独立 Playwright）实际操作 + 截图（必做）**：无任何定位来源时驾驶舱显示「找不到 quay-fleet」；截图存 `tmp/`。
 - 运维收尾（fleet `self-install` 落地并安装后）：删除 `~/.config/systemd/user/claudecodeui-server.service.d/70-quay-fleet.conf`，`daemon-reload`，由用户重启服务，确认 `fleet.binPath` 指向 `~/.quay-fleet/bin/quay-fleet`。若届时 fleet 侧未落地，如实写明并保留 drop-in。
 
+## Notes
+
+- 2026-10-23 worker 实测：`~/.quay-fleet/bin/quay-fleet --version --json` 已返回 contracts `{wallUri:"v0", registry:1, interfaceSession:"v0"}`（version ccb35c0），故四态中显示 `ok`（`no-handshake` 分支由 AC2 的旧版桩覆盖）。经 `createQuayService().getFleetSummary()` 用真实 fleet 检出实测定位：
+  - `QUAY_FLEET_BIN` → `binPath=/data/home/yale/.quay-fleet/bin/quay-fleet`, `state=ok`；
+  - PATH 上的链接 → `binPath=/tmp/fleet-path-bin/quay-fleet`, `state=ok`；
+  - 无 env / PATH 命中 → `~/.quay-fleet/bin/quay-fleet`, `state=ok`；
+  - 三者皆无 → `state=missing, available=false`，reason 说明已查三处。
+- 浏览器（独立 Playwright，喂入同一 `fleet` 读数）截图：`tmp/cockpit-fleet-missing.png`（驾驶舱一行「此服务器上找不到 quay-fleet」，且无逐项目「未登记」）、`tmp/cockpit-fleet-incompatible.png`（state 行点名 `wallUri`）。
+- 运维收尾：fleet 稳定软链接已存在，但删除 `~/.config/systemd/user/claudecodeui-server.service.d/70-quay-fleet.conf` 并重启线上服务须由用户/运维执行（worker 会话不重启线上服务），故 drop-in 保留。
+
 ## Touches
 
 - server/modules/quay/quay-fleet-locator.ts
