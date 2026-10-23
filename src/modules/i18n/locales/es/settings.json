@@ -49,7 +49,9 @@
   "actions": {
     "saveChanges": "Guardar cambios",
     "resetToDefaults": "Restablecer valores por defecto",
-    "cancelChanges": "Cancelar cambios"
+    "cancelChanges": "Cancelar cambios",
+    "reportIssue": "Informar de un problema",
+    "joinCommunity": "Unirse a la comunidad"
   },
   "voiceSettings": {
     "title": "Voz",

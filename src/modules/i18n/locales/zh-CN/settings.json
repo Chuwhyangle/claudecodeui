@@ -49,7 +49,9 @@
   "actions": {
     "saveChanges": "保存更改",
     "resetToDefaults": "重置为默认值",
-    "cancelChanges": "取消更改"
+    "cancelChanges": "取消更改",
+    "reportIssue": "报告问题",
+    "joinCommunity": "加入社区"
   },
   "voiceSettings": {
     "title": "语音",

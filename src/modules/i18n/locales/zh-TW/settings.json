@@ -48,7 +48,9 @@
   "actions": {
     "saveChanges": "儲存變更",
     "resetToDefaults": "重設為預設值",
-    "cancelChanges": "取消變更"
+    "cancelChanges": "取消變更",
+    "reportIssue": "回報問題",
+    "joinCommunity": "加入社群"
   },
   "quickSettings": {
     "title": "快速設定",
