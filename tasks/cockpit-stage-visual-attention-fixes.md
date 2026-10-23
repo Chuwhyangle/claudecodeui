@@ -1,7 +1,7 @@
 ---
 id: cockpit-stage-visual-attention-fixes
 title: 驾驶舱舞台视觉修正：磁贴不显示原始 URI、需要人的项目唯一强调、序号标签可读
-status: ready
+status: done
 labels:
   - cockpit
   - ui
@@ -44,11 +44,3 @@ depends_on:
 - e2e/cockpit-visual.spec.ts
 - playwright.config.ts
 - tasks/cockpit-stage-visual-attention-fixes.md
-
-## Blocker
-
-**2026-10-23T04:08:26.549Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：929f9e43-2c02-40b6-8415-89b7644c9e3f

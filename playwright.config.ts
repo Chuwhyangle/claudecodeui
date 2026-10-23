@@ -536,6 +536,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // rather than left to the 55 s single-file default so a load-slowed fan-in run is not killed
   // mid-case by the watchdog.
   'ui-scenario-runner.spec.ts': 240_000,
+  // The cockpit's reading hierarchy: one browser, two cases — the fleet stage's ordinal label
+  // measured off its COMPUTED style (font size against the body text, WCAG AA contrast resolved
+  // from the painted colours), the board rail's task-id/title naming, then the control arm that
+  // injects the small-light-type defect onto the same element and re-reads through the same
+  // function. MEASURED 2026-10-23 on this worktree: `2 passed (15.2s)` and `2 passed (16.8s)` over
+  // two consecutive runs — the whole invocation, config evaluation, both servers and the browser
+  // launch included. 120_000 is the sibling interaction-heavy entries' value and clears that
+  // measurement ~7x with room for a load-slowed fan-in run, rather than leaving the file to the
+  // 55 s single-file default.
+  'cockpit-visual.spec.ts': 120_000,
 };
 
 /**

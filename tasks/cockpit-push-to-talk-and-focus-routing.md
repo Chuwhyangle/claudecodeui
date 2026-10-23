@@ -30,10 +30,10 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/cockpitRouting.test.ts` exit 0——焦点在 `quay://claudecodeui/task/x` 上、fleet 字段给出会话 S 时（桩读口），未命中意图的转写生成的发送预览目标为 S，包内 focus 为该 URI；字段为空、以及读口不可用时都回落到最近打开的会话且预览标明来源；钉选操作调用的是 fleet 写入函数（桩计数 1），本地无持久化写入；两者都无时不产生发送动作；命中意图的转写只切换视图、不产生发送动作。
-- [ ] AC2: 同一测试文件——未确认时发送函数调用次数为 0；确认后恰好 1 次，且消息正文包含焦点 URI；取消后为 0。
-- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitPushToTalk.test.tsx` exit 0——驾驶舱使用的是 `@/modules/chat` 导出的 `useVoiceInput`（假语音引擎注入）；口述文字进入输入框而非直接发送；按住空格开始、松开结束；焦点在输入框内时按空格只输入空格；打字提交与口述提交得到相同的意图 / 路由结果。
-- [ ] AC4: `npm run typecheck` 通过；chat 模块语音既有测试（`src/modules/chat/utils/tests/voiceContextPack.test.ts`）原样通过。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/cockpitRouting.test.ts` exit 0——焦点在 `quay://claudecodeui/task/x` 上、fleet 字段给出会话 S 时（桩读口），未命中意图的转写生成的发送预览目标为 S，包内 focus 为该 URI；字段为空、以及读口不可用时都回落到最近打开的会话且预览标明来源；钉选操作调用的是 fleet 写入函数（桩计数 1），本地无持久化写入；两者都无时不产生发送动作；命中意图的转写只切换视图、不产生发送动作。
+- [x] AC2: 同一测试文件——未确认时发送函数调用次数为 0；确认后恰好 1 次，且消息正文包含焦点 URI；取消后为 0。
+- [x] AC3: `npx vitest run src/modules/cockpit/tests/CockpitPushToTalk.test.tsx` exit 0——驾驶舱使用的是 `@/modules/chat` 导出的 `useVoiceInput`（假语音引擎注入）；口述文字进入输入框而非直接发送；按住空格开始、松开结束；焦点在输入框内时按空格只输入空格；打字提交与口述提交得到相同的意图 / 路由结果。
+- [x] AC4: `npm run typecheck` 通过；chat 模块语音既有测试（`src/modules/chat/utils/tests/voiceContextPack.test.ts`）原样通过。
 
 ## DoD
 
@@ -45,6 +45,16 @@ depends_on:
 
 文案键按仓库惯例覆盖全部 12 个 locale，并照 `src/modules/project-workspace/tests/i18nQuayTabCompleteness.test.ts` 的样式加驾驶舱文案完整性测试（只在 1/2 任务里加一次，2/2 任务扩展同一测试）。
 
+### DoD 执行记录（2026-10-23）
+
+- 隔离实例：worktree 的 `tsx server/index.ts`（`SERVER_PORT=3017`，`DATABASE_PATH` 为 live DB 的 `better-sqlite3 .backup()` 副本）+ `vite --port 5181`（`CI=true`）；未触碰 live 实例。
+- 浏览器：本会话没有 MCP browser 工具，改用仓库既有的 standalone Playwright（chromium）驱动，等价执行了 `browser_evaluate` 读数。
+- 流程：`/cockpit?view=board&project=<claudecodeui>` → 焦点落在在途任务 `quay://<project>/task/cockpit-push-to-talk-and-focus-routing` → 向输入框注入转写「请把现在的进展说给我听」并提交 → 预览条出现（`data-cockpit-session=19f9a355-…`，`source=pinned`，包内 focus 即焦点 URI）→ 确认发送。
+- 证据（仓库 `tmp/`，gitignored）：`cockpit-2-board-focus.png`、`cockpit-2-preview.png`、`cockpit-2-received-session.png`；`browser_evaluate` 读回的包与报告在 `/tmp/cockpit-p2/report.json`。
+- 目标会话确实收到一条 user 消息，正文含引用 URI 列表（`receivedBodyHasFocusUri=true`，`userMessageCount=1`）。发送走的是全站共用的 `chat.send` websocket 帧（与 MCP `session_send` 同一 control service）。
+- 真实麦克风：headless 验证环境无麦克风，未走真麦；口述链路由 AC3 的假引擎测试覆盖（按住空格开始/松开结束），浏览器侧用注入转写走同一提交路径。
+- 钉选演示写入的是真实 `~/.quay-fleet/registry.json`，验证后已 `clear` 复原（`interfaceSessionId:null`）；隔离服务与 Vite 已停止。
+- 场景运行器：`scripts/ui-scenario.mjs` 的 `open` 词表只有 `quay-panel`，驾驶舱尚未注册场景契约（见 `cockpit-verify-isolated-instance-and-scenario-runner-gap`），故本任务无场景 JSON 可跑，如实记录。
 
 ### fleet 接口会话 CLI 形状（fleet 任务 `fleet-registry-per-project-interface-session` 定稿，2026-10-23）
 

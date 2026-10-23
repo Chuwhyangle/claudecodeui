@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +38,7 @@ const FLEET: QuayFleetSummary = {
       projectId: 'p2',
       projectPath: '/work/quay-fleet',
       driver: { state: 'stale' },
-      tasks: { total: 2, todo: 1, ready: 0, needsHuman: 1, done: 0 },
+      tasks: { total: 2, todo: 1, ready: 0, needsHuman: 0, done: 0 },
       cached: false,
       error: null,
     },
@@ -60,7 +60,9 @@ const SNAPSHOT: QuaySnapshot = {
     ready: 1,
     needsHuman: 1,
     done: 0,
-    recent: [],
+    recent: [
+      { id: 'task-a', title: 'Make the in-flight tile readable', status: 'ready', updatedAt: null },
+    ],
   },
   goals: { total: 0, achieved: 0, breakdown: { byStatus: {}, recent: [] } },
   adrs: { total: 0, recent: [] },
@@ -157,6 +159,26 @@ describe('fleet view contract', () => {
   });
 });
 
+describe('visual attention', () => {
+  it('marks only the tiles that need a person, and hides the always-on driver badge', async () => {
+    renderCockpit();
+
+    const tiles = await screen.findAllByTestId('cockpit-fleet-tile');
+    expect(tiles).toHaveLength(2);
+    // p1 reports one task needing a person; p2 reports none. The marker is the tile's own
+    // data attribute, so the emphasis is addressable without reading CSS.
+    expect(tiles[0]?.getAttribute('data-needs-human')).toBe('true');
+    expect(tiles[1]?.hasAttribute('data-needs-human')).toBe(false);
+
+    // A running driver draws no badge — it is the normal state, and a badge on every tile says
+    // nothing. The stale driver (p2) is the abnormal reading and is the one that gets a badge.
+    expect(within(tiles[0] as HTMLElement).queryByTestId('cockpit-fleet-tile-driver')).toBeNull();
+    expect(
+      within(tiles[1] as HTMLElement).getByTestId('cockpit-fleet-tile-driver').getAttribute('data-driver-state'),
+    ).toBe('stale');
+  });
+});
+
 describe('view changes and history', () => {
   it('Enter on a project opens its board, and Backspace returns to the fleet', async () => {
     renderCockpit();
@@ -201,6 +223,22 @@ describe('board view contract', () => {
         'quay://p1/task/task-a',
       ]);
     });
+  });
+
+  it('names an in-flight tile by task id and title, never by its raw URI', async () => {
+    renderCockpit('/cockpit?view=board&project=p1');
+
+    await screen.findByTestId('cockpit-board-rail');
+    const obj = await screen.findByTestId('cockpit-board-object');
+
+    // The URI is the status bar's reading, not the tile's headline: a truncated
+    // `quay://…/task/…` is neither readable nor speakable.
+    expect(obj.textContent).not.toContain('quay://');
+    expect(obj.textContent).toContain('task-a');
+    expect(obj.textContent).toContain('Make the in-flight tile readable');
+
+    // …and the address still reaches the status bar, where focus is named.
+    await waitFor(() => expect(focusUri()).toBe('quay://p1/task/task-a'));
   });
 
   it('shows an error state (not a blank stage) when the snapshot fails, and focus stays in the view', async () => {
