@@ -534,6 +534,199 @@ export function addEdgeHitTargets(host: HTMLElement, coarsePointer: boolean): vo
 }
 
 /**
+ * WCAG 2.5.5's minimum touch target, in CSS pixels. The toolbar controls get
+ * this through `TOUCH_TARGET_STYLE`; a drawn node's visible shape scales with
+ * the drawing, so a fitted overview can paint it at a fraction of the size.
+ */
+export const NODE_TOUCH_TARGET_PX = 44;
+
+/**
+ * The uniform mapping from an SVG's user units to client pixels.
+ *
+ * Fitted drawings scale by rewriting only the root `width`/`height` attributes
+ * (see `svgViewport.ts`), so the viewBox-to-box ratio IS the on-screen scale;
+ * semantic mode draws at 1:1, where the same ratio is 1. `null` until the
+ * element has a laid-out box (jsdom, a hidden tab).
+ */
+type SvgScreenMap = {
+  readonly left: number;
+  readonly top: number;
+  readonly minX: number;
+  readonly minY: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+};
+
+function svgScreenMap(svg: SVGSVGElement): SvgScreenMap | null {
+  const rect = svg.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) return null;
+  const viewBox = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+  let minX = 0;
+  let minY = 0;
+  let width = 0;
+  let height = 0;
+  if (viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[2] > 0 && viewBox[3] > 0) {
+    [minX, minY, width, height] = viewBox;
+  } else {
+    width = Number.parseFloat(svg.getAttribute('width') ?? '');
+    height = Number.parseFloat(svg.getAttribute('height') ?? '');
+  }
+  if (!(width > 0) || !(height > 0)) return null;
+  return {
+    left: rect.left,
+    top: rect.top,
+    minX,
+    minY,
+    scaleX: rect.width / width,
+    scaleY: rect.height / height,
+  };
+}
+
+/** A drawn node's own rectangle in the SVG's user units (the first `rect` it paints). */
+function nodeBox(element: Element): MarkerRect & { readonly width: number; readonly height: number } | null {
+  const rect = element.querySelector('rect');
+  if (rect === null) return null;
+  const x = Number(rect.getAttribute('x') ?? '0');
+  const y = Number(rect.getAttribute('y') ?? '0');
+  const width = Number(rect.getAttribute('width') ?? '0');
+  const height = Number(rect.getAttribute('height') ?? '0');
+  if (![x, y, width, height].every(Number.isFinite) || !(width > 0) || !(height > 0)) return null;
+  return { x, y, width, height };
+}
+
+/** Whether the node or one of its ancestors was hidden by a semantic tier pass. */
+function isDisplayedNone(element: Element): boolean {
+  for (let current: Element | null = element; current !== null; current = current.parentElement) {
+    const style = (current as { style?: CSSStyleDeclaration }).style;
+    if (style !== undefined && style.display === 'none') return true;
+  }
+  return false;
+}
+
+/**
+ * One drawn node's coarse-pointer hit area, in CLIENT pixels: at least
+ * {@link NODE_TOUCH_TARGET_PX} square, centred on the node's own rectangle.
+ */
+export type NodeTouchTarget = {
+  readonly id: string;
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+  readonly centerX: number;
+  readonly centerY: number;
+};
+
+/**
+ * Every drawn entity node's touch target, measured from the live drawing.
+ *
+ * Stub nodes are left out: they are view scaffolding the click handler already
+ * ignores. Group nodes ARE included — on a phone a group is still something the
+ * reader selects, and the 44px rule applies to it the same way.
+ */
+export function nodeTouchTargets(host: HTMLElement): NodeTouchTarget[] {
+  const svg = host.querySelector('svg');
+  if (!(svg instanceof SVGSVGElement)) return [];
+  const map = svgScreenMap(svg);
+  if (map === null) return [];
+  const targets: NodeTouchTarget[] = [];
+  for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = element.getAttribute('data-entity-id');
+    if (id === null || id.startsWith(STUB_PREFIX)) continue;
+    if (isDisplayedNone(element)) continue;
+    const box = nodeBox(element);
+    if (box === null) continue;
+    const centerX = map.left + (box.x + box.width / 2 - map.minX) * map.scaleX;
+    const centerY = map.top + (box.y + box.height / 2 - map.minY) * map.scaleY;
+    const width = Math.max(box.width * map.scaleX, NODE_TOUCH_TARGET_PX);
+    const height = Math.max(box.height * map.scaleY, NODE_TOUCH_TARGET_PX);
+    targets.push({
+      id,
+      left: centerX - width / 2,
+      top: centerY - height / 2,
+      width,
+      height,
+      centerX,
+      centerY,
+    });
+  }
+  return targets;
+}
+
+/**
+ * The node a coarse-pointer press at `clientX`/`clientY` is aimed at, or `null`
+ * when the point is outside every node's touch target.
+ *
+ * A dense drawing's 44px boxes overlap, so "the topmost rectangle captured the
+ * event" would hand the tap to a neighbour the finger was not on. The node
+ * whose CENTRE is nearest wins among the boxes that contain the point, which is
+ * what makes an overlap lose the tap instead of swallowing it.
+ */
+export function nearestNodeHitId(host: HTMLElement, clientX: number, clientY: number): string | null {
+  let best: { readonly id: string; readonly distance: number } | null = null;
+  for (const target of nodeTouchTargets(host)) {
+    if (clientX < target.left || clientX > target.left + target.width) continue;
+    if (clientY < target.top || clientY > target.top + target.height) continue;
+    const distance = Math.hypot(clientX - target.centerX, clientY - target.centerY);
+    if (best === null || distance < best.distance) best = { id: target.id, distance };
+  }
+  return best?.id ?? null;
+}
+
+/**
+ * Overlay a transparent hit rectangle on every drawn node so a coarse pointer
+ * gets the 44px target the visible shape cannot provide.
+ *
+ * The visible shape scales with the drawing (a fitted overview paints a file
+ * box ~10px tall), so the rectangle is sized in USER units from the measured
+ * screen scale: `44 / scale`. It is anchored to the node's own centre, appended
+ * INSIDE the node group (so `closest('[data-entity-id]')` still names the node
+ * and the hit survives no other lookup), and painted transparent with
+ * `pointer-events: all` so only the hit testing sees it.
+ *
+ * `data-architecture-hit-screen-width/-height` publish the measured CSS size,
+ * so a test can assert the 44px floor without repeating the scale math. A fine
+ * pointer gets the rectangles removed: the desktop hit area stays the visible
+ * shape.
+ */
+export function addNodeHitTargets(host: HTMLElement, coarsePointer: boolean): void {
+  for (const stale of [...host.querySelectorAll('[data-architecture-node-hit]')]) stale.remove();
+  if (!coarsePointer) return;
+  const svg = host.querySelector('svg');
+  if (!(svg instanceof SVGSVGElement)) return;
+  const map = svgScreenMap(svg);
+  if (map === null) return;
+  // Read every node first, then write: interleaving the two would force a
+  // layout read per rectangle for no benefit.
+  const plans: { element: Element; id: string; box: MarkerRect & { width: number; height: number } }[] = [];
+  for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = element.getAttribute('data-entity-id');
+    if (id === null || id.startsWith(STUB_PREFIX)) continue;
+    if (isDisplayedNone(element)) continue;
+    const box = nodeBox(element);
+    if (box === null) continue;
+    plans.push({ element, id, box });
+  }
+  for (const { element, id, box } of plans) {
+    const width = Math.max(box.width, NODE_TOUCH_TARGET_PX / map.scaleX);
+    const height = Math.max(box.height, NODE_TOUCH_TARGET_PX / map.scaleY);
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    hit.setAttribute('class', 'arch-node-hit');
+    hit.setAttribute('data-architecture-node-hit', id);
+    hit.setAttribute('data-architecture-hit-screen-width', String(width * map.scaleX));
+    hit.setAttribute('data-architecture-hit-screen-height', String(height * map.scaleY));
+    hit.setAttribute('x', String(box.x + box.width / 2 - width / 2));
+    hit.setAttribute('y', String(box.y + box.height / 2 - height / 2));
+    hit.setAttribute('width', String(width));
+    hit.setAttribute('height', String(height));
+    hit.setAttribute('fill', 'transparent');
+    hit.setAttribute('stroke', 'none');
+    hit.setAttribute('pointer-events', 'all');
+    element.appendChild(hit);
+  }
+}
+
+/**
  * Mark the freshly injected drawing unselectable, inline.
  *
  * The injected {@link CANVAS_UNSELECTABLE_STYLE} rule already covers the host,

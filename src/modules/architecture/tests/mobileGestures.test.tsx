@@ -9,6 +9,7 @@ import type * as SharedApiModule from '@/shared/api';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
+import { addNodeHitTargets, nearestNodeHitId } from '@/modules/architecture/graphDom';
 
 /**
  * The architecture tab's mobile input contract:
@@ -21,6 +22,8 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
  *    finger); drilling needs an explicit gesture — double-tap or "Drill in";
  *  · a coarse pointer gets 44×44 hit areas and a narrow screen keeps one header
  *    row, moving the other entries into the bottom sheet;
+ *  · on a coarse pointer the drawn NODES get the same 44px hit area, resolved
+ *    to the nearest centre when dense boxes overlap;
  *  · the canvas owns the wheel (a plain wheel zooms around the cursor), and the
  *    zoom cluster floats on the drawing rather than in the toolbar.
  */
@@ -548,4 +551,250 @@ test('the sheet closes and the legacy Mermaid item still writes the .mmd documen
 
   assert.deepEqual(downloads, ['architecture-file.mmd'], 'the legacy item must write the same document the header used to');
   assert.equal(document.querySelector('[data-architecture-sheet]'), null, 'the sheet closes after exporting');
+});
+
+/** A DOMRect-shaped box for stubbing the layout jsdom never performs. */
+function boxRect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+/**
+ * Give the root SVG an on-screen box before the diagram loads. Every OTHER SVG
+ * element keeps jsdom's zero rect: the node hit targets only need the root's
+ * box and the viewBox to derive the user-unit → CSS-pixel scale.
+ */
+function stubRootSvgBox(width: number, height: number): () => void {
+  const original = SVGElement.prototype.getBoundingClientRect;
+  SVGElement.prototype.getBoundingClientRect = function stub(this: SVGElement): DOMRect {
+    if (this.tagName.toLowerCase() === 'svg') return boxRect(0, 0, width, height);
+    return original.call(this);
+  };
+  return () => {
+    SVGElement.prototype.getBoundingClientRect = original;
+  };
+}
+
+/** The user-unit → client-pixel mapping `svgViewport` applies by rewriting width/height. */
+function svgScreenScale(
+  svg: SVGSVGElement,
+): { left: number; top: number; scaleX: number; scaleY: number } | null {
+  const rect = svg.getBoundingClientRect();
+  const viewBox = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+  if (viewBox.length !== 4 || !(viewBox[2] > 0) || !(viewBox[3] > 0)) return null;
+  return {
+    left: rect.left,
+    top: rect.top,
+    scaleX: rect.width / viewBox[2],
+    scaleY: rect.height / viewBox[3],
+  };
+}
+
+/** A drawn node's own rect, in the SVG's user units. */
+function drawnNodeBox(host: HTMLElement, id: string): { x: number; y: number; width: number; height: number } | null {
+  const node = host.querySelector(`.uml-node[data-entity-id="${id}"]`);
+  const rect = node?.querySelector('rect');
+  if (rect === null || rect === undefined) return null;
+  const read = (name: string): number => Number(rect.getAttribute(name) ?? '0');
+  return { x: read('x'), y: read('y'), width: read('width'), height: read('height') };
+}
+
+test('touch hit area: a coarse tap within 20px of a node centre selects the nearest node', async () => {
+  usePhone();
+  rememberShowAllFilter();
+  // The entity graph draws all three fixture entities; the file overview folds
+  // two of them into a group, and a group tap only pins the renderer's own
+  // highlight (the panel paints no selected entity for it). The hit-area
+  // geometry is graph-agnostic, so the entity reading is the honest fixture.
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  const svg = host.querySelector('svg');
+  assert.ok(svg instanceof SVGSVGElement, 'the renderer must draw an SVG');
+
+  // The phone reads a FITTED drawing: the same SVG shown at a fraction of its
+  // natural size. jsdom performs no layout, so the on-screen box is stubbed
+  // from the viewBox — at 0.1× the visible node box is a few pixels tall.
+  const viewBox = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+  assert.equal(viewBox.length, 4);
+  svg.getBoundingClientRect = () => boxRect(0, 0, viewBox[2] * 0.1, viewBox[3] * 0.1);
+  const scale = svgScreenScale(svg);
+  assert.ok(scale !== null);
+
+  const drawn = [...host.querySelectorAll('.uml-node[data-entity-id]')]
+    .map((node) => node.getAttribute('data-entity-id') ?? '')
+    // Groups are scaffolding the panel does not paint as a selected entity (a
+    // group tap only pins the renderer's own highlight), and stubs are not
+    // entities at all: the assertion below needs a node the panel selects.
+    .filter((id) => id !== '' && !id.startsWith('grp::') && !id.startsWith('stub::'));
+  assert.ok(drawn.length >= 2, `the fixture must draw neighbours; got ${drawn.length}`);
+
+  const centres = drawn.map((id) => {
+    const box = drawnNodeBox(host, id);
+    assert.ok(box !== null, `the drawn node ${id} must carry its own rect`);
+    return {
+      id,
+      x: scale.left + (box.x + box.width / 2) * scale.scaleX,
+      y: scale.top + (box.y + box.height / 2) * scale.scaleY,
+      screenHeight: box.height * scale.scaleY,
+    };
+  });
+  // The most isolated node: the tap point below must be nearer to it than to
+  // any overlapping neighbour for the assertion to mean "nearest centre".
+  let chosen = centres[0];
+  let nearestOtherDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of centres) {
+    const nearest = centres
+      .filter((entry) => entry.id !== candidate.id)
+      .reduce((distance, entry) => Math.min(
+        distance,
+        Math.hypot(entry.x - candidate.x, entry.y - candidate.y),
+      ), Number.POSITIVE_INFINITY);
+    if (!(nearest < nearestOtherDistance)) continue;
+    chosen = candidate;
+    nearestOtherDistance = nearest;
+  }
+  assert.ok(
+    chosen.screenHeight < 20,
+    `the visible box must be smaller than a finger; got ${chosen.screenHeight}px`,
+  );
+
+  // Aim just outside the visible shape but well inside the 44px target, in
+  // the direction away from the closest other node, so the intended node is
+  // unambiguously the nearest centre (10px ≤ 20px, and < d/3).
+  const away = centres
+    .filter((entry) => entry.id !== chosen.id)
+    .reduce((best, entry) => {
+      const distance = Math.hypot(entry.x - chosen.x, entry.y - chosen.y);
+      return distance < best.distance ? { entry, distance } : best;
+    }, { entry: centres[0], distance: Number.POSITIVE_INFINITY });
+  const awayX = chosen.x - away.entry.x;
+  const awayY = chosen.y - away.entry.y;
+  const length = Math.hypot(awayX, awayY) || 1;
+  const offset = Math.min(10, Math.max(1, away.distance / 3));
+  const target = {
+    x: chosen.x + (awayX / length) * offset,
+    y: chosen.y + (awayY / length) * offset,
+  };
+  assert.ok(Math.hypot(target.x - chosen.x, target.y - chosen.y) <= 20, 'the tap must land within 20px of the centre');
+
+  fireEvent.pointerDown(host, { pointerId: 1, pointerType: 'touch', clientX: target.x, clientY: target.y });
+  fireEvent.pointerUp(host, { pointerId: 1, pointerType: 'touch', clientX: target.x, clientY: target.y });
+  fireEvent.click(host, { clientX: target.x, clientY: target.y });
+
+  await waitFor(() => {
+    const selected = host.querySelector('.arch-selected[data-entity-id]');
+    assert.equal(
+      selected?.getAttribute('data-entity-id'),
+      chosen.id,
+      'the tap must select the node whose centre it was nearest',
+    );
+  });
+});
+
+test('touch hit area: every drawn node gets a coarse hit rectangle of at least 44px on screen', async () => {
+  usePhone();
+  rememberShowAllFilter();
+  // The box is stubbed BEFORE the drawing mounts, because the hit rectangles
+  // are laid down in the draw pass from the measured scale.
+  const restore = stubRootSvgBox(60, 45);
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+    const host = await waitForDiagram();
+    const hits = [...host.querySelectorAll('[data-architecture-node-hit]')];
+    assert.ok(hits.length >= 1, 'the coarse tier must overlay a hit rectangle on every drawn node');
+    for (const hit of hits) {
+      const width = Number(hit.getAttribute('data-architecture-hit-screen-width'));
+      const height = Number(hit.getAttribute('data-architecture-hit-screen-height'));
+      assert.ok(width >= 44, `a node hit rectangle must reach 44px wide; got ${width}px`);
+      assert.ok(height >= 44, `a node hit rectangle must reach 44px tall; got ${height}px`);
+      assert.equal(hit.getAttribute('pointer-events'), 'all', 'the overlay must receive the tap');
+    }
+
+    // The reason the overlay exists: the visible file box is far below 44px.
+    const svg = host.querySelector('svg');
+    assert.ok(svg instanceof SVGSVGElement);
+    const scale = svgScreenScale(svg);
+    assert.ok(scale !== null);
+    const box = drawnNodeBox(host, 'src/modules/beta/b.ts');
+    assert.ok(box !== null, 'the fixture draws the single-file directory as itself');
+    assert.ok(
+      box.height * scale.scaleY < 20,
+      `the visible box must stay below 20px on screen; got ${box.height * scale.scaleY}px`,
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('touch hit area: overlapping coarse targets resolve to the nearest node centre', () => {
+  const host = document.createElement('div');
+  // Two nodes whose 44px boxes overlap: their centres are 25 screen px apart
+  // (viewBox 1000×500 shown at 100×50 = 0.1×), so a topmost-rectangle hit test
+  // would hand the second node's taps to the first.
+  host.innerHTML = [
+    '<svg viewBox="0 0 1000 500">',
+    '<g class="uml-node" data-entity-id="a"><rect x="100" y="100" width="200" height="40"/></g>',
+    '<g class="uml-node" data-entity-id="b"><rect x="350" y="100" width="200" height="40"/></g>',
+    '<g class="uml-node" data-entity-id="stub::outside"><rect x="800" y="100" width="100" height="40"/></g>',
+    '</svg>',
+  ].join('');
+  const svg = host.querySelector('svg');
+  assert.ok(svg instanceof SVGSVGElement);
+  svg.getBoundingClientRect = () => boxRect(0, 0, 100, 50);
+
+  addNodeHitTargets(host, true);
+  assert.equal(host.querySelectorAll('[data-architecture-node-hit]').length, 2, 'stub nodes get no target');
+  // Node a's centre is (20, 12); node b's is (45, 12). At x = 30 the two boxes
+  // both contain the point, but a's centre is nearer.
+  assert.equal(nearestNodeHitId(host, 30, 12), 'a');
+  assert.equal(nearestNodeHitId(host, 40, 12), 'b');
+  assert.equal(nearestNodeHitId(host, 400, 400), null, 'a point outside every target hits nothing');
+  assert.equal(nearestNodeHitId(host, 85, 12), null, 'a stub is not an entity target');
+
+  addNodeHitTargets(host, false);
+  assert.equal(host.querySelectorAll('[data-architecture-node-hit]').length, 0, 'a fine pointer keeps the visible shape');
+});
+
+test('touch hit area: a fine pointer click still selects and opens the inspector on the first click', async () => {
+  // The beforeEach setup is the fine-pointer desktop tier.
+  rememberShowAllFilter();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  const host = await waitForDiagram();
+  const node = host.querySelector('[data-entity-id="src/modules/beta/b.ts"]');
+  assert.ok(node instanceof Element);
+  fireEvent.click(node);
+
+  await waitFor(() => {
+    assert.equal(
+      host.querySelector('.arch-selected[data-entity-id]')?.getAttribute('data-entity-id'),
+      'src/modules/beta/b.ts',
+      'the first click must select the node',
+    );
+  });
+  const name = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-inspector-name]');
+    assert.ok(element !== null, 'the first fine-pointer click opens the inspector');
+    return element;
+  });
+  assert.ok((name.getAttribute('data-architecture-inspector-name') ?? '').length > 0);
+  // The inspector names the file the clicked node lives in; for a project-
+  // relative file id that path IS the id.
+  assert.equal(
+    document.querySelector('[data-architecture-inspector-path]')?.getAttribute('data-architecture-inspector-path'),
+    'src/modules/beta/b.ts',
+  );
+  assert.equal(
+    host.querySelector('[data-architecture-node-hit]'),
+    null,
+    'a fine pointer must not get the coarse overlay',
+  );
 });
