@@ -15,15 +15,18 @@ import type { SvgViewportSize } from '@/modules/architecture/svgViewport';
  * 13px labels draw under half a pixel tall. The policy therefore offers two
  * readings of the same drawing:
  *
- *  · overview — the DEFAULT: keep the whole graph in view at the true geometric
- *    fit (the reader asked to see the diagram, not a crop of it). The context
- *    that the drawing is too small to read is offered as a "zoom into …" hint,
- *    and the package-level titles are counter-scaled by the LOD layer so they
- *    stay legible (see `explosionLod.ts`);
- *  · focus — an EXPLICIT choice: stop trying to show everything and render at
- *    the scale where a label is at least readable, centred on the package
- *    carrying the densest share of the transcript's seeds. The user's choice is
- *    remembered per project, never inferred from a previous automatic default.
+ *  · overview — the whole graph at the true geometric fit. It is the default
+ *    whenever that fit already draws readable labels. The context that the
+ *    drawing is too small to read is offered as a "zoom into …" hint, and the
+ *    package-level titles are counter-scaled by the LOD layer so they stay
+ *    legible (see `explosionLod.ts`);
+ *  · focus — the default when the geometric fit would draw labels below the
+ *    readable floor (`fitScale < READABLE_ZOOM_SCALE`): showing a 25 % whole
+ *    graph whose text is 3 px tall is not "seeing the diagram", so the drawing
+ *    opens at the scale where a label is at least readable, centred on the
+ *    package carrying the densest share of the transcript's seeds. The reader
+ *    can always choose overview, and that explicit choice is remembered per
+ *    project and never overwritten by the automatic default.
  *
  * It also flags a drawing whose natural width/height is far wider than the
  * container: such a canvas becomes a thin band, so the caller collapses it to
@@ -86,9 +89,12 @@ export type ReadableZoomHint = {
 
 /** What the default view should do with one drawing. */
 export type ReadableZoomDecision = {
-  /** The mode to apply: the user's explicit choice, else the whole-graph default. */
+  /** The mode to apply: the user's explicit choice, else the drawing's own default. */
   readonly mode: ReadableZoomMode;
-  /** The mode this drawing chooses on its own — always the whole-graph overview. */
+  /**
+   * The mode this drawing chooses on its own: focus when its geometric fit is
+   * below the readable floor, overview when the whole graph already reads.
+   */
   readonly defaultMode: ReadableZoomMode;
   /** The uniform scale for `mode`: readable in focus, geometric in overview. */
   readonly scale: number;
@@ -289,22 +295,52 @@ export function canvasIsTooWide(
 }
 
 /**
+ * The fit scale a decision actually reads: a usable positive number, never
+ * above 1 (a fit never enlarges the drawing beyond its natural size).
+ */
+function measuredFitScale(fitScale: number): number {
+  return Number.isFinite(fitScale) && fitScale > 0 ? Math.min(fitScale, 1) : 1;
+}
+
+/**
+ * The mode a drawing opens in when the reader has made no explicit choice:
+ * focus when the geometric fit would draw the renderer's 13 px labels below the
+ * readable floor (`MIN_READABLE_FONT_PX`), overview when the whole graph
+ * already reads. This is geometry, not device: a desktop canvas opening the
+ * same unreadable 25 % drawing gets the same focus view.
+ */
+export function defaultReadableMode(fitScale: number): ReadableZoomMode {
+  return measuredFitScale(fitScale) < READABLE_ZOOM_SCALE ? 'focus' : 'overview';
+}
+
+/**
+ * The mode to apply: the reader's explicit (persisted) choice when there is
+ * one, else the drawing's own default. A stored choice is never overwritten by
+ * the automatic default — only the reader's own toolbar press updates it.
+ */
+export function resolveReadableMode(
+  fitScale: number,
+  chosen: ReadableZoomMode | null | undefined,
+): ReadableZoomMode {
+  return chosen ?? defaultReadableMode(fitScale);
+}
+
+/**
  * Decide the default view for one drawing.
  *
- * The default is ALWAYS overview: the whole graph at its true geometric fit.
- * A geometric fit under the readable scale does not silently crop the drawing
- * any more — the reader asked to see the diagram, and the LOD layer keeps the
- * package titles legible at that scale while the overview hint names the
- * package worth zooming into. Focus is entered only by an explicit `mode`
- * (the toolbar's remembered choice), and the scale it maps to is unchanged:
- * focus renders at or above the readable floor, overview always shows the
- * whole drawing.
+ * The default follows what the reader can actually READ: a geometric fit at or
+ * above the readable floor keeps the whole graph in view (overview); a fit
+ * below it opens focused at the readable floor instead of cropping nothing and
+ * drawing 3 px labels. Focus is entered automatically only in that unreadable
+ * case — an explicit `mode` (the toolbar's remembered choice) always wins, and
+ * the scale each mode maps to is unchanged: focus renders at or above the
+ * readable floor, overview always shows the whole drawing.
  */
 export function decideReadableZoom(input: ReadableZoomInput): ReadableZoomDecision {
   const { fitScale, natural, viewport, hierarchy } = input;
-  const measuredFit = Number.isFinite(fitScale) && fitScale > 0 ? Math.min(fitScale, 1) : 1;
-  const defaultMode: ReadableZoomMode = 'overview';
-  const mode = input.mode ?? defaultMode;
+  const measuredFit = measuredFitScale(fitScale);
+  const defaultMode = defaultReadableMode(measuredFit);
+  const mode = resolveReadableMode(measuredFit, input.mode);
   const scale = mode === 'focus' ? Math.max(measuredFit, READABLE_ZOOM_SCALE) : measuredFit;
 
   const focusPackageId = hierarchy === null

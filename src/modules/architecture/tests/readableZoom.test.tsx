@@ -8,6 +8,7 @@ import {
   buildSeedHierarchy,
   canvasIsTooWide,
   decideReadableZoom,
+  defaultReadableMode,
   densestSeedPackage,
   FIT_CONTROL_FOCUS_KEY,
   FIT_CONTROL_WHOLE_KEY,
@@ -19,6 +20,7 @@ import {
   readableModeStorageKey,
   readStoredReadableMode,
   RENDERED_LABEL_FONT_PX,
+  resolveReadableMode,
   seedPackageCount,
   shortPackageName,
   WIDE_CANVAS_ASPECT_RATIO,
@@ -76,7 +78,33 @@ test('the readable scale is derived from the smallest readable label', () => {
   assert.ok(READABLE_ZOOM_SCALE > MIN_ZOOM_SCALE, 'readable is stricter than the manual zoom floor');
 });
 
-test('a fit below the readable scale still opens as the whole-graph overview', () => {
+test('the default mode follows the geometric fit, and an explicit choice wins', () => {
+  // The three arms the phone review asked for: an unreadable fit opens in
+  // focus, a readable fit keeps the whole graph, and a persisted choice is
+  // never overwritten by either automatic default.
+  assert.equal(defaultReadableMode(HUGE_FIT), 'focus', 'a fit below the floor cannot read');
+  assert.equal(defaultReadableMode(READABLE_ZOOM_SCALE), 'overview', 'the floor itself reads');
+  assert.equal(defaultReadableMode(0.9), 'overview', 'a comfortably fitted drawing reads');
+
+  assert.equal(resolveReadableMode(HUGE_FIT, 'overview'), 'overview', 'the reader chose the whole graph');
+  assert.equal(resolveReadableMode(HUGE_FIT, 'focus'), 'focus');
+  assert.equal(resolveReadableMode(HUGE_FIT, null), 'focus', 'no choice falls back to the drawing');
+  assert.equal(resolveReadableMode(HUGE_FIT, undefined), 'focus');
+  assert.equal(resolveReadableMode(0.9, null), 'overview');
+
+  // The decision uses the same rule, so the component and the unit share one
+  // definition rather than re-deriving it.
+  const unreadable = decideReadableZoom({
+    fitScale: HUGE_FIT,
+    natural: HUGE_NATURAL,
+    viewport: DESKTOP_VIEWPORT,
+    hierarchy: HIERARCHY,
+  });
+  assert.equal(unreadable.defaultMode, 'focus');
+  assert.equal(unreadable.mode, 'focus');
+});
+
+test('a fit below the readable scale opens in the readable focus', () => {
   const decision = decideReadableZoom({
     fitScale: HUGE_FIT,
     natural: HUGE_NATURAL,
@@ -84,20 +112,26 @@ test('a fit below the readable scale still opens as the whole-graph overview', (
     hierarchy: HIERARCHY,
   });
 
-  // The reader asked to see the drawing, so the default is its true geometric
-  // fit — not `max(fit, 0.69)`, which showed only a crop of it.
-  assert.equal(decision.defaultMode, 'overview');
-  assert.equal(decision.mode, 'overview');
-  assert.equal(decision.scale, HUGE_FIT, 'the default applies the geometric fit unchanged');
-  assert.ok(
-    decision.scale >= HUGE_FIT * 0.95,
-    'the whole drawing must stay inside the canvas (>= 95% of the theoretical fit)',
-  );
-  // The hint still says where the readable detail is, without cropping to it.
+  // The 32880 px drawing fitted into 1151 px needs 5 %; the 13 px labels would
+  // draw at 0.65 px. The default is the readable focus at the floor instead.
+  assert.equal(decision.defaultMode, 'focus');
+  assert.equal(decision.mode, 'focus');
+  assert.equal(decision.scale, READABLE_ZOOM_SCALE, 'the default applies the readable floor');
   assert.equal(decision.focusPackageId, 'modules/alpha');
-  assert.equal(decision.overviewHint?.packageId, 'modules/alpha');
-  assert.equal(decision.overviewHint?.zoomPercent, Math.round(HUGE_FIT * 100));
-  assert.equal(decision.collapsedForAspect, false);
+  // Focus needs no "zoom into …" hint: it already IS the zoomed view.
+  assert.equal(decision.overviewHint, null);
+  // An explicit Overview still shows the whole drawing at its geometric fit.
+  const wholeGraph = decideReadableZoom({
+    fitScale: HUGE_FIT,
+    natural: HUGE_NATURAL,
+    viewport: DESKTOP_VIEWPORT,
+    hierarchy: HIERARCHY,
+    mode: 'overview',
+  });
+  assert.equal(wholeGraph.mode, 'overview');
+  assert.equal(wholeGraph.scale, HUGE_FIT, 'the explicit whole-graph fit is unchanged');
+  assert.equal(wholeGraph.overviewHint?.zoomPercent, Math.round(HUGE_FIT * 100));
+  assert.equal(wholeGraph.collapsedForAspect, false);
 });
 
 test('the explicit focus arm keeps its readable floor, unchanged by the new default', () => {
@@ -220,23 +254,24 @@ test('an empty or package-less graph yields no focus target without throwing', (
     hierarchy: empty,
   });
 
-  assert.equal(decision.mode, 'overview');
-  assert.equal(decision.scale, 0.01);
+  // The unreadable default is focus even with no package to centre; it must
+  // fall back to the readable floor without throwing.
+  assert.equal(decision.mode, 'focus');
+  assert.equal(decision.scale, READABLE_ZOOM_SCALE);
   assert.equal(decision.focusPackageId, null);
   assert.equal(decision.overviewHint, null);
 
-  // The explicit focus arm still maps to the readable floor with no package to
-  // centre; it must not throw.
-  const focused = decideReadableZoom({
+  // The explicit overview arm keeps the geometric fit.
+  const overview = decideReadableZoom({
     fitScale: 0.01,
     natural: { width: 1000, height: 500 },
     viewport: DESKTOP_VIEWPORT,
     hierarchy: empty,
-    mode: 'focus',
+    mode: 'overview',
   });
-  assert.equal(focused.mode, 'focus');
-  assert.equal(focused.scale, READABLE_ZOOM_SCALE);
-  assert.equal(focused.focusPackageId, null);
+  assert.equal(overview.mode, 'overview');
+  assert.equal(overview.scale, 0.01);
+  assert.equal(overview.focusPackageId, null);
 });
 
 test('the fit control is only called "Fit to view" when the fit really contains the graph', () => {

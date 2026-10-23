@@ -60,6 +60,7 @@ import {
   buildSeedHierarchy,
   decideReadableZoom,
   fitControlReading,
+  READABLE_ZOOM_SCALE,
   readStoredReadableMode,
   shortPackageName,
   writeStoredReadableMode,
@@ -3181,13 +3182,28 @@ export function PlantUmlGraph({
    */
   const displayScale = drawnFit?.factor ?? zoom.scale;
 
+  /**
+   * Whether the scale control is pressed. It used to say "pressed" whenever the
+   * zoom was a fit — including the 25 % whole-graph fit whose labels are 3 px
+   * tall. A control that promises a readable view must not claim to be applied
+   * while the view on screen is unreadable: an explicitly chosen overview below
+   * the readable floor is a fit, but the pressed state now belongs to the
+   * readable focus instead. A semantic (LOD) drawing carries its own ≥ 9 px font
+   * floor, so it always reads and keeps the pressed state.
+   */
+  const fitPressed = fitReading.pressed
+    && !(fitReading.mode === 'overview'
+      && semanticCaptureRef.current === null
+      && displayScale < READABLE_ZOOM_SCALE);
+
   /** The 聚焦 / 全貌 switch: focus at the readable floor, or the whole drawing. */
   const readableModeGroup = (
     <span
       role="group"
       aria-label={t('architecture.plantuml.readable.group', { defaultValue: 'Readable zoom mode' })}
+      data-architecture-readable-toggle="true"
       style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
-      className="flex items-center rounded border border-border/60 p-0.5"
+      className="pointer-events-auto flex items-center rounded border border-border/60 bg-background/90 p-0.5"
     >
       <button
         type="button"
@@ -3407,7 +3423,7 @@ export function PlantUmlGraph({
     <button
       type="button"
       onClick={fitDiagram}
-      aria-pressed={fitReading.pressed}
+      aria-pressed={fitPressed}
       data-architecture-zoom-fit="true"
       // The honest reading of what this control applies. `zoom-mode` above keeps
       // its existing fit/custom vocabulary; this is the view the fit lands on.
@@ -3447,7 +3463,12 @@ export function PlantUmlGraph({
       style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
       className="pointer-events-auto flex max-w-full flex-wrap items-center rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
     >
-      {readableModeGroup}
+      {/* On the compact tier the switch is a standing capsule ON THE CANVAS
+          (see the render below), not an entry inside the Adjust sheet: the
+          reader who opens an unreadable overview must be able to return to a
+          readable view without discovering a menu. Every other tier keeps it in
+          this row, where it was. */}
+      {compactToolbar ? null : readableModeGroup}
       {zoomReadout}
       {neighbourhoodStatus !== null && (
         <span
@@ -3904,6 +3925,20 @@ export function PlantUmlGraph({
             )}
           </div>
         </div>
+        {/* The standing Focus / Overview capsule on the compact tier. It lives
+            ON the drawing because the phone opens on the focus view whenever
+            the geometric fit is unreadable: the way back to the whole graph
+            must be one visible tap, not an entry inside the Adjust sheet. The
+            desktop tier keeps the same switch in its header row. */}
+        {compactToolbar && (
+          <div
+            data-architecture-canvas-readable-toggle="true"
+            style={{ position: 'absolute', zIndex: 24, left: 8, bottom: 12 }}
+            className="pointer-events-auto"
+          >
+            {readableModeGroup}
+          </div>
+        )}
       </div>
       {failure !== null && (
         <p data-architecture-plantuml-error="true" role="alert" className="px-4 pb-2 text-xs text-destructive">
