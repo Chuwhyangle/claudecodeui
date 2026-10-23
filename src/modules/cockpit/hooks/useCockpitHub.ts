@@ -5,6 +5,7 @@ import type {
   CockpitEventSource,
   CockpitHubEvent,
   CockpitHubState,
+  CockpitRole,
   CockpitVisibleSet,
 } from '@/shared/types';
 import { readDeviceName } from '@/shared/userSettings';
@@ -68,8 +69,26 @@ function readStateFrame(frame: unknown): CockpitHubState | null {
   return state as CockpitHubState;
 }
 
-/** Used by `CockpitPage` (the `/cockpit` route) to share one cockpit state across devices. */
-export function useCockpitHub(): CockpitHubConnection {
+/** The roles a page announces when it does not choose: the `/cockpit` wall both shows and drives. */
+const BOTH_ROLES: readonly CockpitRole[] = ['display', 'input'];
+
+export type CockpitHubOptions = {
+  /**
+   * Which roles this page announces. The default (both) is the desktop wall; the phone remote
+   * announces `input` only, because a report from a page that is not displaying the stage would
+   * overwrite the visible set the confirmation card is built from.
+   */
+  roles?: readonly CockpitRole[];
+};
+
+/**
+ * Used by `CockpitPage` (the `/cockpit` route) and `CockpitRemote` (the `/cockpit/remote`
+ * route) to share one cockpit state across devices.
+ */
+export function useCockpitHub(options: CockpitHubOptions = {}): CockpitHubConnection {
+  // A serialized key rather than the array: a caller may pass a fresh literal on every render,
+  // and re-announcing (or re-subscribing) on that identity would be a loop.
+  const rolesKey = (options.roles ?? BOTH_ROLES).join(',');
   const socket = useWebSocketOptional();
   // The hub's broadcast state. Replaced wholesale on every frame: it is the server's value,
   // not a locally-derived one, which is what keeps two displays from drifting apart.
@@ -91,18 +110,19 @@ export function useCockpitHub(): CockpitHubConnection {
 
   useEffect(() => {
     if (socket === null || !connected) return;
-    // Both roles on one connection: this page renders the stage AND accepts input. The hello
-    // lives only as long as the socket, so every reconnect announces again.
-    const hello = (role: 'display' | 'input') => ({
+    // Every announced role on one connection. The hello lives only as long as the socket, so
+    // every reconnect announces again.
+    const hello = (role: CockpitRole) => ({
       type: 'cockpit.hello',
       role,
       deviceId,
       tabId,
       deviceName,
     });
-    socket.sendMessage(hello('display'));
-    socket.sendMessage(hello('input'));
-  }, [connected, deviceId, deviceName, socket, tabId]);
+    for (const role of rolesKey.split(',') as CockpitRole[]) {
+      socket.sendMessage(hello(role));
+    }
+  }, [connected, deviceId, deviceName, rolesKey, socket, tabId]);
 
   const source = useMemo<CockpitEventSource>(
     () => ({ deviceId, deviceName, role: 'input' }),
