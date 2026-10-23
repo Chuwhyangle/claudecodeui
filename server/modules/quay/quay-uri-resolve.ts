@@ -158,16 +158,16 @@ function formatQuayAddress(address: QuayUriAddress): string {
  * Formats the SAME object in quay-fleet's own address forms, which is what the fleet read
  * port parses.
  *
- * WHY THIS TRANSLATION EXISTS. The wall's addresses carry the project as their FIRST
- * segment (`quay://<project>/task/<id>`) because one wall shows several projects. The
- * fleet reads one workspace at a time — the caller names it with `--root`, not in the
- * address — so its refs are project-less (`quay://task/<id>`, `quay://goal/<id>`,
- * `quay://ledger/<name>/<eventId>`), and a board names its project as the object id
- * (`quay://board/<project>`). The project segment therefore selects the workspace root
- * for the read; inside that workspace the fleet's own form is the address.
- *
- * The returned `uri` in a resolve/summary result stays in the wall's form — the caller
- * only ever sees the address space it minted.
+ * ⚠️ TEMPORARY ADAPTER — THE ONE PLACE THIS TRANSLATION MAY LIVE. The wall's addresses
+ * carry the project as their FIRST segment (`quay://<project>/task/<id>`) because one wall
+ * shows several projects; that is the agreed syntax and the ONLY form this module (and its
+ * API responses) may hand to a caller. quay-fleet currently parses the project-less forms
+ * (`quay://task/<id>`, `quay://goal/<id>`, `quay://ledger/<name>/<eventId>`, and
+ * `quay://board/<project>`), and rejects a project segment as `unknown-type`; the fleet side
+ * has been asked to accept the project-scoped form. Until it does, the project segment is
+ * translated here into (a) the fleet's address and (b) the `--root` workspace argument —
+ * and nowhere else. When the fleet accepts the wall's form, delete this function and call
+ * the fleet with {@link formatQuayAddress}.
  */
 function formatFleetAddress(address: QuayUriAddress): string {
   switch (address.type) {
@@ -387,6 +387,18 @@ export type QuayUriErrorCode =
 /** Which side answered. The fallback names itself so a caller never mistakes it for fleet. */
 export type QuayUriSource = 'fleet' | 'snapshot-fallback';
 
+/**
+ * Why the snapshot answered instead of the fleet. The two are different facts and the
+ * caller acts differently on each:
+ *
+ * - `no-summary` — the fleet READ PORT IS UP but its write path has stored no L2 row for
+ *   this reference (today that is every reference: the fleet's write path is not wired into
+ *   the observe loop yet). That is not a reader failure.
+ * - `reader-unavailable` — the fleet CLI is absent, exited non-zero, timed out, or printed
+ *   something that is not the read port's document. Nothing about the fleet could be read.
+ */
+export type QuayUriFallbackReason = 'no-summary' | 'reader-unavailable';
+
 /** A resolved L1 reference. */
 export type QuayUriResolveSuccess = {
   ok: true;
@@ -397,11 +409,17 @@ export type QuayUriResolveSuccess = {
    */
   type: string;
   label: string;
-  /** Fleet's action enum verbatim; `[]` on the fallback (this side never invents actions). */
+  /**
+   * Fleet's action enum verbatim. It is `[]` only when the fleet's L1 could not be read at
+   * all (there is then no enum to forward); a read-port summary miss keeps the L1 actions
+   * because those still came from the fleet, not from this side.
+   */
   actions: readonly string[];
   fragment?: { kind: 'ac'; index: number };
   source: QuayUriSource;
-  /** The stored task fields, present only on the snapshot fallback. */
+  /** Present when `source` is the snapshot fallback: which fallback this was. */
+  reason?: QuayUriFallbackReason;
+  /** The stored task fields, present only when the snapshot supplied the object's content. */
   task?: QuayUriSnapshotTask;
 };
 
@@ -411,6 +429,8 @@ export type QuayUriSummarySuccess = {
   uri: string;
   source: QuayUriSource;
   state: 'ok' | 'absent';
+  /** Present when `source` is the snapshot fallback: which fallback this was. */
+  reason?: QuayUriFallbackReason;
   summary?: string;
   generatedAt?: string | null;
   sourceEventId?: string | null;
@@ -463,42 +483,73 @@ function findSnapshotTask(
 }
 
 /**
- * Creates the resolver. The fleet port is tried first; only a task reference that it
- * cannot answer falls back to the snapshot, and the fallback never generates an L2.
+ * Creates the resolver.
+ *
+ * The fleet L1/L2 read port is tried first. The snapshot answers only TASK references, and
+ * only when the fleet could not supply that reference's CONTENT:
+ *
+ *  - L1 unreadable (no CLI, non-zero exit, unreadable document) → the snapshot supplies the
+ *    task fields, `actions: []` (no enum was read), reason `reader-unavailable`;
+ *  - L1 readable, L2 `absent` (the fleet's write path has stored no row) → the fleet's own
+ *    type/actions/fragment are kept and the snapshot supplies the task fields, reason
+ *    `no-summary`.
+ *
+ * Neither path generates an L2 summary.
  */
 export function createQuayUriResolver(dependencies: QuayUriResolveDependencies): QuayUriResolver {
+  /** The fleet's own L1 values, forwarded unchanged: this side never mints an action set. */
+  const fleetAnswer = (
+    address: QuayUriAddress,
+    uri: string,
+    reference: QuayFleetL1,
+  ): QuayUriResolveSuccess => ({
+    ok: true,
+    uri,
+    type: reference.type,
+    label: reference.label,
+    actions: reference.actions,
+    ...(reference.fragment === undefined ? { fragment: fragmentOf(address) } : { fragment: reference.fragment }),
+    source: 'fleet',
+  });
+
   /**
-   * The snapshot answer for one task reference. It reuses the snapshot's own fields and
-   * declares `actions: []` — CloudCLI is not the action enum's source, so inventing a set
-   * here would make the two sides disagree.
+   * The snapshot answer for one task reference. `reference` is the fleet's L1 when the read
+   * port answered (a summary miss keeps its type/actions/fragment); it is absent when the
+   * port could not be read, in which case no action set is forwarded.
    */
   const resolveFromSnapshot = async (
     address: Extract<QuayUriAddress, { type: 'task' }>,
     uri: string,
+    reason: QuayUriFallbackReason,
+    reference?: QuayFleetL1,
   ): Promise<QuayUriResolveResult> => {
     if (dependencies.resolveProjectRoot(address.project) === null) {
-      return failure('project-not-found', `no CloudCLI project '${address.project}' to fall back to`);
+      return reference === undefined
+        ? failure('project-not-found', `no CloudCLI project '${address.project}' to fall back to`)
+        : fleetAnswer(address, uri, reference);
     }
     const snapshot = await dependencies.readSnapshot(address.project);
-    if (snapshot === null) {
-      return failure(
-        'snapshot-unavailable',
-        `the fleet read port is unavailable and project '${address.project}' has no snapshot reading`,
-      );
-    }
-    const task = findSnapshotTask(snapshot, address.id);
+    const task = snapshot === null ? null : findSnapshotTask(snapshot, address.id);
     if (task === null) {
-      return failure('task-not-found', `task '${address.id}' is not in project '${address.project}' snapshot`);
+      // The L1 reading is still valid even when no stored snapshot row supplies content.
+      if (reference !== undefined) return fleetAnswer(address, uri, reference);
+      return snapshot === null
+        ? failure(
+            'snapshot-unavailable',
+            `the fleet read port is unavailable and project '${address.project}' has no snapshot reading`,
+          )
+        : failure('task-not-found', `task '${address.id}' is not in project '${address.project}' snapshot`);
     }
-    const fragment = fragmentOf(address);
+    const fragment = reference?.fragment ?? fragmentOf(address);
     return {
       ok: true,
       uri,
-      type: 'task',
-      label: task.id,
-      actions: [],
-      source: 'snapshot-fallback',
+      type: reference?.type ?? 'task',
+      label: reference?.label ?? task.id,
+      actions: reference?.actions ?? [],
       ...(fragment === undefined ? {} : { fragment }),
+      source: 'snapshot-fallback',
+      reason,
       task,
     };
   };
@@ -510,30 +561,43 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
     }
     const { address } = parsed;
     const canonical = formatQuayAddress(address);
-
     const fleet = dependencies.fleetWallReader;
-    if (fleet !== null) {
-      const reference = await fleet.resolve(formatFleetAddress(address));
-      if (reference !== null) {
-        // type/actions/fragment are quay-fleet's values, forwarded unchanged: this side is
-        // a consumer of the enum, never a second source for it.
-        return {
-          ok: true,
-          uri: canonical,
-          type: reference.type,
-          label: reference.label,
-          actions: reference.actions,
-          ...(reference.fragment === undefined ? { fragment: fragmentOf(address) } : { fragment: reference.fragment }),
-          source: 'fleet',
-        };
-      }
+
+    if (fleet === null) {
+      return address.type === 'task'
+        ? resolveFromSnapshot(address, canonical, 'reader-unavailable')
+        : failure(
+            'fleet-unavailable',
+            `the fleet read port is unavailable; only task references have a snapshot fallback ('${canonical}')`,
+          );
     }
 
-    if (address.type === 'task') return resolveFromSnapshot(address, canonical);
+    const reference = await fleet.resolve(formatFleetAddress(address));
+    if (reference === null) {
+      return address.type === 'task'
+        ? resolveFromSnapshot(address, canonical, 'reader-unavailable')
+        : failure(
+            'fleet-unavailable',
+            `the fleet read port is unavailable; only task references have a snapshot fallback ('${canonical}')`,
+          );
+    }
 
-    return failure(
-      'fleet-unavailable',
-      `the fleet read port is unavailable; only task references have a snapshot fallback ('${canonical}')`,
+    // A non-task kind has no snapshot content to add: the fleet's L1 is the whole reading.
+    if (address.type !== 'task') return fleetAnswer(address, canonical, reference);
+
+    // A task's stored content (title/status) lives in the snapshot while the fleet's write
+    // path has stored no L2 row. The fleet's L1 values stay; the reason names why the
+    // content came from the snapshot.
+    const projectRoot = dependencies.resolveProjectRoot(address.project);
+    if (projectRoot === null) return fleetAnswer(address, canonical, reference);
+    const reading = await fleet.summary(formatFleetAddress(address), projectRoot);
+    if (reading !== null && reading.state === 'ok') return fleetAnswer(address, canonical, reference);
+
+    return resolveFromSnapshot(
+      address,
+      canonical,
+      reading === null ? 'reader-unavailable' : 'no-summary',
+      reference,
     );
   };
 
@@ -549,34 +613,37 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
       return failure('project-not-found', `no CloudCLI project '${address.project}'`);
     }
 
+    /** The snapshot holds no L2 ledger: an absent reading is all it can honestly answer. */
+    const fallbackAbsent = (reason: QuayUriFallbackReason): QuayUriSummaryResult =>
+      address.type === 'task'
+        ? { ok: true, uri: canonical, source: 'snapshot-fallback', state: 'absent', reason }
+        : failure(
+            'fleet-unavailable',
+            `the fleet read port is unavailable; only task references have a snapshot fallback ('${canonical}')`,
+          );
+
     const fleet = dependencies.fleetWallReader;
-    if (fleet !== null) {
-      const reading = await fleet.summary(formatFleetAddress(address), projectRoot);
-      if (reading !== null) {
-        return reading.state === 'ok'
-          ? {
-              ok: true,
-              uri: canonical,
-              source: 'fleet',
-              state: 'ok',
-              summary: reading.summary,
-              generatedAt: reading.generatedAt,
-              sourceEventId: reading.sourceEventId,
-            }
-          : { ok: true, uri: canonical, source: 'fleet', state: 'absent' };
-      }
+    if (fleet === null) return fallbackAbsent('reader-unavailable');
+
+    const reading = await fleet.summary(formatFleetAddress(address), projectRoot);
+    if (reading === null) return fallbackAbsent('reader-unavailable');
+
+    if (reading.state === 'absent') {
+      // A stored-miss is NOT a reader failure: the fleet answered, it just has no row yet.
+      return address.type === 'task'
+        ? { ok: true, uri: canonical, source: 'snapshot-fallback', state: 'absent', reason: 'no-summary' }
+        : { ok: true, uri: canonical, source: 'fleet', state: 'absent' };
     }
 
-    if (address.type === 'task') {
-      // The snapshot holds no L2 ledger, and the read path never manufactures one: the
-      // honest answer for a task reference when the fleet is unavailable is `absent`.
-      return { ok: true, uri: canonical, source: 'snapshot-fallback', state: 'absent' };
-    }
-
-    return failure(
-      'fleet-unavailable',
-      `the fleet read port is unavailable; only task references have a snapshot fallback ('${canonical}')`,
-    );
+    return {
+      ok: true,
+      uri: canonical,
+      source: 'fleet',
+      state: 'ok',
+      summary: reading.summary,
+      generatedAt: reading.generatedAt,
+      sourceEventId: reading.sourceEventId,
+    };
   };
 
   return { resolve, summary };

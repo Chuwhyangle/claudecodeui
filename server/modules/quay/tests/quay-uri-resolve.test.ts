@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import fs from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import express from 'express';
 
 import { createQuayRouter } from '../quay.routes.js';
 import {
+  createQuayFleetCliWallReader,
   createQuayUriResolver,
+  QUAY_FLEET_BIN_ENV,
   type QuayFleetL1,
   type QuayFleetL2,
   type QuayFleetWallReader,
@@ -76,6 +81,17 @@ const L2_ROWS: Record<string, QuayFleetL2[]> = {
       summary: 'newest stored summary',
       generatedAt: '2026-10-23T01:00:00.000Z',
       sourceEventId: 'evt-newest',
+    },
+  ],
+  // The fleet ledger keys rows by the exact address, fragment included, so an AC address can
+  // carry its own stored row. Keeping one here leaves the AC1 resolve on the fleet path.
+  'quay://task/T-42#ac-3': [
+    {
+      state: 'ok',
+      uri: 'quay://task/T-42#ac-3',
+      summary: 'stored AC summary',
+      generatedAt: '2026-10-23T01:10:00.000Z',
+      sourceEventId: 'evt-ac',
     },
   ],
 };
@@ -204,6 +220,7 @@ test('AC2: an unavailable fleet port reads a task back from the snapshot fixture
 
   // The fallback declares itself, and invents no actions (the fleet owns that enum).
   assert.equal(resolved.source, 'snapshot-fallback');
+  assert.equal(resolved.reason, 'reader-unavailable');
   assert.deepEqual(resolved.actions, []);
   assert.equal(resolved.type, 'task');
 
@@ -213,7 +230,138 @@ test('AC2: an unavailable fleet port reads a task back from the snapshot fixture
   if (!summary.ok) return;
   assert.equal(summary.state, 'absent');
   assert.equal(summary.source, 'snapshot-fallback');
+  assert.equal(summary.reason, 'reader-unavailable');
   assert.equal(summary.summary, undefined);
+});
+
+test('fallback reason no-summary: the fleet answered L1 but has stored no L2 row', async () => {
+  // The write path is not wired yet, so `wall summary` answers `absent` for every URI. That
+  // is NOT a reader failure: the fleet still supplies L1, and the snapshot supplies content.
+  const noSummaryFleet: QuayFleetWallReader = {
+    async resolve(uri: string): Promise<QuayFleetL1 | null> {
+      return uri === 'quay://task/T-99'
+        ? { uri, type: 'task', label: 'T-99', actions: V0_ACTIONS.task }
+        : null;
+    },
+    async summary(uri: string): Promise<QuayFleetL2 | null> {
+      return { state: 'absent', uri };
+    },
+  };
+  const snapshot: QuayUriSnapshotTasks = {
+    tasks: {
+      total: 1,
+      byStatus: { todo: 1 },
+      ready: 0,
+      needsHuman: 0,
+      done: 0,
+      recent: [
+        { id: 'T-99', title: '无摘要任务的真实标题', status: 'todo', updatedAt: '2026-10-23T02:00:00.000Z' },
+      ],
+    },
+  };
+  const resolver = createQuayUriResolver({
+    fleetWallReader: noSummaryFleet,
+    resolveProjectRoot,
+    readSnapshot: async () => snapshot,
+  });
+
+  const resolved = await resolver.resolve('quay://wall-proj/task/T-99');
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.source, 'snapshot-fallback');
+  assert.equal(resolved.reason, 'no-summary');
+  // The fleet's own enum is kept: a stored miss is not the same as an unreadable port.
+  assert.deepEqual(resolved.actions, V0_ACTIONS.task);
+  assert.equal(resolved.task?.title, '无摘要任务的真实标题');
+  assert.equal(resolved.task?.status, 'todo');
+
+  const summarized = await resolver.summary('quay://wall-proj/task/T-99');
+  assert.equal(summarized.ok, true);
+  if (!summarized.ok) return;
+  assert.equal(summarized.state, 'absent');
+  assert.equal(summarized.source, 'snapshot-fallback');
+  assert.equal(summarized.reason, 'no-summary');
+});
+
+test('fallback reason reader-unavailable: a configured-but-failing read port is not a stored miss', async () => {
+  // The adapter turns a missing CLI, a non-zero exit and an unparseable document into `null`;
+  // the resolver must report that as `reader-unavailable`, separate from `no-summary`.
+  const failingFleet: QuayFleetWallReader = {
+    async resolve(): Promise<QuayFleetL1 | null> {
+      return null;
+    },
+    async summary(): Promise<QuayFleetL2 | null> {
+      return null;
+    },
+  };
+  const resolver = createQuayUriResolver({
+    fleetWallReader: failingFleet,
+    resolveProjectRoot,
+    readSnapshot: async () => SNAPSHOT,
+  });
+
+  const resolved = await resolver.resolve(TASK_URI);
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.source, 'snapshot-fallback');
+  assert.equal(resolved.reason, 'reader-unavailable');
+  assert.deepEqual(resolved.actions, []);
+  assert.equal(resolved.task?.title, SNAPSHOT.tasks?.recent[0]?.title);
+
+  const summarized = await resolver.summary(TASK_URI);
+  assert.equal(summarized.ok, true);
+  if (!summarized.ok) return;
+  assert.equal(summarized.state, 'absent');
+  assert.equal(summarized.reason, 'reader-unavailable');
+});
+
+test('the fleet read port is the CLI: missing/non-zero/unparseable output all read unavailable', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quay-fleet-reader-'));
+  const writeExecutable = (name: string, body: string): string => {
+    const filePath = path.join(directory, name);
+    fs.writeFileSync(filePath, body);
+    fs.chmodSync(filePath, 0o755);
+    return filePath;
+  };
+  try {
+    const missing = path.join(directory, 'does-not-exist');
+    const nonZero = writeExecutable('non-zero.sh', '#!/bin/sh\nexit 3\n');
+    const unparseable = writeExecutable('unparseable.sh', '#!/bin/sh\necho not-json\n');
+    const good = writeExecutable(
+      'good.sh',
+      `#!/bin/sh\necho '${JSON.stringify({
+        ok: true,
+        uri: 'quay://task/T-1',
+        type: 'task',
+        label: 'T-1',
+        actions: ['read'],
+      })}'\n`,
+    );
+
+    for (const binaryPath of [missing, nonZero, unparseable]) {
+      const reader = createQuayFleetCliWallReader({ binaryPath, timeoutMs: 2_000 });
+      assert.ok(reader !== null);
+      assert.equal(await reader.resolve('quay://task/T-1'), null, `${binaryPath} must read unavailable`);
+      assert.equal(await reader.summary('quay://task/T-1', PROJECT_ROOT), null);
+    }
+
+    const reader = createQuayFleetCliWallReader({ binaryPath: good, timeoutMs: 2_000 });
+    assert.ok(reader !== null);
+    const l1 = await reader.resolve('quay://task/T-1');
+    assert.equal(l1?.type, 'task');
+    assert.deepEqual(l1?.actions, ['read']);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+
+  // No binary configured is the honest "no read port" reading, never a guessed host path.
+  const previous = process.env[QUAY_FLEET_BIN_ENV];
+  delete process.env[QUAY_FLEET_BIN_ENV];
+  try {
+    assert.equal(createQuayFleetCliWallReader({ binaryPath: null, timeoutMs: 2_000 }), null);
+  } finally {
+    if (previous !== undefined) process.env[QUAY_FLEET_BIN_ENV] = previous;
+  }
 });
 
 test('AC3: invalid references are named failures (never throws) and nothing generates', async () => {
