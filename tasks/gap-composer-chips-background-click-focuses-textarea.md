@@ -40,21 +40,56 @@ extra:
 
 ## AC
 
-- [ ] 新测试文件通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionChipsBackground.test.tsx` 退出码 0；该文件为下列每条各有一个独立 `it`（一腿一 test）：(a) 在 `listbox` 元素自身上触发 `mousedown`，事件的 `defaultPrevented` 为 true 且 `onBackgroundPress` 恰好被调用 1 次；(b) 在某个 chip 上触发 `mousedown`，`defaultPrevented` 为 true 且 `onBackgroundPress` 没有被调用；(c) 点击 chip 恰好以该 chip 的下标调用 `onAccept` 1 次；(d) 不传 `onBackgroundPress` 时，在 `listbox` 上触发 `mousedown` 不抛错；(e) 经 `ChatComposer` 接起来的集成：在 `listbox` 背景上触发 `mousedown` 后，`document.activeElement` 是 composer 的 textarea；(f) `listbox` 元素的 className 按空白切分后不含 `flex-1` 这个词元（jsdom 没有布局，这是对根因的类名层面约束，真正的布局读数由下面的 DoD 承担）。
-- [ ] 既有测试保持绿，以下每个文件单独运行退出码均为 0：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx`、`.../chatComposerResponsive.test.tsx`、`.../composerCompactTier.test.tsx`；其中 `inputSuggestionsComposer.test.tsx` 既有 `it` 的断言行没有被修改或删除（diff 只增不改）。
-- [ ] 静态门通过：`npm run typecheck` 与 `npm run lint` 退出码均为 0。
-- [ ] 前端规范：新增测试文件 `src/modules/chat/tests/inputSuggestionChipsBackground.test.tsx` 与被改动的 `src/modules/chat/composer/InputSuggestionChips.tsx` 中，`grep -nE "from '\.{1,2}/"` 与 `grep -nE "^(export )?interface "` 均无输出（退出码 1）；`git diff --name-status` 相对任务起点没有新建目录。
+- [x] 新测试文件通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionChipsBackground.test.tsx` 退出码 0；该文件为下列每条各有一个独立 `it`（一腿一 test）：(a) 在 `listbox` 元素自身上触发 `mousedown`，事件的 `defaultPrevented` 为 true 且 `onBackgroundPress` 恰好被调用 1 次；(b) 在某个 chip 上触发 `mousedown`，`defaultPrevented` 为 true 且 `onBackgroundPress` 没有被调用；(c) 点击 chip 恰好以该 chip 的下标调用 `onAccept` 1 次；(d) 不传 `onBackgroundPress` 时，在 `listbox` 上触发 `mousedown` 不抛错；(e) 经 `ChatComposer` 接起来的集成：在 `listbox` 背景上触发 `mousedown` 后，`document.activeElement` 是 composer 的 textarea；(f) `listbox` 元素的 className 按空白切分后不含 `flex-1` 这个词元（jsdom 没有布局，这是对根因的类名层面约束，真正的布局读数由下面的 DoD 承担）。
+- [x] 既有测试保持绿，以下每个文件单独运行退出码均为 0：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx`、`.../chatComposerResponsive.test.tsx`、`.../composerCompactTier.test.tsx`；其中 `inputSuggestionsComposer.test.tsx` 既有 `it` 的断言行没有被修改或删除（diff 只增不改）。
+- [x] 静态门通过：`npm run typecheck` 与 `npm run lint` 退出码均为 0。
+- [x] 前端规范：新增测试文件 `src/modules/chat/tests/inputSuggestionChipsBackground.test.tsx` 与被改动的 `src/modules/chat/composer/InputSuggestionChips.tsx` 中，`grep -nE "from '\.{1,2}/"` 与 `grep -nE "^(export )?interface "` 均无输出（退出码 1）；`git diff --name-status` 相对任务起点没有新建目录。
 
 ## DoD
 
 真实页面上的读数，缺一不可；测试只是必要条件。
 
-- [ ] 在隔离实例（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001；本项只测点击，不需要模型）的真实页面上，1280px 与 390px 两种宽度各做一遍：让 chip 可见（本项测的是点击聚焦而不是 chip 首次出现，允许用 `localStorage['chat-input-history']` 播种，并在报告里写明），对下列五个位置依次执行「先让 textarea 失焦、真实鼠标点击该点、再输入一个字符」：chip 上、两个 chip 之间的缝、最后一个 chip 右侧的空白、提示文字下方（仅桌面）、chip 行下面那一行。贴出每个位置的 `document.elementFromPoint` 命中元素、`document.activeElement` 是否为 textarea、textarea 的值。chip 上的点击读作填入该 chip，其余四个位置必须读作「已聚焦且字符进入输入框」。
-- [ ] 同一次真实页面里，点击「最后一个 chip 右侧的空白」后做一次真实粘贴（例如 Playwright 的 `keyboard.insertText` 或剪贴板粘贴），贴出粘贴的文字进入了 textarea。
-- [ ] 对照读数：在修复之前的提交上跑同样的探测，贴出「chip 之间的缝」与「最后一个 chip 右侧的空白」读作未聚焦、字符丢失，证明探测本身能区分修复前后。
-- [ ] 窄屏横向滚动不退化：390px 下用一个接近 60 字上限的长条目（需出现至少两次才会入选），贴出 `scrollWidth` 大于 `clientWidth`，且把 `scrollLeft` 设为 80 后读回大于 0。
-- [ ] 贴出 `listbox` 在修复前后的实际宽度读数（桌面应由 619px 一类的整行宽度变为约等于 chip 之和加缝隙的宽度）。
-- [ ] 证伪记录：临时恢复 `flex-1`，贴出 AC 中 (f) 对应的 `it` 变红的输出；临时撤掉 `onMouseDown`，贴出 (a) 与 (e) 对应的 `it` 变红的输出；再恢复。
+- [x] 在隔离实例（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001；本项只测点击，不需要模型）的真实页面上，1280px 与 390px 两种宽度各做一遍：让 chip 可见（本项测的是点击聚焦而不是 chip 首次出现，允许用 `localStorage['chat-input-history']` 播种，并在报告里写明），对下列五个位置依次执行「先让 textarea 失焦、真实鼠标点击该点、再输入一个字符」：chip 上、两个 chip 之间的缝、最后一个 chip 右侧的空白、提示文字下方（仅桌面）、chip 行下面那一行。贴出每个位置的 `document.elementFromPoint` 命中元素、`document.activeElement` 是否为 textarea、textarea 的值。chip 上的点击读作填入该 chip，其余四个位置必须读作「已聚焦且字符进入输入框」。
+- [x] 同一次真实页面里，点击「最后一个 chip 右侧的空白」后做一次真实粘贴（例如 Playwright 的 `keyboard.insertText` 或剪贴板粘贴），贴出粘贴的文字进入了 textarea。
+- [x] 对照读数：在修复之前的提交上跑同样的探测，贴出「chip 之间的缝」与「最后一个 chip 右侧的空白」读作未聚焦、字符丢失，证明探测本身能区分修复前后。
+- [x] 窄屏横向滚动不退化：390px 下用一个接近 60 字上限的长条目（需出现至少两次才会入选），贴出 `scrollWidth` 大于 `clientWidth`，且把 `scrollLeft` 设为 80 后读回大于 0。
+- [x] 贴出 `listbox` 在修复前后的实际宽度读数（桌面应由 619px 一类的整行宽度变为约等于 chip 之和加缝隙的宽度）。
+- [x] 证伪记录：临时恢复 `flex-1`，贴出 AC 中 (f) 对应的 `it` 变红的输出；临时撤掉 `onMouseDown`，贴出 (a) 与 (e) 对应的 `it` 变红的输出；再恢复。
+
+## Evidence
+
+**方法。** 隔离实例 = `playwright.config.ts` 自己的 harness（内核分配端口 + 一次性 data-dir，不碰 :3001），真实 Chromium、真实鼠标。会话 `e2e-mobile-layout`；chip 用 `localStorage['chat-input-history'] = { "session-a": ["继续","继续","提交","提交","检查进展","检查进展"] }` 播种（addInitScript）。每个位置先 `blur()` 再 `page.mouse.click`，100ms 后读焦点、再 `keyboard.type('a')` 读值。截图在 `tmp/chips-probe/`。
+
+**修复后（1280 / 390，listbox 宽 158px）。**
+
+| 宽度 | 位置 | elementFromPoint | 点击后聚焦 | 值 |
+|---|---|---|---|---|
+| 1280 | chip | BUTTON role=option「检查进展」 | 是 | `检查进展a` |
+| 1280 | 缝隙 | DIV role=listbox | 是 | `a` |
+| 1280 | 最后 chip 右侧空白 | TEXTAREA slot=prompt-input-textarea | 是 | `a` |
+| 1280 | 提示文字下方 | TEXTAREA slot=prompt-input-textarea | 是 | `a` |
+| 1280 | chip 行下面一行 | TEXTAREA slot=prompt-input-textarea | 是 | `a` |
+| 390 | chip | BUTTON role=option「检查进展」 | 是 | `检查进展a` |
+| 390 | 缝隙 | DIV role=listbox | 是 | `a` |
+| 390 | 最后 chip 右侧空白 | TEXTAREA slot=prompt-input-textarea | 是 | `a` |
+| 390 | chip 行下面一行 | TEXTAREA slot=prompt-input-textarea | 是 | `a` |
+
+**对照（修复前，develop 源码）。**
+
+| 宽度 | 位置 | elementFromPoint | 点击后聚焦 | 值 |
+|---|---|---|---|---|
+| 1280 | 缝隙 | DIV role=listbox | 否 | ``（丢失） |
+| 1280 | 最后 chip 右侧空白 | DIV role=listbox | 否 | ``（丢失） |
+| 390 | 缝隙 | DIV role=listbox | 否 | ``（丢失） |
+| 390 | 最后 chip 右侧空白 | DIV role=listbox | 否 | ``（丢失） |
+
+**粘贴。** 修复后：点最后 chip 右侧空白（命中 TEXTAREA）→ `keyboard.insertText('PASTED-TEXT')` → 值 `PASTED-TEXT`，焦点在 textarea。修复前同一点命中 listbox，值 ``。
+
+**横向滚动（390，58 字长条目出现 3 次）。** 修复前后一致：`scrollWidth` 806 > `clientWidth` 340；`scrollLeft` 设为 80 后读回 80。
+
+**listbox 宽度。** 1280：619px → 158px（三 chip 66+42+42 加两个 4px 缝）；390：340px → 158px。修复后 158px 恰为 chip 之和加缝隙。
+
+**证伪。** 临时恢复 `flex-1`：`(f)` FAIL（`assert.equal(tokens.includes('flex-1'), false)`），其余 5 条通过，`Tests 1 failed | 5 passed`。临时撤掉 `onMouseDown`：`(a)` 与 `(e)` FAIL（`(e)` 消息 `the press must leave focus in the textarea`），其余 4 条通过，`Tests 2 failed | 4 passed`。两次都已恢复，恢复后 6/6 绿。
 
 ## Touches
 
