@@ -1,7 +1,7 @@
 ---
 id: cockpit-live-verification-defects
 title: 驾驶舱实测缺陷：fleet CLI 缺失静默降级、方向键语义错乱、输入框抢焦点、预览显示会话 UUID、来源分不出设备
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
