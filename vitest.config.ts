@@ -2,6 +2,14 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 import { resolveWorkerWidth } from './scripts/vitest-worker-budget.mjs';
+import {
+  CONSOLE_LOG_ENV,
+  consoleLogAnnouncement,
+  createConsoleLogSink,
+  createFailureVerdictReporter,
+  resetConsoleLog,
+  resolveConsoleLogPath,
+} from './scripts/vitest-console-log.mjs';
 
 // Vitest sizes its client worker pool from `os.availableParallelism()` when the
 // config pins nothing — 128 workers on this box. A single suite survives that,
@@ -76,6 +84,30 @@ const WORKER_HEAP_MB: number | null = (() => {
   return DEFAULT_WORKER_HEAP_MB;
 })();
 
+// Test-console attribution (gap-ac323-vitest-stderr-masks-load-flake).
+//
+// The goal gate records a failed criterion's reason from the run's STDERR head. This suite calls
+// `console.error` in ordinary green cases (jsdom's `Not implemented`, `[Auth] session lapse
+// recorded`, `UPSTREAM_ERROR`), so on AC-323's `npx vitest run …` leg the gate's 500-character
+// window held only that noise and `[truncated, N chars omitted]` — the failing case's name, which
+// the reporter writes to STDOUT, could never be read, and every red along AC-323 was a guess.
+//
+// `onConsoleLog` now appends those lines to a per-run file (scripts/vitest-console-log.mjs) and
+// returns `false` to stop vitest forwarding them to the runner's streams. Nothing is discarded:
+// the file path is printed on stdout below. Vitest's OWN failures (a dead worker, `Timeout calling
+// "fetch"`) still reach stderr, so it is informative again; when stderr is empty the gate falls
+// back to the stdout tail, where the reporter writes the failing file/test and `1 failed`.
+//
+// Only the OWNING process truncates and announces. Forked workers re-evaluate this file with
+// `QUAY_VITEST_CONSOLE_LOG` already exported by the owner: they must append to that same file
+// (truncating there would wipe the lines an earlier worker already wrote).
+const consoleLogPath = resolveConsoleLogPath();
+if (!process.env[CONSOLE_LOG_ENV]) {
+  process.env[CONSOLE_LOG_ENV] = consoleLogPath;
+  resetConsoleLog(consoleLogPath);
+  console.log(consoleLogAnnouncement(consoleLogPath));
+}
+
 // The client test suite runs under jsdom because the hook and component tests
 // added alongside the state refactor rely on real effects, DOM events and
 // localStorage — none of which run under react-dom/server.
@@ -106,6 +138,12 @@ export default defineConfig({
       VITE_IS_PLATFORM: 'false',
     },
     setupFiles: ['./vitest.setup.ts'],
+    // Test-console noise leaves the runner's streams and lands in the run's own log; see the
+    // block above. `false` is vitest's "do not forward" contract.
+    onConsoleLog: createConsoleLogSink(consoleLogPath),
+    // The verdict line is written before `default` so it is the FIRST bytes of a red run's
+    // stderr — the gate's excerpt is the stderr head. Green runs write nothing.
+    reporters: [createFailureVerdictReporter(), 'default'],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     restoreMocks: true,
     // Both budgets are declared here rather than left to vitest's defaults (5000 /
