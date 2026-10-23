@@ -2069,6 +2069,16 @@ async function assertCanvasSelectsNothing(
 async function assertDockSelectsText(page: Page, label: string): Promise<void> {
   const dock = page.locator('[role="complementary"]');
   if ((await dock.count()) === 0) {
+    // The previous leg ends on a drill (a double-click), so a new drawing may
+    // still be in flight. Clicking coordinates measured on the OLD drawing can
+    // land on the background of the new one and clear the selection instead of
+    // opening the dock; the panel states when the drawn model has landed.
+    await page.waitForFunction(
+      () => document.querySelector('[data-architecture-canvas-region]')
+        ?.getAttribute('data-architecture-drawn-source') === 'drawn',
+      undefined,
+      { timeout: 40_000 },
+    );
     // Open it the way a reader does: a single click on a drawn node.
     const points = await findGesturePoints(page);
     expect(points.label, `${label}: the drawing must offer a node to select`).not.toBeNull();
@@ -4262,6 +4272,100 @@ test('control arm — restoring the default detail puts the overflow row back in
     ).toBeGreaterThan(0);
     expect(reading.violations.length, 'the shared reading must read the defect red').toBeGreaterThan(0);
     await page.screenshot({ path: test.info().outputPath('lossless-control-text-panel.png') });
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * The selection tray's attachment is the SAME complete document.
+ *
+ * "Attach the selected subgraph's PlantUML" goes through the text page's own
+ * `buildPlantUmlText`, so it inherited the same compact-detail truncation. With
+ * two >4-member classes selected, the copied attachment must carry both blocks'
+ * full member bodies, its volume reading must be the complete document's, and
+ * the same {@link readLosslessText} must find no marker and no missing row.
+ */
+test('main arm — the tray attachment carries the same complete PlantUML', async ({ browser }) => {
+  const activeFixture = fixture as ArchitectureFixtureReading;
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
+    await page.waitForFunction(
+      () => document.querySelector('[data-architecture-canvas-region]')
+        ?.getAttribute('data-architecture-drawn-source') === 'drawn',
+      undefined,
+      { timeout: 40_000 },
+    );
+
+    // Two drawn CLASS entities (a payload with more than four members): the
+    // defect is only observable on an entity whose tail compact would drop.
+    const classNames = Object.entries(activeFixture.memberCountById)
+      .filter(([, members]) => members > 4)
+      .map(([id]) => id.slice(id.lastIndexOf('.') + 1));
+    const picked = await page.evaluate((names: string[]) => {
+      const wanted = new Set(names);
+      const points: { x: number; y: number }[] = [];
+      for (const node of document.querySelectorAll('.uml-node[data-entity-id]')) {
+        const id = node.getAttribute('data-entity-id') ?? '';
+        if (!wanted.has(id.slice(id.lastIndexOf('.') + 1))) continue;
+        const text = node.querySelector('text');
+        if (text === null) continue;
+        const rect = text.getBoundingClientRect();
+        if (rect.width < 8 || rect.height < 6) continue;
+        const point = {
+          x: Math.round(rect.left + Math.min(rect.width / 2, 30)),
+          y: Math.round(rect.top + rect.height / 2),
+        };
+        const hit = document.elementFromPoint(point.x, point.y);
+        if (hit === null || hit.closest('[data-entity-id]') === null) continue;
+        points.push(point);
+        if (points.length === 2) break;
+      }
+      return points;
+    }, classNames);
+    expect(picked.length, 'the drawing must offer two multi-member classes to select').toBe(2);
+
+    await page.mouse.click(picked[0].x, picked[0].y);
+    await page.keyboard.down('Shift');
+    await page.mouse.click(picked[1].x, picked[1].y);
+    await page.keyboard.up('Shift');
+    await expect(page.locator('[data-architecture-tray-root]')).toBeVisible({ timeout: 10_000 });
+
+    // The tray opens COLLAPSED (a 2-selected pill); the attachment controls are
+    // inside the expanded panel.
+    await page.locator('[data-architecture-tray-pill]').click();
+    await expect(page.locator('[data-architecture-tray-expanded-panel]')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-architecture-tray-attach]').check();
+    const volumeElement = page.locator('[data-architecture-tray-volume]');
+    await expect(volumeElement).toBeVisible({ timeout: 10_000 });
+    const tokens = Number(await volumeElement.getAttribute('data-architecture-tray-volume'));
+
+    await page.locator('[data-architecture-tray-copy]').click();
+    const attachment = await page.evaluate(() => navigator.clipboard.readText());
+    const reading = readLosslessText(attachment, activeFixture);
+    console.log(`[architecture-layout] lossless.tray=${JSON.stringify({
+      classCount: reading.classCount,
+      markerLines: reading.markerLines.slice(0, 3),
+      missingMembers: reading.missingMembers.slice(0, 3),
+      tokens,
+      characters: attachment.length,
+    })}`);
+    expect(reading.classCount, 'the attachment is exactly the two selected classes').toBe(2);
+    expect(reading.markerLines, 'the attachment may not contain the truncation row').toEqual([]);
+    expect(reading.missingMembers, 'the attachment must carry every member').toEqual([]);
+    expect(reading.violations).toEqual([]);
+    expect(tokens, 'the volume reading measures the complete document').toBe(Math.round(attachment.length / 3.5));
+    await page.screenshot({ path: test.info().outputPath('lossless-tray-attachment.png') });
+
+    // Restore the interaction state this case created: no selection, no tray.
+    await page.locator('[data-architecture-tray-clear]').click();
+    await expect(page.locator('[data-architecture-tray-root]')).toHaveCount(0);
   } finally {
     await context.close();
   }
