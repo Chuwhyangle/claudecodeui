@@ -29,13 +29,13 @@ extra:
 
 ## AC
 
-- [ ] 测试通过：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0，断言 settings 解析：默认 `enabled===false`；文件 `residentRestore.enabled=true` 才开启；`max`/`maxAgeMs` 非法值回落缺省；`SERVER_SETTINGS_PATH` 指向不存在文件/非法 JSON 时回落缺省并记录 problem。
-- [ ] 同一测试文件断言恢复集选择（保留）：只恢复 resident 且 `provider_session_id` 非空、provider 挂 resident 驱动的会话；按最后活跃降序；超过 max 截断；`updated_at` 旧于 maxAge 跳过；单个 `startResidentSession` 抛错时其余仍执行且服务不抛（失败隔离）。
-- [ ] `sessionsDb.listRestorableResidentSessions` 在临时库上验证（保留）：过滤（archived / `lifecycle_mode` 非 resident / `provider_session_id` NULL 排除）、排序口径、limit 生效。
-- [ ] 启动接线存在：`grep -nE "residentRestore|restoreResident|resident-restore" server/index.ts` exit 0 且该调用行号大于 `sweepOrphanClaudeSessionScopes()` 调用行号；`grep -nE "SERVER_SETTINGS_PATH|server\.settings" server/index.ts` exit 0。
-- [ ] 旧配置面已迁走：`grep -rnE "CLAUDE_RESIDENT_RESTORE" server/ --include=*.ts` 零命中（exit 1）。
-- [ ] 默认 off 不改变现有行为（保留）：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0。
-- [ ] `npm run typecheck` exit 0；`npx oxlint config 2>/dev/null; npx oxlint server/modules/settings/server-settings.ts server/modules/settings/index.ts server/modules/session-hosts/resident-restore.service.ts server/modules/session-hosts/index.ts server/index.ts server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0。
+- [x] 测试通过：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0，断言 settings 解析：默认 `enabled===false`；文件 `residentRestore.enabled=true` 才开启；`max`/`maxAgeMs` 非法值回落缺省；`SERVER_SETTINGS_PATH` 指向不存在文件/非法 JSON 时回落缺省并记录 problem。
+- [x] 同一测试文件断言恢复集选择（保留）：只恢复 resident 且 `provider_session_id` 非空、provider 挂 resident 驱动的会话；按最后活跃降序；超过 max 截断；`updated_at` 旧于 maxAge 跳过；单个 `startResidentSession` 抛错时其余仍执行且服务不抛（失败隔离）。
+- [x] `sessionsDb.listRestorableResidentSessions` 在临时库上验证（保留）：过滤（archived / `lifecycle_mode` 非 resident / `provider_session_id` NULL 排除）、排序口径、limit 生效。
+- [x] 启动接线存在：`grep -nE "residentRestore|restoreResident|resident-restore" server/index.ts` exit 0 且该调用行号大于 `sweepOrphanClaudeSessionScopes()` 调用行号；`grep -nE "SERVER_SETTINGS_PATH|server\.settings" server/index.ts` exit 0。
+- [x] 旧配置面已迁走：`grep -rnE "CLAUDE_RESIDENT_RESTORE" server/ --include=*.ts` 零命中（exit 1）。
+- [x] 默认 off 不改变现有行为（保留）：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0。
+- [x] `npm run typecheck` exit 0；`npx oxlint config 2>/dev/null; npx oxlint server/modules/settings/server-settings.ts server/modules/settings/index.ts server/modules/session-hosts/resident-restore.service.ts server/modules/session-hosts/index.ts server/index.ts server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0。
 
 ## DoD
 
