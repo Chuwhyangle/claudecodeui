@@ -1,7 +1,7 @@
 ---
 id: gap-composer-empty-box-history-frequency-chips
 title: 输入框空态建议项（第一档）：按历史输入频次在空 textarea 内显示虚线 chip，Tab/鼠标/Enter 填入，不调模型
-status: todo
+status: ready
 labels:
   - gap
 parent: null
