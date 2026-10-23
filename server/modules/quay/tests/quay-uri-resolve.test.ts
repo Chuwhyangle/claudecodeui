@@ -16,6 +16,7 @@ import {
   QUAY_FLEET_BIN_ENV,
   type QuayFleetL1,
   type QuayFleetL2,
+  type QuayFleetSummaryReading,
   type QuayFleetWallReader,
   type QuayUriSnapshotTasks,
 } from '../quay-uri-resolve.js';
@@ -61,34 +62,35 @@ const V0_ACTIONS = {
 
 /**
  * L1 documents the stub fleet resolves; their shape is `wall resolve --json` verbatim, and
- * their KEYS are quay-fleet's own project-less address forms — the resolver must translate
- * the wall's project-scoped reference into these before calling the read port.
+ * their KEYS are the SAME project-scoped addresses the caller passes — quay-fleet requires
+ * the project segment and refuses the superseded project-less draft, so the resolver hands
+ * its URI to the read port unchanged (no translation step).
  */
 const L1_BY_URI: Record<string, QuayFleetL1> = {
-  'quay://task/T-42': { uri: 'quay://task/T-42', type: 'task', label: 'T-42', actions: V0_ACTIONS.task },
-  'quay://task/T-42#ac-3': {
-    uri: 'quay://task/T-42#ac-3',
+  [TASK_URI]: { uri: TASK_URI, type: 'task', label: 'T-42', actions: V0_ACTIONS.task },
+  [AC_URI]: {
+    uri: AC_URI,
     type: 'task',
     label: 'T-42#ac-3',
     actions: V0_ACTIONS.fragmentAc,
     fragment: { kind: 'ac', index: 3 },
   },
-  'quay://goal/G-1': { uri: 'quay://goal/G-1', type: 'goal', label: 'G-1', actions: V0_ACTIONS.goal },
+  [GOAL_URI]: { uri: GOAL_URI, type: 'goal', label: 'G-1', actions: V0_ACTIONS.goal },
 };
 
-/** L2 ledger rows in write order per fleet address; the stub returns the LAST one, as the fleet does. */
+/** L2 ledger rows in write order per canonical address; the stub returns the LAST one, as the fleet does. */
 const L2_ROWS: Record<string, QuayFleetL2[]> = {
-  'quay://task/T-42': [
+  [TASK_URI]: [
     {
       state: 'ok',
-      uri: 'quay://task/T-42',
+      uri: TASK_URI,
       summary: 'older stored summary',
       generatedAt: '2026-10-23T00:00:00.000Z',
       sourceEventId: 'evt-older',
     },
     {
       state: 'ok',
-      uri: 'quay://task/T-42',
+      uri: TASK_URI,
       summary: 'newest stored summary',
       generatedAt: '2026-10-23T01:00:00.000Z',
       sourceEventId: 'evt-newest',
@@ -96,10 +98,10 @@ const L2_ROWS: Record<string, QuayFleetL2[]> = {
   ],
   // The fleet ledger keys rows by the exact address, fragment included, so an AC address can
   // carry its own stored row. Keeping one here leaves the AC1 resolve on the fleet path.
-  'quay://task/T-42#ac-3': [
+  [AC_URI]: [
     {
       state: 'ok',
-      uri: 'quay://task/T-42#ac-3',
+      uri: AC_URI,
       summary: 'stored AC summary',
       generatedAt: '2026-10-23T01:10:00.000Z',
       sourceEventId: 'evt-ac',
@@ -218,15 +220,22 @@ test('AC1: fleet L1/L2 documents pass through, including the #ac-<n> fragment', 
   assert.equal(absent.state, 'absent');
   assert.equal(absent.source, 'fleet');
 
-  // The read port was called in quay-fleet's OWN forms: the project segment selects the
-  // workspace root (--root), it is not part of the fleet's address.
-  assert.ok(fleetCalls.includes('resolve quay://task/T-42'));
-  assert.ok(fleetCalls.includes('resolve quay://task/T-42#ac-3'));
-  assert.ok(fleetCalls.includes('summary quay://task/T-42'));
-  assert.ok(fleetCalls.includes('summary quay://goal/G-1'));
+  // The read port was called with the SAME project-scoped references the caller passed —
+  // field for field, fragment included. quay-fleet requires the project segment, so a
+  // project-less form reaching it would be refused and silently drop the wall to the
+  // snapshot fallback; this list is the anti-regression pin for that shape.
+  assert.deepEqual(fleetCalls, [
+    `resolve ${TASK_URI}`,
+    `summary ${TASK_URI}`,
+    `resolve ${AC_URI}`,
+    `summary ${AC_URI}`,
+    `summary ${TASK_URI}`,
+    `summary ${GOAL_URI}`,
+  ]);
+  // Belt and braces: no call may carry the superseded project-less draft (`quay://task/…`).
   assert.ok(
-    fleetCalls.every((call) => !call.includes(`/${FLEET_PROJECT_ID}/`)),
-    'no project segment may leak into a fleet call',
+    fleetCalls.every((call) => !/^[a-z]+ quay:\/\/(task|goal|ledger|board)(\/|$)/.test(call)),
+    `a project-less address reached the fleet read port: ${fleetCalls.join(', ')}`,
   );
 });
 
@@ -272,7 +281,7 @@ test('fallback reason no-summary: the fleet answered L1 but has stored no L2 row
   // is NOT a reader failure: the fleet still supplies L1, and the snapshot supplies content.
   const noSummaryFleet: QuayFleetWallReader = {
     async resolve(uri: string): Promise<QuayFleetL1 | null> {
-      return uri === 'quay://task/T-99'
+      return uri === `quay://${FLEET_PROJECT_ID}/task/T-99`
         ? { uri, type: 'task', label: 'T-99', actions: V0_ACTIONS.task }
         : null;
     },
@@ -348,6 +357,98 @@ test('fallback reason reader-unavailable: a configured-but-failing read port is 
   assert.equal(summarized.reason, 'reader-unavailable');
 });
 
+test('fallback reason project-not-registered: the fleet answered and refused the PROJECT', async () => {
+  // `wall resolve` is pure parsing, so the fleet supplies L1 for any project segment; the
+  // refusal only appears on `wall summary`, and it is about the workspace, not the reader.
+  const unregisteredFleet: QuayFleetWallReader = {
+    async resolve(uri: string): Promise<QuayFleetL1 | null> {
+      return { uri, type: 'task', label: 'T-77', actions: V0_ACTIONS.task };
+    },
+    async summary(uri: string): Promise<QuayFleetSummaryReading | null> {
+      return { state: 'project-not-registered', uri };
+    },
+  };
+  const snapshot: QuayUriSnapshotTasks = {
+    tasks: {
+      total: 1,
+      byStatus: { ready: 1 },
+      ready: 1,
+      needsHuman: 0,
+      done: 0,
+      recent: [
+        { id: 'T-77', title: '未登记项目里的任务', status: 'ready', updatedAt: '2026-10-23T03:00:00.000Z' },
+      ],
+    },
+  };
+  const resolver = createQuayUriResolver({
+    fleetWallReader: unregisteredFleet,
+    // The join knows the project but has no root for it, so no `--root` override is sent and
+    // the URI's segment alone selects the workspace — the branch that can reach the refusal.
+    resolveFleetProject: async (segment) =>
+      segment === FLEET_PROJECT_ID ? { root: '', projectId: CLOUD_PROJECT_ID } : null,
+    readSnapshot: async () => snapshot,
+    warn: () => {},
+  });
+
+  const unregisteredUri = `quay://${FLEET_PROJECT_ID}/task/T-77`;
+  const resolved = await resolver.resolve(unregisteredUri);
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.source, 'snapshot-fallback');
+  // The refusal is named as itself, NOT as a broken reader.
+  assert.equal(resolved.reason, 'project-not-registered');
+  // The fleet's L1 survived: the refusal is about L2's workspace, not about the reference.
+  assert.deepEqual(resolved.actions, V0_ACTIONS.task);
+  assert.equal(resolved.type, 'task');
+  assert.equal(resolved.task?.title, '未登记项目里的任务');
+
+  const summarized = await resolver.summary(unregisteredUri);
+  assert.equal(summarized.ok, true);
+  if (!summarized.ok) return;
+  assert.equal(summarized.state, 'absent');
+  assert.equal(summarized.source, 'snapshot-fallback');
+  assert.equal(summarized.reason, 'project-not-registered');
+});
+
+test('project-not-registered reaches the resolver through the REAL CLI reader', async () => {
+  // End to end over a child process: `wall resolve` answers L1 on stdout, `wall summary`
+  // refuses with the fleet's own stderr line and a non-zero exit. This is the shape the
+  // production reader sees, so it pins the stderr parsing to the resolver's reason.
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quay-fleet-refusal-'));
+  const binaryPath = path.join(directory, 'fleet.sh');
+  fs.writeFileSync(
+    binaryPath,
+    "#!/bin/sh\n" +
+      'if [ "$2" = resolve ]; then\n' +
+      `  echo '${JSON.stringify({ ok: true, uri: TASK_URI, type: 'task', label: 'T-42', actions: ['read', 'check'] })}'\n` +
+      '  exit 0\n' +
+      'fi\n' +
+      "echo 'quay-fleet: wall summary: project-not-registered — project '\\''claudecodeui'\\'' is not registered in /home/.quay-fleet/registry.json and no --root was given' >&2\n" +
+      'exit 2\n',
+  );
+  fs.chmodSync(binaryPath, 0o755);
+
+  try {
+    const fleet = createQuayFleetCliWallReader({ binaryPath, timeoutMs: 5_000 });
+    assert.ok(fleet !== null);
+    const resolver = createQuayUriResolver({
+      fleetWallReader: fleet,
+      resolveFleetProject: async (segment) =>
+        segment === FLEET_PROJECT_ID ? { root: '', projectId: CLOUD_PROJECT_ID } : null,
+      readSnapshot: async () => SNAPSHOT,
+      warn: () => {},
+    });
+
+    const resolved = await resolver.resolve(TASK_URI);
+    assert.equal(resolved.ok, true);
+    if (!resolved.ok) return;
+    assert.equal(resolved.reason, 'project-not-registered');
+    assert.deepEqual(resolved.actions, ['read', 'check']);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('the fleet read port is the CLI: missing/non-zero/unparseable output all read unavailable', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quay-fleet-reader-'));
   const writeExecutable = (name: string, body: string): string => {
@@ -364,7 +465,7 @@ test('the fleet read port is the CLI: missing/non-zero/unparseable output all re
       'good.sh',
       `#!/bin/sh\necho '${JSON.stringify({
         ok: true,
-        uri: 'quay://task/T-1',
+        uri: `quay://${FLEET_PROJECT_ID}/task/T-1`,
         type: 'task',
         label: 'T-1',
         actions: ['read'],
@@ -374,13 +475,46 @@ test('the fleet read port is the CLI: missing/non-zero/unparseable output all re
     for (const binaryPath of [missing, nonZero, unparseable]) {
       const reader = createQuayFleetCliWallReader({ binaryPath, timeoutMs: 2_000 });
       assert.ok(reader !== null);
-      assert.equal(await reader.resolve('quay://task/T-1'), null, `${binaryPath} must read unavailable`);
-      assert.equal(await reader.summary('quay://task/T-1', PROJECT_ROOT), null);
+      assert.equal(
+        await reader.resolve(`quay://${FLEET_PROJECT_ID}/task/T-1`),
+        null,
+        `${binaryPath} must read unavailable`,
+      );
+      assert.equal(await reader.summary(`quay://${FLEET_PROJECT_ID}/task/T-1`, PROJECT_ROOT), null);
     }
+
+    // quay-fleet's REFUSAL of an unregistered project: the read port answered (it is the
+    // registry that has no row), so this is a reading, not an unreadable port. The reason is
+    // read from stderr exactly as the real CLI prints it, with the usage text after it.
+    const unregistered = writeExecutable(
+      'project-not-registered.sh',
+      "#!/bin/sh\n" +
+        "echo 'quay-fleet: wall summary: project-not-registered — project '\\''never-registered'\\'' is not registered in /home/.quay-fleet/registry.json and no --root was given' >&2\n" +
+        "echo 'usage: quay-fleet wall resolve <uri> [--json]' >&2\n" +
+        'exit 2\n',
+    );
+    const unregisteredReader = createQuayFleetCliWallReader({ binaryPath: unregistered, timeoutMs: 2_000 });
+    assert.ok(unregisteredReader !== null);
+    assert.deepEqual(
+      await unregisteredReader.summary(`quay://never-registered/task/T-1`, null),
+      { state: 'project-not-registered', uri: `quay://never-registered/task/T-1` },
+    );
+
+    // Every OTHER refusal reason stays the unavailable reading: the fleet named a reason this
+    // side cannot turn into a workspace fact, so nothing about the project was read.
+    const otherReason = writeExecutable(
+      'other-refusal.sh',
+      "#!/bin/sh\n" +
+        "echo 'quay-fleet: wall summary: registry-unreadable — the registry at /home/.quay-fleet/registry.json is unreadable: EACCES' >&2\n" +
+        'exit 2\n',
+    );
+    const otherReader = createQuayFleetCliWallReader({ binaryPath: otherReason, timeoutMs: 2_000 });
+    assert.ok(otherReader !== null);
+    assert.equal(await otherReader.summary(`quay://${FLEET_PROJECT_ID}/task/T-1`, null), null);
 
     const reader = createQuayFleetCliWallReader({ binaryPath: good, timeoutMs: 2_000 });
     assert.ok(reader !== null);
-    const l1 = await reader.resolve('quay://task/T-1');
+    const l1 = await reader.resolve(`quay://${FLEET_PROJECT_ID}/task/T-1`);
     assert.equal(l1?.type, 'task');
     assert.deepEqual(l1?.actions, ['read']);
   } finally {
@@ -452,10 +586,11 @@ test('AC4: the project segment is a fleet registry id, and a UUID segment is unk
     async resolve(uri: string): Promise<QuayFleetL1 | null> {
       return { uri, type: 'task', label: 'T-42', actions: V0_ACTIONS.task };
     },
-    async summary(uri: string, projectRoot: string): Promise<QuayFleetL2 | null> {
-      // The registered root is the fleet's `--root`: the project segment selects it and is
-      // never part of the fleet's own address.
-      roots.push(projectRoot);
+    async summary(uri: string, projectRoot: string | null): Promise<QuayFleetL2 | null> {
+      // `--root` is only the OPTIONAL consistency override: the URI's project segment is
+      // what the fleet resolves through its registry, and the root handed back is the one
+      // that same join produced.
+      roots.push(projectRoot ?? '<none>');
       return { state: 'absent', uri };
     },
   };

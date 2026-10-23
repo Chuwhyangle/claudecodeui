@@ -1,7 +1,7 @@
 ---
 id: cockpit-hub-cross-device-state
 title: 驾驶舱中枢：服务端持有焦点/视图/托盘/待确认发送（纯函数 reducer + 语义事件 + 多设备订阅）
-status: ready
+status: done
 labels:
   - cockpit
   - contract
@@ -79,11 +79,3 @@ depends_on:
 - tasks/cockpit-hub-cross-device-state.md
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
-
-## Blocker
-
-**2026-10-23T05:42:24.166Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=82001 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792733720267
-- run_id：wk-prod-anchor
-- session_id：d01debf6-f245-4e6a-b5c6-ce2268ec8d11

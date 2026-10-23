@@ -3463,3 +3463,101 @@ export type VoiceProviderRow = {
 };
 
 // ---------------------------
+
+//----------------- COCKPIT HUB ------------
+
+/**
+ * The two roles a cockpit connection announces over the shared chat websocket.
+ *
+ * A display renders the stage; an input sends direction keys and phrases. The `/cockpit` page
+ * announces both on one socket, so a desktop can be watched while a phone drives it.
+ */
+export type CockpitRole = 'display' | 'input';
+
+/** Which device produced an event; `deviceName` is what the status bar echoes (「来自手机」). */
+export type CockpitEventSource = {
+  deviceId: string;
+  deviceName?: string;
+  role: CockpitRole;
+};
+
+/** The stage's serializable view description; the project segment is the fleet registry id. */
+export type CockpitHubView = { type: 'fleet' } | { type: 'board'; project: string };
+
+/**
+ * One project the display can address, with both identities the server's target rules need:
+ * the CloudCLI project id the fleet registry is keyed by, and the fleet registry id that
+ * appears in a `quay://` address.
+ */
+export type CockpitVisibleProject = {
+  projectId: string;
+  fleetProjectId: string | null;
+  name: string;
+  projectPath: string;
+};
+
+/** The display's report of what it is showing: the view address, its objects and its roster. */
+export type CockpitVisibleSet = {
+  viewUri: string | null;
+  focusables: QuayFocusableObject[];
+  projects: CockpitVisibleProject[];
+};
+
+/** The conversation a pending send would go to, and why that conversation. */
+export type CockpitPendingSendTarget = {
+  sessionId: string;
+  projectId: string | null;
+  projectName: string | null;
+  sessionTitle: string | null;
+  source: 'pinned' | 'recent';
+  fleetUnavailableReason: string | null;
+};
+
+/**
+ * The confirmation card as the hub holds it. `visible` is the DISPLAY's last reported set —
+ * the input device's own page is irrelevant — and `target === null` means nothing will be sent.
+ */
+export type CockpitPendingSend = {
+  text: string;
+  visible: QuayFocusableObject[];
+  viewUri: string | null;
+  focusUri: QuayObjectUri | null;
+  target: CockpitPendingSendTarget | null;
+  reason: 'no-focus' | 'no-session' | null;
+};
+
+/** Everything the cockpit knows, as the server broadcasts it on every change. */
+export type CockpitHubState = {
+  /** Increments on every applied event; two devices compare it to tell whose state is newer. */
+  rev: number;
+  view: CockpitHubView;
+  viewStack: CockpitHubView[];
+  focusUri: QuayObjectUri | null;
+  tray: QuayObjectUri[];
+  history: QuayObjectUri[];
+  visible: CockpitVisibleSet;
+  pendingSend: CockpitPendingSend | null;
+  lastEventSource: CockpitEventSource | null;
+};
+
+/** One event this client sends to the hub (the hub stamps the `source` itself). */
+export type CockpitHubEvent =
+  | { type: 'move'; direction: 'up' | 'down' | 'left' | 'right' }
+  | { type: 'zoom'; direction: 'in' | 'out' }
+  | { type: 'back' }
+  | { type: 'focus'; uri: QuayObjectUri }
+  | { type: 'pin' }
+  | { type: 'unpin'; uri: QuayObjectUri }
+  | { type: 'setView'; view: CockpitHubView }
+  | { type: 'utterance'; text: string }
+  | { type: 'confirm' }
+  | { type: 'cancel' }
+  | { type: 'pinTarget' };
+
+/** The `cockpit.state` frame the server broadcasts (one of `ServerEvent`'s kinds). */
+export type CockpitStateFrame = {
+  kind: 'cockpit.state';
+  state: CockpitHubState;
+};
+
+// ---------------------------

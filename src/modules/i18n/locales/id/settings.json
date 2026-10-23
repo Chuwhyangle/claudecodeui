@@ -49,7 +49,9 @@
   "actions": {
     "saveChanges": "Simpan Perubahan",
     "resetToDefaults": "Reset ke Default",
-    "cancelChanges": "Batalkan Perubahan"
+    "cancelChanges": "Batalkan Perubahan",
+    "reportIssue": "Laporkan Masalah",
+    "joinCommunity": "Gabung Komunitas"
   },
   "voiceSettings": {
     "title": "Suara",
