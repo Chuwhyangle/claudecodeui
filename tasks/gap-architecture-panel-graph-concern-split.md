@@ -2,7 +2,7 @@
 id: gap-architecture-panel-graph-concern-split
 title: ArchitecturePanel/PlantUmlGraph
   按关注点切分（第一刀）：存储/过滤/DOM/样式/常量/子组件迁到命名兄弟文件，两个主组件只留编排与渲染
-status: todo
+status: ready
 labels:
   - gap
 parent: null
