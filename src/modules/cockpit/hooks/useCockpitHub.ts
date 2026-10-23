@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useWebSocketOptional } from '@/shared/context/WebSocketContext';
 import type {
@@ -8,7 +9,7 @@ import type {
   CockpitRole,
   CockpitVisibleSet,
 } from '@/shared/types';
-import { readDeviceName } from '@/shared/userSettings';
+import { MCP_DEVICE_NAME_STORAGE_KEY } from '@/shared/userSettings';
 import { getDeviceId, getTabId } from '@/shared/utils/deviceIdentity';
 
 /**
@@ -72,6 +73,38 @@ function readStateFrame(frame: unknown): CockpitHubState | null {
 /** The roles a page announces when it does not choose: the `/cockpit` wall both shows and drives. */
 const BOTH_ROLES: readonly CockpitRole[] = ['display', 'input'];
 
+/**
+ * The viewport width below which the cockpit calls a device a phone. It matches the fleet
+ * grid's own `sm` breakpoint, so "this is the phone window" and "this is the one-column
+ * stage" are the same boundary.
+ */
+const PHONE_MAX_WIDTH_PX = 639;
+
+/**
+ * The name this page announces for the hub's 「来自手机/桌面」 echo.
+ *
+ * A name the person chose in settings (the same value the ui-client registry stores) is
+ * theirs and is kept verbatim. With no chosen name, the User-Agent default ("Chrome · Linux")
+ * describes a browser rather than a device, and reads IDENTICALLY on a phone and a desktop —
+ * which is exactly why the echo could not tell the two windows apart. So the fallback is the
+ * device class the viewport actually is, plus a short `deviceId` so two desktops still differ.
+ */
+function cockpitDeviceName(deviceId: string, phoneLabel: string, desktopLabel: string): string {
+  let stored = '';
+  try {
+    stored = localStorage.getItem(MCP_DEVICE_NAME_STORAGE_KEY)?.trim() ?? '';
+  } catch {
+    // A storage-disabled browser still gets a readable name from the viewport.
+    stored = '';
+  }
+  if (stored !== '') return stored;
+  const phone =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(`(max-width: ${PHONE_MAX_WIDTH_PX}px)`).matches;
+  return `${phone ? phoneLabel : desktopLabel} · ${deviceId.slice(0, 6)}`;
+}
+
 export type CockpitHubOptions = {
   /**
    * Which roles this page announces. The default (both) is the desktop wall; the phone remote
@@ -86,6 +119,7 @@ export type CockpitHubOptions = {
  * route) to share one cockpit state across devices.
  */
 export function useCockpitHub(options: CockpitHubOptions = {}): CockpitHubConnection {
+  const { t } = useTranslation();
   // A serialized key rather than the array: a caller may pass a fresh literal on every render,
   // and re-announcing (or re-subscribing) on that identity would be a loop.
   const rolesKey = (options.roles ?? BOTH_ROLES).join(',');
@@ -96,7 +130,11 @@ export function useCockpitHub(options: CockpitHubOptions = {}): CockpitHubConnec
 
   const deviceId = useMemo(() => getDeviceId(), []);
   const tabId = useMemo(() => getTabId(), []);
-  const deviceName = useMemo(() => readDeviceName(), []);
+  // The device class comes from the viewport, not the User-Agent (see `cockpitDeviceName`).
+  const deviceName = useMemo(
+    () => cockpitDeviceName(deviceId, t('cockpit.deviceMobile'), t('cockpit.deviceDesktop')),
+    [deviceId, t],
+  );
   const connected = socket?.isConnected ?? false;
 
   useEffect(() => {

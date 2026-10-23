@@ -99,7 +99,14 @@ function RemoteQr({ value, title }: { value: string; title: string }) {
 /** One fleet reading; the discriminated union keeps a failed read from being drawn as empty. */
 type FleetReading =
   | { status: 'loading' }
-  | { status: 'loaded'; projects: CockpitProject[] }
+  | {
+      status: 'loaded';
+      projects: CockpitProject[];
+      /** Whether the server could ask quay-fleet at all (false = the CLI is missing). */
+      fleetAvailable: boolean;
+      /** The server's reason the fleet CLI could not be asked. */
+      fleetReason: string | null;
+    }
   | { status: 'error'; message: string };
 
 /** A view change whose intent → first-frame latency is still being measured. */
@@ -129,6 +136,50 @@ function isEditableTarget(target: EventTarget | null): boolean {
   }
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/**
+ * The fleet tile grid's column count at a viewport width.
+ *
+ * It MIRRORS the classes on the grid in `CockpitStage` (`grid-cols-1 sm:grid-cols-2
+ * xl:grid-cols-3`). The hub snaps focus over the `pos` the display reports and the server has
+ * no DOM to measure, so the display must report the grid it actually drew — a contract where
+ * every tile sits in column 1 is what made → a no-op and ↓ a linear "next tile".
+ */
+const FLEET_GRID_BREAKPOINTS = [
+  { minWidth: 1280, columns: 3 },
+  { minWidth: 640, columns: 2 },
+] as const;
+
+function fleetGridColumns(viewportWidth: number): number {
+  for (const breakpoint of FLEET_GRID_BREAKPOINTS) {
+    if (viewportWidth >= breakpoint.minWidth) return breakpoint.columns;
+  }
+  return 1;
+}
+
+/** The viewport width, or 0 where there is no window (a non-browser render pass). */
+function currentViewportWidth(): number {
+  return typeof window === 'undefined' ? 0 : window.innerWidth;
+}
+
+/**
+ * Re-indexes a single-column contract onto the columns the grid draws. Labels and ordinals keep
+ * their reading order; only `pos` changes, because `pos` is the coordinate the reducer snaps
+ * over. A null-safe `columns` floor of 1 keeps a zero-width first render from dividing by zero.
+ */
+function withGridPositions(
+  focusables: readonly QuayFocusableObject[],
+  columns: number,
+): QuayFocusableObject[] {
+  const width = Math.max(1, columns);
+  return focusables.map((object, index) => ({
+    ...object,
+    display: {
+      ...object.display,
+      pos: { row: Math.floor(index / width) + 1, column: (index % width) + 1 },
+    },
+  }));
 }
 
 /**
@@ -173,6 +224,11 @@ export default function CockpitPage() {
   // The input box's draft. The only page-local state the stage cannot derive: it is text being
   // typed, not cockpit state, and it must survive the round trip that follows submission.
   const [intentText, setIntentText] = useState('');
+  // The window's width, tracked so the display reports the SAME grid it draws: the tile grid
+  // changes columns at `sm`/`xl`, and the hub's arrow snapping reads the reported `pos`.
+  const [viewportWidth, setViewportWidth] = useState<number>(currentViewportWidth);
+  // The textarea, so `/` can move focus into it without the box ever taking focus on load.
+  const intentInputRef = useRef<HTMLTextAreaElement>(null);
   // Every measured intent → first-frame latency, oldest first, published on the root for the
   // scenario runner. A measurement, not cockpit state.
   const [timings, setTimings] = useState<CockpitTiming[]>([]);
@@ -217,6 +273,10 @@ export default function CockpitPage() {
           cached: project.cached,
           error: project.error,
         })),
+        // An older server omits `fleet`; that is not the same as "the CLI is missing", so it
+        // reads as available and the per-project ids carry the whole story.
+        fleetAvailable: summary.fleet?.available !== false,
+        fleetReason: summary.fleet?.reason ?? null,
       });
     } catch (error) {
       setFleet({
@@ -229,6 +289,13 @@ export default function CockpitPage() {
   useEffect(() => {
     void loadFleet();
   }, [loadFleet]);
+
+  // One resize listener for the whole page: the grid contract is derived from this reading.
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(currentViewportWidth());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const projects = useMemo<CockpitProject[]>(
     () => (fleet.status === 'loaded' ? fleet.projects : []),
@@ -281,8 +348,14 @@ export default function CockpitPage() {
   );
 
   const fleetFocusables = useMemo(
-    () => (fleet.status === 'loaded' ? buildCockpitFleetContract(fleet.projects).focusables : []),
-    [fleet],
+    () =>
+      fleet.status === 'loaded'
+        ? withGridPositions(
+            buildCockpitFleetContract(fleet.projects).focusables,
+            fleetGridColumns(viewportWidth),
+          )
+        : [],
+    [fleet, viewportWidth],
   );
 
   // The board's project segment: the fleet registry id, never the CloudCLI project id.
@@ -533,6 +606,13 @@ export default function CockpitPage() {
           };
           hub.dispatch({ type: 'back' });
           break;
+        case '/':
+          // `/` enters the composer. The box deliberately does not take focus on load: an
+          // auto-focused textarea swallows the first arrow press, so the stage owns the
+          // keyboard until the person asks for the box.
+          event.preventDefault();
+          intentInputRef.current?.focus();
+          break;
         default:
           // Escape is deliberately NOT handled: it aborts a running session turn elsewhere in
           // the app, and the cockpit's "back" is Backspace for exactly that reason.
@@ -580,6 +660,17 @@ export default function CockpitPage() {
 
   const pendingSend: CockpitPendingSend | null = hubState.pendingSend;
   const pendingTarget = pendingSend?.target ?? null;
+  // What the card calls the destination: the conversation's TITLE. A session id is a storage
+  // handle, not a name — the preview used to print the full UUID, which told the person
+  // nothing about where the message would go. Without a title, the honest label is
+  // 「unnamed conversation」 plus a short id, never the whole identifier.
+  const pendingSessionTitle = pendingTarget?.sessionTitle?.trim() ?? '';
+  const pendingSessionLabel =
+    pendingTarget === null
+      ? ''
+      : pendingSessionTitle !== ''
+        ? pendingSessionTitle
+        : t('cockpit.unnamedSession', { id: pendingTarget.sessionId.slice(0, 8) });
 
   return (
     <div
@@ -676,6 +767,8 @@ export default function CockpitPage() {
           projects={projects}
           fleetStatus={fleetStatus}
           fleetError={fleetError}
+          fleetAvailable={fleet.status === 'loaded' ? fleet.fleetAvailable : true}
+          fleetReason={fleet.status === 'loaded' ? fleet.fleetReason : null}
           focusables={focusables}
           focusUri={focusObject?.uri ?? null}
           onFocusObject={(uri) => hub.dispatch({ type: 'focus', uri: uri as QuayObjectUri })}
@@ -763,7 +856,7 @@ export default function CockpitPage() {
             <p className="text-xs" data-testid="cockpit-send-preview-line">
               {t('cockpit.sendPreview', {
                 project: pendingTarget.projectName ?? pendingTarget.projectId ?? '',
-                session: pendingTarget.sessionTitle ?? pendingTarget.sessionId,
+                session: pendingSessionLabel,
                 text: pendingSend.text,
               })}
             </p>
@@ -825,6 +918,7 @@ export default function CockpitPage() {
           voiceState={pushToTalk.state}
           onVoiceToggle={pushToTalk.toggle}
           voiceInFlight={pushToTalk.inFlight}
+          textareaRef={intentInputRef}
         />
       </footer>
     </div>

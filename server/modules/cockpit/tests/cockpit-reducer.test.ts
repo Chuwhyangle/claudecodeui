@@ -74,7 +74,10 @@ test('move snaps by grid position and clamps at every edge without wrapping', ()
   assert.equal(state.rev, 2, 'a move advances the revision');
 
   state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
-  assert.equal(state.focusUri, 'quay://three/board', 'down snaps to the nearest lower row, leftmost cell');
+  assert.equal(state.focusUri, 'quay://four/board', 'down takes the nearest column of the next row');
+
+  state = reduceCockpit(state, { type: 'move', direction: 'left', source: INPUT });
+  assert.equal(state.focusUri, 'quay://three/board');
 
   state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
   assert.equal(state.focusUri, 'quay://four/board');
@@ -85,12 +88,74 @@ test('move snaps by grid position and clamps at every edge without wrapping', ()
   state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
   assert.equal(state.focusUri, 'quay://four/board');
 
-  state = reduceCockpit(state, { type: 'move', direction: 'left', source: INPUT });
-  assert.equal(state.focusUri, 'quay://three/board');
   state = reduceCockpit(state, { type: 'move', direction: 'up', source: INPUT });
-  assert.equal(state.focusUri, 'quay://two/board', 'up snaps to the nearest upper row, rightmost cell');
+  assert.equal(state.focusUri, 'quay://two/board', 'up takes the nearest column of the row above');
   state = reduceCockpit(state, { type: 'move', direction: 'up', source: INPUT });
   assert.equal(state.focusUri, 'quay://two/board');
+
+  state = reduceCockpit(state, { type: 'move', direction: 'left', source: INPUT });
+  assert.equal(state.focusUri, 'quay://one/board');
+});
+
+/**
+ * AC2's fixture: a 3-column grid whose last row is short (①②③ / ④⑤). The page draws the
+ * fleet tiles in exactly this shape (`grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`), so the
+ * directions must be the two axes of THIS grid, not a linear next/previous.
+ */
+const THREE_COLUMN: CockpitFocusable[] = [
+  object('quay://a/board', 1, 1, 1),
+  object('quay://b/board', 1, 2, 2),
+  object('quay://c/board', 1, 3, 3),
+  object('quay://d/board', 2, 1, 4),
+  object('quay://e/board', 2, 2, 5),
+];
+
+/** A state whose display has reported {@link THREE_COLUMN}. */
+function threeColumnState(): CockpitState {
+  return reduceCockpit(createCockpitState(), {
+    type: 'visible',
+    viewUri: 'quay://a/board',
+    focusables: THREE_COLUMN,
+    source: DISPLAY,
+  });
+}
+
+test('AC2: arrows move on the two axes of the reported grid, and the short last row takes the nearest column', () => {
+  let state = threeColumnState();
+  assert.equal(state.focusUri, 'quay://a/board');
+
+  // → crosses the row; ← comes back. A same-column-only rule (the old behaviour) made → a
+  // no-op because every object was declared in column 1.
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  assert.equal(state.focusUri, 'quay://b/board', '(1,1) → (1,2)');
+  state = reduceCockpit(state, { type: 'move', direction: 'left', source: INPUT });
+  assert.equal(state.focusUri, 'quay://a/board', '(1,2) ← (1,1)');
+
+  // ↓ moves to the next ROW, keeping the column (the old rule moved linearly to the next
+  // object whatever its row).
+  state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
+  assert.equal(state.focusUri, 'quay://d/board', '(1,1) ↓ (2,1)');
+  state = reduceCockpit(state, { type: 'move', direction: 'up', source: INPUT });
+  assert.equal(state.focusUri, 'quay://a/board', '(2,1) ↑ (1,1)');
+
+  // The last row is short: (1,3) has no (2,3), so ↓ lands on the nearest column, (2,2).
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  assert.equal(state.focusUri, 'quay://c/board');
+  state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
+  assert.equal(state.focusUri, 'quay://e/board', '(1,3) ↓ nearest column (2,2)');
+
+  // Edges clamp: no wrapping, no leaving the declared grid.
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  assert.equal(state.focusUri, 'quay://e/board', '→ past the last column stays put');
+  state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
+  assert.equal(state.focusUri, 'quay://e/board', '↓ past the last row stays put');
+
+  state = threeColumnState();
+  state = reduceCockpit(state, { type: 'move', direction: 'left', source: INPUT });
+  assert.equal(state.focusUri, 'quay://a/board', '← past the first column stays put');
+  state = reduceCockpit(state, { type: 'move', direction: 'up', source: INPUT });
+  assert.equal(state.focusUri, 'quay://a/board', '↑ past the first row stays put');
 });
 
 test('zoom in on a project address pushes the fleet view and back pops it', () => {

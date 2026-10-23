@@ -269,10 +269,15 @@ function orderFocusables(objects: readonly CockpitFocusable[]): CockpitFocusable
 /**
  * The next object in one direction, or null at the edge.
  *
- * The rules are the stage's own: rows are the vertical axis, columns horizontal, and moving
- * past the last object stays put rather than wrapping. "Snapping" means the nearest greater
- * row (then its leftmost cell) for `down`, the mirror for `up`, and a same-row neighbour for
- * left/right.
+ * The space is the grid the DISPLAY reported: `row` is the vertical axis and `column` the
+ * horizontal one. The axes are independent, which is the whole point — a grid is not a linear
+ * list. `right`/`left` move to the adjacent cell IN THE SAME ROW; `down`/`up` move to the
+ * adjacent ROW (the nearest one that exists, so a missing row does not trap focus) and land on
+ * the cell whose column is closest to the current one. A last row that is not full therefore
+ * takes the nearest remaining column instead of jumping to the leftmost cell, which is what a
+ * person looking at the grid expects.
+ *
+ * Moving past the last row/column stays put (returns null) rather than wrapping.
  */
 function nextInDirection(
   current: CockpitFocusable,
@@ -280,27 +285,42 @@ function nextInDirection(
   objects: readonly CockpitFocusable[],
 ): CockpitFocusable | null {
   const { row, column } = current.display.pos;
+
+  /** The object in `row` whose column is closest to `column`; ties go to the lower column. */
+  const nearestColumnIn = (candidates: readonly CockpitFocusable[]): CockpitFocusable | null => {
+    let best: CockpitFocusable | null = null;
+    for (const candidate of candidates) {
+      if (best === null) {
+        best = candidate;
+        continue;
+      }
+      const distance = Math.abs(candidate.display.pos.column - column);
+      const bestDistance = Math.abs(best.display.pos.column - column);
+      if (
+        distance < bestDistance ||
+        // Deterministic tie-break: the lower column, so two equidistant cells never flip
+        // between runs on array order.
+        (distance === bestDistance && candidate.display.pos.column < best.display.pos.column)
+      ) {
+        best = candidate;
+      }
+    }
+    return best;
+  };
+
   switch (direction) {
-    case 'down':
-      return (
-        objects
-          .filter((object) => object.display.pos.row > row)
-          .sort(
-            (left, right) =>
-              left.display.pos.row - right.display.pos.row ||
-              left.display.pos.column - right.display.pos.column,
-          )[0] ?? null
-      );
-    case 'up':
-      return (
-        objects
-          .filter((object) => object.display.pos.row < row)
-          .sort(
-            (left, right) =>
-              right.display.pos.row - left.display.pos.row ||
-              right.display.pos.column - left.display.pos.column,
-          )[0] ?? null
-      );
+    case 'down': {
+      const lower = objects.filter((object) => object.display.pos.row > row);
+      if (lower.length === 0) return null;
+      const targetRow = Math.min(...lower.map((object) => object.display.pos.row));
+      return nearestColumnIn(lower.filter((object) => object.display.pos.row === targetRow));
+    }
+    case 'up': {
+      const upper = objects.filter((object) => object.display.pos.row < row);
+      if (upper.length === 0) return null;
+      const targetRow = Math.max(...upper.map((object) => object.display.pos.row));
+      return nearestColumnIn(upper.filter((object) => object.display.pos.row === targetRow));
+    }
     case 'right':
       return (
         objects
