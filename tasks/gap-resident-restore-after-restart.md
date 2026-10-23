@@ -1,7 +1,7 @@
 ---
 id: gap-resident-restore-after-restart
 title: 重启后自动恢复 resident 会话（最小可行版：默认 off，CLAUDE_RESIDENT_RESTORE=on 开启）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
