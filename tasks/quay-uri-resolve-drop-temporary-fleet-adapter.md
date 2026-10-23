@@ -24,9 +24,9 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-uri-resolve.test.ts` exit 0——桩 fleet 读口收到的 URI 与调用方传入的 `quay://<project>/…` 逐字相等（含 `#ac-<n>`）；不再出现无项目段形式；既有 no-summary / reader-unavailable 两条 reason 用例不弱化。
-- [ ] AC2: `git grep -n "formatFleetAddress" -- server` 无命中。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-uri-resolve.test.ts` exit 0——桩 fleet 读口收到的 URI 与调用方传入的 `quay://<project>/…` 逐字相等（含 `#ac-<n>`）；不再出现无项目段形式；既有 no-summary / reader-unavailable 两条 reason 用例不弱化。
+- [x] AC2: `git grep -n "formatFleetAddress" -- server` 无命中。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 

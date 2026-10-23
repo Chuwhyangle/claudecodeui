@@ -1,7 +1,7 @@
 ---
 id: cockpit-phone-remote-input
 title: 驾驶舱手机遥控器：/cockpit/remote 按住说话 + 打字 + 方向键 + 手机上确认，输出在桌面
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
