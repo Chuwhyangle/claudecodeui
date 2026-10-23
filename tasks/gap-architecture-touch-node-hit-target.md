@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-touch-node-hit-target
 title: 架构图节点在粗指针下的点击面积：命中区不小于 44px，密集图先选中居中再开检查器
-status: todo
+status: ready
 labels:
   - gap
 parent: null
