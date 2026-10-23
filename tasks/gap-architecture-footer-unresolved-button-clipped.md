@@ -12,11 +12,11 @@ extra:
 ---
 ## Proposal
 
-2026-10-23 移动端（390×844）真机路径审查发现：`ArchitecturePanel.tsx` 的 `sourceFooter`（`data-architecture-source-line`）把「Analysis: <时间> · N names mentioned in this session were not found…」整段放进一个 `min-w-0 truncate` 的 `<span>`，其中的 `data-architecture-unresolved` 是可点按钮。实测按钮宽 352px，容器 263px，按钮被 overflow 裁掉，只露出 "Analysis: 14 hours ago · …"；Playwright 对它的点击超时（报被 `data-architecture-source-line` 的 span 拦截）。用户在窄屏上看不到、也点不到「未解析名字」入口。
+2026-10-23 移动端（390×844）路径审查发现：`ArchitecturePanel.tsx` 的 `sourceFooter`（`data-architecture-source-line`）把「Analysis: <时间> · N names mentioned in this session were not found…」整段放进一个 `min-w-0 truncate` 的 `<span>`，其中的 `data-architecture-unresolved` 是可点按钮。实测按钮宽 352px，容器 263px，按钮被 overflow 裁掉，只露出 "Analysis: 14 hours ago · …"；Playwright 对它的点击超时（报被 `data-architecture-source-line` 的 span 拦截，拦截的确切原因未查清，但按钮超宽被裁是实测事实）。用户在窄屏上看不到、也点不到「未解析名字」入口。
 
 机制：可交互控件被嵌在会自我裁剪的文本容器里。改法：
 - 只让「Analysis: <相对时间>」这一段 truncate；未解析按钮移出该 span，与 `Scope cleanup` 并排，同为 `shrink-0` 的小胶囊。
-- 窄屏（compact 档）按钮文案缩成短句（例如「{{count}} 未匹配 ▸」，新增 i18n 键，所有 locale 补齐），完整句子放进向上展开的列表（`data-architecture-unresolved-list`）顶部。
+- 窄屏（compact 档）按钮文案缩成短句（例如「{{count}} 未匹配 ▸」，新增 i18n 键，12 个 locale 全部补齐），完整句子放进向上展开的列表（`data-architecture-unresolved-list`）顶部。
 - 保持原有约束：页脚行不能加 `overflow-hidden`（两个向上展开的面板 `absolute bottom-full` 会被裁成零高，见源码注释）。
 
 相关但不同机制：`architecture-landscape-phone-layout`（ready，同改 ArchitecturePanel.tsx，调度器按 Touches 串行）；本任务只动页脚，保持独立验收。<!-- dedup-ref --> 合并决定：separate，原因是验收独立、改动范围只在页脚 JSX。
@@ -35,8 +35,18 @@ extra:
 ## Touches
 
 - src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
 - src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
 - src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
 - tasks/gap-architecture-footer-unresolved-button-clipped.md
