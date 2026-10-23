@@ -4,6 +4,7 @@ import { beforeEach, test } from 'vitest';
 
 import {
   applyZoomScale,
+  centeredScrollForDrawingRect,
   clampZoomScale,
   createSvgDragPan,
   createSvgViewport,
@@ -13,6 +14,7 @@ import {
   fitZoomScale,
   MAX_ZOOM_SCALE,
   MIN_READABLE_ZOOM_SCALE,
+  MIN_USEFUL_OVERVIEW_SCALE,
   MIN_ZOOM_SCALE,
   PAN_THRESHOLD_PX,
   readSvgNaturalSize,
@@ -534,3 +536,118 @@ test('fitAvoidingCorners falls back to the plain fit for an unmeasurable or over
   assert.equal(fitAvoidingCorners({ width: 0, height: 0 }, HOST, [CORNER]), fitZoomScale({ width: 0, height: 0 }, HOST));
   assert.equal(fitAvoidingCorners(NATURAL, { width: 0, height: 0 }, [CORNER]), 1);
 });
+
+/* ── the phone geometry: 366×505 canvas, a 44px minimap button, a ~1.05:1 drawing ───────── */
+
+/**
+ * The narrow-container layout turns the session's 5116×2910 drawing into a
+ * near-square one (~1.05:1). The phone canvas is 366×505 and its only corner
+ * chrome by default is the 44×44 collapsed-minimap button at the bottom right.
+ */
+const PHONE_NATURAL = { width: 5116, height: 4872 };
+const PHONE_VIEWPORT = { width: 366, height: 505 };
+/** The collapsed minimap button: 44×44, 12px in from the canvas's bottom-right. */
+const PHONE_MINIMAP = {
+  left: PHONE_VIEWPORT.width - 12 - 44,
+  top: PHONE_VIEWPORT.height - 12 - 44,
+  width: 44,
+  height: 44,
+};
+/** What the canvas's own content box affords for that drawing. */
+const PHONE_THEORETICAL_FIT = Math.min(
+  PHONE_VIEWPORT.width / PHONE_NATURAL.width,
+  PHONE_VIEWPORT.height / PHONE_NATURAL.height,
+  1,
+);
+
+test('the phone fit keeps ≥95% of the theoretical maximum and clears the minimap button', () => {
+  const placement = fitPlacementAvoidingCorners(
+    PHONE_NATURAL,
+    PHONE_VIEWPORT,
+    [PHONE_MINIMAP],
+    MIN_ZOOM_SCALE,
+  );
+  assert.ok(
+    placement.scale >= PHONE_THEORETICAL_FIT * 0.95,
+    `the phone fit must keep ≥95% of ${PHONE_THEORETICAL_FIT}: got ${placement.scale}`,
+  );
+  const rect = placedDrawingRect(PHONE_NATURAL, placement);
+  assert.equal(intersects(rect, PHONE_MINIMAP), false, 'the drawing must not run under the minimap button');
+  assert.ok(rect.left >= 0 && rect.top >= 0, 'the drawing stays inside the canvas');
+  assert.ok(rect.right <= PHONE_VIEWPORT.width + 1e-6);
+  assert.ok(rect.bottom <= PHONE_VIEWPORT.height + 1e-6);
+  // The drawing really fills the canvas width the task measures.
+  assert.ok(rect.right - rect.left >= PHONE_VIEWPORT.width * 0.95);
+});
+
+test('the shipped tall corner column is avoided by TRANSLATING, not by shrinking', () => {
+  // The pre-fix phone chrome was a 44px-wide column reaching ~256px up the
+  // right edge (minimap button + gap + 204px zoom column). On the session's
+  // wide drawing (5116×2910) the centred fit overlaps it; moving the drawing
+  // to the top of the canvas clears it at the SAME scale.
+  const wideNatural = { width: 5116, height: 2910 };
+  const tallChrome = {
+    left: PHONE_VIEWPORT.width - 12 - 44,
+    top: PHONE_VIEWPORT.height - 12 - 256,
+    width: 44,
+    height: 256,
+  };
+  const fit = Math.min(PHONE_VIEWPORT.width / wideNatural.width, PHONE_VIEWPORT.height / wideNatural.height);
+  assert.ok(intersects(fittedDrawingRect(wideNatural, PHONE_VIEWPORT, fit), tallChrome), 'the fixture really overlaps at the centred fit');
+
+  const placement = fitPlacementAvoidingCorners(wideNatural, PHONE_VIEWPORT, [tallChrome], MIN_ZOOM_SCALE);
+  assert.ok(
+    placement.scale >= fit * 0.95,
+    `a translation exists, so the fit must not shrink: got ${placement.scale} vs ${fit}`,
+  );
+  const rect = placedDrawingRect(wideNatural, placement);
+  assert.equal(intersects(rect, tallChrome), false, 'the translated drawing clears the column');
+  const centredTop = (PHONE_VIEWPORT.height - wideNatural.height * placement.scale) / 2;
+  assert.ok(
+    Math.abs(placement.offsetY - centredTop) > 1,
+    'clearing the column is what moved the drawing off centre',
+  );
+});
+
+test('only when every placement intersects does the phone fit drop below the maximum', () => {
+  // A full-width band leaves less height than the fitted drawing needs in
+  // every vertical position, so no translation can save the scale.
+  const band = { left: 0, top: 300, width: PHONE_VIEWPORT.width, height: PHONE_VIEWPORT.height - 300 };
+  const placement = fitPlacementAvoidingCorners(
+    PHONE_NATURAL,
+    PHONE_VIEWPORT,
+    [band],
+    MIN_ZOOM_SCALE,
+  );
+  assert.ok(
+    placement.scale < PHONE_THEORETICAL_FIT * 0.95,
+    `no placement clears the band at the fit, so the scale must drop; got ${placement.scale}`,
+  );
+  const rect = placedDrawingRect(PHONE_NATURAL, placement);
+  assert.equal(intersects(rect, band), false, 'the reduced fit still clears the band');
+});
+
+test('the overview threshold sits below the readable floor and above the manual floor', () => {
+  // It is a presentation cue for an unreadably small overview, not a zoom
+  // limit: manual zoom-out still reaches MIN_ZOOM_SCALE.
+  assert.ok(MIN_USEFUL_OVERVIEW_SCALE > MIN_ZOOM_SCALE);
+  assert.ok(MIN_USEFUL_OVERVIEW_SCALE < MIN_READABLE_ZOOM_SCALE);
+});
+
+test('centeredScrollForDrawingRect centres a package frame in the drawing user units', () => {
+  const offsets = centeredScrollForDrawingRect(
+    { width: 366, height: 505 },
+    { left: 2000, top: 1000, width: 400, height: 300 },
+    0.5,
+  );
+  // The frame's centre in screen pixels is (2000+200)·0.5 = 1100 by
+  // (1000+150)·0.5 = 575; minus half the content box.
+  assert.equal(offsets.left, 1100 - 183);
+  assert.equal(offsets.top, 575 - 252.5);
+  // A frame at the drawing's origin clamps at zero instead of scrolling past it.
+  assert.deepEqual(
+    centeredScrollForDrawingRect({ width: 366, height: 505 }, { left: 0, top: 0, width: 100, height: 100 }, 0.5),
+    { left: 0, top: 0 },
+  );
+});
+

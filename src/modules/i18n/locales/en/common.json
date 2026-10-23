@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "Message",
       "mentionFileOnly": "mentioned the file, not the name"
     },
-    "tray":     {
+    "tray": {
       "region": "Selection",
       "pill": "{{count}} selected ▴",
       "expand": "Expand the selection tray",
@@ -159,7 +159,9 @@
         "collapsed": "The graph is too wide, so it was collapsed to the directory overview.",
         "focusedFitHint": "Readable zoom is on, so this is a focus view — choose Overview to see the whole graph.",
         "focusSummary": "Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).",
-        "focusOnly": "Readable zoom is on — choose Overview to see the whole graph."
+        "focusOnly": "Readable zoom is on — choose Overview to see the whole graph.",
+        "overviewTooSmall": "Whole graph at {{zoom}}% — tap a package to zoom in",
+        "backToWhole": "Back to whole graph"
       },
       "minimap": {
         "label": "Graph overview, showing {{percent}}% of the drawing",

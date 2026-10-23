@@ -55,7 +55,7 @@
       "mentionBadgeMessage": "訊息",
       "mentionFileOnly": "提到了該檔案，不是該名字"
     },
-    "tray":     {
+    "tray": {
       "region": "已選元素",
       "pill": "已選 {{count}} 項 ▴",
       "expand": "展開選擇托盤",
@@ -123,7 +123,9 @@
         "collapsed": "圖過寬，已摺疊為目錄全貌。",
         "focusedFitHint": "已按可讀縮放聚焦，點「全貌」查看整圖。",
         "focusSummary": "可讀縮放已開啟：聚焦 {{package}}，目前 {{zoom}}% — 選「全貌」檢視整張圖（另有 {{count}} 個套件）。",
-        "focusOnly": "可讀縮放已開啟 — 選「全貌」檢視整張圖。"
+        "focusOnly": "可讀縮放已開啟 — 選「全貌」檢視整張圖。",
+        "overviewTooSmall": "整圖縮小到 {{zoom}}%，點一個 package 放大檢視",
+        "backToWhole": "返回全圖"
       },
       "minimap": {
         "label": "圖概覽，目前視野佔 {{percent}}%",

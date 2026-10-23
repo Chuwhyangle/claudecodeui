@@ -21,6 +21,8 @@ import {
   buildExplosionHierarchy,
   createExplosionLodScheduler,
   focusPackageOf,
+  packageFrameBox,
+  PACKAGE_LOD_DEPTH,
   resolveLodDepth,
   type ExplosionLodDepth,
   type ExplosionLodScheduler,
@@ -69,12 +71,16 @@ import {
 } from '@/modules/architecture/selectionModel';
 import {
   centerElementInContainer,
+  centeredScrollForDrawingRect,
+  clampZoomScale,
   createSvgDragPan,
   createSvgTouchGestures,
   createSvgViewport,
   fitPlacementAvoidingCorners,
   fitZoomScale,
   measureViewportSize,
+  MIN_READABLE_ZOOM_SCALE,
+  MIN_USEFUL_OVERVIEW_SCALE,
   MIN_ZOOM_SCALE,
   readSvgNaturalSize,
   ZOOM_STEP,
@@ -1107,6 +1113,22 @@ export function PlantUmlGraph({
     setZoom(next);
   }, []);
 
+  // The package the reader zoomed into from the too-small overview hint (the
+  // "tap a package" gesture), or `null` while the whole graph is on screen. It
+  // is what keeps the hint row visible after the zoom and gives that row its
+  // "back to whole graph" action; a fit or an explicit readable-mode switch
+  // clears it.
+  const [packageFocus, setPackageFocus] = useState<string | null>(null);
+
+  /** The viewBox origin of the drawing on screen, in user units (usually 0,0). */
+  const drawingOrigin = useCallback((): { x: number; y: number } => {
+    const parts = (hostRef.current?.querySelector('svg')?.getAttribute('viewBox') ?? '')
+      .trim().split(/[\s,]+/).map(Number);
+    return parts.length === 4 && parts.every(Number.isFinite)
+      ? { x: parts[0], y: parts[1] }
+      : { x: 0, y: 0 };
+  }, []);
+
   // The panel's chrome-row cell this renderer draws the zoom tier into, or null
   // when the renderer is not inside a panel (see `CanvasHeaderSlotContext`).
   const canvasHeaderSlot = useCanvasHeaderSlot();
@@ -1186,6 +1208,45 @@ export function PlantUmlGraph({
     drawing.style.marginTop = placement.offsetY > 0 ? `${placement.offsetY}px` : '0';
     drawing.style.marginBottom = 'auto';
   }, []);
+
+  /**
+   * Zoom the viewport onto one drawn package frame and centre it.
+   *
+   * Occurrences: the overview hint's "tap a package" gesture while the whole
+   * graph is too small to read. The target scale is the one that makes the
+   * frame fill most of the content box, lifted to the readable floor so the
+   * gesture always lands on text a reader can use; the offsets come from the
+   * drawing's own user units, so the frame is centred without waiting for a
+   * layout pass. A package the drawing has no frame for is a no-op.
+   */
+  const zoomToPackage = useCallback((packageId: string): void => {
+    const host = hostRef.current;
+    const viewport = viewportRef.current;
+    if (host === null || viewport === null) return;
+    const frame = packageFrameBox(host, packageId);
+    const box = measureViewportSize(host);
+    if (frame === null || box === null) return;
+    const fitToFrame = Math.min(
+      (box.width * 0.9) / frame.width,
+      (box.height * 0.9) / frame.height,
+    );
+    const scale = clampZoomScale(Math.max(fitToFrame, MIN_READABLE_ZOOM_SCALE));
+    const applied = viewport.zoomTo(scale);
+    applyZoom({ scale: applied, mode: 'custom' });
+    // The fit placement pins explicit margins; a zoomed package is centred by
+    // the scroll offsets below instead, so hand the drawing back to `auto`.
+    applyPlacement(host.querySelector('svg'), null);
+    const origin = drawingOrigin();
+    const offsets = centeredScrollForDrawingRect(box, {
+      left: frame.x - origin.x,
+      top: frame.y - origin.y,
+      width: frame.width,
+      height: frame.height,
+    }, applied);
+    host.scrollLeft = offsets.left;
+    host.scrollTop = offsets.top;
+    setPackageFocus(packageId);
+  }, [applyPlacement, applyZoom, drawingOrigin]);
 
   // The readable default applied to the drawing on screen: focus or overview,
   // the package focus centres, and the overview hint (if any). Rendering reads
@@ -1699,6 +1760,9 @@ export function PlantUmlGraph({
             hint: decision.overviewHint,
           };
           setReadableView(readout);
+          // A fresh drawing is a new whole-graph view; a package zoom from the
+          // previous one no longer names a frame on screen.
+          setPackageFocus(null);
           matchReading = decision;
         }
         // A fresh SVG has no highlight classes; re-pin the current selection.
@@ -1936,6 +2000,22 @@ export function PlantUmlGraph({
       // menu itself never reaches this listener (the menu is a sibling).
       setContextMenu(null);
 
+      // At the package level the drawing is a map of frames, not selectable
+      // entities: a click on one zooms into it — the "tap a package" gesture
+      // the too-small overview hint offers, on every pointer tier. This runs
+      // before the background-clear branch because a frame carries no
+      // `data-entity-id` of its own.
+      if (lodDepthRef.current === PACKAGE_LOD_DEPTH) {
+        const frame = event.target instanceof Element
+          ? event.target.closest('.uml-package[data-package-id]')
+          : null;
+        const packageId = frame?.getAttribute('data-package-id') ?? null;
+        if (packageId !== null) {
+          zoomToPackage(packageId);
+          return;
+        }
+      }
+
       // A relation's enlarged hit band sits ON TOP of the drawing, so it is
       // checked before the node lookup: clicking a line selects the relation,
       // not whatever box the line starts on.
@@ -2041,7 +2121,7 @@ export function PlantUmlGraph({
       host.removeEventListener('dblclick', onDoubleClick);
       host.removeEventListener('contextmenu', onContextMenu);
     };
-  }, [canCurate, drillInto]);
+  }, [canCurate, drillInto, zoomToPackage]);
 
   // The other direction of the cross-panel linkage: a sibling panel selects an
   // entity by its stable id (e.g. a file referenced in chat). The graph pins the
@@ -2190,6 +2270,7 @@ export function PlantUmlGraph({
   const applyReadableMode = useCallback((mode: ReadableZoomMode): void => {
     readableModeRef.current = mode;
     setReadableMode(mode);
+    setPackageFocus(null);
     // The toolbar click is the EXPLICIT choice this project remembers; an
     // automatic default is never written here.
     writeStoredReadableMode(localReadableStorage(), projectId, mode);
@@ -2228,6 +2309,9 @@ export function PlantUmlGraph({
   const fitDiagram = (): void => {
     const host = hostRef.current;
     const viewport = viewportRef.current;
+    // A fit is the whole-graph reading: the package zoom the hint offered is
+    // over, and its row must not keep asking the reader to go back.
+    setPackageFocus(null);
     if (host === null || viewport === null) {
       applyZoom({ scale: 1, mode: 'fit' });
       return;
@@ -2584,6 +2668,26 @@ export function PlantUmlGraph({
   // it. 32px targets on a fine pointer, 44px on a coarse one.
   const clusterTargetStyle = touchUi ? TOUCH_TARGET_STYLE : ZOOM_CLUSTER_TARGET_STYLE;
 
+  /**
+   * The overview hint: shown while the WHOLE graph is too small to read (the
+   * fit / a manual zoom-out below `MIN_USEFUL_OVERVIEW_SCALE`) on any pointer
+   * tier, and kept on screen after the reader taps a package so the row carries
+   * the way back. Focus mode is a readable crop already, so it never shows one.
+   */
+  const overviewTooSmall = zoom.scale < MIN_USEFUL_OVERVIEW_SCALE;
+  const showOverviewHint = readableView !== null
+    && readableView.mode === 'overview'
+    && (overviewTooSmall || packageFocus !== null);
+  const overviewHintText = packageFocus === null
+    ? t('architecture.plantuml.readable.overviewTooSmall', {
+        defaultValue: 'Whole graph at {{zoom}}% — tap a package to zoom in',
+        zoom: Math.round(zoom.scale * 100),
+      })
+    : t('architecture.plantuml.readable.focusHint', {
+        defaultValue: 'Focused on {{package}}',
+        package: shortPackageName(packageFocus),
+      });
+
   const zoomOutButton = (
     <button
       type="button"
@@ -2772,7 +2876,11 @@ export function PlantUmlGraph({
           // and 1 is natural size (see `onCanvasKeyDown`). The ring is only drawn
           // for keyboard focus, so a mouse press does not flash a box.
           tabIndex={0}
-          className="h-full w-full overflow-auto p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60"
+          // The phone tier spends only 4px a side on padding: the task wants
+          // the fitted drawing at ≥95% of the canvas width, and a 12px inset
+          // already costs 6.5% of a 366px canvas. The fine-pointer tier keeps
+          // the roomier p-3.
+          className={`h-full w-full overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 ${touchUi ? 'p-1' : 'p-3'}`}
           // The gestures own every touch on the drawing: without this the browser
           // would pan/zoom the page and the pinch would never reach the controller.
           // The flex column is the vertical-centring mechanism: the injected SVG
@@ -2794,6 +2902,33 @@ export function PlantUmlGraph({
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
+        {showOverviewHint && (
+          <div
+            data-architecture-readable-hint="true"
+            role="status"
+            // An overlay pill, not a row: it must never take height from the
+            // drawing (which would move the very fit it is talking about). It
+            // sits at the canvas's top-left, clear of the top-right touch hint
+            // and of the bottom-right corner chrome.
+            style={{ position: 'absolute', left: 8, top: 8, zIndex: 25, maxWidth: '78%' }}
+            className="pointer-events-auto flex items-center gap-2 rounded-md border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+          >
+            <span className="min-w-0 truncate">{overviewHintText}</span>
+            {packageFocus !== null && (
+              <button
+                type="button"
+                data-architecture-readable-back="true"
+                onClick={fitDiagram}
+                style={clusterTargetStyle}
+                className={TOOLBAR_BUTTON_CLASS}
+              >
+                {t('architecture.plantuml.readable.backToWhole', {
+                  defaultValue: 'Back to whole graph',
+                })}
+              </button>
+            )}
+          </div>
+        )}
         {marquee !== null && (
           <div
             data-architecture-marquee="true"
@@ -2912,9 +3047,15 @@ export function PlantUmlGraph({
             bottom: 12,
             right: 12,
             display: 'flex',
-            flexDirection: 'column',
+            // A phone spends one ROW on the corner chrome: the collapsed
+            // minimap button and the zoom cluster sit side by side, bottom
+            // aligned, so the pair takes ~52px of height instead of a 204px
+            // column covering the drawing's right edge. The fine-pointer tier
+            // keeps its stacked column.
+            flexDirection: touchUi ? 'row' : 'column',
             alignItems: 'flex-end',
             rowGap: 8,
+            columnGap: touchUi ? 8 : 0,
           }}
           className="z-20 pointer-events-none"
         >
@@ -2933,8 +3074,16 @@ export function PlantUmlGraph({
             role="group"
             aria-label={zoomGroupLabel}
             data-architecture-zoom-cluster="true"
-            style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
-            className="pointer-events-auto flex flex-col items-center rounded-lg border border-border/60 bg-background/90 p-1 shadow-sm"
+            // A phone draws ONE horizontal row (+, −, Fit, then the scale and
+            // the level label as small text): 44px buttons + 4px padding a side
+            // make the row exactly 52px tall. The fine-pointer tier keeps the
+            // compact vertical cluster beside the drawing.
+            style={{
+              gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4,
+              flexDirection: touchUi ? 'row' : 'column',
+              height: touchUi ? '52px' : undefined,
+            }}
+            className={`pointer-events-auto flex items-center rounded-lg border border-border/60 bg-background/90 shadow-sm ${touchUi ? 'p-0' : 'flex-col p-1'}`}
           >
             {zoomInButton}
             {zoomOutButton}

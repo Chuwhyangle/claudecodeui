@@ -129,6 +129,7 @@ const SEL = {
   searchOption: '[data-architecture-search-results] [role="option"]',
   zoomLevel: '[data-architecture-zoom-level]',
   readableHint: '[data-architecture-readable-hint]',
+  readableBack: '[data-architecture-readable-back]',
 } as const;
 
 /* ── the server's own faces ────────────────────────────────────────────────────────────────── */
@@ -635,6 +636,78 @@ const assertFitNearTheoretical = (reading: LayoutReading, label: string): void =
         + `tier=${JSON.stringify(reading.zoomLevelText)} hint=${formatNumber(reading.readableHintPercent)}%`,
     ).toBe(`${reading.readableHintPercent}%`);
   }
+};
+
+/* ── the phone's density contract ────────────────────────────────────────────────────────── */
+
+/**
+ * The phone tier's density readings, all taken from the SAME `readLayout`
+ * round trip as every other leg:
+ *  · the fitted drawing reaches ≥85% of the canvas in its binding axis. The
+ *    criterion's 95% is pinned exactly by `svgViewport.test.tsx` on the measured
+ *    geometry (366×505 canvas, a ~1.05:1 drawing, a 44×44 corner button), where
+ *    the corner is cleared by TRANSLATION and the fit is 100% of the maximum.
+ *    THIS fixture's explosion drawing is portrait (~0.46) in a portrait phone
+ *    canvas, so it binds on the HEIGHT: the mandatory 52px corner row can only
+ *    be cleared by giving up ~9% of that height — 95% is geometrically
+ *    unreachable there without demanding upscaling, and the shipped symmetric
+ *    shrink (66% of both axes) still fails this floor;
+ *  · the canvas region keeps at least 70% of the tab's height;
+ *  · the collapsed readout is at most 44px tall;
+ *  · the zoom cluster is one horizontal row at most 52px tall.
+ *
+ * Split into separate helpers so the control arm can reuse the cluster leg
+ * verbatim (the guard must be shown able to go red on the same reading).
+ */
+const PHONE_DRAWING_FILL_FLOOR = 0.85;
+
+const assertPhoneDrawingFillsCanvas = (reading: LayoutReading, label: string): void => {
+  expect.soft(reading.svg, `${label}: the drawing must be measurable`).not.toBeNull();
+  expect.soft(reading.canvas, `${label}: the canvas region must be measurable`).not.toBeNull();
+  const widthShare = reading.svg !== null && reading.canvas !== null && reading.canvas.w > 0
+    ? reading.svg.w / reading.canvas.w
+    : 0;
+  const heightShare = reading.svg !== null && reading.canvas !== null && reading.canvas.h > 0
+    ? reading.svg.h / reading.canvas.h
+    : 0;
+  expect.soft(
+    Math.max(widthShare, heightShare),
+    `${label}: the fitted drawing must fill ≥${PHONE_DRAWING_FILL_FLOOR} of the canvas in its binding axis — `
+      + `svg=${formatBox(reading.svg)} canvas=${formatBox(reading.canvas)} `
+      + `width=${formatNumber(widthShare)} height=${formatNumber(heightShare)}`
+      + ` (the shipped symmetric shrink left the drawing at ~66% of both)`,
+  ).toBeGreaterThanOrEqual(PHONE_DRAWING_FILL_FLOOR);
+};
+
+const assertPhoneRegionHeight = (reading: LayoutReading, label: string): void => {
+  expect.soft(reading.panel, `${label}: the panel must be measurable`).not.toBeNull();
+  expect.soft(reading.canvas, `${label}: the canvas region must be measurable`).not.toBeNull();
+  const share = reading.panel !== null && reading.canvas !== null && reading.panel.h > 0
+    ? reading.canvas.h / reading.panel.h
+    : 0;
+  expect.soft(
+    share,
+    `${label}: the canvas region must keep ≥70% of the tab height — `
+      + `canvas=${formatBox(reading.canvas)} panel=${formatBox(reading.panel)} share=${formatNumber(share)}`,
+  ).toBeGreaterThanOrEqual(0.7);
+};
+
+const assertPhoneReadoutCollapsed = (reading: LayoutReading, label: string): void => {
+  expect.soft(reading.readout, `${label}: the readout card must be measurable`).not.toBeNull();
+  expect.soft(
+    reading.readout?.h ?? Number.POSITIVE_INFINITY,
+    `${label}: the collapsed phone readout is one line no taller than 44px — `
+      + `readout=${formatBox(reading.readout)} text=${JSON.stringify(reading.readoutText)}`,
+  ).toBeLessThanOrEqual(44);
+};
+
+const assertPhoneZoomClusterRow = (reading: LayoutReading, label: string): void => {
+  expect.soft(reading.zoomCluster, `${label}: the zoom cluster must be measurable`).not.toBeNull();
+  expect.soft(
+    reading.zoomCluster?.h ?? Number.POSITIVE_INFINITY,
+    `${label}: the phone zoom cluster is one horizontal row no taller than 52px — `
+      + `cluster=${formatBox(reading.zoomCluster)}`,
+  ).toBeLessThanOrEqual(52);
 };
 
 /* ── the guard's own legs ─────────────────────────────────────────────────────────────────── */
@@ -1651,6 +1724,40 @@ async function zoomOutToPackageLevel(page: Page): Promise<void> {
   await settle(page, 500);
 }
 
+/**
+ * Zoom out through the on-canvas cluster until the applied scale is under the
+ * 12% useful-overview floor, then wait for the LOD to settle at the package
+ * level (where the package frames are visible and tappable).
+ *
+ * This is the state a default fit on a phone already reaches for a large
+ * drawing; driving it with the real zoom-out control keeps the case honest on
+ * a fixture whose default fit happens to be larger.
+ */
+async function zoomOutBelowUsefulScale(page: Page): Promise<void> {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    const raw = await page.locator(SEL.graphRoot).getAttribute('data-architecture-zoom-scale');
+    const scale = Number(raw ?? '1');
+    if (Number.isFinite(scale) && scale > 0 && scale < 0.12) break;
+    await page.locator(SEL.zoomOut).first().click();
+    await page.waitForTimeout(120);
+  }
+  await page.waitForFunction(
+    (sel) => {
+      const raw = Number(document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-zoom-scale') ?? '1');
+      return raw > 0 && raw < 0.12;
+    },
+    SEL,
+    { timeout: 15_000 },
+  );
+  await page.waitForFunction(
+    (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-lod-depth') === '0',
+    SEL,
+    { timeout: 15_000 },
+  );
+  // One debounce window plus the LOD overlay rebuild.
+  await settle(page, 400);
+}
+
 /* ── the fixture, built once per worker ──────────────────────────────────────────────────── */
 
 let baseURL = '';
@@ -1807,6 +1914,62 @@ test('main arm — the phone canvas fills the panel and every control is a 44px 
     assertChromeClearOfNodes(fitted, 'phone.fitted');
     assertFooterInFlow(fitted, 'phone.fitted');
     assertFitNearTheoretical(fitted, 'phone.fitted');
+
+    // A whole graph that falls under the useful scale offers the hint, and a
+    // package tap zooms in with a way back. The explosion view draws the
+    // package frames the gesture names; the zoom-out path then reaches the
+    // same tiny state a default fit on a large drawing would.
+    await showExplosionView(page);
+    const exploded = await readLayout(page);
+    printReading('phone.exploded.fitted', exploded);
+    // The density contract: the drawing really fills the canvas, the readout is
+    // one 44px line and the zoom cluster is one 52px row.
+    assertPhoneDrawingFillsCanvas(exploded, 'phone.exploded.fitted');
+    assertPhoneRegionHeight(exploded, 'phone.exploded.fitted');
+    assertPhoneReadoutCollapsed(exploded, 'phone.exploded.fitted');
+    assertPhoneZoomClusterRow(exploded, 'phone.exploded.fitted');
+
+    await zoomOutBelowUsefulScale(page);
+    const tiny = await readLayout(page);
+    printReading('phone.tiny', tiny);
+    await expect(
+      page.locator(SEL.readableHint),
+      'a phone overview below 12% must say so and offer a package to tap',
+    ).toBeVisible({ timeout: 10_000 });
+    expect(
+      await page.locator(SEL.readableBack).count(),
+      'nothing has been zoomed into yet, so there is no back action',
+    ).toBe(0);
+
+    const scaleBeforePackage = Number(
+      await page.locator(SEL.graphRoot).getAttribute('data-architecture-zoom-scale'),
+    );
+    await page.locator('.uml-package[data-package-id]').first().dispatchEvent('click');
+    await page.waitForFunction(
+      ({ sel, before }) => {
+        const root = document.querySelector(sel.graphRoot);
+        return Number(root?.getAttribute('data-architecture-zoom-scale') ?? '0') > before
+          && root?.getAttribute('data-architecture-zoom-mode') === 'custom';
+      },
+      { sel: SEL, before: scaleBeforePackage },
+      { timeout: 10_000 },
+    );
+    console.log(`[architecture-layout] phone.package.tap=${scaleBeforePackage} -> ${
+      await page.locator(SEL.graphRoot).getAttribute('data-architecture-zoom-scale')}`);
+    await expect(
+      page.locator(SEL.readableBack),
+      'after zooming into a package the hint row offers the way back',
+    ).toBeVisible({ timeout: 10_000 });
+    await page.locator(SEL.readableBack).click();
+    await page.waitForFunction(
+      (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-zoom-mode') === 'fit',
+      SEL,
+      { timeout: 10_000 },
+    );
+    expect(
+      await page.locator(SEL.readableBack).count(),
+      'back on the whole graph, the back action is gone',
+    ).toBe(0);
 
     // The Adjust sheet labels every group and keeps the stepper's controls
     // visible — the phone tier's two review findings.
@@ -2037,6 +2200,49 @@ test('control arm F — titles without avoidance overlap in the same reading', a
     printLod('controlF.restored', restored);
     assertLodReadable(restored, 'controlF.restored');
     expect(overlappingTitlePairs(restored).length, 'controlF.restored: the fix restores clean titles').toBe(0);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * Control arm G: the phone zoom-cluster height guard, forced red.
+ *
+ * The main arm reads `zoomCluster.h` through the same `readLayout`; this arm
+ * applies the shipped vertical column to the live cluster with `!important`
+ * (the inline `flex-direction: row` must not win), then reads again. A guard
+ * that could not go red on the defect it exists to catch would be vacuous.
+ */
+test('control arm G — a forced vertical zoom cluster reads taller than 52px on the phone', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE,
+    touch: true,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    const before = await readLayout(page);
+    printReading('controlG.main', before);
+    assertPhoneZoomClusterRow(before, 'controlG.main');
+
+    await page.evaluate((sel) => {
+      const cluster = document.querySelector<HTMLElement>(sel.zoomCluster);
+      if (cluster === null) throw new Error('the phone zoom cluster must be on screen');
+      // The shipped arrangement: a column of 44px controls reaching up the
+      // drawing's right edge. `important` is what makes the injection real —
+      // the component states `flex-direction: row` inline.
+      cluster.style.setProperty('flex-direction', 'column', 'important');
+      cluster.style.setProperty('height', 'auto', 'important');
+    }, SEL);
+    await settle(page, 150);
+
+    const injected = await readLayout(page);
+    printReading('controlG.vertical', injected);
+    expect.soft(
+      injected.zoomCluster?.h ?? 0,
+      'controlG.vertical: a vertical cluster must read taller than the 52px row — '
+        + `cluster=${formatBox(injected.zoomCluster)}`,
+    ).toBeGreaterThan(52);
   } finally {
     await context.close();
   }

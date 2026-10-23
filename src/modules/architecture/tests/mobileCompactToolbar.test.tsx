@@ -18,9 +18,12 @@ import type { ArchitectureGraphResult } from '@/modules/architecture';
  *    focus trap, focus restored to the trigger) carrying scope, detail, the
  *    SAME filter content the desktop `Filter ▾` popover draws, search, export
  *    and the legend; it is capped at 45vh so the drawing stays visible;
- *  · the one-line readout floats on the drawing's top-left instead of taking
- *    a header row, and its second line states what the filter is hiding;
- *  · the minimap starts collapsed above the zoom cluster and opens to 96×64;
+ *  · the one-line readout is a single 44px in-flow row above the drawing; its
+ *    explanation, hidden-count and filter actions live in the expanded area,
+ *    which stays in document flow when opened;
+ *  · the minimap starts collapsed in the SAME bottom-right row as the zoom
+ *    cluster (one horizontal row) and opens to its 96×64 thumbnail;
+ *  · the zoom cluster itself is one horizontal 52px row of 44px targets;
  *  · the touch instruction is a one-off in-canvas bubble (`role="status"`)
  *    that fades itself out after 3s or closes on demand, and the dismissal is
  *    remembered;
@@ -425,10 +428,20 @@ test('stepping scope or narrowing the filter inside the sheet updates the floati
   );
 
   // The filter is the same component: choosing "show every relation" removes
-  // the hidden-count second line from the readout while the sheet stays open.
-  assert.ok(
+  // the hidden-count line from the expanded readout while the sheet stays open.
+  // The collapsed card is one line by contract, so the line lives behind the
+  // toggle; expanding is what puts it in the document.
+  assert.equal(
     readoutOverlay.querySelector('[data-architecture-filter-hidden]'),
-    'the default filter hides the call edge, so the readout states it first',
+    null,
+    'the collapsed one-line readout states only the shown/related summary',
+  );
+  fireEvent.click(readoutOverlay.querySelector('[data-architecture-readout-toggle]') as Element);
+  await waitFor(() =>
+    assert.ok(
+      readoutOverlay.querySelector('[data-architecture-filter-hidden]'),
+      'the default filter hides the call edge, so the expanded readout states it',
+    ),
   );
   fireEvent.click(sheet.querySelector('[data-architecture-filter-relation="call"]') as Element);
   await waitFor(() =>
@@ -488,34 +501,99 @@ test('the minimap starts collapsed above the zoom cluster and opens to 96×64 wi
   assert.equal(canvas.style.width, '96px', 'the phone map is the 96px thumbnail');
   assert.equal(canvas.style.height, '64px');
 
-  // Both on-canvas blocks live in ONE absolute column with a positive gap, in
-  // the order map-then-cluster, so they cannot intersect.
+  // A phone spends ONE ROW on the corner chrome: the collapsed minimap button
+  // and the zoom cluster sit side by side, bottom aligned. The pair therefore
+  // takes ~52px of height instead of the shipped 204px column.
   const overlays = document.querySelector('[data-architecture-canvas-overlays]');
   const cluster = document.querySelector('[data-architecture-zoom-cluster]');
   assert.ok(overlays instanceof HTMLElement);
   assert.ok(cluster instanceof HTMLElement);
   assert.equal(overlays.style.rowGap, '8px');
-  assert.equal(overlays.style.flexDirection, 'column');
+  assert.equal(overlays.style.columnGap, '8px');
+  assert.equal(overlays.style.flexDirection, 'row');
   const minimap = document.querySelector('[data-architecture-minimap]');
   assert.ok(minimap instanceof HTMLElement);
   assert.ok(
     minimap.compareDocumentPosition(cluster) & Node.DOCUMENT_POSITION_FOLLOWING,
-    'the map sits above the zoom cluster',
+    'the map sits before the zoom cluster in the row',
   );
 
-  // Inject the two boxes' sizes and prove the gap: the arithmetic is what the
-  // flex column above states, read through getBoundingClientRect.
+  // Inject the two boxes' sizes and prove the horizontal gap: the arithmetic
+  // is what the flex row above states, read through getBoundingClientRect.
   minimap.getBoundingClientRect = () => ({
-    x: 250, y: 500, left: 250, top: 500, width: 96, height: 64, right: 346, bottom: 564,
+    x: 200, y: 533, left: 200, top: 533, width: 44, height: 44, right: 244, bottom: 577,
     toJSON: () => ({}),
   }) as DOMRect;
   cluster.getBoundingClientRect = () => ({
-    x: 250, y: 572, left: 250, top: 572, width: 44, height: 140, right: 294, bottom: 712,
+    x: 252, y: 525, left: 252, top: 525, width: 120, height: 52, right: 372, bottom: 577,
     toJSON: () => ({}),
   }) as DOMRect;
   const mapRect = minimap.getBoundingClientRect();
   const clusterRect = cluster.getBoundingClientRect();
-  assert.ok(clusterRect.top - mapRect.bottom >= 8, 'the map and the cluster keep an 8px gap');
+  assert.ok(clusterRect.left - mapRect.right >= 8, 'the map and the cluster keep an 8px gap');
+  assert.equal(clusterRect.height, 52, 'the phone zoom cluster is one 52px row');
+
+  // The row's own height contract: one horizontal row of 44px targets.
+  assert.equal(cluster.style.flexDirection, 'row');
+  assert.equal(cluster.style.height, '52px');
+});
+
+test('the phone readout collapses to one 44px line and expands in document flow', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  const readout = document.querySelector('[data-architecture-readout]');
+  assert.ok(readout instanceof HTMLElement);
+  const toggle = readout.querySelector('[data-architecture-readout-toggle]');
+  assert.ok(toggle instanceof HTMLElement);
+  // Collapsed: the card itself is a 44px box, and its one line does not wrap.
+  assert.equal(readout.style.height, '44px', 'the collapsed phone readout is one 44px line');
+  assert.equal(toggle.style.minHeight, '44px', 'the toggle is still a 44×44 target');
+  assert.match(toggle.className, /flex-nowrap/, 'the collapsed line stays on one row');
+  const summary = readout.querySelector('[data-architecture-readout-summary]');
+  assert.ok(summary instanceof HTMLElement);
+  assert.match(summary.className, /truncate|whitespace-nowrap/, 'the summary truncates instead of wrapping');
+  assert.equal(readout.querySelector('[data-architecture-readout-detail]'), null, 'nothing is expanded yet');
+
+  // Expanded: the detail area is a normal-flow block under the toggle, so it
+  // grows the card instead of covering the drawing.
+  fireEvent.click(toggle);
+  const detail = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-readout-detail]');
+    assert.ok(node instanceof HTMLElement, 'clicking the toggle expands the readout');
+    return node;
+  });
+  assert.equal(readout.style.height, '', 'the expanded card is no longer fixed at 44px');
+  const detailPosition = getComputedStyle(detail).position;
+  assert.ok(
+    detailPosition === '' || detailPosition === 'static',
+    `the expanded area is in document flow (position=${detailPosition})`,
+  );
+  assert.ok(
+    readout.contains(detail),
+    'the expanded area belongs to the same card above the canvas',
+  );
+});
+
+test('the phone zoom cluster is one horizontal 52px row of 44px targets', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  const cluster = document.querySelector('[data-architecture-zoom-cluster]');
+  assert.ok(cluster instanceof HTMLElement);
+  assert.match(cluster.className, /flex/, 'the cluster is a flex row');
+  assert.equal(cluster.style.flexDirection, 'row', 'the phone cluster is horizontal');
+  assert.equal(cluster.style.height, '52px', 'one 44px row plus 4px a side');
+  for (const attribute of ['data-architecture-zoom-in', 'data-architecture-zoom-out', 'data-architecture-zoom-fit']) {
+    const button = cluster.querySelector(`[${attribute}]`) as HTMLElement | null;
+    assert.ok(button instanceof HTMLElement, `${attribute} must be in the cluster`);
+    assert.equal(button.style.minHeight, '44px');
+    assert.equal(button.style.minWidth, '44px');
+  }
+  // The scale and level readings ride in the same row's right-hand small text.
+  assert.ok(cluster.querySelector('[data-architecture-zoom-cluster-level]'));
 });
 
 test('the touch hint is a one-off bubble on the drawing, dismissed by click or fade and remembered', async () => {
@@ -602,23 +680,26 @@ test('every architecture control keeps a 44×44 target and an 8px gap from its n
     assert.ok(Number.isFinite(gap) && gap >= 8, `a control group must keep an 8px gap; got ${declared || '(none)'}`);
   }
 
-  // Pairwise geometry for the zoom cluster: buttons stacked with that gap.
+  // Pairwise geometry for the zoom cluster: on the phone its buttons are one
+  // horizontal row with that gap, not the desktop's stacked column.
   const cluster = document.querySelector('[data-architecture-zoom-cluster]') as HTMLElement;
+  assert.equal(cluster.style.flexDirection, 'row', 'the phone cluster is one row');
+  assert.equal(cluster.style.height, '52px', 'the row is 44px targets + 4px a side');
   const clusterButtons = [...cluster.querySelectorAll('button')];
   const gap = Number.parseFloat(cluster.style.gap);
-  let top = 100;
+  let left = 100;
   for (const button of clusterButtons) {
-    const boxTop = top;
+    const boxLeft = left;
     button.getBoundingClientRect = () => ({
-      x: 0, y: boxTop, left: 0, top: boxTop, width: 44, height: 44, right: 44, bottom: boxTop + 44,
+      x: boxLeft, y: 0, left: boxLeft, top: 0, width: 44, height: 44, right: boxLeft + 44, bottom: 44,
       toJSON: () => ({}),
     }) as DOMRect;
-    top += 44 + gap;
+    left += 44 + gap;
   }
   for (let index = 1; index < clusterButtons.length; index += 1) {
     const previous = clusterButtons[index - 1].getBoundingClientRect();
     const current = clusterButtons[index].getBoundingClientRect();
-    assert.ok(current.top - previous.bottom >= 8, 'adjacent zoom controls keep an 8px gap');
+    assert.ok(current.left - previous.right >= 8, 'adjacent zoom controls keep an 8px gap');
   }
 });
 
