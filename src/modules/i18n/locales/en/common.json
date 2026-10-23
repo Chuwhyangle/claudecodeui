@@ -198,6 +198,13 @@
       "touchHintBubble": "Drag with one finger to pan, pinch to zoom, double-tap a node to drill in."
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
+    "emptyView": {
+      "title": "No nodes to draw in this view.",
+      "unresolvedFiles": "Files mentioned in this session were not found in the analysis cache: {{names}}",
+      "more": "…and {{count}} more",
+      "viewFileGraph": "View the file graph ({{count}} files)",
+      "viewEntityGraph": "View the class diagram ({{count}} entities)"
+    },
     "honesty": {
       "analysis": "Analysis",
       "unresolved": "{{count}} unresolved seed(s)",

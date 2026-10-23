@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{total}} düğümün {{visible}} tanesi",
     "noSeeds": "Bu oturum, analizin yerleştirebileceği hiçbir dosya veya tanımlayıcıya başvurmadı.",
+    "emptyView": {
+      "title": "Bu görünümde çizilecek düğüm yok.",
+      "unresolvedFiles": "Bu oturumda bahsedilen dosyalar analiz önbelleğinde bulunamadı: {{names}}",
+      "more": "…ve {{count}} tane daha",
+      "viewFileGraph": "Dosya grafiğini göster ({{count}} dosya)",
+      "viewEntityGraph": "Sınıf diyagramını göster ({{count}} varlık)"
+    },
     "honesty": {
       "analysis": "Analiz",
       "unresolved": "{{count}} çözümlenmemiş tohum",

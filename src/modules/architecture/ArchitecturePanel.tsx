@@ -156,6 +156,13 @@ function nodeIdShapeOf(granularity: ArchitectureGranularity): ArchitectureNodeId
 const FILTER_REQUEST_DEBOUNCE_MS = 250;
 
 /**
+ * How many unresolved file paths the "nothing to draw in this view" empty state
+ * names before collapsing the rest into an "…and N more" count. The state exists
+ * to explain a blank canvas, not to print the whole unresolved set.
+ */
+const EMPTY_VIEW_UNRESOLVED_LIMIT = 5;
+
+/**
  * The id of the "keep these shown…" hint paragraph. Every "keep mentioned"
  * switch points `aria-describedby` at it, so the visible name and the extra
  * explanation are separate readings instead of one overloaded `aria-label`.
@@ -1497,6 +1504,38 @@ export default function ArchitecturePanel({
   // the drawing on screen rather than a re-derivation from the payload.
   const drawnGraph: ArchitectureRendererGraph =
     layoutFit?.graph ?? detailRanking?.graph ?? displayNeighbourhood ?? neighbourhood;
+
+  // The third empty state the seed reading cannot see: the session DID resolve
+  // seeds, but the granularity on screen has no node to draw (the reported
+  // `entityTotal=0` class view over a cache that carries files is the canonical
+  // case). The other granularity may still have content, so the state explains
+  // why instead of leaving a blank canvas, and offers a one-click switch.
+  const drawnEmpty = drawnGraph.nodes.length === 0;
+  const alternateGranularity: ArchitectureGranularity = granularity === 'entity' ? 'file' : 'entity';
+  // The switch's count is the pre-budget total when the payload carries it (the
+  // same denominator the readout uses), falling back to the graph in hand.
+  const alternateTotal = alternateGranularity === 'file'
+    ? stats.fileTotal ?? result.graph.file.nodes.length
+    : stats.entityTotal ?? result.graph.entity.nodes.length;
+  // Why nothing was drawn: the session's unresolved file seeds, capped so a
+  // long list cannot turn the empty state into a wall of paths.
+  const emptyViewMessage = (() => {
+    const base = t('architecture.emptyView.title', { defaultValue: 'No nodes to draw in this view.' });
+    const files = stats.unresolved.files;
+    if (files.length === 0) return base;
+    const shown = files.slice(0, EMPTY_VIEW_UNRESOLVED_LIMIT);
+    const rest = files.length - shown.length;
+    const names = rest === 0
+      ? shown.join(', ')
+      : `${shown.join(', ')} ${t('architecture.emptyView.more', {
+        defaultValue: '…and {{count}} more',
+        count: rest,
+      })}`;
+    return `${base} ${t('architecture.emptyView.unresolvedFiles', {
+      defaultValue: 'Files mentioned in this session were not found in the analysis cache: {{names}}',
+      names,
+    })}`;
+  })();
 
   // The hover reading, stated from the payload instead of the internal id: the
   // id carries the opaque scope key (`93e0a992/…`), which means nothing to the
@@ -3571,6 +3610,35 @@ export default function ArchitecturePanel({
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasSeeds ? (
+          drawnEmpty ? (
+            // Seeds resolved, but this granularity has nothing to draw. The
+            // toolbar above keeps the granularity radios, so the switch here is
+            // a shortcut, not the only way out of the blank canvas.
+            <ArchitectureEmptyState
+              message={emptyViewMessage}
+              action={
+                alternateTotal > 0 ? (
+                  <button
+                    type="button"
+                    data-architecture-empty-switch={alternateGranularity}
+                    onClick={() => changeGranularity(alternateGranularity)}
+                    style={compactTargetStyle}
+                    className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    {alternateGranularity === 'file'
+                      ? t('architecture.emptyView.viewFileGraph', {
+                        defaultValue: 'View the file graph ({{count}} files)',
+                        count: alternateTotal,
+                      })
+                      : t('architecture.emptyView.viewEntityGraph', {
+                        defaultValue: 'View the class diagram ({{count}} entities)',
+                        count: alternateTotal,
+                      })}
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : (
           <>
             {/* Desktop keeps its in-flow row: the readout on the left, the
                 renderer's zoom tier and scale on the right. The compact tier
@@ -3843,6 +3911,7 @@ export default function ArchitecturePanel({
               )}
             </div>
           </>
+          )
         ) : (
           <>
             <ArchitectureEmptyState

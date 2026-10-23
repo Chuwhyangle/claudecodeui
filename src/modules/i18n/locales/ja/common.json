@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{total}} ノード中 {{visible}} 件",
     "noSeeds": "このセッションには、分析で配置できるファイルや識別子への参照がありません。",
+    "emptyView": {
+      "title": "このビューには描画できるノードがありません。",
+      "unresolvedFiles": "このセッションで言及された次のファイルは分析キャッシュに見つかりませんでした：{{names}}",
+      "more": "…ほか {{count}} 件",
+      "viewFileGraph": "ファイルグラフを表示（{{count}} ファイル）",
+      "viewEntityGraph": "クラス図を表示（{{count}} エンティティ）"
+    },
     "honesty": {
       "analysis": "分析",
       "unresolved": "未解決のシード {{count}} 件",

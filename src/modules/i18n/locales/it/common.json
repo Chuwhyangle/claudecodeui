@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{visible}} di {{total}} nodi",
     "noSeeds": "Questa sessione non ha referenziato alcun file o identificatore che l'analisi possa collocare.",
+    "emptyView": {
+      "title": "Nessun nodo da disegnare in questa vista.",
+      "unresolvedFiles": "I file menzionati in questa sessione non sono stati trovati nella cache di analisi: {{names}}",
+      "more": "…e altri {{count}}",
+      "viewFileGraph": "Mostra il grafo dei file ({{count}} file)",
+      "viewEntityGraph": "Mostra il diagramma delle classi ({{count}} entità)"
+    },
     "honesty": {
       "analysis": "Analisi",
       "unresolved": "{{count}} seme/i non risolto/i",

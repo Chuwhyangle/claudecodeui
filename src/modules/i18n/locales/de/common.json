@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{visible}} von {{total}} Knoten",
     "noSeeds": "Diese Sitzung hat keine Datei und keinen Bezeichner referenziert, den die Analyse einordnen kann.",
+    "emptyView": {
+      "title": "In dieser Ansicht gibt es keine Knoten zum Zeichnen.",
+      "unresolvedFiles": "In dieser Sitzung erwähnte Dateien wurden nicht im Analyse-Cache gefunden: {{names}}",
+      "more": "…und {{count}} weitere",
+      "viewFileGraph": "Dateidiagramm anzeigen ({{count}} Dateien)",
+      "viewEntityGraph": "Klassendiagramm anzeigen ({{count}} Entitäten)"
+    },
     "honesty": {
       "analysis": "Analyse",
       "unresolved": "{{count}} nicht aufgelöste(r) Ausgangspunkt(e)",

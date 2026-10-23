@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{visible}} / {{total}} 个节点",
     "noSeeds": "该会话未引用分析可定位的任何文件或标识符。",
+    "emptyView": {
+      "title": "此视图没有可绘制的节点。",
+      "unresolvedFiles": "本会话提到的以下文件未在分析缓存中找到：{{names}}",
+      "more": "…等 {{count}} 个",
+      "viewFileGraph": "查看文件图（{{count}} 个文件）",
+      "viewEntityGraph": "查看类图（{{count}} 个实体）"
+    },
     "honesty": {
       "analysis": "分析",
       "unresolved": "{{count}} 个未解析的种子",

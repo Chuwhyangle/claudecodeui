@@ -753,6 +753,68 @@ const EMPTY_RESULT: ArchitectureGraphResult = {
 };
 
 /**
+ * The third empty state's canonical payload: seeds resolved (two files, three
+ * identifiers) but the ENTITY graph is empty while the FILE graph carries three
+ * files — exactly the `entityTotal=0, fileTotal=3` reading the 45ac161a review
+ * saw. Seven unresolved files exercise the five-name cap and the "…and N more"
+ * tail.
+ */
+const EMPTY_CLASS_RESULT: ArchitectureGraphResult = {
+  mmd: { file: FILE_MMD, entity: '@startuml\n@enduml' },
+  graph: {
+    file: {
+      nodes: [
+        { id: 'src/modules/alpha/a.ts', label: 'src/modules/alpha/a.ts', distance: 0 },
+        { id: 'src/modules/alpha/a2.ts', label: 'src/modules/alpha/a2.ts', distance: 1 },
+        { id: 'src/modules/beta/b.ts', label: 'src/modules/beta/b.ts', distance: 2 },
+      ],
+      edges: [
+        { from: 'src/modules/alpha/a2.ts', to: 'src/modules/alpha/a.ts', relationType: 'dependency' },
+      ],
+    },
+    entity: { nodes: [], edges: [] },
+  },
+  stats: {
+    entityNodes: 0,
+    fileNodes: 3,
+    entityEdges: 0,
+    fileEdges: 1,
+    truncated: false,
+    entityTotal: 0,
+    fileTotal: 3,
+    seedFiles: 2,
+    seedIdentifiers: 3,
+    nodeCount: 3,
+    edgeCount: 1,
+    unresolved: {
+      files: [
+        '.quay/config.yml',
+        '.agents/skills/alpha/SKILL.md',
+        '.agents/skills/beta/SKILL.md',
+        '.agents/skills/gamma/SKILL.md',
+        '.agents/skills/delta/SKILL.md',
+        '.agents/skills/epsilon/SKILL.md',
+        '.agents/skills/zeta/SKILL.md',
+      ],
+      identifiers: [],
+    },
+  },
+  provenance: EMPTY_RESULT.provenance,
+};
+
+/** Seeds resolved, yet BOTH granularities are empty: explain, offer no switch. */
+const BOTH_EMPTY_RESULT: ArchitectureGraphResult = {
+  ...EMPTY_RESULT,
+  stats: {
+    ...EMPTY_RESULT.stats,
+    seedFiles: 1,
+    seedIdentifiers: 0,
+    unresolved: { files: ['only-unresolved.ts'], identifiers: [] },
+  },
+  provenance: RESULT.provenance,
+};
+
+/**
  * The reading from a manifest with the real archguard pathologies: nested
  * scopes over the same files, absolute-path ids, and scopes belonging to other
  * projects. The server reports what it cleaned in `provenance.scopeHygiene`.
@@ -3514,6 +3576,82 @@ test('an empty seed set renders the empty state, not a blank graph', async () =>
     document.querySelector('[data-architecture-unresolved]')?.textContent ?? '',
     /^0 names mentioned in this session were not found in the analysis cache/,
   );
+});
+
+test('an empty class view offers the file graph through the empty state', async () => {
+  // Seeds resolved and the file graph carries three files, but the class view
+  // has zero entities — the reading the 45ac161a review saw as a blank canvas.
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(EMPTY_CLASS_RESULT));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+
+  const emptyState = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-empty]');
+    assert.ok(node instanceof HTMLElement, 'a seed-resolved but empty class view must render the empty state');
+    return node;
+  });
+  assert.equal(
+    document.querySelector('[data-architecture-plantuml]'),
+    null,
+    'zero drawn entities means there is no graph to draw',
+  );
+
+  const switchButton = within(emptyState).getByRole('button', { name: /view the file graph/i });
+  fireEvent.click(switchButton);
+
+  await waitFor(() => {
+    const fileRadio = screen.getByRole('radio', { name: 'File graph' });
+    assert.equal(
+      fileRadio.getAttribute('aria-checked'),
+      'true',
+      'the empty-state switch must flip the granularity radio to the file graph',
+    );
+  });
+});
+
+test('an empty view with no other content explains itself without offering a switch', async () => {
+  // Seeds resolved, but every granularity is empty: there is nowhere to switch.
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(BOTH_EMPTY_RESULT));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+
+  const emptyState = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-empty]');
+    assert.ok(node instanceof HTMLElement, 'a seed-resolved empty view must still explain itself');
+    return node;
+  });
+  assert.equal(
+    document.querySelector('[data-architecture-empty-switch]'),
+    null,
+    'with no content in the other granularity there is nothing to switch to',
+  );
+  assert.equal(within(emptyState).queryAllByRole('button').length, 0, 'no action button belongs here');
+  assert.match(emptyState.textContent ?? '', /No nodes to draw in this view/);
+});
+
+test('the empty view names at most five unresolved files and counts the rest', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(EMPTY_CLASS_RESULT));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+
+  const text = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-empty]');
+    assert.ok(node instanceof HTMLElement, 'the empty view must render before its text is read');
+    return node.textContent ?? '';
+  });
+
+  for (const file of [
+    '.quay/config.yml',
+    '.agents/skills/alpha/SKILL.md',
+    '.agents/skills/beta/SKILL.md',
+    '.agents/skills/gamma/SKILL.md',
+    '.agents/skills/delta/SKILL.md',
+  ]) {
+    assert.ok(text.includes(file), `the first five unresolved files must be named; missing ${file} in: ${text}`);
+  }
+  assert.ok(text.includes('and 2 more'), `the two files past the cap must become a count, got: ${text}`);
+  assert.ok(!text.includes('.agents/skills/epsilon/SKILL.md'), 'the sixth file is folded into the count');
+  assert.ok(!text.includes('.agents/skills/zeta/SKILL.md'), 'the seventh file is folded into the count');
 });
 
 test('the fetch effect tears down cleanly when the panel unmounts mid-request', async () => {

@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{visible}} dari {{total}} node",
     "noSeeds": "Sesi ini belum merujuk berkas atau pengenal yang dapat ditempatkan oleh analisis.",
+    "emptyView": {
+      "title": "Tidak ada simpul untuk digambar di tampilan ini.",
+      "unresolvedFiles": "Berkas yang disebut di sesi ini tidak ditemukan di cache analisis: {{names}}",
+      "more": "…dan {{count}} lainnya",
+      "viewFileGraph": "Lihat graf berkas ({{count}} berkas)",
+      "viewEntityGraph": "Lihat diagram kelas ({{count}} entitas)"
+    },
     "honesty": {
       "analysis": "Analisis",
       "unresolved": "{{count}} benih tidak terselesaikan",

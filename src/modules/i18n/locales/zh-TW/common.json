@@ -190,6 +190,13 @@
     },
     "visibleNodes": "{{visible}} / {{total}} 個節點",
     "noSeeds": "此工作階段未參照分析可定位的任何檔案或識別碼。",
+    "emptyView": {
+      "title": "此檢視沒有可繪製的節點。",
+      "unresolvedFiles": "本工作階段提到的下列檔案未在分析快取中找到：{{names}}",
+      "more": "…等 {{count}} 個",
+      "viewFileGraph": "檢視檔案圖（{{count}} 個檔案）",
+      "viewEntityGraph": "檢視類別圖（{{count}} 個實體）"
+    },
     "honesty": {
       "analysis": "分析",
       "unresolved": "{{count}} 個未解析的種子",
