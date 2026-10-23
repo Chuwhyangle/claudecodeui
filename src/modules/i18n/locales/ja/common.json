@@ -635,5 +635,34 @@
       "updateAvailable": "アップデートあり",
       "closeSidebar": "サイドバーを閉じる"
     }
+  },
+  "cockpit": {
+    "title": "コックピット",
+    "readOnly": "読み取り専用",
+    "projectStrip": "プロジェクト",
+    "fleetView": "すべてのプロジェクト",
+    "boardView": "ボード",
+    "focus": "フォーカス",
+    "noFocus": "なし",
+    "loading": "読み込み中…",
+    "projectsError": "quay フリートを読み取れませんでした: {{message}}",
+    "retry": "再試行",
+    "emptyProjects": "quay プロジェクトが報告されていません。",
+    "driverRunning": "ドライバー実行中",
+    "driverIdle": "ドライバー待機中",
+    "driverStale": "ドライバー停止の疑い",
+    "driverNotConfigured": "未設定",
+    "driverUnavailable": "ドライバー利用不可",
+    "tasksCount": "{{total}} 件のタスク",
+    "readyCount": "{{n}} 件準備完了",
+    "needsHumanCount": "{{n}} 件要対応",
+    "inFlight": "実行中",
+    "inFlightEmpty": "実行中のタスクはありません。",
+    "intentPlaceholder": "何を見るか入力 — 例: claudecodeui を見る、2番目、拡大、戻る、すべてのプロジェクト",
+    "intentHint": "Enter で実行 · 矢印キーでフォーカス移動 · Backspace で戻る",
+    "intentSubmit": "実行",
+    "intentUnmatched": "認識できません: 「{{text}}」。推測はしていません。",
+    "timingLast": "最後の変更 → 初回フレーム {{ms}} ms",
+    "keyHint": "矢印キーでフォーカス移動 · Enter で拡大 · Backspace で戻る"
   }
 }

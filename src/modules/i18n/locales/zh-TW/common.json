@@ -635,5 +635,34 @@
       "updateAvailable": "有可用更新",
       "closeSidebar": "關閉側邊欄"
     }
+  },
+  "cockpit": {
+    "title": "駕駛艙",
+    "readOnly": "唯讀",
+    "projectStrip": "專案",
+    "fleetView": "全部專案",
+    "boardView": "任務板",
+    "focus": "焦點",
+    "noFocus": "無",
+    "loading": "載入中…",
+    "projectsError": "無法讀取 quay 艦隊：{{message}}",
+    "retry": "重試",
+    "emptyProjects": "沒有回報任何 quay 專案。",
+    "driverRunning": "驅動執行中",
+    "driverIdle": "驅動閒置",
+    "driverStale": "驅動失聯",
+    "driverNotConfigured": "未設定",
+    "driverUnavailable": "驅動無法使用",
+    "tasksCount": "{{total}} 個任務",
+    "readyCount": "{{n}} 個就緒",
+    "needsHumanCount": "{{n}} 個需要人",
+    "inFlight": "在途",
+    "inFlightEmpty": "沒有宣告在途任務。",
+    "intentPlaceholder": "說出要看什麼——例如：看 claudecodeui、第二個、放大、返回、全部專案",
+    "intentHint": "Enter 執行這句話 · 方向鍵移動焦點 · Backspace 返回",
+    "intentSubmit": "執行",
+    "intentUnmatched": "未辨識：「{{text}}」。沒有做任何猜測。",
+    "timingLast": "最近一次變更 → 首幀 {{ms}} 毫秒",
+    "keyHint": "方向鍵移動焦點 · Enter 放大 · Backspace 返回"
   }
 }

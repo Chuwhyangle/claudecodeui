@@ -718,5 +718,34 @@
     "closeLoginModal": "Tutup modal login",
     "pluginLoadFailed": "Plugin gagal dimuat: {{error}}"
   },
-  "cancel": "Batal"
+  "cancel": "Batal",
+  "cockpit": {
+    "title": "Kokpit",
+    "readOnly": "hanya baca",
+    "projectStrip": "Proyek",
+    "fleetView": "Semua proyek",
+    "boardView": "Papan",
+    "focus": "Fokus",
+    "noFocus": "tidak ada",
+    "loading": "Memuat…",
+    "projectsError": "Tidak dapat membaca armada quay: {{message}}",
+    "retry": "Coba lagi",
+    "emptyProjects": "Tidak ada proyek quay yang dilaporkan.",
+    "driverRunning": "driver berjalan",
+    "driverIdle": "driver menganggur",
+    "driverStale": "driver basi",
+    "driverNotConfigured": "belum dikonfigurasi",
+    "driverUnavailable": "driver tidak tersedia",
+    "tasksCount": "{{total}} tugas",
+    "readyCount": "{{n}} siap",
+    "needsHumanCount": "{{n}} butuh manusia",
+    "inFlight": "Sedang berjalan",
+    "inFlightEmpty": "Tidak ada tugas yang sedang berjalan.",
+    "intentPlaceholder": "Katakan apa yang ingin dilihat — mis. lihat claudecodeui, yang kedua, perbesar, kembali, semua proyek",
+    "intentHint": "Enter menjalankan frasa · panah memindahkan fokus · Backspace kembali",
+    "intentSubmit": "Jalankan",
+    "intentUnmatched": "Tidak dikenali: “{{text}}”. Tidak ada tebakan.",
+    "timingLast": "perubahan terakhir → bingkai pertama {{ms}} ms",
+    "keyHint": "Panah memindahkan fokus · Enter memperbesar · Backspace kembali"
+  }
 }

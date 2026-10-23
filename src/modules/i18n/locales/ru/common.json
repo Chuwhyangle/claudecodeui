@@ -605,5 +605,34 @@
       "updateAvailable": "Доступно обновление",
       "closeSidebar": "Закрыть боковую панель"
     }
+  },
+  "cockpit": {
+    "title": "Кокпит",
+    "readOnly": "только чтение",
+    "projectStrip": "Проекты",
+    "fleetView": "Все проекты",
+    "boardView": "Доска",
+    "focus": "Фокус",
+    "noFocus": "нет",
+    "loading": "Загрузка…",
+    "projectsError": "Не удалось прочитать флот quay: {{message}}",
+    "retry": "Повторить",
+    "emptyProjects": "Проекты quay не сообщены.",
+    "driverRunning": "драйвер работает",
+    "driverIdle": "драйвер простаивает",
+    "driverStale": "драйвер устарел",
+    "driverNotConfigured": "не настроен",
+    "driverUnavailable": "драйвер недоступен",
+    "tasksCount": "задач: {{total}}",
+    "readyCount": "готово: {{n}}",
+    "needsHumanCount": "нужен человек: {{n}}",
+    "inFlight": "В работе",
+    "inFlightEmpty": "Задач в работе не объявлено.",
+    "intentPlaceholder": "Скажите, что показать — например: показать claudecodeui, второй, увеличить, назад, все проекты",
+    "intentHint": "Enter выполняет фразу · стрелки двигают фокус · Backspace возвращает назад",
+    "intentSubmit": "Выполнить",
+    "intentUnmatched": "Не распознано: «{{text}}». Догадок не было.",
+    "timingLast": "последнее изменение → первый кадр {{ms}} мс",
+    "keyHint": "Стрелки двигают фокус · Enter увеличивает · Backspace возвращает"
   }
 }
