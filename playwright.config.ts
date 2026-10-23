@@ -433,7 +433,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // arm's forced-DOWN round trip through a fresh page, and the wider-viewport /
   // >150-entity looks): `29 passed (6.8m)` for the whole invocation. 660_000
   // still clears that reading ~1.6x, so the entry stays.
-  'architecture-canvas-layout.spec.ts': 660_000,
+  // Re-measured 2026-10-24 with the landscape-phone legs (a 844×390 touch page
+  // that reads the 240px canvas floor, the 30% default zoom and the in-flow
+  // side column, plus its two control arms): the file now declares 31 cases.
+  // Under concurrent host load (several sibling Playwright runs were live) one
+  // whole-file run crossed the old 660_000ms ceiling at case 26/31 and the
+  // watchdog ended it there; the ceiling — not a hang — was the limit. The
+  // two new cases cost ~29s together when run alone. 1_200_000 is the value
+  // that lets a load-slowed run finish while remaining a ceiling (a quiet
+  // 31-case run is expected around 7.3m from the 6.8m / 29-case reading).
+  'architecture-canvas-layout.spec.ts': 1_200_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear

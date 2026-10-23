@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { applyView, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import i18next from 'i18next';
@@ -848,4 +849,67 @@ test('the attached subgraph carries every member and its volume band is the comp
     33,
     'the attachment carries all 25 + 8 member rows',
   );
+});
+
+/**
+ * The landscape-phone tray: it is the inspector column's TOP ROW, not a layer
+ * over the drawing. The reading is structural — the collapsed pill, the
+ * multi-select bar and the expanded body are all in document flow — because the
+ * geometric half ("the column does not intersect the selected box") is taken in
+ * the browser by `e2e/architecture-canvas-layout.spec.ts`.
+ */
+test('a panel-row tray draws every form in flow instead of across the canvas', async () => {
+  function Harness() {
+    const [expanded, setExpanded] = useState(false);
+    return (
+      <ArchitectureSelectionTray
+        selections={entitySelections(2)}
+        graph={trayGraphWith(2)}
+        idShape="scope-prefixed"
+        view={{ kind: 'overview' }}
+        grouping="raw"
+        drawn={null}
+        projectId="project-1"
+        analyzedAt="2026-10-22T00:00:00.000Z"
+        canCompose
+        canRemove
+        multiSelect
+        expanded={expanded}
+        compact={false}
+        panelRow
+        onExpandedChange={setExpanded}
+        onExitMultiSelect={() => undefined}
+        onToggleItem={() => undefined}
+        onClear={() => undefined}
+        onCompose={() => undefined}
+        onRemoveSelected={() => undefined}
+      />
+    );
+  }
+  render(<Harness />);
+
+  const root = document.querySelector('[data-architecture-tray-root]');
+  assert.ok(root instanceof HTMLElement);
+  assert.equal(root.getAttribute('data-architecture-tray-panel-row'), 'true');
+  assert.equal(root.style.position, 'relative', 'the root is an in-flow row');
+  assert.notEqual(root.className, '', 'the row carries the column separator');
+
+  // The multi-select bar is a row inside the column, not a floating capsule.
+  const bar = document.querySelector('[data-architecture-multiselect-bar]') as HTMLElement | null;
+  assert.ok(bar instanceof HTMLElement);
+  assert.notEqual(bar.style.position, 'absolute');
+
+  const pill = document.querySelector('[data-architecture-tray-pill]') as HTMLElement | null;
+  assert.ok(pill instanceof HTMLElement);
+  assert.notEqual(pill.style.position, 'absolute', 'the collapsed pill must not float over the drawing');
+  assert.equal(pill.style.width, '100%', 'it spans the column row');
+
+  fireEvent.click(pill);
+  const expanded = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-tray-expanded-panel]');
+    assert.ok(element instanceof HTMLElement, 'the pill expands the tray');
+    return element;
+  });
+  assert.equal(expanded.style.position, 'relative', 'the expanded body grows inside the column');
+  assert.equal(expanded.style.maxHeight, '45vh');
 });

@@ -402,7 +402,7 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
   const { t } = useTranslation();
   // A phone has no room for the map, so it starts collapsed (only the 44px
   // button); the expanded mobile form is the mobile layout task's arrangement.
-  const { isMobile, touchUi } = useTouchLayout();
+  const { isMobile, touchUi, shortTouch } = useTouchLayout();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // The measured drawing and content box. A resize is the only thing that
   // changes it, so it is state (it decides whether the map is shown at all);
@@ -444,9 +444,14 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
   const translateRef = useRef(t);
   translateRef.current = t;
 
-  const collapsed = preference === null ? isMobile : preference === 'collapsed';
-  const mapWidth = isMobile ? MINIMAP_MOBILE_WIDTH_PX : MINIMAP_WIDTH_PX;
-  const mapHeight = isMobile ? MINIMAP_MOBILE_HEIGHT_PX : MINIMAP_HEIGHT_PX;
+  // A phone — and a landscape phone, whose 844px width clears every width
+  // breakpoint while its height does not — has no room for the map, so it
+  // starts collapsed (only the 44px button). The short tier therefore joins
+  // `isMobile` here: width alone would leave the 160×100 map over the drawing.
+  const collapsed = preference === null ? (isMobile || shortTouch) : preference === 'collapsed';
+  const glanceSized = isMobile || shortTouch;
+  const mapWidth = glanceSized ? MINIMAP_MOBILE_WIDTH_PX : MINIMAP_WIDTH_PX;
+  const mapHeight = glanceSized ? MINIMAP_MOBILE_HEIGHT_PX : MINIMAP_HEIGHT_PX;
   mapSizeRef.current = { width: mapWidth, height: mapHeight };
 
   /** The current reading, with the host's live scroll offsets folded in. */

@@ -207,7 +207,9 @@ export function buildSelectionMessage(
  * current chat draft and switches to the Chat tab. It never sends.
  *
  * On the compact tier the tray merges into a bottom bar and expands into a
- * drawer; on the desktop it floats bottom-centre inside the canvas. The
+ * drawer; on the desktop it floats bottom-centre inside the canvas. On the
+ * landscape phone (`panelRow`) it is an in-flow row at the top of the inspector
+ * column instead — nothing on that tier may float across the drawing. The
  * expanded/collapsed state is owned by the panel because Escape collapses the
  * tray before it clears the selection.
  */
@@ -226,6 +228,7 @@ export function ArchitectureSelectionTray({
   multiSelect,
   expanded,
   compact,
+  panelRow = false,
   bottomInset = 0,
   onExpandedChange,
   onExitMultiSelect,
@@ -540,19 +543,31 @@ export function ArchitectureSelectionTray({
       data-architecture-tray-root="true"
       data-architecture-tray-expanded={expanded ? 'true' : 'false'}
       data-architecture-tray-selected={items.length}
-      style={{ position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none' }}
+      data-architecture-tray-panel-row={panelRow ? 'true' : undefined}
+      style={
+        panelRow
+          // In the inspector column the tray is a document-flow row: the
+          // column narrows the canvas, so nothing may float across it.
+          ? { position: 'relative', zIndex: 45, pointerEvents: 'auto' }
+          : { position: 'absolute', inset: 0, zIndex: 45, pointerEvents: 'none' }
+      }
+      className={panelRow ? 'shrink-0 border-b border-border/60 bg-background px-2 py-1' : undefined}
     >
       {multiSelect && (
         <div
           data-architecture-multiselect-bar="true"
           role="status"
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            pointerEvents: 'auto',
-          }}
+          style={
+            panelRow
+              ? { pointerEvents: 'auto', marginBottom: 4 }
+              : {
+                  position: 'absolute',
+                  top: 8,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  pointerEvents: 'auto',
+                }
+          }
           className="flex items-center gap-2 rounded-full border border-border bg-popover px-2 py-0.5 text-[11px] font-medium text-foreground shadow-sm"
         >
           <span data-architecture-multiselect-count={items.length}>
@@ -580,15 +595,25 @@ export function ArchitectureSelectionTray({
           aria-expanded={expanded}
           aria-label={t('architecture.tray.expand', { defaultValue: 'Expand the selection tray' })}
           onClick={() => onExpandedChange(true)}
-          style={{
-            position: 'absolute',
-            bottom: 8 + bottomInset,
-            pointerEvents: 'auto',
-            ...(compact
-              ? { left: 0, right: 0, margin: '0 auto' }
-              : { left: '50%', transform: 'translateX(-50%)' }),
-            ...(targetStyle ?? {}),
-          }}
+          style={
+            panelRow
+              ? {
+                  display: 'block',
+                  width: '100%',
+                  pointerEvents: 'auto',
+                  textAlign: 'left',
+                  ...(targetStyle ?? {}),
+                }
+              : {
+                  position: 'absolute',
+                  bottom: 8 + bottomInset,
+                  pointerEvents: 'auto',
+                  ...(compact
+                    ? { left: 0, right: 0, margin: '0 auto' }
+                    : { left: '50%', transform: 'translateX(-50%)' }),
+                  ...(targetStyle ?? {}),
+                }
+          }
           className="rounded-full border border-border bg-popover px-3 py-1 text-xs font-medium text-foreground shadow-lg outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
         >
           {t('architecture.tray.pill', {
@@ -605,22 +630,33 @@ export function ArchitectureSelectionTray({
           role="region"
           aria-label={t('architecture.tray.region', { defaultValue: 'Selection' })}
           data-architecture-tray-expanded-panel="true"
-          style={{
-            position: 'absolute',
-            bottom: compact ? bottomInset : 8 + bottomInset,
-            left: compact ? 0 : '50%',
-            right: compact ? 0 : undefined,
-            transform: compact ? undefined : 'translateX(-50%)',
-            width: compact ? undefined : 'min(560px, calc(100% - 24px))',
-            maxHeight: compact
-              // Lifted above an overlaid drawer, the panel may not run past the
-              // top of the canvas: its old 60vh ceiling would, because the
-              // drawer already owns the bottom share of the viewport.
-              ? (bottomInset > 0 ? 'calc(55vh - 8px)' : '60vh')
-              : '55%',
-            pointerEvents: 'auto',
-            ...(compact ? {} : { minWidth: 280 }),
-          }}
+          style={
+            panelRow
+              ? {
+                  position: 'relative',
+                  width: '100%',
+                  // The column is the inspector's; an expanded tray may use most
+                  // of its height but never the whole viewport.
+                  maxHeight: '45vh',
+                  pointerEvents: 'auto',
+                }
+              : {
+                  position: 'absolute',
+                  bottom: compact ? bottomInset : 8 + bottomInset,
+                  left: compact ? 0 : '50%',
+                  right: compact ? 0 : undefined,
+                  transform: compact ? undefined : 'translateX(-50%)',
+                  width: compact ? undefined : 'min(560px, calc(100% - 24px))',
+                  maxHeight: compact
+                    // Lifted above an overlaid drawer, the panel may not run past the
+                    // top of the canvas: its old 60vh ceiling would, because the
+                    // drawer already owns the bottom share of the viewport.
+                    ? (bottomInset > 0 ? 'calc(55vh - 8px)' : '60vh')
+                    : '55%',
+                  pointerEvents: 'auto',
+                  ...(compact ? {} : { minWidth: 280 }),
+                }
+          }
           className="flex min-h-0 flex-col overflow-y-auto rounded-lg border border-border bg-popover p-2 shadow-xl"
         >
           {body}
@@ -669,6 +705,12 @@ type ArchitectureSelectionTrayProps = {
   readonly expanded: boolean;
   /** True on the compact tier: bottom bar + drawer instead of the floating panel. */
   readonly compact: boolean;
+  /**
+   * True on the landscape-phone tier: the tray is the TOP ROW of the in-flow
+   * inspector column, so it must not float over the drawing at all. The pill
+   * becomes a full-width row and the expanded body grows inside the column.
+   */
+  readonly panelRow?: boolean;
   /**
    * How much of the tray root's bottom edge is covered by chrome drawn OVER the
    * canvas (the coarse-tier inspector drawer). The tray is lifted by this many

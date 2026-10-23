@@ -689,7 +689,7 @@ export function PlantUmlGraph({
   const hostRef = useRef<HTMLDivElement | null>(null);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
   // collect the toolbar into one overflow menu (see `useTouchLayout`).
-  const { touchUi, coarsePointer, compactToolbar } = useTouchLayout();
+  const { touchUi, coarsePointer, compactToolbar, shortTouch } = useTouchLayout();
   // The semantic layout runs from imperative callbacks, so the pointer tier
   // that picks the minimum font size is mirrored into a ref.
   const coarsePointerRef = useRef(coarsePointer);
@@ -2091,35 +2091,57 @@ export function PlantUmlGraph({
   }, [applyPlacement, applySemanticLayout, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, placementForDecision, projectId, view]);
 
   /**
-   * Keep the SELECTED box above the coarse drawer.
+   * Keep the SELECTED box inside the visible canvas.
    *
-   * The drawer is an overlay, so opening it does not resize the canvas; the
-   * host's bottom padding reserves the band (see the host style above). When the
-   * drawing is larger than the reserved viewport the selected box can still be
-   * scrolled under the drawer — the reader selected it to inspect it, so its top
-   * edge is brought back into the uncovered part of the canvas.
+   * Two states need this and they are the same reading: the coarse drawer is an
+   * overlay, so its bottom band must not hide the box (the host's padding
+   * reserves it, see the host style above); and the landscape-phone side column
+   * NARROWS the canvas, which in a focus-mode drawing does not re-fit the
+   * geometry (only `fit` mode does). A box that sat near the old right edge
+   * would otherwise end up outside the host — or under the side column.
    *
    * The correction is re-asserted for a moment rather than applied once: the
-   * reserved band changes the host's content box, which makes the resize/fit
-   * machinery re-centre the drawing on its anchor a few frames later, and that
-   * re-centre would otherwise undo the one correction. Each step is a no-op
-   * once the box is clear, so a settled page stops scrolling.
+   * fit/placement machinery may re-centre the drawing a few frames later, and
+   * that re-centre would otherwise undo it. Each step is a no-op once the box
+   * is clear, so a settled page stops scrolling. `scrollLeft/scrollTop` pan the
+   * drawing without changing its scale.
    */
+  const revealSelectedRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     const host = hostRef.current;
-    if (host === null || bottomObscuredPx <= 0 || selectedNodeId === null) return;
+    if (host === null || selectedNodeId === null) {
+      revealSelectedRef.current = null;
+      return;
+    }
     const revealSelected = (): void => {
       const selected = nodeElement(host, selectedNodeId);
       if (selected === null) return;
       const hostRect = host.getBoundingClientRect();
-      const drawerTop = hostRect.bottom - bottomObscuredPx;
       const nodeRect = selected.getBoundingClientRect();
-      if (nodeRect.top < drawerTop - 1) return;
-      host.scrollTop += nodeRect.top - drawerTop + 8;
+      // The uncovered part of the host: the overlay drawer's band is not
+      // visible ground for the selection.
+      const visibleBottom = hostRect.bottom - Math.min(bottomObscuredPx, hostRect.height);
+      const margin = 8;
+      let dx = 0;
+      let dy = 0;
+      if (nodeRect.left < hostRect.left + margin) {
+        dx = nodeRect.left - hostRect.left - margin;
+      } else if (nodeRect.right > hostRect.right - margin) {
+        dx = nodeRect.right - hostRect.right + margin;
+      }
+      if (nodeRect.top < hostRect.top + margin) {
+        dy = nodeRect.top - hostRect.top - margin;
+      } else if (nodeRect.bottom > visibleBottom - margin) {
+        dy = nodeRect.bottom - visibleBottom + margin;
+      }
+      if (dx !== 0) host.scrollLeft += dx;
+      if (dy !== 0) host.scrollTop += dy;
     };
+    revealSelectedRef.current = revealSelected;
     const frame = requestAnimationFrame(revealSelected);
     const timers = [250, 600, 1000].map((delay) => setTimeout(revealSelected, delay));
     return () => {
+      revealSelectedRef.current = null;
       cancelAnimationFrame(frame);
       for (const timer of timers) clearTimeout(timer);
     };
@@ -2476,6 +2498,10 @@ export function PlantUmlGraph({
       if (shouldRelayoutForAspect(drawnAspectRef.current, measured, { locked: relayoutLockedRef.current }) && measured !== null) {
         scheduleAspectRelayout(measured);
       }
+      // A resize can narrow the canvas without changing the fit — focus mode
+      // deliberately keeps its scale — so the selected box has to be panned
+      // back into view here, before the `fit`-only branch below.
+      revealSelectedRef.current?.();
       if (zoomRef.current.mode !== 'fit') return;
       const viewport = viewportRef.current;
       if (viewport === null) return;
@@ -3884,8 +3910,12 @@ export function PlantUmlGraph({
           // inline sizes).
           style={{
             position: 'absolute',
-            bottom: 12,
-            right: 12,
+            // The landscape-phone tier hugs the canvas edge: the drawing host
+            // has only ~280px of height, so 12px of inset on each axis is
+            // chrome the reader pays for out of the diagram. The hit targets
+            // stay 44px; only the distance to the edge shrinks.
+            bottom: shortTouch ? 4 : 12,
+            right: shortTouch ? 4 : 12,
             display: 'flex',
             // A phone spends one ROW on the corner chrome: the collapsed
             // minimap button and the zoom cluster sit side by side, bottom
@@ -3895,7 +3925,7 @@ export function PlantUmlGraph({
             flexDirection: touchUi ? 'row' : 'column',
             alignItems: 'flex-end',
             rowGap: 8,
-            columnGap: touchUi ? 8 : 0,
+            columnGap: shortTouch ? 4 : touchUi ? 8 : 0,
           }}
           className="z-20 pointer-events-none"
         >
@@ -3921,11 +3951,13 @@ export function PlantUmlGraph({
             // A phone draws ONE horizontal row (+, −, Fit, then the scale and
             // the level label as small text): 44px buttons + 4px padding a side
             // make the row exactly 52px tall. The fine-pointer tier keeps the
-            // compact vertical cluster beside the drawing.
+            // compact vertical cluster beside the drawing. The landscape-phone
+            // tier trims the row to the 44px targets themselves (no extra
+            // band) because its height budget is the whole point of the tier.
             style={{
-              gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4,
+              gap: shortTouch ? 4 : touchUi ? TOUCH_CONTROL_GAP_PX : 4,
               flexDirection: touchUi ? 'row' : 'column',
-              height: touchUi ? '52px' : undefined,
+              height: shortTouch ? '44px' : touchUi ? '52px' : undefined,
             }}
             className={`pointer-events-auto flex items-center rounded-lg border border-border/60 bg-background/90 shadow-sm ${touchUi ? 'p-0' : 'flex-col p-1'}`}
           >
@@ -3960,7 +3992,7 @@ export function PlantUmlGraph({
         {compactToolbar && (
           <div
             data-architecture-canvas-readable-toggle="true"
-            style={{ position: 'absolute', zIndex: 24, left: 8, bottom: 12 }}
+            style={{ position: 'absolute', zIndex: 24, left: 8, bottom: shortTouch ? 4 : 12 }}
             className="pointer-events-auto"
           >
             {readableModeGroup}

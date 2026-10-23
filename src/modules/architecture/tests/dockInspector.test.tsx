@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';
@@ -100,6 +100,13 @@ function stubMatchMedia(matches: (query: string) => boolean): void {
 function usePhone(): void {
   Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
   Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 844 });
+  stubMatchMedia((query) => query === '(pointer: coarse)' || query === '(pointer: coarse) and (hover: none)');
+}
+
+/** The landscape phone the side-column criterion is about: 844×390, coarse, no hover. */
+function useLandscapePhone(): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 844 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 390 });
   stubMatchMedia((query) => query === '(pointer: coarse)' || query === '(pointer: coarse) and (hover: none)');
 }
 
@@ -599,6 +606,110 @@ test('the desktop dock keeps its one close control and draws no snap row', async
     0,
     'the desktop dock has no drawer snap controls',
   );
+});
+
+/**
+ * The landscape-phone criterion (844×390, touch): the inspector is an IN-FLOW
+ * side column, not the bottom drawer, and the selection tray is that column's
+ * top row rather than a pill floating across the drawing. The two readings are
+ * the structural half of "the panel must not cover the selected entity";
+ * `e2e/architecture-canvas-layout.spec.ts` takes the geometric half.
+ */
+test('the landscape-phone tier draws the inspector as a side column with the tray as its top row', async () => {
+  useLandscapePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  tap(host.querySelector(`[data-entity-id="${ALPHA}"]`) as Element);
+  const side = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-dock-side]');
+    assert.ok(element instanceof HTMLElement, 'a short touch viewport gets the in-flow side column');
+    return element;
+  });
+
+  assert.equal(
+    document.querySelector('[data-architecture-dock-touch]'),
+    null,
+    'the landscape tier must not draw the bottom drawer',
+  );
+  assert.ok(side.querySelector('[data-architecture-inspector]'), 'the same inspector content is drawn in the column');
+  assert.equal(side.getAttribute('data-architecture-dock-width-ratio'), '40', 'the column states its 40% width ratio');
+
+  // The tray is the column's top row: inside the dock, outside the canvas.
+  const tray = document.querySelector('[data-architecture-tray-root]');
+  assert.ok(tray instanceof HTMLElement, 'the selection tray is on screen');
+  assert.equal(tray.getAttribute('data-architecture-tray-panel-row'), 'true');
+  assert.ok(side.contains(tray), 'the tray belongs to the inspector column');
+  assert.equal(
+    tray.closest('[data-architecture-canvas-region]'),
+    null,
+    'the tray must not float over the drawing',
+  );
+
+  // The one-row toolbar keeps the design's four cells, and the readout it used
+  // to spend a standing row on is a toggle in that row.
+  const toolbar = document.querySelector('[data-architecture-toolbar]');
+  assert.ok(toolbar instanceof HTMLElement);
+  assert.equal(toolbar.getAttribute('data-architecture-toolbar-short-touch'), 'true');
+  assert.ok(toolbar.querySelector('[data-architecture-readout-toolbar-toggle]'), 'the summary lives in the toolbar');
+  assert.equal(document.querySelector('[data-architecture-canvas-header]'), null, 'no standing readout row');
+  assert.equal(document.querySelector('[data-architecture-source-footer]'), null, 'no standing footer');
+
+  fireEvent.click(toolbar.querySelector('[data-architecture-readout-toolbar-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-readout-popover]')));
+  assert.ok(
+    document.querySelector('[data-architecture-readout-popover] [data-architecture-readout]'),
+    'the expansion carries the full readout',
+  );
+  assert.ok(
+    document.querySelector('[data-architecture-readout-popover] [data-architecture-source-footer]'),
+    'and the provenance footer the short tier cannot afford to keep standing',
+  );
+
+  // The shell-owned sidebar collapse: the Adjust sheet offers an entry that
+  // invokes the control the shell header renders (found by lucide's exported
+  // icon class, not by a title/text match). A stand-in control proves the
+  // wiring without touching the shell.
+  const shellCollapse = document.createElement('button');
+  const shellIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  shellIcon.setAttribute('class', 'lucide lucide-panel-left-close');
+  shellCollapse.appendChild(shellIcon);
+  let shellClicks = 0;
+  shellCollapse.addEventListener('click', () => {
+    shellClicks += 1;
+  });
+  document.body.appendChild(shellCollapse);
+  fireEvent.click(screen.getByRole('button', { name: 'Adjust' }));
+  const collapseEntry = await waitFor(() => {
+    const entry = document.querySelector('[data-architecture-sidebar-collapse]');
+    assert.ok(entry instanceof HTMLElement, 'the Adjust sheet offers the shell sidebar-collapse entry');
+    return entry;
+  });
+  fireEvent.click(collapseEntry);
+  assert.equal(shellClicks, 1, 'the entry invokes the control the shell already renders');
+  shellCollapse.remove();
+});
+
+/**
+ * The counter-reading for the tier above: neither a tall phone nor a desktop
+ * may enter it. Both keep their shipped form (bottom drawer, desktop dock).
+ */
+test('a tall phone and a desktop never enter the landscape side-column tier', async () => {
+  // Desktop (the beforeEach viewport).
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const desktopHost = await waitForDiagram();
+  await openInspectorFor(desktopHost, ALPHA);
+  assert.equal(document.querySelector('[data-architecture-dock-side]'), null, 'a desktop keeps its dock');
+  assert.ok(dock() instanceof HTMLElement, 'and that dock really opened');
+  cleanup();
+
+  // Portrait phone: tall enough to miss the 480px height tier.
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const phoneHost = await waitForDiagram();
+  tap(phoneHost.querySelector(`[data-entity-id="${ALPHA}"]`) as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-dock-touch]') instanceof HTMLElement));
+  assert.equal(document.querySelector('[data-architecture-dock-side]'), null, 'a tall phone keeps the drawer');
 });
 
 /**

@@ -2037,6 +2037,82 @@ test('the zoom cluster grows to 44px targets on a coarse pointer', async () => {
   }
 });
 
+test('the landscape-phone tier folds the summary into a one-row toolbar and hugs the canvas chrome', async () => {
+  const originalMatchMedia = window.matchMedia;
+  const originalInnerWidth = window.innerWidth;
+  const originalInnerHeight = window.innerHeight;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 844 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 390 });
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query === '(pointer: coarse)' || query === '(pointer: coarse) and (hover: none)',
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+    await waitForDiagram();
+
+    const toolbar = document.querySelector('[data-architecture-toolbar]') as HTMLElement | null;
+    assert.ok(toolbar instanceof HTMLElement);
+    assert.equal(toolbar.getAttribute('data-architecture-toolbar-short-touch'), 'true');
+    // ONE row by contract: the pinned 52px line (44px targets + 2×4px padding)
+    // cannot wrap into the second row that would cost the drawing 44px.
+    assert.equal(toolbar.style.height, '52px');
+    assert.equal(toolbar.style.flexWrap, 'nowrap');
+
+    // The summary it used to spend a standing row on is a toolbar cell now.
+    const summary = toolbar.querySelector('[data-architecture-readout-toolbar-toggle]');
+    assert.ok(summary instanceof HTMLElement, 'the readout is a toolbar toggle');
+    assert.equal(document.querySelector('[data-architecture-canvas-header]'), null);
+    assert.equal(document.querySelector('[data-architecture-source-footer]'), null);
+    // The overlay entry moved into Adjust, as the design requires of the
+    // remaining controls.
+    assert.equal(toolbar.querySelector('[data-architecture-fullscreen-toggle]'), null);
+
+    fireEvent.click(summary);
+    const popover = await waitFor(() => {
+      const element = document.querySelector('[data-architecture-readout-popover]');
+      assert.ok(element instanceof HTMLElement, 'the summary expands in place');
+      return element;
+    });
+    assert.ok(popover.querySelector('[data-architecture-readout]'), 'the expansion carries the readout');
+    assert.ok(
+      popover.querySelector('[data-architecture-source-footer]'),
+      'and the footer the short tier has no standing room for',
+    );
+    // The expansion is an overlay: it must not become a standing row.
+    assert.match(popover.className, /\babsolute\b/);
+
+    // The on-canvas chrome hugs the edge and trims the extra band: 44px
+    // targets stay 44px, but the cluster is exactly that row and sits 4px from
+    // the corner.
+    const cluster = zoomCluster();
+    assert.equal(cluster.style.flexDirection, 'row');
+    assert.equal(cluster.style.height, '44px');
+    assert.equal(cluster.style.gap, '4px');
+    const overlays = cluster.parentElement as HTMLElement;
+    assert.equal(overlays.style.bottom, '4px');
+    assert.equal(overlays.style.right, '4px');
+  } finally {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: originalInnerWidth });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: originalInnerHeight });
+  }
+});
+
 test('an explicit readable-mode choice is remembered for its project across mounts and does not leak', async () => {
   const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await screen.findByTestId('plantuml-host');

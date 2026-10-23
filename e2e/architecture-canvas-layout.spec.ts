@@ -88,6 +88,8 @@ const RUN_STARTED_AT = Number(process.env.QUAY_E2E_RUN_STARTED_AT) || Date.now()
 /** The two viewports the criterion runs: the PC panel and the phone panel. */
 const VIEWPORT_PC = { width: 1440, height: 765 };
 const VIEWPORT_PHONE = { width: 390, height: 844 };
+/** The landscape phone the short-touch tier exists for: wide, but only 390px tall. */
+const VIEWPORT_PHONE_LANDSCAPE = { width: 844, height: 390 };
 
 /**
  * How much of the panel's free height the drawing host must occupy.
@@ -5797,13 +5799,14 @@ async function shot(page: Page, name: string): Promise<void> {
  */
 async function ensureVisibleEntityBox(
   page: Page,
+  pick: 'lowest' | 'highest' = 'lowest',
 ): Promise<{ x: number; y: number; id: string } | null> {
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const found = await page.evaluate((sel) => {
+    const found = await page.evaluate(({ sel, pick }) => {
       const host = document.querySelector(sel.host);
       if (host === null) return null;
       const hostRect = host.getBoundingClientRect();
-      let lowest: { x: number; y: number; id: string } | null = null;
+      let chosen: { x: number; y: number; id: string } | null = null;
       for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
         const id = node.getAttribute('data-entity-id') ?? '';
         if (id.startsWith('grp::') || id.startsWith('stub::')) continue;
@@ -5817,10 +5820,13 @@ async function ensureVisibleEntityBox(
         if (y <= hostRect.top + 6 || y >= hostRect.bottom - 6) continue;
         const hit = document.elementFromPoint(x, y);
         if (hit === null || hit.closest('[data-entity-id]') === null) continue;
-        if (lowest === null || y > lowest.y) lowest = { x, y, id };
+        if (
+          chosen === null
+          || (pick === 'lowest' ? y > chosen.y : y < chosen.y)
+        ) chosen = { x, y, id };
       }
-      return lowest;
-    }, SEL);
+      return chosen;
+    }, { sel: SEL, pick });
     if (found !== null) return found;
     const zoomIn = page.locator(SEL.zoomIn);
     if ((await zoomIn.count()) === 0) break;
@@ -6488,5 +6494,310 @@ test('main arm — the orientation holds on a wider viewport and large graphs ke
     expect(reason, 'the entity budget must be the stated reason — no second layout ran').toBe('entity-budget-exceeded');
   } finally {
     await large.context.close();
+  }
+});
+
+/* ── the landscape-phone short-touch tier ─────────────────────────────────────────────────── */
+
+/**
+ * Everything the landscape criterion reads from one page, in a single round
+ * trip. The SAME function answers the main arm and both control arms, so a
+ * green and a red are readings of one instrument rather than two claims.
+ *
+ * `hostClientHeight` is the drawing HOST's own `clientHeight` — the task's
+ * canvas-height unit. `intersects` is the relation the design forbids between
+ * the inspector panel and the entity the reader selected; `nodeVisible` is the
+ * companion reading (the node must also be inside the canvas, not merely
+ * outside the panel by being clipped off-canvas).
+ */
+type ShortTouchReading = {
+  viewport: { width: number; height: number };
+  sidebarWidth: number;
+  availableWidth: number;
+  panel: Box | null;
+  toolbarCount: number;
+  toolbarShortTouch: boolean;
+  toolbarHeight: number;
+  host: Box | null;
+  hostClientHeight: number;
+  hostWidth: number;
+  canvas: Box | null;
+  zoomScale: number | null;
+  readoutRow: boolean;
+  footer: boolean;
+  /** The in-flow side column, when the tier draws one. */
+  dockSide: Box | null;
+  /** The overlay bottom drawer, when the control arm restores it. */
+  dockDrawer: Box | null;
+  selectedNode: Box | null;
+  intersects: boolean;
+  nodeVisible: boolean;
+  trayPanelRow: boolean;
+  trayOverCanvas: boolean;
+};
+
+const readShortTouchLayout = (page: Page, selectedNodeId: string | null = null): Promise<ShortTouchReading> =>
+  page.evaluate(({ sel, selectedNodeId }) => {
+    const boxOf = (element: Element | null): Box | null => {
+      if (element === null) return null;
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, w: rect.width, h: rect.height, x2: rect.right, y2: rect.bottom };
+    };
+    const overlaps = (a: Box | null, b: Box | null): boolean =>
+      Boolean(a && b && a.x < b.x2 && b.x < a.x2 && a.y < b.y2 && b.y < a.y2);
+    const numberOf = (element: Element | null, attribute: string): number | null => {
+      const raw = element?.getAttribute(attribute) ?? null;
+      if (raw === null) return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    };
+
+    const shell = document.querySelector('[data-app-shell]');
+    // The desktop workspace's first child is the docked sidebar (the provider
+    // renders its children directly), so "viewport minus sidebar" is a real
+    // subtraction rather than a hardcoded 289.
+    const sidebar = shell?.firstElementChild ?? null;
+    const sidebarWidth = sidebar?.getBoundingClientRect().width ?? 0;
+
+    const toolbar = document.querySelectorAll(sel.toolbar);
+    const host = document.querySelector(sel.host);
+    const canvas = document.querySelector(sel.canvas);
+    const graphRoot = document.querySelector(sel.graphRoot);
+    const dockSide = document.querySelector('[data-architecture-dock-side]');
+    const dockDrawer = document.querySelector('[data-architecture-dock-touch]');
+    const tray = document.querySelector('[data-architecture-tray-root]');
+    const selectedNode = selectedNodeId === null
+      ? null
+      : [...document.querySelectorAll('.uml-node[data-entity-id]')]
+        .find((node) => node.getAttribute('data-entity-id') === selectedNodeId) ?? null;
+
+    const hostBox = boxOf(host);
+    const canvasBox = boxOf(canvas);
+    const sideBox = boxOf(dockSide);
+    const drawerBox = boxOf(dockDrawer);
+    const nodeBox = boxOf(selectedNode);
+
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      sidebarWidth,
+      availableWidth: window.innerWidth - sidebarWidth,
+      panel: boxOf(document.querySelector(sel.panel)),
+      toolbarCount: toolbar.length,
+      toolbarShortTouch: document.querySelector(sel.toolbar)?.getAttribute('data-architecture-toolbar-short-touch') === 'true',
+      toolbarHeight: document.querySelector(sel.toolbar)?.getBoundingClientRect().height ?? 0,
+      host: hostBox,
+      hostClientHeight: host instanceof HTMLElement ? host.clientHeight : 0,
+      hostWidth: hostBox?.w ?? 0,
+      canvas: canvasBox,
+      zoomScale: numberOf(graphRoot, 'data-architecture-zoom-scale'),
+      readoutRow: document.querySelector(sel.canvasRegionHeader) !== null,
+      footer: document.querySelector(sel.footer) !== null,
+      dockSide: sideBox,
+      dockDrawer: drawerBox,
+      selectedNode: nodeBox,
+      // Either overlay form counts: the design forbids BOTH from covering the
+      // selection, and the control arm needs the drawer form to answer true.
+      intersects: overlaps(sideBox, nodeBox) || overlaps(drawerBox, nodeBox),
+      nodeVisible: Boolean(
+        nodeBox !== null
+        && canvasBox !== null
+        && nodeBox.x >= canvasBox.x - 1
+        && nodeBox.x2 <= canvasBox.x2 + 1
+        && nodeBox.y >= canvasBox.y - 1
+        && nodeBox.y2 <= canvasBox.y2 + 1,
+      ),
+      trayPanelRow: tray?.getAttribute('data-architecture-tray-panel-row') === 'true',
+      trayOverCanvas: tray !== null && tray.closest(sel.canvas) !== null,
+    };
+  }, { sel: SEL, selectedNodeId });
+
+const printShortTouch = (label: string, reading: ShortTouchReading): void => {
+  console.log(`[architecture-layout] ${label}.viewport=${reading.viewport.width}x${reading.viewport.height} `
+    + `sidebar=${formatNumber(reading.sidebarWidth)} available=${formatNumber(reading.availableWidth)}`);
+  console.log(`[architecture-layout] ${label}.canvas.host=${formatBox(reading.host)} `
+    + `clientHeight=${reading.hostClientHeight} width=${formatNumber(reading.hostWidth)} region=${formatBox(reading.canvas)}`);
+  console.log(`[architecture-layout] ${label}.zoom.scale=${JSON.stringify(reading.zoomScale)} `
+    + `toolbar.count=${reading.toolbarCount} shortTouch=${String(reading.toolbarShortTouch)} `
+    + `toolbar.h=${formatNumber(reading.toolbarHeight)}`);
+  console.log(`[architecture-layout] ${label}.readoutRow=${String(reading.readoutRow)} footer=${String(reading.footer)}`);
+  console.log(`[architecture-layout] ${label}.dock.side=${formatBox(reading.dockSide)} drawer=${formatBox(reading.dockDrawer)}`);
+  console.log(`[architecture-layout] ${label}.node=${formatBox(reading.selectedNode)} `
+    + `intersects=${String(reading.intersects)} visible=${String(reading.nodeVisible)}`);
+  console.log(`[architecture-layout] ${label}.tray.panelRow=${String(reading.trayPanelRow)} overCanvas=${String(reading.trayOverCanvas)}`);
+};
+
+/**
+ * The short-touch structural readings. The canvas height is the task's 240px
+ * floor and the width is its "≥60% of the viewport minus the sidebar" floor;
+ * the default zoom is the DoD's ≥30% (the defect read 14%).
+ */
+const assertLandscapeCanvas = (reading: ShortTouchReading, label: string): void => {
+  expect.soft(reading.toolbarCount, `${label}: the tier must spend exactly one row on chrome`).toBe(1);
+  expect.soft(reading.toolbarShortTouch, `${label}: the short-touch toolbar must be in force`).toBe(true);
+  expect.soft(reading.toolbarHeight, `${label}: the toolbar must be one 52px row`).toBeLessThanOrEqual(60);
+  expect.soft(
+    reading.hostClientHeight,
+    `${label}: the drawing host must keep at least 240px of height (reading ${reading.hostClientHeight}px)`,
+  ).toBeGreaterThanOrEqual(240);
+  expect.soft(
+    reading.hostWidth,
+    `${label}: the drawing must keep ≥60% of (viewport − sidebar) = ${(reading.availableWidth * 0.6).toFixed(0)}px `
+      + `(reading ${reading.hostWidth.toFixed(0)}px)`,
+  ).toBeGreaterThanOrEqual(reading.availableWidth * 0.6);
+  expect.soft(
+    reading.zoomScale,
+    `${label}: the default fit must be at least 30% (the defect read 14%; reading ${String(reading.zoomScale)})`,
+  ).toBeGreaterThanOrEqual(0.3);
+  expect.soft(reading.readoutRow, `${label}: the summary must be a toolbar cell, not a standing row`).toBe(false);
+  expect.soft(reading.footer, `${label}: the provenance footer must not hold standing height`).toBe(false);
+};
+
+/** The selected-state relation: an in-flow column beside the entity, not over it. */
+const assertInspectorBesideSelection = (reading: ShortTouchReading, label: string): void => {
+  expect.soft(reading.dockSide, `${label}: selecting must open the in-flow side column`).not.toBeNull();
+  expect.soft(reading.dockDrawer, `${label}: the bottom drawer must not be drawn`).toBeNull();
+  expect.soft(
+    reading.intersects,
+    `${label}: the inspector panel and the selected entity must not intersect `
+      + `(panel ${formatBox(reading.dockSide ?? reading.dockDrawer)} node ${formatBox(reading.selectedNode)})`,
+  ).toBe(false);
+  expect.soft(
+    reading.nodeVisible,
+    `${label}: the selected entity must stay inside the visible canvas (node ${formatBox(reading.selectedNode)})`,
+  ).toBe(true);
+  expect.soft(reading.trayPanelRow, `${label}: the selection tray must be the column's top row`).toBe(true);
+  expect.soft(reading.trayOverCanvas, `${label}: the tray must not float over the canvas`).toBe(false);
+};
+
+test('main arm — the landscape phone canvas keeps 240px and the inspector sits beside the selection (844x390)', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE_LANDSCAPE,
+    touch: true,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    // `openArchitectureTab` lands on the FILE overview for its own readings;
+    // this criterion is about the shipped default (the class diagram), so take
+    // the panel back to it before measuring the default state.
+    await showClassDiagram(page);
+    await waitForDrawing(page);
+    await settle(page, 600);
+
+    const opened = await readShortTouchLayout(page);
+    printShortTouch('landscape.opened', opened);
+    assertLandscapeCanvas(opened, 'landscape.opened');
+    await page.screenshot({ path: test.info().outputPath('landscape-opened.png') });
+
+    // The HIGHEST visible entity: after the side column takes its share of the
+    // width the drawing re-fits, and a box that started at the very bottom can
+    // end up straddling the canvas' bottom edge. "The selected entity is in the
+    // visible area" must therefore be read on a box the reader can actually
+    // select to inspect, not on the one chosen to stress a bottom overlay.
+    const target = await ensureVisibleEntityBox(page, 'highest');
+    expect(target, 'the landscape drawing must offer a visible entity to tap').not.toBeNull();
+    const point = target as { x: number; y: number; id: string };
+
+    await page.mouse.click(point.x, point.y);
+    await expect(page.locator('[data-architecture-dock-side]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-architecture-dock-touch]')).toHaveCount(0);
+    // Let the dock's width change settle and the renderer re-fit into the
+    // narrower canvas before the geometry is read.
+    await settle(page, 1_200);
+
+    const selected = await readShortTouchLayout(page, point.id);
+    printShortTouch('landscape.selected', selected);
+    assertLandscapeCanvas(selected, 'landscape.selected');
+    assertInspectorBesideSelection(selected, 'landscape.selected');
+    await page.screenshot({ path: test.info().outputPath('landscape-selected.png') });
+    await shot(page, 'landscape-selected');
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * The two control arms, each restoring ONE half of the defect through the same
+ * DEV-only levers the other architecture criteria use, and read through the
+ * SAME `readShortTouchLayout` the main arm just passed with.
+ *
+ *  · compact off → the old chrome (standing readout row + footer + wrapped
+ *    toolbar) leaves the canvas at its pre-task height: the 240px reading reds.
+ *  · drawer restored on the short tier → the inspector is an overlay covering
+ *    the drawing again: the intersection reading reds while the canvas height
+ *    stays green, so the two readings are independent.
+ */
+test('control arm — turning the short-touch tier off reds the canvas height, and the restored drawer reds the intersection (844x390)', async ({ browser }) => {
+  // Arm A: the short-touch tier is switched off.
+  const tierOff = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE_LANDSCAPE,
+    touch: true,
+  });
+  try {
+    await tierOff.context.addInitScript(() => {
+      window.localStorage.setItem('architecture-short-touch-layout', 'off');
+    });
+    await openArchitectureTab(tierOff.page, sessionId);
+    await waitForDrawing(tierOff.page);
+    await settle(tierOff.page, 600);
+
+    const withoutTier = await readShortTouchLayout(tierOff.page);
+    printShortTouch('control.tier-off', withoutTier);
+    expect(
+      withoutTier.toolbarShortTouch,
+      'the lever must really restore the pre-task chrome',
+    ).toBe(false);
+    expect(
+      withoutTier.hostClientHeight,
+      `without the tier the canvas height reading must go red (reading ${withoutTier.hostClientHeight}px, floor 240px)`,
+    ).toBeLessThan(240);
+    await tierOff.page.screenshot({ path: test.info().outputPath('control-tier-off.png') });
+  } finally {
+    await tierOff.context.close();
+  }
+
+  // Arm B: the side column is replaced by the old bottom drawer.
+  const drawer = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE_LANDSCAPE,
+    touch: true,
+  });
+  try {
+    await drawer.context.addInitScript(() => {
+      window.localStorage.setItem('architecture-short-touch-dock', 'drawer');
+    });
+    await openArchitectureTab(drawer.page, sessionId);
+    await showClassDiagram(drawer.page);
+    await waitForDrawing(drawer.page);
+    await settle(drawer.page, 600);
+
+    const target = await ensureVisibleEntityBox(drawer.page);
+    expect(target, 'the control arm needs the same tappable entity').not.toBeNull();
+    const point = target as { x: number; y: number; id: string };
+    await drawer.page.mouse.click(point.x, point.y);
+    await expect(drawer.page.locator('[data-architecture-dock-touch]')).toBeVisible({ timeout: 10_000 });
+    // The drawer's shipped opening snap is Half (45vh ≈ 175px of this canvas'
+    // 289px). It is an OVERLAY, so its rect covers the bottom band of the
+    // canvas — the lowest entity the helper selected lives there.
+    await settle(drawer.page, 1_200);
+
+    const withDrawer = await readShortTouchLayout(drawer.page, point.id);
+    printShortTouch('control.drawer', withDrawer);
+    expect(
+      withDrawer.dockDrawer,
+      'the lever must really restore the bottom drawer',
+    ).not.toBeNull();
+    expect(withDrawer.dockSide, 'and must not draw the side column').toBeNull();
+    expect(
+      withDrawer.hostClientHeight,
+      'the compact chrome stays on in this arm, so the height reading stays green',
+    ).toBeGreaterThanOrEqual(240);
+    expect(
+      withDrawer.intersects,
+      `with the drawer restored the panel/selection intersection reading must go red `
+        + `(drawer ${formatBox(withDrawer.dockDrawer)} node ${formatBox(withDrawer.selectedNode)})`,
+    ).toBe(true);
+    await drawer.page.screenshot({ path: test.info().outputPath('control-drawer.png') });
+  } finally {
+    await drawer.context.close();
   }
 });

@@ -89,6 +89,49 @@ const getIsCoarsePointer = (): boolean => {
 };
 
 /**
+ * The DEV-only lever the landscape criterion's control arms pull: setting
+ * `architecture-short-touch-layout = "off"` restores the pre-task chrome on a
+ * short touch viewport, so the SAME reading function can measure what the
+ * canvas looks like without the compact tier.
+ *
+ * DEV-gated exactly like the renderer's member-limit and orientation levers: a
+ * production build does not contain this branch, so no reader can turn the
+ * feature off.
+ */
+const SHORT_TOUCH_LAYOUT_STORAGE_KEY = 'architecture-short-touch-layout';
+
+const shortTouchLayoutForcedOff = (): boolean => {
+  if (!import.meta.env.DEV) return false;
+  try {
+    return window.localStorage.getItem(SHORT_TOUCH_LAYOUT_STORAGE_KEY) === 'off';
+  } catch {
+    // Private mode: the store is unreadable, so the shipped tier applies.
+    return false;
+  }
+};
+
+/**
+ * Which form the dock takes on a short touch viewport.
+ *
+ * `side` is the shipped landscape form: an in-flow column on the canvas's right
+ * edge, so it cannot cover the selected entity. The DEV-only `drawer` value is
+ * the control arm's restoration of the old bottom drawer — the overlay that
+ * DOES cover the drawing — so one reading can compare both forms.
+ */
+const SHORT_TOUCH_DOCK_STORAGE_KEY = 'architecture-short-touch-dock';
+
+export function shortTouchDockForm(): 'side' | 'drawer' {
+  if (import.meta.env.DEV) {
+    try {
+      if (window.localStorage.getItem(SHORT_TOUCH_DOCK_STORAGE_KEY) === 'drawer') return 'drawer';
+    } catch {
+      // Private mode: the shipped side column applies.
+    }
+  }
+  return 'side';
+}
+
+/**
  * The architecture tab's pointer/size tier, used by `PlantUmlGraph` and
  * `ArchitecturePanel`.
  *
@@ -100,11 +143,20 @@ const getIsCoarsePointer = (): boolean => {
  * The coarse-pointer reading is followed at runtime (a mouse paired to a tablet,
  * a keyboard docked to a tablet) rather than taken once: the tier changes what
  * the same tap means, so it must not go stale mid-session.
+ *
+ * `shortTouch` is the landscape-phone tier: the pointer is a finger AND the
+ * viewport is short (≤ 480 CSS px — see `SHORT_VIEWPORT_MAX_HEIGHT_PX`). It is a
+ * subset of `compactToolbar`, and it changes the panel's STRUCTURE rather than
+ * only its control sizes: the toolbar folds the readout into its one row, the
+ * provenance footer moves into that row's expansion, and the inspector becomes
+ * an in-flow side column instead of the bottom drawer. Width alone cannot see
+ * this state — 844px clears every width breakpoint — so height is the axis.
  */
 export function useTouchLayout(): {
   coarsePointer: boolean;
   isMobile: boolean;
   isShortTouchViewport: boolean;
+  shortTouch: boolean;
   touchUi: boolean;
   compactToolbar: boolean;
 } {
@@ -124,6 +176,7 @@ export function useTouchLayout(): {
     coarsePointer,
     isMobile,
     isShortTouchViewport,
+    shortTouch: isShortTouchViewport && !shortTouchLayoutForcedOff(),
     touchUi: coarsePointer || isShortTouchViewport,
     compactToolbar: coarsePointer || isMobile,
   };

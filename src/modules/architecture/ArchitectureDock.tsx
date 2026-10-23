@@ -27,6 +27,14 @@ export type ArchitectureDockTab = {
 type ArchitectureDockProps = {
   /** Whether the dock is on screen. The panel owns this state. */
   readonly open: boolean;
+  /**
+   * Which structural form the shell draws. `desktop` is the in-flow 320px
+   * right-hand column; `drawer` is the coarse bottom drawer with three snap
+   * heights; `side` is the landscape-phone column — also in flow, so it narrows
+   * the canvas instead of covering the selected entity, but proportioned as 40%
+   * of that canvas rather than a fixed width.
+   */
+  readonly tier: 'desktop' | 'drawer' | 'side';
   readonly tabs: readonly ArchitectureDockTab[];
   readonly activeTabId: string;
   readonly onTabChange: (tabId: string) => void;
@@ -36,6 +44,13 @@ type ArchitectureDockProps = {
   readonly title: string;
   /** The close control's accessible name. */
   readonly closeLabel: string;
+  /**
+   * A row drawn ABOVE the tablist inside the dock. The landscape-phone tier
+   * hands its selection tray here: the tray's actions belong with the
+   * inspector, and an in-flow row at the column's top is the form the design
+   * asks for instead of a pill floating over the drawing.
+   */
+  readonly panelHeader?: ReactNode;
   /**
    * Where focus returns when the dock closes. The panel passes the canvas
    * region: the click that opened the dock was a gesture on the drawing, so the
@@ -91,8 +106,9 @@ function touchDrawerHeightPx(snap: DrawerSnap, viewportHeight: number): number {
 }
 
 /**
- * The architecture tab's right-hand dock (desktop) and bottom drawer (coarse
- * pointer), plus the tab shell both tiers share.
+ * The architecture tab's right-hand dock (desktop), bottom drawer (coarse
+ * pointer) or in-flow side column (landscape phone), plus the tab shell every
+ * tier shares.
  *
  * Used by `ArchitecturePanel` only. On a fine pointer the dock is an in-flow
  * `role="complementary"` column: opening it narrows the canvas (the panel locks
@@ -100,12 +116,17 @@ function touchDrawerHeightPx(snap: DrawerSnap, viewportHeight: number): number {
  * in from the right in 160ms. On a coarse pointer the same tab content is drawn
  * in a bottom drawer with three snap heights — collapsed (96px: name, kind and
  * actions), half (45vh) and full — so the drawing is never covered entirely.
+ * On a landscape phone (a short touch viewport) it is an in-flow column again,
+ * but proportioned against the canvas it sits beside (40% of it) and carries
+ * the selection tray as its top row: the short tier cannot afford a standing
+ * row on the drawing, and an in-flow column cannot cover the selected entity.
  *
  * The shell owns the tablist and focus return; the panel owns `open`, the
  * active tab and (through the inspector's props) the content.
  */
 export function ArchitectureDock({
   open,
+  tier,
   tabs,
   activeTabId,
   onTabChange,
@@ -115,6 +136,7 @@ export function ArchitectureDock({
   returnFocusRef,
   collapsedSummary,
   snapLabels,
+  panelHeader,
   onTouchDrawerHeightChange,
 }: ArchitectureDockProps) {
   const { coarsePointer } = useTouchLayout();
@@ -148,9 +170,9 @@ export function ArchitectureDock({
   // than measured, so the reading is the height the drawer is about to paint
   // and does not wait for the slide-in animation.
   useEffect(() => {
-    if (!coarsePointer) return;
+    if (tier !== 'drawer') return;
     onTouchDrawerHeightChange?.(open ? touchDrawerHeightPx(snap, window.innerHeight) : 0);
-  }, [coarsePointer, open, snap, onTouchDrawerHeightChange]);
+  }, [tier, open, snap, onTouchDrawerHeightChange]);
 
   if (!open) return null;
 
@@ -240,7 +262,7 @@ export function ArchitectureDock({
     `}</style>
   );
 
-  if (coarsePointer) {
+  if (tier === 'drawer') {
     return (
       <>
         {motionStyle}
@@ -289,6 +311,30 @@ export function ArchitectureDock({
           {tabList}
           {tabPanel(activeTab)}
         </section>
+      </>
+    );
+  }
+
+  if (tier === 'side') {
+    return (
+      <>
+        {motionStyle}
+        <aside
+          role="complementary"
+          aria-label={title}
+          data-architecture-dock="true"
+          data-architecture-dock-side="true"
+          // The design states the column's width against its NEIGHBOUR, not the
+          // row: 40% of the canvas. canvas:panel therefore splits the row 5:2,
+          // and 2/7 ≈ 28.5714% of the row is exactly 40% of that canvas.
+          data-architecture-dock-width-ratio="40"
+          style={{ width: '28.5714%' }}
+          className="flex min-h-0 shrink-0 flex-col border-l border-border/60 bg-background"
+        >
+          {panelHeader}
+          {tabList}
+          {tabPanel(activeTab)}
+        </aside>
       </>
     );
   }

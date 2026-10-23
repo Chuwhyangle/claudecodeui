@@ -70,6 +70,7 @@ import {
 import {
   CanvasHeaderSlotContext,
   CompactToolbarSlotContext,
+  shortTouchDockForm,
   TOUCH_CONTROL_GAP_PX,
   TOUCH_TARGET_STYLE,
   useTouchLayout,
@@ -353,7 +354,15 @@ export default function ArchitecturePanel({
   // The pointer/size tier. On a narrow screen the export action moves into the
   // graph's overflow menu (one menu, not two), and on a coarse pointer every
   // header control grows to a 44px target.
-  const { coarsePointer, compactToolbar } = useTouchLayout();
+  const { coarsePointer, compactToolbar, shortTouch } = useTouchLayout();
+  // The dock's structural form. On the landscape-phone tier the DEV-only
+  // `drawer` override restores the old overlay for the criterion's control arm;
+  // every normal render gets the in-flow side column.
+  const dockTier: 'desktop' | 'drawer' | 'side' = shortTouch
+    ? shortTouchDockForm()
+    : coarsePointer
+      ? 'drawer'
+      : 'desktop';
   const headerButtonClass = coarsePointer
     ? 'rounded-md px-3 text-sm font-medium'
     : 'rounded-md px-2 py-0.5 text-xs font-medium';
@@ -3379,6 +3388,90 @@ export default function ArchitecturePanel({
     </div>
   );
 
+  /**
+   * The landscape-phone summary's expansion cell and the shell's sidebar
+   * collapse entry.
+   *
+   * The shell owns the sidebar and already renders a collapse control in its
+   * header (the `PanelLeftClose` icon); the compact design asks the Architecture
+   * tab for an entry that invokes that existing capability without changing the
+   * shell. Lucide's exported icon name is part of its public API (`lucide-
+   * panel-left-close` is the class it stamps), so the control is found by that
+   * stable marker rather than by a localized title or a text match. No shell
+   * implementation is touched, and if the shell ever stops rendering the
+   * control the click is a no-op rather than an error.
+   */
+  const collapseShellSidebar = (): void => {
+    const button = document.querySelector('svg.lucide-panel-left-close')?.closest('button');
+    if (button instanceof HTMLElement) button.click();
+  };
+  const sidebarCollapseButton = (
+    <button
+      type="button"
+      onClick={collapseShellSidebar}
+      data-architecture-sidebar-collapse="true"
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex items-center gap-1 border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+    >
+      {t('versionUpdate.ariaLabels.closeSidebar', { defaultValue: 'Close sidebar' })}
+    </button>
+  );
+
+  /**
+   * The landscape-phone toolbar's summary cell. It states the SAME one-line
+   * reading the other tiers draw in their canvas-header row and expands into
+   * that row's full reading (plus the provenance footer) as an overlay. This is
+   * the cell that lets the short tier spend no standing height on a summary
+   * row: the drawing gets the 44px the row would have taken.
+   */
+  const shortTouchReadoutToggle = (
+    <button
+      type="button"
+      aria-expanded={readoutOpen}
+      onClick={() => setReadoutOpen((open) => !open)}
+      data-architecture-readout-toolbar-toggle="true"
+      data-architecture-readout-toolbar-summary={readout.shown}
+      data-architecture-readout-toolbar-total={readout.related}
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex min-w-0 max-w-[38%] items-center gap-1 border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+    >
+      <span className="min-w-0 truncate whitespace-nowrap">{readoutSummary}</span>
+      <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
+    </button>
+  );
+
+  /**
+   * The selection tray in its landscape-phone form: the TOP ROW of the
+   * inspector column. It is never drawn across the canvas on this tier.
+   */
+  const shortTouchPanelTray = shortTouch && selections.length > 0
+    ? (
+      <ArchitectureSelectionTray
+        selections={selections}
+        graph={drawnGraph}
+        idShape={nodeIdShapeOf(granularity)}
+        view={diagramView}
+        grouping={granularity === 'file' ? 'adaptive' : 'raw'}
+        drawn={drawnPlantUml}
+        projectId={projectId}
+        projectName={projectName}
+        analyzedAt={provenance.generatedAt}
+        canCompose={canComposeSelection}
+        canRemove={canCurateEntities}
+        multiSelect={multiSelectMode}
+        expanded={trayExpanded}
+        compact={compactToolbar}
+        panelRow
+        onExpandedChange={setTrayExpanded}
+        onExitMultiSelect={() => setMultiSelectMode(false)}
+        onToggleItem={toggleSelection}
+        onClear={clearSelectionOnCanvas}
+        onCompose={composeSelectionText}
+        onRemoveSelected={removeSelected}
+      />
+    )
+    : undefined;
+
   return (
     <div
       ref={panelRootRef}
@@ -3403,14 +3496,20 @@ export default function ArchitecturePanel({
       <style>{'@keyframes architecture-touch-hint-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }'}</style>
       <div
         data-architecture-toolbar="true"
+        data-architecture-toolbar-short-touch={shortTouch ? 'true' : undefined}
         // On the overlay the compact row is ONE 56px line (a 44px target plus
         // the row's 2×6px padding): `nowrap` and the stated height are the
         // contract that keeps a second row from covering the drawing again.
+        // The landscape-phone tier states the same `nowrap` contract at 52px
+        // (a 44px target plus the row's 2×4px padding), because its scarce axis
+        // is height and a wrapped second row would cost the drawing ~44px.
         style={
           compactToolbar
             ? fullscreen.active
               ? { gap: TOUCH_CONTROL_GAP_PX, height: 56, flexWrap: 'nowrap' }
-              : { gap: TOUCH_CONTROL_GAP_PX }
+              : shortTouch
+                ? { gap: TOUCH_CONTROL_GAP_PX, height: 52, flexWrap: 'nowrap' }
+                : { gap: TOUCH_CONTROL_GAP_PX }
             : undefined
         }
         // Over the overlay the row is chrome ON TOP of a viewport-sized
@@ -3421,9 +3520,9 @@ export default function ArchitecturePanel({
         // normal paint flow, and the desktop row still fits one line at its
         // breakpoint (it only wraps when the width really runs out, which is
         // preferable to hiding controls in a scroller).
-        className={`flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5 ${
-          fullscreen.active ? 'relative z-40 bg-background' : ''
-        }`}
+        className={`relative flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 ${
+          shortTouch && !fullscreen.active ? 'py-1' : 'py-1.5'
+        } ${fullscreen.active ? 'relative z-40 bg-background' : ''}`}
       >
         {compactToolbar ? (
           fullscreen.active ? (
@@ -3433,6 +3532,18 @@ export default function ArchitecturePanel({
             <>
               <span className="flex-1" />
               {fullscreenButton}
+              {adjustButton}
+            </>
+          ) : shortTouch ? (
+            // The landscape-phone row: the view switch, the one-line summary
+            // (expanding into the readout above the drawing), the Text door and
+            // the one Adjust menu. Fullscreen and export move INTO that menu —
+            // the design's "remaining controls live in Adjust".
+            <>
+              {granularityGroup}
+              <span className="flex-1" />
+              {shortTouchReadoutToggle}
+              {textToggle}
               {adjustButton}
             </>
           ) : (
@@ -3461,6 +3572,21 @@ export default function ArchitecturePanel({
             {exportMenu}
             {legendButton}
           </>
+        )}
+        {/* The landscape-phone summary's expansion. It is an overlay anchored
+            under the toolbar (not an in-flow row): opening it must not take
+            height from the drawing the reader is inspecting, and closing it
+            must return that height untouched. The provenance footer, which is a
+            document-flow row on the other tiers, travels WITH the summary here
+            — the short tier has no room for a standing footer. */}
+        {shortTouch && readoutOpen && (
+          <div
+            data-architecture-readout-popover="true"
+            className="absolute left-0 right-0 top-full z-50 max-h-[70vh] overflow-y-auto border-b border-border/60 bg-background shadow-lg"
+          >
+            {readoutPanel}
+            {sourceFooter}
+          </div>
         )}
       </div>
 
@@ -3542,6 +3668,17 @@ export default function ArchitecturePanel({
               <div className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
                 {granularityGroup}
                 {textToggle}
+              </div>
+            )}
+            {/* The landscape-phone toolbar keeps only the view switch, the
+                summary, Text and Adjust, so the overlay entry and the shell's
+                sidebar-collapse entry live here. The collapse button invokes
+                the control the shell header already renders; the architecture
+                module does not own or change the sidebar. */}
+            {shortTouch && !fullscreen.active && (
+              <div className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+                {fullscreenButton}
+                {sidebarCollapseButton}
               </div>
             )}
             {/* The renderer's own view chrome (tier, scale, readable mode, Back,
@@ -3666,7 +3803,7 @@ export default function ArchitecturePanel({
                 card covered the drawing and collided with the corner chrome).
                 It is marked as the canvas header so the layout contract treats
                 it as chrome: the drawing's available height starts below it. */}
-            {compactToolbar && (
+            {compactToolbar && (!shortTouch || fullscreen.active) && (
               <div
                 ref={readoutRowRef}
                 data-architecture-canvas-header="true"
@@ -3756,8 +3893,15 @@ export default function ArchitecturePanel({
                     graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
                     // The coarse drawer covers the canvas' bottom band while it
                     // is open; the drawing reserves that band and keeps the
-                    // selected box above it.
-                    bottomObscuredPx={compactToolbar && dockOpen ? touchDrawerHeight : 0}
+                    // selected box above it. The landscape side column is in
+                    // flow, so it covers nothing and reserves nothing. The one
+                    // exception is the criterion's DEV drawer override: there
+                    // the point IS that the restored overlay covers the drawing,
+                    // so no band is reserved (reserving it would hide the
+                    // defect the control arm exists to measure).
+                    bottomObscuredPx={
+                      dockTier === 'drawer' && dockOpen && !shortTouch ? touchDrawerHeight : 0
+                    }
                     // On the overlay the chrome is painted OVER the viewport-
                     // sized canvas; the drawing reserves that band so a fitted
                     // graph is fully visible below it.
@@ -3880,8 +4024,11 @@ export default function ArchitecturePanel({
 
               {/* The selection tray floats inside the canvas: tags, the memo,
                   the optional PlantUML attachment and the append-to-draft
-                  action. On the compact tier it becomes a bottom bar/drawer. */}
-              {selections.length > 0 && (
+                  action. On the compact tier it becomes a bottom bar/drawer.
+                  The landscape-phone tier draws it as the inspector column's
+                  top row instead (see `shortTouchPanelTray`), so it is not
+                  rendered over the drawing at all. */}
+              {selections.length > 0 && !shortTouch && (
                 <ArchitectureSelectionTray
                   selections={selections}
                   graph={drawnGraph}
@@ -3899,8 +4046,10 @@ export default function ArchitecturePanel({
                   compact={compactToolbar}
                   // The coarse drawer is drawn OVER the canvas: lift the tray
                   // (pill and expanded panel) above its top edge so the two
-                  // never share screen space.
-                  bottomInset={compactToolbar && dockOpen ? touchDrawerHeight : 0}
+                  // never share screen space. The side column is in flow, so
+                  // there is nothing to lift above — and the DEV drawer override
+                  // deliberately keeps the overlay's covering behaviour.
+                  bottomInset={dockTier === 'drawer' && dockOpen && !shortTouch ? touchDrawerHeight : 0}
                   onExpandedChange={setTrayExpanded}
                   onExitMultiSelect={() => setMultiSelectMode(false)}
                   onToggleItem={toggleSelection}
@@ -3933,16 +4082,18 @@ export default function ArchitecturePanel({
         // fine-pointer dock is wrapped.
         <div
           data-architecture-fullscreen-dock={
-            fullscreen.active && !compactToolbar ? 'true' : undefined
+            fullscreen.active && dockTier !== 'drawer' ? 'true' : undefined
           }
           className={
-            fullscreen.active && !compactToolbar
+            fullscreen.active && dockTier !== 'drawer'
               ? 'absolute inset-y-0 right-0 z-40 flex max-h-full flex-col'
               : 'contents'
           }
         >
         <ArchitectureDock
           open={dockOpen}
+          tier={dockTier}
+          panelHeader={shortTouchPanelTray}
           title={t('architecture.dock.title', { defaultValue: 'Inspector' })}
           closeLabel={t('architecture.dock.close', { defaultValue: 'Close inspector' })}
           returnFocusRef={graphAreaRef}
@@ -4096,8 +4247,11 @@ export default function ArchitecturePanel({
       {/* The provenance/cleanup row is the panel's FOOTER: in the document
           flow BELOW the canvas (and the dock), never a pill over the drawing.
           The canvas therefore keeps only the minimap and the zoom cluster as
-          floating corner chrome. */}
-      {sourceFooter}
+          floating corner chrome. The landscape-phone tier has no standing
+          footer: its reading travels inside the toolbar summary's expansion,
+          which is the row that buys the drawing the 44px the footer would cost
+          on a 390px-tall viewport. */}
+      {!shortTouch && sourceFooter}
       </div>
     </div>
   );
