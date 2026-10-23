@@ -4,44 +4,41 @@ import { RESIDENT_IDLE_TIMEOUT } from './session-host-manager.service.js';
 import type { HostDriverResolver, ResidentSessionStarter } from './session-hosts.routes.js';
 
 /**
- * The opt-in switch for restoring resident sessions at start-up.
+ * Whether the shipped configuration restores resident sessions at start-up.
  *
- * Off unless the value is `on` (case- and whitespace-insensitive; `true` and `1`
- * are accepted as the same switch). Off is the shipped default because bringing
- * a process up costs a provider launch per session, and an operator should opt
- * into that trade rather than discover it after a restart. Pinned by this
- * module's restore criterion, which sets the variable through an injected env
- * object and reads the answer back.
+ * Off: a restore pass launches one provider process per session, and an operator
+ * should opt into that trade rather than discover it after a restart. The switch
+ * is the `residentRestore.enabled` key of the generic server settings file
+ * (`server/modules/settings/server-settings.ts`); this module owns the default,
+ * the settings loader reads it, and `server/index.ts` branches on that reading.
+ * There is no per-key environment variable for it. Pinned by this module's
+ * restore criterion.
  */
-export const RESIDENT_RESTORE_ENV = 'CLAUDE_RESIDENT_RESTORE';
+export const DEFAULT_RESIDENT_RESTORE_ENABLED = false;
 
 /**
- * How many resident sessions a single restore pass may start.
+ * The shipped ceiling on sessions per restore pass.
  *
  * Milliseconds are not involved; the unit is sessions. A ceiling exists because
  * a restore pass that started every resident row would turn a restart into a
  * launch storm — measured at eight sessions active in the last six hours and ten
  * in the last twelve, so sixteen leaves headroom for the busy case while still
- * bounding the burst. Malformed values fall back to {@link DEFAULT_RESIDENT_RESTORE_MAX}.
+ * bounding the burst. This is the value `residentRestore.max` falls back to when
+ * the settings file says nothing or names a malformed value.
  */
-export const RESIDENT_RESTORE_MAX_ENV = 'CLAUDE_RESIDENT_RESTORE_MAX';
+export const DEFAULT_RESIDENT_RESTORE_MAX = 16;
 
 /**
- * How recently a resident session must have carried activity to be restored.
+ * The shipped activity window.
  *
  * The value is also the semantic boundary of the claim: a resident session that
  * had already been idle past the provider's own idle ceiling before the restart
- * was not really alive, so it is not restored. The default is
+ * was not really alive, so it is not restored. It is
  * {@link RESIDENT_IDLE_TIMEOUT} — the same 24 hours the manager closes an idle
  * resident host at — so the restore window and the lifetime policy cannot drift
- * apart without this file changing. Malformed values fall back to that default.
+ * apart without this file changing. This is the value `residentRestore.maxAgeMs`
+ * falls back to.
  */
-export const RESIDENT_RESTORE_MAX_AGE_ENV = 'CLAUDE_RESIDENT_RESTORE_MAX_AGE_MS';
-
-/** The shipped ceiling on sessions per restore pass; see {@link RESIDENT_RESTORE_MAX_ENV}. */
-export const DEFAULT_RESIDENT_RESTORE_MAX = 16;
-
-/** The shipped activity window; see {@link RESIDENT_RESTORE_MAX_AGE_ENV}. */
 export const DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS = RESIDENT_IDLE_TIMEOUT;
 
 /**
@@ -131,49 +128,6 @@ export type ResidentRestoreDeps = {
   /** Where the pass and its per-session failures are reported. */
   log?: (message: string) => void;
 };
-
-/**
- * Whether a starting server should restore resident sessions, from `CLAUDE_RESIDENT_RESTORE`.
- *
- * Only an explicit `on` (or its `true` / `1` spellings) enables the pass; every
- * other value — including absent, empty, `off` and `0` — leaves the shipped
- * behaviour exactly as it was. Opt-in is the whole point: the pass launches
- * processes at boot, and a default that did so would change every restart.
- *
- * Consumed by `server/index.ts` at start-up and by this module's restore
- * criterion.
- */
-export function resolveResidentRestoreEnabled(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
-  const raw = (env[RESIDENT_RESTORE_ENV] ?? '').trim().toLowerCase();
-  return raw === 'on' || raw === 'true' || raw === '1';
-}
-
-/**
- * The per-pass session ceiling, from `CLAUDE_RESIDENT_RESTORE_MAX`.
- *
- * A positive integer or the shipped default; zero, negatives, fractions and
- * non-numeric text all fall back rather than throwing, because a malformed knob
- * must not be able to stop the server from booting. Consumed by this module's
- * restore criterion and by the composition root's summary log.
- */
-export function readResidentRestoreMax(env: Record<string, string | undefined> = process.env): number {
-  return readPositiveInteger(env[RESIDENT_RESTORE_MAX_ENV], DEFAULT_RESIDENT_RESTORE_MAX);
-}
-
-/**
- * The activity window, from `CLAUDE_RESIDENT_RESTORE_MAX_AGE_MS`.
- *
- * A positive integer or {@link DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS}; malformed
- * values fall back for the same reason {@link readResidentRestoreMax} does.
- * Consumed by this module's restore criterion and by the composition root.
- */
-export function readResidentRestoreMaxAgeMs(
-  env: Record<string, string | undefined> = process.env,
-): number {
-  return readPositiveInteger(env[RESIDENT_RESTORE_MAX_AGE_ENV], DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS);
-}
 
 /**
  * Builds the restore pass over the two injected seams.
@@ -320,23 +274,6 @@ function compareByLastActivity(left: RestorableResidentSession, right: Restorabl
     return 0;
   }
   return left.appSessionId < right.appSessionId ? 1 : -1;
-}
-
-/**
- * A positive integer from a raw environment value, or the default.
- *
- * Shared by the two numeric knobs above; `Number('')` is `0` and `Number(' 3 ')`
- * is `3`, so the trim happens before the parse and the emptiness is checked
- * first. Fractional and non-finite values fall back rather than rounding, since
- * a knob that says `2.5` is a mistake rather than a request for two.
- */
-function readPositiveInteger(raw: string | undefined, fallback: number): number {
-  const trimmed = (raw ?? '').trim();
-  if (!trimmed) {
-    return fallback;
-  }
-  const parsed = Number(trimmed);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 /**
