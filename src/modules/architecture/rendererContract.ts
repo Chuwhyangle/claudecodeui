@@ -268,6 +268,14 @@ export type ArchitectureRendererProps = {
   } | null;
   readonly relayoutLocked?: boolean;
   /**
+   * How many pixels at the TOP of the canvas are covered by chrome drawn OVER
+   * it (the fullscreen overlay's toolbar and readout rows). The drawing reserves
+   * that band — a fitted drawing is centred below it instead of starting behind
+   * it — exactly as `bottomObscuredPx` reserves the touch drawer's band. 0
+   * everywhere else, where the chrome is in normal flow above the canvas.
+   */
+  readonly topObscuredPx?: number;
+  /**
    * The panel's request to re-fit after a canvas-size change it caused itself
    * (the fullscreen overlay). Absent/null means no request was made. A renderer
    * in Fit mode fits once per `token`; a manually zoomed drawing ignores it.

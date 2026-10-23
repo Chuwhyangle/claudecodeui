@@ -900,6 +900,13 @@ export default function ArchitecturePanel({
   // makes each toggle its own request; null means no request was made yet.
   const [fitRequest, setFitRequest] = useState<ArchitectureFitRequest | null>(null);
   const fitTokenRef = useRef(0);
+  // How much of the overlay's top edge the in-flow chrome (the one-row toolbar
+  // and the readout row) covers. The drawing region is the whole viewport on
+  // the overlay, so without this band a fitted drawing starts BEHIND the chrome
+  // — the defect the review found. 0 outside the overlay, where chrome sits
+  // above the canvas in normal flow and takes height from it instead.
+  const [topChromePx, setTopChromePx] = useState(0);
+  const readoutRowRef = useRef<HTMLDivElement | null>(null);
   const wasFullscreenForFitRef = useRef(false);
   useEffect(() => {
     if (wasFullscreenForFitRef.current === fullscreenActive) return;
@@ -914,11 +921,15 @@ export default function ArchitecturePanel({
         // on a layout pass this effect cannot observe.
         ? window.innerHeight
         : graphAreaRef.current?.getBoundingClientRect().height ?? 0;
+      // The readout row is the LAST in-flow chrome row on the overlay (the
+      // toolbar sits above it), so its bottom edge is the covered band's height.
+      const chromeBottom = readoutRowRef.current?.getBoundingClientRect().bottom ?? 0;
+      setTopChromePx(fullscreenActive && compactToolbar ? Math.ceil(chromeBottom) : 0);
       fitTokenRef.current += 1;
       setFitRequest({ token: fitTokenRef.current, viewportHeight });
     });
     return () => cancelAnimationFrame(frame);
-  }, [fullscreenActive]);
+  }, [fullscreenActive, compactToolbar]);
 
   const changeScope = (next: number): void => {
     const clamped = clampArchitectureScope(next);
@@ -3559,6 +3570,7 @@ export default function ArchitecturePanel({
                 it as chrome: the drawing's available height starts below it. */}
             {compactToolbar && (
               <div
+                ref={readoutRowRef}
                 data-architecture-canvas-header="true"
                 data-architecture-readout-overlay="true"
                 className={`flex shrink-0 border-b border-border/60 px-3 py-1 ${
@@ -3648,6 +3660,10 @@ export default function ArchitecturePanel({
                     // is open; the drawing reserves that band and keeps the
                     // selected box above it.
                     bottomObscuredPx={compactToolbar && dockOpen ? touchDrawerHeight : 0}
+                    // On the overlay the chrome is painted OVER the viewport-
+                    // sized canvas; the drawing reserves that band so a fitted
+                    // graph is fully visible below it.
+                    topObscuredPx={topChromePx}
                     // Which project the drawing belongs to; the renderer uses it
                     // to remember the reader's explicit readable mode.
                     projectId={projectId}

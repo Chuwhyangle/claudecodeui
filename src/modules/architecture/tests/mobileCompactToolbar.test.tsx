@@ -736,8 +736,23 @@ test('compact fullscreen toolbar is one row holding only Exit fullscreen and Adj
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
+  // jsdom reports a zero box for every element; the readout row's covered band
+  // is what the drawing must reserve. Inject its bottom edge — the toolbar sits
+  // above it, so this button is the whole covered band.
+  const readoutRow = document.querySelector('[data-architecture-readout-overlay]') as HTMLElement;
+  assert.ok(readoutRow instanceof HTMLElement);
+  readoutRow.getBoundingClientRect = () => ({ bottom: 100 }) as unknown as DOMRect;
+
   fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
   await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), 'true'));
+
+  // The viewport-sized drawing reserves the chrome band, so its fitted content
+  // is centred BELOW the readout row instead of starting behind it.
+  await waitFor(() => assert.equal(
+    (document.querySelector('[data-architecture-plantuml]') as HTMLElement).style.paddingTop,
+    '104px',
+    'the drawing reserves the top chrome band inside the overlay',
+  ));
 
   const row = toolbarRow();
   // The row states its one-line contract, and a laid-out row can only be that

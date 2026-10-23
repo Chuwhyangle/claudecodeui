@@ -575,6 +575,7 @@ export function PlantUmlGraph({
   onBoxSelect,
   projectId = null,
   bottomObscuredPx = 0,
+  topObscuredPx = 0,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -3374,6 +3375,13 @@ export function PlantUmlGraph({
             // so a fitted drawing is never half-hidden behind it.
             ...(bottomObscuredPx > 0
               ? { paddingBottom: `${(touchUi ? 4 : 12) + bottomObscuredPx}px` }
+              : {}),
+            // The overlay's chrome (toolbar + readout rows) is drawn OVER the
+            // viewport-sized canvas. Reserving it as padding makes the flex
+            // centring — and `measureViewportSize`'s fit box — use the area
+            // BELOW the chrome, so a fitted drawing is never tucked behind it.
+            ...(topObscuredPx > 0
+              ? { paddingTop: `${(touchUi ? 4 : 12) + topObscuredPx}px` }
               : {}),
             userSelect: 'none',
             WebkitUserSelect: 'none',
