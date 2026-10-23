@@ -1,7 +1,7 @@
 ---
 id: gap-composer-chips-visibility-follows-dock-turn-anchor
 title: 输入框建议 chip 的可见条件与状态条同源：坞判定回合进行中（含服务端确认的 turn anchor）时不显示 chip，键盘也不接管
-status: ready
+status: done
 labels:
   - gap
   - defect
@@ -39,20 +39,20 @@ extra:
 
 ## AC
 
-- [ ] 新测试文件通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsDockTurn.test.tsx` 退出码 0；该文件为下列每条各有一个独立 `it`（一腿一 test）：(a) `useInputSuggestions` 在其余显示条件全满足时，`isDockTurnShown: true` 使 `visible` 为 false，缺省或 false 时为 true（正控制）；(b) `isDockTurnShown: true` 时 `handleKeyDown` 对 Tab、Enter、Esc 都返回 false，并且 Tab 在 composer 里恰好触发 1 次 `cyclePermissionMode`；(c) `useActivityDockTurn` 在 `activity` 为 null 且服务端帧确立了回合锚点时返回 true；(d) 在 `activity` 为 null 且没有锚点时返回 false；(e) 在 `activity` 非 null 时返回 true；(f) 锚点被服务端帧清除后重新返回 false；(g) 坞处于 `unreachable`（有锚点且活性判为不可达）时返回 true；(h) 坞处于 `background`（无回合、有进行中的任务或计划）时返回 false；(i) 经 `useChatComposerState` 与 `ChatComposer` 接起来的集成：`isLoading` 为 false 且 `activity` 为 null、坞为 in-turn 时页面上没有 `[role="listbox"]`，textarea 的 placeholder 恢复为非空；同一接线下无锚点时 `[role="listbox"]` 存在。
-- [ ] 同源约束：`grep -n "deriveActivityDockView(" src/modules/chat/hooks/useActivityDockTurn.ts` 至少 1 行输出；`grep -nE "hasTurnAnchor" src/modules/chat/hooks/useInputSuggestions.ts src/modules/chat/hooks/useChatComposerState.ts` 无任何输出（退出码 1）。
-- [ ] 既有测试保持绿，以下每个文件单独运行退出码均为 0：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx`、`.../activityDockUnreachable.test.tsx`、`.../activityDockHonestStatus.test.tsx`、`.../activityDockControls.test.tsx`、`.../chatInterfaceEscapeAbort.test.tsx`；其中 `inputSuggestionsComposer.test.tsx` 既有 `it` 的断言行没有被修改或删除（diff 只增不改）。
-- [ ] 静态门通过：`npm run typecheck` 与 `npm run lint` 退出码均为 0。
-- [ ] 前端规范：新增文件 `src/modules/chat/hooks/useActivityDockTurn.ts` 与 `src/modules/chat/tests/inputSuggestionsDockTurn.test.tsx` 中，`grep -nE "from '\.{1,2}/"` 与 `grep -nE "^(export )?interface "` 均无输出（退出码 1）；`git diff --name-status` 相对任务起点没有新建目录。
+- [x] 新测试文件通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsDockTurn.test.tsx` 退出码 0；该文件为下列每条各有一个独立 `it`（一腿一 test）：(a) `useInputSuggestions` 在其余显示条件全满足时，`isDockTurnShown: true` 使 `visible` 为 false，缺省或 false 时为 true（正控制）；(b) `isDockTurnShown: true` 时 `handleKeyDown` 对 Tab、Enter、Esc 都返回 false，并且 Tab 在 composer 里恰好触发 1 次 `cyclePermissionMode`；(c) `useActivityDockTurn` 在 `activity` 为 null 且服务端帧确立了回合锚点时返回 true；(d) 在 `activity` 为 null 且没有锚点时返回 false；(e) 在 `activity` 非 null 时返回 true；(f) 锚点被服务端帧清除后重新返回 false；(g) 坞处于 `unreachable`（有锚点且活性判为不可达）时返回 true；(h) 坞处于 `background`（无回合、有进行中的任务或计划）时返回 false；(i) 经 `useChatComposerState` 与 `ChatComposer` 接起来的集成：`isLoading` 为 false 且 `activity` 为 null、坞为 in-turn 时页面上没有 `[role="listbox"]`，textarea 的 placeholder 恢复为非空；同一接线下无锚点时 `[role="listbox"]` 存在。
+- [x] 同源约束：`grep -n "deriveActivityDockView(" src/modules/chat/hooks/useActivityDockTurn.ts` 至少 1 行输出；`grep -nE "hasTurnAnchor" src/modules/chat/hooks/useInputSuggestions.ts src/modules/chat/hooks/useChatComposerState.ts` 无任何输出（退出码 1）。
+- [x] 既有测试保持绿，以下每个文件单独运行退出码均为 0：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx`、`.../activityDockUnreachable.test.tsx`、`.../activityDockHonestStatus.test.tsx`、`.../activityDockControls.test.tsx`、`.../chatInterfaceEscapeAbort.test.tsx`；其中 `inputSuggestionsComposer.test.tsx` 既有 `it` 的断言行没有被修改或删除（diff 只增不改）。
+- [x] 静态门通过：`npm run typecheck` 与 `npm run lint` 退出码均为 0。
+- [x] 前端规范：新增文件 `src/modules/chat/hooks/useActivityDockTurn.ts` 与 `src/modules/chat/tests/inputSuggestionsDockTurn.test.tsx` 中，`grep -nE "from '\\.{1,2}/"` 与 `grep -nE "^(export )?interface "` 均无输出（退出码 1）；`git diff --name-status` 相对任务起点没有新建目录。
 
 ## DoD
 
 真实页面上的读数，缺一不可；测试只是必要条件。
 
-- [ ] 在隔离实例（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001）的真实页面上，用确定性的办法造出「composer 空闲、坞在画回合」：例如用 Playwright 的 `page.routeWebSocket` 向页面注入服务端的 `chat_subscribed` hello（`isProcessing: true`）使坞确立回合锚点，而本地没有任何发送。截图存 `tmp/` 并贴出：坞文字可见且 chip 不显示；再注入能清除锚点的帧，chip 重现；另附一张没有锚点时的正常空闲截图（chip 可见），作为正控制。若找不到确定性的注入办法，如实写明，不得伪造，并说明改用了什么读数。
-- [ ] 贴出上述三个状态下 `document.querySelectorAll('[role="listbox"]').length` 与坞的 `data-activity-state` 读数，两者须一致：坞为 `in-turn` 时 listbox 数为 0。
-- [ ] 贴出一次未被注入的常规回合（有条件发真实回合时）的读数：发送后 chip 隐藏、回合结束后 chip 重现。若隔离实例无法发真实回合（例如没有模型凭据），如实写明，不得伪造。
-- [ ] 证伪记录：临时撤掉 `isDockTurnShown` 对 `visible` 的约束，贴出 AC 中 (a)、(i) 两条对应的 `it` 变红的输出，再恢复。
+- [x] 在隔离实例（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001）的真实页面上，用确定性的办法造出「composer 空闲、坞在画回合」：例如用 Playwright 的 `page.routeWebSocket` 向页面注入服务端的 `chat_subscribed` hello（`isProcessing: true`）使坞确立回合锚点，而本地没有任何发送。截图存 `tmp/` 并贴出：坞文字可见且 chip 不显示；再注入能清除锚点的帧，chip 重现；另附一张没有锚点时的正常空闲截图（chip 可见），作为正控制。若找不到确定性的注入办法，如实写明，不得伪造，并说明改用了什么读数。
+- [x] 贴出上述三个状态下 `document.querySelectorAll('[role="listbox"]').length` 与坞的 `data-activity-state` 读数，两者须一致：坞为 `in-turn` 时 listbox 数为 0。
+- [x] 贴出一次未被注入的常规回合（有条件发真实回合时）的读数：发送后 chip 隐藏、回合结束后 chip 重现。若隔离实例无法发真实回合（例如没有模型凭据），如实写明，不得伪造。
+- [x] 证伪记录：临时撤掉 `isDockTurnShown` 对 `visible` 的约束，贴出 AC 中 (a)、(i) 两条对应的 `it` 变红的输出，再恢复。
 
 ## Touches
 
