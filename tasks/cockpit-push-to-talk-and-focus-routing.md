@@ -38,6 +38,10 @@ depends_on:
 - 用真实麦克风至少走一次（若环境不允许，如实写明并保留文件音源证据）。
 - 若场景运行器已落地，补场景 JSON 与报告。
 
+## Notes
+
+文案键按仓库惯例覆盖全部 12 个 locale，并照 `src/modules/project-workspace/tests/i18nQuayTabCompleteness.test.ts` 的样式加驾驶舱文案完整性测试（只在 1/2 任务里加一次，2/2 任务扩展同一测试）。
+
 ## Touches
 
 - src/modules/cockpit/CockpitPage.tsx
@@ -46,6 +50,17 @@ depends_on:
 - src/modules/cockpit/tests/cockpitRouting.test.ts
 - src/modules/cockpit/tests/CockpitPushToTalk.test.tsx
 - src/modules/chat/index.ts
+- src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
 - src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
+- src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
 - tasks/cockpit-push-to-talk-and-focus-routing.md
