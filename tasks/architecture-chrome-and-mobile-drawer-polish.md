@@ -57,6 +57,8 @@ extra:
 - src/modules/architecture/ArchitectureSelectionTray.tsx
 - src/modules/architecture/ArchitecturePanel.tsx
 - src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/CurationToast.tsx
+- src/modules/architecture/ArchitectureCurationManager.tsx
 - src/modules/architecture/tests/dockInspector.test.tsx
 - src/modules/architecture/tests/selectionTray.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
