@@ -1,11 +1,13 @@
 import { useTranslation } from 'react-i18next';
 
+import type { VoiceInputState } from '@/shared/types';
 import {
   PromptInput,
   PromptInputBody,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
+  VoiceInputButton,
 } from '@/modules/chat';
 
 /**
@@ -27,10 +29,23 @@ export type CockpitInputProps = {
   value: string;
   onValueChange: (value: string) => void;
   onSubmit: (value: string) => void;
+  /** The dictation hook's state, painted on the mic control beside the submit button. */
+  voiceState: VoiceInputState;
+  /** The mic control's press: the same start/stop the held Space key drives. */
+  onVoiceToggle: () => void;
+  /** True while a transcription request is outstanding for the recording listen. */
+  voiceInFlight?: boolean;
 };
 
 /** Rendered by `CockpitPage` as the cockpit's only text entry point. */
-export default function CockpitInput({ value, onValueChange, onSubmit }: CockpitInputProps) {
+export default function CockpitInput({
+  value,
+  onValueChange,
+  onSubmit,
+  voiceState,
+  onVoiceToggle,
+  voiceInFlight = false,
+}: CockpitInputProps) {
   const { t } = useTranslation();
 
   return (
@@ -59,8 +74,15 @@ export default function CockpitInput({ value, onValueChange, onSubmit }: Cockpit
         />
       </PromptInputBody>
       <PromptInputFooter>
-        <span className="text-[11px] text-muted-foreground">{t('cockpit.intentHint')}</span>
-        <PromptInputSubmit aria-label={t('cockpit.intentSubmit')} />
+        <span className="text-[11px] text-muted-foreground">{t('cockpit.pushToTalkHint')}</span>
+        <div className="flex items-center gap-1">
+          <VoiceInputButton
+            state={voiceState}
+            onToggle={onVoiceToggle}
+            inFlight={voiceInFlight}
+          />
+          <PromptInputSubmit aria-label={t('cockpit.intentSubmit')} />
+        </div>
       </PromptInputFooter>
     </PromptInput>
   );

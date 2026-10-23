@@ -663,6 +663,21 @@
     "intentSubmit": "Esegui",
     "intentUnmatched": "Non riconosciuto: «{{text}}». Nessuna ipotesi.",
     "timingLast": "ultimo cambiamento → primo fotogramma {{ms}} ms",
-    "keyHint": "Frecce spostano il fuoco · Invio ingrandisce · Backspace torna indietro"
+    "keyHint": "Frecce spostano il fuoco · Invio ingrandisce · Backspace torna indietro",
+    "pushToTalkHint": "Tieni premuto Spazio per parlare o digita una frase",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "Riferimenti: {{refs}}",
+    "sendTargetPinned": "Conversazione di destinazione fissata",
+    "sendTargetRecent": "Non fissata — uso l’ultima conversazione aperta",
+    "sendTargetRecentUnavailable": "Non fissata — uso l’ultima conversazione aperta (registro fleet non disponibile)",
+    "sendConfirm": "Invia",
+    "sendCancel": "Annulla",
+    "sent": "Inviato",
+    "noTargetSession": "«{{text}}» non ha una conversazione di destinazione.",
+    "noFocusTarget": "Metti a fuoco un progetto o un’attività prima di dire «{{text}}».",
+    "pinTarget": "Fissa come conversazione di destinazione",
+    "pinned": "Fissata",
+    "pinUnavailable": "Registro fleet non disponibile — impossibile fissare",
+    "pinRefused": "Fissaggio non riuscito: {{reason}}"
   }
 }

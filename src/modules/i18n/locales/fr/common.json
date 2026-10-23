@@ -663,6 +663,21 @@
     "intentSubmit": "Exécuter",
     "intentUnmatched": "Non reconnu : « {{text}} ». Aucune supposition.",
     "timingLast": "dernier changement → première image {{ms}} ms",
-    "keyHint": "Flèches déplacent le focus · Entrée zoome · Retour arrière revient"
+    "keyHint": "Flèches déplacent le focus · Entrée zoome · Retour arrière revient",
+    "pushToTalkHint": "Maintenez Espace pour parler ou saisissez une phrase",
+    "sendPreview": "→ {{project}} / {{session}} : {{text}}",
+    "sendReferences": "Références : {{refs}}",
+    "sendTargetPinned": "Conversation cible épinglée",
+    "sendTargetRecent": "Non épinglée — dernière conversation ouverte utilisée",
+    "sendTargetRecentUnavailable": "Non épinglée — dernière conversation ouverte utilisée (registre de flotte indisponible)",
+    "sendConfirm": "Envoyer",
+    "sendCancel": "Annuler",
+    "sent": "Envoyé",
+    "noTargetSession": "« {{text}} » n’a pas de conversation cible.",
+    "noFocusTarget": "Concentrez-vous sur un projet ou une tâche avant de dire « {{text}} ».",
+    "pinTarget": "Épingler comme conversation cible",
+    "pinned": "Épinglée",
+    "pinUnavailable": "Registre de flotte indisponible — épinglage impossible",
+    "pinRefused": "Épinglage échoué : {{reason}}"
   }
 }

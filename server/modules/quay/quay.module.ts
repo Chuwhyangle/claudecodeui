@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 
-import { projectsDb } from '@/modules/database/index.js';
+import { projectsDb, uiLastOpenedDb } from '@/modules/database/index.js';
 
+import { createQuayFleetRegistry } from './quay-fleet-registry.js';
 import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process.js';
 import { createQuayRouter } from './quay.routes.js';
 import { createQuayService, type QuayFileReader } from './quay.service.js';
@@ -96,5 +97,22 @@ export const quayService = createQuayService({
   commandTimeoutMs: QUAY_COMMAND_TIMEOUT_MS,
 });
 
-/** Used by the server entrypoint to mount the authenticated read-only Quay endpoints. */
-export const quayRoutes = createQuayRouter({ quayService });
+/**
+ * The fleet registry seam the cockpit's pinned-target read/write goes through. It maps a
+ * CloudCLI project id to the fleet's own registry id by comparing registered roots, and every
+ * failure is an answer (`{ok:false, reason}`) rather than a thrown error — a host without the
+ * fleet CLI still renders and routes, falling back to the last-opened session.
+ */
+export const quayFleetRegistry = createQuayFleetRegistry({
+  resolveProjectPathById: (projectId) => projectsDb.getProjectPathById(projectId),
+});
+
+/**
+ * Used by the server entrypoint to mount the authenticated Quay endpoints. The write surface is
+ * the interface-session triple; everything else stays read-only.
+ */
+export const quayRoutes = createQuayRouter({
+  quayService,
+  fleetRegistry: quayFleetRegistry,
+  readLastOpenedSession: () => uiLastOpenedDb.read(),
+});

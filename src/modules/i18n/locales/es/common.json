@@ -663,6 +663,21 @@
     "intentSubmit": "Ejecutar",
     "intentUnmatched": "No reconocido: «{{text}}». No se adivinó nada.",
     "timingLast": "último cambio → primer fotograma {{ms}} ms",
-    "keyHint": "Flechas mueven el foco · Enter amplía · Retroceso vuelve"
+    "keyHint": "Flechas mueven el foco · Enter amplía · Retroceso vuelve",
+    "pushToTalkHint": "Mantén Espacio para hablar o escribe una frase",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "Referencias: {{refs}}",
+    "sendTargetPinned": "Conversación destino fijada",
+    "sendTargetRecent": "Sin fijar: se usa la última conversación abierta",
+    "sendTargetRecentUnavailable": "Sin fijar: se usa la última conversación abierta (registro de flota no disponible)",
+    "sendConfirm": "Enviar",
+    "sendCancel": "Cancelar",
+    "sent": "Enviado",
+    "noTargetSession": "«{{text}}» no tiene una conversación destino.",
+    "noFocusTarget": "Enfoca un proyecto o tarea antes de decir «{{text}}».",
+    "pinTarget": "Fijar como conversación destino",
+    "pinned": "Fijada",
+    "pinUnavailable": "Registro de flota no disponible: no se puede fijar",
+    "pinRefused": "No se pudo fijar: {{reason}}"
   }
 }

@@ -663,6 +663,21 @@
     "intentSubmit": "执行",
     "intentUnmatched": "未识别：“{{text}}”。没有做任何猜测。",
     "timingLast": "最近一次变更 → 首帧 {{ms}} 毫秒",
-    "keyHint": "方向键移动焦点 · Enter 放大 · Backspace 返回"
+    "keyHint": "方向键移动焦点 · Enter 放大 · Backspace 返回",
+    "pushToTalkHint": "按住空格说话，或输入指令",
+    "sendPreview": "→ {{project}} / {{session}}：{{text}}",
+    "sendReferences": "引用：{{refs}}",
+    "sendTargetPinned": "已钉选目标会话",
+    "sendTargetRecent": "未钉选，使用最近打开",
+    "sendTargetRecentUnavailable": "未钉选，使用最近打开（fleet 读口不可用）",
+    "sendConfirm": "发送",
+    "sendCancel": "取消",
+    "sent": "已发送",
+    "noTargetSession": "“{{text}}”没有可路由的目标会话。",
+    "noFocusTarget": "先聚焦一个项目或任务，再说“{{text}}”。",
+    "pinTarget": "钉选为目标会话",
+    "pinned": "已钉选",
+    "pinUnavailable": "fleet 读口不可用，无法钉选",
+    "pinRefused": "钉选失败：{{reason}}"
   }
 }

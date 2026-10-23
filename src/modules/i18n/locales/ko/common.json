@@ -663,6 +663,21 @@
     "intentSubmit": "실행",
     "intentUnmatched": "인식하지 못했습니다: “{{text}}”. 추측하지 않았습니다.",
     "timingLast": "마지막 변경 → 첫 프레임 {{ms}} ms",
-    "keyHint": "화살표로 포커스 이동 · Enter로 확대 · Backspace로 뒤로"
+    "keyHint": "화살표로 포커스 이동 · Enter로 확대 · Backspace로 뒤로",
+    "pushToTalkHint": "스페이스를 누른 채 말하거나 문장을 입력하세요",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "참조: {{refs}}",
+    "sendTargetPinned": "대상 대화가 고정됨",
+    "sendTargetRecent": "고정되지 않음 — 마지막으로 연 대화 사용",
+    "sendTargetRecentUnavailable": "고정되지 않음 — 마지막으로 연 대화 사용(fleet 레지스트리를 읽을 수 없음)",
+    "sendConfirm": "보내기",
+    "sendCancel": "취소",
+    "sent": "보냄",
+    "noTargetSession": "“{{text}}”에 보낼 대상 대화가 없습니다.",
+    "noFocusTarget": "먼저 프로젝트나 작업에 포커스한 뒤 “{{text}}”라고 말하세요.",
+    "pinTarget": "대상 대화로 고정",
+    "pinned": "고정됨",
+    "pinUnavailable": "fleet 레지스트리를 읽을 수 없어 고정할 수 없습니다",
+    "pinRefused": "고정 실패: {{reason}}"
   }
 }

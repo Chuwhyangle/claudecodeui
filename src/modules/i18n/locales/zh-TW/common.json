@@ -663,6 +663,21 @@
     "intentSubmit": "執行",
     "intentUnmatched": "未辨識：「{{text}}」。沒有做任何猜測。",
     "timingLast": "最近一次變更 → 首幀 {{ms}} 毫秒",
-    "keyHint": "方向鍵移動焦點 · Enter 放大 · Backspace 返回"
+    "keyHint": "方向鍵移動焦點 · Enter 放大 · Backspace 返回",
+    "pushToTalkHint": "按住空白鍵說話，或輸入指令",
+    "sendPreview": "→ {{project}} / {{session}}：{{text}}",
+    "sendReferences": "引用：{{refs}}",
+    "sendTargetPinned": "已釘選目標會話",
+    "sendTargetRecent": "未釘選，使用最近開啟",
+    "sendTargetRecentUnavailable": "未釘選，使用最近開啟（fleet 讀取不可用）",
+    "sendConfirm": "傳送",
+    "sendCancel": "取消",
+    "sent": "已傳送",
+    "noTargetSession": "「{{text}}」沒有可路由的目標會話。",
+    "noFocusTarget": "先聚焦一個專案或任務，再說「{{text}}」。",
+    "pinTarget": "釘選為目標會話",
+    "pinned": "已釘選",
+    "pinUnavailable": "fleet 讀取不可用，無法釘選",
+    "pinRefused": "釘選失敗：{{reason}}"
   }
 }

@@ -52,6 +52,17 @@ export const useWebSocket = () => {
 };
 
 /**
+ * The connection when one exists, or `null` outside a provider.
+ *
+ * Used by the cockpit (`/cockpit`), which may be rendered standalone in a unit test with no
+ * socket: its "send to the target session" path needs the connection, but its stage, focus and
+ * intent parsing do not, and a throw here would make the whole page unrenderable for a caller
+ * that only reads quay.
+ */
+export const useWebSocketOptional = (): WebSocketContextType | null =>
+  useContext(WebSocketContext);
+
+/**
  * Announces this browser to the server on the socket it just opened.
  *
  * Sent from `onopen` and nowhere else, so it fires exactly once per connection —

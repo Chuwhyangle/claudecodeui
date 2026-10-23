@@ -350,6 +350,28 @@ export const api = {
       })}`,
     ),
   /**
+   * The project's pinned 「对人接口会话」, read from the fleet registry (`projects[].interfaceSessionId`).
+   *
+   * The cockpit's push-to-talk routes an unmatched phrase to this conversation. The answer is the
+   * fleet CLI's own document (`{ok, project, interfaceSessionId}`, or `{ok:false, reason}`) so the
+   * caller can state WHY a pin could not be read instead of treating every failure as "none".
+   */
+  quayInterfaceSession: (projectId: string) =>
+    get(`/api/quay/${encodeURIComponent(projectId)}/interface-session`),
+  /** Pins `sessionId` as the project's target conversation. Writes the fleet registry, not local state. */
+  pinQuayInterfaceSession: (projectId: string, sessionId: string) =>
+    put(`/api/quay/${encodeURIComponent(projectId)}/interface-session`, { sessionId }),
+  /** Un-pins the project's target conversation (idempotent, as the fleet CLI's `clear` is). */
+  clearQuayInterfaceSession: (projectId: string) =>
+    del(`/api/quay/${encodeURIComponent(projectId)}/interface-session`),
+  /**
+   * The browser's last-opened session (`ui_last_opened_session`), or `{ sessionId: null }`.
+   *
+   * The cockpit's fallback target when a project has no pinned conversation. It carries no
+   * project of its own; the caller pairs it with the session's own details before routing.
+   */
+  quayLastOpenedSession: () => get('/api/quay/last-opened-session'),
+  /**
    * The on-demand architecture reading for one session (ADR-005 decision 2):
    * both Mermaid documents, the counters and the provenance, generated server-
    * side from the project's `.archguard` cache. The response body is the result

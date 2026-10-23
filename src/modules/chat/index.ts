@@ -19,6 +19,21 @@ export type { VoiceReferencePack } from '@/modules/chat/utils/voice/voiceContext
 export { getClaudeSettings } from '@/modules/chat/utils/session/chatStorage';
 export { default as ResidentSessionBadge } from '@/modules/chat/transcript/ResidentSessionBadge';
 /**
+ * The cockpit's push-to-talk reuses chat's ONE dictation hook rather than a second ASR path:
+ * dictated text lands in the cockpit's input box exactly as it does in the composer. The
+ * capture-engine and draft types travel with it so the cockpit hook can accept an injected
+ * engine, which is what lets a test push PCM without a microphone.
+ */
+export { useVoiceInput } from '@/modules/chat/hooks/useVoiceInput';
+export type {
+  VoiceCaptureEngine,
+  VoiceCaptureSink,
+  VoiceDraftSnapshot,
+  VoiceSource,
+} from '@/modules/chat/hooks/useVoiceInput';
+/** The composer's mic control, rendered by the cockpit input beside the same submit button. */
+export { default as VoiceInputButton, VoiceFailureNotice } from '@/modules/chat/composer/VoiceInputButton';
+/**
  * The composer's presentation shell, exposed so the cockpit's intent input is assembled from
  * the SAME form/textarea/footer/submit components instead of a copy. The cockpit deliberately
  * does not reuse `ChatComposer` itself: that component is bound to one session's permission,

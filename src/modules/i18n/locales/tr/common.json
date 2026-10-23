@@ -663,6 +663,21 @@
     "intentSubmit": "Çalıştır",
     "intentUnmatched": "Tanınmadı: “{{text}}”. Tahmin yapılmadı.",
     "timingLast": "son değişiklik → ilk kare {{ms}} ms",
-    "keyHint": "Oklar odağı taşır · Enter büyütür · Backspace geri gider"
+    "keyHint": "Oklar odağı taşır · Enter büyütür · Backspace geri gider",
+    "pushToTalkHint": "Konuşmak için Boşluk tuşunu basılı tutun veya bir ifade yazın",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "Başvurular: {{refs}}",
+    "sendTargetPinned": "Hedef konuşma sabitlendi",
+    "sendTargetRecent": "Sabitlenmedi — son açılan konuşma kullanılıyor",
+    "sendTargetRecentUnavailable": "Sabitlenmedi — son açılan konuşma kullanılıyor (filo kaydı okunamıyor)",
+    "sendConfirm": "Gönder",
+    "sendCancel": "İptal",
+    "sent": "Gönderildi",
+    "noTargetSession": "“{{text}}” için hedef konuşma yok.",
+    "noFocusTarget": "Önce bir projeye veya göreve odaklanın, sonra “{{text}}” deyin.",
+    "pinTarget": "Hedef konuşma olarak sabitle",
+    "pinned": "Sabitlendi",
+    "pinUnavailable": "Filo kaydı okunamıyor — sabitlenemiyor",
+    "pinRefused": "Sabitleme başarısız: {{reason}}"
   }
 }

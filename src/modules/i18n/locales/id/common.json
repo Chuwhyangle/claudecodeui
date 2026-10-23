@@ -746,6 +746,21 @@
     "intentSubmit": "Jalankan",
     "intentUnmatched": "Tidak dikenali: “{{text}}”. Tidak ada tebakan.",
     "timingLast": "perubahan terakhir → bingkai pertama {{ms}} ms",
-    "keyHint": "Panah memindahkan fokus · Enter memperbesar · Backspace kembali"
+    "keyHint": "Panah memindahkan fokus · Enter memperbesar · Backspace kembali",
+    "pushToTalkHint": "Tahan Spasi untuk berbicara, atau ketik frasa",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "Referensi: {{refs}}",
+    "sendTargetPinned": "Percakapan tujuan disematkan",
+    "sendTargetRecent": "Belum disematkan — memakai percakapan terakhir yang dibuka",
+    "sendTargetRecentUnavailable": "Belum disematkan — memakai percakapan terakhir yang dibuka (registri fleet tidak tersedia)",
+    "sendConfirm": "Kirim",
+    "sendCancel": "Batal",
+    "sent": "Terkirim",
+    "noTargetSession": "“{{text}}” tidak punya percakapan tujuan.",
+    "noFocusTarget": "Fokuskan proyek atau tugas dulu, lalu ucapkan “{{text}}”.",
+    "pinTarget": "Sematkan sebagai percakapan tujuan",
+    "pinned": "Disematkan",
+    "pinUnavailable": "Registri fleet tidak tersedia — tidak bisa menyematkan",
+    "pinRefused": "Gagal menyematkan: {{reason}}"
   }
 }

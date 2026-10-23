@@ -633,6 +633,21 @@
     "intentSubmit": "Ausführen",
     "intentUnmatched": "Nicht erkannt: „{{text}}“. Es wurde nichts geraten.",
     "timingLast": "letzte Änderung → erster Frame {{ms}} ms",
-    "keyHint": "Pfeile bewegen den Fokus · Enter vergrößert · Backspace geht zurück"
+    "keyHint": "Pfeile bewegen den Fokus · Enter vergrößert · Backspace geht zurück",
+    "pushToTalkHint": "Leertaste halten zum Sprechen oder einen Befehl tippen",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "Referenzen: {{refs}}",
+    "sendTargetPinned": "Zielgespräch angeheftet",
+    "sendTargetRecent": "Nicht angeheftet – zuletzt geöffnetes Gespräch",
+    "sendTargetRecentUnavailable": "Nicht angeheftet – zuletzt geöffnetes Gespräch (Fleet-Registry nicht lesbar)",
+    "sendConfirm": "Senden",
+    "sendCancel": "Abbrechen",
+    "sent": "Gesendet",
+    "noTargetSession": "„{{text}}“ hat kein Zielgespräch.",
+    "noFocusTarget": "Zuerst ein Projekt oder eine Aufgabe fokussieren, dann „{{text}}“ sagen.",
+    "pinTarget": "Als Zielgespräch anheften",
+    "pinned": "Angeheftet",
+    "pinUnavailable": "Fleet-Registry nicht lesbar – Anheften nicht möglich",
+    "pinRefused": "Anheften fehlgeschlagen: {{reason}}"
   }
 }

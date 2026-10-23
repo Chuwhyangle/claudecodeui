@@ -752,6 +752,21 @@
     "intentSubmit": "Run",
     "intentUnmatched": "Not recognised: “{{text}}”. No guess was made.",
     "timingLast": "last change → first frame {{ms}} ms",
-    "keyHint": "Arrows move focus · Enter zooms in · Backspace goes back"
+    "keyHint": "Arrows move focus · Enter zooms in · Backspace goes back",
+    "pushToTalkHint": "Hold Space to talk, or type a phrase",
+    "sendPreview": "→ {{project}} / {{session}}: {{text}}",
+    "sendReferences": "References: {{refs}}",
+    "sendTargetPinned": "Pinned target conversation",
+    "sendTargetRecent": "Not pinned — using the last-opened conversation",
+    "sendTargetRecentUnavailable": "Not pinned — using the last-opened conversation (fleet registry unavailable)",
+    "sendConfirm": "Send",
+    "sendCancel": "Cancel",
+    "sent": "Sent",
+    "noTargetSession": "“{{text}}” has no target conversation to route to.",
+    "noFocusTarget": "Focus a project or task before saying “{{text}}”.",
+    "pinTarget": "Pin as target conversation",
+    "pinned": "Pinned",
+    "pinUnavailable": "Fleet registry unavailable — cannot pin",
+    "pinRefused": "Pin failed: {{reason}}"
   }
 }

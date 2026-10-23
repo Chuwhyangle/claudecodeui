@@ -3,12 +3,25 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '@/shared/api';
-import type { QuayFleetSummary, QuayFocusableObject } from '@/shared/types';
+import { useWebSocketOptional } from '@/shared/context/WebSocketContext';
+import type { QuayFleetSummary, QuayFocusableObject, VoiceFailureReport } from '@/shared/types';
 import { buildQuayInFlightContract, formatQuayUri, parseQuayUri, useQuayStatus } from '@/modules/quay';
 import CockpitInput from '@/modules/cockpit/CockpitInput';
 import CockpitStage from '@/modules/cockpit/CockpitStage';
 import type { CockpitFleetStatus } from '@/modules/cockpit/CockpitStage';
-import { parseCockpitIntent } from '@/modules/cockpit/cockpitIntent';
+import type { CockpitIntent } from '@/modules/cockpit/cockpitIntent';
+import {
+  openCockpitSendGate,
+  pinCockpitTargetSession,
+  routeCockpitText,
+} from '@/modules/cockpit/cockpitRouting';
+import type {
+  CockpitFleetPort,
+  CockpitFleetReading,
+  CockpitFleetWriteResult,
+  CockpitSendGate,
+  CockpitSendPreview,
+} from '@/modules/cockpit/cockpitRouting';
 import {
   buildCockpitFleetContract,
   cockpitViewPath,
@@ -18,6 +31,7 @@ import {
 } from '@/modules/cockpit/cockpitView';
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
 import { useCockpitFocus } from '@/modules/cockpit/hooks/useCockpitFocus';
+import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
 
 /**
  * The cockpit's top-level page (`/cockpit`): a read-only stage over the quay fleet.
@@ -49,8 +63,12 @@ type PendingTiming = {
  */
 const PAGE_LOADED_AT = performance.now();
 
-/** The parser's own failure message, shown verbatim: an unmatched phrase is never a guess. */
-type IntentFeedback = { text: string };
+/**
+ * Why a phrase produced no action: the parser matched no view command and the cockpit found no
+ * conversation to route it to. `text` is the phrase verbatim, so the notice can quote what it
+ * could not place instead of guessing at a nearby object.
+ */
+type IntentFeedback = { text: string; reason: 'no-focus' | 'no-session' };
 
 /**
  * True when the focused element owns keyboard input. The stage must not steal arrows or Enter
@@ -91,6 +109,19 @@ export default function CockpitPage() {
   // Every measured intent → first-frame latency, oldest first. Rendered as JSON on the root so
   // the future scenario runner can read it without another interface.
   const [timings, setTimings] = useState<CockpitTiming[]>([]);
+  // The confirmation card for one routed phrase. Non-null means NOTHING has been sent yet: the
+  // gate below owns the single transition, and this state is what draws the preview.
+  const [pendingSend, setPendingSend] = useState<CockpitSendPreview | null>(null);
+  // The project whose target conversation just received a message. Shown on the project strip
+  // until the next submission; the conversation's own status change is the session's business.
+  const [sentProjectId, setSentProjectId] = useState<string | null>(null);
+  // The result of the last pin attempt, shown beside the preview. `null` means no attempt.
+  const [pinNotice, setPinNotice] = useState<string | null>(null);
+  // The dictation chain's own failure sentence, shown where the cockpit's other notices are.
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+  // The open confirmation gate. A ref, not state: it is a one-shot transition, not something the
+  // UI renders, and re-creating it on a render would re-open a gate the person already closed.
+  const gateRef = useRef<CockpitSendGate | null>(null);
 
   // The views already shown, newest last. Backspace pops this rather than trusting the browser
   // history stack, so a deep link (`?view=board&...`) still has a defined "back" (the fleet).
@@ -141,6 +172,79 @@ export default function CockpitPage() {
   const projects = useMemo<CockpitProject[]>(
     () => (fleet.status === 'loaded' ? fleet.projects : []),
     [fleet],
+  );
+
+  /**
+   * The fleet registry seam's production binding: the server route that spawns the fleet CLI.
+   * A failed request is `{ok:false, reason}` rather than a throw, so the cockpit can say the pin
+   * could not be read and fall back instead of blanking the stage.
+   */
+  const fleetPort = useMemo<CockpitFleetPort>(
+    () => ({
+      async readInterfaceSession(projectId) {
+        const response = await api.quayInterfaceSession(projectId);
+        if (!response.ok) return { ok: false, reason: `http-${response.status}` };
+        return (await response.json()) as CockpitFleetReading;
+      },
+      async writeInterfaceSession(projectId, sessionId) {
+        const response = await api.pinQuayInterfaceSession(projectId, sessionId);
+        if (!response.ok) return { ok: false, reason: `http-${response.status}` };
+        return (await response.json()) as CockpitFleetWriteResult;
+      },
+      async clearInterfaceSession(projectId) {
+        const response = await api.clearQuayInterfaceSession(projectId);
+        if (!response.ok) return { ok: false, reason: `http-${response.status}` };
+        return (await response.json()) as CockpitFleetWriteResult;
+      },
+    }),
+    [],
+  );
+
+  /**
+   * The last-opened session, but only when it belongs to the project being addressed — the pointer
+   * is global, and routing a phrase about project A into project B's conversation would be the
+   * wrong-object failure this whole surface exists to prevent.
+   */
+  const readRecentSessionForProject = useCallback(async (projectId: string) => {
+    const response = await api.quayLastOpenedSession();
+    if (!response.ok) return null;
+    const pointer = (await response.json()) as { sessionId?: unknown };
+    const sessionId =
+      typeof pointer.sessionId === 'string' && pointer.sessionId !== '' ? pointer.sessionId : null;
+    if (sessionId === null) return null;
+    const detailsResponse = await api.sessionDetails(sessionId);
+    if (!detailsResponse.ok) return null;
+    const details = (await detailsResponse.json()) as {
+      data?: { project?: { projectId?: string } | null };
+    };
+    return details.data?.project?.projectId === projectId ? sessionId : null;
+  }, []);
+
+  /** One conversation's title for the preview bar; absent or unreadable falls back to its id. */
+  const readSessionTitle = useCallback(async (sessionId: string) => {
+    try {
+      const response = await api.sessionDetails(sessionId);
+      if (!response.ok) return null;
+      const details = (await response.json()) as { data?: { summary?: unknown } };
+      const summary = details.data?.summary;
+      return typeof summary === 'string' && summary.trim() !== '' ? summary.trim() : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /**
+   * Where a confirmed message goes: the chat websocket the whole app shares, addressing the
+   * target session by id. This is the same `chat.send` frame the composer sends and the same
+   * control service the MCP gateway's `session_send` uses — the cockpit opens no second path.
+   * `null` outside a provider (a standalone render) simply sends nothing.
+   */
+  const socket = useWebSocketOptional();
+  const sendToSession = useCallback(
+    (sessionId: string, content: string) => {
+      socket?.sendMessage({ type: 'chat.send', sessionId, content });
+    },
+    [socket],
   );
 
   const boardProjectId = view.type === 'board' ? view.project : null;
@@ -218,40 +322,181 @@ export default function CockpitPage() {
     [focusState.focusObject, showView],
   );
 
-  const handleIntentSubmit = useCallback(
-    (text: string) => {
-      const startedAt = performance.now();
-      const intent = parseCockpitIntent(text, { visible: focusables, projects });
-      setIntentText('');
-
+  /** Applies a recognised intent to the stage. Routing decisions never reach here. */
+  const applyIntent = useCallback(
+    (intent: CockpitIntent, text: string, startedAt: number) => {
       switch (intent.kind) {
         case 'view':
-          setIntentFeedback(null);
           showView(intent.view, { source: 'intent', input: text, startedAt });
           break;
         case 'focus':
-          setIntentFeedback(null);
           focusOn(intent.uri);
           break;
         case 'zoom-in':
-          setIntentFeedback(null);
           zoomIn({ source: 'intent', input: text, startedAt });
           break;
         case 'back':
-          setIntentFeedback(null);
           goBack({ source: 'intent', input: text, startedAt });
           break;
         case 'unmatched':
-          // No guess: the UI states exactly what it did not understand.
-          setIntentFeedback({ text: intent.text });
+          // `routeCockpitText` never returns this arm; kept exhaustive on purpose so a new intent
+          // kind cannot be added without this switch being visited.
+          setIntentFeedback({ text: intent.text, reason: 'no-focus' });
           break;
       }
     },
-    [focusOn, focusables, goBack, projects, showView, zoomIn],
+    [focusOn, goBack, showView, zoomIn],
   );
+
+  /**
+   * The ONE submit path for typed and dictated text.
+   *
+   * The parser decides the destination: a recognised phrase changes the view (reversible), and
+   * anything else is routed to the focused project's target conversation — as a PREVIEW, never
+   * as a send. Nothing leaves until {@link confirmSend}; that is the whole point of the gate.
+   */
+  const handleSubmit = useCallback(
+    async (text: string) => {
+      const startedAt = performance.now();
+      setIntentText('');
+      setVoiceNotice(null);
+      setPinNotice(null);
+
+      const decision = await routeCockpitText({
+        text,
+        visible: focusables,
+        projects,
+        focusUri: focusState.focusUri,
+        fleet: fleetPort,
+        recentSessionId: readRecentSessionForProject,
+        sessionTitle: readSessionTitle,
+      });
+
+      switch (decision.kind) {
+        case 'intent':
+          setIntentFeedback(null);
+          applyIntent(decision.intent, text, startedAt);
+          break;
+        case 'preview': {
+          setIntentFeedback(null);
+          gateRef.current = openCockpitSendGate(decision.preview, sendToSession);
+          setPendingSend(decision.preview);
+          break;
+        }
+        case 'no-target':
+          // No guess, no send: the notice quotes the phrase and says what was missing.
+          setIntentFeedback({ text: decision.text, reason: decision.reason });
+          break;
+      }
+    },
+    [
+      applyIntent,
+      fleetPort,
+      focusState.focusUri,
+      focusables,
+      projects,
+      readRecentSessionForProject,
+      readSessionTitle,
+      sendToSession,
+    ],
+  );
+
+  /** Sends the preview that is on screen, exactly once, and records「已发送」 on its project. */
+  const confirmSend = useCallback(() => {
+    const gate = gateRef.current;
+    if (gate === null) return;
+    gateRef.current = null;
+    gate.confirm();
+    setPendingSend(null);
+    setPinNotice(null);
+    setSentProjectId(gate.preview.projectId);
+  }, []);
+
+  /** Abandons the preview without sending. */
+  const cancelSend = useCallback(() => {
+    gateRef.current?.cancel();
+    gateRef.current = null;
+    setPendingSend(null);
+    setPinNotice(null);
+  }, []);
+
+  /**
+   * 「钉选为目标会话」: writes the preview's target into the fleet registry, then marks the
+   * preview as pinned. The fleet's own refusal reason is shown verbatim — the dev-session
+   * refusal is actionable, so paraphrasing it would hide the fix.
+   */
+  const pinTarget = useCallback(async () => {
+    const preview = pendingSend;
+    if (preview === null) return;
+    const result = await pinCockpitTargetSession(fleetPort, preview.projectId, preview.sessionId);
+    if (!result.ok) {
+      setPinNotice(t('cockpit.pinRefused', { reason: result.reason }));
+      return;
+    }
+    const pinned: CockpitSendPreview = {
+      ...preview,
+      source: 'pinned',
+      fleetUnavailableReason: null,
+    };
+    gateRef.current = openCockpitSendGate(pinned, sendToSession);
+    setPendingSend(pinned);
+    setPinNotice(t('cockpit.pinned'));
+  }, [fleetPort, pendingSend, sendToSession, t]);
+
+  // The value the dictation is committed into: the box as it stood when THIS listen opened, so
+  // segments committed one after another replace the listen's own text instead of stacking it.
+  const voiceBaseRef = useRef('');
+  const previousVoiceStateRef = useRef<'idle' | 'recording' | 'transcribing'>('idle');
+
+  // Dictation lands in the input box and nowhere else. The hook's `send` flag is deliberately
+  // dropped: confirming a send is a separate, explicit act.
+  const pushToTalk = useCockpitPushToTalk({
+    onTranscript: useCallback((text: string) => {
+      const base = voiceBaseRef.current.trim();
+      setIntentText(base === '' ? text : `${base} ${text}`);
+    }, []),
+    onError: useCallback((failure: VoiceFailureReport) => {
+      setVoiceNotice(typeof failure === 'string' ? failure : failure.code ?? 'VOICE_FAILED');
+    }, []),
+    // The recogniser's hotwords: what the stage shows, plus the project names the person can say.
+    candidates: useMemo(
+      () => [
+        ...projects.map((project) => project.name),
+        ...focusables.flatMap((object) => [object.label, object.uri]),
+      ],
+      [focusables, projects],
+    ),
+    // While a confirmation is open, Space belongs to the confirmation, not to a new listen.
+    enabled: pendingSend === null,
+  });
+
+  useEffect(() => {
+    const previous = previousVoiceStateRef.current;
+    previousVoiceStateRef.current = pushToTalk.state;
+    if (pushToTalk.state === 'recording' && previous !== 'recording') {
+      voiceBaseRef.current = intentText;
+      setVoiceNotice(null);
+    }
+  }, [intentText, pushToTalk.state]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A confirmation owns Enter and Backspace wherever focus is: Enter sends the preview,
+      // Backspace abandons it. Without this, Enter in the (now empty) box would submit nothing
+      // and Backspace would walk the view history out from under the pending message.
+      if (pendingSend !== null) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          confirmSend();
+          return;
+        }
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          cancelSend();
+          return;
+        }
+      }
+
       // The cockpit's text input owns every key while it has focus (arrows and Enter included).
       if (isEditableTarget(event.target)) {
         return;
@@ -291,7 +536,7 @@ export default function CockpitPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [moveFocus, goBack, zoomIn]);
+  }, [cancelSend, confirmSend, moveFocus, goBack, pendingSend, zoomIn]);
 
   // One reading for the initial URL-driven mount: how long the first stage took to appear.
   useEffect(() => {
@@ -386,9 +631,15 @@ export default function CockpitPage() {
               onClick={() => openProject(project)}
               className="truncate rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent"
               data-testid="cockpit-project-strip-item"
+              data-cockpit-sent={sentProjectId === project.projectId ? 'true' : undefined}
               title={project.projectPath}
             >
               {project.name}
+              {sentProjectId === project.projectId && (
+                <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400">
+                  {t('cockpit.sent')}
+                </span>
+              )}
             </button>
           ))}
         </aside>
@@ -434,14 +685,101 @@ export default function CockpitPage() {
 
         {intentFeedback !== null && (
           <p className="mb-2 text-xs text-amber-700 dark:text-amber-300" data-testid="cockpit-intent-unmatched">
-            {t('cockpit.intentUnmatched', { text: intentFeedback.text })}
+            {intentFeedback.reason === 'no-focus'
+              ? t('cockpit.noFocusTarget', { text: intentFeedback.text })
+              : t('cockpit.noTargetSession', { text: intentFeedback.text })}
           </p>
+        )}
+
+        {voiceNotice !== null && (
+          <p className="mb-2 text-xs text-red-600 dark:text-red-400" data-testid="cockpit-voice-error">
+            {voiceNotice}
+          </p>
+        )}
+
+        {/*
+          The confirmation card. It shows the destination in the person's own words — project,
+          conversation, text, and the references that will ride along — and nothing is sent until
+          the button (or Enter) is pressed. 「取消」 and Backspace abandon it.
+        */}
+        {pendingSend !== null && (
+          <div
+            className="mb-2 rounded border border-border/60 bg-muted/40 px-2 py-1.5"
+            data-testid="cockpit-send-preview"
+            data-cockpit-session={pendingSend.sessionId}
+            data-cockpit-send-source={pendingSend.source}
+          >
+            <p className="text-xs" data-testid="cockpit-send-preview-line">
+              {t('cockpit.sendPreview', {
+                project: pendingSend.projectName,
+                session: pendingSend.sessionTitle ?? pendingSend.sessionId,
+                text: pendingSend.text,
+              })}
+            </p>
+            <p className="text-[11px] text-muted-foreground" data-testid="cockpit-send-references">
+              {t('cockpit.sendReferences', {
+                refs: [
+                  ...(pendingSend.pack.focus === null
+                    ? []
+                    : [`${pendingSend.pack.focus.label} → ${pendingSend.pack.focus.uri}`]),
+                  ...pendingSend.pack.visible.map((object) => `${object.label} → ${object.uri}`),
+                ].join('；'),
+              })}
+            </p>
+            <p className="text-[11px] text-muted-foreground" data-testid="cockpit-send-source">
+              {pendingSend.source === 'pinned'
+                ? t('cockpit.sendTargetPinned')
+                : pendingSend.fleetUnavailableReason !== null
+                  ? t('cockpit.sendTargetRecentUnavailable')
+                  : t('cockpit.sendTargetRecent')}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="cockpit-send-confirm"
+                onClick={confirmSend}
+                className="rounded bg-foreground px-2 py-0.5 text-[11px] text-background"
+              >
+                {t('cockpit.sendConfirm')}
+              </button>
+              <button
+                type="button"
+                data-testid="cockpit-send-cancel"
+                onClick={cancelSend}
+                className="rounded border border-border/60 px-2 py-0.5 text-[11px]"
+              >
+                {t('cockpit.sendCancel')}
+              </button>
+              <button
+                type="button"
+                data-testid="cockpit-pin-target"
+                onClick={() => void pinTarget()}
+                disabled={pendingSend.fleetUnavailableReason !== null}
+                title={
+                  pendingSend.fleetUnavailableReason === null
+                    ? t('cockpit.pinTarget')
+                    : t('cockpit.pinUnavailable')
+                }
+                className="rounded border border-border/60 px-2 py-0.5 text-[11px] disabled:opacity-50"
+              >
+                {pendingSend.source === 'pinned' ? t('cockpit.pinned') : t('cockpit.pinTarget')}
+              </button>
+              {pinNotice !== null && (
+                <span className="text-[11px] text-muted-foreground" data-testid="cockpit-pin-notice">
+                  {pinNotice}
+                </span>
+              )}
+            </div>
+          </div>
         )}
 
         <CockpitInput
           value={intentText}
           onValueChange={setIntentText}
-          onSubmit={handleIntentSubmit}
+          onSubmit={(text) => void handleSubmit(text)}
+          voiceState={pushToTalk.state}
+          onVoiceToggle={pushToTalk.toggle}
+          voiceInFlight={pushToTalk.inFlight}
         />
       </footer>
     </div>
