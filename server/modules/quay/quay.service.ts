@@ -21,6 +21,13 @@ import type {
   QuayTestRoundSummary,
   QuayTestsSummary,
 } from '@/shared/types.js';
+
+import {
+  createQuayFleetCliWallReader,
+  createQuayUriResolver,
+  type QuayFleetWallReader,
+} from './quay-uri-resolve.js';
+
 export type {
   QuayAdrCounts,
   QuayConfigIssueCounts,
@@ -486,6 +493,14 @@ type QuayServiceDependencies = {
   snapshotTtlMs: number;
   /** Per-command subprocess timeout. */
   commandTimeoutMs: number;
+  /**
+   * The fleet wall read port (quay-fleet's `wall resolve` / `wall summary`) behind the
+   * `quay://` dereference entry point. OPTIONAL so every existing criterion composing this
+   * service is untouched: `undefined` builds the configured CLI adapter from
+   * {@link QUAY_FLEET_BIN_ENV}; `null` disables the fleet path (task references read from
+   * the snapshot); an injected reader is the seam the dereference criteria use.
+   */
+  fleetWallReader?: QuayFleetWallReader | null;
 };
 
 type QuaySnapshotOptions = {
@@ -1763,6 +1778,28 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     };
   };
 
+  // ── wall URI dereference (quay-wall-uri-dereference-with-snapshot-fallback) ──────────────
+  //
+  // The resolver is composed from the SAME snapshot reading the panel uses, so a fallback
+  // answer cannot disagree with what the panel shows. The fleet reader is tried first; the
+  // snapshot is read only when that port is unavailable, and the read path never generates
+  // an L2 summary.
+  const fleetWallReader: QuayFleetWallReader | null =
+    dependencies.fleetWallReader !== undefined
+      ? dependencies.fleetWallReader
+      : createQuayFleetCliWallReader({ timeoutMs: dependencies.commandTimeoutMs });
+
+  const quayUriResolver = createQuayUriResolver({
+    fleetWallReader,
+    resolveProjectRoot: (projectId) => dependencies.resolveProjectPathById(projectId),
+    // Cached first, so dereferencing a URI the panel just rendered spawns nothing. A cold
+    // cache loads the same snapshot the panel loads; the TTL then serves both surfaces.
+    readSnapshot: async (projectId) => getCachedSnapshot(projectId) ?? getQuaySnapshot(projectId),
+  });
+
+  const resolveQuayUri = (uri: string) => quayUriResolver.resolve(uri);
+  const getQuayUriSummary = (uri: string) => quayUriResolver.summary(uri);
+
   return {
     detectQuayConfig,
     runQuayCommand,
@@ -1778,5 +1815,10 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // for every quay project, per-project TTL, bounded fan-out. The sidebar consumes it
     // for the project-row task badges; the lazy Tier-2 snapshot stays the expanded view.
     getFleetSummary,
+    // The wall's dereference entry points (quay-wall-uri-dereference-with-snapshot-fallback):
+    // `resolveQuayUri` answers the L1 reference (fleet first, snapshot for tasks), and
+    // `getQuayUriSummary` the L2 stored summary (absent when the fleet has not stored one).
+    resolveQuayUri,
+    getQuayUriSummary,
   };
 }

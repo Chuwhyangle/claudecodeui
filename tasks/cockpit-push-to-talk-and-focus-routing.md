@@ -55,11 +55,17 @@ depends_on:
 ## Touches
 
 - src/modules/cockpit/CockpitPage.tsx
+- src/modules/cockpit/CockpitInput.tsx
 - src/modules/cockpit/cockpitRouting.ts
 - src/modules/cockpit/hooks/useCockpitPushToTalk.ts
 - src/modules/cockpit/tests/cockpitRouting.test.ts
 - src/modules/cockpit/tests/CockpitPushToTalk.test.tsx
 - src/modules/chat/index.ts
+- src/shared/api.ts
+- src/shared/context/WebSocketContext.tsx
+- server/modules/quay/quay-fleet-registry.ts
+- server/modules/quay/quay.routes.ts
+- server/modules/quay/quay.module.ts
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
