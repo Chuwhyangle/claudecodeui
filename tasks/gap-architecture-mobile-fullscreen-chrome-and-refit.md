@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-mobile-fullscreen-chrome-and-refit
 title: 架构图手机全屏：工具栏压成一行，进出全屏后按新尺寸重新 fit，缩放读数一致
-status: ready
+status: done
 labels:
   - gap
 parent: null
