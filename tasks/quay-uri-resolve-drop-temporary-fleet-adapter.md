@@ -1,7 +1,7 @@
 ---
 id: quay-uri-resolve-drop-temporary-fleet-adapter
 title: 删除 C 片临时适配 formatFleetAddress：fleet 已改为只认带项目段的 URI，现主路径全部被拒并静默回落
-status: todo
+status: ready
 labels:
   - wall
   - contract
