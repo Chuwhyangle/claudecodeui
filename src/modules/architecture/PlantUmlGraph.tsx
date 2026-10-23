@@ -113,6 +113,7 @@ import {
   TOOLBAR_BUTTON_CLASS,
 } from '@/modules/architecture/graphConstants';
 import {
+  addNodeHitTargets,
   annotateNodes,
   addEdgeHitTargets,
   announceSelection,
@@ -134,6 +135,7 @@ import {
   isEntityGraph,
   markDrawingUnselectable,
   measureLayoutAspect,
+  nearestNodeHitId,
   nodeElement,
   positionOverviewHint,
   relationsOf,
@@ -1199,6 +1201,11 @@ export function PlantUmlGraph({
     fitToCanvas: boolean,
   ): number => {
     drawSemanticLayout(host, capture, layout, fontPx);
+    // The rewritten drawing rebuilds every node group's children, so the
+    // coarse-pointer hit rectangles are laid down again on the geometry that is
+    // actually on screen (they are not part of `capture.inner`, which stays the
+    // undecorated snapshot).
+    addNodeHitTargets(host, coarsePointerRef.current);
     // The renderer's own `.uml-canvas` rectangle is a paper-coloured fill sized
     // to the mapped CONTENT. Once the geometry pass reshapes the drawing, that
     // leaves a white rectangle around the content with the panel's own
@@ -1981,6 +1988,10 @@ export function PlantUmlGraph({
           appliedLayoutRef.current = null;
           setLodDepth(null);
           setDrawnFit(null);
+          // A drawing with no semantic pass still needs its coarse-pointer hit
+          // rectangles; the captured path lays them down inside
+          // `applySemanticLayout`, after the rewrite rebuilt the nodes.
+          addNodeHitTargets(host, coarsePointer);
         } else {
           semanticTierRef.current = carriedTier;
           const layout = solveSemanticZoom(capture.geometry, {
@@ -2266,32 +2277,48 @@ export function PlantUmlGraph({
         }
       }
 
-      // A relation's enlarged hit band sits ON TOP of the drawing, so it is
-      // checked before the node lookup: clicking a line selects the relation,
-      // not whatever box the line starts on.
-      const edgeHit = event.target instanceof Element
-        ? event.target.closest('[data-architecture-edge-hit]')
+      // On a coarse pointer a node's visible shape is far smaller than a
+      // finger: the drawing scales with the zoom, so even a fitted overview can
+      // paint a file box ~10px tall. Resolve the tap against the 44px hit
+      // rectangles instead, and let the NEAREST centre win when a dense
+      // drawing's rectangles overlap (the topmost rectangle would otherwise
+      // hand the tap to a neighbour). The package-only tiers draw no entities,
+      // so they keep their frame-zoom path untouched.
+      const packageOnly = semanticTierRef.current === 'C' || semanticTierRef.current === 'D';
+      const coarseNodeId = coarsePointerRef.current && !packageOnly
+        ? nearestNodeHitId(host, event.clientX, event.clientY)
         : null;
-      if (edgeHit !== null) {
-        const from = edgeHit.getAttribute('data-architecture-edge-source');
-        const to = edgeHit.getAttribute('data-architecture-edge-target');
-        const relationType = edgeHit.getAttribute('data-architecture-edge-type') ?? '';
-        if (from === null || to === null) return;
-        const edge = { from, to, relationType };
-        if (additive && toggleEdgeCallbackRef.current !== undefined) {
-          toggleEdgeCallbackRef.current(edge);
+
+      // A relation's enlarged hit band sits ON TOP of the drawing, so it is
+      // checked before the ordinary node lookup: clicking a line selects the
+      // relation, not whatever box the line starts on. A coarse tap inside a
+      // node's touch target is a node press (the finger aimed at the box, and
+      // the band is wider than the visible line anyway).
+      let id = coarseNodeId;
+      if (id === null) {
+        const edgeHit = event.target instanceof Element
+          ? event.target.closest('[data-architecture-edge-hit]')
+          : null;
+        if (edgeHit !== null) {
+          const from = edgeHit.getAttribute('data-architecture-edge-source');
+          const to = edgeHit.getAttribute('data-architecture-edge-target');
+          const relationType = edgeHit.getAttribute('data-architecture-edge-type') ?? '';
+          if (from === null || to === null) return;
+          const edge = { from, to, relationType };
+          if (additive && toggleEdgeCallbackRef.current !== undefined) {
+            toggleEdgeCallbackRef.current(edge);
+            return;
+          }
+          selectedRelationRef.current = edge;
+          selectedRef.current = null;
+          setSelectedId(null);
+          setSelectedByTouch(false);
+          highlightEdge(host, edgeElement(host, from, to));
+          edgeClickCallbackRef.current?.(edge);
           return;
         }
-        selectedRelationRef.current = edge;
-        selectedRef.current = null;
-        setSelectedId(null);
-        setSelectedByTouch(false);
-        highlightEdge(host, edgeElement(host, from, to));
-        edgeClickCallbackRef.current?.(edge);
-        return;
+        id = nodeFrom(event.target)?.getAttribute('data-entity-id') ?? null;
       }
-
-      const id = nodeFrom(event.target)?.getAttribute('data-entity-id') ?? null;
       if (id === null) {
         // Clicking the background is the "clear the pinned selection" gesture.
         selectedRef.current = null;
