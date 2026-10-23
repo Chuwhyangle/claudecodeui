@@ -34,6 +34,7 @@ const baseProps = () => ({
   isRefreshing: false,
   onCreateProject: () => {},
   onCollapseSidebar: () => {},
+  onShowSettings: () => {},
   t,
 });
 

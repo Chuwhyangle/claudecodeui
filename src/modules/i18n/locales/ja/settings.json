@@ -48,7 +48,9 @@
   "actions": {
     "saveChanges": "変更を保存",
     "resetToDefaults": "デフォルトに戻す",
-    "cancelChanges": "変更をキャンセル"
+    "cancelChanges": "変更をキャンセル",
+    "reportIssue": "問題を報告",
+    "joinCommunity": "コミュニティに参加"
   },
   "quickSettings": {
     "title": "クイック設定",

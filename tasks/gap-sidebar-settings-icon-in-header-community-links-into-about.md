@@ -2,7 +2,7 @@
 id: gap-sidebar-settings-icon-in-header-community-links-into-about
 title: 侧栏底部 Report Issue / Join Community / Settings 三行占掉会话列表空间：Settings
   上移为标题右侧纯图标（桌面+手机），Report Issue 与 Join Community 收进设置「关于」页
-status: ready
+status: done
 labels:
   - gap
 parent: null

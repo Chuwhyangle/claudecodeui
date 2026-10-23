@@ -48,7 +48,9 @@
   "actions": {
     "saveChanges": "Değişiklikleri Kaydet",
     "resetToDefaults": "Varsayılanlara Döndür",
-    "cancelChanges": "Değişiklikleri İptal Et"
+    "cancelChanges": "Değişiklikleri İptal Et",
+    "reportIssue": "Sorun Bildir",
+    "joinCommunity": "Topluluğa Katıl"
   },
   "quickSettings": {
     "title": "Hızlı Ayarlar",

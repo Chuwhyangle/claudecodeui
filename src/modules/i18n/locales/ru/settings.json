@@ -48,7 +48,9 @@
   "actions": {
     "saveChanges": "Сохранить изменения",
     "resetToDefaults": "Сбросить к значениям по умолчанию",
-    "cancelChanges": "Отменить изменения"
+    "cancelChanges": "Отменить изменения",
+    "reportIssue": "Сообщить о проблеме",
+    "joinCommunity": "Присоединиться к сообществу"
   },
   "quickSettings": {
     "title": "Быстрые настройки",

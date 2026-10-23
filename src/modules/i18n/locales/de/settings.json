@@ -48,7 +48,9 @@
   "actions": {
     "saveChanges": "Änderungen speichern",
     "resetToDefaults": "Auf Standardwerte zurücksetzen",
-    "cancelChanges": "Änderungen abbrechen"
+    "cancelChanges": "Änderungen abbrechen",
+    "reportIssue": "Problem melden",
+    "joinCommunity": "Community beitreten"
   },
   "quickSettings": {
     "title": "Schnelleinstellungen",
