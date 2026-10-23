@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell non disponibile per le sessioni residenti"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "classe",
+      "kindInterface": "interfaccia",
+      "kindEnum": "enum",
+      "kindAbstract": "classe astratta",
+      "kindFunction": "funzione",
+      "kindEntity": "entità",
+      "announceEntity": "{{label}}, {{kind}}, pacchetto {{package}}, {{outgoing}} uscenti, {{incoming}} entranti",
+      "announcePackage": "Pacchetto {{package}}, {{count}} entità",
+      "noNeighbour": "Nessuna entità in quella direzione",
+      "selected": "{{label}} selezionato",
+      "deselected": "{{label}} rimosso dalla selezione",
+      "selectedIntoSet": "{{label}} aggiunto alla selezione",
+      "enteredPackage": "Pacchetto {{package}} aperto",
+      "rootPackage": "il pacchetto radice"
+    },
     "copyFix": {
       "kindClass": "{{count}} classi",
       "kindFunction": "{{count}} funzioni",

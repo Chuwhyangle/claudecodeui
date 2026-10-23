@@ -57,7 +57,12 @@ import type {
   ArchitectureRendererProps,
 } from '@/modules/architecture/rendererContract';
 import {
-  cycleNodeFocus,
+  moveEntityFocus,
+  PACKAGE_NAV_PREFIX,
+  type EntityNavigationDirection,
+  type EntityNavigationItem,
+} from '@/modules/architecture/entityNavigation';
+import {
   selectionsIntersectingBox,
   type ArchitectureSelection,
   type ArchitectureSelectionRect,
@@ -118,6 +123,7 @@ import {
   rendererOptionsFor,
   restoreEntityIds,
   reverseAliases,
+  selectionOf,
   type PlantUmlApplyView,
   type PlantUmlRenderDetailed,
   type PlantUmlToPlantUml,
@@ -147,6 +153,147 @@ function localReadableStorage(): {
   } catch {
     return null;
   }
+}
+
+/** The class the keyboard cursor paints on the drawn box it stands on. */
+const NAV_FOCUS_CLASS = 'arch-nav-focus';
+/** The id prefix the cursor's DOM elements carry, for `aria-activedescendant`. */
+const NAV_DOM_ID_PREFIX = 'arch-nav-';
+/** How far the focus ring sits outside the box, in SVG user units. */
+const NAV_RING_GAP = 2;
+
+/**
+ * The id `aria-activedescendant` names. Derived from the cursor id alone, so the
+ * React attribute and the element's own `id` are written from one source and
+ * cannot disagree.
+ */
+function navigationDomId(cursorId: string): string {
+  return `${NAV_DOM_ID_PREFIX}${cursorId.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+}
+
+/** A positive numeric attribute, or `null` when absent/unparseable. */
+function numericAttribute(element: Element, name: string): number | null {
+  const raw = element.getAttribute(name);
+  if (raw === null) return null;
+  const value = Number.parseFloat(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * The item's rectangle in the SVG's own user coordinates.
+ *
+ * The leading `rect` is read FIRST: the semantic pass rebuilds every group's
+ * children in the mapped layout but leaves the group's original `data-x/y/w/h`
+ * (published by the renderer before that rewrite) in place, so a ring painted
+ * from those would sit at the pre-semantic position. A drawing the semantic
+ * pass has not touched has the two in agreement, and the attributes remain the
+ * fallback for a group without a rect.
+ */
+function navigationRectOf(element: Element): { x: number; y: number; width: number; height: number } | null {
+  const rect = element.querySelector('rect');
+  const x = (rect === null ? null : numericAttribute(rect, 'x')) ?? numericAttribute(element, 'data-x');
+  const y = (rect === null ? null : numericAttribute(rect, 'y')) ?? numericAttribute(element, 'data-y');
+  const width = (rect === null ? null : numericAttribute(rect, 'width')) ?? numericAttribute(element, 'data-w');
+  const height = (rect === null ? null : numericAttribute(rect, 'height')) ?? numericAttribute(element, 'data-h');
+  if (x === null || y === null || width === null || height === null) return null;
+  return { x, y, width, height };
+}
+
+/** The package a node id lives in, when the drawing did not publish one. */
+function packageIdOfNodeId(id: string): string {
+  const path = id.startsWith(GROUP_PREFIX) ? id.slice(GROUP_PREFIX.length) : id;
+  const slash = path.lastIndexOf('/');
+  if (slash === -1) return '';
+  // An entity id is `<file path>.<Entity>`; its file's directory is the package.
+  return path.slice(0, slash);
+}
+
+function normalizedPackageId(raw: string | null): string | null {
+  if (raw === null) return null;
+  const normalized = raw.trim().split('/').filter(Boolean).join('/');
+  return normalized;
+}
+
+/**
+ * Everything the keyboard can stand on in the drawing just laid out: its entity
+ * boxes (group and stub nodes included, since `[`/`]` and Enter act on whatever
+ * is drawn) and the package frames that contain them.
+ *
+ * Read from the DOM rather than the payload on purpose: the drawing is the
+ * visible slice, and a node that the semantic tier hid must not be a keyboard
+ * target the reader cannot see.
+ */
+function collectNavigationItems(host: HTMLElement): EntityNavigationItem[] {
+  const items: EntityNavigationItem[] = [];
+  for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = element.getAttribute('data-entity-id') ?? '';
+    if (id === '' || id.startsWith(STUB_PREFIX)) continue;
+    if ((element as SVGElement).style?.display === 'none') continue;
+    const rect = navigationRectOf(element);
+    if (rect === null) continue;
+    const packageId = normalizedPackageId(element.getAttribute('data-package-id'))
+      ?? packageIdOfNodeId(id);
+    items.push({ id, kind: 'entity', packageId, ...rect });
+  }
+  for (const element of host.querySelectorAll('.uml-package[data-package-id]')) {
+    const packageId = normalizedPackageId(element.getAttribute('data-package-id'));
+    if (packageId === null || packageId === '') continue;
+    if ((element as SVGElement).style?.display === 'none') continue;
+    const rect = navigationRectOf(element);
+    if (rect === null) continue;
+    items.push({ id: `${PACKAGE_NAV_PREFIX}${packageId}`, kind: 'package', packageId, ...rect });
+  }
+  return items;
+}
+
+/** The drawn element a cursor id names. */
+function navigationElementOf(host: HTMLElement, cursorId: string): Element | null {
+  if (!cursorId.startsWith(PACKAGE_NAV_PREFIX)) return nodeElement(host, cursorId);
+  const packageId = cursorId.slice(PACKAGE_NAV_PREFIX.length);
+  for (const frame of host.querySelectorAll('.uml-package[data-package-id]')) {
+    if (normalizedPackageId(frame.getAttribute('data-package-id')) === packageId) return frame;
+  }
+  return null;
+}
+
+/**
+ * Paint the keyboard cursor: remove the previous ring, mark the new element for
+ * `aria-activedescendant`, and draw a 3px ring with a 2px gap around its box —
+ * a shape cue, not a colour-only one. The ring is a separate SVG rect so a
+ * reader (and the e2e guard) can read its screen rectangle.
+ */
+function paintNavigationFocus(host: HTMLElement, cursorId: string | null): void {
+  for (const ring of host.querySelectorAll('[data-architecture-nav-ring]')) ring.remove();
+  for (const marked of host.querySelectorAll(`.${NAV_FOCUS_CLASS}`)) {
+    marked.classList.remove(NAV_FOCUS_CLASS);
+    marked.removeAttribute('data-architecture-nav-focus');
+  }
+  if (cursorId === null) return;
+  const element = navigationElementOf(host, cursorId);
+  if (element === null) return;
+  element.id = navigationDomId(cursorId);
+  element.classList.add(NAV_FOCUS_CLASS);
+  element.setAttribute('data-architecture-nav-focus', 'true');
+  const rect = navigationRectOf(element);
+  const svg = host.querySelector('svg');
+  if (rect === null || svg === null) return;
+  const ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  ring.setAttribute('data-architecture-nav-ring', 'true');
+  ring.setAttribute('x', String(rect.x - NAV_RING_GAP));
+  ring.setAttribute('y', String(rect.y - NAV_RING_GAP));
+  ring.setAttribute('width', String(rect.width + NAV_RING_GAP * 2));
+  ring.setAttribute('height', String(rect.height + NAV_RING_GAP * 2));
+  ring.setAttribute('rx', '4');
+  ring.setAttribute('fill', 'none');
+  ring.setAttribute('stroke', '#1d4ed8');
+  ring.setAttribute('stroke-width', '3');
+  ring.setAttribute('pointer-events', 'none');
+  svg.appendChild(ring);
+}
+
+/** Remove every trace of the keyboard cursor from a drawing. */
+function clearNavigationFocus(host: HTMLElement): void {
+  paintNavigationFocus(host, null);
 }
 
 /**
@@ -376,10 +523,24 @@ export function PlantUmlGraph({
   const selectedRelationsRef = useRef<NonNullable<PlantUmlGraphProps['selectedRelations']>>(
     selectedRelations ?? [],
   );
-  // The node the `[`/`]` keyboard cursor sits on. A ref (not state): moving the
-  // cursor only touches SVG classes, so it must not re-render (and never
-  // re-layout) the drawing.
+  // The last entity the keyboard cursor stood on. A ref (not state): the
+  // cursor's own move only edits SVG classes/ids, and this reading exists so
+  // re-entering the navigation state lands where the reader left off rather
+  // than at the top-left entity.
   const keyboardFocusRef = useRef<string | null>(null);
+  // Whether the canvas is in its entity-navigation state: Enter puts it there,
+  // Escape leaves it. State, not a ref, because the host's role and
+  // `aria-activedescendant` are render output that must follow it.
+  const [navigationActive, setNavigationActive] = useState(false);
+  // The item the keyboard cursor stands on (an entity id, or
+  // `package::<path>`). Also state: it is the `aria-activedescendant` value.
+  const [navigationCursorId, setNavigationCursorId] = useState<string | null>(null);
+  // The polite live-region sentence for the current entity / last selection.
+  const [navigationAnnouncement, setNavigationAnnouncement] = useState('');
+  // The same two readings as refs: the redraw callback (async, outside the
+  // render that created it) re-paints the ring from the settled values.
+  const navigationActiveRef = useRef(false);
+  const navigationCursorRef = useRef<string | null>(null);
   // The entity the user clicked (or a sibling panel asked for). Unlike the
   // hover reading it survives leaving the node and being re-rendered, so the
   // dependency/reverse-dependency highlight stays pinned until the selection is
@@ -1820,16 +1981,160 @@ export function PlantUmlGraph({
   };
 
   /**
+   * The node a cursor id names, when it names an entity that is in the payload.
+   * Package frames and overview group nodes have no payload node.
+   */
+  const navigationNodeOf = (cursorId: string | null): ArchitectureRendererNode | null => {
+    if (cursorId === null || cursorId.startsWith(PACKAGE_NAV_PREFIX)) return null;
+    return graphRef.current.nodes.find((candidate) => candidate.id === cursorId) ?? null;
+  };
+
+  /** The spoken kind of an entity: the payload's kind, translated. */
+  const navigationKindLabel = (node: ArchitectureRendererNode | null): string => {
+    switch (node?.kind) {
+      case 'class':
+        return t('architecture.nav.kindClass', { defaultValue: 'class' });
+      case 'interface':
+        return t('architecture.nav.kindInterface', { defaultValue: 'interface' });
+      case 'enum':
+        return t('architecture.nav.kindEnum', { defaultValue: 'enum' });
+      case 'abstract':
+        return t('architecture.nav.kindAbstract', { defaultValue: 'abstract class' });
+      case 'function':
+        return t('architecture.nav.kindFunction', { defaultValue: 'function' });
+      default:
+        return t('architecture.nav.kindEntity', { defaultValue: 'entity' });
+    }
+  };
+
+  /** The label a cursor id reads as: the payload label, the drawn label, or the id. */
+  const navigationLabelOf = (host: HTMLElement, cursorId: string): string => {
+    const node = navigationNodeOf(cursorId);
+    if (node !== null) return node.label;
+    const element = navigationElementOf(host, cursorId);
+    const drawn = element?.querySelector('[data-architecture-label]')?.getAttribute('data-architecture-label');
+    if (drawn !== undefined && drawn !== null && drawn !== '') return drawn;
+    const text = element?.querySelector('text')?.textContent ?? '';
+    return text === '' ? cursorId : text;
+  };
+
+  /**
+   * The polite sentence for a cursor position: the entity's label, its kind,
+   * the package it lives in and its drawn relations. A frame is read as a frame
+   * with the count of entities inside it.
+   */
+  const navigationAnnouncementFor = (host: HTMLElement, cursorId: string): string => {
+    if (cursorId.startsWith(PACKAGE_NAV_PREFIX)) {
+      const packageId = cursorId.slice(PACKAGE_NAV_PREFIX.length);
+      const prefix = `${packageId}/`;
+      const count = collectNavigationItems(host)
+        .filter((item) => item.kind === 'entity'
+          && (item.packageId === packageId || item.packageId.startsWith(prefix)))
+        .length;
+      return t('architecture.nav.announcePackage', {
+        defaultValue: 'Package {{package}}, {{count}} entities',
+        package: packageId,
+        count,
+      });
+    }
+    const node = navigationNodeOf(cursorId);
+    const element = navigationElementOf(host, cursorId);
+    const packageId = (element === null ? null : normalizedPackageId(element.getAttribute('data-package-id')))
+      ?? packageIdOfNodeId(cursorId);
+    const selection = selectionOf(graphRef.current, cursorId);
+    return t('architecture.nav.announceEntity', {
+      defaultValue: '{{label}}, {{kind}}, package {{package}}, {{outgoing}} outgoing, {{incoming}} incoming',
+      label: navigationLabelOf(host, cursorId),
+      kind: navigationKindLabel(node),
+      package: packageId === ''
+        ? t('architecture.nav.rootPackage', { defaultValue: 'the root package' })
+        : packageId,
+      outgoing: selection.outgoing.length,
+      incoming: selection.incoming.length,
+    });
+  };
+
+  /** Write the cursor into both the refs the async redraw reads and the render state. */
+  const applyNavigationCursor = (cursorId: string | null, announcement: string): void => {
+    navigationCursorRef.current = cursorId;
+    setNavigationCursorId(cursorId);
+    setNavigationAnnouncement(announcement);
+  };
+
+  /** Repaint the ring and scroll the current box into the viewport. */
+  const paintCurrentNavigationItem = (host: HTMLElement): void => {
+    const cursorId = navigationCursorRef.current;
+    paintNavigationFocus(host, cursorId);
+    if (cursorId === null) return;
+    const element = navigationElementOf(host, cursorId);
+    if (element === null) return;
+    centerElementInContainer(host, element);
+  };
+
+  /**
+   * Enter the entity-navigation state on the current selection (or the first
+   * drawn entity), paint its ring and announce it. False when the drawing has
+   * nothing to stand on.
+   */
+  const enterEntityNavigation = (host: HTMLElement): boolean => {
+    const items = collectNavigationItems(host);
+    const preferred = selectedRef.current ?? keyboardFocusRef.current;
+    const first = (preferred === null
+      ? null
+      : items.find((item) => item.kind === 'entity' && item.id === preferred))
+      ?? items.filter((item) => item.kind === 'entity')
+        .sort((left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id))[0];
+    if (first === undefined) return false;
+    navigationActiveRef.current = true;
+    setNavigationActive(true);
+    keyboardFocusRef.current = first.id;
+    applyNavigationCursor(first.id, navigationAnnouncementFor(host, first.id));
+    paintCurrentNavigationItem(host);
+    return true;
+  };
+
+  /** Leave the navigation state; the selection and the drawing stay unchanged. */
+  const exitEntityNavigation = (host: HTMLElement): void => {
+    navigationActiveRef.current = false;
+    navigationCursorRef.current = null;
+    setNavigationActive(false);
+    setNavigationCursorId(null);
+    clearNavigationFocus(host);
+  };
+
+  /** Move the cursor one step and announce the landing (or "nothing there"). */
+  const moveNavigationCursor = (host: HTMLElement, direction: EntityNavigationDirection): void => {
+    const currentId = navigationCursorRef.current;
+    const next = moveEntityFocus(collectNavigationItems(host), currentId, direction);
+    if (next === null) return;
+    if (next === currentId) {
+      applyNavigationCursor(currentId, t('architecture.nav.noNeighbour', {
+        defaultValue: 'No entity in that direction',
+      }));
+      return;
+    }
+    if (!next.startsWith(PACKAGE_NAV_PREFIX)) keyboardFocusRef.current = next;
+    applyNavigationCursor(next, navigationAnnouncementFor(host, next));
+    paintCurrentNavigationItem(host);
+  };
+
+  /**
    * Keyboard navigation once the canvas has focus: arrows pan, `+`/`-` zoom,
    * `0` fits and `1` returns to natural size.
    *
-   * The selection keys follow the inspector task: `]`/`[` move a visible cursor
-   * through the drawing's node order (wrapping), `Enter` selects the cursor's
-   * node, `Alt+Enter` drills into it, and `Escape` — ONLY while something is
-   * selected — closes the dock / clears the selection. That Escape branch calls
-   * `stopPropagation`, so the chat page's global abort never sees it; with no
-   * selection the key keeps its default behaviour. Modified presses are left to
-   * the browser and the app's shortcuts (Ctrl/Cmd + key).
+   * `Enter` enters the entity-navigation state on the current selection (or the
+   * first drawn entity). In that state arrows move by screen position, Home/End
+   * go to the top-left/bottom-right entity, PageUp/PageDown walk one package,
+   * `[`/`]` walk to the enclosing frame and back to its first entity, `Enter`
+   * selects (opening the inspector), `Shift+Enter`/Space toggles multi-select,
+   * `A` pins and `X` removes through the same callbacks the context menu uses.
+   * `Escape` leaves the state and calls `stopPropagation`, so the chat page's
+   * global abort never sees it; outside the state Escape keeps its old
+   * selection-clearing behaviour, and with no selection at all it is not
+   * consumed.
+   *
+   * Modified presses are left to the browser and the app's shortcuts (Ctrl/Cmd
+   * + key), except the curation undo.
    */
   const onCanvasKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     const host = hostRef.current;
@@ -1850,6 +2155,14 @@ export function PlantUmlGraph({
         event.preventDefault();
         event.stopPropagation();
         setContextMenu(null);
+        return;
+      }
+      // In the entity-navigation state Escape leaves that state and nothing
+      // else: `stopPropagation` keeps the chat page's global abort out of it.
+      if (navigationActiveRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        exitEntityNavigation(host);
         return;
       }
       if (selectedRef.current === null && selectedRelationRef.current === null) return;
@@ -1883,73 +2196,189 @@ export function PlantUmlGraph({
       return;
     }
 
-    if (event.key === ']' || event.key === '[') {
-      event.preventDefault();
-      const drawnIds = graphRef.current.nodes
-        .map((node) => node.id)
-        .filter((id) => nodeElement(host, id) !== null);
-      const nextId = cycleNodeFocus(drawnIds, keyboardFocusRef.current, event.key === ']' ? 1 : -1);
-      if (nextId === null) return;
-      keyboardFocusRef.current = nextId;
-      for (const element of host.querySelectorAll('.arch-keyboard-focus')) {
-        element.classList.remove('arch-keyboard-focus');
-        element.removeAttribute('data-architecture-keyboard-focus');
-      }
-      const focused = nodeElement(host, nextId);
-      if (focused !== null) {
-        focused.classList.add('arch-keyboard-focus');
-        focused.setAttribute('data-architecture-keyboard-focus', 'true');
-      }
-      host.setAttribute('data-architecture-keyboard-focus-id', nextId);
-      return;
-    }
+    /** The entity the cursor stands on, or null on a frame / nowhere. */
+    const cursorNode = (): ArchitectureRendererNode | null => navigationNodeOf(navigationCursorRef.current);
 
-    // Space / Shift+Enter toggles the keyboard cursor's node in the selection
-    // set; a renderer embedded without a tray keeps the old "select" reading.
-    if (event.key === ' ' || event.key === 'Spacebar' || (event.key === 'Enter' && event.shiftKey)) {
-      const id = keyboardFocusRef.current;
-      if (id === null) return;
-      const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
-      if (node === undefined) return;
-      event.preventDefault();
-      event.stopPropagation();
-      selectedRef.current = id;
-      highlightRelations(host, id);
-      announceSelection(graphRef.current, id);
+    /** Enter's selection: an entity opens the inspector, a frame zooms into it. */
+    const selectCursorItem = (): boolean => {
+      const cursorId = navigationCursorRef.current;
+      if (cursorId === null) return false;
+      if (cursorId.startsWith(PACKAGE_NAV_PREFIX)) {
+        // A frame is a place, not an entity: the same gesture a tap gives it.
+        zoomToPackage(cursorId.slice(PACKAGE_NAV_PREFIX.length));
+        setNavigationAnnouncement(t('architecture.nav.enteredPackage', {
+          defaultValue: 'Entered package {{package}}',
+          package: cursorId.slice(PACKAGE_NAV_PREFIX.length),
+        }));
+        return true;
+      }
+      const node = cursorNode();
+      if (node === null) return false;
+      selectedRef.current = cursorId;
+      highlightRelations(host, cursorId);
+      announceSelection(graphRef.current, cursorId);
+      clickCallbackRef.current?.(node);
+      setNavigationAnnouncement(t('architecture.nav.selected', {
+        defaultValue: '{{label}} selected',
+        label: navigationLabelOf(host, cursorId),
+      }));
+      return true;
+    };
+
+    /** Shift+Enter / Space: toggle the cursor's entity in the multi-select set. */
+    const toggleCursorSelection = (): boolean => {
+      const node = cursorNode();
+      const cursorId = navigationCursorRef.current;
+      if (node === null || cursorId === null) return false;
+      const wasSelected = selectedNodeIdsRef.current.includes(cursorId) || selectedRef.current === cursorId;
+      selectedRef.current = cursorId;
+      highlightRelations(host, cursorId);
+      announceSelection(graphRef.current, cursorId);
       if (toggleNodeCallbackRef.current !== undefined) toggleNodeCallbackRef.current(node);
       else clickCallbackRef.current?.(node);
-      return;
-    }
+      setNavigationAnnouncement(wasSelected
+        ? t('architecture.nav.deselected', {
+            defaultValue: '{{label}} removed from the selection',
+            label: node.label,
+          })
+        : t('architecture.nav.selectedIntoSet', {
+            defaultValue: '{{label}} added to the selection',
+            label: node.label,
+          }));
+      return true;
+    };
 
-    if (event.key === 'Enter') {
-      const id = keyboardFocusRef.current;
-      if (id === null) return;
-      event.preventDefault();
-      if (event.altKey) {
-        drillInto(id);
+    if (navigationActiveRef.current) {
+      switch (event.key) {
+        case 'ArrowUp':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'up');
+          return;
+        case 'ArrowDown':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'down');
+          return;
+        case 'ArrowLeft':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'left');
+          return;
+        case 'ArrowRight':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'right');
+          return;
+        case 'Home':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'home');
+          return;
+        case 'End':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'end');
+          return;
+        case 'PageUp':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'pageUp');
+          return;
+        case 'PageDown':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'pageDown');
+          return;
+        case '[':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'parent');
+          return;
+        case ']':
+          event.preventDefault();
+          event.stopPropagation();
+          moveNavigationCursor(host, 'child');
+          return;
+        case 'Enter':
+          if (event.shiftKey) {
+            if (!toggleCursorSelection()) return;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+          if (event.altKey) {
+            const drillId = navigationCursorRef.current;
+            if (drillId === null || drillId.startsWith(PACKAGE_NAV_PREFIX)) return;
+            event.preventDefault();
+            drillInto(drillId);
+            return;
+          }
+          if (!selectCursorItem()) return;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        case ' ':
+        case 'Spacebar':
+          if (!toggleCursorSelection()) return;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        case 'a':
+        case 'A': {
+          const node = cursorNode();
+          if (node === null) return;
+          const action = pinnedSet.has(node.id) ? onUnpinNode : onPinNode;
+          if (action === undefined) return;
+          event.preventDefault();
+          event.stopPropagation();
+          action(node);
+          return;
+        }
+        case 'x':
+        case 'X': {
+          const node = cursorNode();
+          if (node === null || onRemoveNode === undefined) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onRemoveNode(node);
+          return;
+        }
+        default:
+          // `+`/`-`/`0`/`1` keep working below; everything else is default.
+          break;
+      }
+    } else {
+      // Enter enters the navigation state on the current selection or the first
+      // drawn entity. Arrows keep panning until then (requirement 4).
+      if (event.key === 'Enter') {
+        if (enterEntityNavigation(host)) event.preventDefault();
         return;
       }
-      const node = graphRef.current.nodes.find((candidate) => candidate.id === id);
-      if (node === undefined) return;
-      selectedRef.current = id;
-      highlightRelations(host, id);
-      announceSelection(graphRef.current, id);
-      clickCallbackRef.current?.(node);
-      return;
+      if (event.key === '[' || event.key === ']') {
+        if (!enterEntityNavigation(host)) return;
+        event.preventDefault();
+        moveNavigationCursor(host, event.key === '[' ? 'parent' : 'child');
+        return;
+      }
     }
 
     if (event.altKey) return;
     switch (event.key) {
       case 'ArrowLeft':
+        if (navigationActiveRef.current) return;
         host.scrollLeft -= KEYBOARD_PAN_STEP;
         break;
       case 'ArrowRight':
+        if (navigationActiveRef.current) return;
         host.scrollLeft += KEYBOARD_PAN_STEP;
         break;
       case 'ArrowUp':
+        if (navigationActiveRef.current) return;
         host.scrollTop -= KEYBOARD_PAN_STEP;
         break;
       case 'ArrowDown':
+        if (navigationActiveRef.current) return;
         host.scrollTop += KEYBOARD_PAN_STEP;
         break;
       case '+':
@@ -1972,6 +2401,20 @@ export function PlantUmlGraph({
     }
     event.preventDefault();
   };
+
+  // The keyboard cursor lives in the DOM (a class, an element id and a drawn
+  // ring), so a drawing that was replaced — a new view, or a semantic rewrite —
+  // loses it. Repaint it from the settled state; the cursor's own moves paint
+  // synchronously in the key handler, and this is the restoring half.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null) return;
+    if (!navigationActive) {
+      clearNavigationFocus(host);
+      return;
+    }
+    paintCurrentNavigationItem(host);
+  }, [drawn, drawnRevision, navigationActive, navigationCursorId]);
 
   const viewLabel = view.kind === 'overview'
     ? t('architecture.plantuml.overview', { defaultValue: 'Overview' })
@@ -2347,8 +2790,16 @@ export function PlantUmlGraph({
       <div className="relative flex min-h-0 flex-1 flex-col" data-architecture-canvas="true">
         <div
           ref={hostRef}
-          role="img"
+          // The canvas is an image until the reader enters entity navigation;
+          // then it is an application whose active descendant is the entity the
+          // keyboard cursor stands on (the ring is drawn inside the drawing).
+          role={navigationActive ? 'application' : 'img'}
           aria-label={t('architecture.graphAria', { defaultValue: 'Architecture neighbourhood graph' })}
+          aria-activedescendant={
+            navigationActive && navigationCursorId !== null
+              ? navigationDomId(navigationCursorId)
+              : undefined
+          }
           // The canvas is its own keyboard target: arrows pan, +/- zoom, 0 fits
           // and 1 is natural size (see `onCanvasKeyDown`). The ring is only drawn
           // for keyboard focus, so a mouse press does not flash a box.
@@ -2379,6 +2830,17 @@ export function PlantUmlGraph({
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />
+        {/* The keyboard cursor's polite reading: the entity it stands on (label,
+            kind, package, in/out counts) and the last selection action. Sibling
+            of the host so the drawing's imperative innerHTML never wipes it. */}
+        <span
+          role="status"
+          aria-live="polite"
+          data-architecture-nav-announcer="true"
+          className="sr-only"
+        >
+          {navigationAnnouncement}
+        </span>
         {showOverviewHint && (
           <div
             data-architecture-readable-hint="true"

@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell unavailable for resident sessions"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "class",
+      "kindInterface": "interface",
+      "kindEnum": "enum",
+      "kindAbstract": "abstract class",
+      "kindFunction": "function",
+      "kindEntity": "entity",
+      "announceEntity": "{{label}}, {{kind}}, package {{package}}, {{outgoing}} outgoing, {{incoming}} incoming",
+      "announcePackage": "Package {{package}}, {{count}} entities",
+      "noNeighbour": "No entity in that direction",
+      "selected": "{{label}} selected",
+      "deselected": "{{label}} removed from the selection",
+      "selectedIntoSet": "{{label}} added to the selection",
+      "enteredPackage": "Entered package {{package}}",
+      "rootPackage": "the root package"
+    },
     "copyFix": {
       "kindClass": "{{count}} classes",
       "kindFunction": "{{count}} functions",

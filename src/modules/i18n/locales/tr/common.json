@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "sınıf",
+      "kindInterface": "arayüz",
+      "kindEnum": "enum",
+      "kindAbstract": "soyut sınıf",
+      "kindFunction": "işlev",
+      "kindEntity": "varlık",
+      "announceEntity": "{{label}}, {{kind}}, paket {{package}}, {{outgoing}} giden, {{incoming}} gelen",
+      "announcePackage": "Paket {{package}}, {{count}} varlık",
+      "noNeighbour": "O yönde varlık yok",
+      "selected": "{{label}} seçildi",
+      "deselected": "{{label}} seçimden çıkarıldı",
+      "selectedIntoSet": "{{label}} seçime eklendi",
+      "enteredPackage": "{{package}} paketi açıldı",
+      "rootPackage": "kök paket"
+    },
     "copyFix": {
       "kindClass": "{{count}} sınıf",
       "kindFunction": "{{count}} işlev",

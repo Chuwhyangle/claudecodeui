@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell für dauerhafte Sitzungen nicht verfügbar"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "Klasse",
+      "kindInterface": "Interface",
+      "kindEnum": "Enum",
+      "kindAbstract": "abstrakte Klasse",
+      "kindFunction": "Funktion",
+      "kindEntity": "Entität",
+      "announceEntity": "{{label}}, {{kind}}, Paket {{package}}, {{outgoing}} ausgehend, {{incoming}} eingehend",
+      "announcePackage": "Paket {{package}}, {{count}} Entitäten",
+      "noNeighbour": "Keine Entität in dieser Richtung",
+      "selected": "{{label}} ausgewählt",
+      "deselected": "{{label}} aus der Auswahl entfernt",
+      "selectedIntoSet": "{{label}} zur Auswahl hinzugefügt",
+      "enteredPackage": "Paket {{package}} geöffnet",
+      "rootPackage": "das Wurzelpaket"
+    },
     "copyFix": {
       "kindClass": "{{count}} Klassen",
       "kindFunction": "{{count}} Funktionen",

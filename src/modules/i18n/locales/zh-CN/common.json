@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "类",
+      "kindInterface": "接口",
+      "kindEnum": "枚举",
+      "kindAbstract": "抽象类",
+      "kindFunction": "函数",
+      "kindEntity": "实体",
+      "announceEntity": "{{label}}，{{kind}}，所在包 {{package}}，{{outgoing}} 条出边，{{incoming}} 条入边",
+      "announcePackage": "包 {{package}}，{{count}} 个实体",
+      "noNeighbour": "该方向没有实体",
+      "selected": "已选中 {{label}}",
+      "deselected": "已将 {{label}} 移出多选",
+      "selectedIntoSet": "已将 {{label}} 加入多选",
+      "enteredPackage": "已进入包 {{package}}",
+      "rootPackage": "根包"
+    },
     "copyFix": {
       "kindClass": "{{count}} 类",
       "kindFunction": "{{count}} 函数",

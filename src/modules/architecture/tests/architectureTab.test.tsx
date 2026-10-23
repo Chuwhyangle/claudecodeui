@@ -1434,6 +1434,185 @@ test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone
   assert.equal(fireEvent.keyDown(host, { key: 'Escape' }), true, 'Escape must not be consumed by the canvas');
 });
 
+/** The rect an item's keyboard ring should surround, from the drawing's own numbers. */
+function drawnRectOf(element: Element): { x: number; y: number; width: number; height: number } {
+  // The leading rect is what the semantic rewrite keeps current; the group's
+  // data-* attributes predate that rewrite.
+  const rect = element.querySelector('rect');
+  const read = (fallback: string, attribute: string): number => {
+    const value = rect?.getAttribute(fallback) ?? element.getAttribute(attribute) ?? '0';
+    return Number(value);
+  };
+  return { x: read('x', 'data-x'), y: read('y', 'data-y'), width: read('width', 'data-w'), height: read('height', 'data-h') };
+}
+
+test('entity navigation: Enter activates a ringed cursor, arrows move it, and the selection keys act', async () => {
+  rememberShowAllFilter();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
+
+  host.focus();
+  assert.equal(host.getAttribute('role'), 'img', 'before navigation the canvas is an image');
+
+  // Enter enters the entity-navigation state; the canvas becomes an application
+  // whose active descendant is the entity the cursor stands on.
+  assert.equal(fireEvent.keyDown(host, { key: 'Enter' }), false, 'Enter is consumed when it enters navigation');
+  assert.equal(host.getAttribute('role'), 'application', 'navigation turns the canvas into an application');
+  const firstDomId = host.getAttribute('aria-activedescendant');
+  assert.ok(firstDomId !== null, 'the canvas names its active descendant');
+  const firstNode = document.getElementById(firstDomId);
+  assert.ok(firstNode !== null, 'aria-activedescendant must name a drawn element');
+  const firstEntityId = firstNode.getAttribute('data-entity-id');
+  assert.ok(firstEntityId !== null && !firstEntityId.startsWith('grp::'));
+
+  // The cursor's ring is a real drawn shape, 2px outside the entity's box.
+  const ringFor = (node: Element): Element => {
+    const ring = host.querySelector('[data-architecture-nav-ring]');
+    assert.ok(ring !== null, 'the active entity must carry a focus ring');
+    assert.ok(ring.isConnected, 'the ring must be inside the drawing');
+    const box = drawnRectOf(node);
+    assert.equal(Number(ring.getAttribute('x')), box.x - 2, 'the ring keeps a 2px gap on the left');
+    assert.equal(Number(ring.getAttribute('y')), box.y - 2, 'the ring keeps a 2px gap above');
+    assert.equal(Number(ring.getAttribute('width')), box.width + 4);
+    assert.equal(Number(ring.getAttribute('stroke-width')), 3, 'the ring is a thick outline, not a colour change alone');
+    return ring;
+  };
+  ringFor(firstNode);
+
+  // Arrows move by screen position to another drawn entity, and each landing is
+  // reflected in aria-activedescendant (the reading the control arm falsifies).
+  const visited = new Set<string>([firstEntityId]);
+  for (const key of ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'ArrowDown']) {
+    assert.equal(fireEvent.keyDown(host, { key }), false, `${key} is consumed while navigating`);
+    const domId = host.getAttribute('aria-activedescendant');
+    assert.ok(domId !== null, `${key} must leave an active descendant`);
+    const active = document.getElementById(domId);
+    assert.ok(active !== null, `${key} must point at a drawn element`);
+    const entityId = active.getAttribute('data-entity-id');
+    assert.ok(entityId !== null, `${key} must land on an entity or frame`);
+    visited.add(entityId);
+  }
+  assert.ok(visited.size >= 2, `arrows must traverse more than one entity (visited ${[...visited].join(', ')})`);
+
+  // The polite live region carries the entity's name and package.
+  const announcer = document.querySelector('[data-architecture-nav-announcer]');
+  assert.ok(announcer instanceof HTMLElement, 'the canvas must own an aria-live region');
+  assert.equal(announcer.getAttribute('aria-live'), 'polite');
+  const activeNode = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+  assert.ok(activeNode !== null);
+  const activeLabel = activeNode.querySelector('[data-architecture-label]')?.getAttribute('data-architecture-label')
+    ?? activeNode.querySelector('title')?.textContent
+    ?? '';
+  assert.ok(activeLabel !== '', 'the active entity must expose its label for the reading');
+  assert.ok(
+    (announcer.textContent ?? '').includes(activeLabel),
+    `the live region must name the current entity (${announcer.textContent ?? ''})`,
+  );
+
+  // `[` walks to the enclosing package frame, `]` back to its first entity.
+  fireEvent.keyDown(host, { key: '[' });
+  const packageDomId = host.getAttribute('aria-activedescendant') ?? '';
+  const packageFrame = document.getElementById(packageDomId);
+  assert.ok(packageFrame !== null);
+  assert.ok(packageFrame.classList.contains('uml-package'), '`[` lands on a package frame');
+  assert.ok(packageDomId.startsWith('arch-nav-package-'), 'the frame is named as a frame');
+  fireEvent.keyDown(host, { key: ']' });
+  const childNode = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+  assert.ok(childNode !== null);
+  assert.ok(childNode.getAttribute('data-entity-id') !== null, '`]` lands on an entity');
+
+  // Enter selects through the same callback a click uses: the inspector opens.
+  fireEvent.keyDown(host, { key: 'Enter' });
+  const dock = await waitFor(() => {
+    const element = document.querySelector('[role="complementary"]');
+    assert.ok(element !== null, 'Enter must open the inspector');
+    return element;
+  });
+  const selectedEntityId = childNode.getAttribute('data-entity-id') ?? '';
+  const selectedNode = graphNodeLabel(selectedEntityId);
+  assert.ok((dock.textContent ?? '').includes(selectedNode), `the inspector must show ${selectedNode}`);
+
+  // Move away, then Shift+Enter adds the new entity to the multi-select set.
+  const moveKeys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'];
+  let toggleTarget: Element | null = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    fireEvent.keyDown(host, { key: moveKeys[attempt % moveKeys.length] });
+    const node = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+    if (node !== null && node.getAttribute('data-entity-id') !== selectedEntityId) {
+      toggleTarget = node;
+      break;
+    }
+  }
+  assert.ok(toggleTarget !== null, 'the cursor must be able to reach a different entity');
+  assert.equal(fireEvent.keyDown(host, { key: 'Enter', shiftKey: true }), false);
+  // The tray opens collapsed; its pill states the count, and expanding it lists
+  // both members.
+  const trayPill = await waitFor(() => {
+    const pill = document.querySelector('[data-architecture-tray-pill]');
+    assert.ok(pill instanceof HTMLElement, 'Shift+Enter must put the selection into the tray');
+    return pill;
+  });
+  assert.ok((trayPill.textContent ?? '').includes('2'), 'the tray pill states two selected elements');
+  fireEvent.click(trayPill);
+  await waitFor(() => {
+    const items = document.querySelectorAll('[data-architecture-tray-item]');
+    assert.equal(items.length, 2, 'the expanded tray lists both selected entities');
+  });
+  assert.ok((announcer.textContent ?? '').includes('selection'), 'the toggle is announced');
+
+  // `A` pins through the context menu's own callback, with an undo.
+  assert.equal(fireEvent.keyDown(host, { key: 'a' }), false, 'A is consumed while navigating');
+  const pinnedToast = await waitFor(() => {
+    const toast = document.querySelector('[data-architecture-curation-toast]');
+    assert.ok(toast !== null, 'A must show the curation toast');
+    return toast;
+  });
+  assert.ok((pinnedToast.textContent ?? '').length > 0);
+  const pinUndo = document.querySelector('[data-architecture-curation-undo]');
+  assert.ok(pinUndo instanceof HTMLElement, 'pinning must offer undo');
+  fireEvent.click(pinUndo);
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-curation-toast]'), null));
+
+  // `X` removes through the same callback and offers the same undo.
+  assert.equal(fireEvent.keyDown(host, { key: 'x' }), false, 'X is consumed while navigating');
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-curation-toast]') !== null));
+  const removeUndo = document.querySelector('[data-architecture-curation-undo]');
+  assert.ok(removeUndo instanceof HTMLElement, 'removing must offer undo');
+  fireEvent.click(removeUndo);
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-curation-toast]'), null));
+
+  // Escape leaves the state, consumes the key and never reaches the chat page's
+  // global abort listener.
+  const aborts: string[] = [];
+  const recordEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') aborts.push('chat.abort');
+  };
+  document.addEventListener('keydown', recordEscape);
+  try {
+    assert.equal(fireEvent.keyDown(host, { key: 'Escape' }), false, 'Escape is consumed while navigating');
+    assert.equal(host.getAttribute('role'), 'img', 'Escape returns the canvas to an image');
+    assert.equal(host.getAttribute('aria-activedescendant'), null, 'the active descendant is cleared');
+    assert.equal(host.querySelector('[data-architecture-nav-ring]'), null, 'the ring is removed');
+    assert.equal(aborts.length, 0, 'Escape must not reach the chat page abort');
+  } finally {
+    document.removeEventListener('keydown', recordEscape);
+  }
+  // Panning is back: the canvas's old arrow behaviour survived the state change.
+  const beforePan = host.scrollLeft;
+  fireEvent.keyDown(host, { key: 'ArrowRight' });
+  assert.equal(host.scrollLeft, beforePan + 40, 'arrows pan again after leaving navigation');
+});
+
+/** A payload node's label, for asserting the inspector shows the selected entity. */
+function graphNodeLabel(id: string): string {
+  const node = CLASS_DIAGRAM_RESULT.graph.entity.nodes.find((candidate) => candidate.id === id);
+  assert.ok(node !== undefined, `${id} must be in the fixture`);
+  return node.label;
+}
+
+
 test('the zoom cluster lives on the canvas, not in the toolbar, with 32px targets', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();

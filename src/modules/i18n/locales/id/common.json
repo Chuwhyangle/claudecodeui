@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell tidak tersedia untuk sesi residen"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "kelas",
+      "kindInterface": "antarmuka",
+      "kindEnum": "enum",
+      "kindAbstract": "kelas abstrak",
+      "kindFunction": "fungsi",
+      "kindEntity": "entitas",
+      "announceEntity": "{{label}}, {{kind}}, paket {{package}}, {{outgoing}} keluar, {{incoming}} masuk",
+      "announcePackage": "Paket {{package}}, {{count}} entitas",
+      "noNeighbour": "Tidak ada entitas ke arah itu",
+      "selected": "{{label}} dipilih",
+      "deselected": "{{label}} dihapus dari pilihan",
+      "selectedIntoSet": "{{label}} ditambahkan ke pilihan",
+      "enteredPackage": "Paket {{package}} dibuka",
+      "rootPackage": "paket akar"
+    },
     "copyFix": {
       "kindClass": "{{count}} kelas",
       "kindFunction": "{{count}} fungsi",
