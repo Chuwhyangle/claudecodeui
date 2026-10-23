@@ -2,7 +2,7 @@
 id: gap-ac323-vitest-stderr-masks-load-flake
 title: AC-323 同树概率性红（5 连绿 → 20:24 load≈90–100 时 exit 1）：CMD2 vitest 的
   console.error 占满 gate 的 stderr 头部使红不可归因 ⇒ 噪声落盘恢复归因、复现并修掉负载时序红
-status: ready
+status: done
 labels:
   - gap
   - defect
