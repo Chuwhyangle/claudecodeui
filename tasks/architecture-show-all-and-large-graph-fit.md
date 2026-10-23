@@ -27,16 +27,28 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/elementRelationFilter.test.ts` exit 0：新增用例——Show all 之后 `relations` 字段不变（三种预设各一个用例）；种类与孤立节点按预期改变；Reset filters 回到默认；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：新增用例——用至少 500 个实体、嵌套 4 层以上的合成几何，C 档总尺寸超过画布 2 倍时选 D 档；D 档总尺寸 ≤ 画布的 1.2 倍；被折叠子包的数量与 `★N` 汇总到父包；缩放 ≥ 0.9 与小图行为不变；同输入同输出
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：布局预计超过 1 秒时 200ms 内出现 "Laying out N entities…" 状态，完成后消失；Fit 后读数与真实适应结果一致，D 档提示文案不再写 "Whole graph at 5%"；既有用例不回归
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用含 300 个以上函数的夹具点 Show all，关系预设读数不变；完成后 Fit 下宿主元素的 `scrollWidth ≤ clientWidth + 2` 且 `scrollHeight ≤ clientHeight + 2`
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面新读数各配控制臂（恢复 Show all 改关系预设、关闭 D 档各一条），控制臂里对应读数必须变红
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/elementRelationFilter.test.ts` exit 0：新增用例——Show all 之后 `relations` 字段不变（三种预设各一个用例）；种类与孤立节点按预期改变；Reset filters 回到默认；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：新增用例——用至少 500 个实体、嵌套 4 层以上的合成几何，C 档总尺寸超过画布 2 倍时选 D 档；D 档总尺寸 ≤ 画布的 1.2 倍；被折叠子包的数量与 `★N` 汇总到父包；缩放 ≥ 0.9 与小图行为不变；同输入同输出
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：布局预计超过 1 秒时 200ms 内出现 "Laying out N entities…" 状态，完成后消失；Fit 后读数与真实适应结果一致，D 档提示文案不再写 "Whole graph at 5%"；既有用例不回归
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用含 300 个以上函数的夹具点 Show all，关系预设读数不变；完成后 Fit 下宿主元素的 `scrollWidth ≤ clientWidth + 2` 且 `scrollHeight ≤ clientHeight + 2`
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面新读数各配控制臂（恢复 Show all 改关系预设、关闭 D 档各一条），控制臂里对应读数必须变红
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
 真实浏览器里（PC 1440×765）在本会话的 Architecture 标签点 Show all：读出关系预设（仍为 `+Dependencies`）、进度状态出现的时刻、完成后 Fit 的缩放与宿主滚动尺寸（修复前 4415 宽、需横向滚动）；点 Reset filters 回到初始状态。贴截图（存 `tmp/`）与读数；过程中做过的任何改动必须还原。
+
+## Evidence
+
+真机读数（`e2e/architecture-canvas-layout.spec.ts` 的 functions 夹具，396 个实体 = 384 functions + 12 classes，PC 1440×765，playwright 输出）：
+
+- Show all 后的关系预设：`dependency`（`+Dependencies`），`call` 未选中 —— 与修复前（会被改成 `call`）相反。
+- 布局状态："Laying out 396 entities…"，点 Show all 后 344ms 首次可见（面板的 250ms 过滤防抖 + 94ms；状态在阻塞布局之前上屏，布局结束后随新图清除）。
+- Fit 后宿主：`scrollWidth=1151 clientWidth=1151 scrollHeight=551 clientHeight=551`（修复前 4415 宽、需横向滚动）；缩放读数 **92%**（真实适应结果 = 1151/1250）。
+- Reset filters 后：Filter 读数回到 `Hiding 4`，读数行重新显示 `Hidden 384 functions · 12 isolated nodes`。
+- 截图：`tmp/show-all-fitted-pc.png`（Show all + Fit）、`tmp/show-all-reset-pc.png`（Reset filters）、`tmp/show-all-control-arm-restored.png`（控制臂还原）。
+
+引擎读数（`semanticZoomLayout.test.ts` 的 576 实体 / 5 层合成几何，画布 900×300）：C 档被 D 档取代；D 档 `foldDepth ≥ 1`，总尺寸 ≤ 1.2 画布；被折叠子包的实体数与 ★N 汇总到父包标签；`scale ≥ 0.9` 与小图仍是 A/B/C。
 
 ## Touches
 
@@ -51,4 +63,5 @@ extra:
 - e2e/architecture-canvas-layout.spec.ts
 - e2e/support/architectureFixture.ts
 - playwright.config.ts
+- src/modules/i18n/locales/*/common.json
 - tasks/architecture-show-all-and-large-graph-fit.md
