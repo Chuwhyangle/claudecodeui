@@ -31,11 +31,11 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——在途任务磁贴 URI 为 `quay://<fleetProjectId>/task/<id>`；`fleetProjectId` 为 null 时不声明可聚焦元素并显示未登记提示；全文件断言中不出现 UUID 形态的项目段。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——fleet 视图项目 URI 为 `quay://<fleetProjectId>/board`；未登记项目不可聚焦。
-- [ ] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-project-id.test.ts` exit 0——桩 registry 按规范化 root 匹配（尾斜杠、符号链接解析后相等）得到 registry id；无匹配为 null；registry CLI 不可用时全部为 null 且不抛出。
-- [ ] AC4: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-uri-resolve.test.ts` exit 0——项目段按 registry id 解析到 root；UUID 形态项目段返回 `unknown-project`。
-- [ ] AC5: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——在途任务磁贴 URI 为 `quay://<fleetProjectId>/task/<id>`；`fleetProjectId` 为 null 时不声明可聚焦元素并显示未登记提示；全文件断言中不出现 UUID 形态的项目段。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——fleet 视图项目 URI 为 `quay://<fleetProjectId>/board`；未登记项目不可聚焦。
+- [x] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-project-id.test.ts` exit 0——桩 registry 按规范化 root 匹配（尾斜杠、符号链接解析后相等）得到 registry id；无匹配为 null；registry CLI 不可用时全部为 null 且不抛出。
+- [x] AC4: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-uri-resolve.test.ts` exit 0——项目段按 registry id 解析到 root；UUID 形态项目段返回 `unknown-project`。
+- [x] AC5: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -51,6 +51,11 @@ depends_on:
 - `enabled` 不参与映射：与 fleet 的 id→root 映射保持一致，disabled 的登记项仍可被引用。
 - 当前 registry 只有 5 个项目（quay-fleet、quay、claudecodeui、archguard、plantuml-js）；驾驶舱显示的 cantus、meta-cc 未登记，修正后会显示「未登记到 quay-fleet」且不可被引用——这是预期行为，不是缺陷。
 
+### Touches 补充（实现时发现）
+
+- `server/shared/types.ts`：后端镜像的 `QuaySnapshot` 也要带 `fleetProjectId`（与 `src/shared/types.ts` 成对声明；AC5 的后端 typecheck 需要它）。
+- `src/modules/ui-scenario/tests/scenarioSurface.test.ts`：场景面的发布 gate 依赖 `fleetProjectId`，其逐字夹具随新的 URI 项目段更新。
+
 ## Touches
 
 - server/modules/quay/quay.service.ts
@@ -59,6 +64,7 @@ depends_on:
 - server/modules/quay/quay-uri-resolve.ts
 - server/modules/quay/tests/quay-fleet-project-id.test.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
+- server/shared/types.ts
 - src/modules/quay/QuayPanel.tsx
 - src/modules/quay/hooks/useQuayStatus.ts
 - src/modules/quay/tests/QuayPanel.test.tsx
@@ -66,5 +72,6 @@ depends_on:
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/CockpitStage.tsx
 - src/modules/cockpit/tests/CockpitStage.test.tsx
+- src/modules/ui-scenario/tests/scenarioSurface.test.ts
 - src/shared/types.ts
 - tasks/quay-uri-project-segment-is-fleet-registry-id.md
