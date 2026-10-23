@@ -41,8 +41,10 @@ import { shouldHideToolResult } from '@/modules/chat/tools';
 import {
   buildVoiceContextPack,
   buildVoiceInputContextPack,
+  buildVoiceReferencePack,
   isVoiceContextRow,
   resolveVoiceContextPackRuntime,
+  resolveVoiceReference,
   VOICE_CONTEXT_BUDGET_CHARS,
   VOICE_CONTEXT_MAX_ROWS,
   VOICE_CONTEXT_PACK_CEILING,
@@ -53,7 +55,7 @@ import {
 } from '@/modules/chat/utils/voice/voiceContextPack';
 import type { VoiceContextPack } from '@/modules/chat/utils/voice/voiceContextPack';
 import { groupWorkSegments, isWorkSegmentMember } from '@/modules/chat/utils/transcript/workSegments';
-import type { ChatMessage } from '@/shared/types';
+import type { ChatMessage, QuayFocusableObject } from '@/shared/types';
 
 /** The clock every case reads against, so a `刚刚` in the rendered line is a constant. */
 const NOW = Date.parse('2026-10-10T12:00:00.000Z');
@@ -754,4 +756,180 @@ test('④ the whole pack stays within its budget over ≥200 seeded inputs, ever
 
   // Positive control: "≤ budget" is also satisfied by a pack that never includes the conversation.
   assert.ok(withConversation > RANDOM_SEEDS / 4, `only ${withConversation} seeds reached the conversation`);
+});
+
+// ── 5. The reference pack: wall objects sent as references, never as prose ───────────────────
+
+/**
+ * The visible set a view contract would publish: three objects with the four display
+ * attributes AC4 resolves against. The URIs are the project-segmented form the wall mints
+ * (`quay://<project>/task/<id>`), so the fixture exercises the real address grammar.
+ */
+const WALL_VISIBLE: QuayFocusableObject[] = [
+  {
+    uri: 'quay://claudecodeui/task/gap-wall-red',
+    label: '①',
+    display: { status: 'needs-human', color: 'red', ordinal: 1, pos: { row: 1, column: 1 } },
+  },
+  {
+    uri: 'quay://claudecodeui/task/gap-wall-green',
+    label: '②',
+    display: { status: 'done', color: 'green', ordinal: 2, pos: { row: 2, column: 1 } },
+  },
+  {
+    uri: 'quay://claudecodeui/task/gap-wall-blue',
+    label: '③',
+    display: { status: 'implementing', color: 'blue', ordinal: 3, pos: { row: 3, column: 1 } },
+  },
+];
+
+/** The text half's conversation, distinct from anything the reference half may carry. */
+const REFERENCE_HISTORY: ChatMessage[] = [
+  { type: 'user', content: 'ROW-history-text', timestamp: FRESH },
+  { type: 'assistant', content: 'ROW-history-reply', timestamp: FRESH },
+];
+
+const HISTORY_URIS = ['quay://claudecodeui/board', 'quay://claudecodeui/goal/GOAL-043'] as const;
+const TRAY_URIS = [WALL_VISIBLE[0].uri] as const;
+
+/** Resolves and returns the match, failing loudly (with the whole result) when it does not. */
+function resolved(phrase: string, visible: readonly QuayFocusableObject[] = WALL_VISIBLE) {
+  const match = resolveVoiceReference(visible, phrase);
+  if (match.status !== 'resolved') {
+    throw new Error(`${phrase} did not resolve: ${JSON.stringify(match)}`);
+  }
+  return match;
+}
+
+test('⑤ the reference pack carries URIs and display attributes, and only `text` carries prose', () => {
+  const draftBefore = 'DRAFT-BEFORE-光标前';
+  const draftAfter = 'DRAFT-AFTER-光标后';
+  const voiceSoFar = 'VOICE-SO-FAR-已经说出';
+
+  const existing = buildVoiceInputContextPack({
+    messages: REFERENCE_HISTORY,
+    draftBefore,
+    draftAfter,
+    voiceSoFar,
+    now: NOW,
+  });
+  const pack = buildVoiceReferencePack({
+    utterance: '把第二个改成三十秒',
+    focusables: WALL_VISIBLE,
+    focusUri: WALL_VISIBLE[1].uri,
+    history: HISTORY_URIS,
+    tray: TRAY_URIS,
+    messages: REFERENCE_HISTORY,
+    draftBefore,
+    draftAfter,
+    voiceSoFar,
+    now: NOW,
+  });
+
+  // focus names the focused object by reference; visible is the same set, spatial order.
+  assert.equal(pack.focus?.uri, WALL_VISIBLE[1].uri);
+  assert.deepEqual(pack.visible, WALL_VISIBLE);
+
+  // history/tray are URI ARRAYS — not conversation text and not the draft.
+  assert.deepEqual(pack.history, [...HISTORY_URIS]);
+  assert.deepEqual(pack.tray, [...TRAY_URIS]);
+  assert.ok(pack.history.every((uri) => uri.startsWith('quay://')));
+  assert.ok(pack.tray.every((uri) => uri.startsWith('quay://')));
+
+  // The text half is BYTE-FOR-BYTE the existing C2 + draft/voice output — the degradation
+  // path did not change when the reference pack was added.
+  assert.equal(pack.text, existing.text);
+  assert.ok(pack.text.includes('ROW-history-text'), 'the text half lost the conversation');
+  assert.ok(pack.text.includes('DRAFT-BEFORE-光标前'), 'the text half lost the draft');
+
+  // The reference half carries NO content: no conversation row, no draft text, and each
+  // focusable is exactly the {uri, label, display} triple.
+  const referenceHalf = JSON.stringify({
+    focus: pack.focus,
+    visible: pack.visible,
+    history: pack.history,
+    tray: pack.tray,
+  });
+  assert.equal(referenceHalf.includes('ROW-history-text'), false, 'conversation text entered the reference half');
+  assert.equal(referenceHalf.includes('DRAFT-BEFORE'), false, 'draft text entered the reference half');
+  for (const object of [...pack.visible, ...(pack.focus === null ? [] : [pack.focus])]) {
+    assert.deepEqual(Object.keys(object).sort(), ['display', 'label', 'uri']);
+    assert.deepEqual(Object.keys(object.display).sort(), ['color', 'ordinal', 'pos', 'status']);
+  }
+});
+
+test('⑤ a focus URI outside the visible set yields no focus, and an empty wall is the text-only pack', () => {
+  const offWall = buildVoiceReferencePack({
+    focusables: WALL_VISIBLE,
+    focusUri: 'quay://claudecodeui/task/gap-wall-absent',
+  });
+  // No fabricated reference: a focus the view never declared cannot be resolved downstream.
+  assert.equal(offWall.focus, null);
+
+  // No wall at all: the reference half is genuinely empty and the text half is unchanged —
+  // this is the compatibility boundary with C2.
+  const textOnly = buildVoiceReferencePack({ messages: REFERENCE_HISTORY, now: NOW });
+  assert.equal(textOnly.focus, null);
+  assert.deepEqual(textOnly.visible, []);
+  assert.deepEqual(textOnly.history, []);
+  assert.deepEqual(textOnly.tray, []);
+  assert.equal(textOnly.text, buildVoiceInputContextPack({ messages: REFERENCE_HISTORY, now: NOW }).text);
+});
+
+test('⑤ a spoken reference resolves by ordinal, label, colour or position', () => {
+  // 「第二个」 — display.ordinal.
+  const second = resolved('第二个');
+  assert.equal(second.object.uri, WALL_VISIBLE[1].uri);
+  assert.deepEqual(second.by, ['ordinal']);
+
+  // 「②」 — the short spoken label itself.
+  const circled = resolved('②');
+  assert.equal(circled.object.uri, WALL_VISIBLE[1].uri);
+  assert.deepEqual(circled.by, ['label']);
+
+  // 「红的那个」 — display.color.
+  const red = resolved('红的那个');
+  assert.equal(red.object.uri, WALL_VISIBLE[0].uri);
+  assert.deepEqual(red.by, ['color']);
+
+  // 「左上那个」 — display.pos, top-left origin.
+  const topLeft = resolved('左上那个');
+  assert.equal(topLeft.object.uri, WALL_VISIBLE[0].uri);
+  assert.deepEqual(topLeft.by, ['pos']);
+
+  // A phrase naming two attributes must satisfy BOTH (AND, not OR).
+  const greenSecond = resolved('第二个绿的');
+  assert.equal(greenSecond.object.uri, WALL_VISIBLE[1].uri);
+  assert.deepEqual(greenSecond.by, ['color', 'ordinal']);
+});
+
+test('⑤ two matching objects are ambiguous, and ordinary words are not ordinals', () => {
+  // A second red object: 「红的那个」 no longer names a unique object.
+  const twoReds: QuayFocusableObject[] = [
+    WALL_VISIBLE[0],
+    {
+      uri: 'quay://claudecodeui/task/gap-wall-red-2',
+      label: '③',
+      display: { status: 'needs-human', color: 'red', ordinal: 3, pos: { row: 3, column: 1 } },
+    },
+  ];
+  const ambiguous = resolveVoiceReference(twoReds, '红的那个');
+  assert.equal(ambiguous.status, 'unresolved');
+  if (ambiguous.status === 'unresolved') {
+    assert.equal(ambiguous.reason, 'ambiguous');
+    assert.deepEqual(ambiguous.candidates.map((object) => object.uri), [twoReds[0].uri, twoReds[1].uri]);
+  }
+
+  // 「一起」 and 「十二点」 are ordinary words, not "the first/second object". Treating them
+  // as ordinals would silently edit an object nobody named.
+  for (const phrase of ['一起', '十二点']) {
+    const match = resolveVoiceReference(WALL_VISIBLE, phrase);
+    assert.equal(match.status, 'unresolved', `${phrase} was treated as a reference`);
+    if (match.status === 'unresolved') assert.equal(match.reason, 'none');
+  }
+
+  // A named attribute with no matching object is `none`, not a guess.
+  const missing = resolveVoiceReference(WALL_VISIBLE, '第五个');
+  assert.equal(missing.status, 'unresolved');
+  if (missing.status === 'unresolved') assert.equal(missing.reason, 'none');
 });

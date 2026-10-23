@@ -428,6 +428,103 @@ export type QuayProjectStatus = {
   hasQuayConfig: boolean;
 };
 
+//----------------- QUAY WALL VIEW CONTRACT ------------
+
+/**
+ * The object kinds a `quay://` URI can address, per quay-fleet's contract #1
+ * (`fleet-wall-object-uri-address-space`): a task, a goal, one ledger event, or the
+ * project's board. CloudCLI renders and focuses these objects; it never invents a kind the
+ * fleet side does not publish.
+ */
+export type QuayObjectKind = 'task' | 'goal' | 'ledger' | 'board';
+
+/**
+ * An L1 object reference in quay-fleet's three-level serialization. The address carries a
+ * PROJECT SEGMENT: `quay://<project>/<kind>/<id>`, with an optional `#ac-<n>` fragment
+ * naming one acceptance criterion of a task. The five forms are:
+ *
+ *   quay://<project>/task/<id>
+ *   quay://<project>/task/<id>#ac-<n>
+ *   quay://<project>/goal/<id>
+ *   quay://<project>/ledger/<name>/<eventId>
+ *   quay://<project>/board
+ *
+ * A URI without the project segment (`quay://task/<id>`) is NOT this grammar and is
+ * rejected by `parseQuayUri`. The voice/input layer treats a reference as an opaque string:
+ * parsing belongs to `src/modules/quay/quayUri.ts`, so a reference crosses a process
+ * boundary unchanged.
+ */
+export type QuayObjectUri = `quay://${string}`;
+
+/**
+ * Where one visible object sits in the declaring tile's own flow, both axes 1-based and
+ * counted from the TOP-LEFT (`{row: 1, column: 1}`). A vertical list tile puts every row in
+ * column 1; a grid tile may use both.
+ *
+ * Position is a display attribute because 「左上那个」 must resolve against where the
+ * object was drawn, not against the order the data happened to arrive in.
+ */
+export type QuayObjectPos = {
+  /** 1-based row, counting from the top. */
+  row: number;
+  /** 1-based column, counting from the left. */
+  column: number;
+};
+
+/**
+ * The display attributes of a visible object: the half a spoken referent resolves against
+ * without reading the object itself (「红的那个」 → `color`, 「第二个」 → `ordinal`,
+ * 「②」 → `label`, 「左上那个」 → `pos`).
+ *
+ * `color` is the bucket a person would actually say out loud, derived by the renderer from
+ * `status`; `status` is kept verbatim beside it so a reader can tell which status the colour
+ * stands for. A resolver matching a spoken phrase therefore never has to know the
+ * renderer's CSS classes.
+ */
+export type QuayObjectDisplay = {
+  /** The object's lifecycle status (or in-flight phase), verbatim from quay. */
+  status: string;
+  /** Human-language colour bucket derived from `status` (`red`/`green`/`amber`/`blue`/`gray`). */
+  color: string;
+  /** 1-based position in the view's spatial order; the short label `②` carries the same number. */
+  ordinal: number;
+  /** Where the object sits in the declaring tile's flow (top-left origin). */
+  pos: QuayObjectPos;
+};
+
+/**
+ * One focusable child of a rendered view, exactly the triple the view contract publishes:
+ * the `quay://` reference, the short spoken label (circled ordinal ①②③…), and the display
+ * attributes a spoken referent resolves against.
+ *
+ * It deliberately carries NO title, body or other object content: the reference is the
+ * payload, and content is read back by URI downstream (「送引用不送内容」).
+ */
+export type QuayFocusableObject = {
+  /** The L1 reference the input pack carries instead of the object's content. */
+  uri: QuayObjectUri;
+  /** The short spoken label — a circled ordinal (`①`, `②`, …) matching `display.ordinal`. */
+  label: string;
+  /** Status/colour/ordinal/position, so 「红的那个 / 第二个 / ② / 左上那个」 resolve without content. */
+  display: QuayObjectDisplay;
+};
+
+/**
+ * What a rendered view publishes so focus and voice input can address it: the focusable
+ * children, in spatial (reading) order. `QuayPanel` declares one for its In-flight tile;
+ * the voice input pack carries the same objects as references.
+ *
+ * Zooming into a focusable object replaces this contract with that object's own sub-view;
+ * zooming back out returns the parent contract. CloudCLI ships the declaration side first —
+ * the zoom navigation itself is the wall's later work.
+ */
+export type QuayViewContract = {
+  /** Focusable children, first-drawn first — the ordinal each item displays is its index + 1. */
+  focusables: QuayFocusableObject[];
+};
+
+// ---------------------------
+
 //----------------- QUAY FLEET SUMMARY ------------
 
 /**
