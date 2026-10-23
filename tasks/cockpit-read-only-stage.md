@@ -1,7 +1,7 @@
 ---
 id: cockpit-read-only-stage
 title: 驾驶舱 1/2：/cockpit 顶层只读舞台（项目条 + 视图描述 + 吸附焦点 + 确定性意图）
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
