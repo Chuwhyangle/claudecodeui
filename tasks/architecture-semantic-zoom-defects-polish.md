@@ -37,15 +37,15 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：新增用例用 0.4.0 渲染器对一个成员数超过显示上限的类实际渲染出的 SVG，断言上游溢出提示行不出现在成员列表里、读出的成员总数等于该行的 `(N members)`，以及一个只有溢出提示行而无其它成员的边界用例
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts` exit 0：新增用例覆盖构造型文字（按最小字号绘制且标题格高度随之增加，或放不下时被隐藏，两条路径各一个用例，屏幕字号永远不低于下限）、粘性包名只在自己的标签页矩形与视口不相交时出现、粘性标签避开类名文字矩形与提示条矩形、粘性标签完整落在视口内
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/canvasLayoutContract.test.tsx` exit 0：既有用例不回归；提示条与包标签页的屏幕矩形不相交
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：在 1440×765 与 390×844 两个视口、Quay OO 与 claudecodeui 两类夹具、65/46/33/17/6% 五档下，所有可见文字（含构造型文字与粘性标签）的屏幕字号 ≥ 下限；粘性标签与其所属包自己的标签页不同时可见；粘性标签矩形与任何可见类名文字矩形不相交；成员区文本里不含上游溢出行
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面新增的每条读数各配一个控制臂（关闭构造型字号规则、关闭粘性标签出现条件、关闭粘性避让、关闭溢出行剔除各一条），主臂与控制臂用同一读取函数，控制臂里对应读数必须变红
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：新增用例覆盖——成员显示时第二条分隔线位于最后一个属性行之下、第一个方法行之上且与所有成员行矩形不相交（含只有属性、只有方法、两者都有、属性行被「… +N more」截断四种）；一个置顶实体的夹具（节点最前面有徽标 `<text>`）读出的类名等于实体标签而不是 `📌`，且只产生一个徽标；`planEntityName` 的按实际宽度选择：615px 宽度下 `VoiceFrameProcessor` 取单行，宽度不足时取折两行，再不足取中间省略，标题格高度分别为单行高与两行高；函数、枚举节点的构造型文字字号不低于下限，函数节点只有一条规则
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（同上一条 e2e AC 的预算说明）：新增读数——任一显示成员文字的类框里，分隔线的屏幕矩形与所有成员文字矩形不相交；置顶一个实体后该实体的类名文字等于其标签且框内只有一个徽标；在宽度足够的框里类名只占一行
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面三条新读数各配控制臂（恢复按比例定位分隔线、恢复按第一个 `<text>` 读类名、恢复固定 130px 的单行 / 折行判定各一条），控制臂里对应读数必须变红
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：新增用例用 0.4.0 渲染器对一个成员数超过显示上限的类实际渲染出的 SVG，断言上游溢出提示行不出现在成员列表里、读出的成员总数等于该行的 `(N members)`，以及一个只有溢出提示行而无其它成员的边界用例
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts` exit 0：新增用例覆盖构造型文字（按最小字号绘制且标题格高度随之增加，或放不下时被隐藏，两条路径各一个用例，屏幕字号永远不低于下限）、粘性包名只在自己的标签页矩形与视口不相交时出现、粘性标签避开类名文字矩形与提示条矩形、粘性标签完整落在视口内
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx src/modules/architecture/tests/canvasLayoutContract.test.tsx` exit 0：既有用例不回归；提示条与包标签页的屏幕矩形不相交
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：在 1440×765 与 390×844 两个视口、Quay OO 与 claudecodeui 两类夹具、65/46/33/17/6% 五档下，所有可见文字（含构造型文字与粘性标签）的屏幕字号 ≥ 下限；粘性标签与其所属包自己的标签页不同时可见；粘性标签矩形与任何可见类名文字矩形不相交；成员区文本里不含上游溢出行
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面新增的每条读数各配一个控制臂（关闭构造型字号规则、关闭粘性标签出现条件、关闭粘性避让、关闭溢出行剔除各一条），主臂与控制臂用同一读取函数，控制臂里对应读数必须变红
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：新增用例覆盖——成员显示时第二条分隔线位于最后一个属性行之下、第一个方法行之上且与所有成员行矩形不相交（含只有属性、只有方法、两者都有、属性行被「… +N more」截断四种）；一个置顶实体的夹具（节点最前面有徽标 `<text>`）读出的类名等于实体标签而不是 `📌`，且只产生一个徽标；`planEntityName` 的按实际宽度选择：615px 宽度下 `VoiceFrameProcessor` 取单行，宽度不足时取折两行，再不足取中间省略，标题格高度分别为单行高与两行高；函数、枚举节点的构造型文字字号不低于下限，函数节点只有一条规则
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（同上一条 e2e AC 的预算说明）：新增读数——任一显示成员文字的类框里，分隔线的屏幕矩形与所有成员文字矩形不相交；置顶一个实体后该实体的类名文字等于其标签且框内只有一个徽标；在宽度足够的框里类名只占一行
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面三条新读数各配控制臂（恢复按比例定位分隔线、恢复按第一个 `<text>` 读类名、恢复固定 130px 的单行 / 折行判定各一条），控制臂里对应读数必须变红
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
