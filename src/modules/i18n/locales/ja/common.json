@@ -129,6 +129,7 @@
         "tierPackages": "パッケージ"
       },
       "explosion": "爆発ビュー",
+      "layoutProgress": "{{count}} 個のエンティティをレイアウト中…",
       "drillIn": "開く",
       "moreActions": "その他の操作",
       "touchHint": "ノードをタップして選択します。ドラッグで移動、ピンチでズームします。ダブルタップまたは「開く」で近傍を表示します。",
@@ -143,6 +144,7 @@
         "focusSummary": "読みやすいズームが有効です: {{package}} にフォーカス中（{{zoom}}%）— 「全体」を選ぶとグラフ全体を表示します（他 {{count}} パッケージ）。",
         "focusOnly": "読みやすいズームが有効です — 「全体」を選ぶとグラフ全体を表示します。",
         "overviewTooSmall": "全体グラフは {{zoom}}% — パッケージをタップして拡大",
+        "folded": "{{depth}} 階層に折りたたみました — パッケージをタップして拡大",
         "backToWhole": "全体グラフに戻る"
       },
       "minimap": {
@@ -281,7 +283,8 @@
       "mentionedHint": "種類が非表示でも表示したままにする",
       "mentionedToggleAria": "このセッションで言及、種類が非表示でも表示したまま",
       "mentionedInKind": "このセッションで {{count}} 件言及",
-      "showMentioned": "▸ 言及されたものを表示"
+      "showMentioned": "▸ 言及されたものを表示",
+      "reset": "↺ フィルターをリセット"
     },
     "scopeHygiene": {
       "summary": "スコープの整理",

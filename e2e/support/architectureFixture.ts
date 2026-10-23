@@ -50,6 +50,9 @@ export const ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER = 'architecture-canvas-lay
 /** A drawing whose class payload interleaves fields and methods. */
 export const ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED = 'architecture-canvas-layout-workspace-interleaved';
 
+/** The function-heavy workspace the "Show all" / folded-fit legs drive. */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS = 'architecture-canvas-layout-workspace-functions';
+
 /** Which project shape to write. */
 export type ArchitectureFixtureVariant =
   | 'quay-oo'
@@ -61,7 +64,13 @@ export type ArchitectureFixtureVariant =
   /** 150 classes: the `compact` band's upper edge. */
   | 'lossless-150'
   /** 600 classes: the layout budget's ceiling, and the largest text fixture. */
-  | 'lossless-600';
+  | 'lossless-600'
+  /**
+   * 384 FUNCTION entities in 108 deeply named packages: the shape "Show all"
+   * was reported on (a project whose drawing is mostly functions, the kind the
+   * shipped filter hides). See {@link buildFunctionEntities}.
+   */
+  | 'functions-384';
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
@@ -355,6 +364,69 @@ function losslessEntityCount(variant: ArchitectureFixtureVariant): number | null
 }
 
 /**
+ * The function-heavy fixture: the shape the "Show all" defect was reported on.
+ *
+ * WHY FUNCTIONS. The shipped filter hides the `function` kind, so this drawing
+ * is exactly the one "Show all" is FOR: before the click the canvas holds almost
+ * nothing (the twelve module-level seeds), after it a 396-box drawing. The
+ * relation preset must survive that click — the reported defect was that it
+ * silently moved from `+Dependencies` to `+Calls` at the same time.
+ *
+ * WHY 108 PACKAGES. The folded tier is chosen on the size of the PACKAGE-ONLY
+ * drawing, whose width is the sum of its tabs' minimum widths. That many packages
+ * with long directory names make that sum many canvases wide on a 1440×765
+ * screen — the state the reported 573-function project was in — which is what
+ * the folded tier exists to answer. Every function is chained to the next so
+ * none is isolated (the default filter would drop it before "Show all" could
+ * matter) and the drawing is one connected neighbourhood from any seed.
+ */
+function buildFunctionEntities(): FixtureEntity[] {
+  const entities: FixtureEntity[] = [];
+  for (let module = 0; module < 12; module += 1) {
+    // One CLASS per module: the shipped filter shows it, so the tab opens on a
+    // real drawing (an all-hidden payload would open on the empty state, and
+    // "Show all" would then have nothing to widen).
+    const moduleDir = `src/modules/module${String(module).padStart(2, '0')}`;
+    const serviceName = `Module${String(module).padStart(2, '0')}Service`;
+    entities.push({
+      id: `${moduleDir}/${serviceName}.ts.${serviceName}`,
+      name: serviceName,
+      file: `${moduleDir}/${serviceName}.ts`,
+      type: 'class',
+      isAbstract: false,
+      parents: [],
+      members: [],
+    });
+    // Eight units of four functions: 384 functions in 96 leaf packages. The
+    // package count is what the folded tier is measured on (the package-only
+    // drawing is as wide as its tabs' minimum widths), so breadth per module —
+    // not depth per unit — is the lever here.
+    for (let unit = 0; unit < 8; unit += 1) {
+      for (let step = 0; step < 4; step += 1) {
+        const index = entities.length;
+        const dir = `${moduleDir}/unit${String(unit)}`;
+        const name = `handleFrameBudgetStep${String(index).padStart(3, '0')}`;
+        entities.push({
+          id: `${dir}/${name}.ts.${name}`,
+          name,
+          file: `${dir}/${name}.ts`,
+          type: 'function',
+          isAbstract: false,
+          // EVERY function hangs off its module's class. That is what makes the
+          // whole 372-entity drawing reachable in ONE hop from the twelve class
+          // seeds: the server seeds identifiers from the session text under a
+          // hard cap (40), so a chain would leave most of the fixture outside
+          // the neighbourhood and the criterion would measure a 50-box drawing
+          // instead of the large one this fixture exists for.
+          parents: [`${moduleDir}/${serviceName}.ts.${serviceName}`],
+        });
+      }
+    }
+  }
+  return entities;
+}
+
+/**
  * The interleaved-member fixture: one class whose PAYLOAD members alternate
  * field → method → field → method, inside two packages.
  *
@@ -496,7 +568,9 @@ export function writeArchitectureFixture(
       ? buildPerimeterEntities()
       : variant === 'interleaved-members'
         ? buildInterleavedEntities()
-        : buildEntities(families, classMembers);
+        : variant === 'functions-384'
+          ? buildFunctionEntities()
+          : buildEntities(families, classMembers);
   const srcDir = path.join(workspaceDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
 
@@ -522,6 +596,12 @@ export function writeArchitectureFixture(
     // one seed would not necessarily reach the whole fixture, and the lossless
     // criteria need all `count` boxes drawn.
     ? entities.map((entity) => entity.name)
+    : variant === 'functions-384'
+    // ONLY the twelve module classes are named. The server caps identifier
+    // seeds (40), so naming all 372 would seed an arbitrary prefix of the list;
+    // naming the twelve hubs reaches every function in one hop instead, and the
+    // whole drawing exists BEFORE "Show all" so the click is the only change.
+    ? entities.filter((entity) => entity.type === 'class').map((entity) => entity.name)
     : variant === 'outer-perimeter'
     // EVERY entity is a seed: the class graph expands a bounded number of hops
     // from the mentioned names, and a chain seeded only at its head would be

@@ -129,6 +129,7 @@
         "tierPackages": "套件"
       },
       "explosion": "爆炸圖",
+      "layoutProgress": "正在排版 {{count}} 個實體…",
       "drillIn": "進入",
       "moreActions": "更多操作",
       "touchHint": "點按節點即可選取；拖曳可平移，雙指捏合可縮放。連點兩下或選擇「進入」可開啟其鄰域檢視。",
@@ -143,6 +144,7 @@
         "focusSummary": "可讀縮放已開啟：聚焦 {{package}}，目前 {{zoom}}% — 選「全貌」檢視整張圖（另有 {{count}} 個套件）。",
         "focusOnly": "可讀縮放已開啟 — 選「全貌」檢視整張圖。",
         "overviewTooSmall": "整圖縮小到 {{zoom}}%，點一個 package 放大檢視",
+        "folded": "已摺疊到 {{depth}} 層 — 點一個 package 放大檢視",
         "backToWhole": "返回全圖"
       },
       "minimap": {
@@ -281,7 +283,8 @@
       "mentionedHint": "即使該種類被隱藏也保持顯示工作階段中提及的",
       "mentionedToggleAria": "工作階段中提及的，即使該種類被隱藏也保持顯示",
       "mentionedInKind": "其中 {{count}} 個在工作階段中提及過",
-      "showMentioned": "▸ 顯示提及的"
+      "showMentioned": "▸ 顯示提及的",
+      "reset": "↺ 重設篩選"
     },
     "scopeHygiene": {
       "summary": "scope 清理",

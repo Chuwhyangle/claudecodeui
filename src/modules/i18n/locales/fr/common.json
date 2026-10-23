@@ -129,6 +129,7 @@
         "tierPackages": "Paquets"
       },
       "explosion": "Vue explosion",
+      "layoutProgress": "Calcul de la disposition de {{count}} entités…",
       "drillIn": "Ouvrir",
       "moreActions": "Plus d’actions",
       "touchHint": "Touchez un nœud pour le sélectionner ; faites glisser pour déplacer et pincez pour zoomer. Double-touchez ou choisissez « Ouvrir » pour afficher son voisinage.",
@@ -143,6 +144,7 @@
         "focusSummary": "Le zoom lisible est actif : focus sur {{package}} à {{zoom}} % — choisissez Vue d’ensemble pour voir tout le graphe ({{count}} autre(s) paquet(s)).",
         "focusOnly": "Le zoom lisible est actif — choisissez Vue d’ensemble pour voir tout le graphe.",
         "overviewTooSmall": "Graphe complet à {{zoom}} % — touchez un paquet pour zoomer",
+        "folded": "Réduit à {{depth}} niveaux — touchez un paquet pour zoomer",
         "backToWhole": "Retour au graphe complet"
       },
       "minimap": {
@@ -281,7 +283,8 @@
       "mentionedHint": "Les garder visibles même si leur type est masqué",
       "mentionedToggleAria": "mentionnées dans cette session, visibles même si leur type est masqué",
       "mentionedInKind": "{{count}} mentionnées dans cette session",
-      "showMentioned": "▸ Afficher les mentionnées"
+      "showMentioned": "▸ Afficher les mentionnées",
+      "reset": "↺ Réinitialiser les filtres"
     },
     "scopeHygiene": {
       "summary": "Nettoyage des scopes",

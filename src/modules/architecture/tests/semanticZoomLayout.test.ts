@@ -16,7 +16,11 @@ import {
   type SemanticTier,
   type SemanticZoomLayout,
 } from '@/modules/architecture/semanticZoomLayout';
-import { readSemanticDrawingGeometry } from '@/modules/architecture/semanticZoomRead';
+import {
+  readSemanticDrawingGeometry,
+  type SemanticNodeGeometry,
+  type SemanticPackageGeometry,
+} from '@/modules/architecture/semanticZoomRead';
 import { TWENTY_SIX_PACKAGE_HIERARCHY } from '@/modules/architecture/tests/layoutFixtures';
 
 /**
@@ -480,5 +484,230 @@ describe('the content boundary counts the relations that run outside the frames'
     const unit = solveSemanticZoom(perimeter, { scale: 1, forceTier: 'A', viewport: null });
     assert.ok(Math.abs(unit.content.width - identity.width) < 1e-6);
     assert.ok(Math.abs(unit.content.height - identity.height) < 1e-6);
+  });
+});
+
+/* ── the folded tier (D): a large drawing that C still cannot fit ─────────────────────────── */
+
+/**
+ * A synthetic drawing with the shape of the reported project: 576 entities
+ * under a FIVE-level package tree (6 roots → 2 → 2 → 2 → 2 = 96 leaf packages),
+ * drawn DENSELY — 4 800 × 2 000 drawing units for all 576 boxes.
+ *
+ * The density is the point. At the 5 % floor scale the package tabs' minimum
+ * widths (one per package) and the class boxes' minimum widths add up to far
+ * more than 5 % of the drawing, so the stretch budget is blown well past 1.8×
+ * and the engine descends to the package-only tier — the state the reported
+ * 573-function graph was in, where the mapped drawing was 4 415 px wide on a
+ * 1 151 px canvas.
+ *
+ * Five levels of NESTING (not six of breadth) is what makes the folded case
+ * observable: at the test canvas even the full tree's tabs fit in a few rows,
+ * so a fold is only exercised when the level count is what runs out of room.
+ */
+function deepWideGeometry(): SemanticDrawingGeometry {
+  const packages: SemanticPackageGeometry[] = [];
+  const nodes: SemanticNodeGeometry[] = [];
+  const edges: { source: string; target: string; points: { x: number; y: number }[]; bundleSize: number }[] = [];
+  const addNode = (id: string, rect: SemanticRect, seed: boolean): void => {
+    nodes.push({
+      id,
+      rect,
+      label: id.split('/').pop() ?? id,
+      kind: 'class',
+      stereotype: null,
+      members: [],
+      seed,
+      mentionTier: null,
+      titleHeight: 14,
+      attributesHeight: 0,
+      operationsHeight: 0,
+      ruleCount: 1,
+      titleRuleY: null,
+    });
+  };
+  const addPackage = (id: string, rect: SemanticRect): void => {
+    packages.push({
+      id,
+      rect,
+      rawLabel: id,
+      tabWidth: 40 + id.length * 2,
+      tabHeight: 18,
+      tabClosed: true,
+    });
+  };
+  let entityIndex = 0;
+  for (let root = 0; root < 6; root += 1) {
+    const rootX = root * 800;
+    addPackage(`root${root}`, { x: rootX, y: 0, width: 775, height: 1990 });
+    for (let first = 0; first < 2; first += 1) {
+      const firstX = rootX + 12 + first * 385;
+      addPackage(`root${root}/first${first}`, { x: firstX, y: 30, width: 370, height: 1940 });
+      for (let second = 0; second < 2; second += 1) {
+        const secondX = firstX + 10 + second * 180;
+        addPackage(`root${root}/first${first}/second${second}`, {
+          x: secondX, y: 55, width: 172, height: 1900,
+        });
+        for (let third = 0; third < 2; third += 1) {
+          const thirdX = secondX + 8 + third * 82;
+          addPackage(`root${root}/first${first}/second${second}/third${third}`, {
+            x: thirdX, y: 80, width: 78, height: 1860,
+          });
+          for (let leaf = 0; leaf < 2; leaf += 1) {
+            const leafY = 110 + leaf * 920;
+            const leafId = `root${root}/first${first}/second${second}/third${third}/leaf${leaf}`;
+            addPackage(leafId, { x: thirdX + 4, y: leafY, width: 70, height: 880 });
+            // Six entities per leaf: 96 leaves × 6 = 576 entities in total.
+            const leafIds: string[] = [];
+            for (let entity = 0; entity < 6; entity += 1) {
+              const column = entity % 2;
+              const row = Math.floor(entity / 2);
+              const id = `${leafId}/Entity${entityIndex}`;
+              addNode(
+                id,
+                { x: thirdX + 10 + column * 28, y: leafY + 30 + row * 60, width: 26, height: 20 },
+                // A spread-out minority is a mention, so the ★N badge has a real
+                // number to aggregate and not a zero that would pass vacuously.
+                entityIndex % 7 === 0,
+              );
+              leafIds.push(id);
+              entityIndex += 1;
+            }
+            for (let index = 1; index < leafIds.length; index += 1) {
+              edges.push({
+                source: leafIds[index - 1],
+                target: leafIds[index],
+                points: [{ x: 0, y: 0 }, { x: 10, y: 10 }],
+                bundleSize: 1,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+  return { width: 4_800, height: 2_000, nodes, packages, edges };
+}
+
+/** Whether `inner` sits inside `outer` (edges inclusive, with float slack). */
+function rectWithin(outer: SemanticRect, inner: SemanticRect): boolean {
+  const slack = 0.75;
+  return inner.x >= outer.x - slack
+    && inner.y >= outer.y - slack
+    && inner.x + inner.width <= outer.x + outer.width + slack
+    && inner.y + inner.height <= outer.y + outer.height + slack;
+}
+
+describe('the folded tier (D): C cannot fit, so the levels collapse', () => {
+  const CANVAS = { width: 900, height: 300 };
+  const deepScale = 0.05;
+  const deep = deepWideGeometry();
+
+  test('the fixture really is the shape the defect needs', () => {
+    assert.ok(deep.nodes.length >= 500, `the fixture draws ${deep.nodes.length} entities, needs ≥ 500`);
+    const tree = buildSemanticPackageTree(deep);
+    const deepest = tree.reduce((value, entry) => Math.max(value, entry.depth), 0);
+    assert.ok(deepest >= 3, `packages nest ${deepest + 1} levels deep, needs ≥ 4`);
+  });
+
+  test('C is still more than twice the canvas wide, and D answers it', () => {
+    // The state the reported canvas was in: the package-only map, measured.
+    const sparse = solveSemanticZoom(deep, { scale: deepScale, forceTier: 'C', viewport: CANVAS });
+    assert.ok(
+      sparse.content.width > CANVAS.width * 2,
+      `the C drawing must blow the 2× trigger; it is ${sparse.content.width} px against ${CANVAS.width}`,
+    );
+
+    const folded = solveSemanticZoom(deep, { scale: deepScale, viewport: CANVAS });
+    assert.equal(folded.tier, 'D');
+    assert.ok(folded.foldDepth !== null && folded.foldDepth >= 1, 'at least one level is kept');
+    assert.equal(folded.nodes.length, 0, 'the folded drawing draws no class box');
+    assert.equal(folded.edges.length, 0, 'and no relation');
+    for (const entry of folded.packages) {
+      assert.ok(
+        entry.depth < (folded.foldDepth as number),
+        `${entry.id} (depth ${entry.depth}) is deeper than the kept ${String(folded.foldDepth)} level(s)`,
+      );
+    }
+    // The rule the tier exists for: the whole map is at most 1.2 canvases.
+    assert.ok(
+      folded.content.width <= CANVAS.width * 1.2 + 0.5,
+      `the folded drawing is ${folded.content.width} px wide against a ${CANVAS.width} px canvas`,
+    );
+    assert.ok(
+      folded.content.height <= CANVAS.height * 1.2 + 0.5,
+      `the folded drawing is ${folded.content.height} px tall against a ${CANVAS.height} px canvas`,
+    );
+  });
+
+  test('a folded child’s entities and mentions are summed into its parent’s (N) and ★N', () => {
+    const folded = solveSemanticZoom(deep, { scale: deepScale, viewport: CANVAS });
+    assert.equal(folded.tier, 'D');
+    const drawnIds = new Set(folded.packages.map((entry) => entry.id));
+    let packagesWithFoldedDescendants = 0;
+    for (const entry of folded.packages) {
+      const original = deep.packages.find((candidate) => candidate.id === entry.id);
+      assert.ok(original !== undefined);
+      // Counted from the GEOMETRY, not from the engine: an entity belongs to
+      // this package when its own rect lies inside the package's original one,
+      // which is exactly "this subtree" for a nested tree.
+      const inside = deep.nodes.filter((candidate) => rectWithin(original.rect, candidate.rect));
+      const mentioned = inside.filter((candidate) => candidate.seed).length;
+      assert.equal(
+        entry.tab.count,
+        inside.length,
+        `${entry.id} must state the ${inside.length} entities of its whole subtree`,
+      );
+      assert.equal(entry.mentionedCount, mentioned);
+      if (mentioned > 0) {
+        assert.ok(
+          entry.tab.badge.includes(`★${mentioned}`),
+          `${entry.id} carries "${entry.tab.badge}", expected ★${mentioned}`,
+        );
+      }
+      // Did this frame really absorb a package the drawing no longer shows?
+      const subtree = buildSemanticPackageTree(deep).filter(
+        (candidate) => candidate.geometry.id !== entry.id
+          && rectWithin(original.rect, candidate.geometry.rect),
+      );
+      if (subtree.some((candidate) => !drawnIds.has(candidate.geometry.id))) {
+        packagesWithFoldedDescendants += 1;
+      }
+    }
+    assert.ok(
+      packagesWithFoldedDescendants > 0,
+      'at least one drawn package stands for children the fold removed',
+    );
+  });
+
+  test('a small drawing, and the same drawing at ≥ 90 %, keep the ordinary tiers', () => {
+    // ≥ 90 % is the identity map: nothing is ever folded there.
+    const zoomedIn = solveSemanticZoom(deep, { scale: 0.92, viewport: CANVAS });
+    assert.equal(zoomedIn.tier, 'A');
+    assert.equal(zoomedIn.foldDepth, null);
+
+    // A drawing a canvas can hold is never folded either, whatever its scale.
+    const small = solveSemanticZoom(geometry, { scale: 0.42, viewport: { width: 800, height: 600 } });
+    assert.notEqual(small.tier, 'D');
+    assert.equal(small.foldDepth, null);
+  });
+
+  test('the same input produces the same folded drawing', () => {
+    const digest = (layout: SemanticZoomLayout): unknown => ({
+      tier: layout.tier,
+      foldDepth: layout.foldDepth,
+      content: layout.content,
+      packages: layout.packages.map((entry) => ({
+        id: entry.id,
+        frame: entry.frame,
+        text: entry.tab.text,
+        badge: entry.tab.badge,
+        mentioned: entry.mentionedCount,
+      })),
+    });
+    assert.deepEqual(
+      digest(solveSemanticZoom(deep, { scale: deepScale, viewport: CANVAS })),
+      digest(solveSemanticZoom(deep, { scale: deepScale, viewport: CANVAS })),
+    );
   });
 });

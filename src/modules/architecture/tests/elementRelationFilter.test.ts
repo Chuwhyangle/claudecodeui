@@ -7,14 +7,16 @@ import {
   applyFilter,
   ARCHITECTURE_DEFAULT_FILTER,
   ARCHITECTURE_ELEMENT_KINDS,
-  ARCHITECTURE_SHOW_ALL_FILTER,
   filtersEqual,
   hiddenTotal,
   isFilterNarrower,
   isRelationAllowed,
   keptMentionedCount,
   relationsForPreset,
+  resetFilter,
+  showAllFilter,
   type ArchitectureElementRelationFilter,
+  type ArchitectureRelationPreset,
 } from '@/modules/architecture/elementRelationFilter';
 // The marker geometry lives beside its only consumer; this file pins it as a
 // pure function (the panel test proves the drawn dots follow it).
@@ -409,13 +411,18 @@ describe('the filter model’s own helpers', () => {
       true,
       'the switch list is a set too',
     );
-    assert.equal(filtersEqual(ARCHITECTURE_DEFAULT_FILTER, ARCHITECTURE_SHOW_ALL_FILTER), false);
+    assert.equal(
+      filtersEqual(ARCHITECTURE_DEFAULT_FILTER, showAllFilter(ARCHITECTURE_DEFAULT_FILTER)),
+      false,
+    );
   });
 
   it('counts the badge’s active decisions', () => {
     // Two hidden kinds + one non-call preset + the isolated toggle.
     assert.equal(activeFilterCount(ARCHITECTURE_DEFAULT_FILTER), 4);
-    assert.equal(activeFilterCount(ARCHITECTURE_SHOW_ALL_FILTER), 0);
+    // "Show all" leaves the relation preset in force, so the badge it lands on
+    // counts exactly that one surviving decision (and never 0 by accident).
+    assert.equal(activeFilterCount(showAllFilter(ARCHITECTURE_DEFAULT_FILTER)), 1);
     // A "keep mentioned" switch SHOWS more, so it is not a hiding decision: the
     // badge used to climb from 4 to 5 while the graph drew more entities.
     assert.equal(activeFilterCount(filterWith({ keepMentionedKinds: ['function'] })), 4);
@@ -424,7 +431,7 @@ describe('the filter model’s own helpers', () => {
 
   it('states the kept-mentioned switches as their own count, not as hiding', () => {
     assert.equal(keptMentionedCount(ARCHITECTURE_DEFAULT_FILTER), 0);
-    assert.equal(keptMentionedCount(ARCHITECTURE_SHOW_ALL_FILTER), 0);
+    assert.equal(keptMentionedCount(showAllFilter(ARCHITECTURE_DEFAULT_FILTER)), 0);
     assert.equal(keptMentionedCount(filterWith({ keepMentionedKinds: ['function'] })), 1);
     assert.equal(keptMentionedCount(filterWith({ keepMentionedKinds: ['class', 'function'] })), 2);
     // The two readings move in opposite directions: opening a switch raises the
@@ -433,6 +440,91 @@ describe('the filter model’s own helpers', () => {
     const opened = filterWith({ keepMentionedKinds: ['function'] });
     assert.equal(activeFilterCount(opened), activeFilterCount(closed));
     assert.equal(keptMentionedCount(opened), keptMentionedCount(closed) + 1);
+  });
+});
+
+describe('the two one-click actions: Show all and Reset filters', () => {
+  const canvasGraph: ArchitectureRendererGraph = {
+    nodes: [
+      node('a.Thing', 0, { kind: 'class' }),
+      node('d.Core', 1, { kind: 'class' }),
+      node('b.Helper', 1, { kind: 'function' }),
+      node('c.Lonely', 2, { kind: 'class' }),
+    ],
+    edges: [
+      edge('a.Thing', 'd.Core', 'dependency'),
+      edge('b.Helper', 'd.Core', 'dependency'),
+    ],
+  };
+
+  it('Show all changes the ELEMENT axis only — every kind, isolated kept, relation preset untouched', () => {
+    // The reported defect: "Show all" also reset the relation preset, so the
+    // drawer went from `+Dependencies` to `+Calls` with no announcement. One
+    // case per preset, because the rule has to hold from all three.
+    for (const relations of ['structural', 'dependency', 'call'] as ArchitectureRelationPreset[]) {
+      const before: ArchitectureElementRelationFilter = {
+        kinds: ['class'],
+        relations,
+        hideIsolated: true,
+        keepMentionedKinds: ['class'],
+      };
+      const after = showAllFilter(before);
+      assert.equal(after.relations, relations, `the ${relations} preset survives Show all`);
+      assert.deepEqual([...after.kinds], [...ARCHITECTURE_ELEMENT_KINDS], 'every kind is shown');
+      assert.equal(after.hideIsolated, false, 'isolated nodes are no longer cut');
+      assert.deepEqual(after.keepMentionedKinds, [], 'the keep-mentioned switches are moot and reset');
+      // The selection it was handed is untouched (a pure action, not a mutator).
+      assert.deepEqual([...before.kinds], ['class']);
+      assert.equal(before.hideIsolated, true);
+    }
+  });
+
+  it('Show all really does show the function and the isolated node it was hiding', () => {
+    // The shipped default hides the function by KIND and the isolated class by
+    // the isolated cut, so only the two connected structural entities remain.
+    const hidden = applyFilter(canvasGraph, ARCHITECTURE_DEFAULT_FILTER);
+    assert.deepEqual(hidden.nodes.map((entry) => entry.id), ['a.Thing', 'd.Core']);
+    assert.equal(hidden.hidden.byKind.function, 1);
+    assert.equal(hidden.hidden.isolated, 1);
+    const shown = applyFilter(canvasGraph, showAllFilter(ARCHITECTURE_DEFAULT_FILTER));
+    assert.deepEqual(
+      shown.nodes.map((entry) => entry.id),
+      ['a.Thing', 'd.Core', 'b.Helper', 'c.Lonely'],
+      'the function and the isolated class are drawn',
+    );
+    assert.equal(shown.edges.length, 2, 'the dependency edges survive the preset it kept');
+    assert.deepEqual(shown.hidden.byKind, {});
+    assert.deepEqual(shown.hidden.byRelation, {});
+    assert.equal(shown.hidden.isolated, 0);
+  });
+
+  it('Show all is a widening of the isolated toggle and the kinds, never of the preset', () => {
+    const before: ArchitectureElementRelationFilter = {
+      kinds: ['class'],
+      relations: 'structural',
+      hideIsolated: true,
+      keepMentionedKinds: [],
+    };
+    const after = showAllFilter(before);
+    assert.equal(isFilterNarrower(after, before), false, 'the panel must ask the server for it');
+    // …and the reverse is not a narrowing either: the preset is what the two
+    // selections share, so neither direction may move it.
+    assert.equal(after.relations, before.relations);
+  });
+
+  it('Reset filters is the project default, whatever the current selection is', () => {
+    assert.equal(filtersEqual(resetFilter(), ARCHITECTURE_DEFAULT_FILTER), true);
+    const wandered: ArchitectureElementRelationFilter = {
+      kinds: ['function'],
+      relations: 'call',
+      hideIsolated: false,
+      keepMentionedKinds: ['function'],
+    };
+    assert.equal(filtersEqual(resetFilter(), wandered), false);
+    assert.deepEqual([...resetFilter().kinds], [...ARCHITECTURE_DEFAULT_FILTER.kinds]);
+    assert.equal(resetFilter().relations, 'dependency');
+    assert.equal(resetFilter().hideIsolated, true);
+    assert.equal(activeFilterCount(resetFilter()), 4, 'the badge is back to the shipped four decisions');
   });
 });
 

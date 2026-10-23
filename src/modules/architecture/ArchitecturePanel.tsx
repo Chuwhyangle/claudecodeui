@@ -48,12 +48,13 @@ import {
   applyFilter,
   ARCHITECTURE_ELEMENT_KINDS,
   ARCHITECTURE_RELATION_PRESETS,
-  ARCHITECTURE_SHOW_ALL_FILTER,
   filtersEqual,
   hiddenTotal,
   isFilterNarrower,
   keptMentionedCount,
   relationsForPreset,
+  resetFilter,
+  showAllFilter,
   type ArchitectureElementRelationFilter,
   type ArchitectureRelationPreset,
 } from '@/modules/architecture/elementRelationFilter';
@@ -2111,6 +2112,20 @@ export default function ArchitecturePanel({
         <span aria-hidden="true">{filter.hideIsolated ? '☑' : '☐'}</span>
         {t('architecture.filter.isolated', { defaultValue: 'Hide isolated nodes' })}
       </button>
+
+      {/* The way back to this project's shipped selection. It lives in the
+          popover as well as in the readout row because the popover is where the
+          reader made the changes; a sequence of switches has no other one-click
+          undo, and the row is only drawn while something is hidden. */}
+      <button
+        type="button"
+        data-architecture-filter-reset="true"
+        onClick={() => changeFilter(resetFilter())}
+        style={compactTargetStyle}
+        className="mt-1 self-start rounded border border-border px-2 py-0.5 text-left text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        {t('architecture.filter.reset', { defaultValue: '↺ Reset filters' })}
+      </button>
     </div>
   );
 
@@ -3021,11 +3036,25 @@ export default function ArchitecturePanel({
           <button
             type="button"
             data-architecture-filter-show-all="true"
-            onClick={() => changeFilter(ARCHITECTURE_SHOW_ALL_FILTER)}
+            onClick={() => changeFilter(showAllFilter(filter))}
+            // Show all is about the ELEMENT axis: it shows every kind and keeps
+            // isolated nodes, and leaves the relation preset where the reader
+            // put it (see `showAllFilter`).
             style={compactTargetStyle}
             className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
           >
             {t('architecture.filter.showAll', { defaultValue: '▸ Show all' })}
+          </button>
+          <button
+            type="button"
+            data-architecture-filter-reset="true"
+            onClick={() => changeFilter(resetFilter())}
+            // The way back from a sequence of switches that no reader can
+            // reconstruct from memory: one click, the project's shipped default.
+            style={compactTargetStyle}
+            className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            {t('architecture.filter.reset', { defaultValue: '↺ Reset filters' })}
           </button>
         </div>
       )}

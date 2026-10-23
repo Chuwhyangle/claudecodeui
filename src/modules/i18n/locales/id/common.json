@@ -129,6 +129,7 @@
         "tierPackages": "Paket"
       },
       "explosion": "Tampilan ledakan",
+      "layoutProgress": "Menyusun tata letak {{count}} entitas…",
       "drillIn": "Buka",
       "moreActions": "Tindakan lainnya",
       "touchHint": "Ketuk simpul untuk memilihnya; seret untuk menggeser dan cubit untuk memperbesar. Ketuk dua kali atau pilih “Buka” untuk membuka tetangganya.",
@@ -143,6 +144,7 @@
         "focusSummary": "Zoom terbaca aktif: fokus pada {{package}} di {{zoom}}% — pilih Ikhtisar untuk melihat seluruh grafik ({{count}} paket lain).",
         "focusOnly": "Zoom terbaca aktif — pilih Ikhtisar untuk melihat seluruh grafik.",
         "overviewTooSmall": "Grafik keseluruhan pada {{zoom}}% — ketuk sebuah paket untuk memperbesar",
+        "folded": "Diringkas menjadi {{depth}} tingkat — ketuk paket untuk memperbesar",
         "backToWhole": "Kembali ke grafik keseluruhan"
       },
       "minimap": {
@@ -281,7 +283,8 @@
       "mentionedHint": "Tetap tampilkan meskipun jenisnya disembunyikan",
       "mentionedToggleAria": "disebut dalam sesi ini, tetap tampil meskipun jenisnya disembunyikan",
       "mentionedInKind": "{{count}} disebut dalam sesi ini",
-      "showMentioned": "▸ Tampilkan yang disebut"
+      "showMentioned": "▸ Tampilkan yang disebut",
+      "reset": "↺ Atur ulang filter"
     },
     "scopeHygiene": {
       "summary": "Pembersihan scope",

@@ -7,6 +7,7 @@ import type { APIRequestContext, Browser, BrowserContext, Page } from '@playwrig
 import {
   ARCHITECTURE_FIXTURE_WORKSPACE,
   ARCHITECTURE_FIXTURE_WORKSPACE_CUI,
+  ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS,
   ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED,
   ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER,
   writeArchitectureFixture,
@@ -139,6 +140,15 @@ const SEL = {
   zoomLevel: '[data-architecture-zoom-level]',
   readableHint: '[data-architecture-readable-hint]',
   readableBack: '[data-architecture-readable-back]',
+  // The filter drawer: the disclosure, its menu, and the two readings this
+  // criterion takes from it (the relation preset, and the "Show all" action).
+  filterToggle: '[data-architecture-filter-toggle]',
+  filterMenu: '[data-architecture-filter-menu]',
+  relationDependency: '[data-architecture-filter-relation="dependency"]',
+  relationCall: '[data-architecture-filter-relation="call"]',
+  filterShowAll: '[data-architecture-filter-show-all]',
+  // The on-canvas zoom cluster's Fit control.
+  zoomFit: '[data-architecture-zoom-fit]',
 } as const;
 
 /* ── the server's own faces ────────────────────────────────────────────────────────────────── */
@@ -2454,6 +2464,9 @@ let cuiFixture: ArchitectureFixtureReading | null = null;
 let perimeterSessionId = '';
 let perimeterFixture: ArchitectureFixtureReading | null = null;
 let interleavedSessionId = '';
+/** The function-heavy fixture the Show-all / folded-fit legs drive. */
+let functionsSessionId = '';
+let functionsFixture: ArchitectureFixtureReading | null = null;
 let interleavedFixture: ArchitectureFixtureReading | null = null;
 
 test.beforeAll(async () => {
@@ -2476,6 +2489,8 @@ test.beforeAll(async () => {
   perimeterFixture = writeArchitectureFixture(perimeterWorkspace, { variant: 'outer-perimeter' });
   const interleavedWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED);
   interleavedFixture = writeArchitectureFixture(interleavedWorkspace, { variant: 'interleaved-members' });
+  const functionsWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS);
+  functionsFixture = writeArchitectureFixture(functionsWorkspace, { variant: 'functions-384' });
 
   const bootstrap = await request.newContext({ baseURL });
   token = await createAccount(bootstrap);
@@ -2514,6 +2529,15 @@ test.beforeAll(async () => {
     interleavedUserText,
     interleavedFixture.seedIdentifiers[0],
   );
+  const functionsUserText =
+    'Please review the frame budget pipeline. '
+    + `Start at ${functionsFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
+  functionsSessionId = await armScenario(
+    api,
+    functionsWorkspace,
+    functionsUserText,
+    functionsFixture.seedIdentifiers[0],
+  );
   await api.dispose();
 
   console.log(`[architecture-layout] fixture.entities=${fixture.entityTotal} variant=${fixture.variant}`);
@@ -2528,6 +2552,9 @@ test.beforeAll(async () => {
   console.log(`[architecture-layout] interleaved.entities=${interleavedFixture.entityTotal} variant=${interleavedFixture.variant}`);
   console.log(`[architecture-layout] interleaved.workspace=${interleavedWorkspace}`);
   console.log(`[architecture-layout] interleaved.session=${interleavedSessionId}`);
+  console.log(`[architecture-layout] functions.entities=${functionsFixture.entityTotal} variant=${functionsFixture.variant}`);
+  console.log(`[architecture-layout] functions.workspace=${functionsWorkspace}`);
+  console.log(`[architecture-layout] functions.session=${functionsSessionId}`);
 });
 
 /* ── lossless text: one reading, two arms ────────────────────────────────────────────────── */
@@ -4458,6 +4485,297 @@ test('main arm — the tray attachment carries the same complete PlantUML', asyn
     // Restore the interaction state this case created: no selection, no tray.
     await page.locator('[data-architecture-tray-clear]').click();
     await expect(page.locator('[data-architecture-tray-root]')).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+/* ── "Show all" and the folded fit on a function-heavy graph ───────────────────────────────── */
+
+/**
+ * Open the Filter drawer, read the relation preset it states, and close it
+ * again (the drawer floats over the canvas; leaving it open would sit on the
+ * geometry the next reading measures).
+ *
+ * The preset is read from the radios' own `aria-checked`, the same attribute a
+ * screen reader gets, so "the preset did not move" is measured on the control
+ * the reader sees rather than on an internal value.
+ */
+async function readRelationPreset(page: Page): Promise<{ preset: string | null; callChecked: boolean }> {
+  const toggle = page.locator(SEL.filterToggle).first();
+  await toggle.click();
+  const menu = page.locator(SEL.filterMenu).first();
+  await expect(menu).toBeVisible({ timeout: 10_000 });
+  const dependencyChecked = (await page.locator(SEL.relationDependency).first().getAttribute('aria-checked')) === 'true';
+  const callChecked = (await page.locator(SEL.relationCall).first().getAttribute('aria-checked')) === 'true';
+  await toggle.click();
+  await expect(menu).toHaveCount(0, { timeout: 10_000 });
+  return { preset: dependencyChecked ? 'dependency' : callChecked ? 'call' : null, callChecked };
+}
+
+/** The canvas' own scroll geometry against its content box, plus the fold it is in. */
+type FitGeometry = {
+  readonly scrollWidth: number;
+  readonly clientWidth: number;
+  readonly scrollHeight: number;
+  readonly clientHeight: number;
+  readonly foldDepth: number | null;
+  readonly zoomScale: number | null;
+  readonly zoomLevelText: string;
+  readonly hintText: string;
+  readonly visibleNodes: number | null;
+  readonly hiddenTotal: number | null;
+};
+
+const readFitGeometry = (page: Page): Promise<FitGeometry> => page.evaluate((sel) => {
+  const host = document.querySelector(sel.host);
+  const root = document.querySelector(sel.graphRoot);
+  const number = (value: string | null | undefined): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  return {
+    scrollWidth: host?.scrollWidth ?? 0,
+    clientWidth: host?.clientWidth ?? 0,
+    scrollHeight: host?.scrollHeight ?? 0,
+    clientHeight: host?.clientHeight ?? 0,
+    foldDepth: number(root?.getAttribute('data-architecture-fold-depth')),
+    zoomScale: number(root?.getAttribute('data-architecture-zoom-scale')),
+    zoomLevelText: document.querySelector(sel.zoomLevel)?.textContent?.trim() ?? '',
+    hintText: document.querySelector(sel.readableHint)?.textContent?.trim() ?? '',
+    visibleNodes: number(root?.getAttribute('data-architecture-visible-nodes')),
+    hiddenTotal: number(
+      document.querySelector('[data-architecture-filter-hidden]')?.getAttribute('data-architecture-filter-hidden'),
+    ),
+  };
+}, SEL);
+
+/**
+ * Open the CLASS (entity) drawing.
+ *
+ * The element/relation filter — and therefore "Show all" — only exists on the
+ * entity graph: a file has no kind. The tab opens on the file view, so both arms
+ * switch first and wait for the entity payload to be drawn.
+ */
+async function openEntityDrawing(page: Page): Promise<void> {
+  const option = page.locator(SEL.viewEntity).first();
+  await expect(option, 'the panel must offer the class (entity) granularity').toHaveCount(1, { timeout: 20_000 });
+  await option.click();
+  await settle(page, 800);
+}
+
+/** Wait until the tab has drawn the graph this session's fixture describes. */
+async function waitForSavedDrawing(page: Page): Promise<void> {
+  await page.waitForFunction(
+    (sel) => {
+      const root = document.querySelector(sel.graphRoot);
+      return root !== null && Number(root.getAttribute('data-architecture-visible-nodes') ?? '0') > 0;
+    },
+    SEL,
+    { timeout: 60_000 },
+  );
+  await settle(page, 600);
+}
+
+test('main arm — Show all keeps the relation preset, and Fit holds the whole function graph (1440x765)', async ({ browser }) => {
+  // This case lays out a 360-box drawing TWICE (once to widen, once to fit), on
+  // a real ELK main thread: the file's 60 s default is a small graph's budget.
+  test.setTimeout(180_000);
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, functionsSessionId);
+    await waitForSavedDrawing(page);
+    await openEntityDrawing(page);
+
+    // The shipped relation preset, before anything is clicked.
+    const before = await readRelationPreset(page);
+    expect(before.preset, 'the tab opens on the shipped +Dependencies preset').toBe('dependency');
+    const beforeFit = await readFitGeometry(page);
+    expect(
+      beforeFit.hiddenTotal,
+      'the function kind is hidden, so the readout offers the "Show all" this criterion drives',
+    ).toBeGreaterThan(0);
+
+    // Watch for the layout status from BEFORE the click: the reading is "how
+    // soon after the reader asked did the canvas say it was laying out", which
+    // is the whole point of the notice (17.6 s of silence was the defect).
+    await page.evaluate(() => {
+      const state = window as unknown as { __layoutStatusAt: number | null; __layoutStatusText: string | null };
+      state.__layoutStatusAt = null;
+      state.__layoutStatusText = null;
+      const observer = new MutationObserver(() => {
+        if (state.__layoutStatusAt !== null) return;
+        const node = document.querySelector('[data-architecture-layout-status]');
+        if (node !== null) {
+          state.__layoutStatusAt = performance.now();
+          state.__layoutStatusText = node.textContent?.trim() ?? null;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+    const showAllClickedAt = await page.evaluate(() => performance.now());
+
+    // "Show all" — the element axis widens; the relation axis must not move.
+    await page.locator(SEL.filterShowAll).first().click();
+    // The widened drawing is a new layout of 396 boxes on the main thread: wait
+    // for the renderer to report it rather than for a fixed delay.
+    await page.waitForFunction(
+      (sel) => Number(document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-visible-nodes') ?? '0') > 300,
+      SEL,
+      { timeout: 120_000 },
+    );
+    await settle(page, 1_200);
+
+    const after = await readRelationPreset(page);
+    expect(
+      after.preset,
+      'Show all shows every KIND; it must leave the relation preset exactly where the reader had it',
+    ).toBe('dependency');
+    expect(after.callChecked, 'the +Calls preset must not be switched on behind the reader\'s back').toBe(false);
+
+    const widened = await readFitGeometry(page);
+    expect(widened.visibleNodes, 'the widened drawing really holds the function boxes').toBeGreaterThan(300);
+    const statusReading = await page.evaluate(() => {
+      const state = window as unknown as { __layoutStatusAt: number | null; __layoutStatusText: string | null };
+      return { at: state.__layoutStatusAt, text: state.__layoutStatusText };
+    });
+    console.log(
+      `[architecture-layout] layoutStatus.firstSeen=`
+        + `${statusReading.at === null ? 'never' : `${Math.round(statusReading.at - showAllClickedAt)}ms after the Show all click`} `
+        + `text=${JSON.stringify(statusReading.text)}`,
+    );
+
+    // Fit must put the WHOLE drawing in the canvas: no scroll bar on either axis.
+    await page.locator(SEL.zoomFit).first().click();
+    await settle(page, 800);
+    const fitted = await readFitGeometry(page);
+    console.log(`[architecture-layout] functions.fitted=${JSON.stringify(fitted)}`);
+    expect(
+      fitted.scrollWidth,
+      `after Fit the drawing must not scroll horizontally: ${fitted.scrollWidth} > ${fitted.clientWidth} + 2`,
+    ).toBeLessThanOrEqual(fitted.clientWidth + 2);
+    expect(
+      fitted.scrollHeight,
+      `after Fit the drawing must not scroll vertically: ${fitted.scrollHeight} > ${fitted.clientHeight} + 2`,
+    ).toBeLessThanOrEqual(fitted.clientHeight + 2);
+    // The hint states what the reader is looking at: the collapse, not a
+    // percentage over a drawing several canvases wide.
+    if (fitted.foldDepth !== null) {
+      expect(fitted.hintText, 'the folded tier explains itself').toMatch(/Collapsed to \d+ level/);
+      expect(fitted.hintText, 'and never claims to be the whole graph at a percentage').not.toMatch(/Whole graph/);
+    }
+
+    await page.screenshot({ path: 'tmp/show-all-fitted-pc.png', fullPage: false });
+
+    // ── Reset filters: one click back to the project's shipped selection ──────
+    // The popover carries the action unconditionally; the readout row offers it
+    // only while something is hidden (after "Show all" on this fixture nothing
+    // is, because there are no `call` edges for the kept preset to hide).
+    await page.locator(SEL.filterToggle).first().click();
+    const menu = page.locator(SEL.filterMenu).first();
+    await expect(menu).toBeVisible({ timeout: 10_000 });
+    const resetButton = menu.locator('[data-architecture-filter-reset]').first();
+    await expect(resetButton, 'the filter drawer offers the way back from the widened filter').toHaveCount(1);
+    await resetButton.click();
+    await settle(page, 800);
+    await page.locator(SEL.filterToggle).first().click();
+    await expect(menu).toHaveCount(0, { timeout: 10_000 });
+    const reset = await readRelationPreset(page);
+    expect(reset.preset, 'Reset filters keeps the preset it restores (the shipped dependency one)').toBe('dependency');
+    const afterReset = await readFitGeometry(page);
+    expect(
+      afterReset.hiddenTotal,
+      'after Reset filters the shipped element cut is back in force (the functions are hidden again)',
+    ).toBeGreaterThan(0);
+    await page.screenshot({ path: 'tmp/show-all-reset-pc.png', fullPage: false });
+
+    const elapsed = Date.now() - RUN_STARTED_AT;
+    console.log(`[architecture-layout] elapsed=${elapsed}ms`);
+  } finally {
+    await context.close();
+  }
+});
+
+test('control arm — restoring the shipped Show-all defect moves the preset, and an unfolded drawing overflows Fit', async ({ browser }) => {
+  // Same 360-box drawing as the main arm, so the same raised budget applies.
+  test.setTimeout(180_000);
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, functionsSessionId);
+    await waitForSavedDrawing(page);
+    await openEntityDrawing(page);
+
+    // ── arm A: the relation-preset reading can read RED ──────────────────────
+    // The same reading, on a page where the shipped defect is reproduced: put
+    // the preset where the old "Show all" silently left it (`+Calls`) and read
+    // the SAME function that asserts "dependency" in the main arm.
+    await page.locator(SEL.filterToggle).first().click();
+    await expect(page.locator(SEL.filterMenu).first()).toBeVisible({ timeout: 10_000 });
+    await page.locator(SEL.relationCall).first().click();
+    await page.locator(SEL.filterToggle).first().click();
+    await expect(page.locator(SEL.filterMenu).first()).toHaveCount(0);
+    const redPreset = await readRelationPreset(page);
+    expect(
+      redPreset.preset,
+      'the reading the main arm relies on must go red when the preset is moved — otherwise it proves nothing',
+    ).toBe('call');
+    expect(redPreset.callChecked).toBe(true);
+    expect(redPreset.preset === 'dependency').toBe(false);
+
+    // Put the preset back so the rest of the page is the shipped one.
+    await page.locator(SEL.filterToggle).first().click();
+    await expect(page.locator(SEL.filterMenu).first()).toBeVisible({ timeout: 10_000 });
+    await page.locator(SEL.relationDependency).first().click();
+    await page.locator(SEL.filterToggle).first().click();
+    expect((await readRelationPreset(page)).preset).toBe('dependency');
+
+    // ── arm B: the fit reading can read RED ("the folded tier switched off") ──
+    // The state the folded tier exists to prevent — the package-only drawing as
+    // wide as the ORIGINAL one — is reproduced here by widening the SVG the
+    // canvas is showing. That is the same failure the tier removes: with the
+    // fold off, nothing re-packs the package frames, so the drawing keeps the
+    // original extent and Fit can only crop it. The SAME reading that asserts
+    // "no horizontal scroll" in the main arm must then read the overflow.
+    await page.locator(SEL.zoomFit).first().click();
+    await settle(page, 600);
+    const green = await readFitGeometry(page);
+    expect(green.scrollWidth, 'baseline: the fitted drawing does not scroll').toBeLessThanOrEqual(green.clientWidth + 2);
+
+    await page.evaluate((sel) => {
+      const svg = document.querySelector(sel.host)?.querySelector('svg');
+      if (svg === null) throw new Error('the canvas has no drawing to widen');
+      svg.setAttribute('data-control-arm-width', svg.getAttribute('width') ?? '');
+      svg.setAttribute('width', String(Math.round((document.querySelector(sel.host)?.clientWidth ?? 100) * 4)));
+    }, SEL);
+    await settle(page, 300);
+    const red = await readFitGeometry(page);
+    expect(
+      red.scrollWidth,
+      'control arm B: a drawing four canvases wide must read as a horizontal overflow',
+    ).toBeGreaterThan(red.clientWidth + 2);
+
+    await page.evaluate((sel) => {
+      const svg = document.querySelector(sel.host)?.querySelector('svg');
+      if (svg === null) return;
+      svg.setAttribute('width', svg.getAttribute('data-control-arm-width') ?? '');
+      svg.removeAttribute('data-control-arm-width');
+    }, SEL);
+    await settle(page, 300);
+    const restored = await readFitGeometry(page);
+    expect(
+      restored.scrollWidth,
+      'control arm B: removing the injection must put the reading back on the passing side',
+    ).toBeLessThanOrEqual(restored.clientWidth + 2);
+    await page.screenshot({ path: 'tmp/show-all-control-arm-restored.png', fullPage: false });
   } finally {
     await context.close();
   }

@@ -77,6 +77,7 @@ import {
   createSvgViewport,
   fitPlacementAvoidingCorners,
   fitZoomScale,
+  applyZoomScale,
   measureViewportSize,
   MIN_READABLE_ZOOM_SCALE,
   MIN_USEFUL_OVERVIEW_SCALE,
@@ -205,6 +206,68 @@ const NAV_FOCUS_CLASS = 'arch-nav-focus';
 const NAV_DOM_ID_PREFIX = 'arch-nav-';
 /** How far the focus ring sits outside the box, in SVG user units. */
 const NAV_RING_GAP = 2;
+
+/**
+ * The layout cost, per entity, a drawing with NO measured sample is assumed to
+ * pay. Calibrated on the reported project (573 functions in 17.6 s ≈ 31 ms per
+ * entity on this machine), rounded DOWN on purpose: the estimate only decides
+ * whether to say "laying out", and a false positive costs the reader a status
+ * line for the length of a fast layout, while a false negative leaves a
+ * 17-second blank canvas unexplained.
+ */
+const LAYOUT_MS_PER_ENTITY_FALLBACK = 4;
+
+/**
+ * How long a layout is expected to take before the canvas says so. Below this
+ * the status would flash and be noise; above it the reader has time to wonder
+ * whether the click did anything.
+ */
+const LAYOUT_STATUS_THRESHOLD_MS = 1000;
+
+/** One measured layout of a drawing kind: how many entities, and how long ELK took. */
+type LayoutSample = { readonly nodes: number; readonly ms: number };
+
+/**
+ * The expected duration of a layout of `nodes` entities, from the entity count
+ * and the LAST layout of the same drawing kind (`sample`).
+ *
+ * Both inputs matter: a project whose drawings are consistently slow shows the
+ * status earlier than its entity count alone would suggest, and a fast one
+ * never hides a genuinely slow layout behind a low sample. The measured
+ * per-entity cost is therefore used only when it is ABOVE the shipped floor —
+ * a sample from a small, fast drawing must not talk the canvas out of
+ * announcing a large one.
+ */
+export function estimateLayoutMs(nodes: number, sample: LayoutSample | null): number {
+  if (!Number.isFinite(nodes) || nodes <= 0) return 0;
+  const measured = sample !== null && sample.nodes > 0 && Number.isFinite(sample.ms)
+    ? sample.ms / sample.nodes
+    : 0;
+  return nodes * Math.max(measured, LAYOUT_MS_PER_ENTITY_FALLBACK);
+}
+
+/**
+ * Resolve after the browser has had the chance to PAINT what React just
+ * committed.
+ *
+ * The layout this guards is one blocking call on the main thread: once it
+ * starts, nothing — not a status line, not an animation — can be committed or
+ * painted until it returns. The status must therefore be in the document and
+ * on screen BEFORE the layout is entered, which is what the frame + task pair
+ * here buys: the frame callback runs after the commit, and the timeout yields
+ * to the paint that follows it.
+ */
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      setTimeout(resolve, 0);
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      setTimeout(resolve, 0);
+    });
+  });
+}
 
 /**
  * The id `aria-activedescendant` names. Derived from the cursor id alone, so the
@@ -674,6 +737,15 @@ export function PlantUmlGraph({
    * element as before.
    */
   const naturalOfDrawing = useCallback((drawing: SVGSVGElement | null): SvgViewportSize | null => {
+    // The folded tier is the exception the rule above does not cover: its
+    // packed drawing is NOT the original geometry times a scale (`x`/`y` are
+    // identity maps), so measuring a fit against the original bounds would ask
+    // for a scale of a fraction of a percent and then render the fold at 1:1
+    // anyway. Here the drawing on screen IS its own natural size.
+    const folded = appliedLayoutRef.current;
+    if (folded !== null && folded.foldDepth !== null) {
+      return { width: Math.max(1, folded.content.width), height: Math.max(1, folded.content.height) };
+    }
     const semanticBase = viewportRef.current?.semanticBaseSize() ?? null;
     if (semanticBase !== null) return semanticBase;
     return drawing === null ? null : readSvgNaturalSize(drawing);
@@ -909,6 +981,37 @@ export function PlantUmlGraph({
   // that are not semantically zoomed (the grouped file overview).
   const semanticCaptureRef = useRef<SemanticCapture | null>(null);
   const semanticTierRef = useRef<SemanticTier | null>(null);
+  /**
+   * The last layout's cost per drawing KIND (`entity` / `file`), keyed by the
+   * id shape. The status estimate reads the sample of the kind it is about to
+   * lay out: class boxes and file boxes cost different amounts, and a file
+   * drawing's 200-node sample must not predict a class drawing's 500.
+   */
+  const layoutSamplesRef = useRef<Map<string, LayoutSample>>(new Map());
+  /**
+   * How many entities the layout in progress holds, or `null` when no layout is
+   * running. Essential state, not a derived reading: it is written BEFORE the
+   * blocking ELK call and cleared after it, and nothing in the render output
+   * can reconstruct "a layout this size is running right now".
+   */
+  const [layoutStatusNodes, setLayoutStatusNodes] = useState<number | null>(null);
+  /**
+   * The adaptation in force for the drawing on screen, when it differs from the
+   * reader's zoom: the factor the map had to be shown at so the whole thing is
+   * visible, and (for the folded tier) how many package levels it kept. `null`
+   * when the drawing is shown at its own semantic size.
+   *
+   * This is state, not a derived value: the factor is computed from the canvas
+   * the layout was measured against, which nothing in the render output records.
+   */
+  const [drawnFit, setDrawnFit] = useState<{ readonly factor: number; readonly foldDepth: number | null } | null>(null);
+  /**
+   * Set by the Fit control so the next settled-zoom pass knows the reader asked
+   * for a WHOLE drawing, not merely a new zoom level: only then may the map be
+   * shrunk to the canvas (see `applySemanticLayout`). A ref, because it is a
+   * one-shot instruction consumed by an effect that runs on a later frame.
+   */
+  const fitRequestedRef = useRef(false);
   // The last layout applied to the captured drawing, plus the font it was
   // planned at. The scroll listener re-reads them to keep the sticky package
   // names at the viewport's top edge as the reader pans.
@@ -929,6 +1032,59 @@ export function PlantUmlGraph({
   // re-reads its boxes instead of blitting the previous scale's bitmap.
   const [drawnRevision, setDrawnRevision] = useState(0);
 
+  /**
+   * Write one semantic layout onto the captured drawing, INCLUDING the folded
+   * tier's omissions, and answer the factor the drawing had to be shown at.
+   *
+   * `drawSemanticLayout` draws the frames it is given and hides the class boxes
+   * it is not; the folded tier also drops whole sub-packages and every relation,
+   * and it owns the drawing's final size (`C`'s package-only map is one drawing,
+   * `D`'s packed grid is another). Those three consequences live here rather
+   * than in the DOM writer because they are the CALLER's view of the layout, and
+   * because the drawing helper must stay one pure application of one layout.
+   *
+   * `fitToCanvas` is what the reader asked for with the Fit control, and what the
+   * folded tier always needs: the semantic map is drawn 1:1 from its own extent,
+   * and the map's own stretch can leave it a few per cent (or, before the fold,
+   * several canvases) larger than the box. When it is set, the drawing is shown
+   * at the REAL adaptation `min(1, canvas ÷ content)` — the size it takes for the
+   * whole map to be visible — and that factor is what the toolbar prints. The
+   * folded tier cannot honour a 1:1 claim at all when even its least-folded grid
+   * misses the canvas, so it always takes the factor.
+   */
+  const applySemanticLayout = useCallback((
+    host: HTMLElement,
+    capture: SemanticCapture,
+    layout: SemanticZoomLayout,
+    fontPx: number,
+    fitToCanvas: boolean,
+  ): number => {
+    drawSemanticLayout(host, capture, layout, fontPx);
+    const folded = layout.foldDepth !== null;
+    if (folded) {
+      const drawnPackages = new Set(layout.packages.map((entry) => entry.id));
+      for (const group of host.querySelectorAll('.uml-package[data-package-id]')) {
+        if (!drawnPackages.has(group.getAttribute('data-package-id') ?? '')) {
+          (group as SVGGElement).style.display = 'none';
+        }
+      }
+      // The folded tier draws packages only: the entity relations were mapped
+      // for a geometry that no longer exists.
+      for (const group of host.querySelectorAll('.uml-edge[data-edge-source]')) {
+        (group as SVGGElement).style.display = 'none';
+      }
+    }
+    if (!folded && !fitToCanvas) return 1;
+    const box = measureViewportSize(host);
+    const width = Math.max(1, layout.content.width);
+    const height = Math.max(1, layout.content.height);
+    const fit = box === null
+      ? 1
+      : Math.min(1, box.width / width, box.height / height);
+    if (fit < 0.999) applyZoomScale(capture.svg, fit);
+    return fit;
+  }, []);
+
   // Re-evaluate the semantic layout after the zoom settles; the previous tier
   // is passed so the 8 % dead band applies at the boundary.
   const applyLod = useCallback((scale: number): void => {
@@ -945,12 +1101,20 @@ export function PlantUmlGraph({
     semanticTierRef.current = layout.tier;
     appliedLayoutRef.current = layout;
     appliedFontRef.current = coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
-    drawSemanticLayout(
+    // A Fit the reader pressed is answered HERE, once this layout is on screen:
+    // the flag is consumed so a later ambient zoom never inherits it.
+    const fitting = fitRequestedRef.current;
+    fitRequestedRef.current = false;
+    const drawnFactor = applySemanticLayout(
       host,
       capture,
       layout,
       coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX,
+      fitting,
     );
+    setDrawnFit(drawnFactor < 0.999 || layout.foldDepth !== null
+      ? { factor: drawnFactor, foldDepth: layout.foldDepth }
+      : null);
     // A rewritten SVG is a fresh set of elements: re-pin the selection and the
     // unselectable declaration, exactly as the render effect does.
     applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
@@ -988,7 +1152,7 @@ export function PlantUmlGraph({
     // behind (the defect this task fixes).
     drawStickyLabels(host, layout, appliedFontRef.current);
     positionOverviewHint(host);
-  }, []);
+  }, [applySemanticLayout]);
   applyLodRef.current = applyLod;
   // One controller per mount: it survives the renderer replacing the SVG (each
   // render re-attaches), so the mode and scale outlive a single drawing.
@@ -1325,6 +1489,26 @@ export function PlantUmlGraph({
         // thread); its duration is the DoD's per-view reading. `renderDetailed`
         // runs the same pipeline but hands back the model that was actually
         // drawn, which the text page serializes (see `onDrawnPlantUmlChange`).
+        //
+        // The layout cannot be interrupted or progressed: once it starts, the
+        // main thread belongs to ELK until it returns. So the reading it is
+        // ABOUT to cost (this drawing's entity count times the last layout of
+        // the same kind, see `estimateLayoutMs`) is taken first, and a layout
+        // expected to take more than a second announces itself and yields a
+        // frame, so the status is ON SCREEN before the block begins. The
+        // previous drawing stays in the host throughout: nothing replaces it
+        // until the new SVG is ready.
+        const layoutNodes = graph.nodes.length;
+        const estimate = estimateLayoutMs(layoutNodes, layoutSamplesRef.current.get(idShape) ?? null);
+        const announce = estimate > LAYOUT_STATUS_THRESHOLD_MS;
+        if (announce) {
+          setLayoutStatusNodes(layoutNodes);
+          await afterPaint();
+          if (cancelled) {
+            setLayoutStatusNodes(null);
+            return;
+          }
+        }
         const renderStartedAt = performance.now();
         const detailed = await renderWithMemberDetail(
           renderDetailed,
@@ -1337,6 +1521,9 @@ export function PlantUmlGraph({
           rendererOptionsFor(view, diagram, engine),
         );
         const elapsedMs = Math.round(performance.now() - renderStartedAt);
+        // The next layout of this kind is estimated from this one: the sample is
+        // the drawing kind's own, never another kind's.
+        layoutSamplesRef.current.set(idShape, { nodes: layoutNodes, ms: elapsedMs });
         if (cancelled) return;
 
         const { svg, model } = detailed;
@@ -1345,6 +1532,14 @@ export function PlantUmlGraph({
         drawnLayoutRef.current = detailed.layout;
         host.innerHTML = svg;
         setLayoutMs(elapsedMs);
+        // The layout of the drawing that was just replaced must not answer
+        // questions about this one (a folded layout's content size, in
+        // particular, is not this drawing's).
+        appliedLayoutRef.current = null;
+        // The new drawing is in the host, so the layout the status described is
+        // over: it is cleared in this same commit. A state write here is safe
+        // because the drawing the reader now sees is already the new one.
+        setLayoutStatusNodes(null);
         // The text page reads this: the model just drawn, plus the upstream
         // functions that serialize and scope it. `diagram.aliasOf` is the
         // graph-id (and overview `grp::` group) → drawn entity id map.
@@ -1482,6 +1677,7 @@ export function PlantUmlGraph({
           semanticTierRef.current = null;
           appliedLayoutRef.current = null;
           setLodDepth(null);
+          setDrawnFit(null);
         } else {
           semanticTierRef.current = carriedTier;
           const layout = solveSemanticZoom(capture.geometry, {
@@ -1494,7 +1690,13 @@ export function PlantUmlGraph({
           const fontPx = coarsePointer ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
           appliedLayoutRef.current = layout;
           appliedFontRef.current = fontPx;
-          drawSemanticLayout(host, capture, layout, fontPx);
+          // A fresh drawing is not a Fit the reader asked for: it is shown at
+          // its own semantic size (the folded tier excepted, which sizes itself
+          // to the canvas by construction).
+          const drawnFactor = applySemanticLayout(host, capture, layout, fontPx, false);
+          setDrawnFit(layout.foldDepth !== null
+            ? { factor: drawnFactor, foldDepth: layout.foldDepth }
+            : null);
           applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
           highlightSelection(host, selectedRef.current);
           markDrawingUnselectable(host);
@@ -1548,6 +1750,10 @@ export function PlantUmlGraph({
         host.innerHTML = '';
         setDrawn(null);
         setLayoutMs(null);
+        // The layout ended — badly — so the status that described it must not
+        // outlive it; the failure line below is the reader's explanation.
+        setLayoutStatusNodes(null);
+        setDrawnFit(null);
         // The previous drawing is gone; the text page must not keep describing it.
         drawnLayoutRef.current = null;
         drawnCallbackRef.current?.(null);
@@ -1562,8 +1768,11 @@ export function PlantUmlGraph({
       // flashes the bridge fallback.
       drawnLayoutRef.current = null;
       drawnCallbackRef.current?.(null);
+      // A status belongs to the layout that set it; the run replacing this one
+      // decides again whether to announce (and clears it again when it ends).
+      setLayoutStatusNodes(null);
     };
-  }, [applyPlacement, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, placementForDecision, projectId, view]);
+  }, [applyPlacement, applySemanticLayout, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, placementForDecision, projectId, view]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -1701,12 +1910,12 @@ export function PlantUmlGraph({
       // menu itself never reaches this listener (the menu is a sibling).
       setContextMenu(null);
 
-      // At the package level the drawing is a map of frames, not selectable
-      // entities: a click on one zooms into it — the "tap a package" gesture
-      // the too-small overview hint offers, on every pointer tier. This runs
-      // before the background-clear branch because a frame carries no
-      // `data-entity-id` of its own.
-      if (semanticTierRef.current === 'C') {
+      // At the package-only levels (`C`, and the folded `D` it deepens into)
+      // the drawing is a map of frames, not selectable entities: a click on one
+      // zooms into it — the "tap a package" gesture the too-small overview hint
+      // offers, on every pointer tier. It runs before the background-clear
+      // branch because a frame carries no `data-entity-id` of its own.
+      if (semanticTierRef.current === 'C' || semanticTierRef.current === 'D') {
         const frame = event.target instanceof Element
           ? event.target.closest('.uml-package[data-package-id]')
           : null;
@@ -1995,8 +2204,22 @@ export function PlantUmlGraph({
       mode,
     });
     const placement = placementForDecision(natural, box, decision);
-    applyZoom({ scale: viewport.zoomTo(placement?.scale ?? decision.scale), mode: 'fit' });
+    const before = zoomRef.current.scale;
+    const fittedScale = viewport.zoomTo(placement?.scale ?? decision.scale);
+    applyZoom({ scale: fittedScale, mode: 'fit' });
     applyPlacement(drawing, placement);
+    // Choosing a readable mode is a whole-graph request too, and a fit at the
+    // scale already in force settles no zoom for a later pass to consume: answer
+    // it against the layout on screen right now.
+    const onScreen = appliedLayoutRef.current;
+    if (onScreen !== null && Math.abs(before - fittedScale) < 1e-9) {
+      const contentWidth = Math.max(1, onScreen.content.width);
+      const contentHeight = Math.max(1, onScreen.content.height);
+      const factor = Math.min(1, box.width / contentWidth, box.height / contentHeight);
+      const current = host.querySelector('svg');
+      if (current !== null) applyZoomScale(current, factor);
+      setDrawnFit(factor < 0.999 ? { factor, foldDepth: null } : null);
+    }
     setReadableView({
       mode: decision.mode,
       focusPackageId: decision.focusPackageId,
@@ -2017,6 +2240,32 @@ export function PlantUmlGraph({
       applyZoom({ scale: 1, mode: 'fit' });
       return;
     }
+    // The folded tier needs no scale of its own. Its drawing is the packed
+    // whole graph, sized against this very canvas and shown at the factor that
+    // puts it all on screen (`applySemanticLayout`); asking for a fit of the
+    // ORIGINAL bounds here would hand back the 5 % floor that made the canvas
+    // lie, and re-entering the tier at that scale would keep the fold while
+    // claiming to be a fit. The scroll is reset so "fitted" means the whole
+    // packed map is on screen from its first row.
+    const applied = appliedLayoutRef.current;
+    if (applied !== null && applied.foldDepth !== null) {
+      const box = measureViewportSize(host);
+      const width = Math.max(1, applied.content.width);
+      const height = Math.max(1, applied.content.height);
+      const factor = box === null ? 1 : Math.min(1, box.width / width, box.height / height);
+      const drawing = host.querySelector('svg');
+      if (drawing !== null) applyZoomScale(drawing, factor);
+      host.scrollLeft = 0;
+      host.scrollTop = 0;
+      setDrawnFit({ factor, foldDepth: applied.foldDepth });
+      return;
+    }
+    // Any other semantic drawing: the map may still be a few per cent larger
+    // than the canvas (the tier's stretch is a readability budget, not a size
+    // budget). The fit the reader just asked for is carried to the settled-zoom
+    // pass, which applies `min(1, canvas ÷ content)` to the drawing it puts on
+    // screen — and, when the scale does not change at all, is applied here.
+    if (applied !== null) fitRequestedRef.current = true;
     // "Fit to view" follows the readable mode in force: the whole-graph fit in
     // overview, the readable fit (plus its focus) in focus mode.
     const drawing = host.querySelector('svg');
@@ -2039,8 +2288,22 @@ export function PlantUmlGraph({
       mode: readableModeRef.current ?? undefined,
     });
     const placement = placementForDecision(natural, box, decision);
-    applyZoom({ scale: viewport.zoomTo(placement?.scale ?? decision.scale), mode: 'fit' });
+    const before = zoomRef.current.scale;
+    const fittedScale = viewport.zoomTo(placement?.scale ?? decision.scale);
+    applyZoom({ scale: fittedScale, mode: 'fit' });
     applyPlacement(drawing, placement);
+    // A fit at the scale already in force settles no zoom, so no later pass
+    // consumes the request: answer it against the layout on screen right now
+    // (the drawing's own stretch can still leave it a few per cent too wide).
+    if (applied !== null && Math.abs(before - fittedScale) < 1e-9) {
+      fitRequestedRef.current = false;
+      const contentWidth = Math.max(1, applied.content.width);
+      const contentHeight = Math.max(1, applied.content.height);
+      const factor = Math.min(1, box.width / contentWidth, box.height / contentHeight);
+      const current = host.querySelector('svg');
+      if (current !== null) applyZoomScale(current, factor);
+      setDrawnFit(factor < 0.999 ? { factor, foldDepth: null } : null);
+    }
     setReadableView({
       mode: decision.mode,
       focusPackageId: decision.focusPackageId,
@@ -2519,6 +2782,15 @@ export function PlantUmlGraph({
   // geometric fit that would smear the labels, and in that state the control
   // must not claim the whole drawing is on screen (see `fitControlReading`).
   const fitReading = fitControlReading(readableView, zoom.mode);
+  /**
+   * The percentage every surface states: the reader's zoom, EXCEPT in the
+   * folded tier, where the drawing is not a scaled original but a repacked map
+   * whose real adaptation to the canvas is the fold's fit factor. Printing
+   * `zoom.scale` there was the lie this task is about — "5 %" over a drawing
+   * four canvases wide. One value, read by the tier bar, the zoom cluster and
+   * the hint, so the canvas never shows two percentages for one drawing.
+   */
+  const displayScale = drawnFit?.factor ?? zoom.scale;
 
   /** The 聚焦 / 全貌 switch: focus at the readable floor, or the whole drawing. */
   const readableModeGroup = (
@@ -2582,7 +2854,7 @@ export function PlantUmlGraph({
             defaultValue:
               'Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).',
             package: shortPackageName(focusPackage),
-            zoom: Math.round(zoom.scale * 100),
+            zoom: Math.round(displayScale * 100),
             count: readableView?.hint?.packageCount ?? 0,
           })}
     </span>
@@ -2591,7 +2863,7 @@ export function PlantUmlGraph({
   /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
   const zoomReadout = (
     <span data-architecture-zoom-level className="min-w-9 text-center tabular-nums">
-      {Math.round(zoom.scale * 100)}%
+      {Math.round(displayScale * 100)}%
     </span>
   );
 
@@ -2656,20 +2928,32 @@ export function PlantUmlGraph({
    * fit / a manual zoom-out below `MIN_USEFUL_OVERVIEW_SCALE`) on any pointer
    * tier, and kept on screen after the reader taps a package so the row carries
    * the way back. Focus mode is a readable crop already, so it never shows one.
+   *
+   * The folded tier ALWAYS shows it, whatever the scale: the drawing on screen
+   * is a map of collapsed package tabs, and the one sentence that says so is
+   * the only thing that explains what the reader is looking at (and how to get
+   * back the entities). It is deliberately not a percentage: a re-packed map
+   * has no meaningful scale against the original drawing.
    */
   const overviewTooSmall = zoom.scale < MIN_USEFUL_OVERVIEW_SCALE;
-  const showOverviewHint = readableView !== null
+  const foldedDepth = drawnFit?.foldDepth ?? null;
+  const showOverviewHint = foldedDepth !== null || (readableView !== null
     && readableView.mode === 'overview'
-    && (overviewTooSmall || packageFocus !== null);
-  const overviewHintText = packageFocus === null
-    ? t('architecture.plantuml.readable.overviewTooSmall', {
-        defaultValue: 'Whole graph at {{zoom}}% — tap a package to zoom in',
-        zoom: Math.round(zoom.scale * 100),
+    && (overviewTooSmall || packageFocus !== null));
+  const overviewHintText = foldedDepth !== null
+    ? t('architecture.plantuml.readable.folded', {
+        defaultValue: 'Collapsed to {{depth}} levels — tap a package to zoom in',
+        depth: foldedDepth,
       })
-    : t('architecture.plantuml.readable.focusHint', {
-        defaultValue: 'Focused on {{package}}',
-        package: shortPackageName(packageFocus),
-      });
+    : packageFocus === null
+      ? t('architecture.plantuml.readable.overviewTooSmall', {
+          defaultValue: 'Whole graph at {{zoom}}% — tap a package to zoom in',
+          zoom: Math.round(displayScale * 100),
+        })
+      : t('architecture.plantuml.readable.focusHint', {
+          defaultValue: 'Focused on {{package}}',
+          package: shortPackageName(packageFocus),
+        });
   // The pill may only cover the drawing where no package tab is painted. It is
   // measured after every commit that can move either side (the drawing was
   // rewritten, the pill's wording changed, or a package zoom re-scrolled).
@@ -2677,7 +2961,7 @@ export function PlantUmlGraph({
     const host = hostRef.current;
     if (host === null || !showOverviewHint) return;
     positionOverviewHint(host);
-  }, [showOverviewHint, drawnRevision, zoom.scale, packageFocus, readableView]);
+  }, [showOverviewHint, drawnRevision, zoom.scale, packageFocus, readableView, foldedDepth]);
 
   const zoomOutButton = (
     <button
@@ -2813,7 +3097,10 @@ export function PlantUmlGraph({
       data-architecture-visible-nodes={drawn?.view === view ? drawn.nodes : 0}
       data-architecture-visible-edges={drawn?.view === view ? drawn.edges : 0}
       data-architecture-zoom-mode={zoom.mode}
-      data-architecture-zoom-scale={zoom.scale}
+      // The percentage the reader can see, not the internal tier input: in the
+      // folded tier those differ (see `displayScale`).
+      data-architecture-zoom-scale={displayScale}
+      data-architecture-fold-depth={drawnFit?.foldDepth ?? undefined}
       data-architecture-lod-depth={lodDepth ?? undefined}
       data-architecture-layout-ms={layoutMs ?? undefined}
       data-architecture-readable-mode={readableView?.mode}
@@ -2912,6 +3199,28 @@ export function PlantUmlGraph({
         >
           {navigationAnnouncement}
         </span>
+        {layoutStatusNodes !== null && (
+          // An overlay, deliberately: a status drawn in flow would change the
+          // canvas' height, and therefore the very fit the drawing after it is
+          // laid out for. It sits above the drawing the reader is still looking
+          // at, not in place of it — the host keeps the previous SVG until the
+          // new one is ready.
+          <div
+            data-architecture-layout-status={layoutStatusNodes}
+            role="status"
+            aria-live="polite"
+            style={{ position: 'absolute', zIndex: 26, left: 12, top: 12, maxWidth: '78%' }}
+            className="pointer-events-none flex items-center gap-2 rounded-md border border-border/60 bg-background/95 px-2 py-1 text-[11px] font-medium text-foreground shadow-sm"
+          >
+            <span aria-hidden="true" className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+            <span className="min-w-0 truncate">
+              {t('architecture.plantuml.layoutProgress', {
+                defaultValue: 'Laying out {{count}} entities…',
+                count: layoutStatusNodes,
+              })}
+            </span>
+          </div>
+        )}
         {showOverviewHint && (
           <div
             data-architecture-readable-hint="true"
@@ -3119,13 +3428,13 @@ export function PlantUmlGraph({
             {zoomOutButton}
             {fitButton}
             {/* The cluster states the same scale reading as the tier bar above
-                the canvas: both are `zoom.scale`, so a reader never sees two
+                the canvas: both are `displayScale`, so a reader never sees two
                 percentages for one drawing. */}
             <span
               data-architecture-zoom-cluster-level="true"
               className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground"
             >
-              {Math.round(zoom.scale * 100)}%
+              {Math.round(displayScale * 100)}%
             </span>
             {lodDepth !== null && (
               <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">

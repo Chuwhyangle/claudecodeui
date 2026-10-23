@@ -44,6 +44,7 @@ import {
   planPackageTab,
   planStickyLabels,
   PACKAGE_TAB_CLEARANCE_PX,
+  PACKAGE_TAB_INSET_PX,
   CLASS_HIDDEN_HEIGHT_PX,
   CLASS_HIDDEN_WIDTH_PX,
   SEMANTIC_MIN_FONT_PX,
@@ -57,8 +58,8 @@ import {
   type StickyLabelCandidate,
 } from '@/modules/architecture/semanticZoomPlan';
 
-/** The three content tiers, from richest to sparsest. */
-export type SemanticTier = 'A' | 'B' | 'C';
+/** The four content tiers, from richest to sparsest. */
+export type SemanticTier = 'A' | 'B' | 'C' | 'D';
 
 /**
  * The fixed outer margin the semantic canvas reserves around its content.
@@ -73,13 +74,44 @@ export type SemanticTier = 'A' | 'B' | 'C';
  */
 export const SEMANTIC_CONTENT_MARGIN_PX = 12;
 
-/** The tier order the budget walks: names/members → frames → packages. */
+/**
+ * The tier order the budget walks: names/members → frames → packages.
+ *
+ * Tier `D` (folded packages) is deliberately NOT in this list: it is not a step
+ * of the stretch budget but the answer to a different question — "the
+ * package-only drawing still does not fit the canvas" — so `solveSemanticZoom`
+ * reaches it only after `C` was chosen and measured (see
+ * {@link chooseFoldedPlan}).
+ */
 export const SEMANTIC_TIERS: readonly SemanticTier[] = ['A', 'B', 'C'];
 
 /** The legacy depth the panel/graph attribute reports for each tier. */
 export function lodDepthForTier(tier: SemanticTier): 0 | 1 | 2 {
   return tier === 'A' ? 2 : tier === 'B' ? 1 : 0;
 }
+
+/**
+ * How far past the canvas the package-only tier (`C`) may reach before the
+ * folded tier (`D`) takes over. "Still does not fit" is stated as a multiple of
+ * the canvas rather than as a single pixel over it, because a C view that is
+ * 1.05 canvases wide is a fit the reader can still read at the floor scale;
+ * 2× is a drawing they would have to scroll through four screens of.
+ */
+export const SEMANTIC_FOLD_TRIGGER_RATIO = 2;
+
+/**
+ * The size ceiling a folded drawing must stay inside, as a multiple of the
+ * canvas — the rule that decides how many levels `D` keeps. A drawing at 1.0×
+ * to 1.2× costs at most a fifth of a screen of scroll (and usually none, since
+ * the packer below is asked for the canvas' own width).
+ */
+export const SEMANTIC_FOLD_FIT_LIMIT = 1.2;
+
+/** The gap between two packed package boxes in the folded tier. */
+export const SEMANTIC_FOLD_GAP_PX = 8;
+
+/** The body a folded package frame keeps below its tab (it contains nothing else). */
+export const SEMANTIC_FOLD_FRAME_BODY_PX = 6;
 
 /** A package's place in the containment tree, derived from the rects. */
 export type SemanticPackageTree = {
@@ -203,6 +235,13 @@ export type SemanticZoomLayout = {
   readonly edges: readonly SemanticEdgeLayout[];
   /** The mapped content rectangle, in layout units, before translation to origin. */
   readonly content: SemanticRect;
+  /**
+   * How many package levels the folded tier (`'D'`) kept, or `null` for every
+   * other tier. At `1` only the outermost packages are drawn and everything
+   * inside them is summed into their tabs; the value is what the canvas states
+   * as "Collapsed to N levels".
+   */
+  readonly foldDepth: number | null;
   /** The content-sized drawing's origin offset (layout units already start at 0). */
   readonly anchor: PlanPoint;
   /** How many edges are visible (drives the opacity band). */
@@ -631,6 +670,163 @@ function evaluateTier(
   };
 }
 
+//-------------------------------- the folded tier (D) ----------------------------------------
+
+/** What one fold depth's packed drawing is: its boxes, its size, and the level it kept. */
+type FoldedPlan = {
+  /** How many package levels the drawing keeps, counting the outermost as 1. */
+  readonly depth: number;
+  readonly packages: readonly SemanticPackageLayout[];
+  /** The packed extent, margin included — what the canvas draws at 1:1. */
+  readonly content: SemanticRect;
+};
+
+/**
+ * Pack the kept package frames into a canvas-wide grid, deterministically.
+ *
+ * The folded tier is a NEW drawing, not a mapping of the old one: the original
+ * positions of a package span everything below it, so mapping them leaves the
+ * drawing exactly as wide as before (that is why `C` could not shrink past
+ * 4415 px on the reported project). Each kept package therefore becomes its own
+ * tab-sized box — the tab that names it, its `(N)` count and its `★N` badge —
+ * and the boxes flow left to right into rows at most one canvas wide. Order is
+ * the packages' own ids, so the same geometry always packs the same way.
+ *
+ * The `(N)` and `★N` of a kept frame sum its WHOLE subtree, not only its own
+ * entities: the frames below it are gone from the drawing, and information the
+ * fold removes must be summed upward, never dropped. See
+ * {@link SemanticPackageTree} for the containment the sum walks.
+ */
+function packFoldedPackages(
+  geometry: SemanticDrawingGeometry,
+  tree: readonly SemanticPackageTree[],
+  depth: number,
+  fontPx: number,
+  viewport: { readonly width: number; readonly height: number },
+): FoldedPlan | null {
+  const seedIds = new Set(geometry.nodes.filter((node) => node.seed).map((node) => node.id));
+  const byId = new Map(tree.map((entry) => [entry.geometry.id, entry]));
+  const entityTotalOf = (id: string, seen: Set<string> = new Set()): number => {
+    const entry = byId.get(id);
+    if (entry === undefined || seen.has(id)) return 0;
+    seen.add(id);
+    return entry.nodeIds.length + entry.childPackageIds
+      .reduce((sum, childId) => sum + entityTotalOf(childId, seen), 0);
+  };
+  const mentionedTotalOf = (id: string, seen: Set<string> = new Set()): number => {
+    const entry = byId.get(id);
+    if (entry === undefined || seen.has(id)) return 0;
+    seen.add(id);
+    const own = entry.nodeIds.filter((nodeId) => seedIds.has(nodeId)).length;
+    return own + entry.childPackageIds
+      .reduce((sum, childId) => sum + mentionedTotalOf(childId, seen), 0);
+  };
+  const boxes = [...tree]
+    .filter((entry) => entry.depth < depth)
+    .sort((left, right) => left.geometry.id.localeCompare(right.geometry.id))
+    .map((entry) => {
+      const id = entry.geometry.id;
+      const tab = planPackageTab({
+        raw: entry.geometry.rawLabel,
+        entityCount: entityTotalOf(id),
+        mentionedCount: mentionedTotalOf(id),
+        tier: 'D',
+        fontPx,
+      });
+      return {
+        entry,
+        tab,
+        width: tab.width + 2 * PACKAGE_TAB_INSET_PX,
+        height: tab.height + SEMANTIC_FOLD_FRAME_BODY_PX,
+      };
+    });
+  if (boxes.length === 0) return null;
+
+  const maxWidth = Math.max(1, viewport.width);
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+  const placed = boxes.map((box) => {
+    if (cursorX > 0 && cursorX + box.width > maxWidth) {
+      cursorX = 0;
+      cursorY += rowHeight + SEMANTIC_FOLD_GAP_PX;
+      rowHeight = 0;
+    }
+    const position = { x: cursorX, y: cursorY };
+    cursorX += box.width + SEMANTIC_FOLD_GAP_PX;
+    rowHeight = Math.max(rowHeight, box.height);
+    return { ...box, ...position };
+  });
+
+  const packages: SemanticPackageLayout[] = placed.map((box) => ({
+    id: box.entry.geometry.id,
+    depth: box.entry.depth,
+    frame: { x: box.x, y: box.y, width: box.width, height: box.height },
+    tab: box.tab,
+    tabRect: {
+      x: box.x + PACKAGE_TAB_INSET_PX - 1,
+      y: box.y,
+      w: box.tab.width,
+      h: box.tab.height,
+    },
+    mentionedCount: mentionedTotalOf(box.entry.geometry.id),
+  }));
+  return {
+    depth,
+    packages,
+    content: packageTierContent(packages),
+  };
+}
+
+/**
+ * The folded plan to draw: the LARGEST level count whose packed drawing stays
+ * inside {@link SEMANTIC_FOLD_FIT_LIMIT} canvases, and at least level 1.
+ *
+ * Deeper levels only add frames, so the packed size grows with the level and
+ * the first level that misses the ceiling closes the search. When even level 1
+ * misses it (a project with dozens of enormous top-level package names), level
+ * 1 is still the answer: the folded drawing is the smallest one this engine can
+ * make, and the canvas then shows it at the fit factor `PlantUmlGraph` derives
+ * from the REAL drawing size instead of a made-up scale.
+ */
+function chooseFoldedPlan(
+  geometry: SemanticDrawingGeometry,
+  tree: readonly SemanticPackageTree[],
+  fontPx: number,
+  viewport: { readonly width: number; readonly height: number },
+): FoldedPlan | null {
+  const maxDepth = tree.reduce((deepest, entry) => Math.max(deepest, entry.depth), 0) + 1;
+  let best: FoldedPlan | null = null;
+  for (let depth = 1; depth <= maxDepth; depth += 1) {
+    const plan = packFoldedPackages(geometry, tree, depth, fontPx, viewport);
+    if (plan === null) break;
+    const fits = plan.content.width <= viewport.width * SEMANTIC_FOLD_FIT_LIMIT + 0.5
+      && plan.content.height <= viewport.height * SEMANTIC_FOLD_FIT_LIMIT + 0.5;
+    if (!fits) break;
+    best = plan;
+  }
+  return best ?? packFoldedPackages(geometry, tree, 1, fontPx, viewport);
+}
+
+/** The content rectangle a package-only tier occupies (it draws no edges or boxes). */
+function packageTierContent(packages: readonly SemanticPackageLayout[]): SemanticRect {
+  return contentBoundaryOf(packages.map((entry) => entry.frame), []);
+}
+
+/** An axis solution that maps nothing: the folded tier's frames are already final units. */
+function identityAxis(axis: 'x' | 'y'): SemanticAxisSolution {
+  return {
+    axis,
+    breakpoints: [],
+    mapped: [],
+    constrained: [],
+    compressed: [],
+    map: (value: number) => value,
+    size: 0,
+    ratio: 1,
+  };
+}
+
 /** Choose the tier: first within the budget, with the previous tier kept in a dead band. */
 export function selectSemanticTier(
   evaluations: readonly TierEvaluation[],
@@ -816,10 +1012,36 @@ export function evaluateSemanticTiers(
   const fontPx = options.minFontPx ?? SEMANTIC_MIN_FONT_PX;
   const alpha = semanticCompactionAlpha(scale);
   const tree = buildSemanticPackageTree(geometry);
-  const tiers = options.forceTier !== null && options.forceTier !== undefined
-    ? [options.forceTier]
-    : SEMANTIC_TIERS;
+  // `D` is not a stretch-budget step: it needs a fold depth, which only
+  // `solveSemanticZoom` can choose. A caller that asks for it here gets the
+  // package-only evaluation the fold would have started from.
+  const tiers = options.forceTier === 'D'
+    ? (['C'] as const)
+    : options.forceTier !== null && options.forceTier !== undefined
+      ? [options.forceTier]
+      : SEMANTIC_TIERS;
   return tiers.map((tier) => evaluateTier(geometry, tree, scale, alpha, fontPx, tier));
+}
+
+/**
+ * The folded plan for a package-only drawing that still does not fit, or
+ * `null` when the sparse tier fits (or there is nothing to measure against).
+ *
+ * The trigger is measured on the tier that was actually CHOSEN: a drawing the
+ * budget already kept inside 1.8× its scale needs no fold, however wide it is.
+ */
+function foldForSparseTier(
+  geometry: SemanticDrawingGeometry,
+  tree: readonly SemanticPackageTree[],
+  chosen: TierEvaluation,
+  fontPx: number,
+  viewport: { readonly width: number; readonly height: number } | null | undefined,
+): FoldedPlan | null {
+  if (chosen.tier !== 'C' || viewport === null || viewport === undefined) return null;
+  const sparse = packageTierContent(chosen.packages);
+  const tooWide = sparse.width > viewport.width * SEMANTIC_FOLD_TRIGGER_RATIO;
+  const tooTall = sparse.height > viewport.height * SEMANTIC_FOLD_TRIGGER_RATIO;
+  return tooWide || tooTall ? chooseFoldedPlan(geometry, tree, fontPx, viewport) : null;
 }
 
 /** Solve the whole drawing for one scale. Deterministic: same input → same output. */
@@ -830,6 +1052,8 @@ export function solveSemanticZoom(
   const scale = Number.isFinite(options.scale) && options.scale > 0 ? options.scale : 1;
   const limit = options.limit ?? SEMANTIC_STRETCH_LIMIT;
   const alpha = semanticCompactionAlpha(scale);
+  const fontPx = options.minFontPx ?? SEMANTIC_MIN_FONT_PX;
+  const tree = buildSemanticPackageTree(geometry);
   const evaluations = evaluateSemanticTiers(geometry, options);
   const forced = options.forceTier !== null && options.forceTier !== undefined;
   const chosen = forced
@@ -840,8 +1064,16 @@ export function solveSemanticZoom(
         deadzone: options.deadzone,
       });
 
-  const layoutsById = chosen.layoutsById;
-  const drawnEdges = chosen.tier === 'C'
+  // ---- the folded tier: chosen only when the package-only drawing still
+  // cannot fit the canvas. `C` is a MAPPED drawing, so its width is the
+  // original one times the scale plus the tab minimums; once that is more than
+  // twice the canvas the reader would be scrolling through several screens with
+  // "whole graph" on the canvas. `D` re-packs the kept packages instead, which
+  // is the only way to leave the original extent behind.
+  const folded = forced ? null : foldForSparseTier(geometry, tree, chosen, fontPx, options.viewport);
+
+  const layoutsById = folded === null ? chosen.layoutsById : new Map<string, SemanticNodeLayout>();
+  const drawnEdges = folded !== null || chosen.tier === 'C'
     ? []
     : geometry.edges.filter((edge) => layoutsById.has(edge.source) && layoutsById.has(edge.target));
   const edges = drawnEdges.map((edge) => ({
@@ -858,20 +1090,26 @@ export function solveSemanticZoom(
   // drawing; leaving it out makes the clipped viewBox cut it in half.
   const mappedArrowPoints = drawnEdges.flatMap((edge) => (edge.arrowPoints ?? [])
     .map((point) => ({ x: chosen.x.map(point.x), y: chosen.y.map(point.y) })));
-  const content = contentBoundaryOf(
-    [
-      ...chosen.packages.map((entry) => entry.frame),
-      ...chosen.nodes.map((entry) => entry.cell),
-    ],
-    [...edges.flatMap((edge) => edge.points), ...mappedArrowPoints],
-  );
+  const content = folded !== null
+    ? folded.content
+    : contentBoundaryOf(
+        [
+          ...chosen.packages.map((entry) => entry.frame),
+          ...chosen.nodes.map((entry) => entry.cell),
+        ],
+        [...edges.flatMap((edge) => edge.points), ...mappedArrowPoints],
+      );
+  const drawnPackages = folded === null ? chosen.packages : folded.packages;
+  const drawnNodes = folded === null ? chosen.nodes : [];
+  const x = folded === null ? chosen.x : identityAxis('x');
+  const y = folded === null ? chosen.y : identityAxis('y');
   // The translation puts the content boundary's own origin at 0, margin included.
   const minX = content.x;
   const minY = content.y;
 
-  const centres: PlanPoint[] = (chosen.tier === 'C' ? [] : chosen.nodes.filter((node) => !node.hidden))
+  const centres: PlanPoint[] = (folded === null && chosen.tier !== 'C' ? chosen.nodes.filter((node) => !node.hidden) : [])
     .map((node) => ({ x: node.cell.x - minX + node.cell.width / 2, y: node.cell.y - minY + node.cell.height / 2 }));
-  const leafPackages = chosen.packages.filter((entry) => entry.depth >= 0);
+  const leafPackages = drawnPackages.filter((entry) => entry.depth >= 0);
   const packageCentres: PlanPoint[] = leafPackages.map((entry) => ({
     x: entry.frame.x - minX + entry.frame.width / 2,
     y: entry.frame.y - minY + entry.frame.height / 2,
@@ -882,7 +1120,9 @@ export function solveSemanticZoom(
     { x: content.width / 2, y: content.height / 2 },
   );
 
-  const stickies = planStickyLabels(
+  // The folded drawing is a static map of tabs: it never scrolls its package
+  // names to the viewport's top, so it has no sticky candidates at all.
+  const stickies = folded !== null ? [] : planStickyLabels(
     chosen.packages.map((entry) => ({
       id: entry.id,
       depth: entry.depth,
@@ -908,14 +1148,15 @@ export function solveSemanticZoom(
   );
 
   return {
-    tier: chosen.tier,
+    tier: folded === null ? chosen.tier : 'D',
+    foldDepth: folded === null ? null : folded.depth,
     scale,
     alpha,
-    x: chosen.x,
-    y: chosen.y,
-    ratio: chosen.ratio,
-    nodes: chosen.nodes,
-    packages: chosen.packages,
+    x,
+    y,
+    ratio: folded === null ? chosen.ratio : 1,
+    nodes: drawnNodes,
+    packages: drawnPackages,
     edges: edges.map((edge) => ({ ...edge, opacity })),
     content,
     anchor,

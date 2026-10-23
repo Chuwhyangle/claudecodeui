@@ -129,6 +129,7 @@
         "tierPackages": "Pakete"
       },
       "explosion": "Explosionsansicht",
+      "layoutProgress": "Layout für {{count}} Entitäten wird berechnet…",
       "drillIn": "Öffnen",
       "moreActions": "Weitere Aktionen",
       "touchHint": "Tippen Sie auf einen Knoten, um ihn auszuwählen; ziehen Sie zum Verschieben und zoomen Sie mit zwei Fingern. Doppeltippen oder „Öffnen“ öffnet die Nachbarschaft.",
@@ -143,6 +144,7 @@
         "focusSummary": "Lesbarer Zoom ist aktiv: Fokus auf {{package}} bei {{zoom}}% — wähle Übersicht, um das ganze Diagramm zu sehen ({{count}} weitere Pakete).",
         "focusOnly": "Lesbarer Zoom ist aktiv — wähle Übersicht, um das ganze Diagramm zu sehen.",
         "overviewTooSmall": "Gesamter Graph bei {{zoom}}% — tippe auf ein Paket, um zu zoomen",
+        "folded": "Auf {{depth}} Ebenen eingeklappt — tippe auf ein Paket, um zu zoomen",
         "backToWhole": "Zurück zum Gesamtgraphen"
       },
       "minimap": {
@@ -281,7 +283,8 @@
       "mentionedHint": "Auch dann sichtbar lassen, wenn ihre Art ausgeblendet ist",
       "mentionedToggleAria": "in dieser Sitzung erwähnt, auch sichtbar, wenn ihre Art ausgeblendet ist",
       "mentionedInKind": "{{count}} in dieser Sitzung erwähnt",
-      "showMentioned": "▸ Erwähnte anzeigen"
+      "showMentioned": "▸ Erwähnte anzeigen",
+      "reset": "↺ Filter zurücksetzen"
     },
     "scopeHygiene": {
       "summary": "Scope-Bereinigung",

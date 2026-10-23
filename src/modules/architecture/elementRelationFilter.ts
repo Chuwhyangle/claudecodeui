@@ -407,16 +407,45 @@ export function keptMentionedCount(filter: ArchitectureElementRelationFilter): n
 }
 
 /**
- * The "show everything" selection behind the readout's one-click reset: every
- * kind, every relation, and no isolated-node removal. The "keep mentioned"
- * switches are irrelevant here (nothing is hidden), so they reset to empty.
+ * The "Show all" action: every entity KIND on and no isolated-node cut, with
+ * the RELATION PRESET LEFT EXACTLY AS IT IS.
+ *
+ * The two axes are independent decisions, and "Show all" is a statement about
+ * one of them: which kinds of entity the drawing may contain. It used to reset
+ * the other axis too (every relation, i.e. the `call` preset), so clicking a
+ * link that says "show all ELEMENTS" silently widened the edges from
+ * `+Dependencies` to `+Calls` and the reader had to walk the preset back by
+ * hand. The relation preset is therefore read from the selection in force, not
+ * from a constant — the reading on the drawer's Filter button then states the
+ * one decision still hiding something, instead of reporting a change nobody
+ * asked for.
+ *
+ * The "keep mentioned" switches reset to empty: with every kind shown they
+ * exempt nothing (a shown kind already keeps its mentions), so carrying them
+ * over would only keep a meaningless "keeping N" badge alive.
  */
-export const ARCHITECTURE_SHOW_ALL_FILTER: ArchitectureElementRelationFilter = {
-  kinds: ARCHITECTURE_ELEMENT_KINDS,
-  relations: 'call',
-  hideIsolated: false,
-  keepMentionedKinds: [],
-};
+export function showAllFilter(
+  current: ArchitectureElementRelationFilter,
+): ArchitectureElementRelationFilter {
+  return {
+    kinds: ARCHITECTURE_ELEMENT_KINDS,
+    relations: current.relations,
+    hideIsolated: false,
+    keepMentionedKinds: [],
+  };
+}
+
+/**
+ * The "Reset filters" action: back to the SHIPPED default of this project
+ * ({@link ARCHITECTURE_DEFAULT_FILTER}), i.e. the selection a project starts
+ * with before the reader touched anything — not the last remembered one.
+ *
+ * A function rather than a constant so a caller cannot mistake it for "the
+ * current selection" and so the reset stays one definition with the default.
+ */
+export function resetFilter(): ArchitectureElementRelationFilter {
+  return ARCHITECTURE_DEFAULT_FILTER;
+}
 
 /** The total number of items a `hidden` reading says were removed. */
 export function hiddenTotal(hidden: ArchitectureFilterHidden): number {

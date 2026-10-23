@@ -403,7 +403,13 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // Measured full-file wall clock (boot + both servers + browser launch + 14
   // cases): `14 passed (3.7m)` on this worktree, 2026-10-23. 360_000 keeps ~1.6x
   // over that reading while leaving the earlier 240_000 ceiling behind.
-  'architecture-canvas-layout.spec.ts': 360_000,
+  // Re-measured 2026-10-23 with the "Show all" / folded-fit cases: the function
+  // fixture's 396-box drawing is laid out TWICE per case on a real ELK main
+  // thread (once to widen, once to Fit), in the main arm and again in the
+  // control arm. `19 passed (4.1m)` for the whole invocation, so 480_000 keeps
+  // ~1.95x over the measurement — the same headroom the 360_000 entry held,
+  // which a load-slowed fan-in lane needs.
+  'architecture-canvas-layout.spec.ts': 480_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear

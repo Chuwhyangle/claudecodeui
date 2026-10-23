@@ -409,11 +409,11 @@ export function planPackageLabel(raw: string): PlannedPackageLabel {
   };
 }
 
-/** One package's tab plan: the shortened name, its aggregate count, and the C-tier badge. */
+/** One package's tab plan: the shortened name, its aggregate count, and the collapsed-tier badge. */
 export type PlannedPackageTab = {
   readonly text: string;
   readonly count: number | null;
-  /** The orange `★N` badge shown at tier C; empty when the package mentions nothing. */
+  /** The orange `★N` badge shown at the package-only tiers (`C`/`D`); empty when nothing was mentioned. */
   readonly badge: string;
   readonly width: number;
   readonly height: number;
@@ -421,22 +421,30 @@ export type PlannedPackageTab = {
 
 /**
  * Plan a package tab. The label is the LAST path segment plus `(N)` — the
- * information a collapsed package would otherwise hide — and at tier C it also
- * carries an orange `★N` counting the entities inside the package that the
- * session mentioned directly (rule 6: hidden information is aggregated upward,
- * never dropped silently).
+ * information a collapsed package would otherwise hide — and at the
+ * package-only tiers (`C`, and the folded `D`) it also carries an orange `★N`
+ * counting the entities inside the package the session mentioned directly
+ * (rule 6: hidden information is aggregated upward, never dropped silently).
+ *
+ * Tier `D` aggregates one level further than `C`: the caller passes the entity
+ * and mention counts of the package's WHOLE SUBTREE, because the frames of the
+ * deeper packages are gone from the drawing entirely (see
+ * `semanticZoomLayout.ts`), so a parent's own `(N)` would otherwise stop
+ * accounting for what was folded into it.
  */
 export function planPackageTab(args: {
   readonly raw: string;
   readonly entityCount: number;
   readonly mentionedCount: number;
-  readonly tier: 'A' | 'B' | 'C';
+  readonly tier: 'A' | 'B' | 'C' | 'D';
   readonly fontPx: number;
 }): PlannedPackageTab {
   const parsed = planPackageLabel(args.raw);
   const count = parsed.count ?? args.entityCount;
   const text = count > 0 ? `${parsed.text} (${count})` : parsed.text;
-  const badge = args.tier === 'C' && args.mentionedCount > 0 ? ` ★${args.mentionedCount}` : '';
+  const badge = (args.tier === 'C' || args.tier === 'D') && args.mentionedCount > 0
+    ? ` ★${args.mentionedCount}`
+    : '';
   const width = planTextWidth(`${text}${badge}`, args.fontPx, 'sans') + 10;
   return { text, count, badge, width, height: args.fontPx + PACKAGE_TAB_PADDING_PX };
 }

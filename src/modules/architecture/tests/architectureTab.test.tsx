@@ -30,7 +30,7 @@ import {
   useEnsureArchitectureTabVisible,
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
-import type { ArchitectureRendererGraph, ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
+import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
 import {
   archguardToPlantUml,
@@ -4096,6 +4096,61 @@ const UNFILTERED_FILTER_RESULT: ArchitectureGraphResult = {
   provenance: RESULT.provenance,
 };
 
+/**
+ * A DENSE 300-class graph in a 12 × 8 package grid: the shape the reported
+ * project had (a big class drawing whose package frames sit on a canvas-sized
+ * patch of paper, with hundreds of boxes the minimum sizes cannot scale away).
+ *
+ * It is the fixture for the three readings this task adds:
+ *  · the layout is expected to take over a second (576 entities × the shipped
+ *    per-entity floor), so the canvas must say "laying out" BEFORE it blocks;
+ *  · at a canvas-sized viewport the package-only tier is still several canvases
+ *    wide, so the canvas must collapse to the folded tier instead of claiming
+ *    "whole graph at 5 %";
+ *  · the folded tier's tabs must add up what they folded away.
+ *
+ * Every entity is a class, so the shipped filter draws all of them without a
+ * "Show all" first, and the chain keeps none of them isolated.
+ */
+/**
+ * How many entities the dense fixture holds. Above the shipped per-entity floor
+ * (4 ms) times it is what makes the layout EXPECTED to pass a second — the
+ * condition the status answers — so the number is stated once and both the
+ * fixture and its assertions read it.
+ */
+const DEEP_ENTITY_COUNT = 300;
+
+const DEEP_ENTITY_RESULT: ArchitectureGraphResult = (() => {
+  const nodes = Array.from({ length: DEEP_ENTITY_COUNT }, (_unused, index) => ({
+    id: `src/modules/m${String(index % 12)}/s${String(index % 8)}/Entity${String(index)}.ts.Entity${String(index)}`,
+    label: `src/modules/m${String(index % 12)}/s${String(index % 8)}/Entity${String(index)}.ts`,
+    distance: index === 0 ? 0 : 1,
+    kind: 'class' as const,
+    ...(index === 0 ? { mentionTier: 'direct' as const } : {}),
+  }));
+  const edges = nodes.slice(1).map((entry, index) => ({
+    from: nodes[index].id,
+    to: entry.id,
+    relationType: 'dependency',
+  }));
+  return {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: { file: RESULT.graph.file, entity: { nodes, edges } },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: nodes.length,
+      entityEdges: edges.length,
+      entityTotal: nodes.length,
+      entityTruncated: false,
+      truncated: false,
+      kindCounts: { class: nodes.length },
+      relationCounts: { dependency: edges.length },
+      hidden: { byKind: {}, byRelation: {}, isolated: 0 },
+    },
+    provenance: RESULT.provenance,
+  };
+})();
+
 /** Open the filter disclosure and return its menu. */
 async function openFilterMenu(): Promise<HTMLElement> {
   fireEvent.click(screen.getByRole('button', { name: /Filter ▾/ }));
@@ -4526,8 +4581,10 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
   await new Promise((resolve) => setTimeout(resolve, 350));
   assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no deferred request either');
 
-  // Widening: "Show all" restores every kind and relation. The request is
-  // deferred, and the OLD drawing stays on screen (and busy) until it lands.
+  // Widening: "Show all" restores every KIND — and, by design, leaves the
+  // relation preset exactly where the reader put it (`structural` here, not
+  // `call`). The request is deferred, and the OLD drawing stays on screen (and
+  // busy) until it lands.
   // The response arrives well after the debounce, so the in-flight window is
   // observable; it always settles, so a failed assertion cannot leave the run
   // waiting on a promise nobody resolves.
@@ -4552,7 +4609,13 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
 
   await new Promise((resolve) => setTimeout(resolve, 1100));
   assert.equal(document.querySelector('[data-architecture-refreshing="true"]'), null, 'the busy state clears');
-  assert.equal(latest().graph.edges.length, 2, 'the new reading replaces the old one');
+  // The element axis was widened, so every entity the payload carries is drawn;
+  // the relation axis was NOT touched, so the composition edge is still the only
+  // one `structural` allows. Before the fix this read 2, because Show all had
+  // silently widened the preset to `call` along with the kinds.
+  assert.equal(latest().graph.nodes.length, 3, 'the element axis is wide again');
+  assert.equal(latest().graph.edges.length, 1, 'the relation preset the reader chose still applies');
+  assert.equal(latest().graph.edges[0]?.relationType, 'composition');
 });
 
 test('a truncated reading makes a narrowing re-fetch in the background (budget may have freed up)', async () => {
@@ -5426,3 +5489,183 @@ test('the Text page reads the complete drawn document for a >40-entity class gra
 function previewText(): string {
   return document.querySelector('[data-architecture-text-preview]')?.textContent ?? '';
 }
+
+/* ── Show all / Reset filters, the layout status, and the folded tier ────────────────────── */
+
+test('Show all widens the element axis only, and Reset filters restores the shipped default', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  const menu = await openFilterMenu();
+  const checked = (selector: string): string | null =>
+    menu.querySelector(selector)?.getAttribute('aria-checked') ?? null;
+  assert.equal(checked('[data-architecture-filter-relation="dependency"]'), 'true');
+
+  // The one-click "Show all" lives in the readout row under the drawing, not in
+  // the popover: it is offered exactly when the readout has something hidden.
+  fireEvent.click(document.querySelector('[data-architecture-filter-show-all]') as Element);
+
+  // ① The relation preset is UNTOUCHED. The reported defect was that Show all
+  //    silently moved it to `call` — the panel went from "hide 4" to "hide 0"
+  //    and the reader had to walk the preset back by hand.
+  assert.equal(
+    checked('[data-architecture-filter-relation="dependency"]'),
+    'true',
+    'Show all must leave the relation preset where the reader put it',
+  );
+  assert.equal(checked('[data-architecture-filter-relation="call"]'), 'false');
+  // ② The element axis really did widen.
+  assert.equal(checked('[data-architecture-filter-kind="function"]'), 'true');
+  assert.equal(checked('[data-architecture-filter-isolated]'), 'false');
+  // ③ The badge states the ONE decision still hiding something (the preset).
+  assert.equal(
+    document.querySelector('[data-architecture-filter-badge]')?.getAttribute('data-architecture-filter-badge'),
+    '1',
+    'the drawer says what is still hidden instead of reporting a change nobody asked for',
+  );
+
+  // ④ The follow-up request (a widening, so it must ask the server) carries the
+  //    same preset and the wider kind list.
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
+  const widened = (apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as {
+    relations: string[];
+    kinds: string[];
+  };
+  assert.deepEqual(widened.relations, ['inheritance', 'implementation', 'composition', 'dependency']);
+  assert.ok(widened.kinds.includes('function'), 'the function kind is requested');
+
+  // ⑤ Reset filters: one click back to the project's default. That is a
+  //    NARROWING, so it is answered from the payload in hand — no third request.
+  fireEvent.click(document.querySelector('[data-architecture-filter-reset]') as Element);
+  await waitFor(() => assert.equal(checked('[data-architecture-filter-kind="function"]'), 'false'));
+  assert.equal(checked('[data-architecture-filter-isolated]'), 'true');
+  assert.equal(checked('[data-architecture-filter-relation="dependency"]'), 'true');
+  assert.equal(
+    document.querySelector('[data-architecture-filter-badge]')?.getAttribute('data-architecture-filter-badge'),
+    '4',
+    'the badge is back to the shipped four decisions',
+  );
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'a narrowing needs no round trip');
+});
+
+test('a drawing expected to be slow announces its layout, and one the package tier cannot fit collapses', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(DEEP_ENTITY_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+
+  // ── the status: on screen BEFORE the blocking layout, gone with the drawing ──
+  // A 300-box drawing is expected to pass a second (the entity count times the
+  // shipped per-entity floor), so the canvas must say so. The proof that it is
+  // announced BEFORE the block rather than after it: at the moment the status is
+  // visible the host still holds no drawing at all — the first SVG is inserted
+  // only once ELK has returned.
+  const statusNode = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-layout-status]');
+    assert.ok(node instanceof HTMLElement, 'the canvas must announce the layout it is about to run');
+    return node;
+  }, { interval: 5, timeout: 20_000 });
+  const statusAppearedAt = Date.now();
+  const host = await screen.findByTestId('plantuml-host', {}, { timeout: 20_000 });
+  assert.equal(host.querySelector('svg'), null, 'the status is up while the drawing is still being laid out');
+  assert.equal(
+    statusNode.getAttribute('data-architecture-layout-status'),
+    String(DEEP_ENTITY_COUNT),
+    'the status names the entity count of the drawing being laid out',
+  );
+  assert.match(statusNode.textContent ?? '', new RegExp(`Laying out ${DEEP_ENTITY_COUNT} entities`));
+  // The AC's 200 ms reads as "the status is up early in the layout, not after
+  // it". Measured the way jsdom can measure it without counting the harness'
+  // own commit/poll latency: the notice preceded the END of the layout by at
+  // least (the layout duration − 200 ms). A status painted only once the layout
+  // returned would leave a gap of ~0 and fail this bound by the layout's own
+  // length; the shipped defect (17.6 s of silent blocking) fails it by 17 s.
+  const root = graphRoot();
+  await waitFor(() => assert.ok(host.querySelector('svg')), { timeout: 20_000 });
+  const drawingEndedAt = Date.now();
+  const layoutMs = Number(root.getAttribute('data-architecture-layout-ms'));
+  assert.equal(
+    document.querySelector('[data-architecture-layout-status]'),
+    null,
+    'the status goes away with the layout it described',
+  );
+  // jsdom lays the same drawing out several times faster than a browser (the
+  // ESTIMATE, not this reading, is what decides to announce), so the floor here
+  // only guards against a drawing so small the announcement would be vacuous.
+  assert.ok(layoutMs >= 250, `the first layout really was long enough to be worth announcing; got ${layoutMs} ms`);
+  assert.ok(
+    drawingEndedAt - statusAppearedAt >= layoutMs - 200,
+    `the status appeared ${drawingEndedAt - statusAppearedAt} ms before the drawing landed, but the layout took `
+      + `${layoutMs} ms: it was not announced within the first 200 ms of the block`,
+  );
+
+  // ── the folded tier: a canvas the package-only drawing cannot fit ────────────
+  // A canvas the dense 300-box drawing cannot map into at the floor scale: the
+  // package-only drawing is several canvases wide there, which is the state the
+  // reported project was in ("whole graph at 5 %" over a 4 415 px drawing).
+  sizeHost(host, 200, 150);
+  triggerResize();
+
+  await waitFor(() => {
+    const depth = root.getAttribute('data-architecture-fold-depth');
+    assert.ok(depth !== null, 'the canvas collapses deeper than the package tier');
+  }, { timeout: 20_000 });
+
+  const foldDepth = Number(root.getAttribute('data-architecture-fold-depth'));
+  assert.ok(Number.isInteger(foldDepth) && foldDepth >= 1, `the fold keeps at least one level; got ${foldDepth}`);
+  // The hint states the collapse instead of claiming to be the whole graph at a
+  // percentage that is not what the drawing shows.
+  const hint = document.querySelector('[data-architecture-readable-hint]');
+  assert.ok(hint instanceof HTMLElement, 'the collapsed drawing explains itself');
+  assert.match(hint.textContent ?? '', new RegExp(`Collapsed to ${foldDepth} levels`));
+  assert.doesNotMatch(
+    hint.textContent ?? '',
+    /Whole graph/,
+    'the "Whole graph at N%" sentence is a claim the folded tier must not make',
+  );
+  // The folded drawing is a map of package tabs: every class box is hidden and
+  // the deeper package levels are gone.
+  const drawnBoxes = [...host.querySelectorAll('[data-entity-id]')]
+    .filter((node) => (node as SVGGElement).style.display !== 'none');
+  assert.equal(drawnBoxes.length, 0, 'every class box is hidden by the fold');
+  const allPackages = [...host.querySelectorAll('.uml-package[data-package-id]')];
+  const drawnPackages = allPackages.filter((node) => (node as SVGGElement).style.display !== 'none');
+  assert.ok(drawnPackages.length > 0, 'the fold draws the packages it kept');
+  assert.ok(
+    drawnPackages.length < allPackages.length,
+    `the fold really removed the deeper levels (${drawnPackages.length} of ${allPackages.length} frames stay)`,
+  );
+
+  // ── the reading is the REAL adaptation, and Fit leaves it fitting ────────────
+  const svgOf = (): SVGSVGElement => {
+    const element = host.querySelector('svg');
+    assert.ok(element instanceof SVGSVGElement);
+    return element;
+  };
+  const viewBoxWidth = (svg: SVGSVGElement): number =>
+    Number((svg.getAttribute('viewBox') ?? '').split(/[\s,]+/)[2]);
+  assert.ok(
+    Number(svgOf().getAttribute('width')) <= host.clientWidth + 0.5,
+    `the folded drawing is ${svgOf().getAttribute('width')} px wide in a ${host.clientWidth} px canvas`,
+  );
+  fireEvent.click(document.querySelector('[data-architecture-zoom-fit]') as Element);
+  await waitFor(() => {
+    assert.ok(
+      Number(svgOf().getAttribute('width')) <= host.clientWidth + 0.5,
+      'Fit must leave the whole folded graph inside the canvas',
+    );
+  });
+  // The stated percentage is the drawing's own adaptation to the canvas over the
+  // drawing's own width — never the 5 % floor the ORIGINAL bounds would produce.
+  const stated = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.ok(stated > 0 && stated <= 1);
+  assert.ok(
+    Math.abs(Number(svgOf().getAttribute('width')) - viewBoxWidth(svgOf()) * stated) < 1.5,
+    'the percentage the reader sees is the size actually drawn over the drawing\'s own size',
+  );
+  assert.ok(stated > 0.05, `a folded drawing is not shown at the 5 % floor; got ${stated}`);
+});

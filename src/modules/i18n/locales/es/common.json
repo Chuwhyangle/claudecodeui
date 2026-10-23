@@ -129,6 +129,7 @@
         "tierPackages": "Paquetes"
       },
       "explosion": "Vista de explosión",
+      "layoutProgress": "Calculando el diseño de {{count}} entidades…",
       "drillIn": "Abrir",
       "moreActions": "Más acciones",
       "touchHint": "Toca un nodo para seleccionarlo; arrastra para desplazar y pellizca para ampliar. Toca dos veces o elige «Abrir» para ver su vecindad.",
@@ -143,6 +144,7 @@
         "focusSummary": "El zoom legible está activo: enfoque en {{package}} al {{zoom}}% — elige Vista general para ver todo el grafo ({{count}} paquete(s) más).",
         "focusOnly": "El zoom legible está activo — elige Vista general para ver todo el grafo.",
         "overviewTooSmall": "Grafo completo al {{zoom}}% — toca un paquete para ampliar",
+        "folded": "Contraído a {{depth}} niveles — toca un paquete para ampliar",
         "backToWhole": "Volver al grafo completo"
       },
       "minimap": {
@@ -281,7 +283,8 @@
       "mentionedHint": "Mantenerlas visibles aunque su tipo esté oculto",
       "mentionedToggleAria": "mencionadas en esta sesión, visibles aunque su tipo esté oculto",
       "mentionedInKind": "{{count}} mencionadas en esta sesión",
-      "showMentioned": "▸ Mostrar mencionadas"
+      "showMentioned": "▸ Mostrar mencionadas",
+      "reset": "↺ Restablecer filtros"
     },
     "scopeHygiene": {
       "summary": "Limpieza de scopes",
