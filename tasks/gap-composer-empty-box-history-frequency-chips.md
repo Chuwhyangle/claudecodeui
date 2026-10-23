@@ -52,10 +52,10 @@ extra:
 - [ ] 用 MCP 浏览器在**隔离实例**（按 AGENTS.md 与 cockpit 隔离实例做法，不碰常驻的 :3001）的真实页面上走完整个交互，截图存 `tmp/` 并贴出：在一个真实会话里通过**真实发送**把「检查进展」发 2 次、「继续」发 2 次、「提交」发 2 次（chip 的首次出现必须由真实送达写入 `chat-input-history` 产生，不得直接写 localStorage 造夹具）；助手空闲、输入为空时 chip 可见；Tab 选中第 1 个；Enter 填入；输入一个字符后 chip 消失；清空后重现；鼠标点击填入；Esc 隐藏；深色主题一张；窄屏 390px 一张。
 - [ ] 用 `browser_evaluate` 贴出布局读数：有 chip 与无 chip 时 `PromptInputBody` 高度之差 ≤8px，composer 整体高度之差 ≤8px；窄屏 `document.documentElement.scrollWidth <= window.innerWidth` 且 chip 容器可横向滚动。
 - [ ] 贴出完成上述操作后 `localStorage['chat-suggestion-stats']` 的实际值，四个计数均大于 0，证明计数在真实交互中累加而非只在单测里累加。
-- [ ] 场景运行器：若存在适用场景，运行 `node scripts/ui-scenario.mjs <scenario.json>` 并贴出 JSON 报告与检查点截图；若没有适用场景，如实写明「无适用场景」及原因，不得伪造。
-- [ ] 证伪记录：对「候选规则」(a)–(i) 与「可见条件」负例各临时撤掉对应一条实现，贴出对应 `it` 变红的输出，再恢复；至少覆盖 Tab 交还、Esc 的 `stopPropagation`、`mousedown` 的 `preventDefault` 三处。
+- [x] 场景运行器：若存在适用场景，运行 `node scripts/ui-scenario.mjs <scenario.json>` 并贴出 JSON 报告与检查点截图；若没有适用场景，如实写明「无适用场景」及原因，不得伪造。
+- [x] 证伪记录：对「候选规则」(a)–(i) 与「可见条件」负例各临时撤掉对应一条实现，贴出对应 `it` 变红的输出，再恢复；至少覆盖 Tab 交还、Esc 的 `stopPropagation`、`mousedown` 的 `preventDefault` 三处。
 - [ ] Esc 的真实验证只在**空闲**会话里进行；在运行中的会话里按 Escape 会中止该轮，不得在真实会话中这样验证。
-- [ ] 若实现与 `docs/proposals/composer-empty-input-suggestions.md` 有出入，更新该文档对应段落，并在任务收尾说明出入原因。
+- [x] 若实现与 `docs/proposals/composer-empty-input-suggestions.md` 有出入，更新该文档对应段落，并在任务收尾说明出入原因。
 
 ## Touches
 
