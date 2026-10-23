@@ -1,7 +1,7 @@
 ---
 id: gap-resident-restore-after-restart
 title: 重启后自动恢复 resident 会话（最小可行版：默认 off，CLAUDE_RESIDENT_RESTORE=on 开启）
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -49,11 +49,3 @@ extra:
 - scripts/suite-duration-baseline.tsv
 - server/shared/tests/quay-test-script.test.ts
 - tasks/gap-resident-restore-after-restart.md
-
-## Blocker
-
-**2026-10-23T06:19:19.002Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=83320 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792735952063
-- run_id：wk-prod-anchor
-- session_id：5f6f36c6-67d8-42ad-b174-26157bb97c82

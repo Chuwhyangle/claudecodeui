@@ -39,7 +39,7 @@ import {
     uiLastOpenedSessionService,
 } from '@/modules/providers/index.js';
 import { activityStore, BOOT_ID, broadcastHostsChanged, broadcastSessionUpserted, broadcastSessionUpsertedBatch, chatRunRegistry, connectedClients, createActivityRouter, createChatControlService, createUiNavigationService, createWebSocketServer, listUiClients, uiClientRegistry, uiStateRequestService, WS_OPEN_STATE } from '@/modules/websocket/index.js';
-import { createSessionHostsRouter, sessionHostManager } from '@/modules/session-hosts/index.js';
+import { createResidentRestoreService, createSessionHostsRouter, resolveResidentRestoreEnabled, sessionHostManager } from '@/modules/session-hosts/index.js';
 
 import { getConnectableHost } from '../shared/networkHosts.js';
 import { OAUTH_CONSENT_SPA_PATH } from '../shared/oauthConsent.js';
@@ -2361,6 +2361,14 @@ async function startServer() {
             console.log(`${terminalTextStyles.info('[INFO]')} Swept ${sweptSessionScopes.length} orphaned Claude session scope(s): ${sweptSessionScopes.join(', ')}`);
         }
 
+        // After the sweep, never before it: the restore pass launches processes of
+        // its own, and a sweep running afterwards would have to tell them apart
+        // from orphans. Off unless `CLAUDE_RESIDENT_RESTORE=on`, and scheduled
+        // rather than awaited so a slow provider cannot hold up `listen`.
+        if (resolveResidentRestoreEnabled()) {
+            restoreResidentSessionsAfterRestart();
+        }
+
         server.listen(SERVER_PORT, HOST, async () => {
             const appInstallPath = APP_ROOT;
             await writeLocalServerMarker().catch((error) => {
@@ -2469,6 +2477,64 @@ async function startServer() {
         console.error('[ERROR] Failed to start server:', error);
         process.exit(1);
     }
+}
+
+/**
+ * How long the restore pass waits before its first launch.
+ *
+ * Long enough for the listen callback and the ready banner to run first, so the
+ * pass is provably off the boot path rather than merely `void`-ed; short enough
+ * that a user who reloads right after a restart sees the sessions come back.
+ */
+const RESIDENT_RESTORE_STARTUP_DELAY_MS = 2_000;
+
+/**
+ * Schedules one resident-session restore pass and returns immediately.
+ *
+ * A restart drops every resident process the previous server held, and the
+ * sessions stay dormant until the next `chat.send` lazily opens one — which
+ * leaves cross-session peer addressing (`SendMessage` by `peerName`) pointing at
+ * a session nobody is serving. This pass brings the most recently active resident
+ * sessions back at boot. It is opt-in (`CLAUDE_RESIDENT_RESTORE=on`) and
+ * fire-and-forget: the sessions module owns the policy (window, ceiling, budget,
+ * per-session isolation) and this function only supplies the two seams the module
+ * cannot reach — the session store's candidate reader and the providers layer's
+ * on-demand launch. The timer is unref'd so a pass waiting to fire can never be
+ * the thing that keeps a shutting-down process alive.
+ */
+function restoreResidentSessionsAfterRestart(): void {
+    const service = createResidentRestoreService({
+        listRestorableResidentSessions: ({ maxAgeMs, limit }) =>
+            sessionsDb.listRestorableResidentSessions({ maxAgeMs, limit }).map((session) => ({
+                appSessionId: session.appSessionId,
+                provider: session.provider as LLMProvider,
+                providerSessionId: session.providerSessionId,
+                lastActiveAt: session.lastActiveAt,
+            })),
+        // A stored provider id the registry does not know mounts no driver, and
+        // that is the same answer as a provider that mounts none: the session is
+        // skipped rather than allowed to abort the pass.
+        resolveHostDriver: (provider) => {
+            try {
+                return providerRegistry.resolveProvider(provider).hostDriver ?? null;
+            } catch {
+                return null;
+            }
+        },
+        startResidentSession: (provider, sessionId) =>
+            providerRuntimeService.startResidentSession(provider, sessionId),
+        log: (message) => console.log(`${terminalTextStyles.info('[INFO]')} ${message}`),
+    });
+
+    const timer = setTimeout(() => {
+        void service.restore().catch((error: unknown) => {
+            console.warn(
+                '[WARN] Resident session restore failed:',
+                error instanceof Error ? error.message : error,
+            );
+        });
+    }, RESIDENT_RESTORE_STARTUP_DELAY_MS);
+    timer.unref();
 }
 
 startServer();
