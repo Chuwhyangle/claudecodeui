@@ -4253,6 +4253,38 @@ export type QuayConfigIssueCounts = {
 };
 
 /**
+ * The contracts a `quay-fleet --version --json` handshake declares. The server compares them
+ * with the versions it supports; the CLI's `version` string is informational only.
+ */
+export type QuayFleetContracts = {
+  wallUri: string;
+  registry: number;
+  interfaceSession: string;
+};
+
+/**
+ * How this server's fleet-CLI locator reads the host.
+ *
+ * `missing` and `incompatible` are hard failures (no fleet handle may be minted); `no-handshake`
+ * stays usable during the transition (an older fleet that does not answer `--version`).
+ */
+export type QuayFleetCliState = 'ok' | 'missing' | 'incompatible' | 'no-handshake';
+
+/** The locator's complete reading, carried by the fleet summary and by every snapshot. */
+export type QuayFleetCliReading = {
+  available: boolean;
+  state: QuayFleetCliState;
+  /** The selected binary, or `null` when none of the three lookups found one. */
+  binPath: string | null;
+  /** The CLI's self-reported version, for display/logging only. */
+  version: string | null;
+  /** The contracts it declared, or `null` for `no-handshake`/`missing`. */
+  contracts: QuayFleetContracts | null;
+  /** One sentence naming the failure, `null` exactly when the state is `ok`. */
+  reason: string | null;
+};
+
+/**
  * Everything the Tier-2 panel renders, assembled from whitelisted read-only
  * commands. A section is `null` when its command failed or returned unparseable
  * output; the failure is recorded in `warnings` rather than thrown, so one
@@ -4261,6 +4293,14 @@ export type QuayConfigIssueCounts = {
 export type QuaySnapshot = {
   projectId: string;
   projectPath: string;
+  /**
+   * The host-level fleet CLI reading for this snapshot, from the shared locator.
+   *
+   * OPTIONAL because the Tier-2 cache can hold a snapshot written before this field existed;
+   * absent is "not reported", never "the CLI is missing". The panel uses it to state ONE cause
+   * (missing / incompatible / no-handshake) instead of repeating 「未登记到 quay-fleet」 per card.
+   */
+  fleet?: QuayFleetCliReading;
   /**
    * The project's quay-fleet registry id, joined from the fleet registry by matching the
    * project root. It is the ONLY project segment a `quay://` reference may carry: the fleet

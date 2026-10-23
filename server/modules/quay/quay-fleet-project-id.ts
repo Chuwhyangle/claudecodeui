@@ -2,6 +2,12 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {
+  createQuayFleetCliReader,
+  locateQuayFleetCli,
+  type QuayFleetCliReading,
+  type QuayFleetCliState,
+} from './quay-fleet-locator.js';
 import type { QuayFleetExec } from './quay-fleet-registry.js';
 
 /**
@@ -70,19 +76,14 @@ export type QuayFleetProjectMatch = {
 };
 
 /**
- * Whether this host can ask the fleet at all.
+ * Whether this host can ask the fleet at all, and — when it can — what the CLI said it is.
  *
- * `available: false` means the `quay-fleet` CLI could not be run (absent, timed out, non-zero
- * exit, or unreadable output); `reason` then names the failure so the UI can print one line
- * instead of labelling every project "unregistered". `available: true` means the registry
- * document was read: a project with `fleetProjectId: null` under this reading really is not
- * registered with the fleet.
+ * The reading is the locator's full {@link QuayFleetCliReading}: `available: false` covers both
+ * "no binary was found" (`state: 'missing'`) and "the binary speaks a contract this build does
+ * not" (`state: 'incompatible'`); `reason` names the failure either way. `no-handshake` stays
+ * available so an un-upgraded fleet keeps working during the transition.
  */
-export type QuayFleetAvailability = {
-  available: boolean;
-  /** Why the fleet could not be asked; `null` exactly when `available` is `true`. */
-  reason: string | null;
-};
+export type QuayFleetAvailability = QuayFleetCliReading;
 
 /**
  * The two joins the Quay module needs. Consumer: `quay.service.ts`, which stamps each fleet
@@ -116,7 +117,10 @@ export type QuayFleetProjectIdDependencies = {
    * still resolves references through the fleet read port but has no snapshot fallback.
    */
   listProjects?: () => readonly { projectId: string; projectPath: string }[];
-  /** The fleet CLI to spawn. Defaults to `QUAY_FLEET_BIN`, then `quay-fleet` on `PATH`. */
+  /**
+   * The fleet CLI to spawn. Defaults to the shared locator (`QUAY_FLEET_BIN` → `PATH` →
+   * `~/.quay-fleet/bin/quay-fleet`), so this module no longer carries a lookup of its own.
+   */
   binPath?: string;
   /** Child-process seam, defaulting to Node's `execFile`. */
   exec?: QuayFleetExec;
@@ -210,7 +214,34 @@ export function createQuayFleetProjectIdResolver(
   const normalize = dependencies.normalizePath ?? canonicalPath;
   const now = dependencies.now ?? Date.now;
   const ttlMs = dependencies.ttlMs ?? QUAY_FLEET_PROJECT_ID_TTL_MS;
-  const binPath = dependencies.binPath ?? (process.env.QUAY_FLEET_BIN?.trim() || 'quay-fleet');
+
+  /**
+   * The binary every read spawns. An explicit `binPath` wins (the tests' seam). Otherwise the
+   * shared locator answers; when it finds nothing AND no exec seam was injected, this is
+   * `null` and the reads report "not found" without forking a child that cannot exist. An
+   * injected exec is honoured with the bare name so a criterion can drive the join on a host
+   * with no fleet installed.
+   */
+  const resolveBinPath = (): string | null =>
+    dependencies.binPath
+    ?? locateQuayFleetCli().binPath
+    ?? (dependencies.exec === undefined ? null : 'quay-fleet');
+
+  /**
+   * The handshake over the same seam. Its TTL is this resolver's TTL: one child per window
+   * however many summaries and snapshots read the availability.
+   */
+  const cliReader = createQuayFleetCliReader({
+    locate: () => ({ binPath: resolveBinPath(), source: null }),
+    exec: dependencies.exec,
+    timeoutMs: QUAY_FLEET_TIMEOUT_MS,
+    ttlMs,
+    now,
+  });
+
+  /** Classifies a failed registry read: no binary at all versus a binary that did not answer. */
+  const failureState = (reason: string): QuayFleetCliState =>
+    /not found|ENOENT/i.test(reason) ? 'missing' : 'no-handshake';
 
   /**
    * The cached registry reading. `entries: null` is a real reading too — "the fleet could not
@@ -225,8 +256,22 @@ export function createQuayFleetProjectIdResolver(
   const readRegistry = async (): Promise<QuayFleetRegistryReading> => {
     const unavailable = (reason: string): QuayFleetRegistryReading => ({
       entries: null,
-      availability: { available: false, reason },
+      availability: {
+        available: false,
+        state: failureState(reason),
+        binPath: resolveBinPath(),
+        version: null,
+        contracts: null,
+        reason,
+      },
     });
+
+    const binPath = resolveBinPath();
+    if (binPath === null) {
+      return unavailable(
+        'quay-fleet was not found (checked QUAY_FLEET_BIN, PATH and ~/.quay-fleet/bin/quay-fleet)',
+      );
+    }
 
     let result;
     try {
@@ -263,7 +308,20 @@ export function createQuayFleetProjectIdResolver(
         entries.push({ id: project.id, root: normalize(project.root) });
       }
     }
-    return { entries, availability: { available: true, reason: null } };
+    // The registry answered, so the CLI is reachable. The CONTRACT reading is the handshake's
+    // (composed in `resolveFleetAvailability`); this cached value only has to agree on
+    // `available`, and names the binary the read used.
+    return {
+      entries,
+      availability: {
+        available: true,
+        state: 'ok',
+        binPath: resolveBinPath(),
+        version: null,
+        contracts: null,
+        reason: null,
+      },
+    };
   };
 
   /** The registry reading, from cache, from the one in-flight read, or fresh. */
@@ -318,8 +376,16 @@ export function createQuayFleetProjectIdResolver(
 
     async resolveFleetAvailability() {
       const { availability } = await registryReading();
-      // A copy: the cached reading is shared by every caller in the TTL window.
-      return { ...availability };
+      if (!availability.available) {
+        // The registry document could not be read: the failure (and its state/reason) IS the
+        // availability answer, so there is nothing a handshake could add.
+        return { ...availability };
+      }
+      // The CLI answered the registry read, so it exists. The handshake says which contracts it
+      // speaks; a lookup miss here can only be the injected-seam sentinel, so keep the path the
+      // registry read used.
+      const cli = await cliReader.read();
+      return cli.state === 'missing' ? { ...cli, binPath: availability.binPath } : cli;
     },
   };
 }
