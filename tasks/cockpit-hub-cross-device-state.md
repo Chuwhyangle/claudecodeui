@@ -1,7 +1,7 @@
 ---
 id: cockpit-hub-cross-device-state
 title: 驾驶舱中枢：服务端持有焦点/视图/托盘/待确认发送（纯函数 reducer + 语义事件 + 多设备订阅）
-status: todo
+status: ready
 labels:
   - cockpit
   - contract
