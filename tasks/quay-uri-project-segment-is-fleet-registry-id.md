@@ -42,6 +42,15 @@ depends_on:
 - **MCP 浏览器实际操作 + 截图（必做）**：真实 CloudCLI 的 `/cockpit` 与 Quay 面板上，状态条显示的焦点 URI 为 `quay://claudecodeui/...` 这类 registry id 形态；截图存 `tmp/`，`browser_evaluate` 读回可见集，确认无 UUID 项目段。
 - 用 `ui-scenario-driver-semantic-surface` 落地的运行器跑一次 Quay 面板场景，贴报告。
 
+## Notes
+
+### fleet 确认（2026-10-23）
+
+- 项目段的权威来源 = fleet registry `projects[].id`（稳定 slug）。fleet 没有改名动词：改 id 只能 remove + add，等于换新身份；将来若支持改名，会先和 CloudCLI 对齐。
+- `quay-fleet registry list --json` 实测形状：`{"version":1,"projects":[{"id","root","enabled",...}],"interfaceSessionIds":[...],"devSessionIds":[...]}`。
+- `enabled` 不参与映射：与 fleet 的 id→root 映射保持一致，disabled 的登记项仍可被引用。
+- 当前 registry 只有 5 个项目（quay-fleet、quay、claudecodeui、archguard、plantuml-js）；驾驶舱显示的 cantus、meta-cc 未登记，修正后会显示「未登记到 quay-fleet」且不可被引用——这是预期行为，不是缺陷。
+
 ## Touches
 
 - server/modules/quay/quay.service.ts
