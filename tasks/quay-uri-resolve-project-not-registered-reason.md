@@ -20,8 +20,8 @@ fleet 的事实：`wall resolve` 是纯解析、不查 registry，任何 slug �
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-uri-resolve.test.ts` exit 0——桩 summary 以非零退出并给出 `project-not-registered` 时，结果 reason 为 `project-not-registered`；给出其他 reason 或无法解析时为 `reader-unavailable`；`no-summary` 用例不弱化。
-- [ ] AC2: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-uri-resolve.test.ts` exit 0——桩 summary 以非零退出并给出 `project-not-registered` 时，结果 reason 为 `project-not-registered`；给出其他 reason 或无法解析时为 `reader-unavailable`；`no-summary` 用例不弱化。
+- [x] AC2: `npm run typecheck` 通过。
 
 ## DoD
 
