@@ -1,4 +1,5 @@
 import { Activity, AlertTriangle, ExternalLink, Info, Loader2, RefreshCw } from 'lucide-react';
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 import type {
@@ -595,6 +596,25 @@ function InFlightCard({
   generatedAt: string;
 }) {
   const contract = buildQuayInFlightContract(projectId, inFlight);
+  const focusablesJson = JSON.stringify(contract.focusables);
+
+  // PUBLISH THE SAME DECLARATION THE TILE DRAWS. The dev-only scenario surface reads focusables
+  // from a view-contract registry rather than from the DOM, so a scenario and the renderer resolve
+  // 「②」 to one object — the tile is not re-declared for tests. `import.meta.env.DEV` is a
+  // build-time constant: in a production bundle this branch is compiled out and the dynamic import
+  // with it, so the surface's symbol never reaches `dist/`. The module itself no-ops unless the
+  // operator opened the runtime lock (`?ui-scenario=1` / `localStorage['ui-scenario']='on'`).
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      const viewUri = formatQuayUri({ type: 'board', project: projectId });
+      void import('@/modules/ui-scenario').then(({ publishScenarioViewContract }) => {
+        publishScenarioViewContract(viewUri, contract);
+      });
+    }
+    // `focusablesJson` is the contract's identity: `contract` is rebuilt every render, and
+    // re-publishing on every render would make the registry's "most recent" clock meaningless.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusablesJson, projectId]);
 
   return (
     <section
