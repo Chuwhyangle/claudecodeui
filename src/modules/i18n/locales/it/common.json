@@ -160,6 +160,10 @@
     "granularity": "Granularità del grafo",
     "fileGraph": "Grafo dei file",
     "entityGraph": "Grafo delle entità",
+    "fullscreen": {
+      "enter": "Schermo intero",
+      "exit": "Esci da schermo intero"
+    },
     "controls": {
       "maxHops": "Salti",
       "hopOption": "Salti {{count}}",

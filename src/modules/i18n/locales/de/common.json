@@ -160,6 +160,10 @@
     "granularity": "Diagramm-Detailgrad",
     "fileGraph": "Dateidiagramm",
     "entityGraph": "Entitätsdiagramm",
+    "fullscreen": {
+      "enter": "Vollbild",
+      "exit": "Vollbild beenden"
+    },
     "controls": {
       "maxHops": "Hops",
       "hopOption": "Hops {{count}}",

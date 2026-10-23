@@ -160,6 +160,10 @@
     "granularity": "グラフの粒度",
     "fileGraph": "ファイルグラフ",
     "entityGraph": "エンティティグラフ",
+    "fullscreen": {
+      "enter": "全画面",
+      "exit": "全画面を終了"
+    },
     "controls": {
       "maxHops": "ホップ数",
       "hopOption": "ホップ数 {{count}}",

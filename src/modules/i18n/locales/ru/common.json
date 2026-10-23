@@ -160,6 +160,10 @@
     "granularity": "Детализация графа",
     "fileGraph": "Граф файлов",
     "entityGraph": "Граф сущностей",
+    "fullscreen": {
+      "enter": "Полный экран",
+      "exit": "Выйти из полноэкранного режима"
+    },
     "controls": {
       "maxHops": "Прыжки",
       "hopOption": "Прыжки {{count}}",

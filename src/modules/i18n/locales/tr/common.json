@@ -160,6 +160,10 @@
     "granularity": "Graf ayrıntı düzeyi",
     "fileGraph": "Dosya grafiği",
     "entityGraph": "Varlık grafiği",
+    "fullscreen": {
+      "enter": "Tam ekran",
+      "exit": "Tam ekrandan çık"
+    },
     "controls": {
       "maxHops": "Atlamalar",
       "hopOption": "Atlama {{count}}",

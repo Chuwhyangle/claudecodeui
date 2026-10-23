@@ -1220,6 +1220,11 @@ export function PlantUmlGraph({
   // The drawing the LOD level belongs to, so an aspect re-layout of the SAME
   // view carries the current level and focus over instead of re-deriving them.
   const drawnKeyRef = useRef<string | null>(null);
+  // The inputs the last layout effect run was given. When the effect re-runs
+  // with the SAME inputs it is an aspect-driven re-layout (the container's
+  // shape changed), not a new view/graph; a custom zoom the reader chose must
+  // survive that. A genuinely new drawing re-derives its own scale.
+  const layoutInputRef = useRef<{ graph: unknown; viewKey: string; idShape: string; entityGraph: boolean } | null>(null);
   // Pending debounced re-layout (one timer: the latest reading wins).
   const aspectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Whether aspect-driven re-layout is frozen (see `relayoutLocked`). The lock
@@ -1254,6 +1259,17 @@ export function PlantUmlGraph({
     if (host === null) return;
 
     let cancelled = false;
+    // Is this run a re-layout of the SAME drawing (the container's shape
+    // changed), rather than a new view/graph? Only the former may keep a
+    // reader-chosen scale: a new drawing has its own natural size.
+    const viewKey = drawingKeyOf(view);
+    const previousLayoutInput = layoutInputRef.current;
+    const sameDrawing = previousLayoutInput !== null
+      && previousLayoutInput.graph === graph
+      && previousLayoutInput.viewKey === viewKey
+      && previousLayoutInput.idShape === idShape
+      && previousLayoutInput.entityGraph === entityGraph;
+    layoutInputRef.current = { graph, viewKey, idShape, entityGraph };
     // A pending application belongs to the drawing being replaced; the new one
     // is applied synchronously below.
     lodSchedulerRef.current?.cancel();
@@ -1422,7 +1438,12 @@ export function PlantUmlGraph({
             setCollapsedNotice(false);
           }
           const placement = placementForDecision(natural, box, decision);
-          drawnScale = viewport.zoomTo(placement?.scale ?? decision.scale);
+          // An aspect re-layout keeps the scale the reader chose; a new
+          // drawing re-derives it from its own natural size. `applyPlacement`
+          // still re-centres the drawing inside the new container.
+          drawnScale = sameDrawing && zoomRef.current.mode === 'custom'
+            ? zoomRef.current.scale
+            : viewport.zoomTo(placement?.scale ?? decision.scale);
           applyPlacement(drawing, placement);
           applyZoom({ scale: drawnScale, mode: zoomRef.current.mode });
           readout = {

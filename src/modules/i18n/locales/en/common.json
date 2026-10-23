@@ -121,6 +121,10 @@
     "granularity": "Graph granularity",
     "fileGraph": "File graph",
     "entityGraph": "Entity graph",
+    "fullscreen": {
+      "enter": "Fullscreen",
+      "exit": "Exit fullscreen"
+    },
     "controls": {
       "maxHops": "Hops",
       "hopOption": "Hops {{count}}",

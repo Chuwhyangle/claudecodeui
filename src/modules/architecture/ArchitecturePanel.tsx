@@ -1,5 +1,6 @@
 import {
   type ComponentType,
+  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -7,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
@@ -95,6 +97,7 @@ import {
   type ArchitectureSelectionScope,
 } from '@/modules/architecture/selectionModel';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
+import { useArchitectureFullscreen } from '@/modules/architecture/useArchitectureFullscreen';
 import { readDraftText, writeDraftText } from '@/shared/chatDrafts';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 import { ArchitectureEmptyState } from '@/modules/architecture/ArchitectureEmptyState';
@@ -769,6 +772,12 @@ export default function ArchitecturePanel({
   // The rendered drawing's container, so the export actions can read the live
   // SVG without the renderer having to hand its host ref up the tree.
   const graphAreaRef = useRef<HTMLDivElement | null>(null);
+  // The overlay root is the panel's own element: fullscreen restyles it in
+  // place rather than mounting a second copy, so the renderer keeps its zoom
+  // and the panel keeps every filter/scope/selection reading.
+  const panelRootRef = useRef<HTMLDivElement | null>(null);
+  // Where focus returns when the overlay closes.
+  const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyFallbackRef = useRef<HTMLTextAreaElement | null>(null);
   // A fallback dialog opens with its text already selected, so the documented
   // "select and copy" path is one keystroke rather than a drag.
@@ -777,6 +786,37 @@ export default function ArchitecturePanel({
     copyFallbackRef.current?.focus();
     copyFallbackRef.current?.select();
   }, [copyFallbackText]);
+
+  // The page-internal overlay plus, on a fine pointer, the browser's own
+  // fullscreen session. `allowNativeFullscreen` stays false on a coarse
+  // pointer: phones get the overlay alone (which is all iOS Safari supports).
+  const fullscreen = useArchitectureFullscreen({
+    overlayRef: panelRootRef,
+    allowNativeFullscreen: !coarsePointer,
+  });
+  // The stable members the effects and handlers below depend on, named so a
+  // hook dependency is a callback rather than a freshly built object.
+  const fullscreenActive = fullscreen.active;
+  const exitFullscreen = fullscreen.exit;
+  const toggleFullscreen = fullscreen.toggle;
+  // Focus moves INTO the drawing on entry and back to the toggle on exit, so
+  // the keyboard reader is never left on a control the overlay covers.
+  const wasFullscreenRef = useRef(false);
+  useEffect(() => {
+    if (fullscreenActive) {
+      wasFullscreenRef.current = true;
+      (graphAreaRef.current ?? panelRootRef.current)?.focus();
+      return;
+    }
+    if (!wasFullscreenRef.current) return;
+    wasFullscreenRef.current = false;
+    fullscreenButtonRef.current?.focus();
+  }, [fullscreenActive]);
+  // A different session or project is a different reading: fullscreen must not
+  // travel with the panel into it.
+  useEffect(() => {
+    exitFullscreen();
+  }, [sessionId, projectId, exitFullscreen]);
 
   const changeScope = (next: number): void => {
     const clamped = clampArchitectureScope(next);
@@ -1183,6 +1223,18 @@ export default function ArchitecturePanel({
     setMultiSelectMode(false);
     if (dockOpen) changeDockOpen(false);
   }, [dockOpen, changeDockOpen]);
+
+  /**
+   * `F`, while the drawing owns the keyboard: the same toggle the toolbar
+   * button performs. The handler lives on the canvas REGION (not the panel), so
+   * typing `f` in the search box or a tray memo never enters fullscreen.
+   */
+  const handleCanvasFullscreenKey = useCallback((event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'f' && event.key !== 'F') return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    event.preventDefault();
+    toggleFullscreen();
+  }, [toggleFullscreen]);
   // An empty set has nothing to expand: reset both tray readings with it, so a
   // later selection starts from the pill rather than a stale drawer.
   useEffect(() => {
@@ -1608,6 +1660,40 @@ export default function ArchitecturePanel({
       className={`${headerButtonClass} border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
     >
       {t('architecture.text.open', { defaultValue: 'Text' })}
+    </button>
+  );
+
+  /**
+   * The overlay's one control. It carries an icon AND the visible word (the
+   * icon alone is not a label), flips to "Exit fullscreen" while the overlay is
+   * up, and lives on both toolbar tiers: on the compact row it sits OUTSIDE the
+   * Adjust sheet, so entering the overlay never asks the reader to open a
+   * sheet first.
+   */
+  const fullscreenButton = (
+    <button
+      ref={fullscreenButtonRef}
+      type="button"
+      aria-pressed={fullscreen.active}
+      aria-label={
+        fullscreen.active
+          ? t('architecture.fullscreen.exit', { defaultValue: 'Exit fullscreen' })
+          : t('architecture.fullscreen.enter', { defaultValue: 'Fullscreen' })
+      }
+      onClick={fullscreen.toggle}
+      data-architecture-fullscreen-toggle="true"
+      data-architecture-fullscreen-active={fullscreen.active ? 'true' : undefined}
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex items-center gap-1 border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+    >
+      {fullscreen.active
+        ? <Minimize2 className="h-4 w-4" aria-hidden="true" />
+        : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+      <span>
+        {fullscreen.active
+          ? t('architecture.fullscreen.exit', { defaultValue: 'Exit fullscreen' })
+          : t('architecture.fullscreen.enter', { defaultValue: 'Fullscreen' })}
+      </span>
     </button>
   );
 
@@ -3019,7 +3105,23 @@ export default function ArchitecturePanel({
   );
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden" data-architecture-panel="true">
+    <div
+      ref={panelRootRef}
+      // A programmatic focus target for the no-canvas (empty state) reading;
+      // the drawing region is preferred whenever it exists.
+      tabIndex={-1}
+      data-architecture-panel="true"
+      data-architecture-fullscreen={fullscreen.active ? 'true' : undefined}
+      // The overlay is the SAME element the panel always renders: `fixed;
+      // inset: 0` restyles it in place, which is what lets the renderer keep
+      // its zoom and the panel keep every reading through the toggle.
+      style={fullscreen.active ? { position: 'fixed', inset: 0, zIndex: 60 } : undefined}
+      className={
+        fullscreen.active
+          ? 'flex flex-col overflow-hidden bg-background outline-none'
+          : 'relative flex h-full flex-col overflow-hidden'
+      }
+    >
       {/* The one-off touch bubble's own fade. It is keyed CSS (not a JS timer)
           so the dismissal runs off the animation end even in a background tab,
           and a test can drive it with a single animation event. */}
@@ -3027,19 +3129,24 @@ export default function ArchitecturePanel({
       <div
         data-architecture-toolbar="true"
         style={compactToolbar ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
-        // The row WRAPS rather than scrolls. `overflow-x: auto` also makes the
-        // block axis a scroll container, which clipped every absolutely
-        // positioned child — the search results were cut to a 3px line. Wrapping
-        // keeps the popovers in normal paint flow, and the desktop row still
-        // fits one line at its breakpoint (it only wraps when the width really
-        // runs out, which is preferable to hiding controls in a scroller).
-        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5"
+        // Over the overlay the row is chrome ON TOP of a viewport-sized
+        // drawing, not a band that shortens it. Otherwise the row WRAPS rather
+        // than scrolls: `overflow-x: auto` also makes the block axis a scroll
+        // container, which clipped every absolutely positioned child — the
+        // search results were cut to a 3px line. Wrapping keeps the popovers in
+        // normal paint flow, and the desktop row still fits one line at its
+        // breakpoint (it only wraps when the width really runs out, which is
+        // preferable to hiding controls in a scroller).
+        className={`flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5 ${
+          fullscreen.active ? 'relative z-40 bg-background' : ''
+        }`}
       >
         {compactToolbar ? (
           <>
             {granularityGroup}
             <span className="flex-1" />
             {textToggle}
+            {fullscreenButton}
             <button
               ref={sheetTriggerRef}
               type="button"
@@ -3067,6 +3174,7 @@ export default function ArchitecturePanel({
             {curationManagerButton}
             <span className="flex-1" />
             {textToggle}
+            {fullscreenButton}
             {exportMenu}
             {legendButton}
           </>
@@ -3219,7 +3327,11 @@ export default function ArchitecturePanel({
             {!compactToolbar && (
               <div
                 data-architecture-canvas-header="true"
-                className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1"
+                // Floats above the overlay's viewport-sized drawing instead of
+                // taking a band from it (see the graph region below).
+                className={`flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1 ${
+                  fullscreen.active ? 'relative z-30 bg-background' : ''
+                }`}
               >
                 <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
                 <div
@@ -3238,7 +3350,9 @@ export default function ArchitecturePanel({
               <div
                 data-architecture-canvas-header="true"
                 data-architecture-readout-overlay="true"
-                className="flex shrink-0 border-b border-border/60 px-3 py-1"
+                className={`flex shrink-0 border-b border-border/60 px-3 py-1 ${
+                  fullscreen.active ? 'relative z-30 bg-background' : ''
+                }`}
               >
                 {readoutPanel}
               </div>
@@ -3267,7 +3381,17 @@ export default function ArchitecturePanel({
                 WebkitUserSelect: 'none',
                 WebkitTouchCallout: 'none',
               }}
-              className={`relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`}
+              // `F` is the drawing's own shortcut while it owns the keyboard.
+              onKeyDown={handleCanvasFullscreenKey}
+              // On the overlay the REGION itself is viewport-sized: the toolbar
+              // and readout rows above float over it with a higher z-index, so
+              // "the drawing fills the screen" is literally its box, not a
+              // share of the remaining column.
+              className={
+                fullscreen.active
+                  ? `fixed inset-0 z-0 flex min-h-0 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`
+                  : `relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`
+              }
             >
               {/* One-off, in-canvas instruction. It is an overlay bubble (not a
                   row in the panel column), fades itself out after 3s, and the
@@ -3450,6 +3574,21 @@ export default function ArchitecturePanel({
       </div>
 
       {hasSeeds && (
+        // `contents` keeps the dock a direct flex item on the normal layout.
+        // On the overlay it becomes a floating right-hand column instead: the
+        // inspector/text pages overlay the drawing rather than narrowing it.
+        // The coarse tier already draws its own bottom drawer, so only the
+        // fine-pointer dock is wrapped.
+        <div
+          data-architecture-fullscreen-dock={
+            fullscreen.active && !compactToolbar ? 'true' : undefined
+          }
+          className={
+            fullscreen.active && !compactToolbar
+              ? 'absolute inset-y-0 right-0 z-40 flex max-h-full flex-col'
+              : 'contents'
+          }
+        >
         <ArchitectureDock
           open={dockOpen}
           title={t('architecture.dock.title', { defaultValue: 'Inspector' })}
@@ -3562,6 +3701,7 @@ export default function ArchitecturePanel({
             full: t('architecture.dock.snapFull', { defaultValue: 'Full' }),
           }}
         />
+        </div>
       )}
 
       <ArchitectureCurationManager

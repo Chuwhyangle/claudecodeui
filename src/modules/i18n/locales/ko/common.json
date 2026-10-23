@@ -160,6 +160,10 @@
     "granularity": "그래프 세분성",
     "fileGraph": "파일 그래프",
     "entityGraph": "엔티티 그래프",
+    "fullscreen": {
+      "enter": "전체 화면",
+      "exit": "전체 화면 종료"
+    },
     "controls": {
       "maxHops": "홉",
       "hopOption": "홉 {{count}}",

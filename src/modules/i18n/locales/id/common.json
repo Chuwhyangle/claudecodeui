@@ -160,6 +160,10 @@
     "granularity": "Granularitas graf",
     "fileGraph": "Graf berkas",
     "entityGraph": "Graf entitas",
+    "fullscreen": {
+      "enter": "Layar penuh",
+      "exit": "Keluar dari layar penuh"
+    },
     "controls": {
       "maxHops": "Lompatan",
       "hopOption": "Lompatan {{count}}",

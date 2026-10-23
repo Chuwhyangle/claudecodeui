@@ -425,6 +425,18 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // architecture entries' value and clears that measurement ~14x, leaving room
   // for a load-slowed fan-in run without changing what is measured.
   'architecture-keyboard.spec.ts': 240_000,
+  // The fullscreen criterion: three real pages (PC 1440×765, phone portrait
+  // 390×844, phone landscape 844×390), each opening the class drawing,
+  // selecting an entity, entering the overlay, reading the drawing host's box
+  // against the viewport, exiting and re-reading the restored layout — plus a
+  // fourth page that starts a real turn, exits the overlay with Escape and
+  // re-runs the same reading with `stopPropagation` removed (the control arm).
+  // MEASURED 2026-10-23 on this worktree: `4 passed (31.7s)` for the whole
+  // invocation — config evaluation, both webServers' boot, the browser launch,
+  // the fixture and all four cases included. 240_000 is the sibling
+  // architecture entries' value and clears that measurement ~7.5x, which leaves
+  // room for a load-slowed fan-in run without changing what is measured.
+  'architecture-fullscreen.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2691,6 +2703,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // so the Architecture tab exists). It writes its own `.archguard` tree under
   // that home and needs no other channel.
   'architecture-keyboard.spec.ts',
+  // The fullscreen criterion: same fixture home (a session whose transcript
+  // seeds the entities the drawing is about, and a project with an `.archguard`
+  // cache so the Architecture tab exists). It writes its own three-entity tree
+  // under that home and needs no other channel.
+  'architecture-fullscreen.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

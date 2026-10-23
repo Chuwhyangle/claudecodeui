@@ -160,6 +160,10 @@
     "granularity": "图粒度",
     "fileGraph": "文件图",
     "entityGraph": "实体图",
+    "fullscreen": {
+      "enter": "全屏",
+      "exit": "退出全屏"
+    },
     "controls": {
       "maxHops": "跳数",
       "hopOption": "跳数 {{count}}",
