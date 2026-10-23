@@ -1,7 +1,7 @@
 ---
 id: architecture-semantic-zoom-defects-polish
 title: 架构图语义缩放缺陷修补：构造型文字最小字号、粘性包名重影与遮挡、上游溢出行去重、分隔线定位、置顶徽标读名、名字按实际宽度换行
-status: ready
+status: done
 labels:
   - feature
 parent: null
