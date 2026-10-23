@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "クラス",
+      "kindInterface": "インターフェース",
+      "kindEnum": "列挙型",
+      "kindAbstract": "抽象クラス",
+      "kindFunction": "関数",
+      "kindEntity": "エンティティ",
+      "announceEntity": "{{label}}、{{kind}}、パッケージ {{package}}、出 {{outgoing}} 本、入 {{incoming}} 本",
+      "announcePackage": "パッケージ {{package}}、{{count}} 個のエンティティ",
+      "noNeighbour": "その方向にエンティティはありません",
+      "selected": "{{label}} を選択しました",
+      "deselected": "{{label}} を選択から外しました",
+      "selectedIntoSet": "{{label}} を選択に追加しました",
+      "enteredPackage": "パッケージ {{package}} を開きました",
+      "rootPackage": "ルートパッケージ"
+    },
     "copyFix": {
       "kindClass": "{{count}} クラス",
       "kindFunction": "{{count}} 関数",

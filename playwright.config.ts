@@ -408,6 +408,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // entry above declares and clears that measurement more than tenfold, which
   // leaves room for a load-slowed fan-in run without changing what is measured.
   'architecture-send-to-chat.spec.ts': 240_000,
+  // The keyboard criterion: one real page that Tabs into the class drawing,
+  // enters the entity-navigation state, walks it with arrow keys, selects and
+  // multi-selects, pins and undoes, and runs the aria-activedescendant control
+  // arm. MEASURED on this worktree 2026-10-23: the whole invocation (config
+  // evaluation, both webServers' boot, the browser launch, the 120-entity
+  // fixture and its scenario) took `1 passed (16.3s)`; the case body itself
+  // reported `elapsed=16136ms` from the run's start. 240_000 is the sibling
+  // architecture entries' value and clears that measurement ~14x, leaving room
+  // for a load-slowed fan-in run without changing what is measured.
+  'architecture-keyboard.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2669,6 +2679,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // and a project with an `.archguard` cache so the Architecture tab exists. It
   // writes its own three-entity tree under that home.
   'architecture-send-to-chat.spec.ts',
+  // The keyboard criterion: same fixture home (a session whose transcript seeds
+  // the entities the reading is about, and a project with an `.archguard` cache
+  // so the Architecture tab exists). It writes its own `.archguard` tree under
+  // that home and needs no other channel.
+  'architecture-keyboard.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

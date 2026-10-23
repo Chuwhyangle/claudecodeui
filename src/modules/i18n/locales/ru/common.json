@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell недоступен для резидентных сессий"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "класс",
+      "kindInterface": "интерфейс",
+      "kindEnum": "перечисление",
+      "kindAbstract": "абстрактный класс",
+      "kindFunction": "функция",
+      "kindEntity": "сущность",
+      "announceEntity": "{{label}}, {{kind}}, пакет {{package}}, {{outgoing}} исходящих, {{incoming}} входящих",
+      "announcePackage": "Пакет {{package}}, сущностей: {{count}}",
+      "noNeighbour": "В этом направлении нет сущностей",
+      "selected": "{{label}} выбран",
+      "deselected": "{{label}} удалён из выбора",
+      "selectedIntoSet": "{{label}} добавлен в выбор",
+      "enteredPackage": "Открыт пакет {{package}}",
+      "rootPackage": "корневой пакет"
+    },
     "copyFix": {
       "kindClass": "{{count}} классов",
       "kindFunction": "{{count}} функций",
