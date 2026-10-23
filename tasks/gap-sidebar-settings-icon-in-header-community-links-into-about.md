@@ -30,12 +30,12 @@ E. 留意两条测试 mock：`tests/sidebarResize.test.ts`、`tests/sessionFilte
 
 ## AC
 
-- [ ] `grep -nE "reportIssue|joinCommunity|DISCORD_INVITE_URL|GITHUB_ISSUES_URL" src/modules/sidebar/SidebarFooter.tsx` 无输出，且 `grep -c "onShowSettings" src/modules/sidebar/SidebarFooter.tsx` 为 0
-- [ ] 新增单测（`src/modules/sidebar/tests/SidebarHeaderSettings.test.tsx`）：渲染 `SidebarHeader` 桌面与手机两个头部，各存在一个 `aria-label` 为 `actions.settings`（key-echo `t`）的按钮，点击触发一次 `onShowSettings`；`npx vitest run src/modules/sidebar/tests/SidebarHeaderSettings.test.tsx src/modules/sidebar/tests/SidebarHeaderGoHome.test.tsx` 退出码 0
-- [ ] 新增单测（`src/modules/settings/tests/aboutTabCommunityLinks.test.tsx`）：渲染 `AboutTab`，存在指向 `https://github.com/siteboon/claudecodeui/issues/new` 与 `https://discord.gg/buxwujPNRE` 的链接，且均带 `target="_blank"` 与 `rel` 含 `noopener`；`npx vitest run` 该文件退出码 0
-- [ ] `grep -rn "function DiscordIcon" src | wc -l` 为 1（只剩共享的一份）
-- [ ] 新增的 i18n 键在 12 个 locale 里齐全：`node --test` 或 vitest 的现有 i18n 完整性测试（`src/modules/settings/tests/i18n*Completeness.test.ts`）退出码 0，且 `grep -L "<新键名>" src/modules/i18n/locales/*/settings.json` 无输出
-- [ ] `npm run typecheck`（或仓库现行的前端 typecheck 命令）退出码 0；`npx eslint src/modules/sidebar src/modules/settings` 退出码 0（含 boundaries 规则）
+- [x] `grep -nE "reportIssue|joinCommunity|DISCORD_INVITE_URL|GITHUB_ISSUES_URL" src/modules/sidebar/SidebarFooter.tsx` 无输出（exit 1），且 `grep -c "onShowSettings" src/modules/sidebar/SidebarFooter.tsx` 为 0
+- [x] 新增单测（`src/modules/sidebar/tests/SidebarHeaderSettings.test.tsx`）：渲染 `SidebarHeader` 桌面与手机两个头部，各存在一个 `aria-label` 为 `actions.settings`（key-echo `t`）的按钮，点击各触发一次 `onShowSettings`；`npx vitest run src/modules/sidebar/tests/SidebarHeaderSettings.test.tsx src/modules/sidebar/tests/SidebarHeaderGoHome.test.tsx` 退出码 0（3 tests passed）
+- [x] 新增单测（`src/modules/settings/tests/aboutTabCommunityLinks.test.tsx`）：渲染 `AboutTab`，存在指向 `https://github.com/siteboon/claudecodeui/issues/new` 与 `https://discord.gg/buxwujPNRE` 的链接，且均带 `target="_blank"` 与 `rel` 含 `noopener`；`npx vitest run` 该文件退出码 0（1 test passed）
+- [x] `grep -rn "function DiscordIcon" src | wc -l` 为 1（只剩 `src/shared/ui/DiscordIcon.tsx` 的共享一份；`AboutTab` 与 `SidebarCollapsed` 都经 `@/shared/ui` barrel 引用）
+- [x] 新增的 i18n 键（`actions.reportIssue` / `actions.joinCommunity`，落在 `settings` 命名空间，12 个 locale 全有译文）：现有 i18n 完整性测试（`npx vitest run src/modules/settings/tests/i18nAccessTokensCompleteness.test.ts src/modules/settings/tests/i18nConnectedAppsCompleteness.test.ts src/modules/settings/tests/i18nMcpSettingsCompleteness.test.ts src/modules/i18n/tests/localeDuplicateKeys.test.ts`）退出码 0（15 tests passed），且 `grep -L "reportIssue" src/modules/i18n/locales/*/settings.json` 与 `grep -L "joinCommunity" src/modules/i18n/locales/*/settings.json` 均无输出（exit 1）
+- [x] `npm run typecheck`（tsc × 前端 / server / scripts）退出码 0；lint 门禁用仓库实际入口 oxlint（`.oxlintrc.json` 配置了 eslint-plugin-boundaries 的模块边界规则）：`npx oxlint src/modules/sidebar src/modules/settings src/shared/ui` 退出码 0。仓库没有 `eslint.config.*`，ESLint 9 无法启动，故 AC 原文的 `npx eslint` 以实际 lint 入口替代
 
 ## DoD
 
@@ -51,6 +51,18 @@ E. 留意两条测试 mock：`tests/sidebarResize.test.ts`、`tests/sessionFilte
 - src/modules/sidebar/tests/SidebarHeaderSettings.test.tsx
 - src/modules/sidebar/tests/SidebarHeaderGoHome.test.tsx
 - src/modules/settings/tests/aboutTabCommunityLinks.test.tsx
+- src/shared/ui/DiscordIcon.tsx
+- src/shared/ui/index.ts
 - src/modules/i18n/locales/en/settings.json
+- src/modules/i18n/locales/es/settings.json
+- src/modules/i18n/locales/fr/settings.json
+- src/modules/i18n/locales/id/settings.json
+- src/modules/i18n/locales/ja/settings.json
+- src/modules/i18n/locales/ko/settings.json
+- src/modules/i18n/locales/tr/settings.json
 - src/modules/i18n/locales/zh-CN/settings.json
+- src/modules/i18n/locales/zh-TW/settings.json
+- src/modules/i18n/locales/de/settings.json
+- src/modules/i18n/locales/it/settings.json
+- src/modules/i18n/locales/ru/settings.json
 - tasks/gap-sidebar-settings-icon-in-header-community-links-into-about.md
