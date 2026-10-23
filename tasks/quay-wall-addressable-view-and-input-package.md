@@ -42,6 +42,7 @@ extra: {}
 ## DoD
 
 - 在真实运行的 CloudCLI 上打开 Quay 面板，在途任务磁贴带可见序号标签；在开发者控制台或测试夹具中对一条语音构建引用包，包内 focus 为该磁贴的 `quay://<project>/task/<id>`。
+- **MCP 浏览器视觉验证（必做）**：用 playwright MCP 打开真实运行的 CloudCLI → Quay 面板，截图在途任务磁贴的序号标签与状态色（截图存仓库 `tmp/`），并用 `browser_evaluate` 读回该磁贴声明的可聚焦子元素（uri/label/display），与截图上看到的一致。证据贴进 Evidence。
 - 如实写明：本任务不解引用（交给 C）；`text` 降级路径的兼容边界。
 
 ## Notes
