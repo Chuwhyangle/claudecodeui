@@ -23,10 +23,10 @@ extra:
 
 ## AC
 
-- [ ] 在 390px 宽的渲染下，`[data-architecture-unresolved]` 的 `getBoundingClientRect().right` 不超过其父级页脚行 `[data-architecture-source-footer]` 的 `right`（新增 vitest 断言，用例名含 `footer unresolved button stays inside the footer`）。
-- [ ] 窄屏下 `[data-architecture-unresolved]` 的文本为短文案（长度小于 20 个字符），点击后 `[data-architecture-unresolved-list]` 出现且列出全部 unresolved 名字。
-- [ ] 新增 i18n 键在 `src/modules/i18n/locales/` 下每个 locale 的 `common.json` 里都存在；`npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` 退出码 0。
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` 与 `src/modules/architecture/tests/mobileCompactToolbar.test.tsx` 退出码 0。
+- [x] 在 390px 宽的渲染下，`[data-architecture-unresolved]` 的 `getBoundingClientRect().right` 不超过其父级页脚行 `[data-architecture-source-footer]` 的 `right`（新增 vitest 断言，用例名含 `footer unresolved button stays inside the footer`）。
+- [x] 窄屏下 `[data-architecture-unresolved]` 的文本为短文案（长度小于 20 个字符），点击后 `[data-architecture-unresolved-list]` 出现且列出全部 unresolved 名字。
+- [x] 新增 i18n 键在 `src/modules/i18n/locales/` 下每个 locale 的 `common.json` 里都存在；`npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` 退出码 0。
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` 与 `src/modules/architecture/tests/mobileCompactToolbar.test.tsx` 退出码 0。
 
 ## DoD
 
