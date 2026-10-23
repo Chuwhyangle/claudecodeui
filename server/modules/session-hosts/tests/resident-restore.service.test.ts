@@ -10,10 +10,13 @@
  *
  * The claim has three parts, read in order:
  *
- *   (1) the switch and its two numeric knobs: `CLAUDE_RESIDENT_RESTORE` is on
- *       only for an explicit `on` (or `true` / `1`), and a malformed ceiling or
- *       window falls back to the shipped default instead of throwing — a knob
- *       that could throw would take the whole boot down;
+ *   (1) the configuration face: the generic SERVER-level settings file decides
+ *       the switch — `residentRestore.enabled` is off unless the file sets it
+ *       true — and a malformed `max` / `maxAgeMs` (or a file that cannot be
+ *       read) falls back to the shipped default with the reason in `problems`
+ *       instead of throwing, because a knob that could throw would take the
+ *       whole boot down. `SERVER_SETTINGS_PATH` names the file; there are no
+ *       per-key environment variables;
  *   (2) the selection itself: only restorable sessions are started, most
  *       recently active first, capped by the ceiling, stale rows declined, and
  *       one launch that rejects does not stop the ones behind it nor reject the
@@ -37,7 +40,7 @@
  * WHERE clauses reds (3)'s exclusion set.
  */
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -49,21 +52,18 @@ import {
   projectsDb,
   sessionsDb,
 } from '@/modules/database/index.js';
+import { SERVER_SETTINGS_ENV, loadServerSettings } from '@/modules/settings/index.js';
 import type { IProviderHostDriver } from '@/shared/interfaces.js';
 import type { HostResidentStartResult, LLMProvider } from '@/shared/types.js';
 
 import {
+  DEFAULT_RESIDENT_RESTORE_ENABLED,
   DEFAULT_RESIDENT_RESTORE_MAX,
   DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
-  RESIDENT_RESTORE_ENV,
-  RESIDENT_RESTORE_MAX_AGE_ENV,
-  RESIDENT_RESTORE_MAX_ENV,
   createResidentRestoreService,
-  readResidentRestoreMax,
-  readResidentRestoreMaxAgeMs,
-  resolveResidentRestoreEnabled,
 } from '../resident-restore.service.js';
 import type { RestorableResidentSession } from '../resident-restore.service.js';
+import { RESIDENT_IDLE_TIMEOUT } from '../session-host-manager.service.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -157,68 +157,121 @@ function candidate(
 }
 
 // ---------------------------
-//----------------- (1) SWITCH AND KNOBS ------------
-test('AC1: the switch is off unless explicitly on; malformed knobs fall back', () => {
-  // The public names are pinned here as the contract: a rename the
-  // implementation makes alone must show up as a red reading, not as a test
-  // that follows the code.
-  assert.equal(RESIDENT_RESTORE_ENV, 'CLAUDE_RESIDENT_RESTORE');
-  assert.equal(RESIDENT_RESTORE_MAX_ENV, 'CLAUDE_RESIDENT_RESTORE_MAX');
-  assert.equal(RESIDENT_RESTORE_MAX_AGE_ENV, 'CLAUDE_RESIDENT_RESTORE_MAX_AGE_MS');
+//----------------- (1) THE SERVER SETTINGS FILE ------------
+test('AC1: the settings file decides the switch; malformed values fall back with a problem', async () => {
+  // The public name is pinned here as the contract: a rename the implementation
+  // makes alone must show up as a red reading, not as a test that follows the
+  // code. It is the ONLY environment entry — there are no per-key variables.
+  assert.equal(SERVER_SETTINGS_ENV, 'SERVER_SETTINGS_PATH');
 
-  const switchCases: Array<[Record<string, string | undefined>, boolean]> = [
-    [{}, false],
-    [{ [RESIDENT_RESTORE_ENV]: 'on' }, true],
-    [{ [RESIDENT_RESTORE_ENV]: ' ON ' }, true],
-    [{ [RESIDENT_RESTORE_ENV]: 'true' }, true],
-    [{ [RESIDENT_RESTORE_ENV]: '1' }, true],
-    [{ [RESIDENT_RESTORE_ENV]: 'off' }, false],
-    [{ [RESIDENT_RESTORE_ENV]: '0' }, false],
-    [{ [RESIDENT_RESTORE_ENV]: ' OFF ' }, false],
-    [{ [RESIDENT_RESTORE_ENV]: '' }, false],
-  ];
-  for (const [env, expected] of switchCases) {
-    const actual = resolveResidentRestoreEnabled(env);
-    console.log(`restore-switch env=${JSON.stringify(env)} enabled=${actual}`);
-    assert.equal(actual, expected, `${JSON.stringify(env)} must resolve to ${expected}`);
-  }
-
-  // The ceiling: a positive integer, or the shipped default. Empty, zero,
-  // negative, fractional and non-numeric all fall back — never throw.
+  // The shipped defaults, and the one equality that keeps the window honest: it
+  // is the resident idle ceiling itself, so "alive before the restart" cannot
+  // drift from the lifetime policy.
+  assert.equal(DEFAULT_RESIDENT_RESTORE_ENABLED, false);
   assert.equal(DEFAULT_RESIDENT_RESTORE_MAX, 16);
-  const maxCases: Array<[string | undefined, number]> = [
-    [undefined, DEFAULT_RESIDENT_RESTORE_MAX],
-    ['4', 4],
-    [' 8 ', 8],
-    ['0', DEFAULT_RESIDENT_RESTORE_MAX],
-    ['-3', DEFAULT_RESIDENT_RESTORE_MAX],
-    ['2.5', DEFAULT_RESIDENT_RESTORE_MAX],
-    ['nope', DEFAULT_RESIDENT_RESTORE_MAX],
-    ['', DEFAULT_RESIDENT_RESTORE_MAX],
-  ];
-  for (const [raw, expected] of maxCases) {
-    const actual = readResidentRestoreMax(raw === undefined ? {} : { [RESIDENT_RESTORE_MAX_ENV]: raw });
-    console.log(`restore-max raw=${JSON.stringify(raw)} max=${actual}`);
-    assert.equal(actual, expected, `ceiling ${JSON.stringify(raw)} must resolve to ${expected}`);
-  }
-
-  // The window defaults to the resident idle ceiling itself (24 hours), so the
-  // restore window and the lifetime policy cannot drift apart silently.
   assert.equal(DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS, 24 * HOUR_MS);
   assert.equal(DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS, 86_400_000);
-  const ageCases: Array<[string | undefined, number]> = [
-    [undefined, DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS],
-    ['60000', 60_000],
-    ['0', DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS],
-    ['-1', DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS],
-    ['soon', DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS],
-  ];
-  for (const [raw, expected] of ageCases) {
-    const actual = readResidentRestoreMaxAgeMs(
-      raw === undefined ? {} : { [RESIDENT_RESTORE_MAX_AGE_ENV]: raw },
+  assert.equal(DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS, RESIDENT_IDLE_TIMEOUT);
+
+  const tempDirectory = await mkdtemp(path.join(tmpdir(), 'resident-restore-settings-'));
+  try {
+    const absentUserCopy = path.join(tempDirectory, 'no-user-copy', 'server.settings.json');
+    const shippedPolicy = {
+      enabled: DEFAULT_RESIDENT_RESTORE_ENABLED,
+      max: DEFAULT_RESIDENT_RESTORE_MAX,
+      maxAgeMs: DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
+    };
+
+    // (a) Nothing configured: the shipped defaults, off, and NOT a problem —
+    // an absent user copy is the normal state, not a bad configuration.
+    const shipped = loadServerSettings({ env: {}, defaultPath: absentUserCopy });
+    console.log(`restore-settings shipped=${JSON.stringify(shipped)}`);
+    assert.deepEqual(shipped.residentRestore, shippedPolicy);
+    assert.equal(shipped.source, 'default');
+    assert.deepEqual(shipped.problems, []);
+
+    // (b) The file's `residentRestore.enabled` is what turns the pass on; the
+    // two numeric keys are read from the same block.
+    const enabledPath = path.join(tempDirectory, 'enabled.json');
+    await writeFile(
+      enabledPath,
+      JSON.stringify({ residentRestore: { enabled: true, max: 4, maxAgeMs: 60_000 } }),
     );
-    console.log(`restore-age raw=${JSON.stringify(raw)} maxAgeMs=${actual}`);
-    assert.equal(actual, expected, `window ${JSON.stringify(raw)} must resolve to ${expected}`);
+    const enabled = loadServerSettings({ settingsPath: enabledPath });
+    console.log(`restore-settings enabled=${JSON.stringify(enabled)}`);
+    assert.deepEqual(enabled.residentRestore, { enabled: true, max: 4, maxAgeMs: 60_000 });
+    assert.equal(enabled.source, 'file');
+    assert.deepEqual(enabled.problems, []);
+
+    // (c) Unknown keys — top-level and inside the block — are ignored: a file
+    // written for a newer build must not stop this one from booting.
+    const unknownPath = path.join(tempDirectory, 'unknown.json');
+    await writeFile(
+      unknownPath,
+      JSON.stringify({ futureKnob: 1, residentRestore: { enabled: true, futureKnob: 'x' } }),
+    );
+    const unknown = loadServerSettings({ settingsPath: unknownPath });
+    assert.equal(unknown.residentRestore.enabled, true);
+    assert.equal(unknown.residentRestore.max, DEFAULT_RESIDENT_RESTORE_MAX);
+    assert.deepEqual(unknown.problems, []);
+
+    // (d) Malformed values fall back FIELD BY FIELD and are reported: a typo in
+    // `max` must not silently turn off a pass the operator explicitly enabled.
+    const malformedPath = path.join(tempDirectory, 'malformed.json');
+    await writeFile(
+      malformedPath,
+      JSON.stringify({ residentRestore: { enabled: 'yes', max: 0, maxAgeMs: 2.5 } }),
+    );
+    const malformed = loadServerSettings({ settingsPath: malformedPath });
+    console.log(`restore-settings malformed=${JSON.stringify(malformed)}`);
+    assert.deepEqual(malformed.residentRestore, shippedPolicy);
+    assert.equal(malformed.problems.length, 3, `every malformed field must be reported: ${JSON.stringify(malformed.problems)}`);
+    assert.ok(malformed.problems.some((problem) => problem.includes('residentRestore.enabled')));
+    assert.ok(malformed.problems.some((problem) => problem.includes('residentRestore.max')));
+    assert.ok(malformed.problems.some((problem) => problem.includes('residentRestore.maxAgeMs')));
+
+    // A block that is not an object cannot be read field by field, so every
+    // default stays and the reason names the block.
+    const blockPath = path.join(tempDirectory, 'block.json');
+    await writeFile(blockPath, JSON.stringify({ residentRestore: 'on' }));
+    const block = loadServerSettings({ settingsPath: blockPath });
+    assert.deepEqual(block.residentRestore, shippedPolicy);
+    assert.deepEqual(block.problems, ['`residentRestore` must be a JSON object']);
+
+    // (e) SERVER_SETTINGS_PATH is the escape hatch: it names the file the
+    // reading consults, and an EXPLICITLY named file that cannot be read is a
+    // problem (unlike the absent user copy above).
+    const viaEnv = loadServerSettings({
+      env: { [SERVER_SETTINGS_ENV]: enabledPath },
+      defaultPath: absentUserCopy,
+    });
+    assert.equal(viaEnv.residentRestore.enabled, true);
+
+    const missing = loadServerSettings({
+      env: { [SERVER_SETTINGS_ENV]: path.join(tempDirectory, 'missing.json') },
+    });
+    console.log(`restore-settings missing=${JSON.stringify(missing)}`);
+    assert.deepEqual(missing.residentRestore, shippedPolicy);
+    assert.equal(missing.problems.length, 1);
+    assert.match(missing.problems[0], /could not read/);
+
+    const invalidJsonPath = path.join(tempDirectory, 'invalid.json');
+    await writeFile(invalidJsonPath, '{ not json');
+    const invalidJson = loadServerSettings({ env: { [SERVER_SETTINGS_ENV]: invalidJsonPath } });
+    console.log(`restore-settings invalid-json=${JSON.stringify(invalidJson)}`);
+    assert.deepEqual(invalidJson.residentRestore, shippedPolicy);
+    assert.equal(invalidJson.problems.length, 1);
+    assert.match(invalidJson.problems[0], /not valid JSON/);
+
+    // A JSON document that is not an object is refused whole as well.
+    const arrayPath = path.join(tempDirectory, 'array.json');
+    await writeFile(arrayPath, '[]');
+    const arrayDocument = loadServerSettings({ settingsPath: arrayPath });
+    assert.deepEqual(arrayDocument.residentRestore, shippedPolicy);
+    assert.equal(arrayDocument.problems.length, 1);
+    assert.match(arrayDocument.problems[0], /must contain a JSON object/);
+  } finally {
+    await rm(tempDirectory, { recursive: true, force: true });
   }
 });
 
