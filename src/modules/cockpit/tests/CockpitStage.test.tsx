@@ -134,20 +134,46 @@ const hubMock = vi.hoisted(() => {
         const current = set.find((object) => object.uri === state.focusUri) ?? set[0];
         const { row, column } = current.display.pos;
         const direction = event.direction as 'up' | 'down' | 'left' | 'right';
-        const candidates = set.filter((object) => {
-          if (direction === 'down') return object.display.pos.row > row;
-          if (direction === 'up') return object.display.pos.row < row;
-          if (direction === 'right') return object.display.pos.row === row && object.display.pos.column > column;
-          return object.display.pos.row === row && object.display.pos.column < column;
-        });
-        const next =
-          direction === 'down'
-            ? candidates.sort((a, b) => a.display.pos.row - b.display.pos.row || a.display.pos.column - b.display.pos.column)[0]
-            : direction === 'up'
-              ? candidates.sort((a, b) => b.display.pos.row - a.display.pos.row || b.display.pos.column - a.display.pos.column)[0]
-              : direction === 'right'
-                ? candidates.sort((a, b) => a.display.pos.column - b.display.pos.column)[0]
-                : candidates.sort((a, b) => b.display.pos.column - a.display.pos.column)[0];
+        // The two axes of the reported grid, mirroring the server reducer: left/right stay in
+        // the row, up/down take the adjacent row's nearest column.
+        const nearestIn = (candidates: FakeFocusable[]) => {
+          let best: FakeFocusable | undefined;
+          for (const candidate of candidates) {
+            if (best === undefined) {
+              best = candidate;
+              continue;
+            }
+            const distance = Math.abs(candidate.display.pos.column - column);
+            const bestDistance = Math.abs(best.display.pos.column - column);
+            if (
+              distance < bestDistance ||
+              (distance === bestDistance && candidate.display.pos.column < best.display.pos.column)
+            ) {
+              best = candidate;
+            }
+          }
+          return best;
+        };
+        let next: FakeFocusable | undefined;
+        if (direction === 'down' || direction === 'up') {
+          const rows = set
+            .map((object) => object.display.pos.row)
+            .filter((candidateRow) => (direction === 'down' ? candidateRow > row : candidateRow < row));
+          if (rows.length === 0) return;
+          const targetRow =
+            direction === 'down' ? Math.min(...rows) : Math.max(...rows);
+          next = nearestIn(set.filter((object) => object.display.pos.row === targetRow));
+        } else {
+          const candidates = set.filter((object) =>
+            direction === 'right'
+              ? object.display.pos.row === row && object.display.pos.column > column
+              : object.display.pos.row === row && object.display.pos.column < column,
+          );
+          next =
+            direction === 'right'
+              ? candidates.sort((a, b) => a.display.pos.column - b.display.pos.column)[0]
+              : candidates.sort((a, b) => b.display.pos.column - a.display.pos.column)[0];
+        }
         if (next !== undefined) state.focusUri = next.uri;
         return;
       }
@@ -438,13 +464,13 @@ describe('fleet view contract', () => {
     expect(declared.map((object) => object.uri)).not.toContain('quay://cantus/board');
     await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(focusUri()).toBe('quay://quay-fleet/board');
   });
 
-  it('moves focus by direction key in spatial order and clamps at both ends', async () => {
+  it('moves focus by direction key on the reported grid and clamps at both ends', async () => {
     renderCockpit();
     await screen.findByTestId('cockpit-fleet-tiles');
 
@@ -452,17 +478,20 @@ describe('fleet view contract', () => {
     // normalized the display's report).
     await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    // Two registered tiles in a two-column grid (jsdom's 1024px viewport) share one row, so
+    // the horizontal axis moves between them and the vertical axis has nowhere to go.
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(focusUri()).toBe('quay://quay-fleet/board');
 
     // Past the last declared object the focus stays put instead of wrapping or leaving the set
     // (the third project is unregistered and declares nothing to land on).
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     expect(focusUri()).toBe('quay://quay-fleet/board');
 
-    fireEvent.keyDown(window, { key: 'ArrowUp' });
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
     expect(focusUri()).toBe('quay://claudecodeui/board');
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
     fireEvent.keyDown(window, { key: 'ArrowUp' });
     expect(focusUri()).toBe('quay://claudecodeui/board');
   });
@@ -562,7 +591,7 @@ describe('view changes and history', () => {
     await screen.findByTestId('cockpit-fleet-tiles');
     await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
-    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
     fireEvent.keyDown(window, { key: 'Enter' });
 
     await waitFor(() => expect(locationSearch()).toBe('?view=board&project=p2'));
@@ -635,6 +664,135 @@ describe('board view contract', () => {
     // A direction key over an empty contract is a no-op: focus cannot leave the page.
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     expect(focusUri()).toBeNull();
+  });
+});
+
+describe('AC3: keyboard ownership, fleet availability and the send preview', () => {
+  it('loads with the STAGE focused, so the first → moves focus instead of landing in the input', async () => {
+    const { container } = renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+
+    const stage = screen.getByTestId('cockpit-stage');
+    const textarea = container.querySelector('[data-slot="prompt-input-textarea"]');
+    expect(textarea).not.toBeNull();
+    expect(document.activeElement).toBe(stage);
+    expect(document.activeElement).not.toBe(textarea);
+
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+    // THE FIRST PRESS NOW MOVES. With the textarea focused this key never reached the stage.
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(focusUri()).toBe('quay://quay-fleet/board');
+  });
+
+  it('states a missing fleet CLI once, and no tile claims 「unregistered」 in that reading', async () => {
+    apiMock.quayFleetSummary.mockResolvedValue(
+      okResponse({
+        ...FLEET,
+        // The server could not run quay-fleet: every id is null for the SAME reason.
+        fleet: { available: false, reason: 'quay-fleet was not found: quay-fleet' },
+        projects: FLEET.projects.map((project) => ({ ...project, fleetProjectId: null })),
+      }),
+    );
+
+    renderCockpit();
+
+    const notice = await screen.findByTestId('cockpit-fleet-cli-missing');
+    expect(notice.textContent).toContain('QUAY_FLEET_BIN');
+    expect(notice.textContent).toContain('quay-fleet was not found');
+    // One line, not one label per tile.
+    expect(screen.queryAllByTestId('cockpit-fleet-tile-unregistered')).toHaveLength(0);
+  });
+
+  it('names the destination conversation by its title and states the target source', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+
+    const sessionId = 'c5a57036-de6c-4f0a-9d3e-123456789abc';
+    hubMock.pushState({
+      rev: 5,
+      view: { type: 'fleet' },
+      viewStack: [],
+      focusUri: 'quay://claudecodeui/board',
+      tray: [],
+      history: [],
+      visible: {
+        viewUri: null,
+        focusables: [
+          {
+            uri: 'quay://claudecodeui/board',
+            label: '①',
+            display: { status: 'running', color: 'green', ordinal: 1, pos: { row: 1, column: 1 } },
+          },
+        ],
+        projects: [],
+      },
+      pendingSend: {
+        text: '看看这个',
+        visible: [],
+        viewUri: null,
+        focusUri: 'quay://claudecodeui/board',
+        target: {
+          sessionId,
+          projectId: 'p1',
+          projectName: 'claudecodeui',
+          sessionTitle: 'Fix the cockpit',
+          source: 'pinned',
+          fleetUnavailableReason: null,
+        },
+        reason: null,
+      },
+      lastEventSource: null,
+    });
+
+    const preview = await screen.findByTestId('cockpit-send-preview');
+    expect(preview.textContent).toContain('Fix the cockpit');
+    expect(preview.textContent).not.toContain(sessionId);
+    const source = within(preview).getByTestId('cockpit-send-source');
+    expect(source.textContent).toBe(i18n.t('cockpit.sendTargetPinned'));
+  });
+
+  it('shows 「unnamed conversation」 plus a SHORT id when the session has no title', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+
+    const sessionId = 'c5a57036-de6c-4f0a-9d3e-123456789abc';
+    hubMock.pushState({
+      rev: 5,
+      view: { type: 'fleet' },
+      viewStack: [],
+      focusUri: 'quay://claudecodeui/board',
+      tray: [],
+      history: [],
+      visible: {
+        viewUri: null,
+        focusables: [],
+        projects: [],
+      },
+      pendingSend: {
+        text: '看看这个',
+        visible: [],
+        viewUri: null,
+        focusUri: 'quay://claudecodeui/board',
+        target: {
+          sessionId,
+          projectId: 'p1',
+          projectName: 'claudecodeui',
+          sessionTitle: null,
+          source: 'recent',
+          fleetUnavailableReason: null,
+        },
+        reason: null,
+      },
+      lastEventSource: null,
+    });
+
+    const preview = await screen.findByTestId('cockpit-send-preview');
+    expect(preview.textContent).toContain(i18n.t('cockpit.unnamedSession', { id: 'c5a57036' }));
+    // The full identifier is a storage handle, not a name.
+    expect(preview.textContent).not.toContain(sessionId);
+    expect(within(preview).getByTestId('cockpit-send-source').textContent).toBe(
+      i18n.t('cockpit.sendTargetRecent'),
+    );
   });
 });
 

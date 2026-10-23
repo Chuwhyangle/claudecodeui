@@ -304,12 +304,16 @@ const cockpitHub = createCockpitModule({
         if (sessionId === null) {
             return { target: null, reason: 'no-session' as const };
         }
+        // The preview names the destination conversation by its TITLE. The row's `custom_name`
+        // already coalesces the user's rename with the transcript-derived name; without it the
+        // card fell back to the raw session UUID, which tells the person nothing.
+        const sessionTitle = sessionsDb.getSessionById(sessionId)?.custom_name ?? null;
         return {
             target: {
                 sessionId,
                 projectId: project.projectId,
                 projectName: project.name,
-                sessionTitle: null,
+                sessionTitle,
                 source,
                 fleetUnavailableReason,
             },

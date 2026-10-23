@@ -575,6 +575,13 @@ export type QuayFleetProjectSummary = {
  */
 export type QuayFleetSummary = {
   projects: QuayFleetProjectSummary[];
+  /**
+   * Whether the server could ask `quay-fleet` at all. `available: false` means the CLI was
+   * missing or unreadable, so EVERY project's `fleetProjectId` is null for one reason the
+   * cockpit must state once ("set QUAY_FLEET_BIN") rather than per tile. Absent when talking
+   * to a server that predates the reading; treat that as available.
+   */
+  fleet?: { available: boolean; reason: string | null };
   generatedAt: string;
   ttlPerProjectMs: number;
   /** `true` only when every project in the response came from the TTL cache. */

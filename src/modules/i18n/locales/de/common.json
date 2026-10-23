@@ -679,6 +679,11 @@
     "remoteTypeHint": "Enter sendet · Taste zum Diktieren halten",
     "remoteSubmit": "Senden",
     "remoteWakeLockFailed": "Die Bildschirmsperre unterbricht die Aufnahme",
-    "remoteInsecureContext": "Das Mikrofon braucht HTTPS (oder localhost). Tippen und Richtungstasten funktionieren weiterhin."
+    "remoteInsecureContext": "Das Mikrofon braucht HTTPS (oder localhost). Tippen und Richtungstasten funktionieren weiterhin.",
+    "fleetCliMissing": "quay-fleet wurde auf diesem Server nicht gefunden – setze QUAY_FLEET_BIN, damit Projekte registriert werden können. ({{reason}})",
+    "projectNotRegistered": "Nicht bei quay-fleet registriert",
+    "unnamedSession": "Unbenannte Unterhaltung · {{id}}",
+    "deviceMobile": "Telefon",
+    "deviceDesktop": "Desktop"
   }
 }

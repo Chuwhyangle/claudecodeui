@@ -709,6 +709,11 @@
     "remoteTypeHint": "Invio invia · tieni premuto per dettare",
     "remoteSubmit": "Invia",
     "remoteWakeLockFailed": "Il blocco dello schermo interromperà la registrazione",
-    "remoteInsecureContext": "Il microfono richiede HTTPS (o localhost). La digitazione e la croce direzionale funzionano comunque."
+    "remoteInsecureContext": "Il microfono richiede HTTPS (o localhost). La digitazione e la croce direzionale funzionano comunque.",
+    "fleetCliMissing": "quay-fleet non è stato trovato su questo server — imposta QUAY_FLEET_BIN perché i progetti possano essere registrati. ({{reason}})",
+    "projectNotRegistered": "Non registrato in quay-fleet",
+    "unnamedSession": "Conversazione senza nome · {{id}}",
+    "deviceMobile": "Telefono",
+    "deviceDesktop": "Desktop"
   }
 }

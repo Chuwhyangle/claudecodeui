@@ -285,8 +285,9 @@ test('the phone remote moves the desktop focus, then a spoken 「看 <project>�
   await expect(desktop.getByTestId('cockpit-fleet-tile')).toHaveCount(2, { timeout: 15_000 });
   expect(await waitForDesktopFocus(desktop)).toBe('quay://alpha/board');
 
-  // 1. The direction pad moves the desktop's focus. The remote's own echo agrees.
-  await phone.getByTestId('cockpit-remote-move-down').click();
+  // 1. The direction pad moves the desktop's focus. The two registered tiles share the first
+  //    row of the desktop's grid, so the horizontal axis is the one with somewhere to go.
+  await phone.getByTestId('cockpit-remote-move-right').click();
   await expect(desktop.getByTestId('cockpit-focus')).toHaveAttribute(
     'data-cockpit-focus',
     'quay://beta/board',

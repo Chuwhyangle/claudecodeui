@@ -27,7 +27,7 @@ import {
   createQuayUriResolver,
   type QuayFleetWallReader,
 } from './quay-uri-resolve.js';
-import type { QuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
+import type { QuayFleetAvailability, QuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 
 export type {
   QuayAdrCounts,
@@ -274,6 +274,15 @@ export type QuayFleetProjectSummary = {
  */
 export type QuayFleetSummary = {
   projects: QuayFleetProjectSummary[];
+  /**
+   * Whether this host could ask quay-fleet at all.
+   *
+   * A summary read while the CLI is missing still carries every project's quay CLI reading
+   * (driver + task counts); what it cannot carry is a registry identity for ANY of them. The
+   * UI must say that once, as "quay-fleet is not available (set QUAY_FLEET_BIN)", instead of
+   * rendering each tile as an individually unregistered project.
+   */
+  fleet: QuayFleetAvailability;
   generatedAt: string;
   /** How long one project's cached reading stays fresh. */
   ttlPerProjectMs: number;
@@ -1132,6 +1141,12 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   const fleetProjectIds: QuayFleetProjectIdResolver = dependencies.fleetProjectIdResolver ?? {
     resolveFleetProjectId: async () => null,
     resolveFleetProject: async () => null,
+    // Nothing was composed to ask the fleet with: that is "the CLI is not available here",
+    // not "every project is unregistered".
+    resolveFleetAvailability: async () => ({
+      available: false,
+      reason: 'quay-fleet is not configured on this server (set QUAY_FLEET_BIN)',
+    }),
   };
 
   /** Tier-1 detection: a pure path check, never a subprocess. */
@@ -1779,6 +1794,22 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   };
 
   /**
+   * Whether the fleet could be asked. A resolver that does not expose the reading (an older
+   * composition) keeps the pre-existing behaviour: the join answers per project and the
+   * summary does not claim the CLI is missing.
+   */
+  const readFleetAvailability = async (): Promise<QuayFleetAvailability> => {
+    if (fleetProjectIds.resolveFleetAvailability === undefined) {
+      return { available: true, reason: null };
+    }
+    try {
+      return await fleetProjectIds.resolveFleetAvailability();
+    } catch {
+      return { available: false, reason: 'quay-fleet availability could not be read' };
+    }
+  };
+
+  /**
    * Reads the fleet summary: every project with a `.quay/config.yml`, each carrying its
    * driver state and task counts. Projects without that carrier are absent from the
    * result — the fleet is quay projects, not every project the server knows.
@@ -1794,39 +1825,45 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       detectQuayConfig(candidate.projectPath),
     );
 
-    const projects = await Promise.all(
-      candidates.map(async (candidate): Promise<QuayFleetProjectSummary> => {
-        const cached = fleetSummaryCache.get(candidate.projectId);
-        if (cached && cached.expiresAt > dependencies.now()) {
-          return { ...cached.summary, cached: true };
-        }
-
-        const pending = inFlightFleetProjects.get(candidate.projectId);
-        if (pending) {
-          return pending;
-        }
-
-        const load = (async (): Promise<QuayFleetProjectSummary> => {
-          try {
-            const reading = await loadFleetProject(candidate);
-            if (reading.error === null) {
-              fleetSummaryCache.set(candidate.projectId, {
-                expiresAt: dependencies.now() + QUAY_FLEET_SUMMARY_TTL_MS,
-                summary: reading,
-              });
-            }
-            return reading;
-          } finally {
-            inFlightFleetProjects.delete(candidate.projectId);
+    // Availability is read alongside the projects rather than before them: both share the
+    // resolver's one cached registry read, so this adds no child process to the fan-out.
+    const [projects, fleet] = await Promise.all([
+      Promise.all(
+        candidates.map(async (candidate): Promise<QuayFleetProjectSummary> => {
+          const cached = fleetSummaryCache.get(candidate.projectId);
+          if (cached && cached.expiresAt > dependencies.now()) {
+            return { ...cached.summary, cached: true };
           }
-        })();
-        inFlightFleetProjects.set(candidate.projectId, load);
-        return load;
-      }),
-    );
+
+          const pending = inFlightFleetProjects.get(candidate.projectId);
+          if (pending) {
+            return pending;
+          }
+
+          const load = (async (): Promise<QuayFleetProjectSummary> => {
+            try {
+              const reading = await loadFleetProject(candidate);
+              if (reading.error === null) {
+                fleetSummaryCache.set(candidate.projectId, {
+                  expiresAt: dependencies.now() + QUAY_FLEET_SUMMARY_TTL_MS,
+                  summary: reading,
+                });
+              }
+              return reading;
+            } finally {
+              inFlightFleetProjects.delete(candidate.projectId);
+            }
+          })();
+          inFlightFleetProjects.set(candidate.projectId, load);
+          return load;
+        }),
+      ),
+      readFleetAvailability(),
+    ]);
 
     return {
       projects,
+      fleet,
       generatedAt: new Date(dependencies.now()).toISOString(),
       ttlPerProjectMs: QUAY_FLEET_SUMMARY_TTL_MS,
       cached: projects.length > 0 && projects.every((project) => project.cached),

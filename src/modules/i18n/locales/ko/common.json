@@ -709,6 +709,11 @@
     "remoteTypeHint": "Enter로 전송 · 길게 눌러 받아쓰기",
     "remoteSubmit": "보내기",
     "remoteWakeLockFailed": "화면 잠금은 녹음을 중단합니다",
-    "remoteInsecureContext": "마이크는 HTTPS(또는 localhost)가 필요합니다. 입력과 방향 키는 계속 작동합니다."
+    "remoteInsecureContext": "마이크는 HTTPS(또는 localhost)가 필요합니다. 입력과 방향 키는 계속 작동합니다.",
+    "fleetCliMissing": "이 서버에서 quay-fleet를 찾을 수 없습니다. 프로젝트를 등록하려면 QUAY_FLEET_BIN을 설정하세요. ({{reason}})",
+    "projectNotRegistered": "quay-fleet에 등록되지 않음",
+    "unnamedSession": "제목 없는 대화 · {{id}}",
+    "deviceMobile": "휴대폰",
+    "deviceDesktop": "데스크톱"
   }
 }

@@ -9,6 +9,7 @@ import {
   QUAY_FLEET_PROJECT_ID_TTL_MS,
   type QuayFleetProjectIdDependencies,
 } from '../quay-fleet-project-id.js';
+import { createQuayService } from '../quay.service.js';
 
 /**
  * The CloudCLI project id → quay-fleet registry id join (quay-fleet-project-id).
@@ -153,6 +154,10 @@ test('AC3: an unavailable registry reads every project as unregistered and never
       assert.equal(await resolver.resolveFleetProjectId('p1'), null);
       assert.equal(await resolver.resolveFleetProjectId('p2'), null);
       assert.equal(await resolver.resolveFleetProject('claudecodeui'), null);
+      // The failure is a value the UI can print, not a silent per-project "unregistered".
+      const availability = await resolver.resolveFleetAvailability?.();
+      assert.equal(availability?.available, false);
+      assert.ok((availability?.reason ?? '').length > 0, 'an unavailable fleet must state why');
     }
   } finally {
     fs.rmSync(workspace.directory, { recursive: true, force: true });
@@ -189,6 +194,92 @@ test('AC3: the registry reading is cached for its TTL, then read again', async (
     now += QUAY_FLEET_PROJECT_ID_TTL_MS;
     assert.equal(await resolver.resolveFleetProjectId('p1'), 'claudecodeui');
     assert.equal(reads, 2);
+  } finally {
+    fs.rmSync(workspace.directory, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The REAL fleet summary, composed from the same service `GET /api/quay/fleet-summary` reads,
+ * with only the two CLI seams faked: the `quay-fleet` registry join and quay's own per-project
+ * reading. The assertion therefore measures the response shape the cockpit receives.
+ */
+function fleetSummaryService(exec: QuayFleetProjectIdDependencies['exec'], projectPath: string) {
+  const projects = () => [{ projectId: 'p1', projectPath }];
+  return createQuayService({
+    // Every candidate is a quay project: the summary filters on this carrier.
+    fileExists: (filePath) => filePath.endsWith(path.join('.quay', 'config.yml')),
+    resolveProjectPathById: (projectId) => (projectId === 'p1' ? projectPath : null),
+    listProjects: projects,
+    runCommand: async (_cwd, args) =>
+      args[0] === 'task'
+        ? { ok: true, code: 0, stdout: '[]', stderr: '' }
+        : { ok: true, code: 0, stdout: JSON.stringify({ alive: 1, running: 0 }), stderr: '' },
+    readFile: {
+      size: async () => null,
+      readChunk: async () => '',
+      readText: async () => '',
+    },
+    probeWebService: async () => false,
+    now: () => 1_000_000,
+    snapshotTtlMs: 30_000,
+    commandTimeoutMs: 10_000,
+    fleetProjectIdResolver: createQuayFleetProjectIdResolver({
+      resolveProjectPathById: (projectId) => (projectId === 'p1' ? projectPath : null),
+      listProjects: projects,
+      exec,
+      binPath: '/usr/local/bin/quay-fleet',
+    }),
+  });
+}
+
+test('AC1: a missing fleet CLI is fleet.available=false with a reason, not a per-project verdict', async () => {
+  const workspace = createWorkspace();
+  try {
+    const service = fleetSummaryService(
+      // What the production adapter reports when `quay-fleet` is not on PATH and no
+      // QUAY_FLEET_BIN is set.
+      async () => ({
+        ok: false,
+        code: null,
+        stdout: '',
+        stderr: '',
+        error: 'quay-fleet was not found: /usr/local/bin/quay-fleet',
+      }),
+      workspace.real,
+    );
+
+    const summary = await service.getFleetSummary();
+
+    assert.equal(summary.fleet.available, false);
+    assert.ok(
+      (summary.fleet.reason ?? '').length > 0,
+      'the UI needs a reason to print beside the missing-CLI notice',
+    );
+    // The project's own quay reading still answered; only the fleet identity is unknown.
+    assert.equal(summary.projects.length, 1);
+    assert.equal(summary.projects[0]?.fleetProjectId, null);
+  } finally {
+    fs.rmSync(workspace.directory, { recursive: true, force: true });
+  }
+});
+
+test('AC1: an answering fleet with no matching project is available=true and fleetProjectId=null', async () => {
+  const workspace = createWorkspace();
+  try {
+    const service = fleetSummaryService(
+      // A healthy registry that registers some OTHER checkout: the CLI works, this project
+      // simply is not in it. That is the honest per-project answer, not a missing CLI.
+      staticExec(registryDocument([{ id: 'elsewhere', root: workspace.unregistered }])),
+      workspace.real,
+    );
+
+    const summary = await service.getFleetSummary();
+
+    assert.equal(summary.fleet.available, true);
+    assert.equal(summary.fleet.reason, null);
+    assert.equal(summary.projects.length, 1);
+    assert.equal(summary.projects[0]?.fleetProjectId, null);
   } finally {
     fs.rmSync(workspace.directory, { recursive: true, force: true });
   }

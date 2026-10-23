@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { QuayDriverState, QuayFocusableObject, QuayObjectUri } from '@/shared/types';
@@ -40,6 +41,14 @@ export type CockpitStageProps = {
   projects: readonly CockpitProject[];
   fleetStatus: CockpitFleetStatus;
   fleetError: string | null;
+  /**
+   * Whether the server could ask `quay-fleet` at all. `false` means every project's missing
+   * registry id has ONE cause (no CLI on this host), so the stage states that once above the
+   * tiles instead of repeating 「未登记」 on each of them.
+   */
+  fleetAvailable: boolean;
+  /** The server's stated reason the fleet CLI could not be asked; shown beside the notice. */
+  fleetReason: string | null;
   /** The current view's declared focusable children, in spatial order. */
   focusables: readonly QuayFocusableObject[];
   focusUri: QuayObjectUri | null;
@@ -57,6 +66,8 @@ export default function CockpitStage({
   projects,
   fleetStatus,
   fleetError,
+  fleetAvailable,
+  fleetReason,
   focusables,
   focusUri,
   onFocusObject,
@@ -64,9 +75,19 @@ export default function CockpitStage({
   boardView,
   onRefreshBoard,
 }: CockpitStageProps) {
+  // FOCUS STARTS ON THE STAGE, NOT IN THE TEXT BOX. A page that loads with the intent input
+  // focused swallows the first arrow press (editable targets own their keys by design), so the
+  // stage takes focus on mount. `/` or a pointer is how a person enters the box.
+  const stageRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    stageRef.current?.focus();
+  }, []);
+
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col"
+      ref={stageRef}
+      tabIndex={-1}
+      className="flex min-h-0 flex-1 flex-col focus:outline-none"
       data-testid="cockpit-stage"
       data-cockpit-view={view.type}
     >
@@ -75,6 +96,8 @@ export default function CockpitStage({
           projects={projects}
           fleetStatus={fleetStatus}
           fleetError={fleetError}
+          fleetAvailable={fleetAvailable}
+          fleetReason={fleetReason}
           focusables={focusables}
           focusUri={focusUri}
           onFocusObject={onFocusObject}
@@ -98,6 +121,8 @@ function FleetView({
   projects,
   fleetStatus,
   fleetError,
+  fleetAvailable,
+  fleetReason,
   focusables,
   focusUri,
   onFocusObject,
@@ -105,6 +130,8 @@ function FleetView({
   projects: readonly CockpitProject[];
   fleetStatus: CockpitFleetStatus;
   fleetError: string | null;
+  fleetAvailable: boolean;
+  fleetReason: string | null;
   focusables: readonly QuayFocusableObject[];
   focusUri: QuayObjectUri | null;
   onFocusObject: (uri: string) => void;
@@ -127,7 +154,9 @@ function FleetView({
     );
   }
 
-  if (projects.length === 0) {
+  // "No projects" and "no fleet CLI" are different readings. With the CLI missing, "No quay
+  // projects reported" would be a lie: the projects are there, their fleet identities are not.
+  if (projects.length === 0 && fleetAvailable) {
     return (
       <p className="p-6 text-sm text-muted-foreground" data-testid="cockpit-fleet-empty">
         {t('cockpit.emptyProjects')}
@@ -136,13 +165,27 @@ function FleetView({
   }
 
   return (
-    <ul
-      className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3"
-      data-testid="cockpit-fleet-tiles"
-      // The view contract itself, published once so a test (or the future semantic surface)
-      // reads the same declaration the renderer drew.
-      data-cockpit-focusables={JSON.stringify(focusables)}
-    >
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/*
+        ONE line for the one cause. Every tile's registry id is null for the same reason, so
+        repeating it per tile turns a single actionable fact (set QUAY_FLEET_BIN) into noise.
+      */}
+      {!fleetAvailable && (
+        <p
+          className="mx-4 mt-4 rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+          data-testid="cockpit-fleet-cli-missing"
+          data-fleet-available="false"
+        >
+          {t('cockpit.fleetCliMissing', { reason: fleetReason ?? '' })}
+        </p>
+      )}
+      <ul
+        className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3"
+        data-testid="cockpit-fleet-tiles"
+        // The view contract itself, published once so a test (or the future semantic surface)
+        // reads the same declaration the renderer drew.
+        data-cockpit-focusables={JSON.stringify(focusables)}
+      >
       {projects.map((project) => {
         // The fleet view's focusable objects are addressed by the fleet REGISTRY id. A project
         // whose root is not registered has no such id, so it is absent from the declared set
@@ -225,6 +268,16 @@ function FleetView({
                 {t('cockpit.needsHumanCount', { n: project.tasks.needsHuman })}
               </span>
             </p>
+            {/*
+              Only when the fleet ANSWERED but this project is not in it. With the CLI
+              missing, the single notice above already explains why no tile is registered,
+              and repeating it here is the per-tile noise this task removes.
+            */}
+            {fleetAvailable && fleetProjectId === null && (
+              <p className="mt-1 text-[11px] text-muted-foreground" data-testid="cockpit-fleet-tile-unregistered">
+                {t('cockpit.projectNotRegistered')}
+              </p>
+            )}
             {project.error !== null && (
               <p className="mt-1 truncate text-[11px] text-amber-700 dark:text-amber-300" data-testid="cockpit-fleet-tile-error">
                 {project.error}
@@ -233,7 +286,8 @@ function FleetView({
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </div>
   );
 }
 

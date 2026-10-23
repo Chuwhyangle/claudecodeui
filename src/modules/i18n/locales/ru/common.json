@@ -679,6 +679,11 @@
     "remoteTypeHint": "Enter отправляет · удерживайте для диктовки",
     "remoteSubmit": "Отправить",
     "remoteWakeLockFailed": "Блокировка экрана прервёт запись",
-    "remoteInsecureContext": "Для микрофона нужен HTTPS (или localhost). Ввод и крестовина продолжают работать."
+    "remoteInsecureContext": "Для микрофона нужен HTTPS (или localhost). Ввод и крестовина продолжают работать.",
+    "fleetCliMissing": "quay-fleet не найден на этом сервере — задайте QUAY_FLEET_BIN, чтобы проекты можно было зарегистрировать. ({{reason}})",
+    "projectNotRegistered": "Не зарегистрирован в quay-fleet",
+    "unnamedSession": "Безымянный диалог · {{id}}",
+    "deviceMobile": "Телефон",
+    "deviceDesktop": "Компьютер"
   }
 }

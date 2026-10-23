@@ -709,6 +709,11 @@
     "remoteTypeHint": "Enter gönderir · dikte için basılı tutun",
     "remoteSubmit": "Gönder",
     "remoteWakeLockFailed": "Ekran kilidi kaydı kesintiye uğratır",
-    "remoteInsecureContext": "Mikrofon HTTPS (veya localhost) gerektirir. Yazma ve yön tuşları çalışmaya devam eder."
+    "remoteInsecureContext": "Mikrofon HTTPS (veya localhost) gerektirir. Yazma ve yön tuşları çalışmaya devam eder.",
+    "fleetCliMissing": "quay-fleet bu sunucuda bulunamadı — projelerin kaydedilebilmesi için QUAY_FLEET_BIN ayarlayın. ({{reason}})",
+    "projectNotRegistered": "quay-fleet'e kayıtlı değil",
+    "unnamedSession": "Adsız konuşma · {{id}}",
+    "deviceMobile": "Telefon",
+    "deviceDesktop": "Masaüstü"
   }
 }

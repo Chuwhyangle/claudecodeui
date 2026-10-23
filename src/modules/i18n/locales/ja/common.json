@@ -709,6 +709,11 @@
     "remoteTypeHint": "Enter で送信 · 押し続けて音声入力",
     "remoteSubmit": "送信",
     "remoteWakeLockFailed": "画面ロックは録音を中断します",
-    "remoteInsecureContext": "マイクには HTTPS（または localhost）が必要です。入力と方向キーは引き続き使えます。"
+    "remoteInsecureContext": "マイクには HTTPS（または localhost）が必要です。入力と方向キーは引き続き使えます。",
+    "fleetCliMissing": "このサーバーに quay-fleet が見つかりません。プロジェクトを登録するには QUAY_FLEET_BIN を設定してください。（{{reason}}）",
+    "projectNotRegistered": "quay-fleet に未登録",
+    "unnamedSession": "無題の会話 · {{id}}",
+    "deviceMobile": "スマートフォン",
+    "deviceDesktop": "デスクトップ"
   }
 }

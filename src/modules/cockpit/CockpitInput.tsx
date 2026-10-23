@@ -1,3 +1,4 @@
+import type { RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { VoiceInputState } from '@/shared/types';
@@ -23,6 +24,11 @@ import {
  * (arrows included) is the input's. The stage's window-level handler bails on editable targets
  * (see `CockpitPage`), so the two never both react to the same press. Enter submits the
  * phrase; Shift+Enter keeps the textarea's newline behaviour.
+ *
+ * FOCUS IS EXPLICIT. The box does not take focus on load — the stage does, so the first arrow
+ * press moves focus instead of landing in a textarea. `/` (handled by the page) and a pointer
+ * are how a person enters the box; the forwarded ref is what makes the `/` shortcut able to
+ * focus this exact element.
  */
 
 export type CockpitInputProps = {
@@ -35,6 +41,8 @@ export type CockpitInputProps = {
   onVoiceToggle: () => void;
   /** True while a transcription request is outstanding for the recording listen. */
   voiceInFlight?: boolean;
+  /** The page's handle on the textarea, used to focus it from the `/` shortcut. */
+  textareaRef?: RefObject<HTMLTextAreaElement>;
 };
 
 /** Rendered by `CockpitPage` as the cockpit's only text entry point. */
@@ -45,6 +53,7 @@ export default function CockpitInput({
   voiceState,
   onVoiceToggle,
   voiceInFlight = false,
+  textareaRef,
 }: CockpitInputProps) {
   const { t } = useTranslation();
 
@@ -59,6 +68,7 @@ export default function CockpitInput({
     >
       <PromptInputBody>
         <PromptInputTextarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={(event) => {
