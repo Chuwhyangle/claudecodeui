@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "이 세션에서 언급된 이름 {{count}}개를 분석 캐시에서 찾지 못했습니다",
+      "unresolvedShort": "{{count}}개 미매칭",
       "listLabel": "미해결 이름"
     },
     "filter": {

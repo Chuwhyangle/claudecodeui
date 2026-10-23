@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "{{count}} nombres mencionados en esta sesión no se encontraron en la caché de análisis",
+      "unresolvedShort": "{{count}} sin coincidencia",
       "listLabel": "Nombres sin resolver"
     },
     "filter": {

@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "このセッションで言及された {{count}} 個の名前は分析キャッシュに見つかりませんでした",
+      "unresolvedShort": "{{count}} 件未解決",
       "listLabel": "未解決の名前"
     },
     "filter": {

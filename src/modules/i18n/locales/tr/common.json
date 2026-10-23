@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "Bu oturumda adı geçen {{count}} ad analiz önbelleğinde bulunamadı",
+      "unresolvedShort": "{{count}} eşleşmedi",
       "listLabel": "Çözülemeyen adlar"
     },
     "filter": {

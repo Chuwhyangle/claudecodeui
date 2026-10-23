@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "本次会话中提到的 {{count}} 个名字未在分析缓存中找到",
+      "unresolvedShort": "{{count}} 未匹配",
       "listLabel": "未解析的名字"
     },
     "filter": {

@@ -264,6 +264,7 @@
     },
     "source": {
       "unresolved": "{{count}} names mentioned in this session were not found in the analysis cache",
+      "unresolvedShort": "{{count}} unmatched",
       "listLabel": "Unresolved names"
     },
     "filter": {

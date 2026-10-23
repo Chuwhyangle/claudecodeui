@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "{{count}} noms mentionnés dans cette session n’ont pas été trouvés dans le cache d’analyse",
+      "unresolvedShort": "{{count}} non trouvés",
       "listLabel": "Noms non résolus"
     },
     "filter": {

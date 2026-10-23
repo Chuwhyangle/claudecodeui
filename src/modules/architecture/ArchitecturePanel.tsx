@@ -2938,9 +2938,16 @@ export default function ArchitecturePanel({
     // row cannot overflow on its own — the source line is `min-w-0 truncate`
     // (which clips itself) and the cleanup pill is `shrink-0` — so the clip
     // bought nothing and cost both panels.
+    //
+    // `z-30`, not `z-20`: the disclosures are absolutely positioned out of
+    // this row and therefore overlap the drawing's own corner chrome
+    // (the zoom cluster at 20, the readable Focus/Overview switch at 24).
+    // At an equal tier the later sibling already won, but the footer's
+    // stacking context capped its children below the switch, so the list's
+    // first rows were painted under it.
     <div
       data-architecture-source-footer="true"
-      className="relative z-20 flex shrink-0 items-center gap-2 border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
+      className="relative z-30 flex shrink-0 items-center gap-2 border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
     >
       <span
         data-architecture-source-line="true"
@@ -2958,30 +2965,53 @@ export default function ArchitecturePanel({
         ) : (
           <span data-architecture-generated-at>unknown</span>
         )}
-        {' · '}
-        <button
-          type="button"
-          aria-expanded={unresolvedOpen}
-          data-architecture-unresolved={unresolvedCount}
-          onClick={() => setUnresolvedOpen((open) => !open)}
-          style={compactTargetStyle}
-          className="underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
-        >
-          {t('architecture.source.unresolved', {
-            defaultValue: '{{count}} names mentioned in this session were not found in the analysis cache',
-            count: unresolvedCount,
-          })}
-          <span aria-hidden="true">{unresolvedOpen ? ' ▾' : ' ▸'}</span>
-        </button>
       </span>
+      {/* The unresolved toggle is a SIBLING of the truncating source line, not
+          its child: inside a `truncate` span its own 352px width was clipped by
+          the span's `overflow: hidden`, so a phone showed "Analysis: 14 hours
+          ago · …" and the names were neither visible nor tappable. As a
+          `shrink-0` pill it keeps its whole hit box and the source line gives
+          up width instead. The compact tier shortens the label to fit the same
+          row; the full sentence moves to the top of the expanded list. */}
+      <button
+        type="button"
+        aria-expanded={unresolvedOpen}
+        data-architecture-unresolved={unresolvedCount}
+        onClick={() => setUnresolvedOpen((open) => !open)}
+        style={compactTargetStyle}
+        className="shrink-0 whitespace-nowrap rounded-md border border-border/60 bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        {compactToolbar
+          ? t('architecture.source.unresolvedShort', {
+              defaultValue: '{{count}} unmatched',
+              count: unresolvedCount,
+            })
+          : t('architecture.source.unresolved', {
+              defaultValue: '{{count}} names mentioned in this session were not found in the analysis cache',
+              count: unresolvedCount,
+            })}
+        <span aria-hidden="true">{unresolvedOpen ? ' ▾' : ' ▸'}</span>
+      </button>
       {unresolvedOpen && (
         <ul
           data-architecture-unresolved-list="true"
           aria-label={t('architecture.source.listLabel', { defaultValue: 'Unresolved names' })}
           className="absolute bottom-full left-3 z-30 mb-1 max-h-40 overflow-y-auto rounded-md border border-border/60 bg-background/95 px-2 py-1 shadow-sm"
         >
+          {/* The pill drops the full sentence on the compact tier; the reader
+              still gets it here, above the names it describes. */}
+          {compactToolbar && (
+            <li data-architecture-unresolved-summary="true" className="pb-1 text-muted-foreground">
+              {t('architecture.source.unresolved', {
+                defaultValue: '{{count}} names mentioned in this session were not found in the analysis cache',
+                count: unresolvedCount,
+              })}
+            </li>
+          )}
           {unresolvedNames.map((name) => (
-            <li key={name}>{name}</li>
+            <li key={name} data-architecture-unresolved-name="true">
+              {name}
+            </li>
           ))}
         </ul>
       )}

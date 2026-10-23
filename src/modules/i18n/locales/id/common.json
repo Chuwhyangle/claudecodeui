@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "{{count}} nama yang disebut dalam sesi ini tidak ditemukan di cache analisis",
+      "unresolvedShort": "{{count}} tidak cocok",
       "listLabel": "Nama belum terselesaikan"
     },
     "filter": {
