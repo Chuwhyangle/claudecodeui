@@ -89,7 +89,7 @@ describe('class-name fallback (rule 3)', () => {
 describe('class frame and compartments (rule 7)', () => {
   test('a class always keeps two rules, and both positions are inside the frame', () => {
     const content = planEntityContent(
-      { label: 'Alpha', kind: 'class', members: ['name: string', 'run()'], seed: false },
+      { label: 'Alpha', kind: 'class', hasAttributes: true, hasOperations: true, seed: false },
       FONT_PX,
     );
     assert.equal(content.ruleCount, 2);
@@ -109,7 +109,7 @@ describe('class frame and compartments (rule 7)', () => {
 
   test('an interface with only operations keeps one rule', () => {
     const content = planEntityContent(
-      { label: 'Runner', kind: 'interface', members: ['run()'], seed: false },
+      { label: 'Runner', kind: 'interface', hasAttributes: false, hasOperations: true, seed: false },
       FONT_PX,
     );
     assert.equal(content.hasAttributes, false);

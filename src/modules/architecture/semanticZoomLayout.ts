@@ -9,8 +9,8 @@
  * alignment, containment and the orthogonality of the polyline edges all
  * survive — this is the property the prototype proved and the E2E guard reads.
  *
- * The engine is pure: geometry in, layout out. `readSemanticDrawingGeometry`
- * is the only function that touches the DOM, and it only READS.
+ * The engine is pure: geometry in, layout out. The DOM read lives in
+ * `semanticZoomRead.ts`; this module imports its types only.
  *
  * Consumers: `PlantUmlGraph.tsx` (captures geometry once per drawing, then
  * rewrites the SVG on each settled zoom) and
@@ -19,6 +19,21 @@
  */
 
 import { tierWithinDeadzone } from '@/modules/architecture/explosionLod';
+export type {
+  SemanticDrawingGeometry,
+  SemanticEdgeGeometry,
+  SemanticMember,
+  SemanticNodeGeometry,
+  SemanticPackageGeometry,
+  SemanticRect,
+} from '@/modules/architecture/semanticZoomRead';
+import type {
+  SemanticDrawingGeometry,
+  SemanticEdgeGeometry,
+  SemanticNodeGeometry,
+  SemanticPackageGeometry,
+  SemanticRect,
+} from '@/modules/architecture/semanticZoomRead';
 import {
   followCompactedFrame,
   planCompartmentRules,
@@ -51,52 +66,6 @@ export function lodDepthForTier(tier: SemanticTier): 0 | 1 | 2 {
   return tier === 'A' ? 2 : tier === 'B' ? 1 : 0;
 }
 
-/** A rect in drawing user units. */
-export type SemanticRect = {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
-};
-
-/** One entity as the renderer drew it. */
-export type SemanticNodeGeometry = {
-  readonly id: string;
-  readonly rect: SemanticRect;
-  readonly label: string;
-  readonly kind: string;
-  /** The `<<kind>>` token the renderer drew (if any), kept for the stereotype line. */
-  readonly stereotype: string | null;
-  readonly members: readonly string[];
-  readonly seed: boolean;
-  readonly mentionTier: string | null;
-  /** The renderer's title-rule y, used to keep the ≥ 90 % view identical. */
-  readonly titleRuleY: number | null;
-};
-
-/** One package frame as the renderer drew it. */
-export type SemanticPackageGeometry = {
-  readonly id: string;
-  readonly rect: SemanticRect;
-  readonly rawLabel: string;
-};
-
-/** One edge as the renderer drew it: its polyline in drawing user units. */
-export type SemanticEdgeGeometry = {
-  readonly source: string;
-  readonly target: string;
-  readonly points: readonly PlanPoint[];
-};
-
-/** Everything the engine reads from one rendered drawing. */
-export type SemanticDrawingGeometry = {
-  readonly width: number;
-  readonly height: number;
-  readonly nodes: readonly SemanticNodeGeometry[];
-  readonly packages: readonly SemanticPackageGeometry[];
-  readonly edges: readonly SemanticEdgeGeometry[];
-};
-
 /** A package's place in the containment tree, derived from the rects. */
 export type SemanticPackageTree = {
   readonly geometry: SemanticPackageGeometry;
@@ -105,121 +74,6 @@ export type SemanticPackageTree = {
   readonly childPackageIds: readonly string[];
   readonly nodeIds: readonly string[];
 };
-
-/** The drawing's rectangle in user units. */
-function rectOf(element: Element): SemanticRect | null {
-  const rect = element.querySelector('rect');
-  if (rect === null) return null;
-  const number = (name: string): number => {
-    const value = Number(rect.getAttribute(name));
-    return Number.isFinite(value) ? value : 0;
-  };
-  return { x: number('x'), y: number('y'), width: number('width'), height: number('height') };
-}
-
-/** Direct-child elements of one tag, without descending into nested groups. */
-function directChildren(element: Element, tag: string): Element[] {
-  return [...element.children].filter((child) => child.tagName.toLowerCase() === tag);
-}
-
-/**
- * The entity's drawn label and kind.
- *
- * `plantuml-js` prints the bare name (the stereotype lives in the PlantUML
- * document, not the canvas), and marks interfaces/abstracts with an italic
- * title. The stereotype prefix is still parsed when a future renderer emits
- * `<<kind>>` in the text, so this reading does not depend on one spelling.
- */
-function entityLabelOf(group: Element): { label: string; kind: string; stereotype: string | null } {
-  const first = directChildren(group, 'text')[0];
-  const text = first?.textContent ?? group.getAttribute('data-entity-id') ?? '';
-  const match = /^(?:<<\s*([\w]+)\s*>>|«\s*([\w]+)\s*»)\s*/.exec(text);
-  const stereotype = match?.[1] ?? match?.[2] ?? null;
-  const italic = /italic/.test(first?.getAttribute('font-style') ?? '');
-  return {
-    kind: stereotype ?? (italic ? 'interface' : 'class'),
-    label: text.replace(/^(?:<<\s*[\w]+\s*>>|«\s*[\w]+\s*»)\s*/, ''),
-    stereotype,
-  };
-}
-
-/** Whether a drawn node carries the session-seed marker. */
-function nodeIsSeed(group: Element): boolean {
-  const marker = group.getAttribute('data-architecture-seed');
-  return marker === 'true' || marker === 'light'
-    || group.classList.contains('arch-seed')
-    || group.classList.contains('arch-seed-light');
-}
-
-/** The points of a path's `d` attribute, in order (curves keep their control points). */
-export function pathPointsOf(d: string | null): PlanPoint[] {
-  if (d === null) return [];
-  const numbers = [...d.matchAll(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)].map((match) => Number(match[0]));
-  const points: PlanPoint[] = [];
-  for (let index = 0; index + 1 < numbers.length; index += 2) {
-    points.push({ x: numbers[index], y: numbers[index + 1] });
-  }
-  return points;
-}
-
-/** Read the geometry of one rendered drawing. Read-only; never mutates the SVG. */
-export function readSemanticDrawingGeometry(svg: Element): SemanticDrawingGeometry {
-  const viewBox = (svg.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
-  const width = Number(svg.getAttribute('width'));
-  const height = Number(svg.getAttribute('height'));
-  const boxWidth = Number.isFinite(viewBox[2]) && viewBox[2] > 0
-    ? viewBox[2]
-    : Number.isFinite(width) && width > 0 ? width : 0;
-  const boxHeight = Number.isFinite(viewBox[3]) && viewBox[3] > 0
-    ? viewBox[3]
-    : Number.isFinite(height) && height > 0 ? height : 0;
-
-  const packages: SemanticPackageGeometry[] = [];
-  for (const group of svg.querySelectorAll('.uml-package[data-package-id]')) {
-    const rect = rectOf(group);
-    if (rect === null) continue;
-    packages.push({
-      id: group.getAttribute('data-package-id') ?? '',
-      rect,
-      rawLabel: directChildren(group, 'text')[0]?.textContent ?? group.getAttribute('data-package-id') ?? '',
-    });
-  }
-
-  const nodes: SemanticNodeGeometry[] = [];
-  for (const group of svg.querySelectorAll('.uml-node[data-entity-id]')) {
-    const rect = rectOf(group);
-    if (rect === null) continue;
-    const texts = directChildren(group, 'text');
-    const labelled = entityLabelOf(group);
-    const line = directChildren(group, 'line')[0];
-    const ruleY = line === undefined ? NaN : Number(line.getAttribute('y1'));
-    nodes.push({
-      id: group.getAttribute('data-entity-id') ?? '',
-      rect,
-      label: labelled.label,
-      kind: labelled.kind,
-      stereotype: labelled.stereotype,
-      members: texts.slice(1).map((text) => text.textContent ?? ''),
-      seed: nodeIsSeed(group),
-      mentionTier: group.getAttribute('data-architecture-pinned') === 'true' ? 'pinned' : null,
-      titleRuleY: Number.isFinite(ruleY) ? ruleY : null,
-    });
-  }
-
-  const edges: SemanticEdgeGeometry[] = [];
-  for (const group of svg.querySelectorAll('.uml-edge[data-edge-source][data-edge-target]')) {
-    const path = directChildren(group, 'path')[0];
-    const points = pathPointsOf(path?.getAttribute('d') ?? null);
-    if (points.length < 2) continue;
-    edges.push({
-      source: group.getAttribute('data-edge-source') ?? '',
-      target: group.getAttribute('data-edge-target') ?? '',
-      points,
-    });
-  }
-
-  return { width: boxWidth, height: boxHeight, nodes, packages, edges };
-}
 
 /** Whether `outer` (strictly) contains `inner`. */
 function containsRect(outer: SemanticRect, inner: SemanticRect): boolean {
@@ -500,7 +354,8 @@ function evaluateTier(
         label: node.label,
         kind: node.kind,
         stereotype: node.stereotype,
-        members: node.members,
+        hasAttributes: node.members.some((member) => member.compartment === 'attr'),
+        hasOperations: node.members.some((member) => member.compartment === 'op'),
         seed: node.seed,
       },
       fontPx,
@@ -508,7 +363,7 @@ function evaluateTier(
     // Members are shown at tier A whenever the frame has room for at least two
     // rows at the floor font; a compacted frame (alpha > 0) drops them.
     const rows = planMemberRows({
-      members: node.members,
+      members: node.members.map((member) => member.text),
       height: node.rect.height * scale,
       titleHeight: plan.titleHeight,
       fontPx,

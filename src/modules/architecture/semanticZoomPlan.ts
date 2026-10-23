@@ -206,15 +206,19 @@ export function planEntityContent(
     readonly label: string;
     readonly kind?: string | null;
     readonly stereotype?: string | null;
-    readonly members: readonly string[];
+    /** Whether the renderer published any `uml-attr` member. */
+    readonly hasAttributes: boolean;
+    /** Whether the renderer published any `uml-op` member. */
+    readonly hasOperations: boolean;
     readonly seed: boolean;
   },
   fontPx: number,
 ): PlannedEntityContent {
   const kind = planEntityKind(input.kind);
   const name = planEntityName(input.label, fontPx, input.seed);
-  const hasAttributes = input.members.some((member) => !member.includes('('));
-  const hasOperations = input.members.some((member) => member.includes('('));
+  // The compartments come from the renderer's `uml-attr` / `uml-op` classes
+  // (read in `semanticZoomRead.ts`); no member text is inspected here.
+  const { hasAttributes, hasOperations } = input;
   // A non-class kind names itself in a `<<kind>>` line above the title, the way
   // a UML box states its stereotype. It earns its own row of title space.
   const stereotype = input.stereotype

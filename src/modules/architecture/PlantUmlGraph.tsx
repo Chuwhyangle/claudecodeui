@@ -29,8 +29,8 @@ import {
   type ArchitectureLayoutEngineClass,
 } from '@/modules/architecture/elkAspectEngine';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
+import { readSemanticDrawingGeometry, type SemanticEntityKind } from '@/modules/architecture/semanticZoomRead';
 import {
-  readSemanticDrawingGeometry,
   semanticCompartmentRules,
   solveSemanticZoom,
   lodDepthForTier,
@@ -844,10 +844,31 @@ type SemanticCapture = {
 };
 
 /** Capture the drawing that was just injected. */
-function captureSemanticDrawing(host: HTMLElement): SemanticCapture | null {
+function captureSemanticDrawing(
+  host: HTMLElement,
+  graph: ArchitectureRendererGraph,
+): SemanticCapture | null {
   const svg = host.querySelector('svg');
   if (!(svg instanceof SVGSVGElement)) return null;
-  const geometry = readSemanticDrawingGeometry(svg);
+  // 0.4.0 publishes compartments but not the entity KIND (function vs class)
+  // and its member parser calls a field whose type contains `(` a method, so
+  // the payload's authoritative kinds are handed to the read layer as hints.
+  const kindById = new Map<string, SemanticEntityKind>(graph.nodes.map((node) => {
+    const kind = node.kind;
+    const mapped: SemanticEntityKind = kind === 'interface' || kind === 'enum' || kind === 'function'
+      ? kind
+      : 'class';
+    return [node.id, mapped];
+  }));
+  const memberKindsById = new Map<string, readonly ('field' | 'method')[]>(
+    graph.nodes
+      .filter((node) => (node.members?.length ?? 0) > 0)
+      .map((node) => [
+        node.id,
+        (node.members ?? []).map((member) => (member.kind === 'method' ? 'method' : 'field')),
+      ]),
+  );
+  const geometry = readSemanticDrawingGeometry(svg, { kindById, memberKindsById });
   const titles = new Map<string, string | null>();
   for (const node of svg.querySelectorAll('.uml-node[data-entity-id]')) {
     const id = node.getAttribute('data-entity-id');
@@ -942,10 +963,8 @@ function drawSemanticLayout(
   }
 
   // ---- edges (mapped first; the class boxes are drawn on top of them)
-  const drawnEdgeKeys = new Set(layout.edges.map((edge) => `${edge.source}\u0000${edge.target}`));
-  for (const group of svg.querySelectorAll('.uml-edge[data-edge-source][data-edge-target]')) {
-    const key = `${group.getAttribute('data-edge-source')}\u0000${group.getAttribute('data-edge-target')}`;
-    if (!drawnEdgeKeys.has(key)) {
+  for (const group of svg.querySelectorAll('.uml-edge[data-edge-source]')) {
+    if (layout.tier === 'C') {
       // Tier C draws packages only: the entity relations are hidden, not left
       // mapped at their old coordinates.
       (group as SVGGElement).style.display = 'none';
@@ -1175,7 +1194,8 @@ function drawSemanticLayout(
     }
     if (nodeLayout.showMembers) {
       const rows = planMemberRows({
-        members: capture.geometry.nodes.find((node) => node.id === nodeLayout.id)?.members ?? [],
+        members: (capture.geometry.nodes.find((node) => node.id === nodeLayout.id)?.members ?? [])
+          .map((member) => member.text),
         height: h,
         titleHeight: nodeLayout.drawnTitleHeight,
         fontPx,
@@ -2235,7 +2255,7 @@ export function PlantUmlGraph({
         // so no decoration can accumulate. The grouped overview (a directory
         // map, not a UML drawing) keeps the ordinary CSS-scaled viewport.
         const semanticEligible = !diagram.grouped && !(view.kind === 'overview' && !entityGraph);
-        const capture = semanticEligible ? captureSemanticDrawing(host) : null;
+        const capture = semanticEligible ? captureSemanticDrawing(host, graph) : null;
         semanticCaptureRef.current = capture;
         semanticTierRef.current = null;
         const viewportForMode = viewportRef.current;

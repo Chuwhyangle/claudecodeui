@@ -7,13 +7,13 @@ import {
   densestWindowAnchor,
   evaluateSemanticTiers,
   lodDepthForTier,
-  readSemanticDrawingGeometry,
   semanticCompactionAlpha,
   solveSemanticZoom,
   type SemanticDrawingGeometry,
   type SemanticTier,
   type SemanticZoomLayout,
 } from '@/modules/architecture/semanticZoomLayout';
+import { readSemanticDrawingGeometry } from '@/modules/architecture/semanticZoomRead';
 import { TWENTY_SIX_PACKAGE_HIERARCHY } from '@/modules/architecture/tests/layoutFixtures';
 
 /**
