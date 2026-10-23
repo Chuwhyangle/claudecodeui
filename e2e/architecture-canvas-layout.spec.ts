@@ -4327,6 +4327,8 @@ test('control arm — restoring the default detail puts the overflow row back in
       markerLines: reading.markerLines.slice(0, 3),
       missingMembers: reading.missingMembers.slice(0, 3),
       violations: reading.violations.length,
+      characters: textPuml.length,
+      lines: textPuml.split('\n').length,
     })}`);
     expect(
       reading.markerLines.length,
