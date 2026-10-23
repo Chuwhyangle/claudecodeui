@@ -29,9 +29,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——在途磁贴的可见文本不含 `quay://`；needs-human > 0 的磁贴带强调样式标记（data 属性），= 0 的不带；驱动正常时不渲染驱动徽标，停止时渲染。
-- [ ] AC2: `npx playwright test e2e/cockpit-visual.spec.ts` exit 0（在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——读取序号标签计算后的字号 ≥ 正文字号、前景 / 背景对比度 ≥ 4.5；控制臂：把标签强制设为浅灰小字后同一读取函数判红。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——在途磁贴的可见文本不含 `quay://`；needs-human > 0 的磁贴带强调样式标记（data 属性），= 0 的不带；驱动正常时不渲染驱动徽标，停止时渲染。
+- [x] AC2: `npx playwright test e2e/cockpit-visual.spec.ts` exit 0（在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——读取序号标签计算后的字号 ≥ 正文字号、前景 / 背景对比度 ≥ 4.5；控制臂：把标签强制设为浅灰小字后同一读取函数判红。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -44,3 +44,11 @@ depends_on:
 - e2e/cockpit-visual.spec.ts
 - playwright.config.ts
 - tasks/cockpit-stage-visual-attention-fixes.md
+
+## Blocker
+
+**2026-10-23T04:08:26.549Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/3，剩余未勾 3）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：929f9e43-2c02-40b6-8415-89b7644c9e3f
