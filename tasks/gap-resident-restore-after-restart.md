@@ -1,7 +1,7 @@
 ---
 id: gap-resident-restore-after-restart
 title: 重启后自动恢复 resident 会话（配置面走通用 server settings 文件，默认 off）
-status: ready
+status: done
 labels:
   - gap
 parent: null

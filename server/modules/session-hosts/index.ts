@@ -124,15 +124,22 @@ export { LIFECYCLE_MODE_ERROR_CODES } from '@/shared/types.js';
 // fact two close reasons carry, needed by any caller that injects a policy or
 // reads why an `exited` host died.
 export type { HostCloseDetail, LifecyclePolicy } from '@/shared/types.js';
-// createResidentRestoreService / resolveResidentRestoreEnabled: the start-up
-// restore pass and the switch that gates it. Consumed by `server/index.ts`,
-// which asks the resolver whether to schedule the pass and hands the factory the
-// two seams only it can supply (the session store's candidate reader and the
-// providers layer's resident launch). Exported here rather than reached into by
-// path because the composition root imports this module through its barrel.
+// createResidentRestoreService: the start-up restore pass. Consumed by
+// `server/index.ts`, which branches on the server settings file's
+// `residentRestore.enabled` and hands the factory the two seams only it can
+// supply (the session store's candidate reader and the providers layer's
+// resident launch). Exported here rather than reached into by path because the
+// composition root imports this module through its barrel.
+export { createResidentRestoreService } from './resident-restore.service.js';
+// DEFAULT_RESIDENT_RESTORE_ENABLED / _MAX / _MAX_AGE_MS: the shipped policy the
+// generic server settings loader (`modules/settings/server-settings.ts`) fills
+// its `residentRestore` block from when the file says nothing or names a
+// malformed value. They live with the pass because the pass owns the policy;
+// the settings loader imports them through this barrel so the two cannot drift.
 export {
-  createResidentRestoreService,
-  resolveResidentRestoreEnabled,
+  DEFAULT_RESIDENT_RESTORE_ENABLED,
+  DEFAULT_RESIDENT_RESTORE_MAX,
+  DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
 } from './resident-restore.service.js';
 // ResidentRestoreOutcome / ResidentRestoreDeps / RestorableResidentSession: the
 // pass's answer, its inputs, and the candidate row it reads. Exported as types

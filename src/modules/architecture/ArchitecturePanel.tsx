@@ -1,6 +1,5 @@
 import {
   type ComponentType,
-  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -20,7 +19,6 @@ import {
   type ArchitectureCurationItem,
   type ArchitectureCurationState,
   type CurationActionResult,
-  type CurationStorageLike,
 } from '@/modules/architecture/curationStore';
 import { resolveCurationItems, useProjectSearch } from '@/modules/architecture/hooks/useProjectSearch';
 import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
@@ -40,14 +38,12 @@ import {
   ARCHITECTURE_SCOPE_MAX,
   ARCHITECTURE_SCOPE_MIN,
   clampArchitectureScope,
-  DEFAULT_ARCHITECTURE_SCOPE,
   rankArchitectureDetail,
   type ArchitectureDetailTier,
 } from '@/modules/architecture/detailRanking';
 import {
   activeFilterCount,
   applyFilter,
-  ARCHITECTURE_DEFAULT_FILTER,
   ARCHITECTURE_ELEMENT_KINDS,
   ARCHITECTURE_RELATION_PRESETS,
   ARCHITECTURE_SHOW_ALL_FILTER,
@@ -57,7 +53,6 @@ import {
   keptMentionedCount,
   relationsForPreset,
   type ArchitectureElementRelationFilter,
-  type ArchitectureFilterHidden,
   type ArchitectureRelationPreset,
 } from '@/modules/architecture/elementRelationFilter';
 import {
@@ -102,9 +97,28 @@ import {
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 import { readDraftText, writeDraftText } from '@/shared/chatDrafts';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
-
-/** The two subgraphs the endpoint returns together; switching between them is local. */
-type ArchitectureGranularity = 'file' | 'entity';
+import { ArchitectureEmptyState } from '@/modules/architecture/ArchitectureEmptyState';
+import { ArchitectureExportMenu } from '@/modules/architecture/ArchitectureExportMenu';
+import { CurationToast } from '@/modules/architecture/CurationToast';
+import { LegendSwatch } from '@/modules/architecture/LegendSwatch';
+import { useDismissiblePopover } from '@/modules/architecture/useDismissiblePopover';
+import {
+  addHidden,
+  EMPTY_HIDDEN,
+  readStoredFilter,
+  truncationReading,
+  writeStoredFilter,
+  type ArchitectureGranularity,
+} from '@/modules/architecture/panelFilters';
+import {
+  BROWSER_CURATION_STORAGE,
+  readStoredDetail,
+  readStoredScope,
+  readStoredTouchHintDismissed,
+  writeStoredDetail,
+  writeStoredScope,
+  writeStoredTouchHintDismissed,
+} from '@/modules/architecture/panelPersistence';
 
 /**
  * The dock's pages. `inspector` is the selection reading; `text` is the
@@ -123,14 +137,6 @@ function nodeIdShapeOf(granularity: ArchitectureGranularity): ArchitectureNodeId
 }
 
 /**
- * The server-side BFS depth the panel asks for on its first activation when the
- * project has no remembered scope. Two hops is the server's loose default
- * (`DEFAULT_HOPS` in `architecture/service.ts`); the scope stepper below is a
- * REQUEST parameter, so unlike the granularity toggle it re-enters the fetch.
- */
-const DEFAULT_SCOPE = DEFAULT_ARCHITECTURE_SCOPE;
-
-/**
  * How long a filter/view change waits before it becomes a request.
  *
  * Walking the relation presets (structural → dependency → call) is one gesture;
@@ -140,21 +146,11 @@ const DEFAULT_SCOPE = DEFAULT_ARCHITECTURE_SCOPE;
 const FILTER_REQUEST_DEBOUNCE_MS = 250;
 
 /**
- * Where one project's two display knobs are remembered. They are deliberately
- * separate keys: the sibling element/relation-filter task reuses this storage,
- * and a reader changing only the scope must not rewrite the detail choice.
- */
-const SCOPE_STORAGE_PREFIX = 'architecture.scope.';
-const DETAIL_STORAGE_PREFIX = 'architecture.detail.';
-const FILTER_STORAGE_PREFIX = 'architecture.filter.';
-/**
  * The id of the "keep these shown…" hint paragraph. Every "keep mentioned"
  * switch points `aria-describedby` at it, so the visible name and the extra
  * explanation are separate readings instead of one overloaded `aria-label`.
  */
 const MENTIONED_HINT_ID = 'architecture-filter-mentioned-hint';
-/** Whether the one-off touch instruction has been dismissed in this browser. */
-const TOUCH_HINT_STORAGE_KEY = 'architecture.touchHint.dismissed';
 /**
  * How long the dock's open/close animation lasts (matching the 160ms
  * `transform` transition in `ArchitectureDock`). Aspect-driven re-layout stays
@@ -162,25 +158,6 @@ const TOUCH_HINT_STORAGE_KEY = 'architecture.touchHint.dismissed';
  * the dock itself is never read as a container shape change.
  */
 const DOCK_LAYOUT_LOCK_MS = 200;
-
-/** The touch instruction is a one-off: a remembered dismissal keeps it off screen. */
-function readStoredTouchHintDismissed(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(TOUCH_HINT_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-/** Remember the dismissal; storage being unavailable must not resurrect the bubble. */
-function writeStoredTouchHintDismissed(): void {
-  try {
-    window.localStorage.setItem(TOUCH_HINT_STORAGE_KEY, 'true');
-  } catch {
-    // Private mode: the dismissal still holds for this session.
-  }
-}
 
 /** The remembered knobs for one project; `projectId` keys the loaded pair. */
 type ArchitectureDisplaySettings = {
@@ -201,205 +178,6 @@ type ArchitectureFocusTarget = {
    */
   readonly drill: boolean;
 };
-
-/** Read one project's remembered scope, clamped into the stepper's range. */
-function readStoredScope(projectId: string | null): number {
-  if (projectId === null || typeof window === 'undefined') return DEFAULT_SCOPE;
-  try {
-    const stored = window.localStorage.getItem(`${SCOPE_STORAGE_PREFIX}${projectId}`);
-    if (stored === null) return DEFAULT_SCOPE;
-    const parsed = Number(stored);
-    return Number.isFinite(parsed) ? clampArchitectureScope(parsed) : DEFAULT_SCOPE;
-  } catch {
-    // Storage can be unavailable (private mode, embedded webview); the knob
-    // still works for this visit, it just is not remembered.
-    return DEFAULT_SCOPE;
-  }
-}
-
-/** Read one project's remembered detail tier, falling back to the identity tier. */
-function readStoredDetail(projectId: string | null): ArchitectureDetailTier {
-  if (projectId === null || typeof window === 'undefined') return 'all';
-  try {
-    const stored = window.localStorage.getItem(`${DETAIL_STORAGE_PREFIX}${projectId}`);
-    return stored !== null && (ARCHITECTURE_DETAIL_TIERS as readonly string[]).includes(stored)
-      ? (stored as ArchitectureDetailTier)
-      : 'all';
-  } catch {
-    return 'all';
-  }
-}
-
-/** Remember one project's scope choice; a failed write must not break the knob. */
-function writeStoredScope(projectId: string | null, scope: number): void {
-  if (projectId === null) return;
-  try {
-    window.localStorage.setItem(`${SCOPE_STORAGE_PREFIX}${projectId}`, String(scope));
-  } catch {
-    // See readStoredScope: remembering is best-effort, the knob is not.
-  }
-}
-
-/** Remember one project's detail choice; a failed write must not break the knob. */
-function writeStoredDetail(projectId: string | null, detail: ArchitectureDetailTier): void {
-  if (projectId === null) return;
-  try {
-    window.localStorage.setItem(`${DETAIL_STORAGE_PREFIX}${projectId}`, detail);
-  } catch {
-    // See readStoredScope: remembering is best-effort, the knob is not.
-  }
-}
-
-/** True when `value` is one of the element axis' kinds. */
-function isElementKind(value: unknown): value is (typeof ARCHITECTURE_ELEMENT_KINDS)[number] {
-  return typeof value === 'string' && (ARCHITECTURE_ELEMENT_KINDS as readonly string[]).includes(value);
-}
-
-/** True when `value` is one of the relation axis' presets. */
-function isRelationPreset(value: unknown): value is ArchitectureRelationPreset {
-  return typeof value === 'string' && (ARCHITECTURE_RELATION_PRESETS as readonly string[]).includes(value);
-}
-
-/**
- * Read one project's remembered element/relation filter.
- *
- * The stored value is a JSON object written by this panel; a hand-edited or
- * older entry (or storage being unavailable) falls back to the shipped default
- * rather than throwing. Validation is per FIELD, so one unknown kind does not
- * discard the other two selections.
- */
-function readStoredFilter(projectId: string | null): ArchitectureElementRelationFilter {
-  if (projectId === null || typeof window === 'undefined') return ARCHITECTURE_DEFAULT_FILTER;
-  try {
-    const stored = window.localStorage.getItem(`${FILTER_STORAGE_PREFIX}${projectId}`);
-    if (stored === null) return ARCHITECTURE_DEFAULT_FILTER;
-    const parsed: unknown = JSON.parse(stored);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return ARCHITECTURE_DEFAULT_FILTER;
-    }
-    const record = parsed as Record<string, unknown>;
-    const kinds = Array.isArray(record.kinds)
-      ? record.kinds.filter(isElementKind)
-      : ARCHITECTURE_DEFAULT_FILTER.kinds;
-    return {
-      kinds,
-      relations: isRelationPreset(record.relations)
-        ? record.relations
-        : ARCHITECTURE_DEFAULT_FILTER.relations,
-      hideIsolated: typeof record.hideIsolated === 'boolean'
-        ? record.hideIsolated
-        : ARCHITECTURE_DEFAULT_FILTER.hideIsolated,
-      // An entry written before the switches existed has no such field: the
-      // shipped default (no kind exempt) is the right fallback, not "all on".
-      keepMentionedKinds: Array.isArray(record.keepMentionedKinds)
-        ? record.keepMentionedKinds.filter(isElementKind)
-        : ARCHITECTURE_DEFAULT_FILTER.keepMentionedKinds,
-    };
-  } catch {
-    return ARCHITECTURE_DEFAULT_FILTER;
-  }
-}
-
-/** Remember one project's filter; a failed write must not break the popover. */
-function writeStoredFilter(projectId: string | null, filter: ArchitectureElementRelationFilter): void {
-  if (projectId === null) return;
-  try {
-    window.localStorage.setItem(`${FILTER_STORAGE_PREFIX}${projectId}`, JSON.stringify(filter));
-  } catch {
-    // See readStoredScope: remembering is best-effort, the knob is not.
-  }
-}
-
-/**
- * The browser storage the curation store persists through.
- *
- * The store's own seam is the two methods it needs, so a blocked/unavailable
- * `localStorage` (private mode, storage quota) degrades to "this page's state
- * only" instead of throwing during render.
- */
-const BROWSER_CURATION_STORAGE: CurationStorageLike = {
-  getItem: (key) => {
-    try {
-      return typeof window === 'undefined' ? null : window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem: (key, value) => {
-    try {
-      if (typeof window !== 'undefined') window.localStorage.setItem(key, value);
-    } catch {
-      // Best-effort: the in-memory store keeps working for this page.
-    }
-  },
-};
-
-/** Add two `hidden` readings; the narrow path composes the local cut onto the server's. */
-function addHidden(base: ArchitectureFilterHidden, extra: ArchitectureFilterHidden): ArchitectureFilterHidden {
-  const byKind: Partial<Record<string, number>> = { ...base.byKind };
-  for (const [kind, count] of Object.entries(extra.byKind)) {
-    byKind[kind] = (byKind[kind] ?? 0) + (count ?? 0);
-  }
-  const byRelation: Record<string, number> = { ...base.byRelation };
-  for (const [type, count] of Object.entries(extra.byRelation)) {
-    byRelation[type] = (byRelation[type] ?? 0) + count;
-  }
-  // The mentioned subset is summed on the same axes as `byKind`: the server cut
-  // is one reading and a local narrowing is another, and the readout's "N of
-  // them mentioned" has to describe both. Absent on both sides ⇒ absent, so an
-  // old payload keeps its exact shape.
-  const mentionedByKind: Partial<Record<string, number>> = { ...base.mentionedByKind };
-  for (const [kind, count] of Object.entries(extra.mentionedByKind ?? {})) {
-    mentionedByKind[kind] = (mentionedByKind[kind] ?? 0) + (count ?? 0);
-  }
-  // Per-node relation removals compose the same way: the server's relation axis
-  // and a local narrowing are one reading of what the box in front of the
-  // reader lost.
-  const byNodeRelations: Record<string, Record<string, number>> = {};
-  for (const source of [base.byNodeRelations ?? {}, extra.byNodeRelations ?? {}]) {
-    for (const [id, counts] of Object.entries(source)) {
-      const merged = byNodeRelations[id] ?? {};
-      for (const [type, count] of Object.entries(counts)) {
-        merged[type] = (merged[type] ?? 0) + count;
-      }
-      byNodeRelations[id] = merged;
-    }
-  }
-  return {
-    byKind,
-    byRelation,
-    isolated: base.isolated + extra.isolated,
-    ...(Object.keys(mentionedByKind).length === 0 ? {} : { mentionedByKind }),
-    ...(Object.keys(byNodeRelations).length === 0 ? {} : { byNodeRelations }),
-  };
-}
-
-/** An empty `hidden` reading, for a payload whose server carried no filter stats. */
-const EMPTY_HIDDEN: ArchitectureFilterHidden = { byKind: {}, byRelation: {}, isolated: 0 };
-
-/**
- * One granularity's truncation reading, taken from the response alone.
- *
- * The per-granularity flags are optional on the wire (a payload from an older
- * server has only the legacy `truncated` boolean), so an absent flag falls back
- * to `truncated`. When a granularity was cut, the retained count IS the budget
- * the generator applied, so it stands in for the limit.
- */
-function truncationReading(result: ArchitectureGraphResult, granularity: ArchitectureGranularity) {
-  const { stats } = result;
-  if (granularity === 'file') {
-    return {
-      truncated: stats.fileTruncated ?? stats.truncated,
-      shown: stats.fileNodes,
-      total: stats.fileTotal ?? stats.fileNodes,
-    };
-  }
-  return {
-    truncated: stats.entityTruncated ?? stats.truncated,
-    shown: stats.entityNodes,
-    total: stats.entityTotal ?? stats.entityNodes,
-  };
-}
 
 type ArchitecturePanelProps = {
   /** The selected project's DB id; the endpoint resolves it to a project root. */
@@ -476,401 +254,6 @@ type ArchitecturePanelRenderer = ComponentType<
     }[];
   }
 >;
-
-/** The five formats the export menu offers; `mmd` is the legacy Mermaid pair. */
-type ArchitectureExportItemId = 'puml' | 'copy' | 'svg' | 'png' | 'mmd';
-
-type ArchitectureExportMenuProps = {
-  /** Whether the menu is drawn inside the compact toolbar's overflow panel. */
-  readonly compact?: boolean;
-  readonly onExportPlantUml: () => void;
-  readonly onCopyPlantUml: () => void;
-  readonly onExportSvg: () => void;
-  readonly onExportPng: () => void;
-  readonly onExportMermaid: () => void;
-  /** Runs after an item is chosen, so the compact overflow panel can close. */
-  readonly onAction: () => void;
-};
-
-/**
- * The `Export ▾` disclosure.
- *
- * Standard menu semantics: the trigger advertises `aria-haspopup="menu"`, the
- * list is a `role="menu"` of `menuitem` buttons, arrow keys move between them,
- * and Escape closes ONLY this menu — it calls `stopPropagation` so the chat
- * page's document-level Escape (abort the running turn) never sees the key.
- * The five formats are ordered PlantUML first and the legacy Mermaid pair last;
- * the item list is the same on every layout, only its position differs (the
- * compact tier draws it inside the panel's overflow sheet).
- *
- * Used by `ArchitecturePanel` only.
- */
-function ArchitectureExportMenu({
-  compact = false,
-  onExportPlantUml,
-  onCopyPlantUml,
-  onExportSvg,
-  onExportPng,
-  onExportMermaid,
-  onAction,
-}: ArchitectureExportMenuProps) {
-  const { t } = useTranslation();
-  // A coarse pointer needs a real 44px hit area on the disclosure AND on each
-  // item; the size is inline so the reading does not depend on a stylesheet.
-  const { coarsePointer } = useTouchLayout();
-  const targetStyle = coarsePointer ? TOUCH_TARGET_STYLE : undefined;
-  // Whether the list is expanded. Local to the disclosure: the panel does not
-  // need to know (it only learns about the chosen format through the callbacks).
-  const [open, setOpen] = useState(false);
-  // Which item owns the roving tab stop while the menu is open.
-  const [activeIndex, setActiveIndex] = useState(0);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const toggleRef = useRef<HTMLButtonElement | null>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-
-  const items: readonly {
-    readonly id: ArchitectureExportItemId;
-    readonly label: string;
-    readonly legacy: boolean;
-    readonly run: () => void;
-  }[] = [
-    {
-      id: 'puml',
-      label: t('architecture.export.plantUml', { defaultValue: 'PlantUML (.puml)' }),
-      legacy: false,
-      run: onExportPlantUml,
-    },
-    {
-      id: 'copy',
-      label: t('architecture.export.copy', { defaultValue: 'Copy PlantUML' }),
-      legacy: false,
-      run: onCopyPlantUml,
-    },
-    { id: 'svg', label: t('architecture.export.svg', { defaultValue: 'SVG' }), legacy: false, run: onExportSvg },
-    { id: 'png', label: t('architecture.export.png', { defaultValue: 'PNG' }), legacy: false, run: onExportPng },
-    {
-      id: 'mmd',
-      label: t('architecture.export.mermaid', { defaultValue: 'Mermaid (.mmd, legacy)' }),
-      legacy: true,
-      run: onExportMermaid,
-    },
-  ];
-
-  const itemCount = items.length;
-  const focusItem = (index: number): void => {
-    const next = ((index % itemCount) + itemCount) % itemCount;
-    setActiveIndex(next);
-    itemRefs.current[next]?.focus();
-  };
-  const close = (restoreFocus: boolean): void => {
-    setOpen(false);
-    if (restoreFocus) toggleRef.current?.focus();
-  };
-  // The toolbar scrolls horizontally, which would clip an absolutely positioned
-  // dropdown. On the desktop tier the list is therefore `position: fixed`,
-  // anchored under the trigger; the compact tier draws it inline in the sheet.
-  const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number } | null>(null);
-  const openMenu = (): void => {
-    if (!compact) {
-      const rect = toggleRef.current?.getBoundingClientRect();
-      if (rect !== undefined) {
-        setPopoverPosition({ left: Math.max(8, rect.right - 224), top: rect.bottom + 4 });
-      }
-    }
-    setOpen(true);
-  };
-
-  // Opening moves focus into the list, the way a disclosure menu does.
-  useEffect(() => {
-    if (open) itemRefs.current[0]?.focus();
-  }, [open]);
-
-  // A press outside the disclosure closes it without stealing the press.
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (event: MouseEvent): void => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [open]);
-
-  const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    switch (event.key) {
-      case 'Escape':
-        // Escape belongs to this menu while it is open. Stopping propagation
-        // is what keeps the chat page's global abort from also firing.
-        event.preventDefault();
-        event.stopPropagation();
-        close(true);
-        break;
-      case 'ArrowDown':
-        event.preventDefault();
-        focusItem(activeIndex + 1);
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        focusItem(activeIndex - 1);
-        break;
-      case 'Home':
-        event.preventDefault();
-        focusItem(0);
-        break;
-      case 'End':
-        event.preventDefault();
-        focusItem(itemCount - 1);
-        break;
-      default:
-        break;
-    }
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      className={compact ? 'flex flex-col' : 'relative'}
-      style={compact ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
-      data-architecture-export-menu-root="true"
-    >
-      <button
-        ref={toggleRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => {
-          if (open) close(false);
-          else openMenu();
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            openMenu();
-          }
-        }}
-        data-architecture-export="true"
-        style={targetStyle}
-        className={`rounded-lg border border-border font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
-          compact ? 'px-3 py-2 text-sm text-left' : 'px-2 py-0.5 text-xs'
-        }`}
-      >
-        {t('architecture.export.menu', { defaultValue: 'Export ▾' })}
-      </button>
-      {open && (
-        <div
-          role="menu"
-          aria-label={t('architecture.export.menu', { defaultValue: 'Export ▾' })}
-          data-architecture-export-menu="true"
-          onKeyDown={handleMenuKeyDown}
-          style={compact ? { gap: TOUCH_CONTROL_GAP_PX } : popoverPosition ?? { left: 8, top: 56 }}
-          className={
-            compact
-              ? 'flex flex-col'
-              : 'fixed z-50 flex w-56 flex-col rounded-lg border border-border bg-popover p-1 shadow-lg'
-          }
-        >
-          {items.map((item, index) => (
-            <button
-              key={item.id}
-              ref={(node) => {
-                itemRefs.current[index] = node;
-              }}
-              type="button"
-              role="menuitem"
-              tabIndex={index === activeIndex ? 0 : -1}
-              data-architecture-export-item={item.id}
-              data-architecture-export-legacy={item.legacy ? 'true' : undefined}
-              style={targetStyle}
-              onFocus={() => setActiveIndex(index)}
-              onClick={() => {
-                close(false);
-                onAction();
-                item.run();
-              }}
-              className={`rounded px-2 py-1 text-left text-xs text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
-                compact ? 'py-2 text-sm' : ''
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The panel's empty state, for both "no session selected" and "no seeds found". */
-function ArchitectureEmptyState({ message }: { message: string }) {
-  return (
-    <p data-architecture-empty="true" className="p-6 text-sm text-muted-foreground">
-      {message}
-    </p>
-  );
-}
-
-/** One legend glyph: a line style, an arrow head, a stereotype badge or the seed frame. */
-function LegendSwatch({ glyph }: { readonly glyph: string }) {
-  const stroke = 'currentColor';
-  const common = { fill: 'none', stroke, strokeWidth: 1.2 } as const;
-  return (
-    <svg
-      viewBox="0 0 34 14"
-      width="34"
-      height="14"
-      aria-hidden="true"
-      data-architecture-legend-swatch={glyph}
-      className="shrink-0 text-muted-foreground"
-    >
-      {glyph === 'association' && <line x1="2" y1="7" x2="32" y2="7" {...common} />}
-      {glyph === 'dependency' && <line x1="2" y1="7" x2="32" y2="7" strokeDasharray="4 2" {...common} />}
-      {/* Solid line + hollow triangle, versus the dashed line below: the old
-          legend printed `△` for both inheritance and implementation. */}
-      {glyph === 'inheritance' && (
-        <>
-          <line x1="2" y1="7" x2="24" y2="7" {...common} />
-          <path d="M24 2 L33 7 L24 12 Z" {...common} />
-        </>
-      )}
-      {glyph === 'implementation' && (
-        <>
-          <line x1="2" y1="7" x2="24" y2="7" strokeDasharray="4 2" {...common} />
-          <path d="M24 2 L33 7 L24 12 Z" {...common} />
-        </>
-      )}
-      {glyph === 'composition' && (
-        <>
-          <line x1="8" y1="7" x2="32" y2="7" {...common} />
-          <path d="M2 7 L5 4 L8 7 L5 10 Z" fill={stroke} stroke={stroke} strokeWidth="1.2" />
-        </>
-      )}
-      {glyph === 'aggregation' && (
-        <>
-          <line x1="8" y1="7" x2="32" y2="7" {...common} />
-          <path d="M2 7 L5 4 L8 7 L5 10 Z" {...common} />
-        </>
-      )}
-      {glyph === 'stereotype' && (
-        <>
-          <rect x="1" y="3" width="32" height="8" rx="2" {...common} />
-          <line x1="6" y1="7" x2="28" y2="7" strokeDasharray="2 2" {...common} />
-        </>
-      )}
-      {/* A seed is the ORANGE THICK frame, not a `●` dot. */}
-      {glyph === 'seed' && (
-        <rect x="2" y="2" width="30" height="10" rx="1.5" fill="none" stroke="#d97706" strokeWidth="2.5" />
-      )}
-      {glyph === 'folded' && (
-        <>
-          <rect x="2" y="2" width="30" height="10" rx="2" strokeDasharray="3 2" {...common} />
-          <line x1="12" y1="7" x2="22" y2="7" {...common} />
-          <path d="M12 4 L9 7 L12 10" {...common} />
-          <path d="M22 4 L25 7 L22 10" {...common} />
-        </>
-      )}
-    </svg>
-  );
-}
-
-/** How long a curation Toast lives before dismissing itself. */
-const CURATION_TOAST_MS = 6000;
-
-/**
- * The curation Toast: one sentence about what just changed, plus a focusable
- * 撤销 action. It auto-dismisses after {@link CURATION_TOAST_MS}, and hovering
- * or focusing inside it pauses that timer (so a keyboard user can reach the
- * undo button without racing it).
- */
-function CurationToast({
-  toast,
-  undoLabel,
-  onUndo,
-  onDismiss,
-}: {
-  readonly toast: { readonly id: number; readonly message: string; readonly undoable: boolean };
-  readonly undoLabel: string;
-  readonly onUndo: () => void;
-  readonly onDismiss: () => void;
-}) {
-  // Whether the pointer/focus currently holds the Toast open; it pauses the
-  // auto-dismiss so the undo action cannot disappear under the reader's hands.
-  const [paused, setPaused] = useState(false);
-  useEffect(() => {
-    if (paused) return;
-    const timer = setTimeout(onDismiss, CURATION_TOAST_MS);
-    return () => clearTimeout(timer);
-  }, [paused, onDismiss, toast.id]);
-
-  return (
-    <div
-      role="status"
-      data-architecture-curation-toast="true"
-      // The toast floats above the drawing, bottom-centre so it never covers
-      // the toolbar or the dock.
-      style={{ position: 'absolute', left: '50%', bottom: 16, transform: 'translateX(-50%)', zIndex: 60 }}
-      className="flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-lg border border-border bg-popover px-3 py-1.5 text-[11px] text-foreground shadow-lg"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPaused(false);
-      }}
-    >
-      <span data-architecture-curation-toast-message="true">{toast.message}</span>
-      {toast.undoable && (
-        <button
-          type="button"
-          data-architecture-curation-undo="true"
-          onClick={onUndo}
-          className="shrink-0 rounded border border-border px-1.5 py-0.5 font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-        >
-          {undoLabel}
-        </button>
-      )}
-    </div>
-  );
-}
-
-/**
- * Dismiss a disclosure popover the way every menu in this panel must behave:
- * a press outside it closes it WITHOUT swallowing that press (the listener is
- * a plain `mousedown` observer, so the click still reaches its target), and
- * Escape closes it before the chat page's document-level Escape can abort the
- * running turn, returning focus to the disclosure that opened it.
- *
- * Used by `ArchitecturePanel` for the filter, legend and "Adjusted" popovers.
- */
-function useDismissiblePopover(
-  open: boolean,
-  close: () => void,
-  triggerRef: { readonly current: HTMLElement | null },
-  panelSelector: string,
-): void {
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent): void => {
-      const target = event.target as Node | null;
-      if (target === null) return;
-      if (triggerRef.current?.contains(target) === true) return;
-      if (document.querySelector(panelSelector)?.contains(target) === true) return;
-      // No preventDefault: the press that closed the popover still lands.
-      close();
-    };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return;
-      // Capture phase: this runs before the chat page's document-level abort.
-      event.preventDefault();
-      event.stopPropagation();
-      close();
-      triggerRef.current?.focus();
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [open, close, triggerRef, panelSelector]);
-}
 
 /**
  * Rendered by WorkspaceMain when the architecture tab is active. It requests the

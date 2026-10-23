@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, it } from 'vitest';
 import type { KeyboardEvent, RefObject } from 'react';
 
-import { readInputHistory, useInputHistory } from '@/modules/chat/hooks/useInputHistory';
+import { readAllInputHistory, readInputHistory, useInputHistory } from '@/modules/chat/hooks/useInputHistory';
 
 const keyEvent = (
   key: string,
@@ -234,5 +234,19 @@ describe('useInputHistory', () => {
       handled = result.current.handleHistoryKeyDown(keyEvent('ArrowUp', '').event);
     });
     assert.equal(handled, false);
+  });
+
+  it('merges every scope newest-first for the suggestion chips', () => {
+    localStorage.setItem(
+      'chat-input-history',
+      JSON.stringify({
+        'session-a': ['older', 'newer'],
+        'session-b': ['other scope'],
+      }),
+    );
+
+    // Scopes are stored most-recently-used last, so session-b's entry is the
+    // newest overall; within a scope the last entry is the newest.
+    assert.deepEqual(readAllInputHistory(), ['other scope', 'newer', 'older']);
   });
 });

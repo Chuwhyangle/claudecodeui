@@ -691,6 +691,11 @@ function ChatInterface({
     cancelEditMessage,
     draftScope,
     sendFailed,
+    inputSuggestionCandidates,
+    inputSuggestionsVisible,
+    selectedInputSuggestionIndex,
+    inputSuggestionListId,
+    acceptInputSuggestion,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -1265,6 +1270,11 @@ function ChatInterface({
           placeholder={t('input.placeholder', { provider: selectedProviderLabel })}
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
+          inputSuggestionCandidates={inputSuggestionCandidates}
+          inputSuggestionsVisible={inputSuggestionsVisible}
+          selectedInputSuggestionIndex={selectedInputSuggestionIndex}
+          inputSuggestionListId={inputSuggestionListId}
+          onAcceptInputSuggestion={acceptInputSuggestion}
         />
             </>
           )}

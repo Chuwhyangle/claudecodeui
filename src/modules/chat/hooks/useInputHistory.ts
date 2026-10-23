@@ -53,6 +53,28 @@ export function readInputHistory(scope: string | null): string[] {
   return readHistoryStore()[scope] ?? [];
 }
 
+/**
+ * Every entry the browser has recorded, across all chat scopes, newest first.
+ *
+ * The store writes scopes most-recently-used last (see `appendInputHistory`) and
+ * appends entries in order within each scope, so walking both backwards yields a
+ * global recency order. The empty-composer suggestion chips read this rather than
+ * a single scope: they surface what the user repeats *anywhere*, which the
+ * proposal's measurement showed beats a per-project list.
+ */
+export function readAllInputHistory(): string[] {
+  const store = readHistoryStore();
+  const all: string[] = [];
+  const scopes = Object.keys(store);
+  for (let scopeIndex = scopes.length - 1; scopeIndex >= 0; scopeIndex -= 1) {
+    const entries = store[scopes[scopeIndex]];
+    for (let entryIndex = entries.length - 1; entryIndex >= 0; entryIndex -= 1) {
+      all.push(entries[entryIndex]);
+    }
+  }
+  return all;
+}
+
 function appendInputHistory(scope: string, text: string): void {
   const store = readHistoryStore();
   const entries = store[scope] ?? [];
