@@ -27,12 +27,12 @@ extra:
 
 ## AC
 
-- [ ] 新增 `server/modules/session-hosts/tests/resident-restore.service.test.ts` 通过（`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0），断言：`resolveResidentRestoreEnabled({})===false`、`{CLAUDE_RESIDENT_RESTORE:'on'}===true`、`'off'`/`'0'`/`' OFF '`===false；`readResidentRestoreMax`/`readResidentRestoreMaxAgeMs` 对非法值回落缺省。
-- [ ] 同一测试文件断言恢复集选择：只恢复 resident 且 `provider_session_id` 非空、provider 挂 resident 驱动的会话；按最后活跃降序；超过 max 截断；`updated_at` 旧于 maxAge 的跳过；单个 `startResidentSession` 抛错时其余仍执行且服务不抛（失败隔离）。
-- [ ] `sessionsDb.listRestorableResidentSessions` 在临时库上验证：过滤（archived / `lifecycle_mode` 非 resident / `provider_session_id` NULL 排除）、排序口径 `COALESCE(updated_at,created_at) DESC, session_id DESC`、limit 生效。
-- [ ] 启动接线存在：`grep -nE "residentRestore|restoreResident|resident-restore" server/index.ts` exit 0，且该调用行号大于 `sweepOrphanClaudeSessionScopes()` 调用行号。
-- [ ] 默认 off 不改变现有行为：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0（现判据仍绿）。
-- [ ] `npm run typecheck` exit 0；`npx oxlint server/index.ts server/modules/session-hosts/resident-restore.service.ts server/modules/session-hosts/index.ts server/modules/database/repositories/sessions.db.ts server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0。
+- [x] 新增 `server/modules/session-hosts/tests/resident-restore.service.test.ts` 通过（`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0），断言：`resolveResidentRestoreEnabled({})===false`、`{CLAUDE_RESIDENT_RESTORE:'on'}===true`、`'off'`/`'0'`/`' OFF '`===false；`readResidentRestoreMax`/`readResidentRestoreMaxAgeMs` 对非法值回落缺省。
+- [x] 同一测试文件断言恢复集选择：只恢复 resident 且 `provider_session_id` 非空、provider 挂 resident 驱动的会话；按最后活跃降序；超过 max 截断；`updated_at` 旧于 maxAge 的跳过；单个 `startResidentSession` 抛错时其余仍执行且服务不抛（失败隔离）。
+- [x] `sessionsDb.listRestorableResidentSessions` 在临时库上验证：过滤（archived / `lifecycle_mode` 非 resident / `provider_session_id` NULL 排除）、排序口径 `COALESCE(updated_at,created_at) DESC, session_id DESC`、limit 生效。
+- [x] 启动接线存在：`grep -nE "residentRestore|restoreResident|resident-restore" server/index.ts` exit 0，且该调用行号大于 `sweepOrphanClaudeSessionScopes()` 调用行号。
+- [x] 默认 off 不改变现有行为：`bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --import ./scripts/undici-blocked-ports-preload.mjs --test server/modules/session-hosts/tests/resident-server-restart.test.ts` exit 0（现判据仍绿）。
+- [x] `npm run typecheck` exit 0；`npx oxlint server/index.ts server/modules/session-hosts/resident-restore.service.ts server/modules/session-hosts/index.ts server/modules/database/repositories/sessions.db.ts server/modules/session-hosts/tests/resident-restore.service.test.ts` exit 0。
 
 ## DoD
 
