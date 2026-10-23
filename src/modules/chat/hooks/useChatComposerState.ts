@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ChangeEvent,
-  ClipboardEvent,
   Dispatch,
   FormEvent,
   KeyboardEvent,
@@ -9,35 +8,37 @@ import type {
   SetStateAction,
   TouchEvent,
 } from 'react';
-import { useDropzone } from 'react-dropzone';
 
 import { api } from '@/shared/api';
 import { PROVIDER_PERMISSION_PREFERENCE_KEYS } from '@/shared/constants';
 import { readUserPreference } from '@/shared/userSettings';
-import type { CommandModalPayload, CostCommandData, HelpCommandData, MarkSessionIdle, MarkSessionProcessing, ModelCommandData, QueuedDraft, ServerEvent, SessionActivityMap, StatusCommandData,QueuedSendOptions,ChatAttachment,ChatMessage,PendingPermissionRequest,PermissionMode,SessionEstablishedContext,Project,ProjectSession,LLMProvider,SlashCommand } from '@/shared/types';
+import type { ChatAttachment, ChatMessage, MarkSessionIdle, MarkSessionProcessing, PendingPermissionRequest, PermissionMode, SessionActivityMap, SessionEstablishedContext, Project, ProjectSession, LLMProvider, SlashCommand, QueuedDraft, QueuedSendOptions, ServerEvent } from '@/shared/types';
 import { grantClaudeToolPermission } from '@/modules/chat/utils/session/chatPermissions';
 import { createChatSession } from '@/modules/chat/utils/session/sessionCreation';
-import { createSendDelivery } from '@/modules/chat/utils/session/sendDelivery';
-import type { SendDelivery } from '@/modules/chat/utils/session/sendDelivery';
-
-import {
-  clearQueuedMessage,
-  hydrateChatDrafts,
-  readDraftText,
-  readQueuedMessage,
-  subscribeToChatDrafts,
-  writeDraftText,
-  writeQueuedMessage,
-} from '@/shared/chatDrafts';
-import { escapeRegExp } from '@/modules/chat/utils/transcript/chatFormatting';
-import { applyVoiceChange, beginVoiceInsertion } from '@/modules/chat/utils/voice/voiceInsertion';
-import type { VoiceInsertion } from '@/modules/chat/utils/voice/voiceInsertion';
+import { writeDraftText, writeQueuedMessage } from '@/shared/chatDrafts';
+import { useAttachmentState, isImageAttachment, uploadAttachmentFiles } from '@/modules/chat/hooks/useAttachmentState';
+import { useCommandMenuState } from '@/modules/chat/hooks/useCommandMenuState';
+import { useDraftState } from '@/modules/chat/hooks/useDraftState';
 import { useFileMentions } from '@/modules/chat/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import { useInputSuggestions } from '@/modules/chat/hooks/useInputSuggestions';
+import { useSendDeliveryState } from '@/modules/chat/hooks/useSendDeliveryState';
 import { useSendOnEnter } from '@/modules/chat/hooks/useSendOnEnter';
-import { useSlashCommands } from '@/modules/chat/hooks/useSlashCommands';
+import { useTextareaInteractionState } from '@/modules/chat/hooks/useTextareaInteractionState';
+import { useVoiceInsertionState } from '@/modules/chat/hooks/useVoiceInsertionState';
 import { findSessionHostState, findSessionOccupancy, useSessionHosts } from '@/shared/hooks/useSessionHosts';
+
+/**
+ * The composer's state, assembled from one hook per concern.
+ *
+ * Every concern lives in its own hook — the textarea and its draft mirror
+ * (`useTextareaInteractionState`), attachments (`useAttachmentState`), slash
+ * commands and their modals (`useCommandMenuState`), dictation insertion
+ * (`useVoiceInsertionState`), the queued-message card (`useDraftState`) and send
+ * delivery (`useSendDeliveryState`). What remains here is the one thing that has
+ * to see all of them at once: the send path (`handleSubmit`) and the handlers
+ * that route a DOM event to the concern that owns it.
+ */
 
 type UseChatComposerStateArgs = {
   selectedProject: Project | null;
@@ -140,61 +141,8 @@ type MentionableFile = {
   path: string;
 };
 
-type CommandExecutionResult = {
-  type: 'builtin' | 'custom';
-  action?: string;
-  data?: any;
-  content?: string;
-  hasBashCommands?: boolean;
-  hasFileIncludes?: boolean;
-};
-
 const createFakeSubmitEvent = () => {
   return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
-};
-
-const MAX_ATTACHMENT_COUNT = 10;
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
-
-const isImageAttachment = (attachment: ChatAttachment) => {
-  if (attachment.mimeType?.startsWith('image/')) return true;
-  return /\.(gif|jpe?g|png|svg|webp)$/i.test(attachment.path || attachment.name || '');
-};
-
-const uploadAttachmentFiles = async (files: File[]): Promise<unknown[]> => {
-  if (files.length === 0) {
-    return [];
-  }
-
-  const formData = new FormData();
-  files.forEach((file) => {
-    formData.append('files', file);
-  });
-
-  const response = await api.assets.uploadFiles(formData);
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.error || 'Failed to upload files');
-  }
-
-  const result = await response.json();
-  if (!Array.isArray(result.attachments) || result.attachments.length !== files.length) {
-    throw new Error('File upload returned an incomplete result');
-  }
-  return result.attachments;
-};
-
-const restoreQueuedDraft = (sessionKey: string): QueuedDraft | null => {
-  const saved = readQueuedMessage(sessionKey);
-  return saved
-    ? {
-        content: saved.content,
-        attachments: [],
-        uploadedAttachments: saved.attachments ?? saved.images,
-        options: saved.options,
-      }
-    : null;
 };
 
 const getNotificationSessionSummary = (
@@ -214,18 +162,6 @@ const getNotificationSessionSummary = (
 
   return normalizedFallback.length > 80 ? `${normalizedFallback.slice(0, 77)}...` : normalizedFallback;
 };
-
-/**
- * Enter that CONFIRMS an IME candidate must not also submit.
- *
- * `event.isComposing` alone is not enough: Safari fires `compositionend` BEFORE the confirming
- * Enter's `keydown`, so the flag is already `false` by the time the handler runs. Chrome and
- * Firefox fire it after, which is why the naive guard looks correct on those two and the bug
- * reads as Safari-only. A tight window after `compositionend` covers it — that sequence is
- * synchronous (microseconds), while a human pressing Enter a second time takes >= 100ms and
- * never lands inside it.
- */
-const SAFARI_IME_RACE_WINDOW_MS = 30;
 
 export function useChatComposerState({
   selectedProject,
@@ -266,16 +202,26 @@ export function useChatComposerState({
   // second reading that disagreed would put the two halves of one send in two
   // different places.
   const { snapshot: hostsSnapshot } = useSessionHosts();
-  // The composer text together with the chat scope it belongs to. They are one
-  // state rather than a value plus a ref because they have to move in lockstep:
-  // on a session switch there is one commit where the scope has already changed
-  // while the text has not, and anything that persisted the text in that commit
-  // would write the previous session's message into the new session's draft.
-  // A ref cannot express this — React evaluates a state updater eagerly, so a
-  // ref set inside one is already ahead by the time the effects run.
-  //
-  // Restored synchronously from the draft mirror so a reload shows what was
-  // being typed on the first paint rather than after the drafts request lands.
+
+  const {
+    input,
+    setInput,
+    inputValueRef,
+    sessionKey,
+    sessionKeyRef,
+    draftScope,
+    draftScopeRef,
+    textareaRef,
+    inputHighlightRef,
+    isTextareaExpanded,
+    setIsTextareaExpanded,
+    resizeTextarea,
+    syncInputOverlayScroll,
+    isImeComposing,
+    isInputFocused,
+    handleInputFocusChange,
+  } = useTextareaInteractionState({ selectedProject, selectedSession, currentSessionId });
+
   /**
    * The already-sent message the composer is currently replacing, or null.
    *
@@ -284,153 +230,75 @@ export function useChatComposerState({
    * transcript refreshes underneath the composer.
    */
   const [editingAnchorId, setEditingAnchorId] = useState<string | null>(null);
-  const [inputState, setInputState] = useState<{ scope: string | null; value: string }>(() => {
-    if (typeof window === 'undefined') {
-      return { scope: null, value: '' };
-    }
-    const initialScope = selectedSession?.id || currentSessionId
-      || (selectedProject ? `project:${selectedProject.projectId}` : null);
-    return {
-      scope: initialScope,
-      value: initialScope ? readDraftText(initialScope) : '',
-    };
-  });
-  const input = inputState.value;
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [fileErrors, setFileErrors] = useState<Map<string, string>>(new Map());
-  const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
-  const [commandModalPayload, setCommandModalPayload] = useState<CommandModalPayload | null>(null);
 
-  /**
-   * Whether the last send was never taken — the dock reports it in place of a
-   * turn. Kept as state rather than derived from the delivery ref because the
-   * machine settles outside React and the surface has to redraw when it does.
-   */
-  const [sendFailed, setSendFailed] = useState(false);
-  // The one in-flight send whose acknowledgement (or deadline) is still being
-  // awaited. Only ever one: a second submit while a send is unresolved is
-  // ignored, so an answer can be attributed to the frame that produced it.
-  const pendingDeliveryRef = useRef<{ sessionId: string; delivery: SendDelivery } | null>(null);
-  // The optimistic row a failed send left behind, so its retry re-shows the same
-  // row instead of adding a second one for the same text.
-  const undeliveredTurnRef = useRef<{ id: string; text: string } | null>(null);
-
-  // The server's answer to the send that is in flight. Any frame it addresses
-  // to the session is the acknowledgement — it proves the socket is two-way and
-  // the frame the send handed it was received. A `protocol_error` is the other
-  // answer: the server read the send and refused it, so the send failed even
-  // though frames are arriving. Frames for other sessions, and the synthetic
-  // reconnect marker this client mints itself, prove nothing about this send.
-  useEffect(() => {
-    if (!subscribe) {
-      return undefined;
-    }
-    return subscribe((event) => {
-      const pending = pendingDeliveryRef.current;
-      if (!pending || pending.delivery.getPhase() !== 'sending') return;
-      if (!event.kind || event.kind === 'websocket_reconnected') return;
-      if (event.sessionId !== pending.sessionId) return;
-      if (event.kind === 'protocol_error') {
-        pending.delivery.fail();
-        return;
-      }
-      pending.delivery.ack();
-    });
-  }, [subscribe]);
-
-  useEffect(() => () => {
-    pendingDeliveryRef.current?.delivery.dispose();
-  }, []);
-
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const inputHighlightRef = useRef<HTMLDivElement>(null);
-  const textareaLineHeightRef = useRef<number | null>(null);
-  const lastAutosizedInputRef = useRef<string | null>(null);
+  // The send path is defined at the bottom of this hook — it reads every
+  // concern above — so the hooks that can fire a send (a custom command, a
+  // dictation sent on commit) reach it through this ref and callback rather
+  // than depending on it.
   const handleSubmitRef = useRef<
     ((
       event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>,
       queuedSubmission?: QueuedDraft,
     ) => Promise<void>) | null
   >(null);
-  const inputValueRef = useRef(input);
-  /**
-   * The tracked insertion range a continuous listen commits its text into, or null between listens.
-   *
-   * A ref rather than state: the range has to advance in step with `inputValueRef` on every edit and
-   * every committed segment, and a value read asynchronously (the hook hands over text while the user
-   * may be typing) cannot be a snapshot from an earlier render.
-   */
-  const voiceInsertionRef = useRef<VoiceInsertion | null>(null);
-  /**
-   * The interval `voiceInsertionRef` currently holds, as a value the composer can paint from.
-   *
-   * The ref above stays the source of truth — it is read and written from callbacks that outlive a
-   * render — but a ref write does not redraw anything. This mirror exists for the one consumer that
-   * has to SEE the range: the composer paints the provisional background behind the committed voice
-   * text, and an overlay that only learned about the range on the next unrelated render would show
-   * the highlight late and drop it late. Every write to the ref below writes this too, so the two
-   * cannot describe different intervals.
-   */
-  const [voiceRange, setVoiceRange] = useState<Pick<VoiceInsertion, 'start' | 'end'> | null>(null);
-  const selectedProjectId = selectedProject?.projectId;
-  // Prefer the stable backend-allocated id (selectedSession.id) but fall back
-  // to currentSessionId for a just-established session that hasn't been
-  // handed back to the parent's `selectedSession` prop yet.
-  const sessionKey = selectedSession?.id || currentSessionId || null;
-  // The chat scope a draft belongs to: the open session, or the project for a
-  // chat that has not been sent yet and so has no session id. Drafts used to be
-  // keyed by project alone, so every session in a project shared one draft.
-  const draftScope = sessionKey ?? (selectedProjectId ? `project:${selectedProjectId}` : null);
-  const draftScopeRef = useRef(draftScope);
-  draftScopeRef.current = draftScope;
-  // Composition is tracked on `window` in the capture phase rather than on the textarea, so a
-  // composition that starts in one field and ends after focus moves still closes cleanly.
-  const isComposingRef = useRef(false);
-  const lastCompositionEndAtRef = useRef(0);
-
-  useEffect(() => {
-    const onStart = () => {
-      isComposingRef.current = true;
-    };
-    const onEnd = () => {
-      isComposingRef.current = false;
-      lastCompositionEndAtRef.current = performance.now();
-    };
-    // `blur` does not bubble, but a capture-phase listener on `window` still sees it on the way
-    // down — otherwise a composition abandoned by clicking away would stay open forever.
-    const onBlur = () => {
-      isComposingRef.current = false;
-    };
-    window.addEventListener('compositionstart', onStart, true);
-    window.addEventListener('compositionend', onEnd, true);
-    window.addEventListener('blur', onBlur, true);
-    return () => {
-      window.removeEventListener('compositionstart', onStart, true);
-      window.removeEventListener('compositionend', onEnd, true);
-      window.removeEventListener('blur', onBlur, true);
-    };
+  const submitComposer = useCallback(() => {
+    void handleSubmitRef.current?.(createFakeSubmitEvent());
   }, []);
 
-  /**
-   * True while an IME composition owns the Enter key. It reads the live flag and
-   * the same short post-composition window the Enter branch uses, because Safari
-   * fires `compositionend` before the confirming keydown.
-   */
-  const isImeComposing = useCallback(
-    () =>
-      isComposingRef.current
-      || performance.now() - lastCompositionEndAtRef.current < SAFARI_IME_RACE_WINDOW_MS,
-    [],
-  );
+  const { voiceRange, handleVoiceListeningStart, handleVoiceTranscript, remapVoiceRangeOnEdit } =
+    useVoiceInsertionState({ setInput, inputValueRef, submit: submitComposer });
 
-  const setInput = useCallback<Dispatch<SetStateAction<string>>>((next) => {
-    setInputState((previous) => ({
-      scope: draftScopeRef.current,
-      value: typeof next === 'function' ? next(previous.value) : next,
-    }));
-  }, []);
-  const sessionKeyRef = useRef(sessionKey);
-  sessionKeyRef.current = sessionKey;
+  const {
+    attachedFiles,
+    setAttachedFiles,
+    fileErrors,
+    setFileErrors,
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    openAttachmentPicker,
+    handlePaste,
+  } = useAttachmentState();
+
+  const { sendFailed, setSendFailed, beginDelivery, pendingDeliveryRef, undeliveredTurnRef } =
+    useSendDeliveryState({ subscribe });
+
+  const {
+    slashCommands,
+    slashCommandsCount,
+    filteredCommands,
+    frequentCommands,
+    commandQuery,
+    showCommandMenu,
+    selectedCommandIndex,
+    resetCommandMenuState,
+    handleCommandSelect,
+    handleToggleCommandMenu,
+    handleCommandInputChange,
+    handleCommandMenuKeyDown,
+    commandModalPayload,
+    closeCommandModal,
+    showCostModal,
+    executeCommand,
+  } = useCommandMenuState({
+    selectedProject,
+    selectedSession,
+    currentSessionId,
+    provider,
+    currentProviderModel,
+    tokenBudget,
+    input,
+    setInput,
+    inputValueRef,
+    textareaRef,
+    addMessage,
+    onFileOpen,
+    onShowSettings,
+    submit: submitComposer,
+  });
+
+  const { queuedDraft, setQueuedDraft, queuedDraftSessionRef, editQueuedDraft, deleteQueuedDraft } =
+    useDraftState({ sessionKey, setInput, inputValueRef, textareaRef, setAttachedFiles });
 
   // Recall writes go through the same pair of stores a send reads: the state
   // (for the render) and inputValueRef (so an immediate Enter submits the
@@ -438,7 +306,7 @@ export function useChatComposerState({
   const setInputFromHistory = useCallback((value: string) => {
     setInput(value);
     inputValueRef.current = value;
-  }, [setInput]);
+  }, [setInput, inputValueRef]);
   const { recordSentMessage, handleHistoryKeyDown } = useInputHistory({
     setInput: setInputFromHistory,
     textareaRef,
@@ -457,226 +325,7 @@ export function useChatComposerState({
       textarea.focus();
       textarea.setSelectionRange(text.length, text.length);
     });
-  }, [setInputFromHistory]);
-
-  const [queuedDraft, setQueuedDraft] = useState<QueuedDraft | null>(() => {
-    if (typeof window === 'undefined' || !sessionKey) {
-      return null;
-    }
-    return restoreQueuedDraft(sessionKey);
-  });
-  // Which session the in-memory `queuedDraft` belongs to. On a session switch
-  // there is one commit where `sessionKey` already points at the new session
-  // while `queuedDraft` still holds the old session's draft; the persistence
-  // effect must not write across that gap.
-  const queuedDraftSessionRef = useRef<string | null>(sessionKey);
-
-  const handleBuiltInCommand = useCallback(
-    (result: CommandExecutionResult) => {
-      const { action, data } = result;
-      switch (action) {
-        case 'help':
-          setCommandModalPayload({
-            kind: 'help',
-            data: (data || {}) as HelpCommandData,
-          });
-          break;
-
-        case 'models':
-          setCommandModalPayload({
-            kind: 'models',
-            data: (data || {}) as ModelCommandData,
-          });
-          break;
-
-        case 'cost': {
-          setCommandModalPayload({
-            kind: 'cost',
-            data: (data || {}) as CostCommandData,
-          });
-          break;
-        }
-
-        case 'status': {
-          setCommandModalPayload({
-            kind: 'status',
-            data: (data || {}) as StatusCommandData,
-          });
-          break;
-        }
-
-        case 'memory':
-          if (data.error) {
-            addMessage({
-              type: 'assistant',
-              content: `Warning: ${data.message}`,
-              timestamp: Date.now(),
-            });
-          } else {
-            addMessage({
-              type: 'assistant',
-              content: `${data.message}\n\nPath: \`${data.path}\``,
-              timestamp: Date.now(),
-            });
-            if (data.exists && onFileOpen) {
-              onFileOpen(data.path);
-            }
-          }
-          break;
-
-        case 'config':
-          onShowSettings?.();
-          break;
-
-        default:
-          console.warn('Unknown built-in command action:', action);
-      }
-    },
-    [onFileOpen, onShowSettings, addMessage],
-  );
-
-  const closeCommandModal = useCallback(() => {
-    setCommandModalPayload(null);
-  }, []);
-
-  const handleCustomCommand = useCallback(async (result: CommandExecutionResult) => {
-    const { content, hasBashCommands } = result;
-
-    if (hasBashCommands) {
-      const confirmed = window.confirm(
-        'This command contains bash commands that will be executed. Do you want to proceed?',
-      );
-      if (!confirmed) {
-        addMessage({
-          type: 'assistant',
-          content: 'Command execution cancelled',
-          timestamp: Date.now(),
-        });
-        return;
-      }
-    }
-
-    const commandContent = content || '';
-    setInput(commandContent);
-    inputValueRef.current = commandContent;
-
-    // Defer submit to next tick so the command text is reflected in UI before dispatching.
-    setTimeout(() => {
-      if (handleSubmitRef.current) {
-        handleSubmitRef.current(createFakeSubmitEvent());
-      }
-    }, 0);
-  }, [addMessage]);
-
-  const executeCommand = useCallback(
-    async (command: SlashCommand, rawInput?: string, options?: { preserveInput?: boolean }) => {
-      if (!command || !selectedProject) {
-        return;
-      }
-
-      try {
-        const effectiveInput = rawInput ?? input;
-        const commandMatch = effectiveInput.match(new RegExp(`${escapeRegExp(command.name)}\\s*(.*)`));
-        const args =
-          commandMatch && commandMatch[1] ? commandMatch[1].trim().split(/\s+/) : [];
-
-        // The `/api/commands/execute` context sends `projectId` now instead of
-        // a folder-derived project name; the path is still included verbatim.
-        const context = {
-          projectPath: selectedProject.fullPath || selectedProject.path,
-          projectId: selectedProject.projectId,
-          sessionId: currentSessionId || selectedSession?.id || null,
-          provider,
-          model: currentProviderModel,
-          tokenUsage: tokenBudget,
-        };
-
-        const response = await api.commands.execute({
-          commandName: command.name,
-          commandPath: command.path,
-          args,
-          context,
-        });
-
-        if (!response.ok) {
-          let errorMessage = `Failed to execute command (${response.status})`;
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData?.message || errorData?.error || errorMessage;
-          } catch {
-            // Ignore JSON parse failures and use fallback message.
-          }
-          throw new Error(errorMessage);
-        }
-
-        const result = (await response.json()) as CommandExecutionResult;
-        if (result.type === 'builtin') {
-          handleBuiltInCommand(result);
-          if (!options?.preserveInput) {
-            setInput('');
-            inputValueRef.current = '';
-          }
-        } else if (result.type === 'custom') {
-          await handleCustomCommand(result);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error executing command:', error);
-        addMessage({
-          type: 'assistant',
-          content: `Error executing command: ${message}`,
-          timestamp: Date.now(),
-        });
-      }
-    },
-    [
-      currentProviderModel,
-      currentSessionId,
-      handleBuiltInCommand,
-      handleCustomCommand,
-      input,
-      provider,
-      selectedProject,
-      selectedSession?.id,
-      addMessage,
-      tokenBudget,
-    ],
-  );
-
-  const showCostModal = useCallback(() => {
-    executeCommand(
-      {
-        name: '/cost',
-        description: 'Display token usage information',
-        namespace: 'builtin',
-        metadata: { type: 'builtin' },
-      } as SlashCommand,
-      '/cost',
-      { preserveInput: true },
-    );
-  }, [executeCommand]);
-
-  const {
-    slashCommands,
-    slashCommandsCount,
-    filteredCommands,
-    frequentCommands,
-    commandQuery,
-    showCommandMenu,
-    selectedCommandIndex,
-    resetCommandMenuState,
-    handleCommandSelect,
-    handleToggleCommandMenu,
-    handleCommandInputChange,
-    handleCommandMenuKeyDown,
-  } = useSlashCommands({
-    selectedProject,
-    provider,
-    input,
-    setInput,
-    textareaRef,
-    onExecuteCommand: executeCommand,
-  });
+  }, [setInputFromHistory, textareaRef]);
 
   const {
     showFileDropdown,
@@ -715,93 +364,6 @@ export function useChatComposerState({
     hasAttachments: attachedFiles.length > 0,
     draftScope,
     onAccept: acceptSuggestion,
-  });
-
-  const syncInputOverlayScroll = useCallback((target: HTMLTextAreaElement) => {
-    if (!inputHighlightRef.current || !target) {
-      return;
-    }
-    inputHighlightRef.current.scrollTop = target.scrollTop;
-    inputHighlightRef.current.scrollLeft = target.scrollLeft;
-  }, []);
-
-  const resizeTextarea = useCallback((target: HTMLTextAreaElement) => {
-    target.style.height = 'auto';
-    const nextHeight = Math.max(22, target.scrollHeight);
-    target.style.height = `${nextHeight}px`;
-
-    let lineHeight = textareaLineHeightRef.current;
-    if (!lineHeight) {
-      lineHeight = parseInt(window.getComputedStyle(target).lineHeight);
-      textareaLineHeightRef.current = Number.isFinite(lineHeight) ? lineHeight : 24;
-    }
-
-    const expanded = nextHeight > (textareaLineHeightRef.current || 24) * 2;
-    setIsTextareaExpanded((previous) => previous === expanded ? previous : expanded);
-    lastAutosizedInputRef.current = target.value;
-  }, []);
-
-  const handleAttachmentFiles = useCallback((files: File[]) => {
-    const validFiles = files.filter((file) => {
-      try {
-        if (!file || typeof file !== 'object') {
-          console.warn('Invalid file object:', file);
-          return false;
-        }
-
-        if (file.size > MAX_ATTACHMENT_SIZE) {
-          const fileName = file.name || 'Unknown file';
-          setFileErrors((previous) => {
-            const next = new Map(previous);
-            next.set(fileName, 'File too large (max 10MB)');
-            return next;
-          });
-          return false;
-        }
-
-        return true;
-      } catch (error) {
-        console.error('Error validating file:', error, file);
-        return false;
-      }
-    });
-
-    if (validFiles.length > 0) {
-      setAttachedFiles((previous) => [...previous, ...validFiles].slice(0, MAX_ATTACHMENT_COUNT));
-    }
-  }, []);
-
-  const handlePaste = useCallback(
-    (event: ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = Array.from(event.clipboardData.items);
-
-      items.forEach((item) => {
-        if (!item.type.startsWith('image/')) {
-          return;
-        }
-        const file = item.getAsFile();
-        if (file) {
-          handleAttachmentFiles([file]);
-        }
-      });
-
-      if (items.length === 0 && event.clipboardData.files.length > 0) {
-        const files = Array.from(event.clipboardData.files);
-        const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-        if (imageFiles.length > 0) {
-          handleAttachmentFiles(imageFiles);
-        }
-      }
-    },
-    [handleAttachmentFiles],
-  );
-
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
-    maxSize: MAX_ATTACHMENT_SIZE,
-    maxFiles: MAX_ATTACHMENT_COUNT,
-    onDrop: handleAttachmentFiles,
-    noClick: true,
-    noKeyboard: true,
   });
 
   // Snapshot of everything `chat.send` needs beyond the text itself. Built at
@@ -1240,28 +802,20 @@ export function useChatComposerState({
       // turn stands. The deadline with nothing said settles it failed — the
       // draft stays, the optimistic row is hidden, the local processing mark is
       // taken back, and the dock reports the failure instead of a turn.
-      const delivery = createSendDelivery({
-        onSettle: (phase) => {
-          if (pendingDeliveryRef.current?.delivery === delivery) {
-            pendingDeliveryRef.current = null;
-          }
-          if (phase === 'delivered') {
-            setSendFailed(false);
-            undeliveredTurnRef.current = null;
-            commitSentComposerState();
-            return;
-          }
-          setSendFailed(true);
-          onSessionIdle?.(targetSessionId);
-          if (optimisticRowId) {
-            markUserTurnUndelivered?.(optimisticRowId);
-            undeliveredTurnRef.current = { id: optimisticRowId, text: currentInput };
-          }
-        },
+      beginDelivery(targetSessionId, (phase) => {
+        if (phase === 'delivered') {
+          setSendFailed(false);
+          undeliveredTurnRef.current = null;
+          commitSentComposerState();
+          return;
+        }
+        setSendFailed(true);
+        onSessionIdle?.(targetSessionId);
+        if (optimisticRowId) {
+          markUserTurnUndelivered?.(optimisticRowId);
+          undeliveredTurnRef.current = { id: optimisticRowId, text: currentInput };
+        }
       });
-      pendingDeliveryRef.current = { sessionId: targetSessionId, delivery };
-      setSendFailed(false);
-      delivery.begin();
 
       sendMessage(sendFrame);
       setEditingAnchorId(null);
@@ -1307,201 +861,13 @@ export function useChatComposerState({
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
 
-  // The VPS dispatcher owns sending. While the card is visible, periodically
-  // reconcile only its removal so the UI notices when the server claims it.
-  useEffect(() => {
-    if (!sessionKey || !queuedDraft) {
-      return;
-    }
-    let cancelled = false;
-    const reconcile = async () => {
-      await hydrateChatDrafts();
-      if (!cancelled && !readQueuedMessage(sessionKey)) {
-        queuedDraftSessionRef.current = sessionKey;
-        setQueuedDraft(null);
-      }
-    };
-    const timer = setInterval(() => void reconcile(), 5_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [queuedDraft, sessionKey]);
-
-  const editQueuedDraft = useCallback(() => {
-    if (!queuedDraft) {
-      return;
-    }
-    setQueuedDraft(null);
-    setInput(queuedDraft.content);
-    inputValueRef.current = queuedDraft.content;
-    setAttachedFiles(queuedDraft.attachments);
-    textareaRef.current?.focus();
-  }, [queuedDraft]);
-
-  const deleteQueuedDraft = useCallback(() => {
-    setQueuedDraft(null);
-  }, []);
-
-  /**
-   * Opens the tracked insertion range where a listen starts.
-   *
-   * The composer calls this with the caret that was in the box when the microphone was pressed.
-   * Everything the listen commits goes into this range, so edits the user makes elsewhere while
-   * talking shift it rather than being overwritten.
-   */
-  const handleVoiceListeningStart = useCallback((cursor: number) => {
-    const opening = beginVoiceInsertion(inputValueRef.current, cursor);
-    voiceInsertionRef.current = opening;
-    // An empty interval at the caret: the overlay has nothing to paint yet, and the range's opening
-    // point is where the next committed segment will appear.
-    setVoiceRange({ start: opening.start, end: opening.end });
-  }, []);
-
-  /**
-   * Places the committed voice text.
-   *
-   * The continuous path hands over the whole committed dictation so far on every commit, and it is
-   * written into the tracked range as a replacement rather than appended to the end of the box: the
-   * range is where the listen began, which is not necessarily the end of the draft. Without an open
-   * range — a caller that never signalled a listen start, or the single-shot shape before this
-   * feature — the text is appended the way it always was.
-   *
-   * `send` submits once, after the text is in place. Mirror the value into inputValueRef
-   * synchronously so handleSubmit reads the new text, not the stale state.
-   */
-  const handleVoiceTranscript = useCallback((text: string, send?: boolean) => {
-    const range = voiceInsertionRef.current;
-    let next: string;
-    if (range) {
-      next = range.text.slice(0, range.start) + text + range.text.slice(range.end);
-      voiceInsertionRef.current = { text: next, start: range.start, end: range.start + text.length };
-      setVoiceRange({ start: range.start, end: range.start + text.length });
-    } else {
-      const base = inputValueRef.current.trim();
-      next = base ? `${base} ${text}` : text;
-      // The append shape has no tracked interval, but the appended words are still this listen's
-      // text, so the overlay highlights the tail it just wrote rather than nothing.
-      setVoiceRange({ start: base ? base.length + 1 : 0, end: next.length });
-    }
-    setInput(next);
-    inputValueRef.current = next;
-    if (send) {
-      // The listen is over once it is sent; the next one opens a fresh range at the new caret.
-      voiceInsertionRef.current = null;
-      setVoiceRange(null);
-      handleSubmitRef.current?.(createFakeSubmitEvent());
-    }
-  }, [setInput]);
-
-  useEffect(() => {
-    inputValueRef.current = input;
-  }, [input]);
-
-  // Swap in the open scope's draft, and pick up one that arrives from another
-  // device with the hydrated drafts.
-  useEffect(() => {
-    if (!draftScope) {
-      return;
-    }
-
-    const restoreDraft = () => {
-      const savedInput = readDraftText(draftScope);
-      setInputState((previous) => {
-        if (previous.scope === draftScope && previous.value === savedInput) {
-          return previous;
-        }
-        inputValueRef.current = savedInput;
-        return { scope: draftScope, value: savedInput };
-      });
-    };
-
-    restoreDraft();
-    return subscribeToChatDrafts(restoreDraft);
-  }, [draftScope]);
-
-  // Only persist text that was typed for the scope it is about to be written
-  // to; see the inputState declaration for why the scope travels with the text.
-  useEffect(() => {
-    if (!draftScope || inputState.scope !== draftScope) {
-      return;
-    }
-    writeDraftText(draftScope, inputState.value);
-  }, [inputState, draftScope]);
-
-  // Persist the queued draft under its session's key. Must be defined BEFORE
-  // the swap effect below: on a session switch there is one commit where
-  // `sessionKey` already points at the new session while `queuedDraft` (and
-  // the owner ref) still describe the old one — the ref mismatch makes this
-  // effect skip that commit instead of writing/clearing across sessions.
-  useEffect(() => {
-    if (!sessionKey || queuedDraftSessionRef.current !== sessionKey) {
-      return;
-    }
-    if (
-      queuedDraft
-      && (queuedDraft.content.trim() || (queuedDraft.uploadedAttachments?.length ?? 0) > 0)
-    ) {
-      writeQueuedMessage(sessionKey, {
-        content: queuedDraft.content,
-        options: queuedDraft.options,
-        attachments: queuedDraft.uploadedAttachments,
-      });
-    } else {
-      clearQueuedMessage(sessionKey);
-    }
-  }, [queuedDraft, sessionKey]);
-
-  // Switching sessions swaps in that session's queued draft. Browser File
-  // objects are local to the mounted composer, while their already-uploaded
-  // descriptors restore from storage and remain sendable.
-  useEffect(() => {
-    queuedDraftSessionRef.current = sessionKey;
-    if (!sessionKey) {
-      setQueuedDraft(null);
-      return;
-    }
-    setQueuedDraft(restoreQueuedDraft(sessionKey));
-  }, [sessionKey]);
-
-  useEffect(() => {
-    if (!textareaRef.current) {
-      return;
-    }
-    if (lastAutosizedInputRef.current === input) {
-      return;
-    }
-    // Re-run for restored drafts and programmatic input changes. User typing is
-    // already resized in onInput, so this avoids doing the same forced layout twice.
-    resizeTextarea(textareaRef.current);
-  }, [input, resizeTextarea]);
-
-  useEffect(() => {
-    if (!textareaRef.current || input.trim()) {
-      return;
-    }
-    textareaRef.current.style.height = 'auto';
-    setIsTextareaExpanded(false);
-  }, [input]);
-
   const handleInputChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = event.target.value;
       const cursorPos = event.target.selectionStart;
 
-      // Carry the voice insertion range through the edit before it lands in state. The range tracks
-      // the draft it was opened against, so an edit that does not match it (a programmatic change
-      // through some other path) drops the range rather than shifting it to the wrong place.
-      const range = voiceInsertionRef.current;
-      if (range) {
-        const remapped = range.text === inputValueRef.current
-          ? applyVoiceChange(range, newValue)
-          : null;
-        voiceInsertionRef.current = remapped;
-        // The same value the ref now holds: an edit inside the committed words moves the highlight
-        // with them, and an edit that invalidated the range drops it from the overlay too.
-        setVoiceRange(remapped === null ? null : { start: remapped.start, end: remapped.end });
-      }
+      // Carry the voice insertion range through the edit before it lands in state.
+      remapVoiceRangeOnEdit(inputValueRef.current, newValue);
 
       setInput(newValue);
       inputValueRef.current = newValue;
@@ -1516,7 +882,15 @@ export function useChatComposerState({
 
       handleCommandInputChange(newValue, cursorPos);
     },
-    [handleCommandInputChange, resetCommandMenuState, setCursorPosition],
+    [
+      handleCommandInputChange,
+      inputValueRef,
+      remapVoiceRangeOnEdit,
+      resetCommandMenuState,
+      setCursorPosition,
+      setInput,
+      setIsTextareaExpanded,
+    ],
   );
 
   // Resolved here rather than from the raw preference: on a touch-only device Enter inserts a
@@ -1553,9 +927,7 @@ export function useChatComposerState({
       }
 
       if (event.key === 'Enter') {
-        const endedJustNow =
-          performance.now() - lastCompositionEndAtRef.current < SAFARI_IME_RACE_WINDOW_MS;
-        if (event.nativeEvent.isComposing || isComposingRef.current || endedJustNow) {
+        if (event.nativeEvent.isComposing || isImeComposing()) {
           return;
         }
 
@@ -1612,7 +984,7 @@ export function useChatComposerState({
       textareaRef.current.focus();
     }
     setIsTextareaExpanded(false);
-  }, [resetCommandMenuState]);
+  }, [inputValueRef, resetCommandMenuState, setInput, setIsTextareaExpanded, textareaRef]);
 
   const handleAbortSession = useCallback(() => {
     if (!canAbortSession) {
@@ -1672,15 +1044,6 @@ export function useChatComposerState({
     [sendMessage, setPendingPermissionRequests],
   );
 
-  const [isInputFocused, setIsInputFocused] = useState(false);
-
-  const handleInputFocusChange = useCallback(
-    (focused: boolean) => {
-      setIsInputFocused(focused);
-    },
-    [],
-  );
-
   /** Loads an already-sent message back into the composer to be replaced. */
   const beginEditMessage = useCallback((message: ChatMessage) => {
     if (!message.transcriptAnchorId) return;
@@ -1688,13 +1051,13 @@ export function useChatComposerState({
     setInput(message.content || '');
     inputValueRef.current = message.content || '';
     textareaRef.current?.focus();
-  }, [setInput]);
+  }, [inputValueRef, setInput, textareaRef]);
 
   const cancelEditMessage = useCallback(() => {
     setEditingAnchorId(null);
     setInput('');
     inputValueRef.current = '';
-  }, [setInput]);
+  }, [inputValueRef, setInput]);
 
   return {
     input,
@@ -1736,7 +1099,7 @@ export function useChatComposerState({
     getRootProps,
     getInputProps,
     isDragActive,
-    openAttachmentPicker: open,
+    openAttachmentPicker,
     handleSubmit,
     queuedDraft,
     editQueuedDraft,
