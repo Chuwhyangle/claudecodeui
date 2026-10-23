@@ -1,7 +1,7 @@
 ---
 id: quay-wall-addressable-view-and-input-package
 title: "墙视图 + 视图契约 + 引用式输入包（CloudCLI 侧契约 #2/#3，依赖 fleet 对象 URI 契约）"
-status: todo
+status: ready
 labels:
   - wall
   - contract
