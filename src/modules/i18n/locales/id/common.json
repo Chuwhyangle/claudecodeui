@@ -106,9 +106,9 @@
       "classDiagram": "Diagram kelas",
       "backTo": "Kembali ke {{view}}",
       "lod": {
-        "packages": "Paket",
-        "subpackages": "Subpaket",
-        "entities": "Entitas"
+        "tierNames": "Nama",
+        "tierFrames": "Bingkai",
+        "tierPackages": "Paket"
       },
       "explosion": "Tampilan ledakan",
       "drillIn": "Buka",

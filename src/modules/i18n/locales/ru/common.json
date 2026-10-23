@@ -106,9 +106,9 @@
       "classDiagram": "Диаграмма классов",
       "backTo": "Назад к {{view}}",
       "lod": {
-        "packages": "Пакеты",
-        "subpackages": "Подпакеты",
-        "entities": "Сущности"
+        "tierNames": "Имена",
+        "tierFrames": "Рамки",
+        "tierPackages": "Пакеты"
       },
       "explosion": "Взрывной вид",
       "drillIn": "Открыть",

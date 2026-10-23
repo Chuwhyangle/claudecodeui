@@ -106,9 +106,9 @@
       "classDiagram": "类图",
       "backTo": "返回{{view}}",
       "lod": {
-        "packages": "包",
-        "subpackages": "子包",
-        "entities": "实体"
+        "tierNames": "类名",
+        "tierFrames": "类框",
+        "tierPackages": "包"
       },
       "explosion": "爆炸图",
       "drillIn": "进入",

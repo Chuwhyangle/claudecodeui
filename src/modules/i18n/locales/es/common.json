@@ -106,9 +106,9 @@
       "classDiagram": "Diagrama de clases",
       "backTo": "Volver a {{view}}",
       "lod": {
-        "packages": "Paquetes",
-        "subpackages": "Subpaquetes",
-        "entities": "Entidades"
+        "tierNames": "Nombres",
+        "tierFrames": "Marcos",
+        "tierPackages": "Paquetes"
       },
       "explosion": "Vista de explosión",
       "drillIn": "Abrir",
