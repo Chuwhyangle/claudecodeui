@@ -1,7 +1,7 @@
 ---
 id: ui-scenario-driver-semantic-surface
 title: UI 场景驱动：页内语义面 + 场景运行器（比 MCP 浏览器更大颗粒度的业务场景验证）+ AGENTS.md UI 验证规则
-status: todo
+status: ready
 labels:
   - ui
   - testing
