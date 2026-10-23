@@ -428,6 +428,13 @@ export type QuaySnapshot = {
   dashboardUrl: string | null;
   /** Non-fatal per-command failures; the panel surfaces them instead of hiding a partial read. */
   warnings: string[];
+  /**
+   * The server's fleet CLI reading for this snapshot. Optional because an older backend does
+   * not send it (and the cached Tier-2 path may predate the field); absent is "not reported",
+   * never "the CLI is missing". The panel uses it to state ONE cause (missing / incompatible /
+   * no-handshake) instead of repeating 「未登记」 per card.
+   */
+  fleet?: QuayFleetCliReading;
 };
 
 /** Tier-1 reading returned by `GET /api/quay/:projectId/status`. */
@@ -569,6 +576,38 @@ export type QuayFleetProjectSummary = {
 };
 
 /**
+ * The contracts a `quay-fleet --version --json` handshake declares. The cockpit and the panel
+ * compare them with what the server build supports; `version` below is informational only.
+ */
+export type QuayFleetContracts = {
+  wallUri: string;
+  registry: number;
+  interfaceSession: string;
+};
+
+/**
+ * How the server's CLI locator reads this host.
+ *
+ * `missing` and `incompatible` are hard failures (no handle may be minted); `no-handshake`
+ * stays usable during the transition (an older fleet that does not answer `--version`).
+ */
+export type QuayFleetCliState = 'ok' | 'missing' | 'incompatible' | 'no-handshake';
+
+/** The locator's complete reading, as `GET /api/quay/fleet-summary` and the snapshot carry it. */
+export type QuayFleetCliReading = {
+  available: boolean;
+  state: QuayFleetCliState;
+  /** The selected binary, or `null` when none of the three lookups found one. */
+  binPath: string | null;
+  /** The CLI's self-reported version, for display/logging only. */
+  version: string | null;
+  /** The contracts it declared, or `null` for `no-handshake`/`missing`. */
+  contracts: QuayFleetContracts | null;
+  /** One sentence naming the failure, `null` exactly when the state is `ok`. */
+  reason: string | null;
+};
+
+/**
  * The eager cross-project reading behind the project-row task badges. It carries driver
  * state and task counts only: goals, in-flight tasks and the gantt stay on the lazy
  * Tier-2 snapshot that is read when a project is opened.
@@ -577,11 +616,21 @@ export type QuayFleetSummary = {
   projects: QuayFleetProjectSummary[];
   /**
    * Whether the server could ask `quay-fleet` at all. `available: false` means the CLI was
-   * missing or unreadable, so EVERY project's `fleetProjectId` is null for one reason the
-   * cockpit must state once ("set QUAY_FLEET_BIN") rather than per tile. Absent when talking
-   * to a server that predates the reading; treat that as available.
+   * missing or speaks an incompatible contract, so EVERY project's `fleetProjectId` is null
+   * for one reason the cockpit must state once ("set QUAY_FLEET_BIN") rather than per tile.
+   * Absent when talking to a server that predates the reading; treat that as available.
+   *
+   * The locator fields are OPTIONAL for that same backward compatibility: an older server
+   * sends only `{available, reason}`, and a reader must not infer a state it was not given.
    */
-  fleet?: { available: boolean; reason: string | null };
+  fleet?: {
+    available: boolean;
+    reason: string | null;
+    state?: QuayFleetCliState;
+    binPath?: string | null;
+    version?: string | null;
+    contracts?: QuayFleetContracts | null;
+  };
   generatedAt: string;
   ttlPerProjectMs: number;
   /** `true` only when every project in the response came from the TTL cache. */

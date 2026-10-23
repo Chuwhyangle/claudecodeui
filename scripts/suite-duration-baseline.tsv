@@ -193,7 +193,12 @@
 #   a time on 2026-10-23 with
 #   `bash scripts/with-memory-cap.sh tsx --tsconfig server/tsconfig.json --test <file>`
 #   (dur=2686ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
-#   coverage floor green now that the tree collects 407 server test files).
+#   coverage floor green now that the tree collects 407 server test files),
+#   and the quay-fleet-locator row by quay-fleet-cli-locator-and-handshake, measured one file at a
+#   time on 2026-10-23 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-locator.test.ts`
+#   (dur=1699ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 408 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -561,3 +566,4 @@
 2279	server/modules/cockpit/tests/cockpit-reducer.test.ts
 4772	server/modules/cockpit/tests/cockpit-hub.test.ts
 2686	server/modules/session-hosts/tests/resident-restore.service.test.ts
+1699	server/modules/quay/tests/quay-fleet-locator.test.ts

@@ -6,6 +6,7 @@ import { api } from '@/shared/api';
 import type {
   CockpitHubView,
   CockpitPendingSend,
+  QuayFleetCliState,
   QuayFleetSummary,
   QuayFocusableObject,
   QuayObjectUri,
@@ -102,10 +103,19 @@ type FleetReading =
   | {
       status: 'loaded';
       projects: CockpitProject[];
-      /** Whether the server could ask quay-fleet at all (false = the CLI is missing). */
+      /** Whether the server could ask quay-fleet at all (false = the CLI is missing or incompatible). */
       fleetAvailable: boolean;
       /** The server's reason the fleet CLI could not be asked. */
       fleetReason: string | null;
+      /**
+       * The locator's state, when the server reported one. `null` for an older server that
+       * only sends `{available, reason}`; the page must not invent a state it was not given.
+       */
+      fleetState: QuayFleetCliState | null;
+      /** The binary the server selected, shown beside the notice. */
+      fleetBinPath: string | null;
+      /** The CLI's self-reported version, shown beside the notice. */
+      fleetVersion: string | null;
     }
   | { status: 'error'; message: string };
 
@@ -277,6 +287,9 @@ export default function CockpitPage() {
         // reads as available and the per-project ids carry the whole story.
         fleetAvailable: summary.fleet?.available !== false,
         fleetReason: summary.fleet?.reason ?? null,
+        fleetState: summary.fleet?.state ?? null,
+        fleetBinPath: summary.fleet?.binPath ?? null,
+        fleetVersion: summary.fleet?.version ?? null,
       });
     } catch (error) {
       setFleet({
@@ -791,6 +804,26 @@ export default function CockpitPage() {
           {focusObject !== null && focusedProjectName === null && (
             <span data-testid="cockpit-focus-name">
               {focusObject.label} · {focusObject.display.status}
+            </span>
+          )}
+          {/*
+            ONE line per non-ok locator state. `missing` is already stated once by the stage's
+            fleet notice (「找不到 quay-fleet」); `incompatible` and `no-handshake` are different
+            facts the stage's missing-CLI sentence would misreport, so they get their own line
+            here. This is intentionally English-only, like the Quay panel's own status lines.
+          */}
+          {fleet.status === 'loaded'
+            && (fleet.fleetState === 'incompatible' || fleet.fleetState === 'no-handshake') && (
+            <span
+              className={fleet.fleetState === 'incompatible'
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-muted-foreground'}
+              data-testid="cockpit-fleet-state"
+              data-fleet-state={fleet.fleetState}
+            >
+              {fleet.fleetState === 'incompatible'
+                ? `quay-fleet${fleet.fleetBinPath === null ? '' : ` at ${fleet.fleetBinPath}`} speaks an incompatible contract — ${fleet.fleetReason ?? 'no reason reported'}`
+                : `quay-fleet${fleet.fleetBinPath === null ? '' : ` at ${fleet.fleetBinPath}`} did not complete the version handshake${fleet.fleetVersion === null ? '' : ` (v${fleet.fleetVersion})`} — continuing as compatible`}
             </span>
           )}
           <span data-testid="cockpit-view-uri" data-cockpit-view-uri={viewUri ?? undefined}>

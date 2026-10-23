@@ -2,7 +2,7 @@
 id: quay-fleet-cli-locator-and-handshake
 title: fleet CLI 单一定位（QUAY_FLEET_BIN → PATH → ~/.quay-fleet/bin）+ --version
   契约握手，替换三处不一致的路径解析
-status: ready
+status: done
 labels:
   - wall
   - contract
@@ -70,13 +70,3 @@ depends_on:
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/quay/QuayPanel.tsx
 - tasks/quay-fleet-cli-locator-and-handshake.md
-
-## Blocker
-
-**2026-10-23T08:32:15.978Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/quay-fleet-cli-locator-and-handshake.md）⇒ 判惰性，⛔ 未调分类器
-fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
-fan-in-ff-merge: measure ff_only_locked=false
-- run_id：wk-prod-anchor
-- session_id：eafffbb5-20c3-427e-be34-1ceafdb0b5c2

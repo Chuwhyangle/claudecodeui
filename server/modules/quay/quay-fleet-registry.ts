@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { locateQuayFleetCli } from './quay-fleet-locator.js';
+
 /**
  * The fleet registry's per-project 「对人接口会话」, as the cockpit reads and writes it.
  *
@@ -89,7 +91,7 @@ export type QuayFleetRegistryService = {
 export type QuayFleetRegistryDependencies = {
   /** CloudCLI project id → absolute project path; `null` for an unknown project. */
   resolveProjectPathById: (projectId: string) => string | null | undefined;
-  /** The fleet CLI to spawn. Defaults to `QUAY_FLEET_BIN`, then `quay-fleet` on `PATH`. */
+  /** The fleet CLI to spawn. Defaults to the shared locator, which owns the lookup order. */
   binPath?: string;
   /** Child-process seam, defaulting to Node's `execFile`. */
   exec?: QuayFleetExec;
@@ -143,15 +145,36 @@ export function createQuayFleetRegistry(
 ): QuayFleetRegistryService {
   const exec = dependencies.exec ?? defaultExecFile;
   const normalize = dependencies.normalizePath ?? canonicalPath;
-  const binPath = dependencies.binPath ?? (process.env.QUAY_FLEET_BIN?.trim() || 'quay-fleet');
 
-  const run = (args: readonly string[]): Promise<QuayFleetCommandResult> =>
-    exec(binPath, args, {
+  /**
+   * The binary each call spawns, resolved per call so an install (or a `QUAY_FLEET_BIN`
+   * change) reaches the next read without a restart. An injected exec seam is honoured with
+   * the bare name even when the host has no fleet installed; otherwise a lookup miss is the
+   * ordinary `fleet-cli-unavailable` answer and no child is forked.
+   */
+  const resolveBinPath = (): string | null =>
+    dependencies.binPath
+    ?? locateQuayFleetCli().binPath
+    ?? (dependencies.exec === undefined ? null : 'quay-fleet');
+
+  const run = async (args: readonly string[]): Promise<QuayFleetCommandResult> => {
+    const binPath = resolveBinPath();
+    if (binPath === null) {
+      return {
+        ok: false,
+        code: null,
+        stdout: '',
+        stderr: '',
+        error: 'quay-fleet was not found (checked QUAY_FLEET_BIN, PATH and ~/.quay-fleet/bin/quay-fleet)',
+      };
+    }
+    return exec(binPath, args, {
       timeout: QUAY_FLEET_TIMEOUT_MS,
       maxBuffer: QUAY_FLEET_MAX_OUTPUT_BYTES,
       encoding: 'utf8',
       windowsHide: true,
     });
+  };
 
   /**
    * Resolves the CloudCLI project to the fleet's own registry id.
