@@ -150,7 +150,14 @@ export function useSidebarController({
   const [recentConversationsError, setRecentConversationsError] = useState(false);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [optimisticStarByProjectId, setOptimisticStarByProjectId] = useState<Map<string, boolean>>(new Map());
+  // Which projects have a "load more" request in flight, as the row reads it. Browser state,
+  // not server state: it only exists so the button can say "Loading sessions..." and stay
+  // disabled while its own page request is unanswered.
   const [loadingMoreProjects, setLoadingMoreProjects] = useState<Set<string>>(new Set());
+  // The same in-flight set, readable synchronously by the next click. The state copy above is
+  // only the rendering of it: React may defer a state updater past the handler that scheduled
+  // it, so the guard for a second click must not be a write observed from inside that updater.
+  const loadingMoreProjectsRef = useRef<Set<string>>(new Set());
   const searchSeqRef = useRef(0);
   const recentConversationsSeqRef = useRef(0);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -798,21 +805,25 @@ export function useSidebarController({
       return;
     }
 
-    let shouldLoad = false;
+    // The guard is read from the ref, never from a write made inside the state updater: React
+    // runs an updater during a later render, so a click that arrives while any other update is
+    // pending would otherwise see `shouldLoad` still false, return early *after* the updater
+    // had already scheduled the spinner, and leave the row on "Loading sessions..." forever
+    // with no request in flight (the sidebar's 5s poll is enough to produce that window).
+    if (loadingMoreProjectsRef.current.has(projectId)) {
+      return;
+    }
+    loadingMoreProjectsRef.current.add(projectId);
+
     setLoadingMoreProjects((previous) => {
       if (previous.has(projectId)) {
         return previous;
       }
 
-      shouldLoad = true;
       const next = new Set(previous);
       next.add(projectId);
       return next;
     });
-
-    if (!shouldLoad) {
-      return;
-    }
 
     try {
       await onLoadMoreSessions(projectId);
@@ -820,6 +831,7 @@ export function useSidebarController({
       console.error('[Sidebar] Failed to load more sessions:', error);
       alert(t('messages.refreshError'));
     } finally {
+      loadingMoreProjectsRef.current.delete(projectId);
       setLoadingMoreProjects((previous) => {
         const next = new Set(previous);
         next.delete(projectId);
