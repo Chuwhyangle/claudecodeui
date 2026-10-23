@@ -67,7 +67,7 @@ extra:
 | `useDraftState.ts` (145 行) | `queuedDraft`、`queuedDraftSessionRef` | `editQueuedDraft`、`deleteQueuedDraft`、`setQueuedDraft`；三支 effect 原序（reconcile 5s → 持久化 → 切会话换入；持久化必须在换入之前） |
 | `useSendDeliveryState.ts` (105 行) | `sendFailed`、`pendingDeliveryRef`、`undeliveredTurnRef` | `beginDelivery`（建机器、占槽、清失败标记、`begin`；settle 前先清槽）、`subscribe` 帧答机器、卸载 dispose |
 
-组合层调用行（`useChatComposerState.ts`）：`useTextareaInteractionState` 第 213 行、`useVoiceInsertionState` 第 245 行、`useAttachmentState` 第 248 行、`useSendDeliveryState` 第 263 行、`useCommandMenuState` 第 266 行、`useDraftState` 第 292 行。
+组合层六处调用（`src/modules/chat/hooks/useChatComposerState.ts`）：`useTextareaInteractionState` 第 223 行、`useVoiceInsertionState` 第 249 行、`useAttachmentState` 第 261 行、`useSendDeliveryState` 第 264 行、`useCommandMenuState` 第 283 行、`useDraftState` 第 301 行。
 
 **② 行数前后**：`useChatComposerState.ts` 立案基线 1697 → 本 worktree 开工实测 1763（develop 已增长）→ 切分后 **1126**；6 个新 hook 合计 1043 行。
 
