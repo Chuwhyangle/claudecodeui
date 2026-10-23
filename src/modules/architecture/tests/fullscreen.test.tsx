@@ -123,6 +123,13 @@ function makeStandIn(): {
         >
           select first
         </button>
+        <button
+          type="button"
+          data-stand-in-manual-zoom="true"
+          onClick={() => props.onZoomModeChange?.('custom')}
+        >
+          manual zoom
+        </button>
       </div>
     );
   }
@@ -349,6 +356,57 @@ test('a native fullscreen exit from outside closes the overlay too', async () =>
     document.dispatchEvent(new Event('fullscreenchange'));
   });
   await waitFor(() => assert.equal(isFullscreen(), false));
+});
+
+test('a fullscreen toggle re-fits a fitted drawing and leaves a manual zoom alone', async () => {
+  const { StandIn, calls } = makeStandIn();
+  const originalInnerHeight = window.innerHeight;
+  Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 844 });
+  const rect = (height: number): DOMRect => ({
+    x: 0, y: 0, left: 0, top: 0, width: 390, height, right: 390, bottom: height,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  const latest = (): ArchitectureRendererProps => calls[calls.length - 1];
+
+  try {
+    renderPanel({ renderer: StandIn });
+    await waitForPanel();
+    // The column the drawing lives in before the overlay (jsdom cannot lay it
+    // out, so the box is injected the same way the mobile cases do).
+    const region = canvasRegion();
+    region.getBoundingClientRect = () => rect(688);
+    assert.equal(latest().fitRequest ?? null, null, 'mounting is not a fullscreen toggle');
+
+    // Entering: the region becomes `fixed; inset: 0`, so the drawing is fitted
+    // to the viewport height once.
+    await enterFullscreen();
+    await waitFor(() => assert.equal(latest().fitRequest?.viewportHeight, 844));
+    const entryToken = latest().fitRequest?.token;
+    assert.equal(typeof entryToken, 'number');
+
+    // Leaving: the drawing returns to the flex column and is fitted to THAT
+    // box — a second, distinct request, not the entry one replayed.
+    fireEvent.click(fullscreenButton());
+    await waitFor(() => assert.equal(isFullscreen(), false));
+    await waitFor(() => {
+      const request = latest().fitRequest;
+      assert.ok(request !== null && request !== undefined);
+      assert.notEqual(request.token, entryToken, 'exiting asks for its own fit');
+      assert.equal(request.viewportHeight, 688, 'the fit uses the column height it returned to');
+    });
+
+    // A drawing the reader zoomed by hand keeps the scale they chose: the
+    // toggle makes no request at all.
+    const settledToken = latest().fitRequest?.token;
+    fireEvent.click(document.querySelector('[data-stand-in-manual-zoom]') as HTMLElement);
+    await enterFullscreen();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+    assert.equal(latest().fitRequest?.token, settledToken, 'a manual zoom is not re-fitted');
+  } finally {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: originalInnerHeight });
+  }
 });
 
 test('a session switch and an unmount both leave fullscreen', async () => {

@@ -731,6 +731,71 @@ test('the drawing keeps at least 85% of the phone tab height', async () => {
   assert.ok(share >= 0.85, `the drawing must keep ≥85% of the tab; got ${Math.round(share * 100)}%`);
 });
 
+test('compact fullscreen toolbar is one row holding only Exit fullscreen and Adjust', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), 'true'));
+
+  const row = toolbarRow();
+  // The row states its one-line contract, and a laid-out row can only be that
+  // line: one 44px target plus the row's 2×6px padding.
+  assert.equal(row.style.height, '56px', 'the overlay spends exactly one 44px row');
+  assert.equal(row.style.flexWrap, 'nowrap', 'the overlay row never wraps');
+  // jsdom does not lay out; inject the box the declaration states and read it
+  // the way the criterion does.
+  row.getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, width: 390, height: 56, right: 390, bottom: 56,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  assert.ok(row.getBoundingClientRect().height <= 56, 'the fullscreen toolbar is at most 56px tall');
+
+  assert.ok(within(row).getByRole('button', { name: 'Exit fullscreen' }));
+  const adjust = within(row).getByRole('button', { name: 'Adjust' });
+  assert.equal(adjust.getAttribute('aria-haspopup'), 'dialog');
+  // The view switch and the Text page are NOT part of the one row...
+  assert.equal(row.querySelector('[data-architecture-view-control]'), null);
+  assert.equal(row.querySelector('[data-architecture-text-toggle]'), null);
+  assert.equal(document.querySelectorAll('[data-architecture-toolbar]').length, 1);
+
+  // ...they moved into the one menu the row keeps.
+  fireEvent.click(adjust);
+  const sheet = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-sheet]');
+    assert.ok(node instanceof HTMLElement, 'Adjust still opens its dialog in the overlay');
+    return node;
+  });
+  assert.ok(sheet.querySelector('[data-architecture-view-control]'), 'the view switch moves into Adjust');
+  assert.ok(sheet.querySelector('[data-architecture-text-toggle]'), 'the Text page moves into Adjust');
+
+  // Leaving the overlay brings the full row back.
+  fireEvent.click(sheet.querySelector('[data-architecture-sheet-close]') as Element);
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), null));
+  const restored = toolbarRow();
+  assert.ok(restored.querySelector('[data-architecture-view-control]'), 'the tab keeps its view switch');
+  assert.ok(restored.querySelector('[data-architecture-text-toggle]'), 'the tab keeps its Text page');
+});
+
+test('exactly one zoom percentage is on the page, in the tab and in the overlay', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  // A zoom reading is a leaf whose whole text is the percentage; anything else
+  // ("Whole graph at 92%", the minimap's label) is prose, not a reading.
+  const percentageLeaves = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('span')]
+    .filter((element) => element.children.length === 0 && /^\d+%$/.test((element.textContent ?? '').trim()));
+
+  assert.equal(percentageLeaves().length, 1, 'the tab states the drawing scale once');
+
+  fireEvent.click(document.querySelector('[data-architecture-fullscreen-toggle]') as Element);
+  await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), 'true'));
+  assert.equal(percentageLeaves().length, 1, 'the overlay does not add a second zoom reading');
+});
+
 test('a truncated graph states the cut on the floating readout, not in the header', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(TRUNCATED_RESULT));
   usePhone();

@@ -549,6 +549,8 @@ export function PlantUmlGraph({
   selectedNodeId = null,
   selectedRelation = null,
   relayoutLocked = false,
+  fitRequest = null,
+  onZoomModeChange,
   onExport,
   onDrawnPlantUmlChange,
   focusNodeId = null,
@@ -2421,6 +2423,32 @@ export function PlantUmlGraph({
       centerOnPackage(host, decision.focusPackageId);
     }
   };
+
+  // The panel is told whether the drawing follows the container, because that
+  // is the condition under which a fullscreen toggle may re-fit it: a scale the
+  // reader chose must survive the overlay. The callback rides in a ref so a new
+  // parent render identity never re-registers the effect.
+  const onZoomModeChangeRef = useRef(onZoomModeChange);
+  onZoomModeChangeRef.current = onZoomModeChange;
+  useEffect(() => {
+    onZoomModeChangeRef.current?.(zoom.mode);
+  }, [zoom.mode]);
+
+  // A fit request comes from the PANEL's own size change (the fullscreen
+  // overlay swaps the region's `flex-1` for `fixed; inset: 0`). The renderer
+  // answers each token once, and only while it is in Fit mode: the overlay must
+  // not undo a manual zoom. The token is remembered synchronously so a re-render
+  // carrying the same request cannot fit twice.
+  const fitDiagramRef = useRef(fitDiagram);
+  fitDiagramRef.current = fitDiagram;
+  const answeredFitTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (fitRequest === null) return;
+    if (answeredFitTokenRef.current === fitRequest.token) return;
+    answeredFitTokenRef.current = fitRequest.token;
+    if (zoomRef.current.mode !== 'fit') return;
+    fitDiagramRef.current();
+  }, [fitRequest]);
 
   /**
    * The node a cursor id names, when it names an entity that is in the payload.

@@ -85,6 +85,7 @@ import type {
   ArchitectureDetailReading,
   ArchitectureDrawnPlantUml,
   ArchitectureEntityKind,
+  ArchitectureFitRequest,
   ArchitectureNodeIdShape,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
@@ -884,6 +885,40 @@ export default function ArchitecturePanel({
   useEffect(() => {
     exitFullscreen();
   }, [sessionId, projectId, exitFullscreen]);
+
+  // Whether the drawing follows the container (Fit) or a scale the reader
+  // chose. The renderer reports it; the fullscreen re-fit below is gated on it,
+  // so entering/leaving the overlay never undoes a manual zoom. A ref, not
+  // state: nothing renders from it, and the toggle's effect must read the
+  // latest report without re-scheduling itself.
+  const zoomModeRef = useRef<'fit' | 'custom'>('fit');
+  const handleZoomModeChange = useCallback((mode: 'fit' | 'custom'): void => {
+    zoomModeRef.current = mode;
+  }, []);
+  // A request to fit the drawing again, sent after a size change THIS panel
+  // caused (the overlay turns the region into `fixed; inset: 0`). The token
+  // makes each toggle its own request; null means no request was made yet.
+  const [fitRequest, setFitRequest] = useState<ArchitectureFitRequest | null>(null);
+  const fitTokenRef = useRef(0);
+  const wasFullscreenForFitRef = useRef(false);
+  useEffect(() => {
+    if (wasFullscreenForFitRef.current === fullscreenActive) return;
+    wasFullscreenForFitRef.current = fullscreenActive;
+    if (zoomModeRef.current !== 'fit') return;
+    // One frame after the toggle: the overlay's box, or the region's return to
+    // the flex column, is laid out by then, so the fit uses the settled size.
+    const frame = requestAnimationFrame(() => {
+      const viewportHeight = fullscreenActive
+        // In the overlay the region is `fixed; inset: 0`, so the viewport
+        // height IS its height — read it from the window rather than depending
+        // on a layout pass this effect cannot observe.
+        ? window.innerHeight
+        : graphAreaRef.current?.getBoundingClientRect().height ?? 0;
+      fitTokenRef.current += 1;
+      setFitRequest({ token: fitTokenRef.current, viewportHeight });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fullscreenActive]);
 
   const changeScope = (next: number): void => {
     const clamped = clampArchitectureScope(next);
@@ -1763,6 +1798,29 @@ export default function ArchitecturePanel({
           ? t('architecture.fullscreen.exit', { defaultValue: 'Exit fullscreen' })
           : t('architecture.fullscreen.enter', { defaultValue: 'Fullscreen' })}
       </span>
+    </button>
+  );
+
+  /**
+   * The compact tier's one menu button. It is the row's rightmost control
+   * normally, and in the fullscreen overlay it is one of only two: the view
+   * switch and the Text page move INSIDE the sheet there, so the overlay spends
+   * one 56px row on chrome instead of the two 44px rows that used to cover the
+   * drawing's top nodes.
+   */
+  const adjustButton = (
+    <button
+      ref={sheetTriggerRef}
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={sheetOpen}
+      aria-label={t('architecture.sheet.open', { defaultValue: 'Adjust' })}
+      onClick={() => setSheetOpen(true)}
+      data-architecture-sheet-toggle="true"
+      style={compactTargetStyle}
+      className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+    >
+      {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
     </button>
   );
 
@@ -3265,7 +3323,16 @@ export default function ArchitecturePanel({
       <style>{'@keyframes architecture-touch-hint-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }'}</style>
       <div
         data-architecture-toolbar="true"
-        style={compactToolbar ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
+        // On the overlay the compact row is ONE 56px line (a 44px target plus
+        // the row's 2×6px padding): `nowrap` and the stated height are the
+        // contract that keeps a second row from covering the drawing again.
+        style={
+          compactToolbar
+            ? fullscreen.active
+              ? { gap: TOUCH_CONTROL_GAP_PX, height: 56, flexWrap: 'nowrap' }
+              : { gap: TOUCH_CONTROL_GAP_PX }
+            : undefined
+        }
         // Over the overlay the row is chrome ON TOP of a viewport-sized
         // drawing, not a band that shortens it. Otherwise the row WRAPS rather
         // than scrolls: `overflow-x: auto` also makes the block axis a scroll
@@ -3279,25 +3346,24 @@ export default function ArchitecturePanel({
         }`}
       >
         {compactToolbar ? (
-          <>
-            {granularityGroup}
-            <span className="flex-1" />
-            {textToggle}
-            {fullscreenButton}
-            <button
-              ref={sheetTriggerRef}
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={sheetOpen}
-              aria-label={t('architecture.sheet.open', { defaultValue: 'Adjust' })}
-              onClick={() => setSheetOpen(true)}
-              data-architecture-sheet-toggle="true"
-              style={compactTargetStyle}
-              className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
-            </button>
-          </>
+          fullscreen.active ? (
+            // The overlay keeps ONE row: leaving, and the one menu the view
+            // switch and Text page moved into. Everything else would be a
+            // second row over the drawing's top edge.
+            <>
+              <span className="flex-1" />
+              {fullscreenButton}
+              {adjustButton}
+            </>
+          ) : (
+            <>
+              {granularityGroup}
+              <span className="flex-1" />
+              {textToggle}
+              {fullscreenButton}
+              {adjustButton}
+            </>
+          )
         ) : (
           <>
             <h3 className="shrink-0 text-sm font-semibold text-foreground">
@@ -3390,6 +3456,14 @@ export default function ArchitecturePanel({
             <span className="text-[11px] font-medium text-muted-foreground">
               {t('architecture.sheet.view', { defaultValue: 'View' })}
             </span>
+            {/* In the overlay the one toolbar row keeps only Exit fullscreen and
+                Adjust, so the view switch and the Text page move in here. */}
+            {fullscreen.active && (
+              <div className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+                {granularityGroup}
+                {textToggle}
+              </div>
+            )}
             {/* The renderer's own view chrome (tier, scale, readable mode, Back,
                 Drill in) is portaled in here; on the compact tier the sheet is
                 the one menu, so those entries do not spend a second canvas row. */}
@@ -3608,6 +3682,11 @@ export default function ArchitecturePanel({
                     // The dock narrows the canvas; its transition must not be
                     // read as a container shape change.
                     relayoutLocked={dockLayoutLocked}
+                    // The panel's own size change (the fullscreen overlay) is
+                    // answered by an explicit fit, and only when the drawing is
+                    // still fitted — a manual zoom survives the toggle.
+                    fitRequest={fitRequest}
+                    onZoomModeChange={handleZoomModeChange}
                     // The renderer owns the drill-down view; reporting it keeps
                     // the export menu's PlantUML identical to the drawing.
                     onViewChange={setDiagramView}
