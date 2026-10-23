@@ -33,17 +33,17 @@ extra:
 
 ## AC
 
-- [ ] 纯规则单测通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestions.test.ts` 退出码 0；该文件为下列每一条规则各有一个独立 `it`（一腿一 test）：(a) 按频次降序取前 3；(b) 同频按最近使用；(c) 出现次数 <2 的条目不入选；(d) 多行条目被排除；(e) 超过 60 字的条目被排除；(f) 以 `/` 开头的条目被排除；(g) 大小写与尾部标点归一后合并计数，展示最近一次写法；(h) 空历史返回空数组；(i) 跨 scope 聚合后统计。
-- [ ] 历史存储聚合：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/useInputHistory.test.ts` 退出码 0，其中新增一个 `it` 断言 `readAllInputHistory()` 合并多个 scope 的条目，且该文件既有 `it` 的断言行没有被修改或删除（diff 只增不改）。
-- [ ] 可见条件逐腿通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 退出码 0；其中「可见」一个正例，以及下列每个负例各一个独立 `it`：输入非空、`isLoading`、命令菜单打开、文件菜单打开、有排队草稿、有附件、`isOccupied`、候选为空、本轮已 Esc 隐藏。
-- [ ] 键盘语义逐腿通过（同一测试文件，每条独立 `it`）：Tab 依次选中第 1、2、3 个 chip；走过最后一个后选中态复位且既有 Tab 分支的 `cyclePermissionMode` 恰好被调用 1 次；Shift+Tab 反向并在越过第一个时同样交还；chip 不可见时 Tab 恰好调用 `cyclePermissionMode` 1 次（与现状一致）；有选中时 Enter 把文本写入输入框与 `inputValueRef` 且不触发 `requestSubmit`；无选中时 Enter 不采用任何 chip；Esc 隐藏并调用 `preventDefault` 与 `stopPropagation`；IME 组字（`isComposing`）期间 Enter 不采用；chip 可见时 ↑ 仍由 `useInputHistory` 召回历史。
-- [ ] 鼠标与生命周期逐腿通过（同一测试文件，每条独立 `it`）：chip 的 `mousedown` 被 `preventDefault`；点击后文本填入、光标在末尾、textarea 保持焦点；输入任意字符后 chip 消失，清空后重现；Esc 隐藏在 `isLoading` 由 true 变 false 时恢复；Esc 隐藏在 `draftScope` 变化时恢复；采用后在输入框内编辑再清空，重现的 chip 按此刻的历史重新计算（测试在两次清空之间用 `recordSentMessage` 追加历史使频次排名翻转，断言重现的 chip 顺序随之改变）。
-- [ ] 无障碍与读数通过（同一测试文件，每条独立 `it`）：容器带 `role="listbox"` 与 `aria-label`，chip 为 `role="option"`，选中时 textarea 的 `aria-activedescendant` 指向该 chip 的 id，选中态清除时该属性被移除；`chat-suggestion-stats` 的四个计数按上文定义分别累加，且写入失败（`localStorage` 抛错）时不影响渲染。
-- [ ] 相邻既有测试保持绿：以下每个文件单独运行退出码均为 0，`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/composerDraftScoping.test.tsx`、`.../sendOnEnter.test.tsx`、`.../chatComposerResponsive.test.tsx`、`.../composerCompactTier.test.tsx`、`.../chatInterfaceEscapeAbort.test.tsx`。
-- [ ] 静态门通过：`npm run typecheck`、`npm run lint`、`bash scripts/with-memory-cap.sh npm run build:client` 退出码均为 0；`bash scripts/with-memory-cap.sh vitest run src/modules/i18n/tests/localeDuplicateKeys.test.ts` 退出码 0。
-- [ ] 不联网不调模型：在 `src/modules/chat/utils/inputSuggestions.ts`、`src/modules/chat/hooks/useInputSuggestions.ts`、`src/modules/chat/composer/InputSuggestionChips.tsx` 三个新文件中，`grep -nE "fetch\(|authenticatedFetch|EventSource|from '@/shared/api'"` 无任何输出（退出码 1）。
-- [ ] 前端规范：上述三个新文件中，`grep -nE "from '\.{1,2}/"` 与 `grep -nE "^(export )?interface "` 均无输出（退出码 1）；`git diff --name-status` 相对任务起点只出现已有目录下的新增文件，没有新建目录。
-- [ ] 文案键就位：`node -e "for (const l of ['en','zh-CN']) { const c = require('./src/modules/i18n/locales/'+l+'/chat.json').input.suggestions; for (const k of ['listLabel','hintSelect','hintAccept','hintHide']) if (typeof c[k] !== 'string' || !c[k].trim()) { console.error(l, k); process.exit(1); } }"` 退出码 0。
+- [x] 纯规则单测通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestions.test.ts` 退出码 0；该文件为下列每一条规则各有一个独立 `it`（一腿一 test）：(a) 按频次降序取前 3；(b) 同频按最近使用；(c) 出现次数 <2 的条目不入选；(d) 多行条目被排除；(e) 超过 60 字的条目被排除；(f) 以 `/` 开头的条目被排除；(g) 大小写与尾部标点归一后合并计数，展示最近一次写法；(h) 空历史返回空数组；(i) 跨 scope 聚合后统计。
+- [x] 历史存储聚合：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/useInputHistory.test.ts` 退出码 0，其中新增一个 `it` 断言 `readAllInputHistory()` 合并多个 scope 的条目，且该文件既有 `it` 的断言行没有被修改或删除（diff 只增不改）。
+- [x] 可见条件逐腿通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 退出码 0；其中「可见」一个正例，以及下列每个负例各一个独立 `it`：输入非空、`isLoading`、命令菜单打开、文件菜单打开、有排队草稿、有附件、`isOccupied`、候选为空、本轮已 Esc 隐藏。
+- [x] 键盘语义逐腿通过（同一测试文件，每条独立 `it`）：Tab 依次选中第 1、2、3 个 chip；走过最后一个后选中态复位且既有 Tab 分支的 `cyclePermissionMode` 恰好被调用 1 次；Shift+Tab 反向并在越过第一个时同样交还；chip 不可见时 Tab 恰好调用 `cyclePermissionMode` 1 次（与现状一致）；有选中时 Enter 把文本写入输入框与 `inputValueRef` 且不触发 `requestSubmit`；无选中时 Enter 不采用任何 chip；Esc 隐藏并调用 `preventDefault` 与 `stopPropagation`；IME 组字（`isComposing`）期间 Enter 不采用；chip 可见时 ↑ 仍由 `useInputHistory` 召回历史。
+- [x] 鼠标与生命周期逐腿通过（同一测试文件，每条独立 `it`）：chip 的 `mousedown` 被 `preventDefault`；点击后文本填入、光标在末尾、textarea 保持焦点；输入任意字符后 chip 消失，清空后重现；Esc 隐藏在 `isLoading` 由 true 变 false 时恢复；Esc 隐藏在 `draftScope` 变化时恢复；采用后在输入框内编辑再清空，重现的 chip 按此刻的历史重新计算（测试在两次清空之间用 `recordSentMessage` 追加历史使频次排名翻转，断言重现的 chip 顺序随之改变）。
+- [x] 无障碍与读数通过（同一测试文件，每条独立 `it`）：容器带 `role="listbox"` 与 `aria-label`，chip 为 `role="option"`，选中时 textarea 的 `aria-activedescendant` 指向该 chip 的 id，选中态清除时该属性被移除；`chat-suggestion-stats` 的四个计数按上文定义分别累加，且写入失败（`localStorage` 抛错）时不影响渲染。
+- [x] 相邻既有测试保持绿：以下每个文件单独运行退出码均为 0，`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/composerDraftScoping.test.tsx`、`.../sendOnEnter.test.tsx`、`.../chatComposerResponsive.test.tsx`、`.../composerCompactTier.test.tsx`、`.../chatInterfaceEscapeAbort.test.tsx`。
+- [x] 静态门通过：`npm run typecheck`、`npm run lint`、`bash scripts/with-memory-cap.sh npm run build:client` 退出码均为 0；`bash scripts/with-memory-cap.sh vitest run src/modules/i18n/tests/localeDuplicateKeys.test.ts` 退出码 0。
+- [x] 不联网不调模型：在 `src/modules/chat/utils/inputSuggestions.ts`、`src/modules/chat/hooks/useInputSuggestions.ts`、`src/modules/chat/composer/InputSuggestionChips.tsx` 三个新文件中，`grep -nE "fetch\(|authenticatedFetch|EventSource|from '@/shared/api'"` 无任何输出（退出码 1）。
+- [x] 前端规范：上述三个新文件中，`grep -nE "from '\.{1,2}/"` 与 `grep -nE "^(export )?interface "` 均无输出（退出码 1）；`git diff --name-status` 相对任务起点只出现已有目录下的新增文件，没有新建目录。
+- [x] 文案键就位：`node -e "for (const l of ['en','zh-CN']) { const c = require('./src/modules/i18n/locales/'+l+'/chat.json').input.suggestions; for (const k of ['listLabel','hintSelect','hintAccept','hintHide']) if (typeof c[k] !== 'string' || !c[k].trim()) { console.error(l, k); process.exit(1); } }"` 退出码 0。
 
 ## DoD
 
