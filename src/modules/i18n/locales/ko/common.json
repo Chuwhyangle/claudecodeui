@@ -635,5 +635,34 @@
       "updateAvailable": "업데이트 가능",
       "closeSidebar": "사이드바 닫기"
     }
+  },
+  "cockpit": {
+    "title": "콕핏",
+    "readOnly": "읽기 전용",
+    "projectStrip": "프로젝트",
+    "fleetView": "모든 프로젝트",
+    "boardView": "보드",
+    "focus": "포커스",
+    "noFocus": "없음",
+    "loading": "불러오는 중…",
+    "projectsError": "quay 플릿을 읽을 수 없습니다: {{message}}",
+    "retry": "다시 시도",
+    "emptyProjects": "보고된 quay 프로젝트가 없습니다.",
+    "driverRunning": "드라이버 실행 중",
+    "driverIdle": "드라이버 유휴",
+    "driverStale": "드라이버 응답 없음",
+    "driverNotConfigured": "구성되지 않음",
+    "driverUnavailable": "드라이버 사용 불가",
+    "tasksCount": "작업 {{total}}개",
+    "readyCount": "준비 {{n}}개",
+    "needsHumanCount": "사람 필요 {{n}}개",
+    "inFlight": "진행 중",
+    "inFlightEmpty": "진행 중인 작업이 없습니다.",
+    "intentPlaceholder": "무엇을 볼지 입력하세요 — 예: claudecodeui 보기, 두 번째, 확대, 뒤로, 모든 프로젝트",
+    "intentHint": "Enter로 실행 · 화살표로 포커스 이동 · Backspace로 뒤로",
+    "intentSubmit": "실행",
+    "intentUnmatched": "인식하지 못했습니다: “{{text}}”. 추측하지 않았습니다.",
+    "timingLast": "마지막 변경 → 첫 프레임 {{ms}} ms",
+    "keyHint": "화살표로 포커스 이동 · Enter로 확대 · Backspace로 뒤로"
   }
 }

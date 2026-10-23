@@ -11,6 +11,7 @@ import { WebSocketProvider } from '@/shared/context/WebSocketContext';
 import { PluginsProvider } from '@/modules/plugins';
 import { ProjectWorkspaceRoute } from '@/modules/project-workspace';
 import { OAuthConsentRoute } from '@/modules/oauth-consent';
+import { CockpitPage } from '@/modules/cockpit';
 import { i18n } from '@/modules/i18n';
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
@@ -139,6 +140,10 @@ export default function App() {
                     <Routes>
                       <Route path="/" element={<ProjectWorkspaceRoute />} />
                       <Route path="/session/:sessionId" element={<ProjectWorkspaceRoute />} />
+                      {/* The cockpit: a top-level read-only stage over the quay fleet, a sibling
+                          of the project workspace rather than a tab inside one. It is behind the
+                          same ProtectedRoute, so it reads the fleet only for a signed-in user. */}
+                      <Route path="/cockpit" element={<CockpitPage />} />
                       {/* The OAuth consent screen: a full-page surface of its own, NOT
                           inside the project workspace shell, so an authorization request
                           never mounts the sidebar, tabs or chat pane behind it. It is

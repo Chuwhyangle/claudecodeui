@@ -635,5 +635,34 @@
       "updateAvailable": "Güncelleme mevcut",
       "closeSidebar": "Kenar çubuğunu kapat"
     }
+  },
+  "cockpit": {
+    "title": "Kokpit",
+    "readOnly": "salt okunur",
+    "projectStrip": "Projeler",
+    "fleetView": "Tüm projeler",
+    "boardView": "Pano",
+    "focus": "Odak",
+    "noFocus": "yok",
+    "loading": "Yükleniyor…",
+    "projectsError": "quay filosu okunamadı: {{message}}",
+    "retry": "Yeniden dene",
+    "emptyProjects": "Bildirilmiş quay projesi yok.",
+    "driverRunning": "sürücü çalışıyor",
+    "driverIdle": "sürücü boşta",
+    "driverStale": "sürücü bayat",
+    "driverNotConfigured": "yapılandırılmamış",
+    "driverUnavailable": "sürücü kullanılamıyor",
+    "tasksCount": "{{total}} görev",
+    "readyCount": "{{n}} hazır",
+    "needsHumanCount": "{{n}} insan bekliyor",
+    "inFlight": "İşlemde",
+    "inFlightEmpty": "İşlemde görev bildirilmedi.",
+    "intentPlaceholder": "Neye bakmak istediğinizi yazın — örn. claudecodeui gör, ikinci, büyüt, geri, tüm projeler",
+    "intentHint": "Enter ifadeyi çalıştırır · oklar odağı taşır · Backspace geri gider",
+    "intentSubmit": "Çalıştır",
+    "intentUnmatched": "Tanınmadı: “{{text}}”. Tahmin yapılmadı.",
+    "timingLast": "son değişiklik → ilk kare {{ms}} ms",
+    "keyHint": "Oklar odağı taşır · Enter büyütür · Backspace geri gider"
   }
 }

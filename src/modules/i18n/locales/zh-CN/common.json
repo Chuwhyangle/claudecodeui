@@ -635,5 +635,34 @@
       "updateAvailable": "有可用更新",
       "closeSidebar": "关闭侧边栏"
     }
+  },
+  "cockpit": {
+    "title": "驾驶舱",
+    "readOnly": "只读",
+    "projectStrip": "项目",
+    "fleetView": "全部项目",
+    "boardView": "任务板",
+    "focus": "焦点",
+    "noFocus": "无",
+    "loading": "加载中…",
+    "projectsError": "无法读取 quay 舰队：{{message}}",
+    "retry": "重试",
+    "emptyProjects": "没有报告任何 quay 项目。",
+    "driverRunning": "驱动运行中",
+    "driverIdle": "驱动空闲",
+    "driverStale": "驱动失联",
+    "driverNotConfigured": "未配置",
+    "driverUnavailable": "驱动不可用",
+    "tasksCount": "{{total}} 个任务",
+    "readyCount": "{{n}} 个就绪",
+    "needsHumanCount": "{{n}} 个需要人",
+    "inFlight": "在途",
+    "inFlightEmpty": "没有声明在途任务。",
+    "intentPlaceholder": "说出要看什么——例如：看 claudecodeui、第二个、放大、返回、全部项目",
+    "intentHint": "Enter 执行这句话 · 方向键移动焦点 · Backspace 返回",
+    "intentSubmit": "执行",
+    "intentUnmatched": "未识别：“{{text}}”。没有做任何猜测。",
+    "timingLast": "最近一次变更 → 首帧 {{ms}} 毫秒",
+    "keyHint": "方向键移动焦点 · Enter 放大 · Backspace 返回"
   }
 }
