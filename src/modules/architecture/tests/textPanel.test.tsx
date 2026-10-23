@@ -135,6 +135,7 @@ type PanelOverrides = {
   readonly view?: ArchitectureDiagramView;
   readonly granularity?: 'file' | 'entity';
   readonly drawn?: ArchitectureDrawnPlantUml | null;
+  readonly onPutInChat?: (text: string) => void;
 };
 
 /** Render the page directly, with a detached-but-queryable canvas reference. */
@@ -162,6 +163,7 @@ function renderTextPanel(overrides: PanelOverrides = {}) {
       viewLabel="Class diagram"
       filterSummary="7 functions hidden; relations: structural"
       canvasRef={canvasRef}
+      {...(overrides.onPutInChat === undefined ? {} : { onPutInChat: overrides.onPutInChat })}
     />,
   );
   return { ...result, canvas };
@@ -407,16 +409,70 @@ test('a refusing clipboard falls back to a dialog with the text selected', async
 });
 
 test('an empty graph states so and disables every action', () => {
-  renderTextPanel({ graph: { nodes: [], edges: [] } });
+  renderTextPanel({ graph: { nodes: [], edges: [] }, onPutInChat: () => undefined });
   assert.ok(document.querySelector('[data-architecture-text-empty]'));
   for (const selector of [
     '[data-architecture-text-copy="all"]',
     '[data-architecture-text-copy="context"]',
+    '[data-architecture-text-put-in-chat]',
     '[data-architecture-text-download]',
   ]) {
     const button = document.querySelector(selector) as HTMLButtonElement;
     assert.equal(button.disabled, true, `${selector} must be disabled on an empty graph`);
   }
+});
+
+test('the copy action is named "Copy for chat", the tray wording, and sits beside "Put in chat input"', () => {
+  const put = vi.fn();
+  renderTextPanel({ onPutInChat: put });
+
+  const copyForChat = document.querySelector('[data-architecture-text-copy="context"]');
+  assert.ok(copyForChat !== null);
+  assert.equal(copyForChat.textContent, 'Copy for chat', 'the name matches the tray’s action');
+
+  const putInChat = document.querySelector('[data-architecture-text-put-in-chat]') as HTMLButtonElement;
+  assert.ok(putInChat !== null, 'the page offers the same action as the tray');
+  assert.equal(putInChat.textContent, 'Put in chat input');
+  assert.equal(putInChat.disabled, false);
+});
+
+test('"Put in chat input" hands over the CURRENT scope’s context text, header included', async () => {
+  const put = vi.fn();
+  renderTextPanel({
+    selection: { kind: 'entity', nodeId: BETA },
+    onPutInChat: put,
+  });
+  const putInChat = document.querySelector('[data-architecture-text-put-in-chat]') as HTMLButtonElement;
+
+  // Whole filtered graph: the header names the project display name and the
+  // scope, and the body is the whole document.
+  fireEvent.click(putInChat);
+  assert.equal(put.mock.calls.length, 1);
+  const whole = String(put.mock.calls[0][0]);
+  assert.match(whole, /^About the architecture diagram \(project claudecodeui, session Copy fixes, analysed at /);
+  assert.match(whole, /; scope: Whole filtered graph;/);
+  assert.doesNotMatch(whole, /project project-1/, 'the id is never the headline');
+  assert.ok(whole.includes(fullText()));
+
+  // The same button follows the scope selector: selection + 1 is a different,
+  // smaller document.
+  fireEvent.click(document.querySelector('[data-architecture-text-scope-option="selection"]') as Element);
+  // The rebuild is debounced; wait for the preview to become the narrower scope
+  // (Delta is the selection +1's far end and drops out) before reading it.
+  await waitFor(() => assert.doesNotMatch(preview().textContent ?? '', /Delta/));
+  const selectionText = preview().textContent ?? '';
+  fireEvent.click(putInChat);
+  assert.equal(put.mock.calls.length, 2);
+  const scoped = String(put.mock.calls[1][0]);
+  assert.match(scoped, /; scope: Selected \+ 1 neighbour;/);
+  assert.ok(scoped.includes(selectionText), 'the text that was sent is the text on screen');
+  assert.notEqual(scoped, whole);
+});
+
+test('without a chat to write to, the button is disabled rather than absent', () => {
+  renderTextPanel();
+  const putInChat = document.querySelector('[data-architecture-text-put-in-chat]') as HTMLButtonElement;
+  assert.equal(putInChat.disabled, true);
 });
 
 test('the syntax badge shows a pass, or the first error line and message', async () => {
