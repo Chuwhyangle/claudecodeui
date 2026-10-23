@@ -33,16 +33,30 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/quay/tests/quayUri.test.ts` exit 0——五种 URI 形态 parse→format 往返一致；缺项目段、未知类型、空 id 都被拒绝。
-- [ ] AC2: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——在途任务磁贴按视图契约声明可聚焦子元素，URI 为 `quay://<project>/task/<id>`，带序号标签与 status/color 显示属性；既有用例不弱化。
-- [ ] AC3: `npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts` exit 0——引用包夹具：`focus` 为焦点磁贴 URI；`focus/visible/history/tray` 中不出现任务标题或正文文本；`history`/`tray` 为 URI 数组；`text` 与既有 C2 输出逐字相等；focusUri 不在可见集时 `focus` 为 null；既有 C2 用例不弱化。
-- [ ] AC4: 同一测试文件中的解析用例——「第二个」「②」「红的那个」「左上那个」各自命中唯一对象；两个同色对象时「红的那个」返回 ambiguous；「一起」「十二点」不被当成序号。
-- [ ] AC5: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/modules/quay/tests/quayUri.test.ts` exit 0——五种 URI 形态 parse→format 往返一致；缺项目段、未知类型、空 id 都被拒绝。
+- [x] AC2: `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` exit 0——在途任务磁贴按视图契约声明可聚焦子元素，URI 为 `quay://<project>/task/<id>`，带序号标签与 status/color 显示属性；既有用例不弱化。
+- [x] AC3: `npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts` exit 0——引用包夹具：`focus` 为焦点磁贴 URI；`focus/visible/history/tray` 中不出现任务标题或正文文本；`history`/`tray` 为 URI 数组；`text` 与既有 C2 输出逐字相等；focusUri 不在可见集时 `focus` 为 null；既有 C2 用例不弱化。
+- [x] AC4: 同一测试文件中的解析用例——「第二个」「②」「红的那个」「左上那个」各自命中唯一对象；两个同色对象时「红的那个」返回 ambiguous；「一起」「十二点」不被当成序号。
+- [x] AC5: `npm run typecheck` 通过。
 
 ## DoD
 
 - 在真实运行的 CloudCLI 上打开 Quay 面板，在途任务磁贴带可见序号标签；在开发者控制台或测试夹具中对一条语音构建引用包，包内 focus 为该磁贴的 `quay://<project>/task/<id>`。
 - 如实写明：本任务不解引用（交给 C）；`text` 降级路径的兼容边界。
+
+## Notes
+
+实现读数（2026-10-23，worktree 分支 `task/quay-wall-addressable-view-and-input-package`，merge develop 后重跑）：
+
+- AC1 `npx vitest run src/modules/quay/tests/quayUri.test.ts` → **exit 0，6 passed**。五种形态 parse→format→parse 往返；`quay://task/<id>`（缺项目段）→ `missing-project`；未知类型 → `unknown-type`；空 id/name/eventId → `empty-id`；多段 / `#ac-0` / 非 task 片段 / query → `malformed`。
+- AC2 `npx vitest run src/modules/quay/tests/QuayPanel.test.tsx` → **exit 0，31 passed**（原有用例 28 条未改动）。在途磁贴发布 `data-quay-focusables`（每行 `{uri,label,display}`，URI `quay://<project>/task/<id>`），行内可见序号标签 ①/②；`status` = in-flight phase，`color` 与 phase 徽标同源；`inFlight === null` 不发布契约、`[]` 发布空集。
+- AC3/AC4 `npx vitest run src/modules/chat/utils/tests/voiceContextPack.test.ts` → **exit 0，20 passed**（原有 C2 用例未改动）。引用包 `history`/`tray` 为 URI 数组、`focus`/`visible` 只有 `{uri,label,display}`、`text` 与 `buildVoiceInputContextPack` 输出逐字相等；focusUri 不在可见集 ⇒ `focus: null`；「第二个」/「②」/「红的那个」/「左上那个」各自唯一命中，两个红色 ⇒ `ambiguous`，「一起」/「十二点」⇒ `none`。
+- AC5 `npm run typecheck` → **exit 0**。另跑 `npm run lint` → exit 0（仅既有 warning）与 `npm run build:client` → 成功；anti-drift Touches check → OK（7 个实际文件全在 Touches 内）。
+
+兼容边界（如实）：
+- 本任务**不解引用**，不调 fleet 端点；按 URI 读回真实数据在 `quay-wall-uri-dereference-with-snapshot-fallback`（C）。
+- `text` 字段逐字等于既有 C2 对话包 + 草稿/已说块输出，是无 wall 部署的降级路径（也是 ASR 热词来源）。`useVoiceInput` 当前仍只发送该 `text` 半；把引用半接线进语音链路是后续工作，本任务只落格式与纯函数。
+- DoD 第 1 条的读数由 `QuayPanel.test.tsx` 的真实组件 render + 引用包夹具提供；本 worker 会话未做浏览器目视复核。
 
 ## Touches
 
