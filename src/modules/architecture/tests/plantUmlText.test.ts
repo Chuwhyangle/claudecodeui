@@ -652,7 +652,7 @@ test('the renderer is asked for the full member detail', async () => {
   );
 });
 
-test('the default detail is the defect the control arm reproduces: markers appear', async () => {
+test('the default detail is the defect the control arm reproduces: member rows are lost', async () => {
   const graph = losslessGraph(41);
   const bridge = archguardToPlantUml(graph, LOSSLESS_OPTIONS);
   // Exactly what the renderer does when detail is NOT pinned: the entity-count
@@ -665,15 +665,26 @@ test('the default detail is the defect the control arm reproduces: markers appea
     applyView,
   };
   const text = buildFullPlantUmlDocument(graph, { ...LOSSLESS_OPTIONS, drawn }).text;
-  assert.match(
-    text,
-    TRUNCATION_LINE,
-    'the default detail must put the renderer overflow row into the text (the control)',
+  // 0.5.2 marks the compact row `synthetic` and the serializer SKIPS it, so the
+  // defect is now SILENT: a reader sees no marker at all, and the real rows the
+  // detail dropped are simply gone. The lossy half is what the pinned detail
+  // fixes, and it still reproduces here.
+  const first = graph.nodes[0];
+  const drawnFirst = defaulted.model.entities.find((entity) => entity.id === bridge.aliasOf.get(first.id));
+  assert.ok(drawnFirst !== undefined, 'the control draws the first class');
+  assert.equal(
+    drawnFirst.members.filter((member) => member.synthetic === true).length,
+    1,
+    'the compact drawing folds the tail into one synthetic row',
+  );
+  assert.equal(
+    text.match(TRUNCATION_LINE),
+    null,
+    'that synthetic row is NOT serialized: the control no longer even leaves a marker',
   );
   const rows = memberRowsByEntity(text);
-  const first = graph.nodes[0];
   assert.ok(
     (rows.get(first.label) ?? []).length < (first.members?.length ?? 0),
-    'the control must lose real member rows, not merely add a marker',
+    'the control loses real member rows',
   );
 });

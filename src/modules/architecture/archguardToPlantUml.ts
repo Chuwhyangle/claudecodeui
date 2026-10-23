@@ -71,6 +71,63 @@ export const MAX_DISPLAY_DIR_SEGMENTS = 3;
 export const DEFAULT_NEIGHBORHOOD_HOPS = 1;
 
 /**
+ * How much of a member row the DRAWING shows, in characters.
+ *
+ * The renderer sizes an entity box from the text it will actually paint, so a
+ * signature like `process(inputs: Float32Array<ArrayBufferLike>[][], …)` (105
+ * characters) used to widen the box to 856 units while the screen only ever
+ * showed a fraction of it — on a phone the whole drawing then fitted at ~38 %.
+ * Capping the drawn line here makes the box proportional to what the reader
+ * sees; `PlantUmlMember.raw` keeps the full declaration, so the Text page, the
+ * copied document and the Inspector never lose a character.
+ */
+export const MEMBER_MAX_CHARS = 48;
+
+/**
+ * Member rows an entity box DRAWS before the tail folds into the app's own
+ * `… +N more (M members)` row. Six rows fit a phone frame without stretching
+ * it; anything beyond is read in the Inspector.
+ *
+ * The row cap is the drawing layer's rule, NOT a renderer option: the
+ * renderer's `memberMaxRows` writes the folded row into
+ * `model.entities[].members` as a member, which would make the Text page and a
+ * copied document state a member the source never declared. So the renderer is
+ * only asked to CUT each drawn line (`memberMaxChars`); the row cap is applied
+ * to the drawing after layout, where it cannot touch the model.
+ *
+ * This is the deliberate trade the task writes down: semantic zoom is an
+ * identity map at ≥ 90 %, so at and above that scale an entity shows at most
+ * six rows plus the fold marker, and the full member list lives in the
+ * Inspector (whose `Show all N` expands it).
+ */
+export const MEMBER_MAX_ROWS = 6;
+
+/**
+ * The member options the drawing hands the renderer, in the shape
+ * `RendererOptions` expects. One definition for the drawing and for the tests
+ * that read what it drew, so the two can never state different numbers.
+ *
+ * Only the LINE cap lives here. `detail: 'full'` is supplied once, by
+ * `renderWithMemberDetail` (`PlantUmlGraph.tsx`), so every drawing — and the
+ * model the text page serializes — is complete; and the row cap is ours
+ * (the drawing layer), so the renderer draws every row and only shortens the
+ * LINES here.
+ */
+export function memberDisplayLimits(): { memberMaxChars: number } {
+  return { memberMaxChars: MEMBER_MAX_CHARS };
+}
+
+/**
+ * The fold row the drawing paints when members are hidden, e.g.
+ * `… +1 more (7 members)` for a seven-member class drawn with six rows.
+ * `hidden` is how many rows the cap dropped; `total` is the entity's real
+ * member count. Both appear so a reader can tell what is missing and how much.
+ */
+export function memberOverflowLabel(hidden: number, total: number): string {
+  return `… +${hidden} more (${total} members)`;
+}
+
+/**
  * Which slice of the already-fetched neighbourhood is on screen.
  *  · `overview` folds the whole graph into path groups;
  *  · `group` expands one path group into its own entities;

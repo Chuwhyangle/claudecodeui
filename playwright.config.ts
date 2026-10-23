@@ -423,6 +423,11 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // and the `--grep "control arm"` selection is `13 passed (2.0m)`; the three
   // new cases took 10.9 s, 6.8 s and 11.4 s of that. 660_000 still clears the
   // 5.4m reading ~2.0x.
+  // Re-measured 2026-10-23 on the tree that also carries the node-size legs (a
+  // main arm at both viewports that opens the Inspector and the Text page, and
+  // a control arm drawing the same fixture WITHOUT the member caps through the
+  // DEV-only lever): `26 passed (5.6m)` for the whole invocation. 660_000 still
+  // clears that reading ~2.0x, so the entry stays.
   'architecture-canvas-layout.spec.ts': 660_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,

@@ -8,8 +8,18 @@ import {
   displayName,
   isSessionSeedNode,
   LIGHT_SEED_SHARE_THRESHOLD,
+  MEMBER_MAX_CHARS,
+  MEMBER_MAX_ROWS,
+  memberDisplayLimits,
+  memberOverflowLabel,
   seedMarkerMode,
 } from '@/modules/architecture/archguardToPlantUml';
+import { createLayoutEngine } from '@/modules/architecture/elkAspectEngine';
+import {
+  NODE_SIZE_ENTITIES,
+  nodeSizeEntityGraph,
+  nodeSizeMemberSignature,
+} from '@/../e2e/support/architectureFixture';
 import {
   applyFilter,
   ARCHITECTURE_DEFAULT_FILTER,
@@ -597,4 +607,160 @@ test('only a direct mention is a seed; old payloads keep the distance-0 reading'
   // The tier wins over distance: a direct mention that is not distance 0 (it
   // cannot happen on today's payload, but the rule must not depend on it).
   assert.equal(isSessionSeedNode({ distance: 2, mentionTier: 'direct' }), true);
+});
+
+/* ── the drawn member limits: a box is sized by what the screen shows ────── */
+
+/** The two-entity fixture's 105-character declaration, as the server renders it. */
+const LONG_SIGNATURE = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[4]);
+const SECOND_LONG_SIGNATURE = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[5]);
+
+type DrawnMember = { readonly raw: string; readonly display?: string };
+
+/**
+ * A member line as the SVG carries it: the renderer escapes `&`, `<` and `>`.
+ * The type names in this fixture (`Float32Array<ArrayBufferLike>`) are exactly
+ * the characters that make a naive `includes` a false negative.
+ */
+function asPainted(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** The entity box the layout drew for `id`, found by the alias the SVGs share. */
+function drawnEntityOf(
+  detailed: { readonly model: { entities: readonly { id: string; members: readonly DrawnMember[] }[] } },
+  detailedAlias: string,
+): { id: string; members: readonly DrawnMember[] } {
+  const entity = detailed.model.entities.find((candidate) => candidate.id === detailedAlias);
+  assert.ok(entity !== undefined, `the layout must draw ${detailedAlias}`);
+  return entity;
+}
+
+/**
+ * Draw the two-entity fixture through the REAL renderer, with or without the
+ * member caps, and hand back everything the assertions read.
+ */
+async function drawNodeSizeFixture(withLimits: boolean): Promise<{
+  readonly svg: string;
+  readonly model: { entities: readonly { id: string; members: readonly DrawnMember[] }[] };
+  readonly layout: { nodes: readonly { id: string; width: number }[] };
+  readonly transcribed: string;
+  readonly aliasOf: ReadonlyMap<string, string>;
+}> {
+  const elk = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+    renderDetailed: (
+      input: string,
+      options?: Record<string, unknown>,
+    ) => Promise<{
+      svg: string;
+      model: { entities: readonly { id: string; members: readonly DrawnMember[] }[] };
+      layout: { nodes: readonly { id: string; width: number }[] };
+    }>;
+    toPlantUml: (model: unknown) => string;
+    ElkLayoutEngine: new (options?: { aspectRatio?: number }) => unknown;
+  };
+  const graph = nodeSizeEntityGraph();
+  const diagram = archguardToPlantUml(graph as never);
+  const detailed = await elk.renderDetailed(diagram.puml, {
+    layout: createLayoutEngine({ aspectRatio: null, Engine: elk.ElkLayoutEngine as never }),
+    ...(withLimits ? memberDisplayLimits() : {}),
+  });
+  return {
+    svg: detailed.svg,
+    model: detailed.model,
+    layout: detailed.layout,
+    transcribed: elk.toPlantUml(detailed.model),
+    aliasOf: diagram.aliasOf,
+  };
+}
+
+test('the renderer gets the line cap and full detail — the row cap is the drawing own rule', () => {
+  assert.equal(MEMBER_MAX_CHARS, 48, 'a drawn member line stops at 48 characters');
+  assert.equal(MEMBER_MAX_ROWS, 6, 'an entity box draws at most six member rows');
+  assert.deepEqual(memberDisplayLimits(), { memberMaxChars: 48 });
+  assert.equal(
+    'memberMaxRows' in memberDisplayLimits(),
+    false,
+    'the row cap must not be a renderer option: it writes a folded row into the model',
+  );
+});
+
+test('the fold label names both the hidden rows and the real total', () => {
+  assert.equal(memberOverflowLabel(1, 7), '… +1 more (7 members)');
+  assert.equal(memberOverflowLabel(14, 20), '… +14 more (20 members)');
+});
+
+test('a long signature is drawn truncated, and only its 48-character display is in the SVG', async () => {
+  const drawn = await drawNodeSizeFixture(true);
+  assert.equal(LONG_SIGNATURE.length, 105, 'the fixture really states the 105-character declaration');
+  const processor = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[0].id) as string);
+  const rows = processor.members.map((member) => member.display ?? member.raw);
+  // The model keeps every authored member: the row cap is a drawing rule, so
+  // the renderer is only asked to shorten the LINES it paints.
+  assert.equal(rows.length, 7, 'the model still carries all seven members');
+  for (const row of rows) {
+    assert.ok(row.length <= MEMBER_MAX_CHARS, `a drawn row is at most 48 characters, got ${row.length}: ${row}`);
+  }
+  // The 105-character declaration is the FIFTH row (fields are drawn first) and
+  // is the row the line cap has to cut.
+  assert.ok(rows[4].startsWith('+ process('), `the long method is drawn, got: ${rows[4]}`);
+  assert.ok(rows[4].endsWith('…'), 'a truncated row ends with an ellipsis');
+  assert.ok(drawn.svg.includes(asPainted(rows[4])), 'the SVG paints exactly the truncated row');
+  assert.ok(!drawn.svg.includes(asPainted(LONG_SIGNATURE)), 'the 105-character declaration is never painted');
+  assert.ok(!drawn.svg.includes(asPainted(SECOND_LONG_SIGNATURE)), 'nor is the 114-character one');
+});
+
+test('no folded row is ever a member: the model and the copied document stay complete', async () => {
+  const drawn = await drawNodeSizeFixture(true);
+  for (const id of [NODE_SIZE_ENTITIES[0].id, NODE_SIZE_ENTITIES[1].id]) {
+    const entity = drawnEntityOf(drawn, drawn.aliasOf.get(id) as string);
+    assert.deepEqual(
+      entity.members.filter((member) => /…|\.\.\./.test(member.raw)),
+      [],
+      'a `… +N more` row must never appear in the model',
+    );
+  }
+  const processor = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[0].id) as string);
+  const ledger = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[1].id) as string);
+  assert.equal(processor.members.length, 7);
+  assert.equal(ledger.members.length, 20, 'the twenty-member class keeps all twenty in the model');
+  assert.ok(!/…\s*\+\s*\d+\s+more/.test(drawn.transcribed), 'and the serialized document states no fold row');
+});
+
+test('raw keeps the full declaration, so the copied document and the text page lose nothing', async () => {
+  const drawn = await drawNodeSizeFixture(true);
+  const processor = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[0].id) as string);
+  assert.ok(processor.members[4].raw.endsWith(LONG_SIGNATURE), 'raw is the full 105-character signature');
+  assert.equal(processor.members[4].raw.trim(), `+ ${LONG_SIGNATURE}`, 'the visibility symbol is all that is added');
+  assert.ok(
+    drawn.transcribed.includes(LONG_SIGNATURE),
+    'the serialized document (Copy PlantUML / Text page source) still carries the full signature',
+  );
+  assert.ok(
+    drawn.transcribed.includes(SECOND_LONG_SIGNATURE),
+    'and the second long signature, which the drawing folds away, is in the document too',
+  );
+});
+
+test('a member that fits is untouched: no display override, same text as authored', async () => {
+  const drawn = await drawNodeSizeFixture(true);
+  const ledger = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[1].id) as string);
+  for (const member of ledger.members.slice(0, MEMBER_MAX_ROWS)) {
+    assert.equal(member.display, undefined, 'a short row is drawn from its authored text, unchanged');
+  }
+  // `private` is drawn with the `-` visibility symbol, straight from the payload.
+  assert.equal(ledger.members[0].raw.trim(), '- frameBudgetWindowInMillisecondsPerFrames: int');
+});
+
+test('control — without the caps the same document is drawn full-size and sizes a much wider box', async () => {
+  const capped = await drawNodeSizeFixture(true);
+  const uncapped = await drawNodeSizeFixture(false);
+  assert.ok(uncapped.svg.includes(asPainted(LONG_SIGNATURE)), 'without the caps the 105-character declaration IS painted');
+  const cappedNode = capped.layout.nodes.find((node) => node.id === capped.aliasOf.get(NODE_SIZE_ENTITIES[0].id));
+  const uncappedNode = uncapped.layout.nodes.find((node) => node.id === uncapped.aliasOf.get(NODE_SIZE_ENTITIES[0].id));
+  assert.ok(cappedNode !== undefined && uncappedNode !== undefined);
+  assert.ok(
+    uncappedNode.width >= cappedNode.width * 2,
+    `the uncapped box must be visibly wider (capped ${cappedNode.width}, uncapped ${uncappedNode.width})`,
+  );
 });
