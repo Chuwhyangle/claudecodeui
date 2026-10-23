@@ -32,10 +32,10 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-locator.test.ts` exit 0——注入的环境 / PATH / 文件系统桩下：设了 `QUAY_FLEET_BIN` 用它；未设时用 PATH 命中；PATH 无命中时用 `~/.quay-fleet/bin/quay-fleet`；三者皆无返回 `missing`。
-- [ ] AC2: 同一测试文件——握手桩返回兼容 contracts ⇒ `ok`；`wallUri` 为 `v1` ⇒ `incompatible` 且 reason 点名 `wallUri`；`--version` 以 unknown command 失败 ⇒ `no-handshake`；超时 ⇒ `missing` 以外的独立 reason，不抛出。
-- [ ] AC3: `git grep -n "process.env.QUAY_FLEET_BIN\|process.env\[QUAY_FLEET_BIN_ENV\]" -- server ':!server/modules/quay/quay-fleet-locator.ts' ':!**/tests/**'` 无命中（只剩定位函数一处读取）。
-- [ ] AC4: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-project-id.test.ts` 与 `server/modules/quay/tests/quay-uri-resolve.test.ts` 各自 exit 0（既有用例不弱化）；`npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-locator.test.ts` exit 0——注入的环境 / PATH / 文件系统桩下：设了 `QUAY_FLEET_BIN` 用它；未设时用 PATH 命中；PATH 无命中时用 `~/.quay-fleet/bin/quay-fleet`；三者皆无返回 `missing`。
+- [x] AC2: 同一测试文件——握手桩返回兼容 contracts ⇒ `ok`；`wallUri` 为 `v1` ⇒ `incompatible` 且 reason 点名 `wallUri`；`--version` 以 unknown command 失败 ⇒ `no-handshake`；超时 ⇒ `missing` 以外的独立 reason，不抛出。
+- [x] AC3: `git grep -n "process.env.QUAY_FLEET_BIN\|process.env\[QUAY_FLEET_BIN_ENV\]" -- server ':!server/modules/quay/quay-fleet-locator.ts' ':!**/tests/**'` 无命中（只剩定位函数一处读取）。
+- [x] AC4: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-fleet-project-id.test.ts` 与 `server/modules/quay/tests/quay-uri-resolve.test.ts` 各自 exit 0（既有用例不弱化）；`npm run typecheck` 通过。
 
 ## DoD
 
@@ -53,6 +53,10 @@ depends_on:
 - server/modules/quay/quay.service.ts
 - server/modules/quay/tests/quay-fleet-project-id.test.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
+- server/shared/types.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
+- src/shared/types.ts
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/quay/QuayPanel.tsx
 - tasks/quay-fleet-cli-locator-and-handshake.md
