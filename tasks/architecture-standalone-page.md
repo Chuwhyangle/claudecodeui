@@ -33,11 +33,11 @@ depends_on:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/architectureDeepLink.test.ts` exit 0：新增文件——参数解析与生成互逆；非法值被忽略；未知参数被忽略；`entity` 含特殊字符时正确编码；同输入同输出
-- [ ] `npx vitest run src/modules/architecture/tests/standalonePage.test.tsx` exit 0：新增文件——路由渲染无侧栏的面板；深链参数决定首次状态；`storage` 事件触发后 1 秒内画面与 Adjusted 计数更新；发回会话在有确认时不复制、1.5 秒无确认时回退复制并提示；"Open in new tab" 调用 `window.open` 的参数含当前视图的深链
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：十个 locale 的新增文案齐全
-- [ ] `npx playwright test e2e/architecture-standalone.spec.ts` exit 0（新增文件，在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）：同一浏览器上下文开两个页面（主页面与新开的独立页）——独立页画布宿主矩形等于视口、无侧栏；在独立页置顶一个实体，主页面 Adjusted 计数 1 秒内变为 1；在独立页选中实体并点「Put in chat input」，主页面输入框出现该文本且切到 Chat；关闭主页面后再点，剪贴板得到该文本；测试结束前清空输入框草稿并撤销置顶；控制臂：断开 `BroadcastChannel` 时输入框读数变红
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/architectureDeepLink.test.ts` exit 0：新增文件——参数解析与生成互逆；非法值被忽略；未知参数被忽略；`entity` 含特殊字符时正确编码；同输入同输出
+- [x] `npx vitest run src/modules/architecture/tests/standalonePage.test.tsx` exit 0：新增文件——路由渲染无侧栏的面板；深链参数决定首次状态；`storage` 事件触发后 1 秒内画面与 Adjusted 计数更新；发回会话在有确认时不复制、1.5 秒无确认时回退复制并提示；"Open in new tab" 调用 `window.open` 的参数含当前视图的深链
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：十个 locale 的新增文案齐全
+- [x] `npx playwright test e2e/architecture-standalone.spec.ts` exit 0（新增文件，在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）：同一浏览器上下文开两个页面（主页面与新开的独立页）——独立页画布宿主矩形等于视口、无侧栏；在独立页置顶一个实体，主页面 Adjusted 计数 1 秒内变为 1；在独立页选中实体并点「Put in chat input」，主页面输入框出现该文本且切到 Chat；关闭主页面后再点，剪贴板得到该文本；测试结束前清空输入框草稿并撤销置顶；控制臂：断开 `BroadcastChannel` 时输入框读数变红
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/` exit 0
 
 ## DoD
 
@@ -46,11 +46,14 @@ depends_on:
 ## Touches
 
 - src/App.tsx
+- src/modules/architecture/architectureChatBridge.ts
 - src/modules/architecture/architectureDeepLink.ts
 - src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/architecture/index.ts
 - src/modules/architecture/tests/architectureDeepLink.test.ts
 - src/modules/architecture/tests/standalonePage.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
+- src/modules/project-workspace/WorkspaceMain.tsx
 - e2e/architecture-standalone.spec.ts
 - playwright.config.ts
 - src/modules/i18n/locales/de/common.json
