@@ -1,5 +1,7 @@
 import type { LayoutEngine } from '@yalehwang/plantuml-js/elk';
 
+import type { LayoutOrientation } from '@/modules/architecture/layoutOrientation';
+
 /**
  * The container-aspect layout hint for the architecture diagram.
  *
@@ -34,6 +36,13 @@ export type ArchitectureLayoutEngine = LayoutEngine;
 export type ArchitectureLayoutEngineOptions = {
   /** Target canvas width/height ratio (`elk.aspectRatio`), e.g. 16/9 for a desktop panel. */
   readonly aspectRatio?: number;
+  /**
+   * The layered layout's direction (`elk.direction`), when the orientation
+   * policy asked for a horizontal drawing. Omitted means the package's own
+   * default (top-to-bottom), so an unchanged caller constructs the same engine
+   * it always did.
+   */
+  readonly elk?: Record<string, string>;
 };
 
 /**
@@ -110,7 +119,7 @@ export function shouldRelayoutForAspect(
   return Math.abs(clampAspectRatio(measured) - base) / base > ASPECT_RELAYOUT_THRESHOLD;
 }
 
-/** What the factory needs: the ratio to apply (null = no hint) and the engine class to build. */
+/** What the factory needs: the ratio to apply (null = no hint), the direction, and the engine class. */
 export type CreateLayoutEngineOptions = {
   /**
    * The container's width/height, or `null` when nothing measured it (a
@@ -119,6 +128,13 @@ export type CreateLayoutEngineOptions = {
    * proportions instead of a guess.
    */
   readonly aspectRatio: number | null;
+  /**
+   * The layered direction the orientation policy chose. Omitted (or `DOWN`)
+   * leaves the package's own default in force; `RIGHT` is passed as the raw
+   * `elk.direction` option, which the package injects into the root graph and
+   * every package container.
+   */
+  readonly direction?: LayoutOrientation;
   /** The engine class to construct; see {@link ArchitectureLayoutEngineClass}. */
   readonly Engine: ArchitectureLayoutEngineClass;
 };
@@ -126,18 +142,32 @@ export type CreateLayoutEngineOptions = {
 /**
  * Build the layout engine the renderer is given. THE single construction point
  * for the architecture diagram: `PlantUmlGraph` never constructs an engine
- * itself, so the ratio is passed through this one function.
+ * itself, so the ratio and the direction are passed through this one function.
  *
- * Only `aspectRatio` is set. The local 0.2.x patches — the `wrapping.strategy`
- * raw option and the leaf-layer `COFFMAN_GRAHAM` bound — were measured on
- * 0.3.0 and removed: `aspectRatio` now folds flat overviews and nested
- * hierarchies on its own, and neither patch changed a single reading (see the
- * task's implementation record).
+ * Only `aspectRatio` and the raw `elk.direction` option are set (the latter
+ * only when the orientation policy turned the drawing). The local 0.2.x
+ * patches — the `wrapping.strategy` raw option and the leaf-layer
+ * `COFFMAN_GRAHAM` bound — were measured on 0.3.0 and removed: `aspectRatio`
+ * now folds flat overviews and nested hierarchies on its own, and neither
+ * patch changed a single reading (see the task's implementation record).
  */
 export function createLayoutEngine({
   aspectRatio,
+  direction,
   Engine,
 }: CreateLayoutEngineOptions): ArchitectureLayoutEngine {
-  if (aspectRatio === null) return new Engine();
-  return new Engine({ aspectRatio: clampAspectRatio(aspectRatio) });
+  const horizontal = direction === 'RIGHT';
+  if (!horizontal) {
+    // No measurement: the package's own defaults, with NO argument, so its
+    // aspectRatio default (1.6) applies and nothing is overridden.
+    if (aspectRatio === null) return new Engine();
+    return new Engine({ aspectRatio: clampAspectRatio(aspectRatio) });
+  }
+  return new Engine({
+    ...(aspectRatio === null ? {} : { aspectRatio: clampAspectRatio(aspectRatio) }),
+    // The raw escape hatch: `elk.direction` is what turns a layered layout from
+    // top-to-bottom into left-to-right. It stays a raw option because the
+    // package has no named `direction` knob.
+    elk: { 'elk.direction': 'RIGHT' },
+  });
 }

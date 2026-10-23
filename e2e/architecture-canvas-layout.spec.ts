@@ -10,6 +10,7 @@ import {
   ARCHITECTURE_FIXTURE_WORKSPACE,
   ARCHITECTURE_FIXTURE_WORKSPACE_CUI,
   ARCHITECTURE_FIXTURE_WORKSPACE_NODE_SIZE,
+  ARCHITECTURE_FIXTURE_WORKSPACE_ORIENTATION,
   NODE_SIZE_ENTITIES,
   nodeSizeMemberSignature,
 
@@ -1799,6 +1800,13 @@ async function openSignedInPage(
      * injected box that only imitates it.
      */
     memberLimitsOff?: boolean;
+    /**
+     * Draw with the DOWNWARD layout only. This is the DEV-only lever the
+     * orientation control arm pulls (`forcedLayoutOrientation` in
+     * PlantUmlGraph.tsx), so the same reading is taken on the state the
+     * direction choice replaces rather than on an injected transform.
+     */
+    forceDownLayout?: boolean;
   },
 ): Promise<{ context: BrowserContext; page: Page }> {
   const dataDir = process.env.QUAY_E2E_DATA_DIR;
@@ -1821,6 +1829,11 @@ async function openSignedInPage(
   if (form.memberLimitsOff === true) {
     await context.addInitScript(() => {
       window.localStorage.setItem('architecture-member-limits', 'off');
+    });
+  }
+  if (form.forceDownLayout === true) {
+    await context.addInitScript(() => {
+      window.localStorage.setItem('architecture-layout-orientation', 'down');
     });
   }
   const page = await context.newPage();
@@ -2610,6 +2623,10 @@ let cuiFixture: ArchitectureFixtureReading | null = null;
 // whose boxes can be widened by member text alone.
 let nodeSizeSessionId = '';
 let nodeSizeFixture: ArchitectureFixtureReading | null = null;
+// The two-entity chain whose DOWNWARD layout is a narrow column: the fixture
+// the orientation criterion turns sideways on a desktop canvas.
+let orientationSessionId = '';
+let orientationFixture: ArchitectureFixtureReading | null = null;
 
 // The two render-regression fixtures: relations routed outside the frames, and
 // a class whose payload interleaves fields and methods.
@@ -2642,6 +2659,8 @@ test.beforeAll(async () => {
   cuiFixture = writeArchitectureFixture(cuiWorkspace, { variant: 'claudecodeui' });
   const nodeSizeWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_NODE_SIZE);
   nodeSizeFixture = writeArchitectureFixture(nodeSizeWorkspace, { variant: 'node-size' });
+  const orientationWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_ORIENTATION);
+  orientationFixture = writeArchitectureFixture(orientationWorkspace, { variant: 'orientation-chain' });
 
   const perimeterWorkspace = path.join(fixtureHome, ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER);
   perimeterFixture = writeArchitectureFixture(perimeterWorkspace, { variant: 'outer-perimeter' });
@@ -2679,6 +2698,15 @@ test.beforeAll(async () => {
     'Please review the frame processor and its ledger. '
     + `Start at ${nodeSizeFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
   nodeSizeSessionId = await armScenario(api, nodeSizeWorkspace, nodeSizeUserText, nodeSizeFixture.seedIdentifiers[0]);
+  const orientationUserText =
+    'Please review the dependency chain between the service and its ledger. '
+    + `Start at ${orientationFixture.seedIdentifiers.map((name) => `\`${name}\``).join(', ')}.`;
+  orientationSessionId = await armScenario(
+    api,
+    orientationWorkspace,
+    orientationUserText,
+    orientationFixture.seedIdentifiers[0],
+  );
 
   const perimeterUserText =
     'Please review the layout budget and the readout numbers. '
@@ -2721,6 +2749,9 @@ test.beforeAll(async () => {
   console.log(`[architecture-layout] nodeSize.entities=${nodeSizeFixture.entityTotal} variant=${nodeSizeFixture.variant}`);
   console.log(`[architecture-layout] nodeSize.workspace=${nodeSizeWorkspace}`);
   console.log(`[architecture-layout] nodeSize.session=${nodeSizeSessionId}`);
+  console.log(`[architecture-layout] orientation.entities=${orientationFixture.entityTotal} variant=${orientationFixture.variant}`);
+  console.log(`[architecture-layout] orientation.workspace=${orientationWorkspace}`);
+  console.log(`[architecture-layout] orientation.session=${orientationSessionId}`);
 
   console.log(`[architecture-layout] perimeter.entities=${perimeterFixture.entityTotal} variant=${perimeterFixture.variant}`);
   console.log(`[architecture-layout] perimeter.workspace=${perimeterWorkspace}`);
@@ -6211,5 +6242,251 @@ test('control arm — each restored chrome defect turns its own reading red', as
     ).toBe(overlay.canvasTop);
   } finally {
     await context.close();
+  }
+});
+
+
+/* ── the layout-orientation criterion: the drawing uses the canvas' shape ─── */
+
+/**
+ * How much of the canvas the fitted drawing's own rect must cover.
+ *
+ * The drawing is a two-entity chain; laid out downward its natural shape is a
+ * narrow column, so a wide canvas can only use one axis (measured 0.31 on the
+ * PC viewport). Turned RIGHT it is a wide row that fills both (measured 0.62).
+ * The floor sits between the two, so the control arm has a real gap to red on.
+ */
+const DRAWING_FILL_FLOOR = 0.6;
+
+/** What one state of the canvas reports about the drawing's area. */
+type AreaFillReading = {
+  viewport: { width: number; height: number };
+  canvas: { width: number; height: number } | null;
+  /** The drawn SVG's box, clipped to the canvas, as a fraction of canvas area. */
+  fill: number | null;
+  /** The same fraction before clipping, for a red that names a cropped drawing. */
+  fillUnclipped: number | null;
+  natural: { width: number; height: number } | null;
+  zoom: number | null;
+  /** The direction the layout readout states. */
+  direction: string | null;
+  /** Why the policy chose it. */
+  reason: string | null;
+};
+
+/**
+ * Read the drawing's painted area against the canvas it is painted in.
+ *
+ * THE SAME FUNCTION IS USED BY BOTH ARMS. The main arm reads a drawing the
+ * policy is free to turn; the control arm forces DOWN and reads the state the
+ * feature replaces. Only the page's state differs between them.
+ *
+ * The SVG's bounding box is the drawing's painted extent (the renderer sizes
+ * the element to its viewBox). It is clipped to the canvas so a drawing zoomed
+ * past the panel is measured by what is actually on screen.
+ */
+const readDrawingAreaFill = (page: Page): Promise<AreaFillReading> =>
+  page.evaluate((sel) => {
+    const rectOf = (element: Element | null): DOMRect | null => (
+      element === null ? null : element.getBoundingClientRect()
+    );
+    const canvas = rectOf(document.querySelector(sel.canvas));
+    const host = document.querySelector(sel.host);
+    const svg = rectOf(host?.querySelector('svg') ?? null);
+    const root = document.querySelector(sel.graphRoot);
+    const viewBox = (host?.querySelector('svg')?.getAttribute('viewBox') ?? '').trim().split(/[\s,]+/).map(Number);
+    const clip = (a: DOMRect, b: DOMRect): { width: number; height: number } => ({
+      width: Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)),
+      height: Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)),
+    });
+    const area = (r: DOMRect): number => r.width * r.height;
+    const clipped = canvas !== null && svg !== null ? clip(svg, canvas) : null;
+    const zoomRaw = root?.getAttribute('data-architecture-zoom-scale') ?? null;
+    const zoom = zoomRaw === null ? null : Number(zoomRaw);
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      canvas: canvas === null ? null : { width: Math.round(canvas.width), height: Math.round(canvas.height) },
+      fill: canvas !== null && svg !== null && area(canvas) > 0
+        ? Number(((clipped!.width * clipped!.height) / area(canvas)).toFixed(3))
+        : null,
+      fillUnclipped: canvas !== null && svg !== null && area(canvas) > 0
+        ? Number((area(svg) / area(canvas)).toFixed(3))
+        : null,
+      natural: viewBox.length === 4 && viewBox.every(Number.isFinite)
+        ? { width: Math.round(viewBox[2]), height: Math.round(viewBox[3]) }
+        : null,
+      zoom: zoom !== null && Number.isFinite(zoom) ? zoom : null,
+      direction: root?.getAttribute('data-architecture-layout-direction') ?? null,
+      reason: root?.getAttribute('data-architecture-layout-direction-reason') ?? null,
+    };
+  }, SEL);
+
+/** Print one reading so a green run also records the numbers it measured. */
+function printAreaFill(label: string, reading: AreaFillReading): void {
+  console.log(
+    `[architecture-layout] ${label}.fill=${String(reading.fill)} `
+      + `(unclipped ${String(reading.fillUnclipped)}) canvas=${JSON.stringify(reading.canvas)} `
+      + `natural=${JSON.stringify(reading.natural)} zoom=${String(reading.zoom)} `
+      + `direction=${String(reading.direction)} reason=${String(reading.reason)}`,
+  );
+}
+
+/** Open the ARCHITECTURE tab on the entity (class) drawing this criterion measures. */
+async function openOrientationDrawing(page: Page, sessionId: string): Promise<void> {
+  await openArchitectureTab(page, sessionId);
+  await page.locator('[data-architecture-view-option="entity"]').first().click();
+  await waitForDrawing(page);
+  // The class drawing re-fits once the corner chrome has a size, the same beat
+  // the file view needs.
+  await settle(page, 1200);
+}
+
+/**
+ * Reading: a two-entity dependency chain drawn on a desktop canvas uses the
+ * canvas' shape.
+ *
+ * The fixed member widths make the downward drawing a 360×592 column; the
+ * orientation policy lays it out RIGHT once, the fit uses both axes, and the
+ * readout states the choice. On the phone the canvas is not "clearly wider"
+ * than the column, so the same policy keeps DOWN and the column fills the
+ * portrait canvas (requirement 4: a phone never flips the drawing).
+ */
+test('main arm — the two-entity chain fills the PC and phone canvases (1440x765, 390x844)', async ({ browser }) => {
+  const pc = await openSignedInPage(browser, baseURL, token, { viewport: VIEWPORT_PC, touch: false });
+  try {
+    await openOrientationDrawing(pc.page, orientationSessionId);
+    const reading = await readDrawingAreaFill(pc.page);
+    printAreaFill('orientation.pc', reading);
+    await shot(pc.page, 'orientation-pc');
+    expect(reading.canvas, 'the PC canvas must be measurable').not.toBeNull();
+    expect(reading.direction, 'the PC drawing must be laid out RIGHT on a wide canvas').toBe('RIGHT');
+    expect(reading.reason).toBe('horizontal-fit-larger');
+    expect(
+      reading.fill,
+      `the PC drawing must fill ≥${DRAWING_FILL_FLOOR} of the canvas — measured ${String(reading.fill)} `
+        + `on canvas ${JSON.stringify(reading.canvas)} with natural ${JSON.stringify(reading.natural)}`,
+    ).toBeGreaterThanOrEqual(DRAWING_FILL_FLOOR);
+  } finally {
+    await pc.context.close();
+  }
+
+  const phone = await openSignedInPage(browser, baseURL, token, { viewport: VIEWPORT_PHONE, touch: true });
+  try {
+    await openOrientationDrawing(phone.page, orientationSessionId);
+    const reading = await readDrawingAreaFill(phone.page);
+    printAreaFill('orientation.phone', reading);
+    await shot(phone.page, 'orientation-phone');
+    expect(reading.canvas, 'the phone canvas must be measurable').not.toBeNull();
+    expect(reading.direction, 'a portrait phone canvas must keep the downward layout').toBe('DOWN');
+    expect(reading.reason).toBe('canvas-not-wide');
+    expect(
+      reading.fill,
+      `the phone drawing must fill ≥${DRAWING_FILL_FLOOR} of the canvas — measured ${String(reading.fill)} `
+        + `on canvas ${JSON.stringify(reading.canvas)} with natural ${JSON.stringify(reading.natural)}`,
+    ).toBeGreaterThanOrEqual(DRAWING_FILL_FLOOR);
+  } finally {
+    await phone.context.close();
+  }
+});
+
+/**
+ * Control arm: the SAME fixture and the SAME reading, with the direction
+ * policy's DEV lever forcing DOWN, must land on the failing side; removing the
+ * lever and reloading must restore the passing side.
+ *
+ * This is the arm that proves the fill reading can go red on the state the
+ * feature replaces — a green main arm alone would only prove the fixture.
+ */
+test('control arm — forcing the downward layout reds the PC fill reading', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+    forceDownLayout: true,
+  });
+  try {
+    await openOrientationDrawing(page, orientationSessionId);
+    const forced = await readDrawingAreaFill(page);
+    printAreaFill('orientation.control.down', forced);
+    await shot(page, 'orientation-control-down');
+    expect(forced.direction, 'the control arm must actually render the downward layout').toBe('DOWN');
+    expect(forced.reason, 'the readout must name the control lever').toBe('forced-down');
+    expect(
+      forced.fill,
+      `the downward-only drawing must fall below ${DRAWING_FILL_FLOOR} — measured ${String(forced.fill)} `
+        + `on canvas ${JSON.stringify(forced.canvas)} with natural ${JSON.stringify(forced.natural)}`,
+    ).toBeLessThan(DRAWING_FILL_FLOOR);
+
+  } finally {
+    await context.close();
+  }
+
+  // Restore: the lever is an init script, so the passing side is a fresh page
+  // WITHOUT it. Same fixture, same reading function, only the lever differs.
+  const restoredContext = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openOrientationDrawing(restoredContext.page, orientationSessionId);
+    const restored = await readDrawingAreaFill(restoredContext.page);
+    printAreaFill('orientation.control.restored', restored);
+    await shot(restoredContext.page, 'orientation-control-restored');
+    expect(restored.direction, 'without the lever the policy must choose RIGHT again').toBe('RIGHT');
+    expect(
+      restored.fill,
+      `the restored drawing must clear ${DRAWING_FILL_FLOOR} — measured ${String(restored.fill)}`,
+    ).toBeGreaterThanOrEqual(DRAWING_FILL_FLOOR);
+  } finally {
+    await restoredContext.context.close();
+  }
+});
+
+/**
+ * The DoD's two extra looks, through the same reading.
+ *
+ *  · a WIDER desktop viewport (1920×900): the drawing is still turned RIGHT —
+ *    the direction decision follows the canvas/drawing ratio, not a fixed
+ *    breakpoint;
+ *  · a LARGE graph (the function fixture after "Show all", 396 entities): the
+ *    second layout is skipped by the entity budget, the drawing stays DOWN, and
+ *    the readout says why. That is the "no slowdown on a large graph" check:
+ *    the policy's cost is one layout there, not two.
+ */
+test('main arm — the orientation holds on a wider viewport and large graphs keep DOWN (1920x900)', async ({ browser }) => {
+  const wide = await openSignedInPage(browser, baseURL, token, {
+    viewport: { width: 1920, height: 900 },
+    touch: false,
+  });
+  try {
+    await openOrientationDrawing(wide.page, orientationSessionId);
+    const reading = await readDrawingAreaFill(wide.page);
+    printAreaFill('orientation.1920x900', reading);
+    await shot(wide.page, 'orientation-1920x900');
+    expect(reading.direction, 'a wider canvas keeps choosing RIGHT').toBe('RIGHT');
+  } finally {
+    await wide.context.close();
+  }
+
+  // The function fixture is the >150-entity drawing: 384 functions hidden until
+  // "Show all" widens the entity axis.
+  const large = await openSignedInPage(browser, baseURL, token, { viewport: VIEWPORT_PC, touch: false });
+  try {
+    await openArchitectureTab(large.page, functionsSessionId);
+    await openEntityDrawing(large.page);
+    await large.page.locator(SEL.filterShowAll).first().click();
+    await large.page.waitForFunction(
+      (sel) => Number(document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-visible-nodes') ?? '0') > 150,
+      SEL,
+      { timeout: 120_000 },
+    );
+    await settle(large.page, 1_200);
+    const reading = await readDrawingAreaFill(large.page);
+    printAreaFill('orientation.large', reading);
+    await shot(large.page, 'orientation-large-graph');
+    expect(reading.direction, 'a large graph keeps the downward layout').toBe('DOWN');
+    const reason = await large.page.locator(SEL.graphRoot).first().getAttribute('data-architecture-layout-direction-reason');
+    expect(reason, 'the entity budget must be the stated reason — no second layout ran').toBe('entity-budget-exceeded');
+  } finally {
+    await large.context.close();
   }
 });

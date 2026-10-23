@@ -54,6 +54,7 @@ import {
   nodeSizeMemberSignature,
 } from '@/../e2e/support/architectureFixture';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
+import { ORIENTATION_REASON } from '@/modules/architecture/layoutOrientation';
 import { placeHoverHint } from '@/modules/architecture/hoverHintPlacement';
 
 /**
@@ -6393,4 +6394,40 @@ test('the Adjusted popover header offers the same Undo once the Toast is gone', 
     'with nothing left to undo, the header entry disappears',
   ));
   assert.equal(host.querySelector('[data-architecture-pinned="true"]'), null, 'the pinned marker is gone');
+});
+
+/**
+ * The layout readout, read at the same component seam.
+ *
+ * The direction is a LAYOUT input, and the canvas states which one it drew and
+ * why. Both readings that describe the drawing — the graph's layout row
+ * (`data-architecture-layout-*`) and the zoom readout in the header — must
+ * carry the same direction and reason, so a reader never sees two answers.
+ */
+test('the layout and zoom readouts state the chosen direction and its reason', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(NODE_SIZE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id]'), 'the fixture must draw its classes'));
+
+  await waitFor(() => {
+    assert.ok(
+      graphRoot().getAttribute('data-architecture-layout-direction') !== null,
+      'the layout readout must state the selected direction',
+    );
+  });
+  const root = graphRoot();
+  const direction = root.getAttribute('data-architecture-layout-direction');
+  const reason = root.getAttribute('data-architecture-layout-direction-reason');
+  assert.ok(direction === 'DOWN' || direction === 'RIGHT', `unknown direction ${String(direction)}`);
+  assert.ok(
+    Object.values(ORIENTATION_REASON).includes(reason as (typeof ORIENTATION_REASON)[keyof typeof ORIENTATION_REASON]),
+    `the readout must carry one of the policy's reasons; got ${String(reason)}`,
+  );
+
+  // The zoom readout is the same statement about the same drawing.
+  const zoomReadout = document.querySelector('[data-architecture-zoom-level]');
+  assert.ok(zoomReadout !== null, 'the zoom readout must be drawn');
+  assert.equal(zoomReadout.getAttribute('data-architecture-layout-direction'), direction);
+  assert.equal(zoomReadout.getAttribute('data-architecture-layout-direction-reason'), reason);
 });

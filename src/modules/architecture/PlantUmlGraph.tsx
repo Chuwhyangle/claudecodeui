@@ -25,6 +25,17 @@ import {
   shouldRelayoutForAspect,
   type ArchitectureLayoutEngineClass,
 } from '@/modules/architecture/elkAspectEngine';
+import {
+  chooseLayoutOrientation,
+  createOrientationCache,
+  graphFingerprint,
+  orientationCacheKey,
+  shouldAttemptDualLayout,
+  ORIENTATION_REASON,
+  type LayoutOrientation,
+  type OrientationDecision,
+  type OrientationSize,
+} from '@/modules/architecture/layoutOrientation';
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import {
   solveSemanticZoom,
@@ -170,6 +181,38 @@ function drawnMemberLimits(): { memberMaxChars?: number } {
     }
   }
   return memberDisplayLimits();
+}
+
+/**
+ * The DEV-only lever the orientation criterion's control arm pulls: forcing the
+ * DOWNWARD layout is the only way to measure what the canvas looks like WITHOUT
+ * the direction choice, in the same page and through the same reading.
+ *
+ * DEV-gated exactly like the member-limit lever above — a production build does
+ * not contain this branch, so no reader can turn the feature off.
+ */
+const LAYOUT_ORIENTATION_STORAGE_KEY = 'architecture-layout-orientation';
+
+/** Whether this build's control arm asked for the downward-only layout. */
+function forcedLayoutOrientation(): LayoutOrientation | null {
+  if (import.meta.env.DEV) {
+    try {
+      if (window.localStorage.getItem(LAYOUT_ORIENTATION_STORAGE_KEY) === 'down') return 'DOWN';
+    } catch {
+      // Private mode: the store is unreadable, so the shipped policy applies.
+    }
+  }
+  return null;
+}
+
+/** The natural size a finished layout reports, or `null` when it is unusable. */
+function layoutSizeOf(detailed: { readonly layout: unknown }): OrientationSize | null {
+  const layout = detailed.layout as { readonly width?: unknown; readonly height?: unknown } | null;
+  const width = Number(layout?.width);
+  const height = Number(layout?.height);
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+    ? { width, height }
+    : null;
 }
 
 /**
@@ -1485,6 +1528,15 @@ export function PlantUmlGraph({
   // default). Read by the resize observer to decide whether the container has
   // moved far enough to earn a re-layout.
   const drawnAspectRef = useRef<number | null>(null);
+  // The direction the drawing on screen was laid out in, and the policy's reason
+  // for it. Published as the layout readout (`data-architecture-layout-direction`
+  // and its `-reason` sibling); `null` before the first drawing lands.
+  const [layoutDirection, setLayoutDirection] = useState<LayoutOrientation | null>(null);
+  const [layoutDirectionReason, setLayoutDirectionReason] = useState<string | null>(null);
+  // One direction-decision cache per canvas. A graph re-laid out for the same
+  // canvas band reuses the decision instead of paying for the comparison layout
+  // a second time (see `layoutOrientation.ts`).
+  const orientationCacheRef = useRef(createOrientationCache());
   // The drawing the LOD level belongs to, so an aspect re-layout of the SAME
   // view carries the current level and focus over instead of re-deriving them.
   const drawnKeyRef = useRef<string | null>(null);
@@ -1591,7 +1643,6 @@ export function PlantUmlGraph({
         // engine is CONSTRUCTED with it so ELK draws for this container instead
         // of for its own default proportions.
         const drawnAspect = layoutAspect ?? measureLayoutAspect(host);
-        const engine = createLayoutEngine({ aspectRatio: drawnAspect, Engine: ElkLayoutEngine });
         // The panel is the adaptive consumer for the FILE graph: the bridge
         // collapses its directory layers itself (the renderer's
         // `groupByPathPrefix` would count a file name as a layer, which is the
@@ -1629,32 +1680,131 @@ export function PlantUmlGraph({
             return;
           }
         }
-        const renderStartedAt = performance.now();
-        const detailed = await renderWithMemberDetail(
-          renderDetailed,
-          // The document the reader copies uses real stereotypes
-          // (`class "X" as n0 <<function>>`); the bundled parser needs that
-          // token before the alias, so the DRAWING gets the parser-safe
-          // spelling. `standardiseDrawnStereotypes` reverses it when the drawn
-          // model is serialized for the text page.
-          parserSafePlantUml(diagram.puml),
-          {
-            ...rendererOptionsFor(view, diagram, engine),
-            // The box is sized from the text the renderer will PAINT: a member
-            // line longer than MEMBER_MAX_CHARS is drawn with a trailing `…`,
-            // BEFORE layout, so the width follows what the screen shows. Only
-            // the LINES are capped here — the row cap (`MEMBER_MAX_ROWS`) is a
-            // drawing rule applied after render, so no folded row ever enters
-            // the model. `raw` keeps the full declaration for the Text page,
-            // copy and Inspector.
-            ...drawnMemberLimits(),
-          },
-        );
-        const elapsedMs = Math.round(performance.now() - renderStartedAt);
+
+        /**
+         * One complete layout + render in one direction. The engine comes from
+         * the single factory either way, so `direction` is a LAYOUT input (an
+         * `elk.direction` option) and never a post-render transform.
+         */
+        const renderOnce = (direction?: LayoutOrientation): ReturnType<typeof renderWithMemberDetail> => {
+          const engine = createLayoutEngine({
+            aspectRatio: drawnAspect,
+            ...(direction === undefined ? {} : { direction }),
+            Engine: ElkLayoutEngine,
+          });
+          return renderWithMemberDetail(
+            renderDetailed,
+            // The document the reader copies uses real stereotypes
+            // (`class "X" as n0 <<function>>`); the bundled parser needs that
+            // token before the alias, so the DRAWING gets the parser-safe
+            // spelling. `standardiseDrawnStereotypes` reverses it when the drawn
+            // model is serialized for the text page.
+            parserSafePlantUml(diagram.puml),
+            {
+              ...rendererOptionsFor(view, diagram, engine),
+              // The box is sized from the text the renderer will PAINT: a member
+              // line longer than MEMBER_MAX_CHARS is drawn with a trailing `…`,
+              // BEFORE layout, so the width follows what the screen shows. Only
+              // the LINES are capped here — the row cap (`MEMBER_MAX_ROWS`) is a
+              // drawing rule applied after render, so no folded row ever enters
+              // the model. `raw` keeps the full declaration for the Text page,
+              // copy and Inspector.
+              ...drawnMemberLimits(),
+            },
+          );
+        };
+
+        // The direction policy (see `layoutOrientation.ts`): draw the graph
+        // downward, and — only for a small graph on a canvas clearly wider than
+        // that drawing — draw it once more to the RIGHT, keeping whichever the
+        // canvas can show larger. The decision is cached per graph + canvas
+        // band, so a shape-driven re-layout reuses it instead of laying the
+        // graph out twice again.
+        const canvasBox = measureViewportSize(host);
+        const cacheKey = canvasBox === null
+          ? null
+          : orientationCacheKey(graphFingerprint(graph, viewKey, idShape), canvasBox);
+        const forced = forcedLayoutOrientation();
+        // A forced reading is a control arm, not a cached result: it must not be
+        // shadowed by a RIGHT decision the same canvas earned a moment ago.
+        const cached = forced === null && cacheKey !== null
+          ? orientationCacheRef.current.get(cacheKey)
+          : null;
+
+        let detailed: Awaited<ReturnType<typeof renderWithMemberDetail>>;
+        let elapsedMs = 0;
+        let orientation: OrientationDecision;
+
+        if (cached !== null) {
+          // Cache hit: this drawing was already evaluated for this canvas band,
+          // so only its chosen direction is drawn — no comparison layout.
+          const cachedStartedAt = performance.now();
+          detailed = await renderOnce(cached.direction === 'DOWN' ? undefined : 'RIGHT');
+          elapsedMs = Math.round(performance.now() - cachedStartedAt);
+          orientation = cached;
+        } else if (forced !== null) {
+          const forcedStartedAt = performance.now();
+          detailed = await renderOnce(undefined);
+          elapsedMs = Math.round(performance.now() - forcedStartedAt);
+          orientation = chooseLayoutOrientation({
+            canvas: canvasBox ?? { width: 0, height: 0 },
+            down: layoutSizeOf(detailed) ?? { width: 0, height: 0 },
+            right: null,
+            entities: layoutNodes,
+            firstLayoutMs: elapsedMs,
+            forceDown: true,
+          });
+        } else {
+          const firstStartedAt = performance.now();
+          const down = await renderOnce(undefined);
+          const firstLayoutMs = Math.round(performance.now() - firstStartedAt);
+          const downSize = layoutSizeOf(down);
+          const eligibility = canvasBox === null || downSize === null
+            ? { attempt: false as const, reason: ORIENTATION_REASON.canvasNotWide }
+            : shouldAttemptDualLayout({
+                canvas: canvasBox,
+                down: downSize,
+                entities: layoutNodes,
+                firstLayoutMs,
+              });
+          if (eligibility.attempt && canvasBox !== null && downSize !== null) {
+            const secondStartedAt = performance.now();
+            const right = await renderOnce('RIGHT');
+            const secondLayoutMs = Math.round(performance.now() - secondStartedAt);
+            if (cancelled) return;
+            orientation = chooseLayoutOrientation({
+              canvas: canvasBox,
+              down: downSize,
+              right: layoutSizeOf(right),
+              entities: layoutNodes,
+              firstLayoutMs,
+            });
+            const turned = orientation.direction === 'RIGHT';
+            detailed = turned ? right : down;
+            elapsedMs = turned ? secondLayoutMs : firstLayoutMs;
+          } else {
+            orientation = chooseLayoutOrientation({
+              canvas: canvasBox ?? { width: 0, height: 0 },
+              down: downSize ?? { width: 0, height: 0 },
+              right: null,
+              entities: layoutNodes,
+              firstLayoutMs,
+            });
+            detailed = down;
+            elapsedMs = firstLayoutMs;
+          }
+          if (cacheKey !== null) orientationCacheRef.current.set(cacheKey, orientation);
+        }
+
         // The next layout of this kind is estimated from this one: the sample is
         // the drawing kind's own, never another kind's.
         layoutSamplesRef.current.set(idShape, { nodes: layoutNodes, ms: elapsedMs });
         if (cancelled) return;
+        // The orientation is part of the layout reading, not a hidden detail:
+        // the canvas states which direction it drew and why, so a reader (and
+        // the criterion's control arm) can tell the two layouts apart.
+        setLayoutDirection(orientation.direction);
+        setLayoutDirectionReason(orientation.reason);
 
         const { svg, model } = detailed;
         // The geometry the renderer used, kept for consumers that would rather
@@ -1902,6 +2052,8 @@ export function PlantUmlGraph({
         host.innerHTML = '';
         setDrawn(null);
         setLayoutMs(null);
+        setLayoutDirection(null);
+        setLayoutDirectionReason(null);
         // The layout ended — badly — so the status that described it must not
         // outlive it; the failure line below is the reader's explanation.
         setLayoutStatusNodes(null);
@@ -3111,7 +3263,15 @@ export function PlantUmlGraph({
 
   /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
   const zoomReadout = (
-    <span data-architecture-zoom-level className="min-w-9 text-center tabular-nums">
+    <span
+      data-architecture-zoom-level
+      // The zoom readout carries the same orientation reading as the layout
+      // row: the scale on screen and the direction that produced it are one
+      // statement about the drawing.
+      data-architecture-layout-direction={layoutDirection ?? undefined}
+      data-architecture-layout-direction-reason={layoutDirectionReason ?? undefined}
+      className="min-w-9 text-center tabular-nums"
+    >
       {Math.round(displayScale * 100)}%
     </span>
   );
@@ -3369,6 +3529,10 @@ export function PlantUmlGraph({
       data-architecture-fold-depth={drawnFit?.foldDepth ?? undefined}
       data-architecture-lod-depth={lodDepth ?? undefined}
       data-architecture-layout-ms={layoutMs ?? undefined}
+      // The layout readout's direction and reason: WHICH orientation the
+      // drawing was laid out in, and why the policy chose it.
+      data-architecture-layout-direction={layoutDirection ?? undefined}
+      data-architecture-layout-direction-reason={layoutDirectionReason ?? undefined}
       data-architecture-readable-mode={readableView?.mode}
       data-architecture-readable-package={readableView?.focusPackageId ?? undefined}
     >

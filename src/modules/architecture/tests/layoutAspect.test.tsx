@@ -19,6 +19,7 @@ import {
   NODE_SIZE_ENTITIES,
   nodeSizeEntityGraph,
   nodeSizeMemberSignature,
+  orientationChainGraph,
 } from '@/../e2e/support/architectureFixture';
 import {
   ASPECT_RELAYOUT_DEBOUNCE_MS,
@@ -39,6 +40,22 @@ import {
   viewBoxAspect,
   viewBoxOf,
 } from '@/modules/architecture/tests/layoutFixtures';
+import {
+  canvasIsWiderThanDrawing,
+  canvasRatioBand,
+  chooseLayoutOrientation,
+  createOrientationCache,
+  fitScaleFor,
+  graphFingerprint,
+  orientationCacheKey,
+  shouldAttemptDualLayout,
+  ORIENTATION_DUAL_MAX_ENTITIES,
+  ORIENTATION_DUAL_MAX_MS,
+  ORIENTATION_FIT_HYSTERESIS,
+  ORIENTATION_RATIO_THRESHOLD,
+  ORIENTATION_REASON,
+  type OrientationSize,
+} from '@/modules/architecture/layoutOrientation';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import type * as SharedApiModule from '@/shared/api';
 
@@ -511,10 +528,11 @@ test('the layout engine is constructed in exactly one factory, through the publi
   );
   assert.match(graphSource, /createLayoutEngine\(\{/, 'the diagram must build its engine through that factory');
 
-  // The engine is built with the package's public constructor option. Exactly
-  // two branches construct it: the unmeasured one and the hinted one.
+  // The engine is built with the package's public constructor option. Three
+  // branches construct it: no measurement, the ratio-only arm, and the turned
+  // (ratio + raw `elk.direction`) arm.
   const constructions = engineSource.match(/new Engine\(/g) ?? [];
-  assert.equal(constructions.length, 2, 'exactly two branches construct an engine');
+  assert.equal(constructions.length, 3, 'exactly three branches construct an engine');
   assert.match(
     engineSource,
     /new Engine\(\{ aspectRatio:/,
@@ -630,4 +648,205 @@ test('a long-signature class is sized by the member text the drawing shows', asy
   );
   assert.ok(!toPlantUml(detailed.model).includes('data-w'), 'the copied document is text, not geometry');
   assert.ok(toPlantUml(detailed.model).includes(LONG_SIGNATURE), 'and it keeps the full declaration');
+});
+
+/* ── the layout-direction policy ──────────────────────────────────────────── */
+
+/** The two sizes every orientation case compares. */
+const PC_CANVAS: OrientationSize = { width: 1151, height: 578 };
+const PHONE_CANVAS: OrientationSize = { width: 390, height: 620 };
+
+/**
+ * Lay the two-entity chain fixture out in one direction, through the SAME
+ * renderer path the component uses (member caps + full detail), and read the
+ * natural size it produced.
+ */
+async function drawOrientationFixture(
+  canvas: OrientationSize,
+  direction?: 'DOWN' | 'RIGHT',
+): Promise<OrientationSize & { readonly svg: string }> {
+  const { renderDetailed, ElkLayoutEngine } = (await import('@yalehwang/plantuml-js/elk')) as unknown as {
+    renderDetailed: (puml: string, options?: unknown) => Promise<{ svg: string }>;
+    ElkLayoutEngine: ArchitectureLayoutEngineClass;
+  };
+  const diagram = archguardToPlantUml(orientationChainGraph() as never);
+  const detailed = await renderDetailed(diagram.puml, {
+    layout: createLayoutEngine({
+      aspectRatio: canvas.width / canvas.height,
+      ...(direction === undefined ? {} : { direction }),
+      Engine: ElkLayoutEngine,
+    }),
+    detail: 'full',
+    ...memberDisplayLimits(),
+  });
+  const parts = (/viewBox="([^"]+)"/.exec(detailed.svg)?.[1] ?? '').trim().split(/[\s,]+/).map(Number);
+  assert.equal(parts.length, 4, 'the fixture must draw a viewBox');
+  return { width: parts[2], height: parts[3], svg: detailed.svg };
+}
+
+test('the engine carries the chosen direction as the raw elk.direction option', () => {
+  const vertical = recordingEngineClass();
+  createLayoutEngine({ aspectRatio: 2, Engine: vertical.Engine });
+  assert.deepEqual(vertical.received[0], { aspectRatio: 2 }, 'an untouched caller keeps ratio-only options');
+
+  const turned = recordingEngineClass();
+  createLayoutEngine({ aspectRatio: 2, direction: 'RIGHT', Engine: turned.Engine });
+  assert.deepEqual(
+    turned.received[0],
+    { aspectRatio: 2, elk: { 'elk.direction': 'RIGHT' } },
+    'the turn is a raw ELK option, injected into the same single constructor',
+  );
+
+  // A direction with no measurement still turns the drawing; the package's own
+  // aspectRatio default stays in force because no ratio key is written.
+  const unmeasuredTurn = recordingEngineClass();
+  createLayoutEngine({ aspectRatio: null, direction: 'RIGHT', Engine: unmeasuredTurn.Engine });
+  assert.deepEqual(unmeasuredTurn.received[0], { elk: { 'elk.direction': 'RIGHT' } });
+});
+
+test('a wide canvas turns the two-entity chain RIGHT and the fit is larger', async () => {
+  const down = await drawOrientationFixture(PC_CANVAS);
+  const right = await drawOrientationFixture(PC_CANVAS, 'RIGHT');
+  // The premise this case discriminates against: down is a narrow column, so
+  // its height is the binding axis on a wide canvas.
+  assert.ok(
+    canvasIsWiderThanDrawing(PC_CANVAS, down),
+    `the fixture must be eligible on a PC canvas: ${JSON.stringify(down)}`,
+  );
+  const decision = chooseLayoutOrientation({
+    canvas: PC_CANVAS,
+    down,
+    right,
+    entities: 2,
+    firstLayoutMs: 12,
+  });
+  assert.equal(decision.direction, 'RIGHT', `expected RIGHT for ${JSON.stringify({ down, right })}`);
+  assert.equal(decision.reason, ORIENTATION_REASON.horizontalLarger);
+  assert.ok(decision.rightFitScale !== null);
+  assert.ok(
+    decision.rightFitScale > (decision.downFitScale ?? 0),
+    `the turned drawing must fit larger: down ${String(decision.downFitScale)} vs right ${String(decision.rightFitScale)}`,
+  );
+});
+
+test('a portrait phone canvas keeps the downward layout', async () => {
+  const down = await drawOrientationFixture(PHONE_CANVAS);
+  assert.ok(
+    !canvasIsWiderThanDrawing(PHONE_CANVAS, down),
+    `a phone canvas must not be "clearly wider" than the drawing: ${JSON.stringify(down)}`,
+  );
+  const right = await drawOrientationFixture(PHONE_CANVAS, 'RIGHT');
+  const decision = chooseLayoutOrientation({
+    canvas: PHONE_CANVAS,
+    down,
+    right,
+    entities: 2,
+    firstLayoutMs: 12,
+  });
+  assert.equal(decision.direction, 'DOWN', 'a portrait canvas must not flip the chain sideways');
+  assert.equal(decision.reason, ORIENTATION_REASON.canvasNotWide);
+});
+
+test('the direction rule is pure: threshold, hysteresis, budgets and determinism', () => {
+  assert.equal(ORIENTATION_RATIO_THRESHOLD, 1.5);
+  assert.equal(ORIENTATION_DUAL_MAX_ENTITIES, 150);
+  assert.equal(ORIENTATION_DUAL_MAX_MS, 600);
+  assert.equal(ORIENTATION_FIT_HYSTERESIS, 0.05);
+
+  // The fit is the scale that puts the drawing in the canvas on both axes.
+  assert.equal(fitScaleFor({ width: 400, height: 200 }, { width: 1000, height: 500 }), 2.5);
+  assert.equal(fitScaleFor({ width: 0, height: 200 }, { width: 1000, height: 500 }), 0);
+  assert.equal(fitScaleFor({ width: 400, height: 200 }, { width: 0, height: 0 }), 0);
+
+  // Canvas aspect ÷ drawing aspect, so the test is orientation-independent.
+  assert.equal(canvasIsWiderThanDrawing({ width: 1000, height: 500 }, { width: 400, height: 400 }), true);
+  assert.equal(canvasIsWiderThanDrawing({ width: 1000, height: 500 }, { width: 400, height: 200 }), false);
+
+  const wide = { width: 1000, height: 500 };
+  // 1.25 vs 1.29: the turned drawing is 3.2% larger — inside the band, keep DOWN.
+  const hysteresis = chooseLayoutOrientation({
+    canvas: wide,
+    down: { width: 400, height: 400 },
+    right: { width: 388, height: 388 },
+    entities: 2,
+    firstLayoutMs: 10,
+  });
+  assert.equal(hysteresis.direction, 'DOWN');
+  assert.equal(hysteresis.reason, ORIENTATION_REASON.withinHysteresis);
+
+  // One entity past the entity budget: no second layout, and the reason says so.
+  const entityBudget = chooseLayoutOrientation({
+    canvas: wide,
+    down: { width: 400, height: 400 },
+    right: null,
+    entities: ORIENTATION_DUAL_MAX_ENTITIES + 1,
+    firstLayoutMs: 10,
+  });
+  assert.equal(entityBudget.direction, 'DOWN');
+  assert.equal(entityBudget.reason, ORIENTATION_REASON.entityBudget);
+  assert.deepEqual(
+    shouldAttemptDualLayout({
+      canvas: wide,
+      down: { width: 400, height: 400 },
+      entities: ORIENTATION_DUAL_MAX_ENTITIES + 1,
+      firstLayoutMs: 10,
+    }),
+    { attempt: false, reason: ORIENTATION_REASON.entityBudget },
+  );
+
+  // A first layout over the duration budget: same answer, its own reason.
+  const timeBudget = chooseLayoutOrientation({
+    canvas: wide,
+    down: { width: 400, height: 400 },
+    right: null,
+    entities: 2,
+    firstLayoutMs: ORIENTATION_DUAL_MAX_MS + 1,
+  });
+  assert.equal(timeBudget.reason, ORIENTATION_REASON.layoutBudget);
+  assert.equal(timeBudget.rightFitScale, null, 'no second layout may run over budget');
+
+  // A control-arm force keeps DOWN and names the lever.
+  const forced = chooseLayoutOrientation({
+    canvas: wide,
+    down: { width: 400, height: 400 },
+    right: { width: 300, height: 300 },
+    entities: 2,
+    firstLayoutMs: 10,
+    forceDown: true,
+  });
+  assert.equal(forced.direction, 'DOWN');
+  assert.equal(forced.reason, ORIENTATION_REASON.forcedDown);
+
+  // Same input, same output — no clocks or module state.
+  const input = { canvas: wide, down: { width: 400, height: 400 }, right: { width: 300, height: 300 }, entities: 2, firstLayoutMs: 10 };
+  assert.deepEqual(chooseLayoutOrientation(input), chooseLayoutOrientation(input));
+});
+
+test('the decision cache answers a hit without running the layout comparison again', () => {
+  const cache = createOrientationCache();
+  let comparisons = 0;
+  const compute = (): ReturnType<typeof chooseLayoutOrientation> => {
+    comparisons += 1;
+    return chooseLayoutOrientation({
+      canvas: PC_CANVAS,
+      down: { width: 360, height: 592 },
+      right: { width: 816, height: 480 },
+      entities: 2,
+      firstLayoutMs: 10,
+    });
+  };
+  const key = orientationCacheKey(graphFingerprint({ nodes: [{ id: 'a' }, { id: 'b' }] }, 'hierarchy', 'scope-prefixed'), PC_CANVAS);
+
+  const first = cache.resolve(key, compute);
+  const second = cache.resolve(key, compute);
+  assert.equal(comparisons, 1, 'a cache hit must not lay the graph out twice again');
+  assert.deepEqual(second, first);
+
+  // The key is graph fingerprint + canvas-ratio BAND: a different drawing or a
+  // different container shape misses.
+  assert.notEqual(
+    key,
+    orientationCacheKey(graphFingerprint({ nodes: [{ id: 'a' }] }, 'hierarchy', 'scope-prefixed'), PC_CANVAS),
+  );
+  assert.equal(canvasRatioBand({ width: 1151, height: 578 }), canvasRatioBand({ width: 1200, height: 600 }));
 });

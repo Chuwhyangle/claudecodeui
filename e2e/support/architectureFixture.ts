@@ -74,11 +74,27 @@ export const ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS = 'architecture-canvas-lay
  */
 export const ARCHITECTURE_FIXTURE_WORKSPACE_SCOPE_HYGIENE = 'architecture-canvas-layout-workspace-scope-hygiene';
 
+/**
+ * The two-entity chain the layout-orientation criterion measures.
+ *
+ * The entities are deliberately ASYMMETRIC — one tall (the server's 20-member
+ * cap), one short — and their member names are exactly 32 characters. That
+ * shape is what makes the two directions differ by a visible margin: laid out
+ * downward the drawing is a narrow column (360×592) whose fit is limited by
+ * height; laid out to the RIGHT it is a wide row (816×480) whose fit uses the
+ * desktop canvas. The files sit at the project ROOT so the drawing has no
+ * package frame, which is the "connected small graph" shape the orientation
+ * policy exists for.
+ */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_ORIENTATION = 'architecture-canvas-layout-workspace-orientation';
+
 /** Which project shape to write. */
 export type ArchitectureFixtureVariant =
   | 'quay-oo'
   | 'claudecodeui'
   | 'node-size'
+  /** Two classes in a dependency chain, shaped so RIGHT beats DOWN on a wide canvas. */
+  | 'orientation-chain'
   | 'outer-perimeter'
   | 'interleaved-members'
   /** 41 classes with 7–25 members each: just past the renderer's compact threshold. */
@@ -734,9 +750,122 @@ export function nodeSizeEntityGraph(): {
   };
 }
 
-/** Write the two-entity workspace and answer the reading the criterion uses. */
-function writeNodeSizeFixture(workspaceDir: string, generatedAt: string): ArchitectureFixtureReading {
-  const fixtures: FixtureEntity[] = NODE_SIZE_ENTITIES.map((entity) => ({
+/* ── the two-entity LAYOUT-ORIENTATION fixture ────────────────────────────── */
+
+/** The member-name width (characters) the orientation fixture states. */
+const ORIENTATION_MEMBER_CHARS = 32;
+
+/** One fixed-width member row: the width is what makes the drawing's boxes wide. */
+function orientationMember(prefix: string, index: number): NodeSizeMemberRecord {
+  return {
+    name: `${prefix}${String(index).padStart(2, '0')}`
+      .padEnd(ORIENTATION_MEMBER_CHARS, 'x')
+      .slice(0, ORIENTATION_MEMBER_CHARS),
+    type: 'field',
+    visibility: 'private',
+    fieldType: 'int',
+  };
+}
+
+/**
+ * The tall end of the chain: the server's 20-member cap, all rows the same
+ * width. Files at the project root keep the drawing package-free.
+ *
+ * The CLASS NAME is long on purpose. It is the box's widest line, so it
+ * decides how wide the drawing is: with a short name the side-by-side RIGHT
+ * drawing is only 816 px wide and the desktop canvas still has spare width;
+ * this name makes it ~992 px, which is what lets the turned drawing fill a
+ * 1151 px canvas. Both directions grow with it, but only the RIGHT one grows
+ * along the canvas' long axis.
+ */
+const ORIENTATION_ALPHA: NodeSizeEntityRecord = {
+  id: 'AlphaServiceWithAReallyLongDescriptiveClassNameForWidthTesting.ts.AlphaServiceWithAReallyLongDescriptiveClassNameForWidthTesting',
+  name: 'AlphaServiceWithAReallyLongDescriptiveClassNameForWidthTesting',
+  file: 'AlphaServiceWithAReallyLongDescriptiveClassNameForWidthTesting.ts',
+  type: 'class',
+  isAbstract: false,
+  // The chain's direction: Alpha depends on Beta, so the drawn relation is
+  // Beta → Alpha (the server emits an edge parent → dependent from this).
+  dependsOn: ['BetaLedger.ts.BetaLedger'],
+  members: Array.from({ length: 20 }, (_, index) => orientationMember('alpha', index)),
+};
+
+/**
+ * The short end. Four rows: side by side with the tall class the drawing's
+ * height is the tall box's, which is what makes the RIGHT layout wider without
+ * growing taller. A symmetric pair would leave both directions the same shape.
+ */
+const ORIENTATION_BETA: NodeSizeEntityRecord = {
+  id: 'BetaLedger.ts.BetaLedger',
+  name: 'BetaLedger',
+  file: 'BetaLedger.ts',
+  type: 'class',
+  isAbstract: false,
+  dependsOn: [],
+  members: Array.from({ length: 4 }, (_, index) => orientationMember('beta', index)),
+};
+
+/** Both classes: Alpha first, so the drawing's seed arrives before its dependent. */
+export const ORIENTATION_CHAIN_ENTITIES: readonly NodeSizeEntityRecord[] = [ORIENTATION_ALPHA, ORIENTATION_BETA];
+
+/** The names the session text must mention so both ends of the chain are drawn. */
+export const ORIENTATION_CHAIN_SEED_IDENTIFIERS: readonly string[] = [ORIENTATION_ALPHA.name, ORIENTATION_BETA.name];
+
+/**
+ * The same two classes in the shape the PANEL receives (server `kind` + members
+ * detail). The unit test lays this through the real renderer, so the direction
+ * decision is pinned on the same geometry the browser criterion reads.
+ */
+export function orientationChainGraph(): {
+  readonly nodes: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly distance: number;
+    readonly kind: 'class';
+    readonly members: readonly {
+      readonly name: string;
+      readonly kind: 'field';
+      readonly visibility: string;
+      readonly signature: string;
+    }[];
+  }[];
+  readonly edges: readonly { readonly from: string; readonly to: string; readonly relationType: 'dependency' }[];
+} {
+  const toNode = (entity: NodeSizeEntityRecord) => ({
+    id: entity.id,
+    label: entity.name,
+    distance: 0,
+    kind: 'class' as const,
+    members: entity.members.map((member) => ({
+      name: member.name,
+      kind: 'field' as const,
+      visibility: member.visibility,
+      signature: member.type === 'field' ? member.fieldType : '',
+    })),
+  });
+  return {
+    nodes: ORIENTATION_CHAIN_ENTITIES.map(toNode),
+    // The server's edge direction: for each entity it depends on, an edge runs
+    // from that parent TO the entity (see `buildIndex`'s `dependencies` map).
+    // The panel criterion therefore draws Beta → Alpha, the same relation the
+    // browser criterion draws from the same fixture.
+    edges: ORIENTATION_CHAIN_ENTITIES.flatMap((entity) => entity.dependsOn.map((dependency) => ({
+      from: dependency,
+      to: entity.id,
+      relationType: 'dependency' as const,
+    }))),
+  };
+}
+
+/** Write the two-entity orientation workspace and answer the reading the criterion uses. */
+function writeEntityFixture(
+  workspaceDir: string,
+  generatedAt: string,
+  entities: readonly NodeSizeEntityRecord[],
+  seedIdentifiers: readonly string[],
+  variant: ArchitectureFixtureVariant,
+): ArchitectureFixtureReading {
+  const fixtures: FixtureEntity[] = entities.map((entity) => ({
     id: entity.id,
     name: entity.name,
     file: entity.file,
@@ -762,7 +891,7 @@ function writeNodeSizeFixture(workspaceDir: string, generatedAt: string): Archit
   writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch.json'), {
     version: '1.0',
     language: 'typescript',
-    entities: NODE_SIZE_ENTITIES.map((entity) => ({
+    entities: entities.map((entity) => ({
       id: entity.id,
       name: entity.name,
       type: entity.type,
@@ -773,17 +902,17 @@ function writeNodeSizeFixture(workspaceDir: string, generatedAt: string): Archit
 
   return {
     workspaceDir,
-    entityTotal: NODE_SIZE_ENTITIES.length,
-    entityIds: NODE_SIZE_ENTITIES.map((entity) => entity.id),
-    seedIdentifiers: NODE_SIZE_SEED_IDENTIFIERS,
-    variant: 'node-size',
-    // The rows each class carries in the payload (7 and 20): the lossless
-    // criteria compare them with the document's rows, which the row cap must
-    // never shorten.
-    memberCountById: Object.fromEntries(
-      NODE_SIZE_ENTITIES.map((entity) => [entity.id, entity.members.length]),
-    ),
+    entityTotal: entities.length,
+    entityIds: entities.map((entity) => entity.id),
+    seedIdentifiers,
+    variant,
+    memberCountById: Object.fromEntries(entities.map((entity) => [entity.id, entity.members.length])),
   };
+}
+
+/** Write the two-entity workspace and answer the reading the criterion uses. */
+function writeNodeSizeFixture(workspaceDir: string, generatedAt: string): ArchitectureFixtureReading {
+  return writeEntityFixture(workspaceDir, generatedAt, NODE_SIZE_ENTITIES, NODE_SIZE_SEED_IDENTIFIERS, 'node-size');
 }
 
 /** Write one JSON file, creating its directory. */
@@ -824,6 +953,16 @@ export function writeArchitectureFixture(
   // The node-size variant is not a family shape: it states its two classes
   // directly, because the criterion is about one box's member text.
   if (variant === 'node-size') return writeNodeSizeFixture(workspaceDir, generatedAt);
+  // The orientation variant states its own asymmetric pair for the same reason.
+  if (variant === 'orientation-chain') {
+    return writeEntityFixture(
+      workspaceDir,
+      generatedAt,
+      ORIENTATION_CHAIN_ENTITIES,
+      ORIENTATION_CHAIN_SEED_IDENTIFIERS,
+      'orientation-chain',
+    );
+  }
   const families = variant === 'claudecodeui' ? CUI_FAMILIES : QUAY_FAMILIES;
   // Both family shapes stay past `COMPACT_MEMBER_ROWS` (4); the second shape
   // adds one more row so its upstream `(N members)` reading differs from the

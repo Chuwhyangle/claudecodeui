@@ -428,6 +428,11 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // a control arm drawing the same fixture WITHOUT the member caps through the
   // DEV-only lever): `26 passed (5.6m)` for the whole invocation. 660_000 still
   // clears that reading ~2.0x, so the entry stays.
+  // Re-measured 2026-10-23 with the layout-orientation legs (a two-entity chain
+  // whose DOWN layout is a narrow column: main arm at PC+phone, the control
+  // arm's forced-DOWN round trip through a fresh page, and the wider-viewport /
+  // >150-entity looks): `29 passed (6.8m)` for the whole invocation. 660_000
+  // still clears that reading ~1.6x, so the entry stays.
   'architecture-canvas-layout.spec.ts': 660_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
