@@ -2,7 +2,7 @@
 id: quay-fleet-cli-locator-and-handshake
 title: fleet CLI 单一定位（QUAY_FLEET_BIN → PATH → ~/.quay-fleet/bin）+ --version
   契约握手，替换三处不一致的路径解析
-status: ready
+status: done
 labels:
   - wall
   - contract
