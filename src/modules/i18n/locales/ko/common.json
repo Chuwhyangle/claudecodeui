@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "선택",
-      "pill": "{{count}}개 선택 ▴",
+      "pill": "{{count}}개 선택됨 · 채팅으로 보내기 ▴",
       "expand": "선택 트레이 펼치기",
       "collapse": "선택 트레이 접기",
       "count": "{{count}}개 선택됨",
@@ -94,7 +94,9 @@
       "relationCall": "호출",
       "relationComposition": "합성",
       "relationAggregation": "집계",
-      "relationOther": "관계"
+      "relationOther": "관계",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "다이어그램 확대/축소",
@@ -343,7 +345,6 @@
       "syntaxOk": "구문 OK",
       "syntaxError": "{{line}}행: {{message}}",
       "copy": "복사",
-      "copyAsContext": "세션 컨텍스트로 복사",
       "copied": "PlantUML을 클립보드에 복사했습니다",
       "contextCopied": "세션 헤더와 함께 PlantUML을 클립보드에 복사했습니다",
       "download": ".puml 다운로드",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "PlantUML 직접 복사",
       "copyFallbackHint": "클립보드를 사용할 수 없습니다. 아래 텍스트를 선택해 복사하세요.",
       "close": "닫기",
-      "bridgeFallback": "대체: 브리지 텍스트(그려진 모델을 사용할 수 없음)"
+      "bridgeFallback": "대체: 브리지 텍스트(그려진 모델을 사용할 수 없음)",
+      "copyForChat": "채팅용으로 복사",
+      "putInChat": "채팅 입력란에 넣기"
     },
     "curation": {
       "heading": "조정",
@@ -392,7 +395,9 @@
       "restoreAll": "모두 복원",
       "undo": "실행 취소",
       "solo": "이것만 표시",
-      "soloClear": "전체 그래프 표시"
+      "soloClear": "전체 그래프 표시",
+      "putInChat": "채팅 입력란에 넣기",
+      "putCountInChat": "{{count}}개를 채팅 입력란에 넣기"
     }
   },
   "status": {

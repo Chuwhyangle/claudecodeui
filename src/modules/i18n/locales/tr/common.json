@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "Seçim",
-      "pill": "{{count}} seçili ▴",
+      "pill": "{{count}} seçili · Sohbete gönder ▴",
       "expand": "Seçim tepsisini genişlet",
       "collapse": "Seçim tepsisini daralt",
       "count": "{{count}} seçili",
@@ -94,7 +94,9 @@
       "relationCall": "çağrı",
       "relationComposition": "kompozisyon",
       "relationAggregation": "toplama",
-      "relationOther": "ilişki"
+      "relationOther": "ilişki",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "Diyagram yakınlaştırma",
@@ -343,7 +345,6 @@
       "syntaxOk": "Sözdizimi tamam",
       "syntaxError": "Satır {{line}}: {{message}}",
       "copy": "Kopyala",
-      "copyAsContext": "Oturum bağlamı olarak kopyala",
       "copied": "PlantUML panoya kopyalandı",
       "contextCopied": "PlantUML ve oturum başlığı panoya kopyalandı",
       "download": ".puml indir",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "PlantUML’i elle kopyala",
       "copyFallbackHint": "Pano erişimi yok. Aşağıdaki metni seçip kopyalayın.",
       "close": "Kapat",
-      "bridgeFallback": "Yedek: köprü metni (çizilen model kullanılamıyor)"
+      "bridgeFallback": "Yedek: köprü metni (çizilen model kullanılamıyor)",
+      "copyForChat": "Sohbet için kopyala",
+      "putInChat": "Sohbet girişine koy"
     },
     "curation": {
       "heading": "Ayarla",
@@ -392,7 +395,9 @@
       "restoreAll": "Tümünü geri yükle",
       "undo": "Geri al",
       "solo": "Yalnızca bunu göster",
-      "soloClear": "Tüm grafiği göster"
+      "soloClear": "Tüm grafiği göster",
+      "putInChat": "Sohbet girişine koy",
+      "putCountInChat": "{{count}} öğeyi sohbet girişine koy"
     }
   },
   "status": {

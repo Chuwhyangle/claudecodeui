@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 
@@ -91,6 +92,112 @@ function kindGlyph(kind: string | undefined): string {
   }
 }
 
+/** Everything the selection message needs from the panel; pure, so every entry point shares it. */
+export type ArchitectureSelectionMessageInput = {
+  readonly selections: readonly ArchitectureSelection[];
+  readonly graph: ArchitectureRendererGraph;
+  readonly idShape: ArchitectureNodeIdShape;
+  /** The project's display name: the header states it instead of the opaque id. */
+  readonly projectName?: string | null;
+  /** The fallback when the workspace does not know a display name. */
+  readonly projectId: string | null;
+  readonly analyzedAt: string | null;
+};
+
+/**
+ * Build the message the "put in chat input" action appends.
+ *
+ * Exported because FOUR entry points send the same selection to the chat: the
+ * tray's primary action, the inspector's Adjust row, the multi-select summary
+ * and the canvas context menu. They must not each carry their own copy of this
+ * format — the project's display name (never the UUID), the analysis time, one
+ * line per selected thing, and, under each selected entity, its relations to
+ * the OTHER selected entities.
+ *
+ * The tray passes its memo and attachment as `extras`; the other entry points
+ * send the selection itself.
+ */
+export function buildSelectionMessage(
+  {
+    selections,
+    graph,
+    idShape,
+    projectName,
+    projectId,
+    analyzedAt,
+  }: ArchitectureSelectionMessageInput,
+  t: TFunction,
+  language: string,
+  extras: { readonly note?: string; readonly attachment?: string } = {},
+): string {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const nameOf = (id: string): string => {
+    const node = nodeById.get(id);
+    return node !== undefined && node.label.trim() !== '' ? node.label : id;
+  };
+  const selectedEntityIds = new Set<string>();
+  for (const selection of selections) {
+    if (selection.kind === 'entity') selectedEntityIds.add(selection.nodeId);
+  }
+
+  const lines: string[] = [
+    t('architecture.tray.messageHeader', {
+      defaultValue: 'About these elements in the architecture diagram (project {{project}}, analyzed {{time}}):',
+      // The display name is what a reader recognises; the id is only the
+      // fallback for an embed that has no workspace context.
+      project: projectName?.trim() || projectId || '',
+      time: formatAbsoluteTime(analyzedAt, language) ?? analyzedAt ?? '',
+    }),
+  ];
+
+  for (const selection of selections) {
+    if (selection.kind === 'entity') {
+      const node = nodeById.get(selection.nodeId);
+      lines.push(`- ${t('architecture.tray.entityLine', {
+        defaultValue: '{{kind}} `{{name}}`（{{file}}）',
+        kind: node?.kind ?? (idShape === 'project-relative' ? 'file' : 'entity'),
+        name: nameOf(selection.nodeId),
+        file: node === undefined ? '' : nodeFileOf(node, idShape),
+      })}`);
+      // The relations to OTHER selected entities, stated in the direction the
+      // drawing draws them. A relation to an unselected node is not part of
+      // what the reader is describing, so it stays out.
+      for (const edge of graph.edges) {
+        if (edge.from !== selection.nodeId && edge.to !== selection.nodeId) continue;
+        const other = edge.from === selection.nodeId ? edge.to : edge.from;
+        if (other === selection.nodeId || !selectedEntityIds.has(other)) continue;
+        lines.push(`  - ${edge.from === selection.nodeId
+          ? t('architecture.tray.relatedOutLine', {
+            defaultValue: '{{name}} → {{other}} ({{type}})',
+            name: nameOf(selection.nodeId),
+            other: nameOf(other),
+            type: relationTypeLabel(t, edge.relationType),
+          })
+          : t('architecture.tray.relatedInLine', {
+            defaultValue: '{{name}} ← {{other}} ({{type}})',
+            name: nameOf(selection.nodeId),
+            other: nameOf(other),
+            type: relationTypeLabel(t, edge.relationType),
+          })}`);
+      }
+    } else {
+      lines.push(`- ${t('architecture.tray.relationLine', {
+        defaultValue: 'Relation: `{{from}}` {{arrow}} `{{to}}` ({{type}})',
+        from: nameOf(selection.from),
+        arrow: relationArrow(selection.relationType),
+        to: nameOf(selection.to),
+        type: relationTypeLabel(t, selection.relationType),
+      })}`);
+    }
+  }
+
+  if (extras.note !== undefined && extras.note.trim() !== '') lines.push(extras.note);
+  const body = lines.join('\n');
+  return extras.attachment === undefined || extras.attachment === ''
+    ? body
+    : `${body}\n\n\`\`\`plantuml\n${extras.attachment}\n\`\`\``;
+}
+
 /**
  * The architecture canvas's selection tray. Used by `ArchitecturePanel` only.
  *
@@ -112,6 +219,7 @@ export function ArchitectureSelectionTray({
   grouping,
   drawn,
   projectId,
+  projectName = null,
   analyzedAt,
   canCompose,
   canRemove,
@@ -217,38 +325,16 @@ export function ArchitectureSelectionTray({
   const attachDisabled = tooManyEntities || tooHuge;
   const attached = attach && !attachDisabled && attachedPuml !== '';
 
+  // The tray's own contribution is the memo and the optional attachment; the
+  // selection message itself is the shared builder above, so the inspector,
+  // the context menu and the multi-select summary send the same text.
   const compose = (): void => {
-    const lines: string[] = [
-      t('architecture.tray.messageHeader', {
-        defaultValue: 'About these elements in the architecture diagram (project {{project}}, analyzed {{time}}):',
-        project: projectId ?? '',
-        time: formatAbsoluteTime(analyzedAt, i18n.language) ?? analyzedAt ?? '',
-      }),
-    ];
-    for (const item of items) {
-      if (item.kind === 'entity') {
-        lines.push(`- ${t('architecture.tray.entityLine', {
-          defaultValue: '{{kind}} `{{name}}`（{{file}}）',
-          kind: nodeById.get(item.selection.kind === 'entity' ? item.selection.nodeId : '')?.kind
-            ?? (idShape === 'project-relative' ? 'file' : 'entity'),
-          name: item.label,
-          file: item.detail,
-        })}`);
-      } else if (item.selection.kind === 'relation') {
-        lines.push(`- ${t('architecture.tray.relationLine', {
-          defaultValue: 'Relation: `{{from}}` {{arrow}} `{{to}}` ({{type}})',
-          from: nameOf(item.selection.from),
-          arrow: relationArrow(item.selection.relationType),
-          to: nameOf(item.selection.to),
-          type: relationTypeLabel(t, item.selection.relationType),
-        })}`);
-      }
-    }
-    if (text.trim() !== '') lines.push(text);
-    const body = attached
-      ? `${lines.join('\n')}\n\n\`\`\`plantuml\n${attachedPuml}\n\`\`\``
-      : lines.join('\n');
-    onCompose(body);
+    onCompose(buildSelectionMessage(
+      { selections, graph, idShape, projectName, projectId, analyzedAt },
+      t,
+      i18n.language,
+      attached ? { note: text, attachment: attachedPuml } : { note: text },
+    ));
   };
 
   const copyPuml = async (): Promise<void> => {
@@ -505,7 +591,9 @@ export function ArchitectureSelectionTray({
           className="rounded-full border border-border bg-popover px-3 py-1 text-xs font-medium text-foreground shadow-lg outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
         >
           {t('architecture.tray.pill', {
-            defaultValue: '{{count}} selected ▴',
+            // The pill is the only thing visible while the tray is collapsed, so
+            // it names the action, not just the count.
+            defaultValue: '{{count}} selected · Send to chat ▴',
             count: items.length,
           })}
         </button>
@@ -561,6 +649,8 @@ type ArchitectureSelectionTrayProps = {
   readonly grouping: 'raw' | 'adaptive';
   readonly drawn: ArchitectureDrawnPlantUml | null;
   readonly projectId: string | null;
+  /** The project's display name for the message header; the id is only the fallback. */
+  readonly projectName?: string | null;
   /** The analysis time the message header states (null when the payload has none). */
   readonly analyzedAt: string | null;
   /** False when there is no chat to write to (no session); disables the primary action. */

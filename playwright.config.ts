@@ -397,6 +397,17 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // selection. 240_000 still clears the full-file measurement ~1.8x, so the
   // entry stays; the numbers above are the readings it was checked against.
   'architecture-canvas-layout.spec.ts': 240_000,
+  // The four-doors criterion: two real pages (PC and phone), each opening the
+  // architecture tab and walking the same four entry points — inspector,
+  // context menu, tray, Text page — with a tab round trip and a draft clear
+  // between each. MEASURED 2026-10-23 on this worktree: `4 passed (35.8s)` for
+  // the whole invocation — config evaluation, both webServers' boot, the
+  // browser launch, the fixture and both viewports included; the four cases
+  // (four doors and the two-entity legs, PC and phone) took 7.7 s, 8.1 s,
+  // 7.6 s and 6.3 s. 240_000 is what the sibling architecture
+  // entry above declares and clears that measurement more than tenfold, which
+  // leaves room for a load-slowed fan-in run without changing what is measured.
+  'architecture-send-to-chat.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2653,6 +2664,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // seed extractor resolves them), and a project the client will offer the Architecture tab for. The
   // `.archguard` tree itself is written by the spec under this home before it arms the scenario.
   'architecture-canvas-layout.spec.ts',
+  // The four-doors criterion: same fixture home, because it needs the same two
+  // things — a session whose user text seeds the entities the message is about,
+  // and a project with an `.archguard` cache so the Architecture tab exists. It
+  // writes its own three-entity tree under that home.
+  'architecture-send-to-chat.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

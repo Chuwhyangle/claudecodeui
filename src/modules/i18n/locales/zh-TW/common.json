@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "已選元素",
-      "pill": "已選 {{count}} 項 ▴",
+      "pill": "已選 {{count}} 項 · 傳送到聊天 ▴",
       "expand": "展開選擇托盤",
       "collapse": "收合選擇托盤",
       "count": "已選 {{count}} 項",
@@ -94,7 +94,9 @@
       "relationCall": "呼叫",
       "relationComposition": "組合",
       "relationAggregation": "聚合",
-      "relationOther": "關係"
+      "relationOther": "關係",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "圖表縮放",
@@ -343,7 +345,6 @@
       "syntaxOk": "語法通過",
       "syntaxError": "第 {{line}} 行：{{message}}",
       "copy": "複製",
-      "copyAsContext": "複製為會話上下文",
       "copied": "PlantUML 已複製到剪貼簿",
       "contextCopied": "PlantUML 及其會話標頭已複製到剪貼簿",
       "download": "下載 .puml",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "手動複製 PlantUML",
       "copyFallbackHint": "剪貼簿無法使用，請選取並複製下方文字。",
       "close": "關閉",
-      "bridgeFallback": "回退：橋接層文字（無法取得實際繪製的模型）"
+      "bridgeFallback": "回退：橋接層文字（無法取得實際繪製的模型）",
+      "copyForChat": "複製用於聊天",
+      "putInChat": "放入聊天輸入框"
     },
     "curation": {
       "heading": "調整",
@@ -392,7 +395,9 @@
       "restoreAll": "全部還原",
       "undo": "復原",
       "solo": "只顯示它自己",
-      "soloClear": "顯示整張圖"
+      "soloClear": "顯示整張圖",
+      "putInChat": "放入聊天輸入框",
+      "putCountInChat": "將 {{count}} 項放入聊天輸入框"
     }
   },
   "status": {

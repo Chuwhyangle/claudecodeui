@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "Selezione",
-      "pill": "{{count}} selezionati ▴",
+      "pill": "{{count}} selezionati · Invia alla chat ▴",
       "expand": "Espandi la barra di selezione",
       "collapse": "Comprimi la barra di selezione",
       "count": "{{count}} selezionati",
@@ -94,7 +94,9 @@
       "relationCall": "chiamata",
       "relationComposition": "composizione",
       "relationAggregation": "aggregazione",
-      "relationOther": "relazione"
+      "relationOther": "relazione",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "Zoom del diagramma",
@@ -343,7 +345,6 @@
       "syntaxOk": "Sintassi OK",
       "syntaxError": "Riga {{line}}: {{message}}",
       "copy": "Copia",
-      "copyAsContext": "Copia come contesto della sessione",
       "copied": "PlantUML copiato negli appunti",
       "contextCopied": "PlantUML e la sua intestazione di sessione copiati negli appunti",
       "download": "Scarica .puml",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "Copia il PlantUML manualmente",
       "copyFallbackHint": "Gli appunti non sono disponibili. Seleziona e copia il testo qui sotto.",
       "close": "Chiudi",
-      "bridgeFallback": "Ripiego: testo del ponte (il modello disegnato non è disponibile)"
+      "bridgeFallback": "Ripiego: testo del ponte (il modello disegnato non è disponibile)",
+      "copyForChat": "Copia per la chat",
+      "putInChat": "Metti nell'input della chat"
     },
     "curation": {
       "heading": "Regola",
@@ -392,7 +395,9 @@
       "restoreAll": "Ripristina tutto",
       "undo": "Annulla",
       "solo": "Mostra solo questo",
-      "soloClear": "Mostra tutto il grafico"
+      "soloClear": "Mostra tutto il grafico",
+      "putInChat": "Metti nell'input della chat",
+      "putCountInChat": "Metti {{count}} nell'input della chat"
     }
   },
   "status": {

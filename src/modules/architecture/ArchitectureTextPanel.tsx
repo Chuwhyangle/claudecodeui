@@ -93,6 +93,12 @@ type ArchitectureTextPanelProps = {
   readonly filterSummary: string;
   /** The canvas region; the viewport scope measures node boxes against it. */
   readonly canvasRef: RefObject<HTMLElement | null>;
+  /**
+   * Appends the current scope's context text to the chat draft — the panel's
+   * compose handler, the same one the selection tray uses. Omitted when there
+   * is no chat to write to.
+   */
+  readonly onPutInChat?: (text: string) => void;
 };
 
 /** The read-only syntax reading the badge shows. */
@@ -180,6 +186,7 @@ export function ArchitectureTextPanel({
   viewLabel,
   filterSummary,
   canvasRef,
+  onPutInChat,
 }: ArchitectureTextPanelProps) {
   const { t, i18n } = useTranslation();
   const { coarsePointer } = useTouchLayout();
@@ -402,6 +409,14 @@ export function ArchitectureTextPanel({
     void copy(text, t('architecture.text.copied', { defaultValue: 'PlantUML copied to the clipboard' }));
   };
 
+  // The same text "Copy for chat" puts on the clipboard, handed to the panel's
+  // compose handler instead: the current scope (whole graph, viewport, or
+  // selection + 1) plus its session header.
+  const putInChat = (): void => {
+    if (empty || onPutInChat === undefined) return;
+    onPutInChat(contextText);
+  };
+
   const copyAsContext = (): void => {
     if (empty) return;
     // Above 30k tokens the header + document is a large share of a chat's
@@ -573,7 +588,19 @@ export function ArchitectureTextPanel({
           onClick={copyAsContext}
           className="rounded border border-border px-2 py-0.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {t('architecture.text.copyAsContext', { defaultValue: 'Copy as session context' })}
+          {t('architecture.text.copyForChat', { defaultValue: 'Copy for chat' })}
+        </button>
+        {/* The tray's action, here for the TEXT scope: the same words the tray
+            uses, so the two entry points read as one action. */}
+        <button
+          type="button"
+          data-architecture-text-put-in-chat="true"
+          disabled={empty || onPutInChat === undefined}
+          style={targetStyle}
+          onClick={putInChat}
+          className="rounded border border-border px-2 py-0.5 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {t('architecture.text.putInChat', { defaultValue: 'Put in chat input' })}
         </button>
         <button
           type="button"

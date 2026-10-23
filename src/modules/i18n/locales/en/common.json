@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "Selection",
-      "pill": "{{count}} selected ▴",
+      "pill": "{{count}} selected · Send to chat ▴",
       "expand": "Expand the selection tray",
       "collapse": "Collapse the selection tray",
       "count": "{{count}} selected",
@@ -94,7 +94,9 @@
       "relationCall": "call",
       "relationComposition": "composition",
       "relationAggregation": "aggregation",
-      "relationOther": "relation"
+      "relationOther": "relation",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "title": "Architecture",
     "noSession": "Select a session to see the architecture of the files it touched.",
@@ -349,7 +351,6 @@
       "syntaxOk": "Syntax OK",
       "syntaxError": "Line {{line}}: {{message}}",
       "copy": "Copy",
-      "copyAsContext": "Copy as session context",
       "copied": "PlantUML copied to the clipboard",
       "contextCopied": "PlantUML and its session header copied to the clipboard",
       "download": "Download .puml",
@@ -365,7 +366,9 @@
       "copyFallbackTitle": "Copy the PlantUML manually",
       "copyFallbackHint": "Clipboard access is unavailable. Select and copy the text below.",
       "close": "Close",
-      "bridgeFallback": "Fallback: bridge text (the drawn model is unavailable)"
+      "bridgeFallback": "Fallback: bridge text (the drawn model is unavailable)",
+      "copyForChat": "Copy for chat",
+      "putInChat": "Put in chat input"
     },
     "curation": {
       "heading": "Adjust",
@@ -398,7 +401,9 @@
       "restoreAll": "Restore all",
       "undo": "Undo",
       "solo": "Show only this",
-      "soloClear": "Show the whole graph"
+      "soloClear": "Show the whole graph",
+      "putInChat": "Put in chat input",
+      "putCountInChat": "Put {{count}} in chat input"
     }
   },
   "status": {

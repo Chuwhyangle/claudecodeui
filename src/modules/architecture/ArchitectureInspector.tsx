@@ -63,6 +63,12 @@ type ArchitectureInspectorProps = {
   readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
   readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
   /**
+   * The "put in chat input" action, shared with the tray (the panel's compose
+   * handler). Omitted when there is no chat to write to, so the button is not
+   * offered where it cannot work.
+   */
+  readonly onPutInChat?: () => void;
+  /**
    * Per node, the relations the filter hid, by relation type. The inspector
    * states them instead of printing a bare "0 in · 0 out"; omitted when the
    * caller has no hidden reading.
@@ -379,6 +385,7 @@ function EntityInspector({
   onPinNode,
   onUnpinNode,
   onRemoveNode,
+  onPutInChat,
   hiddenRelations,
   onShowRelationType,
 }: {
@@ -397,6 +404,7 @@ function EntityInspector({
   readonly onPinNode?: (node: ArchitectureRendererNode) => void;
   readonly onUnpinNode?: (node: ArchitectureRendererNode) => void;
   readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
+  readonly onPutInChat?: () => void;
   readonly hiddenRelations?: Readonly<Record<string, Readonly<Record<string, number>>>>;
   readonly onShowRelationType?: (relationType: string) => void;
 }) {
@@ -573,7 +581,8 @@ function EntityInspector({
             </dd>
           </dl>
 
-          {(onPinNode !== undefined || onUnpinNode !== undefined || onRemoveNode !== undefined) && (
+          {(onPinNode !== undefined || onUnpinNode !== undefined || onRemoveNode !== undefined
+            || onPutInChat !== undefined) && (
             <section data-architecture-inspector-curation="true" className="flex flex-col gap-1">
               <h4 className="text-[11px] font-medium text-muted-foreground">
                 {t('architecture.curation.heading', { defaultValue: 'Adjust' })}
@@ -619,6 +628,19 @@ function EntityInspector({
                     className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {t('architecture.curation.removeEntity', { defaultValue: 'Remove from graph' })}
+                  </button>
+                )}
+                {/* The tray's action, offered where the reader already is. It
+                    calls the panel's compose handler, so the message is the same
+                    one the tray would send. */}
+                {onPutInChat !== undefined && (
+                  <button
+                    type="button"
+                    data-architecture-inspector-put-in-chat="true"
+                    onClick={onPutInChat}
+                    className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                  >
+                    {t('architecture.curation.putInChat', { defaultValue: 'Put in chat input' })}
                   </button>
                 )}
               </span>
@@ -748,6 +770,7 @@ function RelationInspector({
   onOpenChat,
   canCurate = false,
   onHideRelation,
+  onPutInChat,
 }: {
   readonly selection: Extract<ArchitectureSelection, { kind: 'relation' }>;
   readonly graph: ArchitectureRendererGraph;
@@ -758,6 +781,7 @@ function RelationInspector({
   readonly onOpenChat?: () => void;
   readonly canCurate?: boolean;
   readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
+  readonly onPutInChat?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const fromName = endpointName(graph, selection.from);
@@ -802,29 +826,43 @@ function RelationInspector({
         </span>
       </header>
 
-      {onHideRelation !== undefined && (
+      {(onHideRelation !== undefined || onPutInChat !== undefined) && (
         <section data-architecture-inspector-curation="true" className="mt-2 flex flex-col gap-1">
           <h4 className="text-[11px] font-medium text-muted-foreground">
             {t('architecture.curation.heading', { defaultValue: 'Adjust' })}
           </h4>
-          <button
-            type="button"
-            data-architecture-inspector-hide-relation={`${selection.from} -> ${selection.to}`}
-            disabled={!canCurate}
-            onClick={() => onHideRelation({
-              from: selection.from,
-              to: selection.to,
-              relationType: selection.relationType,
-            })}
-            className="self-start rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {t('architecture.curation.hideRelation', { defaultValue: 'Hide relation' })}
-          </button>
-          <p className="text-[10px] text-muted-foreground">
-            {t('architecture.curation.hideRelationNote', {
-              defaultValue: 'Hides the display only; the code is unchanged.',
-            })}
-          </p>
+          {onHideRelation !== undefined && (
+            <button
+              type="button"
+              data-architecture-inspector-hide-relation={`${selection.from} -> ${selection.to}`}
+              disabled={!canCurate}
+              onClick={() => onHideRelation({
+                from: selection.from,
+                to: selection.to,
+                relationType: selection.relationType,
+              })}
+              className="self-start rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {t('architecture.curation.hideRelation', { defaultValue: 'Hide relation' })}
+            </button>
+          )}
+          {onPutInChat !== undefined && (
+            <button
+              type="button"
+              data-architecture-inspector-put-in-chat="true"
+              onClick={onPutInChat}
+              className="self-start rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {t('architecture.curation.putInChat', { defaultValue: 'Put in chat input' })}
+            </button>
+          )}
+          {onHideRelation !== undefined && (
+            <p className="text-[10px] text-muted-foreground">
+              {t('architecture.curation.hideRelationNote', {
+                defaultValue: 'Hides the display only; the code is unchanged.',
+              })}
+            </p>
+          )}
         </section>
       )}
 
@@ -898,6 +936,7 @@ export function ArchitectureInspector({
   onUnpinNode,
   onRemoveNode,
   onHideRelation,
+  onPutInChat,
   hiddenRelations,
   onShowRelationType,
 }: ArchitectureInspectorProps) {
@@ -913,6 +952,7 @@ export function ArchitectureInspector({
         onOpenChat={onOpenChat}
         canCurate={canCurate}
         onHideRelation={onHideRelation}
+        {...(onPutInChat === undefined ? {} : { onPutInChat })}
       />
     );
   }
@@ -942,6 +982,7 @@ export function ArchitectureInspector({
       {...(onPinNode === undefined ? {} : { onPinNode })}
       {...(onUnpinNode === undefined ? {} : { onUnpinNode })}
       {...(onRemoveNode === undefined ? {} : { onRemoveNode })}
+      {...(onPutInChat === undefined ? {} : { onPutInChat })}
       {...(hiddenRelations === undefined ? {} : { hiddenRelations })}
       {...(onShowRelationType === undefined ? {} : { onShowRelationType })}
     />
