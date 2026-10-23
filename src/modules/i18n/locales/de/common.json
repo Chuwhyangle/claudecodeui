@@ -256,6 +256,7 @@
     },
     "source": {
       "unresolved": "{{count}} in dieser Sitzung genannte Namen wurden nicht im Analyse-Cache gefunden",
+      "unresolvedShort": "{{count}} ohne Treffer",
       "listLabel": "Ungelöste Namen"
     },
     "filter": {

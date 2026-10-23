@@ -186,6 +186,15 @@ const TRUNCATED_RESULT: ArchitectureGraphResult = {
   stats: { ...RESULT.stats, truncated: true, fileTruncated: true, fileTotal: 9 },
 };
 
+/** A reading whose footer carries unresolved names the reader can expand. */
+const UNRESOLVED_RESULT: ArchitectureGraphResult = {
+  ...RESULT,
+  stats: {
+    ...RESULT.stats,
+    unresolved: { files: ['src/unknown.ts'], identifiers: ['NoSuchThing'] },
+  },
+};
+
 function jsonResponse(result: ArchitectureGraphResult): Response {
   return {
     ok: true,
@@ -829,4 +838,81 @@ test('a truncated graph states the cut on the floating readout, not in the heade
     'the header row carries no badge — it belongs to the readout',
   );
   assert.ok(document.querySelector('[data-architecture-sheet]') === null, 'the reading needs no open sheet');
+});
+
+test('footer unresolved button stays inside the footer at 390px', async () => {
+  usePhone();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(UNRESOLVED_RESULT));
+
+  // jsdom has no layout engine, so model the footer row: the footer is the
+  // 390px viewport. A control INSIDE the truncating source line keeps its
+  // natural width (7px per character) and starts after "Analysis: <time> · ",
+  // which is exactly how its right edge crossed the footer's; a sibling pill is
+  // laid out against the row's right padding and fits by construction.
+  const originalRect = Element.prototype.getBoundingClientRect;
+  const box = (left: number, width: number): DOMRect => ({
+    left, top: 0, width, height: 22, right: left + width, bottom: 22, x: left, y: 0, toJSON: () => ({}),
+  } as DOMRect);
+  Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+    if (this.hasAttribute('data-architecture-source-footer')) return box(0, 390);
+    if (this.hasAttribute('data-architecture-unresolved')) {
+      const width = (this.textContent ?? '').trim().length * 7;
+      const insideSourceLine = this.closest('[data-architecture-source-line]') !== null;
+      return insideSourceLine ? box(100, width) : box(390 - 12 - width, width);
+    }
+    return box(0, 0);
+  };
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+    await waitForDiagram();
+
+    const footer = document.querySelector('[data-architecture-source-footer]');
+    const button = document.querySelector('[data-architecture-unresolved]');
+    assert.ok(footer instanceof HTMLElement);
+    assert.ok(button instanceof HTMLElement, 'the footer offers the unresolved disclosure');
+    assert.equal(
+      button.closest('[data-architecture-source-line]'),
+      null,
+      'the toggle must not live inside the self-clipping source line',
+    );
+    assert.doesNotMatch(
+      footer.className,
+      /(^|\s)overflow-hidden(\s|$)/,
+      'the footer must not clip: both of its disclosures open upwards out of it',
+    );
+    const buttonRect = button.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    assert.ok(
+      buttonRect.right <= footerRect.right,
+      `the unresolved button must fit inside the footer: button right ${buttonRect.right} > footer right ${footerRect.right}`,
+    );
+  } finally {
+    Element.prototype.getBoundingClientRect = originalRect;
+  }
+});
+
+test('the compact footer shows a short unresolved label and expands to every name', async () => {
+  usePhone();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(UNRESOLVED_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
+  await waitForDiagram();
+
+  const button = document.querySelector('[data-architecture-unresolved]');
+  assert.ok(button instanceof HTMLElement);
+  const label = (button.textContent ?? '').trim();
+  assert.ok(label.length < 20, `the phone pill must stay short, got ${label.length} chars: "${label}"`);
+  assert.match(label, /unmatched/, 'the short label still says what the count is');
+  assert.equal(document.querySelector('[data-architecture-unresolved-list]'), null);
+
+  fireEvent.click(button);
+  const list = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-unresolved-list]');
+    assert.ok(node instanceof HTMLElement, 'the names expand upwards out of the footer');
+    return node;
+  });
+  const summary = list.querySelector('[data-architecture-unresolved-summary]');
+  assert.ok(summary instanceof HTMLElement, 'the full sentence moves to the top of the expanded list');
+  assert.match(summary.textContent ?? '', /2 names mentioned in this session were not found/);
+  const names = [...list.querySelectorAll('[data-architecture-unresolved-name]')].map((item) => item.textContent);
+  assert.deepEqual(names, ['src/unknown.ts', 'NoSuchThing'], 'every unresolved name is listed');
 });
