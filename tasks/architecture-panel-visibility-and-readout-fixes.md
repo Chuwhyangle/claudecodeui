@@ -1,7 +1,7 @@
 ---
 id: architecture-panel-visibility-and-readout-fixes
 title: 架构面板可见性与读数修复：Scope cleanup 面板不显示、悬停信息条遮挡画布、摘要计数不一致、邻域视图无说明
-status: todo
+status: ready
 labels:
   - feature
 parent: null
