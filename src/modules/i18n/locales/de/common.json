@@ -166,6 +166,12 @@
       "enter": "Vollbild",
       "exit": "Vollbild beenden"
     },
+    "standalone": {
+      "openInNewTab": "In neuem Tab öffnen",
+      "backToSession": "Zurück zur Sitzung",
+      "sent": "In die Chat-Eingabe der Sitzung übernommen",
+      "copied": "Haupt-Tab nicht erreichbar — in die Zwischenablage kopiert"
+    },
     "controls": {
       "maxHops": "Hops",
       "hopOption": "Hops {{count}}",

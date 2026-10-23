@@ -476,6 +476,20 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // architecture entries' value and clears that measurement ~7.5x, which leaves
   // room for a load-slowed fan-in run without changing what is measured.
   'architecture-fullscreen.spec.ts': 240_000,
+  // The standalone-page criterion: ONE case that drives three real standalone
+  // pages and the workspace page in one context — open-in-new-tab, the two-page
+  // pin/Adjusted reading, a cross-tab send into the composer, a BroadcastChannel
+  // control arm that must leave the composer empty, the clipboard fallback after
+  // the workspace tab closes, and an `?entity=` deep link. The two deliberate
+  // 1.5 s fallback waits plus a 2 s control wait are part of what it measures.
+  // MEASURED on this worktree 2026-10-24 over three consecutive runs: the whole
+  // invocation read `1 passed (23.9s)`, `1 passed (17.2s)` and `1 passed
+  // (31.1s)` — config evaluation, both webServers' boot, browser launch, the
+  // fixture and every leg included (the last case body reported
+  // `elapsed=30841ms` from the run's start). 240_000 clears the slowest reading
+  // ~7.7x and leaves a load-slowed fan-in run the same headroom as the sibling
+  // architecture entries.
+  'architecture-standalone.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2747,6 +2761,11 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // cache so the Architecture tab exists). It writes its own three-entity tree
   // under that home and needs no other channel.
   'architecture-fullscreen.spec.ts',
+  // The standalone-page criterion: the same fixture home for the same two
+  // reasons (a transcript naming the seeds, and a project that offers the
+  // Architecture tab). It writes its own three-entity tree and drives TWO pages
+  // in one context plus the BroadcastChannel between them.
+  'architecture-standalone.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

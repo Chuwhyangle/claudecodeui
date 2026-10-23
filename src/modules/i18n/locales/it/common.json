@@ -166,6 +166,12 @@
       "enter": "Schermo intero",
       "exit": "Esci da schermo intero"
     },
+    "standalone": {
+      "openInNewTab": "Apri in una nuova scheda",
+      "backToSession": "Torna alla sessione",
+      "sent": "Inviato nell’input della chat della sessione",
+      "copied": "Scheda principale non raggiungibile — copiato negli appunti"
+    },
     "controls": {
       "maxHops": "Salti",
       "hopOption": "Salti {{count}}",

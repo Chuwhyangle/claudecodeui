@@ -166,6 +166,12 @@
       "enter": "Plein écran",
       "exit": "Quitter le plein écran"
     },
+    "standalone": {
+      "openInNewTab": "Ouvrir dans un nouvel onglet",
+      "backToSession": "Retour à la session",
+      "sent": "Envoyé dans la saisie du chat de la session",
+      "copied": "Onglet principal injoignable — copié dans le presse-papiers"
+    },
     "controls": {
       "maxHops": "Sauts",
       "hopOption": "Sauts {{count}}",

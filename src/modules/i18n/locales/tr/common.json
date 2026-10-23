@@ -166,6 +166,12 @@
       "enter": "Tam ekran",
       "exit": "Tam ekrandan çık"
     },
+    "standalone": {
+      "openInNewTab": "Yeni sekmede aç",
+      "backToSession": "Oturuma dön",
+      "sent": "Oturumun sohbet girişine gönderildi",
+      "copied": "Ana sekme yanıt vermiyor — panoya kopyalandı"
+    },
     "controls": {
       "maxHops": "Atlamalar",
       "hopOption": "Atlama {{count}}",

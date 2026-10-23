@@ -166,6 +166,12 @@
       "enter": "Layar penuh",
       "exit": "Keluar dari layar penuh"
     },
+    "standalone": {
+      "openInNewTab": "Buka di tab baru",
+      "backToSession": "Kembali ke sesi",
+      "sent": "Dikirim ke input chat sesi",
+      "copied": "Tab utama tidak merespons — disalin ke papan klip"
+    },
     "controls": {
       "maxHops": "Lompatan",
       "hopOption": "Lompatan {{count}}",

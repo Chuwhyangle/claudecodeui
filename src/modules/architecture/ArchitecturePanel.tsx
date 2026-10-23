@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Maximize2, Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
@@ -18,6 +18,7 @@ import { ArchitectureDock } from '@/modules/architecture/ArchitectureDock';
 import { ArchitectureInspector } from '@/modules/architecture/ArchitectureInspector';
 import {
   createCurationStore,
+  curationStorageKey,
   type ArchitectureCurationHiddenEdge,
   type ArchitectureCurationItem,
   type ArchitectureCurationState,
@@ -106,6 +107,12 @@ import {
 } from '@/modules/architecture/selectionModel';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
 import { useArchitectureFullscreen } from '@/modules/architecture/useArchitectureFullscreen';
+import {
+  buildArchitectureStandaloneHref,
+  parseArchitectureDeepLink,
+  type ArchitectureDeepLinkState,
+} from '@/modules/architecture/architectureDeepLink';
+import { sendArchitectureChatMessage } from '@/modules/architecture/architectureChatBridge';
 import { readDraftText, writeDraftText } from '@/shared/chatDrafts';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 import { ArchitectureEmptyState } from '@/modules/architecture/ArchitectureEmptyState';
@@ -227,6 +234,24 @@ type ArchitecturePanelProps = {
    * fixtures that encode file ids) can ask for it explicitly without a toggle.
    */
   initialGranularity?: ArchitectureGranularity;
+  /**
+   * Render the panel as the standalone page (`/session/:sessionId/architecture`):
+   * it fills the viewport, its "Put in chat input" actions travel over the
+   * BroadcastChannel instead of writing this page's draft, and the Back entry
+   * appears in the toolbar. The workspace passes nothing, so the in-page tab
+   * keeps its shipped behavior.
+   */
+  standalone?: boolean;
+  /**
+   * The standalone page's "Back to session" action, supplied by the route that
+   * owns navigation; the panel only draws the entry.
+   */
+  onBackToSession?: () => void;
+  /**
+   * The standalone page's query string (`location.search`). It decides the
+   * FIRST paint only; a null/absent value leaves every stored knob in charge.
+   */
+  deepLinkSearch?: string;
 };
 
 /**
@@ -306,9 +331,25 @@ export default function ArchitecturePanel({
   renderer: Renderer = PlantUmlGraph as ArchitecturePanelRenderer,
   initialGranularity = 'entity',
   onOpenChat,
+  standalone = false,
+  onBackToSession,
+  deepLinkSearch = '',
 }: ArchitecturePanelProps) {
   // `i18n` is the readout's locale (locale-aware times); `t` labels both knobs.
   const { t, i18n } = useTranslation();
+
+  // The standalone link's readings, captured ONCE: a link decides the first
+  // paint, and every later change belongs to the page rather than the address
+  // bar (the panel never writes these back).
+  const [initialDeepLink] = useState<ArchitectureDeepLinkState>(
+    () => parseArchitectureDeepLink(deepLinkSearch),
+  );
+  // The subgraph the link names, mapped onto the panel's own granularity.
+  const deepLinkGranularity: ArchitectureGranularity | null = initialDeepLink.view === null
+    ? null
+    : initialDeepLink.view === 'file'
+      ? 'file'
+      : 'entity';
 
   // The element filter's labels. Each `t()` names its key literally (not a
   // template) so the locale-completeness test extracts every one of them from
@@ -372,26 +413,30 @@ export default function ArchitecturePanel({
   // Which of the two server subgraphs is on screen. Purely local state: both
   // arrive in one response, so this must never re-enter the fetch. The class
   // diagram is the shipped default (the entity subgraph is the one that has
-  // entity kinds and members).
-  const [granularity, setGranularity] = useState<ArchitectureGranularity>(initialGranularity);
+  // entity kinds and members); a standalone link's `view` overrides it once.
+  const [granularity, setGranularity] = useState<ArchitectureGranularity>(
+    deepLinkGranularity ?? initialGranularity,
+  );
   // The two display knobs, remembered per project (localStorage). `scope` is
   // the requested BFS depth — a server generation parameter and part of the
   // result cache's key, so changing it refetches; `detail` only ranks the
   // arrived payload, so changing it must never refetch. The pair is one state
-  // object because a project switch reloads both together.
+  // object because a project switch reloads both together. A standalone link's
+  // scope/detail win for the first paint, without being persisted.
   const [displaySettings, setDisplaySettings] = useState<ArchitectureDisplaySettings>(() => ({
     projectId,
-    scope: readStoredScope(projectId),
-    detail: readStoredDetail(projectId),
+    scope: initialDeepLink.scope ?? readStoredScope(projectId),
+    detail: initialDeepLink.detail ?? readStoredDetail(projectId),
   }));
   // React's "adjust state when a prop changes" pattern: a project switch swaps
   // the remembered pair in the same render, so the graph is never requested
-  // with the previous project's depth.
+  // with the previous project's depth. The link's readings stay authoritative
+  // for this standalone mount (the project id arrives after the first render).
   if (displaySettings.projectId !== projectId) {
     setDisplaySettings({
       projectId,
-      scope: readStoredScope(projectId),
-      detail: readStoredDetail(projectId),
+      scope: initialDeepLink.scope ?? readStoredScope(projectId),
+      detail: initialDeepLink.detail ?? readStoredDetail(projectId),
     });
   }
   const { scope, detail } = displaySettings;
@@ -415,12 +460,24 @@ export default function ArchitecturePanel({
   const { filter, requestFilter } = filterSettings;
 
   // ---- Manual curation (pins / removals / hidden relations) ----------------
+  // A counter bumped by another tab's `storage` event. Recreating the store is
+  // how this tab adopts the other tab's pins/exclusions without a second write
+  // path: the store reads localStorage once at creation, so a fresh instance
+  // IS the new state. (Undo history is deliberately per tab and starts over.)
+  const [curationStorageRevision, setCurationStorageRevision] = useState(0);
   // The store is per `(project, session)`: the graph's seeds are the session's
   // transcript, so a project has no curation of its own. A missing session
   // leaves `canEdit: false`, which disables the whole feature (and says why).
   const curationStore = useMemo(
-    () => createCurationStore({ storage: BROWSER_CURATION_STORAGE, projectId, sessionId }),
-    [projectId, sessionId],
+    () => {
+      // `curationStorageRevision` is the dependency that rebuilds the store when
+      // another tab writes: the store reads localStorage once at creation, so a
+      // fresh instance IS the adopted state. The read makes that intent explicit
+      // to the hook's dependency checker.
+      void curationStorageRevision;
+      return createCurationStore({ storage: BROWSER_CURATION_STORAGE, projectId, sessionId });
+    },
+    [projectId, sessionId, curationStorageRevision],
   );
   const [curationState, setCurationState] = useState<ArchitectureCurationState>(
     () => curationStore.getState(),
@@ -480,7 +537,46 @@ export default function ArchitecturePanel({
   // The granularity the last REQUEST was made for. The element axis does not
   // apply to the file graph, so switching views moves the request too — but the
   // drawing switches immediately (both subgraphs arrive in one response).
-  const [requestGranularity, setRequestGranularity] = useState<ArchitectureGranularity>(initialGranularity);
+  const [requestGranularity, setRequestGranularity] = useState<ArchitectureGranularity>(
+    deepLinkGranularity ?? initialGranularity,
+  );
+  // Another tab's change to this project's remembered knobs. `storage` fires
+  // only in OTHER documents, so applying it here cannot echo back a write this
+  // tab just made. Curation is adopted by recreating the store (above); the
+  // scope/detail pair and the element/relation filter are plain state, so they
+  // are re-read from the same storage keys the other tab wrote.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const projectFilterKey = `architecture.filter.${projectId ?? ''}`;
+    const projectScopeKey = `architecture.scope.${projectId ?? ''}`;
+    const projectDetailKey = `architecture.detail.${projectId ?? ''}`;
+    const sessionCurationKey = curationStorageKey(projectId, sessionId);
+    const onStorage = (event: StorageEvent): void => {
+      // `key === null` is `localStorage.clear()`: every knob is gone, so every
+      // reading has to be re-adopted rather than left describing deleted state.
+      const cleared = event.key === null;
+      if (cleared || event.key === projectFilterKey) {
+        const stored = readStoredFilter(projectId);
+        setFilterSettings({ projectId, filter: stored, requestFilter: stored });
+        // The filter is a generation knob for the view on screen, so the next
+        // read asks for the newly stored selection instead of the old one.
+        setRequestGranularity(granularity);
+      }
+      if (cleared || event.key === projectScopeKey) {
+        const stored = readStoredScope(projectId);
+        setDisplaySettings((current) => ({ ...current, scope: stored }));
+      }
+      if (cleared || event.key === projectDetailKey) {
+        const stored = readStoredDetail(projectId);
+        setDisplaySettings((current) => ({ ...current, detail: stored }));
+      }
+      if (cleared || event.key === sessionCurationKey) {
+        setCurationStorageRevision((revision) => revision + 1);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [projectId, sessionId, granularity]);
   // The filter popover; local like the legend and the export menu.
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
   // The popover is drawn `position: fixed` on the desktop tier because the
@@ -883,6 +979,11 @@ export default function ArchitecturePanel({
   const fullscreenActive = fullscreen.active;
   const exitFullscreen = fullscreen.exit;
   const toggleFullscreen = fullscreen.toggle;
+  // The standalone page is viewport-sized from the first paint (it has no
+  // workspace shell around it), so it borrows the overlay's geometry: the
+  // canvas region is `fixed; inset: 0` and the toolbar/readout rows float over
+  // it. Entering fullscreen thereafter changes nothing about that geometry.
+  const fillsViewport = fullscreenActive || standalone;
   // Focus moves INTO the drawing on entry and back to the toggle on exit, so
   // the keyboard reader is never left on a control the overlay covers.
   const wasFullscreenRef = useRef(false);
@@ -916,36 +1017,60 @@ export default function ArchitecturePanel({
   // makes each toggle its own request; null means no request was made yet.
   const [fitRequest, setFitRequest] = useState<ArchitectureFitRequest | null>(null);
   const fitTokenRef = useRef(0);
-  // How much of the overlay's top edge the in-flow chrome (the one-row toolbar
-  // and the readout row) covers. The drawing region is the whole viewport on
-  // the overlay, so without this band a fitted drawing starts BEHIND the chrome
-  // — the defect the review found. 0 outside the overlay, where chrome sits
-  // above the canvas in normal flow and takes height from it instead.
+  // How much of the viewport-sized canvas the floating chrome (the toolbar and
+  // the readout row) covers. Reserving it lets the renderer fit the drawing
+  // BELOW the chrome instead of tucking its top row underneath it. 0 when the
+  // chrome sits in normal flow (the in-tab layout), where it takes height from
+  // the canvas rather than covering it.
   const [topChromePx, setTopChromePx] = useState(0);
   const readoutRowRef = useRef<HTMLDivElement | null>(null);
-  const wasFullscreenForFitRef = useRef(false);
+  const filledViewportMeasuredRef = useRef(false);
+  // Whether the last render was viewport-filled. A TRANSITION (entering or
+  // leaving fullscreen) always re-fits; the standalone page's fill is NOT a
+  // transition, so its first fit waits for the reading that gives the chrome
+  // rows their height.
+  const lastFillsViewportRef = useRef(fillsViewport);
   useEffect(() => {
-    if (wasFullscreenForFitRef.current === fullscreenActive) return;
-    wasFullscreenForFitRef.current = fullscreenActive;
-    if (zoomModeRef.current !== 'fit') return;
-    // One frame after the toggle: the overlay's box, or the region's return to
-    // the flex column, is laid out by then, so the fit uses the settled size.
+    const transitioned = lastFillsViewportRef.current !== fillsViewport;
+    lastFillsViewportRef.current = fillsViewport;
+
+    if (!fillsViewport) {
+      if (!transitioned) return;
+      // Back to the flex column: the drawing's height is the region's own again.
+      filledViewportMeasuredRef.current = false;
+      setTopChromePx(0);
+      if (zoomModeRef.current !== 'fit') return;
+      const frame = requestAnimationFrame(() => {
+        fitTokenRef.current += 1;
+        setFitRequest({
+          token: fitTokenRef.current,
+          viewportHeight: graphAreaRef.current?.getBoundingClientRect().height ?? 0,
+        });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+
+    // The chrome rows live inside the loaded branch. Measuring before they
+    // mount would read 0 and never re-measure — the defect that left the
+    // standalone page's top row of nodes under the toolbar.
+    if (view.status !== 'loaded') return;
+    if (!transitioned && filledViewportMeasuredRef.current) return;
+    // One frame after the toggle (or the first reading): the overlay's box, or
+    // the region's return to the flex column, is laid out by then, so the fit
+    // uses the settled size.
     const frame = requestAnimationFrame(() => {
-      const viewportHeight = fullscreenActive
-        // In the overlay the region is `fixed; inset: 0`, so the viewport
-        // height IS its height — read it from the window rather than depending
-        // on a layout pass this effect cannot observe.
-        ? window.innerHeight
-        : graphAreaRef.current?.getBoundingClientRect().height ?? 0;
-      // The readout row is the LAST in-flow chrome row on the overlay (the
-      // toolbar sits above it), so its bottom edge is the covered band's height.
+      filledViewportMeasuredRef.current = true;
+      // The readout row is the LAST in-flow chrome row (the toolbar sits above
+      // it), so its bottom edge is the covered band's height.
       const chromeBottom = readoutRowRef.current?.getBoundingClientRect().bottom ?? 0;
-      setTopChromePx(fullscreenActive && compactToolbar ? Math.ceil(chromeBottom) : 0);
+      setTopChromePx(Math.ceil(chromeBottom));
+      // A manual zoom is the reader's; only a fit may be re-issued.
+      if (zoomModeRef.current !== 'fit') return;
       fitTokenRef.current += 1;
-      setFitRequest({ token: fitTokenRef.current, viewportHeight });
+      setFitRequest({ token: fitTokenRef.current, viewportHeight: window.innerHeight });
     });
     return () => cancelAnimationFrame(frame);
-  }, [fullscreenActive, compactToolbar]);
+  }, [fillsViewport, view.status]);
 
   const changeScope = (next: number): void => {
     const clamped = clampArchitectureScope(next);
@@ -1078,6 +1203,31 @@ export default function ArchitecturePanel({
     setFocusTarget((current) => ({ id: nodeId, token: (current?.token ?? 0) + 1, drill }));
     setSearchOpen(false);
   };
+
+  // The standalone link's `entity`/`mode`: select and centre that node once the
+  // reading that contains it has arrived, and drill only when the link says
+  // `neighbourhood`. The ref makes this a FIRST-OPEN instruction — a reader who
+  // later selects another node must not be dragged back by the URL.
+  const deepLinkEntityAppliedRef = useRef<string | null>(null);
+  // `revealNode` closes over state that changes every render; a ref keeps the
+  // link's one-shot effect from re-running (and re-focusing) on every render.
+  const revealNodeRef = useRef(revealNode);
+  useEffect(() => {
+    revealNodeRef.current = revealNode;
+  });
+  useEffect(() => {
+    const entity = initialDeepLink.entity;
+    if (entity === null || deepLinkEntityAppliedRef.current === entity) return;
+    if (view.status !== 'loaded') return;
+    // An id the current subgraph does not carry is ignored rather than focused
+    // blindly: the renderer can only centre a node it draws.
+    if (!view.result.graph[granularity].nodes.some((candidate) => candidate.id === entity)) return;
+    deepLinkEntityAppliedRef.current = entity;
+    // A folded node would be "selected" without being on screen; the link asked
+    // for it, so the identity detail tier is the reading that honours the link.
+    const folded = detailRanking !== null && !detailRanking.retainedNodeIds.has(entity);
+    revealNodeRef.current(entity, folded, initialDeepLink.mode === 'neighbourhood');
+  }, [initialDeepLink, view, granularity, detailRanking]);
 
   // ---- Curation actions ----------------------------------------------------
   /** The store shape of a drawn node: `(file, name)` beside the id. */
@@ -1452,6 +1602,28 @@ export default function ArchitecturePanel({
     changeFilter({ ...filter, kinds });
   };
 
+  /**
+   * The standalone page's Back entry. It sits in the toolbar rather than in a
+   * second bar, so the drawing keeps the full viewport; the compact tier keeps
+   * the icon alone and states the action through `aria-label`.
+   */
+  const standaloneBackButton = standalone && onBackToSession !== undefined ? (
+    <button
+      type="button"
+      onClick={onBackToSession}
+      aria-label={t('architecture.standalone.backToSession', { defaultValue: 'Back to session' })}
+      title={t('architecture.standalone.backToSession', { defaultValue: 'Back to session' })}
+      data-architecture-standalone-back="true"
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex items-center gap-1 border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+    >
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+      {!compactToolbar && (
+        <span>{t('architecture.standalone.backToSession', { defaultValue: 'Back to session' })}</span>
+      )}
+    </button>
+  ) : null;
+
   if (!sessionId) {
     return (
       <div data-architecture-no-session="true">
@@ -1476,25 +1648,41 @@ export default function ArchitecturePanel({
 
   if (view.status === 'idle' || view.status === 'loading') {
     return (
-      <p data-architecture-loading="true" className="p-6 text-sm text-muted-foreground">
-        {t('architecture.loading', { defaultValue: 'Generating the architecture graph…' })}
-      </p>
+      <div
+        data-architecture-standalone={standalone ? 'true' : undefined}
+        data-architecture-viewport-fill={fillsViewport ? 'true' : undefined}
+        style={fillsViewport ? { position: 'fixed', inset: 0, zIndex: 60 } : undefined}
+        className={fillsViewport ? 'flex flex-col overflow-hidden bg-background' : undefined}
+      >
+        {standaloneBackButton !== null && <div className="shrink-0 p-2">{standaloneBackButton}</div>}
+        <p data-architecture-loading="true" className="p-6 text-sm text-muted-foreground">
+          {t('architecture.loading', { defaultValue: 'Generating the architecture graph…' })}
+        </p>
+      </div>
     );
   }
 
   if (view.status === 'error') {
     return (
-      <div className="p-6">
-        <p data-architecture-error="true" role="alert" className="text-sm text-destructive">
-          {view.message}
-        </p>
-        <button
-          type="button"
-          onClick={reload}
-          className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-        >
-          {t('architecture.retry', { defaultValue: 'Retry' })}
-        </button>
+      <div
+        data-architecture-standalone={standalone ? 'true' : undefined}
+        data-architecture-viewport-fill={fillsViewport ? 'true' : undefined}
+        style={fillsViewport ? { position: 'fixed', inset: 0, zIndex: 60 } : undefined}
+        className={fillsViewport ? 'flex flex-col overflow-hidden bg-background' : undefined}
+      >
+        {standaloneBackButton !== null && <div className="shrink-0 p-2">{standaloneBackButton}</div>}
+        <div className="p-6">
+          <p data-architecture-error="true" role="alert" className="text-sm text-destructive">
+            {view.message}
+          </p>
+          <button
+            type="button"
+            onClick={reload}
+            className="mt-3 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            {t('architecture.retry', { defaultValue: 'Retry' })}
+          </button>
+        </div>
       </div>
     );
   }
@@ -1598,6 +1786,38 @@ export default function ArchitecturePanel({
    * the text through its draft subscription. Sending stays the reader's action.
    */
   const composeSelectionText = (text: string): void => {
+    // The standalone page has no composer of its own. The same composed text
+    // travels to the session's workspace tab, which owns the draft AND the tab
+    // switch; without an answer there is nothing to append to, so the reader is
+    // handed the text on the clipboard instead of a silent no-op.
+    if (standalone) {
+      void (async () => {
+        const delivered = await sendArchitectureChatMessage({ sessionId, text });
+        if (delivered) {
+          showCurationToast(
+            t('architecture.standalone.sent', {
+              defaultValue: 'Sent to the session’s chat input',
+            }),
+            false,
+          );
+          return;
+        }
+        try {
+          await navigator.clipboard?.writeText(text);
+        } catch {
+          // The toast below still tells the reader the tab could not be reached;
+          // a refused clipboard is the browser's own limit, not something this
+          // page can repair.
+        }
+        showCurationToast(
+          t('architecture.standalone.copied', {
+            defaultValue: 'Main session tab not reachable — copied to the clipboard',
+          }),
+          false,
+        );
+      })();
+      return;
+    }
     const scope = resolveDraftScope(projectId, sessionId);
     if (scope === null) return;
     const existing = readDraftText(scope);
@@ -1880,6 +2100,64 @@ export default function ArchitecturePanel({
       className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
     >
       {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
+    </button>
+  );
+
+  /**
+   * The view on screen, as the standalone link describes it.
+   *
+   * The panel is the only layer that knows which subgraph, depth, tier and
+   * selection are current, so "Open in new tab" states the reading here rather
+   * than letting the route guess. `entity` prefers the current selection and
+   * falls back to the entity a drilled neighbourhood is centred on;
+   * `mode=neighbourhood` is written only when the drawing IS that drill.
+   */
+  const currentDeepLinkState = (): ArchitectureDeepLinkState => ({
+    view: granularity === 'entity' ? 'class' : 'file',
+    scope,
+    detail,
+    entity: selection?.kind === 'entity'
+      ? selection.nodeId
+      : diagramView.kind === 'neighborhood'
+        ? diagramView.entityId
+        : null,
+    mode: diagramView.kind === 'neighborhood' ? 'neighbourhood' : null,
+  });
+
+  /**
+   * The toolbar's door to a standalone page for the SAME reading.
+   *
+   * The href is built from the current pathname so the deployment's router
+   * basename survives, and carries only the FIRST-paint parameters; the new tab
+   * shares the project's remembered knobs through localStorage afterwards. Also
+   * offered in the fullscreen overlay, where a reader is most likely to want
+   * the drawing on a second screen.
+   */
+  const openInNewTab = (): void => {
+    if (sessionId === null || typeof window === 'undefined') return;
+    const href = buildArchitectureStandaloneHref({
+      pathname: window.location.pathname,
+      sessionId,
+      state: currentDeepLinkState(),
+    });
+    window.open(href, '_blank', 'noopener');
+  };
+
+  const openInNewTabButton = (
+    <button
+      type="button"
+      onClick={openInNewTab}
+      disabled={sessionId === null}
+      aria-label={t('architecture.standalone.openInNewTab', { defaultValue: 'Open in new tab' })}
+      title={t('architecture.standalone.openInNewTab', { defaultValue: 'Open in new tab' })}
+      data-architecture-open-in-new-tab="true"
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex items-center gap-1 border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40`}
+    >
+      <ExternalLink className="h-4 w-4" aria-hidden="true" />
+      {!compactToolbar && (
+        <span>{t('architecture.standalone.openInNewTab', { defaultValue: 'Open in new tab' })}</span>
+      )}
     </button>
   );
 
@@ -3480,12 +3758,15 @@ export default function ArchitecturePanel({
       tabIndex={-1}
       data-architecture-panel="true"
       data-architecture-fullscreen={fullscreen.active ? 'true' : undefined}
+      data-architecture-standalone={standalone ? 'true' : undefined}
+      data-architecture-viewport-fill={fillsViewport ? 'true' : undefined}
       // The overlay is the SAME element the panel always renders: `fixed;
       // inset: 0` restyles it in place, which is what lets the renderer keep
-      // its zoom and the panel keep every reading through the toggle.
-      style={fullscreen.active ? { position: 'fixed', inset: 0, zIndex: 60 } : undefined}
+      // its zoom and the panel keep every reading through the toggle. The
+      // standalone page starts in this geometry because it has no shell.
+      style={fillsViewport ? { position: 'fixed', inset: 0, zIndex: 60 } : undefined}
       className={
-        fullscreen.active
+        fillsViewport
           ? 'flex flex-col overflow-hidden bg-background outline-none'
           : 'relative flex h-full flex-col overflow-hidden'
       }
@@ -3522,7 +3803,7 @@ export default function ArchitecturePanel({
         // preferable to hiding controls in a scroller).
         className={`relative flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 ${
           shortTouch && !fullscreen.active ? 'py-1' : 'py-1.5'
-        } ${fullscreen.active ? 'relative z-40 bg-background' : ''}`}
+        } ${fillsViewport ? 'relative z-40 bg-background' : ''}`}
       >
         {compactToolbar ? (
           fullscreen.active ? (
@@ -3530,7 +3811,9 @@ export default function ArchitecturePanel({
             // switch and Text page moved into. Everything else would be a
             // second row over the drawing's top edge.
             <>
+              {standaloneBackButton}
               <span className="flex-1" />
+              {openInNewTabButton}
               {fullscreenButton}
               {adjustButton}
             </>
@@ -3540,16 +3823,20 @@ export default function ArchitecturePanel({
             // the one Adjust menu. Fullscreen and export move INTO that menu —
             // the design's "remaining controls live in Adjust".
             <>
+              {standaloneBackButton}
               {granularityGroup}
               <span className="flex-1" />
               {shortTouchReadoutToggle}
+              {openInNewTabButton}
               {textToggle}
               {adjustButton}
             </>
           ) : (
             <>
+              {standaloneBackButton}
               {granularityGroup}
               <span className="flex-1" />
+              {openInNewTabButton}
               {textToggle}
               {fullscreenButton}
               {adjustButton}
@@ -3557,6 +3844,7 @@ export default function ArchitecturePanel({
           )
         ) : (
           <>
+            {standaloneBackButton}
             <h3 className="shrink-0 text-sm font-semibold text-foreground">
               {t('architecture.title', { defaultValue: 'Architecture' })}
             </h3>
@@ -3567,6 +3855,7 @@ export default function ArchitecturePanel({
             {searchBox}
             {curationManagerButton}
             <span className="flex-1" />
+            {openInNewTabButton}
             {textToggle}
             {fullscreenButton}
             {exportMenu}
@@ -3783,11 +4072,12 @@ export default function ArchitecturePanel({
                 renderer's view chrome is portaled into the bottom sheet. */}
             {!compactToolbar && (
               <div
+                ref={readoutRowRef}
                 data-architecture-canvas-header="true"
                 // Floats above the overlay's viewport-sized drawing instead of
                 // taking a band from it (see the graph region below).
                 className={`flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1 ${
-                  fullscreen.active ? 'relative z-30 bg-background' : ''
+                  fillsViewport ? 'relative z-30 bg-background' : ''
                 }`}
               >
                 <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
@@ -3809,7 +4099,7 @@ export default function ArchitecturePanel({
                 data-architecture-canvas-header="true"
                 data-architecture-readout-overlay="true"
                 className={`flex shrink-0 border-b border-border/60 px-3 py-1 ${
-                  fullscreen.active ? 'relative z-30 bg-background' : ''
+                  fillsViewport ? 'relative z-30 bg-background' : ''
                 }`}
               >
                 {readoutPanel}
@@ -3841,12 +4131,13 @@ export default function ArchitecturePanel({
               }}
               // `F` is the drawing's own shortcut while it owns the keyboard.
               onKeyDown={handleCanvasFullscreenKey}
-              // On the overlay the REGION itself is viewport-sized: the toolbar
+              // On the overlay (and on the standalone page, which borrows the
+              // same geometry) the REGION itself is viewport-sized: the toolbar
               // and readout rows above float over it with a higher z-index, so
               // "the drawing fills the screen" is literally its box, not a
               // share of the remaining column.
               className={
-                fullscreen.active
+                fillsViewport
                   ? `fixed inset-0 z-0 flex min-h-0 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`
                   : `relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`
               }
@@ -4082,10 +4373,10 @@ export default function ArchitecturePanel({
         // fine-pointer dock is wrapped.
         <div
           data-architecture-fullscreen-dock={
-            fullscreen.active && dockTier !== 'drawer' ? 'true' : undefined
+            fillsViewport && dockTier !== 'drawer' ? 'true' : undefined
           }
           className={
-            fullscreen.active && dockTier !== 'drawer'
+            fillsViewport && dockTier !== 'drawer'
               ? 'absolute inset-y-0 right-0 z-40 flex max-h-full flex-col'
               : 'contents'
           }

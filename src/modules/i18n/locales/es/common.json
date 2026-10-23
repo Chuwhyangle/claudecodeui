@@ -166,6 +166,12 @@
       "enter": "Pantalla completa",
       "exit": "Salir de pantalla completa"
     },
+    "standalone": {
+      "openInNewTab": "Abrir en una pestaña nueva",
+      "backToSession": "Volver a la sesión",
+      "sent": "Enviado a la entrada del chat de la sesión",
+      "copied": "La pestaña principal no responde: copiado al portapapeles"
+    },
     "controls": {
       "maxHops": "Saltos",
       "hopOption": "Saltos {{count}}",

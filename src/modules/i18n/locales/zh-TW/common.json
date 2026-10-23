@@ -166,6 +166,12 @@
       "enter": "全螢幕",
       "exit": "結束全螢幕"
     },
+    "standalone": {
+      "openInNewTab": "在新分頁開啟",
+      "backToSession": "返回工作階段",
+      "sent": "已傳送到工作階段的聊天輸入框",
+      "copied": "主分頁未回應，已複製到剪貼簿"
+    },
     "controls": {
       "maxHops": "跳數",
       "hopOption": "跳數 {{count}}",

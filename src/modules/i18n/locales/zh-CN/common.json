@@ -166,6 +166,12 @@
       "enter": "全屏",
       "exit": "退出全屏"
     },
+    "standalone": {
+      "openInNewTab": "在新标签页打开",
+      "backToSession": "返回会话",
+      "sent": "已发送到会话的聊天输入框",
+      "copied": "主标签页未响应，已复制到剪贴板"
+    },
     "controls": {
       "maxHops": "跳数",
       "hopOption": "跳数 {{count}}",

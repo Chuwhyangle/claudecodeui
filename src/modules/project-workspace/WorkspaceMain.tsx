@@ -14,6 +14,7 @@ import { isQuayTabVisible, QuayPanel, useEnsureQuayTabVisible, useQuayStatus } f
 import {
   ArchitecturePanel,
   isArchitectureTabVisible,
+  useArchitectureChatBridge,
   useEnsureArchitectureTabVisible,
 } from '@/modules/architecture';
 import type { AppTab, DirectoryRevealRequest, Project, ProjectSession, SessionEstablishedContext, SessionNavigationOptions, SettingsMainTab, UiNavigateReveal } from '@/shared/types';
@@ -102,6 +103,22 @@ function WorkspaceMain({
   // Owns the `.archguard/query/manifest.json` reading, exactly like the Quay
   // gate above owns `.quay/config.yml`.
   const shouldShowArchitectureTab = isArchitectureTabVisible(selectedProject);
+
+  /**
+   * The workspace tab's half of the standalone architecture page's bridge.
+   *
+   * Mounted HERE rather than inside the panel: after the first "Put in chat
+   * input" the workspace is on Chat, and the panel is unmounted, but a
+   * standalone page must still be able to send the next selection while this
+   * tab remains open. The panel's own in-page actions keep writing the draft
+   * directly; this only serves the cross-tab transport.
+   */
+  const switchToChat = useCallback((): void => setActiveTab('chat'), [setActiveTab]);
+  useArchitectureChatBridge({
+    projectId: selectedProject?.projectId ?? null,
+    sessionId: selectedSession?.id ?? null,
+    onSwitchToChat: switchToChat,
+  });
 
   const {
     view: quayView,

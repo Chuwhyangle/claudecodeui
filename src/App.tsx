@@ -1,6 +1,6 @@
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import type { ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 
 import { OAUTH_CONSENT_SPA_PATH } from '@shared/oauthConsent';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
@@ -9,9 +9,12 @@ import { AuthProvider, ProtectedRoute, useAuth } from '@/modules/auth';
 import { TaskMasterProvider,TasksSettingsProvider } from '@/modules/task-master';
 import { WebSocketProvider } from '@/shared/context/WebSocketContext';
 import { PluginsProvider } from '@/modules/plugins';
-import { ProjectWorkspaceRoute } from '@/modules/project-workspace';
+import { ProjectWorkspaceRoute, useProjectsState } from '@/modules/project-workspace';
 import { OAuthConsentRoute } from '@/modules/oauth-consent';
 import { CockpitPage, CockpitRemote } from '@/modules/cockpit';
+import { ArchitecturePanel, requestArchitectureSessionFocus } from '@/modules/architecture';
+import { useWebSocket } from '@/shared/context/WebSocketContext';
+import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
 import { i18n } from '@/modules/i18n';
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
@@ -122,9 +125,80 @@ function AuthenticatedWebSocket({ children }: { children: ReactNode }) {
   return <WebSocketProvider auth={{ isLoading, token, user }}>{children}</WebSocketProvider>;
 }
 
+/**
+ * A stable "nothing is running" answer for the standalone page's project state.
+ *
+ * `useProjectsState` normally receives the busy-session predicate from the
+ * workspace's `SessionProtectionProvider`; the standalone architecture page has
+ * no chat, so no turn can be running in it. A module-level function keeps the
+ * hook's dependency identity stable across renders.
+ */
+const NO_SESSION_IS_PROCESSING = (): boolean => false;
+
+/**
+ * The `/session/:sessionId/architecture` route: the architecture panel alone, in
+ * a page of its own.
+ *
+ * Used by `App` and opened by the panel's "Open in new tab". It deliberately
+ * mounts NO workspace shell (no sidebar, no tab strip), so the drawing gets the
+ * whole viewport; the panel itself reports the deep link's first-paint state and
+ * draws the "Back to session" entry. The project is resolved from the session
+ * through the workspace's own state hook, which is also what carries the
+ * Tier-1 `hasArchguardCache` reading for a session that is not in the loaded
+ * project pages.
+ */
+function ArchitectureStandaloneRoute() {
+  const { sessionId } = useParams<{ sessionId?: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { subscribe } = useWebSocket();
+  const { isMobile } = useDeviceSettings({ trackPWA: false });
+  const { selectedProject, selectedSession } = useProjectsState({
+    sessionId,
+    navigate,
+    subscribe,
+    isMobile,
+    isSessionProcessing: NO_SESSION_IS_PROCESSING,
+  });
+
+  /**
+   * Switch to the open workspace tab when one answers; otherwise navigate this
+   * tab to the session. A confirmed tab means this standalone copy closes
+   * itself, so "Back" does not leave a duplicate workspace behind.
+   */
+  const handleBackToSession = useCallback((): void => {
+    if (sessionId === undefined || sessionId === '') {
+      navigate('/');
+      return;
+    }
+    void (async () => {
+      const focused = await requestArchitectureSessionFocus(sessionId);
+      if (!focused) {
+        navigate(`/session/${encodeURIComponent(sessionId)}`);
+        return;
+      }
+      // The workspace tab brought itself forward. Closing a script-opened tab is
+      // allowed; a manually opened one stays, which is harmless — the reader is
+      // already looking at the workspace.
+      window.close();
+    })();
+  }, [navigate, sessionId]);
+
+  return (
+    <ArchitecturePanel
+      projectId={selectedProject?.projectId ?? null}
+      sessionId={sessionId ?? null}
+      projectName={selectedProject?.displayName ?? null}
+      sessionTitle={selectedSession?.title ?? selectedSession?.summary ?? null}
+      standalone
+      deepLinkSearch={location.search}
+      onBackToSession={handleBackToSession}
+    />
+  );
+}
+
 /** Rendered by main.tsx; mounts the shared providers, the auth gate and the project workspace routes. */
-export default function App() {
-  const routerBasename = detectRouterBasename();
+export default function App() {  const routerBasename = detectRouterBasename();
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -140,6 +214,15 @@ export default function App() {
                     <Routes>
                       <Route path="/" element={<ProjectWorkspaceRoute />} />
                       <Route path="/session/:sessionId" element={<ProjectWorkspaceRoute />} />
+                      {/* The standalone architecture page: the same session's
+                          reading without the workspace shell, so it can live on
+                          a second screen or be shared as a link. Sits behind the
+                          same ProtectedRoute as the workspace, so an anonymous
+                          visitor is sent to the existing login first. */}
+                      <Route
+                        path="/session/:sessionId/architecture"
+                        element={<ArchitectureStandaloneRoute />}
+                      />
                       {/* The cockpit: a top-level read-only stage over the quay fleet, a sibling
                           of the project workspace rather than a tab inside one. It is behind the
                           same ProtectedRoute, so it reads the fleet only for a signed-in user. */}

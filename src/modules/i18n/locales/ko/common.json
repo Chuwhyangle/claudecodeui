@@ -166,6 +166,12 @@
       "enter": "전체 화면",
       "exit": "전체 화면 종료"
     },
+    "standalone": {
+      "openInNewTab": "새 탭에서 열기",
+      "backToSession": "세션으로 돌아가기",
+      "sent": "세션 채팅 입력으로 보냈습니다",
+      "copied": "기본 탭에 연결할 수 없음 — 클립보드에 복사했습니다"
+    },
     "controls": {
       "maxHops": "홉",
       "hopOption": "홉 {{count}}",

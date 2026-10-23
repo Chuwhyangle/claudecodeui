@@ -125,6 +125,12 @@
       "enter": "Fullscreen",
       "exit": "Exit fullscreen"
     },
+    "standalone": {
+      "openInNewTab": "Open in new tab",
+      "backToSession": "Back to session",
+      "sent": "Sent to the session’s chat input",
+      "copied": "Main session tab not reachable — copied to the clipboard"
+    },
     "controls": {
       "maxHops": "Hops",
       "hopOption": "Hops {{count}}",
