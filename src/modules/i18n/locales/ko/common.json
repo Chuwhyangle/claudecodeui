@@ -662,7 +662,7 @@
     "intentHint": "Enter로 실행 · 화살표로 포커스 이동 · Backspace로 뒤로",
     "intentSubmit": "실행",
     "intentUnmatched": "인식하지 못했습니다: “{{text}}”. 추측하지 않았습니다.",
-    "timingLast": "의도 → 첫 프레임 {{ms}} ms",
+    "timingLast": "마지막 변경 → 첫 프레임 {{ms}} ms",
     "keyHint": "화살표로 포커스 이동 · Enter로 확대 · Backspace로 뒤로"
   }
 }

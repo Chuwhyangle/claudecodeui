@@ -662,7 +662,7 @@
     "intentHint": "Enter ejecuta la frase · las flechas mueven el foco · Retroceso vuelve",
     "intentSubmit": "Ejecutar",
     "intentUnmatched": "No reconocido: «{{text}}». No se adivinó nada.",
-    "timingLast": "intención → primer fotograma {{ms}} ms",
+    "timingLast": "último cambio → primer fotograma {{ms}} ms",
     "keyHint": "Flechas mueven el foco · Enter amplía · Retroceso vuelve"
   }
 }

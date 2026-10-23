@@ -662,7 +662,7 @@
     "intentHint": "Enter 執行這句話 · 方向鍵移動焦點 · Backspace 返回",
     "intentSubmit": "執行",
     "intentUnmatched": "未辨識：「{{text}}」。沒有做任何猜測。",
-    "timingLast": "意圖 → 首幀 {{ms}} 毫秒",
+    "timingLast": "最近一次變更 → 首幀 {{ms}} 毫秒",
     "keyHint": "方向鍵移動焦點 · Enter 放大 · Backspace 返回"
   }
 }

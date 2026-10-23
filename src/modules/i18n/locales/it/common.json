@@ -662,7 +662,7 @@
     "intentHint": "Invio esegue la frase · le frecce spostano il fuoco · Backspace torna indietro",
     "intentSubmit": "Esegui",
     "intentUnmatched": "Non riconosciuto: «{{text}}». Nessuna ipotesi.",
-    "timingLast": "intento → primo fotogramma {{ms}} ms",
+    "timingLast": "ultimo cambiamento → primo fotogramma {{ms}} ms",
     "keyHint": "Frecce spostano il fuoco · Invio ingrandisce · Backspace torna indietro"
   }
 }

@@ -745,7 +745,7 @@
     "intentHint": "Enter menjalankan frasa · panah memindahkan fokus · Backspace kembali",
     "intentSubmit": "Jalankan",
     "intentUnmatched": "Tidak dikenali: “{{text}}”. Tidak ada tebakan.",
-    "timingLast": "niat → bingkai pertama {{ms}} ms",
+    "timingLast": "perubahan terakhir → bingkai pertama {{ms}} ms",
     "keyHint": "Panah memindahkan fokus · Enter memperbesar · Backspace kembali"
   }
 }

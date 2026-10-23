@@ -751,7 +751,7 @@
     "intentHint": "Enter runs the phrase · arrows move focus · Backspace goes back",
     "intentSubmit": "Run",
     "intentUnmatched": "Not recognised: “{{text}}”. No guess was made.",
-    "timingLast": "intent → first frame {{ms}} ms",
+    "timingLast": "last change → first frame {{ms}} ms",
     "keyHint": "Arrows move focus · Enter zooms in · Backspace goes back"
   }
 }

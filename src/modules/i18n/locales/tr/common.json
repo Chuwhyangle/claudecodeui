@@ -662,7 +662,7 @@
     "intentHint": "Enter ifadeyi çalıştırır · oklar odağı taşır · Backspace geri gider",
     "intentSubmit": "Çalıştır",
     "intentUnmatched": "Tanınmadı: “{{text}}”. Tahmin yapılmadı.",
-    "timingLast": "niyet → ilk kare {{ms}} ms",
+    "timingLast": "son değişiklik → ilk kare {{ms}} ms",
     "keyHint": "Oklar odağı taşır · Enter büyütür · Backspace geri gider"
   }
 }

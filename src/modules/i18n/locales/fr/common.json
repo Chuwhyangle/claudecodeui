@@ -662,7 +662,7 @@
     "intentHint": "Entrée exécute la phrase · les flèches déplacent le focus · Retour arrière revient",
     "intentSubmit": "Exécuter",
     "intentUnmatched": "Non reconnu : « {{text}} ». Aucune supposition.",
-    "timingLast": "intention → première image {{ms}} ms",
+    "timingLast": "dernier changement → première image {{ms}} ms",
     "keyHint": "Flèches déplacent le focus · Entrée zoome · Retour arrière revient"
   }
 }
