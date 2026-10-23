@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-empty-class-view-guides-to-file-graph
 title: 架构图类图 0 节点但文件图有内容时给出引导：说明原因并提供切到文件图的入口
-status: ready
+status: done
 labels:
   - gap
 parent: null
