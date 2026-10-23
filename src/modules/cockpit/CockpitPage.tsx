@@ -27,6 +27,58 @@ import {
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
 import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
+import { encodeQr } from '@/modules/cockpit/cockpitQr';
+
+/** Where the phone remote lives, relative to the cockpit's router basename. */
+const REMOTE_PATH = '/cockpit/remote';
+
+/**
+ * The address the stage's QR code encodes: this deployment's origin and basename plus
+ * `/cockpit/remote`. Derived from the URL the stage is ALREADY on rather than from the router,
+ * because a reverse proxy can mount the app under a prefix and the phone must open exactly the
+ * address that works from outside — the one the desktop itself was served at.
+ */
+function remotePageUrl(): string {
+  if (typeof window === 'undefined') return REMOTE_PATH;
+  const { origin, pathname } = window.location;
+  const cockpitPath = '/cockpit';
+  const base = pathname.endsWith(cockpitPath)
+    ? pathname.slice(0, pathname.length - cockpitPath.length)
+    : '';
+  return `${origin}${base}${REMOTE_PATH}`;
+}
+
+/**
+ * The remote link as a scannable code. The QR encoder is the cockpit's own (see `cockpitQr.ts`);
+ * this component only turns its matrix into one `<path>`, so the stage pays one DOM node rather
+ * than a few thousand — and the code is `currentColor`, so it reads in both themes.
+ */
+function RemoteQr({ value, title }: { value: string; title: string }) {
+  const matrix = useMemo(() => encodeQr(value), [value]);
+  const path = useMemo(() => {
+    let data = '';
+    matrix.modules.forEach((row, rowIndex) => {
+      row.forEach((dark, columnIndex) => {
+        if (dark) data += `M${columnIndex} ${rowIndex}h1v1h-1z`;
+      });
+    });
+    return data;
+  }, [matrix]);
+  return (
+    <svg
+      viewBox={`0 0 ${matrix.size} ${matrix.size}`}
+      width={112}
+      height={112}
+      role="img"
+      aria-label={title}
+      data-testid="cockpit-remote-qr"
+      className="rounded bg-white p-1 text-black dark:bg-white"
+      shapeRendering="crispEdges"
+    >
+      <path d={path} fill="currentColor" />
+    </svg>
+  );
+}
 
 /**
  * The cockpit's top-level page (`/cockpit`): a stage over the quay fleet whose focus, view and
@@ -113,6 +165,8 @@ export default function CockpitPage() {
   const navigate = useNavigate();
   const hub = useCockpitHub();
   const hubState = hub.state;
+  // The remote link: computed once — the origin and basename the stage was served at.
+  const remoteUrl = useMemo(() => remotePageUrl(), []);
 
   // The fleet reading behind the project strip and the fleet tiles (`GET /api/quay/fleet-summary`).
   const [fleet, setFleet] = useState<FleetReading>({ status: 'loading' });
@@ -551,6 +605,25 @@ export default function CockpitPage() {
         <span className="hidden text-[11px] text-muted-foreground sm:block" data-testid="cockpit-key-hint">
           {t('cockpit.keyHint')}
         </span>
+        {/*
+          The phone remote's door: the stage shows the address, the phone scans it. No token is
+          minted — the remote is behind the same login, and the hub binds a device to the signed-in
+          user's state, so the code only has to carry the URL.
+        */}
+        <div
+          className="hidden items-center gap-2 sm:flex"
+          data-testid="cockpit-remote-panel"
+          data-cockpit-remote-url={remoteUrl}
+        >
+          <RemoteQr value={remoteUrl} title={t('cockpit.remoteScanHint')} />
+          <div className="flex max-w-40 flex-col text-[10px] leading-tight text-muted-foreground">
+            <span className="text-[11px] font-medium text-foreground">{t('cockpit.remoteTitle')}</span>
+            <span>{t('cockpit.remoteScanHint')}</span>
+            <a href={remoteUrl} className="underline" data-testid="cockpit-remote-link">
+              {t('cockpit.remoteOpen')}
+            </a>
+          </div>
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
