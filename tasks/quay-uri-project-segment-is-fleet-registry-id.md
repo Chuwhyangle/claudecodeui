@@ -51,10 +51,20 @@ depends_on:
 - `enabled` 不参与映射：与 fleet 的 id→root 映射保持一致，disabled 的登记项仍可被引用。
 - 当前 registry 只有 5 个项目（quay-fleet、quay、claudecodeui、archguard、plantuml-js）；驾驶舱显示的 cantus、meta-cc 未登记，修正后会显示「未登记到 quay-fleet」且不可被引用——这是预期行为，不是缺陷。
 
+### 实测（2026-10-23，隔离实例 3999 + Vite 5199）
+
+- fleet-summary 实读：claudecodeui→`claudecodeui`、archguard→`archguard`、cantus→`null`。
+- 驾驶舱 fleet 焦点 URI：`quay://archguard/board` … 5 个已登记项目；4 个未登记磁贴无地址、不可聚焦。
+- 本任务的在途磁贴：`quay://claudecodeui/task/quay-uri-project-segment-is-fleet-registry-id`（board 与 Quay 面板一致）。
+- 未登记项目（cantus）board：无 focusables、无 view URI、显示「未登记到 quay-fleet」提示。
+- 截图：`tmp/ui-project-segment-shots/{cockpit-fleet,cockpit-board,quay-panel,cockpit-unregistered-board}.png`。
+- 场景运行器报告：`tmp/ui-scenario-report.json`（4 步全绿、3 张 checkpoint 图，views=`quay://claudecodeui/board`）。
+
 ### Touches 补充（实现时发现）
 
 - `server/modules/quay/quay.module.ts`：生产组合根，把 registry join 注入 `createQuayService`。
 - `server/shared/types.ts`：后端镜像的 `QuaySnapshot` 也要带 `fleetProjectId`（与 `src/shared/types.ts` 成对声明；AC5 的后端 typecheck 需要它）。
+- `server/shared/tests/quay-test-script.test.ts`：新增一个 server 测试文件把采集数 403→404，dispatch 顺序 pin 重测（known=3/unknown=401、known=1/unknown=403）。
 - `src/modules/cockpit/cockpitIntent.ts` / `cockpitRouting.ts`：方案 5——口语句里的项目名与 URI 项目段改用同一个 registry id。
 - `src/modules/ui-scenario/tests/scenarioSurface.test.ts`：场景面的发布 gate 依赖 `fleetProjectId`，其逐字夹具随新的 URI 项目段更新。
 
@@ -68,6 +78,7 @@ depends_on:
 - server/modules/quay/tests/quay-fleet-project-id.test.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
 - server/shared/types.ts
+- server/shared/tests/quay-test-script.test.ts
 - src/modules/quay/QuayPanel.tsx
 - src/modules/quay/hooks/useQuayStatus.ts
 - src/modules/quay/tests/QuayPanel.test.tsx
