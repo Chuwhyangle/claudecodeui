@@ -15,7 +15,9 @@ import type { QuayTaskCounts } from '@/shared/types.js';
  *
  * 2. THE READ PATH. quay-fleet is the sole owner of the L1 action enum and of the L2 summary
  *    ledger (`.quay/object-summaries.jsonl`), so the primary path forwards `wall resolve` and
- *    `wall summary` to it verbatim. When that read port is unavailable, a TASK reference
+ *    `wall summary` to it VERBATIM — the same project-scoped address
+ *    (`quay://<project>/…`) the wall mints, because that is the only form the fleet parses.
+ *    When that read port is unavailable, a TASK reference
  *    falls back to the snapshot CloudCLI already reads for the Quay panel, which is honest
  *    stored data — never a summary generated on the spot.
  *
@@ -141,7 +143,14 @@ function parseQuayAddress(uri: string): QuayUriParseResult {
   }
 }
 
-/** Formats a parsed address back into the canonical reference the wall mints. */
+/**
+ * Formats a parsed address back into the canonical reference the wall mints.
+ *
+ * This is ALSO the address quay-fleet parses: the fleet requires the project segment
+ * (`quay://<project>/task/<id>`) and refuses the superseded project-less draft with
+ * `missing-project-segment`. The canonical string is therefore handed to the fleet read
+ * port unchanged — there is no translation step, and none may be reintroduced.
+ */
 function formatQuayAddress(address: QuayUriAddress): string {
   switch (address.type) {
     case 'task':
@@ -154,34 +163,6 @@ function formatQuayAddress(address: QuayUriAddress): string {
       return `quay://${address.project}/ledger/${address.name}/${address.eventId}`;
     case 'board':
       return `quay://${address.project}/board`;
-  }
-}
-
-/**
- * Formats the SAME object in quay-fleet's own address forms, which is what the fleet read
- * port parses.
- *
- * ⚠️ TEMPORARY ADAPTER — THE ONE PLACE THIS TRANSLATION MAY LIVE. The wall's addresses
- * carry the project as their FIRST segment (`quay://<project>/task/<id>`) because one wall
- * shows several projects; that is the agreed syntax and the ONLY form this module (and its
- * API responses) may hand to a caller. quay-fleet currently parses the project-less forms
- * (`quay://task/<id>`, `quay://goal/<id>`, `quay://ledger/<name>/<eventId>`, and
- * `quay://board/<project>`), and rejects a project segment as `unknown-type`; the fleet side
- * has been asked to accept the project-scoped form. Until it does, the project segment is
- * translated here into (a) the fleet's address and (b) the `--root` workspace argument —
- * and nowhere else. When the fleet accepts the wall's form, delete this function and call
- * the fleet with {@link formatQuayAddress}.
- */
-function formatFleetAddress(address: QuayUriAddress): string {
-  switch (address.type) {
-    case 'task':
-      return `quay://task/${address.id}${address.ac === null ? '' : `#ac-${address.ac}`}`;
-    case 'goal':
-      return `quay://goal/${address.id}`;
-    case 'ledger':
-      return `quay://ledger/${address.name}/${address.eventId}`;
-    case 'board':
-      return `quay://board/${address.project}`;
   }
 }
 
@@ -217,10 +198,15 @@ export type QuayFleetL2 =
  * Both methods return `null` — never throw — when the port cannot be read: no binary is
  * configured, the child failed or timed out, or its document was unreadable. `null` is the
  * single "unavailable" reading that lets the resolver choose the snapshot fallback.
+ *
+ * URIs are handed over in the wall's canonical project-scoped form (`quay://<project>/…`),
+ * which is also the only form the fleet parses. `summary` additionally takes an OPTIONAL
+ * `--root` consistency override — the root the fleet registry joined to the URI's project
+ * segment, or `null` to let the segment alone select the workspace.
  */
 export type QuayFleetWallReader = {
   resolve(uri: string): Promise<QuayFleetL1 | null>;
-  summary(uri: string, projectRoot: string): Promise<QuayFleetL2 | null>;
+  summary(uri: string, projectRoot: string | null): Promise<QuayFleetL2 | null>;
 };
 
 /** The environment variable naming the fleet CLI a deployment wants the server to call. */
@@ -352,12 +338,12 @@ export function createQuayFleetCliWallReader(options: {
       const result = await runFleetCommand(binaryPath, ['wall', 'resolve', uri, '--json'], options.timeoutMs);
       return result.ok ? readFleetL1(parseFleetJson(result.stdout)) : null;
     },
-    async summary(uri: string, projectRoot: string): Promise<QuayFleetL2 | null> {
-      const result = await runFleetCommand(
-        binaryPath,
-        ['wall', 'summary', uri, '--root', projectRoot, '--json'],
-        options.timeoutMs,
-      );
+    async summary(uri: string, projectRoot: string | null): Promise<QuayFleetL2 | null> {
+      // `--root` is an OPTIONAL override on the fleet side: without it the URI's project
+      // segment is resolved through the fleet registry, which is the authority. The override
+      // is only added when the caller has a root to pin (worktree / test), never guessed.
+      const args = ['wall', 'summary', uri, ...(projectRoot === null ? [] : ['--root', projectRoot]), '--json'];
+      const result = await runFleetCommand(binaryPath, args, options.timeoutMs);
       return result.ok ? readFleetL2(parseFleetJson(result.stdout)) : null;
     },
   };
@@ -452,7 +438,9 @@ export type QuayUriSummaryResult = QuayUriSummarySuccess | QuayUriFailure;
 /**
  * Where a reference's project segment points, as the fleet registry answers it.
  *
- * `root` is the registered workspace root — the `--root` the fleet read port reads. `projectId`
+ * `root` is the registered workspace root the segment joins to. It is passed to `wall
+ * summary` as its OPTIONAL `--root` consistency override; a blank root means the segment
+ * alone selects the workspace. `projectId`
  * is the CloudCLI project at that root, when this instance knows one; the snapshot fallback
  * reads that project, and `null` means there is no snapshot to fall back to.
  */
@@ -476,6 +464,12 @@ export type QuayUriResolveDependencies = {
    * choice). `null` means there is no snapshot at all — the fallback then says so.
    */
   readSnapshot(projectId: string): Promise<QuayUriSnapshotTasks | null>;
+  /**
+   * Sink for the one consistency warning this module raises: a summary read whose project
+   * segment has no registered root falls back to letting the segment alone select the
+   * workspace. Optional (defaults to `console.warn`) so existing callers stay unchanged.
+   */
+  warn?: (message: string) => void;
 };
 
 /** The dereference entry point consumed by `quay.service.ts` / `quay.routes.ts`. */
@@ -517,6 +511,26 @@ function findSnapshotTask(
  * Neither path generates an L2 summary.
  */
 export function createQuayUriResolver(dependencies: QuayUriResolveDependencies): QuayUriResolver {
+  const warn = dependencies.warn ?? ((message: string) => console.warn(message));
+
+  /**
+   * The optional `--root` consistency override for a summary read.
+   *
+   * The URI's PROJECT SEGMENT is authoritative: the fleet resolves it to a workspace root
+   * through its own registry. CloudCLI knows a root only through that same registry join
+   * ({@link QuayUriResolveDependencies.resolveFleetProject}), so the root passed here is by
+   * construction the segment's own root — a consistency override, never a competing one. A
+   * join without a root therefore sends no override (the segment alone selects the
+   * workspace) and records the divergence instead of pinning a guessed directory.
+   */
+  const summaryRootFor = (address: QuayUriAddress, project: QuayUriFleetProject): string | null => {
+    if (project.root.trim() !== '') return project.root;
+    warn(
+      `quay wall summary: project '${address.project}' has no registered root; the URI's project segment alone selects the workspace ('${formatQuayAddress(address)}')`,
+    );
+    return null;
+  };
+
   /** The fleet's own L1 values, forwarded unchanged: this side never mints an action set. */
   const fleetAnswer = (
     address: QuayUriAddress,
@@ -610,7 +624,7 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
           );
     }
 
-    const reference = await fleet.resolve(formatFleetAddress(address));
+    const reference = await fleet.resolve(canonical);
     if (reference === null) {
       return address.type === 'task'
         ? resolveFromSnapshot(address, project, canonical, 'reader-unavailable')
@@ -626,7 +640,7 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
     // A task's stored content (title/status) lives in the snapshot while the fleet's write
     // path has stored no L2 row. The fleet's L1 values stay; the reason names why the
     // content came from the snapshot.
-    const reading = await fleet.summary(formatFleetAddress(address), project.root);
+    const reading = await fleet.summary(canonical, summaryRootFor(address, project));
     if (reading !== null && reading.state === 'ok') return fleetAnswer(address, canonical, reference);
 
     return resolveFromSnapshot(
@@ -662,7 +676,7 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
     const fleet = dependencies.fleetWallReader;
     if (fleet === null) return fallbackAbsent('reader-unavailable');
 
-    const reading = await fleet.summary(formatFleetAddress(address), project.root);
+    const reading = await fleet.summary(canonical, summaryRootFor(address, project));
     if (reading === null) return fallbackAbsent('reader-unavailable');
 
     if (reading.state === 'absent') {

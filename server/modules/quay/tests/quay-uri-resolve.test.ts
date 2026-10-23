@@ -61,34 +61,35 @@ const V0_ACTIONS = {
 
 /**
  * L1 documents the stub fleet resolves; their shape is `wall resolve --json` verbatim, and
- * their KEYS are quay-fleet's own project-less address forms — the resolver must translate
- * the wall's project-scoped reference into these before calling the read port.
+ * their KEYS are the SAME project-scoped addresses the caller passes — quay-fleet requires
+ * the project segment and refuses the superseded project-less draft, so the resolver hands
+ * its URI to the read port unchanged (no translation step).
  */
 const L1_BY_URI: Record<string, QuayFleetL1> = {
-  'quay://task/T-42': { uri: 'quay://task/T-42', type: 'task', label: 'T-42', actions: V0_ACTIONS.task },
-  'quay://task/T-42#ac-3': {
-    uri: 'quay://task/T-42#ac-3',
+  [TASK_URI]: { uri: TASK_URI, type: 'task', label: 'T-42', actions: V0_ACTIONS.task },
+  [AC_URI]: {
+    uri: AC_URI,
     type: 'task',
     label: 'T-42#ac-3',
     actions: V0_ACTIONS.fragmentAc,
     fragment: { kind: 'ac', index: 3 },
   },
-  'quay://goal/G-1': { uri: 'quay://goal/G-1', type: 'goal', label: 'G-1', actions: V0_ACTIONS.goal },
+  [GOAL_URI]: { uri: GOAL_URI, type: 'goal', label: 'G-1', actions: V0_ACTIONS.goal },
 };
 
-/** L2 ledger rows in write order per fleet address; the stub returns the LAST one, as the fleet does. */
+/** L2 ledger rows in write order per canonical address; the stub returns the LAST one, as the fleet does. */
 const L2_ROWS: Record<string, QuayFleetL2[]> = {
-  'quay://task/T-42': [
+  [TASK_URI]: [
     {
       state: 'ok',
-      uri: 'quay://task/T-42',
+      uri: TASK_URI,
       summary: 'older stored summary',
       generatedAt: '2026-10-23T00:00:00.000Z',
       sourceEventId: 'evt-older',
     },
     {
       state: 'ok',
-      uri: 'quay://task/T-42',
+      uri: TASK_URI,
       summary: 'newest stored summary',
       generatedAt: '2026-10-23T01:00:00.000Z',
       sourceEventId: 'evt-newest',
@@ -96,10 +97,10 @@ const L2_ROWS: Record<string, QuayFleetL2[]> = {
   ],
   // The fleet ledger keys rows by the exact address, fragment included, so an AC address can
   // carry its own stored row. Keeping one here leaves the AC1 resolve on the fleet path.
-  'quay://task/T-42#ac-3': [
+  [AC_URI]: [
     {
       state: 'ok',
-      uri: 'quay://task/T-42#ac-3',
+      uri: AC_URI,
       summary: 'stored AC summary',
       generatedAt: '2026-10-23T01:10:00.000Z',
       sourceEventId: 'evt-ac',
@@ -218,15 +219,22 @@ test('AC1: fleet L1/L2 documents pass through, including the #ac-<n> fragment', 
   assert.equal(absent.state, 'absent');
   assert.equal(absent.source, 'fleet');
 
-  // The read port was called in quay-fleet's OWN forms: the project segment selects the
-  // workspace root (--root), it is not part of the fleet's address.
-  assert.ok(fleetCalls.includes('resolve quay://task/T-42'));
-  assert.ok(fleetCalls.includes('resolve quay://task/T-42#ac-3'));
-  assert.ok(fleetCalls.includes('summary quay://task/T-42'));
-  assert.ok(fleetCalls.includes('summary quay://goal/G-1'));
+  // The read port was called with the SAME project-scoped references the caller passed —
+  // field for field, fragment included. quay-fleet requires the project segment, so a
+  // project-less form reaching it would be refused and silently drop the wall to the
+  // snapshot fallback; this list is the anti-regression pin for that shape.
+  assert.deepEqual(fleetCalls, [
+    `resolve ${TASK_URI}`,
+    `summary ${TASK_URI}`,
+    `resolve ${AC_URI}`,
+    `summary ${AC_URI}`,
+    `summary ${TASK_URI}`,
+    `summary ${GOAL_URI}`,
+  ]);
+  // Belt and braces: no call may carry the superseded project-less draft (`quay://task/…`).
   assert.ok(
-    fleetCalls.every((call) => !call.includes(`/${FLEET_PROJECT_ID}/`)),
-    'no project segment may leak into a fleet call',
+    fleetCalls.every((call) => !/^[a-z]+ quay:\/\/(task|goal|ledger|board)(\/|$)/.test(call)),
+    `a project-less address reached the fleet read port: ${fleetCalls.join(', ')}`,
   );
 });
 
@@ -272,7 +280,7 @@ test('fallback reason no-summary: the fleet answered L1 but has stored no L2 row
   // is NOT a reader failure: the fleet still supplies L1, and the snapshot supplies content.
   const noSummaryFleet: QuayFleetWallReader = {
     async resolve(uri: string): Promise<QuayFleetL1 | null> {
-      return uri === 'quay://task/T-99'
+      return uri === `quay://${FLEET_PROJECT_ID}/task/T-99`
         ? { uri, type: 'task', label: 'T-99', actions: V0_ACTIONS.task }
         : null;
     },
@@ -364,7 +372,7 @@ test('the fleet read port is the CLI: missing/non-zero/unparseable output all re
       'good.sh',
       `#!/bin/sh\necho '${JSON.stringify({
         ok: true,
-        uri: 'quay://task/T-1',
+        uri: `quay://${FLEET_PROJECT_ID}/task/T-1`,
         type: 'task',
         label: 'T-1',
         actions: ['read'],
@@ -374,13 +382,17 @@ test('the fleet read port is the CLI: missing/non-zero/unparseable output all re
     for (const binaryPath of [missing, nonZero, unparseable]) {
       const reader = createQuayFleetCliWallReader({ binaryPath, timeoutMs: 2_000 });
       assert.ok(reader !== null);
-      assert.equal(await reader.resolve('quay://task/T-1'), null, `${binaryPath} must read unavailable`);
-      assert.equal(await reader.summary('quay://task/T-1', PROJECT_ROOT), null);
+      assert.equal(
+        await reader.resolve(`quay://${FLEET_PROJECT_ID}/task/T-1`),
+        null,
+        `${binaryPath} must read unavailable`,
+      );
+      assert.equal(await reader.summary(`quay://${FLEET_PROJECT_ID}/task/T-1`, PROJECT_ROOT), null);
     }
 
     const reader = createQuayFleetCliWallReader({ binaryPath: good, timeoutMs: 2_000 });
     assert.ok(reader !== null);
-    const l1 = await reader.resolve('quay://task/T-1');
+    const l1 = await reader.resolve(`quay://${FLEET_PROJECT_ID}/task/T-1`);
     assert.equal(l1?.type, 'task');
     assert.deepEqual(l1?.actions, ['read']);
   } finally {
@@ -452,10 +464,11 @@ test('AC4: the project segment is a fleet registry id, and a UUID segment is unk
     async resolve(uri: string): Promise<QuayFleetL1 | null> {
       return { uri, type: 'task', label: 'T-42', actions: V0_ACTIONS.task };
     },
-    async summary(uri: string, projectRoot: string): Promise<QuayFleetL2 | null> {
-      // The registered root is the fleet's `--root`: the project segment selects it and is
-      // never part of the fleet's own address.
-      roots.push(projectRoot);
+    async summary(uri: string, projectRoot: string | null): Promise<QuayFleetL2 | null> {
+      // `--root` is only the OPTIONAL consistency override: the URI's project segment is
+      // what the fleet resolves through its registry, and the root handed back is the one
+      // that same join produced.
+      roots.push(projectRoot ?? '<none>');
       return { state: 'absent', uri };
     },
   };
