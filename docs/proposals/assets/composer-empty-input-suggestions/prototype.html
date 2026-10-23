@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>输入框建议项 · 原型（非产品代码）</title>
+<style>
+  /* Tokens copied from src/index.css so the prototype reads like the real composer. */
+  :root{
+    --background:44 22% 96%; --foreground:36 25% 4%; --card:0 0% 100%;
+    --primary:221.2 83.2% 53.3%; --primary-foreground:210 40% 98%;
+    --muted:44 15% 91%; --muted-foreground:40 5% 44%; --border:44 14% 87%;
+  }
+  .dark{
+    --background:0 0% 8%; --foreground:40 8% 93%; --card:0 0% 12%;
+    --primary:217.2 91.2% 59.8%; --primary-foreground:0 0% 8%;
+    --muted:0 0% 17%; --muted-foreground:0 0% 60%; --border:0 0% 17%;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,"Noto Sans CJK SC","PingFang SC",sans-serif;
+       background:hsl(var(--background));color:hsl(var(--foreground))}
+  .wrap{max-width:780px;margin:0 auto;padding:16px}
+  .proto{border:1px solid hsl(var(--border));border-radius:10px;padding:10px 12px;margin-bottom:18px;
+         background:hsl(var(--muted)/.5);font-size:12px;color:hsl(var(--muted-foreground))}
+  .proto b{color:hsl(var(--foreground))}
+  .proto .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+  .proto button,.proto select{font:inherit;font-size:12px;padding:3px 9px;border-radius:6px;cursor:pointer;
+       border:1px solid hsl(var(--border));background:hsl(var(--card));color:hsl(var(--foreground))}
+  .proto button[aria-pressed=true]{border-color:hsl(var(--primary));color:hsl(var(--primary))}
+  .proto label{display:inline-flex;gap:4px;align-items:center}
+
+  /* ── transcript stub ── */
+  .msg{margin:10px 0;display:flex;gap:10px}
+  .avatar{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;
+          background:hsl(var(--muted));color:hsl(var(--muted-foreground))}
+  .bubble{max-width:640px;white-space:pre-wrap}
+  .msg.user .bubble{background:hsl(var(--muted));padding:6px 12px;border-radius:12px}
+  .working{font-size:12px;color:hsl(var(--muted-foreground));margin:8px 0 8px 36px}
+
+  /* ── composer (mirrors PromptInput.tsx classes) ── */
+  form.composer{position:relative;overflow:hidden;border-radius:12px;border:1px solid hsl(var(--border)/.5);
+       background:hsl(var(--card)/.8);box-shadow:0 1px 2px #0001;margin-top:18px;transition:box-shadow .2s,border-color .2s}
+  form.composer:focus-within{border-color:hsl(var(--primary)/.3);box-shadow:0 4px 8px #0001,0 0 0 1px hsl(var(--primary)/.15)}
+  .body{position:relative}
+  textarea{display:block;width:100%;resize:none;border:0;outline:0;background:transparent;color:inherit;
+       font:inherit;font-size:14px;line-height:24px;padding:8px 16px;min-height:40px;max-height:300px;overflow-y:auto}
+  textarea::placeholder{color:hsl(var(--muted-foreground)/.5)}
+  /* While suggestions are showing, the chips are the in-flow content and the textarea sits underneath. */
+  .body.has-chips textarea{position:absolute;inset:0;height:100%}
+  .chips{position:relative;z-index:1;pointer-events:none;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+       padding:6px 12px;min-height:44px}
+  .body:not(.has-chips) .chips{display:none}
+  .chip{pointer-events:auto;cursor:pointer;display:inline-flex;align-items:center;gap:6px;max-width:100%;
+       border:1px dashed hsl(var(--muted-foreground)/.45);border-radius:8px;padding:2px 10px;height:28px;
+       background:transparent;color:hsl(var(--muted-foreground));font:inherit;font-size:13px;line-height:1;
+       transition:border-color .12s,background .12s,color .12s}
+  .chip .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:hsl(var(--foreground)/.8)}
+  .chip .src{font-size:10px;color:hsl(var(--muted-foreground)/.8);border-left:1px solid hsl(var(--border));padding-left:6px}
+  .chip .enter{display:none;font-size:11px;color:hsl(var(--primary))}
+  .chip:hover{border-style:solid;border-color:hsl(var(--primary)/.5);background:hsl(var(--primary)/.06)}
+  .chip[aria-selected=true]{border-style:solid;border-color:hsl(var(--primary));background:hsl(var(--primary)/.10);
+       box-shadow:0 0 0 2px hsl(var(--primary)/.18)}
+  .chip[aria-selected=true] .t{color:hsl(var(--foreground))}
+  .chip[aria-selected=true] .enter{display:inline}
+  .hint{pointer-events:none;margin-left:auto;font-size:11px;color:hsl(var(--muted-foreground)/.8);white-space:nowrap}
+  kbd{font:inherit;font-size:10px;padding:0 4px;border-radius:4px;background:hsl(var(--muted));border:1px solid hsl(var(--border))}
+  .footer{display:flex;justify-content:space-between;align-items:center;border-top:1px solid hsl(var(--border)/.3);padding:8px 12px}
+  .tools{display:flex;gap:6px;align-items:center;color:hsl(var(--muted-foreground))}
+  .ico{width:28px;height:28px;border-radius:8px;display:grid;place-items:center}
+  .mode{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid hsl(var(--border))}
+  .send{width:32px;height:32px;border-radius:8px;border:0;background:hsl(var(--primary));color:hsl(var(--primary-foreground));
+       display:grid;place-items:center;cursor:pointer}
+  .send[disabled]{opacity:.4;cursor:default}
+  .note{font-size:12px;color:hsl(var(--muted-foreground));margin-top:10px}
+  @media (max-width:480px){ .wrap{padding:10px}
+    /* Narrow: keep ONE row (no growth) and let it scroll sideways; the hint is dropped, the chips are the affordance. */
+    .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;pointer-events:auto}
+    .chip{flex:none;max-width:78%} .hint{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="proto">
+    <b>原型控制（不属于产品 UI）</b> — 场景＝助手上一轮结束时的状态；建议只在「输入框为空 + 助手空闲」时出现。
+    <div class="row" id="scenes"></div>
+    <div class="row">
+      采用方式：
+      <button id="m-fill" aria-pressed="true">填入后再发送</button>
+      <button id="m-send" aria-pressed="false">直接发送</button>
+      <label><input type="checkbox" id="showSrc" checked>来源标签</label>
+      <button id="theme">深/浅色</button>
+      <button id="reset">重置</button>
+    </div>
+  </div>
+
+  <div id="transcript"></div>
+  <div class="working" id="working" hidden>Working…（建议在助手运行时不显示）</div>
+
+  <form class="composer" id="form" autocomplete="off">
+    <div class="body has-chips" id="body">
+      <div class="chips" id="chips" role="listbox" aria-label="建议输入"></div>
+      <textarea id="ta" rows="1" dir="auto" placeholder="Type a message…" aria-controls="chips" aria-label="消息输入框"></textarea>
+    </div>
+    <div class="footer">
+      <div class="tools">
+        <span class="ico" title="附件"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 01-7.8-7.8l9-9a3.7 3.7 0 015.2 5.2l-9 9a1.8 1.8 0 01-2.6-2.6l8.3-8.3"/></svg></span><span class="ico" title="语音"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span>
+        <span class="mode" id="mode" title="Tab 切换权限模式（无建议时）">default</span>
+      </div>
+      <button class="send" id="send" type="submit" disabled aria-label="发送"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l11 2-11 2z"/></svg></button>
+    </div>
+  </form>
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+const SCENES = {
+  decision: {
+    label: '助手在等决策',
+    assistant: '有两条路：\nA）只在空 textarea 里叠加建议项（不新增行）；\nB）在 textarea 上方加一行 chip 栏。\n我推荐 A。要按 A 做吗？',
+    chips: [
+      {t:'同意，按 A 推进', src:'生成'},
+      {t:'先说说 B 的代价', src:'生成'},
+      {t:'继续', src:'常用'},
+    ]},
+  done: {
+    label: '一轮工作完成',
+    assistant: '已修改 3 个文件，相关测试 12/12 通过，尚未提交。',
+    chips: [
+      {t:'检查进展', src:'常用'},
+      {t:'提交', src:'常用'},
+      {t:'build + 安全重启', src:'历史'},
+    ]},
+  cut: {
+    label: '回复被截断',
+    assistant: '…下面是第二部分的实现，先写到 resolveScope 这里，后面还需要补上',
+    chips: [
+      {t:'继续', src:'常用', send:true},
+    ]},
+  cold: {
+    label: '新会话（冷启动）',
+    assistant: null,
+    chips: [
+      {t:'检查进展；检查改进是否实际接线可用', src:'历史'},
+      {t:'继续上次：输入框建议项的原型评审', src:'最近会话'},
+      {t:'Commit changes.', src:'历史'},
+    ]},
+  failed: {
+    label: '上一条发送失败',
+    assistant: null, failed: '把 Settings 上移，Report 和 Discord 收进 Settings。',
+    chips: [
+      {t:'重试发送上一条', src:'未送达', send:true},
+      {t:'编辑上一条再发', src:'未送达'},
+    ]},
+};
+const $ = s => document.querySelector(s);
+const ta=$('#ta'), body=$('#body'), chipsEl=$('#chips'), sendBtn=$('#send');
+let scene='decision', active=-1, dismissed=false, busy=false, mode='fill';
+const MODES=['default','plan','acceptEdits'];
+
+function renderTranscript(extra=[]) {
+  const s=SCENES[scene], rows=[];
+  rows.push(['user','把输入框的建议项设计一下，原型看看效果。']);
+  if (s.assistant) rows.push(['assistant', s.assistant]);
+  if (s.failed) rows.push(['user', s.failed + '  ⚠ 未送达']);
+  extra.forEach(e=>rows.push(e));
+  $('#transcript').innerHTML = rows.map(([r,t])=>
+    `<div class="msg ${r}"><div class="avatar">${r==='user'?'U':'C'}</div><div class="bubble"></div></div>`).join('');
+  [...document.querySelectorAll('#transcript .bubble')].forEach((b,i)=>b.textContent=rows[i][1]);
+}
+function visible(){ return !busy && !dismissed && ta.value==='' && SCENES[scene].chips.length>0; }
+function render(){
+  const s=SCENES[scene], show=visible();
+  body.classList.toggle('has-chips', show);
+  ta.placeholder = show ? '' : 'Type a message…';
+  if(!show){ active=-1; ta.removeAttribute('aria-activedescendant'); chipsEl.innerHTML=''; autosize(); sendBtn.disabled = !ta.value.trim(); return; }
+  const src=$('#showSrc').checked;
+  chipsEl.innerHTML = s.chips.map((c,i)=>
+    `<button type="button" class="chip" role="option" id="chip-${i}" aria-selected="${i===active}" data-i="${i}" tabindex="-1">
+       <span class="t"></span>${src?`<span class="src">${c.src}</span>`:''}<span class="enter">${(c.send||mode==='send')?'↵ 发送':'↵ 填入'}</span></button>`).join('')
+    + `<span class="hint"><kbd>Tab</kbd> 选择 · <kbd>↵</kbd> 采用<span class="long"> · <kbd>Esc</kbd> 隐藏 · 直接输入即消失</span></span>`;
+  chipsEl.querySelectorAll('.chip').forEach((el,i)=>el.querySelector('.t').textContent=s.chips[i].t);
+  ta.setAttribute('aria-activedescendant', active>=0?`chip-${active}`:'');
+  ta.style.height='';
+  sendBtn.disabled=true;
+}
+function autosize(){ if(body.classList.contains('has-chips')) return; ta.style.height='auto'; ta.style.height=Math.max(40,ta.scrollHeight)+'px'; }
+
+function accept(i){
+  const c=SCENES[scene].chips[i]; if(!c) return;
+  if(c.send || mode==='send'){ doSend(c.t); return; }
+  ta.value=c.t; render(); ta.focus(); ta.setSelectionRange(c.t.length,c.t.length);
+  setNote(`已填入「${c.t}」——可继续编辑，再按 Enter 发送。建议项已隐藏；清空后会重新出现。`);
+}
+function doSend(text){
+  renderTranscript([['user',text]]); ta.value=''; busy=true; active=-1; render();
+  $('#working').hidden=false; setNote(`已发送「${text}」。助手运行期间建议项不显示。`);
+  setTimeout(()=>{ busy=false; dismissed=false; $('#working').hidden=true;
+    SCENES.after = {chips:[{t:'检查进展',src:'常用'},{t:'提交',src:'常用'},{t:'继续',src:'常用'}],assistant:'好的，已处理。'};
+    scene='after'; renderTranscript([['user',text],['assistant','已处理。']]); render();
+    setNote('助手本轮结束 → 建议项按新的上下文重新出现。');
+  },1400);
+}
+function setNote(t){ $('#note').textContent=t; }
+
+ta.addEventListener('input',()=>{ render(); if(ta.value==='') setNote('输入框已清空 → 建议项重新出现。'); else setNote('有输入 → 建议项消失。'); });
+ta.addEventListener('keydown',e=>{
+  const n=SCENES[scene].chips.length;
+  if(visible()){
+    if(e.key==='Tab'){
+      const next = e.shiftKey ? active-1 : active+1;
+      if(next>=0 && next<n){ e.preventDefault(); active=next; render(); return; }
+      if(next>=n || next<0){ // ran off either end: back to the normal Tab meaning (cycle permission mode)
+        e.preventDefault(); active=-1; mode_cycle(); render(); return; }
+    }
+    if(e.key==='Enter' && active>=0){ e.preventDefault(); accept(active); return; }
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); dismissed=true; render(); setNote('已隐藏本轮建议（Esc 不会中止会话）。'); return; }
+  } else if(e.key==='Tab'){ e.preventDefault(); mode_cycle(); return; }
+  if(e.key==='Enter' && !e.shiftKey && ta.value.trim()){ e.preventDefault(); doSend(ta.value.trim()); }
+});
+function mode_cycle(){ const el=$('#mode'); el.textContent=MODES[(MODES.indexOf(el.textContent)+1)%MODES.length]; setNote('建议项已走完 / 不可见 → Tab 回到原有含义：切换权限模式。'); }
+chipsEl.addEventListener('mousedown',e=>e.preventDefault()); // keep focus in the textarea
+chipsEl.addEventListener('click',e=>{ const c=e.target.closest('.chip'); if(c) accept(+c.dataset.i); });
+$('#form').addEventListener('submit',e=>{ e.preventDefault(); if(ta.value.trim()) doSend(ta.value.trim()); });
+
+$('#scenes').innerHTML = Object.entries(SCENES).map(([k,v])=>`<button data-k="${k}" aria-pressed="${k===scene}">${v.label}</button>`).join('');
+$('#scenes').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
+  scene=b.dataset.k; dismissed=false; busy=false; active=-1; ta.value='';
+  document.querySelectorAll('#scenes button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  renderTranscript(); render(); setNote('场景：'+SCENES[scene].label); });
+for (const m of ['fill','send']) $('#m-'+m).onclick=()=>{ mode=m; $('#m-fill').setAttribute('aria-pressed',m==='fill'); $('#m-send').setAttribute('aria-pressed',m==='send'); render(); };
+$('#showSrc').onchange=render;
+$('#theme').onclick=()=>document.documentElement.classList.toggle('dark');
+$('#reset').onclick=()=>document.querySelector(`#scenes [data-k="${scene in SCENES&&scene!=='after'?scene:'decision'}"]`).click();
+if(location.hash.includes('dark')) document.documentElement.classList.add('dark');
+renderTranscript(); render();
+</script>
+</body>
+</html>
