@@ -5,7 +5,16 @@
 // TTL-cached snapshot or `null` WITHOUT loading, so `overview` over N projects spawns zero
 // `quay` CLI processes. `getQuaySnapshot(projectId, { forceRefresh: true })` remains the
 // load-on-demand path the `quay_snapshot` tool's explicit refresh uses.
-export { quayRoutes, quayService } from './quay.module.js';
+// quayFleetRegistry: the fleet's per-project 「对人接口会话」 pin, read/written by the cockpit
+// hub's target resolver (injected at the composition root, so the cockpit module itself stays
+// a leaf). It maps a CloudCLI project id to the fleet registry id and answers failures as
+// values rather than throwing.
+export { quayFleetRegistry, quayRoutes, quayService } from './quay.module.js';
+export type {
+  QuayFleetInterfaceSessionReading,
+  QuayFleetInterfaceSessionWrite,
+  QuayFleetRegistryService,
+} from './quay-fleet-registry.js';
 // createQuayService: the factory the composition root (`quay.module.ts`) calls,
 // re-exported so a criterion can compose the REAL service with injected adapters
 // rather than reimplementing its index, its budget or its rate limit.

@@ -54,7 +54,11 @@ import {
     validateApiKey,
 } from './modules/auth/index.js';
 import { taskmasterRoutes } from './modules/taskmaster/index.js';
-import { quayRoutes, quayService } from './modules/quay/index.js';
+import { quayFleetRegistry, quayRoutes, quayService } from './modules/quay/index.js';
+// The cockpit hub's composition entry. Built below, after the chat control service it sends
+// through exists, and handed to the websocket gateway. The module itself is a leaf (it imports
+// no sibling module), which is why the two seams it needs are bound here.
+import { createCockpitModule } from './modules/cockpit/index.js';
 import { commandsRoutes } from './modules/commands/index.js';
 import { settingsRoutes } from './modules/settings/index.js';
 import {
@@ -253,6 +257,77 @@ const chatControl = createChatControlService({
             ...activityStore.sessionIds(),
         ]),
     ],
+});
+
+// The cockpit hub: ONE per process, the state every display and input device of a user shares.
+// Built here because its two seams are composition-root knowledge: the target rules read the
+// fleet registry's per-project pin and the browser's last-opened pointer, and a confirmed send
+// goes through the SAME chat control service the composer and the MCP gateway use — the
+// cockpit opens no second send path. `quay://<project>/…`'s project segment is the fleet
+// registry id; the display reports the roster that maps it back to a CloudCLI project id.
+const cockpitHub = createCockpitModule({
+    resolveTarget: async (state) => {
+        const focusUri = state.focusUri;
+        const segment = focusUri === null ? null : /^quay:\/\/([^/]+)\//.exec(focusUri)?.[1] ?? null;
+        if (segment === null) {
+            return { target: null, reason: 'no-focus' as const };
+        }
+        const project = state.visible.projects.find(
+            (candidate) =>
+                (candidate.fleetProjectId !== null
+                    && candidate.fleetProjectId.toLowerCase() === segment.toLowerCase())
+                || candidate.name.toLowerCase() === segment.toLowerCase(),
+        );
+        if (project === undefined) {
+            return { target: null, reason: 'no-focus' as const };
+        }
+
+        // The rule from the cockpit's routing task: the fleet's pinned interface session
+        // first, the last-opened session as the fallback, and nothing at all if neither
+        // exists (a preview with no destination, never a guessed one).
+        const reading = await quayFleetRegistry.readInterfaceSession(project.projectId);
+        let sessionId = reading.ok ? reading.interfaceSessionId : null;
+        let source: 'pinned' | 'recent' = 'pinned';
+        const fleetUnavailableReason = reading.ok ? null : reading.reason;
+        if (sessionId === null) {
+            source = 'recent';
+            const pointer = uiLastOpenedSessionService.readLastOpened();
+            const candidate = pointer === null ? null : sessionsDb.getSessionById(pointer.sessionId);
+            // The pointer is global; a session belonging to another project's path is not this
+            // project's target, and routing there would be the wrong-object failure this
+            // surface exists to prevent.
+            if (candidate !== null && project.projectPath !== ''
+                && candidate.project_path === project.projectPath) {
+                sessionId = candidate.session_id;
+            }
+        }
+        if (sessionId === null) {
+            return { target: null, reason: 'no-session' as const };
+        }
+        return {
+            target: {
+                sessionId,
+                projectId: project.projectId,
+                projectName: project.name,
+                sessionTitle: null,
+                source,
+                fleetUnavailableReason,
+            },
+            reason: null,
+        };
+    },
+    send: async (userId, message) => {
+        const result = await chatControl.send(
+            { userId, via: 'websocket' },
+            { sessionId: message.sessionId, content: message.content },
+        );
+        if (!result.ok) {
+            console.warn('[Cockpit] Confirmed send refused', {
+                sessionId: message.sessionId,
+                code: result.code,
+            });
+        }
+    },
 });
 
 // gap-mcp-ui-open-session: the ONE navigation service for this process, built
@@ -1368,6 +1443,9 @@ createWebSocketServer(server, {
         runtime: providerRuntimeService,
         control: chatControl,
         uiNavigations,
+        // The cockpit's shared state: `cockpit.hello` / `cockpit.event` frames are routed into
+        // it and every state change is broadcast back on the same sockets.
+        cockpitHub,
     },
     shell: {
         resolveProviderSessionId: (sessionId, provider) => {

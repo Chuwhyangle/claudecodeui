@@ -10,12 +10,260 @@ import { formatCockpitView, parseCockpitView } from '@/modules/cockpit/cockpitVi
 import type { CockpitView } from '@/modules/cockpit/cockpitView';
 
 /**
- * The cockpit stage in a real router: what it declares, how focus moves, how Enter/Backspace
- * change the view, and how the URL and the view description round-trip.
+ * The cockpit stage in a real router, wired to a FAKE HUB connection.
  *
- * Only the network hop is stubbed (`@/shared/api`); the page, the focus hook, the fleet
- * projection, quay's in-flight contract and `useQuayStatus` all run for real.
+ * WHY A FAKE HUB. Focus, view and the confirmation card are no longer page state: the page
+ * sends events to the cockpit hub and renders what it is broadcast back. So the test's double
+ * is the transport plus the hub's transitions, exactly the seam production fills with the
+ * websocket. `hubMock.sent` is the fake connection's frame log — a direction key must appear
+ * there as a `move` event, which is what proves the page did not move focus locally.
+ *
+ * Only the network hop (`@/shared/api`) is otherwise stubbed; the page, the fleet projection,
+ * quay's in-flight contract and `useQuayStatus` all run for real.
  */
+
+type HubFrame = Record<string, unknown>;
+
+/** The subset of the hub's state this fake needs; it is the real shape the page renders. */
+type FakeView = { type: 'fleet' } | { type: 'board'; project: string };
+type FakeFocusable = {
+  uri: string;
+  label: string;
+  display: { status: string; color: string; ordinal: number; pos: { row: number; column: number } };
+};
+type FakePending = {
+  text: string;
+  visible: FakeFocusable[];
+  viewUri: string | null;
+  focusUri: string | null;
+  target: Record<string, unknown> | null;
+  reason: string | null;
+};
+type FakeState = {
+  rev: number;
+  view: FakeView;
+  viewStack: FakeView[];
+  focusUri: string | null;
+  tray: string[];
+  history: string[];
+  visible: { viewUri: string | null; focusables: FakeFocusable[]; projects: Array<Record<string, unknown>> };
+  pendingSend: FakePending | null;
+  lastEventSource: Record<string, unknown> | null;
+};
+
+const hubMock = vi.hoisted(() => {
+  /** The state a page draws before the server has said anything. */
+  const initialState = (): FakeState => ({
+    rev: 0,
+    view: { type: 'fleet' },
+    viewStack: [],
+    focusUri: null,
+    tray: [],
+    history: [],
+    visible: { viewUri: null, focusables: [], projects: [] },
+    pendingSend: null,
+    lastEventSource: null,
+  });
+
+  let state: FakeState = initialState();
+  let echo = true;
+  const listeners = new Set<(event: unknown) => void>();
+  const sent: HubFrame[] = [];
+  const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+  const emit = () => {
+    const snapshot = clone(state);
+    for (const listener of [...listeners]) {
+      listener({ kind: 'cockpit.state', state: snapshot });
+    }
+  };
+
+  const ordered = (objects: FakeFocusable[]) =>
+    [...objects].sort(
+      (left, right) =>
+        left.display.pos.row - right.display.pos.row ||
+        left.display.pos.column - right.display.pos.column,
+    );
+
+  const setView = (view: FakeView) => {
+    const unchanged =
+      view.type === state.view.type &&
+      (view.type === 'fleet' ||
+        (state.view.type === 'board' && state.view.project === view.project));
+    if (unchanged) return;
+    state.viewStack.push(state.view);
+    state.view = view;
+    state.visible = { viewUri: null, focusables: [], projects: state.visible.projects };
+    state.focusUri = null;
+  };
+
+  const back = () => {
+    const previous = state.viewStack.pop() as { type: string } | undefined;
+    const next = previous ?? (state.view.type === 'board' ? { type: 'fleet' } : null);
+    if (next === null) return;
+    state.view = next as typeof state.view;
+    state.visible = { viewUri: null, focusables: [], projects: state.visible.projects };
+    state.focusUri = null;
+  };
+
+  /** The hub's transitions, implemented here as the test double of the server-side reducer. */
+  const apply = (event: Record<string, unknown>) => {
+    state.rev += 1;
+    // A report is not an action: the status bar echoes the last device that ACTED.
+    if (event.type !== 'visible') {
+      state.lastEventSource = (event.source as Record<string, unknown> | undefined) ?? null;
+    }
+    const focusables = state.visible.focusables;
+
+    switch (event.type) {
+      case 'visible': {
+        state.visible = {
+          viewUri: (event.viewUri as string | null) ?? null,
+          focusables: clone((event.focusables as FakeFocusable[] | undefined) ?? []),
+          projects: clone((event.projects as Array<Record<string, unknown>> | undefined) ?? []),
+        };
+        const next = state.visible.focusables;
+        if (state.focusUri === null || !next.some((object) => object.uri === state.focusUri)) {
+          state.focusUri = ordered(next)[0]?.uri ?? null;
+        }
+        return;
+      }
+      case 'move': {
+        const set = ordered(focusables);
+        if (set.length === 0) return;
+        const current = set.find((object) => object.uri === state.focusUri) ?? set[0];
+        const { row, column } = current.display.pos;
+        const direction = event.direction as 'up' | 'down' | 'left' | 'right';
+        const candidates = set.filter((object) => {
+          if (direction === 'down') return object.display.pos.row > row;
+          if (direction === 'up') return object.display.pos.row < row;
+          if (direction === 'right') return object.display.pos.row === row && object.display.pos.column > column;
+          return object.display.pos.row === row && object.display.pos.column < column;
+        });
+        const next =
+          direction === 'down'
+            ? candidates.sort((a, b) => a.display.pos.row - b.display.pos.row || a.display.pos.column - b.display.pos.column)[0]
+            : direction === 'up'
+              ? candidates.sort((a, b) => b.display.pos.row - a.display.pos.row || b.display.pos.column - a.display.pos.column)[0]
+              : direction === 'right'
+                ? candidates.sort((a, b) => a.display.pos.column - b.display.pos.column)[0]
+                : candidates.sort((a, b) => b.display.pos.column - a.display.pos.column)[0];
+        if (next !== undefined) state.focusUri = next.uri;
+        return;
+      }
+      case 'focus':
+        if (focusables.some((object) => object.uri === event.uri)) state.focusUri = event.uri as string;
+        return;
+      case 'zoom':
+        if (event.direction === 'in') {
+          const match = /^quay:\/\/([^/]+)\/board/.exec(state.focusUri ?? '');
+          if (match !== null) setView({ type: 'board', project: match[1] });
+        } else {
+          back();
+        }
+        return;
+      case 'back':
+        back();
+        return;
+      case 'setView':
+        setView(event.view as { type: 'fleet' } | { type: 'board'; project: string });
+        return;
+      case 'utterance': {
+        const text = String(event.text ?? '').trim();
+        if (/返回/.test(text)) {
+          back();
+          return;
+        }
+        if (/全部项目/.test(text)) {
+          setView({ type: 'fleet' });
+          return;
+        }
+        const named = /(?:看|打开|显示)\s*([a-zA-Z0-9_-]+)/.exec(text);
+        if (named !== null) {
+          const hit = focusables.some((object) =>
+            object.uri.toLowerCase().startsWith(`quay://${named[1].toLowerCase()}/`),
+          );
+          if (hit) {
+            setView({ type: 'board', project: named[1] });
+            return;
+          }
+        }
+        state.pendingSend = {
+          text,
+          visible: clone(focusables),
+          viewUri: state.visible.viewUri,
+          focusUri: state.focusUri,
+          target: null,
+          reason: state.focusUri === null ? 'no-focus' : 'no-session',
+        };
+        return;
+      }
+      case 'confirm':
+      case 'cancel':
+        state.pendingSend = null;
+        return;
+      case 'pinTarget':
+        if (state.pendingSend?.target != null) {
+          state.pendingSend.target.source = 'pinned';
+        }
+        return;
+      case 'pin':
+        if (state.focusUri !== null && !state.tray.includes(state.focusUri)) {
+          state.tray.push(state.focusUri);
+        }
+        return;
+      case 'unpin':
+        state.tray = state.tray.filter((uri) => uri !== event.uri);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const socket = {
+    ws: null as unknown,
+    isConnected: true,
+    sendMessage(frame: HubFrame) {
+      sent.push(clone(frame));
+      if (!echo) return;
+      if (frame.type === 'cockpit.event') apply(frame.event as Record<string, unknown>);
+      emit();
+    },
+    subscribe(listener: (event: unknown) => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+
+  return {
+    socket,
+    sent,
+    reset() {
+      state = initialState();
+      sent.length = 0;
+      listeners.clear();
+      echo = true;
+    },
+    setEcho(value: boolean) {
+      echo = value;
+    },
+    /** Pushes a state as if the hub had broadcast it; independent of `echo`. */
+    pushState(next: FakeState) {
+      state = clone(next);
+      emit();
+    },
+    getState() {
+      return clone(state);
+    },
+  };
+});
+
+vi.mock('@/shared/context/WebSocketContext', () => ({
+  useWebSocketOptional: () => hubMock.socket,
+  useWebSocket: () => hubMock.socket,
+}));
 
 const apiMock = vi.hoisted(() => ({
   quayFleetSummary: vi.fn(),
@@ -130,7 +378,16 @@ function declaredFocusables(container: HTMLElement): Array<{ uri: string; label:
   }>;
 }
 
+/** The hub's frames of one type; a case reads what the page SENT rather than what it drew. */
+function sentEvents(type?: string): Array<Record<string, unknown>> {
+  return hubMock.sent
+    .filter((frame) => frame.type === 'cockpit.event')
+    .map((frame) => frame.event as Record<string, unknown>)
+    .filter((event) => type === undefined || event.type === type);
+}
+
 beforeEach(() => {
+  hubMock.reset();
   apiMock.quayFleetSummary.mockReset();
   apiMock.quaySnapshot.mockReset();
   apiMock.quayFleetSummary.mockResolvedValue(okResponse(FLEET));
@@ -179,6 +436,7 @@ describe('fleet view contract', () => {
     ) as { uri: string }[];
     expect(declared.map((object) => object.uri)).not.toContain('quay://p3/board');
     expect(declared.map((object) => object.uri)).not.toContain('quay://cantus/board');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     fireEvent.keyDown(window, { key: 'ArrowDown' });
@@ -190,8 +448,9 @@ describe('fleet view contract', () => {
     renderCockpit();
     await screen.findByTestId('cockpit-fleet-tiles');
 
-    // Focus starts on the first declared object (the contract's own spatial order).
-    expect(focusUri()).toBe('quay://claudecodeui/board');
+    // Focus starts on the first declared object (the contract's own spatial order, as the hub
+    // normalized the display's report).
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     expect(focusUri()).toBe('quay://quay-fleet/board');
@@ -206,6 +465,74 @@ describe('fleet view contract', () => {
     expect(focusUri()).toBe('quay://claudecodeui/board');
     fireEvent.keyDown(window, { key: 'ArrowUp' });
     expect(focusUri()).toBe('quay://claudecodeui/board');
+  });
+});
+
+describe('hub-authored state', () => {
+  it('sends direction keys to the hub as move events instead of moving focus locally', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+
+    // Seed the hub's state directly (the display's own report may be suppressed by `echo`).
+    hubMock.pushState({
+      rev: 3,
+      view: { type: 'fleet' },
+      viewStack: [],
+      focusUri: 'quay://claudecodeui/board',
+      tray: [],
+      history: [],
+      visible: {
+        viewUri: 'quay://fleet/board',
+        focusables: [
+          {
+            uri: 'quay://claudecodeui/board',
+            label: '①',
+            display: { status: 'running', color: 'green', ordinal: 1, pos: { row: 1, column: 1 } },
+          },
+          {
+            uri: 'quay://quay-fleet/board',
+            label: '②',
+            display: { status: 'stale', color: 'amber', ordinal: 2, pos: { row: 2, column: 1 } },
+          },
+        ],
+        projects: [],
+      },
+      pendingSend: null,
+      lastEventSource: null,
+    });
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+
+    // With the hub's echo OFF, focus can only move if the page kept its own state — which is
+    // exactly the second implementation this task removed.
+    hubMock.setEcho(false);
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+
+    expect(sentEvents('move')).toHaveLength(1);
+    expect(sentEvents('move')[0]?.direction).toBe('down');
+    expect(focusUri()).toBe('quay://claudecodeui/board');
+  });
+
+  it('renders the focused object and the view the hub broadcast, not the URL', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+
+    hubMock.pushState({
+      rev: 7,
+      view: { type: 'board', project: 'claudecodeui' },
+      viewStack: [{ type: 'fleet' }],
+      focusUri: 'quay://claudecodeui/task/task-a',
+      tray: [],
+      history: [],
+      visible: { viewUri: 'quay://claudecodeui/board', focusables: [], projects: [] },
+      pendingSend: null,
+      lastEventSource: { deviceId: 'device-phone', deviceName: 'phone', role: 'input' },
+    });
+
+    // The URL follows the hub's view (the fleet segment `claudecodeui` is project p1).
+    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=p1'));
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/task/task-a'));
+    expect(screen.getByTestId('cockpit-event-source').textContent).toContain('phone');
   });
 });
 
@@ -233,6 +560,7 @@ describe('view changes and history', () => {
   it('Enter on a project opens its board, and Backspace returns to the fleet', async () => {
     renderCockpit();
     await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     fireEvent.keyDown(window, { key: 'Enter' });
@@ -325,6 +653,7 @@ describe('cockpit input', () => {
   it('owns the arrow keys while focused, and submits a project request from the input', async () => {
     renderCockpit();
     await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
     const textarea = screen
       .getByTestId('cockpit-input')
@@ -334,11 +663,13 @@ describe('cockpit input', () => {
     // The stage must not move focus while the input has it.
     fireEvent.keyDown(textarea, { key: 'ArrowDown' });
     expect(focusUri()).toBe('quay://claudecodeui/board');
+    expect(sentEvents('move')).toHaveLength(0);
 
     fireEvent.change(textarea, { target: { value: '看 claudecodeui' } });
     fireEvent.keyDown(textarea, { key: 'Enter' });
 
     await waitFor(() => expect(locationSearch()).toBe('?view=board&project=p1'));
+    expect(sentEvents('utterance')[0]?.text).toBe('看 claudecodeui');
 
     // The intent → first-frame latency is recorded for the scenario runner.
     await waitFor(() => {
@@ -352,6 +683,7 @@ describe('cockpit input', () => {
   it('states an unmatched phrase instead of guessing', async () => {
     renderCockpit();
     await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
 
     const textarea = screen
       .getByTestId('cockpit-input')
