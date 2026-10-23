@@ -1,7 +1,7 @@
 ---
 id: architecture-show-all-and-large-graph-fit
 title: Show all 的副作用与大图适应：不改关系预设、给布局进度、Fit 真正放得下整图
-status: ready
+status: done
 labels:
   - feature
 parent: null
