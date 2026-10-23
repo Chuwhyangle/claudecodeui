@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "Выбор",
-      "pill": "Выбрано: {{count}} ▴",
+      "pill": "Выбрано: {{count}} · Отправить в чат ▴",
       "expand": "Развернуть панель выбора",
       "collapse": "Свернуть панель выбора",
       "count": "Выбрано: {{count}}",
@@ -94,7 +94,9 @@
       "relationCall": "вызов",
       "relationComposition": "композиция",
       "relationAggregation": "агрегация",
-      "relationOther": "связь"
+      "relationOther": "связь",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "Масштаб диаграммы",
@@ -343,7 +345,6 @@
       "syntaxOk": "Синтаксис в порядке",
       "syntaxError": "Строка {{line}}: {{message}}",
       "copy": "Копировать",
-      "copyAsContext": "Копировать как контекст сессии",
       "copied": "PlantUML скопирован в буфер обмена",
       "contextCopied": "PlantUML и заголовок сессии скопированы в буфер обмена",
       "download": "Скачать .puml",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "Скопировать PlantUML вручную",
       "copyFallbackHint": "Буфер обмена недоступен. Выделите и скопируйте текст ниже.",
       "close": "Закрыть",
-      "bridgeFallback": "Резерв: текст моста (нарисованная модель недоступна)"
+      "bridgeFallback": "Резерв: текст моста (нарисованная модель недоступна)",
+      "copyForChat": "Копировать для чата",
+      "putInChat": "Вставить в поле чата"
     },
     "curation": {
       "heading": "Настроить",
@@ -392,7 +395,9 @@
       "restoreAll": "Восстановить всё",
       "undo": "Отменить",
       "solo": "Показать только это",
-      "soloClear": "Показать весь граф"
+      "soloClear": "Показать весь граф",
+      "putInChat": "Вставить в поле чата",
+      "putCountInChat": "Вставить {{count}} в поле чата"
     }
   },
   "status": {

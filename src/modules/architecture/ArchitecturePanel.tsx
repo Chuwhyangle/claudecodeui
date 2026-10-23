@@ -24,7 +24,10 @@ import {
 } from '@/modules/architecture/curationStore';
 import { resolveCurationItems, useProjectSearch } from '@/modules/architecture/hooks/useProjectSearch';
 import { ArchitectureSheet } from '@/modules/architecture/ArchitectureSheet';
-import { ArchitectureSelectionTray } from '@/modules/architecture/ArchitectureSelectionTray';
+import {
+  ArchitectureSelectionTray,
+  buildSelectionMessage,
+} from '@/modules/architecture/ArchitectureSelectionTray';
 import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPanel';
 import {
   archguardToPlantUml,
@@ -451,6 +454,8 @@ type ArchitecturePanelRenderer = ComponentType<
     readonly onRemoveNode?: (node: ArchitectureRendererNode) => void;
     readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
     readonly onSoloNode?: (node: ArchitectureRendererNode) => void;
+    /** The context menu's "Put in chat input"; the panel composes the message. */
+    readonly onPutNodeInChat?: (node: ArchitectureRendererNode) => void;
     readonly onUndo?: () => void;
     /** Multi-select: additive clicks, the marquee, and the whole set's styling. */
     readonly onToggleNodeClick?: (node: ArchitectureRendererNode) => void;
@@ -2005,6 +2010,51 @@ export default function ArchitecturePanel({
         : t('architecture.tray.toastAppended', { defaultValue: 'Appended to the input box' }),
       false,
     );
+  };
+
+  /**
+   * The selection message every non-tray entry point (the inspector's Adjust
+   * row, the multi-select summary and the canvas context menu) appends.
+   *
+   * Built by the tray's own exported builder, so those three send the same
+   * header, the same entity lines and the same relation lines the tray's
+   * primary button would — the tray adds its memo and attachment on top.
+   */
+  const selectionMessageFor = (entries: readonly ArchitectureSelection[]): string =>
+    buildSelectionMessage(
+      {
+        selections: entries,
+        graph: drawnGraph,
+        idShape: nodeIdShapeOf(granularity),
+        projectName,
+        projectId,
+        analyzedAt: provenance.generatedAt,
+      },
+      t,
+      i18n.language,
+    );
+
+  /** The shared "put the selection in the chat input" action. */
+  const putSelectionInChat = (): void => {
+    composeSelectionText(selectionMessageFor(selections));
+  };
+
+  /**
+   * The canvas context menu's "Put in chat input". A right-click on an entity
+   * that is already part of the selection sends the whole set; on any other
+   * entity it sends that entity alone, making it the selection first so the
+   * drawing and the message agree.
+   */
+  const putNodeInChat = (node: ArchitectureRendererNode): void => {
+    const inSelection = selections.some((entry) => (entry.kind === 'entity'
+      ? entry.nodeId === node.id
+      : entry.from === node.id || entry.to === node.id));
+    if (inSelection) {
+      putSelectionInChat();
+      return;
+    }
+    dispatchSelection({ type: 'select-entity', nodeId: node.id });
+    composeSelectionText(selectionMessageFor([{ kind: 'entity', nodeId: node.id }]));
   };
 
   /** "Remove selected" walks the curation actions: exclude entities, hide relations. */
@@ -3905,6 +3955,9 @@ export default function ArchitecturePanel({
                     onRemoveNode={removeNode}
                     onHideRelation={hideRelation}
                     onSoloNode={(node) => setSoloNodeId(node.id)}
+                    // The right-click menu's entry. It sends the selection the
+                    // right-clicked entity belongs to, or that entity alone.
+                    {...(canComposeSelection ? { onPutNodeInChat: putNodeInChat } : {})}
                     onUndo={undoCuration}
                   />
                 </CanvasHeaderSlotContext.Provider>
@@ -3960,6 +4013,7 @@ export default function ArchitecturePanel({
                   grouping={granularity === 'file' ? 'adaptive' : 'raw'}
                   drawn={drawnPlantUml}
                   projectId={projectId}
+                  projectName={projectName}
                   analyzedAt={provenance.generatedAt}
                   canCompose={canComposeSelection}
                   canRemove={canCurateEntities}
@@ -4009,15 +4063,32 @@ export default function ArchitecturePanel({
                 // A multi-selection has no single entity/relation detail to
                 // show; the open-ended work belongs in the tray, so the
                 // inspector states the count instead of picking a member.
-                <p
-                  data-architecture-inspector-summary={selections.length}
-                  className="text-xs text-muted-foreground"
-                >
-                  {t('architecture.inspector.selectedCount', {
-                    defaultValue: '{{count}} selected',
-                    count: selections.length,
-                  })}
-                </p>
+                <div className="flex flex-col items-start gap-1">
+                  <p
+                    data-architecture-inspector-summary={selections.length}
+                    className="text-xs text-muted-foreground"
+                  >
+                    {t('architecture.inspector.selectedCount', {
+                      defaultValue: '{{count}} selected',
+                      count: selections.length,
+                    })}
+                  </p>
+                  {/* The same action the tray carries, with the count in its
+                      label, so a multi-selection can be sent without expanding
+                      the tray first. */}
+                  <button
+                    type="button"
+                    data-architecture-inspector-put-count-in-chat={selections.length}
+                    disabled={!canComposeSelection}
+                    onClick={putSelectionInChat}
+                    className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t('architecture.curation.putCountInChat', {
+                      defaultValue: 'Put {{count}} in chat input',
+                      count: selections.length,
+                    })}
+                  </button>
+                </div>
               ) : (
                 <ArchitectureInspector
                   selection={selection}
@@ -4036,6 +4107,9 @@ export default function ArchitecturePanel({
                   onUnpinNode={unpinNode}
                   onRemoveNode={removeNode}
                   onHideRelation={hideRelation}
+                  // The tray's action, offered in the inspector; the panel's
+                  // compose handler is the one both call.
+                  {...(canComposeSelection ? { onPutInChat: putSelectionInChat } : {})}
                   {...(hiddenReading.byNodeRelations === undefined
                     ? {}
                     : { hiddenRelations: hiddenReading.byNodeRelations })}
@@ -4065,6 +4139,9 @@ export default function ArchitecturePanel({
                   viewLabel={textViewLabel}
                   filterSummary={textFilterSummary}
                   canvasRef={graphAreaRef}
+                  // The text scope's own body, appended by the same compose
+                  // handler the selection tray uses.
+                  {...(canComposeSelection ? { onPutInChat: composeSelectionText } : {})}
                 />
               ),
             },

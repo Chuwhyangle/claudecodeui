@@ -476,6 +476,73 @@ test('the primary action appends the fixed-format text to the session draft, ope
   composer.remove();
 });
 
+/** The header line of the composed message, without relying on the rest of it. */
+function messageHeader(draft: string): string {
+  return draft.split('\n')[0] ?? '';
+}
+
+test('the message header names the project display name, never its UUID', async () => {
+  // The id the panel is keyed by is opaque; the header must read the way the
+  // workspace labels the project, exactly as the text page's header does.
+  const projectUuid = 'b0a96771-c926-468a-bf18-09a5b3708039';
+  render(
+    <ArchitecturePanel
+      projectId={projectUuid}
+      sessionId="session-1"
+      projectName="claudecodeui"
+    />,
+  );
+  const host = await waitForDiagram();
+  await selectAlphaAndBeta(host);
+  fireEvent.click(document.querySelector('[data-architecture-tray-compose]') as Element);
+
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  const draft = readDraftText('session-1');
+  assert.match(messageHeader(draft), /project claudecodeui/, 'the header names the display name');
+  assert.doesNotMatch(draft, /[0-9a-f]{8}-[0-9a-f]{4}-/, 'no UUID-shaped id appears anywhere in the message');
+  assert.match(messageHeader(draft), /analyzed /, 'the analysis time stays');
+});
+
+test('each selected entity lists its relations to the other selected entities', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" projectName="claudecodeui" />);
+  const host = await waitForDiagram();
+
+  // Alpha and Beta are joined by a dependency edge (Beta → Alpha).
+  await selectAlphaAndBeta(host);
+  fireEvent.click(document.querySelector('[data-architecture-tray-compose]') as Element);
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  const related = readDraftText('session-1');
+  assert.match(related, /^\s+- Alpha ← Beta \(dependency\)$/m, 'the target states its incoming relation');
+  assert.match(related, /^\s+- Beta → Alpha \(dependency\)$/m, 'the source states its outgoing relation');
+
+  // Alpha and Gamma have NO drawn edge between them (Gamma only calls Beta),
+  // so neither entity carries a relation line.
+  resetChatDrafts();
+  fireEvent.click(document.querySelector(`[data-architecture-tray-remove="${selectionKey({ kind: 'entity', nodeId: BETA })}"]`) as Element);
+  await waitFor(() => assert.equal(selectedCount(), 1));
+  fireEvent.click(node(host, GAMMA), { shiftKey: true });
+  await waitFor(() => assert.equal(selectedCount(), 2));
+  fireEvent.click(document.querySelector('[data-architecture-tray-compose]') as Element);
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  assert.doesNotMatch(
+    readDraftText('session-1'),
+    /Alpha (←|→) Gamma|Gamma (←|→) Alpha/,
+    'unrelated selected entities carry no relation line',
+  );
+});
+
+test('the collapsed pill names the action, not only the count', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  fireEvent.click(node(host, ALPHA), { shiftKey: true });
+  fireEvent.click(node(host, BETA), { shiftKey: true });
+  await waitFor(() => assert.equal(selectedCount(), 2));
+
+  const pill = document.querySelector('[data-architecture-tray-pill]');
+  assert.ok(pill !== null);
+  assert.match(pill.textContent ?? '', /2 selected · Send to chat ▴/, 'the pill states the action');
+});
+
 test('a non-empty draft is appended after a blank line and gets the appended wording', async () => {
   writeDraftText('session-1', 'already half-typed');
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);

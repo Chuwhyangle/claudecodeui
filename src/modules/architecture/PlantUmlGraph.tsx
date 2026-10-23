@@ -316,6 +316,11 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
   readonly onHideRelation?: (edge: ArchitectureRendererEdge) => void;
   /** "Only show this pinned item": the panel narrows the drawing to one node. */
   readonly onSoloNode?: (node: ArchitectureRendererNode) => void;
+  /**
+   * The context menu's "Put in chat input": the panel composes the message.
+   * Optional so a renderer embedded without a chat keeps drawing as before.
+   */
+  readonly onPutNodeInChat?: (node: ArchitectureRendererNode) => void;
   /** Ctrl/Cmd+Z while the canvas is focused: undo the latest adjustment. */
   readonly onUndo?: () => void;
   /**
@@ -1633,6 +1638,7 @@ export function PlantUmlGraph({
   onRemoveNode,
   onHideRelation,
   onSoloNode,
+  onPutNodeInChat,
   onUndo,
   onToggleNodeClick,
   onToggleEdgeClick,
@@ -3822,6 +3828,20 @@ export function PlantUmlGraph({
                   >
                     {t('architecture.curation.removeEntity', { defaultValue: 'Remove from graph' })}
                   </button>
+                  {onPutNodeInChat !== undefined && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-architecture-context-put-in-chat={menuNode.id}
+                      onClick={() => {
+                        setContextMenu(null);
+                        onPutNodeInChat(menuNode);
+                      }}
+                      className="rounded px-2 py-1 text-left text-[11px] text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                    >
+                      {t('architecture.curation.putInChat', { defaultValue: 'Put in chat input' })}
+                    </button>
+                  )}
                   {isPinned && onSoloNode !== undefined && (
                     <button
                       type="button"

@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "Sélection",
-      "pill": "{{count}} sélectionnés ▴",
+      "pill": "{{count}} sélectionnés · Envoyer au chat ▴",
       "expand": "Développer le panneau de sélection",
       "collapse": "Réduire le panneau de sélection",
       "count": "{{count}} sélectionnés",
@@ -94,7 +94,9 @@
       "relationCall": "appel",
       "relationComposition": "composition",
       "relationAggregation": "agrégation",
-      "relationOther": "relation"
+      "relationOther": "relation",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "Zoom du diagramme",
@@ -343,7 +345,6 @@
       "syntaxOk": "Syntaxe correcte",
       "syntaxError": "Ligne {{line}} : {{message}}",
       "copy": "Copier",
-      "copyAsContext": "Copier comme contexte de session",
       "copied": "PlantUML copié dans le presse-papiers",
       "contextCopied": "PlantUML et son en-tête de session copiés dans le presse-papiers",
       "download": "Télécharger .puml",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "Copier le PlantUML manuellement",
       "copyFallbackHint": "L'accès au presse-papiers est indisponible. Sélectionnez et copiez le texte ci-dessous.",
       "close": "Fermer",
-      "bridgeFallback": "Repli : texte du pont (le modèle dessiné est indisponible)"
+      "bridgeFallback": "Repli : texte du pont (le modèle dessiné est indisponible)",
+      "copyForChat": "Copier pour le chat",
+      "putInChat": "Mettre dans la saisie du chat"
     },
     "curation": {
       "heading": "Ajuster",
@@ -392,7 +395,9 @@
       "restoreAll": "Tout restaurer",
       "undo": "Annuler",
       "solo": "Afficher seulement ceci",
-      "soloClear": "Afficher tout le graphe"
+      "soloClear": "Afficher tout le graphe",
+      "putInChat": "Mettre dans la saisie du chat",
+      "putCountInChat": "Mettre {{count}} dans la saisie du chat"
     }
   },
   "status": {
