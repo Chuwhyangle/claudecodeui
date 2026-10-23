@@ -55,6 +55,16 @@ type UseChatComposerStateArgs = {
   currentProviderModel: string;
   currentProviderEffort: string;
   isLoading: boolean;
+  /**
+   * True while the activity dock is drawing a turn, from `useActivityDockTurn`.
+   *
+   * The chips are an idle-only affordance, and the dock is the surface that
+   * knows whether a turn is running: a server-confirmed turn (another client, a
+   * voice turn, a reloaded page) can outlive this client's local `isLoading`
+   * mark. Fed into `useInputSuggestions` so the chips' display and their key
+   * handling share that one reading. Optional for callers with no dock.
+   */
+  isDockTurnShown?: boolean;
   processingSessions?: SessionActivityMap;
   canAbortSession: boolean;
   tokenBudget: Record<string, unknown> | null;
@@ -174,6 +184,7 @@ export function useChatComposerState({
   currentProviderModel,
   currentProviderEffort,
   isLoading,
+  isDockTurnShown = false,
   canAbortSession,
   tokenBudget,
   sendMessage,
@@ -357,6 +368,7 @@ export function useChatComposerState({
   } = useInputSuggestions({
     input,
     isLoading,
+    isDockTurnShown,
     isOccupied: Boolean(findSessionOccupancy(hostsSnapshot, sessionKey)),
     isCommandMenuOpen: showCommandMenu,
     isFileMenuOpen: showFileDropdown,
