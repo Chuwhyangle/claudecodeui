@@ -17,10 +17,10 @@ depends_on:
 决策出处：用户 2026-10-23 确认的驾驶舱第一步中的「按住说话 + 焦点路由」。前置：`cockpit-read-only-stage`（舞台、焦点、确定性意图）。
 
 方案：
-1. **按住说话**：驾驶舱里按住一个键（默认空格，焦点不在文本框时生效；手柄以后接同一个接缝）开始收音，松开结束。复用 chat 模块既有的语音输入（经 `@/modules/chat` barrel 暴露所需 hook，不深导入），**不新建第二条 ASR 管线**。收音时舞台上方显示实时转写；识别热词使用当前可见集的标签与项目名。
-2. **两种去向**：
-   - 转写命中 `parseCockpitIntent` ⇒ 直接切换视图（可逆，无需确认）。
-   - 未命中 ⇒ 视为「对某个项目说的话」：构建 A/B 片的引用式输入包（focus / visible / history / tray + text），**路由目标 = 焦点对象所属项目的目标会话**。
+1. **语音复用现有口述机制，与文本合流**：驾驶舱输入框接上 chat 模块现有的 `useVoiceInput` 与 `VoiceInputButton`（经 `@/modules/chat` barrel 导出），行为与聊天里一致——口述的文字进入同一个输入框，可以先改再提交；不新建第二条 ASR 管线，也不另做一套语音专用输入。`candidates`（识别热词）取当前可见集的标签与项目名。**按住说话**只是同一个 hook 的另一个触发方式：焦点不在输入框时按住空格开始、松开结束（手柄以后接同一个接缝）。驾驶舱专属的输入特点（持续收音、无文本框的直接执行等）不在本任务，以后另议。
+2. **两种去向（文本和语音走同一提交路径）**：
+   - 提交的文本命中 `parseCockpitIntent` ⇒ 直接切换视图（可逆，无需确认）。
+   - 未命中 ⇒（无论是打字还是口述） 视为「对某个项目说的话」：构建 A/B 片的引用式输入包（focus / visible / history / tray + text），**路由目标 = 焦点对象所属项目的目标会话**。
 3. **目标会话**：每个项目的目标会话 = 用户为该项目钉选的会话；未钉选时用该项目最近打开的会话（既有 `ui_last_opened_session` 读数）；两者都没有 ⇒ 不发送，提示「该项目没有目标会话」。
 4. **发送前预览 + 确认**：底部显示「→ <项目> / <会话标题>：<转写文本>；引用：<焦点标签> → <URI>」，Enter 确认发送，取消键放弃。发送走既有会话发送路径（与 MCP 网关 `session_send` 同一服务），**消息正文里附带引用 URI 列表**，下游可按 URI 解引用（C 片）。不可在未确认时发送。
 5. 发送后舞台不跳走；项目条上该项目显示「已发送」直到该会话下一次状态变化。
@@ -29,7 +29,7 @@ depends_on:
 
 - [ ] AC1: `npx vitest run src/modules/cockpit/tests/cockpitRouting.test.ts` exit 0——焦点在 `quay://claudecodeui/task/x` 上、项目已钉选会话 S 时，未命中意图的转写生成的发送预览目标为 S，包内 focus 为该 URI；未钉选时回落到最近打开的会话；两者都无时不产生发送动作；命中意图的转写只切换视图、不产生发送动作。
 - [ ] AC2: 同一测试文件——未确认时发送函数调用次数为 0；确认后恰好 1 次，且消息正文包含焦点 URI；取消后为 0。
-- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitPushToTalk.test.tsx` exit 0——按住键开始、松开结束（用假语音引擎）；焦点在文本框内时按空格不触发收音；收音期间显示实时转写。
+- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitPushToTalk.test.tsx` exit 0——驾驶舱使用的是 `@/modules/chat` 导出的 `useVoiceInput`（假语音引擎注入）；口述文字进入输入框而非直接发送；按住空格开始、松开结束；焦点在输入框内时按空格只输入空格；打字提交与口述提交得到相同的意图 / 路由结果。
 - [ ] AC4: `npm run typecheck` 通过；chat 模块语音既有测试（`src/modules/chat/utils/tests/voiceContextPack.test.ts`）原样通过。
 
 ## DoD
