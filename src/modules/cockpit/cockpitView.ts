@@ -18,6 +18,13 @@ import { formatQuayUri } from '@/modules/quay';
  */
 export type CockpitProject = {
   projectId: string;
+  /**
+   * The project's quay-fleet registry id — the project segment every `quay://` address and
+   * spoken project name resolves against. `null` (or absent, which reads the same) when its
+   * root is not registered: such a project has no addressable board and declares no focusable
+   * object.
+   */
+  fleetProjectId?: string | null;
   /** Display name — the project path's last segment, falling back to the id for a bare path. */
   name: string;
   projectPath: string;
@@ -71,15 +78,24 @@ const DRIVER_COLORS: Record<QuayDriverState, string> = {
 };
 
 /**
- * Builds the fleet view's contract: one focusable per project, addressed as its board
- * (`quay://<project>/board`). The ordinal is the tile's spatial order — a single column, so
- * `pos.column` is always 1 — and is the same number the tile draws (①, ②, …), making 「第二个」
- * and the second tile the same object by construction.
+ * Builds the fleet view's contract: one focusable per REGISTERED project, addressed as its
+ * board (`quay://<fleetProjectId>/board`). The ordinal is the tile's spatial order among the
+ * declared objects — a single column, so `pos.column` is always 1 — and is the same number the
+ * tile draws (①, ②, …), making 「第二个」 and the second focusable tile the same object by
+ * construction.
+ *
+ * A project whose root is not registered with quay-fleet is absent from the set: there is no
+ * fleet id to mint an address from, and the CloudCLI project id is not a fleet handle. Its
+ * tile still renders (with the counts) but carries no address and cannot receive focus.
  */
 export function buildCockpitFleetContract(projects: readonly CockpitProject[]): QuayViewContract {
+  const registered = projects.filter(
+    (project): project is CockpitProject & { fleetProjectId: string } =>
+      (project.fleetProjectId ?? null) !== null,
+  );
   return {
-    focusables: projects.map((project, index) => ({
-      uri: formatQuayUri({ type: 'board', project: project.projectId }),
+    focusables: registered.map((project, index) => ({
+      uri: formatQuayUri({ type: 'board', project: project.fleetProjectId }),
       label: CIRCLED_ORDINALS[index] ?? `(${index + 1})`,
       display: {
         status: project.driverState,
@@ -143,9 +159,15 @@ export function cockpitViewPath(view: CockpitView): string {
 
 /**
  * The `quay://` address of the view itself, for the status bar's fallback when no object is
- * focused (a board whose snapshot failed still names the board it is showing). The fleet view
- * has no `quay://` address — it is a CloudCLI-level view — so it returns `null`.
+ * focused (a board whose snapshot failed still names the board it is showing).
+ *
+ * The project segment is the board project's quay-fleet REGISTRY ID, passed in because the
+ * view description itself carries the CloudCLI project id (the id the snapshot route is keyed
+ * by). `null` when the fleet does not register the project: there is no honest address, and
+ * the fleet view — a CloudCLI-level view — has none either.
  */
-export function cockpitViewUri(view: CockpitView): string | null {
-  return view.type === 'board' ? `quay://${view.project}/board` : null;
+export function cockpitViewUri(view: CockpitView, fleetProjectId: string | null): string | null {
+  return view.type === 'board' && fleetProjectId !== null
+    ? `quay://${fleetProjectId}/board`
+    : null;
 }

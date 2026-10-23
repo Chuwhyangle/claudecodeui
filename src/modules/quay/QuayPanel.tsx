@@ -327,17 +327,23 @@ const CIRCLED_ORDINALS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱
  * status this reading carries) and `color` is the same bucket the phase marker draws, so the
  * spoken attribute and the visible marker cannot drift.
  *
- * An unread tile (`inFlight === null`) has no focusable set: `null` is "no lane reading",
- * not "nothing is running", and the renderer publishes the contract attribute only for an
- * actual reading.
+ * THE PROJECT SEGMENT IS THE FLEET REGISTRY ID. `null` means the project's root is not
+ * registered with quay-fleet: no address can be minted for these tasks (the fleet would read a
+ * CloudCLI id as `unknown-project`), so the tile declares NO focusable set at all rather than
+ * declaring objects nobody can dereference. An unread tile (`inFlight === null`) likewise has
+ * no focusable set: `null` is "no lane reading", not "nothing is running", and the renderer
+ * publishes the contract attribute only for an actual, addressable reading.
  */
 export function buildQuayInFlightContract(
-  projectId: string,
+  fleetProjectId: string | null,
   inFlight: QuaySnapshot['inFlight'],
-): QuayViewContract {
+): QuayViewContract | null {
+  if (fleetProjectId === null || inFlight === null) {
+    return null;
+  }
   return {
-    focusables: (inFlight ?? []).map((task, index) => ({
-      uri: formatQuayUri({ type: 'task', project: projectId, id: task.taskId, ac: null }),
+    focusables: inFlight.map((task, index) => ({
+      uri: formatQuayUri({ type: 'task', project: fleetProjectId, id: task.taskId, ac: null }),
       label: CIRCLED_ORDINALS[index] ?? `(${index + 1})`,
       display: {
         status: task.phase,
@@ -587,16 +593,18 @@ function FanInCard({ fanIn, window }: { fanIn: QuaySnapshot['fanIn']; window: Qu
  * same object.
  */
 function InFlightCard({
-  projectId,
+  fleetProjectId,
   inFlight,
   generatedAt,
 }: {
-  projectId: string;
+  /** The project's quay-fleet registry id, or `null` when it is not registered. */
+  fleetProjectId: string | null;
   inFlight: QuaySnapshot['inFlight'];
   generatedAt: string;
 }) {
-  const contract = buildQuayInFlightContract(projectId, inFlight);
-  const focusablesJson = JSON.stringify(contract.focusables);
+  const contract = buildQuayInFlightContract(fleetProjectId, inFlight);
+  const focusables = contract?.focusables ?? [];
+  const focusablesJson = JSON.stringify(focusables);
 
   // PUBLISH THE SAME DECLARATION THE TILE DRAWS. The dev-only scenario surface reads focusables
   // from a view-contract registry rather than from the DOM, so a scenario and the renderer resolve
@@ -604,9 +612,10 @@ function InFlightCard({
   // build-time constant: in a production bundle this branch is compiled out and the dynamic import
   // with it, so the surface's symbol never reaches `dist/`. The module itself no-ops unless the
   // operator opened the runtime lock (`?ui-scenario=1` / `localStorage['ui-scenario']='on'`).
+  // An unregistered project publishes nothing: its view has no addressable URI.
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      const viewUri = formatQuayUri({ type: 'board', project: projectId });
+    if (import.meta.env.DEV && fleetProjectId !== null && contract !== null) {
+      const viewUri = formatQuayUri({ type: 'board', project: fleetProjectId });
       void import('@/modules/ui-scenario').then(({ publishScenarioViewContract }) => {
         publishScenarioViewContract(viewUri, contract);
       });
@@ -614,16 +623,25 @@ function InFlightCard({
     // `focusablesJson` is the contract's identity: `contract` is rebuilt every render, and
     // re-publishing on every render would make the registry's "most recent" clock meaningless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusablesJson, projectId]);
+  }, [focusablesJson, fleetProjectId]);
 
   return (
     <section
       data-testid="quay-panel-inflight"
       // The tile's focusable children, in spatial order. Absent — not "[]" — when the lane
-      // reading failed: an unread tile declares nothing rather than declaring emptiness.
-      data-quay-focusables={inFlight === null ? undefined : JSON.stringify(contract.focusables)}
+      // reading failed OR the project is not registered with quay-fleet: in both cases there
+      // is no address this side may mint.
+      data-quay-focusables={contract === null ? undefined : JSON.stringify(focusables)}
     >
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">In flight</h3>
+      {fleetProjectId === null ? (
+        // The reference's project segment must be a fleet registry id. CloudCLI's own project
+        // id is NOT an honest fallback — the fleet would reject it — so the tile says the
+        // project is unregistered and declares no focusable objects.
+        <p className="mb-2 text-xs text-amber-700 dark:text-amber-300" data-testid="quay-panel-inflight-unregistered">
+          Not registered in quay-fleet (未登记到 quay-fleet) — these tasks cannot be referenced.
+        </p>
+      ) : null}
       {inFlight === null ? (
         <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="quay-panel-inflight-unavailable">
           In-flight tasks unavailable — no lane reading (quay's `lanes` verb could not be read).
@@ -638,7 +656,7 @@ function InFlightCard({
             const phase = IN_FLIGHT_PHASE_META[task.phase];
             const heartbeatAgeMs = elapsedSince(task.lastHeartbeat, generatedAt);
             const stale = heartbeatAgeMs !== null && heartbeatAgeMs > IN_FLIGHT_STALE_AFTER_MS;
-            const focusable = contract.focusables[index];
+            const focusable = focusables[index];
             return (
               <li
                 key={task.taskId}
@@ -889,7 +907,11 @@ function LoadedQuayPanel({
           refreshing={ganttRefreshing}
         />
         <TestsCard tests={snapshot.tests} window={timelineWindow} />
-        <InFlightCard projectId={projectId} inFlight={snapshot.inFlight} generatedAt={snapshot.generatedAt} />
+        <InFlightCard
+          fleetProjectId={snapshot.fleetProjectId ?? null}
+          inFlight={snapshot.inFlight}
+          generatedAt={snapshot.generatedAt}
+        />
         <FanInCard fanIn={snapshot.fanIn} window={timelineWindow} />
 
         <section>
@@ -935,8 +957,12 @@ function LoadedQuayPanel({
         </div>
       )}
 
-      <p className="mt-4 text-[11px] text-muted-foreground" data-testid="quay-panel-project">
-        Project {projectId}
+      <p
+        className="mt-4 text-[11px] text-muted-foreground"
+        data-testid="quay-panel-project"
+        data-fleet-project-id={snapshot.fleetProjectId ?? undefined}
+      >
+        Project {snapshot.fleetProjectId ?? projectId}
       </p>
     </div>
   );

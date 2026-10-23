@@ -5,13 +5,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '@/shared/api';
 import { useWebSocketOptional } from '@/shared/context/WebSocketContext';
 import type { QuayFleetSummary, QuayFocusableObject, VoiceFailureReport } from '@/shared/types';
-import { buildQuayInFlightContract, formatQuayUri, parseQuayUri, useQuayStatus } from '@/modules/quay';
+import { buildQuayInFlightContract, parseQuayUri, useQuayStatus } from '@/modules/quay';
 import CockpitInput from '@/modules/cockpit/CockpitInput';
 import CockpitStage from '@/modules/cockpit/CockpitStage';
 import type { CockpitFleetStatus } from '@/modules/cockpit/CockpitStage';
 import type { CockpitIntent } from '@/modules/cockpit/cockpitIntent';
 import {
   openCockpitSendGate,
+  cockpitProjectForUri,
   pinCockpitTargetSession,
   routeCockpitText,
 } from '@/modules/cockpit/cockpitRouting';
@@ -149,6 +150,9 @@ export default function CockpitPage() {
         status: 'loaded',
         projects: summary.projects.map((project) => ({
           projectId: project.projectId,
+          // The fleet registry id is the ONLY project segment the wall mints; an unregistered
+          // project keeps `null` and therefore declares no addressable object.
+          fleetProjectId: project.fleetProjectId ?? null,
           name: projectNameFromPath(project.projectPath, project.projectId),
           projectPath: project.projectPath,
           driverState: project.driver.state,
@@ -261,12 +265,20 @@ export default function CockpitPage() {
     [fleet],
   );
 
+  // The board's project segment: the fleet registry id, never the CloudCLI project id. The
+  // fleet summary and the board snapshot carry the same server join, so either is a valid
+  // source; `null` means the project is not registered and has no addressable objects.
+  const boardFleetProjectId: string | null = view.type === 'board'
+    ? projects.find((project) => project.projectId === view.project)?.fleetProjectId
+      ?? (boardView.status === 'loaded' ? boardView.snapshot.fleetProjectId ?? null : null)
+    : null;
+
   const boardFocusables = useMemo<QuayFocusableObject[]>(() => {
     if (view.type !== 'board' || boardView.status !== 'loaded') {
       return [];
     }
-    return buildQuayInFlightContract(view.project, boardView.snapshot.inFlight).focusables;
-  }, [view, boardView]);
+    return buildQuayInFlightContract(boardFleetProjectId, boardView.snapshot.inFlight)?.focusables ?? [];
+  }, [view, boardView, boardFleetProjectId]);
 
   const focusables = view.type === 'fleet' ? fleetFocusables : boardFocusables;
   const focusState = useCockpitFocus(focusables);
@@ -317,9 +329,16 @@ export default function CockpitPage() {
       if (!parsed.ok || parsed.object.type !== 'board') {
         return;
       }
-      showView({ type: 'board', project: parsed.object.project }, timing);
+      // The address's project segment is the fleet registry id, while the view description
+      // (and the snapshot route behind it) is keyed by the CloudCLI project id — resolve the
+      // one to the other rather than writing a fleet id into the URL.
+      const project = cockpitProjectForUri(projects, focused.uri);
+      if (project === null) {
+        return;
+      }
+      showView({ type: 'board', project: project.projectId }, timing);
     },
-    [focusState.focusObject, showView],
+    [focusState.focusObject, projects, showView],
   );
 
   /** Applies a recognised intent to the stage. Routing decisions never reach here. */
@@ -558,15 +577,11 @@ export default function CockpitPage() {
   const fleetStatus: CockpitFleetStatus = fleet.status;
   const fleetError = fleet.status === 'error' ? fleet.message : null;
   const lastTiming = timings.length > 0 ? timings[timings.length - 1] : null;
-  const viewUri = cockpitViewUri(view);
+  const viewUri = cockpitViewUri(view, boardFleetProjectId);
   const focusedProjectName =
     focusState.focusObject === null
       ? null
-      : projects.find(
-          (project) =>
-            formatQuayUri({ type: 'board', project: project.projectId }) ===
-            focusState.focusObject?.uri,
-        )?.name ?? null;
+      : cockpitProjectForUri(projects, focusState.focusObject.uri)?.name ?? null;
 
   const openProject = (project: CockpitProject) => {
     showView(

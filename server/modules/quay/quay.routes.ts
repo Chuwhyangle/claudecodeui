@@ -73,7 +73,7 @@ function uriErrorStatus(code: QuayUriErrorCode): number {
     case 'empty-id':
     case 'malformed':
       return 400;
-    case 'project-not-found':
+    case 'unknown-project':
     case 'task-not-found':
       return 404;
     case 'fleet-unavailable':
