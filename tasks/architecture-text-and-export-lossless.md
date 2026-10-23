@@ -58,6 +58,7 @@ extra:
 - src/modules/architecture/tests/textPanel.test.tsx
 - src/modules/architecture/tests/selectionTray.test.tsx
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/exportMenu.test.tsx
 - e2e/architecture-canvas-layout.spec.ts
 - e2e/support/architectureFixture.ts
 - playwright.config.ts
