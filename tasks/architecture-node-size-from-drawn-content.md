@@ -56,6 +56,22 @@ extra:
 - playwright.config.ts
 - tasks/architecture-node-size-from-drawn-content.md
 
+## Evidence
+
+续做轮（2026-10-23 晚）。存储里的正文已改成 0.5.1 规格（渲染入口只拿 `detail: 'full'` + `memberMaxChars: 48`，**不传** `memberMaxRows`；行数上限归绘制层），本轮按该规格重做，未沿用分支旧提交里的 `memberMaxRows`。
+
+- **依赖**：`npm ls @yalehwang/plantuml-js --depth=0` → `@yalehwang/plantuml-js@0.5.2`（package.json 声明 `^0.5.1`），exit 0。
+- **AC1**：`vitest run src/modules/architecture/tests/archguardToPlantUml.test.ts` 25 passed；`vitest run src/modules/architecture/tests/architectureTab.test.tsx` 99 passed。断言含：渲染入口选项为 `{ detail: 'full', memberMaxChars: 48 }` 且 `'memberMaxRows' in options === false`；模型保留全部 7 / 20 个成员、无任何 `… +N more` 合成成员；`raw` 仍是 105 字符；Text 面板含 105 与 114 字符两条完整签名且不含折叠行。新增 `capDrawnMemberRows` 单测：7 行 → 6 行 + `… +1 more (7 members)`，恰好 6 行的实体原样不动。
+- **AC2**：`vitest run src/modules/architecture/tests/layoutAspect.test.tsx` 9 passed；`data-w` 408 ≤ 1.35 × 288.98 + 24。
+- **AC3**：`playwright test e2e/architecture-canvas-layout.spec.ts` → **14 passed (2.7m)**，exit 0（`playwright.config.ts` 的 `SPEC_BUDGET_MS` 条目录为 300_000）。
+  - PC 1440×765：`VoiceFrameProcessor` box=**408**（修复前 856），最长画出文字 288.98，ratio=**1.412**；画布填充率 1；画面上 6 行成员 + `… +1 more`；`FrameBudgetLedger` 6 行 + `… +14 more`。
+  - 手机 390×844：缺省缩放 **0.697**（修复前约 0.38），box=284.4，ratio=1.047。
+  - 截图（真实 Chromium）：`tmp/architecture-node-size-pc.png`、`tmp/architecture-node-size-phone.png`、`tmp/architecture-node-size-pc-inspector.png`；Inspector 仍列出 `process(...)` / `reset(...)` 的完整签名，Text 面板含完整签名。
+- **AC4**：`--grep "control arm"` → **9 passed (1.1m)**，exit 0。控制读数：VoiceFrameProcessor box/text = **2.64**（> 1.35 越界）、手机缩放 **0.352**（< 0.6），两条腿同时变红；主臂与控制臂共用 `readNodeSize`。
+- **AC5**：`npm run typecheck`、`npm run build`、`npm run lint`（另跑 `oxlint src/modules/architecture/`）均 exit 0，只有既有 warning。
+- **折叠标记格式的一处说明**：绘制层的 `capDrawnMemberRows` 画的是长式 `… +N more (M members)`（`memberOverflowLabel`，单测逐字断言）。语义缩放的 `planMemberRows` 仍用既有短式 `… +N more`：读取层把长式认作「渲染器自己的截断行」，应用层若也画长式，既有的「只画一个标记」守卫会转红。因此默认 PC 画面上看到的是 6 行 + `… +1 more`，总数 M 由读取层的 `memberTotal` 持有。
+- **遗留取舍**：行数上限在布局之后施加，框高仍按布局时的全部成员行计算（宽度已按画出的 48 字符行定），成员很多时框底会留白；重排布局不在本任务范围。
+
 ## Blocker
 
 **2026-10-23T08:16:45.332Z — worker 未落地（exited-not-landed）**
