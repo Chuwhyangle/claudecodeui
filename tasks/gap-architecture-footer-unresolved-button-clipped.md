@@ -1,7 +1,7 @@
 ---
 id: gap-architecture-footer-unresolved-button-clipped
 title: 架构图页脚「N 个名字未找到」按钮被 truncate 裁掉：按钮移出截断段，窄屏缩短文案
-status: todo
+status: ready
 labels:
   - gap
   - defect
