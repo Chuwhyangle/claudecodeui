@@ -54,6 +54,14 @@ type ArchitectureDockProps = {
     readonly half: string;
     readonly full: string;
   };
+  /**
+   * The coarse drawer's height in CSS pixels, reported whenever the snap (or
+   * the drawer's open state) changes. The panel needs it because the drawer is
+   * an overlay: the selection tray and the drawing have to stay above its top
+   * edge, and only the drawer knows which of the three heights is in force.
+   * Reports 0 while the drawer is closed.
+   */
+  readonly onTouchDrawerHeightChange?: (heightPx: number) => void;
 };
 
 /** The desktop dock width. Opening it squeezes the canvas instead of covering it. */
@@ -67,6 +75,20 @@ const DRAWER_HEIGHTS = {
 } as const;
 
 type DrawerSnap = keyof typeof DRAWER_HEIGHTS;
+
+/**
+ * The drawer's real height for one snap, in CSS pixels.
+ *
+ * The style states two of the three heights in `vh`; this conversion is what
+ * lets the panel place the tray and the drawing against the same number the
+ * browser paints. `viewportHeight` is `window.innerHeight`, the same basis
+ * `vh` uses.
+ */
+export function touchDrawerHeightPx(snap: DrawerSnap, viewportHeight: number): number {
+  if (snap === 'collapsed') return 96;
+  const ratio = snap === 'half' ? 0.45 : 0.92;
+  return Math.round(viewportHeight * ratio);
+}
 
 /**
  * The architecture tab's right-hand dock (desktop) and bottom drawer (coarse
@@ -93,6 +115,7 @@ export function ArchitectureDock({
   returnFocusRef,
   collapsedSummary,
   snapLabels,
+  onTouchDrawerHeightChange,
 }: ArchitectureDockProps) {
   const { coarsePointer } = useTouchLayout();
   // A coarse pointer gets a real 44×44 target on every dock control; the size
@@ -118,6 +141,16 @@ export function ArchitectureDock({
     const target = returnFocusRef?.current ?? previouslyFocusedRef.current;
     target?.focus();
   }, [open, returnFocusRef]);
+
+  // The coarse drawer's own height, stated to the panel: it is an overlay, so
+  // everything that must not sit underneath it (the selection tray, the
+  // selected box) is placed against this number. Reported from the snap rather
+  // than measured, so the reading is the height the drawer is about to paint
+  // and does not wait for the slide-in animation.
+  useEffect(() => {
+    if (!coarsePointer) return;
+    onTouchDrawerHeightChange?.(open ? touchDrawerHeightPx(snap, window.innerHeight) : 0);
+  }, [coarsePointer, open, snap, onTouchDrawerHeightChange]);
 
   if (!open) return null;
 
@@ -235,22 +268,18 @@ export function ArchitectureDock({
                 data-architecture-dock-snap={nextSnap}
                 onClick={() => setSnap(nextSnap)}
                 style={targetStyle}
-                className="rounded px-2 py-0.5 text-[11px] text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+                // Each button names ITS OWN snap; the pressed one is distinguished
+                // by weight and fill, not by colour alone.
+                className={`rounded px-2 py-0.5 text-[11px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                  snap === nextSnap
+                    ? 'bg-accent font-semibold text-foreground shadow-inner'
+                    : 'font-medium text-muted-foreground'
+                }`}
               >
-                {snapLabels[snap]}
+                {snapLabels[nextSnap]}
               </button>
             ))}
             <span className="flex-1" />
-            <button
-              type="button"
-              aria-label={closeLabel}
-              data-architecture-dock-close="true"
-              onClick={onClose}
-              style={targetStyle}
-              className="rounded px-2 py-0.5 text-sm text-muted-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              ×
-            </button>
           </div>
           {snap === 'collapsed' && collapsedSummary !== undefined && (
             <div data-architecture-dock-summary="true" className="px-3 pb-2 text-sm text-foreground">

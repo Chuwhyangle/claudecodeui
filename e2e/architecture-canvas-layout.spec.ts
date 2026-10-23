@@ -5301,3 +5301,488 @@ test('control arm — each restored panel defect turns its own reading red', asy
     await context.close();
   }
 });
+
+/* ── the chrome / drawer / paper / banner readings ────────────────────────────────────────── */
+
+/**
+ * What the phone drawer, the selection tray, the canvas paper rectangle and the
+ * Focus banner report in ONE round trip.
+ *
+ * `trayOverlapsDrawer` is the reading the task asks for literally: the two
+ * screen rectangles must not intersect. `selectedNodeTopVisible` says whether
+ * the box the reader tapped still has its top edge in the part of the canvas
+ * the drawer does not cover. `paperOk` is the canvas-background rule: the
+ * renderer's paper rectangle must either paint nothing (so the panel's own
+ * background shows), paint exactly the panel's background, or cover the whole
+ * canvas region — a paper-coloured rectangle that only wraps the content is the
+ * seam this task removes.
+ */
+type ChromeReading = {
+  canvasTop: number | null;
+  canvas: Box | null;
+  drawer: Box | null;
+  drawerContent: Box | null;
+  tray: Box | null;
+  trayOverlapsDrawer: boolean;
+  selectedNode: Box | null;
+  snapLabels: string[];
+  snapPressed: string | null;
+  snapPressedClass: string | null;
+  snapUnpressedClass: string | null;
+  closeCount: number;
+  paper: Box | null;
+  paperFill: string;
+  paperVisible: boolean;
+  paperCoversCanvas: boolean;
+  paperMatchesPanel: boolean;
+  paperOk: boolean;
+  panelBackground: string;
+  focusText: string | null;
+  focusTruncated: boolean | null;
+};
+
+const readChrome = (page: Page): Promise<ChromeReading> => page.evaluate(() => {
+  const boxOf = (element: Element | null): Box | null => {
+    if (element === null) return null;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, w: rect.width, h: rect.height, x2: rect.right, y2: rect.bottom };
+  };
+  const overlaps = (a: Box | null, b: Box | null): boolean =>
+    Boolean(a && b && a.x < b.x2 && b.x < a.x2 && a.y < b.y2 && b.y < a.y2);
+  const covers = (outer: Box | null, inner: Box | null): boolean =>
+    Boolean(outer && inner
+      && outer.x <= inner.x + 1 && outer.y <= inner.y + 1
+      && outer.x2 >= inner.x2 - 1 && outer.y2 >= inner.y2 - 1);
+  /** The first painted background above an element: what the reader sees behind a transparent pixel. */
+  const backgroundOf = (start: Element | null): string => {
+    for (let element = start; element !== null; element = element.parentElement) {
+      const background = window.getComputedStyle(element).backgroundColor;
+      if (background !== '' && background !== 'transparent' && background !== 'rgba(0, 0, 0, 0)') {
+        return background;
+      }
+    }
+    return '<none>';
+  };
+  const paintOf = (element: Element | null): { fill: string; visible: boolean } => {
+    if (element === null) return { fill: '<none>', visible: false };
+    const fill = window.getComputedStyle(element).fill || element.getAttribute('fill') || '<none>';
+    const transparent = fill === 'none'
+      || fill === 'transparent'
+      || /^rgba\([^)]*,\s*0(\.0+)?\)$/.test(fill);
+    return { fill, visible: !transparent };
+  };
+
+  const canvas = document.querySelector('[data-architecture-canvas]');
+  const drawer = document.querySelector('[data-architecture-dock-touch]');
+  const drawerContent = drawer?.querySelector('[data-architecture-dock-panel]') ?? null;
+  const snaps = [...document.querySelectorAll('[data-architecture-dock-snap]')];
+  const pressedSnap = snaps.find((snap) => snap.getAttribute('aria-pressed') === 'true') ?? null;
+  const unpressedSnap = snaps.find((snap) => snap.getAttribute('aria-pressed') !== 'true') ?? null;
+  const tray = document.querySelector('[data-architecture-tray-pill]')
+    ?? document.querySelector('[data-architecture-tray-expanded-panel]');
+  // The selected box, marked by the renderer's own class (its top edge is the
+  // reading; the whole box may extend below the drawer).
+  const selectedNode = document.querySelector('.uml-node.arch-selected[data-entity-id]');
+  const paper = document.querySelector('[data-architecture-canvas] .uml-canvas');
+  const paperBox = boxOf(paper);
+  const canvasBox = boxOf(canvas);
+  const fill = paintOf(paper);
+  const panelBackground = backgroundOf(canvas);
+  const focus = document.querySelector('[data-architecture-readable-focus-summary]');
+  const focusTruncated = focus instanceof HTMLElement
+    ? /(^|\s)truncate(\s|$)/.test(focus.className) || focus.scrollWidth > focus.clientWidth + 1
+    : null;
+
+  const trayBox = boxOf(tray);
+  const contentBox = boxOf(drawerContent);
+  const paperCoversCanvas = covers(paperBox, canvasBox);
+  const paperMatchesPanel = fill.visible && fill.fill === panelBackground;
+  return {
+    canvasTop: canvasBox === null ? null : Math.round(canvasBox.y),
+    canvas: canvasBox,
+    drawer: boxOf(drawer),
+    drawerContent: contentBox,
+    tray: trayBox,
+    trayOverlapsDrawer: overlaps(trayBox, contentBox),
+    selectedNode: boxOf(selectedNode),
+    snapLabels: snaps.map((snap) => (snap.textContent ?? '').trim()),
+    snapPressed: pressedSnap?.getAttribute('data-architecture-dock-snap') ?? null,
+    snapPressedClass: pressedSnap?.className ?? null,
+    snapUnpressedClass: unpressedSnap?.className ?? null,
+    closeCount: document.querySelectorAll('[data-architecture-dock-close]').length,
+    paper: paperBox,
+    paperFill: fill.fill,
+    paperVisible: fill.visible,
+    paperCoversCanvas,
+    paperMatchesPanel,
+    paperOk: !fill.visible || paperCoversCanvas || paperMatchesPanel,
+    panelBackground,
+    focusText: focus === null ? null : (focus.textContent ?? '').trim(),
+    focusTruncated,
+  };
+});
+
+const printChrome = (label: string, reading: ChromeReading): void => {
+  console.log(`[architecture-layout] ${label}.canvas.top=${formatNumber(reading.canvasTop)} canvas=${formatBox(reading.canvas)}`);
+  console.log(`[architecture-layout] ${label}.drawer=${formatBox(reading.drawer)} drawer.content=${formatBox(reading.drawerContent)}`);
+  console.log(`[architecture-layout] ${label}.tray=${formatBox(reading.tray)} tray.overlaps.drawer=${reading.trayOverlapsDrawer}`);
+  console.log(`[architecture-layout] ${label}.selected.node=${formatBox(reading.selectedNode)}`);
+  console.log(`[architecture-layout] ${label}.snap.labels=${JSON.stringify(reading.snapLabels)} pressed=${reading.snapPressed}`);
+  console.log(`[architecture-layout] ${label}.snap.pressed.class=${JSON.stringify(reading.snapPressedClass)}`);
+  console.log(`[architecture-layout] ${label}.snap.unpressed.class=${JSON.stringify(reading.snapUnpressedClass)}`);
+  console.log(`[architecture-layout] ${label}.drawer.close.count=${reading.closeCount}`);
+  console.log(`[architecture-layout] ${label}.paper=${formatBox(reading.paper)} fill=${JSON.stringify(reading.paperFill)} `
+    + `visible=${reading.paperVisible} covers=${reading.paperCoversCanvas} panel=${JSON.stringify(reading.panelBackground)} ok=${reading.paperOk}`);
+  console.log(`[architecture-layout] ${label}.focus.text=${JSON.stringify(reading.focusText)} truncated=${String(reading.focusTruncated)}`);
+};
+
+/** Every criterion of the four new readings, in one place so both arms share it. */
+const assertChromeClean = (reading: ChromeReading, label: string): void => {
+  expect.soft(new Set(reading.snapLabels).size, `${label}: the three snap buttons must read three different labels `
+    + `(got ${JSON.stringify(reading.snapLabels)})`).toBe(3);
+  expect.soft(reading.snapPressed, `${label}: exactly one snap must be pressed`).not.toBeNull();
+  expect.soft(reading.snapPressedClass, `${label}: the pressed snap must paint differently from the others`)
+    .not.toBe(reading.snapUnpressedClass);
+  expect.soft(reading.closeCount, `${label}: the touch drawer must offer exactly one close control`).toBe(1);
+  expect.soft(reading.trayOverlapsDrawer, `${label}: the tray and the drawer content must not intersect — `
+    + `tray=${formatBox(reading.tray)} drawer.content=${formatBox(reading.drawerContent)}`).toBe(false);
+  const drawerTop = reading.drawer === null ? null : reading.drawer.y;
+  const canvasTop = reading.canvas === null ? null : reading.canvas.y;
+  expect.soft(reading.selectedNode, `${label}: a selected box must be drawn`).not.toBeNull();
+  if (reading.selectedNode !== null && drawerTop !== null && canvasTop !== null) {
+    expect.soft(reading.selectedNode.y, `${label}: the selected box's TOP edge must stay above the drawer — `
+      + `node=${formatBox(reading.selectedNode)} drawer.top=${formatNumber(drawerTop)}`).toBeLessThan(drawerTop);
+    expect.soft(reading.selectedNode.y, `${label}: and inside the canvas, not scrolled past its top — `
+      + `node=${formatBox(reading.selectedNode)} canvas.top=${formatNumber(canvasTop)}`).toBeGreaterThanOrEqual(canvasTop - 1);
+  }
+  expect.soft(reading.paperOk, `${label}: the canvas paper must be transparent, match the panel, or cover the canvas — `
+    + `fill=${reading.paperFill} document=${formatBox(reading.paper)} panel=${reading.panelBackground} `
+    + `canvas=${formatBox(reading.canvas)} covers=${String(reading.paperCoversCanvas)}`).toBe(true);
+};
+
+test('main arm — the phone drawer, canvas paper and Focus banner read clean (390x844)', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE,
+    touch: true,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    await waitForDrawing(page);
+    await showClassDiagram(page);
+
+    // Tap the LOWEST visible entity: the box the open drawer is most likely to
+    // cover, so "its top edge stays visible" is a real reading rather than one
+    // that happens to pass because the box was already high up.
+    const target = await page.evaluate((sel) => {
+      const host = document.querySelector(sel.host);
+      if (host === null) return null;
+      const hostRect = host.getBoundingClientRect();
+      let lowest: { x: number; y: number; id: string } | null = null;
+      for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
+        const id = node.getAttribute('data-entity-id') ?? '';
+        if (id.startsWith('grp::') || id.startsWith('stub::')) continue;
+        const text = node.querySelector('text');
+        if (text === null) continue;
+        const rect = text.getBoundingClientRect();
+        if (rect.width < 8 || rect.height < 6) continue;
+        const x = Math.round(rect.left + Math.min(rect.width / 2, 30));
+        const y = Math.round(rect.top + rect.height / 2);
+        if (x <= hostRect.left + 6 || x >= hostRect.right - 6) continue;
+        if (y <= hostRect.top + 6 || y >= hostRect.bottom - 6) continue;
+        const hit = document.elementFromPoint(x, y);
+        if (hit === null || hit.closest('[data-entity-id]') === null) continue;
+        if (lowest === null || y > lowest.y) lowest = { x, y, id };
+      }
+      return lowest;
+    }, SEL);
+    console.log(`[architecture-layout] phone.chrome.target=${JSON.stringify(target)}`);
+    expect(target, 'the drawing must offer a visible entity to tap').not.toBeNull();
+    const point = target as { x: number; y: number; id: string };
+
+    await page.mouse.click(point.x, point.y);
+    await expect(page.locator('[data-architecture-dock-touch]')).toBeVisible({ timeout: 10_000 });
+    await settle(page, 600);
+
+    const reading = await readChrome(page);
+    printChrome('phone.chrome', reading);
+    assertChromeClean(reading, 'phone.chrome');
+    await page.screenshot({ path: test.info().outputPath('chrome-phone-drawer.png') });
+
+    // The Focus banner is an overlay: turning Focus on must not move the canvas'
+    // top edge, and the sentence must be complete (it used to truncate to
+    // "whole grap…" and to claim "(0 other package(s))").
+    const canvasTopBefore = reading.canvasTop;
+    await openControlSheet(page);
+    const focusMode = page.locator('[data-architecture-readable-focus-mode]');
+    expect(await focusMode.count(), 'the Adjust sheet exposes the Focus toggle').toBeGreaterThan(0);
+    await focusMode.first().click();
+    await page.waitForFunction(
+      (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-readable-mode') === 'focus',
+      SEL,
+      { timeout: 15_000 },
+    );
+    await closeControlSheet(page);
+    await settle(page, 600);
+
+    const focused = await readChrome(page);
+    printChrome('phone.focused', focused);
+    expect(
+      focused.canvasTop,
+      `pressing Focus must not move the canvas' top edge: ${String(canvasTopBefore)} -> ${String(focused.canvasTop)}`,
+    ).toBe(canvasTopBefore);
+    expect(focused.focusText, 'the Focus tier states its sentence on the canvas').not.toBeNull();
+    expect(focused.focusText ?? '', 'no vacuous "(0 other package(s))"').not.toContain('(0 other package(s))');
+    expect(focused.focusText ?? '', 'the sentence names the escape to the whole graph').toMatch(/whole graph/i);
+    expect(focused.focusTruncated, 'the sentence must be readable in full, not truncated').toBe(false);
+    await page.screenshot({ path: test.info().outputPath('chrome-phone-focus.png') });
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * What every project-search row reports, plus the once-only group explanation.
+ */
+type SearchRowsReading = {
+  rows: {
+    readonly name: string;
+    readonly truncates: boolean;
+    readonly scrollWidth: number;
+    readonly clientWidth: number;
+    readonly pathOnSecondLine: boolean;
+    readonly pathLeftTruncated: boolean;
+  }[];
+  notInGraphCount: number;
+  notInGraphRows: number;
+};
+
+const readSearchRows = (page: Page): Promise<SearchRowsReading | null> => page.evaluate((sel) => {
+  const list = document.querySelector(sel.searchResults);
+  if (list === null) return null;
+  const rows = [...list.querySelectorAll('[data-architecture-search-project-result]')].map((row) => {
+    const name = row.querySelector('[data-architecture-search-project-name]');
+    const file = row.querySelector('[data-architecture-search-project-file]');
+    const nameElement = name instanceof HTMLElement ? name : null;
+    const fileElement = file instanceof HTMLElement ? file : null;
+    return {
+      name: (nameElement?.textContent ?? '').trim(),
+      truncates: nameElement !== null && /(^|\s)truncate(\s|$)/.test(nameElement.className),
+      scrollWidth: nameElement?.scrollWidth ?? 0,
+      clientWidth: nameElement?.clientWidth ?? 0,
+      // The path is a separate block placed AFTER the name in the same column.
+      pathOnSecondLine: fileElement !== null && nameElement !== null
+        && fileElement.previousElementSibling === nameElement,
+      pathLeftTruncated: fileElement !== null
+        && fileElement.getAttribute('dir') === 'rtl'
+        && fileElement.className.includes('truncate'),
+    };
+  });
+  const text = list.textContent ?? '';
+  const notInGraphCount = (text.match(/Not in the current graph/g) ?? []).length;
+  const notInGraphRows = list.querySelectorAll(
+    '[data-architecture-search-project-result][data-architecture-search-project-in-graph="false"]',
+  ).length;
+  return { rows, notInGraphCount, notInGraphRows };
+}, SEL);
+
+test('main arm — project search rows keep the whole class name and state "not in the graph" once (1440x765)', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    await waitForDrawing(page);
+
+    // A stem shared by many fixture entities: the in-graph list is short (only
+    // the seeded entities are drawn), so most hits come from the project index
+    // and land under "Elsewhere in the project".
+    await page.locator(SEL.search).first().fill('Stage');
+    await expect(page.locator(SEL.searchResults).first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-architecture-search-project-result]').length > 0,
+      undefined,
+      { timeout: 20_000 },
+    );
+
+    const reading = await readSearchRows(page);
+    console.log(`[architecture-layout] search.rows=${JSON.stringify(reading)}`);
+    expect(reading, 'the search must draw its result list').not.toBeNull();
+    const rows = (reading as SearchRowsReading).rows;
+    expect(rows.length, 'the project search must list several rows').toBeGreaterThan(3);
+
+    for (const row of rows) {
+      // The criterion is stated for names that fit a row (≤ 40 characters);
+      // every fixture name is far below that.
+      if (row.name.length > 40) continue;
+      expect.soft(row.truncates, `"${row.name}": the class name must not carry a truncate class`).toBe(false);
+      expect.soft(
+        row.scrollWidth <= row.clientWidth + 1,
+        `"${row.name}": the name must not be clipped — scrollWidth ${row.scrollWidth} vs clientWidth ${row.clientWidth}`,
+      ).toBe(true);
+      expect.soft(row.pathOnSecondLine, `"${row.name}": the path must sit on a second line under the name`).toBe(true);
+      expect.soft(row.pathLeftTruncated, `"${row.name}": a long path must lose its left-hand directories`).toBe(true);
+    }
+    expect(
+      (reading as SearchRowsReading).notInGraphRows,
+      'the query must hit entities outside the current graph for the once-only sentence to mean anything',
+    ).toBeGreaterThan(0);
+    expect(
+      (reading as SearchRowsReading).notInGraphCount,
+      'it must be stated ONCE (on the group heading), not on every row',
+    ).toBe(1);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * Control arm for the four new chrome readings. Each defect is injected into
+ * the SAME phone page the main arm measures, the SAME reading is taken, and it
+ * must land on the failing side; the injection is then removed and the reading
+ * must return to passing. The page's own state (selection, zoom, drawer snap)
+ * is identical on both sides of every injection.
+ */
+test('control arm — each restored chrome defect turns its own reading red', async ({ browser }) => {
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PHONE,
+    touch: true,
+  });
+
+  try {
+    await openArchitectureTab(page, sessionId);
+    await waitForDrawing(page);
+    await showClassDiagram(page);
+
+    const candidate = await findClickableNodes(page);
+    expect(candidate.entity, 'the drawing must offer an entity to select').not.toBeNull();
+    const point = candidate.entity as GesturePoint;
+    await page.mouse.click(point.x, point.y);
+    await expect(page.locator('[data-architecture-dock-touch]')).toBeVisible({ timeout: 10_000 });
+    await settle(page, 600);
+
+    const baseline = await readChrome(page);
+    printChrome('controlChrome.baseline', baseline);
+    assertChromeClean(baseline, 'controlChrome.baseline');
+
+    // ── defect 1: every snap button paints the CURRENT snap's label (the
+    // shipped `snapLabels[snap]` bug).
+    const injectedLabels = await page.evaluate(() => {
+      const snaps = [...document.querySelectorAll('[data-architecture-dock-snap]')];
+      const first = snaps.find((snap) => snap.getAttribute('aria-pressed') === 'true') ?? snaps[0] ?? null;
+      if (first === null) return false;
+      const text = (first.textContent ?? '').trim();
+      for (const snap of snaps) {
+        snap.setAttribute('data-architecture-injected-label', snap.textContent ?? '');
+        snap.textContent = text;
+      }
+      return true;
+    });
+    expect(injectedLabels, 'the snap controls must be on screen').toBe(true);
+    const labelsDefect = await readChrome(page);
+    printChrome('controlChrome.snapLabels', labelsDefect);
+    expect(
+      new Set(labelsDefect.snapLabels).size,
+      `control: the shipped label bug must make the three buttons read alike — got ${JSON.stringify(labelsDefect.snapLabels)}`,
+    ).toBeLessThan(3);
+    await page.evaluate(() => {
+      for (const snap of document.querySelectorAll('[data-architecture-dock-snap]')) {
+        const original = snap.getAttribute('data-architecture-injected-label');
+        if (original !== null) snap.textContent = original;
+        snap.removeAttribute('data-architecture-injected-label');
+      }
+    });
+    assertChromeClean(await readChrome(page), 'controlChrome.snapLabels.restored');
+
+    // ── defect 2: a second × in the snap row (the shipped duplicate close).
+    const injectedClose = await page.evaluate(() => {
+      const drawer = document.querySelector('[data-architecture-dock-touch]');
+      const original = drawer?.querySelector('[data-architecture-dock-close]');
+      if (drawer === null || original === null) return false;
+      const clone = original.cloneNode(true);
+      clone.setAttribute('data-architecture-injected-close', 'true');
+      original.parentElement?.appendChild(clone);
+      return true;
+    });
+    expect(injectedClose, 'the drawer must draw its close control').toBe(true);
+    const closeDefect = await readChrome(page);
+    printChrome('controlChrome.close', closeDefect);
+    expect(
+      closeDefect.closeCount,
+      `control: the shipped duplicate close must read two close controls — got ${closeDefect.closeCount}`,
+    ).toBe(2);
+    await page.evaluate(() => {
+      for (const extra of document.querySelectorAll('[data-architecture-injected-close]')) extra.remove();
+    });
+    assertChromeClean(await readChrome(page), 'controlChrome.close.restored');
+
+    // ── defect 3: the white paper rectangle sized to the content (the shipped
+    // `.uml-canvas` fill).
+    const injectedPaper = await page.evaluate(() => {
+      const rects = [...document.querySelectorAll('[data-architecture-canvas] .uml-canvas')];
+      for (const rect of rects) rect.setAttribute('fill', '#ffffff');
+      return rects.length;
+    });
+    expect(injectedPaper, 'the renderer must emit its canvas rectangle').toBeGreaterThan(0);
+    const paperDefect = await readChrome(page);
+    printChrome('controlChrome.paper', paperDefect);
+    expect(
+      paperDefect.paperOk,
+      `control: an opaque paper rectangle sized to the content must read red — fill=${paperDefect.paperFill} `
+        + `paper=${formatBox(paperDefect.paper)} panel=${paperDefect.panelBackground} canvas=${formatBox(paperDefect.canvas)}`,
+    ).toBe(false);
+    await page.evaluate(() => {
+      for (const rect of document.querySelectorAll('[data-architecture-canvas] .uml-canvas')) rect.setAttribute('fill', 'none');
+    });
+    assertChromeClean(await readChrome(page), 'controlChrome.paper.restored');
+
+    // ── defect 4: the Focus banner drawn IN FLOW above the canvas (the shipped
+    // row that pushed the drawing down when Focus was pressed).
+    await openControlSheet(page);
+    const focusMode = page.locator('[data-architecture-readable-focus-mode]');
+    await focusMode.first().click();
+    await page.waitForFunction(
+      (sel) => document.querySelector(sel.graphRoot)?.getAttribute('data-architecture-readable-mode') === 'focus',
+      SEL,
+      { timeout: 15_000 },
+    );
+    await closeControlSheet(page);
+    await settle(page, 500);
+    const overlay = await readChrome(page);
+    printChrome('controlChrome.banner.overlay', overlay);
+    expect(overlay.focusText, 'the Focus sentence is on screen').not.toBeNull();
+    const injectedBanner = await page.evaluate(() => {
+      const header = document.querySelector('[data-architecture-canvas-header]');
+      if (header === null) return false;
+      const row = document.createElement('div');
+      row.setAttribute('data-architecture-injected-banner', 'true');
+      row.textContent = 'Readable zoom is on — choose Overview to see the whole graph.';
+      row.style.height = '32px';
+      row.style.flexShrink = '0';
+      header.appendChild(row);
+      return true;
+    });
+    expect(injectedBanner, 'the canvas header row must be on screen').toBe(true);
+    await settle(page, 300);
+    const bannerDefect = await readChrome(page);
+    printChrome('controlChrome.banner.inFlow', bannerDefect);
+    expect(
+      bannerDefect.canvasTop,
+      `control: an in-flow banner must push the canvas down — canvas.top ${String(overlay.canvasTop)} -> ${String(bannerDefect.canvasTop)}`,
+    ).not.toBe(overlay.canvasTop);
+    await page.evaluate(() => {
+      for (const row of document.querySelectorAll('[data-architecture-injected-banner]')) row.remove();
+    });
+    await settle(page, 300);
+    const bannerRestored = await readChrome(page);
+    printChrome('controlChrome.banner.restored', bannerRestored);
+    expect(
+      bannerRestored.canvasTop,
+      'control: the overlay banner must not move the canvas — the restore returns the top edge',
+    ).toBe(overlay.canvasTop);
+  } finally {
+    await context.close();
+  }
+});

@@ -489,7 +489,24 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
    * panel) means the choice is kept for this visit only.
    */
   readonly projectId?: string | null;
+  /**
+   * How many pixels at the bottom of the canvas are covered by chrome drawn
+   * OVER it (the coarse tier's inspector drawer). The drawing reserves that
+   * band — so a fitted drawing is centred above the drawer instead of behind
+   * it — and a selected box is scrolled clear of it. 0 everywhere else.
+   */
+  readonly bottomObscuredPx?: number;
 };
+
+/**
+ * The pressed state of one toggle drawn with {@link TOOLBAR_BUTTON_CLASS}.
+ *
+ * `aria-pressed` states the mode to assistive technology, but the shared button
+ * class painted pressed and unpressed identically, so a reader could not see
+ * which of Focus / Overview was in force. Weight AND fill change, so the
+ * reading never depends on colour alone.
+ */
+const TOOLBAR_BUTTON_PRESSED_CLASS = 'bg-accent font-semibold text-foreground shadow-inner';
 
 /**
  * The diagram's presentation scale and why it has that value: `fit` follows the
@@ -555,6 +572,7 @@ export function PlantUmlGraph({
   onMultiSelectStart,
   onBoxSelect,
   projectId = null,
+  bottomObscuredPx = 0,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1072,6 +1090,15 @@ export function PlantUmlGraph({
     fitToCanvas: boolean,
   ): number => {
     drawSemanticLayout(host, capture, layout, fontPx);
+    // The renderer's own `.uml-canvas` rectangle is a paper-coloured fill sized
+    // to the mapped CONTENT. Once the geometry pass reshapes the drawing, that
+    // leaves a white rectangle around the content with the panel's own
+    // background showing outside it — the seam the review found on both
+    // viewports. The rectangle is made transparent, so the canvas background IS
+    // the panel's background; no second colour is painted anywhere.
+    for (const canvasRect of host.querySelectorAll<SVGRectElement>('svg .uml-canvas')) {
+      canvasRect.setAttribute('fill', 'none');
+    }
     const folded = layout.foldDepth !== null;
     if (folded) {
       const drawnPackages = new Set(layout.packages.map((entry) => entry.id));
@@ -1559,6 +1586,13 @@ export function PlantUmlGraph({
         // read rectangles than reverse-engineer the SVG (not yet wired).
         drawnLayoutRef.current = detailed.layout;
         host.innerHTML = svg;
+        // The renderer's own `.uml-canvas` rectangle paints a paper colour
+        // sized to the drawing. Against the panel's background that reads as a
+        // second background with a seam around it, on every view — not only the
+        // semantically rewritten one (which re-applies this after each pass).
+        for (const canvasRect of host.querySelectorAll<SVGRectElement>('svg .uml-canvas')) {
+          canvasRect.setAttribute('fill', 'none');
+        }
         setLayoutMs(elapsedMs);
         // The layout of the drawing that was just replaced must not answer
         // questions about this one (a folded layout's content size, in
@@ -1812,6 +1846,30 @@ export function PlantUmlGraph({
       setLayoutStatusNodes(null);
     };
   }, [applyPlacement, applySemanticLayout, applyZoom, coarsePointer, entityGraph, focusNodeId, graph, idShape, layoutAspect, naturalOfDrawing, placementForDecision, projectId, view]);
+
+  /**
+   * Keep the SELECTED box above the coarse drawer.
+   *
+   * The drawer is an overlay, so opening it does not resize the canvas; the
+   * host's bottom padding reserves the band (see the host style above). When the
+   * drawing is larger than the reserved viewport the selected box can still be
+   * scrolled under the drawer — the reader selected it to inspect it, so its top
+   * edge is brought back into the uncovered part of the canvas.
+   */
+  useEffect(() => {
+    const host = hostRef.current;
+    if (host === null || bottomObscuredPx <= 0 || selectedNodeId === null) return;
+    const selected = nodeElement(host, selectedNodeId);
+    if (selected === null) return;
+    const frame = requestAnimationFrame(() => {
+      const hostRect = host.getBoundingClientRect();
+      const drawerTop = hostRect.bottom - bottomObscuredPx;
+      const nodeRect = selected.getBoundingClientRect();
+      if (nodeRect.top >= drawerTop) return;
+      host.scrollTop += nodeRect.top - drawerTop + 8;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [bottomObscuredPx, selectedNodeId, drawnRevision]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -2869,7 +2927,9 @@ export function PlantUmlGraph({
         onClick={() => applyReadableMode('focus')}
         data-architecture-readable-focus-mode="true"
         style={touchTargetStyle}
-        className={TOOLBAR_BUTTON_CLASS}
+        className={`${TOOLBAR_BUTTON_CLASS} ${
+          activeReadableMode === 'focus' ? TOOLBAR_BUTTON_PRESSED_CLASS : ''
+        }`}
       >
         {t('architecture.plantuml.readable.focus', { defaultValue: 'Focus' })}
       </button>
@@ -2879,7 +2939,9 @@ export function PlantUmlGraph({
         onClick={() => applyReadableMode('overview')}
         data-architecture-readable-overview-mode="true"
         style={touchTargetStyle}
-        className={TOOLBAR_BUTTON_CLASS}
+        className={`${TOOLBAR_BUTTON_CLASS} ${
+          activeReadableMode === 'overview' ? TOOLBAR_BUTTON_PRESSED_CLASS : ''
+        }`}
       >
         {t('architecture.plantuml.readable.overview', { defaultValue: 'Overview' })}
       </button>
@@ -2892,11 +2954,18 @@ export function PlantUmlGraph({
    * escape notice and a "Zoom N% · zoom in on <package> and N other
    * package(s)" hint — which could appear together and repeat the tier label
    * a third time. They are merged here, and only the Focus tier shows them:
-   * Overview needs no explanation because it already is the whole graph. The
-   * percentage is the same `zoom.scale` reading the tier's `zoomReadout`
-   * prints, never the decision's unconstrained fit.
+   * Overview needs no explanation because it already is the whole graph.
+   *
+   * Two defects are fixed at this one sentence: a graph with no OTHER package
+   * to switch to printed "(0 other package(s))", which reads as a function that
+   * returned nothing — that case uses the existing focus-only wording; and the
+   * sentence sat in the toolbar row, so a long package name truncated it AND
+   * made the row taller when it appeared, pushing the canvas down. It is drawn
+   * as an OVERLAY over the canvas now (see the render below), wraps instead of
+   * truncating, and therefore cannot move the canvas' top edge.
    */
   const focusPackage = readableView?.focusPackageId ?? readableView?.hint?.packageId ?? null;
+  const otherPackageCount = readableView?.hint?.packageCount ?? 0;
   const readableNotice = collapsedNotice ? (
     <span data-architecture-readable-collapsed="true" className="text-amber-600 dark:text-amber-400">
       {t('architecture.plantuml.readable.collapsed', {
@@ -2907,9 +2976,10 @@ export function PlantUmlGraph({
     <span
       data-architecture-readable-focus-summary="true"
       title={focusPackage ?? undefined}
-      className="min-w-0 max-w-full truncate"
+      // Wrapping, never truncating: the sentence must stay readable in full.
+      className="min-w-0 whitespace-normal break-words"
     >
-      {focusPackage === null
+      {focusPackage === null || otherPackageCount <= 0
         ? t('architecture.plantuml.readable.focusOnly', {
             defaultValue: 'Readable zoom is on — choose Overview to see the whole graph.',
           })
@@ -2918,7 +2988,7 @@ export function PlantUmlGraph({
               'Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).',
             package: shortPackageName(focusPackage),
             zoom: Math.round(displayScale * 100),
-            count: readableView?.hint?.packageCount ?? 0,
+            count: otherPackageCount,
           })}
     </span>
   ) : null;
@@ -3114,7 +3184,6 @@ export function PlantUmlGraph({
       {backButton}
       {explosionButton}
       {drillButton}
-      {readableNotice}
     </div>
   );
 
@@ -3158,7 +3227,12 @@ export function PlantUmlGraph({
   const headerControls = (
     <span
       data-architecture-graph-header-controls="true"
-      className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1"
+      // Desktop pins the tier to the header's right edge; the compact tier's
+      // Adjust sheet stacks its sections, so the same row is left-aligned
+      // there (right-aligned, it left a strip of empty space down the left).
+      className={`flex min-w-0 max-w-full flex-wrap items-center gap-1 ${
+        compactToolbar ? 'w-full justify-start' : 'justify-end'
+      }`}
     >
       {zoomTierGroup}
     </span>
@@ -3256,6 +3330,12 @@ export function PlantUmlGraph({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
+            // The coarse drawer overlays the canvas' bottom band. Reserving it
+            // as padding makes the flex centring use the area ABOVE the drawer,
+            // so a fitted drawing is never half-hidden behind it.
+            ...(bottomObscuredPx > 0
+              ? { paddingBottom: `${(touchUi ? 4 : 12) + bottomObscuredPx}px` }
+              : {}),
             userSelect: 'none',
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',
@@ -3295,6 +3375,20 @@ export function PlantUmlGraph({
                 count: layoutStatusNodes,
               })}
             </span>
+          </div>
+        )}
+        {/* The Focus / collapsed explanation, drawn as an OVERLAY: it must not
+            take a row from the toolbar (that moved the canvas' top edge every
+            time Focus was pressed) and it must be readable in full, so it
+            wraps inside a bounded width instead of truncating. */}
+        {readableNotice !== null && (
+          <div
+            data-architecture-readable-notice="true"
+            role="status"
+            style={{ position: 'absolute', zIndex: 24, left: 8, top: 8, maxWidth: 'min(78%, 520px)' }}
+            className="pointer-events-none rounded-md border border-border/60 bg-background/95 px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+          >
+            {readableNotice}
           </div>
         )}
         {showOverviewHint && (

@@ -255,6 +255,11 @@ type ArchitecturePanelRenderer = ComponentType<
      * explicit readable mode per project under it.
      */
     readonly projectId?: string | null;
+    /**
+     * The coarse drawer's covered band, in CSS pixels: the renderer reserves it
+     * so neither a fitted drawing nor the selected box hides behind the drawer.
+     */
+    readonly bottomObscuredPx?: number;
     readonly selectedNodeIds?: readonly string[];
     readonly selectedRelations?: readonly {
       readonly from: string;
@@ -718,6 +723,12 @@ export default function ArchitecturePanel({
   // empty inspector ("Select a node …") and squeezing the canvas. Only a
   // gesture opens it — a fresh selection, or the toolbar's explicit Text door.
   const [dockOpen, setDockOpen] = useState(false);
+  // The coarse drawer's height in CSS pixels, reported by the dock itself (it
+  // alone knows which of the three snaps is in force). Two consumers need the
+  // number: the selection tray is lifted above the drawer, and the drawing
+  // reserves the band so the selected box is not hidden behind it. 0 when the
+  // drawer is closed or the tier is the desktop dock.
+  const [touchDrawerHeight, setTouchDrawerHeight] = useState(0);
   // True when the reader opened the dock THEMSELVES while nothing was
   // selected (the Text button). Only that kind of open may show an empty
   // inspector page; an open that a selection caused must close as soon as the
@@ -2428,7 +2439,7 @@ export default function ArchitecturePanel({
                 aria-selected={activeSearchIndex === index}
                 data-architecture-search-option-index={index}
                 data-architecture-search-in-graph={match.inGraph}
-                className="flex w-full items-center justify-between gap-1 rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
+                className="flex w-full items-start justify-between gap-1 rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
               >
                 <button
                   type="button"
@@ -2443,9 +2454,13 @@ export default function ArchitecturePanel({
                     // the secondary button below is the drill command.
                     revealNode(match.node.id, !match.inRange, false);
                   }}
-                  className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                  className="flex min-w-0 flex-1 items-start justify-between gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                 >
-                  <span className="min-w-0 truncate">{match.node.label}</span>
+                  {/* The name wraps instead of truncating: it is how a reader
+                      tells two similar results apart. */}
+                  <span data-architecture-search-result-name="true" className="min-w-0 break-words">
+                    {match.node.label}
+                  </span>
                   {!match.inGraph ? (
                     <span
                       data-architecture-search-hidden-reason="true"
@@ -2490,9 +2505,22 @@ export default function ArchitecturePanel({
             <>
               <p
                 data-architecture-search-group="project"
-                className="mt-1 border-t border-border/60 px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mt-1 flex flex-wrap items-baseline gap-1 border-t border-border/60 px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                {t('architecture.search.other', { defaultValue: 'Elsewhere in the project' })}
+                <span>{t('architecture.search.other', { defaultValue: 'Elsewhere in the project' })}</span>
+                {/* Said ONCE, here, instead of on every row: a row repeated the
+                    sentence and the repetition is what pushed the names so
+                    narrow that they were cut to a few characters. */}
+                {projectSearch.search.status === 'ready'
+                  && projectSearch.search.results.some((hit) => !activeNodeIds.has(hit.id)) && (
+                  <span
+                    data-architecture-search-project-missing-note="true"
+                    // Sentence case: this is a sentence, not a section title.
+                    className="font-normal normal-case tracking-normal text-amber-600 dark:text-amber-400"
+                  >
+                    {t('architecture.search.notInGraph', { defaultValue: 'Not in the current graph' })}
+                  </span>
+                )}
               </p>
               {projectSearch.search.status === 'error' ? (
                 <div data-architecture-search-error="true" className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
@@ -2523,26 +2551,42 @@ export default function ArchitecturePanel({
                           aria-selected={activeSearchIndex === searchMatches.length + projectIndex}
                           data-architecture-search-project-result={hit.id}
                           data-architecture-search-project-in-graph={inCurrentGraph}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
+                          // Top-aligned: the name and the path are two lines, so
+                          // the actions stay beside the FIRST line.
+                          className="flex items-start gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
                         >
-                          <span aria-hidden="true" className="w-3 shrink-0 text-center text-muted-foreground">
+                          <span aria-hidden="true" className="mt-0.5 w-3 shrink-0 text-center text-muted-foreground">
                             {searchKindGlyph(hit.kind)}
                           </span>
-                          <span className="min-w-0 flex-1 truncate">
-                            <span className="font-medium">{hit.name}</span>
-                            <span className="ml-1 text-muted-foreground">{hit.file}</span>
-                          </span>
-                          {!inCurrentGraph && (
+                          {/* The name is NEVER truncated: a reader distinguishes
+                              results by the class name (and its kind glyph), so
+                              it wraps onto a second line when it does not fit.
+                              The path goes UNDER it and, when it is too long,
+                              loses its left-hand directories — the file name is
+                              the part that identifies the row. */}
+                          <span className="flex min-w-0 flex-1 flex-col">
                             <span
-                              data-architecture-search-project-missing="true"
-                              className="shrink-0 text-amber-600 dark:text-amber-400"
+                              data-architecture-search-project-name="true"
+                              className="font-medium break-words"
                             >
-                              {t('architecture.search.notInGraph', { defaultValue: 'Not in the current graph' })}
+                              {hit.name}
                             </span>
-                          )}
+                            <span
+                              data-architecture-search-project-file="true"
+                              dir="rtl"
+                              title={hit.file}
+                              className="block truncate text-left text-muted-foreground"
+                            >
+                              {hit.file}
+                            </span>
+                          </span>
                           {!inCurrentGraph && (
                             <button
                               type="button"
+                              aria-label={t('architecture.search.showNamed', {
+                                defaultValue: 'Show {{name}} in the graph',
+                                name: hit.name,
+                              })}
                               data-architecture-search-show={hit.id}
                               // Pinning is what "show it" means for a server-side
                               // hidden entity: the next reading carries it.
@@ -3526,6 +3570,10 @@ export default function ArchitecturePanel({
                   <Renderer
                     key={`${sessionId}:${granularity}:${scope}`}
                     graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
+                    // The coarse drawer covers the canvas' bottom band while it
+                    // is open; the drawing reserves that band and keeps the
+                    // selected box above it.
+                    bottomObscuredPx={compactToolbar && dockOpen ? touchDrawerHeight : 0}
                     // Which project the drawing belongs to; the renderer uses it
                     // to remember the reader's explicit readable mode.
                     projectId={projectId}
@@ -3656,6 +3704,10 @@ export default function ArchitecturePanel({
                   multiSelect={multiSelectMode}
                   expanded={trayExpanded}
                   compact={compactToolbar}
+                  // The coarse drawer is drawn OVER the canvas: lift the tray
+                  // (pill and expanded panel) above its top edge so the two
+                  // never share screen space.
+                  bottomInset={compactToolbar && dockOpen ? touchDrawerHeight : 0}
                   onExpandedChange={setTrayExpanded}
                   onExitMultiSelect={() => setMultiSelectMode(false)}
                   onToggleItem={toggleSelection}
@@ -3801,6 +3853,7 @@ export default function ArchitecturePanel({
           onTabChange={(tabId) => setDockTab(tabId === 'text' ? 'text' : 'inspector')}
           onClose={closeDock}
           collapsedSummary={dockSummary}
+          onTouchDrawerHeightChange={setTouchDrawerHeight}
           snapLabels={{
             collapsed: t('architecture.dock.snapCollapsed', { defaultValue: 'Collapsed' }),
             half: t('architecture.dock.snapHalf', { defaultValue: 'Half' }),
@@ -3820,6 +3873,10 @@ export default function ArchitecturePanel({
         onRestoreGroup={restoreGroup}
         onRestoreAll={() => curationStore.restoreAll()}
         onClearItem={clearCurationItem}
+        // The Toast's Undo, offered in the popover header once the Toast is
+        // gone; `undoCuration` is the one handler both entry points call.
+        canUndo={curationStore.canUndo()}
+        onUndo={undoCuration}
       />
 
       {soloNodeId !== null && (

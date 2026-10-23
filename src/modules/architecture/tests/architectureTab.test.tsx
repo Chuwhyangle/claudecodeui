@@ -31,6 +31,7 @@ import {
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
+import { CurationToast } from '@/modules/architecture/CurationToast';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
 import {
   archguardToPlantUml,
@@ -1894,18 +1895,19 @@ test('the readable toggle shows one merged focus summary only in Focus, and one 
   assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
   const summary = document.querySelector('[data-architecture-readable-focus-summary]');
   assert.ok(summary instanceof HTMLElement, 'the Focus tier states the focus reading');
-  assert.match(summary.textContent ?? '', /modules\/alpha/, 'the summary names the densest seeded package');
-  assert.match(summary.textContent ?? '', /0 other package/, 'and the other-package count');
-  assert.doesNotMatch(summary.textContent ?? '', /src\/modules\/alpha/, 'the strip must not print the whole path');
+  // This drawing has ONE seeded package, so there is no other package to
+  // switch to: the sentence must not claim "(0 other package(s))" — a count
+  // that reads like a function which returned nothing. The focus-only wording
+  // (the existing key) is what it states instead.
+  assert.match(summary.textContent ?? '', /choose Overview to see the whole graph/i);
+  assert.doesNotMatch(summary.textContent ?? '', /0 other package/, 'no vacuous "(0 other package(s))"');
+  assert.doesNotMatch(summary.textContent ?? '', /focused on/, 'and no package claim when there is nothing to switch to');
   assert.equal(summary.getAttribute('title'), 'src/modules/alpha', 'the full package id stays available as the title');
-  // The summary's percentage is the same reading both scale controls print.
+  // The sentence is an overlay that wraps; truncating it would cut exactly the
+  // "choose Overview" escape the sentence exists to give.
+  assert.doesNotMatch(summary.className, /truncate/, 'the sentence must not truncate');
   const tierReadout2 = document.querySelector('[data-architecture-zoom-level]');
   const clusterReadout2 = document.querySelector('[data-architecture-zoom-cluster-level]');
-  assert.equal(
-    /at (\d+)%/.exec(summary.textContent ?? '')?.[1] + '%',
-    tierReadout2?.textContent,
-    'the focus sentence and the scale readout print the same percentage',
-  );
   assert.equal(tierReadout2?.textContent, clusterReadout2?.textContent);
   assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null);
 
@@ -3894,13 +3896,28 @@ test('a search hit the filter hid states why and offers "Show it", which draws i
     return node;
   });
   assert.equal(row.getAttribute('data-architecture-search-project-in-graph'), 'false');
-  assert.ok(
+  // "Not in the current graph" is stated ONCE, on the group heading, not on
+  // every row: the per-row copy was what squeezed the names to a few
+  // characters. The row still carries the machine reading
+  // (`data-architecture-search-project-in-graph="false"`).
+  assert.equal(
+    document.querySelectorAll('[data-architecture-search-group="project"] [data-architecture-search-project-missing-note]').length,
+    1,
+    'the group heading explains the marker once',
+  );
+  assert.equal(
     row.querySelector('[data-architecture-search-project-missing]'),
-    'the row states that the entity is not in the current graph',
+    null,
+    'the row must not repeat the sentence',
   );
   const showIt = row.querySelector('[data-architecture-search-show]');
   assert.ok(showIt instanceof HTMLElement, 'and offers the one-click "Show it" action');
   assert.match(showIt.textContent ?? '', /Show it/);
+  assert.match(
+    showIt.getAttribute('aria-label') ?? '',
+    /MFn/,
+    'the action\'s accessible name names the entity it shows',
+  );
 
   fireEvent.click(showIt);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'pinning re-requests the reading'));
@@ -5964,4 +5981,184 @@ test('drilling into a neighbourhood names it and keeps the zoom', async () => {
     String(scaleBefore),
     'leaving the neighbourhood must not move the zoom either',
   );
+});
+
+// ---------------------------------------------------------------------------
+// architecture-chrome-and-mobile-drawer-polish — pressed chrome, the canvas
+// paper, the project search rows, and the longer-lived Undo
+// ---------------------------------------------------------------------------
+
+test('the Focus / Overview toggle paints the mode in force, and the semantic canvas paints no paper of its own', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  const focus = document.querySelector('[data-architecture-readable-focus-mode]');
+  const overview = document.querySelector('[data-architecture-readable-overview-mode]');
+  assert.ok(focus instanceof HTMLElement, 'the Focus toggle is drawn');
+  assert.ok(overview instanceof HTMLElement, 'the Overview toggle is drawn');
+
+  // The pressed mode is distinguished VISIBLY — weight and fill, not the
+  // aria attribute alone (which the shipped defect had and nobody could see).
+  const pressed = [focus, overview].find((button) => button.getAttribute('aria-pressed') === 'true');
+  const unpressed = [focus, overview].find((button) => button.getAttribute('aria-pressed') !== 'true');
+  assert.ok(pressed !== undefined && unpressed !== undefined, 'exactly one mode is pressed');
+  assert.match(pressed.className, /font-semibold/, `the pressed mode must read heavier: ${pressed.className}`);
+  assert.doesNotMatch(unpressed.className, /font-semibold/);
+  assert.notEqual(pressed.className, unpressed.className, 'pressed and unpressed must not paint identically');
+
+  // Pressing the other one moves the visual state with the reading.
+  fireEvent.click(unpressed);
+  assert.equal(unpressed.getAttribute('aria-pressed'), 'true');
+  assert.match(unpressed.className, /font-semibold/);
+  assert.doesNotMatch(pressed.className, /font-semibold/);
+
+  // The renderer's own `.uml-canvas` paper rectangle is transparent: its fill
+  // used to be a paper colour sized to the mapped CONTENT, which left a white
+  // rectangle with a panel-coloured seam around it on both viewports.
+  const paper = host.querySelector('svg .uml-canvas');
+  assert.ok(paper !== null, 'the renderer still emits its canvas rectangle');
+  assert.equal(
+    paper.getAttribute('fill'),
+    'none',
+    'the canvas rectangle must not paint a second background colour',
+  );
+});
+
+test('the project search shows the whole name, moves the path to a second line, and states "not in the graph" once', async () => {
+  /** 28 characters: long enough that the shipped row cut it to a few glyphs. */
+  const LONG_NAME = 'ArchitectureSearchResultName';
+  assert.equal(LONG_NAME.length, 28);
+  const LONG_FILE = 'src/modules/architecture/search/resultName.ts';
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    results: [
+      { id: `proj/one/${LONG_NAME}`, name: LONG_NAME, file: LONG_FILE, kind: 'class' },
+      { id: 'proj/two/SecondHit', name: 'SecondHit', file: 'src/modules/other/second.ts', kind: 'function' },
+    ],
+    truncated: false,
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  fireEvent.change(screen.getByLabelText('Search entities or files'), { target: { value: 'Architecture' } });
+  const row = await waitFor(() => {
+    const element = document.querySelector(`[data-architecture-search-project-result="proj/one/${LONG_NAME}"]`);
+    assert.ok(element instanceof HTMLElement, 'the project search lists the hit');
+    return element;
+  });
+
+  const name = row.querySelector('[data-architecture-search-project-name]');
+  assert.ok(name instanceof HTMLElement, 'the row draws the class name');
+  assert.doesNotMatch(name.className, /truncate/, 'the name must never be truncated');
+  assert.equal((name.textContent ?? '').trim(), LONG_NAME, 'the whole 28-character name is on screen');
+
+  const file = row.querySelector('[data-architecture-search-project-file]');
+  assert.ok(file instanceof HTMLElement, 'the row draws the path');
+  assert.equal((file.textContent ?? '').trim(), LONG_FILE);
+  assert.equal(file.getAttribute('dir'), 'rtl', 'a long path loses its LEFT-hand directories, keeping the file name');
+  assert.match(file.className, /truncate/);
+  assert.match(file.className, /text-left/);
+  // Second LINE: both are blocks in one column, the path after the name.
+  assert.equal(name.parentElement, file.parentElement, 'name and path share one column');
+  assert.match(name.parentElement?.className ?? '', /flex-col/);
+  assert.equal(name.nextElementSibling, file, 'the path follows the name on its own line');
+
+  // "Not in the current graph" is stated once, on the group heading; no row
+  // repeats it (the repetition is what squeezed the names).
+  assert.equal(screen.getAllByText('Not in the current graph').length, 1, 'said once');
+  assert.doesNotMatch(row.textContent ?? '', /Not in the current graph/, 'and never on a row');
+
+  // Both actions name the entity they act on.
+  const showIt = row.querySelector('[data-architecture-search-show]');
+  assert.ok(showIt instanceof HTMLElement, 'an out-of-graph hit offers "Show it"');
+  assert.match(showIt.getAttribute('aria-label') ?? '', new RegExp(LONG_NAME));
+  const pinButton = row.querySelector('[data-architecture-search-pin]');
+  assert.ok(pinButton instanceof HTMLElement);
+  assert.match(pinButton.getAttribute('aria-label') ?? '', new RegExp(LONG_NAME));
+});
+
+test('the curation Toast lives 12 seconds and a hover pauses it', () => {
+  vi.useFakeTimers();
+  try {
+    const onDismiss = vi.fn();
+    const onUndo = vi.fn();
+    render(
+      <CurationToast
+        toast={{ id: 1, message: 'Pinned Alpha', undoable: true }}
+        undoLabel="Undo"
+        onUndo={onUndo}
+        onDismiss={onDismiss}
+      />,
+    );
+    const toast = screen.getByRole('status');
+
+    // 11 s in: still on screen (the shipped 6 s window would already be gone).
+    act(() => { vi.advanceTimersByTime(11_000); });
+    assert.equal(onDismiss.mock.calls.length, 0, 'the Toast is still there at 11 s');
+    assert.ok(screen.queryByRole('status') !== null);
+
+    // Hover pauses the clock: five more seconds change nothing.
+    fireEvent.mouseEnter(toast);
+    act(() => { vi.advanceTimersByTime(5_000); });
+    assert.equal(onDismiss.mock.calls.length, 0, 'a hover pauses the auto-dismiss');
+
+    // Leaving restarts the full window, and 13 s from the start (2 s more
+    // after the pause, then a fresh 12 s) it dismisses.
+    fireEvent.mouseLeave(toast);
+    act(() => { vi.advanceTimersByTime(11_000); });
+    assert.equal(onDismiss.mock.calls.length, 0, 'still inside the restarted window');
+    act(() => { vi.advanceTimersByTime(1_001); });
+    assert.equal(onDismiss.mock.calls.length, 1, 'the Toast dismisses after its 12 s window');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('the Adjusted popover header offers the same Undo once the Toast is gone', async () => {
+  useCuratedGraphMock();
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    results: [{ id: CURATION_PIN_ID, name: 'Gamma', file: 'src/modules/gamma/c.ts', kind: 'class' }],
+    truncated: false,
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.change(screen.getByLabelText('Search entities or files'), { target: { value: 'Gam' } });
+  await waitFor(() => assert.ok(document.querySelector(`[data-architecture-search-pin="${CURATION_PIN_ID}"]`)));
+  fireEvent.click(document.querySelector(`[data-architecture-search-pin="${CURATION_PIN_ID}"]`) as Element);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'pinning re-requests the reading'));
+  assert.deepEqual(
+    (apiMock.architectureGraph.mock.calls[1][3] as { extraSeeds?: string[] }).extraSeeds,
+    [CURATION_PIN_ID],
+  );
+  assert.ok(document.querySelector('[data-architecture-curation-toast]'), 'the Toast announces the pin');
+
+  // The Adjusted popover is the audit surface; its header keeps Undo reachable
+  // after the Toast has dismissed.
+  fireEvent.click(document.querySelector('[data-architecture-curation-manager-toggle]') as Element);
+  const headerUndo = await waitFor(() => {
+    const button = document.querySelector('[data-architecture-curation-manager-undo]');
+    assert.ok(button instanceof HTMLElement, 'the popover header offers Undo');
+    return button;
+  });
+  fireEvent.click(headerUndo);
+
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3, 'the header Undo restores the reading'));
+  assert.equal(
+    (apiMock.architectureGraph.mock.calls[2][3] as { extraSeeds?: string[] }).extraSeeds,
+    undefined,
+    'the same effect as the Toast\'s Undo: the pin is gone from the request',
+  );
+  assert.equal(
+    document.querySelector('[data-architecture-curation-toast]'),
+    null,
+    'and, exactly like the Toast button, the Undo dismisses the Toast',
+  );
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-curation-manager-undo]'),
+    null,
+    'with nothing left to undo, the header entry disappears',
+  ));
+  assert.equal(host.querySelector('[data-architecture-pinned="true"]'), null, 'the pinned marker is gone');
 });

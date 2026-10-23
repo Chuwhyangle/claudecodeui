@@ -395,6 +395,79 @@ test('a 500ms touch press enters multi-select, and the following taps toggle', a
   assert.equal(selectedCount(), 1, 'Done keeps the selection');
 });
 
+/**
+ * The coarse drawer is drawn OVER the canvas. Two readings follow from that:
+ * the tray is lifted above the drawer's top edge (they must never share screen
+ * space) and the drawing reserves the band, so the box the reader just tapped
+ * is not hidden behind the panel that describes it.
+ *
+ * jsdom has no layout, so the two surfaces' declared geometry is compared the
+ * way the browser composes it: both are anchored to the same bottom edge
+ * (the canvas region the tray fills), and the drawer states its height in its
+ * own inline style.
+ */
+test('on the phone the tray and the drawing stay above the open inspector drawer', async () => {
+  usePhone();
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  tap(node(host, ALPHA));
+  const drawer = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-dock-touch]');
+    assert.ok(element instanceof HTMLElement, 'a tap opens the coarse drawer');
+    return element;
+  });
+  /** The declared height in px, resolved the way `vh` resolves. */
+  const heightPx = (value: string): number => (value.endsWith('vh')
+    ? Math.round((Number.parseFloat(value) / 100) * window.innerHeight)
+    : Number.parseFloat(value));
+
+  const drawerPx = heightPx(drawer.style.height);
+  assert.ok(drawerPx > 0, `the drawer states its height: ${JSON.stringify(drawer.style.height)}`);
+
+  const pill = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-tray-pill]');
+    assert.ok(element instanceof HTMLElement, 'the selection draws the tray pill');
+    return element;
+  });
+  const pillBottom = Number.parseFloat((pill as HTMLElement).style.bottom);
+  assert.ok(
+    pillBottom >= drawerPx,
+    `the tray pill (bottom ${pillBottom}px) must sit above the drawer (${drawerPx}px tall): `
+      + 'their screen rectangles would otherwise intersect',
+  );
+
+  // The expanded panel is anchored at the drawer's top edge too.
+  fireEvent.click(pill);
+  const panel = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-tray-expanded-panel]');
+    assert.ok(element instanceof HTMLElement, 'the pill expands the tray');
+    return element;
+  });
+  assert.equal(
+    Number.parseFloat((panel as HTMLElement).style.bottom),
+    drawerPx,
+    'the expanded tray starts exactly where the drawer ends',
+  );
+
+  // The drawing reserves the same band, so it is centred above the drawer.
+  const graphHost = document.querySelector('[data-architecture-plantuml]') as HTMLElement;
+  assert.equal(
+    graphHost.style.paddingBottom,
+    `${drawerPx + 4}px`,
+    'the drawing reserves the drawer’s band (plus its own 4px touch padding)',
+  );
+
+  // The reading follows the snap: a taller drawer lifts the tray further.
+  fireEvent.click(drawer.querySelector('[data-architecture-dock-snap="full"]') as Element);
+  await waitFor(() => assert.equal(drawer.getAttribute('data-architecture-dock-height'), 'full'));
+  assert.equal(
+    Number.parseFloat((document.querySelector('[data-architecture-tray-expanded-panel]') as HTMLElement).style.bottom),
+    heightPx(drawer.style.height),
+    'the tray tracks the drawer across snap changes',
+  );
+});
+
 test('Escape collapses the expanded tray first, then clears the selection, and never reaches the global abort', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
   const host = await waitForDiagram();
