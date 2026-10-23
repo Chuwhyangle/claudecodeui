@@ -29,10 +29,10 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/fullscreen.test.tsx` exit 0：新增文件——点击全屏按钮进入覆盖层且面板状态（筛选、范围、已选实体）不变；`F` 切换；`requestFullscreen` 不存在或抛错时仍进入覆盖层且无异常；Esc 退出全屏且事件不冒泡到 `document`（用 `document` 上的监听器断言不被调用）；原生全屏被外部退出时覆盖层同步退出；卸载时自动退出；进入后焦点在画布、退出后在按钮；覆盖层打开时外壳节点带 `inert`
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：十个 locale 的新增文案齐全
-- [ ] `npx playwright test e2e/architecture-fullscreen.spec.ts` exit 0（新增文件，在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）：PC 1440×765 与手机 390×844、844×390 三个视口——进入全屏后画布宿主矩形等于视口矩形（容差 1px）、侧栏与页头不可见；选择与缩放在进入前后保留；退出后恢复进入前的布局；在聊天页有运行中回合的会话里按 Esc 退出全屏时回合不被中止（用页面上对 Esc 的全局监听计数为 0 断言）；控制臂：移除 `stopPropagation` 时该计数读数变红
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/fullscreen.test.tsx` exit 0：新增文件——点击全屏按钮进入覆盖层且面板状态（筛选、范围、已选实体）不变；`F` 切换；`requestFullscreen` 不存在或抛错时仍进入覆盖层且无异常；Esc 退出全屏且事件不冒泡到 `document`（用 `document` 上的监听器断言不被调用）；原生全屏被外部退出时覆盖层同步退出；卸载时自动退出；进入后焦点在画布、退出后在按钮；覆盖层打开时外壳节点带 `inert`
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：十个 locale 的新增文案齐全
+- [x] `npx playwright test e2e/architecture-fullscreen.spec.ts` exit 0（新增文件，在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）：PC 1440×765 与手机 390×844、844×390 三个视口——进入全屏后画布宿主矩形等于视口矩形（容差 1px）、侧栏与页头不可见；选择与缩放在进入前后保留；退出后恢复进入前的布局；在聊天页有运行中回合的会话里按 Esc 退出全屏时回合不被中止（用页面上对 Esc 的全局监听计数为 0 断言）；控制臂：移除 `stopPropagation` 时该计数读数变红
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
