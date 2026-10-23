@@ -2759,6 +2759,22 @@ test('main arm — a class box is no wider than the text it draws (1440x765 and 
         ).toBeGreaterThanOrEqual(NODE_SIZE_MIN_PHONE_ZOOM);
       }
 
+      // At the identity scale (the PC default is 100 %) the drawing shows six
+      // member rows plus the app's own `… +N more (M members)` row — the folded
+      // tail is a DRAWING row, so the model keeps every authored member.
+      if (form.name === 'pc') {
+        expect(processor, 'nodeSize.pc: the long-signature class must be drawn').toBeDefined();
+        const drawn = processor?.lines ?? [];
+        expect(
+          drawn.filter((line) => line.startsWith('+ ') || line.startsWith('- ')).length,
+          `nodeSize.pc: six member rows are drawn; lines=${JSON.stringify(drawn)}`,
+        ).toBe(6);
+        expect(
+          drawn.some((line) => /^… \+1 more/.test(line)),
+          `nodeSize.pc: one fold row names the hidden member; got ${JSON.stringify(drawn)}`,
+        ).toBe(true);
+      }
+
       const shotDir = path.join(process.cwd(), 'tmp');
       fs.mkdirSync(shotDir, { recursive: true });
       await page.screenshot({ path: path.join(shotDir, `architecture-node-size-${form.name}.png`) });

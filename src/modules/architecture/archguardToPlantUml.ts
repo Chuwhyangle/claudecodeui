@@ -84,9 +84,16 @@ export const DEFAULT_NEIGHBORHOOD_HOPS = 1;
 export const MEMBER_MAX_CHARS = 48;
 
 /**
- * Member rows an entity box draws before the renderer folds the tail into its
- * own `… +N more (M members)` row. Six rows at the floor font fit a phone
- * frame without stretching it; anything beyond is read in the Inspector.
+ * Member rows an entity box DRAWS before the tail folds into the app's own
+ * `… +N more (M members)` row. Six rows fit a phone frame without stretching
+ * it; anything beyond is read in the Inspector.
+ *
+ * The row cap is the drawing layer's rule, NOT a renderer option: the
+ * renderer's `memberMaxRows` writes the folded row into
+ * `model.entities[].members` as a member, which would make the Text page and a
+ * copied document state a member the source never declared. So the renderer is
+ * only asked to CUT each drawn line (`memberMaxChars`); the row cap is applied
+ * to the drawing after layout, where it cannot touch the model.
  *
  * This is the deliberate trade the task writes down: semantic zoom is an
  * identity map at ≥ 90 %, so at and above that scale an entity shows at most
@@ -96,12 +103,30 @@ export const MEMBER_MAX_CHARS = 48;
 export const MEMBER_MAX_ROWS = 6;
 
 /**
- * The member-display caps handed to the renderer, in the shape
- * `RendererOptions` expects. One definition for the drawing and for the tests
- * that read what it drew, so the two can never state different numbers.
+ * The options the drawing hands the renderer, in the shape `RendererOptions`
+ * expects. One definition for the drawing and for the tests that read what it
+ * drew, so the two can never state different numbers.
+ *
+ * `detail: 'full'` is passed explicitly: the default detail is chosen from the
+ * entity count, and a `compact` drawing would fold members on its own (for the
+ * wrong reason). The row cap is ours, so the renderer draws every row and only
+ * shortens the LINES here.
  */
-export function memberDisplayLimits(): { memberMaxChars: number; memberMaxRows: number } {
-  return { memberMaxChars: MEMBER_MAX_CHARS, memberMaxRows: MEMBER_MAX_ROWS };
+export function memberDisplayLimits(): {
+  detail: 'full';
+  memberMaxChars: number;
+} {
+  return { detail: 'full', memberMaxChars: MEMBER_MAX_CHARS };
+}
+
+/**
+ * The fold row the drawing paints when members are hidden, e.g.
+ * `… +1 more (7 members)` for a seven-member class drawn with six rows.
+ * `hidden` is how many rows the cap dropped; `total` is the entity's real
+ * member count. Both appear so a reader can tell what is missing and how much.
+ */
+export function memberOverflowLabel(hidden: number, total: number): string {
+  return `… +${hidden} more (${total} members)`;
 }
 
 /**

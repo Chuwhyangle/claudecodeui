@@ -8,7 +8,9 @@ import { ArchitectureMinimap } from '@/modules/architecture/ArchitectureMinimap'
 import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
+  MEMBER_MAX_ROWS,
   memberDisplayLimits,
+  memberOverflowLabel,
   parserSafePlantUml,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/archguardToPlantUml';
@@ -151,7 +153,7 @@ export { markerAnchor } from '@/modules/architecture/graphDom';
 const MEMBER_LIMITS_STORAGE_KEY = 'architecture-member-limits';
 
 /** The member caps to hand the renderer: the shipped ones, or none for the control arm. */
-function drawnMemberLimits(): { memberMaxChars?: number; memberMaxRows?: number } {
+function drawnMemberLimits(): { detail?: 'full'; memberMaxChars?: number } {
   if (import.meta.env.DEV) {
     try {
       if (window.localStorage.getItem(MEMBER_LIMITS_STORAGE_KEY) === 'off') return {};
@@ -160,6 +162,40 @@ function drawnMemberLimits(): { memberMaxChars?: number; memberMaxRows?: number 
     }
   }
   return memberDisplayLimits();
+}
+
+/**
+ * Cap the member ROWS the drawing shows, after layout and before the drawing is
+ * captured for semantic zoom.
+ *
+ * This is the drawing layer's rule, not the renderer's: `memberMaxRows` would
+ * write the fold row into `model.entities[].members` as a synthetic member, and
+ * the Text page / a copied document must never state a member the source did
+ * not declare. The renderer is asked only to shorten LINES (`memberMaxChars`);
+ * here the surplus rows are removed from the DOM and replaced by the same
+ * `… +N more (M members)` row the renderer would emit — which the read layer
+ * already parses back into `memberTotal`, so the count survives the fold.
+ *
+ * Rows the entity does not exceed are left untouched, and a box keeps the
+ * rect the layout gave it: the drawing is not re-laid out for a display rule.
+ *
+ * The label is the LONG form on purpose, and only here: the read layer parses
+ * `… +N more (M members)` as the total source, so the marker survives the
+ * semantic pass as a count. The semantic pass's own `… +N more` stays short —
+ * if IT painted the long form, a re-read drawing would count the app's own row
+ * as an upstream overflow and trip the "one marker only" guard.
+ */
+export function capDrawnMemberRows(host: HTMLElement): void {
+  for (const group of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    const rows = [...group.querySelectorAll<SVGTextElement>('text.uml-attr, text.uml-op')];
+    if (rows.length <= MEMBER_MAX_ROWS) continue;
+    const hidden = rows.slice(MEMBER_MAX_ROWS);
+    // The marker inherits the first hidden row's position and font attributes.
+    const marker = hidden[0].cloneNode(false) as SVGTextElement;
+    for (const row of hidden) row.remove();
+    marker.textContent = memberOverflowLabel(hidden.length, rows.length);
+    group.appendChild(marker);
+  }
 }
 
 /** The real browser store, or `null` where accessing it throws (private mode). */
@@ -1142,9 +1178,11 @@ export function PlantUmlGraph({
             ...rendererOptionsFor(view, diagram, engine),
             // The box is sized from the text the renderer will PAINT: a member
             // line longer than MEMBER_MAX_CHARS is drawn with a trailing `…`,
-            // and rows past MEMBER_MAX_ROWS collapse into the renderer's own
-            // `… +N more (M members)` row — both BEFORE layout. `raw` keeps the
-            // full declaration for the Text page, copy and Inspector.
+            // BEFORE layout, so the width follows what the screen shows. Only
+            // the LINES are capped here — the row cap (`MEMBER_MAX_ROWS`) is a
+            // drawing rule applied after render, so no folded row ever enters
+            // the model. `raw` keeps the full declaration for the Text page,
+            // copy and Inspector.
             ...drawnMemberLimits(),
           },
         );
@@ -1156,6 +1194,10 @@ export function PlantUmlGraph({
         // read rectangles than reverse-engineer the SVG (not yet wired).
         drawnLayoutRef.current = detailed.layout;
         host.innerHTML = svg;
+        // The row cap is a DRAWING rule (`MEMBER_MAX_ROWS`): it removes the
+        // surplus rows from the DOM and paints the app's own fold label, so the
+        // model the text page serializes keeps every authored member.
+        capDrawnMemberRows(host);
         setLayoutMs(elapsedMs);
         // The text page reads this: the model just drawn, plus the upstream
         // functions that serialize and scope it. `diagram.aliasOf` is the

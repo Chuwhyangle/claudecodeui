@@ -9,7 +9,12 @@ import { beforeAll, beforeEach, test, vi } from 'vitest';
 
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import { ArchitecturePanel } from '@/modules/architecture';
-import { archguardToPlantUml, memberDisplayLimits } from '@/modules/architecture/archguardToPlantUml';
+import {
+  archguardToPlantUml,
+  MEMBER_MAX_ROWS,
+  memberDisplayLimits,
+  memberOverflowLabel,
+} from '@/modules/architecture/archguardToPlantUml';
 import {
   NODE_SIZE_ENTITIES,
   nodeSizeEntityGraph,
@@ -598,8 +603,16 @@ test('a long-signature class is sized by the member text the drawing shows', asy
 
   const entity = detailed.model.entities.find((candidate) => candidate.id === alias);
   assert.ok(entity !== undefined);
-  // "可见文字" is the class name plus the rows the renderer PAINTS (display).
-  const visible = [NODE_SIZE_ENTITIES[0].name, ...entity.members.map((member) => member.display ?? member.raw)];
+  // "可见文字" is the class name plus the rows the DRAWING paints: the model
+  // keeps every member, but the canvas shows at most `MEMBER_MAX_ROWS` of them
+  // and folds the tail into the app's own `… +N more (M members)` row.
+  const drawnRows = entity.members
+    .slice(0, MEMBER_MAX_ROWS)
+    .map((member) => member.display ?? member.raw);
+  if (entity.members.length > MEMBER_MAX_ROWS) {
+    drawnRows.push(memberOverflowLabel(entity.members.length - MEMBER_MAX_ROWS, entity.members.length));
+  }
+  const visible = [NODE_SIZE_ENTITIES[0].name, ...drawnRows];
   let longest = 0;
   for (const line of visible) longest = Math.max(longest, await drawnLineWidth(line));
   assert.ok(longest > 0, 'the fixture has text to measure');

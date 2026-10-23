@@ -38,7 +38,9 @@ import {
   MAX_DISPLAY_DIR_SEGMENTS,
   MEMBER_MAX_CHARS,
   MEMBER_MAX_ROWS,
+  memberOverflowLabel,
 } from '@/modules/architecture/archguardToPlantUml';
+import { capDrawnMemberRows } from '@/modules/architecture/PlantUmlGraph';
 import {
   NODE_SIZE_ENTITIES,
   nodeSizeEntityGraph,
@@ -351,6 +353,8 @@ const NODE_SIZE_RESULT: ArchitectureGraphResult = (() => {
 
 /** The 105-character declaration the node-size fixture carries. */
 const LONG_SIGNATURE = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[4]);
+/** The 114-character declaration the row cap folds away (the sixth drawn row). */
+const SECOND_LONG_SIGNATURE = nodeSizeMemberSignature(NODE_SIZE_ENTITIES[0].members[5]);
 
 /**
  * Three direct session seeds among four drawn entities (75%), all in one
@@ -5225,18 +5229,20 @@ test('the drawing asks for the member caps, and the Text page keeps the full dec
   await waitFor(() => assert.ok(host.querySelector(`[data-entity-id="${processorId}"]`), 'the long-signature class is drawn'));
   await waitFor(() => assert.ok(host.querySelector(`[data-entity-id="${ledgerId}"]`), 'the twenty-member class is drawn'));
 
-  // 1. The render ENTRY carries the caps. This is the call the canvas makes,
-  //    read from the options object rather than inferred from the drawing.
+  // 1. The render ENTRY carries the LINE cap and full detail — and NOT a row
+  //    cap: `memberMaxRows` would write the folded row into the model as a
+  //    member, and the model must stay complete.
   const capped = renderCalls.filter((call) => call.options?.memberMaxChars !== undefined);
   assert.ok(capped.length > 0, 'the drawing must call renderDetailed with memberMaxChars set');
   const last = capped[capped.length - 1];
   assert.equal(last.options?.memberMaxChars, MEMBER_MAX_CHARS);
-  assert.equal(last.options?.memberMaxRows, MEMBER_MAX_ROWS);
+  assert.equal(last.options?.detail, 'full', 'detail is explicit so the renderer never compacts on its own');
+  assert.equal('memberMaxRows' in (last.options ?? {}), false, 'the row cap is never a renderer option');
   assert.equal(MEMBER_MAX_CHARS, 48);
   assert.equal(MEMBER_MAX_ROWS, 6);
 
-  // 2. What is drawn: no member line longer than the cap, and the folded tail
-  //    is the renderer's own row with the right counts.
+  // 2. What is drawn: no member line longer than the cap, six rows per box, and
+  //    the app's own `… +N more (M members)` row for the tail.
   const processor = host.querySelector(`[data-entity-id="${processorId}"]`) as Element;
   const rows = [...processor.querySelectorAll('text')]
     .map((text) => text.textContent ?? '')
@@ -5247,22 +5253,39 @@ test('the drawing asks for the member caps, and the Text page keeps the full dec
   for (const row of memberRows) {
     assert.ok(row.length <= MEMBER_MAX_CHARS, `a drawn row is at most ${MEMBER_MAX_CHARS} characters: ${row}`);
   }
-  // The READ layer strips the renderer's `… +N more (M members)` row and
-  // reports the total instead, so the canvas keeps ONE marker and draws it
-  // itself with the upstream count (the task's rule 4: never a second marker).
-  assert.ok(
-    processor.textContent?.includes('… +1 more'),
+  // Exactly one fold marker, naming the hidden rows — the drawing layer draws
+  // it, so no second marker can stack on a renderer row. (At this fit the
+  // semantic pass re-draws the frame and writes its own short form; the
+  // identity drawing paints `memberOverflowLabel`'s long form, asserted in the
+  // e2e arm.)
+  assert.match(
+    processor.textContent ?? '',
+    /… \+1 more/,
     `the fold row must name the hidden member: ${processor.textContent}`,
   );
   assert.equal(
     (processor.textContent?.match(/… \+\d+ more/g) ?? []).length,
     1,
-    'exactly one fold marker is drawn, not the renderer row plus the app row',
+    'exactly one fold marker is drawn',
   );
   const ledger = host.querySelector(`[data-entity-id="${ledgerId}"]`) as Element;
-  assert.ok(
-    ledger.textContent?.includes('… +14 more'),
+  const ledgerRows = [...ledger.querySelectorAll('text')]
+    .map((text) => text.textContent ?? '')
+    .filter((text) => text.startsWith('- ') || text.startsWith('… +'));
+  assert.equal(
+    ledgerRows.filter((row) => !row.startsWith('… +')).length,
+    MEMBER_MAX_ROWS,
+    'the twenty-member class draws six rows',
+  );
+  assert.match(
+    ledger.textContent ?? '',
+    /… \+14 more/,
     `the twenty-member class folds fourteen: ${ledger.textContent}`,
+  );
+  // ... and the model keeps all twenty members: the fold is a drawing rule.
+  assert.ok(
+    !ledger.textContent?.match(/… \+\d+ more[^\n]*\n.*… \+/),
+    'only one fold row is drawn for the twenty-member class',
   );
 
   // 3. The Text page still serializes the UNTRUNCATED model.
@@ -5279,4 +5302,72 @@ test('the drawing asks for the member caps, and the Text page keeps the full dec
     !(preview.textContent ?? '').includes('…\n'),
     'the document is not the truncated drawing text',
   );
+  // The row the DRAWING folds away is in the document too: the fold never
+  // reaches the model, so the Text page states every authored member.
+  assert.ok(
+    (preview.textContent ?? '').includes(SECOND_LONG_SIGNATURE),
+    'the folded-away 114-character declaration is still in the document',
+  );
+  assert.equal(
+    /…\s*\+\s*\d+\s+more/.test(preview.textContent ?? ''),
+    false,
+    'the document states no fold row',
+  );
+});
+
+/**
+ * The drawing layer's row cap, on a hand-built node group.
+ *
+ * The component test above goes through the semantic pass, which re-draws the
+ * frame with its own (short) fold label. The cap itself is what runs at the
+ * identity scale and paints the long form the criterion names, so it is pinned
+ * here directly: seven rows in, six rows plus `… +1 more (7 members)` out, and
+ * a group at the limit is untouched.
+ */
+test('the drawing cap folds rows past MEMBER_MAX_ROWS into the long-form marker', () => {
+  const svgNs = 'http://www.w3.org/2000/svg';
+  const host = document.createElement('div');
+  const group = document.createElementNS(svgNs, 'g');
+  group.setAttribute('class', 'uml-node');
+  group.setAttribute('data-entity-id', 'n0');
+  const title = document.createElementNS(svgNs, 'text');
+  title.textContent = 'VoiceFrameProcessor';
+  group.appendChild(title);
+  const rows = ['- windowSize: number', '- frameBudget: number', '- carryOver: number',
+    '- pendingFrames: number', '+ process(inputs?: Float32Array<ArrayBufferLike…', '+ reset(): void', '+ flush(): void'];
+  rows.forEach((row, index) => {
+    const text = document.createElementNS(svgNs, 'text');
+    text.setAttribute('class', index >= 4 ? 'uml-op' : 'uml-attr');
+    text.setAttribute('y', String(52 + index * 18));
+    text.textContent = row;
+    group.appendChild(text);
+  });
+  host.appendChild(group);
+
+  capDrawnMemberRows(host);
+
+  const drawn = [...group.querySelectorAll('text.uml-attr, text.uml-op')].map((text) => text.textContent ?? '');
+  assert.equal(drawn.length, MEMBER_MAX_ROWS + 1, 'six member rows plus one fold row');
+  assert.deepEqual(drawn.slice(0, MEMBER_MAX_ROWS), rows.slice(0, MEMBER_MAX_ROWS), 'the kept rows are unchanged');
+  assert.equal(
+    drawn[MEMBER_MAX_ROWS],
+    memberOverflowLabel(1, 7),
+    'the fold row is the long form, naming the hidden row and the total',
+  );
+  assert.equal(drawn[MEMBER_MAX_ROWS], '… +1 more (7 members)');
+
+  // A group at the limit is left exactly as the renderer drew it.
+  const atLimit = document.createElementNS(svgNs, 'g');
+  atLimit.setAttribute('class', 'uml-node');
+  atLimit.setAttribute('data-entity-id', 'n1');
+  rows.slice(0, MEMBER_MAX_ROWS).forEach((row) => {
+    const text = document.createElementNS(svgNs, 'text');
+    text.setAttribute('class', 'uml-op');
+    text.textContent = row;
+    atLimit.appendChild(text);
+  });
+  const before = atLimit.innerHTML;
+  host.appendChild(atLimit);
+  capDrawnMemberRows(host);
+  assert.equal(atLimit.innerHTML, before, 'an entity within the row limit is untouched');
 });

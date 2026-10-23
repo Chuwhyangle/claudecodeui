@@ -11,6 +11,7 @@ import {
   MEMBER_MAX_CHARS,
   MEMBER_MAX_ROWS,
   memberDisplayLimits,
+  memberOverflowLabel,
   seedMarkerMode,
 } from '@/modules/architecture/archguardToPlantUml';
 import { createLayoutEngine } from '@/modules/architecture/elkAspectEngine';
@@ -673,10 +674,20 @@ async function drawNodeSizeFixture(withLimits: boolean): Promise<{
   };
 }
 
-test('the member caps are one pair of numbers, and that pair is what the renderer gets', () => {
+test('the renderer gets the line cap and full detail — the row cap is the drawing own rule', () => {
   assert.equal(MEMBER_MAX_CHARS, 48, 'a drawn member line stops at 48 characters');
   assert.equal(MEMBER_MAX_ROWS, 6, 'an entity box draws at most six member rows');
-  assert.deepEqual(memberDisplayLimits(), { memberMaxChars: 48, memberMaxRows: 6 });
+  assert.deepEqual(memberDisplayLimits(), { detail: 'full', memberMaxChars: 48 });
+  assert.equal(
+    'memberMaxRows' in memberDisplayLimits(),
+    false,
+    'the row cap must not be a renderer option: it writes a folded row into the model',
+  );
+});
+
+test('the fold label names both the hidden rows and the real total', () => {
+  assert.equal(memberOverflowLabel(1, 7), '… +1 more (7 members)');
+  assert.equal(memberOverflowLabel(14, 20), '… +14 more (20 members)');
 });
 
 test('a long signature is drawn truncated, and only its 48-character display is in the SVG', async () => {
@@ -684,33 +695,36 @@ test('a long signature is drawn truncated, and only its 48-character display is 
   assert.equal(LONG_SIGNATURE.length, 105, 'the fixture really states the 105-character declaration');
   const processor = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[0].id) as string);
   const rows = processor.members.map((member) => member.display ?? member.raw);
-  // Four fields, then the two methods, then the renderer's own fold row.
-  assert.equal(rows.length, MEMBER_MAX_ROWS + 1, 'six drawn rows plus the fold row');
-  for (const row of rows.slice(0, MEMBER_MAX_ROWS)) {
+  // The model keeps every authored member: the row cap is a drawing rule, so
+  // the renderer is only asked to shorten the LINES it paints.
+  assert.equal(rows.length, 7, 'the model still carries all seven members');
+  for (const row of rows) {
     assert.ok(row.length <= MEMBER_MAX_CHARS, `a drawn row is at most 48 characters, got ${row.length}: ${row}`);
-    assert.ok(!row.includes('Float32Array<ArrayBufferLike>[][]'), 'the full type list is never painted');
   }
   // The 105-character declaration is the FIFTH row (fields are drawn first) and
-  // is the row the cap has to cut.
+  // is the row the line cap has to cut.
   assert.ok(rows[4].startsWith('+ process('), `the long method is drawn, got: ${rows[4]}`);
   assert.ok(rows[4].endsWith('…'), 'a truncated row ends with an ellipsis');
   assert.ok(drawn.svg.includes(asPainted(rows[4])), 'the SVG paints exactly the truncated row');
   assert.ok(!drawn.svg.includes(asPainted(LONG_SIGNATURE)), 'the 105-character declaration is never painted');
-  assert.ok(!drawn.svg.includes(asPainted(SECOND_LONG_SIGNATURE)), 'nor is the 114-character one (it is folded away)');
+  assert.ok(!drawn.svg.includes(asPainted(SECOND_LONG_SIGNATURE)), 'nor is the 114-character one');
 });
 
-test('more than six members fold into the renderer own row with the right N and M', async () => {
+test('no folded row is ever a member: the model and the copied document stay complete', async () => {
   const drawn = await drawNodeSizeFixture(true);
+  for (const id of [NODE_SIZE_ENTITIES[0].id, NODE_SIZE_ENTITIES[1].id]) {
+    const entity = drawnEntityOf(drawn, drawn.aliasOf.get(id) as string);
+    assert.deepEqual(
+      entity.members.filter((member) => /…|\.\.\./.test(member.raw)),
+      [],
+      'a `… +N more` row must never appear in the model',
+    );
+  }
   const processor = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[0].id) as string);
-  const rows = processor.members.map((member) => member.display ?? member.raw);
-  assert.equal(rows[MEMBER_MAX_ROWS], '… +1 more (7 members)', 'seven members, six drawn, one folded');
-  assert.ok(drawn.svg.includes('… +1 more (7 members)'), 'the fold row is painted');
-
   const ledger = drawnEntityOf(drawn, drawn.aliasOf.get(NODE_SIZE_ENTITIES[1].id) as string);
-  const ledgerRows = ledger.members.map((member) => member.display ?? member.raw);
-  assert.equal(ledgerRows.length, MEMBER_MAX_ROWS + 1);
-  assert.equal(ledgerRows[MEMBER_MAX_ROWS], '… +14 more (20 members)', 'twenty members, six drawn, fourteen folded');
-  assert.ok(drawn.svg.includes('… +14 more (20 members)'), 'the second fold row is painted');
+  assert.equal(processor.members.length, 7);
+  assert.equal(ledger.members.length, 20, 'the twenty-member class keeps all twenty in the model');
+  assert.ok(!/…\s*\+\s*\d+\s+more/.test(drawn.transcribed), 'and the serialized document states no fold row');
 });
 
 test('raw keeps the full declaration, so the copied document and the text page lose nothing', async () => {
@@ -722,7 +736,10 @@ test('raw keeps the full declaration, so the copied document and the text page l
     drawn.transcribed.includes(LONG_SIGNATURE),
     'the serialized document (Copy PlantUML / Text page source) still carries the full signature',
   );
-  assert.match(drawn.transcribed, /… \+1 more \(7 members\)/, 'and the fold row stays parseable in the text');
+  assert.ok(
+    drawn.transcribed.includes(SECOND_LONG_SIGNATURE),
+    'and the second long signature, which the drawing folds away, is in the document too',
+  );
 });
 
 test('a member that fits is untouched: no display override, same text as authored', async () => {
