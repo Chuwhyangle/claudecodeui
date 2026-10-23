@@ -71,6 +71,14 @@ const SECOND_EVIDENCE = 'docs/experiments/2026-09-23-gemini.md';
  * reading it rather than passing because some file with that shape happens to exist.
  */
 const THIRD_EVIDENCE = 'docs/experiments/2026-09-24-omni-written.md';
+/**
+ * The record the SIXTH registered provider's row names. `dashscope-omni-relay` was registered by
+ * `gap-asr-relay-proxy-context` (`46a872e3f`) and declares `pauseCues: 'neutral'`, so decision 1
+ * obliges it to name its own paired measurement. The discipline check reads every row, so a
+ * fixture without this untouched control cannot load: the baseline reds before any case under test
+ * runs. (Same staleness class as the three records above, not a change of assertion.)
+ */
+const SIXTH_EVIDENCE = 'docs/experiments/2026-10-22-omni-relay-pause-cues.md';
 const THIRD_ADAPTER = 'shared/asr/list/dashscope-omni/dashscope-omni.asr-provider.ts';
 /** Where the declarations live now: the adapter module of the recogniser registered FIRST. */
 const FIRST_ADAPTER = 'shared/asr/list/openai-compatible/openai-compatible.asr-provider.ts';
@@ -93,6 +101,7 @@ const SHIPPING_FILES = [
   EVIDENCE,
   SECOND_EVIDENCE,
   THIRD_EVIDENCE,
+  SIXTH_EVIDENCE,
   REGISTRY,
   FIRST_ADAPTER,
   'shared/asr/list/multimodal/multimodal.asr-provider.ts',
@@ -127,11 +136,15 @@ const CONSUMER_GATE_WITHOUT_CAPABILITY = [
   '  }',
   '  return DEFAULT_KEEP_GAP_SEC;',
 ].join('\n');
-const CONSUMER_IMPORT = "import { trimDecisionFor } from '@/shared/voiceTrim';";
+// RE-ANCHORED (`099740ca0`): the consumer now imports `trimSilenceEdges` from the same module, so
+// the "remove the read point" mutation drops only the capability symbol and keeps the sibling
+// import the file still calls — a mutation that deleted both would break the fixture's load and
+// red some other check rather than `single-source`.
+const CONSUMER_IMPORT = "import { trimDecisionFor, trimSilenceEdges } from '@/shared/voiceTrim';";
 // Removing the capability from the decision means removing the read point with it — a file that
 // still imported the symbol without calling it would still read as a consumer to the scan, and the
 // point of this mutation is that nothing reaches the read point any more.
-const CONSUMER_IMPORT_WITHOUT_CAPABILITY = '';
+const CONSUMER_IMPORT_WITHOUT_CAPABILITY = "import { trimSilenceEdges } from '@/shared/voiceTrim';";
 
 /**
  * The first registered recogniser's own declaration, as its adapter module writes it. This is what

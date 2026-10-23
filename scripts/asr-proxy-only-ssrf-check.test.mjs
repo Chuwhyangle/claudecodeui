@@ -89,6 +89,12 @@ const SHIPPING_FILES = [
   // these two, so a fixture copied without them cannot load the module under test.
   'server/modules/voice/voice-service-capture.ts',
   'server/modules/voice/voice-service-transcribe.ts',
+  // The service's `@shared` runtime-graph edges. The shared-closure helper follows relative
+  // specifiers only, and an alias is a build-time mapping, so these two are named here or the
+  // fixture cannot load the service at all (`Cannot find package '@shared/voice'`), and every
+  // behavioural reading comes back as PROBE_THREW instead of the reading the case mutates.
+  'shared/voice/voiceSettingsRegistry.ts',
+  'shared/voice/voiceContextTruncation.ts',
   // The records the probe's addresses come from. Without them the probe reports EMPTY_READING —
   // which is exactly what AC1's empty-directory case reads, one root over.
   'docs/proposals/voice-dashscope-omni-written-instruction.md',

@@ -94,6 +94,11 @@ export const FIXTURE_FILES = [
   // and an alias is a build-time mapping — so a fixture without it cannot load the service at all:
   // the import throws, the reader prints nothing, and every behavioural reading is `unavailable`.
   'shared/voice/voiceSettingsRegistry.ts',
+  // The one-shot truncation the service imports through the same `@shared` alias
+  // (`099740ca0` moved it here from `server/shared/utils.ts`). Same failure mode as the entry
+  // above: the shared-closure helper follows relative specifiers only, so a fixture without this
+  // file cannot load the service at all and every behavioural reading reads `unavailable`.
+  'shared/voice/voiceContextTruncation.ts',
   // The service's runtime siblings: it composes the capture seam and re-exports the browser
   // recogniser's asset surface from these two named modules (the concern split in
   // `gap-voice-service-concern-split`). A fixture without them cannot load the service at all, so

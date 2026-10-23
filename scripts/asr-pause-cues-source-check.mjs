@@ -20,11 +20,13 @@
  *     to the adapter module it imports, and the adapter's own `id` and
  *     `capabilities.pauseCues` are read off that module. So the reading is the declaration that
  *     would be handed out at runtime, not a copy of it.
- *   · the CLIENT side is SCANNED: any `pauseCues: '<value>'` in `src/` is a client-side
- *     declaration of the capability, whatever it is called and whichever file it sits in — the
- *     shape is the thing, because the shape is what a second table is made of. The scan reads the
- *     client's own fallback too (`DEFAULT_*PROVIDER`), because a table that answers for an
- *     undeclared id is answering about the effective provider just the same.
+ *   · the CLIENT side is SCANNED: any `pauseCues: '<value>'` written as CODE in `src/` is a
+ *     client-side declaration of the capability, whatever it is called and whichever file it sits
+ *     in — the shape is the thing, because the shape is what a second table is made of. Comments
+ *     are stripped first (`stripComments`), because the same words in a sentence that EXPLAINS the
+ *     registry are documentation, not a declaration. The scan reads the client's own fallback too
+ *     (`DEFAULT_*PROVIDER`), because a table that answers for an undeclared id is answering about
+ *     the effective provider just the same.
  *
  * THE EFFECTIVE PROVIDER is the first adapter in registration order. That is what
  * `effectiveProviderId(requested, defaults)` in `server/modules/voice/voice.service.ts` lands on
@@ -316,6 +318,98 @@ function constantValue(expression, constants) {
 }
 
 /**
+ * `source` with its comments removed, leaving string and template literals (and their contents)
+ * byte-for-byte intact.
+ *
+ * WHY THE CLIENT DECLARATION SCAN IS COMMENT-BLIND. `CLIENT_DECLARATION` matches
+ * `pauseCues: '<value>'` in the raw text, but `src/shared/voiceTrim.ts` also EXPLAINS the
+ * registry's own declaration in a JSDoc sentence (`A relay recogniser declares
+ * 'pauseCues: ...'`). That sentence is true documentation about an adapter, not a client-side
+ * declaration, yet the raw scan counted it as a row — `client-declaration-rows=1` where the
+ * invariant says 0. The sibling probe (`scripts/asr-health-provider-check.mjs`) was reded by the
+ * same prose on 2026-10-22 and fixed by stripping comments; this is the same walk, so the two
+ * readings cannot disagree about what a declaration is.
+ *
+ * WHY NOT A REGEX REPLACEMENT. `source.replace(/\/\/.*$/gm, '')` truncates every URL at its scheme
+ * (`https://…`), so a declaration after a URL would vanish. This walks one character at a time and
+ * drops comment syntax only in CODE position: quotes toggle a literal state, a `/` that can begin a
+ * regex is consumed as one, and removed comments become a single space so tokens cannot fuse.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+function stripComments(source) {
+  /** @type {string[]} */
+  const out = [];
+  let quote = '';
+  let previous = '';
+  let index = 0;
+  while (index < source.length) {
+    const char = source[index];
+    const next = source[index + 1];
+    if (quote) {
+      out.push(char);
+      if (char === '\\' && index + 1 < source.length) {
+        out.push(source[index + 1]);
+        index += 2;
+        continue;
+      }
+      if (char === quote) quote = '';
+      index += 1;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      out.push(char);
+      previous = char;
+      index += 1;
+      continue;
+    }
+    if (char === '/' && next === '/') {
+      index += 2;
+      while (index < source.length && source[index] !== '\n') index += 1;
+      out.push(' ');
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      index += 2;
+      out.push(' ');
+      while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
+        if (source[index] === '\n') out.push('\n');
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+    if (char === '/' && (previous === '' || /[(,=:[!&|?{};+\-*%^~<>]/.test(previous))) {
+      let cursor = index + 1;
+      let inClass = false;
+      let closed = false;
+      while (cursor < source.length) {
+        const inner = source[cursor];
+        if (inner === '\\') { cursor += 2; continue; }
+        if (inner === '\n') break;
+        if (inner === '[') { inClass = true; cursor += 1; continue; }
+        if (inner === ']') { inClass = false; cursor += 1; continue; }
+        if (inner === '/' && !inClass) { closed = true; cursor += 1; break; }
+        cursor += 1;
+      }
+      if (closed) {
+        while (cursor < source.length && /[a-z]/i.test(source[cursor])) cursor += 1;
+        out.push(source.slice(index, cursor));
+        previous = '/';
+        index = cursor;
+        continue;
+      }
+    }
+    out.push(char);
+    if (!/\s/.test(char)) previous = char;
+    index += 1;
+  }
+  return out.join('');
+}
+
+/**
  * Every client-side declaration of the capability in `root`'s `src/`, and the row the client falls
  * back to for an id its own table does not declare.
  *
@@ -332,7 +426,8 @@ function clientDeclarations(root) {
   let fallback = null;
 
   for (const rel of sourceFiles(root, ['src/**/*.ts', 'src/**/*.tsx'])) {
-    const text = readFileSync(path.join(root, rel), 'utf8');
+    // Comment-blind on purpose: see `stripComments` above.
+    const text = stripComments(readFileSync(path.join(root, rel), 'utf8'));
     const constants = stringConstants(text);
 
     for (const match of text.matchAll(CLIENT_DECLARATION)) {
