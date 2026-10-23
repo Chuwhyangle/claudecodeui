@@ -46,8 +46,10 @@ depends_on:
 - src/modules/cockpit/index.ts
 - src/modules/cockpit/CockpitRemote.tsx
 - src/modules/cockpit/CockpitPage.tsx
+- src/modules/cockpit/cockpitQr.ts
 - src/modules/cockpit/hooks/useCockpitHub.ts
 - src/modules/cockpit/tests/CockpitRemote.test.tsx
+- src/modules/cockpit/tests/cockpitQr.test.ts
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
 - src/modules/chat/index.ts
 - e2e/cockpit-remote.spec.ts
