@@ -1,7 +1,7 @@
 ---
 id: architecture-layout-orientation-matches-canvas
 title: 架构图缺省布局方向跟画布形状走：宽画布向右、竖屏向下，小图双布局挑适应缩放更大者
-status: todo
+status: ready
 labels:
   - feature
 parent: null
