@@ -46,6 +46,8 @@ extra:
 - server/modules/session-hosts/index.ts
 - server/modules/database/repositories/sessions.db.ts
 - server/modules/session-hosts/tests/resident-restore.service.test.ts
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 - tasks/gap-resident-restore-after-restart.md
 
 ## Blocker
