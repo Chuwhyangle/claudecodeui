@@ -1855,20 +1855,31 @@ export function PlantUmlGraph({
    * drawing is larger than the reserved viewport the selected box can still be
    * scrolled under the drawer — the reader selected it to inspect it, so its top
    * edge is brought back into the uncovered part of the canvas.
+   *
+   * The correction is re-asserted for a moment rather than applied once: the
+   * reserved band changes the host's content box, which makes the resize/fit
+   * machinery re-centre the drawing on its anchor a few frames later, and that
+   * re-centre would otherwise undo the one correction. Each step is a no-op
+   * once the box is clear, so a settled page stops scrolling.
    */
   useEffect(() => {
     const host = hostRef.current;
     if (host === null || bottomObscuredPx <= 0 || selectedNodeId === null) return;
-    const selected = nodeElement(host, selectedNodeId);
-    if (selected === null) return;
-    const frame = requestAnimationFrame(() => {
+    const revealSelected = (): void => {
+      const selected = nodeElement(host, selectedNodeId);
+      if (selected === null) return;
       const hostRect = host.getBoundingClientRect();
       const drawerTop = hostRect.bottom - bottomObscuredPx;
       const nodeRect = selected.getBoundingClientRect();
-      if (nodeRect.top >= drawerTop) return;
+      if (nodeRect.top < drawerTop - 1) return;
       host.scrollTop += nodeRect.top - drawerTop + 8;
-    });
-    return () => cancelAnimationFrame(frame);
+    };
+    const frame = requestAnimationFrame(revealSelected);
+    const timers = [250, 600, 1000].map((delay) => setTimeout(revealSelected, delay));
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const timer of timers) clearTimeout(timer);
+    };
   }, [bottomObscuredPx, selectedNodeId, drawnRevision]);
 
   useEffect(() => {

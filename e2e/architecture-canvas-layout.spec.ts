@@ -5337,6 +5337,8 @@ type ChromeReading = {
   paperMatchesPanel: boolean;
   paperOk: boolean;
   panelBackground: string;
+  /** The drawing host's scroll reading: what the "keep the box above the drawer" correction acts on. */
+  hostScroll: { top: number; max: number; height: number } | null;
   focusText: string | null;
   focusTruncated: boolean | null;
 };
@@ -5417,10 +5419,76 @@ const readChrome = (page: Page): Promise<ChromeReading> => page.evaluate(() => {
     paperMatchesPanel,
     paperOk: !fill.visible || paperCoversCanvas || paperMatchesPanel,
     panelBackground,
+    hostScroll: (() => {
+      const host = document.querySelector('[data-architecture-plantuml]');
+      if (!(host instanceof HTMLElement)) return null;
+      return {
+        top: Math.round(host.scrollTop),
+        max: Math.max(0, host.scrollHeight - host.clientHeight),
+        height: host.clientHeight,
+      };
+    })(),
     focusText: focus === null ? null : (focus.textContent ?? '').trim(),
     focusTruncated,
   };
 });
+
+/**
+ * Optional browser evidence: when `ARCHITECTURE_LAYOUT_SHOTS_DIR` is set, the
+ * chrome states are also captured there (the task's DoD screenshots). Off by
+ * default — a suite run should not litter the tree.
+ */
+const SHOTS_DIR = process.env.ARCHITECTURE_LAYOUT_SHOTS_DIR ?? '';
+
+async function shot(page: Page, name: string): Promise<void> {
+  if (SHOTS_DIR === '') return;
+  await page.screenshot({ path: path.join(SHOTS_DIR, `arch-chrome-${name}.png`) });
+}
+
+/**
+ * The LOWEST visible entity box on screen, zooming in until the semantic tier
+ * draws entity boxes at all.
+ *
+ * On a phone a 120-entity class drawing opens at a tier that paints package
+ * frames only; a box that is not drawn is not a tap target. Zooming in is the
+ * reader's own way out of that tier, so the helper does exactly that, then
+ * returns the bottom-most entity so "the drawer does not hide the box" is a
+ * real reading rather than one that passes because the box was already high up.
+ */
+async function ensureVisibleEntityBox(
+  page: Page,
+): Promise<{ x: number; y: number; id: string } | null> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const found = await page.evaluate((sel) => {
+      const host = document.querySelector(sel.host);
+      if (host === null) return null;
+      const hostRect = host.getBoundingClientRect();
+      let lowest: { x: number; y: number; id: string } | null = null;
+      for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
+        const id = node.getAttribute('data-entity-id') ?? '';
+        if (id.startsWith('grp::') || id.startsWith('stub::')) continue;
+        const text = node.querySelector('text');
+        if (text === null) continue;
+        const rect = text.getBoundingClientRect();
+        if (rect.width < 8 || rect.height < 6) continue;
+        const x = Math.round(rect.left + Math.min(rect.width / 2, 30));
+        const y = Math.round(rect.top + rect.height / 2);
+        if (x <= hostRect.left + 6 || x >= hostRect.right - 6) continue;
+        if (y <= hostRect.top + 6 || y >= hostRect.bottom - 6) continue;
+        const hit = document.elementFromPoint(x, y);
+        if (hit === null || hit.closest('[data-entity-id]') === null) continue;
+        if (lowest === null || y > lowest.y) lowest = { x, y, id };
+      }
+      return lowest;
+    }, SEL);
+    if (found !== null) return found;
+    const zoomIn = page.locator(SEL.zoomIn);
+    if ((await zoomIn.count()) === 0) break;
+    await zoomIn.first().click();
+    await settle(page, 300);
+  }
+  return null;
+}
 
 const printChrome = (label: string, reading: ChromeReading): void => {
   console.log(`[architecture-layout] ${label}.canvas.top=${formatNumber(reading.canvasTop)} canvas=${formatBox(reading.canvas)}`);
@@ -5433,6 +5501,7 @@ const printChrome = (label: string, reading: ChromeReading): void => {
   console.log(`[architecture-layout] ${label}.drawer.close.count=${reading.closeCount}`);
   console.log(`[architecture-layout] ${label}.paper=${formatBox(reading.paper)} fill=${JSON.stringify(reading.paperFill)} `
     + `visible=${reading.paperVisible} covers=${reading.paperCoversCanvas} panel=${JSON.stringify(reading.panelBackground)} ok=${reading.paperOk}`);
+  console.log(`[architecture-layout] ${label}.host.scroll=${JSON.stringify(reading.hostScroll)}`);
   console.log(`[architecture-layout] ${label}.focus.text=${JSON.stringify(reading.focusText)} truncated=${String(reading.focusTruncated)}`);
 };
 
@@ -5460,6 +5529,26 @@ const assertChromeClean = (reading: ChromeReading, label: string): void => {
     + `canvas=${formatBox(reading.canvas)} covers=${String(reading.paperCoversCanvas)}`).toBe(true);
 };
 
+/**
+ * The canvas-background reading, stated on a drawing that does NOT cover the
+ * canvas. In a zoomed-in state the paper rectangle covers the whole canvas, so
+ * "a paper-coloured rectangle only around the content" cannot be observed
+ * there; the fit/overview state is the one the review found the seam in.
+ */
+const assertPaperClean = (reading: ChromeReading, label: string): void => {
+  expect.soft(
+    reading.paperCoversCanvas,
+    `${label}: the paper reading is only meaningful when the drawing does NOT cover the canvas — `
+      + `paper=${formatBox(reading.paper)} canvas=${formatBox(reading.canvas)}`,
+  ).toBe(false);
+  expect.soft(
+    reading.paperOk,
+    `${label}: the canvas paper must be transparent, match the panel, or cover the canvas — `
+      + `fill=${reading.paperFill} paper=${formatBox(reading.paper)} panel=${reading.panelBackground} `
+      + `canvas=${formatBox(reading.canvas)} covers=${String(reading.paperCoversCanvas)}`,
+  ).toBe(true);
+};
+
 test('main arm — the phone drawer, canvas paper and Focus banner read clean (390x844)', async ({ browser }) => {
   const { context, page } = await openSignedInPage(browser, baseURL, token, {
     viewport: VIEWPORT_PHONE,
@@ -5470,49 +5559,49 @@ test('main arm — the phone drawer, canvas paper and Focus banner read clean (3
     await openArchitectureTab(page, sessionId);
     await waitForDrawing(page);
     await showClassDiagram(page);
+    // The canvas-background reading is taken on the WHOLE-GRAPH fit: there the
+    // drawing does not cover the canvas, so a paper-coloured rectangle that
+    // only wraps the content is visible (it is that seam the review found).
+    await showWholeGraph(page);
+    const fitted = await readChrome(page);
+    printChrome('phone.fitted', fitted);
+    assertPaperClean(fitted, 'phone.fitted');
+    await shot(page, 'phone-fitted-paper');
 
     // Tap the LOWEST visible entity: the box the open drawer is most likely to
     // cover, so "its top edge stays visible" is a real reading rather than one
     // that happens to pass because the box was already high up.
-    const target = await page.evaluate((sel) => {
-      const host = document.querySelector(sel.host);
-      if (host === null) return null;
-      const hostRect = host.getBoundingClientRect();
-      let lowest: { x: number; y: number; id: string } | null = null;
-      for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
-        const id = node.getAttribute('data-entity-id') ?? '';
-        if (id.startsWith('grp::') || id.startsWith('stub::')) continue;
-        const text = node.querySelector('text');
-        if (text === null) continue;
-        const rect = text.getBoundingClientRect();
-        if (rect.width < 8 || rect.height < 6) continue;
-        const x = Math.round(rect.left + Math.min(rect.width / 2, 30));
-        const y = Math.round(rect.top + rect.height / 2);
-        if (x <= hostRect.left + 6 || x >= hostRect.right - 6) continue;
-        if (y <= hostRect.top + 6 || y >= hostRect.bottom - 6) continue;
-        const hit = document.elementFromPoint(x, y);
-        if (hit === null || hit.closest('[data-entity-id]') === null) continue;
-        if (lowest === null || y > lowest.y) lowest = { x, y, id };
-      }
-      return lowest;
-    }, SEL);
+    const target = await ensureVisibleEntityBox(page);
     console.log(`[architecture-layout] phone.chrome.target=${JSON.stringify(target)}`);
     expect(target, 'the drawing must offer a visible entity to tap').not.toBeNull();
     const point = target as { x: number; y: number; id: string };
 
     await page.mouse.click(point.x, point.y);
     await expect(page.locator('[data-architecture-dock-touch]')).toBeVisible({ timeout: 10_000 });
-    await settle(page, 600);
+    // Long enough for the drawer's reserved band to settle AND for the drawing's
+    // own fit pass to stop re-centring: the "box above the drawer" correction is
+    // re-asserted for a second after the drawer opens.
+    await settle(page, 1_200);
 
     const reading = await readChrome(page);
     printChrome('phone.chrome', reading);
     assertChromeClean(reading, 'phone.chrome');
     await page.screenshot({ path: test.info().outputPath('chrome-phone-drawer.png') });
+    await shot(page, 'phone-drawer');
+
+    // The drawer's own reading is complete. Close it before the Focus leg: the
+    // Adjust sheet is a bottom sheet too, and the coarse drawer (z-40, later in
+    // the DOM) covers the sheet's lower half, so the Focus toggle would not be
+    // clickable while the drawer is open. The × also clears the selection, so
+    // the banner reading is taken on a clean canvas.
+    await page.locator('[data-architecture-dock-close]').click();
+    await expect(page.locator('[data-architecture-dock-touch]')).toHaveCount(0, { timeout: 10_000 });
+    await settle(page, 500);
 
     // The Focus banner is an overlay: turning Focus on must not move the canvas'
     // top edge, and the sentence must be complete (it used to truncate to
     // "whole grap…" and to claim "(0 other package(s))").
-    const canvasTopBefore = reading.canvasTop;
+    const canvasTopBefore = (await readChrome(page)).canvasTop;
     await openControlSheet(page);
     const focusMode = page.locator('[data-architecture-readable-focus-mode]');
     expect(await focusMode.count(), 'the Adjust sheet exposes the Focus toggle').toBeGreaterThan(0);
@@ -5536,6 +5625,7 @@ test('main arm — the phone drawer, canvas paper and Focus banner read clean (3
     expect(focused.focusText ?? '', 'the sentence names the escape to the whole graph').toMatch(/whole graph/i);
     expect(focused.focusTruncated, 'the sentence must be readable in full, not truncated').toBe(false);
     await page.screenshot({ path: test.info().outputPath('chrome-phone-focus.png') });
+    await shot(page, 'phone-focus-banner');
   } finally {
     await context.close();
   }
@@ -5596,6 +5686,17 @@ test('main arm — project search rows keep the whole class name and state "not 
     await openArchitectureTab(page, sessionId);
     await waitForDrawing(page);
 
+    // The canvas-background reading is taken on the PC viewport too (the seam
+    // was reported on both), on the whole-graph fit: there the drawing does not
+    // cover the canvas, so a paper-coloured rectangle that only wraps the
+    // content is visible.
+    await showClassDiagram(page);
+    await showWholeGraph(page);
+    const pcFitted = await readChrome(page);
+    printChrome('pc.fitted', pcFitted);
+    assertPaperClean(pcFitted, 'pc.fitted');
+    await shot(page, 'pc-fitted-paper');
+
     // A stem shared by many fixture entities: the in-graph list is short (only
     // the seeded entities are drawn), so most hits come from the project index
     // and land under "Elsewhere in the project".
@@ -5609,6 +5710,7 @@ test('main arm — project search rows keep the whole class name and state "not 
 
     const reading = await readSearchRows(page);
     console.log(`[architecture-layout] search.rows=${JSON.stringify(reading)}`);
+    await shot(page, 'pc-search-rows');
     expect(reading, 'the search must draw its result list').not.toBeNull();
     const rows = (reading as SearchRowsReading).rows;
     expect(rows.length, 'the project search must list several rows').toBeGreaterThan(3);
@@ -5655,13 +5757,40 @@ test('control arm — each restored chrome defect turns its own reading red', as
     await openArchitectureTab(page, sessionId);
     await waitForDrawing(page);
     await showClassDiagram(page);
+    await showWholeGraph(page);
 
-    const candidate = await findClickableNodes(page);
-    expect(candidate.entity, 'the drawing must offer an entity to select').not.toBeNull();
-    const point = candidate.entity as GesturePoint;
+    // ── defect 3 (measured FIRST, on the whole-graph fit where the drawing does
+    // not cover the canvas): the white paper rectangle sized to the content.
+    const fitted = await readChrome(page);
+    printChrome('controlChrome.fit', fitted);
+    assertPaperClean(fitted, 'controlChrome.fit');
+    const injectedPaper = await page.evaluate(() => {
+      const rects = [...document.querySelectorAll('[data-architecture-canvas] .uml-canvas')];
+      for (const rect of rects) rect.setAttribute('fill', '#ffffff');
+      return rects.length;
+    });
+    expect(injectedPaper, 'the renderer must emit its canvas rectangle').toBeGreaterThan(0);
+    const paperDefect = await readChrome(page);
+    printChrome('controlChrome.paper', paperDefect);
+    await shot(page, 'control-white-paper');
+    expect(
+      paperDefect.paperOk,
+      `control: an opaque paper rectangle sized to the content must read red — fill=${paperDefect.paperFill} `
+        + `paper=${formatBox(paperDefect.paper)} panel=${paperDefect.panelBackground} canvas=${formatBox(paperDefect.canvas)}`,
+    ).toBe(false);
+    await page.evaluate(() => {
+      for (const rect of document.querySelectorAll('[data-architecture-canvas] .uml-canvas')) rect.setAttribute('fill', 'none');
+    });
+    assertPaperClean(await readChrome(page), 'controlChrome.paper.restored');
+
+    // ── the selection the other three arms need. Zooming in until entity boxes
+    // are drawn is the reader's own way out of the package-only tier.
+    const candidate = await ensureVisibleEntityBox(page);
+    expect(candidate, 'the drawing must offer a visible entity to select').not.toBeNull();
+    const point = candidate as GesturePoint;
     await page.mouse.click(point.x, point.y);
     await expect(page.locator('[data-architecture-dock-touch]')).toBeVisible({ timeout: 10_000 });
-    await settle(page, 600);
+    await settle(page, 1_200);
 
     const baseline = await readChrome(page);
     printChrome('controlChrome.baseline', baseline);
@@ -5718,28 +5847,14 @@ test('control arm — each restored chrome defect turns its own reading red', as
     });
     assertChromeClean(await readChrome(page), 'controlChrome.close.restored');
 
-    // ── defect 3: the white paper rectangle sized to the content (the shipped
-    // `.uml-canvas` fill).
-    const injectedPaper = await page.evaluate(() => {
-      const rects = [...document.querySelectorAll('[data-architecture-canvas] .uml-canvas')];
-      for (const rect of rects) rect.setAttribute('fill', '#ffffff');
-      return rects.length;
-    });
-    expect(injectedPaper, 'the renderer must emit its canvas rectangle').toBeGreaterThan(0);
-    const paperDefect = await readChrome(page);
-    printChrome('controlChrome.paper', paperDefect);
-    expect(
-      paperDefect.paperOk,
-      `control: an opaque paper rectangle sized to the content must read red — fill=${paperDefect.paperFill} `
-        + `paper=${formatBox(paperDefect.paper)} panel=${paperDefect.panelBackground} canvas=${formatBox(paperDefect.canvas)}`,
-    ).toBe(false);
-    await page.evaluate(() => {
-      for (const rect of document.querySelectorAll('[data-architecture-canvas] .uml-canvas')) rect.setAttribute('fill', 'none');
-    });
-    assertChromeClean(await readChrome(page), 'controlChrome.paper.restored');
-
+    // ── defect 3 has already been measured on the fit state above.
     // ── defect 4: the Focus banner drawn IN FLOW above the canvas (the shipped
-    // row that pushed the drawing down when Focus was pressed).
+    // row that pushed the drawing down when Focus was pressed). The drawer's
+    // readings are complete, so close it first: it sits above the Adjust
+    // sheet's lower half, which is where the Focus toggle lives.
+    await page.locator('[data-architecture-dock-close]').click();
+    await expect(page.locator('[data-architecture-dock-touch]')).toHaveCount(0, { timeout: 10_000 });
+    await settle(page, 500);
     await openControlSheet(page);
     const focusMode = page.locator('[data-architecture-readable-focus-mode]');
     await focusMode.first().click();
@@ -5759,7 +5874,9 @@ test('control arm — each restored chrome defect turns its own reading red', as
       const row = document.createElement('div');
       row.setAttribute('data-architecture-injected-banner', 'true');
       row.textContent = 'Readable zoom is on — choose Overview to see the whole graph.';
-      row.style.height = '32px';
+      // Taller than the existing compact readout row (44px targets), so the row
+      // really grows — the shipped defect added a line of text to it.
+      row.style.height = '80px';
       row.style.flexShrink = '0';
       header.appendChild(row);
       return true;
@@ -5768,6 +5885,7 @@ test('control arm — each restored chrome defect turns its own reading red', as
     await settle(page, 300);
     const bannerDefect = await readChrome(page);
     printChrome('controlChrome.banner.inFlow', bannerDefect);
+    await shot(page, 'control-inflow-banner');
     expect(
       bannerDefect.canvasTop,
       `control: an in-flow banner must push the canvas down — canvas.top ${String(overlay.canvasTop)} -> ${String(bannerDefect.canvasTop)}`,

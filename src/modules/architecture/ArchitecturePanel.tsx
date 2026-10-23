@@ -2583,10 +2583,10 @@ export default function ArchitecturePanel({
                           {!inCurrentGraph && (
                             <button
                               type="button"
-                              aria-label={t('architecture.search.showNamed', {
-                                defaultValue: 'Show {{name}} in the graph',
-                                name: hit.name,
-                              })}
+                              // The visible label stays "Show it"; the accessible
+                              // name adds WHICH entity, reusing the same key (no
+                              // new i18n entry for a sentence no locale owns).
+                              aria-label={`${t('architecture.search.showIt', { defaultValue: 'Show it' })}: ${hit.name}`}
                               data-architecture-search-show={hit.id}
                               // Pinning is what "show it" means for a server-side
                               // hidden entity: the next reading carries it.

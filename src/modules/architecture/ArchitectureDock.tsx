@@ -84,7 +84,7 @@ type DrawerSnap = keyof typeof DRAWER_HEIGHTS;
  * browser paints. `viewportHeight` is `window.innerHeight`, the same basis
  * `vh` uses.
  */
-export function touchDrawerHeightPx(snap: DrawerSnap, viewportHeight: number): number {
+function touchDrawerHeightPx(snap: DrawerSnap, viewportHeight: number): number {
   if (snap === 'collapsed') return 96;
   const ratio = snap === 'half' ? 0.45 : 0.92;
   return Math.round(viewportHeight * ratio);

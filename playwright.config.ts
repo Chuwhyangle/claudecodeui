@@ -417,6 +417,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // whole invocation is `21 passed (5.1m)` and the `--grep "control arm"`
   // selection is `12 passed (2.0m)`. The two new cases are 34.5 s and 32.5 s of
   // that. 660_000 restores the ~2.1x headroom over the whole-file reading.
+  // Re-measured 2026-10-23 with the chrome/drawer/paper/banner legs (the phone
+  // drawer arm, the PC project-search arm, and the one control arm carrying the
+  // four injected chrome defects): the whole invocation is `24 passed (5.4m)`
+  // and the `--grep "control arm"` selection is `13 passed (2.0m)`; the three
+  // new cases took 10.9 s, 6.8 s and 11.4 s of that. 660_000 still clears the
+  // 5.4m reading ~2.0x.
   'architecture-canvas-layout.spec.ts': 660_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
