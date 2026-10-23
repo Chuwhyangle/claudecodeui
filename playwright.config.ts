@@ -564,6 +564,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // measurement ~7x with room for a load-slowed fan-in run, rather than leaving the file to the
   // 55 s single-file default.
   'cockpit-visual.spec.ts': 120_000,
+  // The phone remote driving the desktop stage: two cases, each opening two real browser
+  // contexts (a desktop stage and a phone remote) against one hub. The main arm waits for the
+  // display's visible-set report, presses the phone's direction pad, then submits a phrase and
+  // waits for the desktop's view to follow; the control arm mints a second user's token against
+  // the run's own database and asserts that user's remote moves only its own hub. MEASURED
+  // 2026-10-23 on this worktree: `2 passed (17.2s–19.7s)` across runs for the whole
+  // invocation — config evaluation, both servers and the browser launches included. 240_000 is the sibling
+  // interaction-heavy entries' value and clears that measurement with room for a load-slowed
+  // fan-in run, rather than leaving the file to the 55 s single-file default.
+  'cockpit-remote.spec.ts': 240_000,
 };
 
 /**
