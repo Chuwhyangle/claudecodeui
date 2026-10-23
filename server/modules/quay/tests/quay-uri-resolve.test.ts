@@ -16,6 +16,7 @@ import {
   QUAY_FLEET_BIN_ENV,
   type QuayFleetL1,
   type QuayFleetL2,
+  type QuayFleetSummaryReading,
   type QuayFleetWallReader,
   type QuayUriSnapshotTasks,
 } from '../quay-uri-resolve.js';
@@ -356,6 +357,98 @@ test('fallback reason reader-unavailable: a configured-but-failing read port is 
   assert.equal(summarized.reason, 'reader-unavailable');
 });
 
+test('fallback reason project-not-registered: the fleet answered and refused the PROJECT', async () => {
+  // `wall resolve` is pure parsing, so the fleet supplies L1 for any project segment; the
+  // refusal only appears on `wall summary`, and it is about the workspace, not the reader.
+  const unregisteredFleet: QuayFleetWallReader = {
+    async resolve(uri: string): Promise<QuayFleetL1 | null> {
+      return { uri, type: 'task', label: 'T-77', actions: V0_ACTIONS.task };
+    },
+    async summary(uri: string): Promise<QuayFleetSummaryReading | null> {
+      return { state: 'project-not-registered', uri };
+    },
+  };
+  const snapshot: QuayUriSnapshotTasks = {
+    tasks: {
+      total: 1,
+      byStatus: { ready: 1 },
+      ready: 1,
+      needsHuman: 0,
+      done: 0,
+      recent: [
+        { id: 'T-77', title: '未登记项目里的任务', status: 'ready', updatedAt: '2026-10-23T03:00:00.000Z' },
+      ],
+    },
+  };
+  const resolver = createQuayUriResolver({
+    fleetWallReader: unregisteredFleet,
+    // The join knows the project but has no root for it, so no `--root` override is sent and
+    // the URI's segment alone selects the workspace — the branch that can reach the refusal.
+    resolveFleetProject: async (segment) =>
+      segment === FLEET_PROJECT_ID ? { root: '', projectId: CLOUD_PROJECT_ID } : null,
+    readSnapshot: async () => snapshot,
+    warn: () => {},
+  });
+
+  const unregisteredUri = `quay://${FLEET_PROJECT_ID}/task/T-77`;
+  const resolved = await resolver.resolve(unregisteredUri);
+  assert.equal(resolved.ok, true);
+  if (!resolved.ok) return;
+  assert.equal(resolved.source, 'snapshot-fallback');
+  // The refusal is named as itself, NOT as a broken reader.
+  assert.equal(resolved.reason, 'project-not-registered');
+  // The fleet's L1 survived: the refusal is about L2's workspace, not about the reference.
+  assert.deepEqual(resolved.actions, V0_ACTIONS.task);
+  assert.equal(resolved.type, 'task');
+  assert.equal(resolved.task?.title, '未登记项目里的任务');
+
+  const summarized = await resolver.summary(unregisteredUri);
+  assert.equal(summarized.ok, true);
+  if (!summarized.ok) return;
+  assert.equal(summarized.state, 'absent');
+  assert.equal(summarized.source, 'snapshot-fallback');
+  assert.equal(summarized.reason, 'project-not-registered');
+});
+
+test('project-not-registered reaches the resolver through the REAL CLI reader', async () => {
+  // End to end over a child process: `wall resolve` answers L1 on stdout, `wall summary`
+  // refuses with the fleet's own stderr line and a non-zero exit. This is the shape the
+  // production reader sees, so it pins the stderr parsing to the resolver's reason.
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quay-fleet-refusal-'));
+  const binaryPath = path.join(directory, 'fleet.sh');
+  fs.writeFileSync(
+    binaryPath,
+    "#!/bin/sh\n" +
+      'if [ "$2" = resolve ]; then\n' +
+      `  echo '${JSON.stringify({ ok: true, uri: TASK_URI, type: 'task', label: 'T-42', actions: ['read', 'check'] })}'\n` +
+      '  exit 0\n' +
+      'fi\n' +
+      "echo 'quay-fleet: wall summary: project-not-registered — project '\\''claudecodeui'\\'' is not registered in /home/.quay-fleet/registry.json and no --root was given' >&2\n" +
+      'exit 2\n',
+  );
+  fs.chmodSync(binaryPath, 0o755);
+
+  try {
+    const fleet = createQuayFleetCliWallReader({ binaryPath, timeoutMs: 5_000 });
+    assert.ok(fleet !== null);
+    const resolver = createQuayUriResolver({
+      fleetWallReader: fleet,
+      resolveFleetProject: async (segment) =>
+        segment === FLEET_PROJECT_ID ? { root: '', projectId: CLOUD_PROJECT_ID } : null,
+      readSnapshot: async () => SNAPSHOT,
+      warn: () => {},
+    });
+
+    const resolved = await resolver.resolve(TASK_URI);
+    assert.equal(resolved.ok, true);
+    if (!resolved.ok) return;
+    assert.equal(resolved.reason, 'project-not-registered');
+    assert.deepEqual(resolved.actions, ['read', 'check']);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('the fleet read port is the CLI: missing/non-zero/unparseable output all read unavailable', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'quay-fleet-reader-'));
   const writeExecutable = (name: string, body: string): string => {
@@ -389,6 +482,35 @@ test('the fleet read port is the CLI: missing/non-zero/unparseable output all re
       );
       assert.equal(await reader.summary(`quay://${FLEET_PROJECT_ID}/task/T-1`, PROJECT_ROOT), null);
     }
+
+    // quay-fleet's REFUSAL of an unregistered project: the read port answered (it is the
+    // registry that has no row), so this is a reading, not an unreadable port. The reason is
+    // read from stderr exactly as the real CLI prints it, with the usage text after it.
+    const unregistered = writeExecutable(
+      'project-not-registered.sh',
+      "#!/bin/sh\n" +
+        "echo 'quay-fleet: wall summary: project-not-registered — project '\\''never-registered'\\'' is not registered in /home/.quay-fleet/registry.json and no --root was given' >&2\n" +
+        "echo 'usage: quay-fleet wall resolve <uri> [--json]' >&2\n" +
+        'exit 2\n',
+    );
+    const unregisteredReader = createQuayFleetCliWallReader({ binaryPath: unregistered, timeoutMs: 2_000 });
+    assert.ok(unregisteredReader !== null);
+    assert.deepEqual(
+      await unregisteredReader.summary(`quay://never-registered/task/T-1`, null),
+      { state: 'project-not-registered', uri: `quay://never-registered/task/T-1` },
+    );
+
+    // Every OTHER refusal reason stays the unavailable reading: the fleet named a reason this
+    // side cannot turn into a workspace fact, so nothing about the project was read.
+    const otherReason = writeExecutable(
+      'other-refusal.sh',
+      "#!/bin/sh\n" +
+        "echo 'quay-fleet: wall summary: registry-unreadable — the registry at /home/.quay-fleet/registry.json is unreadable: EACCES' >&2\n" +
+        'exit 2\n',
+    );
+    const otherReader = createQuayFleetCliWallReader({ binaryPath: otherReason, timeoutMs: 2_000 });
+    assert.ok(otherReader !== null);
+    assert.equal(await otherReader.summary(`quay://${FLEET_PROJECT_ID}/task/T-1`, null), null);
 
     const reader = createQuayFleetCliWallReader({ binaryPath: good, timeoutMs: 2_000 });
     assert.ok(reader !== null);

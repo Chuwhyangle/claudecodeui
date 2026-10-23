@@ -19,7 +19,9 @@ import type { QuayTaskCounts } from '@/shared/types.js';
  *    (`quay://<project>/…`) the wall mints, because that is the only form the fleet parses.
  *    When that read port is unavailable, a TASK reference
  *    falls back to the snapshot CloudCLI already reads for the Quay panel, which is honest
- *    stored data — never a summary generated on the spot.
+ *    stored data — never a summary generated on the spot. `wall resolve` never consults the
+ *    registry, so the fleet's `project-not-registered` refusal can only arrive from
+ *    `wall summary`; it is read as its own fallback reason rather than as a broken reader.
  *
  * STORED, NOT GENERATED. The L2 read path has no generator argument and never synthesises a
  * summary; a missing ledger row is reported as `absent`. The snapshot fallback likewise
@@ -193,11 +195,31 @@ export type QuayFleetL2 =
   | { state: 'absent'; uri: string };
 
 /**
+ * The fleet's own refusal of a `wall summary` invocation that is a fact about the WORKSPACE,
+ * not about the read port.
+ *
+ * `project-not-registered` — the fleet is up and answered, and it refuses to open any carrier
+ * because no `registry.json` row joins the URI's project segment to a workspace root (and no
+ * `--root` was given). That refusal is a real reading of the fleet's registry; reporting it
+ * as an unreadable read port would blame the reader for an honest「这个项目没登记」.
+ */
+export type QuayFleetSummaryRefusal = { state: 'project-not-registered'; uri: string };
+
+/**
+ * What one `wall summary` call read: an L2 document, a workspace refusal, or — through the
+ * reader's `null` — nothing at all.
+ */
+export type QuayFleetSummaryReading = QuayFleetL2 | QuayFleetSummaryRefusal;
+
+/**
  * The fleet side of the wall (quay-fleet's `wall resolve` / `wall summary` read port).
  *
  * Both methods return `null` — never throw — when the port cannot be read: no binary is
  * configured, the child failed or timed out, or its document was unreadable. `null` is the
  * single "unavailable" reading that lets the resolver choose the snapshot fallback.
+ *
+ * `summary` has one more outcome: {@link QuayFleetSummaryRefusal}, for a non-zero exit whose
+ * stated reason is a workspace fact. A non-zero exit for any other reason stays `null`.
  *
  * URIs are handed over in the wall's canonical project-scoped form (`quay://<project>/…`),
  * which is also the only form the fleet parses. `summary` additionally takes an OPTIONAL
@@ -206,19 +228,30 @@ export type QuayFleetL2 =
  */
 export type QuayFleetWallReader = {
   resolve(uri: string): Promise<QuayFleetL1 | null>;
-  summary(uri: string, projectRoot: string | null): Promise<QuayFleetL2 | null>;
+  summary(uri: string, projectRoot: string | null): Promise<QuayFleetSummaryReading | null>;
 };
 
 /** The environment variable naming the fleet CLI a deployment wants the server to call. */
 export const QUAY_FLEET_BIN_ENV = 'QUAY_FLEET_BIN';
 
-/** One call to the fleet CLI, normalized so the reader never sees child-process internals. */
-type FleetCommandResult = { ok: boolean; stdout: string };
+/**
+ * One call to the fleet CLI, normalized so the reader never sees child-process internals.
+ * `stderr` is kept because a REFUSED invocation states its reason there (see
+ * {@link readFleetSummaryRefusal}); it is only ever read when `ok` is false.
+ */
+type FleetCommandResult = { ok: boolean; stdout: string; stderr: string };
+
+/**
+ * How much of a failing child's stderr is kept. The reason this module reads is the first
+ * line; the usage text quay-fleet appends after it is tens of kilobytes and is not a reading.
+ * Bounding the buffer keeps a misbehaving child from growing the server's heap.
+ */
+const STDERR_CAPTURE_LIMIT = 8 * 1024;
 
 /**
  * Runs the fleet CLI once with a hard wall-clock bound. It never rejects: a missing binary,
- * a timeout and a non-zero exit all read `ok: false`, which the caller maps to `null`
- * (the snapshot fallback) rather than surfacing a process error the panel cannot act on.
+ * a timeout and a non-zero exit all read `ok: false`. The caller decides whether that failure
+ * means "the read port is unavailable" (`null`) or carries a reason of its own.
  */
 function runFleetCommand(binaryPath: string, args: readonly string[], timeoutMs: number): Promise<FleetCommandResult> {
   return new Promise((resolve) => {
@@ -235,13 +268,13 @@ function runFleetCommand(binaryPath: string, args: readonly string[], timeoutMs:
     try {
       child = spawn(binaryPath, [...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     } catch {
-      settle({ ok: false, stdout: '' });
+      settle({ ok: false, stdout: '', stderr: '' });
       return;
     }
 
     timer = setTimeout(() => {
       child.kill('SIGKILL');
-      settle({ ok: false, stdout: '' });
+      settle({ ok: false, stdout: '', stderr: '' });
     }, timeoutMs);
 
     let stdout = '';
@@ -249,11 +282,14 @@ function runFleetCommand(binaryPath: string, args: readonly string[], timeoutMs:
     child.stdout?.on('data', (chunk: string) => {
       stdout += chunk;
     });
-    // stderr is drained so a chatty child cannot block on a full pipe; its content is not
-    // a reading this module reports — the exit code already says the call failed.
-    child.stderr?.resume();
-    child.on('error', () => settle({ ok: false, stdout: '' }));
-    child.on('close', (code) => settle({ ok: code === 0, stdout }));
+    let stderr = '';
+    child.stderr?.setEncoding('utf8');
+    child.stderr?.on('data', (chunk: string) => {
+      // Drained even past the cap, so a chatty child cannot block on a full pipe.
+      if (stderr.length < STDERR_CAPTURE_LIMIT) stderr += chunk;
+    });
+    child.on('error', () => settle({ ok: false, stdout: '', stderr: '' }));
+    child.on('close', (code) => settle({ ok: code === 0, stdout, stderr }));
   });
 }
 
@@ -300,6 +336,22 @@ function readFleetL1(value: unknown): QuayFleetL1 | null {
   return { uri, type, label, actions, ...(fragment === undefined ? {} : { fragment }) };
 }
 
+/**
+ * The fleet's stable reason token for a REFUSED `wall summary`, read from the child's stderr.
+ *
+ * quay-fleet prints a refused invocation as `quay-fleet: wall summary: <reason> — <detail>`
+ * and exits non-zero; `<detail>` and the usage text that follows never repeat the reason, so
+ * anchoring to that line matches the reason and nothing else. Only `project-not-registered`
+ * is a workspace fact worth a reading of its own — `root-not-a-directory`,
+ * `registry-unreadable` and every other reason stay `null`, because for them the fleet could
+ * not read a carrier at all.
+ */
+function readFleetSummaryRefusal(stderr: string): 'project-not-registered' | null {
+  return /^quay-fleet: wall summary: project-not-registered(?:\s|$)/m.test(stderr)
+    ? 'project-not-registered'
+    : null;
+}
+
 /** Reads one L2 document, or `null` when it does not carry the contract's shape. */
 function readFleetL2(value: unknown): QuayFleetL2 | null {
   const record = asRecord(value);
@@ -338,13 +390,18 @@ export function createQuayFleetCliWallReader(options: {
       const result = await runFleetCommand(binaryPath, ['wall', 'resolve', uri, '--json'], options.timeoutMs);
       return result.ok ? readFleetL1(parseFleetJson(result.stdout)) : null;
     },
-    async summary(uri: string, projectRoot: string | null): Promise<QuayFleetL2 | null> {
+    async summary(uri: string, projectRoot: string | null): Promise<QuayFleetSummaryReading | null> {
       // `--root` is an OPTIONAL override on the fleet side: without it the URI's project
       // segment is resolved through the fleet registry, which is the authority. The override
       // is only added when the caller has a root to pin (worktree / test), never guessed.
       const args = ['wall', 'summary', uri, ...(projectRoot === null ? [] : ['--root', projectRoot]), '--json'];
       const result = await runFleetCommand(binaryPath, args, options.timeoutMs);
-      return result.ok ? readFleetL2(parseFleetJson(result.stdout)) : null;
+      if (result.ok) return readFleetL2(parseFleetJson(result.stdout));
+      // A non-zero exit normally means "the read port is unavailable", but the fleet also
+      // refuses an UNREGISTERED project from a working read port. Its stated reason is what
+      // separates the two; the exit code alone cannot.
+      const refusal = readFleetSummaryRefusal(result.stderr);
+      return refusal === null ? null : { state: refusal, uri };
     },
   };
 }
@@ -378,16 +435,20 @@ export type QuayUriErrorCode =
 export type QuayUriSource = 'fleet' | 'snapshot-fallback';
 
 /**
- * Why the snapshot answered instead of the fleet. The two are different facts and the
+ * Why the snapshot answered instead of the fleet. The three are different facts and the
  * caller acts differently on each:
  *
  * - `no-summary` — the fleet READ PORT IS UP but its write path has stored no L2 row for
  *   this reference (today that is every reference: the fleet's write path is not wired into
  *   the observe loop yet). That is not a reader failure.
- * - `reader-unavailable` — the fleet CLI is absent, exited non-zero, timed out, or printed
- *   something that is not the read port's document. Nothing about the fleet could be read.
+ * - `project-not-registered` — the fleet READ PORT IS UP and refused the read as a workspace
+ *   fact: no registry row joins the reference's project segment to a root. The project is
+ *   unknown to the fleet; that is not the same fact as an unreadable reader.
+ * - `reader-unavailable` — the fleet CLI is absent, exited non-zero for any other reason,
+ *   timed out, or printed something that is not the read port's document. Nothing about the
+ *   fleet could be read.
  */
-export type QuayUriFallbackReason = 'no-summary' | 'reader-unavailable';
+export type QuayUriFallbackReason = 'no-summary' | 'project-not-registered' | 'reader-unavailable';
 
 /** A resolved L1 reference. */
 export type QuayUriResolveSuccess = {
@@ -506,9 +567,12 @@ function findSnapshotTask(
  *    task fields, `actions: []` (no enum was read), reason `reader-unavailable`;
  *  - L1 readable, L2 `absent` (the fleet's write path has stored no row) → the fleet's own
  *    type/actions/fragment are kept and the snapshot supplies the task fields, reason
- *    `no-summary`.
+ *    `no-summary`;
+ *  - L1 readable, L2 refused with `project-not-registered` → the same keeping of the fleet's
+ *    L1, reason `project-not-registered`: the fleet is up and named the workspace it does not
+ *    know, which is not a reader failure.
  *
- * Neither path generates an L2 summary.
+ * None of these paths generates an L2 summary.
  */
 export function createQuayUriResolver(dependencies: QuayUriResolveDependencies): QuayUriResolver {
   const warn = dependencies.warn ?? ((message: string) => console.warn(message));
@@ -647,7 +711,11 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
       address,
       project,
       canonical,
-      reading === null ? 'reader-unavailable' : 'no-summary',
+      reading === null
+        ? 'reader-unavailable'
+        : reading.state === 'project-not-registered'
+          ? 'project-not-registered'
+          : 'no-summary',
       reference,
     );
   };
@@ -678,6 +746,9 @@ export function createQuayUriResolver(dependencies: QuayUriResolveDependencies):
 
     const reading = await fleet.summary(canonical, summaryRootFor(address, project));
     if (reading === null) return fallbackAbsent('reader-unavailable');
+    // The fleet answered and refused the project, not the read: a workspace fact, reported
+    // as itself rather than as a broken reader.
+    if (reading.state === 'project-not-registered') return fallbackAbsent('project-not-registered');
 
     if (reading.state === 'absent') {
       // A stored-miss is NOT a reader failure: the fleet answered, it just has no row yet.
