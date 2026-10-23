@@ -1,7 +1,7 @@
 ---
 id: architecture-send-selection-to-chat-entry-points
 title: 选中实体发到会话：Inspector、右键菜单、悬浮条、Text 面板四个入口，消息用项目显示名与关系行
-status: ready
+status: done
 labels:
   - feature
 parent: null
