@@ -1,7 +1,7 @@
 ---
 id: cockpit-push-to-talk-and-focus-routing
 title: 驾驶舱 2/2：按住说话 + 焦点路由到项目目标会话（预览后确认发送）
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
