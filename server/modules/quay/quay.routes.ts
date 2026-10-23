@@ -16,11 +16,39 @@ import express from 'express';
 
 import { asyncHandler } from '@/shared/utils.js';
 
+import type { QuayUriErrorCode } from './quay-uri-resolve.js';
 import type { createQuayService } from './quay.service.js';
 
 type QuayRouterDependencies = {
   quayService: ReturnType<typeof createQuayService>;
 };
+
+/**
+ * Maps a dereference failure code to its transport status. The resolver returns failures as
+ * VALUES (never throws), so the only 5xx here is the honest "the fleet read port is down and
+ * this reference has no fallback" — an invalid or unknown reference is a 400, never a 500.
+ */
+function uriErrorStatus(code: QuayUriErrorCode): number {
+  switch (code) {
+    case 'not-a-quay-uri':
+    case 'missing-project':
+    case 'unknown-type':
+    case 'empty-id':
+    case 'malformed':
+      return 400;
+    case 'project-not-found':
+    case 'task-not-found':
+      return 404;
+    case 'fleet-unavailable':
+    case 'snapshot-unavailable':
+      return 503;
+  }
+}
+
+/** The `uri` query parameter, or `''` when it is absent or repeated. */
+function readUriQuery(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
 
 /** Creates the read-only Quay routes; mounted by the server entrypoint behind auth. */
 export function createQuayRouter(dependencies: QuayRouterDependencies): express.Router {
@@ -36,6 +64,42 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
       // the per-project TTL and the concurrency ceiling; the route only relays it.
       const summary = await quayService.getFleetSummary();
       return res.json(summary);
+    }),
+  );
+
+  // The wall's dereference entry points. `uri` must arrive as one query value (a `#ac-<n>`
+  // fragment has to be percent-encoded as `%23`, since a real URL fragment never reaches the
+  // server). The route only validates the transport and maps the service's value-result;
+  // every read and every fallback decision lives in the service.
+  router.get(
+    '/resolve',
+    asyncHandler(async (req, res) => {
+      const uri = readUriQuery(req.query.uri);
+      if (uri === '') {
+        return res.status(400).json({
+          ok: false,
+          error: { code: 'missing-uri', message: 'the `uri` query parameter is required' },
+        });
+      }
+
+      const result = await quayService.resolveQuayUri(uri);
+      return res.status(result.ok ? 200 : uriErrorStatus(result.error.code)).json(result);
+    }),
+  );
+
+  router.get(
+    '/summary',
+    asyncHandler(async (req, res) => {
+      const uri = readUriQuery(req.query.uri);
+      if (uri === '') {
+        return res.status(400).json({
+          ok: false,
+          error: { code: 'missing-uri', message: 'the `uri` query parameter is required' },
+        });
+      }
+
+      const result = await quayService.getQuayUriSummary(uri);
+      return res.status(result.ok ? 200 : uriErrorStatus(result.error.code)).json(result);
     }),
   );
 

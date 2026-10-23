@@ -1,7 +1,7 @@
 ---
 id: quay-wall-uri-dereference-with-snapshot-fallback
 title: 墙 C 片：quay:// 引用解引用（fleet L1/L2 读口主路径 + snapshot 回落）
-status: ready
+status: done
 labels:
   - wall
   - contract

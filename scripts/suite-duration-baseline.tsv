@@ -173,7 +173,12 @@
 #   a time on 2026-10-21 with
 #   `npx tsx --tsconfig server/tsconfig.json --test server/modules/architecture/tests/architecture-routes.test.ts`
 #   (its own new criterion; no green round contains it yet — the row also keeps the 90% coverage
-#   floor green now that the tree collects 395 server test files).
+#   floor green now that the tree collects 395 server test files),
+#   and the quay-uri-resolve row by quay-wall-uri-dereference-with-snapshot-fallback, measured one
+#   file at a time on 2026-10-23 with
+#   `bash scripts/test.sh server/modules/quay/tests/quay-uri-resolve.test.ts` (dur=1909ms; its own
+#   new criterion; no green round contains it yet — the row also keeps the 90% coverage floor green
+#   now that the tree collects 403 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -536,3 +541,4 @@
 2700	server/modules/voice/tests/voice-provider-cycle.test.ts
 2000	server/modules/projects/tests/projects-session-fetch-cycle.test.ts
 2200	server/modules/providers/tests/providers-websocket-cycle.test.ts
+1909	server/modules/quay/tests/quay-uri-resolve.test.ts
