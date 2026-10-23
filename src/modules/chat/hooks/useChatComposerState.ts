@@ -34,6 +34,7 @@ import { applyVoiceChange, beginVoiceInsertion } from '@/modules/chat/utils/voic
 import type { VoiceInsertion } from '@/modules/chat/utils/voice/voiceInsertion';
 import { useFileMentions } from '@/modules/chat/hooks/useFileMentions';
 import { useInputHistory } from '@/modules/chat/hooks/useInputHistory';
+import { useInputSuggestions } from '@/modules/chat/hooks/useInputSuggestions';
 import { useSendOnEnter } from '@/modules/chat/hooks/useSendOnEnter';
 import { useSlashCommands } from '@/modules/chat/hooks/useSlashCommands';
 import { findSessionHostState, findSessionOccupancy, useSessionHosts } from '@/shared/hooks/useSessionHosts';
@@ -410,6 +411,18 @@ export function useChatComposerState({
     };
   }, []);
 
+  /**
+   * True while an IME composition owns the Enter key. It reads the live flag and
+   * the same short post-composition window the Enter branch uses, because Safari
+   * fires `compositionend` before the confirming keydown.
+   */
+  const isImeComposing = useCallback(
+    () =>
+      isComposingRef.current
+      || performance.now() - lastCompositionEndAtRef.current < SAFARI_IME_RACE_WINDOW_MS,
+    [],
+  );
+
   const setInput = useCallback<Dispatch<SetStateAction<string>>>((next) => {
     setInputState((previous) => ({
       scope: draftScopeRef.current,
@@ -431,6 +444,20 @@ export function useChatComposerState({
     textareaRef,
     scope: draftScope,
   });
+  // An accepted chip is filled into the draft, not sent: the same pair of stores
+  // a send reads is written so the very next Enter submits the new text rather
+  // than a stale value. The caret goes to the end so the user can extend it.
+  const acceptSuggestion = useCallback((text: string) => {
+    setInputFromHistory(text);
+    requestAnimationFrame(() => {
+      const textarea = textareaRef.current;
+      if (!textarea) {
+        return;
+      }
+      textarea.focus();
+      textarea.setSelectionRange(text.length, text.length);
+    });
+  }, [setInputFromHistory]);
 
   const [queuedDraft, setQueuedDraft] = useState<QueuedDraft | null>(() => {
     if (typeof window === 'undefined' || !sessionKey) {
@@ -664,6 +691,30 @@ export function useChatComposerState({
     input,
     setInput,
     textareaRef,
+  });
+
+  // Empty-box suggestion chips. Every display condition the proposal names is
+  // read here — the same values the composer itself paints from — and the hook
+  // owns selection, the Esc round, the adoption counters and the Tab/Enter/Esc
+  // semantics. It is called after the menu hooks because those decide two of the
+  // conditions.
+  const {
+    candidates: inputSuggestionCandidates,
+    selectedIndex: selectedInputSuggestionIndex,
+    listId: inputSuggestionListId,
+    visible: inputSuggestionsVisible,
+    accept: acceptInputSuggestion,
+    handleKeyDown: handleInputSuggestionsKeyDown,
+  } = useInputSuggestions({
+    input,
+    isLoading,
+    isOccupied: Boolean(findSessionOccupancy(hostsSnapshot, sessionKey)),
+    isCommandMenuOpen: showCommandMenu,
+    isFileMenuOpen: showFileDropdown,
+    hasQueuedDraft: queuedDraft !== null,
+    hasAttachments: attachedFiles.length > 0,
+    draftScope,
+    onAccept: acceptSuggestion,
   });
 
   const syncInputOverlayScroll = useCallback((target: HTMLTextAreaElement) => {
@@ -1487,6 +1538,14 @@ export function useChatComposerState({
         return;
       }
 
+      // Suggestion chips sit between history recall and the existing Tab/Enter
+      // branches: they own Tab only while visible (falling through, un-consumed,
+      // once the selection walks past an end) and Enter only while a chip is
+      // selected. A composition's Enter is never an acceptance.
+      if (handleInputSuggestionsKeyDown(event, event.nativeEvent.isComposing || isImeComposing())) {
+        return;
+      }
+
       if (event.key === 'Tab' && !showFileDropdown && !showCommandMenu) {
         event.preventDefault();
         cyclePermissionMode();
@@ -1519,6 +1578,8 @@ export function useChatComposerState({
       handleCommandMenuKeyDown,
       handleFileMentionsKeyDown,
       handleHistoryKeyDown,
+      handleInputSuggestionsKeyDown,
+      isImeComposing,
       sendOnEnter,
       showCommandMenu,
       showFileDropdown,
@@ -1667,6 +1728,11 @@ export function useChatComposerState({
     attachedFiles,
     setAttachedFiles,
     fileErrors,
+    inputSuggestionCandidates,
+    inputSuggestionsVisible,
+    selectedInputSuggestionIndex,
+    inputSuggestionListId,
+    acceptInputSuggestion,
     getRootProps,
     getInputProps,
     isDragActive,

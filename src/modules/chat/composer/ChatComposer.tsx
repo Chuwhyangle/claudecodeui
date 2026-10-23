@@ -47,6 +47,8 @@ import { ScheduledMessageList } from '@/modules/chat/composer/ScheduledMessageLi
 import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import ComposerPermissionMenu from '@/modules/chat/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMenu';
+import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
+import { suggestionOptionId } from '@/modules/chat/utils/inputSuggestions';
 
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
 const RELEASE_COPIED_NOTICE_MS = 1500;
@@ -216,6 +218,23 @@ type ChatComposerProps = {
   placeholder: string;
   isTextareaExpanded: boolean;
   sendByCtrlEnter?: boolean;
+  /**
+   * Ranked empty-box suggestion labels from `useInputSuggestions`. Optional so
+   * the standalone renders in tests keep working; absent means "no chips".
+   */
+  inputSuggestionCandidates?: string[];
+  /**
+   * True only while every display condition holds (empty box, idle assistant, no
+   * menu, no queued draft or attachment, not occupied, not hidden this round).
+   * The candidates may be non-empty while this is false — the box just has text.
+   */
+  inputSuggestionsVisible?: boolean;
+  /** The chip the keyboard is on, or null. Mirrored into aria-activedescendant. */
+  selectedInputSuggestionIndex?: number | null;
+  /** Listbox id from the state hook; also prefixes each option id. */
+  inputSuggestionListId?: string;
+  /** Fills the draft with the chip's text; never sends. */
+  onAcceptInputSuggestion?: (index: number) => void;
 };
 
 /**
@@ -300,6 +319,11 @@ export default function ChatComposer({
   placeholder,
   isTextareaExpanded,
   sendByCtrlEnter,
+  inputSuggestionCandidates = [],
+  inputSuggestionsVisible = false,
+  selectedInputSuggestionIndex = null,
+  inputSuggestionListId = '',
+  onAcceptInputSuggestion,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   /*
@@ -561,6 +585,10 @@ export default function ChatComposer({
     : t(composerDock.stopReasonKey, { defaultValue: 'Stop is unavailable while the server is unreachable' });
 
   const hasQueuedDraft = Boolean(queuedDraft);
+  // The chips occupy the textarea's one empty line. While they are on screen the
+  // placeholder is blank so the two are not drawn over each other; the chips
+  // themselves are absolutely positioned and add no row.
+  const showSuggestionChips = inputSuggestionsVisible && inputSuggestionCandidates.length > 0;
   const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
   // The same button press, two different outcomes. For a per-run session the text waits in this
   // client's queue until the turn ends, which is why the button becomes a queue arrow and the hint
@@ -922,7 +950,12 @@ export default function ChatComposer({
               onFocus={() => onInputFocusChange?.(true)}
               onBlur={() => onInputFocusChange?.(false)}
               onInput={onTextareaInput}
-              placeholder={placeholder}
+              placeholder={showSuggestionChips ? '' : placeholder}
+              aria-activedescendant={
+                showSuggestionChips && selectedInputSuggestionIndex !== null
+                  ? suggestionOptionId(inputSuggestionListId, selectedInputSuggestionIndex)
+                  : undefined
+              }
               // Tighter than the class cap while the controls share this row: the row's height is
               // the textarea's own, so a long draft would spend the transcript's budget to grow.
               // An inline style rather than another class because the class cap carries `sm:`,
@@ -937,6 +970,14 @@ export default function ChatComposer({
               // can be sent until the job is stopped.
               disabled={isOccupied}
             />
+            {showSuggestionChips && (
+              <InputSuggestionChips
+                listId={inputSuggestionListId}
+                suggestions={inputSuggestionCandidates}
+                selectedIndex={selectedInputSuggestionIndex}
+                onAccept={onAcceptInputSuggestion ?? (() => undefined)}
+              />
+            )}
             {/* Inline tier only: the row below is a sibling of this body, and the form is a row on
                 that tier, so a sibling here would become a third column of its own. It moves into
                 this column instead, under the textarea, where it costs the input height rather than

@@ -164,6 +164,12 @@
       "updateQueued": "Enter 更新排队消息"
     },
     "clickToChangeMode": "点击更改权限模式（或在输入框中按 Tab）",
+    "suggestions": {
+      "listLabel": "常用输入",
+      "hintSelect": "Tab 选择",
+      "hintAccept": "↵ 采用",
+      "hintHide": "Esc 隐藏"
+    },
     "showAllCommands": "显示所有命令",
     "moreTools": "更多工具",
     "clearInput": "清空输入",
