@@ -1,7 +1,7 @@
 ---
 id: gap-composer-empty-box-history-frequency-chips
 title: 输入框空态建议项（第一档）：按历史输入频次在空 textarea 内显示虚线 chip，Tab/鼠标/Enter 填入，不调模型
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -114,11 +114,3 @@ extra:
 - `src/modules/chat/tests/useInputHistory.test.ts`
 - `docs/proposals/composer-empty-input-suggestions.md`
 - `tasks/gap-composer-empty-box-history-frequency-chips.md`
-
-## Blocker
-
-**2026-10-23T07:17:57.852Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 14/18，剩余未勾 4）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：cb8ecdbf-7fcd-457a-b9c7-c64b8cdb59bd

@@ -23,6 +23,13 @@ import type { QuayFleetExec } from './quay-fleet-registry.js';
  * failure reads `null`, never throws. `null` is the honest "this project is not registered"
  * reading, and the UI renders it as 「未登记到 quay-fleet」 instead of falling back to a UUID.
  *
+ * BUT "UNREGISTERED" AND "NO FLEET CLI ON THIS HOST" ARE DIFFERENT ANSWERS. Both used to read
+ * `null` for every project, so a server without `QUAY_FLEET_BIN` looked exactly like a fleet
+ * where nobody had registered anything: every tile said 「未登记」 and none could be focused.
+ * {@link QuayFleetAvailability} is the separate reading that lets the UI say the one thing it
+ * can act on — 「找不到 quay-fleet（设置 QUAY_FLEET_BIN）」 — instead of repeating that sentence
+ * on every tile. `available: true` with every id `null` is the real "nothing is registered".
+ *
  * The registry document is cached for {@link QUAY_FLEET_PROJECT_ID_TTL_MS}; the join is
  * computed per call from that one small reading, so a summary over N projects costs at most
  * one `quay-fleet` invocation per TTL window.
@@ -63,6 +70,21 @@ export type QuayFleetProjectMatch = {
 };
 
 /**
+ * Whether this host can ask the fleet at all.
+ *
+ * `available: false` means the `quay-fleet` CLI could not be run (absent, timed out, non-zero
+ * exit, or unreadable output); `reason` then names the failure so the UI can print one line
+ * instead of labelling every project "unregistered". `available: true` means the registry
+ * document was read: a project with `fleetProjectId: null` under this reading really is not
+ * registered with the fleet.
+ */
+export type QuayFleetAvailability = {
+  available: boolean;
+  /** Why the fleet could not be asked; `null` exactly when `available` is `true`. */
+  reason: string | null;
+};
+
+/**
  * The two joins the Quay module needs. Consumer: `quay.service.ts`, which stamps each fleet
  * summary entry and each snapshot with its `fleetProjectId`, and composes the URI resolver
  * over {@link QuayFleetProjectIdResolver.resolveFleetProject}.
@@ -74,6 +96,14 @@ export type QuayFleetProjectIdResolver = {
   resolveFleetProjectId(projectId: string): Promise<string | null>;
   /** Fleet registry id → registered root + the CloudCLI project at that root. */
   resolveFleetProject(projectSegment: string): Promise<QuayFleetProjectMatch | null>;
+  /**
+   * Whether the fleet CLI answered at all, and why not when it did not.
+   *
+   * OPTIONAL so a composition or an existing criterion that only exercises the join is not
+   * forced to grow this member: an absent method reads as "the fleet side is available" and
+   * keeps the pre-existing per-project behaviour.
+   */
+  resolveFleetAvailability?(): Promise<QuayFleetAvailability>;
 };
 
 /** The seams the mapper reads through; every one of them is replaceable in a test. */
@@ -99,6 +129,16 @@ export type QuayFleetProjectIdDependencies = {
 };
 
 type QuayFleetExecError = Error & { code?: number | string | null; killed?: boolean };
+
+/**
+ * One registry read: the registered rows plus whether the fleet could be asked at all.
+ * `entries: null` always carries `availability.available === false`; both are cached together
+ * so a summary cannot ask twice and get two different answers.
+ */
+type QuayFleetRegistryReading = {
+  entries: readonly QuayFleetRegisteredProject[] | null;
+  availability: QuayFleetAvailability;
+};
 
 /** Production child-process binding; every failure is a value, so the caller never sees a throw. */
 const defaultExecFile: QuayFleetExec = (file, args, options) =>
@@ -175,13 +215,19 @@ export function createQuayFleetProjectIdResolver(
   /**
    * The cached registry reading. `entries: null` is a real reading too — "the fleet could not
    * be asked" — and is cached for the same short window so a down fleet is not re-spawned by
-   * every project in a fan-out.
+   * every project in a fan-out. The availability travels WITH the entries: a summary needs
+   * both, and deriving one from the other after the fact is what conflated the two answers.
    */
-  let cache: { expiresAt: number; entries: readonly QuayFleetRegisteredProject[] | null } | null = null;
-  let inFlight: Promise<readonly QuayFleetRegisteredProject[] | null> | null = null;
+  let cache: { expiresAt: number; reading: QuayFleetRegistryReading } | null = null;
+  let inFlight: Promise<QuayFleetRegistryReading> | null = null;
 
   /** Runs `quay-fleet registry list --json` once and normalizes every registered root. */
-  const readRegistry = async (): Promise<readonly QuayFleetRegisteredProject[] | null> => {
+  const readRegistry = async (): Promise<QuayFleetRegistryReading> => {
+    const unavailable = (reason: string): QuayFleetRegistryReading => ({
+      entries: null,
+      availability: { available: false, reason },
+    });
+
     let result;
     try {
       result = await exec(binPath, ['registry', 'list', '--json'], {
@@ -190,15 +236,25 @@ export function createQuayFleetProjectIdResolver(
         encoding: 'utf8',
         windowsHide: true,
       });
-    } catch {
+    } catch (error) {
       // A seam that throws is still "the fleet did not answer"; the caller maps it to null.
-      return null;
+      return unavailable(
+        error instanceof Error && error.message !== ''
+          ? `quay-fleet could not be run: ${error.message}`
+          : 'quay-fleet could not be run',
+      );
     }
-    if (!result.ok) return null;
+    if (!result.ok) {
+      return unavailable(
+        result.error ?? `quay-fleet exited ${result.code === null ? 'without a status' : `with ${result.code}`}`,
+      );
+    }
 
     const document = parseJsonObject(result.stdout);
     const rows = document?.projects;
-    if (!Array.isArray(rows)) return null;
+    if (!Array.isArray(rows)) {
+      return unavailable('quay-fleet returned no registry document');
+    }
 
     const entries: QuayFleetRegisteredProject[] = [];
     for (const row of rows) {
@@ -207,21 +263,21 @@ export function createQuayFleetProjectIdResolver(
         entries.push({ id: project.id, root: normalize(project.root) });
       }
     }
-    return entries;
+    return { entries, availability: { available: true, reason: null } };
   };
 
   /** The registry reading, from cache, from the one in-flight read, or fresh. */
-  const registryEntries = async (): Promise<readonly QuayFleetRegisteredProject[] | null> => {
+  const registryReading = async (): Promise<QuayFleetRegistryReading> => {
     if (cache !== null && cache.expiresAt > now()) {
-      return cache.entries;
+      return cache.reading;
     }
     if (inFlight !== null) {
       return inFlight;
     }
     const read = readRegistry()
-      .then((entries) => {
-        cache = { expiresAt: now() + ttlMs, entries };
-        return entries;
+      .then((reading) => {
+        cache = { expiresAt: now() + ttlMs, reading };
+        return reading;
       })
       .finally(() => {
         inFlight = null;
@@ -236,7 +292,7 @@ export function createQuayFleetProjectIdResolver(
       if (typeof projectPath !== 'string' || projectPath.trim() === '') {
         return null;
       }
-      const entries = await registryEntries();
+      const { entries } = await registryReading();
       if (entries === null) {
         return null;
       }
@@ -246,7 +302,7 @@ export function createQuayFleetProjectIdResolver(
     },
 
     async resolveFleetProject(projectSegment) {
-      const entries = await registryEntries();
+      const { entries } = await registryReading();
       if (entries === null) {
         return null;
       }
@@ -258,6 +314,12 @@ export function createQuayFleetProjectIdResolver(
       const projects = dependencies.listProjects?.() ?? [];
       const project = projects.find((candidate) => normalize(candidate.projectPath) === entry.root);
       return { fleetProjectId: entry.id, root: entry.root, projectId: project?.projectId ?? null };
+    },
+
+    async resolveFleetAvailability() {
+      const { availability } = await registryReading();
+      // A copy: the cached reading is shared by every caller in the TTL window.
+      return { ...availability };
     },
   };
 }

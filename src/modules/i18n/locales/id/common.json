@@ -792,6 +792,11 @@
     "remoteTypeHint": "Enter mengirim · tahan untuk mendikte",
     "remoteSubmit": "Kirim",
     "remoteWakeLockFailed": "Kunci layar akan menghentikan perekaman",
-    "remoteInsecureContext": "Mikrofon memerlukan HTTPS (atau localhost). Mengetik dan tombol arah tetap berfungsi."
+    "remoteInsecureContext": "Mikrofon memerlukan HTTPS (atau localhost). Mengetik dan tombol arah tetap berfungsi.",
+    "fleetCliMissing": "quay-fleet tidak ditemukan di server ini — setel QUAY_FLEET_BIN agar proyek dapat terdaftar. ({{reason}})",
+    "projectNotRegistered": "Tidak terdaftar di quay-fleet",
+    "unnamedSession": "Percakapan tanpa nama · {{id}}",
+    "deviceMobile": "Ponsel",
+    "deviceDesktop": "Desktop"
   }
 }

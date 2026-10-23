@@ -709,6 +709,11 @@
     "remoteTypeHint": "Enter 送出 · 按住按鈕口述",
     "remoteSubmit": "送出",
     "remoteWakeLockFailed": "鎖屏會中斷收音",
-    "remoteInsecureContext": "麥克風需要 HTTPS（或 localhost）。打字和方向鍵仍然可用。"
+    "remoteInsecureContext": "麥克風需要 HTTPS（或 localhost）。打字和方向鍵仍然可用。",
+    "fleetCliMissing": "此伺服器上找不到 quay-fleet —— 請設定 QUAY_FLEET_BIN，專案才能註冊。({{reason}})",
+    "projectNotRegistered": "未登記到 quay-fleet",
+    "unnamedSession": "未命名工作階段 · {{id}}",
+    "deviceMobile": "手機",
+    "deviceDesktop": "桌面"
   }
 }
