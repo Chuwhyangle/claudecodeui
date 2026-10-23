@@ -9,6 +9,8 @@ labels:
 parent: null
 children: []
 extra: {}
+depends_on:
+  - quay-wall-addressable-view-and-input-package
 ---
 ## Proposal
 
