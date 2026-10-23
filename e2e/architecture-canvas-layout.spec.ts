@@ -2058,6 +2058,49 @@ async function assertCanvasSelectsNothing(
 }
 
 /**
+ * Points on a drawn ENTITY and on a directory GROUP, measured on the CURRENT
+ * drawing. A group box is scaffolding: clicking it marks it locally but never
+ * reports an entity, so only an entity can open the inspector.
+ */
+function findClickableNodes(page: Page): Promise<{
+  entity: { x: number; y: number } | null;
+  group: { x: number; y: number } | null;
+}> {
+  return page.evaluate((sel) => {
+    const host = document.querySelector(sel.host) as HTMLElement | null;
+    if (host === null) return { entity: null, group: null };
+    const hostRect = host.getBoundingClientRect();
+    const pointOf = (node: Element): { x: number; y: number } | null => {
+      const text = node.querySelector('text');
+      if (text === null) return null;
+      const rect = text.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 6) return null;
+      const point = {
+        x: Math.round(rect.left + Math.min(rect.width / 2, 30)),
+        y: Math.round(rect.top + rect.height / 2),
+      };
+      const inside = point.x > hostRect.left + 6 && point.x < hostRect.right - 6
+        && point.y > hostRect.top + 6 && point.y < hostRect.bottom - 6;
+      if (!inside) return null;
+      const hit = document.elementFromPoint(point.x, point.y);
+      if (hit === null || hit.closest('[data-entity-id]') === null) return null;
+      return point;
+    };
+    let entity: { x: number; y: number } | null = null;
+    let group: { x: number; y: number } | null = null;
+    for (const node of host.querySelectorAll('.uml-node[data-entity-id]')) {
+      const id = node.getAttribute('data-entity-id') ?? '';
+      if (id.startsWith('grp::') || id.startsWith('stub::')) {
+        group ??= pointOf(node);
+      } else {
+        entity ??= pointOf(node);
+      }
+    }
+    return { entity, group };
+  }, SEL);
+}
+
+/**
  * The dock leg: the same drag over the inspector's own prose MUST select text.
  *
  * The dock is the copyable side of the panel (session hits, the PlantUML text),
@@ -2074,15 +2117,38 @@ async function assertDockSelectsText(page: Page, label: string): Promise<void> {
     // land on the background of the new one and clear the selection instead of
     // opening the dock; the panel states when the drawn model has landed.
     await page.waitForFunction(
-      () => document.querySelector('[data-architecture-canvas-region]')
-        ?.getAttribute('data-architecture-drawn-source') === 'drawn',
+      () => {
+        const region = document.querySelector('[data-architecture-canvas-region]');
+        const graph = document.querySelector('[data-architecture-plantuml-graph]');
+        return region?.getAttribute('data-architecture-drawn-source') === 'drawn'
+          && Number(graph?.getAttribute('data-architecture-visible-nodes') ?? '0') > 0;
+      },
       undefined,
       { timeout: 40_000 },
     );
-    // Open it the way a reader does: a single click on a drawn node.
-    const points = await findGesturePoints(page);
-    expect(points.label, `${label}: the drawing must offer a node to select`).not.toBeNull();
-    await page.mouse.click((points.label as GesturePoint).x, (points.label as GesturePoint).y);
+    // Open it the way a reader does: a single click on a drawn ENTITY. The
+    // grouped overview draws directory boxes, which no click can report; when
+    // the previous leg left one of those on screen, drill into it first so the
+    // drawing carries its files.
+    let candidate = await findClickableNodes(page);
+    if (candidate.entity === null && candidate.group !== null) {
+      await page.mouse.dblclick(candidate.group.x, candidate.group.y);
+      await page.waitForFunction(
+        (sel) => {
+          const root = document.querySelector(sel.graphRoot);
+          const region = document.querySelector('[data-architecture-canvas-region]');
+          return root?.getAttribute('data-architecture-view') === 'group'
+            && region?.getAttribute('data-architecture-drawn-source') === 'drawn'
+            && Number(root.getAttribute('data-architecture-visible-nodes') ?? '0') > 0;
+        },
+        SEL,
+        { timeout: 40_000 },
+      );
+      candidate = await findClickableNodes(page);
+    }
+    expect(candidate.entity, `${label}: the drawing must offer an entity to select`).not.toBeNull();
+    const targetPoint = candidate.entity as GesturePoint;
+    await page.mouse.click(targetPoint.x, targetPoint.y);
   }
   await expect(dock, `${label}: the inspector dock must open for a selection`).toBeVisible({ timeout: 10_000 });
 
