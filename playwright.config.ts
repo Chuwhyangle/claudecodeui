@@ -396,7 +396,14 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // launch included), and `8 passed (58.0s)` for the `--grep "control arm"`
   // selection. 240_000 still clears the full-file measurement ~1.8x, so the
   // entry stays; the numbers above are the readings it was checked against.
-  'architecture-canvas-layout.spec.ts': 240_000,
+  // Raised to 360_000 on 2026-10-23 for the two render regressions: the file now
+  // also drives the perimeter-routing fixture and the interleaved-member fixture
+  // on both viewports at the five negotiated levels plus the 100 % baseline, and
+  // the control arm crops/restores the viewBox and swaps/restores member rows.
+  // Measured full-file wall clock (boot + both servers + browser launch + 14
+  // cases): `14 passed (3.7m)` on this worktree, 2026-10-23. 360_000 keeps ~1.6x
+  // over that reading while leaving the earlier 240_000 ceiling behind.
+  'architecture-canvas-layout.spec.ts': 360_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear

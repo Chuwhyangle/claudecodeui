@@ -578,9 +578,11 @@ export function captureSemanticDrawing(
 ): SemanticCapture | null {
   const svg = host.querySelector('svg');
   if (!(svg instanceof SVGSVGElement)) return null;
-  // 0.4.0 publishes compartments but not the entity KIND (function vs class)
-  // and its member parser calls a field whose type contains `(` a method, so
-  // the payload's authoritative kinds are handed to the read layer as hints.
+  // 0.4.0 publishes compartments and the compartment of every member row, but
+  // not the entity KIND (function vs class), so the payload's authoritative
+  // kind is handed to the read layer as the only hint. Member compartments are
+  // NOT hinted: the renderer groups fields before methods while the payload
+  // keeps source order, so an index-aligned overlay scrambles them.
   const kindById = new Map<string, SemanticEntityKind>(graph.nodes.map((node) => {
     const kind = node.kind;
     const mapped: SemanticEntityKind = kind === 'interface' || kind === 'enum' || kind === 'function'
@@ -588,15 +590,7 @@ export function captureSemanticDrawing(
       : 'class';
     return [node.id, mapped];
   }));
-  const memberKindsById = new Map<string, readonly ('field' | 'method')[]>(
-    graph.nodes
-      .filter((node) => (node.members?.length ?? 0) > 0)
-      .map((node) => [
-        node.id,
-        (node.members ?? []).map((member) => (member.kind === 'method' ? 'method' : 'field')),
-      ]),
-  );
-  const geometry = readSemanticDrawingGeometry(svg, { kindById, memberKindsById });
+  const geometry = readSemanticDrawingGeometry(svg, { kindById });
   const titles = new Map<string, string | null>();
   for (const node of svg.querySelectorAll('.uml-node[data-entity-id]')) {
     const id = node.getAttribute('data-entity-id');

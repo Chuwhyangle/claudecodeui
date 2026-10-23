@@ -25,6 +25,7 @@ import {
 import type { ArchitectureHierarchyIndex } from '@/modules/architecture/hierarchyIndex';
 import {
   solveSemanticZoom,
+  semanticContentBounds,
   lodDepthForTier,
   type SemanticTier,
   type SemanticZoomLayout,
@@ -1314,7 +1315,12 @@ export function PlantUmlGraph({
         semanticCaptureRef.current = capture;
         semanticTierRef.current = null;
         const viewportForMode = viewportRef.current;
-        viewportForMode?.setSemanticMode(capture?.baseSize ?? null);
+        // The semantic base size is the SAME boundary the canvas will draw
+        // (`semanticContentBounds`), not the renderer's pre-semantic viewBox:
+        // the fit reading and the minimap must measure what is on screen.
+        viewportForMode?.setSemanticMode(
+          capture === null ? null : semanticContentBounds(capture.geometry),
+        );
         applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize

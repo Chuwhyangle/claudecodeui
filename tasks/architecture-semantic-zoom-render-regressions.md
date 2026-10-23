@@ -1,7 +1,7 @@
 ---
 id: architecture-semantic-zoom-render-regressions
 title: 语义缩放渲染回归修复：边被外框裁掉、属性与方法分错格
-status: ready
+status: done
 labels:
   - feature
 parent: null
