@@ -54,3 +54,11 @@ extra:
 - e2e/support/architectureFixture.ts
 - playwright.config.ts
 - tasks/architecture-node-size-from-drawn-content.md
+
+## Blocker
+
+**2026-10-23T08:16:45.332Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：AC 未全勾（checked 0/5，剩余未勾 5）——续做只需验证并勾选 AC
+- run_id：wk-prod-anchor
+- session_id：c1850c92-abff-4b18-9b7e-3231865d37ca
