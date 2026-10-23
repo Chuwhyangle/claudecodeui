@@ -52,6 +52,7 @@ depends_on:
 - 截图：`tmp/cockpit-hub-dod-1-before.png`、`tmp/cockpit-hub-dod-2-after-move.png`、`tmp/cockpit-hub-dod-3-phone.png`、`tmp/cockpit-hub-dod-4-after-view.png`（`tmp/` 已 gitignore；驱动脚本 `tmp/cockpit-hub-dod.mjs`）。
 - 场景运行器缺口（如实）：`scripts/ui-scenario.mjs` 的 `open` 只认 `quay-panel`，语义面 `window.__cloudcliScenario` 读的是 Quay wall 的页面内契约；驾驶舱的焦点/视图现在在中枢里、页面上只有 `data-cockpit-hub-rev` 等读数，要接运行器需要新增 cockpit opener + 把中枢 state 暴露进语义面。本任务未做，记此缺口。
 - 既有单元用例：`src/modules/cockpit/tests/` 5 个文件 48 用例全绿（舞台原有用例断言未减弱，只把测试替身换成假中枢连接）。
+- 落地补缝（2026-10-23，上一轮 suite 红）：本任务的 2 个新 server 测试文件把收集数 404→406，`server/shared/tests/quay-test-script.test.ts` 的 AC7 90% 覆盖率地板（364/406）与 AC2/AC3 的 exact `unknown=` 钉子（401→403、403→405）随之红。修法：把 `cockpit-reducer.test.ts`（2279ms）与 `cockpit-hub.test.ts`（4772ms）按基线惯例逐文件实测补进 `scripts/suite-duration-baseline.tsv`（366/406 = 90.15%），并同步两个 exact 钉子；单元重跑 14/14 绿。
 
 ## Touches
 
@@ -76,3 +77,13 @@ depends_on:
 - scripts/ui-scenario.mjs
 - src/modules/ui-scenario/scenarioSurface.ts
 - tasks/cockpit-hub-cross-device-state.md
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
+
+## Blocker
+
+**2026-10-23T05:42:24.166Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=82001 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792733720267
+- run_id：wk-prod-anchor
+- session_id：d01debf6-f245-4e6a-b5c6-ce2268ec8d11
