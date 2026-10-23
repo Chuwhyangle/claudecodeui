@@ -19,11 +19,14 @@ extra:
 
 七条原则（逐条可验收）：1 基线是原布局乘缩放，约 90% 以上完全还原；2 每个可见元素有最小尺寸，文字固定在最小字号（PC 10px、手机 11px）放不下就省略绝不缩小；3 满足最小尺寸只靠对 x、y 各一次的单调分段线性映射（顺序、对齐、包含、折线正交性全保留）；4 文字隐藏的类框可压缩，从格子左上角起按紧凑高度绘制，边的端点跟随；5 拉伸预算超过 1.8 倍就降档（A 类名与成员，B 只留类框，C 只留包）；6 被隐藏的信息在上一级汇总（包名后 `(N)`，C 档加橙色 `★N` 表示该包内被会话直接提到的实体数）；7 UML 形态不退化（包标签是含右侧封口的完整小矩形标签页，类框始终保留标题 / 属性 / 方法两条横线，接口只有方法时一条）。
 
-范围：客户端 `src/modules/architecture/`。不改 plantuml-js 输出契约；属性 / 方法分格在 plantuml-js 提供分格元素之前，按成员文本是否含 `(` 近似，并把近似集中在一个函数里，便于之后换成读新类名。已就分格元素、标签页闭合形态、几何元数据三件事向 plantuml-js 会话发出请求，不阻塞本任务。
+范围：客户端 `src/modules/architecture/`，并把依赖 `@yalehwang/plantuml-js` 升到 `^0.4.0`（0.4.0 已发布，含三格分栏、闭合标签页、几何元数据）。引擎直接读取上游输出，不再猜测：`uml-compartment-rule`（`data-rule="title"` 与 `data-rule="ops"`，接口只有方法时只有 title 一条）、成员文本 `uml-attr` 与 `uml-op`、闭合的 `uml-package-tab`（`<path>`）、`uml-node` 的 `data-x` `data-y` `data-w` `data-h` 与 `data-title-h` `data-attrs-h` `data-ops-h`、`uml-package` 的 `data-x` `data-y` `data-w` `data-h` 与 `data-tab-w` `data-tab-h`、聚合边 `uml-edge-bundle`（带 `data-bundle-size` 与 `data-weight`）。不得再用「成员文本是否含 `(`」之类的文本推断区分属性与方法。若 `npm install` 暂时解析不到 0.4.0（发布刚完成、registry 仍在传播），等待并重试，不要降级或回退到近似。
+
+参考文档的位置：`docs/proposals/architecture-semantic-zoom/` 暂时只在提交 `e8bd1acbb`（分支 `author`）里，worktree 里没有该目录时用 `git show e8bd1acbb:docs/proposals/architecture-semantic-zoom/README.md` 与 `git show e8bd1acbb:docs/proposals/architecture-semantic-zoom/reference/prototype-v14.js` 读取，参考图用 `git show e8bd1acbb:docs/proposals/architecture-semantic-zoom/reference/v14-montage-pc-voice.png > <临时路径>` 取出（四张：pc-quay、pc-voice、m-quay、m-voice）。注意原型脚本是在 0.3.1 的 SVG 上写的，含按文本猜测属性 / 方法与读 `rect`、`line` 的部分，这些都改读上面的 0.4.0 类名与属性。
 
 ## Plan
 
-1. 纯函数引擎 `semanticZoomLayout.ts`：输入是从渲染出的 SVG 读到的几何（实体矩形、包矩形、包含关系、折线边与箭头、成员文本）加缩放、最小字号、视口；输出是 x/y 两个映射、选定的档位、拉伸比。含约束求解（前向一遍加长路径）、可压缩间距判定、档位选择、内容最密窗口锚点。无 DOM、无 React。
+0. 依赖与读取层：升级 `@yalehwang/plantuml-js` 到 `^0.4.0`（`package.json`、`package-lock.json`）；新增 `semanticZoomRead.ts`，把渲染出的 SVG 读成引擎的输入几何（实体与包矩形取自 `data-x/y/w/h`，实体的标题 / 属性 / 方法格高取自 `data-title-h/attrs-h/ops-h`，包的标签带取自 `data-tab-w/h`，成员文本按 `uml-attr` / `uml-op` 分类，边含 `uml-edge-bundle`）。这是唯一读 SVG 的地方。
+1. 纯函数引擎 `semanticZoomLayout.ts`：输入是读取层给出的几何（实体矩形、包矩形、包含关系、折线边与箭头、成员文本）加缩放、最小字号、视口；输出是 x/y 两个映射、选定的档位、拉伸比。含约束求解（前向一遍加长路径）、可压缩间距判定、档位选择、内容最密窗口锚点。无 DOM、无 React。
 2. 纯函数规划 `semanticZoomPlan.ts`：类名排版（整行、驼峰折两行、中间省略）、类框紧凑高度与分格位置、包标签（最后一段加计数加 ★N）、粘性包名（最多 2 个）、边不透明度三档、边端点随类框收缩的平移、成员行与 `… +N more` 的排布。
 3. 渲染接入：`PlantUmlGraph.tsx` 在 plantuml-js 的 SVG 之上，按引擎结果重写几何（保持 `data-entity-id`、`data-package-id`、`data-edge-source`、`data-edge-target` 契约），原覆盖层标题机制退役；类框、包框、边仍是可命中的 SVG 元素。
 4. 交互经映射：选择、置顶与排除徽标、命中测试、拖拽、滚轮与双指缩放、小地图视口框、适应视图，全部改为经过同一套映射换算，缩放锚点使用「内容最密窗口」。
@@ -33,6 +36,7 @@ extra:
 
 ## AC
 
+- [ ] `npm ls @yalehwang/plantuml-js --depth=0` 输出的版本 ≥ 0.4.0 且 exit 0；`npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：夹具是 0.4.0 渲染器对仓库内已提交的小图夹具实际渲染出的 SVG，断言读取层从 `data-x/y/w/h`、`data-title-h/attrs-h/ops-h`、`data-tab-w/h` 得到几何，`uml-attr` 与 `uml-op` 成员被正确分类，接口节点只有 `data-rule="title"` 一条规则，聚合边 `uml-edge-bundle` 被读成带 `data-bundle-size` 的边；并断言一个属性名含括号字样（例如类型里有 `(`）的成员不会被误判为方法
 - [ ] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：覆盖单调性（任意两点映射后顺序不变且映射非减）、缩放 ≥ 0.9 时映射等于恒等缩放、最小尺寸约束被满足且只在约束处拉伸、可压缩间距随 α 从 0 到 1 渐变、拉伸比超过 1.8 时降档且降档顺序是 A、B、C、同一输入同一输出、内容最密窗口锚点在稀疏图上不落在空白处；夹具用 plantuml-js 对仓库内已提交的小图夹具实际布局得到的几何，不是手写矩形
 - [ ] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts` exit 0：类名排版三级回退（整行、驼峰折两行、中间省略，非高亮至少保留 9 个字符、被提到的至少 6 个）、两行类名使标题格加高、类框紧凑高度与两条横线位置（接口只有方法时一条）、包标签取最后一段加计数且 C 档追加 `★N`、粘性包名不超过 2 个、边不透明度在 22/40/100 三个边界上取 0.85/0.5/0.3/0.18、边端点在类框被缩短后落在新的底边或侧边上
 - [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩放读数旁的档位名随档位变化；缩小后 `data-entity-id`、`data-package-id`、`data-edge-source`、`data-edge-target` 契约仍在；原覆盖标题层 `[data-architecture-lod-labels]` 不再出现；选择与置顶徽标在缩放后仍作用于正确的实体；既有用例不回归
@@ -47,6 +51,10 @@ extra:
 
 ## Touches
 
+- package.json
+- package-lock.json
+- src/modules/architecture/semanticZoomRead.ts
+- src/modules/architecture/tests/semanticZoomRead.test.ts
 - src/modules/architecture/semanticZoomLayout.ts
 - src/modules/architecture/semanticZoomPlan.ts
 - src/modules/architecture/PlantUmlGraph.tsx
