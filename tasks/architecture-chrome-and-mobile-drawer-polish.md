@@ -2,7 +2,7 @@
 id: architecture-chrome-and-mobile-drawer-polish
 title: 架构 tab 手机抽屉、画布外观、搜索结果行与撤销提示：档位按钮文字、重复关闭、托盘避让、Focus 按下态、画布底色、Focus
   横幅、搜索名字截断、Undo 停留时间
-status: ready
+status: done
 labels:
   - feature
 parent: null
