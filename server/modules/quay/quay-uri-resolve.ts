@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 
 import type { QuayTaskCounts } from '@/shared/types.js';
 
+import { locateQuayFleetCli } from './quay-fleet-locator.js';
+
 /**
  * Dereferencing for the wall's `quay://` address space.
  *
@@ -231,8 +233,13 @@ export type QuayFleetWallReader = {
   summary(uri: string, projectRoot: string | null): Promise<QuayFleetSummaryReading | null>;
 };
 
-/** The environment variable naming the fleet CLI a deployment wants the server to call. */
-export const QUAY_FLEET_BIN_ENV = 'QUAY_FLEET_BIN';
+/**
+ * The environment variable naming the fleet CLI a deployment wants the server to call.
+ *
+ * Re-exported from the shared locator so this module's public surface (and its criterion) keep
+ * naming the same constant; the ACTUAL lookup lives in `quay-fleet-locator.ts` only.
+ */
+export { QUAY_FLEET_BIN_ENV } from './quay-fleet-locator.js';
 
 /**
  * One call to the fleet CLI, normalized so the reader never sees child-process internals.
@@ -373,16 +380,19 @@ function readFleetL2(value: unknown): QuayFleetL2 | null {
  * Builds the production read port over the fleet CLI, or `null` when no binary is
  * configured. Consumer: `quay.service.ts`, which passes the result to the resolver.
  *
- * `binaryPath` defaults to {@link QUAY_FLEET_BIN_ENV}. A deployment that has not set it
- * gets `null` — the honest "no fleet read port here" reading that sends task references
+ * `binaryPath` is the explicit seam: `null` disables the fleet path, an undefined value asks
+ * the shared locator (`QUAY_FLEET_BIN` → `PATH` → `~/.quay-fleet/bin/quay-fleet`). A lookup
+ * miss is `null` — the honest "no fleet read port here" reading that sends task references
  * down the snapshot fallback — rather than a guessed host path.
  */
 export function createQuayFleetCliWallReader(options: {
   binaryPath?: string | null;
   timeoutMs: number;
 }): QuayFleetWallReader | null {
-  const configured = options.binaryPath ?? process.env[QUAY_FLEET_BIN_ENV] ?? '';
-  if (configured === '') return null;
+  const configured = options.binaryPath !== undefined
+    ? options.binaryPath
+    : locateQuayFleetCli().binPath;
+  if (configured === null || configured === '') return null;
   const binaryPath = configured;
 
   return {

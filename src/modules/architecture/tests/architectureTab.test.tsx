@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import { applyView, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 import type * as PlantUmlElkModule from '@yalehwang/plantuml-js/elk';
 import i18next from 'i18next';
@@ -30,7 +31,8 @@ import {
   useEnsureArchitectureTabVisible,
 } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
-import type { ArchitectureRendererGraph, ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
+import type { ArchitectureRendererProps } from '@/modules/architecture/rendererContract';
+import { CurationToast } from '@/modules/architecture/CurationToast';
 import type { ArchitectureNeighborhood } from '@/modules/architecture/useArchitectureGraph';
 import {
   archguardToPlantUml,
@@ -39,14 +41,20 @@ import {
   MEMBER_MAX_CHARS,
   MEMBER_MAX_ROWS,
   memberOverflowLabel,
+  parserSafePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
-import { capDrawnMemberRows } from '@/modules/architecture/PlantUmlGraph';
+import { capDrawnMemberRows, renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
+import {
+  buildFullPlantUmlDocument,
+  standardiseDrawnStereotypes,
+} from '@/modules/architecture/plantUmlText';
 import {
   NODE_SIZE_ENTITIES,
   nodeSizeEntityGraph,
   nodeSizeMemberSignature,
 } from '@/../e2e/support/architectureFixture';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
+import { placeHoverHint } from '@/modules/architecture/hoverHintPlacement';
 
 /**
  * The architecture tab's wiring, end to end at the component seam:
@@ -1504,6 +1512,185 @@ test('a focused canvas pans and zooms from the keyboard, and leaves Escape alone
   assert.equal(fireEvent.keyDown(host, { key: 'Escape' }), true, 'Escape must not be consumed by the canvas');
 });
 
+/** The rect an item's keyboard ring should surround, from the drawing's own numbers. */
+function drawnRectOf(element: Element): { x: number; y: number; width: number; height: number } {
+  // The leading rect is what the semantic rewrite keeps current; the group's
+  // data-* attributes predate that rewrite.
+  const rect = element.querySelector('rect');
+  const read = (fallback: string, attribute: string): number => {
+    const value = rect?.getAttribute(fallback) ?? element.getAttribute(attribute) ?? '0';
+    return Number(value);
+  };
+  return { x: read('x', 'data-x'), y: read('y', 'data-y'), width: read('width', 'data-w'), height: read('height', 'data-h') };
+}
+
+test('entity navigation: Enter activates a ringed cursor, arrows move it, and the selection keys act', async () => {
+  rememberShowAllFilter();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(CLASS_DIAGRAM_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="entity" />);
+  const host = await waitForDiagram();
+  await waitFor(() => assert.ok(host.querySelector('[data-entity-id="src/modules/alpha/halt.ts.haltVerdict"]')));
+
+  host.focus();
+  assert.equal(host.getAttribute('role'), 'img', 'before navigation the canvas is an image');
+
+  // Enter enters the entity-navigation state; the canvas becomes an application
+  // whose active descendant is the entity the cursor stands on.
+  assert.equal(fireEvent.keyDown(host, { key: 'Enter' }), false, 'Enter is consumed when it enters navigation');
+  assert.equal(host.getAttribute('role'), 'application', 'navigation turns the canvas into an application');
+  const firstDomId = host.getAttribute('aria-activedescendant');
+  assert.ok(firstDomId !== null, 'the canvas names its active descendant');
+  const firstNode = document.getElementById(firstDomId);
+  assert.ok(firstNode !== null, 'aria-activedescendant must name a drawn element');
+  const firstEntityId = firstNode.getAttribute('data-entity-id');
+  assert.ok(firstEntityId !== null && !firstEntityId.startsWith('grp::'));
+
+  // The cursor's ring is a real drawn shape, 2px outside the entity's box.
+  const ringFor = (node: Element): Element => {
+    const ring = host.querySelector('[data-architecture-nav-ring]');
+    assert.ok(ring !== null, 'the active entity must carry a focus ring');
+    assert.ok(ring.isConnected, 'the ring must be inside the drawing');
+    const box = drawnRectOf(node);
+    assert.equal(Number(ring.getAttribute('x')), box.x - 2, 'the ring keeps a 2px gap on the left');
+    assert.equal(Number(ring.getAttribute('y')), box.y - 2, 'the ring keeps a 2px gap above');
+    assert.equal(Number(ring.getAttribute('width')), box.width + 4);
+    assert.equal(Number(ring.getAttribute('stroke-width')), 3, 'the ring is a thick outline, not a colour change alone');
+    return ring;
+  };
+  ringFor(firstNode);
+
+  // Arrows move by screen position to another drawn entity, and each landing is
+  // reflected in aria-activedescendant (the reading the control arm falsifies).
+  const visited = new Set<string>([firstEntityId]);
+  for (const key of ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'ArrowDown']) {
+    assert.equal(fireEvent.keyDown(host, { key }), false, `${key} is consumed while navigating`);
+    const domId = host.getAttribute('aria-activedescendant');
+    assert.ok(domId !== null, `${key} must leave an active descendant`);
+    const active = document.getElementById(domId);
+    assert.ok(active !== null, `${key} must point at a drawn element`);
+    const entityId = active.getAttribute('data-entity-id');
+    assert.ok(entityId !== null, `${key} must land on an entity or frame`);
+    visited.add(entityId);
+  }
+  assert.ok(visited.size >= 2, `arrows must traverse more than one entity (visited ${[...visited].join(', ')})`);
+
+  // The polite live region carries the entity's name and package.
+  const announcer = document.querySelector('[data-architecture-nav-announcer]');
+  assert.ok(announcer instanceof HTMLElement, 'the canvas must own an aria-live region');
+  assert.equal(announcer.getAttribute('aria-live'), 'polite');
+  const activeNode = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+  assert.ok(activeNode !== null);
+  const activeLabel = activeNode.querySelector('[data-architecture-label]')?.getAttribute('data-architecture-label')
+    ?? activeNode.querySelector('title')?.textContent
+    ?? '';
+  assert.ok(activeLabel !== '', 'the active entity must expose its label for the reading');
+  assert.ok(
+    (announcer.textContent ?? '').includes(activeLabel),
+    `the live region must name the current entity (${announcer.textContent ?? ''})`,
+  );
+
+  // `[` walks to the enclosing package frame, `]` back to its first entity.
+  fireEvent.keyDown(host, { key: '[' });
+  const packageDomId = host.getAttribute('aria-activedescendant') ?? '';
+  const packageFrame = document.getElementById(packageDomId);
+  assert.ok(packageFrame !== null);
+  assert.ok(packageFrame.classList.contains('uml-package'), '`[` lands on a package frame');
+  assert.ok(packageDomId.startsWith('arch-nav-package-'), 'the frame is named as a frame');
+  fireEvent.keyDown(host, { key: ']' });
+  const childNode = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+  assert.ok(childNode !== null);
+  assert.ok(childNode.getAttribute('data-entity-id') !== null, '`]` lands on an entity');
+
+  // Enter selects through the same callback a click uses: the inspector opens.
+  fireEvent.keyDown(host, { key: 'Enter' });
+  const dock = await waitFor(() => {
+    const element = document.querySelector('[role="complementary"]');
+    assert.ok(element !== null, 'Enter must open the inspector');
+    return element;
+  });
+  const selectedEntityId = childNode.getAttribute('data-entity-id') ?? '';
+  const selectedNode = graphNodeLabel(selectedEntityId);
+  assert.ok((dock.textContent ?? '').includes(selectedNode), `the inspector must show ${selectedNode}`);
+
+  // Move away, then Shift+Enter adds the new entity to the multi-select set.
+  const moveKeys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'];
+  let toggleTarget: Element | null = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    fireEvent.keyDown(host, { key: moveKeys[attempt % moveKeys.length] });
+    const node = document.getElementById(host.getAttribute('aria-activedescendant') ?? '');
+    if (node !== null && node.getAttribute('data-entity-id') !== selectedEntityId) {
+      toggleTarget = node;
+      break;
+    }
+  }
+  assert.ok(toggleTarget !== null, 'the cursor must be able to reach a different entity');
+  assert.equal(fireEvent.keyDown(host, { key: 'Enter', shiftKey: true }), false);
+  // The tray opens collapsed; its pill states the count, and expanding it lists
+  // both members.
+  const trayPill = await waitFor(() => {
+    const pill = document.querySelector('[data-architecture-tray-pill]');
+    assert.ok(pill instanceof HTMLElement, 'Shift+Enter must put the selection into the tray');
+    return pill;
+  });
+  assert.ok((trayPill.textContent ?? '').includes('2'), 'the tray pill states two selected elements');
+  fireEvent.click(trayPill);
+  await waitFor(() => {
+    const items = document.querySelectorAll('[data-architecture-tray-item]');
+    assert.equal(items.length, 2, 'the expanded tray lists both selected entities');
+  });
+  assert.ok((announcer.textContent ?? '').includes('selection'), 'the toggle is announced');
+
+  // `A` pins through the context menu's own callback, with an undo.
+  assert.equal(fireEvent.keyDown(host, { key: 'a' }), false, 'A is consumed while navigating');
+  const pinnedToast = await waitFor(() => {
+    const toast = document.querySelector('[data-architecture-curation-toast]');
+    assert.ok(toast !== null, 'A must show the curation toast');
+    return toast;
+  });
+  assert.ok((pinnedToast.textContent ?? '').length > 0);
+  const pinUndo = document.querySelector('[data-architecture-curation-undo]');
+  assert.ok(pinUndo instanceof HTMLElement, 'pinning must offer undo');
+  fireEvent.click(pinUndo);
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-curation-toast]'), null));
+
+  // `X` removes through the same callback and offers the same undo.
+  assert.equal(fireEvent.keyDown(host, { key: 'x' }), false, 'X is consumed while navigating');
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-curation-toast]') !== null));
+  const removeUndo = document.querySelector('[data-architecture-curation-undo]');
+  assert.ok(removeUndo instanceof HTMLElement, 'removing must offer undo');
+  fireEvent.click(removeUndo);
+  await waitFor(() => assert.equal(document.querySelector('[data-architecture-curation-toast]'), null));
+
+  // Escape leaves the state, consumes the key and never reaches the chat page's
+  // global abort listener.
+  const aborts: string[] = [];
+  const recordEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') aborts.push('chat.abort');
+  };
+  document.addEventListener('keydown', recordEscape);
+  try {
+    assert.equal(fireEvent.keyDown(host, { key: 'Escape' }), false, 'Escape is consumed while navigating');
+    assert.equal(host.getAttribute('role'), 'img', 'Escape returns the canvas to an image');
+    assert.equal(host.getAttribute('aria-activedescendant'), null, 'the active descendant is cleared');
+    assert.equal(host.querySelector('[data-architecture-nav-ring]'), null, 'the ring is removed');
+    assert.equal(aborts.length, 0, 'Escape must not reach the chat page abort');
+  } finally {
+    document.removeEventListener('keydown', recordEscape);
+  }
+  // Panning is back: the canvas's old arrow behaviour survived the state change.
+  const beforePan = host.scrollLeft;
+  fireEvent.keyDown(host, { key: 'ArrowRight' });
+  assert.equal(host.scrollLeft, beforePan + 40, 'arrows pan again after leaving navigation');
+});
+
+/** A payload node's label, for asserting the inspector shows the selected entity. */
+function graphNodeLabel(id: string): string {
+  const node = CLASS_DIAGRAM_RESULT.graph.entity.nodes.find((candidate) => candidate.id === id);
+  assert.ok(node !== undefined, `${id} must be in the fixture`);
+  return node.label;
+}
+
+
 test('the zoom cluster lives on the canvas, not in the toolbar, with 32px targets', async () => {
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   const host = await waitForDiagram();
@@ -1777,18 +1964,19 @@ test('the readable toggle shows one merged focus summary only in Focus, and one 
   assert.equal(root.getAttribute('data-architecture-readable-package'), 'src/modules/alpha');
   const summary = document.querySelector('[data-architecture-readable-focus-summary]');
   assert.ok(summary instanceof HTMLElement, 'the Focus tier states the focus reading');
-  assert.match(summary.textContent ?? '', /modules\/alpha/, 'the summary names the densest seeded package');
-  assert.match(summary.textContent ?? '', /0 other package/, 'and the other-package count');
-  assert.doesNotMatch(summary.textContent ?? '', /src\/modules\/alpha/, 'the strip must not print the whole path');
+  // This drawing has ONE seeded package, so there is no other package to
+  // switch to: the sentence must not claim "(0 other package(s))" — a count
+  // that reads like a function which returned nothing. The focus-only wording
+  // (the existing key) is what it states instead.
+  assert.match(summary.textContent ?? '', /choose Overview to see the whole graph/i);
+  assert.doesNotMatch(summary.textContent ?? '', /0 other package/, 'no vacuous "(0 other package(s))"');
+  assert.doesNotMatch(summary.textContent ?? '', /focused on/, 'and no package claim when there is nothing to switch to');
   assert.equal(summary.getAttribute('title'), 'src/modules/alpha', 'the full package id stays available as the title');
-  // The summary's percentage is the same reading both scale controls print.
+  // The sentence is an overlay that wraps; truncating it would cut exactly the
+  // "choose Overview" escape the sentence exists to give.
+  assert.doesNotMatch(summary.className, /truncate/, 'the sentence must not truncate');
   const tierReadout2 = document.querySelector('[data-architecture-zoom-level]');
   const clusterReadout2 = document.querySelector('[data-architecture-zoom-cluster-level]');
-  assert.equal(
-    /at (\d+)%/.exec(summary.textContent ?? '')?.[1] + '%',
-    tierReadout2?.textContent,
-    'the focus sentence and the scale readout print the same percentage',
-  );
   assert.equal(tierReadout2?.textContent, clusterReadout2?.textContent);
   assert.equal(document.querySelector('[data-architecture-zoom-tier-label]'), null);
 
@@ -3777,13 +3965,28 @@ test('a search hit the filter hid states why and offers "Show it", which draws i
     return node;
   });
   assert.equal(row.getAttribute('data-architecture-search-project-in-graph'), 'false');
-  assert.ok(
+  // "Not in the current graph" is stated ONCE, on the group heading, not on
+  // every row: the per-row copy was what squeezed the names to a few
+  // characters. The row still carries the machine reading
+  // (`data-architecture-search-project-in-graph="false"`).
+  assert.equal(
+    document.querySelectorAll('[data-architecture-search-group="project"] [data-architecture-search-project-missing-note]').length,
+    1,
+    'the group heading explains the marker once',
+  );
+  assert.equal(
     row.querySelector('[data-architecture-search-project-missing]'),
-    'the row states that the entity is not in the current graph',
+    null,
+    'the row must not repeat the sentence',
   );
   const showIt = row.querySelector('[data-architecture-search-show]');
   assert.ok(showIt instanceof HTMLElement, 'and offers the one-click "Show it" action');
   assert.match(showIt.textContent ?? '', /Show it/);
+  assert.match(
+    showIt.getAttribute('aria-label') ?? '',
+    /MFn/,
+    'the action\'s accessible name names the entity it shows',
+  );
 
   fireEvent.click(showIt);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'pinning re-requests the reading'));
@@ -3979,6 +4182,61 @@ const UNFILTERED_FILTER_RESULT: ArchitectureGraphResult = {
   },
   provenance: RESULT.provenance,
 };
+
+/**
+ * A DENSE 300-class graph in a 12 × 8 package grid: the shape the reported
+ * project had (a big class drawing whose package frames sit on a canvas-sized
+ * patch of paper, with hundreds of boxes the minimum sizes cannot scale away).
+ *
+ * It is the fixture for the three readings this task adds:
+ *  · the layout is expected to take over a second (576 entities × the shipped
+ *    per-entity floor), so the canvas must say "laying out" BEFORE it blocks;
+ *  · at a canvas-sized viewport the package-only tier is still several canvases
+ *    wide, so the canvas must collapse to the folded tier instead of claiming
+ *    "whole graph at 5 %";
+ *  · the folded tier's tabs must add up what they folded away.
+ *
+ * Every entity is a class, so the shipped filter draws all of them without a
+ * "Show all" first, and the chain keeps none of them isolated.
+ */
+/**
+ * How many entities the dense fixture holds. Above the shipped per-entity floor
+ * (4 ms) times it is what makes the layout EXPECTED to pass a second — the
+ * condition the status answers — so the number is stated once and both the
+ * fixture and its assertions read it.
+ */
+const DEEP_ENTITY_COUNT = 300;
+
+const DEEP_ENTITY_RESULT: ArchitectureGraphResult = (() => {
+  const nodes = Array.from({ length: DEEP_ENTITY_COUNT }, (_unused, index) => ({
+    id: `src/modules/m${String(index % 12)}/s${String(index % 8)}/Entity${String(index)}.ts.Entity${String(index)}`,
+    label: `src/modules/m${String(index % 12)}/s${String(index % 8)}/Entity${String(index)}.ts`,
+    distance: index === 0 ? 0 : 1,
+    kind: 'class' as const,
+    ...(index === 0 ? { mentionTier: 'direct' as const } : {}),
+  }));
+  const edges = nodes.slice(1).map((entry, index) => ({
+    from: nodes[index].id,
+    to: entry.id,
+    relationType: 'dependency',
+  }));
+  return {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: { file: RESULT.graph.file, entity: { nodes, edges } },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: nodes.length,
+      entityEdges: edges.length,
+      entityTotal: nodes.length,
+      entityTruncated: false,
+      truncated: false,
+      kindCounts: { class: nodes.length },
+      relationCounts: { dependency: edges.length },
+      hidden: { byKind: {}, byRelation: {}, isolated: 0 },
+    },
+    provenance: RESULT.provenance,
+  };
+})();
 
 /** Open the filter disclosure and return its menu. */
 async function openFilterMenu(): Promise<HTMLElement> {
@@ -4219,7 +4477,7 @@ test('the readout’s "show mentioned" opens exactly the kinds the reading hides
   );
 });
 
-test('closing a mention switch is a narrowing answered from the payload, with no request', async () => {
+test('closing a mention switch narrows at once and asks the server for the settled reading', async () => {
   rememberFilter('project-1', {
     kinds: ['class', 'interface', 'enum', 'abstract'],
     relations: 'dependency',
@@ -4244,8 +4502,15 @@ test('closing a mention switch is a narrowing answered from the payload, with no
   await openFilterMenu();
   fireEvent.click(document.querySelector('[data-architecture-filter-mentioned-kind="function"]') as Element);
   await waitFor(() => assert.equal(latest().graph.nodes.some((node) => node.id === MENTION_IDS.fn), false));
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the narrower drawing is shown before any request');
   await new Promise((resolve) => setTimeout(resolve, 400));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'narrowing is answered from the payload in hand');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the settled selection is confirmed by the server');
+  assert.equal(
+    ((apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as { keepMentionedKinds?: readonly string[] })
+      .keepMentionedKinds,
+    undefined,
+    'the closed switch leaves the request entirely (no kind is kept mentioned)',
+  );
 });
 
 test('the mention switches are remembered per project and isolated from another', async () => {
@@ -4382,7 +4647,7 @@ test('the filter popover carries element counts, the three relation presets and 
   );
 });
 
-test('narrowing filters the payload in hand; widening re-requests and keeps the old drawing busy', async () => {
+test('a narrowing draws from the payload at once and is then settled by the server', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
   const seen: ArchitectureRendererProps[] = [];
   function StandInRenderer(props: ArchitectureRendererProps) {
@@ -4399,19 +4664,35 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
   };
 
   // Narrowing: the relation preset moves to `structural`, which keeps only the
-  // composition edge. No request may follow.
+  // composition edge. The drawing narrows from the payload IN HAND, in the same
+  // frame as the click — no round trip is needed to SHOW it.
   await openFilterMenu();
   fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
   await waitFor(() => assert.equal(latest().graph.edges.length, 1));
   assert.equal(latest().graph.edges[0]?.relationType, 'composition');
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'narrowing is answered from the payload in hand');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'the narrower drawing is shown before any request');
 
-  // Give the debounce more than its window: a narrowing must not schedule one.
+  // …and the SETTLED reading still comes from the server. The server runs its
+  // BFS and its node budget ON the filtered graph, so a local cut of a wider
+  // payload is a different reading: it still carries entities reachable only
+  // through the edges the narrower preset drops, and it counts the removals
+  // against a different denominator (most call edges vanish with the element
+  // cut and are never counted as relation-hidden). Skipping this request is
+  // exactly what made the summary disagree with a reload of the same state:
+  // "9 related · 1 call relations · 11 isolated nodes" against "5 related ·
+  // 601 call relations · 6 isolated nodes".
   await new Promise((resolve) => setTimeout(resolve, 350));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 1, 'no deferred request either');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the settled selection is confirmed by the server');
+  assert.deepEqual(
+    ((apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as { relations?: readonly string[] }).relations,
+    ['inheritance', 'implementation', 'composition'],
+    'the confirming request carries the narrowed relation axis',
+  );
 
-  // Widening: "Show all" restores every kind and relation. The request is
-  // deferred, and the OLD drawing stays on screen (and busy) until it lands.
+  // Widening: "Show all" restores every KIND — and, by design, leaves the
+  // relation preset exactly where the reader put it (`structural` here, not
+  // `call`). The request is deferred, and the OLD drawing stays on screen (and
+  // busy) until it lands.
   // The response arrives well after the debounce, so the in-flight window is
   // observable; it always settles, so a failed assertion cannot leave the run
   // waiting on a promise nobody resolves.
@@ -4424,7 +4705,7 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
   // `act` wrapper handles badly, and these readings are about the window's
   // CONTENT, not about whether polling can observe it.
   await new Promise((resolve) => setTimeout(resolve, 400));
-  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'the widened selection was requested');
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 3, 'the widened selection was requested');
   const busy = document.querySelector('[data-architecture-refreshing="true"]');
   assert.ok(busy instanceof HTMLElement, 'the drawing is marked busy while the widened reading is computed');
   assert.equal(busy.getAttribute('aria-busy'), 'true');
@@ -4436,10 +4717,16 @@ test('narrowing filters the payload in hand; widening re-requests and keeps the 
 
   await new Promise((resolve) => setTimeout(resolve, 1100));
   assert.equal(document.querySelector('[data-architecture-refreshing="true"]'), null, 'the busy state clears');
-  assert.equal(latest().graph.edges.length, 2, 'the new reading replaces the old one');
+  // The element axis was widened, so every entity the payload carries is drawn;
+  // the relation axis was NOT touched, so the composition edge is still the only
+  // one `structural` allows. Before the fix this read 2, because Show all had
+  // silently widened the preset to `call` along with the kinds.
+  assert.equal(latest().graph.nodes.length, 3, 'the element axis is wide again');
+  assert.equal(latest().graph.edges.length, 1, 'the relation preset the reader chose still applies');
+  assert.equal(latest().graph.edges[0]?.relationType, 'composition');
 });
 
-test('a truncated reading makes a narrowing re-fetch in the background (budget may have freed up)', async () => {
+test('a truncated reading settles on the server like any other selection', async () => {
   apiMock.architectureGraph.mockResolvedValue(jsonResponse({
     ...FILTER_RESULT,
     stats: { ...FILTER_RESULT.stats, entityTruncated: true, truncated: true, entityTotal: 9 },
@@ -4451,12 +4738,13 @@ test('a truncated reading makes a narrowing re-fetch in the background (budget m
   await openFilterMenu();
   fireEvent.click(document.querySelector('[data-architecture-filter-relation="structural"]') as Element);
 
-  // Narrowing still renders from the payload at once. A sleep rather than
+  // The narrowing renders from the payload at once. A sleep rather than
   // `waitFor`: the request it also schedules puts the drawing in the in-flight
   // state, which a polling `act` wrapper handles badly.
   await new Promise((resolve) => setTimeout(resolve, 400));
   assert.equal(apiMock.architectureGraph.mock.calls.length, 2);
-  // …and asks the server because the arrived reading was cut.
+  // …and settles on the server. A cut reading is no longer special: the freed
+  // budget is one more reason the payload in hand cannot speak for the state.
   assert.ok(
     (apiMock.architectureGraph.mock.calls[1] as unknown[])[3],
     'a truncated narrowing sends its filter to the server',
@@ -5213,10 +5501,11 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
 /**
  * The member caps, read at the component seam.
  *
- * The drawing must ASK the renderer for `memberMaxChars: 48` and
- * `memberMaxRows: 6`, draw the truncated rows and the renderer's own fold row,
- * and still hand the Text page the untruncated declarations — the trade the
- * task writes down (six rows on the canvas, everything in the Inspector/Text).
+ * The drawing must ASK the renderer for `detail: 'full'` and
+ * `memberMaxChars: 48` (and NOT `memberMaxRows`), draw at most
+ * `MEMBER_MAX_ROWS` rows plus the app's own fold row, and still hand the Text
+ * page the untruncated declarations — the trade the task writes down (six rows
+ * on the canvas, everything in the Inspector/Text).
  */
 test('the drawing asks for the member caps, and the Text page keeps the full declaration', async () => {
   renderCalls.length = 0;
@@ -5370,4 +5659,738 @@ test('the drawing cap folds rows past MEMBER_MAX_ROWS into the long-form marker'
   host.appendChild(atLimit);
   capDrawnMemberRows(host);
   assert.equal(atLimit.innerHTML, before, 'an entity within the row limit is untouched');
+});
+
+/**
+ * The Text page reads the COMPLETE drawn document.
+ *
+ * 41 classes (the renderer's default detail switches to `compact` above 40) with
+ * 7–25 members each. The real renderer runs, the panel reports its drawn model,
+ * and the Text page's character/line readings are those of the complete
+ * document — no `… +N more (M members)` row, every member present. This is the
+ * wiring leg: the option that makes it complete lives in the renderer, and the
+ * reading that proves it lives in the dock.
+ */
+test('the Text page reads the complete drawn document for a >40-entity class graph', async () => {
+  const nodes = Array.from({ length: 41 }, (_unused, index) => ({
+    id: `s1/src/pkg${String(index % 5)}/e${String(index)}.ts.Entity${String(index)}`,
+    label: `Entity${String(index)}`,
+    distance: index === 0 ? 0 : 1 + (index % 3),
+    kind: 'class' as const,
+    members: Array.from({ length: 7 + (index % 19) }, (_member, member) => ({
+      name: `member${String(member)}`,
+      kind: 'field' as const,
+      visibility: 'private',
+      signature: 'number',
+    })),
+  }));
+  // A dependency chain, so no node is isolated: the shipped filter hides
+  // isolated nodes by default, and an all-isolated fixture would draw nothing.
+  const graph = {
+    nodes,
+    edges: nodes.slice(1).map((node, index) => ({
+      from: nodes[index].id,
+      to: node.id,
+      relationType: 'dependency',
+    })),
+  };
+  const entityResult: ArchitectureGraphResult = {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: { file: RESULT.graph.file, entity: graph },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: 41,
+      entityEdges: 40,
+      entityTotal: 41,
+      nodeCount: 41,
+      edgeCount: 40,
+      truncated: false,
+      entityTruncated: false,
+    },
+    provenance: RESULT.provenance,
+  };
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(entityResult));
+
+  // What the panel will report, reproduced through the app's own render options.
+  const options = { view: { kind: 'hierarchy' } as const, grouping: 'raw' as const, idShape: 'scope-prefixed' as const };
+  const bridge = archguardToPlantUml(graph, options);
+  const detailed = await renderWithMemberDetail(renderDetailed, parserSafePlantUml(bridge.puml), {});
+  const drawn = {
+    model: detailed.model,
+    entityIdOf: bridge.aliasOf,
+    toPlantUml: (model: typeof detailed.model) => standardiseDrawnStereotypes(toPlantUml(model)),
+    applyView,
+  };
+  const expected = buildFullPlantUmlDocument(graph, { ...options, drawn }).text;
+  const expectedMemberRows = nodes.reduce((total, node) => total + node.members.length, 0);
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  await waitFor(() =>
+    assert.equal(
+      document.querySelector('[data-architecture-drawn-source]')?.getAttribute('data-architecture-drawn-source'),
+      'drawn',
+      'the panel must report the drawn model the Text page serializes',
+    ),
+  );
+  await waitFor(() =>
+    assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'hierarchy'),
+  );
+
+  fireEvent.click(document.querySelector('[data-architecture-text-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-text-panel]')));
+
+  const reading = () => document.querySelector('[data-architecture-text-volume]');
+  await waitFor(() => {
+    assert.equal(
+      Number(reading()?.getAttribute('data-architecture-text-characters')),
+      expected.length,
+      'the reading must be the complete document',
+    );
+  });
+  assert.equal(Number(reading()?.getAttribute('data-architecture-text-lines')), expected.split('\n').length);
+  assert.doesNotMatch(previewText(), /…\s*\+\d+\s+more|\(\d+\s+members\)/);
+  assert.equal(
+    (expected.match(/^[ \t]*- member\d+: number$/gm) ?? []).length,
+    expectedMemberRows,
+    'every member of every class is in the document',
+  );
+});
+
+/** The dock's text preview element. */
+function previewText(): string {
+  return document.querySelector('[data-architecture-text-preview]')?.textContent ?? '';
+}
+
+/* ── Show all / Reset filters, the layout status, and the folded tier ────────────────────── */
+
+test('Show all widens the element axis only, and Reset filters restores the shipped default', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+  const menu = await openFilterMenu();
+  const checked = (selector: string): string | null =>
+    menu.querySelector(selector)?.getAttribute('aria-checked') ?? null;
+  assert.equal(checked('[data-architecture-filter-relation="dependency"]'), 'true');
+
+  // The one-click "Show all" lives in the readout row under the drawing, not in
+  // the popover: it is offered exactly when the readout has something hidden.
+  fireEvent.click(document.querySelector('[data-architecture-filter-show-all]') as Element);
+
+  // ① The relation preset is UNTOUCHED. The reported defect was that Show all
+  //    silently moved it to `call` — the panel went from "hide 4" to "hide 0"
+  //    and the reader had to walk the preset back by hand.
+  assert.equal(
+    checked('[data-architecture-filter-relation="dependency"]'),
+    'true',
+    'Show all must leave the relation preset where the reader put it',
+  );
+  assert.equal(checked('[data-architecture-filter-relation="call"]'), 'false');
+  // ② The element axis really did widen.
+  assert.equal(checked('[data-architecture-filter-kind="function"]'), 'true');
+  assert.equal(checked('[data-architecture-filter-isolated]'), 'false');
+  // ③ The badge states the ONE decision still hiding something (the preset).
+  assert.equal(
+    document.querySelector('[data-architecture-filter-badge]')?.getAttribute('data-architecture-filter-badge'),
+    '1',
+    'the drawer says what is still hidden instead of reporting a change nobody asked for',
+  );
+
+  // ④ The follow-up request (a widening, so it must ask the server) carries the
+  //    same preset and the wider kind list.
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2));
+  const widened = (apiMock.architectureGraph.mock.calls[1] as unknown[])[3] as {
+    relations: string[];
+    kinds: string[];
+  };
+  assert.deepEqual(widened.relations, ['inheritance', 'implementation', 'composition', 'dependency']);
+  assert.ok(widened.kinds.includes('function'), 'the function kind is requested');
+
+  // ⑤ Reset filters: one click back to the project's default. That is a
+  //    NARROWING, so it is answered from the payload in hand — no third request.
+  fireEvent.click(document.querySelector('[data-architecture-filter-reset]') as Element);
+  await waitFor(() => assert.equal(checked('[data-architecture-filter-kind="function"]'), 'false'));
+  assert.equal(checked('[data-architecture-filter-isolated]'), 'true');
+  assert.equal(checked('[data-architecture-filter-relation="dependency"]'), 'true');
+  assert.equal(
+    document.querySelector('[data-architecture-filter-badge]')?.getAttribute('data-architecture-filter-badge'),
+    '4',
+    'the badge is back to the shipped four decisions',
+  );
+  assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'a narrowing needs no round trip');
+});
+
+test('a drawing expected to be slow announces its layout, and one the package tier cannot fit collapses', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(DEEP_ENTITY_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+
+  // ── the status: on screen BEFORE the blocking layout, gone with the drawing ──
+  // A 300-box drawing is expected to pass a second (the entity count times the
+  // shipped per-entity floor), so the canvas must say so. The proof that it is
+  // announced BEFORE the block rather than after it: at the moment the status is
+  // visible the host still holds no drawing at all — the first SVG is inserted
+  // only once ELK has returned.
+  const statusNode = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-layout-status]');
+    assert.ok(node instanceof HTMLElement, 'the canvas must announce the layout it is about to run');
+    return node;
+  }, { interval: 5, timeout: 20_000 });
+  const statusAppearedAt = Date.now();
+  const host = await screen.findByTestId('plantuml-host', {}, { timeout: 20_000 });
+  assert.equal(host.querySelector('svg'), null, 'the status is up while the drawing is still being laid out');
+  assert.equal(
+    statusNode.getAttribute('data-architecture-layout-status'),
+    String(DEEP_ENTITY_COUNT),
+    'the status names the entity count of the drawing being laid out',
+  );
+  assert.match(statusNode.textContent ?? '', new RegExp(`Laying out ${DEEP_ENTITY_COUNT} entities`));
+  // The AC's 200 ms reads as "the status is up early in the layout, not after
+  // it". Measured the way jsdom can measure it without counting the harness'
+  // own commit/poll latency: the notice preceded the END of the layout by at
+  // least (the layout duration − 200 ms). A status painted only once the layout
+  // returned would leave a gap of ~0 and fail this bound by the layout's own
+  // length; the shipped defect (17.6 s of silent blocking) fails it by 17 s.
+  const root = graphRoot();
+  await waitFor(() => assert.ok(host.querySelector('svg')), { timeout: 20_000 });
+  const drawingEndedAt = Date.now();
+  const layoutMs = Number(root.getAttribute('data-architecture-layout-ms'));
+  assert.equal(
+    document.querySelector('[data-architecture-layout-status]'),
+    null,
+    'the status goes away with the layout it described',
+  );
+  // jsdom lays the same drawing out several times faster than a browser (the
+  // ESTIMATE, not this reading, is what decides to announce), so the floor here
+  // only guards against a drawing so small the announcement would be vacuous.
+  assert.ok(layoutMs >= 250, `the first layout really was long enough to be worth announcing; got ${layoutMs} ms`);
+  assert.ok(
+    drawingEndedAt - statusAppearedAt >= layoutMs - 200,
+    `the status appeared ${drawingEndedAt - statusAppearedAt} ms before the drawing landed, but the layout took `
+      + `${layoutMs} ms: it was not announced within the first 200 ms of the block`,
+  );
+
+  // ── the folded tier: a canvas the package-only drawing cannot fit ────────────
+  // A canvas the dense 300-box drawing cannot map into at the floor scale: the
+  // package-only drawing is several canvases wide there, which is the state the
+  // reported project was in ("whole graph at 5 %" over a 4 415 px drawing).
+  sizeHost(host, 200, 150);
+  triggerResize();
+
+  await waitFor(() => {
+    const depth = root.getAttribute('data-architecture-fold-depth');
+    assert.ok(depth !== null, 'the canvas collapses deeper than the package tier');
+  }, { timeout: 20_000 });
+
+  const foldDepth = Number(root.getAttribute('data-architecture-fold-depth'));
+  assert.ok(Number.isInteger(foldDepth) && foldDepth >= 1, `the fold keeps at least one level; got ${foldDepth}`);
+  // The hint states the collapse instead of claiming to be the whole graph at a
+  // percentage that is not what the drawing shows.
+  const hint = document.querySelector('[data-architecture-readable-hint]');
+  assert.ok(hint instanceof HTMLElement, 'the collapsed drawing explains itself');
+  assert.match(hint.textContent ?? '', new RegExp(`Collapsed to ${foldDepth} levels`));
+  assert.doesNotMatch(
+    hint.textContent ?? '',
+    /Whole graph/,
+    'the "Whole graph at N%" sentence is a claim the folded tier must not make',
+  );
+  // The folded drawing is a map of package tabs: every class box is hidden and
+  // the deeper package levels are gone.
+  const drawnBoxes = [...host.querySelectorAll('[data-entity-id]')]
+    .filter((node) => (node as SVGGElement).style.display !== 'none');
+  assert.equal(drawnBoxes.length, 0, 'every class box is hidden by the fold');
+  const allPackages = [...host.querySelectorAll('.uml-package[data-package-id]')];
+  const drawnPackages = allPackages.filter((node) => (node as SVGGElement).style.display !== 'none');
+  assert.ok(drawnPackages.length > 0, 'the fold draws the packages it kept');
+  assert.ok(
+    drawnPackages.length < allPackages.length,
+    `the fold really removed the deeper levels (${drawnPackages.length} of ${allPackages.length} frames stay)`,
+  );
+
+  // ── the reading is the REAL adaptation, and Fit leaves it fitting ────────────
+  const svgOf = (): SVGSVGElement => {
+    const element = host.querySelector('svg');
+    assert.ok(element instanceof SVGSVGElement);
+    return element;
+  };
+  const viewBoxWidth = (svg: SVGSVGElement): number =>
+    Number((svg.getAttribute('viewBox') ?? '').split(/[\s,]+/)[2]);
+  assert.ok(
+    Number(svgOf().getAttribute('width')) <= host.clientWidth + 0.5,
+    `the folded drawing is ${svgOf().getAttribute('width')} px wide in a ${host.clientWidth} px canvas`,
+  );
+  fireEvent.click(document.querySelector('[data-architecture-zoom-fit]') as Element);
+  await waitFor(() => {
+    assert.ok(
+      Number(svgOf().getAttribute('width')) <= host.clientWidth + 0.5,
+      'Fit must leave the whole folded graph inside the canvas',
+    );
+  });
+  // The stated percentage is the drawing's own adaptation to the canvas over the
+  // drawing's own width — never the 5 % floor the ORIGINAL bounds would produce.
+  const stated = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.ok(stated > 0 && stated <= 1);
+  assert.ok(
+    Math.abs(Number(svgOf().getAttribute('width')) - viewBoxWidth(svgOf()) * stated) < 1.5,
+    'the percentage the reader sees is the size actually drawn over the drawing\'s own size',
+  );
+  assert.ok(stated > 0.05, `a folded drawing is not shown at the 5 % floor; got ${stated}`);
+});
+
+/* ── panel visibility and readout fixes (2026-10-23) ──────────────────────────────────────── */
+
+/**
+ * Reading: an expanded Scope cleanup panel is really on screen.
+ *
+ * The row's detail opens UPWARDS out of the provenance footer (`absolute
+ * bottom-full`), and the footer used to clip (`overflow-hidden`): the toggle
+ * flipped `aria-expanded` to true and its arrow to ▾ while nothing appeared.
+ * jsdom has no layout engine, so this reading is the ancestor chain that
+ * decides the clip — the browser-side box reading (area > 0, fully inside the
+ * viewport) lives in `e2e/architecture-canvas-layout.spec.ts`.
+ */
+test('an expanded Scope cleanup panel is not clipped by the footer it opens out of', async () => {
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(SCOPE_HYGIENE_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  fireEvent.click(document.querySelector('[data-architecture-scope-hygiene]') as Element);
+  const detail = await waitFor(() => {
+    const node = document.querySelector('[data-architecture-scope-hygiene-detail]');
+    assert.ok(node instanceof HTMLElement, 'expanding the row draws its detail');
+    return node;
+  });
+
+  // The detail opens ABOVE the footer, i.e. outside the footer's own box, so the
+  // footer (and everything between) is the clip that can cut it. Ancestors above
+  // the footer hold the whole panel column, and the detail stays inside that.
+  const clipClasses = /^overflow-(hidden|auto|scroll|clip)$/;
+  const clippedBy: string[] = [];
+  for (let ancestor = detail.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+    const declarations = [...ancestor.classList].filter((name) => clipClasses.test(name));
+    if (declarations.length > 0) {
+      clippedBy.push(`${ancestor.tagName.toLowerCase()}.${declarations.join('.')}`);
+    }
+    if (ancestor.hasAttribute('data-architecture-source-footer')) break;
+  }
+  assert.ok(
+    detail.closest('[data-architecture-source-footer]') !== null,
+    'the detail belongs to the provenance footer this case is about',
+  );
+  assert.deepEqual(clippedBy, [], 'no ancestor up to the footer may clip the panel it opens out of');
+  assert.notEqual(window.getComputedStyle(detail).display, 'none', 'the detail is drawn, not display:none');
+  const rows = [...detail.querySelectorAll('li')].filter((row) => (row.textContent ?? '').trim().length > 0);
+  assert.ok(rows.length >= 4, `the detail must carry its rows; got ${rows.length}`);
+});
+
+/**
+ * Reading: the hover hint never covers the drawing's own labels.
+ *
+ * The hint was pinned to the canvas's top-left corner, which is exactly where a
+ * package frame paints its tab and its class names. The rule is pure
+ * (`placeHoverHint`); the panel-level half proves the panel MEASURES the live
+ * canvas and feeds that rule, rather than only calling it in isolation.
+ */
+test('the hover hint is placed clear of the package tabs and class names', async () => {
+  type Rect = { left: number; top: number; right: number; bottom: number };
+  const overlaps = (a: Rect, b: Rect): boolean =>
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+  // ── the rule itself ───────────────────────────────────────────────────────
+  const container = { left: 0, top: 0, right: 900, bottom: 600 };
+  const hint = { width: 420, height: 22 };
+  // A package frame's tab spans the whole canvas width at its top edge, and a
+  // class name sits a little below it.
+  const tabBand = { left: 0, top: 0, right: 900, bottom: 40 };
+  const className = { left: 40, top: 70, right: 300, bottom: 88 };
+  const placement = placeHoverHint({ container, hint, obstacles: [tabBand, className] });
+  const placed = {
+    left: placement.left,
+    top: placement.top,
+    right: placement.left + hint.width,
+    bottom: placement.top + hint.height,
+  };
+  assert.equal(placement.overlapsObstacle, false, 'a free band exists, so none may be claimed');
+  assert.equal(overlaps(placed, tabBand), false, `the hint must clear the tab band; got ${JSON.stringify(placed)}`);
+  assert.equal(overlaps(placed, className), false, `the hint must clear the class name; got ${JSON.stringify(placed)}`);
+  // Positive control: the pinned corner the panel shipped DOES intersect both,
+  // so the reading above is able to go red on the defect it replaces.
+  const pinnedCorner = { left: 8, top: 8, right: 428, bottom: 30 };
+  assert.equal(overlaps(pinnedCorner, tabBand), true, 'the shipped corner overlapped the tab band');
+
+  // ── the panel's own measurement ───────────────────────────────────────────
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(RESULT));
+  const originalRect = Element.prototype.getBoundingClientRect;
+  const box = (left: number, top: number, width: number, height: number): DOMRect => ({
+    left, top, width, height, right: left + width, bottom: top + height, x: left, y: top,
+    toJSON: () => ({}),
+  }) as DOMRect;
+  Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+    if (this.hasAttribute('data-architecture-canvas-region')) return box(0, 0, 900, 600);
+    if (this.matches('.uml-package[data-package-id] > path')) return box(0, 0, 900, 40);
+    if (this.hasAttribute('data-architecture-node-name')) return box(0, 70, 260, 18);
+    if (this.hasAttribute('data-architecture-hover')) return box(0, 0, 420, 22);
+    return box(0, 0, 0, 0);
+  };
+  try {
+    render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+    const host = await waitForDiagram();
+    assert.ok(
+      host.querySelector('.uml-package[data-package-id] > path') !== null,
+      'this case needs the drawing to paint package tabs, or it proves nothing',
+    );
+    const node = host.querySelector('[data-entity-id]');
+    assert.ok(node instanceof Element, 'the drawing must offer a node to hover');
+    fireEvent.mouseOver(node);
+    const hintElement = await waitFor(() => {
+      const wrapper = document.querySelector('[data-architecture-hover-hint]');
+      assert.ok(wrapper instanceof HTMLElement, 'hovering a node draws the reading');
+      return wrapper;
+    });
+    const left = Number.parseFloat(hintElement.style.left);
+    const top = Number.parseFloat(hintElement.style.top);
+    assert.ok(
+      top >= tabBand.bottom,
+      `the measured hint must sit below the tab band; top=${hintElement.style.top} left=${hintElement.style.left}`,
+    );
+    assert.equal(
+      overlaps({ left, top, right: left + 420, bottom: top + 22 }, tabBand),
+      false,
+      'the drawn hint must not intersect the tabs it was moved off',
+    );
+  } finally {
+    Element.prototype.getBoundingClientRect = originalRect;
+  }
+});
+
+/**
+ * Reading: a settled filter change prints the numbers a reload prints.
+ *
+ * The fake request sequence is the defect itself: the widening's answer is held
+ * back, the reader returns to the narrower preset, and the held-back (now
+ * SUPERSEDED) answer lands after the current one. The summary must keep the
+ * current state's numbers — the panel used to adopt the late answer and stay
+ * wrong until the page was reloaded.
+ */
+test('a preset change settles on the numbers a reload prints, even when the superseded result lands late', async () => {
+  const callResult: ArchitectureGraphResult = {
+    ...FILTER_RESULT,
+    stats: {
+      ...FILTER_RESULT.stats,
+      entityTotal: 9,
+      relationCounts: { dependency: 1, composition: 1 },
+      hidden: { byKind: { function: 4 }, byRelation: {}, isolated: 11 },
+    },
+  };
+  let resolveCall: ((response: Response) => void) | null = null;
+  let resolveDependency: ((response: Response) => void) | null = null;
+  apiMock.architectureGraph.mockResolvedValueOnce(jsonResponse(FILTER_RESULT));
+  apiMock.architectureGraph.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+    resolveCall = resolve;
+  }));
+  apiMock.architectureGraph.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+    resolveDependency = resolve;
+  }));
+
+  const seen: ArchitectureRendererProps[] = [];
+  function StandInRenderer(props: ArchitectureRendererProps) {
+    seen.push(props);
+    return <div data-stand-in-renderer="true" />;
+  }
+  const first = render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(seen.length > 0));
+
+  /** The three numbers the AC names, read off the DOM the reader reads. */
+  const reading = (): Record<string, string | null | undefined> => {
+    const summary = document.querySelector('[data-architecture-readout-summary]');
+    const hidden = document.querySelector('[data-architecture-filter-hidden]');
+    return {
+      shown: summary?.getAttribute('data-architecture-readout-summary'),
+      related: summary?.getAttribute('data-architecture-readout-total'),
+      hiddenTotal: hidden?.getAttribute('data-architecture-filter-hidden'),
+      hiddenRelations: hidden?.getAttribute('data-architecture-filter-hidden-relations'),
+      hiddenIsolated: hidden?.getAttribute('data-architecture-filter-hidden-isolated'),
+    };
+  };
+  const settled = reading();
+  assert.equal(settled.related, '3', 'the dependency reading names its related count');
+
+  // +Calls widens: the request goes out and is held in flight.
+  await openFilterMenu();
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="call"]') as Element);
+  await new Promise((resolve) => setTimeout(resolve, 350));
+
+  // Back to +Dependencies: narrower, drawn at once, and requested.
+  fireEvent.click(document.querySelector('[data-architecture-filter-relation="dependency"]') as Element);
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  assert.equal(
+    apiMock.architectureGraph.mock.calls.length,
+    3,
+    'the narrowing is settled by the server, not only by the local cut',
+  );
+
+  // The CURRENT reading lands first; the superseded (wider) one arrives after.
+  assert.ok(resolveCall !== null && resolveDependency !== null);
+  await act(async () => resolveDependency?.(jsonResponse(FILTER_RESULT)));
+  await act(async () => resolveCall?.(jsonResponse(callResult)));
+
+  const afterLate = reading();
+  assert.deepEqual(afterLate, settled, 'the superseded result must not overwrite the settled reading');
+  first.unmount();
+
+  // The reference: the SAME state, read fresh (what reloading the page prints).
+  apiMock.architectureGraph.mockReset();
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(FILTER_RESULT));
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" renderer={StandInRenderer} />);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-readout-summary]') !== null));
+  assert.deepEqual(reading(), afterLate, 'the settled numbers equal a reload of the same state');
+});
+
+/**
+ * Reading: a drilled neighbourhood says what it is, and the zoom does not move.
+ *
+ * Double-clicking an entity replaced the drawing and stated nothing: the new
+ * chrome named only where the reader could go ("Back to Class diagram",
+ * "Explosion view"), and the re-fit moved the percentage from 72% to 75% over a
+ * drawing that had barely changed.
+ */
+test('drilling into a neighbourhood names it and keeps the zoom', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+  sizeHost(host, 160, 120);
+  triggerResize();
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  assert.equal(
+    document.querySelector('[data-architecture-neighbourhood-status]'),
+    null,
+    'the default drawing is not a neighbourhood and states none',
+  );
+  const scaleBefore = Number(graphRoot().getAttribute('data-architecture-zoom-scale'));
+  assert.ok(scaleBefore > 0, `the drawing is at a real scale before the drill; got ${scaleBefore}`);
+
+  drillNode(host, 'src/modules/alpha/A.ts.Alpha');
+  // The view attribute flips with the state; the drawing follows one async
+  // layout later, and THAT is the commit whose zoom the reader sees.
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'neighborhood'));
+  await waitFor(() =>
+    assert.ok(
+      Number(graphRoot().getAttribute('data-architecture-visible-nodes') ?? '0') > 0,
+      'the neighbourhood drawing must be on screen before its zoom is read',
+    ));
+
+  const status = document.querySelector('[data-architecture-neighbourhood-status]');
+  assert.ok(status instanceof HTMLElement, 'the toolbar states what the reader is looking at');
+  assert.match(status.textContent ?? '', /Neighbourhood of Alpha/, `got "${status.textContent}"`);
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-zoom-scale'),
+    String(scaleBefore),
+    'entering the neighbourhood must not move the zoom',
+  );
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-zoom-mode'),
+    'custom',
+    'the tier stops claiming the new drawing is fitted',
+  );
+  const explosion = document.querySelector('[data-architecture-explosion]');
+  assert.ok(explosion instanceof HTMLElement, 'the explosion control is offered from the neighbourhood');
+  assert.ok((explosion.getAttribute('title') ?? '').length > 0, 'the control explains what the view is');
+
+  // …and stepping back out keeps the same scale.
+  fireEvent.click(document.querySelector('[data-architecture-back]') as Element);
+  await waitFor(() => assert.equal(graphRoot().getAttribute('data-architecture-view'), 'hierarchy'));
+  await waitFor(() =>
+    assert.ok(
+      Number(graphRoot().getAttribute('data-architecture-visible-nodes') ?? '0') > 0,
+      'the class drawing must be back on screen before its zoom is read',
+    ));
+  assert.equal(
+    graphRoot().getAttribute('data-architecture-zoom-scale'),
+    String(scaleBefore),
+    'leaving the neighbourhood must not move the zoom either',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// architecture-chrome-and-mobile-drawer-polish — pressed chrome, the canvas
+// paper, the project search rows, and the longer-lived Undo
+// ---------------------------------------------------------------------------
+
+test('the Focus / Overview toggle paints the mode in force, and the semantic canvas paints no paper of its own', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  const focus = document.querySelector('[data-architecture-readable-focus-mode]');
+  const overview = document.querySelector('[data-architecture-readable-overview-mode]');
+  assert.ok(focus instanceof HTMLElement, 'the Focus toggle is drawn');
+  assert.ok(overview instanceof HTMLElement, 'the Overview toggle is drawn');
+
+  // The pressed mode is distinguished VISIBLY — weight and fill, not the
+  // aria attribute alone (which the shipped defect had and nobody could see).
+  const pressed = [focus, overview].find((button) => button.getAttribute('aria-pressed') === 'true');
+  const unpressed = [focus, overview].find((button) => button.getAttribute('aria-pressed') !== 'true');
+  assert.ok(pressed !== undefined && unpressed !== undefined, 'exactly one mode is pressed');
+  assert.match(pressed.className, /font-semibold/, `the pressed mode must read heavier: ${pressed.className}`);
+  assert.doesNotMatch(unpressed.className, /font-semibold/);
+  assert.notEqual(pressed.className, unpressed.className, 'pressed and unpressed must not paint identically');
+
+  // Pressing the other one moves the visual state with the reading.
+  fireEvent.click(unpressed);
+  assert.equal(unpressed.getAttribute('aria-pressed'), 'true');
+  assert.match(unpressed.className, /font-semibold/);
+  assert.doesNotMatch(pressed.className, /font-semibold/);
+
+  // The renderer's own `.uml-canvas` paper rectangle is transparent: its fill
+  // used to be a paper colour sized to the mapped CONTENT, which left a white
+  // rectangle with a panel-coloured seam around it on both viewports.
+  const paper = host.querySelector('svg .uml-canvas');
+  assert.ok(paper !== null, 'the renderer still emits its canvas rectangle');
+  assert.equal(
+    paper.getAttribute('fill'),
+    'none',
+    'the canvas rectangle must not paint a second background colour',
+  );
+});
+
+test('the project search shows the whole name, moves the path to a second line, and states "not in the graph" once', async () => {
+  /** 28 characters: long enough that the shipped row cut it to a few glyphs. */
+  const LONG_NAME = 'ArchitectureSearchResultName';
+  assert.equal(LONG_NAME.length, 28);
+  const LONG_FILE = 'src/modules/architecture/search/resultName.ts';
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    results: [
+      { id: `proj/one/${LONG_NAME}`, name: LONG_NAME, file: LONG_FILE, kind: 'class' },
+      { id: 'proj/two/SecondHit', name: 'SecondHit', file: 'src/modules/other/second.ts', kind: 'function' },
+    ],
+    truncated: false,
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+
+  fireEvent.change(screen.getByLabelText('Search entities or files'), { target: { value: 'Architecture' } });
+  const row = await waitFor(() => {
+    const element = document.querySelector(`[data-architecture-search-project-result="proj/one/${LONG_NAME}"]`);
+    assert.ok(element instanceof HTMLElement, 'the project search lists the hit');
+    return element;
+  });
+
+  const name = row.querySelector('[data-architecture-search-project-name]');
+  assert.ok(name instanceof HTMLElement, 'the row draws the class name');
+  assert.doesNotMatch(name.className, /truncate/, 'the name must never be truncated');
+  assert.equal((name.textContent ?? '').trim(), LONG_NAME, 'the whole 28-character name is on screen');
+
+  const file = row.querySelector('[data-architecture-search-project-file]');
+  assert.ok(file instanceof HTMLElement, 'the row draws the path');
+  assert.equal((file.textContent ?? '').trim(), LONG_FILE);
+  assert.equal(file.getAttribute('dir'), 'rtl', 'a long path loses its LEFT-hand directories, keeping the file name');
+  assert.match(file.className, /truncate/);
+  assert.match(file.className, /text-left/);
+  // Second LINE: both are blocks in one column, the path after the name.
+  assert.equal(name.parentElement, file.parentElement, 'name and path share one column');
+  assert.match(name.parentElement?.className ?? '', /flex-col/);
+  assert.equal(name.nextElementSibling, file, 'the path follows the name on its own line');
+
+  // "Not in the current graph" is stated once, on the group heading; no row
+  // repeats it (the repetition is what squeezed the names).
+  assert.equal(screen.getAllByText('Not in the current graph').length, 1, 'said once');
+  assert.doesNotMatch(row.textContent ?? '', /Not in the current graph/, 'and never on a row');
+
+  // Both actions name the entity they act on.
+  const showIt = row.querySelector('[data-architecture-search-show]');
+  assert.ok(showIt instanceof HTMLElement, 'an out-of-graph hit offers "Show it"');
+  assert.match(showIt.getAttribute('aria-label') ?? '', new RegExp(LONG_NAME));
+  const pinButton = row.querySelector('[data-architecture-search-pin]');
+  assert.ok(pinButton instanceof HTMLElement);
+  assert.match(pinButton.getAttribute('aria-label') ?? '', new RegExp(LONG_NAME));
+});
+
+test('the curation Toast lives 12 seconds and a hover pauses it', () => {
+  vi.useFakeTimers();
+  try {
+    const onDismiss = vi.fn();
+    const onUndo = vi.fn();
+    render(
+      <CurationToast
+        toast={{ id: 1, message: 'Pinned Alpha', undoable: true }}
+        undoLabel="Undo"
+        onUndo={onUndo}
+        onDismiss={onDismiss}
+      />,
+    );
+    const toast = screen.getByRole('status');
+
+    // 11 s in: still on screen (the shipped 6 s window would already be gone).
+    act(() => { vi.advanceTimersByTime(11_000); });
+    assert.equal(onDismiss.mock.calls.length, 0, 'the Toast is still there at 11 s');
+    assert.ok(screen.queryByRole('status') !== null);
+
+    // Hover pauses the clock: five more seconds change nothing.
+    fireEvent.mouseEnter(toast);
+    act(() => { vi.advanceTimersByTime(5_000); });
+    assert.equal(onDismiss.mock.calls.length, 0, 'a hover pauses the auto-dismiss');
+
+    // Leaving restarts the full window, and 13 s from the start (2 s more
+    // after the pause, then a fresh 12 s) it dismisses.
+    fireEvent.mouseLeave(toast);
+    act(() => { vi.advanceTimersByTime(11_000); });
+    assert.equal(onDismiss.mock.calls.length, 0, 'still inside the restarted window');
+    act(() => { vi.advanceTimersByTime(1_001); });
+    assert.equal(onDismiss.mock.calls.length, 1, 'the Toast dismisses after its 12 s window');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('the Adjusted popover header offers the same Undo once the Toast is gone', async () => {
+  useCuratedGraphMock();
+  apiMock.architectureSearch.mockResolvedValue(responseOf({
+    results: [{ id: CURATION_PIN_ID, name: 'Gamma', file: 'src/modules/gamma/c.ts', kind: 'class' }],
+    truncated: false,
+  }));
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  fireEvent.change(screen.getByLabelText('Search entities or files'), { target: { value: 'Gam' } });
+  await waitFor(() => assert.ok(document.querySelector(`[data-architecture-search-pin="${CURATION_PIN_ID}"]`)));
+  fireEvent.click(document.querySelector(`[data-architecture-search-pin="${CURATION_PIN_ID}"]`) as Element);
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 2, 'pinning re-requests the reading'));
+  assert.deepEqual(
+    (apiMock.architectureGraph.mock.calls[1][3] as { extraSeeds?: string[] }).extraSeeds,
+    [CURATION_PIN_ID],
+  );
+  assert.ok(document.querySelector('[data-architecture-curation-toast]'), 'the Toast announces the pin');
+
+  // The Adjusted popover is the audit surface; its header keeps Undo reachable
+  // after the Toast has dismissed.
+  fireEvent.click(document.querySelector('[data-architecture-curation-manager-toggle]') as Element);
+  const headerUndo = await waitFor(() => {
+    const button = document.querySelector('[data-architecture-curation-manager-undo]');
+    assert.ok(button instanceof HTMLElement, 'the popover header offers Undo');
+    return button;
+  });
+  fireEvent.click(headerUndo);
+
+  await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.length, 3, 'the header Undo restores the reading'));
+  assert.equal(
+    (apiMock.architectureGraph.mock.calls[2][3] as { extraSeeds?: string[] }).extraSeeds,
+    undefined,
+    'the same effect as the Toast\'s Undo: the pin is gone from the request',
+  );
+  assert.equal(
+    document.querySelector('[data-architecture-curation-toast]'),
+    null,
+    'and, exactly like the Toast button, the Undo dismisses the Toast',
+  );
+  await waitFor(() => assert.equal(
+    document.querySelector('[data-architecture-curation-manager-undo]'),
+    null,
+    'with nothing left to undo, the header entry disappears',
+  ));
+  assert.equal(host.querySelector('[data-architecture-pinned="true"]'), null, 'the pinned marker is gone');
 });

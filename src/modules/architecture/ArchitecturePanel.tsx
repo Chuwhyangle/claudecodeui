@@ -1,12 +1,15 @@
 import {
   type ComponentType,
+  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
   useState,
 } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PlantUmlGraph } from '@/modules/architecture/PlantUmlGraph';
@@ -28,7 +31,6 @@ import {
 } from '@/modules/architecture/ArchitectureSelectionTray';
 import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPanel';
 import {
-  archguardToPlantUml,
   nodeFileOf,
   seedMarkerMode,
   type ArchitectureDiagramView,
@@ -41,17 +43,18 @@ import {
   rankArchitectureDetail,
   type ArchitectureDetailTier,
 } from '@/modules/architecture/detailRanking';
+import { buildFullPlantUmlDocument } from '@/modules/architecture/plantUmlText';
 import {
   activeFilterCount,
   applyFilter,
   ARCHITECTURE_ELEMENT_KINDS,
   ARCHITECTURE_RELATION_PRESETS,
-  ARCHITECTURE_SHOW_ALL_FILTER,
   filtersEqual,
   hiddenTotal,
-  isFilterNarrower,
   keptMentionedCount,
   relationsForPreset,
+  resetFilter,
+  showAllFilter,
   type ArchitectureElementRelationFilter,
   type ArchitectureRelationPreset,
 } from '@/modules/architecture/elementRelationFilter';
@@ -73,10 +76,16 @@ import {
 } from '@/modules/architecture/hooks/useTouchLayout';
 import { fitToLayoutBudget, LAYOUT_NODE_BUDGET } from '@/modules/architecture/layoutBudget';
 import { buildReadout, drawnKindCounts } from '@/modules/architecture/readoutNumbers';
+import {
+  HOVER_HINT_MARGIN_PX,
+  placeHoverHint,
+  type ArchitectureHintRect,
+} from '@/modules/architecture/hoverHintPlacement';
 import type {
   ArchitectureDetailReading,
   ArchitectureDrawnPlantUml,
   ArchitectureEntityKind,
+  ArchitectureFitRequest,
   ArchitectureNodeIdShape,
   ArchitectureRendererEdge,
   ArchitectureRendererGraph,
@@ -95,6 +104,7 @@ import {
   type ArchitectureSelectionScope,
 } from '@/modules/architecture/selectionModel';
 import { useArchitectureGraph, type ArchitectureGraphResult } from '@/modules/architecture/useArchitectureGraph';
+import { useArchitectureFullscreen } from '@/modules/architecture/useArchitectureFullscreen';
 import { readDraftText, writeDraftText } from '@/shared/chatDrafts';
 import { formatAbsoluteTime, formatRelativeTime } from '@/shared/utils';
 import { ArchitectureEmptyState } from '@/modules/architecture/ArchitectureEmptyState';
@@ -246,6 +256,11 @@ type ArchitecturePanelRenderer = ComponentType<
      * explicit readable mode per project under it.
      */
     readonly projectId?: string | null;
+    /**
+     * The coarse drawer's covered band, in CSS pixels: the renderer reserves it
+     * so neither a fitted drawing nor the selected box hides behind the drawer.
+     */
+    readonly bottomObscuredPx?: number;
     readonly selectedNodeIds?: readonly string[];
     readonly selectedRelations?: readonly {
       readonly from: string;
@@ -479,6 +494,59 @@ export default function ArchitecturePanel({
     (hover: ArchitectureRendererHover | null) => setHovered({ key: hoverKey, hover }),
     [hoverKey],
   );
+  // The hint element whose size the placement measures, and the position it
+  // settled on (`null` until measured). Essential state: the position is a
+  // MEASURED relation between the hint and the drawing's package tabs, so it
+  // cannot be derived from props during render.
+  const hoverHintRef = useRef<HTMLSpanElement | null>(null);
+  // The canvas region that holds the drawing. Declared here (not with the other
+  // refs below) because the hover-hint effect reads it from this render on.
+  const graphAreaRef = useRef<HTMLDivElement | null>(null);
+  const [hoverHintPosition, setHoverHintPosition] = useState<{ left: number; top: number } | null>(null);
+  // What the measured position belongs to. The hint's own text (and therefore
+  // its width) changes with the hovered entity and its relation kinds, so the
+  // placement is recomputed whenever any of those move.
+  const hoverHintSignature = hovered !== null && hovered.key === hoverKey && hovered.hover !== null
+    ? `${hoverKey}\u0000${hovered.hover.node.id}\u0000${hovered.hover.relations.join(',')}`
+    : null;
+  // The hint may not cover the drawing's own labels: package tabs are painted
+  // along the top edge of every frame, and class names sit inside them. The
+  // candidate walk and the avoidance live in `placeHoverHint`; this effect only
+  // turns the live DOM into the rectangles it reads. It runs before paint, so
+  // the hint never flashes at the pinned corner first.
+  useLayoutEffect(() => {
+    if (hoverHintSignature === null) {
+      setHoverHintPosition(null);
+      return;
+    }
+    const container = graphAreaRef.current;
+    const hint = hoverHintRef.current;
+    if (container === null || hint === null) return;
+    const containerBox = container.getBoundingClientRect();
+    const hintBox = hint.getBoundingClientRect();
+    const rectsOf = (selector: string): ArchitectureHintRect[] => [...container.querySelectorAll(selector)]
+      .map((element) => element.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0)
+      .map((rect) => ({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }));
+    const placement = placeHoverHint({
+      container: {
+        left: containerBox.left,
+        top: containerBox.top,
+        right: containerBox.right,
+        bottom: containerBox.bottom,
+      },
+      hint: { width: hintBox.width, height: hintBox.height },
+      obstacles: [
+        // The package tabs (each frame's own `path`) and the class-name text.
+        ...rectsOf('.uml-package[data-package-id] > path'),
+        ...rectsOf('[data-architecture-node-name]'),
+        // The canvas's own corner chrome, for the same reason the fit avoids it.
+        ...rectsOf('[data-architecture-minimap]'),
+        ...rectsOf('[data-architecture-zoom-cluster]'),
+      ],
+    });
+    setHoverHintPosition({ left: placement.left, top: placement.top });
+  }, [hoverHintSignature]);
   // The request the server is asked for. `kinds` rides only on the entity view
   // (a file has no element kind); `relations` rides on both views. The
   // "keep mentioned" switches are part of `kinds`' own axis, so they ride only
@@ -656,6 +724,12 @@ export default function ArchitecturePanel({
   // empty inspector ("Select a node …") and squeezing the canvas. Only a
   // gesture opens it — a fresh selection, or the toolbar's explicit Text door.
   const [dockOpen, setDockOpen] = useState(false);
+  // The coarse drawer's height in CSS pixels, reported by the dock itself (it
+  // alone knows which of the three snaps is in force). Two consumers need the
+  // number: the selection tray is lifted above the drawer, and the drawing
+  // reserves the band so the selected box is not hidden behind it. 0 when the
+  // drawer is closed or the tier is the desktop dock.
+  const [touchDrawerHeight, setTouchDrawerHeight] = useState(0);
   // True when the reader opened the dock THEMSELVES while nothing was
   // selected (the Text button). Only that kind of open may show an empty
   // inspector page; an open that a selection caused must close as soon as the
@@ -757,9 +831,21 @@ export default function ArchitecturePanel({
   // when a stand-in renderer does not report a model (the text page then says
   // it is showing the bridge fallback).
   const [drawnPlantUml, setDrawnPlantUml] = useState<ArchitectureDrawnPlantUml | null>(null);
-  // The rendered drawing's container, so the export actions can read the live
-  // SVG without the renderer having to hand its host ref up the tree.
-  const graphAreaRef = useRef<HTMLDivElement | null>(null);
+  // The same model, kept synchronously: the renderer reports it while it is
+  // drawing, one React render before `drawnPlantUml` commits. The Export menu
+  // reads this ref so a click that lands in that window still exports the
+  // document the Text page will settle on, never the bridge spelling.
+  const drawnPlantUmlRef = useRef<ArchitectureDrawnPlantUml | null>(null);
+  const handleDrawnPlantUmlChange = useCallback((drawn: ArchitectureDrawnPlantUml | null): void => {
+    drawnPlantUmlRef.current = drawn;
+    setDrawnPlantUml(drawn);
+  }, []);
+  // The overlay root is the panel's own element: fullscreen restyles it in
+  // place rather than mounting a second copy, so the renderer keeps its zoom
+  // and the panel keeps every filter/scope/selection reading.
+  const panelRootRef = useRef<HTMLDivElement | null>(null);
+  // Where focus returns when the overlay closes.
+  const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   const copyFallbackRef = useRef<HTMLTextAreaElement | null>(null);
   // A fallback dialog opens with its text already selected, so the documented
   // "select and copy" path is one keystroke rather than a drag.
@@ -768,6 +854,82 @@ export default function ArchitecturePanel({
     copyFallbackRef.current?.focus();
     copyFallbackRef.current?.select();
   }, [copyFallbackText]);
+
+  // The page-internal overlay plus, on a fine pointer, the browser's own
+  // fullscreen session. `allowNativeFullscreen` stays false on a coarse
+  // pointer: phones get the overlay alone (which is all iOS Safari supports).
+  const fullscreen = useArchitectureFullscreen({
+    overlayRef: panelRootRef,
+    allowNativeFullscreen: !coarsePointer,
+  });
+  // The stable members the effects and handlers below depend on, named so a
+  // hook dependency is a callback rather than a freshly built object.
+  const fullscreenActive = fullscreen.active;
+  const exitFullscreen = fullscreen.exit;
+  const toggleFullscreen = fullscreen.toggle;
+  // Focus moves INTO the drawing on entry and back to the toggle on exit, so
+  // the keyboard reader is never left on a control the overlay covers.
+  const wasFullscreenRef = useRef(false);
+  useEffect(() => {
+    if (fullscreenActive) {
+      wasFullscreenRef.current = true;
+      (graphAreaRef.current ?? panelRootRef.current)?.focus();
+      return;
+    }
+    if (!wasFullscreenRef.current) return;
+    wasFullscreenRef.current = false;
+    fullscreenButtonRef.current?.focus();
+  }, [fullscreenActive]);
+  // A different session or project is a different reading: fullscreen must not
+  // travel with the panel into it.
+  useEffect(() => {
+    exitFullscreen();
+  }, [sessionId, projectId, exitFullscreen]);
+
+  // Whether the drawing follows the container (Fit) or a scale the reader
+  // chose. The renderer reports it; the fullscreen re-fit below is gated on it,
+  // so entering/leaving the overlay never undoes a manual zoom. A ref, not
+  // state: nothing renders from it, and the toggle's effect must read the
+  // latest report without re-scheduling itself.
+  const zoomModeRef = useRef<'fit' | 'custom'>('fit');
+  const handleZoomModeChange = useCallback((mode: 'fit' | 'custom'): void => {
+    zoomModeRef.current = mode;
+  }, []);
+  // A request to fit the drawing again, sent after a size change THIS panel
+  // caused (the overlay turns the region into `fixed; inset: 0`). The token
+  // makes each toggle its own request; null means no request was made yet.
+  const [fitRequest, setFitRequest] = useState<ArchitectureFitRequest | null>(null);
+  const fitTokenRef = useRef(0);
+  // How much of the overlay's top edge the in-flow chrome (the one-row toolbar
+  // and the readout row) covers. The drawing region is the whole viewport on
+  // the overlay, so without this band a fitted drawing starts BEHIND the chrome
+  // — the defect the review found. 0 outside the overlay, where chrome sits
+  // above the canvas in normal flow and takes height from it instead.
+  const [topChromePx, setTopChromePx] = useState(0);
+  const readoutRowRef = useRef<HTMLDivElement | null>(null);
+  const wasFullscreenForFitRef = useRef(false);
+  useEffect(() => {
+    if (wasFullscreenForFitRef.current === fullscreenActive) return;
+    wasFullscreenForFitRef.current = fullscreenActive;
+    if (zoomModeRef.current !== 'fit') return;
+    // One frame after the toggle: the overlay's box, or the region's return to
+    // the flex column, is laid out by then, so the fit uses the settled size.
+    const frame = requestAnimationFrame(() => {
+      const viewportHeight = fullscreenActive
+        // In the overlay the region is `fixed; inset: 0`, so the viewport
+        // height IS its height — read it from the window rather than depending
+        // on a layout pass this effect cannot observe.
+        ? window.innerHeight
+        : graphAreaRef.current?.getBoundingClientRect().height ?? 0;
+      // The readout row is the LAST in-flow chrome row on the overlay (the
+      // toolbar sits above it), so its bottom edge is the covered band's height.
+      const chromeBottom = readoutRowRef.current?.getBoundingClientRect().bottom ?? 0;
+      setTopChromePx(fullscreenActive && compactToolbar ? Math.ceil(chromeBottom) : 0);
+      fitTokenRef.current += 1;
+      setFitRequest({ token: fitTokenRef.current, viewportHeight });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fullscreenActive, compactToolbar]);
 
   const changeScope = (next: number): void => {
     const clamped = clampArchitectureScope(next);
@@ -802,29 +964,31 @@ export default function ArchitecturePanel({
   };
 
   /**
-   * Apply a new selection.
+   * Apply a new selection: show it now, then let the SERVER settle it.
    *
-   * A NARROWER selection is answered from the payload in hand — that is the
-   * whole "收窄即时" half of the design — with one exception: if the arrived
-   * reading was truncated, the freed budget may have exposed more nodes than
-   * this payload carries, so it asks the server in the background. A WIDER (or
-   * incomparable) selection cannot be reconstructed from a payload that already
-   * had it cut away, so it always re-requests; the old drawing stays on screen
-   * (`refreshing`) until the answer arrives.
+   * Both halves matter. The selection is written to state immediately, and
+   * `displayFilter` below cuts the payload in hand, so the drawing narrows in
+   * the same frame as the click — that is the "收窄即时" half of the design and
+   * it stays.
+   *
+   * The request that follows is NOT optional, and it used to be skipped for a
+   * narrowing. A locally narrowed payload cannot reproduce the server's own
+   * reading of the narrower state: the server runs its BFS and its node budget
+   * ON the filtered graph, so a node reachable only through a filtered-away
+   * edge is absent from its answer, while the wider payload in hand still
+   * carries it (and then counts it, or counts its isolated removal). The
+   * summary therefore drifted from what a reload of the same state printed —
+   * "9 related · 1 call relations · 11 isolated nodes" against "5 related ·
+   * 601 call relations · 6 isolated nodes" — and stayed wrong until the page
+   * was reloaded. Every settled selection now ends on a server reading; the
+   * debounce still collapses a walk through the presets into one round trip.
    */
   const changeFilter = (next: ArchitectureElementRelationFilter): void => {
     setFilterSettings((current) => ({ ...current, filter: next }));
     writeStoredFilter(projectId, next);
     if (filtersEqual(next, requestFilter)) {
+      // Already the request's own selection: the payload in hand IS this state.
       cancelScheduledRequest();
-      return;
-    }
-    if (isFilterNarrower(next, requestFilter)) {
-      const truncated = view.status === 'loaded'
-        && (granularity === 'file'
-          ? (view.result.stats.fileTruncated ?? view.result.stats.truncated)
-          : (view.result.stats.entityTruncated ?? view.result.stats.truncated));
-      if (truncated) scheduleRequest(next, requestGranularity);
       return;
     }
     scheduleRequest(next, requestGranularity);
@@ -1174,6 +1338,18 @@ export default function ArchitecturePanel({
     setMultiSelectMode(false);
     if (dockOpen) changeDockOpen(false);
   }, [dockOpen, changeDockOpen]);
+
+  /**
+   * `F`, while the drawing owns the keyboard: the same toggle the toolbar
+   * button performs. The handler lives on the canvas REGION (not the panel), so
+   * typing `f` in the search box or a tray memo never enters fullscreen.
+   */
+  const handleCanvasFullscreenKey = useCallback((event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'f' && event.key !== 'F') return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    event.preventDefault();
+    toggleFullscreen();
+  }, [toggleFullscreen]);
   // An empty set has nothing to expand: reset both tray readings with it, so a
   // later selection starts from the pill rather than a stale drawer.
   useEffect(() => {
@@ -1458,17 +1634,24 @@ export default function ArchitecturePanel({
   const canComposeSelection = resolveDraftScope(projectId, sessionId) !== null;
 
   /**
-   * The PlantUML document for the view on screen, exactly as the bridge builds
-   * it. The file graph is the adaptive consumer (its overview folds directory
-   * layers); the class graph is never folded — its document draws the entities
-   * in package frames, matching the drawing the reader sees.
+   * The PlantUML document for the view on screen — the SAME document the Text
+   * page's "Whole filtered graph" scope shows.
+   *
+   * Both entry points call {@link buildFullPlantUmlDocument} with the same graph,
+   * view, grouping, id shape and drawn model (the renderer renders that model
+   * with `detail: 'full'`, so its members are complete), which is what makes
+   * the exported file and the copyable text byte-identical instead of two
+   * spellings of the same drawing. Before a drawing exists the builder falls
+   * back to the local bridge — the same fallback the text page takes, so the
+   * two are still equal.
    */
   const currentPlantUml = (): string =>
-    archguardToPlantUml(drawnGraph, {
+    buildFullPlantUmlDocument(drawnGraph, {
       view: diagramView,
       grouping: granularity === 'file' ? 'adaptive' : 'raw',
       idShape: nodeIdShapeOf(granularity),
-    }).puml;
+      drawn: drawnPlantUmlRef.current,
+    }).text;
 
   /** The live drawing, read from the panel's own subtree at export time. */
   const renderedSvg = (): SVGSVGElement | null =>
@@ -1592,6 +1775,63 @@ export default function ArchitecturePanel({
       className={`${headerButtonClass} border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
     >
       {t('architecture.text.open', { defaultValue: 'Text' })}
+    </button>
+  );
+
+  /**
+   * The overlay's one control. It carries an icon AND the visible word (the
+   * icon alone is not a label), flips to "Exit fullscreen" while the overlay is
+   * up, and lives on both toolbar tiers: on the compact row it sits OUTSIDE the
+   * Adjust sheet, so entering the overlay never asks the reader to open a
+   * sheet first.
+   */
+  const fullscreenButton = (
+    <button
+      ref={fullscreenButtonRef}
+      type="button"
+      aria-pressed={fullscreen.active}
+      aria-label={
+        fullscreen.active
+          ? t('architecture.fullscreen.exit', { defaultValue: 'Exit fullscreen' })
+          : t('architecture.fullscreen.enter', { defaultValue: 'Fullscreen' })
+      }
+      onClick={fullscreen.toggle}
+      data-architecture-fullscreen-toggle="true"
+      data-architecture-fullscreen-active={fullscreen.active ? 'true' : undefined}
+      style={compactTargetStyle}
+      className={`${headerButtonClass} inline-flex items-center gap-1 border border-border outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60`}
+    >
+      {fullscreen.active
+        ? <Minimize2 className="h-4 w-4" aria-hidden="true" />
+        : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+      <span>
+        {fullscreen.active
+          ? t('architecture.fullscreen.exit', { defaultValue: 'Exit fullscreen' })
+          : t('architecture.fullscreen.enter', { defaultValue: 'Fullscreen' })}
+      </span>
+    </button>
+  );
+
+  /**
+   * The compact tier's one menu button. It is the row's rightmost control
+   * normally, and in the fullscreen overlay it is one of only two: the view
+   * switch and the Text page move INSIDE the sheet there, so the overlay spends
+   * one 56px row on chrome instead of the two 44px rows that used to cover the
+   * drawing's top nodes.
+   */
+  const adjustButton = (
+    <button
+      ref={sheetTriggerRef}
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={sheetOpen}
+      aria-label={t('architecture.sheet.open', { defaultValue: 'Adjust' })}
+      onClick={() => setSheetOpen(true)}
+      data-architecture-sheet-toggle="true"
+      style={compactTargetStyle}
+      className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+    >
+      {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
     </button>
   );
 
@@ -2009,6 +2249,20 @@ export default function ArchitecturePanel({
         <span aria-hidden="true">{filter.hideIsolated ? '☑' : '☐'}</span>
         {t('architecture.filter.isolated', { defaultValue: 'Hide isolated nodes' })}
       </button>
+
+      {/* The way back to this project's shipped selection. It lives in the
+          popover as well as in the readout row because the popover is where the
+          reader made the changes; a sequence of switches has no other one-click
+          undo, and the row is only drawn while something is hidden. */}
+      <button
+        type="button"
+        data-architecture-filter-reset="true"
+        onClick={() => changeFilter(resetFilter())}
+        style={compactTargetStyle}
+        className="mt-1 self-start rounded border border-border px-2 py-0.5 text-left text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
+      >
+        {t('architecture.filter.reset', { defaultValue: '↺ Reset filters' })}
+      </button>
     </div>
   );
 
@@ -2254,7 +2508,7 @@ export default function ArchitecturePanel({
                 aria-selected={activeSearchIndex === index}
                 data-architecture-search-option-index={index}
                 data-architecture-search-in-graph={match.inGraph}
-                className="flex w-full items-center justify-between gap-1 rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
+                className="flex w-full items-start justify-between gap-1 rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
               >
                 <button
                   type="button"
@@ -2269,9 +2523,13 @@ export default function ArchitecturePanel({
                     // the secondary button below is the drill command.
                     revealNode(match.node.id, !match.inRange, false);
                   }}
-                  className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                  className="flex min-w-0 flex-1 items-start justify-between gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                 >
-                  <span className="min-w-0 truncate">{match.node.label}</span>
+                  {/* The name wraps instead of truncating: it is how a reader
+                      tells two similar results apart. */}
+                  <span data-architecture-search-result-name="true" className="min-w-0 break-words">
+                    {match.node.label}
+                  </span>
                   {!match.inGraph ? (
                     <span
                       data-architecture-search-hidden-reason="true"
@@ -2316,9 +2574,22 @@ export default function ArchitecturePanel({
             <>
               <p
                 data-architecture-search-group="project"
-                className="mt-1 border-t border-border/60 px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mt-1 flex flex-wrap items-baseline gap-1 border-t border-border/60 px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
               >
-                {t('architecture.search.other', { defaultValue: 'Elsewhere in the project' })}
+                <span>{t('architecture.search.other', { defaultValue: 'Elsewhere in the project' })}</span>
+                {/* Said ONCE, here, instead of on every row: a row repeated the
+                    sentence and the repetition is what pushed the names so
+                    narrow that they were cut to a few characters. */}
+                {projectSearch.search.status === 'ready'
+                  && projectSearch.search.results.some((hit) => !activeNodeIds.has(hit.id)) && (
+                  <span
+                    data-architecture-search-project-missing-note="true"
+                    // Sentence case: this is a sentence, not a section title.
+                    className="font-normal normal-case tracking-normal text-amber-600 dark:text-amber-400"
+                  >
+                    {t('architecture.search.notInGraph', { defaultValue: 'Not in the current graph' })}
+                  </span>
+                )}
               </p>
               {projectSearch.search.status === 'error' ? (
                 <div data-architecture-search-error="true" className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
@@ -2349,26 +2620,42 @@ export default function ArchitecturePanel({
                           aria-selected={activeSearchIndex === searchMatches.length + projectIndex}
                           data-architecture-search-project-result={hit.id}
                           data-architecture-search-project-in-graph={inCurrentGraph}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
+                          // Top-aligned: the name and the path are two lines, so
+                          // the actions stay beside the FIRST line.
+                          className="flex items-start gap-1 rounded px-2 py-1 text-[11px] text-foreground hover:bg-accent"
                         >
-                          <span aria-hidden="true" className="w-3 shrink-0 text-center text-muted-foreground">
+                          <span aria-hidden="true" className="mt-0.5 w-3 shrink-0 text-center text-muted-foreground">
                             {searchKindGlyph(hit.kind)}
                           </span>
-                          <span className="min-w-0 flex-1 truncate">
-                            <span className="font-medium">{hit.name}</span>
-                            <span className="ml-1 text-muted-foreground">{hit.file}</span>
-                          </span>
-                          {!inCurrentGraph && (
+                          {/* The name is NEVER truncated: a reader distinguishes
+                              results by the class name (and its kind glyph), so
+                              it wraps onto a second line when it does not fit.
+                              The path goes UNDER it and, when it is too long,
+                              loses its left-hand directories — the file name is
+                              the part that identifies the row. */}
+                          <span className="flex min-w-0 flex-1 flex-col">
                             <span
-                              data-architecture-search-project-missing="true"
-                              className="shrink-0 text-amber-600 dark:text-amber-400"
+                              data-architecture-search-project-name="true"
+                              className="font-medium break-words"
                             >
-                              {t('architecture.search.notInGraph', { defaultValue: 'Not in the current graph' })}
+                              {hit.name}
                             </span>
-                          )}
+                            <span
+                              data-architecture-search-project-file="true"
+                              dir="rtl"
+                              title={hit.file}
+                              className="block truncate text-left text-muted-foreground"
+                            >
+                              {hit.file}
+                            </span>
+                          </span>
                           {!inCurrentGraph && (
                             <button
                               type="button"
+                              // The visible label stays "Show it"; the accessible
+                              // name adds WHICH entity, reusing the same key (no
+                              // new i18n entry for a sentence no locale owns).
+                              aria-label={`${t('architecture.search.showIt', { defaultValue: 'Show it' })}: ${hit.name}`}
                               data-architecture-search-show={hit.id}
                               // Pinning is what "show it" means for a server-side
                               // hidden entity: the next reading carries it.
@@ -2644,9 +2931,16 @@ export default function ArchitecturePanel({
    * seed resolved).
    */
   const sourceFooter = (
+    // NO `overflow-hidden` on this row. Both of its disclosures (`names
+    // mentioned …` and `Scope cleanup`) open UPWARDS out of it
+    // (`absolute bottom-full`), and the clipping footer cut them down to a
+    // zero-height sliver: the toggle flipped to ▾ while nothing appeared. The
+    // row cannot overflow on its own — the source line is `min-w-0 truncate`
+    // (which clips itself) and the cleanup pill is `shrink-0` — so the clip
+    // bought nothing and cost both panels.
     <div
       data-architecture-source-footer="true"
-      className="relative z-20 flex shrink-0 items-center gap-2 overflow-hidden border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
+      className="relative z-20 flex shrink-0 items-center gap-2 border-t border-border/60 px-3 py-1 text-[11px] text-muted-foreground"
     >
       <span
         data-architecture-source-line="true"
@@ -2919,11 +3213,25 @@ export default function ArchitecturePanel({
           <button
             type="button"
             data-architecture-filter-show-all="true"
-            onClick={() => changeFilter(ARCHITECTURE_SHOW_ALL_FILTER)}
+            onClick={() => changeFilter(showAllFilter(filter))}
+            // Show all is about the ELEMENT axis: it shows every kind and keeps
+            // isolated nodes, and leaves the relation preset where the reader
+            // put it (see `showAllFilter`).
             style={compactTargetStyle}
             className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
           >
             {t('architecture.filter.showAll', { defaultValue: '▸ Show all' })}
+          </button>
+          <button
+            type="button"
+            data-architecture-filter-reset="true"
+            onClick={() => changeFilter(resetFilter())}
+            // The way back from a sequence of switches that no reader can
+            // reconstruct from memory: one click, the project's shipped default.
+            style={compactTargetStyle}
+            className="font-medium text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            {t('architecture.filter.reset', { defaultValue: '↺ Reset filters' })}
           </button>
         </div>
       )}
@@ -3003,41 +3311,70 @@ export default function ArchitecturePanel({
   );
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden" data-architecture-panel="true">
+    <div
+      ref={panelRootRef}
+      // A programmatic focus target for the no-canvas (empty state) reading;
+      // the drawing region is preferred whenever it exists.
+      tabIndex={-1}
+      data-architecture-panel="true"
+      data-architecture-fullscreen={fullscreen.active ? 'true' : undefined}
+      // The overlay is the SAME element the panel always renders: `fixed;
+      // inset: 0` restyles it in place, which is what lets the renderer keep
+      // its zoom and the panel keep every reading through the toggle.
+      style={fullscreen.active ? { position: 'fixed', inset: 0, zIndex: 60 } : undefined}
+      className={
+        fullscreen.active
+          ? 'flex flex-col overflow-hidden bg-background outline-none'
+          : 'relative flex h-full flex-col overflow-hidden'
+      }
+    >
       {/* The one-off touch bubble's own fade. It is keyed CSS (not a JS timer)
           so the dismissal runs off the animation end even in a background tab,
           and a test can drive it with a single animation event. */}
       <style>{'@keyframes architecture-touch-hint-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }'}</style>
       <div
         data-architecture-toolbar="true"
-        style={compactToolbar ? { gap: TOUCH_CONTROL_GAP_PX } : undefined}
-        // The row WRAPS rather than scrolls. `overflow-x: auto` also makes the
-        // block axis a scroll container, which clipped every absolutely
-        // positioned child — the search results were cut to a 3px line. Wrapping
-        // keeps the popovers in normal paint flow, and the desktop row still
-        // fits one line at its breakpoint (it only wraps when the width really
-        // runs out, which is preferable to hiding controls in a scroller).
-        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5"
+        // On the overlay the compact row is ONE 56px line (a 44px target plus
+        // the row's 2×6px padding): `nowrap` and the stated height are the
+        // contract that keeps a second row from covering the drawing again.
+        style={
+          compactToolbar
+            ? fullscreen.active
+              ? { gap: TOUCH_CONTROL_GAP_PX, height: 56, flexWrap: 'nowrap' }
+              : { gap: TOUCH_CONTROL_GAP_PX }
+            : undefined
+        }
+        // Over the overlay the row is chrome ON TOP of a viewport-sized
+        // drawing, not a band that shortens it. Otherwise the row WRAPS rather
+        // than scrolls: `overflow-x: auto` also makes the block axis a scroll
+        // container, which clipped every absolutely positioned child — the
+        // search results were cut to a 3px line. Wrapping keeps the popovers in
+        // normal paint flow, and the desktop row still fits one line at its
+        // breakpoint (it only wraps when the width really runs out, which is
+        // preferable to hiding controls in a scroller).
+        className={`flex shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-1.5 ${
+          fullscreen.active ? 'relative z-40 bg-background' : ''
+        }`}
       >
         {compactToolbar ? (
-          <>
-            {granularityGroup}
-            <span className="flex-1" />
-            {textToggle}
-            <button
-              ref={sheetTriggerRef}
-              type="button"
-              aria-haspopup="dialog"
-              aria-expanded={sheetOpen}
-              aria-label={t('architecture.sheet.open', { defaultValue: 'Adjust' })}
-              onClick={() => setSheetOpen(true)}
-              data-architecture-sheet-toggle="true"
-              style={compactTargetStyle}
-              className="rounded-lg border border-border px-3 text-sm font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
-            >
-              {t('architecture.sheet.open', { defaultValue: 'Adjust' })}
-            </button>
-          </>
+          fullscreen.active ? (
+            // The overlay keeps ONE row: leaving, and the one menu the view
+            // switch and Text page moved into. Everything else would be a
+            // second row over the drawing's top edge.
+            <>
+              <span className="flex-1" />
+              {fullscreenButton}
+              {adjustButton}
+            </>
+          ) : (
+            <>
+              {granularityGroup}
+              <span className="flex-1" />
+              {textToggle}
+              {fullscreenButton}
+              {adjustButton}
+            </>
+          )
         ) : (
           <>
             <h3 className="shrink-0 text-sm font-semibold text-foreground">
@@ -3051,6 +3388,7 @@ export default function ArchitecturePanel({
             {curationManagerButton}
             <span className="flex-1" />
             {textToggle}
+            {fullscreenButton}
             {exportMenu}
             {legendButton}
           </>
@@ -3129,6 +3467,14 @@ export default function ArchitecturePanel({
             <span className="text-[11px] font-medium text-muted-foreground">
               {t('architecture.sheet.view', { defaultValue: 'View' })}
             </span>
+            {/* In the overlay the one toolbar row keeps only Exit fullscreen and
+                Adjust, so the view switch and the Text page move in here. */}
+            {fullscreen.active && (
+              <div className="flex flex-col" style={{ gap: TOUCH_CONTROL_GAP_PX }}>
+                {granularityGroup}
+                {textToggle}
+              </div>
+            )}
             {/* The renderer's own view chrome (tier, scale, readable mode, Back,
                 Drill in) is portaled in here; on the compact tier the sheet is
                 the one menu, so those entries do not spend a second canvas row. */}
@@ -3203,7 +3549,11 @@ export default function ArchitecturePanel({
             {!compactToolbar && (
               <div
                 data-architecture-canvas-header="true"
-                className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1"
+                // Floats above the overlay's viewport-sized drawing instead of
+                // taking a band from it (see the graph region below).
+                className={`flex shrink-0 items-start gap-2 border-b border-border/60 px-3 py-1 ${
+                  fullscreen.active ? 'relative z-30 bg-background' : ''
+                }`}
               >
                 <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">{readoutPanel}</div>
                 <div
@@ -3220,9 +3570,12 @@ export default function ArchitecturePanel({
                 it as chrome: the drawing's available height starts below it. */}
             {compactToolbar && (
               <div
+                ref={readoutRowRef}
                 data-architecture-canvas-header="true"
                 data-architecture-readout-overlay="true"
-                className="flex shrink-0 border-b border-border/60 px-3 py-1"
+                className={`flex shrink-0 border-b border-border/60 px-3 py-1 ${
+                  fullscreen.active ? 'relative z-30 bg-background' : ''
+                }`}
               >
                 {readoutPanel}
               </div>
@@ -3235,6 +3588,13 @@ export default function ArchitecturePanel({
               aria-busy={refreshing}
               data-architecture-refreshing={refreshing ? 'true' : undefined}
               data-architecture-canvas-region="true"
+              // Which source the Text page and the Export menu will serialize:
+              // the drawn model (complete, rendered with `detail: 'full'`) once
+              // the renderer has reported one, or the local bridge before that.
+              // The renderer nulls the model when a new drawing starts, so this
+              // flips back to `bridge` for the duration of a re-render — a
+              // reader (and a criterion) can wait for `drawn` instead of racing it.
+              data-architecture-drawn-source={drawnPlantUml === null ? 'bridge' : 'drawn'}
               // The canvas region is an instrument, not prose: dragging it pans
               // and double-clicking drills, so neither gesture may paint a text
               // selection. Scoped to THIS region — the dock beside it (the
@@ -3244,7 +3604,17 @@ export default function ArchitecturePanel({
                 WebkitUserSelect: 'none',
                 WebkitTouchCallout: 'none',
               }}
-              className={`relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`}
+              // `F` is the drawing's own shortcut while it owns the keyboard.
+              onKeyDown={handleCanvasFullscreenKey}
+              // On the overlay the REGION itself is viewport-sized: the toolbar
+              // and readout rows above float over it with a higher z-index, so
+              // "the drawing fills the screen" is literally its box, not a
+              // share of the remaining column.
+              className={
+                fullscreen.active
+                  ? `fixed inset-0 z-0 flex min-h-0 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`
+                  : `relative flex min-h-0 flex-1 flex-col transition-opacity ${refreshing ? 'opacity-60' : ''}`
+              }
             >
               {/* One-off, in-canvas instruction. It is an overlay bubble (not a
                   row in the panel column), fades itself out after 3s, and the
@@ -3286,6 +3656,14 @@ export default function ArchitecturePanel({
                   <Renderer
                     key={`${sessionId}:${granularity}:${scope}`}
                     graph={layoutFit?.graph ?? detailRanking?.graph ?? neighbourhood}
+                    // The coarse drawer covers the canvas' bottom band while it
+                    // is open; the drawing reserves that band and keeps the
+                    // selected box above it.
+                    bottomObscuredPx={compactToolbar && dockOpen ? touchDrawerHeight : 0}
+                    // On the overlay the chrome is painted OVER the viewport-
+                    // sized canvas; the drawing reserves that band so a fitted
+                    // graph is fully visible below it.
+                    topObscuredPx={topChromePx}
                     // Which project the drawing belongs to; the renderer uses it
                     // to remember the reader's explicit readable mode.
                     projectId={projectId}
@@ -3320,11 +3698,16 @@ export default function ArchitecturePanel({
                     // The dock narrows the canvas; its transition must not be
                     // read as a container shape change.
                     relayoutLocked={dockLayoutLocked}
+                    // The panel's own size change (the fullscreen overlay) is
+                    // answered by an explicit fit, and only when the drawing is
+                    // still fitted — a manual zoom survives the toggle.
+                    fitRequest={fitRequest}
+                    onZoomModeChange={handleZoomModeChange}
                     // The renderer owns the drill-down view; reporting it keeps
                     // the export menu's PlantUML identical to the drawing.
                     onViewChange={setDiagramView}
                     // The model it actually drew, for the text page.
-                    onDrawnPlantUmlChange={setDrawnPlantUml}
+                    onDrawnPlantUmlChange={handleDrawnPlantUmlChange}
                     focusNodeId={focusTarget?.id ?? null}
                     focusToken={focusTarget?.token}
                     focusDrill={focusTarget?.drill ?? false}
@@ -3349,10 +3732,23 @@ export default function ArchitecturePanel({
               {/* The hover relation reading replaces the two duplicated
                   standing instructions: it only exists while a node is under
                   the pointer, so the page has no permanent hint sentence. It
-                  stays a transient overlay; the readout above does not. */}
+                  stays a transient overlay; the readout above does not.
+
+                  Its position is MEASURED, never pinned: the drawing paints a
+                  package tab (and the class names) along its top edge, and the
+                  old fixed `left-3 top-3` covered exactly that row. The panel's
+                  layout effect hands the hint the first free candidate. */}
               {hoverReading !== null && (
-                <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[85%] flex-col items-start gap-1">
+                <div
+                  data-architecture-hover-hint="true"
+                  style={{
+                    left: hoverHintPosition?.left ?? HOVER_HINT_MARGIN_PX,
+                    top: hoverHintPosition?.top ?? HOVER_HINT_MARGIN_PX,
+                  }}
+                  className="pointer-events-none absolute z-20 flex max-w-[85%] flex-col items-start gap-1"
+                >
                   <span
+                    ref={hoverHintRef}
                     data-architecture-hover={hoverReading.id}
                     data-architecture-hover-name={hoverReading.label}
                     data-architecture-hover-relations={visibleHover?.relations.join(',') ?? ''}
@@ -3403,6 +3799,10 @@ export default function ArchitecturePanel({
                   multiSelect={multiSelectMode}
                   expanded={trayExpanded}
                   compact={compactToolbar}
+                  // The coarse drawer is drawn OVER the canvas: lift the tray
+                  // (pill and expanded panel) above its top edge so the two
+                  // never share screen space.
+                  bottomInset={compactToolbar && dockOpen ? touchDrawerHeight : 0}
                   onExpandedChange={setTrayExpanded}
                   onExitMultiSelect={() => setMultiSelectMode(false)}
                   onToggleItem={toggleSelection}
@@ -3427,6 +3827,21 @@ export default function ArchitecturePanel({
       </div>
 
       {hasSeeds && (
+        // `contents` keeps the dock a direct flex item on the normal layout.
+        // On the overlay it becomes a floating right-hand column instead: the
+        // inspector/text pages overlay the drawing rather than narrowing it.
+        // The coarse tier already draws its own bottom drawer, so only the
+        // fine-pointer dock is wrapped.
+        <div
+          data-architecture-fullscreen-dock={
+            fullscreen.active && !compactToolbar ? 'true' : undefined
+          }
+          className={
+            fullscreen.active && !compactToolbar
+              ? 'absolute inset-y-0 right-0 z-40 flex max-h-full flex-col'
+              : 'contents'
+          }
+        >
         <ArchitectureDock
           open={dockOpen}
           title={t('architecture.dock.title', { defaultValue: 'Inspector' })}
@@ -3533,12 +3948,14 @@ export default function ArchitecturePanel({
           onTabChange={(tabId) => setDockTab(tabId === 'text' ? 'text' : 'inspector')}
           onClose={closeDock}
           collapsedSummary={dockSummary}
+          onTouchDrawerHeightChange={setTouchDrawerHeight}
           snapLabels={{
             collapsed: t('architecture.dock.snapCollapsed', { defaultValue: 'Collapsed' }),
             half: t('architecture.dock.snapHalf', { defaultValue: 'Half' }),
             full: t('architecture.dock.snapFull', { defaultValue: 'Full' }),
           }}
         />
+        </div>
       )}
 
       <ArchitectureCurationManager
@@ -3551,6 +3968,10 @@ export default function ArchitecturePanel({
         onRestoreGroup={restoreGroup}
         onRestoreAll={() => curationStore.restoreAll()}
         onClearItem={clearCurationItem}
+        // The Toast's Undo, offered in the popover header once the Toast is
+        // gone; `undoCuration` is the one handler both entry points call.
+        canUndo={curationStore.canUndo()}
+        onUndo={undoCuration}
       />
 
       {soloNodeId !== null && (

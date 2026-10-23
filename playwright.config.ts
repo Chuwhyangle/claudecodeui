@@ -396,14 +396,39 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // launch included), and `8 passed (58.0s)` for the `--grep "control arm"`
   // selection. 240_000 still clears the full-file measurement ~1.8x, so the
   // entry stays; the numbers above are the readings it was checked against.
-  // Re-measured 2026-10-23 with the node-size legs (a main arm at both viewports
-  // that also opens the Inspector and the Text page, and a control arm drawing
-  // the same fixture WITHOUT the member caps through the DEV-only lever):
-  // `14 passed (3.1m)` for the whole invocation and `9 passed (1.1m)` for
-  // `--grep "control arm"`. 3.1m = 186s left only 1.29x over the old 240_000 —
-  // too thin for a load-slowed fan-in run — so the entry is raised to 300_000
-  // (~1.6x the measured wall clock, boot and both servers included).
-  'architecture-canvas-layout.spec.ts': 300_000,
+  // Raised to 360_000 on 2026-10-23 for the two render regressions: the file now
+  // also drives the perimeter-routing fixture and the interleaved-member fixture
+  // on both viewports at the five negotiated levels plus the 100 % baseline, and
+  // the control arm crops/restores the viewBox and swaps/restores member rows.
+  // Measured full-file wall clock (boot + both servers + browser launch + 14
+  // cases): `14 passed (3.7m)` on this worktree, 2026-10-23. 360_000 keeps ~1.6x
+  // over that reading while leaving the earlier 240_000 ceiling behind.
+  // Re-measured 2026-10-23 with the "Show all" / folded-fit cases: the function
+  // fixture's 396-box drawing is laid out TWICE per case on a real ELK main
+  // thread (once to widen, once to Fit), in the main arm and again in the
+  // control arm. MEASURED twice: `19 passed (4.1m)` and `19 passed (3.8m)` for
+  // the whole invocation, and `11 passed (1.4m)` for the `--grep "control arm"`
+  // selection. 480_000 keeps ~2.1x over the slower reading — the headroom the
+  // 360_000 entry held, which a load-slowed fan-in reload needs.
+  // Re-measured 2026-10-23 with the panel-visibility legs (an expanded Scope
+  // cleanup panel in its own fixture workspace, three hover readings, three
+  // preset switches plus a page reload, and a drill round trip; the control arm
+  // replays a stale graph body through `page.route` and toggles a kind): the
+  // whole invocation is `21 passed (5.1m)` and the `--grep "control arm"`
+  // selection is `12 passed (2.0m)`. The two new cases are 34.5 s and 32.5 s of
+  // that. 660_000 restores the ~2.1x headroom over the whole-file reading.
+  // Re-measured 2026-10-23 with the chrome/drawer/paper/banner legs (the phone
+  // drawer arm, the PC project-search arm, and the one control arm carrying the
+  // four injected chrome defects): the whole invocation is `24 passed (5.4m)`
+  // and the `--grep "control arm"` selection is `13 passed (2.0m)`; the three
+  // new cases took 10.9 s, 6.8 s and 11.4 s of that. 660_000 still clears the
+  // 5.4m reading ~2.0x.
+  // Re-measured 2026-10-23 on the tree that also carries the node-size legs (a
+  // main arm at both viewports that opens the Inspector and the Text page, and
+  // a control arm drawing the same fixture WITHOUT the member caps through the
+  // DEV-only lever): `26 passed (5.6m)` for the whole invocation. 660_000 still
+  // clears that reading ~2.0x, so the entry stays.
+  'architecture-canvas-layout.spec.ts': 660_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,
   // context menu, tray, Text page — with a tab round trip and a draft clear
@@ -415,6 +440,28 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // entry above declares and clears that measurement more than tenfold, which
   // leaves room for a load-slowed fan-in run without changing what is measured.
   'architecture-send-to-chat.spec.ts': 240_000,
+  // The keyboard criterion: one real page that Tabs into the class drawing,
+  // enters the entity-navigation state, walks it with arrow keys, selects and
+  // multi-selects, pins and undoes, and runs the aria-activedescendant control
+  // arm. MEASURED on this worktree 2026-10-23: the whole invocation (config
+  // evaluation, both webServers' boot, the browser launch, the 120-entity
+  // fixture and its scenario) took `1 passed (16.3s)`; the case body itself
+  // reported `elapsed=16136ms` from the run's start. 240_000 is the sibling
+  // architecture entries' value and clears that measurement ~14x, leaving room
+  // for a load-slowed fan-in run without changing what is measured.
+  'architecture-keyboard.spec.ts': 240_000,
+  // The fullscreen criterion: three real pages (PC 1440×765, phone portrait
+  // 390×844, phone landscape 844×390), each opening the class drawing,
+  // selecting an entity, entering the overlay, reading the drawing host's box
+  // against the viewport, exiting and re-reading the restored layout — plus a
+  // fourth page that starts a real turn, exits the overlay with Escape and
+  // re-runs the same reading with `stopPropagation` removed (the control arm).
+  // MEASURED 2026-10-23 on this worktree: `4 passed (31.7s)` for the whole
+  // invocation — config evaluation, both webServers' boot, the browser launch,
+  // the fixture and all four cases included. 240_000 is the sibling
+  // architecture entries' value and clears that measurement ~7.5x, which leaves
+  // room for a load-slowed fan-in run without changing what is measured.
+  'architecture-fullscreen.spec.ts': 240_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2676,6 +2723,16 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // and a project with an `.archguard` cache so the Architecture tab exists. It
   // writes its own three-entity tree under that home.
   'architecture-send-to-chat.spec.ts',
+  // The keyboard criterion: same fixture home (a session whose transcript seeds
+  // the entities the reading is about, and a project with an `.archguard` cache
+  // so the Architecture tab exists). It writes its own `.archguard` tree under
+  // that home and needs no other channel.
+  'architecture-keyboard.spec.ts',
+  // The fullscreen criterion: same fixture home (a session whose transcript
+  // seeds the entities the drawing is about, and a project with an `.archguard`
+  // cache so the Architecture tab exists). It writes its own three-entity tree
+  // under that home and needs no other channel.
+  'architecture-fullscreen.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

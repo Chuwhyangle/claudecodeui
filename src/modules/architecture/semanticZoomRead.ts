@@ -95,19 +95,30 @@ export type SemanticEdgeGeometry = {
   readonly source: string;
   readonly target: string;
   readonly points: readonly PlanPoint[];
+  /**
+   * The arrowhead polygon's own points. A marker is drawn AT the endpoint and
+   * spreads sideways from the line, so the content bounds must include it or a
+   * marker at the drawing's edge is clipped even when every polyline point is
+   * inside. Absent on hand-built fixtures that predate the arrow reading.
+   */
+  readonly arrowPoints?: readonly PlanPoint[];
   /** How many original relations this (possibly bundled) edge stands for. */
   readonly bundleSize: number;
 };
 
 /**
  * The payload facts the SVG does not carry: an entity's kind (0.4.0 draws a
- * function and a class identically) and its members' field/method kind (the
- * renderer's own parser treats a field whose TYPE contains `(` as a method —
- * the server payload is authoritative and is overlaid here).
+ * function and a class identically).
+ *
+ * There is deliberately NO member-kind hint: 0.4.0 derives each member's
+ * compartment from the model's own `kind` and publishes it as the `uml-attr` /
+ * `uml-op` class, so the class is the honest reading. The payload order is NOT
+ * the renderer's order (the renderer groups fields before methods, the payload
+ * keeps the source order), which is why overlaying it by INDEX put attributes
+ * and operations in each other's compartment.
  */
 export type SemanticReadHints = {
   readonly kindById?: ReadonlyMap<string, SemanticEntityKind>;
-  readonly memberKindsById?: ReadonlyMap<string, readonly ('field' | 'method')[]>;
 };
 
 /** Everything the engine reads from one rendered drawing. */
@@ -133,6 +144,17 @@ export function pathPointsOf(d: string | null): PlanPoint[] {
 /** Direct-child elements of one tag, without descending into nested groups. */
 function directChildren(element: Element, tag: string): Element[] {
   return [...element.children].filter((child) => child.tagName.toLowerCase() === tag);
+}
+
+/** The points of a polygon's `points` attribute (`x,y x,y …`), in order. */
+export function polygonPointsOf(points: string | null): PlanPoint[] {
+  if (points === null) return [];
+  return points
+    .trim()
+    .split(/\s+/)
+    .map((pair) => pair.split(',').map(Number))
+    .filter((pair) => pair.length === 2 && Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
+    .map(([x, y]) => ({ x, y }));
 }
 
 /** One numeric attribute, or null when absent/non-finite. */
@@ -220,6 +242,13 @@ function nodeIsSeed(group: Element): boolean {
  * The members the renderer classified, in drawing order, with its own
  * compact-detail truncation row removed.
  *
+ * The compartment comes from the renderer's own `uml-attr` / `uml-op` class,
+ * which 0.4.0 derives from the MODEL member's kind (so a field whose declared
+ * type contains a parenthesis stays an attribute) and writes fields before
+ * methods. Nothing here re-labels a row from the payload: the payload keeps the
+ * source order, which is a different sequence and cannot be index-mapped onto
+ * the drawn rows.
+ *
  * The truncation row is a RENDERER paging hint, not a member: leaving it in the
  * list makes the semantic plan draw it as a real row and then add its own
  * `… +N more`, so the same class shows two overflow lines (the shipped defect).
@@ -228,7 +257,6 @@ function nodeIsSeed(group: Element): boolean {
  */
 function membersOf(
   group: Element,
-  kinds: readonly ('field' | 'method')[] | undefined,
 ): { members: SemanticMember[]; memberTotal: number; upstreamOverflow: boolean } {
   const rows = directChildren(group, 'text')
     .map((text) => {
@@ -252,18 +280,10 @@ function membersOf(
   // more, the last one wins because it is the one that counted the full list.
   const overflowRow = rows.filter((row) => row.overflowTotal !== null).pop() ?? null;
   const kept = rows.filter((row) => row.overflowTotal === null);
-  // The payload's kinds are an INDEX-ALIGNED hint. That only holds when the
-  // renderer kept every member: a compacted list is a different (and shorter)
-  // sequence, so index-mapping it would scramble attributes into operations and
-  // draw the compartment rule between the wrong rows. In that case the
-  // renderer's own `uml-attr` / `uml-op` classes are the honest reading.
-  const payloadKinds = kinds !== undefined && kinds.length === kept.length ? kinds : undefined;
-  const members = kept.map((member, index) => {
-    const payloadKind = payloadKinds?.[index];
-    const asOperation = payloadKind === 'method'
-      || (payloadKind === undefined && member.drawnAsOperation);
-    return { text: member.text, compartment: asOperation ? 'op' as const : 'attr' as const };
-  });
+  const members = kept.map((member) => ({
+    text: member.text,
+    compartment: member.drawnAsOperation ? 'op' as const : 'attr' as const,
+  }));
   return {
     members,
     memberTotal: overflowRow?.overflowTotal ?? members.length,
@@ -322,7 +342,7 @@ export function readSemanticDrawingGeometry(
     const rule = [...group.querySelectorAll('.uml-compartment-rule')]
       .find((line) => line.getAttribute('data-rule') === 'title');
     const ruleY = rule === undefined ? Number.NaN : Number(rule.getAttribute('y1'));
-    const memberInfo = membersOf(group, hints.memberKindsById?.get(group.getAttribute('data-entity-id') ?? ''));
+    const memberInfo = membersOf(group);
     nodes.push({
       id: group.getAttribute('data-entity-id') ?? '',
       rect,
@@ -348,10 +368,15 @@ export function readSemanticDrawingGeometry(
     const path = directChildren(group, 'path')[0];
     const points = pathPointsOf(path?.getAttribute('d') ?? null);
     if (points.length < 2) continue;
+    // Arrowheads are polygons at the line's ends (a bundle keeps one per member
+    // inside its `<g class="uml-bundle-head">`), so read them all.
+    const arrowPoints = [...group.querySelectorAll('polygon')]
+      .flatMap((polygon) => polygonPointsOf(polygon.getAttribute('points')));
     edges.push({
       source: group.getAttribute('data-edge-source') ?? '',
       target: group.getAttribute('data-edge-target') ?? '',
       points,
+      arrowPoints,
       bundleSize: numericAttribute(group, 'data-bundle-size') ?? numericAttribute(group, 'data-weight') ?? 1,
     });
   }

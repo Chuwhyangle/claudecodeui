@@ -1,7 +1,7 @@
 ---
 id: architecture-semantic-zoom-render-regressions
 title: 语义缩放渲染回归修复：边被外框裁掉、属性与方法分错格
-status: ready
+status: done
 labels:
   - feature
 parent: null
@@ -27,11 +27,11 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：新增用例——用 plantuml-js 对「外圈走线」夹具实际布局得到的几何，内容边界包含所有边折线点与箭头图形且大于等于包框并集加 12px 外边距；去掉边后边界恢复为包框并集（证明读数取决于边）；缩放 ≥ 0.9 时行为与既有恒等映射一致；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：新增用例——成员在 payload 里属性与方法交错的夹具，读出的每个成员的格与其真实种类一致（逐个成员断言，不只断言个数）；类型里含括号的字段被读成属性；不再存在按下标套用 payload 种类的路径（用测试断言读取函数的参数里没有 `kinds`），既有用例不回归
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用上述两个夹具，1440×765 与 390×844 两个视口、65/46/33/17/6% 五档下，所有边的折线点与箭头都在 SVG 盒内（容差 0.5px）；每个类框里第二条分隔线之上的行都是属性、之下的行都是方法（按夹具已知的种类逐行断言）
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——只按包框与类框算内容边界时边越界读数变红；恢复按下标套用 payload 种类时分格读数变红；主臂与控制臂用同一读取函数
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：新增用例——用 plantuml-js 对「外圈走线」夹具实际布局得到的几何，内容边界包含所有边折线点与箭头图形且大于等于包框并集加 12px 外边距；去掉边后边界恢复为包框并集（证明读数取决于边）；缩放 ≥ 0.9 时行为与既有恒等映射一致；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：新增用例——成员在 payload 里属性与方法交错的夹具，读出的每个成员的格与其真实种类一致（逐个成员断言，不只断言个数）；类型里含括号的字段被读成属性；不再存在按下标套用 payload 种类的路径（用测试断言读取函数的参数里没有 `kinds`），既有用例不回归
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用上述两个夹具，1440×765 与 390×844 两个视口、65/46/33/17/6% 五档下，所有边的折线点与箭头都在 SVG 盒内（容差 0.5px）；每个类框里第二条分隔线之上的行都是属性、之下的行都是方法（按夹具已知的种类逐行断言）
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——只按包框与类框算内容边界时边越界读数变红；恢复按下标套用 payload 种类时分格读数变红；主臂与控制臂用同一读取函数
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
@@ -42,6 +42,7 @@ extra:
 - src/modules/architecture/semanticZoomLayout.ts
 - src/modules/architecture/semanticZoomRead.ts
 - src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/graphDom.ts
 - src/modules/architecture/tests/semanticZoomLayout.test.ts
 - src/modules/architecture/tests/semanticZoomRead.test.ts
 - e2e/architecture-canvas-layout.spec.ts

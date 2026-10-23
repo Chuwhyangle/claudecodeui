@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "常駐セッションでは Shell を利用できません"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "クラス",
+      "kindInterface": "インターフェース",
+      "kindEnum": "列挙型",
+      "kindAbstract": "抽象クラス",
+      "kindFunction": "関数",
+      "kindEntity": "エンティティ",
+      "announceEntity": "{{label}}、{{kind}}、パッケージ {{package}}、出 {{outgoing}} 本、入 {{incoming}} 本",
+      "announcePackage": "パッケージ {{package}}、{{count}} 個のエンティティ",
+      "noNeighbour": "その方向にエンティティはありません",
+      "selected": "{{label}} を選択しました",
+      "deselected": "{{label}} を選択から外しました",
+      "selectedIntoSet": "{{label}} を選択に追加しました",
+      "enteredPackage": "パッケージ {{package}} を開きました",
+      "rootPackage": "ルートパッケージ"
+    },
     "copyFix": {
       "kindClass": "{{count}} クラス",
       "kindFunction": "{{count}} 関数",
@@ -113,6 +129,7 @@
         "tierPackages": "パッケージ"
       },
       "explosion": "爆発ビュー",
+      "layoutProgress": "{{count}} 個のエンティティをレイアウト中…",
       "drillIn": "開く",
       "moreActions": "その他の操作",
       "touchHint": "ノードをタップして選択します。ドラッグで移動、ピンチでズームします。ダブルタップまたは「開く」で近傍を表示します。",
@@ -127,6 +144,7 @@
         "focusSummary": "読みやすいズームが有効です: {{package}} にフォーカス中（{{zoom}}%）— 「全体」を選ぶとグラフ全体を表示します（他 {{count}} パッケージ）。",
         "focusOnly": "読みやすいズームが有効です — 「全体」を選ぶとグラフ全体を表示します。",
         "overviewTooSmall": "全体グラフは {{zoom}}% — パッケージをタップして拡大",
+        "folded": "{{depth}} 階層に折りたたみました — パッケージをタップして拡大",
         "backToWhole": "全体グラフに戻る"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "グラフの粒度",
     "fileGraph": "ファイルグラフ",
     "entityGraph": "エンティティグラフ",
+    "fullscreen": {
+      "enter": "全画面",
+      "exit": "全画面を終了"
+    },
     "controls": {
       "maxHops": "ホップ数",
       "hopOption": "ホップ数 {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "種類が非表示でも表示したままにする",
       "mentionedToggleAria": "このセッションで言及、種類が非表示でも表示したまま",
       "mentionedInKind": "このセッションで {{count}} 件言及",
-      "showMentioned": "▸ 言及されたものを表示"
+      "showMentioned": "▸ 言及されたものを表示",
+      "reset": "↺ フィルターをリセット"
     },
     "scopeHygiene": {
       "summary": "スコープの整理",

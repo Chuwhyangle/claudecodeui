@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell unavailable for resident sessions"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "class",
+      "kindInterface": "interface",
+      "kindEnum": "enum",
+      "kindAbstract": "abstract class",
+      "kindFunction": "function",
+      "kindEntity": "entity",
+      "announceEntity": "{{label}}, {{kind}}, package {{package}}, {{outgoing}} outgoing, {{incoming}} incoming",
+      "announcePackage": "Package {{package}}, {{count}} entities",
+      "noNeighbour": "No entity in that direction",
+      "selected": "{{label}} selected",
+      "deselected": "{{label}} removed from the selection",
+      "selectedIntoSet": "{{label}} added to the selection",
+      "enteredPackage": "Entered package {{package}}",
+      "rootPackage": "the root package"
+    },
     "copyFix": {
       "kindClass": "{{count}} classes",
       "kindFunction": "{{count}} functions",
@@ -105,6 +121,10 @@
     "granularity": "Graph granularity",
     "fileGraph": "File graph",
     "entityGraph": "Entity graph",
+    "fullscreen": {
+      "enter": "Fullscreen",
+      "exit": "Exit fullscreen"
+    },
     "controls": {
       "maxHops": "Hops",
       "hopOption": "Hops {{count}}",
@@ -141,6 +161,7 @@
       "overview": "Overview",
       "group": "Group: {{group}}",
       "neighborhood": "{{entity}} · {{hops}} hop(s)",
+      "neighbourhoodStatus": "Neighbourhood of {{entity}} · {{hops}} hop(s)",
       "back": "Back to overview",
       "error": "The diagram could not be rendered: {{message}}",
       "lod": {
@@ -149,6 +170,8 @@
         "tierPackages": "Packages"
       },
       "explosion": "Explosion view",
+      "explosionHint": "Draw every entity as its own box, the whole graph at once",
+      "layoutProgress": "Laying out {{count}} entities…",
       "drillIn": "Drill in",
       "moreActions": "More actions",
       "touchHint": "Tap a node to select it; drag to pan and pinch to zoom. Double-tap or choose Drill in to open its neighbourhood.",
@@ -163,6 +186,7 @@
         "focusSummary": "Readable zoom is on: focused on {{package}} at {{zoom}}% — choose Overview to see the whole graph ({{count}} other package(s)).",
         "focusOnly": "Readable zoom is on — choose Overview to see the whole graph.",
         "overviewTooSmall": "Whole graph at {{zoom}}% — tap a package to zoom in",
+        "folded": "Collapsed to {{depth}} levels — tap a package to zoom in",
         "backToWhole": "Back to whole graph"
       },
       "minimap": {
@@ -267,7 +291,8 @@
       "mentionedHint": "Keep these shown even when their kind is hidden",
       "mentionedToggleAria": "mentioned in this session, kept visible even when the kind is hidden",
       "mentionedInKind": "{{count}} mentioned in this session",
-      "showMentioned": "▸ Show mentioned"
+      "showMentioned": "▸ Show mentioned",
+      "reset": "↺ Reset filters"
     },
     "scopeHygiene": {
       "summary": "Scope cleanup",

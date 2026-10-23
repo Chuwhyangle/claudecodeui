@@ -677,7 +677,7 @@ async function drawNodeSizeFixture(withLimits: boolean): Promise<{
 test('the renderer gets the line cap and full detail — the row cap is the drawing own rule', () => {
   assert.equal(MEMBER_MAX_CHARS, 48, 'a drawn member line stops at 48 characters');
   assert.equal(MEMBER_MAX_ROWS, 6, 'an entity box draws at most six member rows');
-  assert.deepEqual(memberDisplayLimits(), { detail: 'full', memberMaxChars: 48 });
+  assert.deepEqual(memberDisplayLimits(), { memberMaxChars: 48 });
   assert.equal(
     'memberMaxRows' in memberDisplayLimits(),
     false,

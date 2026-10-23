@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell no disponible para sesiones residentes"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "clase",
+      "kindInterface": "interfaz",
+      "kindEnum": "enumeración",
+      "kindAbstract": "clase abstracta",
+      "kindFunction": "función",
+      "kindEntity": "entidad",
+      "announceEntity": "{{label}}, {{kind}}, paquete {{package}}, {{outgoing}} salientes, {{incoming}} entrantes",
+      "announcePackage": "Paquete {{package}}, {{count}} entidades",
+      "noNeighbour": "Ninguna entidad en esa dirección",
+      "selected": "{{label}} seleccionado",
+      "deselected": "{{label}} eliminado de la selección",
+      "selectedIntoSet": "{{label}} añadido a la selección",
+      "enteredPackage": "Paquete {{package}} abierto",
+      "rootPackage": "el paquete raíz"
+    },
     "copyFix": {
       "kindClass": "{{count}} clases",
       "kindFunction": "{{count}} funciones",
@@ -113,6 +129,7 @@
         "tierPackages": "Paquetes"
       },
       "explosion": "Vista de explosión",
+      "layoutProgress": "Calculando el diseño de {{count}} entidades…",
       "drillIn": "Abrir",
       "moreActions": "Más acciones",
       "touchHint": "Toca un nodo para seleccionarlo; arrastra para desplazar y pellizca para ampliar. Toca dos veces o elige «Abrir» para ver su vecindad.",
@@ -127,6 +144,7 @@
         "focusSummary": "El zoom legible está activo: enfoque en {{package}} al {{zoom}}% — elige Vista general para ver todo el grafo ({{count}} paquete(s) más).",
         "focusOnly": "El zoom legible está activo — elige Vista general para ver todo el grafo.",
         "overviewTooSmall": "Grafo completo al {{zoom}}% — toca un paquete para ampliar",
+        "folded": "Contraído a {{depth}} niveles — toca un paquete para ampliar",
         "backToWhole": "Volver al grafo completo"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "Granularidad del gráfico",
     "fileGraph": "Gráfico de archivos",
     "entityGraph": "Gráfico de entidades",
+    "fullscreen": {
+      "enter": "Pantalla completa",
+      "exit": "Salir de pantalla completa"
+    },
     "controls": {
       "maxHops": "Saltos",
       "hopOption": "Saltos {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "Mantenerlas visibles aunque su tipo esté oculto",
       "mentionedToggleAria": "mencionadas en esta sesión, visibles aunque su tipo esté oculto",
       "mentionedInKind": "{{count}} mencionadas en esta sesión",
-      "showMentioned": "▸ Mostrar mencionadas"
+      "showMentioned": "▸ Mostrar mencionadas",
+      "reset": "↺ Restablecer filtros"
     },
     "scopeHygiene": {
       "summary": "Limpieza de scopes",

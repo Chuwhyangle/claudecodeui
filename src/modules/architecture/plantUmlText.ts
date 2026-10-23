@@ -20,14 +20,18 @@ import type {
  * The document is the DRAWING when the renderer reports one:
  * {@link ArchitectureDrawnPlantUml} carries `renderDetailed(...).model` (the
  * model that was laid out and drawn, after view/transform/detail) plus the
- * upstream `toPlantUml`/`applyView`. The full scope serializes that model
+ * upstream `toPlantUml`/`applyView`. The renderer renders that model with
+ * `detail: 'full'` (see `PlantUmlGraph.tsx`), so the model carries every
+ * member — `compact`/`names` would have written synthetic
+ * `… +N more (M members)` rows into it. The full scope serializes that model
  * verbatim; the viewport scope filters it to the nodes on screen; the `+1`
  * scope applies the upstream neighbourhood view. So aggregated edges and hub
  * folding — which only exist after the renderer's transforms — are in the text.
  *
  * Without a drawn model (a stand-in renderer, a page rendered in isolation) or
  * when the upstream functions are missing/throw, {@link buildPlantUmlDocument}
- * falls back to the local bridge (`archguardToPlantUml`) and says so, so the
+ * falls back to the local bridge (`archguardToPlantUml`), which emits every
+ * member too, and says so — so no path truncates the entity bodies and the
  * page never goes blank.
  *
  * Consumers: `ArchitectureTextPanel.tsx` (the page) and
@@ -505,6 +509,25 @@ export function buildPlantUmlDocument(
     text: bridgePlantUmlText(graph, scope, options),
     fallback: true,
   };
+}
+
+/**
+ * The document for the whole filtered graph: the Text page's default scope and
+ * the document the Export menu's `.puml` and "Copy PlantUML" actions produce.
+ *
+ * One definition on purpose — before this, the Text page serialized the drawn
+ * model while the Export menu rebuilt from the bridge, so the same view had two
+ * different texts. Both now call this entry, with the same options and the same
+ * drawn model, so the copyable text and the downloaded file are identical.
+ *
+ * Consumers: `ArchitectureTextPanel.tsx` (the initial scope),
+ * `ArchitecturePanel.tsx` (the export actions) and `tests/plantUmlText.test.ts`.
+ */
+export function buildFullPlantUmlDocument(
+  graph: ArchitectureRendererGraph,
+  options: ArchitecturePlantUmlTextOptions = {},
+): ArchitecturePlantUmlDocument {
+  return buildPlantUmlDocument(graph, { kind: 'full' }, options);
 }
 
 /**

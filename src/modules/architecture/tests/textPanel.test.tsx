@@ -12,8 +12,13 @@ import {
   ArchitectureTextPanel,
   ArchitectureTextSyntaxBadge,
 } from '@/modules/architecture/ArchitectureTextPanel';
-import { archguardToPlantUml, type ArchitectureDiagramView } from '@/modules/architecture/archguardToPlantUml';
-import { buildPlantUmlText } from '@/modules/architecture/plantUmlText';
+import {
+  archguardToPlantUml,
+  parserSafePlantUml,
+  type ArchitectureDiagramView,
+} from '@/modules/architecture/archguardToPlantUml';
+import { renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
+import { buildPlantUmlText, standardiseDrawnStereotypes } from '@/modules/architecture/plantUmlText';
 import type {
   ArchitectureDrawnPlantUml,
   ArchitectureNodeIdShape,
@@ -599,4 +604,59 @@ test('a failing drawn serializer keeps the page populated and annotates the fall
   // Still a real document (the bridge's), not a blank page.
   assert.match(preview().textContent ?? '', /Alpha/);
   assert.doesNotMatch(document.body.textContent ?? '', /按桥接层输出/);
+});
+
+/**
+ * The lossless reading: a drawing past the renderer's 40-entity compact
+ * threshold, rendered with the app's `detail: 'full'`, measures and copies the
+ * COMPLETE document.
+ *
+ * The fixture is 41 classes with 7–25 members each, so the entity-count default
+ * would have replaced every tail with `… +N more (M members)`. The panel reads
+ * the drawn model the renderer reported; this case pins that the volume
+ * readings are those of the complete text (not the preview, and not a compact
+ * model).
+ */
+test('a large drawing is measured, previewed and copied as its complete document', async () => {
+  const graph: ArchitectureRendererGraph = {
+    nodes: Array.from({ length: 41 }, (_unused, index) => ({
+      id: `s1/src/pkg${String(index % 5)}/e${String(index)}.ts.Entity${String(index)}`,
+      label: `Entity${String(index)}`,
+      distance: index === 0 ? 0 : 1 + (index % 3),
+      kind: 'class' as const,
+      members: Array.from({ length: 7 + (index % 19) }, (_member, member) => ({
+        name: `member${String(member)}`,
+        kind: 'field' as const,
+        visibility: 'private',
+        signature: 'number',
+      })),
+    })),
+    edges: [],
+  };
+  const options = { view: { kind: 'hierarchy' } as const, grouping: 'raw' as const, idShape: 'scope-prefixed' as const };
+  const bridge = archguardToPlantUml(graph, options);
+  const detailed = await renderWithMemberDetail(renderDetailed, parserSafePlantUml(bridge.puml), {});
+  const drawn: ArchitectureDrawnPlantUml = {
+    model: detailed.model,
+    entityIdOf: bridge.aliasOf,
+    toPlantUml: (model) => standardiseDrawnStereotypes(toPlantUml(model)),
+    applyView,
+  };
+  const expected = buildPlantUmlText(graph, { kind: 'full' }, { ...options, drawn });
+  assert.doesNotMatch(expected, /…\s*\+\d+\s+more|\(\d+\s+members\)/);
+
+  const clipboard = installClipboard(() => Promise.resolve());
+  renderTextPanel({ graph, drawn });
+
+  const reading = document.querySelector('[data-architecture-text-volume]') as HTMLElement;
+  assert.equal(Number(reading.getAttribute('data-architecture-text-characters')), expected.length);
+  assert.equal(Number(reading.getAttribute('data-architecture-text-lines')), expected.split('\n').length);
+  assert.doesNotMatch(preview().textContent ?? '', /…\s*\+\d+\s+more|\(\d+\s+members\)/);
+  // The complete document is what Copy puts on the clipboard.
+  fireEvent.click(document.querySelector('[data-architecture-text-copy="all"]') as Element);
+  await waitFor(() => assert.equal(clipboard.mock.calls.length, 1));
+  assert.equal(String(clipboard.mock.calls[0][0]), expected);
+  // Every class block keeps every member: 41 classes in the header alone.
+  assert.equal((expected.match(/^[ \t]*- member\d+: number$/gm) ?? []).length, graph.nodes
+    .reduce((total, node) => total + (node.members?.length ?? 0), 0));
 });

@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "常驻会话的 Shell 标签页不可用"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "类",
+      "kindInterface": "接口",
+      "kindEnum": "枚举",
+      "kindAbstract": "抽象类",
+      "kindFunction": "函数",
+      "kindEntity": "实体",
+      "announceEntity": "{{label}}，{{kind}}，所在包 {{package}}，{{outgoing}} 条出边，{{incoming}} 条入边",
+      "announcePackage": "包 {{package}}，{{count}} 个实体",
+      "noNeighbour": "该方向没有实体",
+      "selected": "已选中 {{label}}",
+      "deselected": "已将 {{label}} 移出多选",
+      "selectedIntoSet": "已将 {{label}} 加入多选",
+      "enteredPackage": "已进入包 {{package}}",
+      "rootPackage": "根包"
+    },
     "copyFix": {
       "kindClass": "{{count}} 类",
       "kindFunction": "{{count}} 函数",
@@ -113,6 +129,7 @@
         "tierPackages": "包"
       },
       "explosion": "爆炸图",
+      "layoutProgress": "正在布局 {{count}} 个实体…",
       "drillIn": "进入",
       "moreActions": "更多操作",
       "touchHint": "点按节点即可选中；拖动可平移，双指捏合可缩放。双击或选择“进入”可打开其邻域视图。",
@@ -127,6 +144,7 @@
         "focusSummary": "可读缩放已开启：聚焦 {{package}}，当前 {{zoom}}% — 选“全貌”查看整图（另有 {{count}} 个包）。",
         "focusOnly": "可读缩放已开启 — 选“全貌”查看整图。",
         "overviewTooSmall": "整图缩小到 {{zoom}}%，点一个 package 放大查看",
+        "folded": "已折叠到 {{depth}} 层 — 点一个 package 放大查看",
         "backToWhole": "返回全图"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "图粒度",
     "fileGraph": "文件图",
     "entityGraph": "实体图",
+    "fullscreen": {
+      "enter": "全屏",
+      "exit": "退出全屏"
+    },
     "controls": {
       "maxHops": "跳数",
       "hopOption": "跳数 {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "即使该种类被隐藏也保持显示会话里提到的",
       "mentionedToggleAria": "会话里提到的，即使该种类被隐藏也保持显示",
       "mentionedInKind": "其中 {{count}} 个在会话里提到过",
-      "showMentioned": "▸ 显示提到的"
+      "showMentioned": "▸ 显示提到的",
+      "reset": "↺ 重置筛选"
     },
     "scopeHygiene": {
       "summary": "scope 清理",

@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 
-/** How long a curation Toast lives before dismissing itself. */
-const CURATION_TOAST_MS = 6000;
+/**
+ * How long a curation Toast lives before dismissing itself.
+ *
+ * 12 s, not the original 6 s: the review found the window too short to read the
+ * sentence, decide, and reach the button. Undo is additionally reachable from
+ * the Adjusted popover's header after the Toast is gone.
+ */
+const CURATION_TOAST_MS = 12000;
 
 /**
  * The curation Toast: one sentence about what just changed, plus a focusable

@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "常駐工作階段的 Shell 分頁無法使用"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "類別",
+      "kindInterface": "介面",
+      "kindEnum": "列舉",
+      "kindAbstract": "抽象類別",
+      "kindFunction": "函式",
+      "kindEntity": "實體",
+      "announceEntity": "{{label}}，{{kind}}，所在套件 {{package}}，{{outgoing}} 條出邊，{{incoming}} 條入邊",
+      "announcePackage": "套件 {{package}}，{{count}} 個實體",
+      "noNeighbour": "該方向沒有實體",
+      "selected": "已選取 {{label}}",
+      "deselected": "已將 {{label}} 移出多選",
+      "selectedIntoSet": "已將 {{label}} 加入多選",
+      "enteredPackage": "已進入套件 {{package}}",
+      "rootPackage": "根套件"
+    },
     "copyFix": {
       "kindClass": "{{count}} 類",
       "kindFunction": "{{count}} 函式",
@@ -113,6 +129,7 @@
         "tierPackages": "套件"
       },
       "explosion": "爆炸圖",
+      "layoutProgress": "正在排版 {{count}} 個實體…",
       "drillIn": "進入",
       "moreActions": "更多操作",
       "touchHint": "點按節點即可選取；拖曳可平移，雙指捏合可縮放。連點兩下或選擇「進入」可開啟其鄰域檢視。",
@@ -127,6 +144,7 @@
         "focusSummary": "可讀縮放已開啟：聚焦 {{package}}，目前 {{zoom}}% — 選「全貌」檢視整張圖（另有 {{count}} 個套件）。",
         "focusOnly": "可讀縮放已開啟 — 選「全貌」檢視整張圖。",
         "overviewTooSmall": "整圖縮小到 {{zoom}}%，點一個 package 放大檢視",
+        "folded": "已摺疊到 {{depth}} 層 — 點一個 package 放大檢視",
         "backToWhole": "返回全圖"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "圖表粒度",
     "fileGraph": "檔案圖",
     "entityGraph": "實體圖",
+    "fullscreen": {
+      "enter": "全螢幕",
+      "exit": "結束全螢幕"
+    },
     "controls": {
       "maxHops": "跳數",
       "hopOption": "跳數 {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "即使該種類被隱藏也保持顯示工作階段中提及的",
       "mentionedToggleAria": "工作階段中提及的，即使該種類被隱藏也保持顯示",
       "mentionedInKind": "其中 {{count}} 個在工作階段中提及過",
-      "showMentioned": "▸ 顯示提及的"
+      "showMentioned": "▸ 顯示提及的",
+      "reset": "↺ 重設篩選"
     },
     "scopeHygiene": {
       "summary": "scope 清理",

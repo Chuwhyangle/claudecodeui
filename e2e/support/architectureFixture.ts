@@ -44,18 +44,61 @@ export const ARCHITECTURE_FIXTURE_WORKSPACE_CUI = 'architecture-canvas-layout-wo
 /**
  * The two-entity workspace the node-size criterion measures.
  *
- * The other two variants are big enough that the DRAWING is what decides the
+ * The other variants are big enough that the DRAWING is what decides the
  * reading. This one is the opposite: two classes and one edge, so the only
  * thing that can make a box wide is the member text inside it — the defect
  * `architecture-node-size-from-drawn-content` fixes.
  */
 export const ARCHITECTURE_FIXTURE_WORKSPACE_NODE_SIZE = 'architecture-canvas-layout-workspace-node-size';
 
+/**
+ * A drawing whose relations ELK routes along the OUTSIDE of the outermost
+ * package frames (the semantic viewBox used to clip them).
+ */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_PERIMETER = 'architecture-canvas-layout-workspace-perimeter';
+
+/** A drawing whose class payload interleaves fields and methods. */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_INTERLEAVED = 'architecture-canvas-layout-workspace-interleaved';
+
+/** The function-heavy workspace the "Show all" / folded-fit legs drive. */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_FUNCTIONS = 'architecture-canvas-layout-workspace-functions';
+
+/**
+ * The workspace whose manifest ALSO lists a scope indexed from outside the
+ * project root.
+ *
+ * The panel's "Scope cleanup" row only exists when the server's scope merge
+ * actually cleaned something up (`provenance.scopeHygiene`); a healthy
+ * single-scope project reports nothing and draws no row. This is the fixture
+ * shape that makes the row exist on a real page.
+ */
+export const ARCHITECTURE_FIXTURE_WORKSPACE_SCOPE_HYGIENE = 'architecture-canvas-layout-workspace-scope-hygiene';
+
 /** Which project shape to write. */
-export type ArchitectureFixtureVariant = 'quay-oo' | 'claudecodeui' | 'node-size';
+export type ArchitectureFixtureVariant =
+  | 'quay-oo'
+  | 'claudecodeui'
+  | 'node-size'
+  | 'outer-perimeter'
+  | 'interleaved-members'
+  /** 41 classes with 7–25 members each: just past the renderer's compact threshold. */
+  | 'lossless-41'
+  /** 150 classes: the `compact` band's upper edge. */
+  | 'lossless-150'
+  /** 600 classes: the layout budget's ceiling, and the largest text fixture. */
+  | 'lossless-600'
+  /**
+   * 384 FUNCTION entities in 108 deeply named packages: the shape "Show all"
+   * was reported on (a project whose drawing is mostly functions, the kind the
+   * shipped filter hides). See {@link buildFunctionEntities}.
+   */
+  | 'functions-384';
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
+
+/** The second, out-of-root scope the `outsideScope` option adds to the manifest. */
+const OUTSIDE_SCOPE_KEY = 'scope-vendor';
 
 /**
  * A fixed fingerprint for the scope index.
@@ -115,6 +158,25 @@ export type ArchitectureFixtureReading = {
   readonly seedIdentifiers: readonly string[];
   /** Which project shape this fixture represents. */
   readonly variant: ArchitectureFixtureVariant;
+  /**
+   * How many member rows each entity carries in the payload. The lossless
+   * criteria compare that number with the rows the text actually contains, so
+   * a truncated document is detectable per entity rather than in aggregate.
+   */
+  readonly memberCountById: Readonly<Record<string, number>>;
+  /**
+   * The member rows a drawn class must show, with the TRUE kind each row has in
+   * the payload (the interleaved fixture only). Keyed by entity id, then by the
+   * member's declared name; the E2E reading matches a drawn row by that token.
+   */
+  readonly memberKindsById?: Readonly<Record<string, readonly FixtureMemberKind[]>>;
+};
+
+/** One payload member and the kind the drawing must place it in. */
+export type FixtureMemberKind = {
+  /** The member's declared name — the token a drawn row starts with. */
+  readonly token: string;
+  readonly kind: 'field' | 'method';
 };
 
 /** One entity as this fixture writes it into both `arch-index.json` and `arch.json`. */
@@ -125,6 +187,8 @@ type FixtureEntity = {
   readonly type: 'class' | 'interface' | 'function';
   readonly isAbstract: boolean;
   readonly parents: readonly string[];
+  /** Overrides the shared member recipe when a variant states its own rows. */
+  readonly members?: readonly unknown[];
 };
 
 /**
@@ -239,6 +303,207 @@ function emptyRecord(ids: readonly string[]): Record<string, string[]> {
   return record;
 }
 
+/**
+ * The outer-perimeter fixture: eight directory families, two classes each, a
+ * forward chain per class family, plus FIVE back edges from the last family to
+ * earlier ones.
+ *
+ * Shape, not decoration: the long back edges are what make ELK's orthogonal
+ * router place bends OUTSIDE the union of the package frames (measured on this
+ * fixture: six relations up to ~35 px outside). That is the state the shipped
+ * semantic canvas clipped, because its viewBox was the package union.
+ */
+function buildPerimeterEntities(): FixtureEntity[] {
+  // SINGLE-SEGMENT directories on purpose: a shared parent directory would draw
+  // a root package frame around every family, and ELK keeps the perimeter
+  // routing inside THAT frame. The defect needs the union of the leaf frames to
+  // be the outermost object.
+  const idOf = (stem: 'P' | 'Q', index: number): string => `p${index}/${stem}${index}.ts.${stem}${index}`;
+  const entities: FixtureEntity[] = [];
+  for (let index = 0; index < 8; index += 1) {
+    for (const stem of ['P', 'Q'] as const) {
+      const name = `${stem}${index}`;
+      const parents: string[] = [];
+      // `parents` means "this entity depends on …", so a parent becomes an
+      // outgoing edge FROM the parent: P(i-1) → P(i).
+      if (index > 0) parents.push(idOf(stem, index - 1));
+      // Five back edges from the last P: P7 → P0 … P4.
+      if (stem === 'P' && index <= 4) parents.push(idOf('P', 7));
+      entities.push({
+        id: idOf(stem, index),
+        name,
+        file: `p${index}/${name}.ts`,
+        // Member-free class boxes are the same boxes the unit-test fixture
+        // lays out, so the routing measured there holds here.
+        type: 'class',
+        isAbstract: false,
+        parents,
+        members: [],
+      });
+    }
+  }
+  return entities;
+}
+
+/**
+ * The lossless fixtures: `count` classes carrying 7–25 members each.
+ *
+ * Both numbers are load-bearing. Past 40 entities the renderer's default
+ * `detail` switches to `compact`, which keeps four real rows and writes a
+ * synthetic `… +N more (M members)` row into the drawn model; the member count
+ * cycles across 7–25 so a document that keeps a fixed number of rows cannot
+ * pass. The ids are real three-segment paths so the hierarchy view draws
+ * package frames, and the entities form a dependency chain so none is isolated
+ * (the panel's default filter hides isolated nodes).
+ */
+function buildLosslessEntities(count: number): FixtureEntity[] {
+  return Array.from({ length: count }, (_unused, index) => {
+    const name = `Entity${String(index)}`;
+    const file = `pkg${String(index % 7)}/e${String(index)}.ts`;
+    const memberCount = 7 + (index % 19);
+    return {
+      id: `${file}.${name}`,
+      name,
+      file,
+      type: 'class' as const,
+      isAbstract: false,
+      parents: index === 0
+        ? []
+        : [`pkg${String((index - 1) % 7)}/e${String(index - 1)}.ts.Entity${String(index - 1)}`],
+      members: Array.from({ length: memberCount }, (_member, member) => ({
+        name: `member${String(member)}`,
+        type: 'property',
+        visibility: 'private',
+        fieldType: 'number',
+      })),
+    };
+  });
+}
+
+/** The entity count a lossless variant states. */
+function losslessEntityCount(variant: ArchitectureFixtureVariant): number | null {
+  if (variant === 'lossless-41') return 41;
+  if (variant === 'lossless-150') return 150;
+  if (variant === 'lossless-600') return 600;
+  return null;
+}
+
+/**
+ * The function-heavy fixture: the shape the "Show all" defect was reported on.
+ *
+ * WHY FUNCTIONS. The shipped filter hides the `function` kind, so this drawing
+ * is exactly the one "Show all" is FOR: before the click the canvas holds almost
+ * nothing (the twelve module-level seeds), after it a 396-box drawing. The
+ * relation preset must survive that click — the reported defect was that it
+ * silently moved from `+Dependencies` to `+Calls` at the same time.
+ *
+ * WHY 108 PACKAGES. The folded tier is chosen on the size of the PACKAGE-ONLY
+ * drawing, whose width is the sum of its tabs' minimum widths. That many packages
+ * with long directory names make that sum many canvases wide on a 1440×765
+ * screen — the state the reported 573-function project was in — which is what
+ * the folded tier exists to answer. Every function is chained to the next so
+ * none is isolated (the default filter would drop it before "Show all" could
+ * matter) and the drawing is one connected neighbourhood from any seed.
+ */
+function buildFunctionEntities(): FixtureEntity[] {
+  const entities: FixtureEntity[] = [];
+  for (let module = 0; module < 12; module += 1) {
+    // One CLASS per module: the shipped filter shows it, so the tab opens on a
+    // real drawing (an all-hidden payload would open on the empty state, and
+    // "Show all" would then have nothing to widen).
+    const moduleDir = `src/modules/module${String(module).padStart(2, '0')}`;
+    const serviceName = `Module${String(module).padStart(2, '0')}Service`;
+    entities.push({
+      id: `${moduleDir}/${serviceName}.ts.${serviceName}`,
+      name: serviceName,
+      file: `${moduleDir}/${serviceName}.ts`,
+      type: 'class',
+      isAbstract: false,
+      parents: [],
+      members: [],
+    });
+    // Eight units of four functions: 384 functions in 96 leaf packages. The
+    // package count is what the folded tier is measured on (the package-only
+    // drawing is as wide as its tabs' minimum widths), so breadth per module —
+    // not depth per unit — is the lever here.
+    for (let unit = 0; unit < 8; unit += 1) {
+      for (let step = 0; step < 4; step += 1) {
+        const index = entities.length;
+        const dir = `${moduleDir}/unit${String(unit)}`;
+        const name = `handleFrameBudgetStep${String(index).padStart(3, '0')}`;
+        entities.push({
+          id: `${dir}/${name}.ts.${name}`,
+          name,
+          file: `${dir}/${name}.ts`,
+          type: 'function',
+          isAbstract: false,
+          // EVERY function hangs off its module's class. That is what makes the
+          // whole 372-entity drawing reachable in ONE hop from the twelve class
+          // seeds: the server seeds identifiers from the session text under a
+          // hard cap (40), so a chain would leave most of the fixture outside
+          // the neighbourhood and the criterion would measure a 50-box drawing
+          // instead of the large one this fixture exists for.
+          parents: [`${moduleDir}/${serviceName}.ts.${serviceName}`],
+        });
+      }
+    }
+  }
+  return entities;
+}
+
+/**
+ * The interleaved-member fixture: one class whose PAYLOAD members alternate
+ * field → method → field → method, inside two packages.
+ *
+ * The renderer groups fields before methods when it draws, so the drawn order
+ * differs from the payload order. The read layer must classify each row from
+ * the renderer's own compartment class; the indexed payload overlay put the
+ * methods in the attributes compartment (the shipped defect).
+ */
+function buildInterleavedEntities(): FixtureEntity[] {
+  const mixedMembers = [
+    { name: 'alphaField', type: 'field', visibility: 'private', fieldType: 'string' },
+    {
+      name: 'deltaMethod',
+      type: 'method',
+      visibility: 'public',
+      parameters: [{ name: 'input', type: 'number', isOptional: false }],
+      returnType: 'boolean',
+    },
+    { name: 'betaField', type: 'field', visibility: 'private', fieldType: 'number' },
+    { name: 'gammaMethod', type: 'method', visibility: 'public', parameters: [], returnType: 'void' },
+  ];
+  return [
+    {
+      id: 'interleaved/core/Mixed.ts.Mixed',
+      name: 'Mixed',
+      file: 'interleaved/core/Mixed.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: [],
+      members: mixedMembers,
+    },
+    {
+      id: 'interleaved/core/Helper.ts.Helper',
+      name: 'Helper',
+      file: 'interleaved/core/Helper.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: ['interleaved/core/Mixed.ts.Mixed'],
+      members: [],
+    },
+    {
+      id: 'interleaved/util/Util.ts.Util',
+      name: 'Util',
+      file: 'interleaved/util/Util.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: ['interleaved/core/Mixed.ts.Mixed'],
+      members: [],
+    },
+  ];
+}
+
 /** Build the index body's adjacency maps from each entity's parents. */
 function buildIndex(entities: readonly FixtureEntity[]): Record<string, unknown> {
   const ids = entities.map((entity) => entity.id);
@@ -283,7 +548,7 @@ function buildArchive(entities: readonly FixtureEntity[], classMembers: number):
       name: entity.name,
       type: entity.type,
       isAbstract: entity.isAbstract,
-      members: membersFor(entity.type, classMembers),
+      members: entity.members ?? membersFor(entity.type, classMembers),
     })),
   };
 }
@@ -512,6 +777,12 @@ function writeNodeSizeFixture(workspaceDir: string, generatedAt: string): Archit
     entityIds: NODE_SIZE_ENTITIES.map((entity) => entity.id),
     seedIdentifiers: NODE_SIZE_SEED_IDENTIFIERS,
     variant: 'node-size',
+    // The rows each class carries in the payload (7 and 20): the lossless
+    // criteria compare them with the document's rows, which the row cap must
+    // never shorten.
+    memberCountById: Object.fromEntries(
+      NODE_SIZE_ENTITIES.map((entity) => [entity.id, entity.members.length]),
+    ),
   };
 }
 
@@ -525,6 +796,13 @@ function writeJson(filePath: string, value: unknown): void {
 export type ArchitectureFixtureOptions = {
   readonly variant?: ArchitectureFixtureVariant;
   readonly generatedAt?: string;
+  /**
+   * Also list a SECOND scope — indexed from outside the project root — in the
+   * manifest, and write its index. The server drops it from the merge and
+   * reports it in `provenance.scopeHygiene`, which is the only way the panel's
+   * "Scope cleanup" disclosure exists at all.
+   */
+  readonly outsideScope?: boolean;
 };
 
 /**
@@ -547,19 +825,43 @@ export function writeArchitectureFixture(
   // directly, because the criterion is about one box's member text.
   if (variant === 'node-size') return writeNodeSizeFixture(workspaceDir, generatedAt);
   const families = variant === 'claudecodeui' ? CUI_FAMILIES : QUAY_FAMILIES;
-  // Both stay past `COMPACT_MEMBER_ROWS` (4); the second shape adds one more row
-  // so its upstream `(N members)` reading differs from the first's.
+  // Both family shapes stay past `COMPACT_MEMBER_ROWS` (4); the second shape
+  // adds one more row so its upstream `(N members)` reading differs from the
+  // first's. The dedicated variants state their own shapes below.
   const classMembers = variant === 'claudecodeui' ? 6 : 5;
-  const entities = buildEntities(families, classMembers);
+  const losslessCount = losslessEntityCount(variant);
+  const entities = losslessCount !== null
+    ? buildLosslessEntities(losslessCount)
+    : variant === 'outer-perimeter'
+      ? buildPerimeterEntities()
+      : variant === 'interleaved-members'
+        ? buildInterleavedEntities()
+        : variant === 'functions-384'
+          ? buildFunctionEntities()
+          : buildEntities(families, classMembers);
   const srcDir = path.join(workspaceDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
 
+  // The out-of-root scope's sources sit beside the workspace, never inside it:
+  // the containment check is what marks the scope as "outside the project".
+  const outsideSources = [path.join(path.dirname(workspaceDir), `${path.basename(workspaceDir)}-vendor`)];
   writeJson(path.join(workspaceDir, '.archguard', 'query', 'manifest.json'), {
     version: '1.0',
     generatedAt,
     globalScopeKey: SCOPE_KEY,
     scopes: [
       { key: SCOPE_KEY, label: 'src (typescript)', language: 'typescript', sources: [srcDir] },
+      ...(options.outsideScope === true
+        ? [{
+            key: OUTSIDE_SCOPE_KEY,
+            label: 'vendor (typescript)',
+            language: 'typescript',
+            sources: outsideSources,
+            // Upstream metadata is trusted over the heuristic (see
+            // `server/modules/architecture/scope-hygiene.ts`).
+            outsideProjectRoot: true,
+          }]
+        : []),
     ],
   });
   writeJson(path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch-index.json'), {
@@ -570,12 +872,71 @@ export function writeArchitectureFixture(
     path.join(workspaceDir, '.archguard', 'query', SCOPE_KEY, 'arch.json'),
     buildArchive(entities, classMembers),
   );
+  if (options.outsideScope === true) {
+    // One entity of its own: the scope is DROPPED by the merge either way, and
+    // an index with no entity would never become a candidate `total` counts.
+    const outsideEntities: FixtureEntity[] = [{
+      id: 'vendor/dep.ts.Vendor',
+      name: 'Vendor',
+      file: 'vendor/dep.ts',
+      type: 'class',
+      isAbstract: false,
+      parents: [],
+    }];
+    writeJson(
+      path.join(workspaceDir, '.archguard', 'query', OUTSIDE_SCOPE_KEY, 'arch-index.json'),
+      { ...buildIndex(outsideEntities), generatedAt },
+    );
+    writeJson(
+      path.join(workspaceDir, '.archguard', 'query', OUTSIDE_SCOPE_KEY, 'arch.json'),
+      buildArchive(outsideEntities, 1),
+    );
+  }
+
+  const seedIdentifiers = losslessCount !== null
+    // Every entity is named in the session text: a bounded hop expansion from
+    // one seed would not necessarily reach the whole fixture, and the lossless
+    // criteria need all `count` boxes drawn.
+    ? entities.map((entity) => entity.name)
+    : variant === 'functions-384'
+    // ONLY the twelve module classes are named. The server caps identifier
+    // seeds (40), so naming all 372 would seed an arbitrary prefix of the list;
+    // naming the twelve hubs reaches every function in one hop instead, and the
+    // whole drawing exists BEFORE "Show all" so the click is the only change.
+    ? entities.filter((entity) => entity.type === 'class').map((entity) => entity.name)
+    : variant === 'outer-perimeter'
+    // EVERY entity is a seed: the class graph expands a bounded number of hops
+    // from the mentioned names, and a chain seeded only at its head would be
+    // drawn three packages deep — the back edges that route around the outside
+    // would never reach the canvas.
+    ? buildPerimeterEntities().map((entity) => entity.name)
+    : variant === 'interleaved-members'
+      ? ['Mixed', 'Util']
+      : families.map((family) => family.seed);
 
   return {
     workspaceDir,
     entityTotal: entities.length,
     entityIds: entities.map((entity) => entity.id),
-    seedIdentifiers: families.map((family) => family.seed),
+    seedIdentifiers,
     variant,
+    // The SAME expression `buildArchive` writes, so a criterion can compare the
+    // text's member rows with the payload's without re-deriving the recipe.
+    memberCountById: Object.fromEntries(entities.map((entity) => [
+      entity.id,
+      (entity.members ?? membersFor(entity.type, classMembers)).length,
+    ])),
+    ...(variant === 'interleaved-members'
+      ? {
+          memberKindsById: {
+            'interleaved/core/Mixed.ts.Mixed': [
+              { token: 'alphaField', kind: 'field' as const },
+              { token: 'betaField', kind: 'field' as const },
+              { token: 'deltaMethod', kind: 'method' as const },
+              { token: 'gammaMethod', kind: 'method' as const },
+            ],
+          },
+        }
+      : {}),
   };
 }

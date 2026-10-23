@@ -1145,6 +1145,10 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // not "every project is unregistered".
     resolveFleetAvailability: async () => ({
       available: false,
+      state: 'missing',
+      binPath: null,
+      version: null,
+      contracts: null,
       reason: 'quay-fleet is not configured on this server (set QUAY_FLEET_BIN)',
     }),
   };
@@ -1508,6 +1512,11 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       ganttUnavailable: ganttRead.unavailable,
       dashboardUrl,
       warnings,
+      // The host-level CLI reading travels WITH the snapshot so the panel can state one cause
+      // (missing / incompatible / no-handshake) instead of blaming each project's registration.
+      // Collected inside the shared in-flight pass, so concurrent opens still receive the SAME
+      // object and pay for one handshake (the reader's own TTL covers later opens).
+      fleet: await readFleetAvailability(),
     };
   };
 
@@ -1670,7 +1679,9 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     }
     const fleetProjectId = await fleetProjectIds.resolveFleetProjectId(projectId);
     // Omitted rather than `null` when unregistered: the shared type documents absent and null
-    // as the same reading, and an older snapshot shape stays byte-comparable.
+    // as the same reading, and an older snapshot shape stays byte-comparable. The object is
+    // returned AS-IS when there is nothing to stamp, so two concurrent opens share one
+    // reference through the in-flight promise (the panel's dedupe criterion measures this).
     return fleetProjectId === null ? snapshot : { ...snapshot, fleetProjectId };
   };
 
@@ -1800,12 +1811,26 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
    */
   const readFleetAvailability = async (): Promise<QuayFleetAvailability> => {
     if (fleetProjectIds.resolveFleetAvailability === undefined) {
-      return { available: true, reason: null };
+      return {
+        available: true,
+        state: 'ok',
+        binPath: null,
+        version: null,
+        contracts: null,
+        reason: null,
+      };
     }
     try {
       return await fleetProjectIds.resolveFleetAvailability();
     } catch {
-      return { available: false, reason: 'quay-fleet availability could not be read' };
+      return {
+        available: false,
+        state: 'no-handshake',
+        binPath: null,
+        version: null,
+        contracts: null,
+        reason: 'quay-fleet availability could not be read',
+      };
     }
   };
 

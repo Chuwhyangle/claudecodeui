@@ -38,10 +38,22 @@ function registryDocument(projects: { id: string; root: string; enabled?: boolea
   });
 }
 
+/** The `quay-fleet --version --json` document a healthy CLI prints (the availability read). */
+const HANDSHAKE_DOCUMENT = JSON.stringify({
+  name: 'quay-fleet',
+  version: '1.4.0',
+  contracts: { wallUri: 'v0', registry: 1, interfaceSession: 'v0' },
+});
+
 /** An exec seam answering every call with `stdout`, recording the argv it was handed. */
 function staticExec(stdout: string, calls: ExecCall[] = []): QuayFleetProjectIdDependencies['exec'] {
   return async (file, args) => {
     calls.push({ file, args: [...args] });
+    // The availability reading now handshakes over the same seam; a stub that answered a
+    // registry document for `--version` would model a fleet that cannot report contracts.
+    if (args.includes('--version')) {
+      return { ok: true, code: 0, stdout: HANDSHAKE_DOCUMENT, stderr: '' };
+    }
     return { ok: true, code: 0, stdout, stderr: '' };
   };
 }

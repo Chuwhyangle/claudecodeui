@@ -24,6 +24,13 @@ type ArchitectureCurationManagerProps = {
   readonly onRestoreGroup: (page: ArchitectureCurationPage) => void;
   readonly onRestoreAll: () => void;
   readonly onClearItem: (page: 'pins' | 'excluded', id: string) => void;
+  /** Whether there is a latest adjustment that can still be undone. */
+  readonly canUndo: boolean;
+  /**
+   * Undo the latest adjustment — the SAME action the Toast's Undo button
+   * performs, offered here so it survives the Toast's dismissal.
+   */
+  readonly onUndo: () => void;
 };
 
 function pageLabelKey(page: ArchitectureCurationPage): string {
@@ -61,6 +68,8 @@ export function ArchitectureCurationManager({
   onRestoreGroup,
   onRestoreAll,
   onClearItem,
+  canUndo,
+  onUndo,
 }: ArchitectureCurationManagerProps) {
   const { t } = useTranslation();
   const { compactToolbar, coarsePointer } = useTouchLayout();
@@ -118,6 +127,21 @@ export function ArchitectureCurationManager({
             );
           })}
         </div>
+        {/* The Toast's Undo, kept available after the Toast dismisses: the
+            latest adjustment is still one click away while the reader audits
+            the list. Rendered only when there IS something to undo. */}
+        {canUndo && (
+          <button
+            type="button"
+            data-architecture-curation-manager-undo="true"
+            disabled={!canEdit}
+            onClick={onUndo}
+            style={targetStyle}
+            className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {t('architecture.curation.undo', { defaultValue: 'Undo' })}
+          </button>
+        )}
         <button
           type="button"
           aria-label={t('architecture.curation.close', { defaultValue: 'Close adjustments' })}

@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Kalıcı oturumlarda Shell kullanılamaz"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "sınıf",
+      "kindInterface": "arayüz",
+      "kindEnum": "enum",
+      "kindAbstract": "soyut sınıf",
+      "kindFunction": "işlev",
+      "kindEntity": "varlık",
+      "announceEntity": "{{label}}, {{kind}}, paket {{package}}, {{outgoing}} giden, {{incoming}} gelen",
+      "announcePackage": "Paket {{package}}, {{count}} varlık",
+      "noNeighbour": "O yönde varlık yok",
+      "selected": "{{label}} seçildi",
+      "deselected": "{{label}} seçimden çıkarıldı",
+      "selectedIntoSet": "{{label}} seçime eklendi",
+      "enteredPackage": "{{package}} paketi açıldı",
+      "rootPackage": "kök paket"
+    },
     "copyFix": {
       "kindClass": "{{count}} sınıf",
       "kindFunction": "{{count}} işlev",
@@ -113,6 +129,7 @@
         "tierPackages": "Paketler"
       },
       "explosion": "Patlama görünümü",
+      "layoutProgress": "{{count}} varlık yerleştiriliyor…",
       "drillIn": "İçine gir",
       "moreActions": "Diğer işlemler",
       "touchHint": "Bir düğümü seçmek için dokunun; kaydırmak için sürükleyin ve iki parmakla yakınlaştırın. Komşuluğunu açmak için çift dokunun veya “İçine gir”i seçin.",
@@ -127,6 +144,7 @@
         "focusSummary": "Okunabilir yakınlaştırma açık: {{package}} odakta, %{{zoom}} — tüm grafiği görmek için Genel görünüm’ü seçin ({{count}} diğer paket).",
         "focusOnly": "Okunabilir yakınlaştırma açık — tüm grafiği görmek için Genel görünüm’ü seçin.",
         "overviewTooSmall": "Tüm grafik %{{zoom}} — yakınlaştırmak için bir pakete dokunun",
+        "folded": "{{depth}} seviyeye katlandı — yakınlaştırmak için bir pakete dokunun",
         "backToWhole": "Tüm grafiğe dön"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "Graf ayrıntı düzeyi",
     "fileGraph": "Dosya grafiği",
     "entityGraph": "Varlık grafiği",
+    "fullscreen": {
+      "enter": "Tam ekran",
+      "exit": "Tam ekrandan çık"
+    },
     "controls": {
       "maxHops": "Atlamalar",
       "hopOption": "Atlama {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "Türleri gizli olsa bile görünür tut",
       "mentionedToggleAria": "bu oturumda anıldı, türü gizli olsa bile görünür tutulur",
       "mentionedInKind": "Bu oturumda {{count}} kez anıldı",
-      "showMentioned": "▸ Anılanları göster"
+      "showMentioned": "▸ Anılanları göster",
+      "reset": "↺ Filtreleri sıfırla"
     },
     "scopeHygiene": {
       "summary": "Scope temizliği",

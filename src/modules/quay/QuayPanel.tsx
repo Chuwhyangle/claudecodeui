@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 
 import type {
   QuayDriverState,
+  QuayFleetCliState,
   QuayInFlightTask,
   QuayListItem,
   QuaySnapshot,
@@ -594,11 +595,18 @@ function FanInCard({ fanIn, window }: { fanIn: QuaySnapshot['fanIn']; window: Qu
  */
 function InFlightCard({
   fleetProjectId,
+  fleetState,
   inFlight,
   generatedAt,
 }: {
   /** The project's quay-fleet registry id, or `null` when it is not registered. */
   fleetProjectId: string | null;
+  /**
+   * The host's CLI reading. When the binary is missing (or speaks an incompatible contract)
+   * the card does NOT blame this project: the one-line notice above the grid already named the
+   * single cause, and repeating it here is the per-card noise this reading removes.
+   */
+  fleetState: QuayFleetCliState | null;
   inFlight: QuaySnapshot['inFlight'];
   generatedAt: string;
 }) {
@@ -634,10 +642,12 @@ function InFlightCard({
       data-quay-focusables={contract === null ? undefined : JSON.stringify(focusables)}
     >
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">In flight</h3>
-      {fleetProjectId === null ? (
+      {fleetProjectId === null && fleetState !== 'missing' && fleetState !== 'incompatible' ? (
         // The reference's project segment must be a fleet registry id. CloudCLI's own project
         // id is NOT an honest fallback — the fleet would reject it — so the tile says the
-        // project is unregistered and declares no focusable objects.
+        // project is unregistered and declares no focusable objects. When the CLI itself is
+        // missing/incompatible the notice above states that ONE cause instead, so this card
+        // does not blame the project for a host-level failure.
         <p className="mb-2 text-xs text-amber-700 dark:text-amber-300" data-testid="quay-panel-inflight-unregistered">
           Not registered in quay-fleet (未登记到 quay-fleet) — these tasks cannot be referenced.
         </p>
@@ -852,6 +862,10 @@ function LoadedQuayPanel({
   // which would contradict the very tab the badge sits in.
   const driverState: QuayDriverState = snapshot.driver === null ? 'unavailable' : snapshot.driver.state;
 
+  // The server's CLI reading, when it sent one. Absent is "not reported" (an older backend),
+  // not "the CLI is missing", so it must not produce a notice.
+  const fleetState: QuayFleetCliState | null = snapshot.fleet?.state ?? null;
+
   // One window for the whole tab: the Loop pulse reading's own window, handed to the Tests and
   // Fan-in bars so all three charts are cut to the same slice (see `resolveTimelineWindow`).
   const timelineWindow = resolveTimelineWindow(snapshot.gantt ?? null, windowHours, snapshot.generatedAt);
@@ -896,6 +910,26 @@ function LoadedQuayPanel({
         </div>
       </div>
 
+      {/*
+        ONE line for the whole host. Without this, a missing/incompatible/compat-only fleet
+        reads as 「未登记到 quay-fleet」 on every project — the same sentence, one cause.
+      */}
+      {fleetState !== null && fleetState !== 'ok' && (
+        <p
+          className={fleetState === 'no-handshake'
+            ? 'mb-3 rounded border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground'
+            : 'mb-3 rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200'}
+          data-testid="quay-panel-fleet-state"
+          data-fleet-state={fleetState}
+        >
+          {fleetState === 'missing'
+            ? `quay-fleet was not found on this server — ${snapshot.fleet?.reason ?? 'no reason reported'}`
+            : fleetState === 'incompatible'
+              ? `quay-fleet speaks an incompatible contract — ${snapshot.fleet?.reason ?? 'no reason reported'}`
+              : `quay-fleet did not complete the version handshake${snapshot.fleet?.binPath === null || snapshot.fleet?.binPath === undefined ? '' : ` (${snapshot.fleet.binPath})`} — continuing as compatible`}
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TaskLedger tasks={snapshot.tasks} />
         <StageGoals goals={snapshot.goals} />
@@ -909,6 +943,7 @@ function LoadedQuayPanel({
         <TestsCard tests={snapshot.tests} window={timelineWindow} />
         <InFlightCard
           fleetProjectId={snapshot.fleetProjectId ?? null}
+          fleetState={fleetState}
           inFlight={snapshot.inFlight}
           generatedAt={snapshot.generatedAt}
         />

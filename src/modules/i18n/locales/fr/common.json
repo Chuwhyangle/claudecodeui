@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell indisponible pour les sessions résidentes"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "classe",
+      "kindInterface": "interface",
+      "kindEnum": "énumération",
+      "kindAbstract": "classe abstraite",
+      "kindFunction": "fonction",
+      "kindEntity": "entité",
+      "announceEntity": "{{label}}, {{kind}}, paquet {{package}}, {{outgoing}} sortantes, {{incoming}} entrantes",
+      "announcePackage": "Paquet {{package}}, {{count}} entités",
+      "noNeighbour": "Aucune entité dans cette direction",
+      "selected": "{{label}} sélectionné",
+      "deselected": "{{label}} retiré de la sélection",
+      "selectedIntoSet": "{{label}} ajouté à la sélection",
+      "enteredPackage": "Paquet {{package}} ouvert",
+      "rootPackage": "le paquet racine"
+    },
     "copyFix": {
       "kindClass": "{{count}} classes",
       "kindFunction": "{{count}} fonctions",
@@ -113,6 +129,7 @@
         "tierPackages": "Paquets"
       },
       "explosion": "Vue explosion",
+      "layoutProgress": "Calcul de la disposition de {{count}} entités…",
       "drillIn": "Ouvrir",
       "moreActions": "Plus d’actions",
       "touchHint": "Touchez un nœud pour le sélectionner ; faites glisser pour déplacer et pincez pour zoomer. Double-touchez ou choisissez « Ouvrir » pour afficher son voisinage.",
@@ -127,6 +144,7 @@
         "focusSummary": "Le zoom lisible est actif : focus sur {{package}} à {{zoom}} % — choisissez Vue d’ensemble pour voir tout le graphe ({{count}} autre(s) paquet(s)).",
         "focusOnly": "Le zoom lisible est actif — choisissez Vue d’ensemble pour voir tout le graphe.",
         "overviewTooSmall": "Graphe complet à {{zoom}} % — touchez un paquet pour zoomer",
+        "folded": "Réduit à {{depth}} niveaux — touchez un paquet pour zoomer",
         "backToWhole": "Retour au graphe complet"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "Granularité du graphe",
     "fileGraph": "Graphe des fichiers",
     "entityGraph": "Graphe des entités",
+    "fullscreen": {
+      "enter": "Plein écran",
+      "exit": "Quitter le plein écran"
+    },
     "controls": {
       "maxHops": "Sauts",
       "hopOption": "Sauts {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "Les garder visibles même si leur type est masqué",
       "mentionedToggleAria": "mentionnées dans cette session, visibles même si leur type est masqué",
       "mentionedInKind": "{{count}} mentionnées dans cette session",
-      "showMentioned": "▸ Afficher les mentionnées"
+      "showMentioned": "▸ Afficher les mentionnées",
+      "reset": "↺ Réinitialiser les filtres"
     },
     "scopeHygiene": {
       "summary": "Nettoyage des scopes",

@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell недоступен для резидентных сессий"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "класс",
+      "kindInterface": "интерфейс",
+      "kindEnum": "перечисление",
+      "kindAbstract": "абстрактный класс",
+      "kindFunction": "функция",
+      "kindEntity": "сущность",
+      "announceEntity": "{{label}}, {{kind}}, пакет {{package}}, {{outgoing}} исходящих, {{incoming}} входящих",
+      "announcePackage": "Пакет {{package}}, сущностей: {{count}}",
+      "noNeighbour": "В этом направлении нет сущностей",
+      "selected": "{{label}} выбран",
+      "deselected": "{{label}} удалён из выбора",
+      "selectedIntoSet": "{{label}} добавлен в выбор",
+      "enteredPackage": "Открыт пакет {{package}}",
+      "rootPackage": "корневой пакет"
+    },
     "copyFix": {
       "kindClass": "{{count}} классов",
       "kindFunction": "{{count}} функций",
@@ -113,6 +129,7 @@
         "tierPackages": "Пакеты"
       },
       "explosion": "Взрывной вид",
+      "layoutProgress": "Выполняется раскладка {{count}} сущностей…",
       "drillIn": "Открыть",
       "moreActions": "Другие действия",
       "touchHint": "Коснитесь узла, чтобы выбрать его; перетаскивайте для перемещения и масштабируйте двумя пальцами. Дважды коснитесь или выберите «Открыть», чтобы открыть окрестность.",
@@ -127,6 +144,7 @@
         "focusSummary": "Читаемый масштаб включён: фокус на {{package}} при {{zoom}}% — выберите «Обзор», чтобы увидеть весь граф (ещё {{count}} пакет(ов)).",
         "focusOnly": "Читаемый масштаб включён — выберите «Обзор», чтобы увидеть весь граф.",
         "overviewTooSmall": "Весь граф при {{zoom}}% — коснитесь пакета, чтобы увеличить",
+        "folded": "Свёрнуто до {{depth}} уровней — коснитесь пакета, чтобы увеличить",
         "backToWhole": "Вернуться ко всему графу"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "Детализация графа",
     "fileGraph": "Граф файлов",
     "entityGraph": "Граф сущностей",
+    "fullscreen": {
+      "enter": "Полный экран",
+      "exit": "Выйти из полноэкранного режима"
+    },
     "controls": {
       "maxHops": "Прыжки",
       "hopOption": "Прыжки {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "Показывать, даже если их тип скрыт",
       "mentionedToggleAria": "упомянуто в этой сессии, показывается, даже если тип скрыт",
       "mentionedInKind": "{{count}} упомянуто в этой сессии",
-      "showMentioned": "▸ Показать упомянутые"
+      "showMentioned": "▸ Показать упомянутые",
+      "reset": "↺ Сбросить фильтры"
     },
     "scopeHygiene": {
       "summary": "Очистка scope",

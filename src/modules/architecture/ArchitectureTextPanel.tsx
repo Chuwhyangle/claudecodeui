@@ -8,6 +8,7 @@ import {
 } from '@/modules/architecture/exportArtifacts';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
+  buildFullPlantUmlDocument,
   buildPlantUmlDocument,
   measurePlantUmlText,
   nodesIntersectingViewport,
@@ -205,7 +206,7 @@ export function ArchitectureTextPanel({
   // filter/view render.
   const [document, setDocument] = useState<ArchitecturePlantUmlDocument>(() => {
     try {
-      return buildPlantUmlDocument(graph, { kind: 'full' }, { view, grouping, idShape, drawn });
+      return buildFullPlantUmlDocument(graph, { view, grouping, idShape, drawn });
     } catch {
       return { text: '', fallback: true };
     }

@@ -271,8 +271,10 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // (404 + 2 = 406 collected server test files).
     // Then gap-resident-restore-after-restart added its criterion
     // server/modules/session-hosts/tests/resident-restore.service.test.ts (406 + 1 = 407).
-    // This fixture names 3 known files, so 407 - 3 = 404.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=404$/);
+    // Then quay-fleet-cli-locator-and-handshake added its locator criterion
+    // server/modules/quay/tests/quay-fleet-locator.test.ts (407 + 1 = 408).
+    // This fixture names 3 known files, so 408 - 3 = 405.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=405$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -321,9 +323,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 407 files on this tree — but this fixture names ONE known file,
-    // so 407 - 1 = 406 (AC2 reads 404 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=406$/);
+    // same collection as AC2 — 408 files on this tree — but this fixture names ONE known file,
+    // so 408 - 1 = 407 (AC2 reads 405 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=407$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

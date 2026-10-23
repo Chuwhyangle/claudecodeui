@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { checkSyntax } from '@yalehwang/plantuml-js';
+import { checkSyntax, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { beforeAll, beforeEach, test, vi } from 'vitest';
@@ -13,8 +13,11 @@ import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import {
   archguardToPlantUml,
+  parserSafePlantUml,
   type ArchitectureDiagramView,
 } from '@/modules/architecture/archguardToPlantUml';
+import { renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
+import { standardiseDrawnStereotypes } from '@/modules/architecture/plantUmlText';
 import {
   architectureExportFilename,
   EXPORT_PNG_MAX_EDGE,
@@ -164,7 +167,28 @@ function jsonResponse(result: ArchitectureGraphResult): Response {
 async function waitForDiagram(): Promise<HTMLElement> {
   const host = await screen.findByTestId('plantuml-host');
   await waitFor(() => assert.ok(host.querySelector('svg'), 'the renderer must draw an SVG'));
+  // The export serializes the SAME drawn model the Text page shows, and the
+  // renderer reports it one render after the SVG lands. Wait for that source so
+  // a download cannot race the report and silently export the bridge text.
+  await waitFor(() =>
+    assert.equal(
+      document.querySelector('[data-architecture-drawn-source]')?.getAttribute('data-architecture-drawn-source'),
+      'drawn',
+      'the export needs the drawn model the Text page serializes',
+    ),
+  );
   return host;
+}
+
+/** Wait until the panel holds a drawn model again after a view/graph change. */
+async function waitForDrawnSource(): Promise<void> {
+  await waitFor(() =>
+    assert.equal(
+      document.querySelector('[data-architecture-drawn-source]')?.getAttribute('data-architecture-drawn-source'),
+      'drawn',
+      'the re-render must report its drawn model before the export is read',
+    ),
+  );
 }
 
 /** One captured download: the filename the anchor carried and its Blob. */
@@ -236,17 +260,31 @@ function rememberShowAllFilter(projectId = 'project-1'): void {
 }
 
 /**
- * The exact document the bridge builds for one view of one graph. The file
- * graph is the adaptive consumer; the class graph is drawn raw (entities in
- * package frames), matching the default hierarchy drawing.
+ * The exact document the panel exports for one view of one graph.
+ *
+ * The export is the DRAWN model (the same source the Text page's "Whole
+ * filtered graph" scope serializes), rendered with the app's `detail: 'full'`
+ * option, so this helper reproduces the renderer's pipeline: bridge document →
+ * parser-safe spelling → `renderDetailed` (with the view the renderer applies,
+ * when it applies one) → the upstream serializer in the standard spelling.
+ * The layout engine does not change the model, so the default engine is used.
  */
-function expectedPuml(
+async function expectedPuml(
   graph: ArchitectureRendererGraph,
   view: ArchitectureDiagramView,
   idShape: 'project-relative' | 'scope-prefixed',
   grouping: 'adaptive' | 'raw' = 'adaptive',
-): string {
-  return archguardToPlantUml(graph, { view, grouping, idShape }).puml;
+): Promise<string> {
+  const diagram = archguardToPlantUml(graph, { view, grouping, idShape });
+  const options = view.kind === 'neighborhood' && diagram.rendererEntity !== null
+    ? { view: { kind: 'neighborhood' as const, entity: diagram.rendererEntity, hops: view.hops } }
+    : {};
+  const detailed = await renderWithMemberDetail(
+    renderDetailed,
+    parserSafePlantUml(diagram.puml),
+    options,
+  );
+  return standardiseDrawnStereotypes(toPlantUml(detailed.model));
 }
 
 /** No `error`-severity diagnostic, using the package's own checker. */
@@ -312,7 +350,7 @@ test('the file graph export is the bridge document for the overview on screen, a
   await waitFor(() => assert.equal(downloads.length, 1));
 
   const puml = await readLastDownload();
-  assert.equal(puml, expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
+  assert.equal(puml, await expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
   assert.match(downloads[0].filename, /^architecture-file-project-1-\d{8}-\d{4}\.puml$/);
   assertSyntaxOk(puml);
 });
@@ -328,7 +366,7 @@ test('the class diagram export is the bridge document for the entity subgraph', 
   const puml = await readLastDownload();
   assert.equal(
     puml,
-    expectedPuml(RESULT.graph.entity, { kind: 'hierarchy' }, 'scope-prefixed', 'raw'),
+    await expectedPuml(RESULT.graph.entity, { kind: 'hierarchy' }, 'scope-prefixed', 'raw'),
     'the class export is the hierarchy drawing on screen, not a directory fold',
   );
   assert.doesNotMatch(puml, /grp::/, 'the class diagram document carries no directory group boxes');
@@ -346,18 +384,19 @@ test('drilled group and neighbourhood views export their own document, not the o
   assert.ok(groupNode !== null, 'the overview must draw the alpha directory as a group');
   fireEvent.doubleClick(groupNode);
   await waitFor(() => assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'group'));
+  await waitForDrawnSource();
 
   openExportMenu();
   clickExportItem('puml');
   await waitFor(() => assert.equal(downloads.length, 1));
   const groupPuml = await readLastDownload();
-  const expectedGroup = expectedPuml(
+  const expectedGroup = await expectedPuml(
     RESULT.graph.file,
     { kind: 'group', prefix: 'src/modules/alpha' },
     'project-relative',
   );
   assert.equal(groupPuml, expectedGroup, 'the export must be the group view the reader drilled into');
-  assert.notEqual(groupPuml, expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
+  assert.notEqual(groupPuml, await expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
   assertSyntaxOk(groupPuml);
 
   // An entity's double-click opens its neighbourhood; the export follows it.
@@ -370,6 +409,7 @@ test('drilled group and neighbourhood views export their own document, not the o
   await waitFor(() =>
     assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'neighborhood'),
   );
+  await waitForDrawnSource();
 
   openExportMenu();
   clickExportItem('puml');
@@ -377,7 +417,7 @@ test('drilled group and neighbourhood views export their own document, not the o
   const neighbourhoodPuml = await readLastDownload();
   assert.equal(
     neighbourhoodPuml,
-    expectedPuml(
+    await expectedPuml(
       RESULT.graph.file,
       { kind: 'neighborhood', entityId: 'src/modules/alpha/a2.ts', hops: 1 },
       'project-relative',
@@ -406,13 +446,14 @@ test('the export follows the scope and detail knobs', async () => {
   await waitFor(() =>
     assert.equal(document.querySelector('[data-architecture-detail-option="core"]')?.getAttribute('aria-checked'), 'true'),
   );
+  await waitForDrawnSource();
   openExportMenu();
   clickExportItem('puml');
   await waitFor(() => assert.equal(downloads.length, 2));
   const corePuml = await readLastDownload();
 
   assert.notEqual(corePuml, widePuml, 'folding detail must change what is exported');
-  assert.equal(corePuml, expectedPuml(coreGraph, { kind: 'overview' }, 'project-relative'));
+  assert.equal(corePuml, await expectedPuml(coreGraph, { kind: 'overview' }, 'project-relative'));
   assertSyntaxOk(corePuml);
 
   // Back to the full drawing, then range +2 → +1 re-requests; wait until the
@@ -421,13 +462,14 @@ test('the export follows the scope and detail knobs', async () => {
   fireEvent.click(document.querySelector('[data-architecture-scope-decrease]') as Element);
   await waitFor(() => assert.equal(apiMock.architectureGraph.mock.calls.at(-1)?.[2], 1));
   await waitFor(() => assert.ok(document.querySelector('[data-architecture-plantuml] svg')));
+  await waitForDrawnSource();
   openExportMenu();
   clickExportItem('puml');
   await waitFor(() => assert.equal(downloads.length, 3));
   const narrowPuml = await readLastDownload();
 
   assert.notEqual(narrowPuml, widePuml, 'a smaller scope must produce a smaller document');
-  assert.equal(narrowPuml, expectedPuml(SCOPE_ONE_RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
+  assert.equal(narrowPuml, await expectedPuml(SCOPE_ONE_RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
 });
 
 test('Copy PlantUML writes the current document and announces success', async () => {
@@ -445,7 +487,7 @@ test('Copy PlantUML writes the current document and announces success', async ()
 
   const clipboard = navigator.clipboard.writeText as unknown as ReturnType<typeof vi.fn>;
   assert.equal(clipboard.mock.calls.length, 1);
-  assert.equal(clipboard.mock.calls[0][0], expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
+  assert.equal(clipboard.mock.calls[0][0], await expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
   const status = document.querySelector('[data-architecture-export-status]');
   assert.equal(status?.getAttribute('role'), 'status');
   assert.equal(status?.getAttribute('aria-live'), 'polite');
@@ -467,7 +509,7 @@ test('a refusing clipboard falls back to a dialog with the text selected', async
   const dialog = document.querySelector('[data-architecture-export-fallback]');
   assert.equal(dialog?.getAttribute('role'), 'dialog');
   const textarea = document.querySelector('[data-architecture-export-fallback-text]') as HTMLTextAreaElement;
-  assert.equal(textarea.value, expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
+  assert.equal(textarea.value, await expectedPuml(RESULT.graph.file, { kind: 'overview' }, 'project-relative'));
 
   fireEvent.click(document.querySelector('[data-architecture-export-fallback-close]') as Element);
   assert.equal(document.querySelector('[data-architecture-export-fallback]'), null);

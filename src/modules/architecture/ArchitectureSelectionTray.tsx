@@ -226,6 +226,7 @@ export function ArchitectureSelectionTray({
   multiSelect,
   expanded,
   compact,
+  bottomInset = 0,
   onExpandedChange,
   onExitMultiSelect,
   onToggleItem,
@@ -581,7 +582,7 @@ export function ArchitectureSelectionTray({
           onClick={() => onExpandedChange(true)}
           style={{
             position: 'absolute',
-            bottom: 8,
+            bottom: 8 + bottomInset,
             pointerEvents: 'auto',
             ...(compact
               ? { left: 0, right: 0, margin: '0 auto' }
@@ -606,12 +607,17 @@ export function ArchitectureSelectionTray({
           data-architecture-tray-expanded-panel="true"
           style={{
             position: 'absolute',
-            bottom: compact ? 0 : 8,
+            bottom: compact ? bottomInset : 8 + bottomInset,
             left: compact ? 0 : '50%',
             right: compact ? 0 : undefined,
             transform: compact ? undefined : 'translateX(-50%)',
             width: compact ? undefined : 'min(560px, calc(100% - 24px))',
-            maxHeight: compact ? '60vh' : '55%',
+            maxHeight: compact
+              // Lifted above an overlaid drawer, the panel may not run past the
+              // top of the canvas: its old 60vh ceiling would, because the
+              // drawer already owns the bottom share of the viewport.
+              ? (bottomInset > 0 ? 'calc(55vh - 8px)' : '60vh')
+              : '55%',
             pointerEvents: 'auto',
             ...(compact ? {} : { minWidth: 280 }),
           }}
@@ -663,6 +669,13 @@ type ArchitectureSelectionTrayProps = {
   readonly expanded: boolean;
   /** True on the compact tier: bottom bar + drawer instead of the floating panel. */
   readonly compact: boolean;
+  /**
+   * How much of the tray root's bottom edge is covered by chrome drawn OVER the
+   * canvas (the coarse-tier inspector drawer). The tray is lifted by this many
+   * pixels so its pill and its expanded panel never sit underneath the drawer's
+   * content. 0 on the desktop tier, where the dock narrows the canvas instead.
+   */
+  readonly bottomInset?: number;
   readonly onExpandedChange: (expanded: boolean) => void;
   readonly onExitMultiSelect: () => void;
   readonly onToggleItem: (selection: ArchitectureSelection) => void;

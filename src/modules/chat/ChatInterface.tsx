@@ -24,6 +24,7 @@ import { useInputOutline } from '@/modules/chat/outline/useInputOutline';
 import InputOutlineDrawer from '@/modules/chat/outline/InputOutlineDrawer';
 import { useChatRealtimeHandlers } from '@/modules/chat/hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState';
+import { useActivityDockTurn } from '@/modules/chat/hooks/useActivityDockTurn';
 import { useSessionStore } from '@/modules/chat/hooks/useSessionStore';
 import { useUiNavigate } from '@/modules/chat/hooks/useUiNavigate';
 import { useUiStateResponder } from '@/modules/chat/hooks/useUiStateResponder';
@@ -638,6 +639,22 @@ function ChatInterface({
     return () => endVoiceCapture();
   }, [composerMode, voiceSessionId, startVoiceCapture, endVoiceCapture]);
 
+  /**
+   * Whether the activity dock is drawing a turn, from the dock's own decision
+   * (server-backed freshness plus this client's processing entry). The empty-box
+   * suggestion chips obey it: the local `isLoading` mark can already be clear
+   * while a server-confirmed turn — a voice turn, another client's turn, a
+   * reloaded page — is still running, and the chips must follow the status bar
+   * rather than the local mark. Read here, above the composer hook, because the
+   * chips' `visible` is an input to it. `sendFailed` is deliberately not passed:
+   * it lives inside the composer hook and cannot change this answer, since it
+   * only replaces the dock's reading when there is no turn at all.
+   */
+  const isDockTurnShown = useActivityDockTurn({
+    sessionId: currentSessionId ?? selectedSession?.id ?? null,
+    activity: sessionActivity,
+  });
+
   const {
     input,
     setInput,
@@ -706,6 +723,9 @@ function ChatInterface({
     currentProviderModel,
     currentProviderEffort,
     isLoading: isProcessing,
+    // The chips' idle-only reading comes from the dock, not from the local
+    // processing mark alone: a server-confirmed turn outlives that mark.
+    isDockTurnShown,
     processingSessions,
     canAbortSession,
     tokenBudget,

@@ -103,20 +103,18 @@ export const MEMBER_MAX_CHARS = 48;
 export const MEMBER_MAX_ROWS = 6;
 
 /**
- * The options the drawing hands the renderer, in the shape `RendererOptions`
- * expects. One definition for the drawing and for the tests that read what it
- * drew, so the two can never state different numbers.
+ * The member options the drawing hands the renderer, in the shape
+ * `RendererOptions` expects. One definition for the drawing and for the tests
+ * that read what it drew, so the two can never state different numbers.
  *
- * `detail: 'full'` is passed explicitly: the default detail is chosen from the
- * entity count, and a `compact` drawing would fold members on its own (for the
- * wrong reason). The row cap is ours, so the renderer draws every row and only
- * shortens the LINES here.
+ * Only the LINE cap lives here. `detail: 'full'` is supplied once, by
+ * `renderWithMemberDetail` (`PlantUmlGraph.tsx`), so every drawing — and the
+ * model the text page serializes — is complete; and the row cap is ours
+ * (the drawing layer), so the renderer draws every row and only shortens the
+ * LINES here.
  */
-export function memberDisplayLimits(): {
-  detail: 'full';
-  memberMaxChars: number;
-} {
-  return { detail: 'full', memberMaxChars: MEMBER_MAX_CHARS };
+export function memberDisplayLimits(): { memberMaxChars: number } {
+  return { memberMaxChars: MEMBER_MAX_CHARS };
 }
 
 /**

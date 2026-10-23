@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "상주 세션에서는 Shell을 사용할 수 없습니다"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "클래스",
+      "kindInterface": "인터페이스",
+      "kindEnum": "열거형",
+      "kindAbstract": "추상 클래스",
+      "kindFunction": "함수",
+      "kindEntity": "엔티티",
+      "announceEntity": "{{label}}, {{kind}}, 패키지 {{package}}, 나가는 관계 {{outgoing}}개, 들어오는 관계 {{incoming}}개",
+      "announcePackage": "패키지 {{package}}, 엔티티 {{count}}개",
+      "noNeighbour": "해당 방향에 엔티티가 없습니다",
+      "selected": "{{label}} 선택됨",
+      "deselected": "{{label}} 선택에서 제거됨",
+      "selectedIntoSet": "{{label}} 선택에 추가됨",
+      "enteredPackage": "패키지 {{package}} 열림",
+      "rootPackage": "루트 패키지"
+    },
     "copyFix": {
       "kindClass": "{{count}} 클래스",
       "kindFunction": "{{count}} 함수",
@@ -113,6 +129,7 @@
         "tierPackages": "패키지"
       },
       "explosion": "폭발 뷰",
+      "layoutProgress": "{{count}}개 엔터티 레이아웃 계산 중…",
       "drillIn": "열기",
       "moreActions": "추가 작업",
       "touchHint": "노드를 탭하여 선택합니다. 드래그하여 이동하고 핀치하여 확대/축소합니다. 두 번 탭하거나 '열기'를 선택하면 인접 항목이 열립니다.",
@@ -127,6 +144,7 @@
         "focusSummary": "가독성 확대가 켜져 있습니다: {{package}}에 초점, {{zoom}}% — 전체 보기를 선택하면 전체 그래프를 봅니다 (다른 패키지 {{count}}개).",
         "focusOnly": "가독성 확대가 켜져 있습니다 — 전체 보기를 선택하면 전체 그래프를 봅니다.",
         "overviewTooSmall": "전체 그래프 {{zoom}}% — 패키지를 눌러 확대",
+        "folded": "{{depth}}단계로 접었습니다 — 패키지를 눌러 확대",
         "backToWhole": "전체 그래프로 돌아가기"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "그래프 세분성",
     "fileGraph": "파일 그래프",
     "entityGraph": "엔티티 그래프",
+    "fullscreen": {
+      "enter": "전체 화면",
+      "exit": "전체 화면 종료"
+    },
     "controls": {
       "maxHops": "홉",
       "hopOption": "홉 {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "종류가 숨겨져 있어도 계속 표시",
       "mentionedToggleAria": "이 세션에서 언급됨, 종류가 숨겨져 있어도 계속 표시",
       "mentionedInKind": "이 세션에서 {{count}}개 언급됨",
-      "showMentioned": "▸ 언급된 항목 표시"
+      "showMentioned": "▸ 언급된 항목 표시",
+      "reset": "↺ 필터 초기화"
     },
     "scopeHygiene": {
       "summary": "스코프 정리",

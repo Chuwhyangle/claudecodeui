@@ -31,6 +31,22 @@
     "shellResidentDisabledLabel": "Shell non disponibile per le sessioni residenti"
   },
   "architecture": {
+    "nav": {
+      "kindClass": "classe",
+      "kindInterface": "interfaccia",
+      "kindEnum": "enum",
+      "kindAbstract": "classe astratta",
+      "kindFunction": "funzione",
+      "kindEntity": "entità",
+      "announceEntity": "{{label}}, {{kind}}, pacchetto {{package}}, {{outgoing}} uscenti, {{incoming}} entranti",
+      "announcePackage": "Pacchetto {{package}}, {{count}} entità",
+      "noNeighbour": "Nessuna entità in quella direzione",
+      "selected": "{{label}} selezionato",
+      "deselected": "{{label}} rimosso dalla selezione",
+      "selectedIntoSet": "{{label}} aggiunto alla selezione",
+      "enteredPackage": "Pacchetto {{package}} aperto",
+      "rootPackage": "il pacchetto radice"
+    },
     "copyFix": {
       "kindClass": "{{count}} classi",
       "kindFunction": "{{count}} funzioni",
@@ -113,6 +129,7 @@
         "tierPackages": "Pacchetti"
       },
       "explosion": "Vista esplosa",
+      "layoutProgress": "Calcolo del layout di {{count}} entità…",
       "drillIn": "Apri",
       "moreActions": "Altre azioni",
       "touchHint": "Tocca un nodo per selezionarlo; trascina per spostarti e pizzica per zoomare. Tocca due volte o scegli «Apri» per aprire il suo intorno.",
@@ -127,6 +144,7 @@
         "focusSummary": "Lo zoom leggibile è attivo: focus su {{package}} al {{zoom}}% — scegli Panoramica per vedere tutto il grafo ({{count}} altri pacchetti).",
         "focusOnly": "Lo zoom leggibile è attivo — scegli Panoramica per vedere tutto il grafo.",
         "overviewTooSmall": "Grafo completo al {{zoom}}% — tocca un pacchetto per ingrandire",
+        "folded": "Compresso a {{depth}} livelli — tocca un pacchetto per ingrandire",
         "backToWhole": "Torna al grafo completo"
       },
       "minimap": {
@@ -144,6 +162,10 @@
     "granularity": "Granularità del grafo",
     "fileGraph": "Grafo dei file",
     "entityGraph": "Grafo delle entità",
+    "fullscreen": {
+      "enter": "Schermo intero",
+      "exit": "Esci da schermo intero"
+    },
     "controls": {
       "maxHops": "Salti",
       "hopOption": "Salti {{count}}",
@@ -261,7 +283,8 @@
       "mentionedHint": "Mantienile visibili anche quando il tipo è nascosto",
       "mentionedToggleAria": "menzionate in questa sessione, visibili anche quando il tipo è nascosto",
       "mentionedInKind": "{{count}} menzionate in questa sessione",
-      "showMentioned": "▸ Mostra le menzionate"
+      "showMentioned": "▸ Mostra le menzionate",
+      "reset": "↺ Reimposta filtri"
     },
     "scopeHygiene": {
       "summary": "Pulizia degli scope",

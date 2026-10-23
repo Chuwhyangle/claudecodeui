@@ -82,6 +82,17 @@ type UseInputSuggestionsOptions = {
   input: string;
   /** True while the assistant's turn is running; chips are an idle-only affordance. */
   isLoading: boolean;
+  /**
+   * True while the activity dock is drawing a turn, from `useActivityDockTurn`.
+   *
+   * A second reading of the same question the dock answers: a turn the server
+   * confirmed (a voice turn, another client's turn, a reloaded page) can be
+   * running while this client's local `isLoading` mark is already clear, and the
+   * chips must follow the dock rather than the local mark. Optional so a caller
+   * with no dock (a test harness) keeps the legacy reading; false is the
+   * default, never a required argument.
+   */
+  isDockTurnShown?: boolean;
   /** True while a background job holds the conversation (its textarea is disabled). */
   isOccupied: boolean;
   isCommandMenuOpen: boolean;
@@ -110,6 +121,7 @@ export type UseInputSuggestionsResult = {
 export function useInputSuggestions({
   input,
   isLoading,
+  isDockTurnShown = false,
   isOccupied,
   isCommandMenuOpen,
   isFileMenuOpen,
@@ -144,6 +156,7 @@ export function useInputSuggestions({
 
   const visible = input === ''
     && !isLoading
+    && !isDockTurnShown
     && !isOccupied
     && !isCommandMenuOpen
     && !isFileMenuOpen

@@ -163,6 +163,24 @@ export type ArchitectureDrawnPlantUml = {
   ) => PlantUmlModel;
 };
 
+/**
+ * A request from the panel to fit the drawing to its canvas again.
+ *
+ * The panel sends one when IT changed the canvas size — entering or leaving the
+ * page-internal fullscreen overlay, where the drawing region becomes
+ * `fixed; inset: 0` — instead of leaving the renderer's own resize observer to
+ * notice. `token` makes each request distinguishable (toggling the overlay
+ * twice is two requests, not one), and `viewportHeight` is the canvas height
+ * the fit must use, so the renderer answers against the settled box.
+ *
+ * A renderer re-fits only while it is in Fit mode: a drawing the reader zoomed
+ * by hand keeps the scale they chose (see `onZoomModeChange`).
+ */
+export type ArchitectureFitRequest = {
+  readonly token: number;
+  readonly viewportHeight: number;
+};
+
 /** What a renderer reports while the pointer is over a node. */
 export type ArchitectureRendererHover = {
   /** The hovered node, as it was handed to the renderer. */
@@ -249,6 +267,27 @@ export type ArchitectureRendererProps = {
     readonly relationType: string;
   } | null;
   readonly relayoutLocked?: boolean;
+  /**
+   * How many pixels at the TOP of the canvas are covered by chrome drawn OVER
+   * it (the fullscreen overlay's toolbar and readout rows). The drawing reserves
+   * that band — a fitted drawing is centred below it instead of starting behind
+   * it — exactly as `bottomObscuredPx` reserves the touch drawer's band. 0
+   * everywhere else, where the chrome is in normal flow above the canvas.
+   */
+  readonly topObscuredPx?: number;
+  /**
+   * The panel's request to re-fit after a canvas-size change it caused itself
+   * (the fullscreen overlay). Absent/null means no request was made. A renderer
+   * in Fit mode fits once per `token`; a manually zoomed drawing ignores it.
+   */
+  readonly fitRequest?: ArchitectureFitRequest | null;
+  /**
+   * Reports whether the drawing follows the container (`fit`) or a scale the
+   * reader chose (`custom`). The panel uses it to decide whether a fullscreen
+   * toggle may re-fit; a renderer that never reports leaves the panel's Fit
+   * assumption in place, which is the default zoom.
+   */
+  readonly onZoomModeChange?: (mode: 'fit' | 'custom') => void;
   readonly onExport?: () => void;
   /**
    * Reports the model this renderer actually drew, or null while it draws

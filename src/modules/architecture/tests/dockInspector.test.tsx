@@ -530,6 +530,34 @@ test('the touch tier draws the same inspector in a bottom drawer with three snap
     ['collapsed', 'half', 'full'],
     'the drawer has the three designed snap heights',
   );
+  // Each button states ITS OWN snap. The shipped defect painted the CURRENT
+  // snap's label on all three, so they read "Half / Half / Half".
+  assert.deepEqual(
+    snaps.map((snap) => (snap.textContent ?? '').trim()),
+    ['Collapsed', 'Half', 'Full'],
+    'the three buttons must show three different labels',
+  );
+  const pressedSnap = snaps.filter((snap) => snap.getAttribute('aria-pressed') === 'true');
+  assert.equal(pressedSnap.length, 1, 'exactly one snap is in force');
+  assert.equal(pressedSnap[0]?.getAttribute('data-architecture-dock-snap'), 'half');
+  const unpressedSnap = snaps.find((snap) => snap.getAttribute('aria-pressed') !== 'true');
+  assert.ok(unpressedSnap instanceof HTMLElement, 'the other two snaps are unpressed');
+  // The pressed state is a visible class, not only the aria attribute.
+  assert.match(pressedSnap[0]?.className ?? '', /font-semibold/);
+  assert.doesNotMatch(unpressedSnap.className, /font-semibold/);
+  assert.notEqual(
+    pressedSnap[0]?.className,
+    unpressedSnap.className,
+    'pressed and unpressed must not paint identically',
+  );
+
+  // ONE close control in the touch drawer: the snap row used to draw a second
+  // × alongside the tablist's own, so the drawer carried two "Close inspector".
+  assert.equal(
+    drawer.querySelectorAll('[data-architecture-dock-close]').length,
+    1,
+    'the touch drawer must offer exactly one close control',
+  );
   fireEvent.click(drawer.querySelector('[data-architecture-dock-snap="collapsed"]') as Element);
   await waitFor(() => assert.equal(drawer.getAttribute('data-architecture-dock-height'), 'collapsed'));
   assert.equal((drawer as HTMLElement).style.height, '96px', 'collapsed is the 96px name/kind row');
@@ -544,6 +572,33 @@ test('the touch tier draws the same inspector in a bottom drawer with three snap
   await waitFor(() => {
     assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'neighborhood');
   });
+});
+
+/**
+ * The desktop side of the same fix: removing the touch drawer's duplicate ×
+ * must leave the fine-pointer dock's single close (and no snap controls) as it
+ * was.
+ */
+test('the desktop dock keeps its one close control and draws no snap row', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  const host = await waitForDiagram();
+
+  await openInspectorFor(host, ALPHA);
+  const desktopDock = await waitFor(() => {
+    const element = dock();
+    assert.ok(element instanceof HTMLElement, 'a fine pointer gets the side dock');
+    return element;
+  });
+  assert.equal(
+    desktopDock.querySelectorAll('[data-architecture-dock-close]').length,
+    1,
+    'the desktop dock keeps exactly one close control',
+  );
+  assert.equal(
+    desktopDock.querySelectorAll('[data-architecture-dock-snap]').length,
+    0,
+    'the desktop dock has no drawer snap controls',
+  );
 });
 
 /**
