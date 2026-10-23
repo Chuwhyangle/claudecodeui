@@ -7,10 +7,12 @@ import type {
   QuayListItem,
   QuaySnapshot,
   QuayTimelineWindow,
+  QuayViewContract,
 } from '@/shared/types';
 import { cn } from '@/shared/utils';
 import type { QuayPanelView } from '@/modules/quay/hooks/useQuayStatus';
 import LoopPulseGantt from '@/modules/quay/LoopPulseGantt';
+import { formatQuayUri } from '@/modules/quay/quayUri';
 import TimelineBar from '@/modules/quay/TimelineBar';
 
 type QuayPanelProps = {
@@ -82,16 +84,37 @@ const GOAL_STATUS_PERCENT: Record<string, number> = {
 };
 
 /**
- * Visible label and colour per in-flight `phase`, covering every phase quay publishes
- * (`QuayInFlightPhase`). The phases must render as *different* markers (text, colour and
- * `data-testid`), so a reader — and the test that guards it — can never mistake a task parked
- * in fan-in for one still being implemented.
+ * Visible label, colour class and SPOKEN colour per in-flight `phase`, covering every phase
+ * quay publishes (`QuayInFlightPhase`). The phases must render as *different* markers (text,
+ * colour and `data-testid`), so a reader — and the test that guards it — can never mistake a
+ * task parked in fan-in for one still being implemented. `color` is the same bucket the view
+ * contract publishes as a display attribute, kept in this record so 「红的那个」 and the
+ * drawn marker cannot drift apart.
  */
-const IN_FLIGHT_PHASE_META: Record<QuayInFlightTask['phase'], { label: string; className: string }> = {
-  implementing: { label: 'implementing', className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300' },
-  'fan-in': { label: 'fan-in', className: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300' },
-  'awaiting-land': { label: 'awaiting land', className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
-  landed: { label: 'landed', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' },
+const IN_FLIGHT_PHASE_META: Record<
+  QuayInFlightTask['phase'],
+  { label: string; className: string; color: string }
+> = {
+  implementing: {
+    label: 'implementing',
+    className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+    color: 'blue',
+  },
+  'fan-in': {
+    label: 'fan-in',
+    className: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    color: 'violet',
+  },
+  'awaiting-land': {
+    label: 'awaiting land',
+    className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    color: 'amber',
+  },
+  landed: {
+    label: 'landed',
+    className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    color: 'green',
+  },
 };
 
 /**
@@ -281,6 +304,48 @@ function DetailList({
       {body}
     </section>
   );
+}
+
+// ── The wall view contract ───────────────────────────────────────────────────────────────────
+// The panel's tiles are addressable objects, not just prose: each focusable child carries a
+// quay:// reference, a short spoken label (①②③) and the display attributes a spoken referent
+// resolves against. These helpers are the tile's declaration side; the voice input pack
+// (`buildVoiceReferencePack`) carries the same triples as references.
+
+/** Circled ordinals ①…⑳ — the short spoken label a focusable object carries. */
+const CIRCLED_ORDINALS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
+
+/**
+ * Builds the In-flight tile's view contract: one focusable object per task the worker has in
+ * flight, in the order the tile draws them.
+ *
+ * THE ORDINAL IS THE SPATIAL ORDER, not the task's rank in any store — the same number the
+ * row's visible label shows (①, ②, …), so 「第二个」 and the second row are the same object
+ * by construction. The list lays its rows out in one column, hence `pos.column` is always 1
+ * and `pos` counts down from the top-left. `status` is the task's in-flight phase (the only
+ * status this reading carries) and `color` is the same bucket the phase marker draws, so the
+ * spoken attribute and the visible marker cannot drift.
+ *
+ * An unread tile (`inFlight === null`) has no focusable set: `null` is "no lane reading",
+ * not "nothing is running", and the renderer publishes the contract attribute only for an
+ * actual reading.
+ */
+export function buildQuayInFlightContract(
+  projectId: string,
+  inFlight: QuaySnapshot['inFlight'],
+): QuayViewContract {
+  return {
+    focusables: (inFlight ?? []).map((task, index) => ({
+      uri: formatQuayUri({ type: 'task', project: projectId, id: task.taskId, ac: null }),
+      label: CIRCLED_ORDINALS[index] ?? `(${index + 1})`,
+      display: {
+        status: task.phase,
+        color: IN_FLIGHT_PHASE_META[task.phase].color,
+        ordinal: index + 1,
+        pos: { row: index + 1, column: 1 },
+      },
+    })),
+  };
 }
 
 /** Task ledger card: task counts, the status breakdown and the recent-tasks list in one card. */
@@ -512,10 +577,32 @@ function FanInCard({ fanIn, window }: { fanIn: QuaySnapshot['fanIn']; window: Qu
  * shown as "nothing is running". A row whose heartbeat is older than
  * `IN_FLIGHT_STALE_AFTER_MS` gets an explicit stale marker, so a wedged worker reads as
  * stale rather than as a task that is simply still running.
+ *
+ * THIS TILE IS THE WALL'S FIRST VIEW CONTRACT. Each row is a focusable object addressed
+ * `quay://<project>/task/<id>` and carries a VISIBLE circled ordinal (①②③) plus the
+ * status/colour/ordinal/pos display attributes; the same declaration is published once as
+ * JSON on the tile (`data-quay-focusables`) for the voice input pack to consume. The ordinal
+ * is the row's spatial position, so saying 「第二个」 and clicking the second row name the
+ * same object.
  */
-function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFlight']; generatedAt: string }) {
+function InFlightCard({
+  projectId,
+  inFlight,
+  generatedAt,
+}: {
+  projectId: string;
+  inFlight: QuaySnapshot['inFlight'];
+  generatedAt: string;
+}) {
+  const contract = buildQuayInFlightContract(projectId, inFlight);
+
   return (
-    <section data-testid="quay-panel-inflight">
+    <section
+      data-testid="quay-panel-inflight"
+      // The tile's focusable children, in spatial order. Absent — not "[]" — when the lane
+      // reading failed: an unread tile declares nothing rather than declaring emptiness.
+      data-quay-focusables={inFlight === null ? undefined : JSON.stringify(contract.focusables)}
+    >
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">In flight</h3>
       {inFlight === null ? (
         <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="quay-panel-inflight-unavailable">
@@ -527,16 +614,29 @@ function InFlightCard({ inFlight, generatedAt }: { inFlight: QuaySnapshot['inFli
         </p>
       ) : (
         <ul className="space-y-1" data-testid="quay-panel-inflight-list">
-          {inFlight.map((task) => {
+          {inFlight.map((task, index) => {
             const phase = IN_FLIGHT_PHASE_META[task.phase];
             const heartbeatAgeMs = elapsedSince(task.lastHeartbeat, generatedAt);
             const stale = heartbeatAgeMs !== null && heartbeatAgeMs > IN_FLIGHT_STALE_AFTER_MS;
+            const focusable = contract.focusables[index];
             return (
               <li
                 key={task.taskId}
                 className="flex items-center gap-2 rounded border border-border/40 px-2 py-1 text-xs"
                 data-testid="quay-panel-inflight-row"
+                // The wall declaration for this row, verbatim: the reference the voice pack
+                // carries instead of the task's content.
+                data-quay-uri={focusable?.uri}
+                data-quay-label={focusable?.label}
+                data-quay-display={focusable === undefined ? undefined : JSON.stringify(focusable.display)}
               >
+                <span
+                  className="shrink-0 text-[11px] text-muted-foreground"
+                  data-testid="quay-panel-inflight-label"
+                  title="spoken label for this object"
+                >
+                  {focusable?.label}
+                </span>
                 <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={task.taskId}>
                   {task.taskId}
                 </span>
@@ -769,7 +869,7 @@ function LoadedQuayPanel({
           refreshing={ganttRefreshing}
         />
         <TestsCard tests={snapshot.tests} window={timelineWindow} />
-        <InFlightCard inFlight={snapshot.inFlight} generatedAt={snapshot.generatedAt} />
+        <InFlightCard projectId={projectId} inFlight={snapshot.inFlight} generatedAt={snapshot.generatedAt} />
         <FanInCard fanIn={snapshot.fanIn} window={timelineWindow} />
 
         <section>

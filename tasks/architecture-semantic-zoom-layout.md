@@ -36,14 +36,14 @@ extra:
 
 ## AC
 
-- [ ] `npm ls @yalehwang/plantuml-js --depth=0` 输出的版本 ≥ 0.4.0 且 exit 0；`npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：夹具是 0.4.0 渲染器对仓库内已提交的小图夹具实际渲染出的 SVG，断言读取层从 `data-x/y/w/h`、`data-title-h/attrs-h/ops-h`、`data-tab-w/h` 得到几何，`uml-attr` 与 `uml-op` 成员被正确分类，接口节点只有 `data-rule="title"` 一条规则，聚合边 `uml-edge-bundle` 被读成带 `data-bundle-size` 的边；并断言一个属性名含括号字样（例如类型里有 `(`）的成员不会被误判为方法
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：覆盖单调性（任意两点映射后顺序不变且映射非减）、缩放 ≥ 0.9 时映射等于恒等缩放、最小尺寸约束被满足且只在约束处拉伸、可压缩间距随 α 从 0 到 1 渐变、拉伸比超过 1.8 时降档且降档顺序是 A、B、C、同一输入同一输出、内容最密窗口锚点在稀疏图上不落在空白处；夹具用 plantuml-js 对仓库内已提交的小图夹具实际布局得到的几何，不是手写矩形
-- [ ] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts` exit 0：类名排版三级回退（整行、驼峰折两行、中间省略，非高亮至少保留 9 个字符、被提到的至少 6 个）、两行类名使标题格加高、类框紧凑高度与两条横线位置（接口只有方法时一条）、包标签取最后一段加计数且 C 档追加 `★N`、粘性包名不超过 2 个、边不透明度在 22/40/100 三个边界上取 0.85/0.5/0.3/0.18、边端点在类框被缩短后落在新的底边或侧边上
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩放读数旁的档位名随档位变化；缩小后 `data-entity-id`、`data-package-id`、`data-edge-source`、`data-edge-target` 契约仍在；原覆盖标题层 `[data-architecture-lod-labels]` 不再出现；选择与置顶徽标在缩放后仍作用于正确的实体；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx src/modules/architecture/tests/minimap.test.tsx src/modules/architecture/tests/svgViewport.test.tsx src/modules/architecture/tests/readableZoom.test.tsx src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：调度器的防抖与 8% 死区用例保留并通过；小地图视口框在非线性映射下仍与画布可见区域对应；十个 locale 的新文案齐全
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它更新条目并写明实测）：对 1440×765 与 390×844 两个视口、65/46/33/17/6% 五个缩放档，读出的所有可见文字的屏幕字号 ≥ 最小字号（PC 10、手机 11）；每个可见类框含两条横线（接口只有方法时一条）；包标签带与任何类框的屏幕矩形不相交；包标签页含右侧封口；映射单调（同一行的类框在缩放前后左右顺序不变）；边端点落在可见类框的边界上；C 档下可见的类框数为 0 且每个含被提到实体的包带 `★N`
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面每条断言新增控制臂（关闭最小字号、关闭标签带预留、关闭端点跟随、关闭单调约束各一条），主臂与控制臂用同一读取函数，控制臂里对应读数必须变红，证明守卫能取假
-- [ ] `npm run typecheck` 与 `npm run build` exit 0；`npm run lint` 对 `src/modules/architecture/` exit 0（新增文件在现有目录下平铺，不新建模块目录）
+- [x] `npm ls @yalehwang/plantuml-js --depth=0` 输出的版本 ≥ 0.4.0 且 exit 0；`npx vitest run src/modules/architecture/tests/semanticZoomRead.test.ts` exit 0：夹具是 0.4.0 渲染器对仓库内已提交的小图夹具实际渲染出的 SVG，断言读取层从 `data-x/y/w/h`、`data-title-h/attrs-h/ops-h`、`data-tab-w/h` 得到几何，`uml-attr` 与 `uml-op` 成员被正确分类，接口节点只有 `data-rule="title"` 一条规则，聚合边 `uml-edge-bundle` 被读成带 `data-bundle-size` 的边；并断言一个属性名含括号字样（例如类型里有 `(`）的成员不会被误判为方法
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomLayout.test.ts` exit 0：覆盖单调性（任意两点映射后顺序不变且映射非减）、缩放 ≥ 0.9 时映射等于恒等缩放、最小尺寸约束被满足且只在约束处拉伸、可压缩间距随 α 从 0 到 1 渐变、拉伸比超过 1.8 时降档且降档顺序是 A、B、C、同一输入同一输出、内容最密窗口锚点在稀疏图上不落在空白处；夹具用 plantuml-js 对仓库内已提交的小图夹具实际布局得到的几何，不是手写矩形
+- [x] `npx vitest run src/modules/architecture/tests/semanticZoomPlan.test.ts` exit 0：类名排版三级回退（整行、驼峰折两行、中间省略，非高亮至少保留 9 个字符、被提到的至少 6 个）、两行类名使标题格加高、类框紧凑高度与两条横线位置（接口只有方法时一条）、包标签取最后一段加计数且 C 档追加 `★N`、粘性包名不超过 2 个、边不透明度在 22/40/100 三个边界上取 0.85/0.5/0.3/0.18、边端点在类框被缩短后落在新的底边或侧边上
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` exit 0：缩放读数旁的档位名随档位变化；缩小后 `data-entity-id`、`data-package-id`、`data-edge-source`、`data-edge-target` 契约仍在；原覆盖标题层 `[data-architecture-lod-labels]` 不再出现；选择与置顶徽标在缩放后仍作用于正确的实体；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/explosionLod.test.tsx src/modules/architecture/tests/minimap.test.tsx src/modules/architecture/tests/svgViewport.test.tsx src/modules/architecture/tests/readableZoom.test.tsx src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` exit 0：调度器的防抖与 8% 死区用例保留并通过；小地图视口框在非线性映射下仍与画布可见区域对应；十个 locale 的新文案齐全
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（在既有几何守卫里增加断言，整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 为它更新条目并写明实测）：对 1440×765 与 390×844 两个视口、65/46/33/17/6% 五个缩放档，读出的所有可见文字的屏幕字号 ≥ 最小字号（PC 10、手机 11）；每个可见类框含两条横线（接口只有方法时一条）；包标签带与任何类框的屏幕矩形不相交；包标签页含右侧封口；映射单调（同一行的类框在缩放前后左右顺序不变）；边端点落在可见类框的边界上；C 档下可见的类框数为 0 且每个含被提到实体的包带 `★N`
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：为上面每条断言新增控制臂（关闭最小字号、关闭标签带预留、关闭端点跟随、关闭单调约束各一条），主臂与控制臂用同一读取函数，控制臂里对应读数必须变红，证明守卫能取假
+- [x] `npm run typecheck` 与 `npm run build` exit 0；`npm run lint` 对 `src/modules/architecture/` exit 0（新增文件在现有目录下平铺，不新建模块目录）
 
 ## DoD
 
@@ -81,4 +81,29 @@ extra:
 - src/modules/i18n/locales/it/common.json
 - src/modules/i18n/locales/ru/common.json
 - src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/tr/common.json
 - tasks/architecture-semantic-zoom-layout.md
+
+## Evidence
+
+实现分支：`task/architecture-semantic-zoom-layout`（worktree
+`/data/home/yale/work/claudecodeui-worktrees/architecture-semantic-zoom-layout`）。
+
+- `npm ls @yalehwang/plantuml-js --depth=0` → `0.4.0`。
+- `npx vitest run src/modules/architecture/tests` → 26 files / 408 tests passed
+  （含 semanticZoomRead 5、semanticZoomLayout 11、semanticZoomPlan 15、
+  architectureTab 97、explosionLod 6、minimap 13、svgViewport 22、
+  readableZoom 13、i18nArchitectureTabCompleteness 6）。
+- `npx playwright test e2e/architecture-canvas-layout.spec.ts` → `9 passed (1.3m)`，
+  含新的语义缩放主臂（1440×765 与 390×844，100/65/46/33/17/6% 六档读数：
+  最小字号、两条分格线、标签带不相交、标签页右侧封口、行序单调、边端点贴框、
+  C 档类框数为 0）与四条控制臂（关最小字号、关标签带预留、关端点跟随、关单调约束，
+  每条都经同一 `readSemantic` 读数变红后恢复并通过）。`SPEC_BUDGET_MS` 条目
+  由 120_000 提到 240_000，实测 1.3m。
+- `npm run typecheck`、`npm run build`、`npm run lint`（oxlint）exit 0。
+- 参考几何读数（pc.6%）：tier=C、可见类框 0、包标签 `name (N)` 与 `★N` 正常；
+  pc.17%：tier=B、可见类框 120、标签带与类框零相交；pc.33–100%：tier=A。
+
+**DoD 人工视觉复核（20 张截图并排比对）未在 worker 会话内完成**——该步骤要求打开
+Quay OO 与 live voice 两个真实会话并在两个视口截取五档图，属于人工复核；AC 中的几何
+守卫是本任务的机械替身，全部通过。

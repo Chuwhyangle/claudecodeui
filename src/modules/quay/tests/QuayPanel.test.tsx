@@ -7,7 +7,7 @@ import React from 'react';
 import { beforeEach, test, vi } from 'vitest';
 
 import type { QuaySnapshot } from '@/shared/types';
-import QuayPanel, { IN_FLIGHT_STALE_AFTER_MS } from '@/modules/quay/QuayPanel';
+import QuayPanel, { buildQuayInFlightContract, IN_FLIGHT_STALE_AFTER_MS } from '@/modules/quay/QuayPanel';
 import { type QuayPanelView, useQuayStatus } from '@/modules/quay/hooks/useQuayStatus';
 
 // The panel's in-flight reading travels hook → route → carrier. Only the network
@@ -963,4 +963,87 @@ test('a round and a fan-in attempt outside the shared window are not drawn', () 
     1,
     'only the in-window fan-in attempt is drawn',
   );
+});
+
+/* ── the wall view contract: the In-flight tile declares focusable objects ───────────────────
+ *
+ * AC2 of quay-wall-addressable-view-and-input-package: a focusable child is exactly
+ * `{uri, label, display}` and at least one real QuayPanel tile — here the in-flight tile —
+ * declares them. Each row's URI is the project-segmented task form
+ * `quay://<project>/task/<id>`, and its display attributes are derived from the SAME reading
+ * the row draws: the phase's status, the phase marker's colour, the spatial ordinal and its
+ * top-left position. The tile publishes the contract once as JSON and once per row; both
+ * must describe the same objects, or the wall advertises addresses its rows do not answer.
+ *
+ * The ordinal is also VISIBLE (`quay-panel-inflight-label`), because the declaimed label is
+ * what a person reads as ①② when they say 「第二个」.
+ */
+test('the In-flight tile declares each row as a focusable quay://<project>/task/<id> object', () => {
+  const snapshot: QuaySnapshot = {
+    ...SNAPSHOT,
+    inFlight: [
+      { taskId: 'gap-wall-a', phase: 'implementing', startedAt: '2026-10-01T23:50:00.000Z', lastHeartbeat: '2026-10-02T00:00:00.000Z', workerPid: 1 },
+      { taskId: 'gap-wall-b', phase: 'fan-in', startedAt: '2026-10-01T23:40:00.000Z', lastHeartbeat: '2026-10-02T00:00:00.000Z', workerPid: 1 },
+    ],
+  };
+  const { getByTestId, getAllByTestId } = renderView({ status: 'loaded', snapshot }, null);
+
+  const tile = getByTestId('quay-panel-inflight');
+  const declared = JSON.parse(tile.getAttribute('data-quay-focusables') ?? '[]') as Array<{
+    uri: string;
+    label: string;
+    display: { status: string; color: string; ordinal: number; pos: { row: number; column: number } };
+  }>;
+
+  assert.deepEqual(
+    declared,
+    buildQuayInFlightContract('project-1', snapshot.inFlight).focusables,
+    'the tile and the exported contract disagree',
+  );
+  assert.deepEqual(declared, [
+    {
+      uri: 'quay://project-1/task/gap-wall-a',
+      label: '①',
+      display: { status: 'implementing', color: 'blue', ordinal: 1, pos: { row: 1, column: 1 } },
+    },
+    {
+      uri: 'quay://project-1/task/gap-wall-b',
+      label: '②',
+      display: { status: 'fan-in', color: 'violet', ordinal: 2, pos: { row: 2, column: 1 } },
+    },
+  ]);
+
+  // Exactly the triple — no task id/title content rides inside a focusable, because the
+  // voice pack carries references and reads content back downstream.
+  for (const focusable of declared) {
+    assert.deepEqual(Object.keys(focusable).sort(), ['display', 'label', 'uri']);
+    assert.deepEqual(Object.keys(focusable.display).sort(), ['color', 'ordinal', 'pos', 'status']);
+  }
+
+  // The rows carry the same declaration, and the ordinal is VISIBLE in the row.
+  const rows = getAllByTestId('quay-panel-inflight-row');
+  const labels = getAllByTestId('quay-panel-inflight-label');
+  assert.equal(rows.length, declared.length);
+  assert.equal(labels.length, declared.length);
+  rows.forEach((row, index) => {
+    assert.equal(row.getAttribute('data-quay-uri'), declared[index].uri);
+    assert.equal(row.getAttribute('data-quay-label'), declared[index].label);
+    assert.deepEqual(JSON.parse(row.getAttribute('data-quay-display') ?? '{}'), declared[index].display);
+    assert.equal(labels[index].textContent, declared[index].label);
+  });
+});
+
+test('an unread In-flight tile declares nothing, while an empty reading declares an empty set', () => {
+  // Both renders are alive at once, so the tile is addressed through its own container
+  // rather than document-wide `getByTestId` (which would see both panels' tiles).
+  const tileOf = (rendered: ReturnType<typeof renderView>) =>
+    rendered.container.querySelector('[data-testid="quay-panel-inflight"]');
+
+  const unread = renderView({ status: 'loaded', snapshot: { ...SNAPSHOT, inFlight: null } }, null);
+  // `null` is "no lane reading": there is no set to declare, so there is no attribute.
+  assert.equal(tileOf(unread)?.getAttribute('data-quay-focusables'), null);
+
+  const empty = renderView({ status: 'loaded', snapshot: { ...SNAPSHOT, inFlight: [] } }, null);
+  // `[]` is a reading that answered with nothing: it declares an empty focusable set.
+  assert.equal(tileOf(empty)?.getAttribute('data-quay-focusables'), '[]');
 });

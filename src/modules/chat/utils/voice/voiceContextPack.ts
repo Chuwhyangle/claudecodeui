@@ -1,6 +1,6 @@
 import { shouldHideToolResult } from '@/modules/chat/tools';
 import { isWorkSegmentMember } from '@/modules/chat/utils/transcript/workSegments';
-import type { ChatMessage } from '@/shared/types';
+import type { ChatMessage, QuayFocusableObject, QuayObjectPos, QuayObjectUri } from '@/shared/types';
 
 /**
  * The C2 ContextPack: the part of the conversation the person could actually SEE
@@ -511,4 +511,291 @@ function relativeTime(timestamp: ChatMessage['timestamp'], now: number): string 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} 小时前`;
   return `${Math.floor(hours / 24)} 天前`;
+}
+
+// ── The reference pack: the wall's objects sent as references, not prose ─────────────────────
+
+/**
+ * The reference-form input pack: what a wall-aware voice turn hands the recogniser.
+ *
+ * WHY IT EXISTS. The C2 pack above answers "what could the person see SAID" and renders it as
+ * `角色：文本` rows. The wall adds a second kind of visible thing — OBJECTS drawn as tiles —
+ * and paraphrasing those into text is exactly what the `quay://` address space exists to
+ * avoid: a reference stays stable while the object's content is read back downstream by
+ * whoever holds it (「送引用不送内容」).
+ *
+ * THE FIVE FIELDS, and what each is allowed to carry:
+ *  - `utterance` — the person's words (or the words being dictated);
+ *  - `focus` — the focused object's reference, or `null`;
+ *  - `visible` — the visible set in spatial order, each a `{uri, label, display}` triple;
+ *  - `history` — recently viewed VIEW/OBJECT references, as URIs;
+ *  - `tray` — objects the person pinned into the input tray, as URIs.
+ *
+ * ONLY `text` CARRIES TEXT. `focus`/`visible`/`history`/`tray` never carry a title, body or
+ * summary, and `history`/`tray` are URI arrays rather than the conversation or draft prose
+ * they might appear to be at first glance.
+ *
+ * THIS PACK DOES NOT DEREFERENCE. A URI here is an opaque reference; reading the object's
+ * real data is the separate task `quay-wall-uri-dereference-with-snapshot-fallback` (over the
+ * fleet's L1/L2 read port). The pack states what was on the wall and what was said about it,
+ * and nothing else.
+ */
+export type VoiceReferencePack = {
+  /** The person's words (or the words being dictated) the references resolve in. */
+  utterance: string;
+  /** The object the utterance is about — the focused tile — or `null` when nothing is focused. */
+  focus: QuayFocusableObject | null;
+  /** Every visible wall object in spatial order: the set 「红的那个 / 第二个 / ② / 左上那个」 resolves over. */
+  visible: QuayFocusableObject[];
+  /** Recently viewed view/object references, oldest first — URIs only, never text. */
+  history: QuayObjectUri[];
+  /** Objects the person pinned into the input tray — URIs only, never text. */
+  tray: QuayObjectUri[];
+  /**
+   * The C2 conversation pack followed by the composer's draft/voice-so-far blocks — exactly
+   * `buildVoiceInputContextPack`'s output, byte for byte. This is the DEGRADATION PATH (and
+   * the ASR hotword source): a deployment with no wall sends only this half.
+   */
+  text: string;
+};
+
+/** Knobs for {@link buildVoiceReferencePack}; the text half takes its builder's runtime knobs. */
+export type VoiceReferencePackOptions = {
+  utterance?: string;
+  /** The view contract's focusable objects, in spatial order. */
+  focusables?: readonly QuayFocusableObject[];
+  /** The `quay://` URI of the focused object; `null`/absent means no focus. */
+  focusUri?: string | null;
+  /** Recently viewed view/object URIs, oldest first. */
+  history?: readonly QuayObjectUri[];
+  /** Objects pinned into the input tray, as URIs. */
+  tray?: readonly QuayObjectUri[];
+  /** The visible conversation rows, handed to the text half. */
+  messages?: readonly ChatMessage[];
+  /** The composer draft as it stood when the listen started, up to the caret. */
+  draftBefore?: string;
+  /** That same snapshot, from the caret on. */
+  draftAfter?: string;
+  /** What this listen has already committed. */
+  voiceSoFar?: string;
+  budgetChars?: number;
+  rowCapChars?: number;
+  maxRows?: number;
+  now?: number;
+};
+
+/**
+ * Builds the reference pack for one wall-aware turn.
+ *
+ * NO CONTENT CROSSES FROM THE FOCUSABLES: the caller's objects are copied as the same
+ * `{uri, label, display}` triples, and `history`/`tray` are copied URI lists. `text` is the
+ * existing C2 builder's output verbatim, so the fallback path did not change — this pack is a
+ * superset of what `useVoiceInput` sends today.
+ *
+ * A `focusUri` that is not one of the visible objects yields `null` rather than a fabricated
+ * reference: a focus the view never declared is not a reference a downstream could resolve.
+ */
+export function buildVoiceReferencePack(options: VoiceReferencePackOptions = {}): VoiceReferencePack {
+  const visible = [...(options.focusables ?? [])];
+  const focus = options.focusUri == null
+    ? null
+    : visible.find((object) => object.uri === options.focusUri) ?? null;
+
+  // ONE text half, not two: `buildVoiceInputContextPack` already renders the C2 conversation
+  // and the three draft/voice blocks under one budget, and its output is the byte-for-byte
+  // degradation path the recogniser receives today.
+  const text = buildVoiceInputContextPack({
+    ...(options.messages === undefined ? {} : { messages: options.messages }),
+    ...(options.draftBefore === undefined ? {} : { draftBefore: options.draftBefore }),
+    ...(options.draftAfter === undefined ? {} : { draftAfter: options.draftAfter }),
+    ...(options.voiceSoFar === undefined ? {} : { voiceSoFar: options.voiceSoFar }),
+    ...(options.budgetChars === undefined ? {} : { budgetChars: options.budgetChars }),
+    ...(options.rowCapChars === undefined ? {} : { rowCapChars: options.rowCapChars }),
+    ...(options.maxRows === undefined ? {} : { maxRows: options.maxRows }),
+    ...(options.now === undefined ? {} : { now: options.now }),
+  }).text;
+
+  return {
+    utterance: options.utterance ?? '',
+    focus,
+    visible,
+    history: [...(options.history ?? [])],
+    tray: [...(options.tray ?? [])],
+    text,
+  };
+}
+
+/**
+ * Colour words a person says, mapped to the display bucket a view declares.
+ *
+ * Longer forms come first (`红色` before `红`) so a substring match reports the whole word,
+ * and English is matched case-insensitively. This is a closed vocabulary on purpose: a word
+ * absent here is not a colour reference, and the resolver says so instead of guessing.
+ */
+const REFERENCE_COLOR_WORDS: ReadonlyArray<readonly [string, string]> = [
+  ['红色', 'red'], ['红的', 'red'], ['红', 'red'], ['red', 'red'],
+  ['绿色', 'green'], ['绿的', 'green'], ['绿', 'green'], ['green', 'green'],
+  ['黄色', 'amber'], ['黄的', 'amber'], ['黄', 'amber'], ['琥珀', 'amber'], ['amber', 'amber'], ['yellow', 'amber'],
+  ['蓝色', 'blue'], ['蓝的', 'blue'], ['蓝', 'blue'], ['blue', 'blue'],
+  ['紫色', 'violet'], ['紫的', 'violet'], ['紫', 'violet'], ['violet', 'violet'],
+  ['灰色', 'gray'], ['灰的', 'gray'], ['灰', 'gray'], ['gray', 'gray'], ['grey', 'gray'],
+];
+
+/**
+ * Spoken corner words and the top-left-origin position they name.
+ *
+ * Only positions a view can actually declare are here; `左上` is the criterion's own phrase,
+ * and the other three corners are its siblings. A vertical list can still be addressed as
+ * `左上` — its first row IS the top-left cell — so the vocabulary does not assume a 2-column
+ * grid.
+ */
+const REFERENCE_POSITION_WORDS: ReadonlyArray<readonly [string, QuayObjectPos]> = [
+  ['左上', { row: 1, column: 1 }],
+  ['右上', { row: 1, column: 2 }],
+  ['左下', { row: 2, column: 1 }],
+  ['右下', { row: 2, column: 2 }],
+  ['top-left', { row: 1, column: 1 }],
+  ['top left', { row: 1, column: 1 }],
+  ['upper left', { row: 1, column: 1 }],
+  ['top-right', { row: 1, column: 2 }],
+  ['top right', { row: 1, column: 2 }],
+  ['upper right', { row: 1, column: 2 }],
+  ['bottom-left', { row: 2, column: 1 }],
+  ['bottom left', { row: 2, column: 1 }],
+  ['lower left', { row: 2, column: 1 }],
+  ['bottom-right', { row: 2, column: 2 }],
+  ['bottom right', { row: 2, column: 2 }],
+  ['lower right', { row: 2, column: 2 }],
+];
+
+/** Chinese numerals as the ordinal grammar can see them. */
+const CHINESE_NUMERALS: Record<string, number> = {
+  一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9,
+};
+
+/** Parses a Chinese numeral such as `二` / `十二` / `二十` / `二十一`, or `null` when it is not one. */
+function parseChineseNumeral(text: string): number | null {
+  if (text === '十') return 10;
+  if (text.startsWith('十')) {
+    const ones = CHINESE_NUMERALS[text.slice(1)];
+    return ones === undefined ? null : 10 + ones;
+  }
+  if (text.endsWith('十')) {
+    const tens = CHINESE_NUMERALS[text.slice(0, -1)];
+    return tens === undefined ? null : tens * 10;
+  }
+  if (text.includes('十')) {
+    const [tensText, onesText] = text.split('十');
+    const tens = CHINESE_NUMERALS[tensText];
+    const ones = CHINESE_NUMERALS[onesText];
+    return tens === undefined || ones === undefined ? null : tens * 10 + ones;
+  }
+  return CHINESE_NUMERALS[text] ?? null;
+}
+
+/**
+ * The ordinal a spoken reference names, or `null` when it names none.
+ *
+ * `第` is optional in speech, but a bare numeral is NOT an ordinal without `个` or `第`:
+ * 「一起」 and 「十二点」 are ordinary words, not "the first/second object". Missing that is
+ * the difference between resolving a referent and silently editing something nobody named.
+ */
+function spokenOrdinal(phrase: string): number | null {
+  const digit = /第\s*(\d+)\s*个?|(\d+)\s*个/.exec(phrase);
+  if (digit !== null) return Number(digit[1] ?? digit[2]);
+
+  const chinese = /第\s*([一二两三四五六七八九十]+)\s*个?|([一二两三四五六七八九十]+)\s*个/.exec(phrase);
+  if (chinese !== null) return parseChineseNumeral(chinese[1] ?? chinese[2]);
+
+  return null;
+}
+
+/** The display colour a spoken phrase names, or `null` when it names none. */
+function spokenColor(phrase: string): string | null {
+  const normalized = phrase.toLowerCase();
+  for (const [word, color] of REFERENCE_COLOR_WORDS) {
+    if (normalized.includes(word)) return color;
+  }
+  return null;
+}
+
+/** The position a spoken phrase names, or `null` when it names none. */
+function spokenPosition(phrase: string): QuayObjectPos | null {
+  const normalized = phrase.toLowerCase();
+  for (const [word, position] of REFERENCE_POSITION_WORDS) {
+    if (normalized.includes(word)) return position;
+  }
+  return null;
+}
+
+/** The circled labels the phrase contains, or `null` when it contains none. */
+function spokenLabels(visible: readonly QuayFocusableObject[], phrase: string): string[] | null {
+  const labels = visible
+    .map((object) => object.label)
+    .filter((label) => label !== '' && phrase.includes(label));
+  return labels.length === 0 ? null : [...new Set(labels)];
+}
+
+/** Which display attribute(s) a resolved phrase used. */
+export type VoiceReferenceAttribute = 'color' | 'ordinal' | 'label' | 'pos';
+
+/**
+ * The outcome of resolving one spoken reference against a view's visible objects.
+ *
+ * `none` covers both "the phrase named no attribute we resolve" and "it named attributes no
+ * object has"; `ambiguous` means several objects match and the caller must ask rather than
+ * pick. Silently choosing a candidate is how a voice edit lands on the wrong object, so
+ * ambiguity carries the candidates instead of a winner.
+ */
+export type VoiceReferenceMatch =
+  | { status: 'resolved'; object: QuayFocusableObject; by: VoiceReferenceAttribute[] }
+  | {
+      status: 'unresolved';
+      reason: 'none' | 'ambiguous';
+      candidates: QuayFocusableObject[];
+    };
+
+/**
+ * Resolves a spoken reference — 「第二个」, 「②」, 「红的那个」, 「左上那个」 (or a combination)
+ * — against the visible set by its DISPLAY ATTRIBUTES, never by reading object content.
+ *
+ * ALL NAMED ATTRIBUTES MUST HOLD (logical AND): a phrase naming both a colour and an ordinal
+ * matches only objects satisfying both. An ordinal or a label is unique per valid view
+ * contract, so those phrases cannot be ambiguous; if a broken contract duplicates one, the
+ * ambiguity branch reports it rather than hiding it. Free-form speech is out of scope — this
+ * is a deterministic resolver, not an NLU model.
+ */
+export function resolveVoiceReference(
+  visible: readonly QuayFocusableObject[],
+  phrase: string,
+): VoiceReferenceMatch {
+  const color = spokenColor(phrase);
+  const ordinal = spokenOrdinal(phrase);
+  const position = spokenPosition(phrase);
+  const labels = spokenLabels(visible, phrase);
+  if (color === null && ordinal === null && position === null && labels === null) {
+    return { status: 'unresolved', reason: 'none', candidates: [] };
+  }
+
+  const matches = visible.filter(
+    (object) =>
+      (color === null || object.display.color === color) &&
+      (ordinal === null || object.display.ordinal === ordinal) &&
+      (position === null ||
+        (object.display.pos.row === position.row && object.display.pos.column === position.column)) &&
+      (labels === null || labels.includes(object.label)),
+  );
+  if (matches.length === 0) {
+    return { status: 'unresolved', reason: 'none', candidates: [] };
+  }
+  if (matches.length > 1) {
+    return { status: 'unresolved', reason: 'ambiguous', candidates: matches };
+  }
+
+  const by: VoiceReferenceAttribute[] = [];
+  if (color !== null) by.push('color');
+  if (ordinal !== null) by.push('ordinal');
+  if (position !== null) by.push('pos');
+  if (labels !== null) by.push('label');
+  return { status: 'resolved', object: matches[0], by };
 }
