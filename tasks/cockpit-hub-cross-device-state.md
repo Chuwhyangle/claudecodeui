@@ -29,16 +29,29 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/cockpit/tests/cockpit-reducer.test.ts` exit 0——reducer 纯函数（同输入同输出、不改入参）；`move` 按上报的网格坐标吸附且不越界；`zoom in` 在项目上进入 board 并压栈、`back` 出栈；`pin`/`unpin` 改托盘；`utterance` 命中意图只改视图、未命中生成 `pendingSend` 且其 `visible` 等于最近一次 display 上报的可见集；`cancel` 清除 `pendingSend`。
-- [ ] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/cockpit/tests/cockpit-hub.test.ts` exit 0——两个假 websocket 客户端（同一用户，一个 display、一个 input）：input 发 `move` 后 display 收到 rev+1 的 state；input 发 `utterance` 时包内 visible 取自 display 的上报而非 input 的；`confirm` 触发发送服务恰好 1 次，重复 `confirm` 不重复发送；另一用户的客户端收不到该状态。
-- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——页面按中枢下发的 state 渲染焦点与视图；方向键产生 `move` 事件发往中枢（假连接计数）而不是改本地状态；既有舞台用例不弱化。
-- [ ] AC4: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/cockpit/tests/cockpit-reducer.test.ts` exit 0——reducer 纯函数（同输入同输出、不改入参）；`move` 按上报的网格坐标吸附且不越界；`zoom in` 在项目上进入 board 并压栈、`back` 出栈；`pin`/`unpin` 改托盘；`utterance` 命中意图只改视图、未命中生成 `pendingSend` 且其 `visible` 等于最近一次 display 上报的可见集；`cancel` 清除 `pendingSend`。
+- [x] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/cockpit/tests/cockpit-hub.test.ts` exit 0——两个假 websocket 客户端（同一用户，一个 display、一个 input）：input 发 `move` 后 display 收到 rev+1 的 state；input 发 `utterance` 时包内 visible 取自 display 的上报而非 input 的；`confirm` 触发发送服务恰好 1 次，重复 `confirm` 不重复发送；另一用户的客户端收不到该状态。
+- [x] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——页面按中枢下发的 state 渲染焦点与视图；方向键产生 `move` 事件发往中枢（假连接计数）而不是改本地状态；既有舞台用例不弱化。
+- [x] AC4: `npm run typecheck` 通过。
 
 ## DoD
 
 - **MCP 浏览器实际操作 + 截图（必做）**：同一用户开两个浏览器上下文——桌面尺寸的 `/cockpit`（显示端）与手机尺寸的第二个页面（暂用 `/cockpit` 当输入端）；在手机页按方向键 / 提交「看 <项目>」，截图桌面页焦点与视图随之变化（存 `tmp/`）；`browser_evaluate` 读回两端 state 的 rev 一致。
 - 场景运行器：为驾驶舱补一个场景（运行器目前只认 quay-panel，见记忆中的缺口说明），贴报告；做不到则如实写明缺口。
 - 记录「输入端事件 → 显示端重绘」的实测延迟。
+
+## Notes
+
+实现（commit 811100e1b）：`server/modules/cockpit/` 为纯函数 reducer + 内存 hub（`cockpit.hello` / `cockpit.event` / `cockpit.state`），模块是 AC-394 叶子（只 import `server/shared/**` 与自身，gateway 用结构化 seam 注入），因此无需改 manifest/pin，`server/shared/tests/server-import-cycle-budget.test.ts` 保持绿。中枢的两条外部接缝（目标解析 = fleet registry 接口会话 → 最近打开；发送 = 既有 `chatControl.send`）在组合根注入；`confirm` 先清卡片再 await 发送，重复 `confirm` 结构上不可能二次发送。前端 `useCockpitFocus` 改为纯函数，页面只发事件、渲染广播 state；`visible` 上报只在页面所画视图能被中枢描述时发送，deep link 到未注册项目时仍按 URL 渲染而不是被中枢拉回 fleet。
+
+实测（隔离实例：本 worktree 的 tsx server + vite dev，独立 HOME/DATABASE_PATH，端口 4399/5399；两个真实 Chromium context 同一用户，桌面 1280×800、手机 390×844；quay 两个读接口在浏览器层用夹具桩住）：
+- 初始两端 `rev=2`，焦点均 `quay://claudecodeui/board`；
+- 手机按 ArrowDown → 桌面焦点变 `quay://quay-fleet/board`，两端 `rev=3`；**输入端事件 → 显示端重绘实测 8 ms**；
+- 手机输入「看 claudecodeui」提交 → 桌面切到 board，URL `?view=board&project=p1`，焦点 `quay://claudecodeui/task/task-a`，两端 `rev=7` 一致；
+- 状态条来源回显：桌面显示 `← Phone`（设备名由浏览器上报）。
+- 截图：`tmp/cockpit-hub-dod-1-before.png`、`tmp/cockpit-hub-dod-2-after-move.png`、`tmp/cockpit-hub-dod-3-phone.png`、`tmp/cockpit-hub-dod-4-after-view.png`（`tmp/` 已 gitignore；驱动脚本 `tmp/cockpit-hub-dod.mjs`）。
+- 场景运行器缺口（如实）：`scripts/ui-scenario.mjs` 的 `open` 只认 `quay-panel`，语义面 `window.__cloudcliScenario` 读的是 Quay wall 的页面内契约；驾驶舱的焦点/视图现在在中枢里、页面上只有 `data-cockpit-hub-rev` 等读数，要接运行器需要新增 cockpit opener + 把中枢 state 暴露进语义面。本任务未做，记此缺口。
+- 既有单元用例：`src/modules/cockpit/tests/` 5 个文件 48 用例全绿（舞台原有用例断言未减弱，只把测试替身换成假中枢连接）。
 
 ## Touches
 
@@ -50,8 +63,10 @@ depends_on:
 - server/modules/cockpit/tests/cockpit-hub.test.ts
 - server/modules/websocket/services/chat-websocket.service.ts
 - server/modules/websocket/index.ts
+- server/modules/quay/index.ts
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
+- src/shared/types.ts
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/CockpitStage.tsx
 - src/modules/cockpit/hooks/useCockpitFocus.ts
