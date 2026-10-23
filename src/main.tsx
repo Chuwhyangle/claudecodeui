@@ -24,6 +24,19 @@ if (import.meta.env.DEV && localStorage.getItem('react-scan') === 'on') {
   void import('react-scan').then(({ scan }) => scan({ enabled: true }))
 }
 
+// The dev-only UI scenario surface (`window.__cloudcliScenario`): an in-page semantic reading and
+// driver for business scenarios, so a long scenario costs a handful of round trips instead of one
+// snapshot per step. TWO LOCKS, ONE OF THEM STATIC: `import.meta.env.DEV` is a build-time constant,
+// so a production bundle is compiled with this branch removed and the dynamic import below is
+// dropped with it — the surface's symbol never reaches `dist/`. The module itself additionally
+// refuses to attach unless an operator asked at runtime (`?ui-scenario=1`, or
+// `localStorage['ui-scenario'] = 'on'`); see `src/modules/ui-scenario/scenarioSurface.ts`.
+if (import.meta.env.DEV) {
+  void import('@/modules/ui-scenario').then(({ attachScenarioSurface }) => {
+    attachScenarioSurface();
+  });
+}
+
 // Register service worker for PWA + Web Push support
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(err => {

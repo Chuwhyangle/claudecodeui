@@ -184,6 +184,23 @@ export type VoiceInputContextPackOptions = {
 };
 
 /**
+ * How many times the ASR-output seam has built an input pack in this page.
+ *
+ * THE SEAM, not a heuristic: {@link buildVoiceInputContextPack} is what the real dictation path
+ * calls with a recognised segment's text (`useVoiceInput`'s upload), and it is also the text half
+ * of {@link buildVoiceReferencePack}. A dev-only scenario driver that utters text with no audio has
+ * to prove it reached the SAME builder rather than a lookalike, so it reads this counter before and
+ * after one utterance and asserts a delta of exactly one. The counter is the injectable reading —
+ * it is not consulted by any shipping behaviour.
+ */
+let voiceInputPackBuilds = 0;
+
+/** The seam's build count; see {@link voiceInputPackBuilds}. */
+export function readVoiceInputPackBuildCount(): number {
+  return voiceInputPackBuilds;
+}
+
+/**
  * The dictation pack: the composer's own draft around the caret, what this listen has said so far,
  * then as much of the visible conversation as the remaining budget fits.
  *
@@ -209,6 +226,9 @@ export type VoiceInputContextPackOptions = {
 export function buildVoiceInputContextPack(
   options: VoiceInputContextPackOptions = {},
 ): VoiceContextPack {
+  // The seam's one increment: every caller — the real upload path and the dev scenario driver's
+  // `utter` — passes through here, so a scenario can assert it exercised the product's builder.
+  voiceInputPackBuilds += 1;
   // ONE resolution for the whole pack: the draft blocks and the conversation share a budget, and a
   // caller's runtime reading (from `GET /api/voice/runtime-config`) is clamped here, before either
   // side spends it. `rowCapChars` is forwarded to the conversation builder so the two entries of

@@ -526,6 +526,16 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // With this entry the same invocation reports `7 passed (56.6s)`, 57.4 s wall clock — 240_000 is the
   // sibling voice entries' value and clears that measurement ~4.2x.
   'voice-realtime-composer-embedded.spec.ts': 240_000,
+  // The UI scenario runner criterion: ONE case that boots the app, seeds a Quay fixture and then
+  // invokes `scripts/ui-scenario.mjs` TWICE — a green arm and a control arm whose report must name
+  // the failing step. Each runner invocation launches its own Chromium, navigates, opens the Quay
+  // view and drives six steps, so the file is two real page boots deep before the case's own
+  // assertions. MEASURED 2026-10-23 on this worktree: `1 passed (10.1s)`, the whole invocation
+  // 11.9 s (config evaluation, both servers' boot and both runner launches included). 240_000 is
+  // the sibling interaction-heavy entries' value and clears that measurement ~20x; it is declared
+  // rather than left to the 55 s single-file default so a load-slowed fan-in run is not killed
+  // mid-case by the watchdog.
+  'ui-scenario-runner.spec.ts': 240_000,
 };
 
 /**

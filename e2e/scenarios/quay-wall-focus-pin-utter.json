@@ -1,0 +1,50 @@
+{
+  "name": "quay-wall-focus-pin-utter",
+  "description": "The Quay wall's first business scenario: open the panel, address a focusable by the ordinal a person says, move the focus, pin it into the tray, utter into the ASR seam, and read the resulting input pack. Six steps, two checkpoint screenshots; every assertion is a structured reading from window.__cloudcliScenario, not a DOM query.",
+  "steps": [
+    {
+      "open": "quay-panel",
+      "checkpoint": true,
+      "expect": {
+        "activeViewIncludes": "/board",
+        "focusableCount": 2,
+        "focusableLabels": ["①", "②"]
+      }
+    },
+    {
+      "drive": { "focus": "①" },
+      "expect": {
+        "focusLabel": "①",
+        "trayCount": 0
+      }
+    },
+    {
+      "drive": { "move": "down" },
+      "expect": {
+        "focusLabel": "②"
+      }
+    },
+    {
+      "drive": { "pin": true },
+      "expect": {
+        "trayCount": 1,
+        "trayHasFocus": true
+      }
+    },
+    {
+      "drive": { "utter": "把这个的第三条 AC 改宽" },
+      "expect": {
+        "lastInputPackFocusLabel": "②",
+        "lastInputPackUtterance": "把这个的第三条 AC 改宽",
+        "lastInputPackSeamBuilds": 1
+      }
+    },
+    {
+      "checkpoint": true,
+      "expect": {
+        "lastInputPackFocusIsCurrent": true,
+        "lastInputPackTrayCount": 1
+      }
+    }
+  ]
+}

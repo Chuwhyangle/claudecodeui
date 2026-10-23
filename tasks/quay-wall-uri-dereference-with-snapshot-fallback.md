@@ -51,6 +51,7 @@ depends_on:
   - **fleet 主路径**（读口指向 `/data/home/yale/work/quay-fleet/bin/quay-fleet.mjs`）：`#ac-1` URI → 200，L1 原值透传（`actions:["read","check","edit"]`、`fragment:{kind:"ac",index:1}`），`source:"snapshot-fallback"`、`reason:"no-summary"`、`task` 字段来自 snapshot（fleet 写路径尚未接进 observe 循环，该 workspace 台账无行）；`summary` → `state:"absent"`、`source:"snapshot-fallback"`、`reason:"no-summary"`。
 - **地址空间桥接（单点临时适配）**：墙的引用带项目段（`quay://<project>/task/<id>`），fleet 当前只认无项目段形式（`quay://task/<id>`、`quay://goal/<id>`、`quay://ledger/<name>/<eventId>`，board 为 `quay://board/<project>`）。转换**只在 `formatFleetAddress()` 一个函数里**，注释明标「临时措施」（已请 fleet 侧改成接受带项目段形式）；其他任何地方都不产生无项目段 URI；对外（输入包、API 返回的 `uri`）一律保留 `quay://<project>/…` 原样。项目段同时用于选 `--root` workspace。
 - **兼容边界**：回落只覆盖 task 引用（Proposal 的「task 类 URI」）；goal/ledger/board 在 fleet 不可用时返回 `fleet-unavailable`（503），不臆造数据。回落的 task 数据取 snapshot `tasks.recent`（面板渲染的同一列表，最近 10 条），超出该窗口 ⇒ `task-not-found`（404），如实不猜。`no-summary` 与 `reader-unavailable` 是两种不同读数（前者读口正常但写路径尚无行，后者读口本身读不到）。部署要让主路径生效只需设 `QUAY_FLEET_BIN`。
+- **套件红修复（2026-10-23，第三轮）**：新增服务端测试文件把树收集数从 402 顶到 403，`server/shared/tests/quay-test-script.test.ts` 的 AC7 覆盖率地板（362/403 < 90%）与 AC2/AC3 的 `unknown=` 钉子（399/401）随之变红——这是本任务新增测试文件的直接后果，不是环境噪声。按该测试自述的规程（重新测量，不推导）：把 `server/modules/quay/tests/quay-uri-resolve.test.ts`（实测 1909ms，`bash scripts/test.sh <file>` 的 `__PERFILE__` 读数）登记进 `scripts/suite-duration-baseline.tsv`，并把钉子重测为 400/402（403-3 / 403-1）。两条架构红（architectureTab / semanticZoomRead）则是 develop 既有基线红：`package.json` 已要求 `@yalehwang/plantuml-js@^0.4.0`，但共享 `node_modules` 仍是 0.3.1；按 lock 的 0.4.0 tarball（integrity 与 package-lock 一致）替换后两条转绿（环境修复，不产生源码 delta）。
 
 ### 读口实测形状（2026-10-23，fleet 已落地）
 
@@ -67,4 +68,14 @@ fleet 读口是 `quay-fleet` CLI 的只读子命令（`../quay-fleet/bin/quay-fl
 - server/modules/quay/quay.service.ts
 - server/modules/quay/quay-uri-resolve.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
+- scripts/suite-duration-baseline.tsv
+- server/shared/tests/quay-test-script.test.ts
 - tasks/quay-wall-uri-dereference-with-snapshot-fallback.md
+
+## Blocker
+
+**2026-10-23T03:44:10.153Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: a private field row keeps its symbol [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/quay-test-script.test.ts,server/shared/tests/quay-test-script.test.ts changed=src/modules/architecture/tests/architectureTab.test.tsx,src/modules/architecture/tests/semanticZoomRead.test.ts]
+- run_id：wk-prod-anchor
+- session_id：fb0254c4-7083-424b-a84c-3388cde9ab8d
