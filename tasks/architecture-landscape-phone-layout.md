@@ -1,7 +1,7 @@
 ---
 id: architecture-landscape-phone-layout
 title: 横屏手机的架构图布局：画布不少于 240px 高，抽屉改为侧栏
-status: todo
+status: ready
 labels:
   - feature
 parent: null
