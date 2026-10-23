@@ -1,7 +1,7 @@
 ---
 id: quay-uri-project-segment-is-fleet-registry-id
 title: quay:// 项目段改用 fleet registry id（现用 CloudCLI 项目 UUID，与 fleet 不兼容且不可说）
-status: ready
+status: done
 labels:
   - wall
   - contract
