@@ -259,6 +259,25 @@ type ChatControlSeam = Pick<
   'send' | 'abort' | 'cancelQueued'
 >;
 
+/**
+ * The cockpit hub's surface, as this gateway uses it.
+ *
+ * DECLARED STRUCTURALLY, NOT IMPORTED. The cockpit module is a leaf (AC-394): it imports only
+ * `server/shared/**` and itself, and no `server/modules/**` directory may import it. The
+ * composition root (`server/index.ts`) builds the hub and injects it here, so the gateway can
+ * route the two frames without gaining a static edge into the cockpit, and the same seam lets
+ * a criterion hand in its own hub instance.
+ */
+export type CockpitHubSeam = {
+  hello(connection: RealtimeClientConnection, userId: string | number | null, frame: unknown): boolean;
+  handleEvent(
+    connection: RealtimeClientConnection,
+    userId: string | number | null,
+    frame: unknown,
+  ): Promise<boolean>;
+  disconnect(connection: RealtimeClientConnection): void;
+};
+
 type ChatWebSocketDependencies = {
   /** Central dispatcher for every provider SDK/CLI runtime. */
   runtime: ProviderRuntimeGateway;
@@ -394,6 +413,8 @@ type ChatWebSocketDependencies = {
    * the gateway actually routed.
    */
   uiNavigations?: UiNavigationService;
+  /** The cockpit hub, mounted by the composition root; absent in harnesses that never drive it. */
+  cockpitHub?: CockpitHubSeam;
 };
 
 /**
@@ -1818,6 +1839,8 @@ function handlePermissionResponse(data: AnyRecord, dependencies: ChatWebSocketDe
  * - `chat.subscribe`           { sessions: [{ sessionId, lastSeq? }] }
  * - `ui.hello`                 { deviceId, tabId, deviceName }
  * - `ui.state_response`        { requestId, deviceId, tabId, deviceName, …report }
+ * - `cockpit.hello`            { role: 'display' | 'input', deviceId, deviceName? }
+ * - `cockpit.event`            { event }
  * - `chat.permission-response` { requestId, allow, updatedInput?, message?, rememberEntry? }
  *
  * Outbound protocol (server to client): every frame is `kind`-based — either
@@ -1862,6 +1885,11 @@ export function handleChatConnection(
   // process-wide one — so an instruction's delivery and its final outcome can
   // never be held by two different logs.
   const uiNavigations = dependencies.uiNavigations ?? uiNavigationService;
+
+  // The cockpit hub this connection announces itself to and drives. Absent in every harness
+  // that never exercises the cockpit; those simply drop the two frames (their connections are
+  // otherwise untouched, exactly like a malformed `ui.hello`).
+  const cockpitHub = dependencies.cockpitHub;
 
   ws.on('message', async (rawMessage) => {
     try {
@@ -1910,6 +1938,12 @@ export function handleChatConnection(
         case 'ui.navigate_result':
           handleUiNavigateResult(ws, data, uiNavigations);
           return;
+        case 'cockpit.hello':
+          cockpitHub?.hello(ws, userId, data);
+          return;
+        case 'cockpit.event':
+          await cockpitHub?.handleEvent(ws, userId, data);
+          return;
         case 'chat.permission-response':
           handlePermissionResponse(data, resolvedDependencies);
           return;
@@ -1930,5 +1964,7 @@ export function handleChatConnection(
     // Identity is a fact about a live connection, so it leaves with the socket.
     // A browser that reconnects announces itself again on the new one.
     uiClients.unregister(ws);
+    // The cockpit participant leaves with its socket; the user's state stays until restart.
+    cockpitHub?.disconnect(ws);
   });
 }
