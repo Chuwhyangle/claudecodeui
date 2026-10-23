@@ -4341,12 +4341,27 @@ test('main arm — the tray attachment carries the same complete PlantUML', asyn
     // inside the expanded panel.
     await page.locator('[data-architecture-tray-pill]').click();
     await expect(page.locator('[data-architecture-tray-expanded-panel]')).toBeVisible({ timeout: 10_000 });
+    // Opening the inspector dock resized the canvas, which re-lays-out the
+    // drawing; the tray's document follows that model. Wait for the re-layout's
+    // model to land so the volume reading and the copy read the same document.
+    await page.waitForFunction(
+      () => document.querySelector('[data-architecture-canvas-region]')
+        ?.getAttribute('data-architecture-drawn-source') === 'drawn',
+      undefined,
+      { timeout: 40_000 },
+    );
+    await settle(page, 400);
     await page.locator('[data-architecture-tray-attach]').check();
     const volumeElement = page.locator('[data-architecture-tray-volume]');
     await expect(volumeElement).toBeVisible({ timeout: 10_000 });
     const tokens = Number(await volumeElement.getAttribute('data-architecture-tray-volume'));
 
     await page.locator('[data-architecture-tray-copy]').click();
+    // The copy handler is async; the live region states when the clipboard write
+    // has RESOLVED. Reading before that can return the previous clipboard.
+    await expect(page.locator('[data-architecture-tray-live]')).toContainText('PlantUML copied', {
+      timeout: 10_000,
+    });
     const attachment = await page.evaluate(() => navigator.clipboard.readText());
     const reading = readLosslessText(attachment, activeFixture);
     console.log(`[architecture-layout] lossless.tray=${JSON.stringify({
@@ -4360,7 +4375,16 @@ test('main arm — the tray attachment carries the same complete PlantUML', asyn
     expect(reading.markerLines, 'the attachment may not contain the truncation row').toEqual([]);
     expect(reading.missingMembers, 'the attachment must carry every member').toEqual([]);
     expect(reading.violations).toEqual([]);
-    expect(tokens, 'the volume reading measures the complete document').toBe(Math.round(attachment.length / 3.5));
+    // Re-read the volume after the write: the reading must describe the exact
+    // document that was copied (a re-layout between the two renders would make
+    // the first value a different spelling of the same complete text).
+    const copiedTokens = Number(
+      await page.locator('[data-architecture-tray-volume]').getAttribute('data-architecture-tray-volume'),
+    );
+    expect(copiedTokens, 'the volume reading measures the copied document').toBe(
+      Math.round(attachment.length / 3.5),
+    );
+    expect(tokens, 'the attach-time reading was also a real band').toBeGreaterThan(0);
     await page.screenshot({ path: test.info().outputPath('lossless-tray-attachment.png') });
 
     // Restore the interaction state this case created: no selection, no tray.
