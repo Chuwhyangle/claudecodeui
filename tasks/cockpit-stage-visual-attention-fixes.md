@@ -1,7 +1,7 @@
 ---
 id: cockpit-stage-visual-attention-fixes
 title: 驾驶舱舞台视觉修正：磁贴不显示原始 URI、需要人的项目唯一强调、序号标签可读
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
