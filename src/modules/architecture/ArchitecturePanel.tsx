@@ -28,7 +28,6 @@ import {
 } from '@/modules/architecture/ArchitectureSelectionTray';
 import { ArchitectureTextPanel } from '@/modules/architecture/ArchitectureTextPanel';
 import {
-  archguardToPlantUml,
   nodeFileOf,
   seedMarkerMode,
   type ArchitectureDiagramView,
@@ -41,6 +40,7 @@ import {
   rankArchitectureDetail,
   type ArchitectureDetailTier,
 } from '@/modules/architecture/detailRanking';
+import { buildFullPlantUmlDocument } from '@/modules/architecture/plantUmlText';
 import {
   activeFilterCount,
   applyFilter,
@@ -757,6 +757,15 @@ export default function ArchitecturePanel({
   // when a stand-in renderer does not report a model (the text page then says
   // it is showing the bridge fallback).
   const [drawnPlantUml, setDrawnPlantUml] = useState<ArchitectureDrawnPlantUml | null>(null);
+  // The same model, kept synchronously: the renderer reports it while it is
+  // drawing, one React render before `drawnPlantUml` commits. The Export menu
+  // reads this ref so a click that lands in that window still exports the
+  // document the Text page will settle on, never the bridge spelling.
+  const drawnPlantUmlRef = useRef<ArchitectureDrawnPlantUml | null>(null);
+  const handleDrawnPlantUmlChange = useCallback((drawn: ArchitectureDrawnPlantUml | null): void => {
+    drawnPlantUmlRef.current = drawn;
+    setDrawnPlantUml(drawn);
+  }, []);
   // The rendered drawing's container, so the export actions can read the live
   // SVG without the renderer having to hand its host ref up the tree.
   const graphAreaRef = useRef<HTMLDivElement | null>(null);
@@ -1458,17 +1467,24 @@ export default function ArchitecturePanel({
   const canComposeSelection = resolveDraftScope(projectId, sessionId) !== null;
 
   /**
-   * The PlantUML document for the view on screen, exactly as the bridge builds
-   * it. The file graph is the adaptive consumer (its overview folds directory
-   * layers); the class graph is never folded — its document draws the entities
-   * in package frames, matching the drawing the reader sees.
+   * The PlantUML document for the view on screen — the SAME document the Text
+   * page's "Whole filtered graph" scope shows.
+   *
+   * Both entry points call {@link buildFullPlantUmlDocument} with the same graph,
+   * view, grouping, id shape and drawn model (the renderer renders that model
+   * with `detail: 'full'`, so its members are complete), which is what makes
+   * the exported file and the copyable text byte-identical instead of two
+   * spellings of the same drawing. Before a drawing exists the builder falls
+   * back to the local bridge — the same fallback the text page takes, so the
+   * two are still equal.
    */
   const currentPlantUml = (): string =>
-    archguardToPlantUml(drawnGraph, {
+    buildFullPlantUmlDocument(drawnGraph, {
       view: diagramView,
       grouping: granularity === 'file' ? 'adaptive' : 'raw',
       idShape: nodeIdShapeOf(granularity),
-    }).puml;
+      drawn: drawnPlantUmlRef.current,
+    }).text;
 
   /** The live drawing, read from the panel's own subtree at export time. */
   const renderedSvg = (): SVGSVGElement | null =>
@@ -3235,6 +3251,13 @@ export default function ArchitecturePanel({
               aria-busy={refreshing}
               data-architecture-refreshing={refreshing ? 'true' : undefined}
               data-architecture-canvas-region="true"
+              // Which source the Text page and the Export menu will serialize:
+              // the drawn model (complete, rendered with `detail: 'full'`) once
+              // the renderer has reported one, or the local bridge before that.
+              // The renderer nulls the model when a new drawing starts, so this
+              // flips back to `bridge` for the duration of a re-render — a
+              // reader (and a criterion) can wait for `drawn` instead of racing it.
+              data-architecture-drawn-source={drawnPlantUml === null ? 'bridge' : 'drawn'}
               // The canvas region is an instrument, not prose: dragging it pans
               // and double-clicking drills, so neither gesture may paint a text
               // selection. Scoped to THIS region — the dock beside it (the
@@ -3324,7 +3347,7 @@ export default function ArchitecturePanel({
                     // the export menu's PlantUML identical to the drawing.
                     onViewChange={setDiagramView}
                     // The model it actually drew, for the text page.
-                    onDrawnPlantUmlChange={setDrawnPlantUml}
+                    onDrawnPlantUmlChange={handleDrawnPlantUmlChange}
                     focusNodeId={focusTarget?.id ?? null}
                     focusToken={focusTarget?.token}
                     focusDrill={focusTarget?.drill ?? false}

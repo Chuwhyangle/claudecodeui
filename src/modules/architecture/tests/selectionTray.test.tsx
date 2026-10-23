@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { applyView, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';
@@ -8,6 +9,17 @@ import { afterEach, beforeAll, beforeEach, test, vi } from 'vitest';
 import { ArchitecturePanel } from '@/modules/architecture';
 import type { ArchitectureGraphResult } from '@/modules/architecture';
 import { ArchitectureSelectionTray } from '@/modules/architecture/ArchitectureSelectionTray';
+import {
+  archguardToPlantUml,
+  parserSafePlantUml,
+} from '@/modules/architecture/archguardToPlantUml';
+import { renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
+import {
+  buildPlantUmlText,
+  measurePlantUmlText,
+  standardiseDrawnStereotypes,
+} from '@/modules/architecture/plantUmlText';
+import type { ArchitectureDrawnPlantUml } from '@/modules/architecture/rendererContract';
 import { selectionKey, resolveDraftScope, type ArchitectureSelection } from '@/modules/architecture/selectionModel';
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import type * as SharedApiModule from '@/shared/api';
@@ -676,5 +688,91 @@ test('without a session the compose action is disabled and says why', () => {
   assert.match(
     document.querySelector('[data-architecture-tray-no-session]')?.textContent ?? '',
     /Select a session to put text in the input box/,
+  );
+});
+
+/**
+ * The attachment's volume band is computed from the COMPLETE text.
+ *
+ * The renderer used to truncate any diagram past 40 entities at `compact`,
+ * which replaced the member tail with a synthetic overflow row before the text
+ * page ever saw it. The drawing is now rendered with `detail: 'full'`, so the
+ * tray's attachment (the same builder the Text page uses) carries every member
+ * and its band is the band of that complete document — not of a compact one.
+ */
+test('the attached subgraph carries every member and its volume band is the complete document', async () => {
+  const entity = (name: string, members: number) => ({
+    id: `s1/src/e/${name}.ts.${name}`,
+    label: name,
+    distance: 0,
+    kind: 'class' as const,
+    members: Array.from({ length: members }, (_unused, index) => ({
+      name: `member${String(index)}`,
+      kind: 'field' as const,
+      visibility: 'private',
+      signature: 'number',
+    })),
+  });
+  const graph = { nodes: [entity('Alpha', 25), entity('Beta', 8)], edges: [] };
+  const options = { view: { kind: 'hierarchy' } as const, grouping: 'raw' as const, idShape: 'scope-prefixed' as const };
+  const bridge = archguardToPlantUml(graph, options);
+  const detailed = await renderWithMemberDetail(renderDetailed, parserSafePlantUml(bridge.puml), {});
+  const drawn: ArchitectureDrawnPlantUml = {
+    model: detailed.model,
+    entityIdOf: bridge.aliasOf,
+    toPlantUml: (model) => standardiseDrawnStereotypes(toPlantUml(model)),
+    applyView,
+  };
+  const expected = buildPlantUmlText(
+    graph,
+    { kind: 'selected', nodeIds: graph.nodes.map((node) => node.id) },
+    { ...options, drawn },
+  );
+  assert.doesNotMatch(expected, /…\s*\+\d+\s+more|\(\d+\s+members\)/);
+
+  const composed: string[] = [];
+  render(
+    <ArchitectureSelectionTray
+      selections={[
+        { kind: 'entity' as const, nodeId: graph.nodes[0].id },
+        { kind: 'entity' as const, nodeId: graph.nodes[1].id },
+      ]}
+      graph={graph}
+      idShape="scope-prefixed"
+      view={{ kind: 'hierarchy' }}
+      grouping="raw"
+      drawn={drawn}
+      projectId="project-1"
+      analyzedAt="2026-10-22T00:00:00.000Z"
+      canCompose
+      canRemove
+      multiSelect={false}
+      expanded
+      compact={false}
+      onExpandedChange={() => undefined}
+      onExitMultiSelect={() => undefined}
+      onToggleItem={() => undefined}
+      onClear={() => undefined}
+      onCompose={(text) => composed.push(text)}
+      onRemoveSelected={() => undefined}
+    />,
+  );
+
+  fireEvent.click(document.querySelector('[data-architecture-tray-attach]') as Element);
+  const reading = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-tray-volume]');
+    assert.ok(element !== null, 'the volume reading appears with the attachment');
+    return element;
+  });
+  assert.equal(Number(reading.getAttribute('data-architecture-tray-volume')), measurePlantUmlText(expected).tokens);
+  assert.equal(reading.getAttribute('data-architecture-tray-volume-level'), measurePlantUmlText(expected).level);
+
+  fireEvent.click(document.querySelector('[data-architecture-tray-compose]') as Element);
+  assert.equal(composed.length, 1);
+  assert.doesNotMatch(composed[0], /…\s*\+\d+\s+more|\(\d+\s+members\)/);
+  assert.equal(
+    (composed[0].match(/^[ \t]*- member\d+: number$/gm) ?? []).length,
+    33,
+    'the attachment carries all 25 + 8 member rows',
   );
 });

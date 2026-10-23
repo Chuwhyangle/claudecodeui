@@ -5,6 +5,12 @@ import { test } from 'vitest';
 
 import { archguardToPlantUml, parserSafePlantUml } from '@/modules/architecture/archguardToPlantUml';
 import {
+  PLANTUML_MEMBER_DETAIL,
+  renderWithMemberDetail,
+} from '@/modules/architecture/PlantUmlGraph';
+import type { PlantUmlRenderDetailed } from '@/modules/architecture/graphDom';
+import {
+  buildFullPlantUmlDocument,
   buildPlantUmlDocument,
   buildPlantUmlText,
   measurePlantUmlText,
@@ -453,4 +459,221 @@ test('a function is copied as a real stereotype, and parsePlantUml reads the kin
   assert.match(ifaceText, /^\s*interface "Ports" as n\d+ <<interface>>$/m);
   const ifaceModel = await parsePlantUml(ifaceText);
   assert.equal(ifaceModel.entities.find((entity) => entity.name === 'Ports')?.stereotype, 'interface');
+});
+
+/* ── lossless text: every text path carries every member ─────────────────────────── */
+
+/** The bridge options the lossless fixtures use: the class graph's own view. */
+const LOSSLESS_OPTIONS = {
+  view: { kind: 'hierarchy' } as const,
+  grouping: 'raw' as const,
+  idShape: 'scope-prefixed' as const,
+};
+
+/**
+ * The lossless fixtures: `count` classes, each carrying 7–25 members.
+ *
+ * Past 40 entities the renderer's default detail switches to `compact`, which
+ * writes a synthetic `… +N more (M members)` row into the drawn model and keeps
+ * only four real rows. The member count cycles across the 7–25 band so no
+ * fixture can pass by sharing one truncation shape, and every member name is
+ * distinct so a member line is countable from the document alone.
+ */
+function losslessGraph(count: number): ArchitectureRendererGraph {
+  const nodes = Array.from({ length: count }, (_unused, index) => {
+    const name = `Entity${String(index)}`;
+    const memberCount = 7 + (index % 19);
+    return {
+      id: `s1/src/pkg${String(index % 7)}/e${String(index)}.ts.${name}`,
+      label: name,
+      distance: index === 0 ? 0 : 1 + (index % 3),
+      kind: 'class' as const,
+      members: Array.from({ length: memberCount }, (_member, member) => ({
+        name: `member${String(member)}`,
+        kind: 'field' as const,
+        visibility: 'private',
+        signature: 'number',
+      })),
+    };
+  });
+  // A chain, so the drawing is one connected diagram like a real session's.
+  const edges = nodes.slice(1).map((node, index) => ({
+    from: nodes[index].id,
+    to: node.id,
+    relationType: 'dependency',
+  }));
+  return { nodes, edges };
+}
+
+/** The drawn model the renderer reports for one graph, rendered losslessly. */
+async function losslessDrawn(graph: ArchitectureRendererGraph): Promise<{
+  drawn: ArchitectureDrawnPlantUml;
+  bridge: ReturnType<typeof archguardToPlantUml>;
+}> {
+  const bridge = archguardToPlantUml(graph, LOSSLESS_OPTIONS);
+  const detailed = await renderWithMemberDetail(
+    renderDetailed,
+    parserSafePlantUml(bridge.puml),
+    {},
+  );
+  return {
+    bridge,
+    drawn: {
+      model: detailed.model,
+      entityIdOf: bridge.aliasOf,
+      toPlantUml: (model) => standardiseDrawnStereotypes(toPlantUml(model)),
+      applyView,
+    },
+  };
+}
+
+/** Every line that is the RENDERER's own truncation marker (never a real member). */
+const TRUNCATION_LINE = /…\s*\+\d+\s+more|\(\d+\s+members\)/;
+
+/** The member rows of every class block in a document, keyed by entity name. */
+function memberRowsByEntity(puml: string): Map<string, string[]> {
+  const rows = new Map<string, string[]>();
+  let current: { readonly name: string; readonly rows: string[] } | null = null;
+  let depth = 0;
+  for (const line of puml.split('\n')) {
+    if (current === null) {
+      const declaration = /^[ \t]*(?:abstract\s+)?(?:class|interface|enum)\s+"([^"]+)"\s+as\s+\w+(?:\s+<<[^>]+>>)?\s*\{\s*$/.exec(line);
+      if (declaration !== null) {
+        current = { name: declaration[1], rows: [] };
+        depth = 1;
+      }
+      continue;
+    }
+    if (/^[ \t]*\}[ \t]*$/.test(line)) {
+      depth -= 1;
+      if (depth === 0) {
+        rows.set(current.name, current.rows);
+        current = null;
+      }
+      continue;
+    }
+    if (/\{[ \t]*$/.test(line)) depth += 1;
+    if (/^[ \t]*[-+#~]\s+\S/.test(line)) current.rows.push(line);
+  }
+  if (current !== null) rows.set(current.name, current.rows);
+  return rows;
+}
+
+/** Assert one document has no truncation row and every entity's members intact. */
+function assertComplete(
+  text: string,
+  graph: ArchitectureRendererGraph,
+  label: string,
+  expectEveryEntity = true,
+): void {
+  for (const line of text.split('\n')) {
+    assert.doesNotMatch(line, TRUNCATION_LINE, `${label}: a truncation row reached the text: ${line}`);
+  }
+  const rows = memberRowsByEntity(text);
+  for (const node of graph.nodes) {
+    const entityRows = rows.get(node.label);
+    if (entityRows === undefined) {
+      // A narrower scope may not include this entity at all; what must never
+      // happen is that it appears WITHOUT its members (checked below).
+      assert.equal(
+        expectEveryEntity,
+        false,
+        `${label}: ${node.label} is missing from a document that must carry every entity`,
+      );
+      continue;
+    }
+    const expected = node.members?.length ?? 0;
+    assert.equal(
+      entityRows.length,
+      expected,
+      `${label}: ${node.label} must carry ${String(expected)} member rows, got ${String(entityRows.length)}`,
+    );
+  }
+}
+
+test('41, 150 and 600 entity drawings carry every member into every text path', async () => {
+  for (const count of [41, 150, 600]) {
+    const graph = losslessGraph(count);
+    const { drawn } = await losslessDrawn(graph);
+    const options = { ...LOSSLESS_OPTIONS, drawn };
+    const label = `${String(count)} entities`;
+
+    // The Text page's three scopes.
+    const full = buildFullPlantUmlDocument(graph, options);
+    assert.equal(full.fallback, false, `${label}: the drawn model is the source`);
+    assertComplete(full.text, graph, `${label} full`);
+
+    const viewport = buildPlantUmlText(
+      graph,
+      { kind: 'viewport', nodeIds: graph.nodes.map((node) => node.id) },
+      options,
+    );
+    assertComplete(viewport, graph, `${label} viewport`);
+
+    const anchor = graph.nodes[0].id;
+    const selection = buildPlantUmlText(graph, { kind: 'selection', nodeIds: [anchor] }, options);
+    assertComplete(selection, graph, `${label} selection`, false);
+
+    // Copy / Download's document is the same string; "Copy for chat" fences it.
+    assert.match(wrapSessionContext('About the diagram:', full.text), /```plantuml\n@startuml\n/);
+    assertComplete(wrapSessionContext('About the diagram:', full.text), graph, `${label} context`);
+
+    // The tray's attachment, over the same builder.
+    const tray = buildPlantUmlText(
+      graph,
+      { kind: 'selected', nodeIds: graph.nodes.slice(0, 2).map((node) => node.id) },
+      options,
+    );
+    assertComplete(tray, graph, `${label} tray attachment`, false);
+
+    // The same document the Text page shows is what the export builder returns:
+    // one definition, so the two doors cannot disagree.
+    assert.equal(
+      full.text,
+      buildFullPlantUmlDocument(graph, options).text,
+      `${label}: the Text page and the export menu read one document`,
+    );
+  }
+});
+
+test('the renderer is asked for the full member detail', async () => {
+  assert.equal(PLANTUML_MEMBER_DETAIL, 'full');
+  const received: Record<string, unknown>[] = [];
+  const fakeRender = (async (_puml: string, options: Record<string, unknown>) => {
+    received.push(options);
+    return { model: { diagramType: 'class', entities: [], relations: [], packages: [] }, layout: null, svg: '' };
+  }) as unknown as PlantUmlRenderDetailed;
+  await renderWithMemberDetail(fakeRender, '@startuml\n@enduml', { layout: {} as never });
+  assert.equal(received.length, 1);
+  assert.equal(
+    received[0].detail,
+    'full',
+    'renderDetailed must receive detail: full, never the entity-count default',
+  );
+});
+
+test('the default detail is the defect the control arm reproduces: markers appear', async () => {
+  const graph = losslessGraph(41);
+  const bridge = archguardToPlantUml(graph, LOSSLESS_OPTIONS);
+  // Exactly what the renderer does when detail is NOT pinned: the entity-count
+  // default picks `compact`.
+  const defaulted = await renderDetailed(parserSafePlantUml(bridge.puml), {});
+  const drawn: ArchitectureDrawnPlantUml = {
+    model: defaulted.model,
+    entityIdOf: bridge.aliasOf,
+    toPlantUml: (model) => standardiseDrawnStereotypes(toPlantUml(model)),
+    applyView,
+  };
+  const text = buildFullPlantUmlDocument(graph, { ...LOSSLESS_OPTIONS, drawn }).text;
+  assert.match(
+    text,
+    TRUNCATION_LINE,
+    'the default detail must put the renderer overflow row into the text (the control)',
+  );
+  const rows = memberRowsByEntity(text);
+  const first = graph.nodes[0];
+  assert.ok(
+    (rows.get(first.label) ?? []).length < (first.members?.length ?? 0),
+    'the control must lose real member rows, not merely add a marker',
+  );
 });

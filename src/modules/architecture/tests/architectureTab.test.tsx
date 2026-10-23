@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
+import { applyView, renderDetailed, toPlantUml } from '@yalehwang/plantuml-js';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -35,7 +36,13 @@ import {
   archguardToPlantUml,
   displayName,
   MAX_DISPLAY_DIR_SEGMENTS,
+  parserSafePlantUml,
 } from '@/modules/architecture/archguardToPlantUml';
+import { renderWithMemberDetail } from '@/modules/architecture/PlantUmlGraph';
+import {
+  buildFullPlantUmlDocument,
+  standardiseDrawnStereotypes,
+} from '@/modules/architecture/plantUmlText';
 import { MIN_ZOOM_SCALE } from '@/modules/architecture/svgViewport';
 
 /**
@@ -5318,3 +5325,104 @@ test('a whole graph below the useful scale offers a hint; tapping a package zoom
   assert.ok(restored < before * 1.001, `the whole-graph fit must be restored; got ${restored} vs ${before}`);
   assert.equal(document.querySelector('[data-architecture-readable-back]'), null, 'the back action is gone');
 });
+
+/**
+ * The Text page reads the COMPLETE drawn document.
+ *
+ * 41 classes (the renderer's default detail switches to `compact` above 40) with
+ * 7–25 members each. The real renderer runs, the panel reports its drawn model,
+ * and the Text page's character/line readings are those of the complete
+ * document — no `… +N more (M members)` row, every member present. This is the
+ * wiring leg: the option that makes it complete lives in the renderer, and the
+ * reading that proves it lives in the dock.
+ */
+test('the Text page reads the complete drawn document for a >40-entity class graph', async () => {
+  const nodes = Array.from({ length: 41 }, (_unused, index) => ({
+    id: `s1/src/pkg${String(index % 5)}/e${String(index)}.ts.Entity${String(index)}`,
+    label: `Entity${String(index)}`,
+    distance: index === 0 ? 0 : 1 + (index % 3),
+    kind: 'class' as const,
+    members: Array.from({ length: 7 + (index % 19) }, (_member, member) => ({
+      name: `member${String(member)}`,
+      kind: 'field' as const,
+      visibility: 'private',
+      signature: 'number',
+    })),
+  }));
+  // A dependency chain, so no node is isolated: the shipped filter hides
+  // isolated nodes by default, and an all-isolated fixture would draw nothing.
+  const graph = {
+    nodes,
+    edges: nodes.slice(1).map((node, index) => ({
+      from: nodes[index].id,
+      to: node.id,
+      relationType: 'dependency',
+    })),
+  };
+  const entityResult: ArchitectureGraphResult = {
+    mmd: { file: FILE_MMD, entity: ENTITY_MMD },
+    graph: { file: RESULT.graph.file, entity: graph },
+    stats: {
+      ...RESULT.stats,
+      entityNodes: 41,
+      entityEdges: 40,
+      entityTotal: 41,
+      nodeCount: 41,
+      edgeCount: 40,
+      truncated: false,
+      entityTruncated: false,
+    },
+    provenance: RESULT.provenance,
+  };
+  apiMock.architectureGraph.mockResolvedValue(jsonResponse(entityResult));
+
+  // What the panel will report, reproduced through the app's own render options.
+  const options = { view: { kind: 'hierarchy' } as const, grouping: 'raw' as const, idShape: 'scope-prefixed' as const };
+  const bridge = archguardToPlantUml(graph, options);
+  const detailed = await renderWithMemberDetail(renderDetailed, parserSafePlantUml(bridge.puml), {});
+  const drawn = {
+    model: detailed.model,
+    entityIdOf: bridge.aliasOf,
+    toPlantUml: (model: typeof detailed.model) => standardiseDrawnStereotypes(toPlantUml(model)),
+    applyView,
+  };
+  const expected = buildFullPlantUmlDocument(graph, { ...options, drawn }).text;
+  const expectedMemberRows = nodes.reduce((total, node) => total + node.members.length, 0);
+
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" />);
+  await waitForDiagram();
+  await waitFor(() =>
+    assert.equal(
+      document.querySelector('[data-architecture-drawn-source]')?.getAttribute('data-architecture-drawn-source'),
+      'drawn',
+      'the panel must report the drawn model the Text page serializes',
+    ),
+  );
+  await waitFor(() =>
+    assert.equal(document.querySelector('[data-architecture-view]')?.getAttribute('data-architecture-view'), 'hierarchy'),
+  );
+
+  fireEvent.click(document.querySelector('[data-architecture-text-toggle]') as Element);
+  await waitFor(() => assert.ok(document.querySelector('[data-architecture-text-panel]')));
+
+  const reading = () => document.querySelector('[data-architecture-text-volume]');
+  await waitFor(() => {
+    assert.equal(
+      Number(reading()?.getAttribute('data-architecture-text-characters')),
+      expected.length,
+      'the reading must be the complete document',
+    );
+  });
+  assert.equal(Number(reading()?.getAttribute('data-architecture-text-lines')), expected.split('\n').length);
+  assert.doesNotMatch(previewText(), /…\s*\+\d+\s+more|\(\d+\s+members\)/);
+  assert.equal(
+    (expected.match(/^[ \t]*- member\d+: number$/gm) ?? []).length,
+    expectedMemberRows,
+    'every member of every class is in the document',
+  );
+});
+
+/** The dock's text preview element. */
+function previewText(): string {
+  return document.querySelector('[data-architecture-text-preview]')?.textContent ?? '';
+}

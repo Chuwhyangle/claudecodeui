@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { expect, request, test } from '@playwright/test';
@@ -2453,6 +2454,137 @@ test.beforeAll(async () => {
   console.log(`[architecture-layout] interleaved.session=${interleavedSessionId}`);
 });
 
+/* ── lossless text: one reading, two arms ────────────────────────────────────────────────── */
+
+/**
+ * The renderer's own truncation row. With `detail: 'compact'` it writes
+ * `… +N more (M members)` as a MEMBER into the drawn model, so it reaches the
+ * text; this pattern finds it in a document. A real member line never matches.
+ */
+const TRUNCATED_TEXT_LINE = /…\s*\+\d+\s+more|\(\d+\s+members\)/;
+
+/** The member rows of every class-like block, keyed by the declared name. */
+function textMemberRows(puml: string): Map<string, string[]> {
+  const rows = new Map<string, string[]>();
+  let current: { readonly name: string; readonly rows: string[] } | null = null;
+  let depth = 0;
+  for (const line of puml.split('\n')) {
+    if (current === null) {
+      const declaration = /^[ \t]*(?:abstract\s+)?(?:class|interface|enum)\s+"([^"]+)"\s+as\s+\w+(?:\s+<<[^>]+>>)?\s*\{\s*$/.exec(line);
+      if (declaration !== null) {
+        current = { name: declaration[1], rows: [] };
+        depth = 1;
+      }
+      continue;
+    }
+    if (/^[ \t]*\}[ \t]*$/.test(line)) {
+      depth -= 1;
+      if (depth === 0) {
+        rows.set(current.name, current.rows);
+        current = null;
+      }
+      continue;
+    }
+    if (/\{[ \t]*$/.test(line)) depth += 1;
+    // The renderer's synthetic row IS a visibility-prefixed member line; it is
+    // counted by the marker reading, never as one of the payload's members.
+    if (/^[ \t]*[-+#~]\s+\S/.test(line) && !TRUNCATED_TEXT_LINE.test(line)) current.rows.push(line);
+  }
+  if (current !== null) rows.set(current.name, current.rows);
+  return rows;
+}
+
+/** One document's lossless reading. Both the main and the control arm use THIS. */
+type TextLosslessReading = {
+  /** Entity declarations the document carries (with or without a member body). */
+  readonly entityCount: number;
+  /** Class-like blocks that carry a member compartment. */
+  readonly classCount: number;
+  /** Entities in the document whose payload carries more than four members. */
+  readonly multiMemberEntities: number;
+  /** Lines that are the renderer's truncation row. */
+  readonly markerLines: string[];
+  /** Entities whose member rows are fewer than the payload's. */
+  readonly missingMembers: string[];
+  /** Blocks naming an entity the fixture does not know. */
+  readonly unknownEntities: string[];
+  /** Everything that makes the document lossy; empty is the pass state. */
+  readonly violations: string[];
+};
+
+/**
+ * Read one exported PlantUML document against the fixture's payload.
+ *
+ * A member line is countable without parsing UML: the bridge/serializer writes
+ * one visibility-prefixed line per member, and the renderer's truncation row is
+ * itself a member line — which is why the marker check comes first. Entities not
+ * drawn (a scope narrower than the graph, or a kind the filter hides) are simply
+ * absent; an absent block is not a violation, a short block is.
+ */
+function readLosslessText(
+  text: string,
+  reading: ArchitectureFixtureReading,
+): TextLosslessReading {
+  const nameById = new Map<string, string>();
+  for (const id of reading.entityIds) {
+    const name = id.slice(id.lastIndexOf('.') + 1);
+    if (!nameById.has(name)) nameById.set(name, id);
+  }
+  const markerLines = text.split('\n').filter((line) => TRUNCATED_TEXT_LINE.test(line));
+  const entityCount = [...text.matchAll(
+    /^[ \t]*(?:abstract\s+)?(?:class|interface|enum)\s+"([^"]+)"\s+as\s+\w+(?:\s+<<[^>]+>>)?/gm,
+  )].length;
+  const rows = textMemberRows(text);
+  const missingMembers: string[] = [];
+  const unknownEntities: string[] = [];
+  let multiMemberEntities = 0;
+  for (const [name, entityRows] of rows) {
+    const id = nameById.get(name);
+    if (id === undefined) {
+      unknownEntities.push(name);
+      continue;
+    }
+    const expected = reading.memberCountById[id] ?? 0;
+    if (expected > 4) multiMemberEntities += 1;
+    if (entityRows.length !== expected) {
+      missingMembers.push(`${name}: ${String(entityRows.length)} of ${String(expected)} member rows`);
+    }
+  }
+  return {
+    entityCount,
+    classCount: rows.size,
+    multiMemberEntities,
+    markerLines,
+    missingMembers,
+    unknownEntities,
+    violations: [...markerLines, ...missingMembers, ...unknownEntities],
+  };
+}
+
+/** Run one download-triggering action and read the downloaded text. */
+async function downloadText(page: Page, action: () => Promise<void>): Promise<string> {
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), action()]);
+  const filePath = await download.path();
+  if (filePath === null) throw new Error('the download must have a local path');
+  return readFileSync(filePath, 'utf8');
+}
+
+/** Wait until the panel reports the drawn model, then open the Text page. */
+async function openSettledTextPage(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => document.querySelector('[data-architecture-canvas-region]')
+      ?.getAttribute('data-architecture-drawn-source') === 'drawn',
+    undefined,
+    { timeout: 40_000 },
+  );
+  await page.locator('[data-architecture-text-toggle]').first().click();
+  await expect(page.locator('[data-architecture-text-panel]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-architecture-text-fallback-source]')).toHaveCount(0);
+  // The dock rebuilds on a 300ms debounce after a source change; the opening
+  // build is synchronous, so this only lets layout settle.
+  await settle(page, 400);
+}
+
 /* ── the main arm ────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -3992,6 +4124,144 @@ test('control arm E — a canvas switched back to user-select: auto selects text
     const restored = await readTextSelection(page);
     console.log(`[architecture-layout] controlE.restored=${JSON.stringify(restored)}`);
     expect(restored.length, 'control arm E: the restored canvas must not select').toBe(0);
+  } finally {
+    await context.close();
+  }
+});
+
+/* ── lossless text: the two arms ─────────────────────────────────────────────────────────── */
+
+/**
+ * The Text page and the Export menu carry the SAME complete PlantUML.
+ *
+ * The class fixture draws 120 entities (> the renderer's 40-entity compact
+ * threshold), and every class carries five members. Before the fix the Text
+ * page serialized the compact drawn model — four real rows plus a synthetic
+ * `… +1 more (5 members)` row — while the Export menu rebuilt from the bridge
+ * and was complete: two texts for one view. Now both read the drawn model the
+ * renderer renders with `detail: 'full'`, so this arm asserts three things at
+ * once: no truncation row anywhere, every drawn entity's member rows equal the
+ * payload, and the downloaded file is line-for-line the text page's document.
+ */
+test('main arm — the Text page and the Export menu carry the same complete PlantUML', async ({ browser }) => {
+  const activeFixture = fixture as ArchitectureFixtureReading;
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
+    const visibleNodes = Number(
+      await page.locator(SEL.graphRoot).getAttribute('data-architecture-visible-nodes'),
+    );
+    expect(
+      visibleNodes,
+      'the lossless arm needs a drawing past the renderer’s 40-entity compact threshold',
+    ).toBeGreaterThan(40);
+
+    await openSettledTextPage(page);
+
+    // The Text page's own Download button: the document it shows and copies.
+    const textPuml = await downloadText(page, () => page.locator('[data-architecture-text-download]').click());
+    const textReading = readLosslessText(textPuml, activeFixture);
+    console.log(`[architecture-layout] lossless.text=${JSON.stringify({
+      entityCount: textReading.entityCount,
+      classCount: textReading.classCount,
+      multiMemberEntities: textReading.multiMemberEntities,
+      markerLines: textReading.markerLines.slice(0, 3),
+      missingMembers: textReading.missingMembers.slice(0, 3),
+      characters: textPuml.length,
+      lines: textPuml.split('\n').length,
+    })}`);
+    expect(
+      textReading.markerLines,
+      'no export text may contain the renderer’s truncation row',
+    ).toEqual([]);
+    expect(
+      textReading.missingMembers,
+      'every drawn entity’s member rows must equal its payload member count',
+    ).toEqual([]);
+    expect(textReading.unknownEntities, 'every block must name a fixture entity').toEqual([]);
+    expect(textReading.entityCount, 'the document must carry the drawn entities').toBeGreaterThan(40);
+    expect(
+      textReading.multiMemberEntities,
+      'the criterion is vacuous unless entities past the four-row compact cap are present',
+    ).toBeGreaterThan(0);
+    await page.screenshot({ path: test.info().outputPath('lossless-text-panel.png') });
+
+    // The Export menu's own .puml download, from the same settled drawing.
+    const exportPuml = await downloadText(page, async () => {
+      await page.locator('[data-architecture-export="true"]').first().click();
+      await expect(page.locator('[data-architecture-export-menu="true"]')).toBeVisible({ timeout: 10_000 });
+      await page.locator('[role="menuitem"][data-architecture-export-item="puml"]').first().click();
+    });
+    expect(
+      exportPuml,
+      'the Text page and the Export menu must download one document, line for line',
+    ).toBe(textPuml);
+  } finally {
+    await context.close();
+  }
+});
+
+/**
+ * The control: restore the renderer's DEFAULT detail and the same reading reds.
+ *
+ * The defect is not injectable into the DOM — it happens before layout, inside
+ * `renderDetailed` — so the arm rewrites the served component module and sets
+ * the detail constant to `void 0`, which is exactly "do not pass detail". The
+ * upstream default then picks `compact` for this 120-entity drawing, writes its
+ * `… +N more (M members)` row into the drawn model, and the SAME
+ * {@link readLosslessText} that passes above must report both the marker and
+ * the lost rows.
+ */
+test('control arm — restoring the default detail puts the overflow row back into the reading', async ({ browser }) => {
+  const activeFixture = fixture as ArchitectureFixtureReading;
+  const { context, page } = await openSignedInPage(browser, baseURL, token, {
+    viewport: VIEWPORT_PC,
+    touch: false,
+  });
+  let rewrites = 0;
+  await page.route('**/src/modules/architecture/PlantUmlGraph.tsx*', async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    const rewritten = body.replace(
+      /const PLANTUML_MEMBER_DETAIL = (['"])full\1/,
+      'const PLANTUML_MEMBER_DETAIL = void 0',
+    );
+    if (rewritten !== body) rewrites += 1;
+    await route.fulfill({ response, body: rewritten });
+  });
+  try {
+    await openArchitectureTab(page, sessionId);
+    await showClassDiagram(page);
+    expect(
+      rewrites,
+      'the control must have rewritten the served renderer; a miss would make the arm vacuous',
+    ).toBeGreaterThan(0);
+
+    await openSettledTextPage(page);
+    const textPuml = await downloadText(page, () => page.locator('[data-architecture-text-download]').click());
+    const reading = readLosslessText(textPuml, activeFixture);
+    console.log(`[architecture-layout] lossless.control=${JSON.stringify({
+      entityCount: reading.entityCount,
+      classCount: reading.classCount,
+      multiMemberEntities: reading.multiMemberEntities,
+      markerLines: reading.markerLines.slice(0, 3),
+      missingMembers: reading.missingMembers.slice(0, 3),
+      violations: reading.violations.length,
+    })}`);
+    expect(
+      reading.markerLines.length,
+      `the default detail must put the truncation row back: ${JSON.stringify(reading.markerLines.slice(0, 3))}`,
+    ).toBeGreaterThan(0);
+    expect(
+      reading.missingMembers.length,
+      `the default detail must drop real member rows: ${JSON.stringify(reading.missingMembers.slice(0, 3))}`,
+    ).toBeGreaterThan(0);
+    expect(reading.violations.length, 'the shared reading must read the defect red').toBeGreaterThan(0);
+    await page.screenshot({ path: test.info().outputPath('lossless-control-text-panel.png') });
   } finally {
     await context.close();
   }

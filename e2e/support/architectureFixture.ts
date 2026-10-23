@@ -55,7 +55,13 @@ export type ArchitectureFixtureVariant =
   | 'quay-oo'
   | 'claudecodeui'
   | 'outer-perimeter'
-  | 'interleaved-members';
+  | 'interleaved-members'
+  /** 41 classes with 7–25 members each: just past the renderer's compact threshold. */
+  | 'lossless-41'
+  /** 150 classes: the `compact` band's upper edge. */
+  | 'lossless-150'
+  /** 600 classes: the layout budget's ceiling, and the largest text fixture. */
+  | 'lossless-600';
 
 /** The scope key the manifest names; the panel and the tests never depend on its value. */
 const SCOPE_KEY = 'scope-src';
@@ -118,6 +124,12 @@ export type ArchitectureFixtureReading = {
   readonly seedIdentifiers: readonly string[];
   /** Which project shape this fixture represents. */
   readonly variant: ArchitectureFixtureVariant;
+  /**
+   * How many member rows each entity carries in the payload. The lossless
+   * criteria compare that number with the rows the text actually contains, so
+   * a truncated document is detectable per entity rather than in aggregate.
+   */
+  readonly memberCountById: Readonly<Record<string, number>>;
   /**
    * The member rows a drawn class must show, with the TRUE kind each row has in
    * the payload (the interleaved fixture only). Keyed by entity id, then by the
@@ -300,6 +312,49 @@ function buildPerimeterEntities(): FixtureEntity[] {
 }
 
 /**
+ * The lossless fixtures: `count` classes carrying 7–25 members each.
+ *
+ * Both numbers are load-bearing. Past 40 entities the renderer's default
+ * `detail` switches to `compact`, which keeps four real rows and writes a
+ * synthetic `… +N more (M members)` row into the drawn model; the member count
+ * cycles across 7–25 so a document that keeps a fixed number of rows cannot
+ * pass. The ids are real three-segment paths so the hierarchy view draws
+ * package frames, and the entities form a dependency chain so none is isolated
+ * (the panel's default filter hides isolated nodes).
+ */
+function buildLosslessEntities(count: number): FixtureEntity[] {
+  return Array.from({ length: count }, (_unused, index) => {
+    const name = `Entity${String(index)}`;
+    const file = `pkg${String(index % 7)}/e${String(index)}.ts`;
+    const memberCount = 7 + (index % 19);
+    return {
+      id: `${file}.${name}`,
+      name,
+      file,
+      type: 'class' as const,
+      isAbstract: false,
+      parents: index === 0
+        ? []
+        : [`pkg${String((index - 1) % 7)}/e${String(index - 1)}.ts.Entity${String(index - 1)}`],
+      members: Array.from({ length: memberCount }, (_member, member) => ({
+        name: `member${String(member)}`,
+        type: 'property',
+        visibility: 'private',
+        fieldType: 'number',
+      })),
+    };
+  });
+}
+
+/** The entity count a lossless variant states. */
+function losslessEntityCount(variant: ArchitectureFixtureVariant): number | null {
+  if (variant === 'lossless-41') return 41;
+  if (variant === 'lossless-150') return 150;
+  if (variant === 'lossless-600') return 600;
+  return null;
+}
+
+/**
  * The interleaved-member fixture: one class whose PAYLOAD members alternate
  * field → method → field → method, inside two packages.
  *
@@ -434,11 +489,14 @@ export function writeArchitectureFixture(
   // adds one more row so its upstream `(N members)` reading differs from the
   // first's. The dedicated variants state their own shapes below.
   const classMembers = variant === 'claudecodeui' ? 6 : 5;
-  const entities = variant === 'outer-perimeter'
-    ? buildPerimeterEntities()
-    : variant === 'interleaved-members'
-      ? buildInterleavedEntities()
-      : buildEntities(families, classMembers);
+  const losslessCount = losslessEntityCount(variant);
+  const entities = losslessCount !== null
+    ? buildLosslessEntities(losslessCount)
+    : variant === 'outer-perimeter'
+      ? buildPerimeterEntities()
+      : variant === 'interleaved-members'
+        ? buildInterleavedEntities()
+        : buildEntities(families, classMembers);
   const srcDir = path.join(workspaceDir, 'src');
   fs.mkdirSync(srcDir, { recursive: true });
 
@@ -459,7 +517,12 @@ export function writeArchitectureFixture(
     buildArchive(entities, classMembers),
   );
 
-  const seedIdentifiers = variant === 'outer-perimeter'
+  const seedIdentifiers = losslessCount !== null
+    // Every entity is named in the session text: a bounded hop expansion from
+    // one seed would not necessarily reach the whole fixture, and the lossless
+    // criteria need all `count` boxes drawn.
+    ? entities.map((entity) => entity.name)
+    : variant === 'outer-perimeter'
     // EVERY entity is a seed: the class graph expands a bounded number of hops
     // from the mentioned names, and a chain seeded only at its head would be
     // drawn three packages deep — the back edges that route around the outside
@@ -475,6 +538,12 @@ export function writeArchitectureFixture(
     entityIds: entities.map((entity) => entity.id),
     seedIdentifiers,
     variant,
+    // The SAME expression `buildArchive` writes, so a criterion can compare the
+    // text's member rows with the payload's without re-deriving the recipe.
+    memberCountById: Object.fromEntries(entities.map((entity) => [
+      entity.id,
+      (entity.members ?? membersFor(entity.type, classMembers)).length,
+    ])),
     ...(variant === 'interleaved-members'
       ? {
           memberKindsById: {

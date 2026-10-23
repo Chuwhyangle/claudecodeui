@@ -143,6 +143,49 @@ import {
  */
 export { markerAnchor } from '@/modules/architecture/graphDom';
 
+/**
+ * The member detail every drawing is rendered with.
+ *
+ * The package's default picks a level from the entity count (`≤40` full,
+ * `≤150` compact, else names). Compact replaces every box's tail with a
+ * synthetic `… +N more (M members)` row and, more importantly, writes that row
+ * into the drawn MODEL — so `renderDetailed(...).model`, which the text page
+ * serializes, was already lossy on any diagram past 40 entities. The text the
+ * reader copies, downloads or sends must carry every member, so the detail is
+ * pinned here instead of left to the entity count. The on-screen row cap is the
+ * semantic-zoom layout's job (`planMemberRows`), independent of this value.
+ *
+ * Consumers: `PlantUmlGraph.tsx` (the render call) and
+ * `tests/plantUmlText.test.ts` (the completeness criteria).
+ */
+export const PLANTUML_MEMBER_DETAIL = 'full' as const;
+
+/**
+ * Call `renderDetailed` with {@link PLANTUML_MEMBER_DETAIL} added to its
+ * options.
+ *
+ * `type PlantUmlRenderDetailed` in `graphDom.ts` models only the structural
+ * subset the renderer needs (`layout`/`view`); the package's own `detail`
+ * option is added here, once, so every drawing — and therefore every drawn
+ * model the text page serializes — is complete. Kept as a named function so a
+ * unit test can assert the option the real renderer receives without mounting
+ * the component.
+ *
+ * Consumers: `PlantUmlGraph.tsx` (the only render call) and
+ * `tests/plantUmlText.test.ts`.
+ */
+export function renderWithMemberDetail(
+  render: PlantUmlRenderDetailed,
+  puml: string,
+  options: Partial<Parameters<PlantUmlRenderDetailed>[1]> = {},
+): ReturnType<PlantUmlRenderDetailed> {
+  // A variable, not a fresh literal: the structural options type deliberately
+  // does not name `detail`, and an object with the extra key is assignable to
+  // it (the package reads the key at runtime).
+  const detailedOptions = { ...options, detail: PLANTUML_MEMBER_DETAIL };
+  return render(puml, detailedOptions as Parameters<PlantUmlRenderDetailed>[1]);
+}
+
 /** The real browser store, or `null` where accessing it throws (private mode). */
 function localReadableStorage(): {
   getItem(key: string): string | null;
@@ -1267,7 +1310,8 @@ export function PlantUmlGraph({
         // runs the same pipeline but hands back the model that was actually
         // drawn, which the text page serializes (see `onDrawnPlantUmlChange`).
         const renderStartedAt = performance.now();
-        const detailed = await renderDetailed(
+        const detailed = await renderWithMemberDetail(
+          renderDetailed,
           // The document the reader copies uses real stereotypes
           // (`class "X" as n0 <<function>>`); the bundled parser needs that
           // token before the alias, so the DRAWING gets the parser-safe
