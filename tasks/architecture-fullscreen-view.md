@@ -1,7 +1,7 @@
 ---
 id: architecture-fullscreen-view
 title: 架构图页内全屏：覆盖层铺满视口，桌面叠加原生全屏，退出不触发聊天页的 Esc
-status: todo
+status: ready
 labels:
   - feature
 parent: null
