@@ -25,11 +25,11 @@ extra:
 
 ## AC
 
-- [ ] 新增 vitest 用例（用例名含 `empty class view offers the file graph`）：渲染一个 `entityTotal=0、fileTotal>0` 的图，断言出现 `data-architecture-empty` 元素，且其中有可点击的「查看文件图」按钮；点击后粒度单选 `File graph` 为 checked。
-- [ ] 新增 vitest 用例：`entityTotal=0` 且 `fileTotal=0` 时不出现切换按钮，只显示说明。
-- [ ] 空态说明列出 `unresolved.files` 的前 5 项，超出部分显示「等 N 个」形式的计数（vitest 断言文本）。
-- [ ] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` 退出码 0（新增键 12 个 locale 齐全）。
-- [ ] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` 退出码 0。
+- [x] 新增 vitest 用例（用例名含 `empty class view offers the file graph`）：渲染一个 `entityTotal=0、fileTotal>0` 的图，断言出现 `data-architecture-empty` 元素，且其中有可点击的「查看文件图」按钮；点击后粒度单选 `File graph` 为 checked。
+- [x] 新增 vitest 用例：`entityTotal=0` 且 `fileTotal=0` 时不出现切换按钮，只显示说明。
+- [x] 空态说明列出 `unresolved.files` 的前 5 项，超出部分显示「等 N 个」形式的计数（vitest 断言文本）。
+- [x] `npx vitest run src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts` 退出码 0（新增键 12 个 locale 齐全）。
+- [x] `npx vitest run src/modules/architecture/tests/architectureTab.test.tsx` 退出码 0。
 
 ## DoD
 
