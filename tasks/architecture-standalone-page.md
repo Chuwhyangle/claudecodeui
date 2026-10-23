@@ -1,7 +1,7 @@
 ---
 id: architecture-standalone-page
 title: 架构图独立页：新标签页打开整屏架构图，筛选与置顶跨标签同步，可从独立页发回会话
-status: ready
+status: done
 labels:
   - feature
 parent: null
