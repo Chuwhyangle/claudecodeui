@@ -244,14 +244,16 @@ describe('composer wiring', () => {
 
     const textarea = view.container.querySelector('textarea');
     assert.ok(textarea, 'the composer must render a textarea');
-    assert.equal(textareaRef.current, textarea);
+    // Compare booleans, not the elements: a failing `assert.equal` on two DOM
+    // nodes serialises them, and the message alone can exhaust the worker.
+    assert.equal(textareaRef.current === textarea, true, 'the composer binds the ref to its own textarea');
 
     // Start from a blurred box so focus can only come from the press below.
     (document.activeElement as HTMLElement | null)?.blur();
-    assert.notEqual(document.activeElement, textarea);
+    assert.equal(document.activeElement !== textarea, true, 'the box starts blurred');
 
     fireEvent.mouseDown(view.getByRole('listbox'));
 
-    assert.equal(document.activeElement, textarea);
+    assert.equal(document.activeElement === textarea, true, 'the press must leave focus in the textarea');
   });
 });
