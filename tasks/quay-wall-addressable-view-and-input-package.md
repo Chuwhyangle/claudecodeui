@@ -35,3 +35,12 @@ extra: {}
 
 - 一块真实 QuayPanel tile 经 quay:// 地址被输入包按引用带入语音上下文，且下游读回真实任务数据。
 - 如实写明与 C2 ContextPack 的兼容边界（文本行降级路径），以及 quay:// 端点缺失时的行为。
+
+## Touches
+
+- src/shared/types.ts
+- src/modules/quay/QuayPanel.tsx
+- src/modules/chat/utils/voice/voiceContextPack.ts
+- src/modules/quay/tests/QuayPanel.test.tsx
+- src/modules/chat/utils/tests/voiceContextPack.test.ts
+- tasks/quay-wall-addressable-view-and-input-package.md
