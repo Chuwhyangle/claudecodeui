@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "已选元素",
-      "pill": "已选 {{count}} 项 ▴",
+      "pill": "已选 {{count}} 项 · 发送到聊天 ▴",
       "expand": "展开选择托盘",
       "collapse": "收起选择托盘",
       "count": "已选 {{count}} 项",
@@ -94,7 +94,9 @@
       "relationCall": "调用",
       "relationComposition": "组合",
       "relationAggregation": "聚合",
-      "relationOther": "关系"
+      "relationOther": "关系",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "图表缩放",
@@ -343,7 +345,6 @@
       "syntaxOk": "语法通过",
       "syntaxError": "第 {{line}} 行：{{message}}",
       "copy": "复制",
-      "copyAsContext": "复制为会话上下文",
       "copied": "PlantUML 已复制到剪贴板",
       "contextCopied": "PlantUML 及其会话头部已复制到剪贴板",
       "download": "下载 .puml",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "手动复制 PlantUML",
       "copyFallbackHint": "剪贴板不可用，请选中并复制下方文本。",
       "close": "关闭",
-      "bridgeFallback": "回退：桥接层文本（无法获取实际绘制的模型）"
+      "bridgeFallback": "回退：桥接层文本（无法获取实际绘制的模型）",
+      "copyForChat": "复制用于聊天",
+      "putInChat": "放入聊天输入框"
     },
     "curation": {
       "heading": "调整",
@@ -392,7 +395,9 @@
       "restoreAll": "全部还原",
       "undo": "撤销",
       "solo": "只显示它自己",
-      "soloClear": "显示整张图"
+      "soloClear": "显示整张图",
+      "putInChat": "放入聊天输入框",
+      "putCountInChat": "将 {{count}} 项放入聊天输入框"
     }
   },
   "status": {
@@ -678,6 +683,32 @@
     "pinTarget": "钉选为目标会话",
     "pinned": "已钉选",
     "pinUnavailable": "fleet 读口不可用，无法钉选",
-    "pinRefused": "钉选失败：{{reason}}"
+    "pinRefused": "钉选失败：{{reason}}",
+    "remoteTitle": "手机遥控器",
+    "remoteHint": "用手机操控这块舞台",
+    "remoteScanHint": "用手机扫码操控这块舞台",
+    "remoteOpen": "打开遥控器",
+    "remoteConnected": "已连接",
+    "remoteDisconnected": "未连接",
+    "remoteDirectionPad": "方向键",
+    "remoteMoveUp": "焦点上移",
+    "remoteMoveDown": "焦点下移",
+    "remoteMoveLeft": "焦点左移",
+    "remoteMoveRight": "焦点右移",
+    "remoteZoomIn": "放大",
+    "remoteZoomOut": "缩小",
+    "remoteBack": "返回",
+    "remotePin": "钉到托盘",
+    "remoteUnpin": "从托盘取消钉选",
+    "remoteConfirm": "确认",
+    "remoteCancel": "取消",
+    "remoteHoldToTalk": "按住说话",
+    "remoteListening": "正在听…",
+    "remoteTranscribing": "正在转写…",
+    "remoteInputPlaceholder": "输入一句话，或按住按钮说话",
+    "remoteTypeHint": "Enter 提交 · 按住按钮口述",
+    "remoteSubmit": "发送",
+    "remoteWakeLockFailed": "锁屏会中断收音",
+    "remoteInsecureContext": "麦克风需要 HTTPS（或 localhost）。打字和方向键仍然可用。"
   }
 }

@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "選択",
-      "pill": "{{count}} 件選択 ▴",
+      "pill": "{{count}} 件選択 · チャットに送る ▴",
       "expand": "選択トレイを展開",
       "collapse": "選択トレイを折りたたむ",
       "count": "{{count}} 件選択",
@@ -94,7 +94,9 @@
       "relationCall": "呼び出し",
       "relationComposition": "コンポジション",
       "relationAggregation": "集約",
-      "relationOther": "関係"
+      "relationOther": "関係",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "図のズーム",
@@ -343,7 +345,6 @@
       "syntaxOk": "構文 OK",
       "syntaxError": "{{line}} 行目: {{message}}",
       "copy": "コピー",
-      "copyAsContext": "セッションコンテキストとしてコピー",
       "copied": "PlantUML をクリップボードにコピーしました",
       "contextCopied": "セッションヘッダー付きの PlantUML をクリップボードにコピーしました",
       "download": ".puml をダウンロード",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "PlantUML を手動でコピー",
       "copyFallbackHint": "クリップボードを利用できません。下のテキストを選択してコピーしてください。",
       "close": "閉じる",
-      "bridgeFallback": "フォールバック: ブリッジのテキスト（描画されたモデルを利用できません）"
+      "bridgeFallback": "フォールバック: ブリッジのテキスト（描画されたモデルを利用できません）",
+      "copyForChat": "チャット用にコピー",
+      "putInChat": "チャット入力欄に入れる"
     },
     "curation": {
       "heading": "調整",
@@ -392,7 +395,9 @@
       "restoreAll": "すべて戻す",
       "undo": "元に戻す",
       "solo": "これだけを表示",
-      "soloClear": "グラフ全体を表示"
+      "soloClear": "グラフ全体を表示",
+      "putInChat": "チャット入力欄に入れる",
+      "putCountInChat": "{{count}} 件をチャット入力欄に入れる"
     }
   },
   "status": {
@@ -678,6 +683,32 @@
     "pinTarget": "送信先の会話として固定",
     "pinned": "固定済み",
     "pinUnavailable": "fleet レジストリを読めないため固定できません",
-    "pinRefused": "固定に失敗しました：{{reason}}"
+    "pinRefused": "固定に失敗しました：{{reason}}",
+    "remoteTitle": "スマホリモコン",
+    "remoteHint": "スマホからこのステージを操作",
+    "remoteScanHint": "スマホでスキャンしてこのステージを操作",
+    "remoteOpen": "リモコンを開く",
+    "remoteConnected": "接続済み",
+    "remoteDisconnected": "切断",
+    "remoteDirectionPad": "方向キー",
+    "remoteMoveUp": "フォーカスを上へ",
+    "remoteMoveDown": "フォーカスを下へ",
+    "remoteMoveLeft": "フォーカスを左へ",
+    "remoteMoveRight": "フォーカスを右へ",
+    "remoteZoomIn": "拡大",
+    "remoteZoomOut": "縮小",
+    "remoteBack": "戻る",
+    "remotePin": "トレイに固定",
+    "remoteUnpin": "トレイから外す",
+    "remoteConfirm": "確認",
+    "remoteCancel": "キャンセル",
+    "remoteHoldToTalk": "押し続けて話す",
+    "remoteListening": "聞き取り中…",
+    "remoteTranscribing": "文字起こし中…",
+    "remoteInputPlaceholder": "文を入力するか、ボタンを押し続けて話す",
+    "remoteTypeHint": "Enter で送信 · 押し続けて音声入力",
+    "remoteSubmit": "送信",
+    "remoteWakeLockFailed": "画面ロックは録音を中断します",
+    "remoteInsecureContext": "マイクには HTTPS（または localhost）が必要です。入力と方向キーは引き続き使えます。"
   }
 }

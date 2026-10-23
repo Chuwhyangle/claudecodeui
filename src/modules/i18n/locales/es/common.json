@@ -57,7 +57,7 @@
     },
     "tray": {
       "region": "Selección",
-      "pill": "{{count}} seleccionados ▴",
+      "pill": "{{count}} seleccionados · Enviar al chat ▴",
       "expand": "Expandir la bandeja de selección",
       "collapse": "Contraer la bandeja de selección",
       "count": "{{count}} seleccionados",
@@ -94,7 +94,9 @@
       "relationCall": "llamada",
       "relationComposition": "composición",
       "relationAggregation": "agregación",
-      "relationOther": "relación"
+      "relationOther": "relación",
+      "relatedInLine": "{{name}} ← {{other}} ({{type}})",
+      "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "plantuml": {
       "zoomGroup": "Zoom del diagrama",
@@ -343,7 +345,6 @@
       "syntaxOk": "Sintaxis correcta",
       "syntaxError": "Línea {{line}}: {{message}}",
       "copy": "Copiar",
-      "copyAsContext": "Copiar como contexto de sesión",
       "copied": "PlantUML copiado al portapapeles",
       "contextCopied": "PlantUML y su cabecera de sesión copiados al portapapeles",
       "download": "Descargar .puml",
@@ -359,7 +360,9 @@
       "copyFallbackTitle": "Copiar el PlantUML manualmente",
       "copyFallbackHint": "El portapapeles no está disponible. Selecciona y copia el texto de abajo.",
       "close": "Cerrar",
-      "bridgeFallback": "Reserva: texto del puente (el modelo dibujado no está disponible)"
+      "bridgeFallback": "Reserva: texto del puente (el modelo dibujado no está disponible)",
+      "copyForChat": "Copiar para el chat",
+      "putInChat": "Poner en la entrada del chat"
     },
     "curation": {
       "heading": "Ajustar",
@@ -392,7 +395,9 @@
       "restoreAll": "Restaurar todo",
       "undo": "Deshacer",
       "solo": "Mostrar solo esto",
-      "soloClear": "Mostrar todo el gráfico"
+      "soloClear": "Mostrar todo el gráfico",
+      "putInChat": "Poner en la entrada del chat",
+      "putCountInChat": "Poner {{count}} en la entrada del chat"
     }
   },
   "status": {
@@ -678,6 +683,32 @@
     "pinTarget": "Fijar como conversación destino",
     "pinned": "Fijada",
     "pinUnavailable": "Registro de flota no disponible: no se puede fijar",
-    "pinRefused": "No se pudo fijar: {{reason}}"
+    "pinRefused": "No se pudo fijar: {{reason}}",
+    "remoteTitle": "Mando del teléfono",
+    "remoteHint": "Controla este escenario desde el teléfono",
+    "remoteScanHint": "Escanea con el teléfono para controlar este escenario",
+    "remoteOpen": "Abrir el mando",
+    "remoteConnected": "Conectado",
+    "remoteDisconnected": "Desconectado",
+    "remoteDirectionPad": "Cruzeta de dirección",
+    "remoteMoveUp": "Mover el foco hacia arriba",
+    "remoteMoveDown": "Mover el foco hacia abajo",
+    "remoteMoveLeft": "Mover el foco a la izquierda",
+    "remoteMoveRight": "Mover el foco a la derecha",
+    "remoteZoomIn": "Acercar",
+    "remoteZoomOut": "Alejar",
+    "remoteBack": "Atrás",
+    "remotePin": "Fijar en la bandeja",
+    "remoteUnpin": "Quitar de la bandeja",
+    "remoteConfirm": "Confirmar",
+    "remoteCancel": "Cancelar",
+    "remoteHoldToTalk": "Mantén pulsado para hablar",
+    "remoteListening": "Escuchando…",
+    "remoteTranscribing": "Transcribiendo…",
+    "remoteInputPlaceholder": "Escribe una frase o mantén pulsado para hablar",
+    "remoteTypeHint": "Enter envía · mantén pulsado para dictar",
+    "remoteSubmit": "Enviar",
+    "remoteWakeLockFailed": "El bloqueo de pantalla interrumpirá la grabación",
+    "remoteInsecureContext": "El micrófono requiere HTTPS (o localhost). Escribir y la cruceta siguen funcionando."
   }
 }

@@ -13,6 +13,7 @@ import {
   subscribeToLocateRequests,
   type ChatMessageLocateRequest,
 } from '@/shared/chatMessageLocator';
+import { readDraftText, resetChatDrafts } from '@/shared/chatDrafts';
 import type * as SharedApiModule from '@/shared/api';
 
 /**
@@ -216,6 +217,7 @@ beforeEach(() => {
   // Layer + dock storage decide the starting chrome; a stale value would make a
   // "default is closed" case vacuous.
   window.localStorage.clear();
+  resetChatDrafts();
   consumePendingLocateRequest();
   stubMatchMedia(() => false);
   Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1440 });
@@ -740,4 +742,110 @@ test('each session hit carries its type, and a file-only hit says it is not the 
   assert.match(caveat.textContent ?? '', /mentioned the file, not the name/);
   // The excerpt the server sent starts at a word boundary and is marked as cut.
   assert.match(toolRow.textContent ?? '', /…modules\/alpha\/A\.ts/);
+});
+
+/* ── the "send the selection to the chat" entry points ─────────────────────── */
+
+/** The pill's count, readable while the tray is collapsed. */
+function selectedCount(): number {
+  const root = document.querySelector('[data-architecture-tray-root]');
+  return Number(root?.getAttribute('data-architecture-tray-selected') ?? 0);
+}
+
+test('the inspector Adjust row carries "Put in chat input", and it sends exactly what the tray sends', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" projectName="claudecodeui" />);
+  const host = await waitForDiagram();
+  const panel = await openInspectorFor(host, ALPHA);
+
+  const button = panel.querySelector('[data-architecture-inspector-put-in-chat]');
+  assert.ok(button instanceof HTMLButtonElement, 'the entity inspector offers the tray action');
+  assert.match(button.textContent ?? '', /Put in chat input/);
+
+  // Path 1: the inspector button.
+  fireEvent.click(button);
+  await waitFor(() => assert.ok(readDraftText('session-1').startsWith('About these elements')));
+  const fromInspector = readDraftText('session-1');
+  assert.match(fromInspector, /project claudecodeui/, 'the inspector path names the project, not the id');
+  assert.match(fromInspector, /- class `Alpha` \(src\/modules\/alpha\/A\.ts\)/);
+
+  // Path 2: the tray's primary button, on the same selection. The two entry
+  // points share the panel's compose handler, so the messages are identical.
+  resetChatDrafts();
+  fireEvent.click(document.querySelector('[data-architecture-tray-pill]') as Element);
+  fireEvent.click(document.querySelector('[data-architecture-tray-compose]') as Element);
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  assert.equal(readDraftText('session-1'), fromInspector, 'one handler, one message');
+});
+
+test('a multi-selection offers "Put N in chat input" under the count, and sends the whole set', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" projectName="claudecodeui" />);
+  const host = await waitForDiagram();
+
+  fireEvent.click(host.querySelector(`[data-entity-id="${ALPHA}"]`) as Element);
+  fireEvent.click(host.querySelector(`[data-entity-id="${BETA}"]`) as Element, { shiftKey: true });
+  await waitFor(() => assert.equal(selectedCount(), 2));
+
+  const button = await waitFor(() => {
+    const element = document.querySelector('[data-architecture-inspector-put-count-in-chat="2"]');
+    assert.ok(element instanceof HTMLButtonElement, 'the multi-select summary offers the action with a count');
+    return element;
+  });
+  assert.match(button.textContent ?? '', /Put 2 in chat input/);
+
+  fireEvent.click(button);
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  const draft = readDraftText('session-1');
+  assert.match(draft, /- class `Alpha`/);
+  assert.match(draft, /- interface `Beta`/);
+  assert.match(draft, /Alpha ← Beta \(dependency\)/, 'the two members’ relation is stated');
+});
+
+test('the context menu offers the action; a right-click outside the selection makes that entity the whole selection', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" projectName="claudecodeui" />);
+  const host = await waitForDiagram();
+  // The current selection is Beta; Alpha is right-clicked and is NOT a member.
+  await openInspectorFor(host, BETA);
+  await waitFor(() => assert.equal(selectedCount(), 1));
+
+  const alphaElement = host.querySelector(`[data-entity-id="${ALPHA}"]`) as Element;
+  fireEvent.contextMenu(alphaElement, { clientX: 30, clientY: 30 });
+
+  const item = await waitFor(() => {
+    const element = document.querySelector(`[data-architecture-context-put-in-chat="${ALPHA}"]`);
+    assert.ok(element !== null, 'the entity menu carries the tray action');
+    return element;
+  });
+  assert.match(item.textContent ?? '', /Put in chat input/);
+  fireEvent.click(item);
+
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  const draft = readDraftText('session-1');
+  assert.match(draft, /- class `Alpha`/, 'the right-clicked entity is the message');
+  assert.doesNotMatch(draft, /`Beta`/, 'and the previous selection is not smuggled in');
+  await waitFor(() => assert.equal(selectedCount(), 1, 'the drawing now selects the right-clicked entity alone'));
+  assert.ok(
+    !document.querySelector('[data-architecture-context-menu]'),
+    'the menu closes after the action',
+  );
+});
+
+test('a right-click on an entity that IS selected sends the whole selection', async () => {
+  render(<ArchitecturePanel projectId="project-1" sessionId="session-1" projectName="claudecodeui" />);
+  const host = await waitForDiagram();
+  fireEvent.click(host.querySelector(`[data-entity-id="${ALPHA}"]`) as Element);
+  fireEvent.click(host.querySelector(`[data-entity-id="${BETA}"]`) as Element, { shiftKey: true });
+  await waitFor(() => assert.equal(selectedCount(), 2));
+
+  fireEvent.contextMenu(host.querySelector(`[data-entity-id="${BETA}"]`) as Element, { clientX: 40, clientY: 40 });
+  const item = await waitFor(() => {
+    const element = document.querySelector(`[data-architecture-context-put-in-chat="${BETA}"]`);
+    assert.ok(element !== null);
+    return element;
+  });
+  fireEvent.click(item);
+
+  await waitFor(() => assert.ok(readDraftText('session-1') !== ''));
+  const draft = readDraftText('session-1');
+  assert.match(draft, /- class `Alpha`/);
+  assert.match(draft, /- interface `Beta`/, 'the whole set is sent, not just the right-clicked member');
 });
