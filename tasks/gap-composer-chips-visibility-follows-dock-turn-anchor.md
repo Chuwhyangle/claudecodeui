@@ -1,7 +1,7 @@
 ---
 id: gap-composer-chips-visibility-follows-dock-turn-anchor
 title: 输入框建议 chip 的可见条件与状态条同源：坞判定回合进行中（含服务端确认的 turn anchor）时不显示 chip，键盘也不接管
-status: ready
+status: done
 labels:
   - gap
   - defect
