@@ -45,6 +45,13 @@ depends_on:
 
 文案键按仓库惯例覆盖全部 12 个 locale，并照 `src/modules/project-workspace/tests/i18nQuayTabCompleteness.test.ts` 的样式加驾驶舱文案完整性测试（只在 1/2 任务里加一次，2/2 任务扩展同一测试）。
 
+
+### fleet 接口会话 CLI 形状（fleet 任务 `fleet-registry-per-project-interface-session` 定稿，2026-10-23）
+
+- 读：`quay-fleet registry interface-session get <project> --json` ⇒ `{ok:true, project, interfaceSessionId}`；未钉选时 `interfaceSessionId:null`；未知项目 ⇒ `{ok:false, reason:"unknown-project"}`，exit 2。
+- 写：`registry interface-session set <project> <id> --json`（幂等）；`registry interface-session clear <project> --json`（幂等）。`set` 一个已在该项目 devSessionIds 里的会话会被拒，reason 为 `interface-session-is-dev-session`，驾驶舱要把这个原因如实显示给用户。
+- fleet 未落地或 CLI 不可用 ⇒ 按方案第 3 条回落。读函数只调 `get`，写函数只调 `set`/`clear`。
+
 ## Touches
 
 - src/modules/cockpit/CockpitPage.tsx
