@@ -76,11 +76,3 @@ extra:
 - `npx vitest run …/i18nArchitectureTabCompleteness.test.ts` → 6 passed；`npm run typecheck`、`npm run build` 均通过
 
 AC4 的「图宽 ≥ 画布宽 95%」在 e2e 夹具上几何不可满足，已如实记为放宽并说明了钉子所在：夹具的整图自然尺寸只有 256×384（fit 封顶 1、不放大），explosion 图 2101.5×4564 是竖构图、以高度为绑定轴（620px 画布下 fit=0.121 vs 理论 0.134，右下 44px 缩略图按钮只能靠让出约 10% 高度清除），故该腿断言「绑定轴 ≥ 85% + 图区 ≥ 70% + 读数 ≤ 44 + 簇 ≤ 52 + 提示行存在」；AC 的 95% 精确值由 `svgViewport.test.tsx` 在任务指定的真实手机几何（366×505、~1.05:1、44×44 按钮，平移清除、fit = 理论值 100%）上钉死。DoD 要求的真机会话截图（390×844 打开实盘会话）本会话没有可驱动的真机，需人工补拍。
-
-## Blocker
-
-**2026-10-22T23:50:23.420Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：AC 未全勾（checked 0/6，剩余未勾 6）——续做只需验证并勾选 AC
-- run_id：wk-prod-anchor
-- session_id：e1157bb9-bb5d-4258-879f-347f3daeb1c7
