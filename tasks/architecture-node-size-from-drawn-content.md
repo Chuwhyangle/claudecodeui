@@ -1,7 +1,7 @@
 ---
 id: architecture-node-size-from-drawn-content
 title: 架构图类框尺寸只按画出来的内容定：成员裁剪在布局之前，导出与 Inspector 保持完整
-status: todo
+status: ready
 labels:
   - feature
 parent: null
