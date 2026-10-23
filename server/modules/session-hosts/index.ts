@@ -124,3 +124,24 @@ export { LIFECYCLE_MODE_ERROR_CODES } from '@/shared/types.js';
 // fact two close reasons carry, needed by any caller that injects a policy or
 // reads why an `exited` host died.
 export type { HostCloseDetail, LifecyclePolicy } from '@/shared/types.js';
+// createResidentRestoreService / resolveResidentRestoreEnabled: the start-up
+// restore pass and the switch that gates it. Consumed by `server/index.ts`,
+// which asks the resolver whether to schedule the pass and hands the factory the
+// two seams only it can supply (the session store's candidate reader and the
+// providers layer's resident launch). Exported here rather than reached into by
+// path because the composition root imports this module through its barrel.
+export {
+  createResidentRestoreService,
+  resolveResidentRestoreEnabled,
+} from './resident-restore.service.js';
+// ResidentRestoreOutcome / ResidentRestoreDeps / RestorableResidentSession: the
+// pass's answer, its inputs, and the candidate row it reads. Exported as types
+// for the same consumer: the composition root types its mapping from stored
+// session rows onto the candidate, and the restore criterion drives the pass
+// over fakes it owns.
+export type {
+  ResidentRestoreDeps,
+  ResidentRestoreOutcome,
+  ResidentRestoreSkipReason,
+  RestorableResidentSession,
+} from './resident-restore.service.js';

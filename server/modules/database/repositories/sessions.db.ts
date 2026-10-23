@@ -104,6 +104,37 @@ type RecentSessionsPage = {
 };
 
 /**
+ * One session a start-up restore pass may bring back, as the store reports it.
+ *
+ * The four facts the pass decides on and nothing else: which application
+ * session, which provider would launch it, the provider's own id for the
+ * conversation (never NULL — the query excludes rows without one), and the last
+ * activity instant as epoch milliseconds. Left unexported because the shape is
+ * the contract: `server/index.ts` maps the value structurally onto the
+ * session-hosts module's `RestorableResidentSession`, and a named export would
+ * only invite a second spelling of those four fields.
+ */
+type RestorableResidentSessionRow = {
+  appSessionId: string;
+  provider: string;
+  providerSessionId: string;
+  lastActiveAt: number;
+};
+
+/**
+ * Formats an instant as SQLite's own UTC timestamp form, to the second.
+ *
+ * `CURRENT_TIMESTAMP` writes `YYYY-MM-DD HH:MM:SS`, and every date function in
+ * the restore query reads a value in that form as UTC; an ISO string with a `T`
+ * and a `Z` would parse too on modern SQLite but only because of a lenient
+ * accepted-format list, so the cutoff is written in the same shape the column
+ * already holds rather than in one the comparison merely tolerates.
+ */
+function toSqliteUtcTimestamp(epochMs: number): string {
+  return new Date(epochMs).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
  * Name-based visibility rule for a project's session list. `isHidden` is the
  * compiled matcher from the projects module; sessions listed in
  * `keepSessionIds` (running / attention / selected) are never excluded.
@@ -1050,6 +1081,60 @@ export const sessionsDb = {
       .all() as SessionRow[];
 
     return normalizeSessionRows(rows);
+  },
+
+  /**
+   * The stored sessions a start-up restore pass may bring back, most recent first.
+   *
+   * A session is restorable when it is visible (`isArchived = 0`), was stored as
+   * resident (`lifecycle_mode = 'resident'` — the only persisted statement that
+   * the session is meant to sit between turns), carries the provider's own id
+   * for the conversation (a process cannot be launched without one), and last
+   * carried activity inside the caller's window. The window and the ceiling are
+   * pushed down rather than filtered by the caller so one ordered query answers
+   * the whole question; `lastActiveAt` travels back as epoch milliseconds, which
+   * the SQLite `julianday` arithmetic makes a plain number rather than a
+   * timestamp format the caller would have to parse.
+   *
+   * Ordering is `getRecentSessionsPage`'s own — `COALESCE(updated_at,
+   * created_at)` descending, `session_id` descending as the tiebreak — because
+   * `updated_at` here is the last activity the transcript re-derivation
+   * produced, which is exactly "how recently was this session alive". Archived
+   * project rows are not excluded the way the page query excludes them: the
+   * mode is a property of the session, and a resident session whose project was
+   * archived is still a process the user asked to keep.
+   *
+   * Consumed by `server/index.ts`'s restore wiring and by the session-hosts
+   * module's restore criterion, which drives it on a temporary database.
+   */
+  listRestorableResidentSessions(options: { maxAgeMs: number; limit: number }): RestorableResidentSessionRow[] {
+    const db = getConnection();
+    const rows = db
+      .prepare(
+        `SELECT session_id, provider, provider_session_id,
+                CAST((julianday(COALESCE(updated_at, created_at)) - 2440587.5) * 86400000.0 AS INTEGER) AS last_active_ms
+         FROM sessions
+         WHERE isArchived = 0
+           AND lifecycle_mode = 'resident'
+           AND provider_session_id IS NOT NULL
+           AND julianday(COALESCE(updated_at, created_at)) >= julianday(?)
+         ORDER BY julianday(COALESCE(updated_at, created_at)) DESC,
+                  session_id DESC
+         LIMIT ?`
+      )
+      .all(toSqliteUtcTimestamp(Date.now() - options.maxAgeMs), options.limit) as {
+        session_id: string;
+        provider: string;
+        provider_session_id: string;
+        last_active_ms: number;
+      }[];
+
+    return rows.map((row) => ({
+      appSessionId: row.session_id,
+      provider: row.provider,
+      providerSessionId: row.provider_session_id,
+      lastActiveAt: Number(row.last_active_ms),
+    }));
   },
 
   /**
