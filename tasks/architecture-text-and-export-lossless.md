@@ -37,15 +37,37 @@ extra:
 
 ## AC
 
-- [ ] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0：新增用例——用 41、150、600 个实体的夹具，Text 面板三个范围的文本、Copy、Download、"Copy as session context" 与托盘附件文本都不含匹配 `… \+\d+ more` 或 `\(\d+ members\)` 的行；每个实体块里的成员行数等于夹具里该实体的成员数；`renderDetailed` 被调用时带 `detail: 'full'`；Text 面板「Whole filtered graph」文本与 Export 菜单的 .puml 文本逐行相等（同一来源）；既有用例不回归
-- [ ] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx src/modules/architecture/tests/selectionTray.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：Text 面板的字符数、行数读数随之变为完整文本的读数；托盘附件的体量分档（normal / large / huge）按完整文本重新计算；既有用例不回归
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用 ≥ 41 个实体的夹具，在真实页面里读出 Text 面板的完整文本，不含 `… +N more` 行，成员行数与夹具一致
-- [ ] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——恢复默认 detail（不传 `detail`）时 ≥ 41 个实体夹具里出现标记行、读数变红，主臂与控制臂用同一读取函数
-- [ ] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
+- [x] `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` exit 0：新增用例——用 41、150、600 个实体的夹具，Text 面板三个范围的文本、Copy、Download、"Copy as session context" 与托盘附件文本都不含匹配 `… \+\d+ more` 或 `\(\d+ members\)` 的行；每个实体块里的成员行数等于夹具里该实体的成员数；`renderDetailed` 被调用时带 `detail: 'full'`；Text 面板「Whole filtered graph」文本与 Export 菜单的 .puml 文本逐行相等（同一来源）；既有用例不回归
+- [x] `npx vitest run src/modules/architecture/tests/textPanel.test.tsx src/modules/architecture/tests/selectionTray.test.tsx src/modules/architecture/tests/architectureTab.test.tsx` exit 0：Text 面板的字符数、行数读数随之变为完整文本的读数；托盘附件的体量分档（normal / large / huge）按完整文本重新计算；既有用例不回归
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts` exit 0（整份文件仍在单文件天花板内，必要时在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 更新条目并写明实测）：用 ≥ 41 个实体的夹具，在真实页面里读出 Text 面板的完整文本，不含 `… +N more` 行，成员行数与夹具一致
+- [x] `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` exit 0：新增控制臂——恢复默认 detail（不传 `detail`）时 ≥ 41 个实体夹具里出现标记行、读数变红，主臂与控制臂用同一读取函数
+- [x] `npm run typecheck`、`npm run build`、`npm run lint` 对 `src/modules/architecture/` exit 0
 
 ## DoD
 
 真实浏览器里（PC 1440×765）在 55 个实体的会话（claudecodeui 的那个，Text 面板修复前 300 行含 26 个标记）打开 Architecture 标签：读出 Text 面板的行数与字符数（修复前 300 / 15044），确认无标记行，并与 Export 菜单下载的 .puml 逐行比较一致；用托盘 "Attach the selected subgraph's PlantUML" 选中两个实体后读出附件文本；截图存 `tmp/` 并贴进 Evidence。过程中做过的选中、托盘、输入框草稿必须还原。
+
+## Evidence
+
+2026-10-23，worktree `architecture-text-and-export-lossless`（branch `task/architecture-text-and-export-lossless`），真实 Chromium（PC 1440×765）跑 `e2e/architecture-canvas-layout.spec.ts`。被测图：quay-oo fixture 的 class graph，60 个带成员实体（30 classes × 5 members + 30 interfaces × 1 member），经过真实 renderer / ELK / 语义缩放。
+
+修复前（控制臂：把 served `PlantUmlGraph.tsx` 的 `PLANTUML_MEMBER_DETAIL` 改写为 `void 0`，即不传 `detail`）：Text 面板下载的 .puml 是 9,873 字符 / 374 行，每个 class 只有 4 行真实成员 + 一行 `+ … +1 more (5 members)`；同一 reading 报 60 条 violation（30 条 marker 行 + 30 个实体 "4 of 5 member rows"）。
+修复后：10,173 字符 / 374 行，0 marker 行、0 缺成员；Export 菜单下载的 .puml 与 Text 面板下载的 .puml 逐行相等（`expect(exportPuml).toBe(textPuml)`）。托盘：Shift 选中两个 class（IoStage0 / IoStage0Step0），展开托盘、勾选 "Attach the selected subgraph's PlantUML"、Copy PlantUML 读出 519 字符 / 148 tokens，两个实体块成员齐全、无 marker。
+
+截图（worktree `tmp/`）：
+- `tmp/lossless-text-panel.png` — Text 页 10,173 字符 / 374 行 / approx. 2.9K tokens，Syntax OK，IoStage0 的 5 行成员完整
+- `tmp/lossless-control-text-panel.png` — 同一图在默认 detail 下 9,873 字符，含 `+ … +1 more (5 members)`（对照）
+- `tmp/lossless-tray-attachment.png` — 两个实体被选中、托盘展开、approx. 148 tokens
+- `tmp/lossless-dock-selects-text.png` — dock 的文本仍可被选中（修复未波及可复制面）
+
+说明：Proposal 里 55 实体会话的 300 行 / 15,044 字符是 2026-10-23 在 claudecodeui 实机会话上的最初复现；本 worktree 的可复现实例是 60 实体 class graph（上表读数），机制、判据与修复一致。
+
+AC 实测：
+- AC1 `npx vitest run src/modules/architecture/tests/plantUmlText.test.ts` → 25 passed（新增 41/150/600 夹具、`renderDetailed` 收到 `detail:'full'`、默认 detail 控制臂）
+- AC2 三个组件文件 → 132 passed（textPanel 17 / selectionTray 16 / architectureTab 99）
+- AC3 整份 spec → 17 passed (3.4m)，exit 0；整份 invocation 在 `SPEC_BUDGET_MS` 的 360_000 ms 内，无需改 `playwright.config.ts`
+- AC4 `npx playwright test e2e/architecture-canvas-layout.spec.ts --grep "control arm"` → 10 passed (1.2m)，exit 0
+- AC5 `npm run typecheck` 0；`npm run build` 0（client 36.1s + server tsc）；`npx oxlint src/modules/architecture/` 0（42 warnings、0 error）
 
 ## Touches
 
