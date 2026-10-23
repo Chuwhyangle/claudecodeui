@@ -68,3 +68,11 @@ fleet 读口是 `quay-fleet` CLI 的只读子命令（`../quay-fleet/bin/quay-fl
 - server/modules/quay/quay-uri-resolve.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
 - tasks/quay-wall-uri-dereference-with-snapshot-fallback.md
+
+## Blocker
+
+**2026-10-23T03:44:10.153Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - src/modules/architecture/tests/architectureTab.test.tsx: AssertionError [ERR_ASSERTION]: a private field row keeps its symbol [baseline A/B: HARD RED (changed-assertion) — the task's red set is NOT a subset of the develop baseline red set: added=server/shared/tests/quay-test-script.test.ts,server/shared/tests/quay-test-script.test.ts changed=src/modules/architecture/tests/architectureTab.test.tsx,src/modules/architecture/tests/semanticZoomRead.test.ts]
+- run_id：wk-prod-anchor
+- session_id：fb0254c4-7083-424b-a84c-3388cde9ab8d
