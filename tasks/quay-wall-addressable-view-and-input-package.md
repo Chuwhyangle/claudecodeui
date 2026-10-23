@@ -1,7 +1,7 @@
 ---
 id: quay-wall-addressable-view-and-input-package
 title: 墙：视图契约 + quay:// 地址工具 + 引用式输入包 + 确定性指涉解析（零 fleet 依赖，A/B 片）
-status: ready
+status: done
 labels:
   - wall
   - contract
