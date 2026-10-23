@@ -53,7 +53,9 @@ depends_on:
 
 ### Touches 补充（实现时发现）
 
+- `server/modules/quay/quay.module.ts`：生产组合根，把 registry join 注入 `createQuayService`。
 - `server/shared/types.ts`：后端镜像的 `QuaySnapshot` 也要带 `fleetProjectId`（与 `src/shared/types.ts` 成对声明；AC5 的后端 typecheck 需要它）。
+- `src/modules/cockpit/cockpitIntent.ts` / `cockpitRouting.ts`：方案 5——口语句里的项目名与 URI 项目段改用同一个 registry id。
 - `src/modules/ui-scenario/tests/scenarioSurface.test.ts`：场景面的发布 gate 依赖 `fleetProjectId`，其逐字夹具随新的 URI 项目段更新。
 
 ## Touches
@@ -62,6 +64,7 @@ depends_on:
 - server/modules/quay/quay.routes.ts
 - server/modules/quay/quay-fleet-project-id.ts
 - server/modules/quay/quay-uri-resolve.ts
+- server/modules/quay/quay.module.ts
 - server/modules/quay/tests/quay-fleet-project-id.test.ts
 - server/modules/quay/tests/quay-uri-resolve.test.ts
 - server/shared/types.ts
@@ -69,6 +72,8 @@ depends_on:
 - src/modules/quay/hooks/useQuayStatus.ts
 - src/modules/quay/tests/QuayPanel.test.tsx
 - src/modules/cockpit/cockpitView.ts
+- src/modules/cockpit/cockpitIntent.ts
+- src/modules/cockpit/cockpitRouting.ts
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/CockpitStage.tsx
 - src/modules/cockpit/tests/CockpitStage.test.tsx
