@@ -76,3 +76,11 @@ depends_on:
 - scripts/ui-scenario.mjs
 - src/modules/ui-scenario/scenarioSurface.ts
 - tasks/cockpit-hub-cross-device-state.md
+
+## Blocker
+
+**2026-10-23T05:42:24.166Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=82001 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792733720267
+- run_id：wk-prod-anchor
+- session_id：d01debf6-f245-4e6a-b5c6-ce2268ec8d11
