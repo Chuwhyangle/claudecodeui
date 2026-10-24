@@ -421,6 +421,48 @@ const FLEET_WITH_HOLES: QuayFleetSummary = {
   cached: false,
 };
 
+/**
+ * The strip's openability fixture: one project that can be opened, one whose root is not in the
+ * quay-fleet registry, and one that IS registered but whose driver did not answer. The last two
+ * are the two different refusal causes the strip must name — a registry action and a runtime one.
+ */
+const FLEET_OPENABILITY: QuayFleetSummary = {
+  projects: [
+    {
+      projectId: 'p1',
+      fleetProjectId: 'claudecodeui',
+      projectPath: '/work/claudecodeui',
+      driver: { state: 'running' },
+      tasks: { total: 1, todo: 0, ready: 1, needsHuman: 0, done: 0 },
+      cached: false,
+      error: null,
+    },
+    {
+      projectId: 'p3',
+      // Not registered with quay-fleet: no address can be minted for it.
+      fleetProjectId: null,
+      projectPath: '/work/cantus',
+      driver: { state: 'idle' },
+      tasks: { total: 1, todo: 1, ready: 0, needsHuman: 0, done: 0 },
+      cached: false,
+      error: null,
+    },
+    {
+      projectId: 'p7',
+      // Registered (it has a fleet handle) but its driver did not answer.
+      fleetProjectId: 'quay-dogfood-goal030',
+      projectPath: '/work/quay-dogfood-goal030',
+      driver: { state: 'unavailable' },
+      tasks: { total: 2, todo: 1, ready: 0, needsHuman: 1, done: 0 },
+      cached: false,
+      error: null,
+    },
+  ],
+  generatedAt: '2026-10-23T00:00:00.000Z',
+  ttlPerProjectMs: 30000,
+  cached: false,
+};
+
 const SNAPSHOT: QuaySnapshot = {
   projectId: 'p1',
   projectPath: '/work/claudecodeui',
@@ -647,6 +689,127 @@ describe('fleet view contract', () => {
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
     fireEvent.keyDown(window, { key: 'ArrowUp' });
     expect(focusUri()).toBe('quay://claudecodeui/board');
+  });
+});
+
+describe('unopenable project feedback', () => {
+  beforeEach(() => {
+    apiMock.quayFleetSummary.mockResolvedValue(okResponse(FLEET_OPENABILITY));
+  });
+
+  const stripItems = async () => {
+    await screen.findByTestId('cockpit-project-strip');
+    return screen.findAllByTestId('cockpit-project-strip-item');
+  };
+  const stripItem = (items: HTMLElement[], name: string): HTMLElement => {
+    const found = items.find((item) => item.textContent?.includes(name));
+    expect(found, `the strip draws ${name}`).toBeDefined();
+    return found as HTMLElement;
+  };
+
+  it('AC1: only openable projects are enabled in the strip; the others name their cause', async () => {
+    renderCockpit();
+    const items = await stripItems();
+    expect(items).toHaveLength(3);
+
+    // Registered + driver running: untouched, same path tooltip as before this task.
+    const openable = stripItem(items, 'claudecodeui');
+    expect(openable.getAttribute('aria-disabled')).toBeNull();
+    expect(openable.getAttribute('data-project-openable')).toBe('true');
+    expect(openable.getAttribute('title')).toBe('/work/claudecodeui');
+
+    // Not in the quay-fleet registry: disabled, and the title says so.
+    const unregistered = stripItem(items, 'cantus');
+    expect(unregistered.getAttribute('aria-disabled')).toBe('true');
+    expect(unregistered.getAttribute('data-project-openable')).toBe('false');
+    expect(unregistered.getAttribute('title')).toContain(
+      i18n.t('cockpit.projectNotRegistered'),
+    );
+
+    // Registered but driver unavailable: disabled, with the RUNTIME cause, not the registry one.
+    const noDriver = stripItem(items, 'quay-dogfood-goal030');
+    expect(noDriver.getAttribute('aria-disabled')).toBe('true');
+    expect(noDriver.getAttribute('data-project-openable')).toBe('false');
+    expect(noDriver.getAttribute('title')).toContain(
+      i18n.t('cockpit.projectDriverUnavailable'),
+    );
+  });
+
+  it('AC2: clicking an unregistered project keeps the view and focus, and refuses out loud', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+    const before = locationSearch();
+
+    const items = await stripItems();
+    fireEvent.click(stripItem(items, 'cantus'));
+
+    const echo = await screen.findByTestId('cockpit-echo');
+    expect(echo.getAttribute('data-echo-kind')).toBe('refused');
+    // The echo carries all three parts: what failed, why, and the next step.
+    expect(screen.getByTestId('cockpit-echo-text').textContent).toContain(
+      i18n.t('cockpit.projectOpenRefused', { name: 'cantus' }),
+    );
+    expect(screen.getByTestId('cockpit-echo-reason').textContent).toContain(
+      i18n.t('cockpit.projectNotRegistered'),
+    );
+    expect(screen.getByTestId('cockpit-echo-next').textContent).toContain(
+      i18n.t('cockpit.projectUnregisteredNext'),
+    );
+
+    // The refusal is a no-op on the stage: same URL, same focus.
+    expect(locationSearch()).toBe(before);
+    expect(focusUri()).toBe('quay://claudecodeui/board');
+  });
+
+  it('AC2: clicking a registered project still opens its board', async () => {
+    renderCockpit();
+    const items = await stripItems();
+
+    fireEvent.click(stripItem(items, 'claudecodeui'));
+
+    await waitFor(() => expect(locationSearch()).toBe('?view=board&project=claudecodeui'));
+    await screen.findByTestId('cockpit-board');
+  });
+
+  it('AC3: the fleet explains that ordinals cover registered projects, and an unnumbered digit is refused', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+
+    // The visible copy line, not just a tooltip: the rule applies to the whole grid.
+    expect(screen.getByTestId('cockpit-fleet-ordinal-note').textContent).toContain(
+      i18n.t('cockpit.ordinalsRegisteredOnly'),
+    );
+
+    // ① and ② are minted for the two registered projects (the second is the driver-disabled
+    // one); 3 has no declared ordinal, so it names an unnumbered project. That is a refusal,
+    // not silence.
+    fireEvent.keyDown(window, { key: '3' });
+
+    const echo = await screen.findByTestId('cockpit-echo');
+    expect(echo.getAttribute('data-echo-kind')).toBe('refused');
+    expect(screen.getByTestId('cockpit-echo-text').textContent).toContain(
+      i18n.t('cockpit.ordinalUnavailable', { n: '3' }),
+    );
+    expect(screen.getByTestId('cockpit-echo-reason').textContent).toContain(
+      i18n.t('cockpit.ordinalsRegisteredOnly'),
+    );
+    expect(screen.getByTestId('cockpit-echo-next').textContent).toContain(
+      i18n.t('cockpit.ordinalUnavailableNext'),
+    );
+  });
+
+  it('AC3: a numbered digit still focuses the declared object it names', async () => {
+    renderCockpit();
+    await screen.findByTestId('cockpit-fleet-tiles');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+
+    fireEvent.keyDown(window, { key: '2' });
+
+    // ② is the driver-disabled but REGISTERED project: the ordinal model is the registry's,
+    // not the strip's openability gate.
+    await waitFor(() => expect(focusUri()).toBe('quay://quay-dogfood-goal030/board'));
+    expect(screen.queryByTestId('cockpit-echo')).toBeNull();
   });
 });
 

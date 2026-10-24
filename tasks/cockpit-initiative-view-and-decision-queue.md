@@ -1,7 +1,7 @@
 ---
 id: cockpit-initiative-view-and-decision-queue
 title: M6 驾驶舱倡议视图 + 裁定队列（含联络自决的抽样审计）
-status: ready
+status: done
 labels:
   - cockpit
   - initiative
@@ -60,6 +60,10 @@ depends_on:
 - config/server.settings.example.json
 - scripts/contraction-candidates/scan.mjs (landing-gap guard: develop reds typecheck)
 - scripts/contraction-candidates/scan.test.mjs (landing-gap guard: same)
+- server/shared/ports/initiative-audit-ratio.port.ts (keeps modules/quay out of AC-394 G1)
+- server/index.ts (installs the audit-ratio port at the composition root)
+- server/shared/tests/quay-test-script.test.ts (collateral: server test-file count pin for this task's new criterion)
+- scripts/suite-duration-baseline.tsv (collateral: AC7 coverage row for the new criterion)
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
@@ -90,10 +94,10 @@ DoD — isolated instance: `DATABASE_PATH=/tmp/cockpit-initiative-verify/auth.db
 
 Baseline red carried — the merge of develop brought `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` (landed by `contraction-candidates-signal-inventory-and-design`), whose implicit-any parameters red `npm run typecheck` for every branch on develop. Both files carry a file-local `@ts-nocheck` with a removal note; typing them belongs to their owning follow-up, not to this task. `npm run typecheck` is green with the guard.
 
-## Blocker
+### CONTINUE round 2026-10-24 — the suite red was three things, one of them real
 
-**2026-10-24T10:09:15.993Z — worker 未落地（exited-not-landed）**
+(1) **Branch lag, not this task**: the branch was 187 commits behind develop and carried develop's pre-fix `maxPerKind` parameters, which red repo lint; develop's `5dfa416d6` marks them `_maxPerKind` and the `git merge develop` this round cleared the lint row with no edit of ours. The `@ts-nocheck` landing guard was re-tested by stripping it — `tsc -p scripts/tsconfig.json` still reds on implicit-any, so the guard stays.
 
-- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: the measured cycles must match the pinned baseline groups member-for-member
-- run_id：wk-prod-anchor
-- session_id：6046c5ef-092b-4ea6-a755-b480924dd9cf
+(2) **Collateral count pins** (this task's new server criterion): `find server -name '*.test.ts' -o -name '*.test.js'` = 427, one more than the pinned 426, so `quay-test-script.test.ts` was bumped to `known=3 unknown=424` / `known=1 unknown=426` and the AC7 coverage floor recomputed — the appended `1877  server/modules/quay/tests/quay-initiatives.test.ts` row takes it to 385/427 = 90.16% (floor 384.3). Post-fix single-file run: 14/14 passed. Both collateral files are declared in `## Touches`.
+
+(3) **The real defect — AC-394 G1 widened from 3 to 10**: composing the initiatives reading with `loadServerSettings()` made `modules/quay -> modules/settings`, and `settings -> mcp-gateway -> quay` closed a ten-member SCC (providers, providers/list/claude, providers/services, projects, projects/services, quay, settings, mcp-gateway, websocket, websocket/services). That red `server-import-cycle-budget.test.ts` and both port-break criteria. Fix: the boot-time `initiative.auditRatio` is installed by `server/index.ts` through the new `server/shared/ports/initiative-audit-ratio.port.ts`; an uninstalled port answers `null` and the initiatives service keeps its shipped 1/5. Measured after the fix (same scanner the criterion uses): the SCC is exactly the pinned `[providers, providers/list/claude, providers/services]`. Verified on the merged tree: `server-import-cycle-budget.test.ts` 13/13, `providers-websocket-cycle.test.ts` + `projects-session-fetch-cycle.test.ts` 2/2, `quay-test-script.test.ts` 14/14, `quay-initiatives.test.ts` 4/4, cockpit vitest 12 files / 146 tests, `npm run typecheck` exit 0, `npm run lint` exit 0.

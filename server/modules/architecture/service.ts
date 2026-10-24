@@ -311,6 +311,92 @@ export type ArchitectureGraphResult = {
   readonly provenance: ArchitectureProvenance;
 };
 
+//----------------- structural snapshot (observation-architecture-structural-delta) ------------
+
+/**
+ * One layer of the project's optional layer declaration.
+ *
+ * Layers are listed OUTERMOST first (the UI layer before the service layer before the core), so
+ * an edge from an earlier entry to a later one follows the declared direction and an edge from a
+ * later entry back to an earlier one is a violation. `packages` entries are path prefixes of the
+ * snapshot's package ids (`src/modules/chat`, `server/modules/observation`); a package belongs to
+ * the FIRST layer whose prefix contains it.
+ */
+export type ArchitectureLayerEntry = {
+  readonly name: string;
+  readonly packages: readonly string[];
+};
+
+/** The declaration read from `<project>/.archguard/layers.json`, or `null` when absent. */
+export type ArchitectureLayerDeclaration = {
+  readonly layers: readonly ArchitectureLayerEntry[];
+};
+
+/** One package of the structural snapshot. `entities` is the size unit the delta measures. */
+export type ArchitectureStructurePackage = {
+  readonly id: string;
+  readonly files: number;
+  readonly entities: number;
+  /** The declared layer's name, or null when the project declares no layers. */
+  readonly layer: string | null;
+};
+
+/** One aggregated package→package dependency edge; `weight` is the entity-edge count. */
+export type ArchitectureStructureEdge = {
+  readonly from: string;
+  readonly to: string;
+  readonly weight: number;
+};
+
+/**
+ * One non-trivial strongly connected component of the package graph.
+ *
+ * `key` is the members' sorted join, which is stable across snapshots; `members` is sorted for
+ * the same reason. The component does NOT spell one path around the cycle — every member is on
+ * some cycle inside it — so a reader-facing string joins them and closes the loop.
+ */
+export type ArchitectureStructureCycle = {
+  readonly key: string;
+  readonly members: readonly string[];
+};
+
+/**
+ * The project's package-level structure at one analysis: its packages and sizes, the aggregated
+ * dependency edges, the package cycles (SCCs), and the layer declaration the reading used.
+ *
+ * `id` is a content hash of the graph, so a structural change the delta reports can be traced to
+ * the exact snapshot inputs. The document is deliberately time-free: the producer stamps when it
+ * read it.
+ */
+export type ArchitectureStructureSnapshot = {
+  readonly id: string;
+  readonly packages: readonly ArchitectureStructurePackage[];
+  readonly edges: readonly ArchitectureStructureEdge[];
+  readonly cycles: readonly ArchitectureStructureCycle[];
+  readonly totals: {
+    readonly packages: number;
+    readonly entities: number;
+    readonly files: number;
+    readonly edges: number;
+  };
+  readonly layers: ArchitectureLayerDeclaration | null;
+};
+
+/** What `readStructure` answers: the snapshot plus the analysis provenance it came from. */
+export type ArchitectureStructureResult = {
+  readonly snapshot: ArchitectureStructureSnapshot;
+  readonly provenance: {
+    /** `manifest.generatedAt` — when ArchGuard analysed the tree, not when we read it. */
+    readonly generatedAt: string | null;
+    readonly fingerprints: readonly { readonly scope: string; readonly archJsonHash: string }[];
+  };
+};
+
+/** The request `readStructure` accepts: one project, no session (the reading is project-wide). */
+export type ArchitectureStructureInput = {
+  readonly projectId: string;
+};
+
 /**
  * The on-demand provenance request behind `POST /api/architecture/mentions`.
  *
@@ -417,6 +503,15 @@ export type ArchitectureService = {
   readGraph(input: ArchitectureGraphInput): Promise<ArchitectureGraphResult>;
   readMentions(input: ArchitectureMentionsInput): Promise<ArchitectureMentionsResult>;
   readSearch(input: ArchitectureSearchInput): Promise<ArchitectureSearchResult>;
+  /**
+   * The project-wide package structure (observation-architecture-structural-delta).
+   *
+   * Unlike the session-scoped readings above it takes no transcript: the snapshot is the whole
+   * project's package graph, so the observation producer can diff two analyses without inventing
+   * a session. It reuses the SAME manifest + per-scope parse cache the graph path uses, so a
+   * snapshot after a tab activation reads no `.archguard` file twice.
+   */
+  readStructure(input: ArchitectureStructureInput): Promise<ArchitectureStructureResult>;
 };
 
 /**
@@ -972,6 +1067,230 @@ function buildSeedMentionProvenance(
   return { identifierFiles, identifierCounts, fileCounts };
 }
 
+//----------------- structural snapshot helpers (observation-architecture-structural-delta) ----
+
+/** Where a project's optional layer declaration lives, relative to the project root. */
+const LAYERS_RELATIVE_PATH = path.join('.archguard', 'layers.json');
+
+/**
+ * The package a project-relative file belongs to.
+ *
+ * Feature modules are the unit a reader names (`server/modules/observation`,
+ * `src/modules/architecture`), so those two module roots keep three segments. Every other path
+ * keeps its first two (`server/index.ts` → `server`, `scripts/stamp-version.ts` → `scripts`,
+ * `src/App.tsx` → `src`), which groups top-level scripts and shared leaves without inventing a
+ * package per directory level.
+ */
+function packageIdOfFile(file: string): string {
+  const segments = file.split('/').filter((segment) => segment !== '');
+  if (segments.length === 0) return '.';
+  if (
+    (segments[0] === 'server' || segments[0] === 'src')
+    && segments[1] === 'modules'
+    && segments.length >= 3
+  ) {
+    return segments.slice(0, 3).join('/');
+  }
+  return segments.length === 1 ? segments[0]! : segments.slice(0, 2).join('/');
+}
+
+/**
+ * Reads the optional `.archguard/layers.json` declaration.
+ *
+ * The file is not part of every project (most declare no layers), and a malformed one must not
+ * fail the snapshot, so every failure answers `null` — which is exactly the "no declaration"
+ * case the delta treats as "report new edges only".
+ */
+async function readLayerDeclaration(projectPath: string): Promise<ArchitectureLayerDeclaration | null> {
+  let text: string;
+  try {
+    text = await fsPromises.readFile(path.join(projectPath, LAYERS_RELATIVE_PATH), 'utf8');
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || !Array.isArray(parsed.layers)) return null;
+
+  const layers: ArchitectureLayerEntry[] = [];
+  for (const value of parsed.layers) {
+    if (!isRecord(value) || typeof value.name !== 'string' || value.name.trim() === '') continue;
+    const packages = Array.isArray(value.packages)
+      ? value.packages
+          .filter((entry): entry is string => typeof entry === 'string')
+          .map((entry) => entry.trim().replace(/\/+$/, ''))
+          .filter((entry) => entry !== '')
+      : [];
+    if (packages.length === 0) continue;
+    layers.push({ name: value.name.trim(), packages });
+  }
+  return layers.length === 0 ? null : { layers };
+}
+
+/** The declared layer name for one package, or null when no declaration covers it. */
+function layerNameOfPackage(
+  packageId: string,
+  layers: ArchitectureLayerDeclaration | null,
+): string | null {
+  if (layers === null) return null;
+  for (const layer of layers.layers) {
+    for (const prefix of layer.packages) {
+      if (packageId === prefix || packageId.startsWith(`${prefix}/`)) return layer.name;
+    }
+  }
+  return null;
+}
+
+/**
+ * The package graph's non-trivial strongly connected components (Tarjan).
+ *
+ * Only components with more than one member are cycles: same-package edges are dropped when the
+ * graph is aggregated, so a one-node component is never a real loop. Recursion depth is the
+ * package count (hundreds at most), not the entity count.
+ */
+function computePackageCycles(edges: readonly ArchitectureStructureEdge[]): ArchitectureStructureCycle[] {
+  const adjacency = new Map<string, string[]>();
+  const nodes = new Set<string>();
+  for (const edge of edges) {
+    nodes.add(edge.from);
+    nodes.add(edge.to);
+    const list = adjacency.get(edge.from) ?? [];
+    list.push(edge.to);
+    adjacency.set(edge.from, list);
+  }
+
+  let nextIndex = 0;
+  const indices = new Map<string, number>();
+  const lowLinks = new Map<string, number>();
+  const onStack = new Set<string>();
+  const stack: string[] = [];
+  const cycles: ArchitectureStructureCycle[] = [];
+
+  const strongConnect = (node: string): void => {
+    indices.set(node, nextIndex);
+    lowLinks.set(node, nextIndex);
+    nextIndex += 1;
+    stack.push(node);
+    onStack.add(node);
+
+    for (const neighbour of adjacency.get(node) ?? []) {
+      if (!indices.has(neighbour)) {
+        strongConnect(neighbour);
+        lowLinks.set(node, Math.min(lowLinks.get(node)!, lowLinks.get(neighbour)!));
+      } else if (onStack.has(neighbour)) {
+        lowLinks.set(node, Math.min(lowLinks.get(node)!, indices.get(neighbour)!));
+      }
+    }
+
+    if (lowLinks.get(node) === indices.get(node)) {
+      const component: string[] = [];
+      let member: string;
+      do {
+        member = stack.pop()!;
+        onStack.delete(member);
+        component.push(member);
+      } while (member !== node);
+      if (component.length > 1) {
+        const members = [...component].sort();
+        cycles.push({ key: members.join('|'), members });
+      }
+    }
+  };
+
+  for (const node of [...nodes].sort()) {
+    if (!indices.has(node)) strongConnect(node);
+  }
+  return cycles.sort((left, right) => left.key.localeCompare(right.key));
+}
+
+/**
+ * Builds one snapshot from the merged ArchGuard index.
+ *
+ * The adjacency is the SAME `dependencies` map the graph generator expands (the merge already
+ * resolved scope prefixes), so the snapshot cannot disagree with the tab about what depends on
+ * what. Only cross-package edges are kept — an intra-package dependency does not move the
+ * package graph — and every entity whose file the merge could not name is skipped rather than
+ * assigned to a made-up package.
+ */
+function buildStructureSnapshot(
+  merged: ArchIndex,
+  layers: ArchitectureLayerDeclaration | null,
+): ArchitectureStructureSnapshot {
+  const entityPackage = new Map<string, string>();
+  const packageFiles = new Map<string, Set<string>>();
+  const packageEntities = new Map<string, number>();
+
+  for (const [id, file] of Object.entries(merged.idToFile)) {
+    const packageId = packageIdOfFile(file);
+    entityPackage.set(id, packageId);
+    const files = packageFiles.get(packageId) ?? new Set<string>();
+    files.add(file);
+    packageFiles.set(packageId, files);
+    packageEntities.set(packageId, (packageEntities.get(packageId) ?? 0) + 1);
+  }
+
+  const edgeWeights = new Map<string, ArchitectureStructureEdge>();
+  for (const [fromId, neighbours] of Object.entries(merged.dependencies)) {
+    const fromPackage = entityPackage.get(fromId);
+    if (fromPackage === undefined) continue;
+    for (const toId of neighbours) {
+      const toPackage = entityPackage.get(toId);
+      if (toPackage === undefined || toPackage === fromPackage) continue;
+      const key = `${fromPackage}\u0000${toPackage}`;
+      const existing = edgeWeights.get(key);
+      if (existing === undefined) {
+        edgeWeights.set(key, { from: fromPackage, to: toPackage, weight: 1 });
+      } else {
+        edgeWeights.set(key, { ...existing, weight: existing.weight + 1 });
+      }
+    }
+  }
+
+  const packages: ArchitectureStructurePackage[] = [...packageEntities.keys()]
+    .sort()
+    .map((packageId) => ({
+      id: packageId,
+      files: packageFiles.get(packageId)?.size ?? 0,
+      entities: packageEntities.get(packageId) ?? 0,
+      layer: layerNameOfPackage(packageId, layers),
+    }));
+  const edges = [...edgeWeights.values()].sort(
+    (left, right) => left.from.localeCompare(right.from) || left.to.localeCompare(right.to),
+  );
+  const cycles = computePackageCycles(edges);
+
+  const identity = createHash('sha256')
+    .update(
+      JSON.stringify({
+        packages: packages.map((entry) => [entry.id, entry.entities, entry.files, entry.layer]),
+        edges: edges.map((edge) => [edge.from, edge.to, edge.weight]),
+        layers: layers === null
+          ? null
+          : layers.layers.map((layer) => [layer.name, [...layer.packages].sort()]),
+      }),
+    )
+    .digest('hex')
+    .slice(0, 16);
+
+  return {
+    id: identity,
+    packages,
+    edges,
+    cycles,
+    totals: {
+      packages: packages.length,
+      entities: packages.reduce((total, entry) => total + entry.entities, 0),
+      files: packages.reduce((total, entry) => total + entry.files, 0),
+      edges: edges.length,
+    },
+    layers,
+  };
+}
+
 function emptyReading(): GenerateGraphResult {
   return {
     mmd: { file: EMPTY_GRAPH_MMD, entity: EMPTY_GRAPH_MMD },
@@ -1386,6 +1705,32 @@ export function createArchitectureService(deps: ArchitectureServiceDeps): Archit
         ...(input.limit === undefined ? {} : { limit: input.limit }),
         ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
       });
+    },
+
+    async readStructure(input: ArchitectureStructureInput): Promise<ArchitectureStructureResult> {
+      const projectPath = deps.resolveProjectPath(input.projectId);
+      if (projectPath === null) {
+        throw new AppError(`Project "${input.projectId}" was not found.`, {
+          code: 'PROJECT_NOT_FOUND',
+          statusCode: 404,
+        });
+      }
+
+      // `loadIndex` is the SAME manifest + per-scope cache the graph path uses: a snapshot taken
+      // after a tab activation reads each `.archguard/query/<scope>/arch-index.json` at most once.
+      const { manifest, merged, refs, scopeKeys } = await loadIndex(projectPath, input.projectId);
+      const layers = await readLayerDeclaration(projectPath);
+      const snapshot = buildStructureSnapshot(merged, layers);
+      return {
+        snapshot,
+        provenance: {
+          generatedAt: manifest.generatedAt,
+          fingerprints: refs.map((ref, index) => ({
+            scope: scopeKeys[index]!,
+            archJsonHash: ref.archJsonHash,
+          })),
+        },
+      };
     },
   };
 }

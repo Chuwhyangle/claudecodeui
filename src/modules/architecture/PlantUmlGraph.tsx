@@ -67,6 +67,7 @@ import {
 } from '@/modules/architecture/hooks/useTouchLayout';
 import { canvasIsTooWide, READABLE_ZOOM_SCALE } from '@/modules/architecture/readableZoom';
 import type {
+  ArchitectureDiffHighlight,
   ArchitectureRendererEdge,
   ArchitectureRendererNode,
   ArchitectureRendererProps,
@@ -414,6 +415,111 @@ function normalizedPackageId(raw: string | null): string | null {
   return normalized;
 }
 
+// ── the observation wall's structural diff ──────────────────────────────────
+
+/** The attribute/class a diff-marked element carries; both are removed on clear. */
+const DIFF_MARK_ATTRIBUTE = 'data-architecture-diff';
+const DIFF_NODE_CLASS = 'arch-diff-node';
+const DIFF_EDGE_CLASS = 'arch-diff-edge';
+
+/** The marker's stylesheet: an amber dashed frame/line, distinct from selection blue. */
+const DIFF_HIGHLIGHT_STYLE = `
+  [data-architecture-plantuml] .${DIFF_NODE_CLASS} > rect { stroke: #c2410c; stroke-width: 2.5; stroke-dasharray: 5,3; }
+  [data-architecture-plantuml] .${DIFF_EDGE_CLASS} path,
+  [data-architecture-plantuml] .${DIFF_EDGE_CLASS} polyline,
+  [data-architecture-plantuml] .${DIFF_EDGE_CLASS} line { stroke: #c2410c; stroke-width: 2.5; stroke-dasharray: 6,3; }
+`;
+
+/**
+ * Whether a drawn package id is the declared package (or lives inside it).
+ *
+ * The two sides spell a package from different roots on purpose: the snapshot's ids are
+ * project-relative (`server/modules/observation`), while the drawing publishes the scope's own
+ * path (`modules/observation`, sometimes with the opaque scope key in front). Neither side is
+ * wrong, so the match accepts a suffix on EITHER side at a path boundary rather than an exact
+ * string — anything looser would mark a neighbour.
+ */
+function packageMatches(candidate: string | null, wanted: string): boolean {
+  if (candidate === null) return false;
+  const normalizedCandidate = candidate.replace(/^\/+|\/+$/g, '');
+  const normalizedWanted = wanted.trim().replace(/^\/+|\/+$/g, '');
+  if (normalizedCandidate === '' || normalizedWanted === '') return false;
+  return normalizedCandidate === normalizedWanted
+    || normalizedCandidate.endsWith(`/${normalizedWanted}`)
+    || normalizedCandidate.startsWith(`${normalizedWanted}/`)
+    || normalizedWanted.endsWith(`/${normalizedCandidate}`);
+}
+
+/** The package a drawn node id belongs to, as the drawing published it. */
+function drawnPackageOf(host: HTMLElement, nodeId: string): string | null {
+  const element = nodeElement(host, nodeId);
+  const published = element === null ? null : normalizedPackageId(element.getAttribute('data-package-id'));
+  return published ?? packageOfDrawnId(nodeId);
+}
+
+/**
+ * The package a drawn id names, for a node that carries no `data-package-id`.
+ *
+ * A collapsed overview draws PACKAGE boxes (`grp::server/modules/observation`) rather than files;
+ * that box IS the package, so its whole id is the package id. Everything else is a file/entity id
+ * and its directory is the package.
+ */
+function packageOfDrawnId(nodeId: string): string | null {
+  if (nodeId === '') return null;
+  if (nodeId.startsWith(GROUP_PREFIX)) return normalizedPackageId(nodeId.slice(GROUP_PREFIX.length));
+  return packageIdOfNodeId(nodeId);
+}
+
+/** Removes every diff marker from a drawing (a fresh SVG never carries any). */
+function clearDiffStyles(host: HTMLElement): void {
+  for (const element of host.querySelectorAll(`[${DIFF_MARK_ATTRIBUTE}]`)) {
+    element.removeAttribute(DIFF_MARK_ATTRIBUTE);
+    element.classList.remove(DIFF_NODE_CLASS, DIFF_EDGE_CLASS);
+  }
+}
+
+/**
+ * Marks the structural differences the observation tile passed in.
+ *
+ * Package ids mark their member nodes; package EDGES mark every drawn relation crossing that
+ * pair; the exact `nodeIds`/`edges` forms mark the ids verbatim. With no highlight (or an empty
+ * one) the drawing is left exactly as it was — the pre-highlight rendering.
+ */
+function applyDiffStyles(host: HTMLElement, highlight: ArchitectureDiffHighlight | null): void {
+  clearDiffStyles(host);
+  if (highlight === null) return;
+
+  const exactNodeIds = new Set(highlight.nodeIds ?? []);
+  const packageIds = (highlight.packageIds ?? []).filter((entry) => entry.trim() !== '');
+  for (const element of host.querySelectorAll('.uml-node[data-entity-id]')) {
+    const id = element.getAttribute('data-entity-id') ?? '';
+    const packageId = normalizedPackageId(element.getAttribute('data-package-id'))
+      ?? packageOfDrawnId(id);
+    const marked = exactNodeIds.has(id)
+      || packageIds.some((wanted) => packageMatches(packageId, wanted));
+    if (!marked) continue;
+    element.setAttribute(DIFF_MARK_ATTRIBUTE, 'node');
+    element.classList.add(DIFF_NODE_CLASS);
+  }
+
+  const exactEdges = highlight.edges ?? [];
+  const packageEdges = (highlight.packageEdges ?? []).filter(
+    (entry) => entry.from.trim() !== '' && entry.to.trim() !== '',
+  );
+  for (const element of host.querySelectorAll('.uml-edge[data-edge-source]')) {
+    const from = element.getAttribute('data-edge-source') ?? '';
+    const to = element.getAttribute('data-edge-target') ?? '';
+    const marked = exactEdges.some((entry) => entry.from === from && entry.to === to)
+      || (packageEdges.length > 0 && packageEdges.some(
+        (entry) => packageMatches(drawnPackageOf(host, from), entry.from)
+          && packageMatches(drawnPackageOf(host, to), entry.to),
+      ));
+    if (!marked) continue;
+    element.setAttribute(DIFF_MARK_ATTRIBUTE, 'edge');
+    element.classList.add(DIFF_EDGE_CLASS);
+  }
+}
+
 /**
  * Everything the keyboard can stand on in the drawing just laid out: its entity
  * boxes (group and stub nodes included, since `[`/`]` and Enter act on whatever
@@ -726,6 +832,7 @@ function forcedFullscreenReservedMargins(): boolean {
 export function PlantUmlGraph({
   graph,
   idShape = DEFAULT_NODE_ID_SHAPE,
+  diffHighlight = null,
   detailReading,
   onNodeClick,
   onEdgeClick,
@@ -765,6 +872,8 @@ export function PlantUmlGraph({
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // The structural diff to mark on the NEXT drawing; a repaint reads this ref.
+  const diffHighlightRef = useRef<ArchitectureDiffHighlight | null>(diffHighlight);
   // The pointer/size tier: coarse pointers get 44px hit areas, narrow screens
   // collect the toolbar into one overflow menu (see `useTouchLayout`).
   const {
@@ -909,7 +1018,8 @@ export function PlantUmlGraph({
       ?? (selectedNodeId === null ? [] : [selectedNodeId]);
     selectedRelationsRef.current = selectedRelations
       ?? (selectedRelation === null ? [] : [selectedRelation]);
-  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, onDrawnPlantUmlChange, selectedNodeId, selectedRelation, selectedNodeIds, selectedRelations, onToggleNodeClick, onToggleEdgeClick, onMultiSelectStart, onBoxSelect, multiSelectMode]);
+    diffHighlightRef.current = diffHighlight;
+  }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, onDrawnPlantUmlChange, selectedNodeId, selectedRelation, selectedNodeIds, selectedRelations, onToggleNodeClick, onToggleEdgeClick, onMultiSelectStart, onBoxSelect, multiSelectMode, diffHighlight]);
 
   // Repaint the selection whenever the panel changes it. The draw effect below
   // applies the same styles to a fresh SVG; this one covers a selection made
@@ -1362,6 +1472,15 @@ export function PlantUmlGraph({
   // Bumped whenever the semantic pass rewrites the geometry, so the minimap
   // re-reads its boxes instead of blitting the previous scale's bitmap.
   const [drawnRevision, setDrawnRevision] = useState(0);
+
+  // Repaint the structural diff whenever the panel hands a new set in, and after every draw:
+  // the two subgraphs (and the drill-down views) each rewrite the SVG, and a marker applied to
+  // the previous drawing is gone with it.
+  useEffect(() => {
+    diffHighlightRef.current = diffHighlight;
+    const host = hostRef.current;
+    if (host !== null) applyDiffStyles(host, diffHighlight);
+  }, [diffHighlight, drawnRevision]);
   // Whether the portrait phone's zoom cluster is open. Why state: the tier
   // ships ONE 44px button by default (its drawing owns the height), and the
   // reader's open is what reveals the ±/Fit row. Not persisted: the compact
@@ -1476,6 +1595,7 @@ export function PlantUmlGraph({
     applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
     highlightSelection(host, selectedRef.current);
     markDrawingUnselectable(host);
+    applyDiffStyles(host, diffHighlightRef.current);
     if (neighborCenterRef.current !== null) {
       nodeElement(host, neighborCenterRef.current)?.classList.add('arch-center');
     }
@@ -2046,6 +2166,7 @@ export function PlantUmlGraph({
           capture === null ? null : semanticContentBounds(capture.geometry),
         );
         applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
+        applyDiffStyles(host, diffHighlightRef.current);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
         // observer keeps following the container only for a fit user.
@@ -3610,6 +3731,7 @@ export function PlantUmlGraph({
       data-architecture-layout-direction-reason={layoutDirectionReason ?? undefined}
     >
       <style>{HIGHLIGHT_STYLE}</style>
+      <style data-architecture-diff-highlight-style="true">{DIFF_HIGHLIGHT_STYLE}</style>
       <style data-architecture-canvas-selection-style="true">{CANVAS_UNSELECTABLE_STYLE}</style>
       {/* The renderer's own legend is NOT part of the semantic rewrite, so its
           fixed 10px text would be the one label below the phone floor. The

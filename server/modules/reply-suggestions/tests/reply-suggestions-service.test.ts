@@ -24,6 +24,7 @@ import {
   characterSetOverlap,
   createReplySuggestionsService,
   parseSuggestionChips,
+  REPLY_SUGGESTIONS_BATCH_CACHE_SIZE,
   REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS,
   type ReplySuggestionsService,
 } from '../reply-suggestions.service.js';
@@ -76,6 +77,7 @@ type Harness = {
   settings: ReplySuggestionsSettings;
   advance(ms: number): void;
   setNow(value: number): void;
+  setMessageId(value: string): void;
   usageLogPath: string;
 };
 
@@ -93,13 +95,14 @@ function makeHarness(
   const logs: string[] = [];
   let clock = 1_800_000_000_000;
   const settings = baseSettings(options.settings);
+  let messageId = options.messageId ?? 'assistant-1';
   const messageText = options.messageText === undefined ? '助手消息的正文，最后以一个问题结尾？' : options.messageText;
   const responder: Responder = options.responder ?? (() => '{"chips":["alpha-1","beta-2","gamma-3"]}');
   const usageLogPath = options.usageLog?.path ?? path.join(mkdtempSync(path.join(tmpdir(), 'reply-svc-')), 'usage.jsonl');
 
   const service = createReplySuggestionsService({
     readSettings: () => settings,
-    readLastAssistantMessage: async () => (messageText === null ? null : { id: options.messageId ?? 'assistant-1', text: messageText }),
+    readLastAssistantMessage: async () => (messageText === null ? null : { id: messageId, text: messageText }),
     complete: async (request) => {
       calls.push({
         system: request.system,
@@ -134,6 +137,9 @@ function makeHarness(
     },
     setNow: (value: number) => {
       clock = value;
+    },
+    setMessageId: (value: string) => {
+      messageId = value;
     },
     usageLogPath,
   };
@@ -529,4 +535,265 @@ test('(t) the built-in prompt tells the model not to end a single point with a s
     'the default prompt carries the no-trailing-separator rule',
   );
   assert.equal(harness.settings.systemPrompt, '', 'this reading is the built-in prompt, not an override');
+});
+
+// ---------------------------------------------------------------------------
+// One message, one upstream draw: the batch cache
+// ---------------------------------------------------------------------------
+
+/**
+ * A responder that answers each call with a distinct chip list. The alphabet
+ * offsets are chosen so two different call indexes share no character, which
+ * keeps the near-duplicate filter from turning a second draw into a supplement.
+ */
+function indexedChipList(index: number): string[] {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const word = (offset: number): string => {
+    let text = '';
+    for (let step = 0; step < 10; step += 1) {
+      text += alphabet[(offset + index * 11 + step * 3) % alphabet.length];
+    }
+    return text;
+  };
+  return [word(0), word(17), word(34)];
+}
+
+function indexedChips(index: number): string {
+  return chips(...indexedChipList(index));
+}
+
+test('(cache-a) a repeated first draw is the cached batch: one upstream call, identical chips and draw', async (t) => {
+  const harness = makeHarness(t, { responder: () => chips('a', 'b', 'c') });
+
+  const first = await harness.service.suggest({ sessionId: 's-cache-a' });
+  const second = await harness.service.suggest({ sessionId: 's-cache-a' });
+
+  assert.deepEqual(first, { chips: ['a', 'b', 'c'], draw: 1 });
+  assert.deepEqual(second, first, 'the second reading is the same batch');
+  assert.equal(harness.calls.length, 1, 'the cache hit made no upstream call');
+});
+
+test('(cache-b) a cache hit spends no call-limit budget, moves no draw and leaves the breaker alone', async (t) => {
+  // Two calls a minute: if the cache hit consumed one, the third session would 429.
+  const harness = makeHarness(t, {
+    settings: { maxCallsPerMinute: 2, maxCallsPerDay: 3000 },
+    responder: () => chips('a', 'b', 'c'),
+  });
+
+  const first = await harness.service.suggest({ sessionId: 's-cache-b' });
+  const cached = await harness.service.suggest({ sessionId: 's-cache-b' });
+  assert.equal(cached.draw, first.draw, 'a cache hit does not advance draw');
+
+  const another = await harness.service.suggest({ sessionId: 's-cache-b-other' });
+  assert.deepEqual(another.chips, ['a', 'b', 'c'], 'the cache hit left the minute budget for one real call');
+  assert.equal(harness.calls.length, 2);
+
+  // The daily budget moves the same way.
+  const daily = makeHarness(t, {
+    settings: { maxCallsPerMinute: 100, maxCallsPerDay: 2 },
+    responder: () => chips('a', 'b', 'c'),
+  });
+  await daily.service.suggest({ sessionId: 's-cache-b-day' });
+  await daily.service.suggest({ sessionId: 's-cache-b-day' });
+  await daily.service.suggest({ sessionId: 's-cache-b-day-other' });
+  assert.equal(daily.calls.length, 2, 'the hit did not consume a daily slot');
+  await assert.rejects(
+    () => daily.service.suggest({ sessionId: 's-cache-b-day-third' }),
+    (failure: { statusCode?: number }) => failure.statusCode === 429,
+  );
+
+  // Breaker: 4 consecutive failures, then a cache hit, then a 5th failure must
+  // still open the circuit. A hit that reset or incremented the counter would
+  // leave it closed (or open one call early).
+  let failing = false;
+  const breaker = makeHarness(t, {
+    responder: () => {
+      if (failing) throw new ReplySuggestionsClientError('http', 'upstream returned HTTP 500', 500);
+      return chips('kept-1', 'kept-2', 'kept-3');
+    },
+  });
+  const kept = await breaker.service.suggest({ sessionId: 's-cache-b-kept' });
+  assert.deepEqual(kept.chips, ['kept-1', 'kept-2', 'kept-3']);
+
+  failing = true;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    await assert.rejects(() => breaker.service.suggest({ sessionId: `s-cache-b-fail-${attempt}` }));
+  }
+  assert.deepEqual(await breaker.service.suggest({ sessionId: 's-cache-b-kept' }), kept);
+  assert.equal(breaker.calls.length, 5, 'the hit sits between four failures and the fifth');
+
+  await assert.rejects(() => breaker.service.suggest({ sessionId: 's-cache-b-fail-5' }));
+  assert.equal(breaker.calls.length, 6, 'the fifth consecutive failure reached upstream');
+  await assert.rejects(() => breaker.service.suggest({ sessionId: 's-cache-b-fail-6' }));
+  assert.equal(breaker.calls.length, 6, 'the circuit is open: no seventh call');
+});
+
+test('(cache-c) a redraw calls upstream, swaps the batch, and the next first draw reads the new batch', async (t) => {
+  const harness = makeHarness(t, {
+    responder: (_request, index) => indexedChips(index),
+  });
+
+  const first = await harness.service.suggest({ sessionId: 's-cache-c' });
+  assert.deepEqual(first, { chips: indexedChipList(1), draw: 1 });
+
+  const redraw = await harness.service.suggest({ sessionId: 's-cache-c', redraw: true });
+  assert.deepEqual(redraw, { chips: indexedChipList(2), draw: 2 });
+  assert.equal(harness.calls.length, 2);
+
+  const after = await harness.service.suggest({ sessionId: 's-cache-c' });
+  assert.deepEqual(after, redraw, 'the first draw now reads the replaced batch');
+  assert.equal(harness.calls.length, 2, 'and does not call upstream');
+});
+
+test('(cache-d) a new assistant message id is a cache miss', async (t) => {
+  const harness = makeHarness(t, { responder: (_request, index) => indexedChips(index) });
+
+  const first = await harness.service.suggest({ sessionId: 's-cache-d' });
+  assert.equal(first.draw, 1);
+  harness.setMessageId('assistant-2');
+  const second = await harness.service.suggest({ sessionId: 's-cache-d' });
+
+  assert.equal(harness.calls.length, 2, 'another message draws again');
+  assert.deepEqual(second, { chips: indexedChipList(2), draw: 1 }, 'a new message restarts draw at 1');
+});
+
+test('(cache-e) changing the settings version retires the old cache key', async (t) => {
+  const harness = makeHarness(t, { responder: (_request, index) => indexedChips(index) });
+
+  const first = await harness.service.suggest({ sessionId: 's-cache-e' });
+  assert.equal(first.draw, 1);
+  harness.settings.version = 'test-2';
+  const second = await harness.service.suggest({ sessionId: 's-cache-e' });
+
+  assert.equal(harness.calls.length, 2, 'the new version made a real call');
+  assert.deepEqual(second, { chips: indexedChipList(2), draw: 2 });
+});
+
+test('(cache-f) an upstream failure and an empty batch are not cached; the next request retries', async (t) => {
+  let failing = true;
+  const failure = makeHarness(t, {
+    responder: () => {
+      if (failing) throw new ReplySuggestionsClientError('http', 'upstream returned HTTP 500', 500);
+      return chips('retry-1', 'retry-2', 'retry-3');
+    },
+  });
+  await assert.rejects(() => failure.service.suggest({ sessionId: 's-cache-f-fail' }), /upstream request failed/);
+  failing = false;
+  const retried = await failure.service.suggest({ sessionId: 's-cache-f-fail' });
+  assert.deepEqual(retried.chips, ['retry-1', 'retry-2', 'retry-3']);
+  assert.equal(failure.calls.length, 2, 'the failed draw left nothing to hit');
+
+  // maxChips: 1 keeps the supplement out of the way, so an empty answer is one call.
+  const empty = makeHarness(t, { settings: { maxChips: 1 }, responder: () => chips() });
+  const emptyFirst = await empty.service.suggest({ sessionId: 's-cache-f-empty' });
+  assert.deepEqual(emptyFirst.chips, []);
+  assert.equal(empty.calls.length, 1);
+  const emptySecond = await empty.service.suggest({ sessionId: 's-cache-f-empty' });
+  assert.deepEqual(emptySecond.chips, []);
+  assert.equal(empty.calls.length, 2, 'an empty batch is not cached');
+});
+
+test('(cache-g) an expansion draw neither reads nor writes the ordinary batch cache', async (t) => {
+  const harness = makeHarness(t, {
+    settings: { expansion: 'vary' },
+    responder: (_request, index) => indexedChips(index),
+  });
+
+  const first = await harness.service.suggest({ sessionId: 's-cache-g' });
+  assert.deepEqual(first, { chips: indexedChipList(1), draw: 1 });
+
+  const expansion = await harness.service.suggest({ sessionId: 's-cache-g', expand: true, seed: '已选定的回复' });
+  assert.equal(harness.calls.length, 2, 'the expansion called upstream despite the cached ordinary batch');
+  assert.deepEqual(expansion.chips, indexedChipList(2));
+
+  const ordinary = await harness.service.suggest({ sessionId: 's-cache-g' });
+  assert.deepEqual(ordinary, first, 'the ordinary cache still holds the first batch; the expansion did not replace it');
+  assert.equal(harness.calls.length, 2);
+});
+
+test('(cache-h) the cache keeps 200 keys, evicts the least-recently-used, and never expires by time', async (t) => {
+  const harness = makeHarness(t, {
+    settings: { maxCallsPerMinute: 100000, maxCallsPerDay: 100000 },
+    responder: (_request, index) => indexedChips(index),
+  });
+
+  for (let index = 0; index <= REPLY_SUGGESTIONS_BATCH_CACHE_SIZE; index += 1) {
+    await harness.service.suggest({ sessionId: `s-cache-h-${index}` });
+  }
+  assert.equal(harness.calls.length, REPLY_SUGGESTIONS_BATCH_CACHE_SIZE + 1);
+
+  // 201 keys for a 200-key cache: the oldest (index 0) was evicted.
+  await harness.service.suggest({ sessionId: 's-cache-h-0' });
+  assert.equal(harness.calls.length, REPLY_SUGGESTIONS_BATCH_CACHE_SIZE + 2, 'the evicted key draws again');
+
+  // The most recent key is still cached a year later: there is no time expiry.
+  harness.advance(366 * 24 * 60 * 60 * 1000);
+  await harness.service.suggest({ sessionId: `s-cache-h-${REPLY_SUGGESTIONS_BATCH_CACHE_SIZE}` });
+  assert.equal(
+    harness.calls.length,
+    REPLY_SUGGESTIONS_BATCH_CACHE_SIZE + 2,
+    'a year of silence does not expire a cached batch',
+  );
+});
+
+test('(cache-i) identical concurrent requests still share one upstream call', async (t) => {
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const harness = makeHarness(t, {
+    responder: async () => {
+      await gate;
+      return chips('a', 'b', 'c');
+    },
+  });
+
+  const first = harness.service.suggest({ sessionId: 's-cache-i' });
+  const second = harness.service.suggest({ sessionId: 's-cache-i' });
+  await new Promise((resolve) => setImmediate(resolve));
+  release?.();
+  const [left, right] = await Promise.all([first, second]);
+
+  assert.deepEqual(left, right);
+  assert.equal(harness.calls.length, 1, 'coalescing still happens in front of the cache write');
+});
+
+test('(served-a) a real draw writes served "upstream"; a cache hit writes served "cache" with the same batch', async (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'reply-served-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const ledger = path.join(directory, 'usage.jsonl');
+  const harness = makeHarness(t, {
+    settings: { usageLog: true },
+    responder: () => chips('u-1', 'u-2', 'u-3'),
+    usageLog: { path: ledger },
+  });
+
+  await harness.service.suggest({ sessionId: 's-served' });
+  await harness.service.suggest({ sessionId: 's-served' });
+
+  const rows = readFileSync(ledger, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+  const shown = rows.filter((row) => row.type === 'shown');
+  assert.equal(shown.length, 2, 'a cache hit still leaves a shown row');
+  assert.equal(shown[0].served, 'upstream');
+  assert.equal(shown[1].served, 'cache');
+  assert.deepEqual(shown[1].chips, shown[0].chips, 'the cache row carries the cached chips');
+  assert.equal(shown[1].draw, shown[0].draw, 'and the cached draw');
+  assert.equal(harness.calls.length, 1);
+});
+
+test('(served-b) usageLog off writes no shown row for either path', async (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'reply-served-off-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const ledger = path.join(directory, 'usage.jsonl');
+  const harness = makeHarness(t, {
+    settings: { usageLog: false },
+    responder: () => chips('a', 'b', 'c'),
+    usageLog: { path: ledger },
+  });
+
+  await harness.service.suggest({ sessionId: 's-served-off' });
+  await harness.service.suggest({ sessionId: 's-served-off' });
+
+  assert.equal(existsSync(ledger), false, 'neither the upstream row nor the cache row was written');
+  assert.equal(harness.calls.length, 1);
 });

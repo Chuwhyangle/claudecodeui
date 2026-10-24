@@ -143,7 +143,9 @@
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
 #   and the session-digest-llm row by observation-session-digest-llm-tier,
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
-# so this file now covers 380 of the 422 files the current `find server -name '*.test.ts' -o -name
+#   and the quay-initiatives row by cockpit-initiative-view-and-decision-queue,
+#   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
+# so this file now covers 385 of the 427 files the current `find server -name '*.test.ts' -o -name
 # '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
 # not skipped — it just sorts alphabetically after the listed ones. The remaining ~40 unlisted files
 # (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
@@ -612,3 +614,10 @@
 2058	server/modules/context-events/tests/context-event-writer.test.ts
 1941	server/modules/context-events/tests/utterance-classifier.test.ts
 2012	server/modules/context-events/tests/shadow-predictor.test.ts
+#   and the architecture-delta row by observation-architecture-structural-delta, measured one file
+#   at a time on 2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/architecture-delta.test.ts`
+#   (dur=3405ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 428 server test files).
+3405	server/modules/observation/tests/architecture-delta.test.ts
+1877	server/modules/quay/tests/quay-initiatives.test.ts

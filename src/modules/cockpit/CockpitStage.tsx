@@ -339,6 +339,18 @@ function FleetView({
           {t('cockpit.fleetCliMissing', { reason: fleetReason ?? '' })}
         </p>
       )}
+      {/*
+        The ordinals are minted from the REGISTERED projects, in reading order, so a roster with
+        a hole in it draws ② next to a tile that carries no number at all. Without a sentence
+        saying so, 「第二个」 and the digit 2 look like they should name the second TILE. One
+        quiet line states the rule once for the whole grid.
+      */}
+      <p
+        className="mx-4 mt-2 text-[11px] text-muted-foreground"
+        data-testid="cockpit-fleet-ordinal-note"
+      >
+        {t('cockpit.ordinalsRegisteredOnly')}
+      </p>
       <ul
         className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3"
         data-testid="cockpit-fleet-tiles"

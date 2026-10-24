@@ -3624,6 +3624,71 @@ export type CockpitStateFrame = {
 
 // ---------------------------
 
+//----------------- COMPOSER CHIP STRIP ------------
+
+/**
+ * Where one composer chip came from.
+ *
+ * The three built-in sources are fixed by the strip's order. The trailing
+ * `string & {}` keeps those literals autocompleted while letting a source be
+ * registered from data alone (the accept contract's synthetic source does this),
+ * because the accept entry looks every source up in
+ * `SUGGESTION_CHIP_ACCEPT_SOURCES` rather than branching on the name.
+ */
+export type SuggestionChipSource = 'quoted' | 'model' | 'habit' | (string & {});
+
+/**
+ * One chip after the three sources have been merged, deduplicated and ordered.
+ *
+ * Used by the composer's chip strip and by the accept-descriptor record that
+ * decides how each source's acceptance behaves.
+ */
+export type SuggestionChip = {
+  /** Stable React key and option-id suffix: `<source>-<index>`. */
+  id: string;
+  /** The complete text a click fills into the draft — never the truncated label. */
+  text: string;
+  /** The source id that selects this chip's accept descriptor. */
+  source: SuggestionChipSource;
+  /** Index within its own source; the model index is what `picked` reports. */
+  index: number;
+};
+
+/**
+ * The composer chip strip's whole state and callbacks, produced once by the chip
+ * hook and handed to `ChatComposer` as a single prop.
+ *
+ * It exists so the composer takes one object instead of a dozen separate chip
+ * props: the strip's visibility, keyboard selection, listbox id, merged chips,
+ * the single accept callback, and the Suggest control's enabled/loading/request
+ * plus the expansion row all travel together. Consumers are `ChatComposer` and
+ * `ChatInterface`.
+ */
+export type ComposerChipStrip = {
+  /** Every display condition holds and at least one chip exists. */
+  visible: boolean;
+  /** The chip the keyboard is on, or null. Mirrored into `aria-activedescendant`. */
+  selectedIndex: number | null;
+  /** The listbox id from the chip hook; each option id is derived from it. */
+  listId: string;
+  /** The merged strip (quoted > model > habit). */
+  chips: readonly SuggestionChip[];
+  /** The one acceptance entry: fills the chip's text, never sends. */
+  onAccept: (chip: SuggestionChip) => void;
+  /** Whether the reply-suggestions feature is on and has a message to draw from. */
+  suggestionsEnabled: boolean;
+  /** A Suggest draw is in flight. */
+  suggestionsLoading: boolean;
+  /** Asks for a whole new batch; resolves false when the draw failed. */
+  onRequestSuggestions: () => void | Promise<boolean>;
+  /** The expansion experiment's variant/response chips for the draft in the box. */
+  expansionChips: readonly string[];
+  /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
+  onAcceptExpansionChip: (index: number) => void;
+};
+
+// ---------------------------
+
 //----------------- REPLY SUGGESTIONS ------------
 
 /**

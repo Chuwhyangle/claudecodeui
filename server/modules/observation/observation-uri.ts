@@ -10,6 +10,13 @@
  *   cloudcli://session/<id>              — one CloudCLI session
  *   cloudcli://architecture/<projectId>  — one project's architecture graph
  *   quay://<fleetProjectId>/board        — one fleet project's board (the fleet's own grammar)
+ *   quay://fleet/initiative/<slug>       — one cross-project initiative (the fleet's reserved segment)
+ *
+ * The initiative address is the fleet's (`ADR-013` reserves `fleet` for exactly this object).
+ * The cockpit's initiative view pins it to the wall, so the watch routes must accept it even
+ * though no observation producer writes an object ROW for it: a pin is a user's bookmark, and
+ * refusing the fleet's own address would make 「钉到观察墙」 impossible for the object the
+ * initiative view is about.
  *
  * The cloudcli scheme is CloudCLI's; quay's board URI is kept verbatim because the fleet owns
  * that address space and will own its "seen" write-back later (see the task's Notes). An id
@@ -33,13 +40,16 @@ export type ObservationKind = 'session' | 'project' | 'architecture';
 export type ObservationUri =
   | { scheme: 'cloudcli'; kind: 'session'; id: string; uri: string }
   | { scheme: 'cloudcli'; kind: 'architecture'; id: string; uri: string }
-  | { scheme: 'quay'; kind: 'project'; id: string; uri: string };
+  | { scheme: 'quay'; kind: 'project'; id: string; uri: string }
+  | { scheme: 'quay'; kind: 'initiative'; id: string; uri: string };
 
 /** One path segment: at least one character, none of the URI's structural characters. */
 const SEGMENT = '[^/?#\\s]+';
 
 const CLOUDCLI_URI = new RegExp(`^cloudcli://(session|architecture)/(${SEGMENT})$`);
 const QUAY_BOARD_URI = new RegExp(`^quay://(${SEGMENT})/board$`);
+/** The fleet's one reserved address: `fleet` is not a project, and only `initiative` lives there. */
+const QUAY_INITIATIVE_URI = new RegExp(`^quay://fleet/initiative/(${SEGMENT})$`);
 
 /** The canonical `cloudcli://session/<id>` spelling. */
 export function formatSessionUri(id: string): string {
@@ -56,6 +66,11 @@ export function formatProjectUri(fleetProjectId: string): string {
   return `quay://${fleetProjectId}/board`;
 }
 
+/** The canonical `quay://fleet/initiative/<slug>` spelling. */
+export function formatInitiativeUri(slug: string): string {
+  return `quay://fleet/initiative/${slug}`;
+}
+
 /** Formats a parsed URI back to its canonical spelling. */
 export function formatObservationUri(parsed: ObservationUri): string {
   switch (parsed.kind) {
@@ -65,6 +80,8 @@ export function formatObservationUri(parsed: ObservationUri): string {
       return formatArchitectureUri(parsed.id);
     case 'project':
       return formatProjectUri(parsed.id);
+    case 'initiative':
+      return formatInitiativeUri(parsed.id);
   }
 }
 
@@ -82,6 +99,10 @@ export function parseObservationUri(value: unknown): ObservationUri | null {
     const kind = cloudcli[1] === 'session' ? 'session' : 'architecture';
     const id = cloudcli[2]!;
     return { scheme: 'cloudcli', kind, id, uri: value };
+  }
+  const initiative = QUAY_INITIATIVE_URI.exec(value);
+  if (initiative !== null) {
+    return { scheme: 'quay', kind: 'initiative', id: initiative[1]!, uri: value };
   }
   const quay = QUAY_BOARD_URI.exec(value);
   if (quay !== null) {

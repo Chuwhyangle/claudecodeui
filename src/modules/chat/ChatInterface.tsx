@@ -746,19 +746,7 @@ function ChatInterface({
     cancelEditMessage,
     draftScope,
     sendFailed,
-    inputSuggestionCandidates,
-    inputSuggestionsVisible,
-    selectedInputSuggestionIndex,
-    inputSuggestionListId,
-    acceptInputSuggestion,
-    suggestionChips,
-    acceptModelSuggestion,
-    acceptQuotedSuggestion,
-    replySuggestionsEnabled,
-    replySuggestionsLoading,
-    redrawReplySuggestions,
-    replyExpansionChips,
-    acceptReplyExpansionChip,
+    chipStrip,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -1368,21 +1356,9 @@ function ChatInterface({
           placeholder={t('input.placeholder', { provider: selectedProviderLabel })}
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
-          inputSuggestionCandidates={inputSuggestionCandidates}
-          inputSuggestionsVisible={inputSuggestionsVisible}
-          selectedInputSuggestionIndex={selectedInputSuggestionIndex}
-          inputSuggestionListId={inputSuggestionListId}
-          onAcceptInputSuggestion={acceptInputSuggestion}
-          suggestionChips={suggestionChips}
+          chipStrip={chipStrip}
           replyReference={replyReference}
           replyItems={latestReplyItems?.items}
-          onAcceptModelSuggestion={acceptModelSuggestion}
-          onAcceptQuotedSuggestion={acceptQuotedSuggestion}
-          replySuggestionsEnabled={replySuggestionsEnabled}
-          replySuggestionsLoading={replySuggestionsLoading}
-          onRequestReplySuggestions={redrawReplySuggestions}
-          replyExpansionChips={replyExpansionChips}
-          onAcceptReplyExpansionChip={acceptReplyExpansionChip}
         />
             </>
           )}

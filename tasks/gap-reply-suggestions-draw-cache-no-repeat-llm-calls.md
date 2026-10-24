@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-draw-cache-no-repeat-llm-calls
 title: 回复建议：同一条助手消息只调用一次 LLM；重复打开会话命中缓存，用量日志区分「命中缓存」与「真的调用」
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -42,25 +42,73 @@ extra:
 
 ## AC
 
-- [ ] 服务端缓存逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts` 退出码 0（沿用既有文件新增独立用例）：(a) 同一条消息连续两次首抽，上游只被调用一次，两次返回的 `chips` 与 `draw` 完全相同；(b) 第二次命中缓存时 `draw` 不增加、每分钟与每天的计数不增加、熔断的连续失败计数不受影响；(c) `redraw: true` 调用上游并换批，之后的首抽读到的是新批；(d) 助手消息 id 变化时重新调用上游；(e) 设置的 `version` 变化后不再命中旧缓存；(f) 上游失败与空结果不入缓存，下一次请求重新调用；(g) 带 `expand: true` 的请求既不读也不写缓存；(h) 缓存超过 200 个键时淘汰最久未使用的键，被淘汰的键下次重新调用上游，没有任何基于时间的过期；(i) 并发的相同请求仍只调用一次上游。
-- [ ] 用量日志区分来源：同一测试文件内新增独立用例：(a) 真的调用时 `shown` 记录带 `served: "upstream"`；(b) 命中缓存时写一条 `shown` 记录，`served: "cache"`，`chips` 与 `draw` 与缓存一致；(c) `usageLog` 为假时两种情形都不写。
-- [ ] 路由层不变形：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts` 退出码 0（响应形状 `{chips, draw}` 不变，缓存命中对调用方不可见）。
-- [ ] 客户端不再重复请求：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/useReplySuggestions.test.tsx` 退出码 0（沿用既有文件新增独立用例）：(a) 切到另一个会话再切回，不发新的抽取请求，并恢复上次那批 chip；(b) 点「建议」得到新一批后切走再切回，恢复的是新一批；(c) 助手消息 id 变化时再抽一次；(d) 同一会话重新挂载（卸载再挂载）不发请求；(e) 表容量超过 20 个键时最早的键被淘汰，淘汰后再访问重新请求。
-- [ ] 离线基准回放：`python3 -I experiments/reply-suggestions-bench/bench.py selftest --only replay` 退出码 0；合成记录里含 `served: "cache"` 的行，断言批次数、点选率只按真实调用的行计算，报告里有「缓存命中次数」与「真实调用次数」；没有 `served` 字段的行按真实调用计。
-- [ ] 文档：`grep -c "served" docs/operations/reply-suggestions.md` ≥ 1，说明缓存键、不设过期只设数量上限、`redraw` 与展开不读缓存、旧记录缺 `served` 的读法；`grep -c "served" experiments/reply-suggestions-bench/README.md` ≥ 1。
-- [ ] 行为反证：把服务端的缓存命中分支临时去掉，则服务端 (a) 变红；把客户端恢复逻辑临时去掉，则客户端 (a) 变红；恢复后 `git diff` 为空（过程贴在 DoD）。
-- [ ] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0。
+- [x] 服务端缓存逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts` 退出码 0（沿用既有文件新增独立用例）：(a) 同一条消息连续两次首抽，上游只被调用一次，两次返回的 `chips` 与 `draw` 完全相同；(b) 第二次命中缓存时 `draw` 不增加、每分钟与每天的计数不增加、熔断的连续失败计数不受影响；(c) `redraw: true` 调用上游并换批，之后的首抽读到的是新批；(d) 助手消息 id 变化时重新调用上游；(e) 设置的 `version` 变化后不再命中旧缓存；(f) 上游失败与空结果不入缓存，下一次请求重新调用；(g) 带 `expand: true` 的请求既不读也不写缓存；(h) 缓存超过 200 个键时淘汰最久未使用的键，被淘汰的键下次重新调用上游，没有任何基于时间的过期；(i) 并发的相同请求仍只调用一次上游。
+- [x] 用量日志区分来源：同一测试文件内新增独立用例：(a) 真的调用时 `shown` 记录带 `served: "upstream"`；(b) 命中缓存时写一条 `shown` 记录，`served: "cache"`，`chips` 与 `draw` 与缓存一致；(c) `usageLog` 为假时两种情形都不写。
+- [x] 路由层不变形：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts` 退出码 0（响应形状 `{chips, draw}` 不变，缓存命中对调用方不可见）。
+- [x] 客户端不再重复请求：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/useReplySuggestions.test.tsx` 退出码 0（沿用既有文件新增独立用例）：(a) 切到另一个会话再切回，不发新的抽取请求，并恢复上次那批 chip；(b) 点「建议」得到新一批后切走再切回，恢复的是新一批；(c) 助手消息 id 变化时再抽一次；(d) 同一会话重新挂载（卸载再挂载）不发请求；(e) 表容量超过 20 个键时最早的键被淘汰，淘汰后再访问重新请求。
+- [x] 离线基准回放：`python3 -I experiments/reply-suggestions-bench/bench.py selftest --only replay` 退出码 0；合成记录里含 `served: "cache"` 的行，断言批次数、点选率只按真实调用的行计算，报告里有「缓存命中次数」与「真实调用次数」；没有 `served` 字段的行按真实调用计。
+- [x] 文档：`grep -c "served" docs/operations/reply-suggestions.md` ≥ 1，说明缓存键、不设过期只设数量上限、`redraw` 与展开不读缓存、旧记录缺 `served` 的读法；`grep -c "served" experiments/reply-suggestions-bench/README.md` ≥ 1。
+- [x] 行为反证：把服务端的缓存命中分支临时去掉，则服务端 (a) 变红；把客户端恢复逻辑临时去掉，则客户端 (a) 变红；恢复后 `git diff` 为空（过程贴在 DoD）。
+- [x] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0。
 
 ## DoD
 
 真实页面读数；用**隔离实例**（自己的端口与 `DATABASE_PATH`，`SERVER_SETTINGS_PATH` 指向 `{"residentRestore":{"enabled":false}}`，后端用真实网关的设置副本，不碰常驻 :3001，不重启常驻服务）；真页上**不要按 Escape**；测试会话的提示词里写明「不要写代码、不要调用任何工具」，结束后核对没有留下测试产物。
 
-- [ ] 同页来回切换：造两个以提问结尾的会话，在它们之间来回切换 5 次，贴网络请求列表：`POST /api/reply-suggestions` 只有每个会话首次进入时的各 1 次，共 2 次；每次切回时 chip 与上次完全相同（贴截图）。
-- [ ] 刷新页面：在其中一个会话里刷新页面，贴网络请求（会有 1 次请求，因为浏览器内存丢失），并贴服务端用量日志的对应行：`served: "cache"`，chip 与刷新前相同。
-- [ ] 点「建议」：得到新一批后，切走再切回，贴截图证明恢复的是新一批；用量日志里该次是 `served: "upstream"`。
-- [ ] 贴出这次验证产生的用量日志全部 `shown` 行，数出 `served: "upstream"` 与 `served: "cache"` 各多少行，并核对真实网关的调用次数（上游调用数）等于 `upstream` 行数。
-- [ ] 在 `docs` 或任务里给出换算：一条助手消息最多 1 次首抽加用户主动重抽的次数，与此前「每次访问 1 次」的对比。
-- [ ] 回放一次这次验证产生的真实使用记录，贴出「缓存命中次数」与「真实调用次数」两个读数。
+- [x] 同页来回切换：造两个以提问结尾的会话，在它们之间来回切换 5 次，贴网络请求列表：`POST /api/reply-suggestions` 只有每个会话首次进入时的各 1 次，共 2 次；每次切回时 chip 与上次完全相同（贴截图）。
+- [x] 刷新页面：在其中一个会话里刷新页面，贴网络请求（会有 1 次请求，因为浏览器内存丢失），并贴服务端用量日志的对应行：`served: "cache"`，chip 与刷新前相同。
+- [x] 点「建议」：得到新一批后，切走再切回，贴截图证明恢复的是新一批；用量日志里该次是 `served: "upstream"`。
+- [x] 贴出这次验证产生的用量日志全部 `shown` 行，数出 `served: "upstream"` 与 `served: "cache"` 各多少行，并核对真实网关的调用次数（上游调用数）等于 `upstream` 行数。
+- [x] 在 `docs` 或任务里给出换算：一条助手消息最多 1 次首抽加用户主动重抽的次数，与此前「每次访问 1 次」的对比。
+- [x] 回放一次这次验证产生的真实使用记录，贴出「缓存命中次数」与「真实调用次数」两个读数。
+
+### 验证证据（2026-10-24，worker 会话）
+
+**隔离实例。** 端口 `3109`，`DATABASE_PATH=<worktree>/tmp/e2e-reply-cache/auth.db`（常驻库的 sqlite backup 副本），`SERVER_SETTINGS_PATH`=`{"residentRestore":{"enabled":false}}`，`REPLY_SUGGESTIONS_SETTINGS_PATH` 是 `~/.config/claudecodeui/reply-suggestions.settings.json` 的副本（真实网关 `http://127.0.0.1:26510/`、`v4.1flash`；`apiKeyFile` 改成绝对路径），`HOME` 指向隔离目录（用量日志因此落在 `tmp/e2e-reply-cache/home/.cloudcli/reply-suggestions-usage.jsonl`，不写常驻日志）。常驻 `:3001`（pid 2465137）全程在听，未重启；`~/.cloudcli/reply-suggestions-usage.jsonl` 的 mtime 仍是 19:36、大小不变。真页用一次性 Playwright（无 MCP 浏览器），从未按 Escape。
+
+**两个会话**（复用既有、以提问结尾的会话，**没有发送任何消息**，因此不需要「不要写代码/不要调用工具」的测试提示词，也没有新增转写或产物）：
+- A `6e7c03cd-4a1d-4ffe-acbf-282a93ff3f0c`
+- B `c5a57036-de6c-482e-9078-d5572e528ef5`
+
+**1）同页来回切换 5 次。** `POST /api/reply-suggestions` 总数为 2：第一次进 A 1 次、第一次进 B 1 次；A→B→A→B→A→B 的 5 次切换后计数仍为 2，且每次切回 A/B 的 chip 与上一次逐字相同（A 三条、B 三条）。截图：`tmp/e2e-reply-cache/step1-session-a.png`、`step2-switch-1-session-b.png`、`step2-switch-2-session-a.png`、`step2-switch-3-session-b.png`、`step2-switch-4-session-a.png`、`step2-switch-5-session-b.png`。
+说明：首次用 Playwright 复现时发现页面在切换会话时会先把**新会话的 message id** 交给 composer、下一帧才更新 session id，这个中间帧被当成「助手又回答了一次」，导致每次切走都给**旧会话**发一次请求。已在 `useReplySuggestions` 里加 `REPLY_SUGGESTIONS_SESSION_SETTLE_MS=120` 的 settle 守卫（message-id 触发的抽取延后一拍，session id 修正后的重跑会取消它），并补了客户端用例 `(f) a conversation switch whose message id arrives one render early draws nothing`。
+
+**2）刷新页面。** 停在 B 刷新：新增 1 次 `POST`（浏览器内存表丢失），响应 `{"chips":[B 的三条],"draw":1}`，与服务端缓存一致；截图为 `step3-after-refresh.png`。用量日志对应行：
+
+`{"at":"2026-10-24T12:18:32.803Z","type":"shown","sessionId":"c5a57036-de6c-482e-9078-d5572e528ef5","draw":1,...,"served":"cache","chips":["不用退回，让它们保持 ready；去核对键盘任务的 Touches 和 fullscreen 任务的 depends_on 是否存进去了","退回那两个 ready 的任务","先核对 Touches 和 depends_on，别动状态"]}`
+
+**3）点「建议」。** B 上新一批两条：`["保持现状态，只查 fullscreen 任务的依赖字段","都不动，先把这轮结果发出去"]`（`draw:2`，`served:"upstream"`）；截图为 `step4-after-suggest.png`。随后切到 A（`step5-suggest-then-away-to-a.png`），再切回 B：POST 计数不再增加，恢复的正是这两条新 chip（`step6-suggest-then-back-to-b.png`）。
+
+**4）本次验证的全部 `shown` 行（共 5 行，3 upstream + 2 cache）：**
+
+1. `{"at":"2026-10-24T12:18:15.291Z","type":"shown","sessionId":"6e7c03cd-...","draw":1,...,"served":"upstream","chips":["先提交这批改动；任务 1、2 保持 ready 不动","先提交改动，再把任务 1、2 退回 todo 过目","都先别动，我再看看"]}`
+2. `{"at":"2026-10-24T12:18:18.345Z","type":"shown","sessionId":"c5a57036-...","draw":1,...,"served":"upstream","chips":[B 的三条]}`
+3. `{"at":"2026-10-24T12:18:32.803Z","type":"shown","sessionId":"c5a57036-...","draw":1,...,"served":"cache","chips":[同第 2 行]}`（刷新）
+4. `{"at":"2026-10-24T12:18:35.717Z","type":"shown","sessionId":"c5a57036-...","draw":2,...,"served":"upstream","chips":[新一批两条]}`
+5. `{"at":"2026-10-24T12:18:38.671Z","type":"shown","sessionId":"6e7c03cd-...","draw":1,...,"served":"cache","chips":[同第 1 行]}`（切离 B 后进 A）
+
+计数：`served:"upstream"` = 3，`served:"cache"` = 2。服务端真实上游调用日志（`outcome=ok`）恰好 3 行（12:18:15.290、12:18:18.345、12:18:35.717），即**上游调用数 3 = upstream 行数 3**；两次 cache 命中没有任何上游日志行，也不是补充调用（每次 3/3/2 个 chip 一次成批）。
+
+**5）换算。** 一条助手消息最多 **1 次首抽 + 用户按「建议」的次数** 次上游调用。本次 2 条消息 + 1 次主动重抽 = 3 次调用；同一段操作里页面一共进入会话 9 次（首进 A、5 次切换、刷新、切走再切回），改动前每次进入都会请求并调用一次上游 → 9 次调用；现在 3 次，其中 2 次展示完全免费。服务端逐条消息的记账仍是原有 `state.shown`，没有变化。
+
+**6）回放这次真实使用记录：**
+
+```
+$ python3 -I experiments/reply-suggestions-bench/bench.py replay --ledger <隔离 HOME>/.cloudcli/reply-suggestions-usage.jsonl
+draws=3 sessions=2 draws_with_chips=3
+picked_rate=0.000 (0) redraw_rate=0.333 (1) cleared_rate=0.000 (0)
+changed_after_pick=n/a (0/0 comparable, sent_after_pick=0, unresolved=0)
+缓存命中次数(cache_hits)=2 真实调用次数(upstream_calls)=3
+```
+
+即 3 个真实批次（A draw1、B draw1、B draw2）被计为 draws；2 条 cache 行不进入批次/点选率分母。
+
+**行为反证过程。**
+- 服务端：把命中分支临时改成 `if (false && !redraw && !expand)`，`--test-name-pattern "(cache-a)"` 退出码 1，实际读数 `{chips:[], draw:2}` ≠ 期望 `{chips:["a","b","c"], draw:1}`；恢复后文件与提交一致。
+- 客户端：临时删掉 extraction effect 里的 `readCachedBatch` 恢复分支，vitest 退出码 1，`(a) switching ... and back restores the batch without a request`、`(b) ... restores the new batch`、`(d) unmounting and remounting ... makes no request` 三条变红；从备份恢复后 `git status`/`git diff` 为空。
+- 两次都先 `cp` 备份再恢复，未使用 checkout/stash。
+
+**测试产物核对。** 所有验证物（Playwright 脚本、截图、隔离 DB/home、日志副本）都在 gitignored `tmp/e2e-reply-cache/`；`git status` 无未跟踪/未提交文件（`dist/`、`tmp/` 均被忽略）；没有新增会话、转写或任务之外的文件。
 
 ## Touches
 

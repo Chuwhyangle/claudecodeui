@@ -15,6 +15,7 @@ import { AppError, findApplicationRoot, getModuleDirectory, installVoiceRuntimeC
 import type { AuthenticatedWebSocketRequest, HostMode, LLMProvider, ProviderRuntimeWriter } from '@/shared/types.js';
 import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
 import { installConnectedClientsPort } from '@/shared/ports/connected-clients.port.js';
+import { installInitiativeAuditRatioPort } from '@/shared/ports/initiative-audit-ratio.port.js';
 import { installProjectsSessionFetchPort } from '@/shared/ports/projects-session-fetch.port.js';
 import { installProviderRegistryPort } from '@/shared/ports/provider-registry.port.js';
 import { installSessionBroadcastPort } from '@/shared/ports/session-broadcast.port.js';
@@ -184,6 +185,9 @@ import { configureWebPush } from './modules/notifications/index.js';
 //   voice-lexicon      <- the sessions service's history reader (keeps modules/voice out of the provider cycle)
 //   projects-session-fetch <- the provider synchronizer + the websocket module's OPEN-connection broadcast
 //                             (keeps modules/projects out of the provider/websocket cycle)
+//   initiative-audit-ratio <- the server settings file's `initiative.auditRatio`
+//                             (keeps modules/quay out of that same cycle; installed below, once
+//                              the settings reading exists)
 //
 // Re-installing the same objects is idempotent; nothing here constructs a second
 // registry. The install functions are imported with the rest of the shared
@@ -254,6 +258,12 @@ const serverSettings = loadServerSettings();
 for (const problem of serverSettings.problems) {
     console.warn(`${terminalTextStyles.info('[INFO]')} Server settings: ${problem}`);
 }
+// The cockpit's initiative spot-check ratio. Quay's initiatives reading needs it, and a direct
+// `modules/quay -> modules/settings` import would close the `quay -> settings -> mcp-gateway ->
+// quay` loop (AC-394's provider cycle, ten members instead of three); the port keeps the ONE
+// boot-time reading above as the only reader of the settings module. Installed before the
+// routes are mounted, and read lazily on the first initiatives request.
+installInitiativeAuditRatioPort({ readAuditRatio: () => serverSettings.initiative.auditRatio });
 const queryClaude = providerRuntimeService.getRunner('claude');
 const queryCursor = providerRuntimeService.getRunner('cursor');
 const gitRoutes = createGitModule({

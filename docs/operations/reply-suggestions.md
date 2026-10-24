@@ -94,9 +94,13 @@ composer behaves exactly as it did before the experiment.
 
 `usageLog` — write the local-only JSONL ledger (`true` by default). The ledger
 holds the server's `shown` rows and the client's `picked` / `cleared` /
-`redrawn` / `sent` events. The text a person finally sends is not stored; it can
-be recovered from the session transcript. Rotation: a file that would exceed
-5 MB is renamed to `<file>.1`, discarding the older `.1`.
+`redrawn` / `sent` events. Every `shown` row carries `served`: `"upstream"` when
+the batch came from a real model call, `"cache"` when the service answered from
+the batch cache. Both are displays; only `"upstream"` rows are paid calls. Rows
+written before `served` existed have no such field and must be read as
+`"upstream"`. The text a person finally sends is not stored; it can be recovered
+from the session transcript. Rotation: a file that would exceed 5 MB is renamed
+to `<file>.1`, discarding the older `.1`.
 
 `systemPrompt` — empty uses the built-in prompt; a non-empty string replaces it
 whole.
@@ -129,6 +133,37 @@ path is exposed. `enabled` is the effective switch (a misconfigured file reads
 - Identical concurrent requests (same session, message, redraw flag and focus)
   share one upstream call.
 - No assistant message → `{ chips: [], draw: 0 }` with no upstream call.
+
+### One message, one upstream draw (the batch cache)
+
+The batch last returned for a conversation is cached in the server's memory, so
+a second look at the same assistant message is free. The key is **session id +
+last assistant message id + settings `version`**: editing the settings file
+(switching model or prompt bumps `version`) retires the old entries naturally.
+
+- A non-redraw, non-expand request whose key is cached returns that same
+  `{ chips, draw }` unchanged: **no upstream call, no `draw` increment, and no
+  consumption of `maxCallsPerMinute` / `maxCallsPerDay` or the circuit-breaker
+  counters**.
+- `redraw: true` still calls upstream (that is what the person asked for) and
+  replaces the cached batch with the new one.
+- An expansion request (`expand: true`, with `seed` or `focus`) neither reads nor
+  writes this cache: it is anchored on the draft, not on the message.
+- An upstream failure, an unparseable answer and an empty batch are never
+  cached, so the next request tries again.
+- The cache holds the **200 most recently used keys** and has **no time
+  expiry**; past the bound the least-recently-used key is evicted and draws
+  again. A restart empties it, so the first visit afterwards draws once. This is
+  bounded by count, not by time, precisely so an old-but-still-open conversation
+  does not re-bill the model.
+- Identical concurrent requests are still coalesced into one upstream call.
+
+A message therefore costs **1 first draw + as many redraws as the person presses
+Suggest**, instead of one call per visit. The browser also keeps its own
+20-key in-memory table of batch → chips for the same key, so switching away and
+back (or remounting the composer) restores the batch without even the HTTP
+round-trip; a page reload loses that table and falls through to the server
+cache, which still makes no model call.
 
 ### Expansion (`expand: true`)
 
@@ -171,6 +206,12 @@ at `maxChips`. An answer with no usable chip is an upstream failure (`502`).
 One log line per upstream call records only protocol, model, settings version,
 duration, outcome and the token counts the gateway reported. It never contains
 conversation text, chip text or the key.
+
+The usage ledger's `shown` rows additionally record `served` (`"upstream"` or
+`"cache"`; see the `usageLog` key above). A cache hit writes a `shown` row with
+the cached `chips` and `draw` and no upstream log line, so the ledger separates
+"how many times a batch was displayed" from "how many times the model was
+actually called".
 
 Protection: sliding one-minute and one-day call caps; **five consecutive
 upstream failures open a 30-second circuit breaker** (constants in
