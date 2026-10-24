@@ -636,3 +636,9 @@
 #   (dur=1897ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
 #   coverage floor green now that the tree collects 433 server test files).
 1897	server/modules/quay/tests/session-task-chain.test.ts
+#   and the counter-voice row by cockpit-decision-counter-voice, measured one file at a time
+#   on 2026-10-25 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/counter-voice.test.ts`
+#   (dur=2272ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 435 server test files).
+2272	server/modules/quay/tests/counter-voice.test.ts
