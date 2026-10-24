@@ -37,6 +37,7 @@ extra: {}
 - server/modules/cockpit/tests/cockpit-reducer.test.ts
 - src/modules/cockpit/CockpitStage.tsx
 - src/modules/cockpit/cockpitView.ts
+- src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/CockpitRemote.tsx
 - src/modules/cockpit/tests/CockpitStage.test.tsx
 - src/modules/cockpit/tests/CockpitRemote.test.tsx
