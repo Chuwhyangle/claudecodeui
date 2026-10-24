@@ -45,14 +45,17 @@ depends_on:
 - 浏览器读数：session 4 条、project 3 条、architecture 3 条盲区；「打开原始材料」入口文案分别为 `Open in the conversation` / `Open the Quay panel` / `Open in the architecture tab (highlight differences)`；磁贴文本不含盲区。
 - `GET /api/observation/wall` 实测：三个对象都带非空 `blindSpots`（数据库行未写 `__blindSpots`，读数由服务端按 kind 补默认），且该保留键不出现在返回的 `digest` 中。
 - 隔离实例与 Vite 已按监听端口精确 PID 停止，无本实例 `claudecodeui-session-*` scope。
+- 2026-10-24 suite 红因（上一轮 exited-not-landed）已复现并修好：本任务新增的 `server/modules/observation/tests/blind-spots.test.ts` 把收集数 420→421，撞破 `quay-test-script.test.ts` 的三条 pin——AC7 地板 `378/420`（恰好 90%）→ `378/421` = 89.8%，AC2/AC3 的 `known/unknown` 精确计数（AC2 `unknown=417`、AC3 `unknown=419`）各差 1。修法：单文件量得新判据 `duration_ms=3232` 并追加到 `scripts/suite-duration-baseline.tsv`（覆盖回到 379/421 = 90.0%），同步把 AC2/AC3 的 pin 移到 `unknown=418` / `unknown=420` 并各记一条来源注释。单文件复跑 `quay-test-script.test.ts` 14/14 通过（85.6s）。
 
 ## Touches
 
+- scripts/suite-duration-baseline.tsv
 - server/modules/observation/blind-spots.ts
 - server/modules/observation/observation-store.ts
 - server/modules/observation/observation.routes.ts
 - server/modules/observation/index.ts
 - server/modules/observation/tests/blind-spots.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - src/modules/cockpit/ObservationPreview.tsx
 - src/modules/cockpit/hooks/useObservationWall.ts
 - src/modules/cockpit/tests/ObservationWall.test.tsx
