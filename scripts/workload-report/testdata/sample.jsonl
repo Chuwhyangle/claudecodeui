@@ -1,0 +1,12 @@
+{"at": 1792838400000, "kind": "session", "target": "session-1", "fromTarget": null, "dwellMs": 120000, "deviceId": "fixture-device"}
+{"at": 1792838520000, "kind": "tab", "target": "quay", "fromTarget": "session-1", "dwellMs": 30000, "deviceId": "fixture-device"}
+{"at": 1792838550000, "kind": "tab", "target": "architecture", "fromTarget": "quay", "dwellMs": 15000, "deviceId": "fixture-device"}
+{"at": 1792838565000, "kind": "session", "target": "session-2", "fromTarget": "architecture", "dwellMs": 45000, "deviceId": "fixture-device"}
+{"at": 1792838610000, "kind": "session", "target": "session-1", "fromTarget": "session-2", "dwellMs": 9000, "deviceId": "fixture-device"}
+{"at": 1792838619000, "kind": "tab", "target": "quay", "fromTarget": "session-1", "dwellMs": 6000, "deviceId": "fixture-device"}
+{"at": 1792838625000, "kind": "cockpit-tile", "target": "tile-a", "fromTarget": "quay", "dwellMs": 5000, "deviceId": "fixture-device"}
+{"at": 1792838630000, "kind": "cockpit-preview", "target": "tile-a:preview", "fromTarget": "tile-a", "dwellMs": 4000, "deviceId": "fixture-device"}
+{"at": 1792838634000, "kind": "tab", "target": "cockpit", "fromTarget": "tile-a:preview", "dwellMs": 20000, "deviceId": "fixture-device"}
+{"at": 1792838654000, "kind": "tab", "target": "chat", "fromTarget": "cockpit", "dwellMs": 3000, "deviceId": "fixture-device"}
+{"at": 1792838657000, "kind": "session", "target": "session-3", "fromTarget": "chat", "dwellMs": 8000, "deviceId": "fixture-device"}
+{"at": 1792838665000, "kind": "tab", "target": "quay", "fromTarget": "session-3", "dwellMs": 700, "deviceId": "fixture-device"}

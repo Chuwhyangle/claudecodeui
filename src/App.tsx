@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, useEffect, type ReactNode } from 'react';
 
 import { OAUTH_CONSENT_SPA_PATH } from '@shared/oauthConsent';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
@@ -15,6 +15,7 @@ import { CockpitPage, CockpitRemote } from '@/modules/cockpit';
 import { ArchitecturePanel, requestArchitectureSessionFocus } from '@/modules/architecture';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import { useDeviceSettings } from '@/shared/hooks/useDeviceSettings';
+import { installViewEvents, reportView } from '@/shared/viewEvents';
 import { i18n } from '@/modules/i18n';
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
@@ -136,6 +137,26 @@ function AuthenticatedWebSocket({ children }: { children: ReactNode }) {
 const NO_SESSION_IS_PROCESSING = (): boolean => false;
 
 /**
+ * Starts the local view-event instrumentation and reports the cockpit route.
+ *
+ * The cockpit is a sibling of the project workspace, so it has no active tab for
+ * `useProjectsState` to report; every view inside the workspace is reported there instead.
+ * Mounted first among the router's children, so its install effect runs before the
+ * workspace's first report. Uploads can be disabled in `server.settings.json`
+ * (`observation.viewEvents.enabled`); the server then answers 204 without writing.
+ */
+function ViewEventInstrumentation() {
+  const location = useLocation();
+  useEffect(() => installViewEvents(), []);
+  useEffect(() => {
+    if (location.pathname === '/cockpit' || location.pathname.startsWith('/cockpit/')) {
+      reportView('tab', 'cockpit');
+    }
+  }, [location.pathname]);
+  return null;
+}
+
+/**
  * The `/session/:sessionId/architecture` route: the architecture panel alone, in
  * a page of its own.
  *
@@ -211,6 +232,7 @@ export default function App() {  const routerBasename = detectRouterBasename();
                 <TaskMasterProvider>
                 <ProtectedRoute>
                   <Router basename={routerBasename}>
+                    <ViewEventInstrumentation />
                     <Routes>
                       <Route path="/" element={<ProjectWorkspaceRoute />} />
                       <Route path="/session/:sessionId" element={<ProjectWorkspaceRoute />} />

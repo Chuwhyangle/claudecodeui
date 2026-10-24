@@ -139,7 +139,9 @@
 #   (that file is new and no green round contains it yet),
 #   and the server-import-cycle-budget row by gap-ac394-server-import-cycle-budget,
 #   measured one file at a time on 2026-10-17 (its own new criterion; no green round contains it yet),
-# so this file now covers 375 of the 415 files the current `find server -name '*.test.ts' -o -name
+#   and the view-events row by observation-p0-view-instrumentation-and-weekly-report,
+#   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
+# so this file now covers 378 of the 419 files the current `find server -name '*.test.ts' -o -name
 # '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
 # not skipped — it just sorts alphabetically after the listed ones. The remaining ~40 unlisted files
 # (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
@@ -596,3 +598,4 @@
 3289	server/modules/observation/tests/producer-liveness.test.ts
 3737	server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts
 3622	server/modules/observation/tests/session-digest.test.ts
+1917	server/modules/observation/tests/view-events.test.ts
