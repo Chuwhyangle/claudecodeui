@@ -54,20 +54,20 @@ depends_on:
 
 - `src/shared/api.ts`
 - `src/shared/types.ts`
-- `src/modules/chat/hooks/useReplySuggestions.ts`
-- `src/modules/chat/hooks/useTranscriptSelection.ts`
+- `src/modules/chat/hooks/useReplySuggestions.ts` (new)
+- `src/modules/chat/hooks/useTranscriptSelection.ts` (new)
 - `src/modules/chat/hooks/useInputSuggestions.ts`
 - `src/modules/chat/utils/inputSuggestions.ts`
 - `src/modules/chat/hooks/useChatComposerState.ts`
-- `src/modules/chat/components/InputSuggestionChips.tsx`
-- `src/modules/chat/components/ChatComposer.tsx`
-- `src/modules/chat/components/ChatInterface.tsx`
-- `src/modules/chat/components/transcript/ChatMessagesPane.tsx`
-- `src/i18n/locales/en/chat.json`
-- `src/i18n/locales/zh-CN/chat.json`
-- `src/modules/chat/tests/useReplySuggestions.test.tsx`
-- `src/modules/chat/tests/useTranscriptSelection.test.tsx`
+- `src/modules/chat/composer/InputSuggestionChips.tsx`
+- `src/modules/chat/composer/ChatComposer.tsx`
+- `src/modules/chat/ChatInterface.tsx`
+- `src/modules/chat/transcript/ChatMessagesPane.tsx`
+- `src/modules/i18n/locales/en/chat.json`
+- `src/modules/i18n/locales/zh-CN/chat.json`
+- `src/modules/chat/tests/useReplySuggestions.test.tsx` (new)
+- `src/modules/chat/tests/useTranscriptSelection.test.tsx` (new)
 - `src/modules/chat/tests/inputSuggestions.test.ts`
-- `src/modules/chat/tests/InputSuggestionChips.test.tsx`
-- `src/modules/chat/tests/ChatComposerReplyChips.test.tsx`
+- `src/modules/chat/tests/InputSuggestionChips.test.tsx` (new)
+- `src/modules/chat/tests/ChatComposerReplyChips.test.tsx` (new)
 - `tasks/gap-reply-suggestions-composer-chips-button-selection.md`
