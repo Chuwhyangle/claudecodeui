@@ -42,34 +42,35 @@ depends_on:
 
 ## AC
 
-- [ ] 守卫单元逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-guard.test.ts` 退出码 0；独立用例（时钟可注入）：(a) 连续 5 次失败后熔断，期内抛熔断类错误且不调用 `call`；(b) 冷却期满允许一次试探，成功则恢复，失败则重新熔断；(c) 每分钟上限与每天上限各一条用例，超限抛限流类错误，窗口滑过后恢复；(d) 缓存命中等不经过守卫的路径不占额度（由服务测试覆盖，这里断言守卫只在 `run` 内计数）；(e) 守卫实例之间互相独立。
-- [ ] 抽取存储逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draw-store.test.ts` 退出码 0；独立用例：(a) 同一会话同一助手消息的记账与「已展示」列表；(b) 助手消息 id 变化时重置；(c) 当前批缓存命中与替换；(d) 超过 200 个键淘汰最久未使用的，没有基于时间的过期；(e) 相同键的并发请求合并为一次；(f) 返回给调用者的数组被修改后不影响存储内部状态。
-- [ ] 凭证不透明逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts` 退出码 0（沿用既有文件新增独立用例）：(a) `JSON.stringify(settings)` 不含密钥；(b) `util.inspect(settings, {depth: null})` 不含密钥；(c) `String(credential)` 与模板字符串得到 `[redacted]`；(d) `reveal()` 返回原值；(e) 用 `console.log` 的格式化路径打印设置对象不含密钥；(f) 其余既有设置用例全部保持通过（字段访问路径改为分组后的路径，断言不放宽）。
-- [ ] `reveal` 只在一处使用：`grep -rn "reveal()" server/modules/reply-suggestions --include=*.ts --exclude-dir=tests` 只出现在 `reply-suggestions-client.ts`（构造认证头）与凭证类自己的定义里；`grep -rnE "apiKey\b" server/modules/reply-suggestions --include=*.ts --exclude-dir=tests` 不再出现明文字符串形态的 `apiKey` 字段访问（只允许出现在读取密钥文件、构造凭证的位置，在 DoD 里列出）。
-- [ ] 用量记录带类型：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts` 退出码 0；独立用例：(a) `shown` 记录的字段名与取值形态与改动前一致（含 `served`）；(b) 四种事件记录的字段名一致；(c) 轮转行为不变；(d) 构造函数产出的记录写入后能被离线基准的回放读取（用基准脚本的 `selftest --only replay` 作为互证，退出码 0）。`grep -nE "Record<string, unknown>" server/modules/reply-suggestions/reply-suggestions-usage-log.ts` 无任何输出。
-- [ ] 既有测试迁移后仍然通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts` 退出码 0；迁移只改导入路径与设置字段的访问路径，不删用例、不放宽断言（`git diff --stat` 里这几个文件的删除行数与新增行数一并贴出，并说明每处删除的原因）。
-- [ ] 服务层瘦身且无熔断与存储变量：`grep -cE "consecutiveFailures|circuitOpenUntil|minuteCalls|dayCalls|sessionStates" server/modules/reply-suggestions/reply-suggestions.service.ts` 为 0；`wc -l server/modules/reply-suggestions/reply-suggestions.service.ts` 不超过 260；`grep -nE "usageLogPath|usageLogMaxBytes|usageLogHomeDir" server/modules/reply-suggestions/reply-suggestions.service.ts` 无任何输出。
-- [ ] 导出收窄：`grep -nE "^export (const|function|class|type)" server/modules/reply-suggestions/reply-suggestions.service.ts` 的输出只含 `createReplySuggestionsService` 与服务接口所需的类型；每个 `export` 的定义处有写明消费者的注释（`grep -B1 -E "^export " server/modules/reply-suggestions/*.ts` 人工核对并在 DoD 里贴出逐文件的导出清单与消费者）。
-- [ ] 叶子规则与计数钉子：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出码 0（不改基线）；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0，其中 `unknown=` 计数与说明注释按新增的三个测试文件重新测量；`scripts/suite-duration-baseline.tsv` 为每个新增的 server 测试文件各追加一行「毫秒、路径」。
-- [ ] 配置文件格式未变：`node -e "const t=require('./config/reply-suggestions.settings.example.json'); const need=['version','enabled','protocol','baseUrl','model','authScheme','apiKeyFile','apiKeyVar','disableThinking','temperature','redrawTemperature','maxOutputTokens','timeoutMs','maxChips','maxChipChars','maxTailChars','maxFocusChars','maxCallsPerMinute','maxCallsPerDay','expansion','usageLog','systemPrompt']; for (const k of need) if (!(k in t)) process.exit(1);"` 退出码 0，且 `git diff --stat config/reply-suggestions.settings.example.json` 为空。
-- [ ] 行为反证：临时让守卫的 `run` 不再计数，守卫 (c) 变红；临时让凭证类的 `toJSON` 返回明文，凭证 (a) 变红；临时让存储返回内部数组本身，存储 (f) 变红；恢复后 `git diff` 对相应文件为空（过程贴在 DoD）。
-- [ ] 静态门：`npm run typecheck`、`npm run lint`、`npm run build:server` 退出码均为 0。
+- [x] 守卫单元逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-guard.test.ts` 退出码 0；独立用例（时钟可注入）：(a) 连续 5 次失败后熔断，期内抛熔断类错误且不调用 `call`；(b) 冷却期满允许一次试探，成功则恢复，失败则重新熔断；(c) 每分钟上限与每天上限各一条用例，超限抛限流类错误，窗口滑过后恢复；(d) 缓存命中等不经过守卫的路径不占额度（由服务测试覆盖，这里断言守卫只在 `run` 内计数）；(e) 守卫实例之间互相独立。
+- [x] 抽取存储逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-draw-store.test.ts` 退出码 0；独立用例：(a) 同一会话同一助手消息的记账与「已展示」列表；(b) 助手消息 id 变化时重置；(c) 当前批缓存命中与替换；(d) 超过 200 个键淘汰最久未使用的，没有基于时间的过期；(e) 相同键的并发请求合并为一次；(f) 返回给调用者的数组被修改后不影响存储内部状态。
+- [x] 凭证不透明逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts` 退出码 0（沿用既有文件新增独立用例）：(a) `JSON.stringify(settings)` 不含密钥；(b) `util.inspect(settings, {depth: null})` 不含密钥；(c) `String(credential)` 与模板字符串得到 `[redacted]`；(d) `reveal()` 返回原值；(e) 用 `console.log` 的格式化路径打印设置对象不含密钥；(f) 其余既有设置用例全部保持通过（字段访问路径改为分组后的路径，断言不放宽）。
+- [x] `reveal` 只在一处使用：`grep -rn "reveal()" server/modules/reply-suggestions --include=*.ts --exclude-dir=tests` 只出现在 `reply-suggestions-client.ts`（构造认证头）与凭证类自己的定义里；`grep -rnE "apiKey\b" server/modules/reply-suggestions --include=*.ts --exclude-dir=tests` 不再出现明文字符串形态的 `apiKey` 字段访问（只允许出现在读取密钥文件、构造凭证的位置，在 DoD 里列出）。
+- [x] 用量记录带类型：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts` 退出码 0；独立用例：(a) `shown` 记录的字段名与取值形态与改动前一致（含 `served`）；(b) 四种事件记录的字段名一致；(c) 轮转行为不变；(d) 构造函数产出的记录写入后能被离线基准的回放读取（用基准脚本的 `selftest --only replay` 作为互证，退出码 0）。`grep -nE "Record<string, unknown>" server/modules/reply-suggestions/reply-suggestions-usage-log.ts` 无任何输出。
+- [x] 既有测试迁移后仍然通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts` 退出码 0；迁移只改导入路径与设置字段的访问路径，不删用例、不放宽断言（`git diff --stat` 里这几个文件的删除行数与新增行数一并贴出，并说明每处删除的原因）。
+- [x] 服务层瘦身且无熔断与存储变量：`grep -cE "consecutiveFailures|circuitOpenUntil|minuteCalls|dayCalls|sessionStates" server/modules/reply-suggestions/reply-suggestions.service.ts` 为 0；`wc -l server/modules/reply-suggestions/reply-suggestions.service.ts` 不超过 260；`grep -nE "usageLogPath|usageLogMaxBytes|usageLogHomeDir" server/modules/reply-suggestions/reply-suggestions.service.ts` 无任何输出。
+- [x] 导出收窄：`grep -nE "^export (const|function|class|type)" server/modules/reply-suggestions/reply-suggestions.service.ts` 的输出只含 `createReplySuggestionsService` 与服务接口所需的类型；每个 `export` 的定义处有写明消费者的注释（`grep -B1 -E "^export " server/modules/reply-suggestions/*.ts` 人工核对并在 DoD 里贴出逐文件的导出清单与消费者）。
+- [x] 叶子规则与计数钉子：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/server-import-cycle-budget.test.ts` 退出码 0（不改基线）；`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 退出码 0，其中 `unknown=` 计数与说明注释按新增的三个测试文件重新测量；`scripts/suite-duration-baseline.tsv` 为每个新增的 server 测试文件各追加一行「毫秒、路径」。
+- [x] 配置文件格式未变：`node -e "const t=require('./config/reply-suggestions.settings.example.json'); const need=['version','enabled','protocol','baseUrl','model','authScheme','apiKeyFile','apiKeyVar','disableThinking','temperature','redrawTemperature','maxOutputTokens','timeoutMs','maxChips','maxChipChars','maxTailChars','maxFocusChars','maxCallsPerMinute','maxCallsPerDay','expansion','usageLog','systemPrompt']; for (const k of need) if (!(k in t)) process.exit(1);"` 退出码 0，且 `git diff --stat config/reply-suggestions.settings.example.json` 为空。
+- [x] 行为反证：临时让守卫的 `run` 不再计数，守卫 (c) 变红；临时让凭证类的 `toJSON` 返回明文，凭证 (a) 变红；临时让存储返回内部数组本身，存储 (f) 变红；恢复后 `git diff` 对相应文件为空（过程贴在 DoD）。
+- [x] 静态门：`npm run typecheck`、`npm run lint`、`npm run build:server` 退出码均为 0。
 
 ## DoD
 
 用**隔离实例**（自己的端口与 `DATABASE_PATH`，`SERVER_SETTINGS_PATH` 指向 `{"residentRestore":{"enabled":false}}`，后端用真实网关的设置副本，不碰常驻 :3001，不重启常驻服务）；全程不打印、不回显、不记录密钥或其任何片段，贴出的网关地址一律脱敏。
 
-- [ ] 重构前后对照：同一会话、同一设置，重构前（在改动之前的提交上）与重构后各做一次首抽与一次重抽，贴出状态码、chip 数、`draw`、用量日志行的字段集合，证明形状一致。
-- [ ] 真实网关上的熔断与限额各验证一次：把设置里的每分钟上限临时调到 2，连发 3 次得到 429；把模型改成错的，连发 5 次后得到熔断类的 502，改回正确值并等冷却期满后恢复；贴状态码与日志行。
-- [ ] 密钥卫生核查：写一个小脚本，从密钥文件读出密钥，在服务日志、全部响应体、使用记录文件、`git diff` 与本任务新增的全部文件里查找它，**只打印出现次数**，应全为 0；并在服务进程里对设置对象做 `JSON.stringify` 与 `util.inspect` 的一次性探针（临时调试入口，用完删除并证明 `git diff` 为空），贴出两个输出里 `[redacted]` 出现的位置，不贴密钥。
-- [ ] 贴出重构前后 `reply-suggestions.service.ts` 的行数，以及新增四个源文件各自的行数与对外导出清单。
-- [ ] 缓存行为回归：来回读取同一条助手消息，用量日志里是 `served: "cache"`，且上游调用数没有增加；点「建议」是 `served: "upstream"`。
+- [x] 重构前后对照：同一会话、同一设置，重构前（在改动之前的提交上）与重构后各做一次首抽与一次重抽，贴出状态码、chip 数、`draw`、用量日志行的字段集合，证明形状一致。
+- [x] 真实网关上的熔断与限额各验证一次：把设置里的每分钟上限临时调到 2，连发 3 次得到 429；把模型改成错的，连发 5 次后得到熔断类的 502，改回正确值并等冷却期满后恢复；贴状态码与日志行。
+- [x] 密钥卫生核查：写一个小脚本，从密钥文件读出密钥，在服务日志、全部响应体、使用记录文件、`git diff` 与本任务新增的全部文件里查找它，**只打印出现次数**，应全为 0；并在服务进程里对设置对象做 `JSON.stringify` 与 `util.inspect` 的一次性探针（临时调试入口，用完删除并证明 `git diff` 为空），贴出两个输出里 `[redacted]` 出现的位置，不贴密钥。
+- [x] 贴出重构前后 `reply-suggestions.service.ts` 的行数，以及新增四个源文件各自的行数与对外导出清单。
+- [x] 缓存行为回归：来回读取同一条助手消息，用量日志里是 `served: "cache"`，且上游调用数没有增加；点「建议」是 `served: "upstream"`。
 
 ## Touches
 
 - `server/modules/reply-suggestions/reply-suggestions.service.ts`
 - `server/modules/reply-suggestions/reply-suggestions-guard.ts`
 - `server/modules/reply-suggestions/reply-suggestions-draw-store.ts`
+- `server/modules/reply-suggestions/reply-suggestions-draw.ts`
 - `server/modules/reply-suggestions/reply-suggestions-prompts.ts`
 - `server/modules/reply-suggestions/reply-suggestions-chips.ts`
 - `server/modules/reply-suggestions/reply-suggestions-settings.ts`
@@ -85,6 +86,10 @@ depends_on:
 - `server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts`
 - `server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts`
 - `server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts`
+- `server/modules/observation/session-digest-llm-settings.ts`
+- `server/modules/observation/session-digest-llm.ts`
+- `server/modules/observation/tests/session-digest-llm.test.ts`
+- `server/modules/context-events/tests/production-wiring.test.ts`
 - `server/shared/tests/quay-test-script.test.ts`
 - `scripts/suite-duration-baseline.tsv`
 - `docs/operations/reply-suggestions.md`
