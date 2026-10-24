@@ -1,0 +1,57 @@
+{
+  "_comment": "Synthetic judgement table for the agreement selftest. It contains no user text and no model output: every chip is a slot name, and the verdicts are hand-written. The expected block is the hand computation (see bench.py EXPECTED_AGREEMENT, which is checked against it).",
+  "_definitions": {
+    "same": "both judges call the chip directly sendable",
+    "near": "usable after a small edit",
+    "different": "semantically different",
+    "conservative": "a chip counts only when BOTH judges accept it",
+    "perChip": "denominator is every generated chip",
+    "perMessage": "denominator is every sampled message; a message hits when at least one of its chips hits"
+  },
+  "trials": [
+    {
+      "id": "m1",
+      "chips": [
+        { "verdicts": { "judgeA": "same", "judgeB": "same" } },
+        { "verdicts": { "judgeA": "near", "judgeB": "same" } },
+        { "verdicts": { "judgeA": "different", "judgeB": "near" } }
+      ]
+    },
+    {
+      "id": "m2",
+      "chips": [
+        { "verdicts": { "judgeA": "same", "judgeB": "near" } },
+        { "verdicts": { "judgeA": "different", "judgeB": "different" } }
+      ]
+    },
+    {
+      "id": "m3",
+      "chips": [
+        { "verdicts": { "judgeA": "near", "judgeB": "near" } },
+        { "verdicts": { "judgeA": "same", "judgeB": "different" } },
+        { "verdicts": { "judgeA": "near", "judgeB": "different" } }
+      ]
+    },
+    {
+      "id": "m4",
+      "chips": [
+        { "verdicts": { "judgeA": "different", "judgeB": "same" } },
+        { "verdicts": { "judgeA": "near", "judgeB": "different" } }
+      ]
+    }
+  ],
+  "expected": {
+    "perChipSame": 0.1,
+    "perChipSameOrNear": 0.4,
+    "perMessageSame": 0.25,
+    "perMessageSameOrNear": 0.75
+  },
+  "_hand_computation": {
+    "chips": 10,
+    "messages": 4,
+    "perChipSame": "only m1 chip 1 (both same) -> 1/10 = 0.10",
+    "perChipSameOrNear": "m1c1, m1c2, m2c1, m3c1 -> 4/10 = 0.40",
+    "perMessageSame": "only m1 has a both-same chip -> 1/4 = 0.25",
+    "perMessageSameOrNear": "m1, m2, m3 each have a both-accepted chip -> 3/4 = 0.75"
+  }
+}
