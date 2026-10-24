@@ -424,6 +424,42 @@ export default function CockpitPage() {
     [fleet],
   );
 
+  // The reading the project strip's gate is drawn from. The stage gets the same two values, so
+  // the strip's tooltip and the stage's missing-CLI notice cannot tell two different stories.
+  const fleetAvailable = fleet.status === 'loaded' ? fleet.fleetAvailable : true;
+  const fleetReason = fleet.status === 'loaded' ? fleet.fleetReason : null;
+
+  /**
+   * Why a project cannot be opened, or `null` when it can. Two causes, and they are NOT the same
+   * sentence: 「未登记」 is a registry action (`quay-fleet registry add`), 「驱动不可用」 is a
+   * runtime one. A project whose root the fleet does not know has no `quay://` segment to open,
+   * and a registered project whose driver did not answer has nothing to show behind its board.
+   */
+  const projectBlock = useCallback(
+    (project: CockpitProject): { reason: string; next: string } | null => {
+      if (!fleetAvailable) {
+        return {
+          reason: t('cockpit.fleetCliMissing', { reason: fleetReason ?? '' }),
+          next: t('cockpit.fleetCliMissingNext'),
+        };
+      }
+      if ((project.fleetProjectId ?? null) === null) {
+        return {
+          reason: t('cockpit.projectNotRegistered'),
+          next: t('cockpit.projectUnregisteredNext'),
+        };
+      }
+      if (project.driverState === 'unavailable') {
+        return {
+          reason: t('cockpit.projectDriverUnavailable'),
+          next: t('cockpit.projectDriverUnavailableNext'),
+        };
+      }
+      return null;
+    },
+    [fleetAvailable, fleetReason, t],
+  );
+
   /**
    * The fleet registry seam's production binding: the server route that spawns the fleet CLI.
    * A failed request is `{ok:false, reason}` rather than a throw, so the cockpit can say the pin
@@ -983,9 +1019,28 @@ export default function CockpitPage() {
     [location.search, navigate],
   );
 
-  /** The hub's view, from a pointer on a fleet tile: address it and let the hub stack it. */
-  const openProject = useCallback(    (project: CockpitProject) => {
+  /**
+   * The hub's view, from a pointer on a project in the strip.
+   *
+   * A project the fleet cannot address — or whose driver did not answer — is refused OUT LOUD.
+   * The strip draws it as disabled, and a pointer still lands an echo naming the reason and the
+   * next step: silently returning made a deliberate disable indistinguishable from a broken
+   * click, which is exactly the ambiguity this task removes.
+   */
+  const openProject = useCallback(
+    (project: CockpitProject) => {
+      const blocked = projectBlock(project);
+      if (blocked !== null) {
+        setEcho({
+          kind: 'refused',
+          text: t('cockpit.projectOpenRefused', { name: project.name }),
+          reason: blocked.reason,
+          next: blocked.next,
+        });
+        return;
+      }
       const segment = project.fleetProjectId ?? null;
+      // Unreachable for an unblocked project; keeping the guard makes the type honest.
       if (segment === null) return;
       pendingTimingRef.current = {
         source: 'pointer',
@@ -994,7 +1049,7 @@ export default function CockpitPage() {
       };
       hub.dispatch({ type: 'setView', view: { type: 'board', project: segment } });
     },
-    [hub],
+    [hub, projectBlock, t],
   );
 
   useEffect(() => {
@@ -1016,6 +1071,26 @@ export default function CockpitPage() {
 
       // The cockpit's text input owns every key while it has focus (arrows and Enter included).
       if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      // Ordinal addressing: a digit key focuses the declared object carrying that number. The
+      // fleet mints its numbers for REGISTERED projects only, so a digit with no declared ordinal
+      // names an unnumbered project — a real refusal, echoed with the reason instead of swallowed.
+      if (/^[1-9]$/.test(event.key) && view.type === 'fleet') {
+        event.preventDefault();
+        const ordinal = Number(event.key);
+        const target = focusables.find((object) => object.display.ordinal === ordinal);
+        if (target !== undefined) {
+          hub.dispatch({ type: 'focus', uri: target.uri });
+        } else {
+          setEcho({
+            kind: 'refused',
+            text: t('cockpit.ordinalUnavailable', { n: event.key }),
+            reason: t('cockpit.ordinalsRegisteredOnly'),
+            next: t('cockpit.ordinalUnavailableNext'),
+          });
+        }
         return;
       }
 
@@ -1087,9 +1162,11 @@ export default function CockpitPage() {
     closeWallPreview,
     confirmSend,
     focusObject,
+    focusables,
     hub,
     hubState.pendingSend,
     openWallEntry,
+    t,
     view.type,
     wallPreviewUri,
   ]);
@@ -1302,24 +1379,37 @@ export default function CockpitPage() {
               {t('cockpit.retry')}
             </button>
           )}
-          {projects.map((project) => (
-            <button
-              key={project.projectId}
-              type="button"
-              onClick={() => openProject(project)}
-              className="min-h-11 shrink-0 truncate rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
-              data-testid="cockpit-project-strip-item"
-              data-cockpit-sent={sentProjectId === project.projectId ? 'true' : undefined}
-              title={project.projectPath}
-            >
-              {project.name}
-              {sentProjectId === project.projectId && (
-                <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
-                  {t('cockpit.sent')}
-                </span>
-              )}
-            </button>
-          ))}
+          {projects.map((project) => {
+            // A project the fleet cannot address (or whose driver is unavailable) is drawn as
+            // disabled — lower contrast, `aria-disabled`, and its reason as the tooltip — but it
+            // stays pointer-reachable: the click lands a refused echo instead of nothing.
+            const blocked = projectBlock(project);
+            return (
+              <button
+                key={project.projectId}
+                type="button"
+                onClick={() => openProject(project)}
+                aria-disabled={blocked === null ? undefined : true}
+                className={cn(
+                  'min-h-11 shrink-0 truncate rounded px-2 py-1 text-left text-xs md:min-h-0',
+                  blocked === null
+                    ? 'text-foreground hover:bg-accent'
+                    : 'cursor-not-allowed text-muted-foreground',
+                )}
+                data-testid="cockpit-project-strip-item"
+                data-project-openable={blocked === null ? 'true' : 'false'}
+                data-cockpit-sent={sentProjectId === project.projectId ? 'true' : undefined}
+                title={blocked === null ? project.projectPath : blocked.reason}
+              >
+                {project.name}
+                {sentProjectId === project.projectId && (
+                  <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
+                    {t('cockpit.sent')}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </aside>
 
         <CockpitStage
@@ -1327,8 +1417,8 @@ export default function CockpitPage() {
           projects={orderedProjects}
           fleetStatus={fleetStatus}
           fleetError={fleetError}
-          fleetAvailable={fleet.status === 'loaded' ? fleet.fleetAvailable : true}
-          fleetReason={fleet.status === 'loaded' ? fleet.fleetReason : null}
+          fleetAvailable={fleetAvailable}
+          fleetReason={fleetReason}
           focusables={focusables}
           focusUri={focusObject?.uri ?? null}
           onFocusObject={(uri) => hub.dispatch({ type: 'focus', uri: uri as QuayObjectUri })}
