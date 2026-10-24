@@ -31,8 +31,6 @@ import {
   createReplySuggestionsUsageLog,
   eventRecord,
   shownRecord,
-  type ReplySuggestionsEventName,
-  type ReplySuggestionsExpansionSource,
   type ReplySuggestionsServed,
   type ReplySuggestionsUsageLog,
   type ReplySuggestionsUsageRecord,
@@ -53,6 +51,31 @@ export type ReplySuggestionsInput = {
   /** True for an expansion draw; refused unless the settings say `expansion: "vary"`. */
   expand?: boolean;
 };
+
+/**
+ * What an expansion draw was anchored on: `seed` is the reply the person picked
+ * (variants of it), `focus` is the quoted passage with no reply written yet.
+ *
+ * This file is the server end of the wire contract: the composer's
+ * `src/shared/types.ts` mirrors this union and `src/shared/tests/replySuggestionsTypeSync.test.ts`
+ * reds the moment either end gains or loses a member.
+ *
+ * Consumers: `reply-suggestions-usage-log.ts` (record fields),
+ * `reply-suggestions-draw.ts`, `reply-suggestions-prompts.ts` and
+ * `reply-suggestions.routes.ts`.
+ */
+export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
+
+/**
+ * The pointer-click events the composer reports on `/events`.
+ *
+ * Declared here as the server end of the wire contract (the client mirror and
+ * the drift test are named on `ReplySuggestionsExpansionSource` above).
+ *
+ * Consumers: `reply-suggestions-usage-log.ts` (record fields) and
+ * `reply-suggestions.routes.ts`.
+ */
+export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
 
 /** One `/events` posting; `source` is present only for an expansion chip.
  * Consumers: `reply-suggestions.routes.ts` (its parsed event shape). */

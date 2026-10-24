@@ -27,13 +27,11 @@ import { AppError, asyncHandler } from '@/shared/utils.js';
 
 import type {
   ReplySuggestionsEventInput,
+  ReplySuggestionsEventName,
+  ReplySuggestionsExpansionSource,
   ReplySuggestionsInput,
   ReplySuggestionsService,
 } from './reply-suggestions.service.js';
-import type {
-  ReplySuggestionsEventName,
-  ReplySuggestionsExpansionSource,
-} from './reply-suggestions-usage-log.js';
 
 const EVENT_NAMES: readonly ReplySuggestionsEventName[] = ['picked', 'cleared', 'redrawn', 'sent'];
 const EXPANSION_SOURCES: readonly ReplySuggestionsExpansionSource[] = ['seed', 'focus'];

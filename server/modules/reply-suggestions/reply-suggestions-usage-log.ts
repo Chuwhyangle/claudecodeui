@@ -34,6 +34,10 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'nod
 import os from 'node:os';
 import path from 'node:path';
 
+import type {
+  ReplySuggestionsEventName,
+  ReplySuggestionsExpansionSource,
+} from './reply-suggestions.service.js';
 import type { ReplySuggestionsProtocol } from './reply-suggestions-settings.js';
 
 /** The default cap for one ledger file: 5 MB, as the task's protection clause says. */
@@ -45,24 +49,6 @@ const REPLY_SUGGESTIONS_USAGE_LOG_MAX_BYTES = 5 * 1024 * 1024;
  * Consumers: `reply-suggestions.service.ts` (the `shown` row's `served`).
  */
 export type ReplySuggestionsServed = 'upstream' | 'cache';
-
-/**
- * What an expansion draw was anchored on: `seed` is the reply the person picked
- * (variants of it), `focus` is the quoted passage with no reply written yet.
- * Written into the ledger so a replay can tell the two apart without storing
- * either text twice.
- *
- * Consumers: `reply-suggestions.service.ts`, `reply-suggestions-draw.ts`,
- * `reply-suggestions-prompts.ts` and `reply-suggestions.routes.ts`.
- */
-export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
-
-/**
- * The pointer-click ledger event names the client reports.
- *
- * Consumers: `reply-suggestions.service.ts` and `reply-suggestions.routes.ts`.
- */
-export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
 
 /** One display of a batch. `expansion` is present only for an expansion draw. */
 type ReplySuggestionsShownRecord = {

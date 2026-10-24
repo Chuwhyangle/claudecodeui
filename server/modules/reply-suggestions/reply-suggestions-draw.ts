@@ -34,8 +34,8 @@ import {
   builtInSystemPrompt,
   REPLY_SUGGESTIONS_REDRAW_MEMORY,
 } from './reply-suggestions-prompts.js';
+import type { ReplySuggestionsExpansionSource } from './reply-suggestions.service.js';
 import type { ReplySuggestionsSettings } from './reply-suggestions-settings.js';
-import type { ReplySuggestionsExpansionSource } from './reply-suggestions-usage-log.js';
 
 /** The already-clipped message context one draw shares across its one or two calls. */
 type ReplySuggestionsDrawContext = {

@@ -13,7 +13,7 @@
  * `tests/reply-suggestions-service.test.ts`, which reads the built-in rules off
  * the prompt the service sends.
  */
-import type { ReplySuggestionsExpansionSource } from './reply-suggestions-usage-log.js';
+import type { ReplySuggestionsExpansionSource } from './reply-suggestions.service.js';
 
 /**
  * How many previously shown chips a redraw prompt may list as "do not repeat".
