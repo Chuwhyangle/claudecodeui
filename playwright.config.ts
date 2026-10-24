@@ -646,15 +646,18 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // With this entry the same invocation reports `7 passed (56.6s)`, 57.4 s wall clock — 240_000 is the
   // sibling voice entries' value and clears that measurement ~4.2x.
   'voice-realtime-composer-embedded.spec.ts': 240_000,
-  // The UI scenario runner criterion: ONE case that boots the app, seeds a Quay fixture and then
-  // invokes `scripts/ui-scenario.mjs` TWICE — a green arm and a control arm whose report must name
-  // the failing step. Each runner invocation launches its own Chromium, navigates, opens the Quay
-  // view and drives six steps, so the file is two real page boots deep before the case's own
-  // assertions. MEASURED 2026-10-23 on this worktree: `1 passed (10.1s)`, the whole invocation
-  // 11.9 s (config evaluation, both servers' boot and both runner launches included). 240_000 is
-  // the sibling interaction-heavy entries' value and clears that measurement ~20x; it is declared
-  // rather than left to the 55 s single-file default so a load-slowed fan-in run is not killed
-  // mid-case by the watchdog.
+  // The UI scenario runner criterion: TWO scenario families, each with a green arm and a control
+  // arm whose report must name the failing step. The Quay wall family opens the Quay view and
+  // drives six steps; the cockpit family navigates session → cockpit → back to the same session
+  // through the product's mode switch. Every arm launches its own Chromium and its own runner, so
+  // the file is several real page boots deep before its own assertions — and the wall family is
+  // explicitly skipped on a host whose quay-fleet registry does not know the temporary fixture
+  // project (it publishes no view contract there). MEASURED 2026-10-24 on this worktree, wall
+  // family skipped: `1 passed, 1 skipped (13.1s)`, the whole invocation 13.5 s (config evaluation,
+  // both servers' boot and the runner launches included); the earlier one-family run was
+  // `1 passed (10.1s)`. 240_000 is the sibling interaction-heavy entries' value and clears those
+  // measurements; it is declared rather than left to the 55 s single-file default so a
+  // load-slowed fan-in run is not killed mid-case by the watchdog.
   'ui-scenario-runner.spec.ts': 240_000,
   // The cockpit's reading hierarchy: one browser, two cases — the fleet stage's ordinal label
   // measured off its COMPUTED style (font size against the body text, WCAG AA contrast resolved

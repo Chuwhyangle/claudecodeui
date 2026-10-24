@@ -1,0 +1,31 @@
+{
+  "name": "cockpit-mode-switch",
+  "description": "The cockpit's first business scenario: a person is reading a session, switches to the cockpit with the mode switch, and switches back to the SAME session. Reaching the cockpit is navigation (an opener); everything asserted is a structured reading — the route, whether the cockpit stage is mounted, and the cockpit's own declared view. Three steps, three checkpoint screenshots. Which cockpit view the switch opens is not asserted: a registered project opens its board and an unregistered one opens the fleet overview, and both are the product's answer. The last step is the product's return path: the cockpit recorded the session when it was entered, so 「会话」 leads back to it rather than to a URL the runner invents.",
+  "steps": [
+    {
+      "open": "session",
+      "checkpoint": true,
+      "expect": {
+        "routeIncludes": "/session/",
+        "cockpitMounted": false
+      }
+    },
+    {
+      "open": "cockpit",
+      "checkpoint": true,
+      "expect": {
+        "routeIncludes": "/cockpit",
+        "cockpitMounted": true,
+        "cockpitFocusIs": null
+      }
+    },
+    {
+      "open": "session",
+      "checkpoint": true,
+      "expect": {
+        "routeIncludes": "/session/",
+        "cockpitMounted": false
+      }
+    }
+  ]
+}

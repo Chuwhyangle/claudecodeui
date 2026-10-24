@@ -7,13 +7,19 @@
  * (`window.__cloudcliScenario`) and asserts structured readings, so this criterion boots the
  * runner against the real client and server and reads its report.
  *
- * TWO ARMS, ONE ENTRY POINT. The main arm runs `e2e/scenarios/quay-wall-focus-pin-utter.json`
- * (six steps: open the Quay view, focus by the ordinal a person says, move the focus, pin it,
- * utter, then read the input pack) and expects a green report whose checkpoint screenshots exist
- * and are non-empty. The control arm copies the SAME scenario and changes exactly one
- * expectation — step 3's `focusLabel` — and expects a non-zero exit whose report names step 3 as
- * the failure. Both arms invoke the same `scripts/ui-scenario.mjs`; only the scenario file differs,
- * which is what makes the runner's exit code and `failedStep` a real reading rather than a claim.
+ * TWO ARMS, ONE ENTRY POINT. The main arm runs a scenario file as written and expects a green
+ * report whose checkpoint screenshots exist and are non-empty. The control arm copies the SAME
+ * scenario and changes exactly one expectation, and expects a non-zero exit whose report names
+ * that step as the failure. Both arms invoke the same `scripts/ui-scenario.mjs`; only the
+ * scenario file differs, which is what makes the runner's exit code and `failedStep` a real
+ * reading rather than a claim.
+ *
+ * TWO SCENARIO FAMILIES, ONE SPEC. The Quay wall scenario (focus by the ordinal a person says,
+ * move, pin, utter) is the pre-existing family. The cockpit family is navigation-shaped: a
+ * person reading a session switches to the cockpit stage with the mode switch and returns to the
+ * SAME session through the cockpit's recorded return path. Its readings are the route, whether
+ * the cockpit page is mounted, and the cockpit's own `data-cockpit-view` declaration — not a DOM
+ * snapshot. Both families use the same runner and the same two-arm shape.
  *
  * THE FIXTURE. A project directory the app discovers (via a transcript), carrying a
  * `.quay/config.yml` and the repository's own plugin wiring, two `ready` tasks, and a
@@ -45,17 +51,20 @@ const WORKSPACE_NAME = path.basename(WORKSPACE);
 const TASK_A = 'gap-wall-focus-a';
 const TASK_B = 'gap-wall-focus-b';
 
-const AUTH_TOKEN_KEY = 'auth-token';
 const USERNAME = 'e2euser';
 const PASSWORD = 'e2epassword';
 
 /** The scenario under test, and the runner both arms invoke. */
 const SCENARIO_FILE = path.join(REPO_ROOT, 'e2e', 'scenarios', 'quay-wall-focus-pin-utter.json');
+/** The cockpit's navigation scenario: session → cockpit → back to the same session. */
+const COCKPIT_SCENARIO_FILE = path.join(REPO_ROOT, 'e2e', 'scenarios', 'cockpit-mode-switch.json');
 const RUNNER = path.join(REPO_ROOT, 'scripts', 'ui-scenario.mjs');
 
 /** Where the arms write their reports and checkpoint screenshots. */
 const MAIN_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-main');
 const CONTROL_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-control');
+const COCKPIT_MAIN_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-cockpit-main');
+const COCKPIT_CONTROL_OUT = path.join(REPO_ROOT, 'tmp', 'ui-scenarios', 'e2e-cockpit-control');
 
 type ScenarioStep = { open?: string; drive?: Record<string, unknown>; expect?: Record<string, unknown>; checkpoint?: boolean };
 type Scenario = { name?: string; description?: string; steps: ScenarioStep[] };
@@ -65,7 +74,15 @@ type RunnerReport = {
   failedStep: number | null;
   stepCount: number;
   checkpoints: { step: number; file: string }[];
-  steps: { index: number; action: string; ok: boolean; failures: string[]; screenshot: string | null }[];
+  steps: {
+    index: number;
+    action: string;
+    ok: boolean;
+    failures: string[];
+    screenshot: string | null;
+    /** The structured reading the step was judged against (route, cockpit mount, …). */
+    reading?: { route?: string; cockpit?: { view?: string | null; focus?: string | null } } | null;
+  }[];
 };
 
 /**
@@ -216,19 +233,30 @@ async function createAccount(api: APIRequestContext): Promise<string> {
  * step for a reason outside what it measures. A `hasQuayConfig:false` row is a hard fail: no
  * amount of waiting writes a `.quay/config.yml`.
  */
-const waitForFixtureProject = async (api: APIRequestContext, budgetMs = 30_000): Promise<void> => {
+const waitForFixtureProject = async (
+  api: APIRequestContext,
+  budgetMs = 30_000,
+): Promise<{ projectId: string; hasQuayConfig: boolean }> => {
   const deadline = Date.now() + budgetMs;
   let last = 'never asked';
   while (Date.now() < deadline) {
     const response = await api.get('/api/projects');
     if (response.ok()) {
-      const projects = (await response.json()) as { fullPath?: string; path?: string; hasQuayConfig?: boolean }[];
+      const projects = (await response.json()) as {
+        projectId?: string;
+        fullPath?: string;
+        path?: string;
+        hasQuayConfig?: boolean;
+      }[];
       const row = projects.find((project) => (project.fullPath ?? project.path) === WORKSPACE);
       if (row) {
         if (!row.hasQuayConfig) {
           throw new Error(`the fixture project was indexed without a quay config at ${WORKSPACE}`);
         }
-        return;
+        if (typeof row.projectId !== 'string') {
+          throw new Error(`the fixture project row carries no projectId: ${JSON.stringify(row)}`);
+        }
+        return { projectId: row.projectId, hasQuayConfig: row.hasQuayConfig };
       }
       last = `GET /api/projects listed no project at ${WORKSPACE}`;
     }
@@ -263,24 +291,51 @@ const runRunner = (scenarioFile: string, outDir: string, token: string) => {
   return { status: result.status, stdout, stderr, report };
 };
 
+/**
+ * Seeds the fixture project, signs in, waits for the app to index the project, and reads the one
+ * capability the wall family needs: the fixture's quay-fleet REGISTRY id.
+ *
+ * A `null` fleet id is not a product failure — it is this host's registry not knowing a
+ * throwaway fixture directory. The Quay panel deliberately mints no address in that case, so no
+ * view contract is published and the wall scenario cannot be driven at all. The wall case turns
+ * that into an explicit skip (with the command a developer can run to enable it) rather than a
+ * 30-second runner timeout that says nothing.
+ */
+const prepareFixture = async (): Promise<{ token: string; fleetProjectId: string | null }> => {
+  seedFixtureProject();
+  const bootstrap = await request.newContext({ baseURL: CLIENT_URL });
+  const token = await createAccount(bootstrap);
+  await bootstrap.dispose();
+  const api = await request.newContext({
+    baseURL: CLIENT_URL,
+    extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+  });
+  try {
+    const fixture = await waitForFixtureProject(api);
+    const snapshot = await api.get(`/api/quay/${fixture.projectId}/snapshot`);
+    const body = snapshot.ok() ? (await snapshot.json()) as { fleetProjectId?: string | null } : null;
+    const fleetProjectId = typeof body?.fleetProjectId === 'string' ? body.fleetProjectId : null;
+    return { token, fleetProjectId };
+  } finally {
+    await api.dispose();
+  }
+};
+
+// Serial: both cases seed the same fixture project and sign in as the same account; running them
+// in parallel would race the seed's symlink rewrite and the one-time registration.
+test.describe.configure({ mode: 'serial' });
+
 test.describe('the UI scenario runner on the Quay wall', () => {
   test('runs the wall scenario green, and names the failing step when an expectation is wrong', async () => {
     test.setTimeout(240_000);
-    seedFixtureProject();
-
-    const bootstrap = await request.newContext({ baseURL: CLIENT_URL });
-    const token = await createAccount(bootstrap);
-    await bootstrap.dispose();
-    const api = await request.newContext({
-      baseURL: CLIENT_URL,
-      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
-    });
-
-    try {
-      await waitForFixtureProject(api);
-    } finally {
-      await api.dispose();
-    }
+    const { token, fleetProjectId } = await prepareFixture();
+    test.skip(
+      fleetProjectId === null,
+      `this host's quay-fleet registry does not register the temporary fixture project at ${WORKSPACE}, `
+      + 'so the Quay panel mints no address and publishes no view contract. Register it '
+      + '(`quay-fleet registry add ui-scenario-workspace <that path>`) to run the wall family; '
+      + 'the cockpit family below does not need a registry entry.',
+    );
 
     fs.rmSync(MAIN_OUT, { recursive: true, force: true });
     fs.rmSync(CONTROL_OUT, { recursive: true, force: true });
@@ -332,5 +387,63 @@ test.describe('the UI scenario runner on the Quay wall', () => {
     for (const step of controlReport.steps.slice(0, mutatedIndex)) {
       expect(step.ok, `control step ${step.index} must pass: ${JSON.stringify(step)}`).toBe(true);
     }
+  });
+
+  test('runs the cockpit mode-switch scenario green, and names the failing step when an expectation is wrong', async () => {
+    test.setTimeout(240_000);
+    const { token } = await prepareFixture();
+
+    fs.rmSync(COCKPIT_MAIN_OUT, { recursive: true, force: true });
+    fs.rmSync(COCKPIT_CONTROL_OUT, { recursive: true, force: true });
+
+    // ── main arm: session → cockpit → back to the same session ──────────────────────────────
+    const main = runRunner(COCKPIT_SCENARIO_FILE, COCKPIT_MAIN_OUT, token);
+    expect(main.status, `cockpit main arm must exit 0\nstdout=${main.stdout}\nstderr=${main.stderr}`).toBe(0);
+    expect(main.report, `cockpit main arm must print a JSON report\nstdout=${main.stdout}\nstderr=${main.stderr}`).not.toBeNull();
+    const mainReport = main.report as RunnerReport;
+
+    expect(mainReport.ok, `cockpit main report must be ok: ${JSON.stringify(mainReport.steps)}`).toBe(true);
+    expect(mainReport.failedStep).toBeNull();
+    expect(mainReport.stepCount).toBe(3);
+    expect(mainReport.steps.every((step) => step.ok), JSON.stringify(mainReport.steps)).toBe(true);
+    // Every step is a checkpoint: the session it started from, the cockpit, the return trip.
+    expect(mainReport.checkpoints.length).toBe(3);
+    for (const checkpoint of mainReport.checkpoints) {
+      expect(fs.existsSync(checkpoint.file), `checkpoint screenshot ${checkpoint.file} must exist`).toBe(true);
+      expect(fs.statSync(checkpoint.file).size, `checkpoint screenshot ${checkpoint.file} must be non-empty`).toBeGreaterThan(0);
+    }
+    // THE RETURN IS THE PRODUCT'S OWN: step 3 must land on the exact session step 1 was reading,
+    // not merely on some route under /session/.
+    const startedAt = mainReport.steps[0]?.reading?.route;
+    const returnedTo = mainReport.steps[2]?.reading?.route;
+    expect(startedAt, `step 1 must read the session route: ${JSON.stringify(mainReport.steps[0])}`).toContain('/session/');
+    expect(returnedTo, 'the cockpit must return to the session it was entered from').toBe(startedAt);
+
+    // ── control arm: the SAME scenario, one expectation deliberately wrong ──────────────────
+    const scenario = JSON.parse(fs.readFileSync(COCKPIT_SCENARIO_FILE, 'utf8')) as Scenario;
+    const mutatedIndex = 1; // step 2: the cockpit stage IS mounted
+    expect(scenario.steps[mutatedIndex]?.expect?.cockpitMounted, 'the control arm mutates the cockpit mount assertion').toBe(true);
+    scenario.steps[mutatedIndex] = {
+      ...scenario.steps[mutatedIndex],
+      expect: { ...scenario.steps[mutatedIndex]?.expect, cockpitMounted: false },
+    };
+    scenario.name = 'cockpit-mode-switch-control';
+    fs.mkdirSync(COCKPIT_CONTROL_OUT, { recursive: true });
+    const controlScenario = path.join(COCKPIT_CONTROL_OUT, 'scenario.json');
+    fs.writeFileSync(controlScenario, `${JSON.stringify(scenario, null, 2)}\n`, 'utf8');
+
+    const control = runRunner(controlScenario, COCKPIT_CONTROL_OUT, token);
+    expect(control.status, `cockpit control arm must exit non-zero\nstdout=${control.stdout}\nstderr=${control.stderr}`).toBe(1);
+    expect(control.report, `cockpit control arm must still print a report\nstdout=${control.stdout}`).not.toBeNull();
+    const controlReport = control.report as RunnerReport;
+
+    expect(controlReport.ok).toBe(false);
+    expect(controlReport.failedStep, 'the report must name the step that was mutated').toBe(mutatedIndex + 1);
+    const failed = controlReport.steps[mutatedIndex];
+    expect(failed?.ok, `step ${mutatedIndex + 1} must be the failed one: ${JSON.stringify(failed)}`).toBe(false);
+    expect(failed?.failures.join('\n') ?? '', 'the failure must name the expectation it read').toContain('cockpitMounted');
+
+    // The step before the mutation still passed, so the red is the mutated reading itself.
+    expect(controlReport.steps[0]?.ok, `control step 1 must pass: ${JSON.stringify(controlReport.steps[0])}`).toBe(true);
   });
 });
