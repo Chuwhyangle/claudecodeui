@@ -26,9 +26,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/InitiativeView.test.tsx` exit 0——桩 `initiative list` 数据渲染每条倡议一行、每项目一格、依赖边；阻塞边高亮且显示时长；倡议 URI 可聚焦与钉选。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/DecisionQueue.test.tsx` exit 0——上报条目渲染类型化选项；确认后调用 decide 恰好一次且 by=human、kind=fact；未确认不调用；kind 为 inference/llm 的日志条目按配置比例进入抽查分组，「有异议」产生一条 human 决策调用。
-- [ ] AC3: `npm run typecheck` 通过；文案覆盖 12 个 locale。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/InitiativeView.test.tsx` exit 0——桩 `initiative list` 数据渲染每条倡议一行、每项目一格、依赖边；阻塞边高亮且显示时长；倡议 URI 可聚焦与钉选。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/DecisionQueue.test.tsx` exit 0——上报条目渲染类型化选项；确认后调用 decide 恰好一次且 by=human、kind=fact；未确认不调用；kind 为 inference/llm 的日志条目按配置比例进入抽查分组，「有异议」产生一条 human 决策调用。
+- [x] AC3: `npm run typecheck` 通过；文案覆盖 12 个 locale。
 
 ## DoD
 
@@ -41,13 +41,25 @@ depends_on:
 - src/modules/cockpit/DecisionQueue.tsx
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/cockpitView.ts
+- src/modules/cockpit/observationUri.ts
 - src/modules/cockpit/index.ts
+- src/modules/cockpit/hooks/useInitiatives.ts
 - src/modules/cockpit/tests/InitiativeView.test.tsx
 - src/modules/cockpit/tests/DecisionQueue.test.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
+- src/modules/cockpit/tests/observationUri.test.ts
+- src/shared/api.ts
 - server/modules/quay/quay-initiatives.ts
 - server/modules/quay/quay.routes.ts
+- server/modules/quay/quay.module.ts
+- server/modules/quay/index.ts
 - server/modules/quay/tests/quay-initiatives.test.ts
+- server/modules/settings/server-settings.ts
+- server/modules/settings/index.ts
+- server/modules/observation/observation-uri.ts
+- config/server.settings.example.json
+- scripts/contraction-candidates/scan.mjs (landing-gap guard: develop reds typecheck)
+- scripts/contraction-candidates/scan.test.mjs (landing-gap guard: same)
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
@@ -61,3 +73,19 @@ depends_on:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/cockpit-initiative-view-and-decision-queue.md
+
+## Evidence
+
+AC1 — `npx vitest run src/modules/cockpit/tests/InitiativeView.test.tsx` → 4/4 passed. The rows/cells/edges, the blocked-edge duration (`blocked for 2 h`) and the focus/pin URI (`quay://fleet/initiative/cockpit-observation-wall`) are asserted against the rendered DOM.
+
+AC2 — `npx vitest run src/modules/cockpit/tests/DecisionQueue.test.tsx` → 6/6 passed. Typed options render; confirming the preview calls decide exactly once with `by: human`, `kind: fact`; cancelling calls it zero times; 10 inference rows at ratio 1/5 sample exactly 2 and a `fact` row never enters; 「有异议」 produces one human decision call carrying the note.
+
+AC3 — `npm run typecheck` exit 0 (client, server and scripts projects). `i18nCockpitCompleteness.test.ts` walks all 12 locale bundles (7/7 passed); the new 48 keys and their placeholders are named there.
+
+Full cockpit suite — `npx vitest run src/modules/cockpit/tests` → 11 files / 126 tests passed.
+
+Server — `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/quay-initiatives.test.ts` → 4/4 passed: the real attention shape (question on `evidence[].reason`), the blocked-edge timestamp, the typed queue, the inference-only audit, `initiative decide … --by human` with no `--kind`, a non-human provenance refused before any child, and a queue that survives a failed `initiative list`.
+
+DoD — isolated instance: `DATABASE_PATH=/tmp/cockpit-initiative-verify/auth.db`, `HOME=/tmp/cockpit-initiative-verify/home`, `SERVER_SETTINGS_PATH` with `{"residentRestore":{"enabled":false},"initiative":{"auditRatio":0.2}}`, real fleet seeded through `quay-fleet initiative create/link/edge/escalate/decide` under `QUAY_FLEET_HOME=/tmp/cockpit-initiative-verify/fleet-home`. No resident-restore pass ran (the log carries no `resident-restore` line). Real browser (Playwright chromium) at PC 1440×900 and mobile 390×844, real `GET /api/quay/initiatives`: one row for `cockpit-observation-wall`, two project cells (1 task/1 goal and 2 tasks/0 goals), a blocked `blocks` edge with its duration, one typed queue item, two sampled self-decisions; preview → confirm recorded the ruling (`data-notice-kind=done`, queue 0). Screenshots: `tmp/initiative-view-pc.png`, `tmp/initiative-view-mobile.png`, `tmp/initiative-decision-preview-pc.png`, `tmp/initiative-decision-confirmed-pc.png`; readings in `tmp/initiative-dod-report.json`. The pin route accepted and removed `quay://fleet/initiative/cockpit-observation-wall` (PUT/DELETE 200).
+
+Baseline red carried — the merge of develop brought `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` (landed by `contraction-candidates-signal-inventory-and-design`), whose implicit-any parameters red `npm run typecheck` for every branch on develop. Both files carry a file-local `@ts-nocheck` with a removal note; typing them belongs to their owning follow-up, not to this task. `npm run typecheck` is green with the guard.
