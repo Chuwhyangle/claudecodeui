@@ -33,12 +33,12 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/deploy-readiness.test.ts` exit 0——用桩 git 和桩指纹：三个 sha 相等 ⇒ fresh；HEAD 领先且有提交触及 `src/` 或 `server/` ⇒ pending-build，并列出这些提交；只触及 `docs/` 或 `tasks/` ⇒ fresh；已构建产物的 sha 等于 HEAD 但运行中的不等 ⇒ built-pending-restart；没有指纹 ⇒ unknown。
-- [ ] AC2: 同一测试文件——`POST /api/system/deploy`：构建桩失败 ⇒ 重启桩调用 0 次，读数里带失败步骤和输出尾部；构建成功 ⇒ 重启桩恰好调用 1 次，参数含 `--delay`；未认证 ⇒ 401。
-- [ ] AC3: 同一测试文件——启动核验：状态文件里的目标 sha 等于运行中的 sha 且各检查项为 200 ⇒ `lastDeploy.ok === true`；sha 不等 ⇒ ok 为 false，并在 checks 中指明是哪一项；没有状态文件 ⇒ 不产生 lastDeploy。
-- [ ] AC4: `node --test scripts/write-client-build-info.test.mjs` exit 0——在临时目录里写出的 `build-info.json` 字段与服务端格式一致。
-- [ ] AC5: `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` exit 0——各状态的文案和按钮正确；点击「构建并重启」只打开确认面板，确认之前 deploy 请求为 0 次，确认后恰好 1 次；fresh 状态下会话页不显示紧凑条。
-- [ ] AC6: 文案覆盖 12 个 locale；`npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/deploy-readiness.test.ts` exit 0——用桩 git 和桩指纹：三个 sha 相等 ⇒ fresh；HEAD 领先且有提交触及 `src/` 或 `server/` ⇒ pending-build，并列出这些提交；只触及 `docs/` 或 `tasks/` ⇒ fresh；已构建产物的 sha 等于 HEAD 但运行中的不等 ⇒ built-pending-restart；没有指纹 ⇒ unknown。
+- [x] AC2: 同一测试文件——`POST /api/system/deploy`：构建桩失败 ⇒ 重启桩调用 0 次，读数里带失败步骤和输出尾部；构建成功 ⇒ 重启桩恰好调用 1 次，参数含 `--delay`；未认证 ⇒ 401。
+- [x] AC3: 同一测试文件——启动核验：状态文件里的目标 sha 等于运行中的 sha 且各检查项为 200 ⇒ `lastDeploy.ok === true`；sha 不等 ⇒ ok 为 false，并在 checks 中指明是哪一项；没有状态文件 ⇒ 不产生 lastDeploy。
+- [x] AC4: `node --test scripts/write-client-build-info.test.mjs` exit 0——在临时目录里写出的 `build-info.json` 字段与服务端格式一致。
+- [x] AC5: `npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` exit 0——各状态的文案和按钮正确；点击「构建并重启」只打开确认面板，确认之前 deploy 请求为 0 次，确认后恰好 1 次；fresh 状态下会话页不显示紧凑条。
+- [x] AC6: 文案覆盖 12 个 locale；`npm run typecheck` 通过。
 
 ## DoD
 
@@ -57,6 +57,7 @@ extra: {}
 - scripts/write-client-build-info.mjs (new)
 - scripts/write-client-build-info.test.mjs (new)
 - package.json
+- src/shared/api.ts
 - src/modules/cockpit/DeployReadiness.tsx (new)
 - src/modules/cockpit/tests/DeployReadiness.test.tsx (new)
 - src/modules/cockpit/CockpitPage.tsx
@@ -76,3 +77,19 @@ extra: {}
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/deploy-readiness-build-and-safe-restart.md
+
+## Verification
+
+证据（2026-10-24，工作树 `deploy-readiness-build-and-safe-restart`）：
+
+- AC1/AC2/AC3：`npx tsx --tsconfig server/tsconfig.json --test server/modules/system/tests/deploy-readiness.test.ts` → 14 pass / 0 fail（fresh、pending-build 列表、docs-only ⇒ fresh、built-pending-restart、unknown；构建失败不重启、成功恰好一次 `--delay`、未认证 401 且 build 调用 0 次；启动核验 ok/失配/无状态文件）。
+- AC4：`node --test scripts/write-client-build-info.test.mjs` → 2 pass / 0 fail。
+- AC5：`npx vitest run src/modules/cockpit/tests/DeployReadiness.test.tsx` → 12 pass；同轮 `i18nCockpitCompleteness.test.ts` → 9 pass。
+- AC6：`npm run typecheck` 通过；12 个 locale 均补齐 `deploy*` 文案（任一 locale 缺键或丢占位符都会被完整性用例打红）。
+- DoD 浏览器（独立 Playwright；隔离实例 API `:3101` + vite `:5174`，独立 DB，`residentRestore.enabled=false`，重启指向桩脚本，未触碰 `:3001`）：
+  - `tmp/deploy-verify/1-pending-build.png` — 驾驶舱常驻条：「1 change not yet built · Build and restart」。
+  - `tmp/deploy-verify/2-confirm-panel.png` — 确认面板列出将生效提交与「重启期间页面会断开数秒」；确认前 deploy 请求 0 次。
+  - `tmp/deploy-verify/3-after-confirmed-deploy.png` — 确认后恰好一次；重启桩记录 `--delay 5`。
+  - `tmp/deploy-verify/4-verification-result.png` — 真实启动核验（新进程读到状态文件后记录）：日志 `deploy: boot verification passed`，条上显示「Last deploy adf07bc · verified · just now」。
+- 真实 `:3001` 只读读数（不执行 deploy）：running/built sha = `2d995e88`，HEAD = `0bf6356`，`status: pending-build`，34 个触及 `src/`/`server/` 的待构建提交；`dist/build-info.json` 尚无指纹（新脚本随下次构建落地）。对照 `scripts/check-deploy-freshness.mjs --ref HEAD`：`STALE, behindBy 225` —— 结论一致（检测器数全部提交，本读数只列会触发构建的 source 提交）。原始读数见 `tmp/deploy-verify/real-readiness.json`。
+- 待外部：真实 `:3001` 上的第一次「构建并重启」由用户在界面上亲手点击触发；执行者未在 `:3001` 执行 deploy。
