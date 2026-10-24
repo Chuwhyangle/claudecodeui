@@ -35,7 +35,7 @@ extra: {}
 ## DoD
 
 - 用两个浏览器上下文（同一用户）验证：一端打开预览使游标前移，另一端的差量随之清零（截图存 `tmp/`）。
-- - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
+- 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
 
 ## Touches
 
