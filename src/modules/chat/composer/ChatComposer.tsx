@@ -1113,7 +1113,7 @@ export default function ChatComposer({
                     title={text}
                     tabIndex={-1}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => acceptExpansionChip?.(index)}
+                    onClick={() => acceptExpansionChip?.(text, index)}
                     className="h-6 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
                   >
                     {truncateSuggestionLabel(text)}
