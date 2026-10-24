@@ -150,6 +150,7 @@
       }
     },
     "title": "Architektur",
+    "diffHighlight": "Diff-Hervorhebung: {{nodes}} Ziele · {{edges}} Beziehungen",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",
     "loading": "Architekturdiagramm wird erzeugt…",
     "retry": "Erneut versuchen",

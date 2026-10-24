@@ -150,6 +150,7 @@
       }
     },
     "title": "Arsitektur",
+    "diffHighlight": "Sorotan perbedaan: {{nodes}} target · {{edges}} relasi",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",
     "loading": "Membuat graf arsitektur…",
     "retry": "Coba lagi",

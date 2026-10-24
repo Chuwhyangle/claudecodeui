@@ -150,6 +150,7 @@
       }
     },
     "title": "Mimari",
+    "diffHighlight": "Fark vurgusu: {{nodes}} hedef · {{edges}} ilişki",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",
     "loading": "Mimari grafiği oluşturuluyor…",
     "retry": "Yeniden dene",

@@ -115,6 +115,7 @@
       "relatedOutLine": "{{name}} → {{other}} ({{type}})"
     },
     "title": "Architecture",
+    "diffHighlight": "Diff highlight: {{nodes}} targets · {{edges}} relations",
     "noSession": "Select a session to see the architecture of the files it touched.",
     "loading": "Generating the architecture graph…",
     "retry": "Retry",

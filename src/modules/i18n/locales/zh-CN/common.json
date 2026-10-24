@@ -150,6 +150,7 @@
       }
     },
     "title": "架构",
+    "diffHighlight": "差异高亮：{{nodes}} 个目标 · {{edges}} 条关系",
     "noSession": "选择一个会话，查看它触及的文件的架构。",
     "loading": "正在生成架构图…",
     "retry": "重试",
