@@ -1,0 +1,56 @@
+---
+id: observation-object-model-seen-cursor-and-delta
+title: 观察墙 T1：观察层——ObservedObject / SeenCursor / 差量 API / 经驾驶舱中枢推送，定义 cloudcli:// URI
+status: todo
+labels:
+  - cockpit
+  - observation
+  - contract
+parent: null
+children: []
+extra: {}
+---
+## Proposal
+
+决策出处：2026-10-24 与用户确定的「观察墙」方案（驾驶舱首先是观察面）。依据：14 天负载分析（2159 条人类输入、相邻输入一半落在不同会话、切换中位间隔 2.4 分钟；只看不打字的切换未被记录，真实观察负载更高）；用户确认观察会话输出 / quay 状态 / 架构以及为此做的切换是最大负载。硬约束（quay references）：读数三态（取不到 = 未评估 + 原因，不得显示为绿）、每盏绿灯带活性时间戳、语义判断标注「仅建议」、驾驶舱本身比被治理对象小一个量级。
+
+方案：服务端 `observation` 模块持有被观察对象的统一模型，生产者（T2 会话、T3 项目、T4 架构）只往里写，驾驶舱只读。
+1. `ObservedObject = {uri, kind:'session'|'project'|'architecture', title, status:{state:'ok'|'attention'|'red'|'unevaluated', reason?}, digest:{...按 kind 的结构化字段}, revision(单调递增), updatedAt, provenance:{producer, tier:'deterministic'|'llm', evaluatedAt}}`；每次修订追加一条 `ObservedRevision {uri, revision, at, deltaItems[]}`（差量条目：「新增 2 轮」「落地 X」「新环 A→B→A」）。
+2. `SeenCursor {userId, uri, revision, at}` 存服务端 DB（跨设备一致）。差量 = 游标之后的修订条目。
+3. 观察列表：`WatchEntry {userId, uri, pinnedAt}`；自动浮现规则：未钉选但 `status.state ∈ {attention, red}` 的对象临时进入墙，处理（游标前移且状态复原）后退出。墙上同时显示上限 12 块（配置项），按 状态（red > attention > ok）× 最近修订排序，超出折叠。
+4. API：`GET /api/observation/wall`（墙上对象 + 各自差量）、`POST /api/observation/seen {uri, revision}`、`PUT/DELETE /api/observation/watch/:uri`；状态变化经驾驶舱中枢 websocket 推送 `observation.update`。
+5. URI：会话 `cloudcli://session/<id>`，架构 `cloudcli://architecture/<fleetProjectId>`，项目沿用 `quay://<fleetProjectId>/board`。解析/格式化放在共享位置（遵守 server→根 shared 导入预算的记忆约束：前端放 src、服务端放 server，不跨根 shared）。
+6. 新模块目录按 AC-394 棘轮登记 manifest 与 pin。
+
+## AC
+
+- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-store.test.ts` exit 0——写入修订后 revision 单调递增；游标之后的差量条目正确；游标存在 DB 中，换一个连接读到相同游标；status 为 unevaluated 时必须带 reason（缺 reason 的写入被拒）。
+- [ ] AC2: 同一测试文件——墙的组成：钉选对象常驻；未钉选的 attention/red 对象自动浮现，游标前移且状态复原后退出；超过上限 12 时按 red>attention>ok×最近修订排序并返回折叠数。
+- [ ] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-routes.test.ts` exit 0——三个 API 的成功/鉴权/非法 URI 路径；`seen` 回退游标（revision 小于现值）被忽略。
+- [ ] AC4: `npx vitest run src/modules/cockpit/tests/observationUri.test.ts` exit 0——`cloudcli://session/<id>`、`cloudcli://architecture/<p>` 解析/格式化往返，非法形式被拒。
+- [ ] AC5: `npm run typecheck` 通过；`server/shared/tests/server-import-cycle-budget.test.ts` 通过。
+
+## DoD
+
+- 用两个浏览器上下文（同一用户）验证：一端打开预览使游标前移，另一端的差量随之清零（截图存 `tmp/`）。
+- - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
+
+## Touches
+
+- server/modules/observation/index.ts
+- server/modules/observation/observation.module.ts
+- server/modules/observation/observation-store.ts
+- server/modules/observation/observation.routes.ts
+- server/modules/observation/observation-uri.ts
+- server/modules/observation/tests/observation-store.test.ts
+- server/modules/observation/tests/observation-routes.test.ts
+- server/modules/database/migrations.ts
+- server/modules/database/schema.ts
+- server/modules/database/repositories/observation.repository.ts
+- server/modules/cockpit/cockpit-hub.service.ts
+- server/index.ts
+- server/shared/tests/server-import-cycle-budget.test.ts
+- config/server.settings.example.json
+- src/modules/cockpit/observationUri.ts
+- src/modules/cockpit/tests/observationUri.test.ts
+- tasks/observation-object-model-seen-cursor-and-delta.md
