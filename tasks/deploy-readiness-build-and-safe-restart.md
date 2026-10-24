@@ -65,6 +65,7 @@ extra: {}
 - src/modules/cockpit/CockpitPage.tsx
 - src/modules/cockpit/index.ts
 - src/modules/chat/ChatInterface.tsx
+- src/modules/project-workspace/WorkspaceMain.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
@@ -95,6 +96,7 @@ extra: {}
   - `tmp/deploy-verify/3-after-confirmed-deploy.png` — 确认后恰好一次；重启桩记录 `--delay 5`。
   - `tmp/deploy-verify/4-verification-result.png` — 真实启动核验（新进程读到状态文件后记录）：日志 `deploy: boot verification passed`，条上显示「Last deploy adf07bc · verified · just now」。
 - 真实 `:3001` 只读读数（不执行 deploy）：running/built sha = `2d995e88`，HEAD = `0bf6356`，`status: pending-build`，34 个触及 `src/`/`server/` 的待构建提交；`dist/build-info.json` 尚无指纹（新脚本随下次构建落地）。对照 `scripts/check-deploy-freshness.mjs --ref HEAD`：`STALE, behindBy 225` —— 结论一致（检测器数全部提交，本读数只列会触发构建的 source 提交）。原始读数见 `tmp/deploy-verify/real-readiness.json`。
+- 2026-10-24 续做轮（suite 红修复）：`src/modules/cockpit/tests/CockpitPushToTalk.test.tsx` 的 AC3「reaches useVoiceInput through the @/modules/chat barrel」在本分支上真实复现（单文件运行同样红）。根因不是该测试自身：`ChatInterface` 从 cockpit 桶导入 `DeployReadiness`，闭合成 `chat/index → ChatInterface → cockpit/index → CockpitPage → useCockpitPushToTalk → chat/index` 的跨模块环，使 vitest 的 `vi.mock('@/modules/chat')` 包不住该 hook。改为 `ChatInterface` 接受可选的 `noticeSlot`，由已经同时导入两个桶的 `WorkspaceMain` 传入 `<DeployReadiness compact />`；chat 不再导入 cockpit，节点位置与视觉不变。复跑：`CockpitPushToTalk` 5 pass、`DeployReadiness` 12 pass、`i18nCockpitCompleteness` 9 pass、`escapeAbortGuard` 6 pass、`scenarioSurface` 2 pass；AC1/AC2/AC3 14 pass；AC4 2 pass；`npm run typecheck` 通过。
 - 待外部：真实 `:3001` 上的第一次「构建并重启」由用户在界面上亲手点击触发；执行者未在 `:3001` 执行 deploy。
 
 ## Blocker
