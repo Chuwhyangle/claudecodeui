@@ -88,3 +88,13 @@ extra:
 - `server/modules/reply-suggestions/reply-suggestions.service.ts`
 - `server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts`
 - `tasks/gap-reply-suggestions-chip-row-polish.md`
+
+## Blocker
+
+**2026-10-24T11:28:07.974Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=ff: fan-in-ff-merge: suite 证书 — suite_head..tip 恰为本任务的单个 flip-done 提交（身份判定：仅 M tasks/gap-reply-suggestions-chip-row-polish.md）⇒ 判惰性，⛔ 未调分类器
+fan-in-ff-merge: FF FAILED — To .; not a fast-forward. Retry record written (attempt 1). Return to 无锁段 step 1 (merge develop again — 必须 merge 不得 rebase, AC75), re-judge the delta (step 2) and re-run.
+fan-in-ff-merge: measure ff_only_locked=false
+- run_id：wk-prod-anchor
+- session_id：e20d3a45-2174-46c7-9cd1-a07786f71e45
