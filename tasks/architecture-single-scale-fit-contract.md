@@ -1,7 +1,7 @@
 ---
 id: architecture-single-scale-fit-contract
 title: 架构图单一缩放与适应契约：语义引擎独占比例，Fit 求解而非 CSS 缩放，适应保持粘性，去掉 Focus
-status: ready
+status: done
 labels:
   - feature
 parent: null
