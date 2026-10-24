@@ -1,7 +1,7 @@
 ---
 id: cockpit-walkthrough-interaction-defects
 title: 驾驶舱走查（交互/功能）：board 无可指对象、序号提示错误、无目标死路、遥控器误可确认、后退退出驾驶舱、URL 用 UUID
-status: ready
+status: superseded
 labels:
   - cockpit
   - ui
@@ -78,3 +78,6 @@ depends_on:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/cockpit-walkthrough-interaction-defects.md
+
+
+2026-10-24 用户确认：由 observation-wall-ui（观察墙 T5）取代；其中在新模型下仍成立的条目已并入该任务。
