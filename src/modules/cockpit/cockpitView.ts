@@ -2,6 +2,7 @@ import type {
   QuayDriverState,
   QuayFleetTaskCounts,
   QuayFocusableObject,
+  QuayObjectUri,
   QuayViewContract,
 } from '@/shared/types';
 import { formatQuayUri } from '@/modules/quay';
@@ -42,15 +43,22 @@ export type CockpitProject = {
 };
 
 /**
- * What the cockpit stage currently shows. Two views ship in this task:
+ * What the cockpit stage currently shows. Three views ship:
  *
- *   { type: 'fleet' }                    — every quay project as a tile
+ *   { type: 'wall' }                     — the observation wall: session/project/architecture tiles
+ *   { type: 'fleet' }                    — every quay project as a tile (the 「全部项目」 view)
  *   { type: 'board', project: <id> }     — one project's board / in-flight tasks
+ *
+ * THE WALL IS THE HOME. The project grid is kept as one reachable view rather than the landing
+ * page, because the cockpit's first job is "what needs me now", not "list everything".
  *
  * The description is deliberately serializable: the URL carries exactly these fields, so a
  * view can be linked, reloaded and restored without any client-side registry.
  */
-export type CockpitView = { type: 'fleet' } | { type: 'board'; project: string };
+export type CockpitView =
+  | { type: 'wall' }
+  | { type: 'fleet' }
+  | { type: 'board'; project: string };
 
 /**
  * One measured intent → first-frame latency. `source` names what caused the view change so the
@@ -81,6 +89,54 @@ const DRIVER_COLORS: Record<QuayDriverState, string> = {
   'not-configured': 'gray',
   unavailable: 'gray',
 };
+
+/**
+ * The colour bucket a wall tile is spoken in. Only `attention`/`red` are "loud" — but a spoken
+ * handle still needs to name the state for every tile, so `ok`/`unevaluated` map to their own
+ * neutral names rather than to the accent colour.
+ */
+const OBSERVATION_COLORS: Record<string, string> = {
+  red: 'red',
+  attention: 'amber',
+  ok: 'green',
+  unevaluated: 'gray',
+};
+
+/**
+ * Builds the observation wall's focus contract.
+ *
+ * `pos` is the tile's cell in the DRAWN grid (the same rule as the fleet contract), so the hub's
+ * direction keys move over the wall the person is looking at. The declared objects are exactly
+ * the wall's entries — the 「观察层自身」 tile is NOT one of them (it is a notice about the layer,
+ * not an object a person can open), which is also why it can never occupy one of the twelve
+ * block slots.
+ */
+export function buildObservationWallContract(
+  entries: readonly { object: { uri: string; status: { state: string } } }[],
+  columns: number,
+): QuayViewContract {
+  const width = Math.max(1, columns);
+  const focusables: QuayFocusableObject[] = [];
+  entries.forEach((entry, index) => {
+    const ordinal = focusables.length + 1;
+    focusables.push({
+      // The hub's focusable is typed as a quay address because its zoom gesture parses one.
+      // An observation URI (`cloudcli://…` / `quay://…/board`) is carried as an opaque handle:
+      // the hub only moves focus over it, and its zoom on a non-board address is a stated no-op
+      // (the wall's preview is the page's own transition). Widening the shared type instead
+      // would change a contract this task does not own.
+      uri: entry.object.uri as QuayObjectUri,
+      label: CIRCLED_ORDINALS[ordinal - 1] ?? `(${ordinal})`,
+      display: {
+        status: entry.object.status.state,
+        color: OBSERVATION_COLORS[entry.object.status.state] ?? 'gray',
+        ordinal,
+        pos: { row: Math.floor(index / width) + 1, column: (index % width) + 1 },
+      },
+    });
+  });
+  return { focusables };
+}
 
 /**
  * Builds the fleet view's contract: one focusable per REGISTERED project, addressed as its
@@ -204,18 +260,20 @@ export function projectNameFromPath(projectPath: string, projectId: string): str
 /**
  * Parses the cockpit's query string into a view description.
  *
- * Every malformed or unknown reading falls back to the fleet view rather than throwing: the
- * URL is user-editable, and a broken link must still land on a usable stage. An unknown
- * `view` value and a `board` with no project are both "not a view I can render".
+ * Every malformed or unknown reading falls back to the WALL — the product's home — rather than
+ * throwing: the URL is user-editable, and a broken link must still land on the most useful
+ * stage. An unknown `view` value and a `board` with no project are both "not a view I can
+ * render", and the wall is what a person sees when there is nothing more specific to show.
  */
 export function parseCockpitView(search: string): CockpitView {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const viewType = params.get(VIEW_QUERY_KEY);
   if (viewType === 'board') {
     const project = params.get(PROJECT_QUERY_KEY)?.trim() ?? '';
-    return project === '' ? { type: 'fleet' } : { type: 'board', project };
+    return project === '' ? { type: 'wall' } : { type: 'board', project };
   }
-  return { type: 'fleet' };
+  if (viewType === 'fleet') return { type: 'fleet' };
+  return { type: 'wall' };
 }
 
 /**

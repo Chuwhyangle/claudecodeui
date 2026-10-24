@@ -1,7 +1,7 @@
 ---
 id: contraction-candidates-signal-inventory-and-design
 title: 收缩候选（观察墙之后）：盘点「从不发声的仪器」等退役信号 + 只读扫描原型 + 进入观察墙与裁定落地的设计
-status: todo
+status: ready
 labels:
   - cockpit
   - observation
@@ -47,8 +47,8 @@ fleet 侧的数据（每项目 `.quay/gate-events.jsonl`、`~/.quay-fleet/decisi
 
 ## Touches
 
-- scripts/contraction-candidates/scan.mjs
-- scripts/contraction-candidates/scan.test.mjs
-- scripts/contraction-candidates/testdata/fixture-repo/README.md
-- docs/proposals/contraction-candidates.md
+- scripts/contraction-candidates/scan.mjs (new)
+- scripts/contraction-candidates/scan.test.mjs (new)
+- scripts/contraction-candidates/testdata/fixture-repo/README.md (new)
+- docs/proposals/contraction-candidates.md (new)
 - tasks/contraction-candidates-signal-inventory-and-design.md

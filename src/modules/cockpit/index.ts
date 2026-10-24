@@ -11,9 +11,44 @@ export type { CockpitIntent, CockpitIntentContext } from '@/modules/cockpit/cock
 // where it was before entering, and the cockpit's 「会话」 segment leads back to it.
 export {
   COCKPIT_PATH,
+  buildObservationWallContract,
   cockpitViewPath,
   readCockpitReturnPath,
   rememberCockpitReturnPath,
   resolveCockpitProject,
 } from '@/modules/cockpit/cockpitView';
 export type { CockpitProject, CockpitView } from '@/modules/cockpit/cockpitView';
+// The observation URI grammar, so the sidebar's 「钉到观察墙」 mints the same address the
+// producers wrote and the wall reads — one spelling, both sides.
+export {
+  formatArchitectureUri,
+  formatProjectUri,
+  formatSessionUri,
+  parseObservationUri,
+} from '@/modules/cockpit/observationUri';
+// The observation wall itself, and the row action the sidebar shares with it. Exported here so
+// the sidebar mints its pin toggle from the same module (and the same pin cache) the wall uses.
+export { default as ObservationWall } from '@/modules/cockpit/ObservationWall';
+export { default as ObservationPreview } from '@/modules/cockpit/ObservationPreview';
+export {
+  WatchPinToggle,
+  observationLiveness,
+  observationSummary,
+} from '@/modules/cockpit/ObservationTile';
+export {
+  deriveSelfReading,
+  fetchObservationWall,
+  markObservationSeen,
+  observationPinnedUris,
+  setObservationWatch,
+  useObservationPin,
+  useObservationWall,
+} from '@/modules/cockpit/hooks/useObservationWall';
+export type {
+  ObservationKind,
+  ObservationWall as ObservationWallData,
+  ObservationWallEntry,
+  ObservationWallView,
+  ObservedObject,
+  ObservationProducerReading,
+} from '@/modules/cockpit/hooks/useObservationWall';

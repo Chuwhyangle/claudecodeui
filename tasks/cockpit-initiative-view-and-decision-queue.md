@@ -1,7 +1,7 @@
 ---
 id: cockpit-initiative-view-and-decision-queue
 title: M6 驾驶舱倡议视图 + 裁定队列（含联络自决的抽样审计）
-status: todo
+status: ready
 labels:
   - cockpit
   - initiative

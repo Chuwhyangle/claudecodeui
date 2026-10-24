@@ -7,7 +7,7 @@ import { useHref, useInRouterContext } from 'react-router-dom';
 import { Button } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import type { LLMProvider, MCPServerStatus, Project, ProjectSession, QuayFleetTaskCounts, SessionWithProvider } from '@/shared/types';
-import { cockpitViewPath } from '@/modules/cockpit';
+import { WatchPinToggle, cockpitViewPath, formatProjectUri } from '@/modules/cockpit';
 import { getQuayIndicatorStatus, getTaskIndicatorStatus } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import TaskIndicator from '@/modules/sidebar/TaskIndicator';
 import QuayIndicator from '@/modules/sidebar/QuayIndicator';
@@ -390,6 +390,12 @@ function SidebarProjectItem({
                 ) : (
                   <>
                     {fleetProjectId !== null && (
+                      <WatchPinToggle
+                        uri={formatProjectUri(fleetProjectId)}
+                        testId="cockpit-project-watch-toggle"
+                      />
+                    )}
+                    {fleetProjectId !== null && (
                       <CockpitProjectLink
                         compact
                         fleetProjectId={fleetProjectId}
@@ -583,6 +589,13 @@ function SidebarProjectItem({
                 >
                   <Edit3 className="h-3 w-3" />
                 </div>
+                {fleetProjectId !== null && (
+                  <WatchPinToggle
+                    uri={formatProjectUri(fleetProjectId)}
+                    testId="cockpit-project-watch-toggle"
+                    className="touch:opacity-100 opacity-0 transition-opacity group-hover:opacity-100"
+                  />
+                )}
                 {fleetProjectId !== null && (
                   <CockpitProjectLink
                     compact={false}
