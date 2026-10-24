@@ -87,12 +87,12 @@ const sessionsPath =
 
 ## AC
 
-- [ ] AC1 判据翻绿：`npx playwright test e2e/resident-status-bar.spec.ts` 退出 **0**，4 个用例全过（stdout `4 passed`），且 test 4 打印的 `elapsed=NNNNms` < 55_000。验证：`echo $?` + `4 passed` + `elapsed=` 三行逐字登记（红态基线见 Proposal：EXIT=1 / `1 failed` / `3 did not run` / `:330` 15s 超时）。
-- [ ] AC2 两处会话行定位都排除模式开关锚：`grep -n 'a\[href="/session/\${sessionId}"\]' e2e/resident-status-bar.spec.ts` 的**每一行**都含 `:not([data-mode-switch-link])`，且总行数 ≥ 2（`:329` 与 `:373`）。验证：`grep -n 'a\[href="/session/\${sessionId}"\]' e2e/resident-status-bar.spec.ts | grep -vc ':not(\[data-mode-switch-link\])'` 输出为 **0**，同一条 `grep -n` 的完整输出逐字登记。
-- [ ] AC3 承重断言未被削弱：`git diff develop -- e2e/resident-status-bar.spec.ts | grep -cE '^[-+].*(test\(|expect\(|test\.skip|retries|waitForTimeout)'` = **0**（diff 只允许出现两处定位行的改动）；`npx playwright test e2e/resident-status-bar.spec.ts --list` 退出 0 且仍列出 **4** 个用例、标题逐字未变。验证：两条命令逐字输出 + `--list` 的四个标题。
-- [ ] AC4 承重假形态仍然红（本轮实测，逐字保留）：(i) 把侧栏标记 / 胶囊的状态源改成**本地镜像**（场景切换状态后不再跟随 `GET /api/session-hosts`）⇒ 判据退出**非 0**，红落在四态那条 `toHaveAttribute('data-resident-state', …)` 上；(ii) 把无人轮渲染成用户消息样式 ⇒ 判据退出**非 0**，红落在 `isUserStyle` 那条（`a turn nobody typed must not wear the user's own bubble style`）。两条都登记变异 diff、失败断言逐字、退出码；恢复后判据回 0。验证：两次变异跑与两次还原跑的 `echo $?`。
-- [ ] AC5 边界：`git diff develop -- package.json playwright.config.ts` 为空；spec diff 不新增 `test.skip` / `retries` / `waitForTimeout`；`npm run typecheck` 退出 0；`git status --short` 在完成记录写入时只剩本任务文件与 spec。验证：四条命令逐字输出。
-- [ ] AC6 记录如实：`goals/AC-172-真实浏览器里常驻会话的状态标记-状态条与关闭按钮反映宿主状态-无人轮带触发类型标签.md` 的 body **经 `goal_write`**（body 从 `goal_get` 读全量后再拼接，不从 worktree 直读）新增日期化修订记录 `## 修订记录（2026-10-24）`，逐字点名 `ff2998e9f`（SidebarModeSwitch 的 sessions 段指向当前路由、在 DOM 中先于会话列表）与两处定位的 `:not([data-mode-switch-link])` 修法；**不编辑 frontmatter**（`criterion` / `status: achieved` / `goal: GOAL-013` 逐字不动）。验证：`goal_get AC-172` 的 body 含该标题与该 commit hash，且 `criterion` 逐字为 `npx playwright test e2e/resident-status-bar.spec.ts`、`status: achieved`、`goal: GOAL-013`。
+- [x] AC1 判据翻绿：`npx playwright test e2e/resident-status-bar.spec.ts` 退出 **0**，4 个用例全过（stdout `4 passed`），且 test 4 打印的 `elapsed=NNNNms` < 55_000。验证：`echo $?` + `4 passed` + `elapsed=` 三行逐字登记（红态基线见 Proposal：EXIT=1 / `1 failed` / `3 did not run` / `:330` 15s 超时）。
+- [x] AC2 两处会话行定位都排除模式开关锚：`grep -n 'a\[href="/session/\${sessionId}"\]' e2e/resident-status-bar.spec.ts` 的**每一行**都含 `:not([data-mode-switch-link])`，且总行数 ≥ 2（`:329` 与 `:373`）。验证：`grep -n 'a\[href="/session/\${sessionId}"\]' e2e/resident-status-bar.spec.ts | grep -vc ':not(\[data-mode-switch-link\])'` 输出为 **0**，同一条 `grep -n` 的完整输出逐字登记。
+- [x] AC3 承重断言未被削弱：`git diff develop -- e2e/resident-status-bar.spec.ts | grep -cE '^[-+].*(test\(|expect\(|test\.skip|retries|waitForTimeout)'` = **0**（diff 只允许出现两处定位行的改动）；`npx playwright test e2e/resident-status-bar.spec.ts --list` 退出 0 且仍列出 **4** 个用例、标题逐字未变。验证：两条命令逐字输出 + `--list` 的四个标题。
+- [x] AC4 承重假形态仍然红（本轮实测，逐字保留）：(i) 把侧栏标记 / 胶囊的状态源改成**本地镜像**（场景切换状态后不再跟随 `GET /api/session-hosts`）⇒ 判据退出**非 0**，红落在四态那条 `toHaveAttribute('data-resident-state', …)` 上；(ii) 把无人轮渲染成用户消息样式 ⇒ 判据退出**非 0**，红落在 `isUserStyle` 那条（`a turn nobody typed must not wear the user's own bubble style`）。两条都登记变异 diff、失败断言逐字、退出码；恢复后判据回 0。验证：两次变异跑与两次还原跑的 `echo $?`。
+- [x] AC5 边界：`git diff develop -- package.json playwright.config.ts` 为空；spec diff 不新增 `test.skip` / `retries` / `waitForTimeout`；`npm run typecheck` 退出 0；`git status --short` 在完成记录写入时只剩本任务文件与 spec。验证：四条命令逐字输出。
+- [x] AC6 记录如实：`goals/AC-172-真实浏览器里常驻会话的状态标记-状态条与关闭按钮反映宿主状态-无人轮带触发类型标签.md` 的 body **经 `goal_write`**（body 从 `goal_get` 读全量后再拼接，不从 worktree 直读）新增日期化修订记录 `## 修订记录（2026-10-24）`，逐字点名 `ff2998e9f`（SidebarModeSwitch 的 sessions 段指向当前路由、在 DOM 中先于会话列表）与两处定位的 `:not([data-mode-switch-link])` 修法；**不编辑 frontmatter**（`criterion` / `status: achieved` / `goal: GOAL-013` 逐字不动）。验证：`goal_get AC-172` 的 body 含该标题与该 commit hash，且 `criterion` 逐字为 `npx playwright test e2e/resident-status-bar.spec.ts`、`status: achieved`、`goal: GOAL-013`。
 
 ## DoD
 
@@ -107,3 +107,44 @@ L_D：该轴仍暗，理由：本任务只把一条 AC 判据的会话行定位�
 - e2e/resident-status-bar.spec.ts
 - goals/AC-172-真实浏览器里常驻会话的状态标记-状态条与关闭按钮反映宿主状态-无人轮带触发类型标签.md
 - tasks/gap-ac172-session-row-locator-shadowed-by-mode-switch.md
+
+## 完成记录（2026-10-24）
+
+**实现**：提交 `89ceed8d8`（本任务分支 `task/gap-ac172-session-row-locator-shadowed-by-mode-switch`，基于 develop `a3f6c6c80`）。只改 `e2e/resident-status-bar.spec.ts`（+2 / −2）：`:329`（`readMark` 内）与 `:354`（共享 `sessionRow`）两处会话行定位都加 `:not([data-mode-switch-link])`，排除 `ff2998e9f` 新增的侧栏模式开关锚。
+
+**这不是产品修复**：AC-172 的产品保证（侧栏四态标记与 `GET /api/session-hosts` 逐态比对、胶囊面板的地址 / pid / 复制 / 起停关闭、停止只中止一轮、无人轮分隔标签 / 发送方 / 非用户样式）本轮实测全部成立（test 1 / 2 / 3 全过）。失效的是 test 1 的**量具**：`readMark` 的 `.first()` 被 `ff2998e9f` 新增的侧栏模式开关的 `/session/<当前 id>` 链接抢先命中，而该提交未回灌本 spec。判据命令、60s 门限、`SINGLE_SPEC_CEILING_MS = 55_000` 均未动；未加 retries / skip / stub；未删或放宽任何承重断言；未往生产代码补标记；未改其它 spec。
+
+**AC1** 判据翻绿：`npx playwright test e2e/resident-status-bar.spec.ts` → `EXIT=0`，`4 passed (31.0s)`，`elapsed=31097ms`（< 55_000）。逐条：test 1 `5.5s`（`state=空闲 mark=solid` → `state=未运行 mark=hollow mark.afterClose=hollow`，`panel.address="peer-resident-status-bar" equal=true`，`copy.clipboard="peer-resident-status-bar" equalToAddress=true`，`close.request=200 hosts.beforeClose=1 hosts.afterClose=0`）；test 2 `16.2s`（四态 `运行中 mark=solid+spinner` / `空闲 mark=solid` / `exited(oom) mark=exited`，分隔标签 cron / cross-session 与发送方对，两条无人轮 `isUserStyle=false`，真实用户轮 `isUserStyle=true`）；test 3 `locales.checked=12 keys.perLocale=27 missing=0`；test 4 `elapsed=31097ms`。红态基线（修前）逐字见 Proposal：`EXIT=1` / `1 failed / 3 did not run` / `:330` 15s 超时。
+
+**AC2** 两处定位都排除模式开关锚。`grep -n 'a\[href="/session/\${sessionId}"\]' e2e/resident-status-bar.spec.ts` 逐字：
+
+```
+329:  const mark = page.locator(`a[href="/session/${sessionId}"]:not([data-mode-switch-link])`).first().locator(MARK);
+354:const sessionRow = (page: Page, sessionId: string): Locator => page.locator(`a[href="/session/${sessionId}"]:not([data-mode-switch-link])`).first();
+```
+
+`… | grep -vc ':not(\[data-mode-switch-link\])'` → `0`；总行数 2（≥ 2）。（Proposal 写的 `:373` 是立案时的行号；实际落点是 `:329` 与 `:354`。）
+
+**AC3** 承重断言未被削弱：`git diff develop -- e2e/resident-status-bar.spec.ts | grep -cE '^[-+].*(test\(|expect\(|test\.skip|retries|waitForTimeout)'` → `0`；完整 spec diff 只有上述两处定位行（+2 / −2）。`npx playwright test … --list` → `LIST_EXIT=0`，仍列 4 个用例、标题逐字未变：
+
+```
+resident-status-bar.spec.ts:785:3 › resident status bar › the popover reports the address the listing publishes, copies it, and closes the process
+resident-status-bar.spec.ts:911:3 › resident status bar › the walk drives all four states, and stopping leaves the process
+resident-status-bar.spec.ts:1184:3 › resident status bar › every shipped locale carries the keys the bar, the mark and the dividers read
+resident-status-bar.spec.ts:1223:3 › resident status bar › the run ends inside the ceiling the goal gate kills at
+Total: 4 tests in 1 file
+```
+
+**AC4** 承重假形态仍然红（本轮实测）：
+
+(i) 侧栏标记状态源改为本地镜像——`ResidentMark.tsx` 加模块级 `MIRROR` Map，首次读数即冻结、不再跟随 `GET /api/session-hosts`（diff：`+const MIRROR = new Map<string, ReturnType<typeof readResidentProcessState>>()`；`const liveState = readResidentProcessState(host, error !== null); if (!MIRROR.has(sessionId)) MIRROR.set(sessionId, liveState); const processState = MIRROR.get(sessionId)!;`）。判据 `EXIT=1`，逐字 `Error: expect(locator).toHaveAttribute(expected) failed` / `Locator: locator('a[href="/session/<id>"]:not([data-mode-switch-link])').first().locator('[data-resident-mark]')` / `Expected: "idle"` / `Received: "unstarted"` / `Timeout: 15000ms`，失败行 `> 799 | await expect(markOf(page, armA)).toHaveAttribute('data-resident-state', 'idle', { timeout: 15_000 });`（serial 模式下 test 2–4 did not run；同一个冻结镜像在四态那条 `data-resident-state` 断言上表达为不跟随场景切换）。
+
+(ii) 无人轮渲染成用户消息样式——`MessageComponent.tsx:281` 改为 `data-message-style={rendersAsUser || isUnattendedTurn ? 'user' : message.type}`。判据 `EXIT=1`，test 1 仍过，红落在 test 2 逐字 `Error: a turn nobody typed must not wear the user's own bubble style` / `Expected: not "user"`（`:1154`），同跑打印两条 `row.class=user isUserStyle=true`。
+
+两臂 `git checkout --` 还原后判据回到 `EXIT=0`，`4 passed (31.0s)`，`elapsed=31097ms`。
+
+**AC5** 边界：`git diff develop -- package.json playwright.config.ts` → 空（`wc -l` = 0）；spec diff 未新增 `test.skip` / `retries` / `waitForTimeout`（AC3 的 grep = 0）；`npm run typecheck` → `TYPECHECK_EXIT=0`（`tsconfig.json` + `server/tsconfig.json` + `scripts/tsconfig.json`）；`git status --short`（worktree）在完成记录写入时为空——本任务在 worktree 的全部改动就是已提交的 `e2e/resident-status-bar.spec.ts`（提交 `89ceed8d8`），任务文件经 `task_write`、goal 记录经 `goal_write` 各自提交，不在 worktree 工作树内。
+
+**AC6** 记录如实：`goal_get AC-172` 的 body 已含 `## 修订记录（2026-10-24）`，逐字点名 `ff2998e9f`（SidebarModeSwitch 的 sessions 段指向当前路由、在 DOM 中先于会话列表）与两处定位的 `:not([data-mode-switch-link])` 修法；frontmatter 未编辑——`criterion` 逐字仍为 `npx playwright test e2e/resident-status-bar.spec.ts`、`status: achieved`、`goal: GOAL-013`。`goal_write` 落库提交 `46419a5b2`（`goals: AC-172 field:body by cli:2632477`）。
+
+**DoD**：等 driver 的下一轮 goal-gate 重跑 `npx playwright test e2e/resident-status-bar.spec.ts` 翻绿并把 pass 写进 `.quay/gate-events.jsonl`（AC-172 台账尾部不再 CURRENTLY FALSE）。
