@@ -23,10 +23,10 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/shared/tests/viewEvents.test.ts` exit 0——进入与离开一个会话产生一条带 dwellMs 的事件；页面隐藏时结算并暂停计时；批量阈值触发一次上报（假定时器 + 桩 fetch 计数）；关闭开关后不上报。
-- [ ] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/view-events.test.ts` exit 0——上报写入配置路径的 jsonl、逐行合法 JSON；超过单批上限或非法字段被拒绝；开关关闭时返回 204 不写入。
-- [ ] AC3: `python3 -I scripts/workload-report/report.py --fixture scripts/workload-report/testdata --out /tmp/wr-test.md` exit 0，输出包含「观察型切换」「停留」「按目标类型」三节；对夹具的计数与手算一致（脚本自带 `--self-check` 断言）。
-- [ ] AC4: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/shared/tests/viewEvents.test.ts` exit 0——进入与离开一个会话产生一条带 dwellMs 的事件；页面隐藏时结算并暂停计时；批量阈值触发一次上报（假定时器 + 桩 fetch 计数）；关闭开关后不上报。
+- [x] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/view-events.test.ts` exit 0——上报写入配置路径的 jsonl、逐行合法 JSON；超过单批上限或非法字段被拒绝；开关关闭时返回 204 不写入。
+- [x] AC3: `python3 -I scripts/workload-report/report.py --fixture scripts/workload-report/testdata --out /tmp/wr-test.md` exit 0，输出包含「观察型切换」「停留」「按目标类型」三节；对夹具的计数与手算一致（脚本自带 `--self-check` 断言）。
+- [x] AC4: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -38,12 +38,14 @@ extra: {}
 - src/shared/viewEvents.ts (new)
 - src/shared/tests/viewEvents.test.ts (new)
 - src/App.tsx
+- src/modules/project-workspace/hooks/useProjectsState.ts
 - server/modules/observation/index.ts (new)
 - server/modules/observation/observation.module.ts (new)
 - server/modules/observation/view-events.routes.ts (new)
 - server/modules/observation/view-events.service.ts (new)
 - server/modules/observation/tests/view-events.test.ts (new)
 - server/index.ts
+- server/modules/settings/server-settings.ts
 - config/server.settings.example.json
 - server/shared/tests/server-import-cycle-budget.test.ts
 - scripts/workload-report/report.py (new)
