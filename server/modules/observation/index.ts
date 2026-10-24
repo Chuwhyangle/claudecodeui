@@ -42,6 +42,22 @@ export {
   parseObservationUri,
 } from './observation-uri.js';
 export type { ObservationKind, ObservationUri } from './observation-uri.js';
+// consumer: server/modules/websocket/services/chat-run-registry.service.ts, which fires the
+// producer once per terminal run event; the criterion can build its own instance over an
+// injected clock and transcript reader
+export { createSessionDigestProducer, sessionDigestProducer, SESSION_DIGEST_PRODUCER } from './session-digest.producer.js';
+export type {
+  SessionDigestProducer,
+  SessionDigestProducerDeps,
+  SessionTurnEndEvent,
+} from './session-digest.producer.js';
+export type {
+  SessionActivity,
+  SessionDigest,
+  SessionDigestResult,
+  SessionTestReading,
+  SessionTestRunner,
+} from './session-digest.js';
 // consumer: server/modules/observation/observation-store.ts (the wall's producers[]) and the
 // producer-liveness criterion
 export {

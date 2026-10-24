@@ -96,6 +96,10 @@ import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { createArchitectureModule } from './modules/architecture/index.js';
 import { createObservationModule } from './modules/observation/index.js';
+import { createLiaisonModule, createFileLiaisonStore, createQuayFleetRunner } from './modules/liaison/index.js';
+// The ONE quay-fleet binary locator (QUAY_FLEET_BIN → PATH → ~/.quay-fleet/bin). The liaison
+// module must not grow a second lookup order, so the composition root injects this one.
+import { locateQuayFleetCli } from './modules/quay/quay-fleet-locator.js';
 import { createReplySuggestionsModule } from './modules/reply-suggestions/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
@@ -345,6 +349,63 @@ const cockpitHub = createCockpitModule({
             });
         }
     },
+});
+
+// M3 liaison delivery (`liaison-delivery-by-initiative-and-project`). The module is a leaf:
+// it knows the (initiative, project) → session resolution, the three-state reading and the
+// initiative inbox, and nothing about the fleet CLI's location, the host registry or the chat
+// control plane. Those three are the composition root's knowledge, injected here:
+//
+//   · `runFleet` spawns the ONE located `quay-fleet` binary;
+//   · `isSessionLive` reads the process-wide host registry — a session is alive exactly when
+//     a host is serving it (`liveHostForSession`), which is the authoritative reading in this
+//     process (the probe's `pid`/`procStart` cross-check exists for readers that lack one);
+//   · `sendMessage` is the SAME chat control service the composer, the MCP gateway and the
+//     timer use — the liaison path opens no second send path.
+//
+// The inbox and the delivery log live under the fleet home rather than the CloudCLI data
+// directory: they are the initiative's queue, and `QUAY_FLEET_HOME` is where the fleet itself
+// keeps its state.
+const liaisonFleetHome = process.env.QUAY_FLEET_HOME?.trim() || path.join(os.homedir(), '.quay-fleet');
+const liaisonModule = createLiaisonModule({
+    runFleet: createQuayFleetRunner({ locateBin: () => locateQuayFleetCli().binPath }),
+    isSessionLive: (sessionId) => sessionHostManager.liveHostForSession(sessionId) !== null,
+    sendMessage: async ({ sessionId, content, userId }) => {
+        const result = await chatControl.send(
+            { userId: userId ?? null, via: 'mcp' },
+            { sessionId, content },
+        );
+        return result.ok
+            ? { ok: true, deliveryId: result.deliveryId, runId: result.runId }
+            : { ok: false, code: result.code, message: result.message };
+    },
+    store: createFileLiaisonStore({ directory: path.join(liaisonFleetHome, 'liaison') }),
+    log: (message) => console.log(`${terminalTextStyles.info('[INFO]')} ${message}`),
+});
+
+// A session that just became live drains the messages it was owed. The host registry is the
+// ONE announcement of "someone is serving this session now" — it covers both a resident
+// restore and a lazy first open — so the liaison inbox watches IT rather than subscribing to
+// each transport separately. The set makes the event "became live", not "is live": a change
+// announcement for a session that was already serving must not be read as a recovery.
+const liaisonLiveSessions = new Set<string>();
+sessionHostManager.onChange(() => {
+    const live = new Set<string>();
+    for (const host of sessionHostManager.snapshot()) {
+        if (host.state === 'closed') continue;
+        for (const sessionId of host.bindings.keys()) live.add(sessionId);
+    }
+    const recovered = [...live].filter((sessionId) => !liaisonLiveSessions.has(sessionId));
+    liaisonLiveSessions.clear();
+    for (const sessionId of live) liaisonLiveSessions.add(sessionId);
+    for (const sessionId of recovered) {
+        void liaisonModule.handleSessionRecovered(sessionId).catch((error: unknown) => {
+            console.warn(
+                '[WARN] Liaison inbox redelivery failed:',
+                error instanceof Error ? error.message : error,
+            );
+        });
+    }
 });
 
 // gap-mcp-ui-open-session: the ONE navigation service for this process, built
@@ -1738,6 +1799,11 @@ app.use(
         },
     }),
 );
+// M3 liaison delivery. A session addresses a peer by (initiative, project) — never by name or
+// pid, the two identities the stable-addressing probe measured as unstable — and the module
+// resolves the pair through the fleet registry. Mounted behind the same auth as every other
+// API surface: the authenticated caller is the identity the underlying send is made as.
+app.use('/api/liaison', authenticateToken, liaisonModule.router);
 app.use('/api/scheduled-messages', authenticateToken, scheduledMessagesRoutes);
 
 // Session host listing (protected). Mounted unconditionally — unlike the debug

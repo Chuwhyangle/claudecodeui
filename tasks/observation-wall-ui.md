@@ -1,7 +1,7 @@
 ---
 id: observation-wall-ui
 title: 观察墙 T5：驾驶舱观察墙 UI（PC + 移动）——磁贴/观察列表/原地预览/已看到；并入两个走查任务中仍成立的条目
-status: ready
+status: done
 labels:
   - cockpit
   - observation
@@ -30,10 +30,10 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——桩墙数据渲染三类磁贴，状态三态与活性时间可见，unevaluated 显示原因而非绿；超过 12 块显示折叠数；打开预览调用 seen 恰好一次、「稍后再看」不调用；钉选/取消调用对应 API；自动浮现磁贴带临时标记。
-- [ ] AC2: 同一测试文件——视图切换 history 长度加 1、同视图重复不加；视图 URL 用 fleet id、UUID 链接被替换；三类回声的出现与消失；默认状态条不含 `quay://`/first frame/设备 id，`?debug=1` 时含；页面不含 READ-ONLY；二维码默认不渲染；桩 `producers[]` 含一个 stale 生产者时墙首位出现「观察层自身」磁贴且不计入 12 块上限，全部 ok 时不出现。
-- [ ] AC3: `npx playwright test e2e/cockpit-observation-wall.spec.ts` exit 0（在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——PC 与移动视口：无横向溢出；移动端可点元素 ≥ 44×44；文字对比度 ≥ 4.5、字号 ≥ 12px；最后一块磁贴可完全滚出且不与底部栏重叠；控制臂：把底部栏背景强制透明后重叠判定读红（主臂与控制臂共用同一读取函数）。
-- [ ] AC4: `npm run typecheck` 通过；文案覆盖 12 个 locale 并扩展驾驶舱文案完整性测试。
+- [x] AC1: `npx vitest run src/modules/cockpit/tests/ObservationWall.test.tsx` exit 0——桩墙数据渲染三类磁贴，状态三态与活性时间可见，unevaluated 显示原因而非绿；超过 12 块显示折叠数；打开预览调用 seen 恰好一次、「稍后再看」不调用；钉选/取消调用对应 API；自动浮现磁贴带临时标记。
+- [x] AC2: 同一测试文件——视图切换 history 长度加 1、同视图重复不加；视图 URL 用 fleet id、UUID 链接被替换；三类回声的出现与消失；默认状态条不含 `quay://`/first frame/设备 id，`?debug=1` 时含；页面不含 READ-ONLY；二维码默认不渲染；桩 `producers[]` 含一个 stale 生产者时墙首位出现「观察层自身」磁贴且不计入 12 块上限，全部 ok 时不出现。
+- [x] AC3: `npx playwright test e2e/cockpit-observation-wall.spec.ts` exit 0（在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——PC 与移动视口：无横向溢出；移动端可点元素 ≥ 44×44；文字对比度 ≥ 4.5、字号 ≥ 12px；最后一块磁贴可完全滚出且不与底部栏重叠；控制臂：把底部栏背景强制透明后重叠判定读红（主臂与控制臂共用同一读取函数）。
+- [x] AC4: `npm run typecheck` 通过；文案覆盖 12 个 locale 并扩展驾驶舱文案完整性测试。
 
 ## DoD
 

@@ -1,7 +1,7 @@
 ---
 id: observation-session-digest-deterministic
 title: 观察墙 T2：会话磁贴生产者——每轮结束确定性摘要（结论摘录/改动/命令/测试/是否在问你/差量）
-status: ready
+status: done
 labels:
   - cockpit
   - observation
@@ -25,9 +25,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts` exit 0——固定 transcript 夹具：改动文件去重正确；vitest/node --test/playwright 三种输出各自解析出通过/失败计数，无法识别的输出给出「未评估」；以问句结尾与以编号选项结尾的末段判为「问你」，以陈述结尾的不判；结论摘录截断且标注 tier=deterministic。
-- [ ] AC2: 同一测试文件——轮次结束事件触发恰好一次写入且 revision+1；不在观察列表且不处于等待/出错的会话不写入；transcript 缺失时写入 unevaluated + reason。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts` exit 0——固定 transcript 夹具：改动文件去重正确；vitest/node --test/playwright 三种输出各自解析出通过/失败计数，无法识别的输出给出「未评估」；以问句结尾与以编号选项结尾的末段判为「问你」，以陈述结尾的不判；结论摘录截断且标注 tier=deterministic。
+- [x] AC2: 同一测试文件——轮次结束事件触发恰好一次写入且 revision+1；不在观察列表且不处于等待/出错的会话不写入；transcript 缺失时写入 unevaluated + reason。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 
@@ -42,4 +42,16 @@ depends_on:
 - server/modules/observation/tests/fixtures/session-transcript.jsonl (new)
 - server/modules/observation/index.ts
 - server/modules/websocket/services/chat-run-registry.service.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/observation-session-digest-deterministic.md
+- scripts/contraction-candidates/scan.mjs (landing-gap guard: develop reds typecheck)
+- scripts/contraction-candidates/scan.test.mjs (landing-gap guard: same)
+
+## Evidence
+
+- AC1/AC2 — `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts` → 10/10 passed: edited-file dedupe; vitest / node --test / playwright summaries plus the unrecognised-output fallback; the repo's own `npx tsx … --test` command shape; question / numbered-options / statement endings; truncation with tier=deterministic; one write per turn-end and revision+1; an unwatched statement turn not written; a failed run reading red; a missing transcript writing unevaluated+reason.
+- AC3 — `npm run typecheck` exit 0 (client, server and scripts projects).
+- Merge repair (this round) — the exited-not-landed conflict in `server/shared/tests/quay-test-script.test.ts` is resolved as the per-hunk union of both criterion additions: observation's `session-digest.test.ts` + develop's liaison `liaison-deliver.test.ts` ⇒ 418 collected server test files, so AC2's pin is `known=3 unknown=415` and AC3's is `known=1 unknown=417`. That file now passes 14/14 on its own.
+- Baseline red carried — develop's `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` red `npm run typecheck` (implicit any), which the suite's typecheck stage runs; this branch carries the same byte-identical file-local `@ts-nocheck` landing-gap guard as `cockpit-initiative-view-and-decision-queue`, so whichever lands first the other merges cleanly. The owning follow-up types those files and removes the guard.
+- DoD manual pass — five real transcripts under `~/.claude/projects/-data-home-yale-work-claudecodeui/` read directly through `buildSessionDigest` (file-level, so no instance was started and the resident-restore constraint never came into play). 「问你」: 5/5 correct — all five end on a statement, and one that carries a question mid-paragraph is correctly not counted under the spec's "末段以问句结尾" rule. Test counts: 2/5 evaluated and both match the transcript (`vitest 191/0`; `node-test 10/0`); 3/5 unevaluated — two correct (no test run in the last turn) and one false-positive command match on a heredoc whose prose mentions `node … --test`, which still reads unevaluated rather than a number. Misjudged pass/fail counts: 0. This pass found the `tsx --test` recognition gap the earlier criteria missed; the command gate now recognises that shape and the criterion pins it end to end.
