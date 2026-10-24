@@ -99,24 +99,8 @@ extra: {}
 
 ## Blocker
 
-**2026-10-24T12:47:11.868Z — worker 未落地（exited-not-landed）**
+**2026-10-24T13:52:10.843Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=merge-develop: Auto-merging scripts/suite-duration-baseline.tsv
-Auto-merging server/shared/tests/quay-test-script.test.ts
-CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
-Auto-merging src/modules/cockpit/CockpitPage.tsx
-Auto-merging src/modules/i18n/locales/de/common.json
-Auto-merging src/modules/i18n/locales/en/common.json
-Auto-merging src/modules/i18n/locales/es/common.json
-Auto-merging src/modules/i18n/locales/fr/common.json
-Auto-merging src/modules/i18n/locales/id/common.json
-Auto-merging src/modules/i18n/locales/it/common.json
-Auto-merging src/modules/i18n/locales/ja/common.json
-Auto-merging src/modules/i18n/locales/ko/common.json
-Auto-merging src/modules/i18n/locales/ru/common.json
-Auto-merging src/modules/i18n/locales/tr/common.json
-Auto-merging src/modules/i18n/locales/zh-CN/common.json
-Auto-merging src/modules/i18n/locales/zh-TW/common.json
-Automatic merge failed; fix conflicts and then commit the result.
+- 未落地原因：step=suite: not ok - src/modules/cockpit/tests/CockpitPushToTalk.test.tsx: AssertionError: expected "spy" to be called at least once
 - run_id：wk-prod-anchor
-- session_id：6980a9fd-0e42-497a-9fad-e83ee8d573bf
+- session_id：048cfb69-8793-41b2-8a2b-692b8f2b9dd7
