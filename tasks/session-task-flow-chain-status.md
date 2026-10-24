@@ -74,9 +74,10 @@ depends_on:
 
 **续跑轮（2026-10-24，suite 红修复）**
 
-- 上一轮 fan-in 红在 `server/shared/tests/quay-test-script.test.ts`：不是 delta-relatedness 判定的「无关」，而是本任务新增 `server/modules/quay/tests/session-task-chain.test.ts` 把 server 收集数 432 → 433，AC2/AC3 的两条精确 pin 各差 1（实读 `unknown=430`/`432`，钉 `429`/`431`）。
+- 上一轮 fan-in 红在 `server/shared/tests/quay-test-script.test.ts`：不是 delta-relatedness 判定的「无关」，而是本任务新增 `server/modules/quay/tests/session-task-chain.test.ts` 把 server 收集数 432 → 433，AC2/AC3 的两条精确 pin 各差 1（实读 `unknown=430`/`432`，钉 `429`/`431`）。首次 fan-in 日志里 `not ok` 行点名的子测试（positional test file …）其实是绿的——真红是后面的 AC2/AC3，单文件复跑才看得见。
 - 修复：两条 pin 移到 430/432，并在注释链补记本次 +1；`scripts/suite-duration-baseline.tsv` 追加实测行 `1897 server/modules/quay/tests/session-task-chain.test.ts`（单文件跑得 `duration_ms 1897`），391 行 / 433 收集 = 90.3%，AC7 地板仍绿。
-- 单文件复验：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 结果见本轮回归。
+- 单文件复验：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → exit 0，**14 passed / 0 failed，duration_ms 86192**（AC2/AC3/AC4/AC5/AC6/AC7、e2e-lane 三条腿全绿）。
+- anti-drift：`anti-drift-touches-check.js --task session-task-flow-chain-status --merge-target develop` → `ANTI-DRIFT OK … 23 actual file(s), all within declared Touches`。
 
 ## Touches
 
