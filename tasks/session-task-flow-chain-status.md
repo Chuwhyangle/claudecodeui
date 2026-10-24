@@ -72,6 +72,12 @@ depends_on:
 
 - 方案 4（驾驶舱复用同一份阶段数据）本轮未接线：AC 只覆盖会话视图；阶段数据已由 `GET /api/quay/:projectId/session-task-chain` 提供，`CockpitStage` 的展示接线留给后续任务，避免在没有判据的情况下改动驾驶舱舞台。
 
+**续跑轮（2026-10-24，suite 红修复）**
+
+- 上一轮 fan-in 红在 `server/shared/tests/quay-test-script.test.ts`：不是 delta-relatedness 判定的「无关」，而是本任务新增 `server/modules/quay/tests/session-task-chain.test.ts` 把 server 收集数 432 → 433，AC2/AC3 的两条精确 pin 各差 1（实读 `unknown=430`/`432`，钉 `429`/`431`）。
+- 修复：两条 pin 移到 430/432，并在注释链补记本次 +1；`scripts/suite-duration-baseline.tsv` 追加实测行 `1897 server/modules/quay/tests/session-task-chain.test.ts`（单文件跑得 `duration_ms 1897`），391 行 / 433 收集 = 90.3%，AC7 地板仍绿。
+- 单文件复验：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` 结果见本轮回归。
+
 ## Touches
 
 - server/modules/quay/session-task-chain.service.ts (new)
@@ -97,4 +103,14 @@ depends_on:
 - src/modules/i18n/locales/tr/common.json
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/session-task-flow-chain-status.md
+
+## Blocker
+
+**2026-10-24T15:26:27.192Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=115985 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792855139045
+- run_id：wk-prod-anchor
+- session_id：798cddfb-028a-4ff3-a8e8-82c6c9ad53b1
