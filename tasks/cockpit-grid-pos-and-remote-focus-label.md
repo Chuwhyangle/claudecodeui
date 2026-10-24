@@ -31,6 +31,12 @@ extra: {}
 
 - **浏览器实际操作 + 截图（必做）**：fleet 视图上从 claudecodeui 按 ↓ 落到 archguard；遥控器焦点卡片显示项目名。截图存 `tmp/`。
 
+## Evidence
+
+- DoD 浏览器验证（上一轮落地）：`tmp/ckv-grid-fleet-before.png`（claudecodeui 聚焦）、`tmp/ckv-grid-fleet-after-down.png`（按 ↓ 后落到正下方的 archguard）、`tmp/ckv-grid-remote-focus.png`（遥控器焦点卡片「① archguard · running」）；驱动脚本 `tmp/ckv-grid-verify.cjs`。
+- AC1–AC4：fan-in suite 中 `cockpit-reducer.test.ts`、`CockpitStage.test.tsx`、`CockpitRemote.test.tsx` 全部 passed；`npm run typecheck` passed。
+- 2026-10-24 续做：本轮 suite 只剩两条与本任务无关的既有红（`claude-resident-addressable` / `claude-resident-unattended-turn` 钉住「CLI 默认工具表里没有 Monitor」）。develop 基线单跑同样失败且断言逐字相同（driver 的 `HARD RED (changed-assertion)` 是签名解析 artifact）；安装的 `claude` 2.1.310 默认已含 Monitor。已把两条钉子改为不依赖 CLI 工具集的读法：unattended 的触发仍由 `local_bash`、工具表由 `Bash` 钉住；addressable 的负控制改用一个不存在的工具名。两文件单独重跑均 1/1 绿，typecheck 与 lint 均绿。
+
 ## Touches
 
 - server/modules/cockpit/cockpit.reducer.ts
@@ -41,6 +47,8 @@ extra: {}
 - src/modules/cockpit/CockpitRemote.tsx
 - src/modules/cockpit/tests/CockpitStage.test.tsx
 - src/modules/cockpit/tests/CockpitRemote.test.tsx
+- server/modules/providers/tests/claude-resident-addressable.test.ts
+- server/modules/providers/tests/claude-resident-unattended-turn.test.ts
 - tasks/cockpit-grid-pos-and-remote-focus-label.md
 
 ## Blocker
