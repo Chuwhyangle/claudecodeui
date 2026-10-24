@@ -20,48 +20,65 @@ import {
   type ReplySuggestionsCompletion,
   type ReplySuggestionsCompletionRequest,
 } from '../reply-suggestions-client.js';
-import {
-  characterSetOverlap,
-  createReplySuggestionsService,
-  parseSuggestionChips,
-  REPLY_SUGGESTIONS_BATCH_CACHE_SIZE,
-  REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS,
-  type ReplySuggestionsService,
-} from '../reply-suggestions.service.js';
-import type { ReplySuggestionsSettings } from '../reply-suggestions-settings.js';
+import { characterSetOverlap, parseSuggestionChips } from '../reply-suggestions-chips.js';
+import { REPLY_SUGGESTIONS_DRAW_STORE_SIZE } from '../reply-suggestions-draw-store.js';
+import { REPLY_SUGGESTIONS_CIRCUIT_COOLDOWN_MS } from '../reply-suggestions-guard.js';
+import { createReplySuggestionsService, type ReplySuggestionsService } from '../reply-suggestions.service.js';
+import { ApiCredential, type ReplySuggestionsSettings } from '../reply-suggestions-settings.js';
+import { createReplySuggestionsUsageLog } from '../reply-suggestions-usage-log.js';
 
 const API_KEY = 'sk-service-secret-value';
 
-function baseSettings(overrides: Partial<ReplySuggestionsSettings> = {}): ReplySuggestionsSettings {
+/** The nested overrides a leg may apply to the base reading. */
+type SettingsOverrides = {
+  version?: string;
+  enabled?: boolean;
+  upstream?: Partial<ReplySuggestionsSettings['upstream']>;
+  generation?: Partial<ReplySuggestionsSettings['generation']>;
+  limits?: Partial<ReplySuggestionsSettings['limits']>;
+  usageLog?: boolean;
+};
+
+function baseSettings(overrides: SettingsOverrides = {}): ReplySuggestionsSettings {
   return {
-    version: 'test-1',
-    enabled: true,
-    configuredEnabled: true,
-    protocol: 'anthropic',
-    baseUrl: 'http://gateway.invalid',
-    model: 'test-model',
-    authScheme: '',
-    apiKeyFile: '',
-    apiKeyVar: '',
-    disableThinking: true,
-    temperature: 0.3,
-    redrawTemperature: 1.0,
-    maxOutputTokens: 400,
-    timeoutMs: 5000,
-    maxChips: 3,
-    maxChipChars: 120,
-    maxTailChars: 1500,
-    maxFocusChars: 600,
-    maxCallsPerMinute: 30,
-    maxCallsPerDay: 3000,
-    expansion: 'off',
-    usageLog: false,
-    systemPrompt: '',
-    apiKey: API_KEY,
-    source: 'file',
-    path: '/tmp/reply-suggestions-settings.json',
-    problems: [],
-    ...overrides,
+    version: overrides.version ?? 'test-1',
+    enabled: overrides.enabled ?? true,
+    upstream: {
+      protocol: 'anthropic',
+      baseUrl: 'http://gateway.invalid',
+      model: 'test-model',
+      authScheme: '',
+      credential: new ApiCredential(API_KEY),
+      disableThinking: true,
+      timeoutMs: 5000,
+      ...overrides.upstream,
+    },
+    generation: {
+      temperature: 0.3,
+      redrawTemperature: 1.0,
+      maxOutputTokens: 400,
+      maxChips: 3,
+      maxChipChars: 120,
+      maxTailChars: 1500,
+      maxFocusChars: 600,
+      systemPrompt: '',
+      expansion: 'off',
+      ...overrides.generation,
+    },
+    limits: {
+      maxCallsPerMinute: 30,
+      maxCallsPerDay: 3000,
+      ...overrides.limits,
+    },
+    usageLog: overrides.usageLog ?? false,
+    diagnostics: {
+      source: 'file',
+      path: '/tmp/reply-suggestions-settings.json',
+      problems: [],
+      configuredEnabled: overrides.enabled ?? true,
+      apiKeyFile: '',
+      apiKeyVar: '',
+    },
   };
 }
 
@@ -84,7 +101,7 @@ type Harness = {
 function makeHarness(
   t: { after(callback: () => void): void },
   options: {
-    settings?: Partial<ReplySuggestionsSettings>;
+    settings?: SettingsOverrides;
     messageText?: string | null;
     messageId?: string;
     responder?: Responder;
@@ -118,8 +135,10 @@ function makeHarness(
     ...(options.usageLog === undefined
       ? {}
       : {
-          usageLogPath: options.usageLog.path,
-          ...(options.usageLog.maxBytes === undefined ? {} : { usageLogMaxBytes: options.usageLog.maxBytes }),
+          usageLog: createReplySuggestionsUsageLog({
+            filePath: options.usageLog.path,
+            ...(options.usageLog.maxBytes === undefined ? {} : { maxBytes: options.usageLog.maxBytes }),
+          }),
         }),
   });
 
@@ -161,7 +180,7 @@ test('(a) parsing accepts the three answer shapes and enforces the chip rules', 
   assert.deepEqual((await fenced.service.suggest({ sessionId: 's-fenced' })).chips, ['a', 'b']);
 
   const truncated = makeHarness(t, {
-    settings: { maxChipChars: 3 },
+    settings: { generation: { maxChipChars: 3 } },
     responder: () => chips('abcdef', 'xy'),
   });
   assert.deepEqual((await truncated.service.suggest({ sessionId: 's-clip' })).chips, ['abc', 'xy']);
@@ -170,7 +189,7 @@ test('(a) parsing accepts the three answer shapes and enforces the chip rules', 
   assert.deepEqual((await cleaned.service.suggest({ sessionId: 's-clean' })).chips, ['a', 'b']);
 
   const capped = makeHarness(t, {
-    settings: { maxChips: 2 },
+    settings: { generation: { maxChips: 2 } },
     responder: () => chips('a', 'b', 'c'),
   });
   assert.deepEqual((await capped.service.suggest({ sessionId: 's-cap' })).chips, ['a', 'b']);
@@ -185,7 +204,7 @@ test('(a) parsing accepts the three answer shapes and enforces the chip rules', 
 test('(b) the prompt tail and the focus are clipped to their configured maxima', async (t) => {
   const message = '0123456789ABCDEFGHIJ';
   const harness = makeHarness(t, {
-    settings: { maxTailChars: 10, maxFocusChars: 5 },
+    settings: { generation: { maxTailChars: 10, maxFocusChars: 5 } },
     messageText: message,
     responder: () => chips('a', 'b', 'c'),
   });
@@ -201,7 +220,7 @@ test('(c) a first draw uses temperature; a redraw uses redrawTemperature and lis
   const first = ['first-a', 'first-b', 'first-c'];
   const second = ['second-a', 'second-b', 'second-c'];
   const harness = makeHarness(t, {
-    settings: { temperature: 0.3, redrawTemperature: 1.4 },
+    settings: { generation: { temperature: 0.3, redrawTemperature: 1.4 } },
     responder: (_request, index) => chips(...(index === 1 ? first : second)),
   });
 
@@ -285,7 +304,7 @@ test('(g) identical concurrent requests share one upstream call', async (t) => {
 
 test('(h1) the per-minute cap answers a rate-limit error', async (t) => {
   const harness = makeHarness(t, {
-    settings: { maxCallsPerMinute: 2, maxCallsPerDay: 3000 },
+    settings: { limits: { maxCallsPerMinute: 2, maxCallsPerDay: 3000 } },
     responder: () => chips('a', 'b', 'c'),
   });
   await harness.service.suggest({ sessionId: 's-minute-1' });
@@ -303,7 +322,7 @@ test('(h1) the per-minute cap answers a rate-limit error', async (t) => {
 
 test('(h2) the per-day cap answers a rate-limit error', async (t) => {
   const harness = makeHarness(t, {
-    settings: { maxCallsPerMinute: 100, maxCallsPerDay: 2 },
+    settings: { limits: { maxCallsPerMinute: 100, maxCallsPerDay: 2 } },
     responder: () => chips('a', 'b', 'c'),
   });
   await harness.service.suggest({ sessionId: 's-day-1' });
@@ -406,7 +425,7 @@ test('parseSuggestionChips is exported for the acceptance criterion', () => {
 
 test('(l) expansion off refuses expand:true with 400 and never calls upstream', async (t) => {
   const harness = makeHarness(t, { responder: () => chips('a', 'b', 'c') });
-  assert.equal(harness.settings.expansion, 'off');
+  assert.equal(harness.settings.generation.expansion, 'off');
   await assert.rejects(
     () => harness.service.suggest({ sessionId: 's-expand-off', expand: true, seed: 'picked reply' }),
     (failure: { statusCode?: number; code?: string }) => {
@@ -428,7 +447,7 @@ test('(m) a vary seed draw prompts with the seed and 变体, clips the seed, fil
   const ledger = path.join(directory, 'usage.jsonl');
   const seed = 'AAAAABBBBB-VERY-LONG-SEED';
   const harness = makeHarness(t, {
-    settings: { expansion: 'vary', maxChipChars: 10, usageLog: true },
+    settings: { generation: { expansion: 'vary', maxChipChars: 10 }, usageLog: true },
     responder: () => chips('AAAAABBBB', 'CCCCCDDDDD', 'EEEEEFFFFF'),
     usageLog: { path: ledger },
   });
@@ -460,7 +479,7 @@ test('(n) a vary draw with an empty seed and a focus prompts for 回应 to that 
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const ledger = path.join(directory, 'usage.jsonl');
   const harness = makeHarness(t, {
-    settings: { expansion: 'vary', usageLog: true },
+    settings: { generation: { expansion: 'vary' }, usageLog: true },
     responder: () => chips('回应一', '回应二'),
     usageLog: { path: ledger },
   });
@@ -483,7 +502,7 @@ test('(n) a vary draw with an empty seed and a focus prompts for 回应 to that 
 
 test('(o) a normal redraw with focus still works while expansion is off, and a seed without expand is refused', async (t) => {
   const harness = makeHarness(t, {
-    settings: { expansion: 'off' },
+    settings: { generation: { expansion: 'off' } },
     responder: () => chips('一', '二', '三'),
   });
 
@@ -534,7 +553,7 @@ test('(t) the built-in prompt tells the model not to end a single point with a s
     harness.calls[0].system.includes('不要以分隔'),
     'the default prompt carries the no-trailing-separator rule',
   );
-  assert.equal(harness.settings.systemPrompt, '', 'this reading is the built-in prompt, not an override');
+  assert.equal(harness.settings.generation.systemPrompt, '', 'this reading is the built-in prompt, not an override');
 });
 
 // ---------------------------------------------------------------------------
@@ -576,7 +595,7 @@ test('(cache-a) a repeated first draw is the cached batch: one upstream call, id
 test('(cache-b) a cache hit spends no call-limit budget, moves no draw and leaves the breaker alone', async (t) => {
   // Two calls a minute: if the cache hit consumed one, the third session would 429.
   const harness = makeHarness(t, {
-    settings: { maxCallsPerMinute: 2, maxCallsPerDay: 3000 },
+    settings: { limits: { maxCallsPerMinute: 2, maxCallsPerDay: 3000 } },
     responder: () => chips('a', 'b', 'c'),
   });
 
@@ -590,7 +609,7 @@ test('(cache-b) a cache hit spends no call-limit budget, moves no draw and leave
 
   // The daily budget moves the same way.
   const daily = makeHarness(t, {
-    settings: { maxCallsPerMinute: 100, maxCallsPerDay: 2 },
+    settings: { limits: { maxCallsPerMinute: 100, maxCallsPerDay: 2 } },
     responder: () => chips('a', 'b', 'c'),
   });
   await daily.service.suggest({ sessionId: 's-cache-b-day' });
@@ -684,7 +703,7 @@ test('(cache-f) an upstream failure and an empty batch are not cached; the next 
   assert.equal(failure.calls.length, 2, 'the failed draw left nothing to hit');
 
   // maxChips: 1 keeps the supplement out of the way, so an empty answer is one call.
-  const empty = makeHarness(t, { settings: { maxChips: 1 }, responder: () => chips() });
+  const empty = makeHarness(t, { settings: { generation: { maxChips: 1 } }, responder: () => chips() });
   const emptyFirst = await empty.service.suggest({ sessionId: 's-cache-f-empty' });
   assert.deepEqual(emptyFirst.chips, []);
   assert.equal(empty.calls.length, 1);
@@ -695,7 +714,7 @@ test('(cache-f) an upstream failure and an empty batch are not cached; the next 
 
 test('(cache-g) an expansion draw neither reads nor writes the ordinary batch cache', async (t) => {
   const harness = makeHarness(t, {
-    settings: { expansion: 'vary' },
+    settings: { generation: { expansion: 'vary' } },
     responder: (_request, index) => indexedChips(index),
   });
 
@@ -713,25 +732,25 @@ test('(cache-g) an expansion draw neither reads nor writes the ordinary batch ca
 
 test('(cache-h) the cache keeps 200 keys, evicts the least-recently-used, and never expires by time', async (t) => {
   const harness = makeHarness(t, {
-    settings: { maxCallsPerMinute: 100000, maxCallsPerDay: 100000 },
+    settings: { limits: { maxCallsPerMinute: 100000, maxCallsPerDay: 100000 } },
     responder: (_request, index) => indexedChips(index),
   });
 
-  for (let index = 0; index <= REPLY_SUGGESTIONS_BATCH_CACHE_SIZE; index += 1) {
+  for (let index = 0; index <= REPLY_SUGGESTIONS_DRAW_STORE_SIZE; index += 1) {
     await harness.service.suggest({ sessionId: `s-cache-h-${index}` });
   }
-  assert.equal(harness.calls.length, REPLY_SUGGESTIONS_BATCH_CACHE_SIZE + 1);
+  assert.equal(harness.calls.length, REPLY_SUGGESTIONS_DRAW_STORE_SIZE + 1);
 
   // 201 keys for a 200-key cache: the oldest (index 0) was evicted.
   await harness.service.suggest({ sessionId: 's-cache-h-0' });
-  assert.equal(harness.calls.length, REPLY_SUGGESTIONS_BATCH_CACHE_SIZE + 2, 'the evicted key draws again');
+  assert.equal(harness.calls.length, REPLY_SUGGESTIONS_DRAW_STORE_SIZE + 2, 'the evicted key draws again');
 
   // The most recent key is still cached a year later: there is no time expiry.
   harness.advance(366 * 24 * 60 * 60 * 1000);
-  await harness.service.suggest({ sessionId: `s-cache-h-${REPLY_SUGGESTIONS_BATCH_CACHE_SIZE}` });
+  await harness.service.suggest({ sessionId: `s-cache-h-${REPLY_SUGGESTIONS_DRAW_STORE_SIZE}` });
   assert.equal(
     harness.calls.length,
-    REPLY_SUGGESTIONS_BATCH_CACHE_SIZE + 2,
+    REPLY_SUGGESTIONS_DRAW_STORE_SIZE + 2,
     'a year of silence does not expire a cached batch',
   );
 });

@@ -23,6 +23,28 @@ the settings file. Every knob lives in the file itself. If the named path does
 not exist the server reports a problem and the feature stays off; if the default
 path does not exist that is the ordinary off state and is not a problem.
 
+## Module layout
+
+The backend lives in `server/modules/reply-suggestions/`, split by
+responsibility. The file format above stays flat; the settings are grouped only
+in memory, and the key travels as an opaque credential (`JSON.stringify`,
+`util.inspect` and `toString` all answer `[redacted]`).
+
+| File | Role |
+|---|---|
+| `index.ts` | Barrel; the only entry point for other modules. |
+| `reply-suggestions.module.ts` | Composition root: builds the settings reader and the usage-ledger writer, hands both to the service, mounts the routes. |
+| `reply-suggestions.routes.ts` | HTTP face; parses transport input and calls one service method. |
+| `reply-suggestions.service.ts` | Orchestration: per-session draw/cache decisions and ledger rows. |
+| `reply-suggestions-draw.ts` | One draw: request assembly, first call, the single supplement. |
+| `reply-suggestions-guard.ts` | Circuit breaker and the one-minute/one-day call caps. |
+| `reply-suggestions-draw-store.ts` | Per-session draw state, 200-key batch cache, in-flight coalescing. |
+| `reply-suggestions-prompts.ts` | Built-in and user prompt construction. |
+| `reply-suggestions-chips.ts` | Answer parsing, clipping, de-duplication and near-duplicate filtering. |
+| `reply-suggestions-settings.ts` | Settings file reader, grouped reading and the opaque `ApiCredential`. |
+| `reply-suggestions-client.ts` | Direct-HTTP client for the two wire dialects. |
+| `reply-suggestions-usage-log.ts` | Typed JSONL ledger rows and the bounded, rotating writer. |
+
 The file is re-read whenever its modification time changes, so switching the
 protocol/model/gateway needs no restart. An unreadable or malformed file never
 prevents the server from starting.
@@ -215,7 +237,9 @@ actually called".
 
 Protection: sliding one-minute and one-day call caps; **five consecutive
 upstream failures open a 30-second circuit breaker** (constants in
-`reply-suggestions.service.ts`); every attempt is bounded by `timeoutMs`.
+`reply-suggestions-guard.ts`); every attempt is bounded by `timeoutMs`. A cache
+hit never enters the guard, so it spends no call budget and moves no breaker
+state.
 
 ## Limitations
 

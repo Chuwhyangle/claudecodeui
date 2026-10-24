@@ -258,8 +258,10 @@ function buildReading(
       ? DEFAULT_SESSION_DIGEST.apiKeyFile
       : readString(block, 'apiKeyFile', DEFAULT_SESSION_DIGEST.apiKeyFile, problems);
 
-  const model = blockModel.trim() === '' ? reply.model : blockModel.trim();
-  const apiKey = apiKeyFile.trim() === '' ? reply.apiKey : resolveApiKey(apiKeyFile, homeDir, problems);
+  const model = blockModel.trim() === '' ? reply.upstream.model : blockModel.trim();
+  // The reply-suggestions key is an opaque credential; this module keeps its own
+  // flat `apiKey` contract, so it reveals the shared value once here.
+  const apiKey = apiKeyFile.trim() === '' ? reply.upstream.credential.reveal() : resolveApiKey(apiKeyFile, homeDir, problems);
 
   const settings: SessionDigestLlmSettings = {
     enabled: false,
@@ -268,13 +270,13 @@ function buildReading(
     maxPerHour,
     minTurnChars,
     apiKeyFile,
-    protocol: reply.protocol,
-    baseUrl: reply.baseUrl,
-    authScheme: reply.authScheme,
-    disableThinking: reply.disableThinking,
-    timeoutMs: reply.timeoutMs,
-    maxOutputTokens: reply.maxOutputTokens,
-    temperature: reply.temperature,
+    protocol: reply.upstream.protocol,
+    baseUrl: reply.upstream.baseUrl,
+    authScheme: reply.upstream.authScheme,
+    disableThinking: reply.upstream.disableThinking,
+    timeoutMs: reply.upstream.timeoutMs,
+    maxOutputTokens: reply.generation.maxOutputTokens,
+    temperature: reply.generation.temperature,
     apiKey,
     source,
     path: filePath,

@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-backend-encapsulation
 title: 回复建议后端内部封装：拆出上游守卫与抽取存储、设置按职责分组、密钥改不透明值、用量日志记录带类型、收窄导出
-status: ready
+status: done
 labels:
   - gap
 parent: null
@@ -94,11 +94,3 @@ depends_on:
 - `scripts/suite-duration-baseline.tsv`
 - `docs/operations/reply-suggestions.md`
 - `tasks/gap-reply-suggestions-backend-encapsulation.md`
-
-## Blocker
-
-**2026-10-24T13:09:22.212Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/shared/tests/replySuggestionsTypeSync.test.ts: AssertionError [ERR_ASSERTION]: ReplySuggestionsEventName must be declared in /data/home/yale/work/claudecodeui-worktrees/gap-reply-suggestions-backend-encapsulation/server/modules/reply-suggestions/reply-suggestions.service.ts
-- run_id：wk-prod-anchor
-- session_id：bb48063e-af25-4181-9306-8d59fc69238d
