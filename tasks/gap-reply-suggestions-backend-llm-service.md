@@ -98,20 +98,20 @@ extra:
 
 ## Touches
 
-- `server/modules/reply-suggestions/index.ts`
-- `server/modules/reply-suggestions/reply-suggestions.module.ts`
-- `server/modules/reply-suggestions/reply-suggestions.routes.ts`
-- `server/modules/reply-suggestions/reply-suggestions.service.ts`
-- `server/modules/reply-suggestions/reply-suggestions-settings.ts`
-- `server/modules/reply-suggestions/reply-suggestions-client.ts`
-- `server/modules/reply-suggestions/reply-suggestions-usage-log.ts`
-- `server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts`
-- `server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts`
-- `server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts`
-- `server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts`
+- `server/modules/reply-suggestions/index.ts` (new)
+- `server/modules/reply-suggestions/reply-suggestions.module.ts` (new)
+- `server/modules/reply-suggestions/reply-suggestions.routes.ts` (new)
+- `server/modules/reply-suggestions/reply-suggestions.service.ts` (new)
+- `server/modules/reply-suggestions/reply-suggestions-settings.ts` (new)
+- `server/modules/reply-suggestions/reply-suggestions-client.ts` (new)
+- `server/modules/reply-suggestions/reply-suggestions-usage-log.ts` (new)
+- `server/modules/reply-suggestions/tests/reply-suggestions-settings.test.ts` (new)
+- `server/modules/reply-suggestions/tests/reply-suggestions-client.test.ts` (new)
+- `server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts` (new)
+- `server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts` (new)
 - `server/index.ts`
-- `config/reply-suggestions.settings.example.json`
-- `docs/operations/reply-suggestions.md`
+- `config/reply-suggestions.settings.example.json` (new)
+- `docs/operations/reply-suggestions.md` (new)
 - `.gitignore`
 - `server/shared/tests/quay-test-script.test.ts`
 - `scripts/suite-duration-baseline.tsv`
