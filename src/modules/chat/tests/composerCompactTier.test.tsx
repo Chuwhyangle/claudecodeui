@@ -10,7 +10,7 @@ import { afterEach, beforeEach, test, vi } from 'vitest';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import { COMPACT_TIER_WIDTH_PX, INLINE_TOOLS_MIN_BOX_PX } from '@/modules/chat/hooks/useComposerCompactTier';
 import enChat from '@/modules/i18n/locales/en/chat.json';
-import type { VoiceClipSlot } from '@/shared/types';
+import type { ComposerChipStrip, VoiceClipSlot } from '@/shared/types';
 
 /**
  * The composer's footer was arranged by the window width alone, and a window 768px wide with the
@@ -205,6 +205,21 @@ const injectMatchMediaOnce = () => {
   matchMediaInstalled = true;
 };
 
+/** The one chip prop the composer takes; no chips drawn, the Suggest control on. */
+const baseChipStrip = (overrides: Partial<ComposerChipStrip> = {}): ComposerChipStrip => ({
+  visible: false,
+  selectedIndex: null,
+  listId: 'suggestion-list',
+  chips: [],
+  onAccept: () => undefined,
+  suggestionsEnabled: true,
+  suggestionsLoading: false,
+  onRequestSuggestions: vi.fn(),
+  expansionChips: [],
+  onAcceptExpansionChip: () => undefined,
+  ...overrides,
+});
+
 const baseProps = (options: { dropzoneRef?: MutableRefObject<HTMLFormElement | null> } = {}) => ({
   pendingPermissionRequests: [],
   handlePermissionDecision: () => undefined,
@@ -232,9 +247,7 @@ const baseProps = (options: { dropzoneRef?: MutableRefObject<HTMLFormElement | n
   onSubmit: () => undefined,
   // The shipping footer's row carries the Suggest control (icon on this tier) whenever the
   // feature is on; the arrangement cases must measure that row, not one missing a control.
-  replySuggestionsEnabled: true,
-  replySuggestionsLoading: false,
-  onRequestReplySuggestions: vi.fn(),
+  chipStrip: baseChipStrip(),
   isDragActive: false,
   queuedDraft: null,
   isEditingSentMessage: false,

@@ -13,6 +13,7 @@ import { UiPreferencesProvider } from '@/shared/context/UiPreferencesContext';
 import WebSocketContext from '@/shared/context/WebSocketContext';
 import type {
   ChatMessage,
+  ComposerChipStrip,
   PendingPermissionRequest,
   Project,
   ProjectSession,
@@ -227,9 +228,7 @@ const baseProps = () => ({
   // The reply-suggestions feature is on in the shipping composer whenever the status
   // reading enables it, and its button is one of the controls the footer's budget was
   // measured against — so the fixture renders it rather than a footer the page never has.
-  replySuggestionsEnabled: true,
-  replySuggestionsLoading: false,
-  onRequestReplySuggestions: vi.fn(),
+  chipStrip: baseChipStrip(),
   isDragActive: false,
   queuedDraft: null,
   isEditingSentMessage: false,
@@ -271,6 +270,25 @@ const baseProps = () => ({
   onTextareaInput: () => undefined,
   placeholder: 'Ask anything',
   isTextareaExpanded: false,
+});
+
+/**
+ * The one chip prop the composer takes. The empty strip keeps the reading the
+ * footer's budget cases need (no chips drawn) while the Suggest control stays on,
+ * because its button is one of the controls being measured.
+ */
+const baseChipStrip = (overrides: Partial<ComposerChipStrip> = {}): ComposerChipStrip => ({
+  visible: false,
+  selectedIndex: null,
+  listId: 'suggestion-list',
+  chips: [],
+  onAccept: () => undefined,
+  suggestionsEnabled: true,
+  suggestionsLoading: false,
+  onRequestSuggestions: vi.fn(),
+  expansionChips: [],
+  onAcceptExpansionChip: () => undefined,
+  ...overrides,
 });
 
 type ComposerOverrides = Partial<ReturnType<typeof baseProps>>;
@@ -539,7 +557,9 @@ test('(a) the narrow footer is six controls when empty and seven with a draft, t
 test('(a2) the Suggest control is icon-only and busy-flagged on the narrow tier, labelled on the wide one', () => {
   // Compact tier, a draw in flight: the icon spins, the button is disabled, and the
   // accessible name + aria-busy are what an assistive reading gets in place of text.
-  const compact = renderComposer(MOBILE_WIDTH, { replySuggestionsLoading: true });
+  const compact = renderComposer(MOBILE_WIDTH, {
+    chipStrip: baseChipStrip({ suggestionsLoading: true }),
+  });
   const busy = within(compact.footer).getByRole('button', { name: enChat.input.suggestions.suggest });
   assert.equal(busy.getAttribute('disabled'), '', 'a second click must not become a second draw');
   assert.equal(busy.getAttribute('aria-busy'), 'true');

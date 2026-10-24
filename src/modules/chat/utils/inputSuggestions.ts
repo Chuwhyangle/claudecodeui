@@ -6,7 +6,13 @@
  * three merge into one ordered strip here, and the label/preview rules live beside the ranking so
  * they can be tested without a React tree, a storage mock or a network — and there is deliberately
  * no seed phrase anywhere: no history, no chips.
+ *
+ * The accept-descriptor record at the bottom of this file is the one place a source's acceptance
+ * behaviour is described. The accept entry in `useSuggestionChips` reads that record and contains
+ * no per-source branch, so adding a source is a data change, not a code change.
  */
+
+import type { SuggestionChip } from '@/shared/types';
 
 /** At most this many habit chips are shown. */
 const MAX_SUGGESTIONS = 3;
@@ -16,20 +22,6 @@ const MAX_SUGGESTIONS = 3;
  * second-line preview, so nothing is lost by shortening it here.
  */
 export const SUGGESTION_LABEL_MAX_CHARS = 18;
-
-/** Where one chip came from, in the strip's fixed order. */
-export type SuggestionChipSource = 'quoted' | 'model' | 'habit';
-
-/** One chip after the three sources have been merged, deduplicated and ordered. */
-export type SuggestionChip = {
-  /** Stable React key and option-id suffix: `<source>-<index>`. */
-  id: string;
-  /** The complete text a click fills into the draft — never the truncated label. */
-  text: string;
-  source: SuggestionChipSource;
-  /** Index within its own source; the model index is what `picked` reports. */
-  index: number;
-};
 
 type BuildSuggestionChipsInput = {
   /** Transcript selection, already capped by `useTranscriptSelection`. */
@@ -180,6 +172,98 @@ type Candidate = {
  * - fewer than two occurrences of the normalized key is excluded;
  * - frequency descending, ties broken by most recent use, top three.
  */
+/**
+ * Everything that distinguishes one chip source's acceptance, as data.
+ *
+ * The accept entry (`useSuggestionChips.acceptChip`) reads one of these records
+ * and applies it uniformly, so it never tests `chip.source`: a new source is
+ * added by registering one more record, not by editing the entry. The three
+ * built-in sources fill the same way the strip always did — the behavioural
+ * notes on each field below are the old per-source branches, now data.
+ */
+export type SuggestionChipAcceptDescriptor = {
+  /** The draft an acceptance writes, from the chip and the current input. */
+  buildFill: (chip: SuggestionChip, currentInput: string) => string;
+  /**
+   * Whether the accepted chip must stay on screen after the fill. Only a quoted
+   * chip does: focusing the box collapses the transcript selection, and the pin
+   * keeps the quotation available for appending a second passage.
+   */
+  keepVisibleAfterFill: boolean;
+  /** Whether the acceptance reports the ledger's `picked` event for this source. */
+  reportsPicked: boolean;
+  /**
+   * Whether the fill arms the `sent` attribution, so a later send of exactly the
+   * filled text is reported as this chip's text going out.
+   */
+  attributesSent: boolean;
+  /**
+   * The expansion request issued after the fill when the experiment is on, or
+   * null for a source that never asks: a picked model reply is a `seed`, a
+   * quotation is a `focus`.
+   */
+  expansionRequest: ((chip: SuggestionChip) => { seed?: string; focus?: string }) | null;
+  /**
+   * Whether the acceptance sends the draft itself. Every built-in source is
+   * false — accepting a chip always leaves the text in the box for the person to
+   * send. The field exists because it is read from data: the accept contract
+   * registers a synthetic source with it true to prove the entry honours a
+   * descriptor without any code change (and that the "never send" assertion is
+   * not vacuous).
+   */
+  submitsAfterFill: boolean;
+};
+
+/**
+ * The fill a quotation writes: `> …` line(s) plus a trailing newline.
+ *
+ * A non-empty box is appended to rather than replaced — a second passage follows
+ * a blank line — while an empty box starts with the quotation itself.
+ */
+function buildQuotedFill(chip: SuggestionChip, currentInput: string): string {
+  const quoted = `> ${chip.text.replace(/\r?\n/gu, '\n> ')}\n`;
+  return currentInput.trim() ? `${currentInput.replace(/\s+$/u, '')}\n\n${quoted}` : quoted;
+}
+
+/** The fill every non-quoted source writes: the chip's own complete text. */
+function buildVerbatimFill(chip: SuggestionChip, _currentInput: string): string {
+  return chip.text;
+}
+
+/**
+ * The accept descriptors, keyed by source id.
+ *
+ * Exported (and mutable) so a source can be registered from data — the accept
+ * contract's synthetic source does exactly that — and read by the one accept
+ * entry in `useSuggestionChips`.
+ */
+export const SUGGESTION_CHIP_ACCEPT_SOURCES: Record<string, SuggestionChipAcceptDescriptor> = {
+  quoted: {
+    buildFill: buildQuotedFill,
+    keepVisibleAfterFill: true,
+    reportsPicked: false,
+    attributesSent: false,
+    expansionRequest: (chip) => ({ focus: chip.text, seed: '' }),
+    submitsAfterFill: false,
+  },
+  model: {
+    buildFill: buildVerbatimFill,
+    keepVisibleAfterFill: false,
+    reportsPicked: true,
+    attributesSent: true,
+    expansionRequest: (chip) => ({ seed: chip.text }),
+    submitsAfterFill: false,
+  },
+  habit: {
+    buildFill: buildVerbatimFill,
+    keepVisibleAfterFill: false,
+    reportsPicked: false,
+    attributesSent: false,
+    expansionRequest: null,
+    submitsAfterFill: false,
+  },
+};
+
 export function buildInputSuggestions(entriesNewestFirst: readonly string[]): string[] {
   const candidates = new Map<string, Candidate>();
 

@@ -19,7 +19,7 @@ import {
 } from '@/modules/chat/utils/inputSuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import { resetChatDrafts } from '@/shared/chatDrafts';
-import type { PermissionMode, Project, ProjectSession } from '@/shared/types';
+import type { ComposerChipStrip, PermissionMode, Project, ProjectSession } from '@/shared/types';
 
 /**
  * The empty-composer suggestion chips at the composer's own surface: the display
@@ -245,7 +245,7 @@ describe('display conditions', () => {
     seedHistory(SEED_HISTORY);
     const { result } = renderSuggestions();
     assert.equal(result.current.visible, true);
-    assert.deepEqual(result.current.candidates, ['检查进展', '提交', '继续']);
+    assert.deepEqual(result.current.chips.map((chip) => chip.text), ['检查进展', '提交', '继续']);
   });
 
   it('hides them as soon as the box has any text', () => {
@@ -300,7 +300,7 @@ describe('display conditions', () => {
   it('shows nothing when there is no history to rank', () => {
     const { result } = renderSuggestions();
     assert.equal(result.current.visible, false);
-    assert.deepEqual(result.current.candidates, []);
+    assert.deepEqual(result.current.chips.map((chip) => chip.text), []);
   });
 
   it('hides them for the rest of the round after Escape', () => {
@@ -336,14 +336,14 @@ describe('keyboard semantics', () => {
     const { view, cyclePermissionMode } = setupComposer();
 
     press(view, 'Tab');
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 0);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 0);
     press(view, 'Tab');
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 1);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 1);
     press(view, 'Tab');
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 2);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 2);
 
     press(view, 'Tab');
-    assert.equal(view.result.current.selectedInputSuggestionIndex, null);
+    assert.equal(view.result.current.chipStrip.selectedIndex, null);
     // The key fell through to the composer's existing permission-mode branch, once.
     assert.equal(cyclePermissionMode.mock.calls.length, 1);
   });
@@ -353,14 +353,14 @@ describe('keyboard semantics', () => {
     const { view, cyclePermissionMode } = setupComposer();
 
     press(view, 'Tab', { shiftKey: true });
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 2);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 2);
     press(view, 'Tab', { shiftKey: true });
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 1);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 1);
     press(view, 'Tab', { shiftKey: true });
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 0);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 0);
 
     press(view, 'Tab', { shiftKey: true });
-    assert.equal(view.result.current.selectedInputSuggestionIndex, null);
+    assert.equal(view.result.current.chipStrip.selectedIndex, null);
     assert.equal(cyclePermissionMode.mock.calls.length, 1);
   });
 
@@ -370,7 +370,7 @@ describe('keyboard semantics', () => {
     act(() => {
       view.result.current.setInput('draft in progress');
     });
-    assert.equal(view.result.current.inputSuggestionsVisible, false);
+    assert.equal(view.result.current.chipStrip.visible, false);
 
     press(view, 'Tab', { value: 'draft in progress' });
     assert.equal(cyclePermissionMode.mock.calls.length, 1);
@@ -414,7 +414,7 @@ describe('keyboard semantics', () => {
     const escape = press(view, 'Escape');
     assert.equal(escape.prevented, true);
     assert.equal(escape.stopped, true);
-    assert.equal(view.result.current.inputSuggestionsVisible, false);
+    assert.equal(view.result.current.chipStrip.visible, false);
   });
 
   it('never accepts a chip with an IME-confirming Enter', () => {
@@ -424,13 +424,13 @@ describe('keyboard semantics', () => {
     press(view, 'Tab');
     press(view, 'Enter', { composing: true });
     assert.equal(view.result.current.input, '');
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 0);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 0);
   });
 
   it('leaves ArrowUp to the input history while the chips are visible', () => {
     seedHistory(SEED_HISTORY);
     const { view } = setupComposer();
-    assert.equal(view.result.current.inputSuggestionsVisible, true);
+    assert.equal(view.result.current.chipStrip.visible, true);
 
     press(view, 'ArrowUp');
     // Recalled from `chat-input-history` by `useInputHistory`, not accepted from a chip.
@@ -452,7 +452,7 @@ describe('mouse and lifecycle', () => {
     const view = render(
       React.createElement(InputSuggestionChips, {
         listId: 'suggestion-list',
-        suggestions: ['第一', '第二'],
+        chips: buildSuggestionChips({ habitChips: ['第一', '第二'] }),
         selectedIndex: null,
         onAccept,
       }),
@@ -465,7 +465,10 @@ describe('mouse and lifecycle', () => {
     assert.equal(document.activeElement, textarea);
 
     fireEvent.click(chip);
-    assert.deepEqual(onAccept.mock.calls, [[0]]);
+    assert.deepEqual(
+      onAccept.mock.calls.map(([accepted]) => (accepted as { text: string }).text),
+      ['第一'],
+    );
 
     view.unmount();
     textarea.remove();
@@ -489,7 +492,7 @@ describe('mouse and lifecycle', () => {
     textarea.value = '检查进展';
 
     act(() => {
-      view.result.current.acceptInputSuggestion(0);
+      view.result.current.chipStrip.onAccept(view.result.current.chipStrip.chips[0]);
     });
     act(() => {
       frames.forEach((callback) => callback(0));
@@ -547,7 +550,7 @@ describe('mouse and lifecycle', () => {
     // Stored oldest first: A and B tie, A being the newest overall.
     seedHistory(['B', 'A', 'B', 'A']);
     const { view } = setupComposer();
-    assert.deepEqual(view.result.current.inputSuggestionCandidates, ['A', 'B']);
+    assert.deepEqual(view.result.current.chipStrip.chips.map((chip) => chip.text), ['A', 'B']);
 
     // Accept A, then edit and clear.
     act(() => {
@@ -575,7 +578,7 @@ describe('mouse and lifecycle', () => {
     act(() => {
       view.result.current.setInput('');
     });
-    assert.deepEqual(view.result.current.inputSuggestionCandidates, ['B', 'A']);
+    assert.deepEqual(view.result.current.chipStrip.chips.map((chip) => chip.text), ['B', 'A']);
   });
 });
 
@@ -649,12 +652,28 @@ const composerBaseProps = (): Record<string, unknown> => ({
   onTextareaInput: () => undefined,
   placeholder: 'Ask anything',
   isTextareaExpanded: false,
-  inputSuggestionCandidates: ['检查进展', '提交'],
-  inputSuggestionsVisible: true,
-  selectedInputSuggestionIndex: 0,
-  inputSuggestionListId: 'suggestion-list',
-  onAcceptInputSuggestion: () => undefined,
+  chipStrip: chipStripProps(),
 });
+
+/**
+ * The one chip prop the composer takes. The default mirrors the habit strip the
+ * listbox cases read: two chips, the first selected.
+ */
+function chipStripProps(overrides: Partial<ComposerChipStrip> = {}): ComposerChipStrip {
+  return {
+    visible: true,
+    selectedIndex: 0,
+    listId: 'suggestion-list',
+    chips: buildSuggestionChips({ habitChips: ['检查进展', '提交'] }),
+    onAccept: () => undefined,
+    suggestionsEnabled: false,
+    suggestionsLoading: false,
+    onRequestSuggestions: () => undefined,
+    expansionChips: [],
+    onAcceptExpansionChip: () => undefined,
+    ...overrides,
+  };
+}
 
 type ComposerOverrides = Record<string, unknown>;
 
@@ -686,7 +705,7 @@ describe('accessibility and adoption readout', () => {
     assert.ok(textarea, 'the composer must render a textarea');
     assert.equal(textarea.getAttribute('aria-activedescendant'), options[0].id);
 
-    rerender({ selectedInputSuggestionIndex: null });
+    rerender({ chipStrip: chipStripProps({ selectedIndex: null }) });
     assert.equal(textarea.getAttribute('aria-activedescendant'), null);
   });
 
@@ -727,12 +746,12 @@ describe('accessibility and adoption readout', () => {
     });
 
     const { view } = setupComposer();
-    assert.equal(view.result.current.inputSuggestionsVisible, true);
+    assert.equal(view.result.current.chipStrip.visible, true);
 
     act(() => {
       view.result.current.handleKeyDown(composerKeyEvent('Tab').event);
     });
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 0);
+    assert.equal(view.result.current.chipStrip.selectedIndex, 0);
   });
 });
 
@@ -760,6 +779,7 @@ const renderMergedChips = (props: Partial<React.ComponentProps<typeof InputSugge
     listId: 'chip-list',
     chips: mergedChips(),
     selectedIndex: null,
+    onAccept: () => undefined,
     ...props,
   }),
 );
@@ -797,10 +817,8 @@ describe('merged strip at the component surface', () => {
     assert.equal(view.container.querySelector('[data-suggestion-preview]'), null);
   });
 
-  it('routes a click to the callback that owns each source', () => {
+  it('routes every source to the one accept callback, each with its own chip', () => {
     const onAccept = vi.fn();
-    const onAcceptModel = vi.fn();
-    const onAcceptQuoted = vi.fn();
     const view = renderMergedChips({
       chips: buildSuggestionChips({
         quotedText: '选中的原文',
@@ -808,17 +826,19 @@ describe('merged strip at the component surface', () => {
         habitChips: ['习惯一'],
       }),
       onAccept,
-      onAcceptModel,
-      onAcceptQuoted,
     });
     const options = view.getAllByRole('option');
 
     fireEvent.click(options[0]); // quoted
     fireEvent.click(options[1]); // model index 0
     fireEvent.click(options[3]); // habit index 0 in the strip
-    assert.deepEqual(onAcceptQuoted.mock.calls, [['选中的原文']]);
-    assert.deepEqual(onAcceptModel.mock.calls, [[0]]);
-    assert.deepEqual(onAccept.mock.calls, [[3]]);
+    assert.deepEqual(
+      onAccept.mock.calls.map(([chip]) => {
+        const accepted = chip as { source: string; text: string };
+        return [accepted.source, accepted.text];
+      }),
+      [['quoted', '选中的原文'], ['model', '模型一'], ['habit', '习惯一']],
+    );
   });
 });
 
@@ -830,6 +850,7 @@ describe('the second-line preview follows the hovered or selected chip', () => {
       listId: 'chip-list',
       chips: mergedChips(),
       selectedIndex: null,
+      onAccept: () => undefined,
       ...props,
     },
   );
