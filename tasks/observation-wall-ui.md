@@ -40,6 +40,15 @@ depends_on:
 - 对照 P0（T0）周报说明：本任务上线前后观察型切换的变化（若 T0 数据尚不足一周，如实写明）。
 - - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
 
+## Notes
+
+### 可复用的已有实现（来自被取代的 cockpit-walkthrough-interaction-defects）
+
+该任务的 worker 在被叫停前已完成实现，6 条 AC 测试与 typecheck 在其 worktree 中全绿，PC 端 DoD 走查完成（needs-human 置顶、「第一个」聚焦、无目标卡片列出候选会话、钉选后预览、Back 回 fleet），未提交。改动另存为：
+- `tmp/superseded/cockpit-walkthrough-interaction-defects.patch`（主检出下 gitignored，27 个文件，+1452/−146，基于其分支 HEAD `6dc699ee2`）
+- 走查截图：`tmp/superseded/cockpit-dod/`
+其中**仍可直接沿用**的部分：视图切换 push 历史、URL 用 fleet id、回声 / 原因提示、遥控器无目标时禁用确认、reducer 中无焦点 zoom 的原因提示。**不再沿用**：以目标会话为中心的无目标卡片与钉选流程（目标会话已降级，不在主路径）。按需挑选，不要整体 apply。
+
 ## Touches
 
 - src/modules/cockpit/CockpitPage.tsx
