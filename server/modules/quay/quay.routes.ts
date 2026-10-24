@@ -31,6 +31,7 @@ import type {
   QuayInitiativesService,
 } from './quay-initiatives.js';
 import type { QuayUriErrorCode } from './quay-uri-resolve.js';
+import type { SessionTaskChainService } from './session-task-chain.service.js';
 import type { createQuayService } from './quay.service.js';
 
 /** The browser's last-opened session, as the server's pointer store answers it. */
@@ -54,6 +55,11 @@ type QuayRouterDependencies = {
    * with the shipped sampling ratio; a criterion injects an exec seam instead.
    */
   initiatives?: QuayInitiativesService;
+  /**
+   * The session → task flow chain reading. Absent answers `session-task-chain-unavailable`
+   * for a display-only composition; production (`quay.module.ts`) always binds it.
+   */
+  sessionTaskChain?: SessionTaskChainService;
 };
 
 /** What the router answers when no fleet registry was composed in. */
@@ -320,6 +326,35 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
       }
 
       return res.json(snapshot);
+    }),
+  );
+
+  /**
+   * The session → task flow chain: every task this conversation created or edited, with the
+   * stage its store + git + deploy reading places it at. Read-only; the route parses the id
+   * and relays the service's value (`null` = unknown project).
+   */
+  router.get(
+    '/:projectId/session-task-chain',
+    asyncHandler(async (req, res) => {
+      const projectId = typeof req.params.projectId === 'string' ? req.params.projectId : '';
+      const sessionId = readNonEmptyString(req.query.sessionId);
+      if (sessionId === null) {
+        return res.status(400).json({ ok: false, reason: 'session-id-required' });
+      }
+      if (dependencies.sessionTaskChain === undefined) {
+        return res.status(503).json({ ok: false, reason: 'session-task-chain-unavailable' });
+      }
+
+      const reading = await dependencies.sessionTaskChain.readSessionTaskChain({
+        projectId,
+        sessionId,
+      });
+      if (reading === null) {
+        return res.status(404).json({ ok: false, reason: 'project-or-session-not-found' });
+      }
+
+      return res.json(reading);
     }),
   );
 

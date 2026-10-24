@@ -32,18 +32,17 @@ type InputSuggestionChipsProps = {
 /**
  * The second line's reading for one chip.
  *
- * A quoted chip fills a `> …` block, so its preview shows that block's first
- * line rather than the raw passage: the marker and the line break are part of
- * what a click actually writes, and the preview's own `truncate` class shortens
- * a long line. Model and habit chips fill their own text, so their preview is
- * that complete text.
+ * A quoted chip inserts its passage verbatim, so its preview is that passage's
+ * first line — what a click actually writes, with no marker in front of it. The
+ * preview's own `truncate` class shortens a long line. Model and habit chips
+ * fill their own text, so their preview is that complete text.
  */
 function previewTextFor(chip: SuggestionChip): string {
   if (chip.source !== 'quoted') {
     return chip.text;
   }
-  const firstLine = chip.text.split(/\r?\n/u)[0] ?? '';
-  return `> ${firstLine}`;
+  const [firstLine = ''] = chip.text.split(/\r?\n/u);
+  return firstLine;
 }
 
 /** Touch devices have no hover, so a preview would only be a flash before the fill. */
@@ -180,8 +179,8 @@ export function InputSuggestionChips({
       {previewChip && (
         // The textarea's second line: the complete text of the hovered or
         // keyboard-selected chip, or the first model chip when neither exists.
-        // A quoted chip previews the first line it will fill (`> …`). Never a
-        // hit target — the chips above keep the pointer.
+        // A quoted chip previews the first line it will insert, verbatim. Never
+        // a hit target — the chips above keep the pointer.
         <span
           data-suggestion-preview={previewChip.source}
           aria-label={t('input.suggestions.previewHint', { defaultValue: 'Full suggestion' })}

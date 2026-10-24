@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
 import { ChatInterface } from '@/modules/chat';
+import { DeployReadiness } from '@/modules/cockpit';
 import { FileTree } from '@/modules/file-tree';
 import { StandaloneShell } from '@/modules/standalone-shell';
 import { GitPanel } from '@/modules/git-panel';
@@ -356,6 +357,7 @@ function WorkspaceMain({
                 newSessionTrigger={newSessionTrigger}
                 onShowAllTasks={tasksEnabled ? showAllTasks : null}
                 onRevealNavigate={revealNavigateTarget}
+                noticeSlot={<DeployReadiness compact />}
               />
             </WorkspaceErrorBoundary>
           </div>

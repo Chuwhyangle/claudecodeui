@@ -629,3 +629,10 @@
 #   coverage floor green now that the tree collects 428 server test files).
 3405	server/modules/observation/tests/architecture-delta.test.ts
 1877	server/modules/quay/tests/quay-initiatives.test.ts
+1850	server/modules/system/tests/deploy-readiness.test.ts
+#   and the session-task-chain row by session-task-flow-chain-status, measured one file at a time
+#   on 2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/session-task-chain.test.ts`
+#   (dur=1897ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 433 server test files).
+1897	server/modules/quay/tests/session-task-chain.test.ts

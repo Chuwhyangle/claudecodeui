@@ -16,15 +16,16 @@ import type { SuggestionChip } from '@/shared/types';
  *
  * Every source goes through one entry (`chipStrip.onAccept`), so the invariants
  * are stated once and asserted per source: the draft becomes exactly what the
- * source's descriptor says, focus lands in the textarea with the caret at the
- * end, nothing is sent, and Ctrl+Z restores the draft from before the fill.
+ * source's descriptor says, focus lands in the textarea with the caret after the
+ * inserted text, nothing is sent, and Ctrl+Z restores the draft *and the caret*
+ * from before the fill.
  *
  * The last two legs are what keep that structure honest: a source registered in
  * the descriptor record — with no change to the accept entry — obeys the same
  * invariants, and the expansion experiment's request is still the descriptor's
- * data (a `seed` for a model reply, a `focus` for a quotation, nothing for a
- * habit). The reply-suggestions hook is doubled here because its ledger and
- * expansion requests are the contract's observables, not its subject.
+ * data (a `seed` for a model reply, nothing for a quotation or a habit). The
+ * reply-suggestions hook is doubled here because its ledger and expansion
+ * requests are the contract's observables, not its subject.
  */
 
 const reply = vi.hoisted(() => ({
@@ -34,7 +35,7 @@ const reply = vi.hoisted(() => ({
     loading: false,
     expansionEnabled: false,
     expansionChips: [] as string[],
-    expansionSource: null as 'seed' | 'focus' | null,
+    expansionSource: null as 'seed' | null,
     canExpand: false,
   },
   reportEvent: vi.fn(),
@@ -191,22 +192,30 @@ type SubmitSpy = ReturnType<typeof vi.fn>;
 const assertAccepted = (options: {
   textarea: HTMLTextAreaElement;
   expectedDraft: string;
+  /** Where the caret must land after the fill. */
+  expectedCaret: number;
   submit: SubmitSpy;
+  /** The draft before the fill. */
   before: string;
+  /** The caret before the fill, which undo must restore. */
+  beforeCaret: number;
   state: () => UseSuggestionChipsResult;
 }) => {
-  const { textarea, expectedDraft, submit, before, state } = options;
+  const { textarea, expectedDraft, expectedCaret, submit, before, beforeCaret, state } = options;
   assert.equal(textarea.value, expectedDraft, 'the draft is exactly the source’s fill text');
   assert.equal(document.activeElement, textarea, 'the caret stays in the composer');
-  assert.equal(textarea.selectionStart, expectedDraft.length, 'the caret sits after the fill');
+  assert.equal(textarea.selectionStart, expectedCaret, 'the caret sits after the inserted text');
+  assert.equal(textarea.selectionEnd, expectedCaret, 'the caret is collapsed, not a selection');
   assert.equal(submit.mock.calls.length, 0, 'accepting a chip never sends');
 
   const undo = ctrlZ();
   act(() => {
     assert.equal(state().handleChipUndoKey(undo as unknown as KeyboardEvent<HTMLTextAreaElement>), true);
   });
+  flushFrames();
   assert.equal(undo.prevented, true);
   assert.equal(textarea.value, before, 'Ctrl+Z restores the draft from before the fill');
+  assert.equal(textarea.selectionStart, beforeCaret, 'Ctrl+Z restores the caret from before the fill');
 };
 
 beforeEach(() => {
@@ -243,7 +252,15 @@ describe('every source fills, focuses and never sends', () => {
     });
     flushFrames();
 
-    assertAccepted({ textarea, expectedDraft: '习惯输入', submit, before: '', state });
+    assertAccepted({
+      textarea,
+      expectedDraft: '习惯输入',
+      expectedCaret: '习惯输入'.length,
+      submit,
+      before: '',
+      beforeCaret: 0,
+      state,
+    });
   });
 
   it('(b) model chip: writes its text, reports picked once, never sends', () => {
@@ -253,7 +270,15 @@ describe('every source fills, focuses and never sends', () => {
     });
     flushFrames();
 
-    assertAccepted({ textarea, expectedDraft: '模型回复', submit, before: '', state });
+    assertAccepted({
+      textarea,
+      expectedDraft: '模型回复',
+      expectedCaret: '模型回复'.length,
+      submit,
+      before: '',
+      beforeCaret: 0,
+      state,
+    });
     assert.deepEqual(
       reply.reportEvent.mock.calls,
       [['picked', 0]],
@@ -261,21 +286,36 @@ describe('every source fills, focuses and never sends', () => {
     );
   });
 
-  it('(c) quoted chip with an empty box: writes `> text` plus its newline', () => {
+  it('(c) quoted chip with an empty box: inserts the passage verbatim and opens a new paragraph', () => {
     const { textarea, state, chipFor, submit } = renderHarness({ quotedSelection: '选中的原文' });
     act(() => {
       state().chipStrip.onAccept(chipFor('quoted'));
     });
     flushFrames();
 
-    assertAccepted({ textarea, expectedDraft: '> 选中的原文\n', submit, before: '', state });
+    // The caret starts on the box's only (empty) line, at its end: the passage
+    // lands there, followed by the two line breaks that open the next paragraph.
+    assertAccepted({
+      textarea,
+      expectedDraft: '选中的原文\n\n',
+      expectedCaret: '选中的原文\n\n'.length,
+      submit,
+      before: '',
+      beforeCaret: 0,
+      state,
+    });
   });
 
-  it('(d) quoted chip with a non-empty box: appends after a blank line and Ctrl+Z restores the original', () => {
+  it('(d) quoted chip with a non-empty box and the caret at the end: inserts inline after a space', () => {
     const { textarea, state, chipFor, submit } = renderHarness({
       quotedSelection: '选中的原文',
       initialInput: '已有内容',
     });
+    // The person put the caret at the end of the draft, then looked away: the
+    // textarea keeps that position while blurred.
+    textarea.focus();
+    textarea.setSelectionRange('已有内容'.length, '已有内容'.length);
+
     act(() => {
       state().chipStrip.onAccept(chipFor('quoted'));
     });
@@ -283,20 +323,72 @@ describe('every source fills, focuses and never sends', () => {
 
     assertAccepted({
       textarea,
-      expectedDraft: '已有内容\n\n> 选中的原文\n',
+      expectedDraft: '已有内容 选中的原文',
+      expectedCaret: '已有内容 选中的原文'.length,
       submit,
       before: '已有内容',
+      beforeCaret: '已有内容'.length,
+      state,
+    });
+  });
+
+  it('(d2) quoted chip with the caret in the middle: inserts there, padding both sides', () => {
+    const { textarea, state, chipFor, submit } = renderHarness({
+      quotedSelection: '选中的原文',
+      initialInput: '前面后面',
+    });
+    textarea.focus();
+    textarea.setSelectionRange(2, 2);
+
+    act(() => {
+      state().chipStrip.onAccept(chipFor('quoted'));
+    });
+    flushFrames();
+
+    assertAccepted({
+      textarea,
+      expectedDraft: '前面 选中的原文 后面',
+      expectedCaret: '前面 选中的原文'.length + 1,
+      submit,
+      before: '前面后面',
+      beforeCaret: 2,
+      state,
+    });
+  });
+
+  it('(d3) quoted chip after the caret left a line break: no padding space before it', () => {
+    const { textarea, state, chipFor, submit } = renderHarness({
+      quotedSelection: '选中的原文',
+      initialInput: '第一段\n',
+    });
+    textarea.focus();
+    textarea.setSelectionRange('第一段\n'.length, '第一段\n'.length);
+
+    act(() => {
+      state().chipStrip.onAccept(chipFor('quoted'));
+    });
+    flushFrames();
+
+    // The caret is at the end of an empty line, so the passage starts flush and
+    // is followed by the paragraph break.
+    assertAccepted({
+      textarea,
+      expectedDraft: '第一段\n选中的原文\n\n',
+      expectedCaret: '第一段\n选中的原文\n\n'.length,
+      submit,
+      before: '第一段\n',
+      beforeCaret: '第一段\n'.length,
       state,
     });
   });
 
   it('(e) a source registered only in the descriptor record obeys the same invariants', () => {
     SUGGESTION_CHIP_ACCEPT_SOURCES.synthetic = {
-      buildFill: (chip) => chip.text,
-      keepVisibleAfterFill: false,
+      buildFill: (chip) => ({ text: chip.text, caret: chip.text.length }),
+      anchorsSuggestionFocus: false,
       reportsPicked: false,
       attributesSent: false,
-      expansionRequest: null,
+      expansionSeed: null,
       submitsAfterFill: false,
     };
     const { textarea, state, submit } = renderHarness();
@@ -313,12 +405,20 @@ describe('every source fills, focuses and never sends', () => {
     });
     flushFrames();
 
-    assertAccepted({ textarea, expectedDraft: '合成来源文本', submit, before: '', state });
+    assertAccepted({
+      textarea,
+      expectedDraft: '合成来源文本',
+      expectedCaret: '合成来源文本'.length,
+      submit,
+      before: '',
+      beforeCaret: 0,
+      state,
+    });
   });
 });
 
 describe('the expansion request is part of the source’s data', () => {
-  it('(f) model asks for a `seed`, quoted asks for a `focus`, habit asks for nothing', () => {
+  it('(f) model asks for a `seed`; quoted and habit ask for nothing', () => {
     reply.state.expansionEnabled = true;
 
     const model = renderHarness();
@@ -335,7 +435,11 @@ describe('the expansion request is part of the source’s data', () => {
       quoted.state().chipStrip.onAccept(quoted.chipFor('quoted'));
     });
     flushFrames();
-    assert.deepEqual(reply.requestExpansion.mock.calls, [[{ focus: '选中的原文', seed: '' }]]);
+    assert.deepEqual(
+      reply.requestExpansion.mock.calls,
+      [],
+      'a quotation is inserted, not expanded: its chip has no seed to vary',
+    );
     quoted.view.unmount();
 
     reply.requestExpansion.mockClear();

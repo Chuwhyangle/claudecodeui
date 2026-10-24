@@ -1,8 +1,12 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 import { readContextEventStatus } from '@/modules/context-events/index.js';
-import { projectsDb, uiLastOpenedDb } from '@/modules/database/index.js';
+import { projectsDb, sessionsDb, uiLastOpenedDb } from '@/modules/database/index.js';
+import { parseFrontMatter } from '@/shared/frontmatter.js';
 import { readInitiativeAuditRatio } from '@/shared/ports/initiative-audit-ratio.port.js';
+import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 import { createQuayFleetRegistry } from './quay-fleet-registry.js';
@@ -10,6 +14,11 @@ import { DEFAULT_INITIATIVE_AUDIT_RATIO, createQuayInitiatives } from './quay-in
 import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process.js';
 import { createQuayRouter } from './quay.routes.js';
 import { createQuayService, type QuayFileReader } from './quay.service.js';
+import {
+  createSessionTaskChainService,
+  type SessionTaskChainDependencies,
+  type SessionTaskStoreRecord,
+} from './session-task-chain.service.js';
 
 /** How long a fetched snapshot stays fresh before a panel reopen spawns the CLI again. */
 const SNAPSHOT_TTL_MS = 30_000;
@@ -144,6 +153,148 @@ export const quayInitiatives = createQuayInitiatives({
   resolveAuditRatio: () => readInitiativeAuditRatio() ?? DEFAULT_INITIATIVE_AUDIT_RATIO,
 });
 
+/** The app root this module was loaded from; the deploy fingerprints live at its root. */
+const SESSION_CHAIN_APP_ROOT = findApplicationRoot(getModuleDirectory(import.meta.url));
+
+/** One build fingerprint file's `gitSha`; absent or malformed is `null`, never a throw. */
+function readFingerprintGitSha(filePath: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (parsed === null || typeof parsed !== 'object') return null;
+    const sha = (parsed as { gitSha?: unknown }).gitSha;
+    return typeof sha === 'string' ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The build the running process was STARTED from, captured at module evaluation (boot).
+ *
+ * `dist-server/build-info.json` is also what the last build wrote, so it may move ahead of this
+ * value after a rebuild; that gap is exactly what 「已构建待重启」 means. Keeping the boot
+ * reading in its own constant is what stops a fresh build from being reported as live.
+ */
+const RUNNING_BUILD_SHA = readFingerprintGitSha(
+  path.join(SESSION_CHAIN_APP_ROOT, 'dist-server', 'build-info.json'),
+);
+
+/** One task file under `<projectPath>/tasks/`, parsed; absent or unreadable is `null`. */
+function readProjectTask(projectPath: string, taskId: string): SessionTaskStoreRecord | null {
+  // The task id reaches this through transcript content, so it is validated before any join.
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(taskId)) return null;
+  try {
+    const raw = fs.readFileSync(path.join(projectPath, 'tasks', `${taskId}.md`), 'utf8');
+    const parsed = parseFrontMatter(raw);
+    const data = parsed.data as Record<string, unknown>;
+    const status = typeof data.status === 'string' ? data.status : 'unknown';
+    const title = typeof data.title === 'string' && data.title.trim() !== '' ? data.title : taskId;
+    return { status, title, body: parsed.content };
+  } catch {
+    return null;
+  }
+}
+
+/** Runs one read-only git command in a project; a non-zero exit or spawn failure is `null`. */
+function gitOutput(projectPath: string, args: readonly string[]): string | null {
+  try {
+    return execFileSync('git', ['-C', projectPath, ...args], {
+      encoding: 'utf8',
+      timeout: 5_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** The task ids whose branch (`task/<id>`) is checked out in a worktree of this project. */
+function readWorktreeTaskIds(projectPath: string): ReadonlySet<string> {
+  const ids = new Set<string>();
+  const listing = gitOutput(projectPath, ['worktree', 'list', '--porcelain']);
+  if (listing === null) return ids;
+  for (const line of listing.split(/\r?\n/)) {
+    const match = /^branch refs\/heads\/task\/(\S+)$/.exec(line.trim());
+    if (match?.[1] !== undefined && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(match[1])) {
+      ids.add(match[1]);
+    }
+  }
+  return ids;
+}
+
+/**
+ * The commit that landed a task: the newest develop commit whose message names it, either as
+ * the task branch (`task/<id>`) or the task-store subject (`tasks: <id> …`). `develop` first,
+ * then HEAD, so a project without a develop line still answers from its default line.
+ */
+function findLandCommit(projectPath: string, taskId: string): string | null {
+  for (const ref of ['develop', 'HEAD']) {
+    for (const needle of [`task/${taskId}`, `tasks: ${taskId}`]) {
+      const sha = gitOutput(projectPath, [
+        'log', ref, '-n', '1', '--format=%H', '--fixed-strings', `--grep=${needle}`,
+      ]);
+      const trimmed = sha?.trim() ?? '';
+      if (trimmed !== '') return trimmed.split(/\r?\n/)[0];
+    }
+  }
+  return null;
+}
+
+/** `git merge-base --is-ancestor`; exit 1 (not an ancestor) and spawn errors both answer false. */
+function isGitAncestor(projectPath: string, ancestor: string, descendant: string): boolean {
+  try {
+    execFileSync('git', ['-C', projectPath, 'merge-base', '--is-ancestor', ancestor, descendant], {
+      stdio: 'ignore',
+      timeout: 5_000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The session → task flow chain reading. Every dependency is a reader: task files, the
+ * project's git history and the two build fingerprints. Nothing here writes, builds or restarts.
+ */
+export const sessionTaskChain = createSessionTaskChainService({
+  resolveProjectPath: (projectId) => projectsDb.getProjectPathById(projectId),
+  resolveTranscriptPath: ({ sessionId }) => sessionsDb.getSessionById(sessionId)?.jsonl_path ?? null,
+  transcriptSize: async (transcriptPath) => {
+    try {
+      const stats = await fs.promises.stat(transcriptPath);
+      return stats.isFile() ? stats.size : null;
+    } catch {
+      return null;
+    }
+  },
+  readTranscriptRange: async (transcriptPath, start) => {
+    let handle: fs.promises.FileHandle | null = null;
+    try {
+      handle = await fs.promises.open(transcriptPath, 'r');
+      const { size } = await handle.stat();
+      if (start >= size) return '';
+      const buffer = Buffer.alloc(size - start);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
+      return buffer.subarray(0, bytesRead).toString('utf8');
+    } catch {
+      return null;
+    } finally {
+      await handle?.close().catch(() => undefined);
+    }
+  },
+  readTask: readProjectTask,
+  worktreeTaskIds: readWorktreeTaskIds,
+  findLandCommit,
+  isAncestor: isGitAncestor,
+  readDeployShas: () => ({
+    // The disk's last build may be newer than the process; only `builtSha` follows it.
+    builtSha: readFingerprintGitSha(path.join(SESSION_CHAIN_APP_ROOT, 'dist-server', 'build-info.json')),
+    runningSha: RUNNING_BUILD_SHA,
+  }),
+  now: () => Date.now(),
+});
+
 /**
  * Used by the server entrypoint to mount the authenticated Quay endpoints. The write surface is
  * the interface-session triple; everything else stays read-only.
@@ -153,4 +304,5 @@ export const quayRoutes = createQuayRouter({
   fleetRegistry: quayFleetRegistry,
   readLastOpenedSession: () => uiLastOpenedDb.read(),
   initiatives: quayInitiatives,
+  sessionTaskChain,
 });

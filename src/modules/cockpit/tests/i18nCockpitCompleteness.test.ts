@@ -16,7 +16,11 @@ import { describe, expect, it } from 'vitest';
  */
 const LOCALES_DIR = resolve(process.cwd(), 'src', 'modules', 'i18n', 'locales');
 
-type CommonBundle = { cockpit?: Record<string, unknown> };
+type CommonBundle = {
+  cockpit?: Record<string, unknown>;
+  /** The session → task chain bar's copy, read by the chat module from the default namespace. */
+  sessionTaskChain?: Record<string, unknown>;
+};
 
 /** The `{{name}}` placeholders a translated sentence must keep, sorted for a stable comparison. */
 function placeholders(value: string): string[] {
@@ -24,37 +28,48 @@ function placeholders(value: string): string[] {
 }
 
 /**
- * Why one locale's `cockpit` block fails the contract against the English reference; an empty
- * array means it passes. Returning reasons (not a boolean) is what lets the positive control
- * below prove the checker can actually go red.
+ * Why one locale's block fails the contract against the English reference; an empty array
+ * means it passes. Returning reasons (not a boolean) is what lets the positive control below
+ * prove the checker can actually go red.
+ *
+ * `blockName` is only used in the reason text, so the same checker serves `cockpit` and
+ * `sessionTaskChain` — a second surface whose missing key would likewise render as its raw
+ * key name.
  */
-function cockpitProblems(bundle: CommonBundle, reference: Record<string, string>): string[] {
-  const block = bundle.cockpit;
+function blockProblems(
+  block: Record<string, unknown> | undefined,
+  blockName: string,
+  reference: Record<string, string>,
+): string[] {
   if (block === undefined) {
-    return ['cockpit block is missing'];
+    return [`${blockName} block is missing`];
   }
 
   const problems: string[] = [];
   for (const [key, referenceValue] of Object.entries(reference)) {
     const value = block[key];
     if (typeof value !== 'string') {
-      problems.push(`cockpit.${key} is missing or not a string`);
+      problems.push(`${blockName}.${key} is missing or not a string`);
       continue;
     }
     if (value.trim().length === 0) {
-      problems.push(`cockpit.${key} is an empty string`);
+      problems.push(`${blockName}.${key} is an empty string`);
       continue;
     }
     if (value === key) {
-      problems.push(`cockpit.${key} is the raw key name, not a label`);
+      problems.push(`${blockName}.${key} is the raw key name, not a label`);
       continue;
     }
     if (placeholders(value).join(',') !== placeholders(referenceValue).join(',')) {
-      problems.push(`cockpit.${key} changes the placeholders of the English sentence`);
+      problems.push(`${blockName}.${key} changes the placeholders of the English sentence`);
     }
   }
 
   return problems;
+}
+
+function cockpitProblems(bundle: CommonBundle, reference: Record<string, string>): string[] {
+  return blockProblems(bundle.cockpit, 'cockpit', reference);
 }
 
 describe('every locale carries the cockpit copy', () => {
@@ -333,6 +348,103 @@ describe('every locale carries the cockpit copy', () => {
     expect(placeholders(reference.projectOpenRefused)).toEqual(['name']);
     expect(placeholders(reference.fleetNeedsYou)).toEqual(['name']);
     expect(placeholders(reference.ordinalUnavailable)).toEqual(['n']);
+  });
+
+  // The deployment strip's copy: its status sentences, the confirmation panel, the failure
+  // reading and the relative timestamps. Naming them keeps a rename from being "covered" by
+  // the generic loop while every locale silently falls back to English — and the count-bearing
+  // sentences keep their placeholders.
+  it('covers the deployment strip and its confirmation panel', () => {
+    const required = [
+      'deployStatus',
+      'deployFresh',
+      'deployPendingBuild',
+      'deployPendingBuildOne',
+      'deployBuiltPendingRestart',
+      'deployBuilding',
+      'deployRestarting',
+      'deployUnknown',
+      'deployAction',
+      'deployConfirmTitle',
+      'deployConfirmBody',
+      'deployConfirmRestartHint',
+      'deployConfirm',
+      'deployCancel',
+      'deployCommitTask',
+      'deployNoCommits',
+      'deployLastOk',
+      'deployLastFailed',
+      'deployLastFailedCheck',
+      'deployFailingStep',
+      'deployUnavailable',
+      'deployJustNow',
+      'deployMinutesAgo',
+      'deployHoursAgo',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.deployPendingBuild)).toEqual(['n']);
+    expect(placeholders(reference.deployPendingBuildOne)).toEqual(['n']);
+    expect(placeholders(reference.deployCommitTask)).toEqual(['task']);
+    expect(placeholders(reference.deployLastOk)).toEqual(['sha', 'time']);
+    expect(placeholders(reference.deployLastFailed)).toEqual(['sha']);
+    expect(placeholders(reference.deployLastFailedCheck)).toEqual(['check']);
+    expect(placeholders(reference.deployFailingStep)).toEqual(['step']);
+    expect(placeholders(reference.deployUnavailable)).toEqual(['reason']);
+    for (const key of ['deployMinutesAgo', 'deployHoursAgo']) {
+      expect(placeholders(reference[key]), `cockpit.${key}`).toEqual(['n']);
+    }
+  });
+
+  // The session → task chain bar renders twelve stage labels, the compact count sentence, the
+  // expand/collapse names, the unlanded-reason line and the one-time live notice. Its copy lives
+  // in the DEFAULT namespace (`common.json`), which the chat bar reads through `useTranslation()`;
+  // this walks the same 12-locale glob so a missing stage word cannot fall back to English.
+  it('gives every locale a complete sessionTaskChain block with the same placeholders', () => {
+    const referenceChain = readBundle('en/common.json').sessionTaskChain as Record<string, string>;
+    const required = [
+      'summary',
+      'expand',
+      'collapse',
+      'stageFiled',
+      'stageReady',
+      'stageInProgress',
+      'stageLanded',
+      'stageBuilt',
+      'stageRunning',
+      'stageBlocked',
+      'stageNeedsHuman',
+      'stageSuperseded',
+      'stageUnknown',
+      'blockedReason',
+      'liveNotice',
+      'unavailable',
+    ];
+    for (const key of required) {
+      expect(typeof referenceChain[key], `sessionTaskChain.${key}`).toBe('string');
+      expect(referenceChain[key].trim().length, `sessionTaskChain.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(referenceChain.summary)).toEqual([
+      'blocked',
+      'inProgress',
+      'landed',
+      'running',
+      'total',
+    ]);
+    expect(placeholders(referenceChain.blockedReason)).toEqual(['reason']);
+    expect(placeholders(referenceChain.liveNotice)).toEqual(['taskId']);
+    expect(placeholders(referenceChain.unavailable)).toEqual(['reason']);
+
+    const offenders: string[] = [];
+    for (const file of bundleFiles) {
+      const problems = blockProblems(readBundle(file).sessionTaskChain, 'sessionTaskChain', referenceChain);
+      for (const problem of problems) {
+        offenders.push(`${file}: ${problem}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied

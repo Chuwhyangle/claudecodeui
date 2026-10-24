@@ -45,7 +45,7 @@
     "server:bundle": "npm run build && node scripts/release/build-server-bundle.js",
     "desktop:icon:mac": "node electron/scripts/generate-macos-icon.js",
     "build": "npm run build:client && npm run build:server",
-    "build:client": "vite build",
+    "build:client": "vite build && node scripts/write-client-build-info.mjs",
     "prebuild:server": "node -e \"require('node:fs').rmSync('dist-server.next', { recursive: true, force: true })\"",
     "build:server": "tsc -p server/tsconfig.json && tsc-alias -p server/tsconfig.json && node scripts/write-build-info.mjs",
     "postbuild:server": "node scripts/promote-dist-server.mjs",

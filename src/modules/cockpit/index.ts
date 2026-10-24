@@ -41,6 +41,17 @@ export type {
 // render them without the whole page.
 export { default as InitiativeView } from '@/modules/cockpit/InitiativeView';
 export { default as DecisionQueue, sampleAuditDecisions } from '@/modules/cockpit/DecisionQueue';
+// The deployment strip: `CockpitPage` mounts it persistently, and `ChatInterface` mounts the
+// compact variant when the running build is not current. Exported here so the chat module
+// reaches it through this barrel rather than deep-importing the cockpit's files.
+export { default as DeployReadiness } from '@/modules/cockpit/DeployReadiness';
+export type {
+  DeployCommitReading,
+  DeployFailureReading,
+  DeployLastDeployReading,
+  DeployReadinessReading,
+  DeployStatus,
+} from '@/modules/cockpit/DeployReadiness';
 export {
   decideInitiative,
   fetchInitiativeReading,

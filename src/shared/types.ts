@@ -3775,11 +3775,11 @@ export type ReplySuggestionsResult = {
 
 /**
  * The text an expansion draw is anchored on: `seed` is the reply the person
- * already picked (it asks for variants), `focus` is the quoted passage with no
- * reply of their own yet (it asks for responses). Reported on a `picked` event
- * so the ledger can tell the two apart; the anchored text itself is not stored.
+ * already picked (it asks for variants). Reported on a `picked` event so the
+ * ledger can mark a chip that came from an expansion draw; the anchored text
+ * itself is not stored.
  */
-export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
+export type ReplySuggestionsExpansionSource = 'seed';
 
 /** The pointer/outcome events the composer reports on `POST /api/reply-suggestions/events`. */
 export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
@@ -3798,8 +3798,8 @@ export type ReplySuggestionsEventInput = {
  * One request for a draw; `redraw` asks for a fresh batch, `focus` is the transcript text to centre on.
  *
  * `expand: true` marks the experimental post-pick expansion: `seed` then asks for
- * variants of the picked reply, and a `focus` with no seed asks for responses to
- * that passage. The server refuses both shapes unless `expansion` is `vary`.
+ * variants of the picked reply and is required. The server refuses the shape
+ * unless `expansion` is `vary`.
  */
 export type ReplySuggestionsRequest = {
   sessionId: string;

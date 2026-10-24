@@ -107,9 +107,8 @@ default `600`). A longer selection is clipped, not rejected.
 (defaults `30` / `3000`). Over a cap answers `429`.
 
 `expansion` — `off` or `vary`. With `vary`, picking a model chip asks for
-**variants** of that reply instead of sending it, and quoting a passage asks for
-**responses** to it; both arrive as dashed chips under the textarea and replace
-the body when clicked (a `> quoted` block is kept). `vary` also uses
+**variants** of that reply instead of sending it; the variants arrive as dashed
+chips under the textarea and replace the body when clicked. `vary` also uses
 `redrawTemperature`, because genuine rewording is the point. Default `off`: an
 `expand` request is then refused `400` before any upstream call, and the
 composer behaves exactly as it did before the experiment.
@@ -169,7 +168,7 @@ last assistant message id + settings `version`**: editing the settings file
   counters**.
 - `redraw: true` still calls upstream (that is what the person asked for) and
   replaces the cached batch with the new one.
-- An expansion request (`expand: true`, with `seed` or `focus`) neither reads nor
+- An expansion request (`expand: true`, with a `seed`) neither reads nor
   writes this cache: it is anchored on the draft, not on the message.
 - An upstream failure, an unparseable answer and an empty batch are never
   cached, so the next request tries again.
@@ -193,26 +192,25 @@ cache, which still makes no model call.
 `expansion` is `vary`; otherwise the server answers `400`
 (`REPLY_SUGGESTIONS_EXPANSION_DISABLED`) and makes no upstream call. Without
 `expand`, a `seed` is a `400` too — `seed` only has meaning as an expansion
-anchor. An expansion needs at least one of `seed` / `focus`.
+anchor. An expansion always carries a `seed`; a request with only
+`focus` (or a blank one) answers `400` (`INVALID_REQUEST`) before any upstream
+call.
 
 - `seed` — the reply the person already picked. It is clipped to `maxChipChars`
   and the prompt asks for 2–3 **variants** that keep its decision and intent and
   differ only in wording or detail. The seed counts as already shown for this
   draw: an answer identical to it, or with character-set overlap `>= 0.7`, is
   filtered before it reaches the person.
-- `focus` with an empty `seed` — the passage the person quoted. The prompt asks
-  for 2–3 **responses** to that passage.
 - Expansion draws share the de-duplication, call caps, circuit breaker and
   supplement-once behaviour of an ordinary draw. Their usage row carries
-  `expansion: "seed" | "focus"`; neither the seed nor the focus text is copied
-  into the ledger.
+  `expansion: "seed"`; the seed text is not copied into the ledger.
 - The client caps a chain at five expansion requests; the cap is a frontend
   constant, not a server setting, so a direct API caller may ask for more.
 
 `POST /events` with `{ sessionId, draw, event, index?, source? }` → `204`.
 `event` is `picked`, `cleared`, `redrawn` or `sent`; `index` is the chip's index
-when applicable, and `source` is `seed` or `focus` when the picked chip came from
-an expansion draw. Appends one line to the usage ledger.
+when applicable, and `source` is `seed` when the picked chip came from an
+expansion draw. Appends one line to the usage ledger.
 
 Errors: malformed request `400`; unknown session `404` (the injected reader's
 `AppError` passes through); feature off `503`; over a call cap `429`; upstream

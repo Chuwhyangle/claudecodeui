@@ -44,6 +44,7 @@ import {
   subscribeToLocateRequests,
 } from '@/shared/chatMessageLocator';
 import ChatMessagesPane from '@/modules/chat/transcript/ChatMessagesPane';
+import SessionTaskChain from '@/modules/chat/SessionTaskChain';
 import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import PermissionRequestsBanner from '@/modules/chat/composer/PermissionRequestsBanner';
@@ -119,6 +120,14 @@ type ChatInterfaceProps = {
    * the only place that can switch tabs; answers false when it cannot.
    */
   onRevealNavigate?: (reveal: UiNavigateReveal) => boolean;
+  /**
+   * The line mounted above the transcript, supplied by the workspace. The deployment strip
+   * lives in the cockpit module, and chat must not import another feature module that
+   * exports this very component — that would close a chat ↔ cockpit module cycle and make
+   * the chat barrel resolve partially during tests. So the workspace, which already imports
+   * both modules' barrels, hands the node down.
+   */
+  noticeSlot?: React.ReactNode;
 };
 
 /**
@@ -143,6 +152,7 @@ function ChatInterface({
   newSessionTrigger,
   onShowAllTasks,
   onRevealNavigate,
+  noticeSlot,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const { subscribe, isConnected } = useWebSocket();
@@ -1077,6 +1087,8 @@ function ChatInterface({
             ? t('messageTypes.opencode', { defaultValue: 'OpenCode' })
           : t('messageTypes.claude');
 
+  const chainSessionId = currentSessionId ?? selectedSession?.id ?? null;
+
   if (!selectedProject) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -1118,6 +1130,18 @@ function ChatInterface({
             {t('messageNotFound', { defaultValue: 'No message with that id was found.' })}
           </p>
         )}
+
+        {/* What this conversation has started, and where each task stands. It renders nothing
+            for a session that started no tasks, so it never spends the first row on "none". */}
+        {chainSessionId !== null && (
+          <SessionTaskChain projectId={selectedProject.projectId} sessionId={chainSessionId} />
+        )}
+
+        {/* Deployment news while it is news: the compact strip renders nothing when the running
+            build is current, so the transcript's first row is not spent on an all-green line.
+            A person who asked 「重启成功了吗」 sees the answer here without leaving the chat.
+            Supplied by the workspace rather than imported here — see `noticeSlot`. */}
+        {noticeSlot}
 
         <MarkdownWorkspaceContext.Provider value={markdownWorkspaceValue}>
           <ChatMessagesPane

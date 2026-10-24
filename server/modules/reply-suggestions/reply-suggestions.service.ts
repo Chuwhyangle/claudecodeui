@@ -46,19 +46,19 @@ export type LastAssistantMessage = { id: string; text: string };
 export type ReplySuggestionsInput = {
   sessionId: string;
   redraw?: boolean;
+  /** The transcript passage an ordinary (re)draw centres on. */
   focus?: string;
-  /** The reply the person already picked; only meaningful with `expand: true`. */
+  /** The reply the person already picked; required with `expand: true`. */
   seed?: string;
   /** True for an expansion draw; refused unless the settings say `expansion: "vary"`. */
   expand?: boolean;
 };
 
-/** The expansion anchor: `seed` is the picked reply being varied, `focus` is the
- * quoted passage. The server end of the wire contract mirrored in
- * `src/shared/types.ts` and guarded by
+/** The expansion anchor: `seed` is the picked reply being varied. The server end
+ * of the wire contract mirrored in `src/shared/types.ts` and guarded by
  * `src/shared/tests/replySuggestionsTypeSync.test.ts`; consumers: the ledger rows,
  * `reply-suggestions-draw.ts`, `reply-suggestions-prompts.ts` and `reply-suggestions.routes.ts`. */
-export type ReplySuggestionsExpansionSource = 'seed' | 'focus';
+export type ReplySuggestionsExpansionSource = 'seed';
 
 /** The pointer-click events the composer reports; consumers: the ledger rows and
  * `reply-suggestions.routes.ts`. */
@@ -177,14 +177,12 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
 
     const redraw = input.redraw === true;
     const focus = input.focus === undefined ? '' : truncateCodePoints(input.focus, settings.generation.maxFocusChars);
-    // A non-empty seed wins over focus; it is chip text, so it gets the chip budget.
+    // An expansion always varies a picked reply; the seed is chip text, so it gets the chip budget.
     const expand = input.expand === true;
     const seed = expand && input.seed !== undefined
       ? truncateCodePoints(input.seed.trim(), settings.generation.maxChipChars)
       : '';
-    const expansionSource: ReplySuggestionsExpansionSource | null = expand
-      ? (seed !== '' ? 'seed' : 'focus')
-      : null;
+    const expansionSource: ReplySuggestionsExpansionSource | null = expand ? 'seed' : null;
 
     // Only an ordinary first draw may be served from the cache; a hit returns the
     // batch unchanged and leaves a `shown` row, but spends no call budget.
@@ -235,8 +233,8 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
       if (!settings.enabled) throw disabledError();
       if (input.expand === true) {
         if (settings.generation.expansion !== 'vary') throw expansionDisabledError();
-        if ((input.seed?.trim() ?? '') === '' && (input.focus?.trim() ?? '') === '') {
-          throw invalidInputError('an expansion request needs a "seed" or a "focus"');
+        if ((input.seed?.trim() ?? '') === '') {
+          throw invalidInputError('an expansion request needs a non-empty "seed"');
         }
       } else if ((input.seed?.trim() ?? '') !== '') {
         throw invalidInputError('"seed" is only valid with "expand": true');

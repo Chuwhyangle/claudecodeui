@@ -238,10 +238,19 @@ const RUNNING_VERSION = (() => {
 // still executing the old one. null means the instance was not built here (a tsx dev server) or
 // was built before scripts/write-build-info.mjs existed. See scripts/check-deploy-freshness.mjs.
 const BUILD_INFO = readBuildInfo(APP_ROOT);
-const systemRoutes = createSystemModule({
+const systemModule = createSystemModule({
     appRoot: APP_ROOT,
     installMode,
     isPlatform: IS_PLATFORM,
+    // Captured once here, like BUILD_INFO: the deploy reading must compare against the build
+    // this process is actually executing, not whatever is on disk by the time a request lands.
+    runningBuildInfo: BUILD_INFO,
+    // Resolved lazily because `SERVER_PORT` is computed further down the composition root; the
+    // verifier only runs after `listen`, long after that.
+    serverPort: () => SERVER_PORT,
+    // The fleet handshake travels through this closure so `modules/system` keeps no edge into
+    // `modules/quay`: the composition root is where the two meet.
+    readFleetState: async () => (await quayService.getFleetSummary()).fleet.state,
 });
 console.log('SERVER_PORT from env:', process.env.SERVER_PORT);
 
@@ -1759,7 +1768,7 @@ app.use(
     )
 );
 
-app.use('/api/system', authenticateToken, systemRoutes);
+app.use('/api/system', authenticateToken, systemModule.router);
 
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 
@@ -2526,6 +2535,14 @@ async function startServer() {
             const appInstallPath = APP_ROOT;
             await writeLocalServerMarker().catch((error) => {
                 console.warn('[WARN] Could not write local server marker:', error.message);
+            });
+
+            // A deploy's second half: if a "build and restart" asked for a specific target
+            // sha, this boot verifies that it is that build and that the key surfaces answer,
+            // then records the verdict in the deploy state file the cockpit reads. No pending
+            // state means a plain boot, and this does nothing.
+            void systemModule.verifyPendingDeploy().catch((error) => {
+                console.warn('[WARN] Deploy verification failed to run:', error instanceof Error ? error.message : error);
             });
 
             console.log('');
