@@ -45,6 +45,17 @@ export type CockpitInputProps = {
   textareaRef?: RefObject<HTMLTextAreaElement>;
 };
 
+/**
+ * The cockpit dock's phone touch floor. The chat composer ships 32px icon buttons, which is right
+ * for a mouse; on a phone the same controls must be 44×44 (the product's touch target, the size the
+ * header's mode switch already uses). The `md:` reset hands the desktop its original 32px box back,
+ * so the wide layout is byte-for-byte unchanged.
+ *
+ * Exported because the cockpit test asserts the class SET rather than measuring a box: jsdom applies
+ * no stylesheet, so a height reading there would be noise.
+ */
+export const COCKPIT_PHONE_TOUCH_TARGET_CLASS = 'min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0';
+
 /** Rendered by `CockpitPage` as the cockpit's only text entry point. */
 export default function CockpitInput({
   value,
@@ -81,17 +92,28 @@ export default function CockpitInput({
           placeholder={t('cockpit.intentPlaceholder')}
           aria-label={t('cockpit.intentPlaceholder')}
           rows={1}
+          // The dock stays one line on a phone, but its line is a touch target: 44px minimum,
+          // the same floor the mic and send buttons carry.
+          className="min-h-[44px]"
         />
       </PromptInputBody>
-      <PromptInputFooter>
-        <span className="text-[11px] text-muted-foreground">{t('cockpit.pushToTalkHint')}</span>
+      <PromptInputFooter className="py-1 sm:py-2">
+        {/* The push-to-talk hint is coaching, not a control: on a phone the dock's height is the
+            stage's height, so the sentence yields to the buttons. */}
+        <span className="hidden text-[11px] text-muted-foreground sm:inline">
+          {t('cockpit.pushToTalkHint')}
+        </span>
         <div className="flex items-center gap-1">
           <VoiceInputButton
             state={voiceState}
             onToggle={onVoiceToggle}
             inFlight={voiceInFlight}
+            className={COCKPIT_PHONE_TOUCH_TARGET_CLASS}
           />
-          <PromptInputSubmit aria-label={t('cockpit.intentSubmit')} />
+          <PromptInputSubmit
+            aria-label={t('cockpit.intentSubmit')}
+            className={COCKPIT_PHONE_TOUCH_TARGET_CLASS}
+          />
         </div>
       </PromptInputFooter>
     </PromptInput>

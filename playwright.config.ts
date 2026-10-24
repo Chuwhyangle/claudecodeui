@@ -727,6 +727,18 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // included; the three layout cases alone read 16.9s). 240_000 is the sibling cockpit entries'
   // value and clears that measurement ~12x, leaving room for a load-slowed fan-in run.
   'cockpit-observation-wall.spec.ts': 240_000,
+  // The phone narrow-layout criterion: five real pages at 390×844 (the fleet stage measured for
+  // header/dock/touch/last-tile, the board measured for in-flight chip edges, the project strip
+  // read twice — green arm and the injected-defect control arm) plus the 1440×900 regression pair.
+  // Every case stubs the quay reads at the HTTP boundary, but each still pays the page boot, the
+  // fleet/observation reads and a full-page screenshot. MEASURED on this worktree 2026-10-25:
+  // `5 passed (36.7s)` for the whole invocation (config evaluation, both servers' boot and the
+  // browser launches included). 240_000 is the sibling cockpit entries' value and clears that
+  // measurement ~6.5x, leaving room for a load-slowed fan-in run rather than leaving the file to
+  // the 55 s single-file default. (After the control arm was changed to pin the item's own box —
+  // a bare `min-height` cannot shrink a stretched flex item, which made the first control
+  // reading vacuous — the same invocation measured the 36.7s above.)
+  'cockpit-phone-narrow.spec.ts': 240_000,
 };
 
 /**

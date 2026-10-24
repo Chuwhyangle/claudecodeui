@@ -325,7 +325,14 @@ function FleetView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      // The fleet stage is the phone's own scrolling region: the dock is in normal flow beneath
+      // it, so a tile list taller than the viewport must scroll HERE rather than under the dock.
+      // The narrow-layout criterion reads this element for 「the last tile scrolls fully into
+      // view above the dock」.
+      data-testid="cockpit-fleet-scroll"
+    >
       {/*
         ONE line for the one cause. Every tile's registry id is null for the same reason, so
         repeating it per tile turns a single actionable fact (set QUAY_FLEET_BIN) into noise.

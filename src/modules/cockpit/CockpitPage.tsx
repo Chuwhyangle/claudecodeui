@@ -1348,10 +1348,13 @@ export default function CockpitPage() {
       data-cockpit-focus-uri={focusObject?.uri ?? undefined}
       data-cockpit-debug={debug ? 'true' : undefined}
     >
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="text-sm font-semibold">{t('cockpit.title')}</span>
-          <span className="text-xs text-muted-foreground" data-testid="cockpit-view-label">
+      <header
+        className="flex flex-nowrap items-center justify-between gap-2 border-b border-border/40 px-3 py-1.5 md:flex-wrap md:px-4 md:py-2"
+        data-testid="cockpit-header"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+          <span className="shrink-0 text-sm font-semibold">{t('cockpit.title')}</span>
+          <span className="truncate text-xs text-muted-foreground" data-testid="cockpit-view-label">
             {view.type === 'wall'
               ? t('cockpit.wallView')
               : view.type === 'fleet'
@@ -1363,14 +1366,15 @@ export default function CockpitPage() {
           {/*
             When every producer is healthy the wall's own tile is absent — the layer has nothing
             to say. One quiet timestamp says it is alive without spending the top of the page on
-            an all-green statement: 「各生产者最近更新」.
+            an all-green statement: 「各生产者最近更新」. Secondary on a phone, where the header is
+            one row and every pixel of it is the stage's.
           */}
           {wallView.status === 'loaded' &&
             wallView.wall.producers.length > 0 &&
             wallView.wall.producers.every((producer) => producer.state === 'ok') &&
             latestProducerRunAt(wallView.wall) !== null && (
               <span
-                className="text-xs text-muted-foreground"
+                className="hidden text-xs text-muted-foreground sm:inline"
                 data-testid="cockpit-producers-ok"
                 data-last-run-at={latestProducerRunAt(wallView.wall)}
               >
@@ -1430,10 +1434,16 @@ export default function CockpitPage() {
       </header>
 
       {/* The deployment reading is chrome, not a view: it stays put across the wall, the fleet,
-          the initiatives and every project stage, the same way the header does. */}
-      <div className="border-b border-border/40 px-4 py-2">
-        <DeployReadiness />
-      </div>
+          the initiatives and every project stage, the same way the header does. On a phone it
+          takes the compact form: a strip that exists only when there is news (a fresh deployment
+          has nothing to say), so a phone does not spend a row of the stage on 已是最新. */}
+      {viewportWidth < 768 ? (
+        <DeployReadiness compact />
+      ) : (
+        <div className="border-b border-border/40 px-4 py-2">
+          <DeployReadiness />
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/*
@@ -1441,8 +1451,9 @@ export default function CockpitPage() {
           switches and the same project list, without a fixed 12rem column that would push the
           single-column wall into horizontal overflow.
         */}
+        <div className="relative flex w-full shrink-0 flex-col md:min-h-0 md:w-48">
         <aside
-          className="flex w-full shrink-0 flex-row gap-1 overflow-x-auto border-b border-border/40 p-2 md:w-48 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r md:p-3"
+          className="flex w-full flex-row gap-1 overflow-x-auto border-b border-border/40 p-2 snap-x snap-mandatory [mask-image:linear-gradient(to_right,black_85%,transparent)] md:min-h-0 md:flex-1 md:flex-col md:overflow-y-auto md:border-b-0 md:border-r md:p-3 md:snap-none md:[mask-image:none]"
           data-testid="cockpit-project-strip"
           // The strip is navigation chrome, NOT part of the stage's focus contract: the fleet
           // tiles are the declared objects, and declaring the same project twice would make
@@ -1461,7 +1472,7 @@ export default function CockpitPage() {
             type="button"
             onClick={() => switchView({ type: 'wall' })}
             aria-current={view.type === 'wall' ? 'page' : undefined}
-            className="min-h-11 shrink-0 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
+            className="min-h-11 shrink-0 snap-start rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
             data-testid="cockpit-nav-wall"
           >
             {t('cockpit.wallView')}
@@ -1470,7 +1481,7 @@ export default function CockpitPage() {
             type="button"
             onClick={() => switchView({ type: 'fleet' })}
             aria-current={view.type === 'fleet' ? 'page' : undefined}
-            className="min-h-11 shrink-0 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
+            className="min-h-11 shrink-0 snap-start rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
             data-testid="cockpit-nav-fleet"
           >
             {t('cockpit.fleetView')}
@@ -1483,7 +1494,7 @@ export default function CockpitPage() {
             type="button"
             onClick={() => switchView({ type: 'initiatives' })}
             aria-current={view.type === 'initiatives' ? 'page' : undefined}
-            className="min-h-11 shrink-0 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
+            className="min-h-11 shrink-0 snap-start rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
             data-testid="cockpit-nav-initiatives"
           >
             {t('cockpit.initiativesView')}
@@ -1495,7 +1506,7 @@ export default function CockpitPage() {
             <button
               type="button"
               onClick={() => void loadFleet()}
-              className="rounded border border-border/60 px-2 py-1 text-xs text-foreground hover:bg-accent"
+              className="min-h-[44px] min-w-[44px] shrink-0 snap-start rounded border border-border/60 px-2 py-1 text-xs text-foreground hover:bg-accent md:min-h-0 md:min-w-0"
               data-testid="cockpit-fleet-retry"
             >
               {t('cockpit.retry')}
@@ -1513,7 +1524,11 @@ export default function CockpitPage() {
                 onClick={() => openProject(project)}
                 aria-disabled={blocked === null ? undefined : true}
                 className={cn(
-                  'min-h-11 shrink-0 truncate rounded px-2 py-1 text-left text-xs md:min-h-0',
+                  // A phone gets the 44×44 touch floor on every strip item, and `snap-start`
+                  // lands a scrolled row on a whole chip rather than mid-name. The name is not
+                  // ellipsized on a phone (`md:truncate` only keeps the desktop column at 12rem):
+                  // the strip scrolls the ITEM in and out instead of cutting the word.
+                  'min-h-[44px] min-w-[44px] shrink-0 snap-start rounded px-2 py-1 text-left text-xs md:min-h-0 md:min-w-0 md:truncate',
                   blocked === null
                     ? 'text-foreground hover:bg-accent'
                     : 'cursor-not-allowed text-muted-foreground',
@@ -1533,6 +1548,19 @@ export default function CockpitPage() {
             );
           })}
         </aside>
+        {/*
+          THE RIGHT-EDGE FADE. A phone cannot draw a 12rem column, so the strip is one horizontal
+          row; when the projects outrun the width there is no scrollbar to say so, and a name
+          ending flush at the edge reads as the whole list. The fade says 「there is more」, and
+          the container's mask keeps the fade honest as the row scrolls under it. Desktop keeps
+          its own column and hides it.
+        */}
+        <div
+          aria-hidden="true"
+          data-testid="cockpit-project-strip-fade"
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent md:hidden"
+        />
+        </div>
 
         {view.type === 'initiatives' ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden" data-testid="cockpit-initiatives-stage">
@@ -1624,13 +1652,13 @@ export default function CockpitPage() {
       </div>
 
       <footer className="relative shrink-0 border-t border-border/40 bg-background px-4 py-2" data-testid="cockpit-status">
-        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className="mb-1 flex flex-nowrap items-center gap-x-4 overflow-hidden whitespace-nowrap text-xs text-muted-foreground sm:mb-2 sm:flex-wrap sm:gap-y-1">
           {/*
             The status bar says only what a person can read: the focused object's NAME, never its
             storage handle. `quay://…`, first-frame timings and device ids are diagnostics and
             live behind `?debug=1` below.
           */}
-          <span data-testid="cockpit-focus">
+          <span className="truncate" data-testid="cockpit-focus">
             {t('cockpit.focus')}: {focusedHumanLabel ?? t('cockpit.noFocus')}
             {/* A fleet tile's readable name is its ordinal AND its project; naming only the
                 ordinal leaves 「Focus: ①」 as vague as 「none」. */}

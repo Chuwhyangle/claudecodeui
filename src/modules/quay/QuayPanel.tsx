@@ -864,7 +864,8 @@ export default function QuayPanel({
           <button
             type="button"
             onClick={onRefresh}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+            data-testid="quay-panel-retry"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent md:min-h-0 md:min-w-0"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Retry
@@ -973,7 +974,8 @@ function LoadedQuayPanel({
           <button
             type="button"
             onClick={onRefresh}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent"
+            data-testid="quay-panel-refresh"
+            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-md border border-border/60 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-accent md:min-h-0 md:min-w-0"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
