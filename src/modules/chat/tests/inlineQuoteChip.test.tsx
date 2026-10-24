@@ -277,7 +277,7 @@ describe('inline mode structure', () => {
     const end = showInlineChip('前面后面', 4);
     const endSpacer = spacerOf(end.view);
     assert.equal(endSpacer.previousSibling?.textContent, '前面后面');
-    assert.equal(endSpacer.nextSibling, null, 'nothing follows a caret at the end');
+    assert.equal(endSpacer.nextSibling === null, true, 'nothing follows a caret at the end');
   });
 });
 
@@ -289,7 +289,7 @@ describe('inline mode preconditions', () => {
   it('(b) does not draw it over an empty box, and the quoted chip stays in the row', () => {
     const view = renderComposer({ input: '', chipStrip: quotedStrip() });
 
-    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]'), null);
+    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]') === null, true);
     assert.ok(view.getByRole('listbox'), 'the empty-box strip is unchanged');
     const option = view.getByRole('option');
     assert.equal(option.getAttribute('data-chip-source'), 'quoted');
@@ -301,7 +301,7 @@ describe('inline mode preconditions', () => {
       chipStrip: baseChipStrip({ chips: buildSuggestionChips({ habitChips: ['检查进展'] }) }),
     });
 
-    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]'), null);
+    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]') === null, true);
   });
 
   it('(d) does not draw it while a listen owns the box', () => {
@@ -312,7 +312,7 @@ describe('inline mode preconditions', () => {
       chipStrip: quotedStrip(),
     });
 
-    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]'), null);
+    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]') === null, true);
   });
 });
 
@@ -411,12 +411,12 @@ describe('inline chip button', () => {
 describe('inline mode exit', () => {
   it('(i) exits when the live selection disappears', () => {
     const { view, textarea } = showInlineChip('前面后面', 2);
-    assert.ok(view.container.querySelector('[data-slot="inline-quote-chip"]'));
+    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]') !== null, true);
 
     rerenderComposer(view, { input: '前面后面', chipStrip: baseChipStrip({ visible: false, chips: [] }) });
 
-    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]'), null);
-    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip-spacer"]'), null);
+    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip"]') === null, true);
+    assert.equal(view.container.querySelector('[data-slot="inline-quote-chip-spacer"]') === null, true);
     assert.equal(textarea.getAttribute('data-inline-chip-mode'), null);
     assert.equal(textarea.style.getPropertyValue('color'), '');
   });
