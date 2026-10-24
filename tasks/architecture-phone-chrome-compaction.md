@@ -81,6 +81,15 @@ depends_on:
 
 所有注入式控制臂都在同一次页面内复原（浮层位置、SVG `width` 属性、样式），没有留下改动；`tmp/` 截图不入库。
 
+### fan-in suite 红核对（2026-10-24，上一轮 exited-not-landed 的根因）
+
+上一轮 fan-in 的 suite 红不是环境抖动：本机在 worktree 里单跑两个文件均复现，且是 develop 上**既有**手机外壳用例与本任务新契约的正面相遇。
+
+- `src/modules/architecture/tests/selectionTray.test.tsx`（18 passed，未改该文件）—— 失败断言要求宿主 `paddingBottom === 抽屉带 + 4px`，而本任务又加了 80px 控制保留带。产品代码改法：保留带与抽屉带都从画布底边量起，按 `max(抽屉带, 控制带)` 合成（抽屉打开时它已覆盖控制件的落地位置，不应再叠 80px）。用例原样通过。
+- `src/modules/architecture/tests/mobileCompactToolbar.test.tsx`（15 passed）—— 该文件钉住旧手机外壳（缩放行 52px 常展开、Fullscreen 在工具行、百分比只认 `span`、无会话记忆键清理）。本任务 AC-1/AC-3 明确改为「Fullscreen 进 Adjust」「缩放默认收起为一个 44px 按钮」，故把与旧契约冲突的断言更新为新契约：折叠态 44px 单按钮 → 点开 52px 行；Fullscreen 经 Adjust 进出；百分比叶子把 `button` 计入；`beforeEach` 清 `sessionStorage['architecture-readout-expanded']`。覆盖点保留（44×44 目标、8px 间距、单行、百分比唯一、Fullscreen 往返）。
+- 触控间距：缩放行 `gap` 由 4px 回到仓库标准 8px（`TOUCH_CONTROL_GAP_PX`），与既有「44×44 + 8px」判据一致。
+- 复测：`mobileCompactToolbar.test.tsx` 15 passed；`selectionTray.test.tsx` 18 passed；`architectureTab.test.tsx` + `i18nArchitectureTabCompleteness.test.ts` 127 passed；`canvasLayoutContract.test.tsx` + `mobileGestures.test.tsx` 16 passed；`npm run typecheck` exit 0；`npx oxlint` 对改动文件仅余既有 warning。
+
 ## Touches
 
 - src/modules/architecture/ArchitecturePanel.tsx
@@ -88,6 +97,7 @@ depends_on:
 - src/modules/architecture/ArchitectureExportMenu.tsx
 - src/modules/architecture/hooks/useTouchLayout.ts
 - src/modules/architecture/tests/architectureTab.test.tsx
+- src/modules/architecture/tests/mobileCompactToolbar.test.tsx
 - src/modules/architecture/tests/i18nArchitectureTabCompleteness.test.ts
 - e2e/architecture-canvas-layout.spec.ts
 - e2e/support/architectureFixture.ts
