@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-composer-chips-button-selection
 title: 输入框回复建议前端：模型生成 chip、「建议」按钮重抽、选中文字的「引用」chip
-status: todo
+status: ready
 labels:
   - gap
 parent: null
