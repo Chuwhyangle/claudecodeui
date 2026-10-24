@@ -83,7 +83,7 @@ T 是现有选区钩子给出的文本（已去首尾空格、限 600 字符）�
 - [x] 展开实验开启（设置文件改成 `vary`，运行期按修改时间重读）：点模型 chip 触发 `seed` 变体展开仍然正常；引用 chip 点击后**没有**发出展开请求（贴网络请求计数）；「建议」按钮仍带着引用的 `focus`（贴请求体）。
 - [x] 把设置文件的展开关掉（`off`）后重做一遍引用，结果与上面一致，网络里没有展开请求。
 - [x] 390px 触屏模拟：引用与插入、chip 退场各做一次，贴截图与读数（`tmp/dod/mobile-1-chip.png`、`tmp/dod/mobile-2-after.png`；390x844 下插入后 `textarea.value = "OMITTED | Th\n\n"`、`selectionStart = selectionEnd = 14`、引用 chip 已退场）。
-- [ ] iOS Safari 与 Android Chrome 真机上选中 transcript 文字后点引用 chip，确认插入位置、光标、chip 退场正常（待外部）。
+- [ ] iOS Safari 与 Android Chrome 真机上选中 transcript 文字后点引用 chip，确认插入位置、光标、chip 退场正常（待外部）
 - [x] 贴出 `git diff --stat`，以及删除的文件与符号清单（`splitQuotedDraft`、`buildQuotedFill`、`keepVisibleAfterFill`、`pinnedQuote`、服务端展开专用的回应提示词）。
 ### 真页读数（隔离实例 127.0.0.1:3149，Playwright，2026-10-24）
 
