@@ -502,7 +502,7 @@ function BoardView({
             {t('cockpit.inFlightEmpty')}
           </p>
         ) : (
-          <ul className="flex flex-wrap gap-2" data-testid="cockpit-board-rail">
+          <ul className="flex flex-col gap-1.5" data-testid="cockpit-board-rail">
             {focusables.map((focusable) => {
               const isFocused = focusable.uri === focusUri;
               // An in-flight tile is named the way a person names it: the task id as the title,
@@ -516,14 +516,20 @@ function BoardView({
                 : undefined;
 
               return (
-                <li key={focusable.uri}>
+                <li key={focusable.uri} className="min-w-0">
+                  {/*
+                    ONE CHIP LAYOUT FOR EVERY IN-FLIGHT TASK. Earlier the chip's width came from
+                    its longest line: a task with a subtitle drew a 600–900px bar while a task
+                    without one stayed a small pill, and the status label never lined up. The
+                    chip now fills the rail's column and its text WRAPS (`break-words`) instead
+                    of overflowing, so short and long ids draw the same shape. The focus ring is
+                    a data-attribute variant on the SHARED class string, so the chip's class set
+                    cannot differ between the focused and unfocused state.
+                  */}
                   <button
                     type="button"
                     onClick={() => onFocusObject(focusable.uri)}
-                    className={cn(
-                      'flex max-w-full items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-xs text-foreground',
-                      isFocused && 'ring-2 ring-primary',
-                    )}
+                    className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-left text-xs text-foreground data-[focused=true]:ring-2 data-[focused=true]:ring-primary"
                     data-testid="cockpit-board-object"
                     data-quay-uri={focusable.uri}
                     data-quay-label={focusable.label}
@@ -536,9 +542,9 @@ function BoardView({
                     >
                       {focusable.label}
                     </span>
-                    <span className="flex min-w-0 flex-col text-left">
+                    <span className="flex min-w-0 flex-1 flex-col text-left">
                       <span
-                        className="truncate text-xs font-semibold text-foreground"
+                        className="break-words text-xs font-semibold text-foreground"
                         title={taskId}
                         data-testid="cockpit-board-object-title"
                       >
@@ -546,14 +552,14 @@ function BoardView({
                       </span>
                       {taskTitle !== undefined && (
                         <span
-                          className="truncate text-[11px] text-muted-foreground"
+                          className="break-words text-[11px] text-muted-foreground"
                           data-testid="cockpit-board-object-subtitle"
                         >
                           {taskTitle}
                         </span>
                       )}
                     </span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
                       {focusable.display.status}
                     </span>
                   </button>

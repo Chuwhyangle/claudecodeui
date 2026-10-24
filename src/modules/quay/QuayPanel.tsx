@@ -131,6 +131,32 @@ const IN_FLIGHT_PHASE_META: Record<
  */
 export const IN_FLIGHT_STALE_AFTER_MS = 300000;
 
+/**
+ * How old a CACHED snapshot may be before the panel calls it stale, in milliseconds.
+ *
+ * The backend caches a project's quay reading for a short TTL; a cached reading older than this
+ * means the refresh path is not producing fresh data. Five minutes is the worker-driver's own
+ * round interval — the same bound the in-flight rows use — so 「cached」 and 「stale」 mean the
+ * same thing wherever the panel says them.
+ */
+export const CACHED_STALE_AFTER_MS = 300000;
+
+/** A short, readable age for a cached reading ("just now", "3m ago", "2h ago", "4d ago"). */
+function formatCachedAge(ageMs: number): string {
+  const minutes = Math.floor(Math.max(0, ageMs) / 60_000);
+  if (minutes < 1) {
+    return 'just now';
+  }
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function formatTimestamp(value: string | null): string {
   if (!value) {
     return 'never';
@@ -397,6 +423,12 @@ function TaskLedger({ tasks }: { tasks: QuaySnapshot['tasks'] }) {
 function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
   const statuses = Object.entries(goals?.breakdown.byStatus ?? {}).sort((a, b) => b[1] - a[1]);
   const recent = goals?.breakdown.recent ?? [];
+  // DRAFTS BEFORE ACHIEVED. `recent` is ranked by `updatedAt`, so a store with hundreds of
+  // achieved goals fills the card with full bars and buries the handful that still need work.
+  // A stable sort keeps each group's own recency order.
+  const ordered = [...recent].sort(
+    (left, right) => Number(left.status === 'achieved') - Number(right.status === 'achieved'),
+  );
 
   return (
     <section data-testid="quay-panel-stage-goals">
@@ -416,7 +448,7 @@ function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
             </p>
           ) : (
             <ul className="space-y-2" data-testid="quay-panel-stage-goals-list">
-              {recent.map((goal) => (
+              {ordered.map((goal) => (
                 <li
                   key={goal.id}
                   className="rounded border border-border/40 px-2 py-1.5"
@@ -437,9 +469,16 @@ function StageGoals({ goals }: { goals: QuaySnapshot['goals'] }) {
                   <div className="mt-0.5 truncate text-[11px] text-muted-foreground" title={goal.title}>
                     {goal.title}
                   </div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted" data-testid="quay-panel-stage-goals-bar">
-                    <div className="h-full rounded bg-primary" style={{ width: `${GOAL_STATUS_PERCENT[goal.status] ?? 0}%` }} />
-                  </div>
+                  {/*
+                    An achieved goal has nothing left to complete: a full-width 100% bar is a
+                    wall of colour that says the same thing in every row. Only unfinished
+                    statuses draw a progress bar; the status text still says 「achieved」.
+                  */}
+                  {goal.status !== 'achieved' && (
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-muted" data-testid="quay-panel-stage-goals-bar">
+                      <div className="h-full rounded bg-primary" style={{ width: `${GOAL_STATUS_PERCENT[goal.status] ?? 0}%` }} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -870,6 +909,14 @@ function LoadedQuayPanel({
   // Fan-in bars so all three charts are cut to the same slice (see `resolveTimelineWindow`).
   const timelineWindow = resolveTimelineWindow(snapshot.gantt ?? null, windowHours, snapshot.generatedAt);
 
+  // THE CACHED READING'S AGE, as a first-class reading. 「(cached)」 alone is easy to miss; a
+  // snapshot served from cache is only useful if the person can see how old it is, and an OLD
+  // cached snapshot must look different from a fresh one. `generatedAt` is the server's own
+  // read time, so the age is a property of the snapshot, not of when this component mounted.
+  const generatedMs = toEpochMs(snapshot.generatedAt);
+  const cachedAgeMs = snapshot.cached && generatedMs !== null ? Math.max(0, Date.now() - generatedMs) : null;
+  const cachedStale = cachedAgeMs !== null && cachedAgeMs > CACHED_STALE_AFTER_MS;
+
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4" data-testid="quay-panel-loaded">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -886,7 +933,20 @@ function LoadedQuayPanel({
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-muted-foreground" data-testid="quay-panel-synced-at">
             Last synced {formatTimestamp(snapshot.generatedAt)}
-            {snapshot.cached ? ' (cached)' : ''}
+            {snapshot.cached && (
+              <span
+                className={cn(
+                  'ml-1 rounded px-1',
+                  cachedStale && 'bg-amber-50 font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+                )}
+                data-testid="quay-panel-cached-age"
+                data-stale={cachedStale ? 'true' : 'false'}
+                title={cachedStale ? 'the cached reading is older than the refresh interval' : 'served from the backend cache'}
+              >
+                · cached{cachedAgeMs === null ? '' : ` ${formatCachedAge(cachedAgeMs)}`}
+                {cachedStale ? ' · stale' : ''}
+              </span>
+            )}
           </span>
           <button
             type="button"
