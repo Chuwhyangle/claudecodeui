@@ -49,7 +49,7 @@ T 是现有选区钩子给出的文本（已去首尾空格、限 600 字符）�
 
 **4. 撤销。** 插入是程序写入，浏览器没有原生撤销记录。现有的「最近一次填入」要把插入前的光标位置也记下来，Ctrl+Z 回到插入前的文本**和**光标位置。
 
-**5. 删除「引用 → 回应」展开路径。** 现在展开实验里引用 chip 填入后会发一个只带 `focus` 的展开请求，靠 `> ` 前缀识别草稿里哪一段是引用（`useSuggestionChips.ts` 的 `splitQuotedDraft`）。不再有前缀，识别不了，所以整条路径删除：前端不再发只带 `focus`、不带 `seed` 的展开请求，`splitQuotedDraft` 删除；服务端 `expand: true` 必须带 `seed`，只带 `focus` 的展开请求按 400 拒绝；「回应」提示词删除；用量日志的 `expansion` 取值只剩 `seed`；类型与文档同步。**保留**：模型 chip 的 `seed` 变体展开（默认关闭的实验），以及「建议」按钮用引用文本作 `focus` 的普通重抽（它不是展开请求）。
+**5. 删除「引用 → 回应」展开路径。** 现在展开实验里引用 chip 填入后会发一个只带 `focus` 的展开请求，靠 `> ` 前缀识别草稿里哪一段是引用（`useSuggestionChips.ts` 的 `splitQuotedDraft`）。不再有前缀，识别不了，所以整条路径删除：前端不再发只带 `focus`、不带 `seed` 的展开请求，`splitQuotedDraft` 删除；服务端 `expand: true` 必须带 `seed`，只带 `focus` 的展开请求按 400 拒绝；展开专用的「针对引用给出回应」提示词删除；展开来源的类型 `ReplySuggestionsExpansionSource` 只剩 `'seed'`（服务端与 `src/shared/types.ts` 各有一份，同步改）；用量日志的 `expansion` 取值只剩 `seed`；文档同步。**保留**：模型 chip 的 `seed` 变体展开（默认关闭的实验），以及「建议」按钮用引用文本作 `focus` 的普通重抽（它不是展开请求，其提示词里「想回应它」那一句要保留）。
 
 **6. chip 预览。** `composer/InputSuggestionChips.tsx` 里引用 chip 的预览现在显示 `> 首行`，改成显示将要插入的原文首行（不带 `> `）。
 
@@ -65,9 +65,9 @@ T 是现有选区钩子给出的文本（已去首尾空格、限 600 字符）�
 - [ ] 光标取自输入框元素：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx` 退出码 0（沿用既有文件新增独立用例）：(a) 输入框设了 `selectionEnd` 为中间位置后点引用 chip，插入位置跟随该位置；(b) 从未聚焦的输入框插入在末尾；(c) 点击后输入框聚焦且 `selectionStart === selectionEnd` 等于新光标位置；(d) 点击后页面选区被清除（`window.getSelection().rangeCount === 0` 或折叠）。
 - [ ] chip 用后即退场：同一测试文件内新增独立用例：(a) 点击引用 chip 且输入框非空后，引用 chip 不再渲染；(b) 之后再产生一个新的实时选区，引用 chip 再次出现；(c) 实时选区消失（输入框获得焦点）后 chip 消失，不因输入框非空而留下；(d) 不存在「固定值决定 chip 可见」的路径：`grep -rnE "pinnedQuote|effectiveQuotedSelection" src --include=*.ts --include=*.tsx | grep -v tests/` 无任何输出；(e) 「建议」按钮在引用之后仍带上 `quoteAnchor` 作为 `focus`（用请求体断言）。
 - [ ] 撤销带光标：同一测试文件内新增独立用例：插入后 Ctrl+Z 回到插入前的文本，且光标回到插入前的位置（不是末尾）。
-- [ ] 「引用 → 回应」路径已删除：`grep -rnE "splitQuotedDraft" src` 无任何输出；`grep -rnE "(focus-expansion|responses to|响应.*引用|回应)" server/modules/reply-suggestions --include=*.ts --exclude-dir=tests` 无任何输出（服务端没有回应提示词）；`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts` 退出码 0（沿用既有文件）；用例：(a) `expand: true` 带 `seed` 仍然成功；(b) `expand: true` 只带 `focus`、`seed` 为空得 400 且无上游调用；(c) 不带 `expand` 的普通重抽带 `focus` 在 `expansion` 为 `off` 时仍成功；(d) 用量日志的展开标记只有 `seed`。前端：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/replySuggestionsController.test.ts src/modules/chat/tests/useReplySuggestions.test.tsx` 退出码 0，展开请求必须带非空 `seed`，没有只带 `focus` 的展开用例。
-- [ ] 文档与基准同步：`docs/operations/reply-suggestions.md` 里关于「引用 → 回应」展开的段落已删除，展开只描述 `seed` 变体；`grep -nE "expansion: \"seed\" \| \"focus\"|responses" docs/operations/reply-suggestions.md` 无任何输出；`python3 -I experiments/reply-suggestions-bench/bench.py selftest --only replay` 退出码 0。
-- [ ] chip 预览不带 `> `：`grep -nE "\`> \\\$\{" src/modules/chat/composer/InputSuggestionChips.tsx` 无任何输出；既有预览用例改为断言引用 chip 的预览是原文首行（不带 `> `），并且悬停与键盘选中模型 chip 时预览仍是该 chip 文本。
+- [ ] 「引用 → 回应」路径已删除（按符号与联合类型判，不按中文词判）：`grep -rn "splitQuotedDraft" src` 无任何输出；`grep -rnE "'seed' \| 'focus'|'focus' \| 'seed'" server src --include=*.ts --include=*.tsx` 无任何输出（展开来源类型只剩 `'seed'`）；`grep -rn "expansion: 'focus'\|expansionSource === 'focus'" server src --include=*.ts --include=*.tsx | grep -v tests/` 无任何输出。服务端：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts server/modules/reply-suggestions/tests/reply-suggestions-usage-log.test.ts` 退出码 0（沿用既有文件）；用例：(a) `expand: true` 带 `seed` 仍然成功；(b) `expand: true` 只带 `focus`、`seed` 为空得 400 且无上游调用；(c) 不带 `expand` 的普通重抽带 `focus` 在 `expansion` 为 `off` 时仍成功，且其提示词仍含 focus 文本；(d) 用量日志的展开标记只有 `seed`。前端：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/replySuggestionsController.test.ts src/modules/chat/tests/useReplySuggestions.test.tsx` 退出码 0，展开请求必须带非空 `seed`，没有只带 `focus` 的展开用例。
+- [ ] 文档与基准同步：`docs/operations/reply-suggestions.md` 里关于「引用 → 回应」展开的段落已删除，展开只描述 `seed` 变体；`grep -nE "seed. / .focus|empty .?seed|\"seed\" \| \"focus\"" docs/operations/reply-suggestions.md` 无任何输出；`python3 -I experiments/reply-suggestions-bench/bench.py selftest --only replay` 退出码 0。
+- [ ] chip 预览不带 `> `：`grep -nE "return \`> " src/modules/chat/composer/InputSuggestionChips.tsx` 无任何输出；既有预览用例改为断言引用 chip 的预览是原文首行（不带 `> `），并且悬停与键盘选中模型 chip 时预览仍是该 chip 文本。
 - [ ] 发送去掉末尾空格与回车：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/chatComposerReplyChips.test.tsx src/modules/chat/tests/inputSuggestionsComposer.test.tsx` 退出码 0（沿用既有文件新增独立用例）：(a) 输入框 `T↵↵` 发送，发出的内容是 `T`；(b) `abc  ↵` 发送得到 `abc`；(c) 中间的空格与回车不受影响；(d) 排队草稿与持久化草稿两条发送路径同样去末尾；(e) 去掉之后为空的消息不发送。
 - [ ] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0；`npm run build:server` 退出码 0。
 
@@ -83,7 +83,7 @@ T 是现有选区钩子给出的文本（已去首尾空格、限 600 字符）�
 - [ ] 展开实验开启（设置文件改成 `vary`，运行期按修改时间重读）：点模型 chip 触发 `seed` 变体展开仍然正常；引用 chip 点击后**没有**发出展开请求（贴网络请求计数）；「建议」按钮仍带着引用的 `focus`（贴请求体）。
 - [ ] 把设置文件的展开关掉（`off`）后重做一遍引用，结果与上面一致，网络里没有展开请求。
 - [ ] 390px 触屏模拟：引用与插入、chip 退场各做一次，贴截图与读数；iOS Safari 与 Android Chrome 真机上选中 transcript 文字后点引用 chip，确认插入位置、光标、chip 退场正常（待外部）。
-- [ ] 贴出 `git diff --stat`，以及删除的文件与符号清单（`splitQuotedDraft`、`buildQuotedFill`、`keepVisibleAfterFill`、`pinnedQuote`、服务端「回应」提示词）。
+- [ ] 贴出 `git diff --stat`，以及删除的文件与符号清单（`splitQuotedDraft`、`buildQuotedFill`、`keepVisibleAfterFill`、`pinnedQuote`、服务端展开专用的回应提示词）。
 
 ## Touches
 
