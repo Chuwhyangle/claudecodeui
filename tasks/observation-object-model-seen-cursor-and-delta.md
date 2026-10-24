@@ -37,6 +37,12 @@ extra: {}
 - 用两个浏览器上下文（同一用户）验证：一端打开预览使游标前移，另一端的差量随之清零（截图存 `tmp/`）。
 - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
 
+## Notes
+
+### 「已看到」的写者边界（与 quay-fleet 对齐，2026-10-24；本任务不实现，只保持可演进）
+
+写者由 URI 前缀机械推出，不另立分类表：`quay://*` 是 fleet 拥有的对象，其「已看到」将来写回 fleet attention 的 `acked`（fleet 单写）；`cloudcli://*`、`view://*`、`git://*` 由 CloudCLI 自己持有。本任务的 SeenCursor 先统一存在 CloudCLI，但游标写入要集中在一个函数里，并按 URI 前缀分派，以便下一阶段把 `quay://` 一支改成调用 fleet 的写口。接口细节等观察墙用起来、有真实数据后再定。
+
 ## Touches
 
 - server/modules/observation/index.ts
