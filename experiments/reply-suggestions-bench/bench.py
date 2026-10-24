@@ -946,10 +946,21 @@ def replay_usage(
 ) -> dict:
     rows = list(records) if records is not None else read_jsonl(ledger_path)
     drawings: "collections.OrderedDict[tuple[str, int], dict]" = collections.OrderedDict()
+    cache_hits = 0
+    upstream_calls = 0
     for row in rows:
         key = (str(row.get("sessionId") or ""), int(row.get("draw") or 0))
         kind = row.get("type")
         if kind == "shown":
+            # A cache hit repeats a batch already counted from its `served:
+            # "upstream"` row. Counting it as a draw would count the same batch
+            # twice and inflate the click-rate denominator; it is its own number
+            # ("how many displays were free"). Rows written before `served`
+            # existed have no field and read as real calls.
+            if row.get("served") == "cache":
+                cache_hits += 1
+                continue
+            upstream_calls += 1
             drawings[key] = {
                 "sessionId": key[0],
                 "draw": key[1],
@@ -1005,6 +1016,11 @@ def replay_usage(
     return {
         "draws": total,
         "drawsWithChips": len(drew),
+        # How many `shown` rows were served from the server cache (no model call)
+        # and how many were real upstream calls. The batch figures above count
+        # only the latter.
+        "cacheHits": cache_hits,
+        "upstreamCalls": upstream_calls,
         "pickedRate": (len(picked) / len(drew)) if drew else None,
         "redrawRate": (len(redrawn) / len(drew)) if drew else None,
         "clearedRate": (len(cleared) / len(drew)) if drew else None,
@@ -1034,6 +1050,10 @@ def print_replay(summary: dict) -> None:
         f"changed_after_pick={fmt_rate(summary['changedAfterPickRate'])} "
         f"({summary['changedAfterPick']}/{summary['comparedAfterPick']} comparable, "
         f"sent_after_pick={summary['sentAfterPick']}, unresolved={summary['unresolvedSent']})"
+    )
+    print(
+        f"缓存命中次数(cache_hits)={summary['cacheHits']} "
+        f"真实调用次数(upstream_calls)={summary['upstreamCalls']}"
     )
 
 
@@ -1284,6 +1304,10 @@ def selftest_replay() -> dict:
     records = [
         {"at": "2026-01-01T00:00:01Z", "type": "shown", "sessionId": "sess-a", "draw": 1,
          "chips": ["好，按计划继续", "先别改，我看下", "改吧"]},
+        # A cache hit repeats the same batch (`draw` is unchanged): it must not be
+        # counted as another batch, and its chips must not overwrite the real row.
+        {"at": "2026-01-01T00:00:01Z", "type": "shown", "sessionId": "sess-a", "draw": 1,
+         "served": "cache", "chips": ["缓存副本一", "缓存副本二"]},
         {"at": "2026-01-01T00:00:02Z", "type": "picked", "sessionId": "sess-a", "draw": 1, "index": 0},
         {"at": "2026-01-01T00:00:03Z", "type": "sent", "sessionId": "sess-a", "draw": 1},
         {"at": "2026-01-01T00:00:04Z", "type": "shown", "sessionId": "sess-a", "draw": 2,
@@ -1293,8 +1317,10 @@ def selftest_replay() -> dict:
          "chips": ["测吧", "先别测"]},
         {"at": "2026-01-01T00:00:07Z", "type": "picked", "sessionId": "sess-b", "draw": 1, "index": 1},
         {"at": "2026-01-01T00:00:08Z", "type": "sent", "sessionId": "sess-b", "draw": 1},
+        # An explicit upstream row; the earlier rows have no field and are old
+        # records, which must read as real calls too.
         {"at": "2026-01-01T00:00:09Z", "type": "shown", "sessionId": "sess-b", "draw": 2,
-         "chips": ["按计划继续", "改吧", "先看看"]},
+         "served": "upstream", "chips": ["按计划继续", "改吧", "先看看"]},
         {"at": "2026-01-01T00:00:10Z", "type": "cleared", "sessionId": "sess-b", "draw": 2},
     ]
     with tempfile.TemporaryDirectory(prefix="reply-bench-") as temp_dir:
@@ -1309,11 +1335,14 @@ def selftest_replay() -> dict:
         write_jsonl(root / "proj" / "sess-b.jsonl", transcript[1:])
         summary = replay_usage(pathlib.Path("unused"), transcripts_root=root, records=records)
     assert summary["draws"] == 4, summary
+    assert summary["upstreamCalls"] == 4, summary
+    assert summary["cacheHits"] == 1, summary
     assert abs(summary["pickedRate"] - 0.5) < 1e-9, summary
     assert abs(summary["redrawRate"] - 0.25) < 1e-9, summary
     assert abs(summary["changedAfterPickRate"] - 0.5) < 1e-9, summary
     print(
-        "[selftest] replay: picked=0.500 redrawn=0.250 changed_after_pick=0.500"
+        "[selftest] replay: picked=0.500 redrawn=0.250 changed_after_pick=0.500 "
+        "upstream_calls=4 cache_hits=1"
     )
     return summary
 
@@ -1509,6 +1538,10 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         selftest_blind_with_files()
         print("blind ok")
         return 0
+    if args.only == "replay":
+        selftest_replay()
+        print("replay ok")
+        return 0
     selftest_network()
     selftest_agreement()
     print("[selftest] agreement: fixture numbers match built-in expectation")
@@ -1619,8 +1652,8 @@ def build_parser() -> argparse.ArgumentParser:
     selftest = subcommands.add_parser("selftest", help="run the loopback self-test")
     selftest.add_argument(
         "--only",
-        choices=("agreement", "blind"),
-        help="run only one segment (agreement or blind)",
+        choices=("agreement", "blind", "replay"),
+        help="run only one segment (agreement, blind or replay)",
     )
     selftest.set_defaults(handler=cmd_selftest)
 

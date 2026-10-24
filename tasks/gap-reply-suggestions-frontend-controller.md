@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-frontend-controller
 title: 回复建议前端控制器：去重、缓存、过期响应守卫、展开深度抽成不依赖 React 的对象，hook 只做订阅；响应解析进 api 层
-status: todo
+status: ready
 labels:
   - gap
 parent: null

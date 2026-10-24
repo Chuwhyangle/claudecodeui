@@ -16,4 +16,9 @@ export { loadServerSettings, SERVER_SETTINGS_ENV } from './server-settings.js';
 // branches on (`residentRestore.enabled`, `max`, `maxAgeMs`, `observation.wallLimit`) and the
 // shape of those blocks. Exported for that composition root and for the resident-restore
 // criterion, which drives the loader over files it owns.
-export type { ObservationSettings, ResidentRestoreSettings, ServerSettings } from './server-settings.js';
+export type {
+  InitiativeSettings,
+  ObservationSettings,
+  ResidentRestoreSettings,
+  ServerSettings,
+} from './server-settings.js';

@@ -24,6 +24,12 @@ import express from 'express';
 import { asyncHandler } from '@/shared/utils.js';
 
 import type { QuayFleetRegistryService } from './quay-fleet-registry.js';
+import { createQuayInitiatives } from './quay-initiatives.js';
+import type {
+  InitiativeDecisionInput,
+  InitiativeDecisionOption,
+  QuayInitiativesService,
+} from './quay-initiatives.js';
 import type { QuayUriErrorCode } from './quay-uri-resolve.js';
 import type { createQuayService } from './quay.service.js';
 
@@ -43,6 +49,11 @@ type QuayRouterDependencies = {
   fleetRegistry?: QuayFleetRegistryService;
   /** Reads the `ui_last_opened_session` pointer; absent means no fallback target. */
   readLastOpenedSession?: () => QuayLastOpenedSession | null;
+  /**
+   * The initiative view / decision queue seam (M6). Absent composes the production service
+   * with the shipped sampling ratio; a criterion injects an exec seam instead.
+   */
+  initiatives?: QuayInitiativesService;
 };
 
 /** What the router answers when no fleet registry was composed in. */
@@ -50,6 +61,62 @@ const UNAVAILABLE_FLEET: QuayFleetRegistryService = {
   readInterfaceSession: async () => ({ ok: false, reason: 'fleet-cli-unavailable' }),
   writeInterfaceSession: async () => ({ ok: false, reason: 'fleet-cli-unavailable' }),
 };
+
+/** A non-empty trimmed string, or `null`. */
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+/** One typed option, or `null` when the row is not `{id,label}`. */
+function parseDecisionOption(value: unknown): InitiativeDecisionOption | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const id = readNonEmptyString(record.id);
+  const label = readNonEmptyString(record.label);
+  return id === null || label === null ? null : { id, label };
+}
+
+/**
+ * The one write the initiative view performs: a human ruling.
+ *
+ * `by`/`kind` are checked rather than defaulted. The cockpit is a person's surface, so a
+ * request that tries to record a liaison's self-decision through it is refused — 「谁裁定的」
+ * is a field, and this transport only carries the person's.
+ */
+function parseInitiativeDecisionBody(
+  body: unknown,
+): { ok: true; value: InitiativeDecisionInput } | { ok: false; reason: string } {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return { ok: false, reason: 'decision-body-required' };
+  }
+  const record = body as Record<string, unknown>;
+  if (record.by !== 'human' || record.kind !== 'fact') {
+    return { ok: false, reason: 'human-fact-required' };
+  }
+  const question = readNonEmptyString(record.question);
+  if (question === null) return { ok: false, reason: 'question-required' };
+  const rationale = readNonEmptyString(record.rationale);
+  if (rationale === null) return { ok: false, reason: 'rationale-required' };
+  const chosen = readNonEmptyString(record.chosen);
+  if (chosen === null) return { ok: false, reason: 'chosen-required' };
+  if (!Array.isArray(record.options)) return { ok: false, reason: 'options-required' };
+  const options = record.options
+    .map((option) => parseDecisionOption(option))
+    .filter((option): option is InitiativeDecisionOption => option !== null);
+  if (options.length !== record.options.length || options.length === 0) {
+    return { ok: false, reason: 'options-invalid' };
+  }
+  if (!options.some((option) => option.id === chosen)) {
+    return { ok: false, reason: 'chosen-not-an-option' };
+  }
+  const refs = Array.isArray(record.refs)
+    ? record.refs.filter((ref): ref is string => typeof ref === 'string' && ref.trim() !== '')
+    : [];
+  return {
+    ok: true,
+    value: { question, options, chosen, rationale, refs, by: 'human', kind: 'fact' },
+  };
+}
 
 /** Reads the `sessionId` out of a PUT body; `null` when it is absent or not a usable id. */
 function parseInterfaceSessionId(body: unknown): string | null {
@@ -92,6 +159,7 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
   const { quayService } = dependencies;
   const fleetRegistry = dependencies.fleetRegistry ?? UNAVAILABLE_FLEET;
   const readLastOpenedSession = dependencies.readLastOpenedSession ?? (() => null);
+  const initiatives = dependencies.initiatives ?? createQuayInitiatives();
   const router = express.Router();
 
   // Declared before the `/:projectId/...` routes so the static segment is never mistaken
@@ -151,6 +219,39 @@ export function createQuayRouter(dependencies: QuayRouterDependencies): express.
         sessionId: record?.sessionId ?? null,
         openedAt: record?.openedAt ?? null,
       });
+    }),
+  );
+
+  /**
+   * The cockpit's initiative view: every active initiative (charter, member cells, dependency
+   * edges with their blocking reading) plus the `initiative-decision` queue and the liaison
+   * self-decisions eligible for spot-checking. An unavailable fleet is answered as
+   * `{ok:false, available:false, reason}` with HTTP 200 — the page states why, and the queue
+   * (read from the fleet home) survives a fleet CLI that cannot be spawned.
+   */
+  router.get(
+    '/initiatives',
+    asyncHandler(async (_req, res) => {
+      const reading = await initiatives.read();
+      return res.json(reading);
+    }),
+  );
+
+  /**
+   * One human ruling, recorded by the fleet's own `initiative decide`. The route validates the
+   * transport and relays the fleet's value-result; a refusal keeps the fleet's own reason so
+   * the queue can say why nothing was written.
+   */
+  router.post(
+    '/initiatives/:slug/decide',
+    asyncHandler(async (req, res) => {
+      const slug = typeof req.params.slug === 'string' ? req.params.slug : '';
+      const parsed = parseInitiativeDecisionBody(req.body);
+      if (!parsed.ok) {
+        return res.status(400).json({ ok: false, reason: parsed.reason });
+      }
+      const result = await initiatives.decide(slug, parsed.value);
+      return res.status(result.ok ? 200 : 502).json(result);
     }),
   );
 

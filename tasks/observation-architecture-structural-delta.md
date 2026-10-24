@@ -24,15 +24,40 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/architecture-delta.test.ts` exit 0——两份快照夹具：新增环、消失环、新增反向边、规模增长前 5 各自正确；口径字段存在；同一项目一小时内第二次触发不重新生成。
-- [ ] AC2: `npx vitest run src/modules/architecture/tests/architectureDiffHighlight.test.tsx` exit 0——传入差异集合时对应节点/边带高亮标记，未传时渲染不变。
-- [ ] AC3: `npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/architecture-delta.test.ts` exit 0——两份快照夹具：新增环、消失环、新增反向边、规模增长前 5 各自正确；口径字段存在；同一项目一小时内第二次触发不重新生成。
+- [x] AC2: `npx vitest run src/modules/architecture/tests/architectureDiffHighlight.test.tsx` exit 0——传入差异集合时对应节点/边带高亮标记，未传时渲染不变。
+- [x] AC3: `npm run typecheck` 通过。
 
 ## DoD
 
 - 在 claudecodeui 上选两个相隔若干次落地的提交生成差分，贴出结果并人工核对至少一条环/边的真实性。
 - **浏览器实际操作 + 截图（必做，PC 1440×900 与移动 390×844 各一套）**，截图存 `tmp/`；场景运行器可用时补场景与报告（AGENTS.md「UI 验证」）。
 - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
+
+## Notes
+
+### DoD 证据（2026-10-24）
+
+**真实两提交差分**（较早提交 `89e5d7087` 的检出 vs 本任务 worktree，各自用 ArchGuard 重新分析，再由本任务的 service + diff 计算；完整 JSON 在 `tmp/arch-delta-dod.json`）：
+
+```
+old:     e4b4356ef806f248   64 packages / 2154 entities / 876 files / 113 edges
+current: 22b52b07dc0b49e6   65 packages / 2172 entities / 885 files / 114 edges
+新增依赖: server/modules/observation → server/modules/reply-suggestions (weight 2)
+规模增长前 3: observation +10 (占新增 56%); context-events +7 (39%); reply-suggestions +1 (6%)
+中心模块: server/shared (占新增 0%) ⇒ 增长未回流
+```
+
+人工核对：`server/modules/reply-suggestions/index.ts` 的导入出现在
+`server/modules/observation/session-digest-llm.ts:39` 与 `session-digest-llm-settings.ts:36`
+（`from '@/modules/reply-suggestions/index.js'`），该新增包间边为真；`observation +10` 与本任务新增的两个实现文件 + 一个测试文件的实体数一致。
+
+**浏览器实际操作**（隔离实例 `scripts/isolated-instance.sh`，`residentRestore` 已由脚本强制关闭，读数 `resident_restore_started=0`；server 以本 worktree 的 `dist-server` + `dist` 启动）：
+
+- 驾驶舱观察墙磁贴（`tmp/obs-arch-wall-1440x900.png`、`tmp/obs-arch-wall-390x844.png`）
+- 预览：差量列表 + 盲区（含「规模增长口径固定为 additionsShare」）+「在架构 tab 中打开（高亮差异）」按钮（`tmp/obs-arch-preview-1440x900.png`、`tmp/obs-arch-preview-390x844.png`）
+- 点击打开 → `/session/<id>/architecture?diffPkg=…&diffPkgEdge=…`，画布上 3 个包框与 1 条边带琥珀色虚线标记，读数行显示「Diff highlight: 3 targets · 1 relations」；DOM 读数 `diffMarked=4 (diffNodes=3, diffEdges=1)`（PC 与移动各一套）：`tmp/obs-arch-tab-1440x900.png`、`tmp/obs-arch-tab-390x844.png`、移动端读数行 `tmp/obs-arch-tab-chip-390x844.png`
+- 无差量时画布无任何 `data-architecture-diff` 标记（由 AC2 的用例钉住）
 
 ## Touches
 
@@ -43,5 +68,22 @@ depends_on:
 - server/modules/architecture/service.ts
 - server/modules/architecture/index.ts
 - src/modules/architecture/ArchitecturePanel.tsx
+- src/modules/architecture/PlantUmlGraph.tsx
+- src/modules/architecture/rendererContract.ts
 - src/modules/architecture/tests/architectureDiffHighlight.test.tsx
+- src/modules/cockpit/CockpitPage.tsx
+- src/modules/i18n/locales/en/common.json
+- src/modules/i18n/locales/de/common.json
+- src/modules/i18n/locales/es/common.json
+- src/modules/i18n/locales/fr/common.json
+- src/modules/i18n/locales/id/common.json
+- src/modules/i18n/locales/it/common.json
+- src/modules/i18n/locales/ja/common.json
+- src/modules/i18n/locales/ko/common.json
+- src/modules/i18n/locales/ru/common.json
+- src/modules/i18n/locales/tr/common.json
+- src/modules/i18n/locales/zh-CN/common.json
+- src/modules/i18n/locales/zh-TW/common.json
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/observation-architecture-structural-delta.md

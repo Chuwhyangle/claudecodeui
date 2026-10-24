@@ -58,7 +58,8 @@ export type CockpitProject = {
 export type CockpitView =
   | { type: 'wall' }
   | { type: 'fleet' }
-  | { type: 'board'; project: string };
+  | { type: 'board'; project: string }
+  | { type: 'initiatives' };
 
 /**
  * One measured intent → first-frame latency. `source` names what caused the view change so the
@@ -74,6 +75,140 @@ export type CockpitTiming = {
 
 /** The top-level cockpit route; the view description travels in the query string. */
 export const COCKPIT_PATH = '/cockpit';
+
+// ── The initiative view / decision queue reading ─────────────────────────────
+//
+// The cockpit is a reader of the fleet's state: these are the shapes the server's
+// `GET /api/quay/initiatives` answers, restated here because the frontend and the server have
+// separate `@` roots (the repository forbids `server/` from importing the repo-root `shared/`
+// tree, and the reverse). The two spellings are kept in step by the route's own criterion.
+
+/** One typed option a person chooses between; `id` is what the fleet records as `chosen`. */
+export type InitiativeDecisionOption = {
+  id: string;
+  label: string;
+};
+
+/** The fleet's closed set of dependency-edge semantics. */
+export type InitiativeEdgeKind = 'blocks' | 'contract' | 'release';
+
+/**
+ * One dependency edge between two project objects.
+ *
+ * `blockedSince` is the OLDEST live escalation's timestamp, so a blocking edge's duration is
+ * the time the question has been waiting — re-escalating it does not reset the clock.
+ */
+export type InitiativeEdgeReading = {
+  from: string;
+  to: string;
+  kind: InitiativeEdgeKind;
+  blocked: boolean;
+  blockedSince: string | null;
+};
+
+/** One member project's task/goal refs and its liaison. */
+export type InitiativeMemberReading = {
+  project: string;
+  taskRefs: string[];
+  goalRefs: string[];
+  liaison: string | null;
+};
+
+/** The charter fields the initiative row expands. */
+export type InitiativeCharterReading = {
+  intent: string;
+  projects: string[];
+  completionCriteria: string[];
+  exitConditions: string[];
+  expiresAt: string;
+  grantScope: { mayDecide: string[]; mustEscalate: string[] };
+};
+
+/** One initiative as the cockpit draws it: one row, one cell per member project, its edges. */
+export type InitiativeReading = {
+  slug: string;
+  /** The fleet's reserved address, `quay://fleet/initiative/<slug>`. */
+  uri: string;
+  status: 'active' | 'closed';
+  charter: InitiativeCharterReading;
+  members: InitiativeMemberReading[];
+  edges: InitiativeEdgeReading[];
+};
+
+/** One escalation waiting for a person's ruling. */
+export type InitiativeQueueItem = {
+  attentionId: string;
+  initiative: string;
+  entity: string;
+  question: string;
+  options: InitiativeDecisionOption[];
+  evidence: string[];
+  projectId: string;
+  firstSeenAt: string;
+};
+
+/** One liaison self-decision eligible for the spot-check group. */
+export type InitiativeAuditDecision = {
+  initiative: string;
+  at: string;
+  question: string;
+  options: string[];
+  chosen: string;
+  rationale: string;
+  by: string;
+  kind: string;
+  refs: string[];
+};
+
+/** The successful `/api/quay/initiatives` document. */
+export type InitiativeReadingDocument = {
+  ok: true;
+  available: true;
+  initiatives: InitiativeReading[];
+  decisionQueue: InitiativeQueueItem[];
+  audit: InitiativeAuditDecision[];
+  /** The server's configured spot-check fraction (0–1]. */
+  auditRatio: number;
+};
+
+/** The failed document: the view states the reason instead of drawing an empty board. */
+export type InitiativeReadingUnavailable = {
+  ok: false;
+  available: false;
+  reason: string;
+  initiatives: [];
+  /** Still populated: escalations come from the fleet home, not from the failed CLI call. */
+  decisionQueue: InitiativeQueueItem[];
+  audit: [];
+  auditRatio: number;
+};
+
+export type InitiativeReadingAnswer = InitiativeReadingDocument | InitiativeReadingUnavailable;
+
+/**
+ * One ruling the person asks the server to record. `by`/`kind` are explicit so the request
+ * states its provenance; the server refuses anything but a human fact.
+ */
+export type InitiativeDecisionRequest = {
+  initiative: string;
+  question: string;
+  options: InitiativeDecisionOption[];
+  chosen: string;
+  rationale: string;
+  refs: string[];
+  by: 'human';
+  kind: 'fact';
+};
+
+/** What the decide port answers: the recorded decision, or the reason nothing was written. */
+export type InitiativeDecisionOutcome =
+  | { ok: true }
+  | { ok: false; reason: string; detail?: string };
+
+/** The decide seam; the page binds it to the HTTP route, a criterion stubs it. */
+export type InitiativeDecidePort = (
+  request: InitiativeDecisionRequest,
+) => Promise<InitiativeDecisionOutcome>;
 
 /** Circled ordinals ①…⑳ — the short spoken label a focusable object carries, same as the Quay wall. */
 const CIRCLED_ORDINALS = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳';
@@ -179,6 +314,38 @@ export function buildCockpitFleetContract(
   return { focusables };
 }
 
+/**
+ * Builds the initiative view's focus contract: one focusable per active initiative, addressed
+ * by the fleet's reserved URI (`quay://fleet/initiative/<slug>`) so the hub's focus set, the
+ * spoken ordinal and the pin all name the SAME object the row draws. A closed initiative is
+ * listed but not focusable — it is history, not something a person acts on.
+ *
+ * `pos` is the row's cell in the drawn list (one column), the same rule the wall and fleet
+ * contracts follow.
+ */
+export function buildInitiativeContract(
+  initiatives: readonly InitiativeReading[],
+  columns = 1,
+): QuayViewContract {
+  const width = Math.max(1, columns);
+  const focusables: QuayFocusableObject[] = [];
+  initiatives.forEach((initiative, index) => {
+    if (initiative.status !== 'active') return;
+    const ordinal = focusables.length + 1;
+    focusables.push({
+      uri: initiative.uri as QuayObjectUri,
+      label: CIRCLED_ORDINALS[ordinal - 1] ?? `(${ordinal})`,
+      display: {
+        status: 'initiative',
+        color: initiative.edges.some((edge) => edge.blocked) ? 'amber' : 'green',
+        ordinal,
+        pos: { row: Math.floor(index / width) + 1, column: (index % width) + 1 },
+      },
+    });
+  });
+  return { focusables };
+}
+
 const VIEW_QUERY_KEY = 'view';
 const PROJECT_QUERY_KEY = 'project';
 
@@ -273,6 +440,7 @@ export function parseCockpitView(search: string): CockpitView {
     return project === '' ? { type: 'wall' } : { type: 'board', project };
   }
   if (viewType === 'fleet') return { type: 'fleet' };
+  if (viewType === 'initiatives') return { type: 'initiatives' };
   return { type: 'wall' };
 }
 

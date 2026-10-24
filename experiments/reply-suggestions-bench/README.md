@@ -23,6 +23,7 @@
 python3 -I experiments/reply-suggestions-bench/bench.py selftest
 python3 -I experiments/reply-suggestions-bench/bench.py selftest --only agreement
 python3 -I experiments/reply-suggestions-bench/bench.py selftest --only blind
+python3 -I experiments/reply-suggestions-bench/bench.py selftest --only replay
 
 # 2) 抽样（默认最近 30 天，最多 60 条；样本只写到 tmp/）
 python3 -I experiments/reply-suggestions-bench/bench.py sample \
@@ -100,8 +101,14 @@ python3 -I experiments/reply-suggestions-bench/bench.py score \
 读后端 JSONL 使用记录（`shown` / `picked` / `cleared` / `redrawn` / `sent`），按
 `(sessionId, draw)` 归并：
 
-- **真实点选率**：有点选事件的展示次数 / 有 chip 的展示次数。
-- **重抽率**：有重抽事件的展示次数 / 有 chip 的展示次数。
+- **批次只数真实调用**：`shown` 行带 `served` 字段（`"upstream"` 或 `"cache"`）。服务端命中缓存
+  时也会写一条 `shown`，但 `draw` 与 chip 与首次真实调用相同；回放只按 `served` 不是 `"cache"`
+  的行建立批次，否则同一批会被重复计数、点选率的分母被抬高。**没有 `served` 字段的旧记录一律
+  按真实调用计。**
+- **缓存命中次数 / 真实调用次数**：报告单列 `缓存命中次数(cache_hits)` 与
+  `真实调用次数(upstream_calls)`；前者是免费展示，后者才是花掉模型调用的次数。
+- **真实点选率**：有点选事件的展示次数 / 有 chip 的真实展示次数。
+- **重抽率**：有重抽事件的展示次数 / 有 chip 的真实展示次数。
 - **点选后改动比例**：点选并发送的展示里，最终发送文本与点选 chip 归一化后不相等 / 可比对数。
   发送文本从会话转写按时间还原；还原不到的对数计入 `unresolved`，不进入分母。
 
@@ -142,7 +149,8 @@ python3 -I experiments/reply-suggestions-bench/bench.py score \
 ## 自检覆盖
 
 `selftest` 用本机回环假 HTTP 服务跑通：两种协议的生成（含 `thinking` 开关与温度透传）、
-两个评判、矩阵聚合、使用记录回放、盲标清单生成（40 条、隐去配置名）与打分，最后一行是
-`selftest ok`。`--only agreement` 只用合成判决表校验保守一致度的手算值；`--only blind`
-单独跑 40 条清单的生成、脱敏检查与合成答案打分。合成判决表在
-`fixtures/synthetic-judgements.json`，其中的手算期望与脚本内置常量互相校验。
+两个评判、矩阵聚合、使用记录回放（含 `served: "cache"` 行不重复计批次、旧记录按真实调用计）、
+盲标清单生成（40 条、隐去配置名）与打分，最后一行是 `selftest ok`。`--only agreement` 只用
+合成判决表校验保守一致度的手算值；`--only blind` 单独跑 40 条清单的生成、脱敏检查与合成答案
+打分；`--only replay` 单独跑使用记录回放（批次、点选率、缓存命中次数与真实调用次数）。合成
+判决表在 `fixtures/synthetic-judgements.json`，其中的手算期望与脚本内置常量互相校验。

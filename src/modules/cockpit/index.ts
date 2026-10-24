@@ -11,17 +11,50 @@ export type { CockpitIntent, CockpitIntentContext } from '@/modules/cockpit/cock
 // where it was before entering, and the cockpit's 「会话」 segment leads back to it.
 export {
   COCKPIT_PATH,
+  buildInitiativeContract,
   buildObservationWallContract,
   cockpitViewPath,
   readCockpitReturnPath,
   rememberCockpitReturnPath,
   resolveCockpitProject,
 } from '@/modules/cockpit/cockpitView';
-export type { CockpitProject, CockpitView } from '@/modules/cockpit/cockpitView';
+export type {
+  CockpitProject,
+  CockpitView,
+  InitiativeAuditDecision,
+  InitiativeCharterReading,
+  InitiativeDecidePort,
+  InitiativeDecisionOption,
+  InitiativeDecisionOutcome,
+  InitiativeDecisionRequest,
+  InitiativeEdgeKind,
+  InitiativeEdgeReading,
+  InitiativeMemberReading,
+  InitiativeQueueItem,
+  InitiativeReading,
+  InitiativeReadingAnswer,
+  InitiativeReadingDocument,
+  InitiativeReadingUnavailable,
+} from '@/modules/cockpit/cockpitView';
+// The initiative view and the decision queue: the two surfaces `CockpitPage` mounts for
+// `/cockpit?view=initiatives`. Exported so a scenario runner (and a sibling criterion) can
+// render them without the whole page.
+export { default as InitiativeView } from '@/modules/cockpit/InitiativeView';
+export { default as DecisionQueue, sampleAuditDecisions } from '@/modules/cockpit/DecisionQueue';
+export {
+  decideInitiative,
+  fetchInitiativeReading,
+  useInitiativeReading,
+} from '@/modules/cockpit/hooks/useInitiatives';
+export type {
+  InitiativeReadingConnection,
+  InitiativeReadingView,
+} from '@/modules/cockpit/hooks/useInitiatives';
 // The observation URI grammar, so the sidebar's 「钉到观察墙」 mints the same address the
 // producers wrote and the wall reads — one spelling, both sides.
 export {
   formatArchitectureUri,
+  formatInitiativeUri,
   formatProjectUri,
   formatSessionUri,
   parseObservationUri,

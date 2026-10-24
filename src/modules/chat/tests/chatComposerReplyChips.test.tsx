@@ -12,7 +12,7 @@ import { useReplySuggestions } from '@/modules/chat/hooks/useReplySuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
 import { resetChatDrafts } from '@/shared/chatDrafts';
 import { buildSuggestionChips } from '@/modules/chat/utils/inputSuggestions';
-import type { PermissionMode, Project, ProjectSession, ServerEvent } from '@/shared/types';
+import type { ComposerChipStrip, PermissionMode, Project, ProjectSession, ServerEvent } from '@/shared/types';
 
 /**
  * What each chip source does when it is clicked, and what the Suggest button is.
@@ -114,6 +114,33 @@ afterEach(() => {
 // Component: routing and the Suggest control
 // ---------------------------------------------------------------------------
 
+/**
+ * The one chip prop the composer takes, with both real callbacks and spy
+ * entries for the ones the component surface is about to call.
+ */
+const chipStripProps = (overrides: Partial<ComposerChipStrip> = {}): ComposerChipStrip => ({
+  visible: true,
+  selectedIndex: null,
+  listId: 'suggestion-list',
+  chips: buildSuggestionChips({
+    quotedText: '选中的原文',
+    modelChips: ['模型一'],
+    habitChips: ['习惯一'],
+  }),
+  onAccept: vi.fn(),
+  suggestionsEnabled: true,
+  suggestionsLoading: false,
+  onRequestSuggestions: vi.fn(),
+  expansionChips: [],
+  onAcceptExpansionChip: vi.fn(),
+  ...overrides,
+});
+
+/** The strip a composer render was given, read back for its spy callbacks. */
+const chipStripOf = (props: Record<string, unknown>): ComposerChipStrip => (
+  props.chipStrip as ComposerChipStrip
+);
+
 const composerBaseProps = (): Record<string, unknown> => ({
   pendingPermissionRequests: [],
   handlePermissionDecision: () => undefined,
@@ -180,23 +207,7 @@ const composerBaseProps = (): Record<string, unknown> => ({
   onTextareaInput: () => undefined,
   placeholder: 'Ask anything',
   isTextareaExpanded: false,
-  inputSuggestionCandidates: [],
-  inputSuggestionsVisible: true,
-  selectedInputSuggestionIndex: null,
-  inputSuggestionListId: 'suggestion-list',
-  onAcceptInputSuggestion: () => undefined,
-  suggestionChips: buildSuggestionChips({
-    quotedText: '选中的原文',
-    modelChips: ['模型一'],
-    habitChips: ['习惯一'],
-  }),
-  onAcceptModelSuggestion: vi.fn(),
-  onAcceptQuotedSuggestion: vi.fn(),
-  replySuggestionsEnabled: true,
-  replySuggestionsLoading: false,
-  onRequestReplySuggestions: vi.fn(),
-  replyExpansionChips: [],
-  onAcceptReplyExpansionChip: vi.fn(),
+  chipStrip: chipStripProps(),
 });
 
 const renderComposer = (overrides: Record<string, unknown> = {}) => {
@@ -209,25 +220,23 @@ const renderComposer = (overrides: Record<string, unknown> = {}) => {
 };
 
 describe('chip clicks at the composer surface', () => {
-  it('routes a model chip click to its own callback, never to the form submit', () => {
+  it('routes every source click through the one accept callback, never the form submit', () => {
     const { view, props } = renderComposer();
+    const onAccept = chipStripOf(props).onAccept as ReturnType<typeof vi.fn>;
     const modelChip = view.container.querySelector('[data-chip-source="model"]');
-    assert.ok(modelChip);
+    const quotedChip = view.container.querySelector('[data-chip-source="quoted"]');
+    const habitChip = view.container.querySelector('[data-chip-source="habit"]');
+    assert.ok(modelChip && quotedChip && habitChip);
 
     fireEvent.click(modelChip);
-
-    assert.deepEqual((props.onAcceptModelSuggestion as ReturnType<typeof vi.fn>).mock.calls, [[0]]);
-    assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0);
-  });
-
-  it('routes a quoted chip click to the quote callback and sends nothing', () => {
-    const { view, props } = renderComposer();
-    const quotedChip = view.container.querySelector('[data-chip-source="quoted"]');
-    assert.ok(quotedChip);
-
     fireEvent.click(quotedChip);
+    fireEvent.click(habitChip);
 
-    assert.equal((props.onAcceptQuotedSuggestion as ReturnType<typeof vi.fn>).mock.calls.length, 1);
+    assert.deepEqual(
+      onAccept.mock.calls.map(([chip]) => (chip as { source: string }).source),
+      ['model', 'quoted', 'habit'],
+      'one callback receives every source; what it does is the source descriptor’s business',
+    );
     assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0);
   });
 
@@ -237,13 +246,12 @@ describe('chip clicks at the composer surface', () => {
     assert.equal(button.hasAttribute('disabled'), false);
 
     fireEvent.click(button);
-    assert.equal((props.onRequestReplySuggestions as ReturnType<typeof vi.fn>).mock.calls.length, 1);
+    assert.equal((chipStripOf(props).onRequestSuggestions as ReturnType<typeof vi.fn>).mock.calls.length, 1);
     assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0);
 
     view.rerender(React.createElement(ChatComposer, {
       ...composerBaseProps(),
-      ...props,
-      replySuggestionsLoading: true,
+      chipStrip: chipStripProps({ suggestionsLoading: true }),
     } as unknown as React.ComponentProps<typeof ChatComposer>));
     const busy = view.getByRole('button', { name: enChat.input.suggestions.suggest });
     assert.equal(busy.hasAttribute('disabled'), true, 'a second click must not become a second draw');
@@ -251,7 +259,7 @@ describe('chip clicks at the composer surface', () => {
   });
 
   it('shows no Suggest button at all when the feature is off', () => {
-    const { view } = renderComposer({ replySuggestionsEnabled: false });
+    const { view } = renderComposer({ chipStrip: chipStripProps({ suggestionsEnabled: false }) });
     assert.equal(view.queryByRole('button', { name: enChat.input.suggestions.suggest }), null);
   });
 
@@ -259,8 +267,7 @@ describe('chip clicks at the composer surface', () => {
     const habitText = '这是一条足够长的习惯文本，用来验证第二行预览完整出现';
     const chips = buildSuggestionChips({ modelChips: ['模型一'], habitChips: [habitText] });
     const { view } = renderComposer({
-      suggestionChips: chips,
-      selectedInputSuggestionIndex: 1,
+      chipStrip: chipStripProps({ chips, selectedIndex: 1 }),
     });
 
     const preview = view.container.querySelector('[data-suggestion-preview]');
@@ -270,7 +277,7 @@ describe('chip clicks at the composer surface', () => {
 
   it('draws the expansion chips under the textarea and routes a click to its callback', () => {
     const { view, props } = renderComposer({
-      replyExpansionChips: ['变体一', '变体二'],
+      chipStrip: chipStripProps({ expansionChips: ['变体一', '变体二'] }),
     });
 
     const row = view.container.querySelector('[data-slot="reply-expansion-chips"]');
@@ -280,7 +287,10 @@ describe('chip clicks at the composer surface', () => {
     assert.equal(buttons[0].textContent, '变体一');
 
     fireEvent.click(buttons[1]);
-    assert.deepEqual((props.onAcceptReplyExpansionChip as ReturnType<typeof vi.fn>).mock.calls, [[1]]);
+    assert.deepEqual(
+      (chipStripOf(props).onAcceptExpansionChip as ReturnType<typeof vi.fn>).mock.calls,
+      [[1]],
+    );
     assert.equal((props.onSubmit as ReturnType<typeof vi.fn>).mock.calls.length, 0, 'a variant is filled, not sent by the component');
   });
 });
@@ -307,9 +317,11 @@ function SuggestVisibilityHarness({ lastAssistantMessageId }: { lastAssistantMes
   });
   return React.createElement(ChatComposer, {
     ...composerBaseProps(),
-    replySuggestionsEnabled: enabled,
-    replySuggestionsLoading: loading,
-    onRequestReplySuggestions: redraw,
+    chipStrip: chipStripProps({
+      suggestionsEnabled: enabled,
+      suggestionsLoading: loading,
+      onRequestSuggestions: redraw,
+    }),
   } as unknown as React.ComponentProps<typeof ChatComposer>);
 }
 
@@ -349,7 +361,9 @@ describe('the Suggest control', () => {
   });
 
   it('(c) shows a visible failure state and recovers a few seconds later', async () => {
-    const { view } = renderComposer({ onRequestReplySuggestions: () => Promise.resolve(false) });
+    const { view } = renderComposer({
+      chipStrip: chipStripProps({ onRequestSuggestions: () => Promise.resolve(false) }),
+    });
     const idle = view.getByRole('button', { name: enChat.input.suggestions.suggest });
     assert.equal(idle.getAttribute('data-reply-suggest-state'), 'idle');
 
@@ -378,7 +392,9 @@ describe('the Suggest control', () => {
 
   it('(c2) treats a rejected request as a failure, never as an uncaught exception', async () => {
     const { view } = renderComposer({
-      onRequestReplySuggestions: () => Promise.reject(new Error('gateway down')),
+      chipStrip: chipStripProps({
+        onRequestSuggestions: () => Promise.reject(new Error('gateway down')),
+      }),
     });
     const button = view.getByRole('button', { name: enChat.input.suggestions.suggest });
 
@@ -469,18 +485,32 @@ const sentEvents = () => apiMocks.event.mock.calls
   .map(([payload]) => payload as Record<string, unknown>)
   .filter((payload) => payload.event === 'sent');
 
+/** A view whose hook result exposes the chip strip — all these cases read only that. */
+type ChipHookView = { result: { current: { chipStrip: ComposerChipStrip } } };
+
 /** Waits until the first draw has arrived and the strip shows a model chip. */
-const waitForModelChip = (view: {
-  result: {
-    current: {
-      replySuggestionsEnabled: boolean;
-      suggestionChips: Array<{ source: string }>;
-    };
-  };
-}) => waitFor(() => {
-  assert.equal(view.result.current.replySuggestionsEnabled, true);
-  assert.ok(view.result.current.suggestionChips.some((chip) => chip.source === 'model'));
+const waitForModelChip = (view: ChipHookView) => waitFor(() => {
+  assert.equal(view.result.current.chipStrip.suggestionsEnabled, true);
+  assert.ok(view.result.current.chipStrip.chips.some((chip) => chip.source === 'model'));
 });
+
+/** Presses the chip at `index` in the merged strip through the one accept entry. */
+const acceptChipAt = (view: ChipHookView, index: number) => {
+  const chip = view.result.current.chipStrip.chips[index];
+  if (!chip) {
+    throw new Error(`the strip has no chip at index ${index}`);
+  }
+  view.result.current.chipStrip.onAccept(chip);
+};
+
+/** Presses the quoted chip, wherever it currently sits in the strip. */
+const acceptQuotedChip = (view: ChipHookView) => {
+  const chip = view.result.current.chipStrip.chips.find((candidate) => candidate.source === 'quoted');
+  if (!chip) {
+    throw new Error('the strip has no quoted chip');
+  }
+  view.result.current.chipStrip.onAccept(chip);
+};
 
 type ComposerKeyEvent = Parameters<ReturnType<typeof useChatComposerState>['handleKeyDown']>[0];
 
@@ -533,11 +563,11 @@ describe('composer state chip acceptance', () => {
     const textarea = attachTextarea(view, submitted);
     await waitForModelChip(view);
 
-    // The merged-strip callback first: it is the acceptance ChatComposer wires for
-    // the keyboard route (and the fallback when no index callback is passed), so
-    // this is the leg the refutation arm flips back to `submitComposer()`.
+    // The one accept entry: it is what ChatComposer wires for every source and
+    // for the keyboard route, and the leg the refutation arm flips back to
+    // `submitComposer()`.
     act(() => {
-      view.result.current.acceptInputSuggestion(0);
+      acceptChipAt(view, 0);
     });
     // The controlled textarea receives the new value on the render that follows
     // the fill; commit it here, before the deferred focus/caret callback runs.
@@ -553,10 +583,14 @@ describe('composer state chip acceptance', () => {
     assert.equal(submitted.mock.calls.length, 0, 'and it never submits the composer form');
     assert.equal(expansionRequests().length, 0, 'expansion off sends no second request');
 
-    // Then the index callback the chip press itself reaches: the same fill-only
-    // outcome, still nothing sent.
+    // Then the chip press itself, from an empty box again: the same fill-only
+    // outcome, still nothing sent. (The strip only carries draft chips while the
+    // box is empty, so the second press starts from the cleared draft.)
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      view.result.current.setInput('');
+    });
+    act(() => {
+      acceptChipAt(view, 0);
     });
     assert.equal(view.result.current.input, '模型一');
     assert.equal(sendMessage.mock.calls.length, 0, 'the chip press does not send either');
@@ -573,7 +607,7 @@ describe('composer state chip acceptance', () => {
     act(() => {
       view.result.current.handleKeyDown(keyEvent('Tab', textarea) as unknown as ComposerKeyEvent);
     });
-    assert.equal(view.result.current.selectedInputSuggestionIndex, 0, 'Tab walks onto the first chip');
+    assert.equal(view.result.current.chipStrip.selectedIndex, 0, 'Tab walks onto the first chip');
 
     const enter = keyEvent('Enter', textarea);
     act(() => {
@@ -604,7 +638,7 @@ describe('composer state chip acceptance', () => {
     await waitForModelChip(view);
 
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
     assert.equal(sendMessage.mock.calls.length, 0, 'the fill alone sends nothing');
 
@@ -629,7 +663,7 @@ describe('composer state chip acceptance', () => {
     attachTextarea(view);
 
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
     act(() => {
       view.result.current.handleInputChange({
@@ -657,12 +691,17 @@ describe('composer state chip acceptance', () => {
     attachTextarea(view);
 
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
     assert.equal(view.result.current.input, '模型一');
 
+    // The draft chips are an empty-box affordance; clear so the second chip is
+    // on screen again, then pick it. The attribution must follow the newer fill.
     act(() => {
-      view.result.current.acceptModelSuggestion(1);
+      view.result.current.setInput('');
+    });
+    act(() => {
+      acceptChipAt(view, 1);
     });
     assert.equal(view.result.current.input, '模型二', 'the second pick replaces the draft');
 
@@ -689,9 +728,9 @@ describe('composer state chip acceptance', () => {
     }));
 
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一', '变体二']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一', '变体二']));
 
     assert.equal(view.result.current.input, '模型一', 'the picked reply stays in the box as the seed');
     assert.equal(sendMessage.mock.calls.length, 0, 'an expanded pick is not sent');
@@ -711,7 +750,7 @@ describe('composer state chip acceptance', () => {
     textarea.value = '> 选中的原文\n';
 
     act(() => {
-      view.result.current.acceptQuotedSuggestion();
+      acceptQuotedChip(view);
     });
     act(() => {
       frames.forEach((callback) => callback(0));
@@ -752,7 +791,7 @@ describe('composer state chip acceptance', () => {
     );
 
     act(() => {
-      view.result.current.acceptQuotedSuggestion();
+      acceptQuotedChip(view);
     });
     // Focusing the textarea collapses the browser selection; the composer sees null.
     act(() => {
@@ -761,7 +800,7 @@ describe('composer state chip acceptance', () => {
 
     assert.equal(view.result.current.input, '> 选中的原文\n');
     assert.deepEqual(
-      view.result.current.suggestionChips.map((chip) => chip.source),
+      view.result.current.chipStrip.chips.map((chip) => chip.source),
       ['quoted'],
       'the accepted quote stays as the only chip while the box is non-empty',
     );
@@ -782,9 +821,9 @@ describe('composer state expansion', () => {
     }));
 
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一', '变体二']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一', '变体二']));
 
     assert.equal(view.result.current.input, '模型一', 'the picked reply stays in the box');
     assert.equal(sendMessage.mock.calls.length, 0, 'an expanded pick is not sent');
@@ -802,20 +841,20 @@ describe('composer state expansion', () => {
       json: async () => ({ chips: ['变体一', '变体二'], draw: 11 }),
     }));
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一', '变体二']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一', '变体二']));
 
     apiMocks.suggest.mockImplementation(() => Promise.resolve({
       ok: true,
       json: async () => ({ chips: ['变体三'], draw: 12 }),
     }));
     act(() => {
-      view.result.current.acceptReplyExpansionChip(0);
+      view.result.current.chipStrip.onAcceptExpansionChip(0);
     });
 
     assert.equal(view.result.current.input, '变体一', 'replaced, not appended to the seed');
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体三']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体三']));
     assert.equal(expansionRequests().length, 2, 'the variant became the next seed');
   });
 
@@ -827,9 +866,9 @@ describe('composer state expansion', () => {
       json: async () => ({ chips: ['变体一'], draw: 11 }),
     }));
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一']));
 
     act(() => {
       view.result.current.handleInputChange({
@@ -837,7 +876,7 @@ describe('composer state expansion', () => {
       } as unknown as Parameters<typeof view.result.current.handleInputChange>[0]);
     });
 
-    assert.deepEqual(view.result.current.replyExpansionChips, [], 'an edited draft has no variants to replace');
+    assert.deepEqual(view.result.current.chipStrip.expansionChips, [], 'an edited draft has no variants to replace');
   });
 
   it('(f) sending the draft drops the variant chips', async () => {
@@ -848,9 +887,9 @@ describe('composer state expansion', () => {
       json: async () => ({ chips: ['变体一'], draw: 11 }),
     }));
     act(() => {
-      view.result.current.acceptModelSuggestion(0);
+      acceptChipAt(view, 0);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['变体一']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一']));
 
     await act(async () => {
       await view.result.current.handleSubmit({
@@ -862,7 +901,7 @@ describe('composer state expansion', () => {
     });
 
     await waitFor(() => assert.equal(view.result.current.input, '', 'the delivered send empties the box'));
-    assert.deepEqual(view.result.current.replyExpansionChips, [], 'the sent message has no variants');
+    assert.deepEqual(view.result.current.chipStrip.expansionChips, [], 'the sent message has no variants');
   });
 
   it('(g) quoting sends a focus expansion request with an empty seed', async () => {
@@ -874,9 +913,9 @@ describe('composer state expansion', () => {
     }));
 
     act(() => {
-      view.result.current.acceptQuotedSuggestion();
+      acceptQuotedChip(view);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['回应一', '回应二']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['回应一', '回应二']));
 
     const requests = expansionRequests();
     assert.equal(requests.length, 1);
@@ -892,16 +931,16 @@ describe('composer state expansion', () => {
       json: async () => ({ chips: ['回应一', '回应二'], draw: 15 }),
     }));
     act(() => {
-      view.result.current.acceptQuotedSuggestion();
+      acceptQuotedChip(view);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.replyExpansionChips, ['回应一', '回应二']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['回应一', '回应二']));
 
     apiMocks.suggest.mockImplementation(() => Promise.resolve({
       ok: true,
       json: async () => ({ chips: ['回应一的变体'], draw: 16 }),
     }));
     act(() => {
-      view.result.current.acceptReplyExpansionChip(0);
+      view.result.current.chipStrip.onAcceptExpansionChip(0);
     });
 
     assert.equal(view.result.current.input, '> 选中的原文\n回应一');

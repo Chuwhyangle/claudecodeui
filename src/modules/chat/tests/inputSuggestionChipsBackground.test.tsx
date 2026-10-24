@@ -10,6 +10,7 @@ import ChatComposer from '@/modules/chat/composer/ChatComposer';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
 import { buildSuggestionChips } from '@/modules/chat/utils/inputSuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
+import type { ComposerChipStrip } from '@/shared/types';
 
 /**
  * The suggestion strip's background is a click target of its own: the listbox
@@ -84,11 +85,13 @@ await i18next.use(initReactI18next).init({
 /** A real, cancelable mousedown so `defaultPrevented` is readable afterwards. */
 const press = () => new MouseEvent('mousedown', { bubbles: true, cancelable: true });
 
+const habitChips = () => buildSuggestionChips({ habitChips: ['第一', '第二'] });
+
 const renderChips = (
   overrides: Partial<React.ComponentProps<typeof InputSuggestionChips>> = {},
 ) => render(React.createElement(InputSuggestionChips, {
   listId: 'suggestion-list',
-  suggestions: ['第一', '第二'],
+  chips: habitChips(),
   selectedIndex: null,
   onAccept: () => undefined,
   ...overrides,
@@ -131,13 +134,16 @@ describe('suggestion strip background press', () => {
     assert.equal(onBackgroundPress.mock.calls.length, 0);
   });
 
-  it('(c) accepts the clicked chip with exactly its own index', () => {
+  it('(c) accepts the clicked chip with exactly that chip', () => {
     const onAccept = vi.fn();
     const view = renderChips({ onAccept });
 
     fireEvent.click(view.getByRole('option', { name: '第二' }));
 
-    assert.deepEqual(onAccept.mock.calls, [[1]]);
+    assert.deepEqual(
+      onAccept.mock.calls.map(([chip]) => (chip as { text: string }).text),
+      ['第二'],
+    );
   });
 
   it('(d) does not throw on a background press when the callback is omitted', () => {
@@ -228,12 +234,28 @@ const composerBaseProps = (): Record<string, unknown> => ({
   onTextareaInput: () => undefined,
   placeholder: 'Ask anything',
   isTextareaExpanded: false,
-  inputSuggestionCandidates: ['检查进展', '提交'],
-  inputSuggestionsVisible: true,
-  selectedInputSuggestionIndex: null,
-  inputSuggestionListId: 'suggestion-list',
-  onAcceptInputSuggestion: () => undefined,
+  chipStrip: baseChipStrip(),
 });
+
+/**
+ * The one chip prop the composer takes. The default draws the two habit chips so
+ * the strip has a real listbox; individual cases narrow it.
+ */
+function baseChipStrip(overrides: Partial<ComposerChipStrip> = {}): ComposerChipStrip {
+  return {
+    visible: true,
+    selectedIndex: null,
+    listId: 'suggestion-list',
+    chips: buildSuggestionChips({ habitChips: ['检查进展', '提交'] }),
+    onAccept: () => undefined,
+    suggestionsEnabled: true,
+    suggestionsLoading: false,
+    onRequestSuggestions: () => undefined,
+    expansionChips: [],
+    onAcceptExpansionChip: () => undefined,
+    ...overrides,
+  };
+}
 
 describe('composer wiring', () => {
   it('(e) focuses the composer textarea when the strip background is pressed', () => {
@@ -279,9 +301,7 @@ const renderComposerOverStrip = (overrides: Record<string, unknown> = {}) => ren
   ChatComposer,
   {
     ...composerBaseProps(),
-    inputSuggestionCandidates: [],
-    inputSuggestionsVisible: true,
-    suggestionChips: quotedChips(),
+    chipStrip: baseChipStrip({ chips: quotedChips() }),
     ...overrides,
   } as unknown as React.ComponentProps<typeof ChatComposer>,
 ));
@@ -301,8 +321,7 @@ describe('chip row clearance over a non-empty box', () => {
   it('(b) leaves the empty-box layout unchanged', () => {
     const view = renderComposerOverStrip({
       input: '',
-      inputSuggestionCandidates: ['检查进展'],
-      suggestionChips: undefined,
+      chipStrip: baseChipStrip({ chips: buildSuggestionChips({ habitChips: ['检查进展'] }) }),
     });
 
     const textarea = view.container.querySelector('textarea');
@@ -317,9 +336,7 @@ describe('chip row clearance over a non-empty box', () => {
     view.rerender(React.createElement(ChatComposer, {
       ...composerBaseProps(),
       input: '> 选中的原文\n',
-      inputSuggestionCandidates: [],
-      inputSuggestionsVisible: true,
-      suggestionChips: quotedChips(),
+      chipStrip: baseChipStrip({ chips: quotedChips() }),
     } as unknown as React.ComponentProps<typeof ChatComposer>));
 
     const spacer = view.container.querySelector(CLEARANCE_SELECTOR);
