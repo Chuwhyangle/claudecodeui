@@ -2,7 +2,7 @@
 id: observation-prediction-scoring-24h-ratios
 title: 预测对账：观察墙上线前后各 24 小时的行为比例（预览/跳转、观察型切换占比、轮询类输入占比），按登记的预测判
   confirmed/refuted/insufficient-data
-status: ready
+status: done
 labels:
   - cockpit
   - observation
