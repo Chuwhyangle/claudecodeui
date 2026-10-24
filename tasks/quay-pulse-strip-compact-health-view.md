@@ -1,7 +1,7 @@
 ---
 id: quay-pulse-strip-compact-health-view
 title: 脉搏条：每项目一条 ≤48px 的高密度进展视图（在飞 / fan-in 胜负条 / suite / 阻塞及影响），常驻驾驶舱与 Quay 面板
-status: ready
+status: done
 labels:
   - cockpit
   - quay
@@ -80,12 +80,17 @@ extra: {}
 
 配色验证（WCAG 图形对象 3:1，dataviz 调色板校验口径）：8 个 token 亮色/暗色全部 PASS——in-flight: blue 5.17/6.98、violet 5.70/6.52、cyan 3.68/9.82、indigo 6.29/5.95；status: green 3.30/10.18、amber 3.19/10.63、orange 3.56/7.84、red 4.83/6.41。
 
+### 套件红修复 — quay-test-script 的收集计数钉（续做回合，2026-10-24）
+上一轮 suite 红在 `server/shared/tests/quay-test-script.test.ts` 的 AC2/AC3（`unknown=428` / `unknown=430` 失配）：本任务新增的服务端测试 `server/modules/quay/tests/quay-blockers-summary.test.ts` 把收集到的服务端测试文件数 431 抬到 432，实读 429 / 431。合并 develop 后（develop 侧又新增 deploy-readiness 与 session-task-chain 两个测试文件，计数 433），联合后的收集数为 434：AC2 `unknown=431`、AC3 `unknown=433`，注释里的累加叙述按双方顺序合并。该文件因此登记进 `## Touches`。
+复验（合并 develop 后）：`npx tsx --tsconfig server/tsconfig.json --test server/shared/tests/quay-test-script.test.ts` → 14 passed（AC7 覆盖率 391/434 = 90.09%，高于 90% 门）；AC1 7 passed；AC2/AC3/AC4 的四个 vitest 文件 92 passed；`npm run typecheck` exit 0。
+
 ## Touches
 
 - server/modules/quay/quay.service.ts
 - server/modules/quay/quay-blockers-summary.ts (new)
 - server/modules/quay/tests/quay-blockers-summary.test.ts (new)
 - server/modules/quay/tests/quay-fleet-summary.test.ts
+- server/shared/tests/quay-test-script.test.ts
 - server/shared/types.ts
 - src/shared/types.ts
 - src/modules/quay/PulseStrip.tsx (new)
@@ -111,11 +116,3 @@ extra: {}
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/quay-pulse-strip-compact-health-view.md
-
-## Blocker
-
-**2026-10-24T14:36:52.346Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: __PERFILE__ duration_ms=92400 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792852106563
-- run_id：wk-prod-anchor
-- session_id：f3822078-3a84-4016-9b96-21d79e88bb7e

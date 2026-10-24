@@ -32,10 +32,10 @@ extra:
 
 ## AC
 
-- [ ] AC1: `npx playwright test e2e/cockpit-phone-narrow.spec.ts` exit 0（新建；在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——视口 390×844：页头高度 <= 64px；`document.documentElement.scrollWidth <= innerWidth`；所有可见 button / a / input 的包围盒 >= 44×44（读函数列出违规元素名）；每个在途 chip 的右缘 <= 视口宽；坞高度 <= 视口高的 20%；最后一项可滚出且不与坞重叠。
-- [ ] AC2: 同一 spec——项目条：容器 `scrollWidth > clientWidth` 时右缘遮罩元素存在；任一项目名不被容器边缘截断一半（可见宽度 == 整项宽度或完全不可见）；控制臂：把遮罩与 snap 去掉、触控尺寸强制为 30px 后同一读取函数判红。
-- [ ] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——项目条容器带 `snap-x` 与遮罩类、项目项带 `min-h-[44px]`/`min-w-[44px]` 类（类名断言，不量像素）；Refresh、语音、Run 按钮带手机最小尺寸类；既有用例不弱化。
-- [ ] AC4: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` 与 `npm run typecheck` 均 exit 0。
+- [x] AC1: `npx playwright test e2e/cockpit-phone-narrow.spec.ts` exit 0（新建；在 `playwright.config.ts` 的 `SPEC_BUDGET_MS` 加条目并写明实测）——视口 390×844：页头高度 <= 64px；`document.documentElement.scrollWidth <= innerWidth`；所有可见 button / a / input 的包围盒 >= 44×44（读函数列出违规元素名）；每个在途 chip 的右缘 <= 视口宽；坞高度 <= 视口高的 20%；最后一项可滚出且不与坞重叠。
+- [x] AC2: 同一 spec——项目条：容器 `scrollWidth > clientWidth` 时右缘遮罩元素存在；任一项目名不被容器边缘截断一半（可见宽度 == 整项宽度或完全不可见）；控制臂：把遮罩与 snap 去掉、触控尺寸强制为 30px 后同一读取函数判红。
+- [x] AC3: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——项目条容器带 `snap-x` 与遮罩类、项目项带 `min-h-[44px]`/`min-w-[44px]` 类（类名断言，不量像素）；Refresh、语音、Run 按钮带手机最小尺寸类；既有用例不弱化。
+- [x] AC4: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` 与 `npm run typecheck` 均 exit 0。
 
 ## DoD
 
@@ -49,8 +49,21 @@ extra:
 - src/modules/cockpit/CockpitStage.tsx
 - src/modules/cockpit/CockpitInput.tsx
 - src/modules/quay/QuayPanel.tsx
+- src/modules/chat/composer/VoiceInputButton.tsx
 - e2e/cockpit-phone-narrow.spec.ts
 - playwright.config.ts
 - src/modules/cockpit/tests/CockpitStage.test.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
 - tasks/cockpit-phone-narrow-viewport-layout.md
+
+## Evidence
+
+- AC1/AC2 实测（Playwright 真实 Chromium，390×844）：`npx playwright test e2e/cockpit-phone-narrow.spec.ts` → `5 passed (31.3s–36.7s)`。
+  - `readPhone`：`{"viewportWidth":390,"scrollWidth":390,"horizontalOverflow":false,"headerHeight":61,"dockHeight":136,"dockShare":0.16113744075829384,"touchViolations":[],"lastTile":{"scrollable":true,"fullyVisible":true,"overlaps":false}}`
+  - `readChips`：两枚在途 chip 的 `right` 均为 378（≤ 390），`escaping: []`，`scrollWidth: 390`。
+  - `readStrip`：`{"overflow":true,"maskPresent":true,"maskVisible":true,"snapType":"x mandatory","unreachableItems":[],"truncatedNames":[],"touchViolations":[]}`。控制臂把遮罩删掉、`scroll-snap-type:none`、项目项盒强制 30px 后，同一函数读到 `maskPresent:false`、`snapType:"none"`、`touchViolations.length>0`。
+- 截图（`tmp/`）：`cockpit-phone-narrow-fleet.png`、`cockpit-phone-narrow-dock-typing.png`、`cockpit-phone-narrow-board.png`、`cockpit-phone-narrow-strip.png`、`cockpit-phone-narrow-strip-control.png`（缺陷对照臂）、`cockpit-phone-narrow-pc-fleet.png`、`cockpit-phone-narrow-pc-board.png`（1440×900 回归）。
+- 场景运行器：`e2e/ui-scenario-runner.spec.ts` 的 cockpit 臂跑 `e2e/scenarios/cockpit-mode-switch.json` 全绿，报告 `tmp/ui-scenarios/e2e-cockpit-main/report.json`（`ok:true`，3 个检查点截图）。runner 固定 1280×800 且没有视口参数（`scripts/ui-scenario.mjs` 不在本任务 Touches），所以手机视口的实测由上面的 Playwright 真实页面承担；1280 视口的同一业务场景用于确认没有把驾驶舱导航回归掉。
+- 隔离实例：验证走 Playwright 自带的一次性栈（`DATABASE_PATH` 与 `HOME` 都指向一次性 temp 目录、空库），没有复制 live 库，因此 residentRestore 没有可恢复的会话；未触碰线上实例。
+- AC3/AC4：`npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` → `38 passed`；`npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` → `11 passed`；`npm run typecheck` 三段 tsc 全部 exit 0。另跑 cockpit 全目录 + `voiceInputButton.test.tsx`：`14 files / 175 tests passed`。
+- `src/modules/chat/composer/VoiceInputButton.tsx` 加入 Touches：语音按钮的 44px 手机下限需要一个可选的 `className` 覆盖，桌面默认 32px 不变。
