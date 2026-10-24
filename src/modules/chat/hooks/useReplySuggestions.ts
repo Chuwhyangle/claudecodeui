@@ -21,6 +21,21 @@ export const REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH = 5;
  */
 export const REPLY_SUGGESTIONS_BATCH_CACHE_SIZE = 20;
 
+/**
+ * How long a draw triggered by a message-id change is held before it may reach
+ * the server.
+ *
+ * The session id and the last assistant message id reach this hook from two
+ * different readings of the page. During an in-app conversation switch the
+ * message id belongs to the incoming conversation for one render before the
+ * session id follows, so that render looks like "the assistant answered again in
+ * the outgoing conversation". Holding the draw for one beat lets the corrected
+ * session id re-run the effect, which cancels it: switching between two
+ * conversations neither asks the server nor draws. A message that really did
+ * arrive has no such correction and goes out a fraction of a second later.
+ */
+export const REPLY_SUGGESTIONS_SESSION_SETTLE_MS = 120;
+
 type CachedBatch = { chips: string[]; draw: number };
 
 /**
@@ -339,6 +354,7 @@ export function useReplySuggestions({
     if (extractedRef.current === key) {
       return undefined;
     }
+    const previousKey = extractedRef.current;
     // Marked BEFORE the await: a re-render during the request must not start a second one.
     extractedRef.current = key;
     const cached = readCachedBatch(key);
@@ -347,23 +363,39 @@ export function useReplySuggestions({
       return undefined;
     }
     let cancelled = false;
-    void (async () => {
-      try {
-        const response = await api.replySuggestions.suggest({ sessionId });
-        if (!response.ok) {
-          return;
+    let started = false;
+    const send = () => {
+      started = true;
+      void (async () => {
+        try {
+          const response = await api.replySuggestions.suggest({ sessionId });
+          if (!response.ok) {
+            return;
+          }
+          const body = (await response.json()) as unknown;
+          if (cancelled || sessionRef.current !== sessionId) {
+            return;
+          }
+          writeCachedBatch(key, applyDraw(body));
+        } catch {
+          // Silent fallback: the habit chips are already drawn by `useInputSuggestions`.
         }
-        const body = (await response.json()) as unknown;
-        if (cancelled || sessionRef.current !== sessionId) {
-          return;
-        }
-        writeCachedBatch(key, applyDraw(body));
-      } catch {
-        // Silent fallback: the habit chips are already drawn by `useInputSuggestions`.
-      }
-    })();
+      })();
+    };
+    // See REPLY_SUGGESTIONS_SESSION_SETTLE_MS: a message-id change that arrives
+    // alongside a conversation switch is held one beat, so the corrected session
+    // id can cancel it. Every other draw goes out at once.
+    const timer = previousKey === null
+      ? (send(), undefined)
+      : setTimeout(send, REPLY_SUGGESTIONS_SESSION_SETTLE_MS);
     return () => {
       cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      // A draw that never started must not leave its key marked as handled, or
+      // the corrected render would skip it.
+      if (!started && extractedRef.current === key) {
+        extractedRef.current = null;
+      }
     };
   }, [active, applyDraw, applyResult, lastAssistantMessageId, sessionId, status]);
 

@@ -475,4 +475,23 @@ describe('useReplySuggestions batch cache', () => {
     await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 22));
     await waitFor(() => assert.deepEqual(result.current.chips, ['chip-s-0']));
   });
+
+  it('(f) a conversation switch whose message id arrives one render early draws nothing', async () => {
+    perSession();
+    const { result, rerender } = renderReply();
+    await settle(result);
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 1);
+
+    // The real page hands the incoming conversation's message id to the composer
+    // one render before the session id follows. That pair must not be mistaken
+    // for "the assistant answered again".
+    rerender(baseArgs({ sessionId: 'session-a', lastAssistantMessageId: 'assistant-b' }));
+    rerender(baseArgs({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-b-一', 'session-b-二']));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    assert.equal(apiMocks.suggest.mock.calls.length, 2, 'only the two real first draws, no outgoing-session request');
+    assert.deepEqual(drawnSessions(), ['session-a', 'session-b']);
+  });
 });
