@@ -2,7 +2,7 @@
 id: cockpit-board-and-fleet-readability-polish
 title: 驾驶舱 board / fleet 可读性打磨：回声横幅不挤舞台、Focus 页脚反映圈选磁贴、在途 chip 统一、目标列表默认非
   achieved 优先、id 尾部截断、空态给原因、cached 显示年龄
-status: ready
+status: done
 labels:
   - cockpit
   - ui
