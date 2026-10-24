@@ -186,13 +186,14 @@ const openOverlays = () => Array.from(document.querySelectorAll('[role="menu"],[
 const wrapTokens = (element: Element) =>
   Array.from(element.classList).filter((name) => /^flex-(?:wrap|nowrap)$/.test(name));
 
-/** The names the six primary controls carry in the narrow layout, read from the shipping locale. */
+/** The names the primary controls carry in the narrow layout, read from the shipping locale. */
 const PRIMARY_NAMES = [
   enChat.input.attachFiles,
-  enChat.voice.input,
+  enChat.input.suggestions.suggest,
   enChat.input.moreTools,
   enChat.composer.modelMenu,
   enChat.composer.permissionHeading.replace('{{provider}}', 'Claude'),
+  enChat.voice.input,
   enChat.input.send,
 ];
 
@@ -223,6 +224,12 @@ const baseProps = () => ({
   hasInput: false,
   onClearInput: () => undefined,
   onSubmit: () => undefined,
+  // The reply-suggestions feature is on in the shipping composer whenever the status
+  // reading enables it, and its button is one of the controls the footer's budget was
+  // measured against — so the fixture renders it rather than a footer the page never has.
+  replySuggestionsEnabled: true,
+  replySuggestionsLoading: false,
+  onRequestReplySuggestions: vi.fn(),
   isDragActive: false,
   queuedDraft: null,
   isEditingSentMessage: false,
@@ -294,6 +301,11 @@ const describeFooterControls = (footer: Element) =>
   Array.from(footer.querySelectorAll('button'))
     .map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '<unnamed>')
     .join(' | ');
+
+/** The same names, in DOM order — the compact row is an ordered set, not just a bag of controls. */
+const footerControlNames = (footer: Element) =>
+  Array.from(footer.querySelectorAll('button'))
+    .map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '<unnamed>');
 
 const openMoreMenu = (view: ReturnType<typeof render>) => {
   fireEvent.click(view.getByRole('button', { name: enChat.input.moreTools }));
@@ -453,7 +465,8 @@ await i18next.use(initReactI18next).init({
 });
 
 test('(a) the narrow footer is six controls when empty and seven with a draft, the clear ✕ being the seventh', () => {
-  // The empty row: exactly the controls that send a message.
+  // The empty row: exactly the controls that send a message. The Suggest control is an
+  // icon on this tier, so the accessible name (its aria-label) is the only text it has.
   const empty = renderComposer(MOBILE_WIDTH);
   const emptyControls = Array.from(empty.footer.querySelectorAll('button'));
   assert.equal(
@@ -462,12 +475,18 @@ test('(a) the narrow footer is six controls when empty and seven with a draft, t
     `the empty narrow footer must hold ${PRIMARY_NAMES.length} controls; it holds ${emptyControls.length}: ${describeFooterControls(empty.footer)}`,
   );
 
-  const found: string[] = [];
-  for (const name of PRIMARY_NAMES) {
-    const control = within(empty.footer).queryByRole('button', { name });
-    found.push(control ? name : `MISSING(${name})`);
-  }
-  assert.deepEqual(found, PRIMARY_NAMES, `narrow footer controls read: ${describeFooterControls(empty.footer)}`);
+  assert.deepEqual(
+    footerControlNames(empty.footer),
+    PRIMARY_NAMES,
+    `the narrow footer controls, in order, read: ${describeFooterControls(empty.footer)}`,
+  );
+  const suggest = within(empty.footer).getByRole('button', { name: enChat.input.suggestions.suggest });
+  assert.equal(
+    (suggest.textContent ?? '').trim(),
+    '',
+    `the compact Suggest control is icon-only; it renders text: ${JSON.stringify(suggest.textContent)}`,
+  );
+  assert.equal(suggest.getAttribute('aria-label'), enChat.input.suggestions.suggest);
   assert.equal(
     empty.footer.querySelector('[data-slot="composer-clear-input"]'),
     null,
@@ -491,6 +510,11 @@ test('(a) the narrow footer is six controls when empty and seven with a draft, t
     PRIMARY_NAMES.length + 1,
     `a draft must add exactly the clear ✕; controls read: ${describeFooterControls(drafted.footer)}`,
   );
+  assert.deepEqual(
+    footerControlNames(drafted.footer),
+    [...PRIMARY_NAMES.slice(0, 3), enChat.input.clearInput, ...PRIMARY_NAMES.slice(3)],
+    `the drafted narrow footer puts the ✕ between "more" and the model menu; it reads: ${describeFooterControls(drafted.footer)}`,
+  );
   const clear = drafted.footer.querySelector('[data-slot="composer-clear-input"]');
   assert.ok(clear, 'the drafted narrow footer must offer the clear ✕');
   assert.equal(clear.getAttribute('aria-label'), enChat.input.clearInput);
@@ -510,6 +534,28 @@ test('(a) the narrow footer is six controls when empty and seven with a draft, t
     `below 360px a draft must not add a control; controls read: ${describeFooterControls(narrowest.footer)}`,
   );
   assert.equal(narrowest.footer.querySelector('[data-slot="composer-clear-input"]'), null);
+});
+
+test('(a2) the Suggest control is icon-only and busy-flagged on the narrow tier, labelled on the wide one', () => {
+  // Compact tier, a draw in flight: the icon spins, the button is disabled, and the
+  // accessible name + aria-busy are what an assistive reading gets in place of text.
+  const compact = renderComposer(MOBILE_WIDTH, { replySuggestionsLoading: true });
+  const busy = within(compact.footer).getByRole('button', { name: enChat.input.suggestions.suggest });
+  assert.equal(busy.getAttribute('disabled'), '', 'a second click must not become a second draw');
+  assert.equal(busy.getAttribute('aria-busy'), 'true');
+  assert.equal((busy.textContent ?? '').trim(), '', 'the compact control renders no visible text');
+  assert.ok(busy.querySelector('svg.animate-spin'), 'the in-flight state must be visible as an icon state');
+  compact.view.unmount();
+
+  // Wide tier: the labelled button is unchanged, because that row has the width for it.
+  const wide = renderComposer(1280);
+  const labelled = within(wide.footer).getByRole('button', { name: enChat.input.suggestions.suggest });
+  assert.equal(
+    (labelled.textContent ?? '').trim(),
+    enChat.input.suggestions.suggest,
+    `the wide tier keeps the visible label; it reads: ${JSON.stringify(labelled.textContent)}`,
+  );
+  wide.view.unmount();
 });
 
 test('(a) the tier boundary is md: 767px is still the narrow layout, and 768px is not', () => {

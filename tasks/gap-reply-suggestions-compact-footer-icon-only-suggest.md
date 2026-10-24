@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-compact-footer-icon-only-suggest
 title: 窄屏底栏：「建议」按钮改纯图标，修复有字时发送按钮被挤出屏幕（360/375px）
-status: ready
+status: done
 labels:
   - gap
 parent: null
