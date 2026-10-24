@@ -510,6 +510,17 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // 167.6s. 600_000 keeps ~3.6x over that reading, the same load-slowed
   // fan-in headroom the sibling architecture criteria declare.
   'architecture-fit-contract.spec.ts': 600_000,
+  // The overlay-layout criterion: the 55-entity L fixture on THREE viewports
+  // (PC 1440×765, phone portrait 390×844, landscape 844×390), each zoomed in
+  // until the minimap is drawn, then read after a selection and a hover; plus
+  // a control arm that restores three defects in three fresh contexts.
+  // MEASURED 2026-10-24 on this worktree: `2 passed (1.2m)` for the whole
+  // invocation (config evaluation, both webServers' boot, the browser launch,
+  // the fixture and the Fit/fullscreen DoD gestures included); the
+  // `--grep "control arm"` selection measured `1 passed (35.8s)`. 480_000
+  // keeps ~6.7x over the full-file reading, the same load-slowed fan-in
+  // headroom the sibling architecture entries declare.
+  'architecture-overlay-layout.spec.ts': 480_000,
   // This file holds three describes and five cases, each driving a real browser
   // against a real debug-agent turn and running serially in one worker. The 55s
   // single-file default is sized for one such case; applied to this whole file it
@@ -2803,6 +2814,10 @@ const DEBUG_AGENT_SPEC_FILES: readonly string[] = [
   // session whose transcript seeds the hub of each fixture and a project that
   // offers the Architecture tab. It writes four `.archguard` trees under it.
   'architecture-fit-contract.spec.ts',
+  // The bottom-overlay layout criterion: the same fixture home for the same
+  // reasons (a transcript naming the seeds, and a project that offers the
+  // Architecture tab). It writes its own 55-entity `.archguard` tree.
+  'architecture-overlay-layout.spec.ts',
   // The status bar's own criterion.
   'resident-status-bar.spec.ts',
   // The busy-send criterion: same provider, same control plane, same fixture home — a second

@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { ARCHGUARD_RELATION_ARROWS } from '@yalehwang/plantuml-js/archguard';
 
 import { nodeFileOf, type ArchitectureDiagramView } from '@/modules/architecture/archguardToPlantUml';
+import {
+  BOTTOM_SLOT_INFO_INSET_PX,
+  overlayLayoutDefect,
+} from '@/modules/architecture/bottomSlotLayout';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
   buildPlantUmlText,
@@ -604,15 +608,30 @@ export function ArchitectureSelectionTray({
                   textAlign: 'left',
                   ...(targetStyle ?? {}),
                 }
-              : {
-                  position: 'absolute',
-                  bottom: 8 + bottomInset,
-                  pointerEvents: 'auto',
-                  ...(compact
-                    ? { left: 0, right: 0, margin: '0 auto' }
-                    : { left: '50%', transform: 'translateX(-50%)' }),
-                  ...(targetStyle ?? {}),
-                }
+              : overlayLayoutDefect() === 'no-slot-layout'
+                // The DEV control arm restores the old full-width centred pill:
+                // on the portrait phone it reaches under the corner slot.
+                ? {
+                    position: 'absolute',
+                    bottom: BOTTOM_SLOT_INFO_INSET_PX + bottomInset,
+                    pointerEvents: 'auto',
+                    left: 0,
+                    right: 0,
+                    margin: '0 auto',
+                    ...(targetStyle ?? {}),
+                  }
+                // The INFO slot: bottom-left. The corner slot (map + zoom
+                // controls) owns bottom-right, so the two can never intersect
+                // however narrow the canvas gets — the shared model the whole
+                // bottom band is measured against.
+                : {
+                    position: 'absolute',
+                    bottom: BOTTOM_SLOT_INFO_INSET_PX + bottomInset,
+                    left: BOTTOM_SLOT_INFO_INSET_PX,
+                    pointerEvents: 'auto',
+                    maxWidth: `calc(100% - ${BOTTOM_SLOT_INFO_INSET_PX * 2}px)`,
+                    ...(targetStyle ?? {}),
+                  }
           }
           className="rounded-full border border-border bg-popover px-3 py-1 text-xs font-medium text-foreground shadow-lg outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/60"
         >
