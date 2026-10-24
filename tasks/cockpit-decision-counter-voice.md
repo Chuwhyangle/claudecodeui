@@ -22,9 +22,9 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/counter-voice.test.ts` exit 0——桩 LLM：首次请求生成并缓存，二次请求不再调用；请求输入只含问题 / 选项 / 证据引用（断言请求体中没有会话 transcript 字段）；超过 maxPerHour 返回「未生成：限额」；调用失败返回原因；每次调用写一条用量记录；输出带 kind=llm。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/DecisionQueue.test.tsx` exit 0——卡片显示折叠的「反方」入口，展开后渲染三段；反方未生成时显示原因且裁定按钮仍可用；勾选「已看反方」后 decide 调用的 rationale 含该标记。
-- [ ] AC3: `npm run typecheck` 通过；文案覆盖 12 个 locale。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/counter-voice.test.ts` exit 0——桩 LLM：首次请求生成并缓存，二次请求不再调用；请求输入只含问题 / 选项 / 证据引用（断言请求体中没有会话 transcript 字段）；超过 maxPerHour 返回「未生成：限额」；调用失败返回原因；每次调用写一条用量记录；输出带 kind=llm。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/DecisionQueue.test.tsx` exit 0——卡片显示折叠的「反方」入口，展开后渲染三段；反方未生成时显示原因且裁定按钮仍可用；勾选「已看反方」后 decide 调用的 rationale 含该标记。
+- [x] AC3: `npm run typecheck` 通过；文案覆盖 12 个 locale。
 
 ## DoD
 
@@ -41,6 +41,10 @@ extra: {}
 - src/modules/cockpit/DecisionQueue.tsx
 - src/modules/cockpit/tests/DecisionQueue.test.tsx
 - src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts
+- src/modules/cockpit/cockpitView.ts
+- src/modules/cockpit/CockpitPage.tsx
+- src/modules/cockpit/hooks/useInitiatives.ts
+- src/shared/api.ts
 - src/modules/i18n/locales/de/common.json
 - src/modules/i18n/locales/en/common.json
 - src/modules/i18n/locales/es/common.json
