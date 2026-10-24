@@ -325,6 +325,57 @@ describe('AC1: every control is the hub event it names', () => {
   });
 });
 
+describe('AC3: the focus card names what the ordinal points at', () => {
+  it('shows the project name beside the ordinal and status', () => {
+    hubMock.state = hubState({
+      visible: {
+        viewUri: null,
+        focusables: [FIRST, SECOND],
+        projects: [
+          { projectId: 'p1', fleetProjectId: 'alpha', name: 'Alpha', projectPath: '/work/alpha' },
+        ],
+      },
+    });
+    renderRemote();
+
+    const card = screen.getByTestId('cockpit-remote-focus');
+    expect(card.textContent).toContain('①');
+    expect(card.textContent).toContain('running');
+    // 「① running」 alone does not say WHICH project the phone is commanding.
+    expect(screen.getByTestId('cockpit-remote-focus-name').textContent).toBe('Alpha');
+  });
+
+  it('names a focused task by its task id', () => {
+    const task: QuayFocusableObject = {
+      uri: 'quay://alpha/task/task-a',
+      label: '①',
+      display: { status: 'implementing', color: 'green', ordinal: 1, pos: { row: 1, column: 1 } },
+    };
+    hubMock.state = hubState({
+      focusUri: task.uri,
+      visible: {
+        viewUri: 'quay://alpha/board',
+        focusables: [task],
+        projects: [
+          { projectId: 'p1', fleetProjectId: 'alpha', name: 'Alpha', projectPath: '/work/alpha' },
+        ],
+      },
+    });
+    renderRemote();
+
+    expect(screen.getByTestId('cockpit-remote-focus-name').textContent).toBe('task-a');
+  });
+
+  it('falls back to the address’s project segment when the roster does not name it', () => {
+    hubMock.state = hubState({
+      visible: { viewUri: null, focusables: [FIRST, SECOND], projects: [] },
+    });
+    renderRemote();
+
+    expect(screen.getByTestId('cockpit-remote-focus-name').textContent).toBe('alpha');
+  });
+});
+
 describe('AC2: dictation is the composer\'s hook and lands in the box', () => {
   it('reaches useVoiceInput through the @/modules/chat barrel, with the visible labels as hotwords', () => {
     renderRemote();

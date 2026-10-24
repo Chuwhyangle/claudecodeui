@@ -1,4 +1,9 @@
-import type { QuayDriverState, QuayFleetTaskCounts, QuayViewContract } from '@/shared/types';
+import type {
+  QuayDriverState,
+  QuayFleetTaskCounts,
+  QuayFocusableObject,
+  QuayViewContract,
+} from '@/shared/types';
 import { formatQuayUri } from '@/modules/quay';
 
 /**
@@ -79,32 +84,43 @@ const DRIVER_COLORS: Record<QuayDriverState, string> = {
 
 /**
  * Builds the fleet view's contract: one focusable per REGISTERED project, addressed as its
- * board (`quay://<fleetProjectId>/board`). The ordinal is the tile's spatial order among the
- * declared objects — a single column, so `pos.column` is always 1 — and is the same number the
- * tile draws (①, ②, …), making 「第二个」 and the second focusable tile the same object by
- * construction.
+ * board (`quay://<fleetProjectId>/board`). The ordinal is the tile's order among the DECLARED
+ * objects and is the same number the tile draws (①, ②, …), making 「第二个」 and the second
+ * focusable tile the same object by construction.
+ *
+ * `pos` IS THE TILE'S CELL IN THE DRAWN GRID, computed over `projects` — every tile, in the
+ * order the stage maps them — and not over the focusable subset. An unregistered project still
+ * occupies its cell with a non-focusable placeholder tile, so re-numbering the registered tiles
+ * from 1 would report e.g. (1,2) for a tile actually drawn at (1,3) and let ↓ land on the tile
+ * below the REPORTED cell instead of the one below the tile the person is looking at. `columns`
+ * mirrors the stage's grid classes (`grid-cols-1 sm:grid-cols-2 xl:grid-cols-3`).
  *
  * A project whose root is not registered with quay-fleet is absent from the set: there is no
  * fleet id to mint an address from, and the CloudCLI project id is not a fleet handle. Its
  * tile still renders (with the counts) but carries no address and cannot receive focus.
  */
-export function buildCockpitFleetContract(projects: readonly CockpitProject[]): QuayViewContract {
-  const registered = projects.filter(
-    (project): project is CockpitProject & { fleetProjectId: string } =>
-      (project.fleetProjectId ?? null) !== null,
-  );
-  return {
-    focusables: registered.map((project, index) => ({
-      uri: formatQuayUri({ type: 'board', project: project.fleetProjectId }),
-      label: CIRCLED_ORDINALS[index] ?? `(${index + 1})`,
+export function buildCockpitFleetContract(
+  projects: readonly CockpitProject[],
+  columns: number,
+): QuayViewContract {
+  const width = Math.max(1, columns);
+  const focusables: QuayFocusableObject[] = [];
+  projects.forEach((project, index) => {
+    const fleetProjectId = project.fleetProjectId ?? null;
+    if (fleetProjectId === null) return;
+    const ordinal = focusables.length + 1;
+    focusables.push({
+      uri: formatQuayUri({ type: 'board', project: fleetProjectId }),
+      label: CIRCLED_ORDINALS[ordinal - 1] ?? `(${ordinal})`,
       display: {
         status: project.driverState,
         color: DRIVER_COLORS[project.driverState],
-        ordinal: index + 1,
-        pos: { row: index + 1, column: 1 },
+        ordinal,
+        pos: { row: Math.floor(index / width) + 1, column: (index % width) + 1 },
       },
-    })),
-  };
+    });
+  });
+  return { focusables };
 }
 
 const VIEW_QUERY_KEY = 'view';

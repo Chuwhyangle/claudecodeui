@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { VoiceFailureReport, VoiceInputState } from '@/shared/types';
+import type { CockpitVisibleProject, VoiceFailureReport, VoiceInputState } from '@/shared/types';
 import {
   PromptInput,
   PromptInputBody,
@@ -11,6 +11,7 @@ import {
   useVoiceInput,
 } from '@/modules/chat';
 import type { VoiceCaptureEngine } from '@/modules/chat';
+import { parseQuayUri } from '@/modules/quay';
 import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 
 /**
@@ -72,6 +73,30 @@ const DIRECTION_GLYPH: Record<Direction, string> = {
 function pendingKeyOf(pending: { text: string; target: { sessionId: string } | null } | null): string | null {
   if (pending === null) return null;
   return `${pending.target?.sessionId ?? 'none'}|${pending.text}`;
+}
+
+/**
+ * The human name of a focused object, for the card on the phone. The display reports the
+ * project roster beside its focusables, so a board address resolves to the project's display
+ * name (「quay-fleet」) and a task/goal address to its id — the phone cannot see the desktop,
+ * and an ordinal plus a status does not say WHICH object those belong to.
+ *
+ * `null` when the address is not a wall URI: the card then falls back to the ordinal alone
+ * rather than inventing a name.
+ */
+function focusObjectName(
+  uri: string,
+  projects: readonly CockpitVisibleProject[],
+): string | null {
+  const parsed = parseQuayUri(uri);
+  if (!parsed.ok) return null;
+  const object = parsed.object;
+  if (object.type === 'board') {
+    // The roster's fleet id is the URI's project segment; the display name is what a person says.
+    const project = projects.find((candidate) => candidate.fleetProjectId === object.project);
+    return project?.name ?? object.project;
+  }
+  return object.type === 'ledger' ? object.name : object.id;
 }
 
 /** Rendered by `App` for the `/cockpit/remote` route. */
@@ -199,6 +224,16 @@ export default function CockpitRemote({ captureEngine }: CockpitRemoteProps = {}
     [hubState.focusUri, hubState.visible.focusables],
   );
 
+  // The focused object's own name, resolved from the display's roster (see `focusObjectName`).
+  // Derived from hub state only, so the phone names exactly what the desktop is showing.
+  const focusName = useMemo(
+    () =>
+      hubState.focusUri === null
+        ? null
+        : focusObjectName(hubState.focusUri, hubState.visible.projects),
+    [hubState.focusUri, hubState.visible.projects],
+  );
+
   const pending = hubState.pendingSend;
   const pendingKey = pendingKeyOf(pending);
   const target = pending?.target ?? null;
@@ -283,6 +318,16 @@ export default function CockpitRemote({ captureEngine }: CockpitRemoteProps = {}
         </span>
         <p className="text-sm font-medium" data-testid="cockpit-remote-focus-label">
           {focusObject?.label ?? t('cockpit.noFocus')}
+          {focusName !== null && (
+            // The ordinal is a spoken handle; the name is what it points at. Without it the
+            // phone shows 「① running」 and cannot tell which project that is.
+            <span
+              className="ml-2 text-sm font-semibold text-foreground"
+              data-testid="cockpit-remote-focus-name"
+            >
+              {focusName}
+            </span>
+          )}
           {focusObject !== null && (
             <span className="ml-2 text-[11px] font-normal text-muted-foreground">
               {focusObject.display.status}

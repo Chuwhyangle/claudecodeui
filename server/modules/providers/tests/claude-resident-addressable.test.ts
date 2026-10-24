@@ -1130,9 +1130,15 @@ test('a resident session publishes the address it answers to, and a peer reaches
     const readingB: ClaudeUnattendedReading | null = residentDriver().unattendedReading(SESSION_B);
     const toolTable = readingB?.initTools ?? [];
     const sendMessageInToolTable = toolTable.includes('SendMessage');
-    const monitorInToolTable = toolTable.includes('Monitor');
+    // The negative control: a tool the process lacks must read absent, which is
+    // what says this table is a report rather than a list that answers yes to
+    // everything. Monitor was the original control, but the CLI now includes it
+    // in its default table (2.1.x), so a real name would pin the installed
+    // binary's tool set instead of this reader — hence a name no build ships.
+    const absentToolName = 'NoSuchToolInTheProcess';
+    const absentToolInToolTable = toolTable.includes(absentToolName);
     console.log(
-      `[readings] sendMessageInToolTable=${sendMessageInToolTable} monitorInToolTable=${monitorInToolTable} ` +
+      `[readings] sendMessageInToolTable=${sendMessageInToolTable} absentToolInToolTable=${absentToolInToolTable} ` +
         `tools=${toolTable.length} leg2=${legTwoMs}ms`,
     );
 
@@ -1334,7 +1340,7 @@ test('a resident session publishes the address it answers to, and a peer reaches
         `(${String(handedOver.snapshotPeerName)})`,
     );
     assert.strictEqual(sendMessageInToolTable, true, 'a process that can be addressed must have been handed the tool that addresses');
-    assert.strictEqual(monitorInToolTable, false, 'the tool table is the process\'s own, so a tool it lacks must read absent');
+    assert.strictEqual(absentToolInToolTable, false, `the tool table is the process's own, so a tool it lacks must read absent (${absentToolName})`);
 
     // ---------------------------------------------------------------------
     // Leg 3 — the rename, through the app's own rename path, before the turn

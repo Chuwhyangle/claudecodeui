@@ -1064,7 +1064,11 @@ test('a resident process that opens its own turn gets a run, a replay, a notific
     assert.ok(unattendedUuid, 'the unattended turn must be identified by the opener uuid the CLI minted for it');
     assert.strictEqual(unattendedInSet, false, `the unattended turn's uuid must not be in the pushed set (${unattendedUuid ?? 'none'})`);
     assert.strictEqual(reading?.backgroundTaskType, 'local_bash', 'the trigger the process acted on was a local background task');
-    assert.strictEqual(reading?.initTools.includes('Monitor'), false, 'the tool table the process was given has no Monitor');
+    // No Monitor-absence pin here: the table is the CLI's own default and moves
+    // with the installed binary — Monitor entered it in 2.1.x, so "this process
+    // was given no Monitor" stopped being a fact of the launch. The trigger is
+    // already pinned by the `local_bash` reading above, and the table by the
+    // Bash tool that made it.
     assert.strictEqual(reading?.initTools.includes('Bash'), true, 'the tool table the process was given has the Bash that made the trigger');
 
     assert.ok(notifyCalls >= 1, `the unattended turn must notify (notifyCalls=${notifyCalls})`);

@@ -158,6 +158,52 @@ test('AC2: arrows move on the two axes of the reported grid, and the short last 
   assert.equal(state.focusUri, 'quay://a/board', '↑ past the first row stays put');
 });
 
+test('AC1: arrows honour non-focusable placeholder cells in a full 3-column grid', () => {
+  /**
+   * The grid the display DRAWS, 3 columns wide, with two non-focusable placeholder tiles:
+   *
+   *   (1,1) a   (1,2) b   (1,3) [placeholder]
+   *   (2,1) d   (2,2) e   (2,3) [placeholder]
+   *
+   * A placeholder is simply absent from the reported set — `pos` is a coordinate, not an index
+   * — so the reducer must snap over the holes instead of compacting the four objects into a
+   * linear list. In particular ↓ from (1,2) belongs on (2,2), never on "the next focusable".
+   */
+  let state = reduceCockpit(createCockpitState(), {
+    type: 'visible',
+    viewUri: 'quay://a/board',
+    focusables: [
+      object('quay://a/board', 1, 1, 1),
+      object('quay://b/board', 1, 2, 2),
+      object('quay://d/board', 2, 1, 3),
+      object('quay://e/board', 2, 2, 4),
+    ],
+    source: DISPLAY,
+  });
+  assert.equal(state.focusUri, 'quay://a/board');
+
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  assert.equal(state.focusUri, 'quay://b/board', '(1,1) → (1,2)');
+  state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
+  assert.equal(state.focusUri, 'quay://e/board', '(1,2) ↓ (2,2), the cell directly below');
+
+  // (2,3) is a placeholder, so there is no focusable object to the right of (2,2). The rule is
+  // "stay put at the edge" — stated here so the placeholder case has an asserted reading.
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  assert.equal(state.focusUri, 'quay://e/board', '(2,2) → blocked by the (2,3) placeholder');
+  state = reduceCockpit(state, { type: 'move', direction: 'down', source: INPUT });
+  assert.equal(state.focusUri, 'quay://e/board', '(2,2) ↓ past the last row stays put');
+
+  // The other axis is unaffected by the holes: back left within the row, then up the column.
+  state = reduceCockpit(state, { type: 'move', direction: 'left', source: INPUT });
+  assert.equal(state.focusUri, 'quay://d/board', '(2,2) ← (2,1)');
+  state = reduceCockpit(state, { type: 'move', direction: 'up', source: INPUT });
+  assert.equal(state.focusUri, 'quay://a/board', '(2,1) ↑ (1,1)');
+  state = reduceCockpit(state, { type: 'move', direction: 'right', source: INPUT });
+  state = reduceCockpit(state, { type: 'move', direction: 'up', source: INPUT });
+  assert.equal(state.focusUri, 'quay://b/board', '(1,2) ↑ past the first row stays put');
+});
+
 test('zoom in on a project address pushes the fleet view and back pops it', () => {
   let state = gridState();
   state = reduceCockpit(state, { type: 'zoom', direction: 'in', source: INPUT });

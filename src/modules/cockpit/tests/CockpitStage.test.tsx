@@ -335,6 +335,69 @@ const FLEET: QuayFleetSummary = {
   cached: false,
 };
 
+/**
+ * AC2's fixture: a five-tile fleet whose unregistered projects sit INSIDE the grid, not at its
+ * end. At the `xl` breakpoint the grid draws three columns, so the visual cells are:
+ *
+ *   (1,1) claudecodeui   (1,2) meta-cc [placeholder]   (1,3) quay-fleet
+ *   (2,1) archguard      (2,2) plantuml-js [placeholder]
+ *
+ * The placeholders declare no object but still occupy their cell; the reported `pos` must be
+ * the cell each TILE is drawn in, not a re-count of the three declared objects.
+ */
+const FLEET_WITH_HOLES: QuayFleetSummary = {
+  projects: [
+    {
+      projectId: 'p1',
+      fleetProjectId: 'claudecodeui',
+      projectPath: '/work/claudecodeui',
+      driver: { state: 'running' },
+      tasks: { total: 1, todo: 0, ready: 1, needsHuman: 0, done: 0 },
+      cached: false,
+      error: null,
+    },
+    {
+      projectId: 'p4',
+      fleetProjectId: null,
+      projectPath: '/work/meta-cc',
+      driver: { state: 'idle' },
+      tasks: { total: 1, todo: 1, ready: 0, needsHuman: 0, done: 0 },
+      cached: false,
+      error: null,
+    },
+    {
+      projectId: 'p2',
+      fleetProjectId: 'quay-fleet',
+      projectPath: '/work/quay-fleet',
+      driver: { state: 'stale' },
+      tasks: { total: 1, todo: 0, ready: 0, needsHuman: 1, done: 0 },
+      cached: false,
+      error: null,
+    },
+    {
+      projectId: 'p5',
+      fleetProjectId: 'archguard',
+      projectPath: '/work/archguard',
+      driver: { state: 'running' },
+      tasks: { total: 1, todo: 1, ready: 0, needsHuman: 0, done: 0 },
+      cached: false,
+      error: null,
+    },
+    {
+      projectId: 'p6',
+      fleetProjectId: null,
+      projectPath: '/work/plantuml-js',
+      driver: { state: 'idle' },
+      tasks: { total: 1, todo: 1, ready: 0, needsHuman: 0, done: 0 },
+      cached: false,
+      error: null,
+    },
+  ],
+  generatedAt: '2026-10-23T00:00:00.000Z',
+  ttlPerProjectMs: 30000,
+  cached: false,
+};
+
 const SNAPSHOT: QuaySnapshot = {
   projectId: 'p1',
   projectPath: '/work/claudecodeui',
@@ -393,7 +456,11 @@ const locationSearch = () => screen.getByTestId('location').getAttribute('data-s
 const focusUri = () => screen.getByTestId('cockpit-focus').getAttribute('data-cockpit-focus');
 
 /** The focusable declaration a rendered view publishes, parsed from its own attribute. */
-function declaredFocusables(container: HTMLElement): Array<{ uri: string; label: string }> {
+function declaredFocusables(container: HTMLElement): Array<{
+  uri: string;
+  label: string;
+  display: { status: string; color: string; ordinal: number; pos: { row: number; column: number } };
+}> {
   const holder = container.matches('[data-cockpit-focusables]')
     ? container
     : container.querySelector('[data-cockpit-focusables]');
@@ -401,6 +468,7 @@ function declaredFocusables(container: HTMLElement): Array<{ uri: string; label:
   return JSON.parse(holder?.getAttribute('data-cockpit-focusables') ?? '[]') as Array<{
     uri: string;
     label: string;
+    display: { status: string; color: string; ordinal: number; pos: { row: number; column: number } };
   }>;
 }
 
@@ -468,6 +536,63 @@ describe('fleet view contract', () => {
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(focusUri()).toBe('quay://quay-fleet/board');
+  });
+
+  it('AC2: reports each tile’s real grid cell, counting non-focusable placeholders', async () => {
+    // The stage draws three columns from 1280px up; jsdom's default viewport is 1024px (two).
+    const widthDescriptor = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 });
+    apiMock.quayFleetSummary.mockResolvedValue(okResponse(FLEET_WITH_HOLES));
+
+    try {
+      renderCockpit();
+      const tiles = await screen.findAllByTestId('cockpit-fleet-tile');
+      expect(tiles).toHaveLength(5);
+
+      const declared = declaredFocusables(screen.getByTestId('cockpit-fleet-tiles'));
+      // Labels stay in READING order among the declared objects: the second spoken object is
+      // quay-fleet even though its cell is (1,3), because a placeholder sits between them.
+      expect(declared.map((object) => object.label)).toEqual(['①', '②', '③']);
+      expect(declared.map((object) => object.uri)).toEqual([
+        'quay://claudecodeui/board',
+        'quay://quay-fleet/board',
+        'quay://archguard/board',
+      ]);
+      // ...but `pos` is the cell the TILE is drawn in, placeholders included. Re-numbering the
+      // three declared objects from 1 would report (1,1) (1,2) (1,3) and make ↓ from the first
+      // tile a no-op instead of landing on archguard.
+      expect(declared.map((object) => object.display.pos)).toEqual([
+        { row: 1, column: 1 },
+        { row: 1, column: 3 },
+        { row: 2, column: 1 },
+      ]);
+
+      // The tiles publish the same cells; the two unregistered tiles declare no object at all.
+      const tilePositions = tiles.map((tile) => {
+        const display = tile.getAttribute('data-quay-display');
+        return display === null
+          ? null
+          : (JSON.parse(display) as { pos: { row: number; column: number } }).pos;
+      });
+      expect(tilePositions).toEqual([
+        { row: 1, column: 1 },
+        null,
+        { row: 1, column: 3 },
+        { row: 2, column: 1 },
+        null,
+      ]);
+
+      // The reducer reads these cells: ↓ from the first tile belongs on the tile below it.
+      await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/board'));
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      await waitFor(() => expect(focusUri()).toBe('quay://archguard/board'));
+    } finally {
+      if (widthDescriptor === undefined) {
+        delete (window as unknown as { innerWidth?: number }).innerWidth;
+      } else {
+        Object.defineProperty(window, 'innerWidth', widthDescriptor);
+      }
+    }
   });
 
   it('moves focus by direction key on the reported grid and clamps at both ends', async () => {

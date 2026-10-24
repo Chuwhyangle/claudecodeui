@@ -174,25 +174,6 @@ function currentViewportWidth(): number {
 }
 
 /**
- * Re-indexes a single-column contract onto the columns the grid draws. Labels and ordinals keep
- * their reading order; only `pos` changes, because `pos` is the coordinate the reducer snaps
- * over. A null-safe `columns` floor of 1 keeps a zero-width first render from dividing by zero.
- */
-function withGridPositions(
-  focusables: readonly QuayFocusableObject[],
-  columns: number,
-): QuayFocusableObject[] {
-  const width = Math.max(1, columns);
-  return focusables.map((object, index) => ({
-    ...object,
-    display: {
-      ...object.display,
-      pos: { row: Math.floor(index / width) + 1, column: (index % width) + 1 },
-    },
-  }));
-}
-
-/**
  * The hub's view → the page's view. The hub speaks in `quay://` project segments (fleet
  * registry ids); the page fetches and links by CloudCLI project id. An unregistered segment
  * has no board to show, so it stays on the fleet rather than inventing a URL.
@@ -363,10 +344,7 @@ export default function CockpitPage() {
   const fleetFocusables = useMemo(
     () =>
       fleet.status === 'loaded'
-        ? withGridPositions(
-            buildCockpitFleetContract(fleet.projects).focusables,
-            fleetGridColumns(viewportWidth),
-          )
+        ? buildCockpitFleetContract(fleet.projects, fleetGridColumns(viewportWidth)).focusables
         : [],
     [fleet, viewportWidth],
   );
