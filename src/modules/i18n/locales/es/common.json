@@ -150,6 +150,7 @@
       }
     },
     "title": "Arquitectura",
+    "diffHighlight": "Resaltado de diferencias: {{nodes}} objetivos · {{edges}} relaciones",
     "noSession": "Selecciona una sesión para ver la arquitectura de los archivos que tocó.",
     "loading": "Generando el gráfico de arquitectura…",
     "retry": "Reintentar",

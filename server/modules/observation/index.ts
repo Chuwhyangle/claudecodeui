@@ -102,6 +102,31 @@ export type {
   ProjectVerificationEntry,
   ProjectVerificationLayer,
 } from './project-truth.js';
+// consumer: the observation composition root (refreshes each registered project on a landing,
+// throttled hourly by the producer itself) and `observation-wall-ui`, which renders the
+// architecture tile's diff sentences. The criterion builds its own producer over an injected
+// snapshot reader and clock.
+export {
+  createArchitectureDeltaProducer,
+  ARCHITECTURE_DELTA_PRODUCER,
+  ARCHITECTURE_DELTA_REFRESH_MS,
+} from './architecture-delta.producer.js';
+export type {
+  ArchitectureDeltaProducer,
+  ArchitectureDeltaProducerDeps,
+  ArchitectureDeltaTarget,
+} from './architecture-delta.producer.js';
+export {
+  ARCHITECTURE_GROWTH_TOP_N,
+  ARCHITECTURE_SIZE_CALIBER,
+  diffArchitectureStructures,
+  readStructureSnapshot,
+} from './architecture-delta.js';
+export type {
+  ArchitectureDiffPackageEdge,
+  ArchitectureGrowthRow,
+  ArchitectureStructuralDiff,
+} from './architecture-delta.js';
 // consumer: server/modules/observation/observation-store.ts (the wall's producers[]) and the
 // producer-liveness criterion
 export {

@@ -150,6 +150,7 @@
       }
     },
     "title": "Architecture",
+    "diffHighlight": "Surlignage des différences : {{nodes}} cibles · {{edges}} relations",
     "noSession": "Sélectionnez une session pour voir l'architecture des fichiers qu'elle a touchés.",
     "loading": "Génération du graphe d'architecture…",
     "retry": "Réessayer",

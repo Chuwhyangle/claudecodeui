@@ -76,6 +76,19 @@ export type {
   ArchitectureSearchQueryResult,
   ArchitectureSearchTarget,
 } from './search.js';
+// consumer: server/modules/observation/architecture-delta.ts and
+// architecture-delta.producer.ts (the project-wide structural snapshot and its diff), plus
+// server/modules/architecture/tests/architecture-routes.test.ts
+export type {
+  ArchitectureLayerDeclaration,
+  ArchitectureLayerEntry,
+  ArchitectureStructureCycle,
+  ArchitectureStructureEdge,
+  ArchitectureStructureInput,
+  ArchitectureStructurePackage,
+  ArchitectureStructureResult,
+  ArchitectureStructureSnapshot,
+} from './service.js';
 // consumer: server/index.ts (mounts the router under /api/architecture)
 export { createArchitectureModule } from './module.js';
 export type { ArchitectureModuleDeps } from './module.js';

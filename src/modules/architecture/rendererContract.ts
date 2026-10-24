@@ -190,6 +190,28 @@ export type ArchitectureRendererHover = {
 };
 
 /**
+ * A structural diff set the observation wall hands to the architecture tab.
+ *
+ * The tile's reading is package-level, so it names packages (and package edges) rather than the
+ * entity ids a particular drawing happens to use; the drawing marks every node inside a named
+ * package and every edge whose two ends are a named package pair. `nodeIds`/`edges` carry exact
+ * drawn ids for a caller that already has them (a deep link copied from a drawing).
+ *
+ * Every field is optional: an absent diff is "no highlight", and the tab renders exactly as it
+ * did before diff highlighting existed.
+ */
+export type ArchitectureDiffHighlight = {
+  /** Drawn node ids to mark verbatim (file ids or entity ids, whichever subgraph is open). */
+  readonly nodeIds?: readonly string[];
+  /** Drawn edge pairs to mark verbatim, matched against the payload's own from/to ids. */
+  readonly edges?: readonly { readonly from: string; readonly to: string }[];
+  /** Package ids (project-relative directories) whose drawn nodes are marked. */
+  readonly packageIds?: readonly string[];
+  /** Package-level new dependencies; every drawn edge crossing them is marked. */
+  readonly packageEdges?: readonly { readonly from: string; readonly to: string }[];
+};
+
+/**
  * The props every architecture graph renderer accepts. `graph` arrives whole —
  * the panel never re-fetches.
  *
@@ -252,6 +274,11 @@ export type ArchitectureRendererHover = {
 export type ArchitectureRendererProps = {
   readonly graph: ArchitectureRendererGraph;
   readonly idShape?: ArchitectureNodeIdShape;
+  /**
+   * The structural differences to mark (the observation wall's architecture tile). Absent/null
+   * means no highlight: a renderer must draw byte-identical chrome to the pre-highlight reading.
+   */
+  readonly diffHighlight?: ArchitectureDiffHighlight | null;
   readonly maxHops?: number;
   readonly maxNodes?: number;
   readonly detailReading?: ArchitectureDetailReading;

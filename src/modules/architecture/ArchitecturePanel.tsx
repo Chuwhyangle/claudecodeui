@@ -87,6 +87,7 @@ import {
 import type {
   ArchitectureDetailReading,
   ArchitectureDrawnPlantUml,
+  ArchitectureDiffHighlight,
   ArchitectureEntityKind,
   ArchitectureFitRequest,
   ArchitectureNodeIdShape,
@@ -272,7 +273,67 @@ type ArchitecturePanelProps = {
    * FIRST paint only; a null/absent value leaves every stored knob in charge.
    */
   deepLinkSearch?: string;
+  /**
+   * The structural differences an observation tile asked this tab to mark (the
+   * wall's architecture preview). A deep link's `diffNode`/`diffEdge`/`diffPkg`/
+   * `diffPkgEdge` parameters carry the same set, so a preview can open this page
+   * without a caller-side prop. Absent/null leaves the drawing exactly as before.
+   */
+  diffHighlight?: ArchitectureDiffHighlight | null;
 };
+
+/** One `from->to` pair from a diff deep link; null when either side is missing. */
+function parseDiffPair(raw: string): { from: string; to: string } | null {
+  const separator = raw.indexOf('->');
+  if (separator <= 0) return null;
+  const from = raw.slice(0, separator).trim();
+  const to = raw.slice(separator + 2).trim();
+  return from === '' || to === '' ? null : { from, to };
+}
+
+/**
+ * Parses the diff set a preview puts in the standalone URL.
+ *
+ * Repeatable parameters keep the link readable and avoid inventing a serialisation:
+ * `diffNode=<drawn id>`, `diffEdge=<from>-><to>`, `diffPkg=<package id>`,
+ * `diffPkgEdge=<from>-><to>`. Anything malformed is ignored, like every other deep-link
+ * parameter — a shared URL must never break the page.
+ */
+function parseDeepLinkDiffHighlight(search: string): ArchitectureDiffHighlight | null {
+  const trimmed = search.trim();
+  if (trimmed === '') return null;
+  const params = new URLSearchParams(trimmed.startsWith('?') ? trimmed.slice(1) : trimmed);
+  const strings = (name: string): string[] =>
+    params.getAll(name).map((value) => value.trim()).filter((value) => value !== '');
+  const pairs = (name: string): { from: string; to: string }[] =>
+    strings(name)
+      .map(parseDiffPair)
+      .filter((pair): pair is { from: string; to: string } => pair !== null);
+
+  const nodeIds = strings('diffNode');
+  const edges = pairs('diffEdge');
+  const packageIds = strings('diffPkg');
+  const packageEdges = pairs('diffPkgEdge');
+  if (nodeIds.length === 0 && edges.length === 0 && packageIds.length === 0 && packageEdges.length === 0) {
+    return null;
+  }
+  return {
+    ...(nodeIds.length === 0 ? {} : { nodeIds }),
+    ...(edges.length === 0 ? {} : { edges }),
+    ...(packageIds.length === 0 ? {} : { packageIds }),
+    ...(packageEdges.length === 0 ? {} : { packageEdges }),
+  };
+}
+
+/** How many distinct node/edge targets a highlight names, for the readout chip. */
+function diffHighlightCounts(highlight: ArchitectureDiffHighlight): { nodes: number; edges: number } {
+  const nodes = new Set([...(highlight.nodeIds ?? []), ...(highlight.packageIds ?? [])]).size;
+  const edges = new Set(
+    [...(highlight.edges ?? []), ...(highlight.packageEdges ?? [])]
+      .map((edge) => `${edge.from}->${edge.to}`),
+  ).size;
+  return { nodes, edges };
+}
 
 /**
  * The renderer plus the two optional focus props this panel adds on top of the
@@ -354,9 +415,18 @@ export default function ArchitecturePanel({
   standalone = false,
   onBackToSession,
   deepLinkSearch = '',
+  diffHighlight = null,
 }: ArchitecturePanelProps) {
   // `i18n` is the readout's locale (locale-aware times); `t` labels both knobs.
   const { t, i18n } = useTranslation();
+
+  // The structural diff the drawing marks: an explicit prop (the wall's preview) or the
+  // standalone link's parameters. Absent means no markers and the pre-highlight rendering.
+  const deepLinkDiffHighlight = useMemo(
+    () => parseDeepLinkDiffHighlight(deepLinkSearch),
+    [deepLinkSearch],
+  );
+  const resolvedDiffHighlight = diffHighlight ?? deepLinkDiffHighlight;
 
   // The standalone link's readings, captured ONCE: a link decides the first
   // paint, and every later change belongs to the page rather than the address
@@ -3526,6 +3596,10 @@ export default function ArchitecturePanel({
    * cell): as an overlay it covered the first row of the graph. The filter's
    * second line sits under it, so hiding and narrowing never share a number.
    */
+  // The diff set's size, for the one readout line; null when nothing is highlighted.
+  const diffCounts = resolvedDiffHighlight === null
+    ? null
+    : diffHighlightCounts(resolvedDiffHighlight);
   const readoutPanel = (
     <div
       data-architecture-readout="true"
@@ -3601,6 +3675,22 @@ export default function ArchitecturePanel({
         )}
         <span aria-hidden="true">{readoutOpen ? '▾' : '▸'}</span>
       </button>
+      {/* The wall's structural diff: one line stating how many targets are marked. On the
+          compact tier it lives in the expanded area, like every other second line. */}
+      {diffCounts !== null && (!compactToolbar || readoutOpen) && (
+        <div
+          data-testid="architecture-diff-highlight"
+          data-architecture-diff-nodes={diffCounts.nodes}
+          data-architecture-diff-edges={diffCounts.edges}
+          className="mt-0.5 text-amber-700 dark:text-amber-400"
+        >
+          {t('architecture.diffHighlight', {
+            defaultValue: 'Diff highlight: {{nodes}} targets · {{edges}} relations',
+            nodes: diffCounts.nodes,
+            edges: diffCounts.edges,
+          })}
+        </div>
+      )}
       {/* A scope step that found entities and then hid all of them: state the
           delta and offer the one click that brings them back. On the compact
           tier this is part of the EXPANDED area — the collapsed card is one
@@ -4343,6 +4433,7 @@ export default function ArchitecturePanel({
                     // group prefixes). The renderer must not have to guess: see
                     // `nodeIdShapeOf`.
                     idShape={nodeIdShapeOf(granularity)}
+                    diffHighlight={resolvedDiffHighlight}
                     onNodeHover={handleNodeHover}
                     // A SINGLE click only selects: the inspector opens on the
                     // right and the drawing must not re-lay out. Drilling is the
