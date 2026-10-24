@@ -32,7 +32,7 @@ depends_on:
 ## DoD
 
 - 对 5 个真实会话（含一个以提问结尾、一个跑测试、一个出错）生成摘要，人工核对每条的「问你」判定与测试计数，报告误判数。
-- - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
+- 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
 
 ## Touches
 
