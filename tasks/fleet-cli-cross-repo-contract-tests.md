@@ -35,8 +35,8 @@ extra: {}
 
 ## Touches
 
-- server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts
-- server/modules/quay/tests/contracts/shapes.ts
-- server/modules/quay/tests/contracts/README.md
+- server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts (new)
+- server/modules/quay/tests/contracts/shapes.ts (new)
+- server/modules/quay/tests/contracts/README.md (new)
 - server/modules/quay/quay-fleet-locator.ts
 - tasks/fleet-cli-cross-repo-contract-tests.md
