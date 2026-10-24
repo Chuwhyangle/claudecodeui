@@ -1,7 +1,7 @@
 ---
 id: gap-composer-quote-chip-inline-at-caret
 title: 引用 chip 内嵌在输入框光标处并参与文本排版（输入框非空时），删除文字上方的占位行
-status: ready
+status: done
 labels:
   - gap
 parent: null
