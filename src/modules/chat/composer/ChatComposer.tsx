@@ -64,14 +64,20 @@ const LIVE_VOICE_NOTICE_MS = 4000;
 const REPLY_SUGGEST_FAILURE_DISPLAY_MS = 3000;
 
 /**
- * Top padding for a textarea whose first line would otherwise sit under the chip strip.
+ * The row a non-empty box reserves under the chip strip.
  *
  * The strip is an absolute overlay (`top-0`, `py-2`) holding 24px chips, and the
- * preview line below them ends at 44px. `pt-12` starts the text at 48px, clearing
- * both. It is applied only while the box holds text AND the strip is drawn — the
- * empty-box layout, which the strip was designed for, keeps its original padding.
+ * preview line below them ends at 44px. A 48px flow spacer (`h-12`) starts the
+ * textarea below both. A spacer rather than textarea padding: the textarea's
+ * auto-grow height is computed from `scrollHeight` when its value changes, which
+ * is BEFORE this state's class lands — padding applied after that measurement
+ * left the box too short and the browser scrolled the text back under the strip.
+ * The overlay gets the same 48px (`pt-12`) so a dictation wash stays on the words
+ * it covers. Both are applied only while text is present; the empty-box layout,
+ * which the strip was designed for, keeps its original padding.
  */
-const TEXT_CLEARANCE_UNDER_CHIP_ROW_CLASS = 'pt-12';
+const CHIP_ROW_CLEARANCE_SPACER_CLASS = 'h-12';
+const CHIP_ROW_CLEARANCE_PADDING_CLASS = 'pt-12';
 
 /**
  * The viewport width, in CSS pixels, below which the compact footer drops the clear control.
@@ -1050,8 +1056,21 @@ export default function ChatComposer({
             and the replay row when the tier moves it in here.
           */}
           <PromptInputBody className={areToolsInline ? 'flex min-w-0 flex-col' : undefined}>
+            {chipRowOverText && (
+              // A flow row, not textarea padding: see CHIP_ROW_CLEARANCE_SPACER_CLASS.
+              // It is what keeps the first line of a filled quote out from under the strip.
+              <div
+                data-slot="chip-row-clearance"
+                aria-hidden="true"
+                className={CHIP_ROW_CLEARANCE_SPACER_CLASS}
+              />
+            )}
             <div ref={inputHighlightRef} aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
-              <div className="chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6 text-transparent">
+              <div className={cn(
+                'chat-input-placeholder block w-full whitespace-pre-wrap break-words px-4 py-2 text-sm leading-6 text-transparent',
+                // Mirrors the spacer so a dictation wash lands on the words it covers.
+                chipRowOverText && CHIP_ROW_CLEARANCE_PADDING_CLASS,
+              )}>
                 {/*
                   The overlay is the textarea's own text, drawn transparently, so it can carry a
                   background the textarea itself cannot. The provisional span splits it into the
@@ -1086,9 +1105,6 @@ export default function ChatComposer({
               onFocus={() => onInputFocusChange?.(true)}
               onBlur={() => onInputFocusChange?.(false)}
               onInput={onTextareaInput}
-              // The strip is absolutely positioned over the box; while text is
-              // present it must start under the chips and their preview line.
-              className={chipRowOverText ? TEXT_CLEARANCE_UNDER_CHIP_ROW_CLASS : undefined}
               placeholder={showSuggestionChips ? '' : placeholder}
               aria-activedescendant={
                 showSuggestionChips && selectedInputSuggestionIndex !== null

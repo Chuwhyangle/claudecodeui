@@ -263,8 +263,15 @@ describe('composer wiring', () => {
 // The strip is an overlay: a non-empty box must not have its first line under it
 // ---------------------------------------------------------------------------
 
-/** The top-padding token that starts the text below the chip row and its preview. */
-const CLEARANCE_CLASS = /(^|\s)pt-12(\s|$)/u;
+/**
+ * The flow row the composer reserves so the first text line starts below the
+ * strip. A spacer rather than textarea padding: the textarea's auto-grow height
+ * is measured before a padding class can land, so padding left the box short and
+ * the browser scrolled the text back under the chips. A spacer is applied before
+ * that measurement and cannot be undone by it.
+ */
+const CLEARANCE_SELECTOR = '[data-slot="chip-row-clearance"]';
+const CLEARANCE_HEIGHT_CLASS = /(^|\s)h-12(\s|$)/u;
 
 const quotedChips = () => buildSuggestionChips({ quotedText: '选中的原文' });
 
@@ -285,7 +292,9 @@ describe('chip row clearance over a non-empty box', () => {
 
     const textarea = view.container.querySelector('textarea');
     assert.ok(textarea, 'the composer must render a textarea');
-    assert.match(textarea.className, CLEARANCE_CLASS, 'the first line starts below the chip row');
+    const spacer = view.container.querySelector<HTMLElement>(CLEARANCE_SELECTOR);
+    assert.ok(spacer, 'the box must reserve a row for the strip while text is present');
+    assert.match(spacer.className, CLEARANCE_HEIGHT_CLASS, 'the reserved row is 48px, clearing the 40px chips and the 44px preview');
     assert.ok(view.getByRole('listbox'), 'the quoted chip row is still drawn');
   });
 
@@ -298,14 +307,12 @@ describe('chip row clearance over a non-empty box', () => {
 
     const textarea = view.container.querySelector('textarea');
     assert.ok(textarea);
-    assert.equal(CLEARANCE_CLASS.test(textarea.className), false, 'the empty box keeps its original padding');
+    assert.equal(view.container.querySelector(CLEARANCE_SELECTOR) === null, true, 'the empty box reserves no row');
   });
 
   it('(c) after the quote fills the box the row stays and the text keeps its clearance', () => {
     const view = renderComposerOverStrip({ input: '' });
-    const before = view.container.querySelector('textarea');
-    assert.ok(before);
-    assert.equal(CLEARANCE_CLASS.test(before.className), false);
+    assert.equal(view.container.querySelector(CLEARANCE_SELECTOR) === null, true);
 
     view.rerender(React.createElement(ChatComposer, {
       ...composerBaseProps(),
@@ -315,9 +322,9 @@ describe('chip row clearance over a non-empty box', () => {
       suggestionChips: quotedChips(),
     } as unknown as React.ComponentProps<typeof ChatComposer>));
 
-    const after = view.container.querySelector('textarea');
-    assert.ok(after);
-    assert.match(after.className, CLEARANCE_CLASS);
+    const spacer = view.container.querySelector(CLEARANCE_SELECTOR);
+    assert.ok(spacer, 'the filled quote gets the reserved row');
+    assert.match(spacer.className, CLEARANCE_HEIGHT_CLASS);
     assert.ok(view.getByRole('listbox'), 'the quoted chip is still offered for appending a second passage');
   });
 });
