@@ -530,14 +530,14 @@ function evaluateTier(
       hasAttributes: plan.hasAttributes,
       titleHeight: tier === 'A' ? Math.max(plan.titleHeight, plan.reservedTitleHeight) : 7,
     });
-    // `planMemberRows` OWNS the visibility verdict; the solver only reads it.
-    // This is the interface the task exists for: the same call that decides the
-    // rows also decides whether the frame keeps its full body.
+    // `planMemberRows` OWNS the row plan; the TIER decides whether those rows
+    // are drawn at all (tier B+ hides every member block). The axis solver then
+    // reads that one verdict, so the height and the draw path cannot disagree.
     const showMembers = tier === 'A' && rows.visible;
     const effectiveHeight = planMemberFrameHeight({
       fullHeight: node.rect.height,
       compactHeight,
-      rows,
+      rows: { visible: showMembers },
       compaction: memberCompaction,
     });
     return { geometry: node, plan, showMembers, effectiveHeight };

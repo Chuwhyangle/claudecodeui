@@ -935,7 +935,11 @@ describe('the member-hidden vertical compaction (axis solver × planMemberRows)'
     const cases: { scale: number; forceTier: 'A' | 'B' }[] = [
       // Tier A hides the rows once fewer than two fit (140 × 0.35 leaves none).
       { scale: 0.35, forceTier: 'A' },
-      // Tier B never draws member text, at any scale.
+      // Tier B never draws member text, at any scale — including one at which
+      // the rows WOULD have fit at tier A. The compaction must follow the tier's
+      // draw decision, not the row count alone.
+      { scale: 0.85, forceTier: 'B' },
+      // Tier B at scales where the rows also do not fit geometrically.
       { scale: 0.35, forceTier: 'B' },
       { scale: 0.5, forceTier: 'B' },
     ];
