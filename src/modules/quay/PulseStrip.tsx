@@ -477,7 +477,13 @@ export default function PulseStrip({
                   onMouseLeave={() => setHover(null)}
                   title={mark.tooltip}
                   aria-label={mark.tooltip}
-                  className={cn('absolute w-px', STATUS_STYLES[mark.severity].className)}
+                  className={cn(
+                    // The visual is one thin line; the `before` box is an invisible 5 px hit
+                    // target so a pointer can actually land on it (density must not make the
+                    // reading unhoverable).
+                    'absolute w-px before:absolute before:-inset-x-2 before:inset-y-0 before:content-[""]',
+                    STATUS_STYLES[mark.severity].className,
+                  )}
                   style={{
                     left: `${mark.left}%`,
                     // Success rises from the baseline (row middle) and failure sinks below it.
@@ -499,7 +505,10 @@ export default function PulseStrip({
                   onMouseLeave={() => setHover(null)}
                   title={mark.tooltip}
                   aria-label={mark.tooltip}
-                  className={cn('absolute bottom-0 w-px', STATUS_STYLES[mark.severity].className)}
+                  className={cn(
+                    'absolute bottom-0 w-px before:absolute before:-inset-x-2 before:inset-y-0 before:content-[""]',
+                    STATUS_STYLES[mark.severity].className,
+                  )}
                   style={{ left: `${mark.left}%`, height: mark.height }}
                   data-testid={`${testId}-suite-mark`}
                   data-state={mark.round.state}
@@ -510,7 +519,7 @@ export default function PulseStrip({
                 >
                   {mark.failed && (
                     <span
-                      className={cn('absolute -top-1 left-0 text-[7px] leading-none', STATUS_STYLES.critical.text)}
+                      className={cn('pointer-events-none absolute -top-1 left-0 text-[7px] leading-none', STATUS_STYLES.critical.text)}
                       data-testid={`${testId}-suite-fail-glyph`}
                     >
                       ✕
@@ -546,7 +555,7 @@ export default function PulseStrip({
                 >
                   <span
                     className={cn(
-                      'absolute -top-2 left-full whitespace-nowrap text-[8px] font-semibold leading-none',
+                      'pointer-events-none absolute -top-2 left-full whitespace-nowrap text-[8px] font-semibold leading-none',
                       STATUS_STYLES.critical.text,
                     )}
                     data-testid={`${testId}-blocker-impact`}

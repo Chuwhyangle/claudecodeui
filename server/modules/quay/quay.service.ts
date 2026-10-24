@@ -2047,12 +2047,15 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       readCarrierFileTail(
         dependencies.readFile,
         path.join(quayDir, QUAY_ROUND_HISTORY_FILE),
-        QUAY_RECENT_LIST_LIMIT,
+        // The pulse strip reads the same rounds over a 6/24/72h window, so the snapshot keeps
+        // the window's density rather than the cards' ten rows. The cards slice what they show;
+        // the strip would undercount activity if handed only ten.
+        QUAY_PULSE_HISTORY_LIMIT,
       ),
       readCarrierFileTail(
         dependencies.readFile,
         path.join(quayDir, QUAY_WORKER_OUTCOME_FILE),
-        QUAY_RECENT_LIST_LIMIT,
+        QUAY_PULSE_HISTORY_LIMIT,
       ),
       readLastCarrierRecord(dependencies.readFile, path.join(quayDir, QUAY_WORKER_ROUND_FILE)),
       readDashboardUrl(projectPath),
