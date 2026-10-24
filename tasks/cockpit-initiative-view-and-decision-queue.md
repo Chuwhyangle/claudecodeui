@@ -89,3 +89,11 @@ Server — `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/t
 DoD — isolated instance: `DATABASE_PATH=/tmp/cockpit-initiative-verify/auth.db`, `HOME=/tmp/cockpit-initiative-verify/home`, `SERVER_SETTINGS_PATH` with `{"residentRestore":{"enabled":false},"initiative":{"auditRatio":0.2}}`, real fleet seeded through `quay-fleet initiative create/link/edge/escalate/decide` under `QUAY_FLEET_HOME=/tmp/cockpit-initiative-verify/fleet-home`. No resident-restore pass ran (the log carries no `resident-restore` line). Real browser (Playwright chromium) at PC 1440×900 and mobile 390×844, real `GET /api/quay/initiatives`: one row for `cockpit-observation-wall`, two project cells (1 task/1 goal and 2 tasks/0 goals), a blocked `blocks` edge with its duration, one typed queue item, two sampled self-decisions; preview → confirm recorded the ruling (`data-notice-kind=done`, queue 0). Screenshots: `tmp/initiative-view-pc.png`, `tmp/initiative-view-mobile.png`, `tmp/initiative-decision-preview-pc.png`, `tmp/initiative-decision-confirmed-pc.png`; readings in `tmp/initiative-dod-report.json`. The pin route accepted and removed `quay://fleet/initiative/cockpit-observation-wall` (PUT/DELETE 200).
 
 Baseline red carried — the merge of develop brought `scripts/contraction-candidates/scan.mjs` + `scan.test.mjs` (landed by `contraction-candidates-signal-inventory-and-design`), whose implicit-any parameters red `npm run typecheck` for every branch on develop. Both files carry a file-local `@ts-nocheck` with a removal note; typing them belongs to their owning follow-up, not to this task. `npm run typecheck` is green with the guard.
+
+## Blocker
+
+**2026-10-24T10:09:15.993Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: the measured cycles must match the pinned baseline groups member-for-member
+- run_id：wk-prod-anchor
+- session_id：6046c5ef-092b-4ea6-a755-b480924dd9cf
