@@ -43,9 +43,9 @@ depends_on:
 
 ## Touches
 
-- `experiments/reply-suggestions-bench/bench.py`
-- `experiments/reply-suggestions-bench/README.md`
-- `experiments/reply-suggestions-bench/fixtures/synthetic-judgements.json`
+- `experiments/reply-suggestions-bench/bench.py` (new)
+- `experiments/reply-suggestions-bench/README.md` (new)
+- `experiments/reply-suggestions-bench/fixtures/synthetic-judgements.json` (new)
 - `tasks/gap-reply-suggestions-offline-benchmark-tool.md`
 
 ## Needs-Human
@@ -58,4 +58,5 @@ depends_on:
 
 - 上条 DoD 里的「后端任务落地后产生的本机记录」被 `UNSATISFIABLE_AC_DECLARATION_PHRASES` 的「落地后」无上下文命中；该短语在此只是描述记录的来源，不是声明执行者结构上无法完成。
 - 改写为「由后端任务产生的本机记录」，语义不变；条目本身可满足（后端任务产出使用记录，尚无足够记录时用合成记录演示并按原文注明条数），因此**不加** `（待外部）` 注解。
+- 三个尚未创建的 Touches 补 `(new)` 标注（touches-parser 的既有契约：预占的新文件必须带尾注 `(new)` 才算 admission-eligible），使 `touchesResolve` 为真。
 - 其余文字未动。改写后退回 todo，待依赖 `gap-reply-suggestions-backend-llm-service` 落地后由晋升流程派发。
