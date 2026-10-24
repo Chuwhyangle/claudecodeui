@@ -28,11 +28,11 @@ extra:
 
 ## AC
 
-- [ ] AC1: `npx vitest run src/modules/sidebar/tests/SidebarModeSwitch.test.tsx` exit 0——fleet-summary 桩中 quay-fleet 有 1 项 needs-human、claudecodeui 为 0：徽标 aria-label 与 title 含「quay-fleet」及数量 1、不含 claudecodeui；多个项目时按数量降序列出。
-- [ ] AC2: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——整页渲染后可访问的模式切换实例唯一（`getAllByRole('link', {name: ...})` 中未被 aria-hidden 的恰好一份）；点击徽标后视图为 fleet 且 needs-human 项目排在最前（读渲染顺序）。
-- [ ] AC3: 同一测试文件——「Phone remote」按钮带与图标按钮共用的尺寸类（断言 className 含该共用类，而非 jsdom 量尺寸）；< md 断言类含 `hidden`（`md:` 断点显示）。
-- [ ] AC4: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` exit 0——新文案键 12 个 locale 齐全。
-- [ ] AC5: `npm run typecheck` 通过。
+- [x] AC1: `npx vitest run src/modules/sidebar/tests/SidebarModeSwitch.test.tsx` exit 0——fleet-summary 桩中 quay-fleet 有 1 项 needs-human、claudecodeui 为 0：徽标 aria-label 与 title 含「quay-fleet」及数量 1、不含 claudecodeui；多个项目时按数量降序列出。
+- [x] AC2: `npx vitest run src/modules/cockpit/tests/CockpitStage.test.tsx` exit 0——整页渲染后可访问的模式切换实例唯一（`getAllByRole('link', {name: ...})` 中未被 aria-hidden 的恰好一份）；点击徽标后视图为 fleet 且 needs-human 项目排在最前（读渲染顺序）。
+- [x] AC3: 同一测试文件——「Phone remote」按钮带与图标按钮共用的尺寸类（断言 className 含该共用类，而非 jsdom 量尺寸）；< md 断言类含 `hidden`（`md:` 断点显示）。
+- [x] AC4: `npx vitest run src/modules/cockpit/tests/i18nCockpitCompleteness.test.ts` exit 0——新文案键 12 个 locale 齐全。
+- [x] AC5: `npm run typecheck` 通过。
 
 ## DoD
 
