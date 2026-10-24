@@ -1,7 +1,7 @@
 ---
 id: gap-composer-quote-chip-insert-at-caret
 title: 引用 chip：把选中文本插入输入框光标处（按空格与回车规则）、用后即退场、删除「引用回应」展开路径、发送去掉末尾空格与回车
-status: todo
+status: ready
 labels:
   - gap
 parent: null
