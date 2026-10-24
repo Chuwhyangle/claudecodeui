@@ -58,8 +58,10 @@ depends_on:
 
 ## Blocker
 
-**2026-10-24T09:43:56.514Z — worker 未落地（exited-not-landed）**
+**2026-10-24T09:58:06.069Z — worker 未落地（exited-not-landed）**
 
-- 未落地原因：step=suite: __PERFILE__ duration_ms=89531 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792834643520
+- 未落地原因：step=merge-develop: Auto-merging server/shared/tests/quay-test-script.test.ts
+CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
+Automatic merge failed; fix conflicts and then commit the result.
 - run_id：wk-prod-anchor
-- session_id：afb6aeed-de44-4404-8bbf-5294bcf04c35
+- session_id：e4de0865-ff9f-4d53-84d9-6c855c9ed713
