@@ -1,7 +1,7 @@
 ---
 id: fleet-cli-cross-repo-contract-tests
 title: M2 跨仓库契约测试：对着已安装的 quay-fleet 校验 CloudCLI 消费的全部 CLI 契约形状，不兼容在合入前变红
-status: ready
+status: done
 labels:
   - contract
   - quay
@@ -42,15 +42,3 @@ extra: {}
 - server/shared/tests/quay-test-script.test.ts
 - scripts/suite-duration-baseline.tsv
 - tasks/fleet-cli-cross-repo-contract-tests.md
-
-## Blocker
-
-**2026-10-24T09:01:51.878Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=merge-develop: Auto-merging scripts/suite-duration-baseline.tsv
-CONFLICT (content): Merge conflict in scripts/suite-duration-baseline.tsv
-Auto-merging server/shared/tests/quay-test-script.test.ts
-CONFLICT (content): Merge conflict in server/shared/tests/quay-test-script.test.ts
-Automatic merge failed; fix conflicts and then commit the result.
-- run_id：wk-prod-anchor
-- session_id：f318a611-8c73-4ed2-8ab7-86f6ab30aa14
