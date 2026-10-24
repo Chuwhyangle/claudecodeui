@@ -37,6 +37,7 @@ import {
   DEFAULT_RESIDENT_RESTORE_MAX,
   DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
 } from '@/modules/session-hosts/index.js';
+import { DEFAULT_OBSERVATION_WALL_LIMIT } from '@/modules/observation/index.js';
 
 /**
  * The environment variable naming the settings file, or nothing when the shipped user-copy
@@ -80,17 +81,31 @@ export type ResidentRestoreSettings = {
 export type ServerSettingsSource = 'default' | 'file';
 
 /**
+ * The observation wall's server-level policy.
+ *
+ * `wallLimit` is the number of object blocks the wall renders before folding the rest. The
+ * observation layer's own 「观察层自身」 entry is deliberately NOT part of this cap — a wall
+ * that is quiet because its producers died must still say so. Consumed by `server/index.ts`
+ * when it composes the observation module.
+ */
+export type ObservationSettings = {
+  wallLimit: number;
+};
+
+/**
  * One reading of the server settings file, good for the whole boot.
  *
- * `residentRestore` is ALWAYS concrete and always default-filled: a file that said nothing —
- * or named a malformed value — leaves the shipped default in place, so no caller has to
- * decide what a half-valid file means. `source` says whether a file was accepted; `path` is
- * the file this reading consulted (the user copy when nothing named one); `problems` explains
- * every value that fell back, oldest first, and is what `server/index.ts` logs. Consumed by
- * `server/index.ts` and by the resident-restore criterion.
+ * `residentRestore` and `observation` are ALWAYS concrete and always default-filled: a file
+ * that said nothing — or named a malformed value — leaves the shipped default in place, so no
+ * caller has to decide what a half-valid file means. `source` says whether a file was accepted;
+ * `path` is the file this reading consulted (the user copy when nothing named one); `problems`
+ * explains every value that fell back, oldest first, and is what `server/index.ts` logs.
+ * Consumed by `server/index.ts`, by the resident-restore criterion, and by the observation
+ * wall's composition.
  */
 export type ServerSettings = {
   residentRestore: ResidentRestoreSettings;
+  observation: ObservationSettings;
   source: ServerSettingsSource;
   path: string;
   problems: string[];
@@ -152,8 +167,9 @@ export function loadServerSettings(options: {
   // Only the keys this module knows are read; every other top-level key is ignored, so a file
   // carrying knobs for a newer build still boots an older one.
   const residentRestore = readResidentRestore(record.residentRestore, problems);
+  const observation = readObservation(record.observation, problems);
 
-  return { residentRestore, source: 'file', path: filePath, problems };
+  return { residentRestore, observation, source: 'file', path: filePath, problems };
 }
 
 /**
@@ -167,6 +183,7 @@ function defaultServerSettings(filePath: string): ServerSettings {
       max: DEFAULT_RESIDENT_RESTORE_MAX,
       maxAgeMs: DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
     },
+    observation: { wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT },
     source: 'default',
     path: filePath,
     problems: [],
@@ -224,6 +241,35 @@ function readResidentRestore(raw: unknown, problems: string[]): ResidentRestoreS
 /** A JSON number that is a whole count of sessions or milliseconds; anything else falls back. */
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * The `observation` block, field by field over the shipped defaults.
+ *
+ * A malformed block keeps the shipped wall limit and says why in `problems`. The limit must be
+ * a positive integer: zero would render an empty wall while everything behind it is healthy,
+ * which is the exact "quiet looks fine" failure the layer exists to rule out.
+ */
+function readObservation(raw: unknown, problems: string[]): ObservationSettings {
+  const settings: ObservationSettings = { wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT };
+
+  if (raw === undefined) {
+    return settings;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    problems.push('`observation` must be a JSON object');
+    return settings;
+  }
+
+  const record = raw as Record<string, unknown>;
+  if (record.wallLimit !== undefined) {
+    if (isPositiveInteger(record.wallLimit)) {
+      settings.wallLimit = record.wallLimit;
+    } else {
+      problems.push('`observation.wallLimit` must be a positive integer');
+    }
+  }
+  return settings;
 }
 
 /** Whether the read failure was "the file is not there", the one benign case for the user copy. */

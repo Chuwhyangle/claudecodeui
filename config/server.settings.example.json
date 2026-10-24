@@ -5,5 +5,9 @@
     "max": 16,
     "maxAgeMs": 86400000
   },
-  "_residentRestore": "Bring the most recently active resident sessions back after a restart, instead of waiting for the next send to open one lazily. `enabled` ships true: the pass launches one provider process per session, and an operator who does not want that launch burst writes `false` to opt out. `max` is the per-pass ceiling (16 sessions). `maxAgeMs` is the activity window; its default 86400000 (24 h) is the same ceiling an idle resident host is closed at, so a session that was already dead before the restart is not brought back. A malformed value falls back to its default and is reported in the server log. The pass runs after the orphan-scope sweep, never before it."
+  "_residentRestore": "Bring the most recently active resident sessions back after a restart, instead of waiting for the next send to open one lazily. `enabled` ships true: the pass launches one provider process per session, and an operator who does not want that launch burst writes `false` to opt out. `max` is the per-pass ceiling (16 sessions). `maxAgeMs` is the activity window; its default 86400000 (24 h) is the same ceiling an idle resident host is closed at, so a session that was already dead before the restart is not brought back. A malformed value falls back to its default and is reported in the server log. The pass runs after the orphan-scope sweep, never before it.",
+  "observation": {
+    "wallLimit": 12
+  },
+  "_observation": "The observation wall's block cap. At most `wallLimit` observed objects are shown; the rest are folded and the response carries `collapsedCount`. The observation layer's own 「观察层自身」 entry is not part of this cap — a quiet wall must still admit when its producers are stale or red. A malformed value (anything but a positive integer) falls back to the shipped 12 and is reported in the server log."
 }

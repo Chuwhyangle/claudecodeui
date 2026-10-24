@@ -186,6 +186,13 @@ const CYCLE_GROUPS: readonly string[][] = [
  * Its mandated inbound edges (`modules/projects/services`' Tier-1 listing field
  * and `modules/mcp-gateway`'s overview reading) are the leaf rule's sanctioned
  * shape; without the entry they would red the inbound arm.
+ * A FIFTH ENTRY WAS ADDED, by `observation-object-model-seen-cursor-and-delta` (2026-10-24),
+ * under the same escape hatch: `modules/observation` is the observation layer's single feature
+ * directory. Its only out-edges are `server/shared/**` and the `modules/database` barrel (the
+ * mandated persistence direction every storing module takes), it imports no sibling feature
+ * module, and it sits in no SCC — `modules/database` never points back at it. Registering the
+ * directory is what lets `server/index.ts` mount its router without the new-directory leaf rule
+ * reading the mandated composition-root inbound edge as a stray.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -207,6 +214,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/notifications',
   'modules/notifications/services',
   'modules/notifications/websocket',
+  'modules/observation',
   'modules/oauth',
   'modules/plugins',
   'modules/projects',

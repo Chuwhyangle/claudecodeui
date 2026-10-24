@@ -95,6 +95,7 @@ import {
 import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { createArchitectureModule } from './modules/architecture/index.js';
+import { createObservationModule } from './modules/observation/index.js';
 import { createReplySuggestionsModule } from './modules/reply-suggestions/index.js';
 import { fileTreeRoutes } from './modules/file-tree/index.js';
 import { worktreesRoutes } from './modules/worktrees/index.js';
@@ -232,6 +233,17 @@ console.log('SERVER_PORT from env:', process.env.SERVER_PORT);
 
 const app = express();
 const server = http.createServer(app);
+
+// The generic SERVER-level settings file, read ONCE per process. It is loaded here rather than
+// inside `startServer` because two composition decisions need it before the routes are mounted
+// (the observation wall's block cap) and before a listener exists (the resident-restore pass);
+// both read the SAME reading, so an edit cannot reach one and not the other. Every knob is
+// optional; a malformed one falls back to its shipped default and reports the reason, which is
+// logged here.
+const serverSettings = loadServerSettings();
+for (const problem of serverSettings.problems) {
+    console.warn(`${terminalTextStyles.info('[INFO]')} Server settings: ${problem}`);
+}
 const queryClaude = providerRuntimeService.getRunner('claude');
 const queryCursor = providerRuntimeService.getRunner('cursor');
 const gitRoutes = createGitModule({
@@ -1688,6 +1700,18 @@ app.use(
             (await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 })).messages,
     }),
 );
+// The observation wall (observation-object-model-seen-cursor-and-delta). The module is a leaf:
+// it reads and writes through the database barrel and knows nothing about websockets, so the
+// composition root binds its push seam to the cockpit hub — the same per-user socket fan-out
+// the cockpit already uses. The block cap is the server settings file's `observation.wallLimit`.
+app.use(
+    '/api/observation',
+    authenticateToken,
+    createObservationModule({
+        wallLimit: serverSettings.observation.wallLimit,
+        publish: (userId, frame) => cockpitHub.broadcast(userId, frame),
+    }),
+);
 // Reply suggestions (composer chips). The module imports no sibling feature
 // module, so the composition root binds its ONE reader here: the providers
 // module's full-history read reduced to the last text-bearing assistant row.
@@ -2390,19 +2414,12 @@ async function startServer() {
             console.log(`${terminalTextStyles.info('[INFO]')} Swept ${sweptSessionScopes.length} orphaned Claude session scope(s): ${sweptSessionScopes.join(', ')}`);
         }
 
-        // The generic SERVER-level settings file, read ONCE here — after the
-        // orphan sweep above, so the restore pass this file may enable launches
-        // its processes after the sweep rather than before it. The env is a
-        // path escape hatch only — `SERVER_SETTINGS_PATH` names another file —
-        // and the shipped user copy is ~/.config/claudecodeui/server.settings.json.
-        // Every knob is optional; a malformed one falls back to its shipped
-        // default and reports the reason, which is logged here. On unless the
-        // file says `residentRestore.enabled: false`, and scheduled rather than
-        // awaited so a slow provider cannot hold up `listen`.
-        const serverSettings = loadServerSettings();
-        for (const problem of serverSettings.problems) {
-            console.warn(`${terminalTextStyles.info('[INFO]')} Server settings: ${problem}`);
-        }
+        // The generic SERVER-level settings file was read ONCE at module load (see the
+        // composition root above), after the orphan sweep of the process start and before any
+        // listener existed, so the restore pass this file may enable launches its processes
+        // after the sweep rather than before it. On unless the file says
+        // `residentRestore.enabled: false`, and scheduled rather than awaited so a slow
+        // provider cannot hold up `listen`.
         if (serverSettings.residentRestore.enabled) {
             restoreResidentSessionsAfterRestart(serverSettings.residentRestore);
         }
