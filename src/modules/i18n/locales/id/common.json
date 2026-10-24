@@ -143,7 +143,11 @@
         "hide": "Ciutkan ringkasan diagram"
       },
       "zoomTier": "Tingkat zoom",
-      "touchHintBubble": "Seret dengan satu jari untuk menggeser, cubit untuk zoom, ketuk dua kali untuk menelusuri."
+      "touchHintBubble": "Seret dengan satu jari untuk menggeser, cubit untuk zoom, ketuk dua kali untuk menelusuri.",
+      "zoomControls": {
+        "show": "Tampilkan kontrol zoom",
+        "hide": "Sembunyikan kontrol zoom"
+      }
     },
     "title": "Arsitektur",
     "noSession": "Pilih sesi untuk melihat arsitektur berkas yang disentuhnya.",

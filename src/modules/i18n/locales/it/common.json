@@ -143,7 +143,11 @@
         "hide": "Comprimi la panoramica del diagramma"
       },
       "zoomTier": "Livello di zoom",
-      "touchHintBubble": "Trascina con un dito per spostare, pizzica per zoomare, doppio tocco per approfondire."
+      "touchHintBubble": "Trascina con un dito per spostare, pizzica per zoomare, doppio tocco per approfondire.",
+      "zoomControls": {
+        "show": "Mostra controlli zoom",
+        "hide": "Nascondi controlli zoom"
+      }
     },
     "title": "Architettura",
     "noSession": "Seleziona una sessione per vedere l'architettura dei file che ha toccato.",

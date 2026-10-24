@@ -143,7 +143,11 @@
         "hide": "Réduire l’aperçu du diagramme"
       },
       "zoomTier": "Niveau de zoom",
-      "touchHintBubble": "Faites glisser avec un doigt pour déplacer, pincez pour zoomer, double-touchez pour explorer."
+      "touchHintBubble": "Faites glisser avec un doigt pour déplacer, pincez pour zoomer, double-touchez pour explorer.",
+      "zoomControls": {
+        "show": "Afficher les commandes de zoom",
+        "hide": "Masquer les commandes de zoom"
+      }
     },
     "title": "Architecture",
     "noSession": "Sélectionnez une session pour voir l'architecture des fichiers qu'elle a touchés.",

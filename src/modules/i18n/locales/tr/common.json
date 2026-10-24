@@ -143,7 +143,11 @@
         "hide": "Diyagram genel görünümünü daralt"
       },
       "zoomTier": "Yakınlaştırma düzeyi",
-      "touchHintBubble": "Tek parmakla sürükleyin, iki parmakla yakınlaştırın, düğüme çift dokunarak inin."
+      "touchHintBubble": "Tek parmakla sürükleyin, iki parmakla yakınlaştırın, düğüme çift dokunarak inin.",
+      "zoomControls": {
+        "show": "Yakınlaştırma denetimlerini göster",
+        "hide": "Yakınlaştırma denetimlerini gizle"
+      }
     },
     "title": "Mimari",
     "noSession": "Dokunduğu dosyaların mimarisini görmek için bir oturum seçin.",

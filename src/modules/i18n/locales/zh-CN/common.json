@@ -143,7 +143,11 @@
         "hide": "收起图概览"
       },
       "zoomTier": "缩放档位",
-      "touchHintBubble": "单指拖动，双指缩放，双击节点下钻"
+      "touchHintBubble": "单指拖动，双指缩放，双击节点下钻",
+      "zoomControls": {
+        "show": "显示缩放控件",
+        "hide": "隐藏缩放控件"
+      }
     },
     "title": "架构",
     "noSession": "选择一个会话，查看它触及的文件的架构。",

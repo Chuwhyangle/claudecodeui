@@ -442,6 +442,15 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // two new cases cost ~29s together when run alone. 1_200_000 is the value
   // that lets a load-slowed run finish while remaining a ceiling (a quiet
   // 31-case run is expected around 7.3m from the 6.8m / 29-case reading).
+  // Re-measured 2026-10-24 with the portrait-phone chrome matrix (one page per
+  // S/M/L/Quay fit-contract shape, which also arms four extra sessions, plus
+  // the two-arm control test) and the four stale Focus-era legs repaired to the
+  // single-scale contract: the file declares 33 cases and the whole invocation
+  // MEASURED `33 passed (7.0m)` on this worktree (boot, both servers and the
+  // browser launch included); the `--grep "control arm"` selection measured
+  // `17 passed (2.8m)`. 1_200_000 keeps ~2.9x over the full-file reading, so
+  // the entry stays. The 396-box cases also carry their own 300 s per-test
+  // ceilings: a load-shared host pushed them past the old 180 s.
   'architecture-canvas-layout.spec.ts': 1_200_000,
   // The four-doors criterion: two real pages (PC and phone), each opening the
   // architecture tab and walking the same four entry points — inspector,

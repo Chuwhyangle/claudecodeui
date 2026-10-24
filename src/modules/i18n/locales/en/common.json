@@ -191,7 +191,11 @@
         "hide": "Collapse graph overview"
       },
       "zoomTier": "Zoom level",
-      "touchHintBubble": "Drag with one finger to pan, pinch to zoom, double-tap a node to drill in."
+      "touchHintBubble": "Drag with one finger to pan, pinch to zoom, double-tap a node to drill in.",
+      "zoomControls": {
+        "show": "Show zoom controls",
+        "hide": "Hide zoom controls"
+      }
     },
     "noSeeds": "This session has not referenced any file or identifier that the analysis can place.",
     "emptyView": {

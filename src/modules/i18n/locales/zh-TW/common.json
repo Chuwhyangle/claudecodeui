@@ -143,7 +143,11 @@
         "hide": "收合圖概覽"
       },
       "zoomTier": "縮放層級",
-      "touchHintBubble": "單指拖動，雙指縮放，雙擊節點下鑽"
+      "touchHintBubble": "單指拖動，雙指縮放，雙擊節點下鑽",
+      "zoomControls": {
+        "show": "顯示縮放控制項",
+        "hide": "隱藏縮放控制項"
+      }
     },
     "title": "架構",
     "noSession": "選擇一個工作階段，查看它觸及的檔案的架構。",

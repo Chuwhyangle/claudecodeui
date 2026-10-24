@@ -143,7 +143,11 @@
         "hide": "Diagrammübersicht einklappen"
       },
       "zoomTier": "Zoomstufe",
-      "touchHintBubble": "Mit einem Finger ziehen zum Verschieben, zwei Finger zum Zoomen, Doppel-Tippen zum Eintauchen."
+      "touchHintBubble": "Mit einem Finger ziehen zum Verschieben, zwei Finger zum Zoomen, Doppel-Tippen zum Eintauchen.",
+      "zoomControls": {
+        "show": "Zoom-Steuerung anzeigen",
+        "hide": "Zoom-Steuerung ausblenden"
+      }
     },
     "title": "Architektur",
     "noSession": "Wählen Sie eine Sitzung aus, um die Architektur der von ihr berührten Dateien zu sehen.",
