@@ -1,7 +1,7 @@
 ---
 id: cockpit-header-controls-and-badge-consistency
 title: 驾驶舱页头控件一致性：手机遥控按钮统一样式且手机端隐藏、模式切换重复渲染、注意力徽标说明来源并可点进 needs-human 优先的 fleet 视图
-status: ready
+status: done
 labels:
   - cockpit
   - ui
