@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-draw-cache-no-repeat-llm-calls
 title: 回复建议：同一条助手消息只调用一次 LLM；重复打开会话命中缓存，用量日志区分「命中缓存」与「真的调用」
-status: ready
+status: done
 labels:
   - gap
 parent: null
