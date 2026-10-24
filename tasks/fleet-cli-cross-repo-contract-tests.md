@@ -24,10 +24,10 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts` exit 0（本机已安装 fleet）——握手通过；`wall resolve`（含 `#ac-<n>` 片段）、`wall summary`、`registry list`、`registry interface-session get`、`status` 的输出逐个符合形状声明。
-- [ ] AC2: 同一测试文件的控制臂——把形状声明里一个必填字段改名（测试内构造），校验读红并点名该字段；把 CloudCLI 声明支持的 `wallUri` 改为 `v1`，握手读红并点名 `wallUri`。
-- [ ] AC3: 未设开关且定位不到 fleet 时测试失败（不是 skip）；设了 `CONTRACT_TESTS_ALLOW_MISSING_FLEET=1` 时输出 skipped 原因。
-- [ ] AC4: 测试运行前后 `~/.quay-fleet/` 下文件的 mtime 不变（写类动词只在临时 home 上执行）；`npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts` exit 0（本机已安装 fleet）——握手通过；`wall resolve`（含 `#ac-<n>` 片段）、`wall summary`、`registry list`、`registry interface-session get`、`status` 的输出逐个符合形状声明。
+- [x] AC2: 同一测试文件的控制臂——把形状声明里一个必填字段改名（测试内构造），校验读红并点名该字段；把 CloudCLI 声明支持的 `wallUri` 改为 `v1`，握手读红并点名 `wallUri`。
+- [x] AC3: 未设开关且定位不到 fleet 时测试失败（不是 skip）；设了 `CONTRACT_TESTS_ALLOW_MISSING_FLEET=1` 时输出 skipped 原因。
+- [x] AC4: 测试运行前后 `~/.quay-fleet/` 下文件的 mtime 不变（写类动词只在临时 home 上执行）；`npm run typecheck` 通过。
 
 ## DoD
 
@@ -39,4 +39,6 @@ extra: {}
 - server/modules/quay/tests/contracts/shapes.ts (new)
 - server/modules/quay/tests/contracts/README.md (new)
 - server/modules/quay/quay-fleet-locator.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/fleet-cli-cross-repo-contract-tests.md
