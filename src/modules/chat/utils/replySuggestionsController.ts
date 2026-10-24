@@ -32,11 +32,11 @@ import type {
  *   `redraw` is the one command that reports failure, through its `false`, so a
  *   press with no answer is not mistaken for a press that did nothing.
  * - The experimental expansion (`expansion: "vary"`) is a second draw on the same
- *   message: a picked reply (`seed`) asks for variants, a quoted passage
- *   (`focus`) asks for responses. Its chips live beside the model batch because
- *   they answer the draft in the box, not the empty box the model batch is drawn
- *   for; the chain caps at {@link REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH} and is
- *   dropped whenever the draft is edited, cleared or sent.
+ *   message: a picked reply (`seed`) asks for variants of that reply. Its chips
+ *   live beside the model batch because they answer the draft in the box, not the
+ *   empty box the model batch is drawn for; the chain caps at
+ *   {@link REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH} and is dropped whenever the
+ *   draft is edited, cleared or sent.
  * - The ledger is a readout. `picked` / `cleared` / `redrawn` / `sent` posts are
  *   fire-and-forget, and a refused write never changes the surface.
  *
@@ -172,7 +172,7 @@ export type ReplySuggestionsSnapshot = {
   loading: boolean;
   /** The variant/response chips for the draft in the box. Empty when no chain is live. */
   expansionChips: string[];
-  /** Which anchor produced `expansionChips`: a picked reply or a quoted passage. */
+  /** Which anchor produced `expansionChips`: the picked reply (`seed`). */
   expansionSource: ReplySuggestionsExpansionSource | null;
   /** An expansion request is in flight. */
   expansionLoading: boolean;
@@ -196,8 +196,8 @@ export type ReplySuggestionsController = {
   setContext: (context: ReplySuggestionsContext) => void;
   /** Asks for a completely new batch; resolves true only when one was applied. */
   redraw: () => Promise<boolean>;
-  /** Asks for variants of `seed`, or responses to `focus` when the seed is empty. */
-  requestExpansion: (request: { seed?: string; focus?: string }) => void;
+  /** Asks for variants of `seed`; a blank seed asks for nothing. */
+  requestExpansion: (request: { seed: string }) => void;
   /** Drops the expansion chips and resets the chain depth. */
   clearExpansion: () => void;
   /** Reports one ledger event; failures are swallowed. */
@@ -526,11 +526,10 @@ export function createReplySuggestionsController(options: {
   };
 
   /**
-   * One expansion draw. The two anchors are exclusive in practice: a picked reply
-   * wins (`seed`), otherwise the quoted passage is the anchor (`focus`). The
+   * One expansion draw. The anchor is always a picked reply (`seed`) — the
    * response replaces the previous expansion chips wholesale.
    */
-  const requestExpansion = (request: { seed?: string; focus?: string }): void => {
+  const requestExpansion = (request: { seed: string }): void => {
     const currentStatus = status;
     const sessionId = context.sessionId;
     if (disposed || currentStatus?.enabled !== true || currentStatus.expansion !== 'vary' || sessionId === null) {
@@ -539,10 +538,9 @@ export function createReplySuggestionsController(options: {
     if (expansionLoading || expansionDepth >= REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH) {
       return;
     }
-    const seed = request.seed?.trim() ?? '';
-    const focus = request.focus?.trim() ?? '';
-    if (seed === '' && focus === '') return;
-    const source: ReplySuggestionsExpansionSource = seed !== '' ? 'seed' : 'focus';
+    const seed = request.seed.trim();
+    if (seed === '') return;
+    const source: ReplySuggestionsExpansionSource = 'seed';
     const depth = expansionDepth + 1;
     const requestId = ++expansionSeq;
     expansionLoading = true;
@@ -556,8 +554,7 @@ export function createReplySuggestionsController(options: {
         const result = await api.suggest({
           sessionId,
           expand: true,
-          ...(seed === '' ? {} : { seed }),
-          ...(focus === '' ? {} : { focus }),
+          seed,
         }, { maxChips: currentStatus.maxChips });
         if (disposed || expansionSeq !== requestId || context.sessionId !== sessionId) {
           return;

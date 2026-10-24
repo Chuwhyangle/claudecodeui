@@ -18,7 +18,7 @@ import {
   truncateSuggestionLabel,
 } from '@/modules/chat/utils/inputSuggestions';
 import enChat from '@/modules/i18n/locales/en/chat.json';
-import { resetChatDrafts } from '@/shared/chatDrafts';
+import { resetChatDrafts, writeDraftText } from '@/shared/chatDrafts';
 import type { ComposerChipStrip, PermissionMode, Project, ProjectSession } from '@/shared/types';
 
 /**
@@ -394,6 +394,24 @@ describe('keyboard semantics', () => {
     });
     assert.equal(sendMessage.mock.calls.length, 1);
     assert.equal((sendMessage.mock.calls[0][0] as { content: string }).content, '检查进展');
+  });
+
+  it('sends a restored draft without its trailing spaces and line breaks', async () => {
+    writeDraftText('session-a', '草稿内容  \n');
+    const { view, sendMessage } = setupComposer();
+
+    assert.equal(view.result.current.input, '草稿内容  \n', 'the stored draft is restored as it was typed');
+
+    await act(async () => {
+      await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+    });
+
+    assert.equal(sendMessage.mock.calls.length, 1);
+    assert.equal(
+      (sendMessage.mock.calls[0][0] as { content: string }).content,
+      '草稿内容',
+      'the persisted draft takes the same trailing-whitespace rule as a typed send',
+    );
   });
 
   it('does not accept any chip with Enter while nothing is selected', () => {
@@ -863,8 +881,18 @@ describe('the second-line preview follows the hovered or selected chip', () => {
 
     const preview = previewOf(view);
     assert.ok(preview, 'hovering a chip must produce the second-line preview');
-    assert.equal(preview.textContent, '> 选中的原文');
+    assert.equal(preview.textContent, '选中的原文', 'the preview is the passage as it will be inserted');
     assert.equal(preview.getAttribute('data-suggestion-preview'), 'quoted');
+  });
+
+  it('(a2) a multi-line passage previews only its first line', () => {
+    const view = renderMergedChips({
+      chips: buildSuggestionChips({ quotedText: '第一行\n第二行' }),
+    });
+
+    fireEvent.mouseEnter(view.getAllByRole('option')[0]);
+
+    assert.equal(previewOf(view)?.textContent, '第一行');
   });
 
   it('(b) a keyboard-selected model chip previews its own complete text', () => {
@@ -886,13 +914,13 @@ describe('the second-line preview follows the hovered or selected chip', () => {
 
   it('(d) moving the selection from the quoted chip to a model chip and back moves the preview', () => {
     const view = render(element({ selectedIndex: 0 }));
-    assert.equal(previewOf(view)?.textContent, '> 选中的原文');
+    assert.equal(previewOf(view)?.textContent, '选中的原文');
 
     view.rerender(element({ selectedIndex: 1 }));
     assert.equal(previewOf(view)?.textContent, '模型答复一');
 
     view.rerender(element({ selectedIndex: 0 }));
-    assert.equal(previewOf(view)?.textContent, '> 选中的原文');
+    assert.equal(previewOf(view)?.textContent, '选中的原文');
   });
 });
 

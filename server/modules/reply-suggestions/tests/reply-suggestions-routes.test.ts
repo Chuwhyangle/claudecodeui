@@ -266,7 +266,7 @@ test('POST / refuses expansion requests with 400 while the settings say off', as
   assert.equal(harness.calls.length, 0, 'a refused expansion never reaches upstream');
 });
 
-test('POST / with expansion vary sends the seed prompt and the focus prompt to upstream', async (t) => {
+test('POST / with expansion vary expands a seed and refuses a focus-only request', async (t) => {
   const harness = await start(t, { settings: { expansion: 'vary' } });
 
   const withSeed = await post(harness.baseUrl, '/api/reply-suggestions', {
@@ -278,15 +278,15 @@ test('POST / with expansion vary sends the seed prompt and the focus prompt to u
   assert.ok(harness.calls[0].user.includes('已被选中的回复'));
   assert.ok(harness.calls[0].user.includes('变体'));
 
-  const withFocus = await post(harness.baseUrl, '/api/reply-suggestions', {
+  const focusOnly = await post(harness.baseUrl, '/api/reply-suggestions', {
     sessionId: 's-expand-focus',
     expand: true,
     focus: '被引用的那一段',
     seed: '',
   });
-  assert.equal(withFocus.status, 200);
-  assert.ok(harness.calls[1].user.includes('被引用的那一段'));
-  assert.ok(harness.calls[1].user.includes('回应'));
+  assert.equal(focusOnly.status, 400);
+  assert.equal((focusOnly.body as { error: { code: string } }).error.code, 'INVALID_REQUEST');
+  assert.equal(harness.calls.length, 1, 'a refused expansion never reaches upstream');
 });
 
 test('POST / still serves an ordinary redraw with focus while expansion is off', async (t) => {

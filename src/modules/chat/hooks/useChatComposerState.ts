@@ -40,6 +40,16 @@ import { findSessionHostState, findSessionOccupancy, useSessionHosts } from '@/s
  * that route a DOM event to the concern that owns it.
  */
 
+/**
+ * The message text a draft sends as: trailing spaces and line breaks removed,
+ * anything internal kept. A quote chip accepted at the end of an empty line
+ * leaves two newlines in the box, and those are the composer's padding rather
+ * than part of the message.
+ */
+function stripTrailingWhitespace(text: string): string {
+  return text.replace(/\s+$/u, '');
+}
+
 type UseChatComposerStateArgs = {
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
@@ -433,7 +443,12 @@ export function useChatComposerState({
       queuedSubmission?: QueuedDraft,
     ) => {
       event.preventDefault();
-      const currentInput = queuedSubmission?.content ?? inputValueRef.current;
+      // Trailing spaces and line breaks are composer padding, not message text: a
+      // quotation accepted at the end of an empty line leaves two of them behind,
+      // and a message should never go out with them. Every send path — an
+      // immediate send, a queued draft replayed through here, the durable draft
+      // written while a turn runs — reads the content from this one value.
+      const currentInput = stripTrailingWhitespace(queuedSubmission?.content ?? inputValueRef.current);
       const currentAttachments = queuedSubmission?.attachments ?? attachedFiles;
       const previouslyUploadedAttachments = queuedSubmission?.uploadedAttachments ?? [];
       if (

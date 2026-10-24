@@ -8,28 +8,48 @@ import {
   SUGGESTION_CHIP_ACCEPT_SOURCES,
   suggestionConditionsHold,
 } from '@/modules/chat/utils/inputSuggestions';
-import type { SuggestionDisplayConditions } from '@/modules/chat/utils/inputSuggestions';
+import type {
+  SuggestionDisplayConditions,
+  SuggestionFillSelection,
+} from '@/modules/chat/utils/inputSuggestions';
 
 /**
  * Owns the composer suggestion chips: the merged strip, the model/expansion
  * draws, and the one acceptance path every source goes through.
  *
  * The accepted chip always FILLS the draft — both stores written, the textarea
- * focused with the caret at the end — and never sends. What differs per source is
- * only data: each source's record in {@link SUGGESTION_CHIP_ACCEPT_SOURCES} says
- * how its fill text is built, whether it stays visible, what it reports, and what
- * expansion request it asks for. `acceptChip` reads that record and has no
- * `chip.source` branch of its own.
+ * focused with the caret after the inserted text — and never sends. What differs
+ * per source is only data: each source's record in
+ * {@link SUGGESTION_CHIP_ACCEPT_SOURCES} says how its fill text is built, what
+ * it anchors, what it reports, and what expansion seed it asks for. `acceptChip`
+ * reads that record and has no `chip.source` branch of its own.
  *
- * Also here, because they are chip state: the quoted chip's pin (it survives the
- * focus collapse the fill causes), the last fill for the one Ctrl+Z undo this
- * surface owns, and the model-fill attribution that makes a later `sent` a report
- * about a delivered chip rather than a click.
+ * A quotation is inserted at the live caret as ordinary text; the chip exists
+ * only while a transcript selection exists, so accepting it (or losing the
+ * selection) takes it off screen. The accepted passage is also kept here as the
+ * `quoteAnchor` the Suggest button re-draws with — it is not what keeps the chip
+ * visible.
+ *
+ * Also here, because they are chip state: the last fill for the one Ctrl+Z undo
+ * this surface owns (text *and* caret), and the model-fill attribution that
+ * makes a later `sent` a report about a delivered chip rather than a click.
  *
  * Consumers: `useChatComposerState`, which forwards the produced
  * `ComposerChipStrip` to `ChatComposer` and routes the keyboard/clear/send
  * helpers to the right places.
  */
+
+/**
+ * Drops the page's own selection. The transcript selection that draws the
+ * quoted chip is this selection; an accepted fill is ordinary draft text, so it
+ * must not leave one behind.
+ */
+function clearPageSelection(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.getSelection()?.removeAllRanges();
+}
 
 type UseSuggestionChipsOptions = {
   /** The composer draft exactly as the textarea shows it. */
@@ -78,32 +98,6 @@ export type UseSuggestionChipsResult = {
   ) => boolean;
 };
 
-/**
- * Split a quoted draft into the part a response must keep and the part it
- * replaces.
- *
- * A quotation is pasted as one or more `> …` lines. An expansion chip for that
- * quotation replaces what the person wrote AFTER it, never the quotation itself,
- * so the prefix runs through the last `> ` line (and its newline). A draft with
- * no quotation has an empty prefix and the chip replaces all of it.
- */
-function splitQuotedPrefix(text: string): { prefix: string; rest: string } {
-  const lines = text.split('\n');
-  let lastQuotedLine = -1;
-  for (let index = 0; index < lines.length; index += 1) {
-    if (lines[index].trimStart().startsWith('>')) {
-      lastQuotedLine = index;
-    }
-  }
-  if (lastQuotedLine < 0) {
-    return { prefix: '', rest: text };
-  }
-  return {
-    prefix: `${lines.slice(0, lastQuotedLine + 1).join('\n')}\n`,
-    rest: lines.slice(lastQuotedLine + 1).join('\n'),
-  };
-}
-
 export function useSuggestionChips({
   input,
   inputValueRef,
@@ -117,35 +111,35 @@ export function useSuggestionChips({
   quotedSelection,
 }: UseSuggestionChipsOptions): UseSuggestionChipsResult {
   /**
-   * The passage a quoted chip pasted, held after the browser selection itself is gone.
+   * The passage a quoted chip inserted, kept as the Suggest button's `focus`.
    *
-   * Clicking the chip focuses the textarea, and focusing it collapses the document
-   * selection — which the selection hook correctly reports as "no selection". The
-   * strip still promises the chip stays while the box holds the quote (that is how
-   * several passages are appended), so the accepted text is pinned here until the
-   * box is emptied or a NEW transcript selection arrives. It is never a stale
-   * source: it is set only from the chip that was just accepted.
+   * Taking the composer's focus collapses the transcript selection, and the
+   * suggestion button should still re-draw around the passage the person just
+   * quoted. This is a query anchor only: it never decides whether the chip is
+   * visible (that is the live selection alone), and it is superseded by a new
+   * selection and forgotten with the draft.
    */
-  const [pinnedQuote, setPinnedQuote] = useState<string | null>(null);
+  const [quoteAnchor, setQuoteAnchor] = useState<string | null>(null);
   // The composition's last chip fill, for the one undo this surface owns: a fill is a
-  // programmatic value, so the browser has no native undo entry for it.
-  const lastChipFillRef = useRef<{ before: string; after: string } | null>(null);
+  // programmatic value, so the browser has no native undo entry for it. The caret
+  // before the fill travels with the text, so undo restores the position too.
+  const lastChipFillRef = useRef<{ before: string; beforeCaret: number; after: string } | null>(null);
   // The text a model chip wrote into the draft, held until the send path confirms
   // it went out. That is what makes `sent` a report about a delivered chip rather
   // than about a click.
   const modelChipFillRef = useRef<string | null>(null);
 
   const trimmedQuotedSelection = quotedSelection?.trim() ? quotedSelection.trim() : null;
-  // A fresh selection supersedes the pinned one. Clearing (null) deliberately does not:
-  // that is the focus collapse the pin exists to survive.
+  // A fresh selection supersedes the anchor it was quoted from.
   useEffect(() => {
     if (trimmedQuotedSelection) {
-      setPinnedQuote(null);
+      setQuoteAnchor(null);
     }
   }, [trimmedQuotedSelection]);
 
-  const effectiveQuotedSelection = trimmedQuotedSelection
-    ?? (input !== '' ? pinnedQuote : null);
+  // The chip's visibility reads the live selection and nothing else: the chip is
+  // gone the moment the selection is (a focus collapse, a click elsewhere).
+  const focus = trimmedQuotedSelection ?? quoteAnchor;
 
   // Model chips: one draw per assistant message, only while the empty box would
   // show them, silent when the feature is off. The reply hook also owns the
@@ -171,53 +165,110 @@ export function useSuggestionChips({
     sessionId,
     lastAssistantMessageId,
     active: suggestionConditionsHold(conditions) && input === '',
-    focus: effectiveQuotedSelection,
+    focus,
   });
+
+  // Whether the textarea has ever taken focus. The element reports the start of
+  // its text until then, which is not a caret the person put anywhere; after the
+  // first focus the browser keeps their position across blurs, which is what a
+  // fill must read.
+  const textareaWasFocusedRef = useRef(false);
+  const watchedTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea === null) {
+      return;
+    }
+    if (watchedTextareaRef.current !== textarea) {
+      watchedTextareaRef.current = textarea;
+      textareaWasFocusedRef.current = false;
+    }
+    const markFocused = () => {
+      textareaWasFocusedRef.current = true;
+    };
+    textarea.addEventListener('focus', markFocused);
+    return () => {
+      textarea.removeEventListener('focus', markFocused);
+    };
+  });
+
+  /**
+   * The live selection the fill is built from.
+   *
+   * Read from the textarea at acceptance time, never from a cached position: the
+   * element keeps its `selectionStart`/`selectionEnd` while it is blurred, so
+   * this is the caret the person left behind. A box that has never taken focus
+   * reports the element's default (the start of the text), not a position the
+   * person chose, so the fill goes to the end of the draft in that case — and
+   * likewise when no element is mounted yet.
+   */
+  const readFillSelection = useCallback((): SuggestionFillSelection => {
+    const textarea = textareaRef.current;
+    const input = inputValueRef.current;
+    if (textarea === null || !textareaWasFocusedRef.current) {
+      return { input, selectionStart: input.length, selectionEnd: input.length };
+    }
+    const selectionEnd = Math.min(Math.max(textarea.selectionEnd, 0), input.length);
+    const selectionStart = Math.min(Math.max(textarea.selectionStart, 0), selectionEnd);
+    return { input, selectionStart, selectionEnd };
+  }, [inputValueRef, textareaRef]);
 
   /**
    * The one acceptance entry. Every source fills only: clicking a chip is a
    * draft, not a send, and the person confirms by pressing send themselves.
    *
    * All per-source differences come from the source's descriptor record — the
-   * fill text, the pin, the `picked` report, the `sent` attribution and the
-   * expansion request — so this function contains no source branch.
+   * fill text and caret, the focus anchor, the `picked` report, the `sent`
+   * attribution and the expansion seed — so this function contains no source
+   * branch.
    */
   const acceptChip = useCallback((chip: SuggestionChip) => {
     const descriptor = SUGGESTION_CHIP_ACCEPT_SOURCES[chip.source];
     if (!descriptor) {
       return;
     }
-    const current = inputValueRef.current;
-    const next = descriptor.buildFill(chip, current);
+    const selection = readFillSelection();
+    const fill = descriptor.buildFill(chip, selection);
 
     if (descriptor.reportsPicked) {
       reportReplySuggestionEvent('picked', chip.index);
     }
-    if (descriptor.keepVisibleAfterFill) {
-      setPinnedQuote(chip.text);
+    if (descriptor.anchorsSuggestionFocus) {
+      setQuoteAnchor(chip.text);
     }
     modelChipFillRef.current = descriptor.attributesSent && !replyExpansionEnabled
       ? chip.text
       : null;
-    lastChipFillRef.current = { before: current, after: next };
-    setInputFromHistory(next);
+    lastChipFillRef.current = {
+      before: selection.input,
+      beforeCaret: selection.selectionEnd,
+      after: fill.text,
+    };
+    // The chip's job is done once the passage is in the draft: dropping the page
+    // selection takes it off screen immediately and makes a second click on the
+    // same chip impossible (there is no chip left to click).
+    clearPageSelection();
+    setInputFromHistory(fill.text);
     requestAnimationFrame(() => {
       const textarea = textareaRef.current;
       if (!textarea) {
         return;
       }
+      // Focus first, then place the caret: while the textarea holds focus its
+      // selection IS the document selection, so clearing the page selection
+      // afterwards would wipe the caret as well.
       textarea.focus();
-      textarea.setSelectionRange(next.length, next.length);
+      textarea.setSelectionRange(fill.caret, fill.caret);
     });
 
-    if (replyExpansionEnabled && descriptor.expansionRequest) {
-      requestReplyExpansion(descriptor.expansionRequest(chip));
+    if (replyExpansionEnabled && descriptor.expansionSeed) {
+      requestReplyExpansion({ seed: descriptor.expansionSeed(chip) });
     }
     if (descriptor.submitsAfterFill) {
       submit();
     }
   }, [
-    inputValueRef,
+    readFillSelection,
     replyExpansionEnabled,
     reportReplySuggestionEvent,
     requestReplyExpansion,
@@ -241,17 +292,17 @@ export function useSuggestionChips({
     ...conditions,
     draftScope,
     modelChips: replySuggestionChips,
-    quotedText: effectiveQuotedSelection,
+    quotedText: trimmedQuotedSelection,
     onAccept: acceptChip,
   });
 
   /**
-   * Accepts one variant/response chip from the expansion experiment.
+   * Accepts one variant chip from the expansion experiment.
    *
-   * The chip REPLACES the body — `> 原文` lines are the only part that survives a
-   * quoted draft — and, while the chain has depth left, becomes the seed of the
-   * next expansion so the person can keep refining. At the cap the chip is simply
-   * accepted and the strip goes away.
+   * The chip REPLACES the draft — the expansion is anchored on a picked reply,
+   * not on quoted text — and, while the chain has depth left, becomes the seed
+   * of the next expansion so the person can keep refining. At the cap the chip
+   * is simply accepted and the strip goes away.
    *
    * The text arrives with the click, so accepting never looks a chip up by its
    * array index again; `index` is only the batch position the `picked` event
@@ -260,18 +311,16 @@ export function useSuggestionChips({
   const acceptExpansionChip = useCallback((text: string, index: number) => {
     reportReplySuggestionEvent('picked', index, replyExpansionSource ?? undefined);
     const current = inputValueRef.current;
-    const { prefix } = splitQuotedPrefix(current);
-    const next = prefix === '' ? text : `${prefix}${text}`;
     modelChipFillRef.current = null;
-    lastChipFillRef.current = { before: current, after: next };
-    setInputFromHistory(next);
+    lastChipFillRef.current = { before: current, beforeCaret: current.length, after: text };
+    setInputFromHistory(text);
     requestAnimationFrame(() => {
       const textarea = textareaRef.current;
       if (!textarea) {
         return;
       }
       textarea.focus();
-      textarea.setSelectionRange(next.length, next.length);
+      textarea.setSelectionRange(text.length, text.length);
     });
     if (replyExpansionCanExpand) {
       requestReplyExpansion({ seed: text });
@@ -306,8 +355,13 @@ export function useSuggestionChips({
     event.preventDefault();
     lastChipFillRef.current = null;
     setInputFromHistory(fill.before);
+    // The caret comes back with the text: undo must land where the person was
+    // editing, not at the end of the restored draft.
+    requestAnimationFrame(() => {
+      textareaRef.current?.setSelectionRange(fill.beforeCaret, fill.beforeCaret);
+    });
     return true;
-  }, [inputValueRef, setInputFromHistory]);
+  }, [inputValueRef, setInputFromHistory, textareaRef]);
 
   const noteDraftEdit = useCallback((newValue: string) => {
     // Only an unedited model-chip fill is that chip's text going out; once the
@@ -325,7 +379,7 @@ export function useSuggestionChips({
   }, [reportReplySuggestionEvent]);
 
   const forgetChipState = useCallback(() => {
-    setPinnedQuote(null);
+    setQuoteAnchor(null);
     lastChipFillRef.current = null;
   }, []);
 

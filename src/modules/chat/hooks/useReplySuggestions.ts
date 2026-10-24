@@ -69,7 +69,7 @@ export type UseReplySuggestionsResult = {
     enabled: boolean;
     /** The variant/response chips; empty when no chain is live. */
     chips: string[];
-    /** Which anchor produced `chips`: a picked reply or a quoted passage. */
+    /** Which anchor produced `chips`: the picked reply (`seed`). */
     source: ReplySuggestionsExpansionSource | null;
     /** An expansion request is in flight. */
     loading: boolean;
@@ -77,11 +77,8 @@ export type UseReplySuggestionsResult = {
     depth: number;
     /** Whether another expansion may be requested (enabled and under the depth cap). */
     canExpand: boolean;
-    /**
-     * Asks for variants of `seed` (or responses to `focus` when it is empty). A
-     * no-op while the feature is off, a request is in flight, or at the cap.
-     */
-    request: (request: { seed?: string; focus?: string }) => void;
+    /** Asks for variants of `seed`. A no-op while the feature is off, a request is in flight, or at the cap. */
+    request: (request: { seed: string }) => void;
     /** Drops the expansion chips and resets the chain depth (manual edit, clear, send). */
     clear: () => void;
   };
