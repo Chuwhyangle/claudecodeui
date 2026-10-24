@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-backend-encapsulation
 title: 回复建议后端内部封装：拆出上游守卫与抽取存储、设置按职责分组、密钥改不透明值、用量日志记录带类型、收窄导出
-status: ready
+status: done
 labels:
   - gap
 parent: null

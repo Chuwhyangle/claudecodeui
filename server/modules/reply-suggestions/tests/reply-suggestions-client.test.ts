@@ -20,6 +20,7 @@ import {
   replySuggestionsEndpoint,
   type ReplySuggestionsClientConfig,
 } from '../reply-suggestions-client.js';
+import { ApiCredential } from '../reply-suggestions-settings.js';
 
 const API_KEY = 'sk-client-secret-value';
 
@@ -74,7 +75,7 @@ function config(overrides: Partial<ReplySuggestionsClientConfig> = {}): ReplySug
     baseUrl: 'http://127.0.0.1:1',
     model: 'test-model',
     authScheme: '',
-    apiKey: API_KEY,
+    credential: new ApiCredential(API_KEY),
     disableThinking: true,
     timeoutMs: 2000,
     ...overrides,

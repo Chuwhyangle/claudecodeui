@@ -31,11 +31,11 @@
  */
 import { observationDb } from '@/modules/database/index.js';
 import {
+  ApiCredential,
   completeReplySuggestions,
   createReplySuggestionsUsageLog,
   type ReplySuggestionsCompletion,
   type ReplySuggestionsCompletionRequest,
-  type ReplySuggestionsUsageLog,
 } from '@/modules/reply-suggestions/index.js';
 
 import type { ObservedObject, ObservationStore } from './observation-store.js';
@@ -74,6 +74,18 @@ export type SessionDigestLlmReading =
   | { state: 'skipped'; reason: string }
   | { state: 'unevaluated'; reason: string };
 
+/**
+ * The digest tier appends its own `observation.session-digest-llm` rows to the
+ * shared reply-suggestions ledger. Those rows are a different shape from the
+ * reply-suggestions union (they carry `uri`, token counts and a state), so this
+ * seam is deliberately the ledger's broad file-level contract; the concrete
+ * reply-suggestions writer is assignable to it.
+ */
+type SessionDigestUsageLog = {
+  readonly path: string;
+  write(record: Record<string, unknown>): void;
+};
+
 /** What the tier needs from the world; production supplies every default. */
 export type SessionDigestLlmTierDeps = {
   /** The deterministic producer whose revision this tier extends. */
@@ -87,7 +99,7 @@ export type SessionDigestLlmTierDeps = {
   /** Whether anyone pinned the object. Defaults to the observation watch entries. */
   isObserved?: (uri: string) => boolean;
   /** The usage ledger. Defaults to the reply-suggestions JSONL ledger. */
-  usageLog?: ReplySuggestionsUsageLog;
+  usageLog?: SessionDigestUsageLog;
   /** The clock. Defaults to `Date.now`. */
   now?: () => number;
 };
@@ -208,7 +220,7 @@ export function createSessionDigestLlmTier(deps: SessionDigestLlmTierDeps): Sess
   const readSettings = deps.readSettings ?? defaultSettingsSource().read;
   const complete = deps.complete ?? completeReplySuggestions;
   const isObserved = deps.isObserved ?? ((uri: string) => observationDb.listWatchUserIds(uri).length > 0);
-  const usageLog = deps.usageLog ?? createReplySuggestionsUsageLog();
+  const usageLog: SessionDigestUsageLog = deps.usageLog ?? createReplySuggestionsUsageLog();
   const now = deps.now ?? (() => Date.now());
 
   // The sliding hour. It is per-process by design: the ledger is the long-lived record, this
@@ -275,7 +287,7 @@ export function createSessionDigestLlmTier(deps: SessionDigestLlmTierDeps): Sess
           baseUrl: settings.baseUrl,
           model: settings.model,
           authScheme: settings.authScheme,
-          apiKey: settings.apiKey,
+          credential: new ApiCredential(settings.apiKey),
           disableThinking: settings.disableThinking,
           timeoutMs: settings.timeoutMs,
         },
