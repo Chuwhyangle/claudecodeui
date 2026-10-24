@@ -1,7 +1,7 @@
 ---
 id: cockpit-walkthrough-interaction-defects
 title: 驾驶舱走查（交互/功能）：board 无可指对象、序号提示错误、无目标死路、遥控器误可确认、后退退出驾驶舱、URL 用 UUID
-status: todo
+status: ready
 labels:
   - cockpit
   - ui
