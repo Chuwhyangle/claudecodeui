@@ -319,7 +319,11 @@ describe('the Suggest control', () => {
     await waitFor(() => assert.equal(apiMocks.status.mock.calls.length, 1));
     await flushMicrotasks();
 
-    assert.equal(view.queryByRole('button', { name: enChat.input.suggestions.suggest }), null);
+    assert.equal(
+      view.queryByRole('button', { name: enChat.input.suggestions.suggest }) === null,
+      true,
+      'no assistant message means no Suggest control',
+    );
   });
 
   it('(b) is drawn once an assistant message exists', async () => {
@@ -337,7 +341,11 @@ describe('the Suggest control', () => {
     await waitFor(() => assert.equal(apiMocks.status.mock.calls.length, 1));
     await flushMicrotasks();
 
-    assert.equal(view.queryByRole('button', { name: enChat.input.suggestions.suggest }), null);
+    assert.equal(
+      view.queryByRole('button', { name: enChat.input.suggestions.suggest }) === null,
+      true,
+      '/status disabled keeps the control hidden',
+    );
   });
 
   it('(c) shows a visible failure state and recovers a few seconds later', async () => {

@@ -860,7 +860,7 @@ describe('the second-line preview follows the hovered or selected chip', () => {
     assert.equal(previewOf(withModel)?.textContent, '模型答复一');
 
     const habitsOnly = renderMergedChips({ chips: buildSuggestionChips({ habitChips: ['习惯一'] }) });
-    assert.equal(previewOf(habitsOnly), null, 'a habit chip is never the fallback preview');
+    assert.equal(previewOf(habitsOnly) === null, true, 'a habit chip is never the fallback preview');
   });
 
   it('(d) moving the selection from the quoted chip to a model chip and back moves the preview', () => {
