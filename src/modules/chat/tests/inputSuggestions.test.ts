@@ -4,8 +4,12 @@ import { beforeEach, describe, it } from 'vitest';
 
 import { readAllInputHistory } from '@/modules/chat/hooks/useInputHistory';
 import {
+  SUGGESTION_LABEL_MAX_CHARS,
   buildInputSuggestions,
+  buildSuggestionChips,
   normalizeSuggestionKey,
+  suggestionConditionsHold,
+  truncateSuggestionLabel,
 } from '@/modules/chat/utils/inputSuggestions';
 
 /**
@@ -80,5 +84,114 @@ describe('buildInputSuggestions', () => {
     // One use in each scope is the two occurrences the rule requires; the
     // newest spelling comes from session-b, the most recently written scope.
     assert.deepEqual(buildInputSuggestions(readAllInputHistory()), ['检查进展。']);
+  });
+});
+
+describe('buildSuggestionChips', () => {
+  it('orders the three sources: quoted, then model, then habit', () => {
+    const chips = buildSuggestionChips({
+      quotedText: '选中的原文',
+      modelChips: ['模型一', '模型二'],
+      habitChips: ['习惯一'],
+    });
+    assert.deepEqual(
+      chips.map((chip) => [chip.source, chip.text]),
+      [
+        ['quoted', '选中的原文'],
+        ['model', '模型一'],
+        ['model', '模型二'],
+        ['habit', '习惯一'],
+      ],
+    );
+  });
+
+  it('drops a model chip whose normalized text equals a habit chip', () => {
+    const chips = buildSuggestionChips({
+      modelChips: ['继续', '  别的 答复 '],
+      habitChips: ['继续', '习惯'],
+    });
+    assert.deepEqual(
+      chips.map((chip) => chip.text),
+      ['继续', '别的 答复', '习惯'],
+      'the model spelling wins; whitespace is normalized for the comparison only',
+    );
+  });
+
+  it('keeps the quoted chip and drops later duplicates of it', () => {
+    const chips = buildSuggestionChips({
+      quotedText: '同一段',
+      modelChips: ['同一段'],
+      habitChips: ['同一段', '别的'],
+    });
+    assert.deepEqual(
+      chips.map((chip) => [chip.source, chip.text]),
+      [['quoted', '同一段'], ['habit', '别的']],
+    );
+  });
+
+  it('indexes each source independently', () => {
+    const chips = buildSuggestionChips({
+      quotedText: '引用',
+      modelChips: ['模型一', '模型二'],
+      habitChips: ['习惯一', '习惯二'],
+    });
+    assert.deepEqual(
+      chips.map((chip) => `${chip.source}:${chip.index}`),
+      ['quoted:0', 'model:0', 'model:1', 'habit:0', 'habit:1'],
+    );
+  });
+
+  it('returns an empty strip when every source is empty', () => {
+    assert.deepEqual(buildSuggestionChips({}), []);
+    assert.deepEqual(buildSuggestionChips({ quotedText: '   ', modelChips: [], habitChips: [] }), []);
+  });
+});
+
+describe('truncateSuggestionLabel', () => {
+  it('keeps a short label unchanged and ellipsizes a long one', () => {
+    assert.equal(truncateSuggestionLabel('短句'), '短句');
+    const long = '一'.repeat(SUGGESTION_LABEL_MAX_CHARS + 5);
+    const label = truncateSuggestionLabel(long);
+    assert.equal(Array.from(label).length, SUGGESTION_LABEL_MAX_CHARS + 1);
+    assert.ok(label.endsWith('…'));
+    assert.equal(label, `${'一'.repeat(SUGGESTION_LABEL_MAX_CHARS)}…`);
+  });
+
+  it('collapses line breaks so a multi-line reply still reads as one chip', () => {
+    assert.equal(truncateSuggestionLabel('第一行\n第二行'), '第一行 第二行');
+  });
+
+  it('never splits an emoji surrogate pair', () => {
+    const label = truncateSuggestionLabel('😀'.repeat(SUGGESTION_LABEL_MAX_CHARS + 1));
+    assert.equal(Array.from(label).length, SUGGESTION_LABEL_MAX_CHARS + 1);
+  });
+});
+
+describe('suggestionConditionsHold', () => {
+  const idle = {
+    isLoading: false,
+    isOccupied: false,
+    isCommandMenuOpen: false,
+    isFileMenuOpen: false,
+    hasQueuedDraft: false,
+    hasAttachments: false,
+  };
+
+  it('is true when nothing holds the composer', () => {
+    assert.equal(suggestionConditionsHold(idle), true);
+  });
+
+  it('is false for each single blocker, including the dock turn anchor', () => {
+    for (const blocker of [
+      { isLoading: true },
+      { isDockTurnShown: true },
+      { isOccupied: true },
+      { isCommandMenuOpen: true },
+      { isFileMenuOpen: true },
+      { hasQueuedDraft: true },
+      { hasAttachments: true },
+    ]) {
+      assert.equal(suggestionConditionsHold({ ...idle, ...blocker }), false, JSON.stringify(blocker));
+    }
   });
 });
