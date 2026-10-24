@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-chip-row-polish
 title: 回复建议四个小问题：引用后 chip 行遮挡文字、预览与选中项错位、新会话「建议」空操作、chip 尾部多余标点
-status: todo
+status: ready
 labels:
   - gap
 parent: null
