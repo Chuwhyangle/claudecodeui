@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-model-chip-fill-only
 title: 模型回复 chip 点击只填入输入框、由人确认后手动发送（修复点击即发出）
-status: todo
+status: ready
 labels:
   - gap
 parent: null
