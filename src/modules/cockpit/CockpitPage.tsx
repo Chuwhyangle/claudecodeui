@@ -1252,8 +1252,8 @@ export default function CockpitPage() {
         </aside>
 
         {view.type === 'initiatives' ? (
-          <div className="flex min-h-0 flex-1 flex-col lg:flex-row" data-testid="cockpit-initiatives-stage">
-            <div className="flex min-h-0 flex-1 flex-col border-b border-border/40 lg:border-b-0 lg:border-r">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden" data-testid="cockpit-initiatives-stage">
+            <div className="flex flex-col border-b border-border/40 lg:min-h-0 lg:flex-1 lg:border-b-0 lg:border-r">
               {initiative.view.status === 'loading' && (
                 <p className="p-3 text-xs text-muted-foreground" data-testid="initiative-loading">
                   {t('cockpit.loading')}
@@ -1288,7 +1288,7 @@ export default function CockpitPage() {
                 />
               )}
             </div>
-            <div className="flex w-full min-h-0 flex-col border-t border-border/40 lg:w-96 lg:border-t-0 lg:border-l">
+            <div className="flex w-full flex-col border-t border-border/40 lg:min-h-0 lg:w-96 lg:border-t-0 lg:border-l">
               {initiative.view.status === 'loaded' || initiative.view.status === 'unavailable' ? (
                 <DecisionQueue
                   items={initiative.view.reading.decisionQueue}

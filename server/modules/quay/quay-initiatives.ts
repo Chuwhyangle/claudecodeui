@@ -288,18 +288,31 @@ export function initiativeSlugFromEntity(entity: unknown): string | null {
 }
 
 /**
- * The question an escalation carries. The fleet stores it in `reason` as
- * `initiative escalate: <question>`; an attention row written by hand may carry anything, so
- * the stored options are kept even when the question has to fall back to the entity.
+ * The question an escalation carries.
+ *
+ * THE FLEET STORES IT IN THE EVIDENCE ITEM, NOT ON THE ENTRY. `upsertEntry`'s entry shape has
+ * no `reason`/`question` field: the candidate's `reason` is copied into each evidence item
+ * (`evidence[].reason`), which is what `initiative escalate` writes as
+ * `initiative escalate: <question>`. A hand-written row may carry a top-level `reason` or
+ * `question`, so both are accepted first; the newest evidence item is the fallback (the last
+ * `escalate` of the same question is the current statement of it). With none of those, the
+ * honest reading is the entity — the options are still usable.
  */
 export function questionFromAttention(entry: Record<string, unknown>, entity: string): string {
-  const reason = asString(entry.reason);
-  if (reason !== null) {
-    const prefix = 'initiative escalate: ';
-    return reason.startsWith(prefix) ? reason.slice(prefix.length) : reason;
+  const prefix = 'initiative escalate: ';
+  const strip = (value: string): string => (value.startsWith(prefix) ? value.slice(prefix.length) : value);
+
+  const topLevel = asString(entry.reason) ?? asString(entry.question);
+  if (topLevel !== null) return strip(topLevel);
+
+  const evidence = Array.isArray(entry.evidence) ? entry.evidence : [];
+  for (let index = evidence.length - 1; index >= 0; index -= 1) {
+    const item = evidence[index];
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) continue;
+    const reason = asString((item as Record<string, unknown>).reason);
+    if (reason !== null) return strip(reason);
   }
-  const question = asString(entry.question);
-  return question ?? entity;
+  return entity;
 }
 
 /** One typed option row, or `null` when it is not `{id,label}`. */

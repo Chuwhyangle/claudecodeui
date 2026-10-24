@@ -100,12 +100,19 @@ test.before(async () => {
           category: 'initiative-decision',
           entity: 'initiative:cockpit-observation-wall@abc123',
           state: 'open',
-          reason: 'initiative escalate: Which layout should the decision queue use?',
           options: [
             { id: 'own-it', label: 'Draw it in the cockpit' },
             { id: 'link-out', label: 'Link to the fleet UI' },
           ],
-          evidence: [{ ref: 'decisions.jsonl@dec_1', reason: 'the fleet keeps the ledger' }],
+          // THE REAL SHAPE: the fleet stores the candidate's `reason` on the EVIDENCE item,
+          // never on the entry. A fixture with a top-level `reason` would not exercise the
+          // path the production document uses.
+          evidence: [
+            {
+              ref: 'decisions.jsonl@esc:cockpit-observation-wall@abc123',
+              reason: 'initiative escalate: Which layout should the decision queue use?',
+            },
+          ],
           firstSeenAt: FIRST_SEEN,
         },
         // A different category must never leak into this queue.

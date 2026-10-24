@@ -145,6 +145,13 @@ export default function DecisionQueue({
           text: `${t('cockpit.decisionFailed')} ${outcome.reason}`,
         });
       }
+    } catch (error) {
+      // A request that never reached the server is still a refusal the person must see: an
+      // unhandled rejection here would leave the preview open with no reading at all.
+      setNotice({
+        kind: 'refused',
+        text: `${t('cockpit.decisionFailed')} ${error instanceof Error ? error.message : 'request failed'}`,
+      });
     } finally {
       setPending(false);
     }
@@ -183,6 +190,11 @@ export default function DecisionQueue({
             text: `${t('cockpit.decisionFailed')} ${outcome.reason}`,
           });
         }
+      } catch (error) {
+        setNotice({
+          kind: 'refused',
+          text: `${t('cockpit.decisionFailed')} ${error instanceof Error ? error.message : 'request failed'}`,
+        });
       } finally {
         setPending(false);
       }

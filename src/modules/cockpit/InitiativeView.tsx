@@ -82,8 +82,12 @@ export default function InitiativeView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="initiative-view">
-      <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3" data-testid="initiative-rows">
+    <div className="flex flex-col lg:min-h-0 lg:flex-1" data-testid="initiative-view">
+      {/*
+        On a phone the page itself scrolls: the list must grow to its content instead of
+        squeezing into a fixed pane, or the row is clipped mid-sentence above the queue.
+      */}
+      <ul className="space-y-2 p-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto" data-testid="initiative-rows">
         {initiatives.map((initiative, index) => {
           const focused = initiative.uri === focusUri;
           const pinned = pinnedUris.has(initiative.uri);

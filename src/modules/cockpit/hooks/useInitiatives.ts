@@ -77,7 +77,14 @@ export function useInitiativeReading(isActive: boolean): InitiativeReadingConnec
   const [view, setView] = useState<InitiativeReadingView>({ status: 'loading' });
 
   const load = useCallback(async () => {
-    setView({ status: 'loading' });
+    // A re-read keeps the last reading on screen while it is in flight: replacing it with
+    // `loading` would unmount the decision queue and erase the echo of the ruling that just
+    // triggered the read.
+    setView((previous) =>
+      previous.status === 'loaded' || previous.status === 'unavailable'
+        ? previous
+        : { status: 'loading' },
+    );
     try {
       const reading = await fetchInitiativeReading();
       if (reading.ok) {
