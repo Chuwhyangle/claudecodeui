@@ -150,6 +150,13 @@
     }
   },
   "input": {
+    "suggestions": {
+      "suggest": "제안",
+      "suggesting": "제안 중…",
+      "suggestHint": "지금까지의 대화에서 답장을 제안",
+      "quoteChip": "인용: {{text}}",
+      "previewHint": "전체 제안"
+    },
     "placeholder": "/를 입력하여 명령어, @를 입력하여 파일, 또는 {{provider}}에게 무엇이든 물어보세요...",
     "placeholderDefault": "메시지를 입력하세요...",
     "disabled": "입력 비활성화",

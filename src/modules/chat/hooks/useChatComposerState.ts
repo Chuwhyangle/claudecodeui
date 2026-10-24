@@ -1037,12 +1037,9 @@ export function useChatComposerState({
       // Carry the voice insertion range through the edit before it lands in state.
       remapVoiceRangeOnEdit(inputValueRef.current, newValue);
 
-      // The person typed over a model batch: report it once, on the empty -> text
-      // transition. A fill from a chip goes through `setInputFromHistory`, never
-      // this DOM handler, so a click is not mistaken for typing.
-      if (inputValueRef.current === '' && newValue !== '' && replySuggestionChips.length > 0) {
-        reportReplySuggestionEvent('cleared');
-      }
+      // Deliberately no `cleared` here. That event means "the person dismissed the
+      // batch with the clear control or Escape"; deleting the text by hand is an edit,
+      // not a dismissal, and reporting it would count every backspace as a clear.
 
       setInput(newValue);
       inputValueRef.current = newValue;
@@ -1061,8 +1058,6 @@ export function useChatComposerState({
       handleCommandInputChange,
       inputValueRef,
       remapVoiceRangeOnEdit,
-      replySuggestionChips.length,
-      reportReplySuggestionEvent,
       resetCommandMenuState,
       setCursorPosition,
       setInput,
@@ -1074,6 +1069,37 @@ export function useChatComposerState({
   // newline regardless of what the stored preference says, because a soft keyboard has no
   // Shift key to offer as the newline alternative.
   const { sendOnEnter } = useSendOnEnter(sendByCtrlEnter);
+
+  /**
+   * The one clear action behind the footer's ✕ and the Esc gesture.
+   *
+   * `cleared` is reported HERE and nowhere else: it means the person dismissed the
+   * draft with a clear control, not that the text happened to become empty. The
+   * accepted quote and any chip fill are forgotten with it, and the caret returns
+   * to the now-empty box.
+   */
+  const handleClearInput = useCallback(() => {
+    if (inputValueRef.current !== '') {
+      reportReplySuggestionEvent('cleared');
+    }
+    setInput('');
+    inputValueRef.current = '';
+    setPinnedQuote(null);
+    lastChipFillRef.current = null;
+    resetCommandMenuState();
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
+    }
+    setIsTextareaExpanded(false);
+  }, [
+    inputValueRef,
+    reportReplySuggestionEvent,
+    resetCommandMenuState,
+    setInput,
+    setIsTextareaExpanded,
+    textareaRef,
+  ]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1115,6 +1141,26 @@ export function useChatComposerState({
         return;
       }
 
+      if (event.key === 'Escape') {
+        // Escape is a clear gesture only when there is a draft to clear and nothing
+        // else owns the key. The menu handlers above get it first (an open slash or
+        // file menu closes, the box keeps its text); a running turn keeps the global
+        // abort meaning, and an empty box keeps the chip-hide behaviour the suggestion
+        // hook has already handled. Anything left here falls through un-consumed.
+        if (
+          inputValueRef.current !== ''
+          && !isLoading
+          && !isDockTurnShown
+          && !showCommandMenu
+          && !showFileDropdown
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          handleClearInput();
+        }
+        return;
+      }
+
       if (event.key === 'Tab' && !showFileDropdown && !showCommandMenu) {
         event.preventDefault();
         cyclePermissionMode();
@@ -1144,10 +1190,13 @@ export function useChatComposerState({
       cyclePermissionMode,
       handleCommandMenuKeyDown,
       handleFileMentionsKeyDown,
+      handleClearInput,
       handleHistoryKeyDown,
       handleInputSuggestionsKeyDown,
       inputValueRef,
+      isDockTurnShown,
       isImeComposing,
+      isLoading,
       sendOnEnter,
       setInputFromHistory,
       showCommandMenu,
@@ -1171,17 +1220,6 @@ export function useChatComposerState({
     },
     [resizeTextarea, setCursorPosition, syncInputOverlayScroll],
   );
-
-  const handleClearInput = useCallback(() => {
-    setInput('');
-    inputValueRef.current = '';
-    resetCommandMenuState();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.focus();
-    }
-    setIsTextareaExpanded(false);
-  }, [inputValueRef, resetCommandMenuState, setInput, setIsTextareaExpanded, textareaRef]);
 
   const handleAbortSession = useCallback(() => {
     if (!canAbortSession) {

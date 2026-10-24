@@ -57,6 +57,16 @@ const RELEASE_COPIED_NOTICE_MS = 1500;
 /** How long a tap on an unavailable Live Voice entry leaves its explanation on screen. */
 const LIVE_VOICE_NOTICE_MS = 4000;
 
+/**
+ * The viewport width, in CSS pixels, below which the compact footer drops the clear control.
+ *
+ * The compact row is exactly the controls that send a message plus the clear ✕ while there is
+ * a draft; a box narrower than this is already at its horizontal edge (the tool buttons shrink
+ * to `w-7` below 360px for the same reason), and a seventh control there would push the send
+ * button out rather than fit beside it.
+ */
+const NARROWEST_FOOTER_VIEWPORT_PX = 360;
+
 type MentionableFile = {
   name: string;
   path: string;
@@ -423,6 +433,22 @@ export default function ChatComposer({
   // measurement, so it is false on the first render and in any environment that cannot measure —
   // see the hook for why that is the safe direction to be wrong in.
   const { containerRef, isCompactTier, areToolsInline } = useComposerCompactTier();
+  // Whether the viewport is too narrow for the compact row's clear control. State read
+  // from the window and followed on resize: the 360px crossing is narrower than the
+  // compact-tier signal, so a rotation or a window drag can cross it without changing
+  // `isCompactTier`.
+  const [isNarrowestFooter, setIsNarrowestFooter] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < NARROWEST_FOOTER_VIEWPORT_PX,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    const read = () => setIsNarrowestFooter(window.innerWidth < NARROWEST_FOOTER_VIEWPORT_PX);
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, []);
   // The dropzone's own root ref comes back out of its root props and is re-attached beside the
   // tier hook's: the props are spread onto the form, so a `ref=` written next to the spread is
   // silently replaced by the one inside it — which is how this hook's box went unmeasured. Both
@@ -1102,7 +1128,7 @@ export default function ChatComposer({
                 disabled={replySuggestionsLoading}
                 aria-label={t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
                 aria-busy={replySuggestionsLoading || undefined}
-                className="h-8 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-8 shrink-0 whitespace-nowrap rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {replySuggestionsLoading
                   ? t('input.suggestions.suggesting', { defaultValue: 'Suggesting…' })
@@ -1130,16 +1156,33 @@ export default function ChatComposer({
             )}
 
             {isCompactTier ? (
-              // The three controls below move behind one entry on the compact tier;
-              // that entry is the only addition to this row, so the row stays six wide.
-              <ComposerMobileMoreMenu
-                tokenBudget={tokenBudget}
-                onShowTokenUsage={onShowTokenUsage}
-                slashCommandsCount={slashCommandsCount}
-                onToggleCommandMenu={onToggleCommandMenu}
-                canSchedule={Boolean(input.trim())}
-                onScheduleMessage={onScheduleMessage}
-              />
+              <>
+                {/*
+                  The three secondary controls move behind one entry on the compact
+                  tier. That keeps the empty row at the six controls that send a
+                  message; a draft adds the clear ✕ as the one extra, immediately
+                  after this entry and before the model/permission group. Below 360px
+                  the row has no width to spare, so the ✕ is dropped there.
+                */}
+                <ComposerMobileMoreMenu
+                  tokenBudget={tokenBudget}
+                  onShowTokenUsage={onShowTokenUsage}
+                  slashCommandsCount={slashCommandsCount}
+                  onToggleCommandMenu={onToggleCommandMenu}
+                  canSchedule={Boolean(input.trim())}
+                  onScheduleMessage={onScheduleMessage}
+                />
+                {hasInput && !isNarrowestFooter && (
+                  <PromptInputButton
+                    tooltip={{ content: t('input.clearInput', { defaultValue: 'Clear input' }) }}
+                    onClick={onClearInput}
+                    aria-label={t('input.clearInput', { defaultValue: 'Clear input' })}
+                    data-slot="composer-clear-input"
+                  >
+                    <XIcon />
+                  </PromptInputButton>
+                )}
+              </>
             ) : (
               <>
                 <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
@@ -1161,9 +1204,9 @@ export default function ChatComposer({
                 </PromptInputButton>
 
                 {/*
-                  Wide tier only. The compact row is exactly the six primary controls,
-                  so a seventh that appears with text would either wrap it or push
-                  send off the edge — the one thing that row may not do.
+                  Wide tier's clear control. The compact tier draws the same control
+                  in its own tools group (above), because the row there is a fixed set
+                  and the ✕ belongs beside "more" rather than in a group that wraps.
                 */}
                 {hasInput && (
                   <PromptInputButton
@@ -1171,6 +1214,7 @@ export default function ChatComposer({
                     onClick={onClearInput}
                     className="hidden sm:flex"
                     aria-label={t('input.clearInput', { defaultValue: 'Clear input' })}
+                    data-slot="composer-clear-input"
                   >
                     <XIcon />
                   </PromptInputButton>
