@@ -420,6 +420,8 @@ const SESSION: ProjectSession = { id: 'session-a' };
 type ComposerSetupOptions = {
   /** The settings' expansion switch the /status mock reports. */
   expansion?: 'off' | 'vary';
+  /** True while a turn runs: a submit is queued (the durable draft) instead of sent. */
+  isLoading?: boolean;
 };
 
 const setupComposer = (quotedSelection: string | null = null, options: ComposerSetupOptions = {}) => {
@@ -449,7 +451,7 @@ const setupComposer = (quotedSelection: string | null = null, options: ComposerS
     resolvePermissionModeForProvider: () => 'default' as PermissionMode,
     currentProviderModel: 'test-model',
     currentProviderEffort: 'medium',
-    isLoading: false,
+    isLoading: options.isLoading ?? false,
     canAbortSession: false,
     tokenBudget: null,
     sendMessage,
@@ -728,71 +730,379 @@ describe('composer state chip acceptance', () => {
     assert.equal(requests[0].seed, '模型一');
   });
 
-  it('pastes `> selection` plus a newline and focuses, without sending, for a quoted chip', () => {
+  it('(quoted) inserts the selected passage at the caret and focuses, without sending', () => {
     const { view, sendMessage, frames } = setupComposer('选中的原文');
-    const textarea = document.createElement('textarea');
-    document.body.appendChild(textarea);
-    (view.result.current.textareaRef as { current: HTMLTextAreaElement | null }).current = textarea;
-    // The composer binds `input` to this node on the next render; put the quoted
-    // text in first so the caret range has somewhere to land (as the habit-chip
-    // criterion does).
-    textarea.value = '> 选中的原文\n';
+    const textarea = attachTextarea(view);
 
     act(() => {
       acceptQuotedChip(view);
     });
+    textarea.value = view.result.current.input;
     act(() => {
       frames.forEach((callback) => callback(0));
     });
 
-    assert.equal(view.result.current.input, '> 选中的原文\n');
-    assert.equal(document.activeElement, textarea);
-    assert.equal(textarea.selectionStart, '> 选中的原文\n'.length);
+    assert.equal(
+      view.result.current.input,
+      '选中的原文\n\n',
+      'the passage lands on the empty line, then opens the next paragraph',
+    );
+    assert.equal(document.activeElement, textarea, 'the composer takes focus');
+    assert.equal(textarea.selectionStart, '选中的原文\n\n'.length);
     assert.equal(sendMessage.mock.calls.length, 0, 'quoting is not sending');
 
     textarea.remove();
   });
+});
 
-  it('keeps the quoted chip while the box holds the quote, after the selection collapses', () => {
-    const view = renderHook(
-      (props: { quotedSelection: string | null }) => useChatComposerState({
-        selectedProject: PROJECT,
-        selectedSession: SESSION,
-        currentSessionId: SESSION.id,
-        provider: 'claude',
-        permissionMode: 'default',
-        cyclePermissionMode: () => undefined,
-        resolvePermissionModeForProvider: () => 'default' as PermissionMode,
-        currentProviderModel: 'test-model',
-        currentProviderEffort: 'medium',
-        isLoading: false,
-        canAbortSession: false,
-        tokenBudget: null,
-        sendMessage: vi.fn(),
-        scrollToBottom: () => undefined,
-        addMessage: () => undefined,
-        setIsUserScrolledUp: () => undefined,
-        setPendingPermissionRequests: () => undefined,
-        lastAssistantMessageId: 'assistant-1',
-        quotedSelection: props.quotedSelection,
-      }),
-      { initialProps: { quotedSelection: '选中的原文' } as { quotedSelection: string | null } },
-    );
+// ---------------------------------------------------------------------------
+// Where a quotation lands: the caret is read from the textarea at click time
+// ---------------------------------------------------------------------------
 
+/** The `focus` values the Suggest control sent (an ordinary redraw, never an expansion). */
+const redrawFocuses = () => apiMocks.suggest.mock.calls
+  .map(([body]) => body as Record<string, unknown>)
+  .filter((body) => body.redraw === true && typeof body.focus === 'string')
+  .map((body) => body.focus as string);
+
+/** A composer whose quoted selection the test can change, as the page's selection does. */
+const setupQuotedComposer = (initialSelection: string | null) => {
+  const sendMessage = vi.fn();
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  const view = renderHook(
+    (props: { quotedSelection: string | null }) => useChatComposerState({
+      selectedProject: PROJECT,
+      selectedSession: SESSION,
+      currentSessionId: SESSION.id,
+      provider: 'claude',
+      permissionMode: 'default',
+      cyclePermissionMode: () => undefined,
+      resolvePermissionModeForProvider: () => 'default' as PermissionMode,
+      currentProviderModel: 'test-model',
+      currentProviderEffort: 'medium',
+      isLoading: false,
+      canAbortSession: false,
+      tokenBudget: null,
+      sendMessage,
+      scrollToBottom: () => undefined,
+      addMessage: () => undefined,
+      setIsUserScrolledUp: () => undefined,
+      setPendingPermissionRequests: () => undefined,
+      lastAssistantMessageId: 'assistant-1',
+      quotedSelection: props.quotedSelection,
+    }),
+    { initialProps: { quotedSelection: initialSelection } as { quotedSelection: string | null } },
+  );
+  const textarea = attachTextarea(view);
+  return { view, textarea, frames, sendMessage };
+};
+
+const acceptQuoted = (
+  view: ReturnType<typeof setupQuotedComposer>['view'],
+  frames: FrameRequestCallback[],
+  textarea: HTMLTextAreaElement,
+) => {
+  act(() => {
+    acceptQuotedChip(view);
+  });
+  // React commits the new value to the controlled element; the bare node this
+  // harness attaches has to be given it by hand before the deferred caret runs.
+  textarea.value = view.result.current.input;
+  act(() => {
+    frames.splice(0).forEach((callback) => callback(0));
+  });
+};
+
+describe('quoted chip insertion reads the live selection', () => {
+  it('(a) follows a selectionEnd the person put in the middle', () => {
+    const { view, textarea, frames } = setupQuotedComposer('选中的原文');
+    // A render first: the box is watched for focus from the render it mounts in.
     act(() => {
-      acceptQuotedChip(view);
+      view.result.current.setInput('前面后面');
     });
-    // Focusing the textarea collapses the browser selection; the composer sees null.
+    textarea.value = '前面后面';
+    textarea.focus();
+    textarea.setSelectionRange(2, 2);
+
+    acceptQuoted(view, frames, textarea);
+
+    assert.equal(view.result.current.input, '前面 选中的原文 后面');
+    assert.equal(textarea.selectionStart, '前面 选中的原文 '.length, 'the caret is after the passage');
+  });
+
+  it('(b) inserts at the end of a box that was never focused', () => {
+    const { view, frames, textarea } = setupQuotedComposer('选中的原文');
+    act(() => {
+      view.result.current.setInput('已有内容');
+    });
+    textarea.value = '已有内容';
+
+    acceptQuoted(view, frames, textarea);
+
+    // The element reports position 0 until it takes focus, which is not a caret
+    // the person chose; the passage goes to the end of the draft instead.
+    assert.equal(view.result.current.input, '已有内容 选中的原文');
+  });
+
+  it('(c) focuses the box and collapses the caret at the end of the inserted text', () => {
+    const { view, textarea, frames } = setupQuotedComposer('选中的原文');
+    act(() => {
+      view.result.current.setInput('前面后面');
+    });
+    textarea.value = '前面后面';
+    textarea.focus();
+    textarea.setSelectionRange(1, 1);
+
+    acceptQuoted(view, frames, textarea);
+
+    assert.equal(document.activeElement, textarea);
+    // The caret sits after everything that was inserted, not at the end of the
+    // draft: the text that followed the caret is still there.
+    assert.equal(textarea.selectionStart, '前 选中的原文 '.length);
+    assert.equal(textarea.selectionEnd, '前 选中的原文 '.length);
+  });
+
+  it('(d) clears the page selection so the chip cannot be clicked twice', () => {
+    const { view, frames, textarea } = setupQuotedComposer('选中的原文');
+    const transcript = document.createElement('div');
+    transcript.textContent = '选中的原文';
+    document.body.appendChild(transcript);
+    const range = document.createRange();
+    range.selectNodeContents(transcript);
+    const selection = window.getSelection();
+    assert.ok(selection);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    assert.equal(selection.rangeCount, 1, 'the page selection exists before the click');
+
+    acceptQuoted(view, frames, textarea);
+
+    // Nothing is selected any more: the document may keep a collapsed caret
+    // range for the focused textarea, which is not a selection to quote.
+    const cleared = window.getSelection();
+    assert.equal(
+      cleared === null || cleared.rangeCount === 0 || cleared.isCollapsed,
+      true,
+      'the accepted passage leaves no page selection',
+    );
+    transcript.remove();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The chip leaves with the selection: nothing pins it on screen
+// ---------------------------------------------------------------------------
+
+const quotedChipShown = (view: ReturnType<typeof setupQuotedComposer>['view']) => (
+  view.result.current.chipStrip.chips.some((chip) => chip.source === 'quoted')
+);
+
+describe('the quoted chip is shown only while a live selection exists', () => {
+  it('(a) accepting it into a non-empty box takes it off screen', () => {
+    const { view, frames, textarea } = setupQuotedComposer('选中的原文');
+    act(() => {
+      view.result.current.setInput('已有内容');
+    });
+    textarea.value = '已有内容';
+    assert.equal(quotedChipShown(view), true, 'the live selection draws the chip over the non-empty box');
+
+    acceptQuoted(view, frames, textarea);
+    // Focusing the composer collapses the transcript selection, as the page reports it.
     act(() => {
       view.rerender({ quotedSelection: null });
     });
 
-    assert.equal(view.result.current.input, '> 选中的原文\n');
-    assert.deepEqual(
-      view.result.current.chipStrip.chips.map((chip) => chip.source),
-      ['quoted'],
-      'the accepted quote stays as the only chip while the box is non-empty',
+    assert.equal(view.result.current.input, '已有内容 选中的原文', 'the passage is in the draft');
+    assert.equal(quotedChipShown(view), false, 'the accepted chip does not stay for a second passage');
+  });
+
+  it('(b) a new live selection draws it again', () => {
+    const { view, frames, textarea } = setupQuotedComposer('选中的原文');
+    acceptQuoted(view, frames, textarea);
+    act(() => {
+      view.rerender({ quotedSelection: null });
+    });
+    assert.equal(quotedChipShown(view), false);
+
+    act(() => {
+      view.rerender({ quotedSelection: '另一段原文' });
+    });
+
+    const quoted = view.result.current.chipStrip.chips.find((chip) => chip.source === 'quoted');
+    assert.equal(quoted?.text, '另一段原文', 'the new selection is the new chip');
+  });
+
+  it('(c) a selection that goes away without an accept leaves no chip behind', () => {
+    const { view } = setupQuotedComposer('选中的原文');
+    act(() => {
+      view.result.current.setInput('已经写了一半');
+    });
+    assert.equal(quotedChipShown(view), true);
+
+    // The box took focus (or the person clicked elsewhere): the selection is gone.
+    act(() => {
+      view.rerender({ quotedSelection: null });
+    });
+
+    assert.equal(quotedChipShown(view), false, 'a non-empty box alone does not keep the chip');
+  });
+
+  it('(e) the Suggest button still re-draws with the accepted passage as its focus', async () => {
+    const { view, frames, textarea } = setupQuotedComposer('选中的原文');
+    await waitFor(() => assert.equal(view.result.current.chipStrip.suggestionsEnabled, true));
+    acceptQuoted(view, frames, textarea);
+    act(() => {
+      view.rerender({ quotedSelection: null });
+    });
+
+    await act(async () => {
+      await view.result.current.chipStrip.onRequestSuggestions();
+    });
+
+    assert.equal(
+      redrawFocuses().includes('选中的原文'),
+      true,
+      'the fixed value now only anchors the Suggest request',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Undo restores the caret as well as the text
+// ---------------------------------------------------------------------------
+
+describe('chip undo restores the caret', () => {
+  it('Ctrl+Z after an insertion returns the draft and the caret from before it', () => {
+    const { view, textarea, frames } = setupQuotedComposer('选中的原文');
+    act(() => {
+      view.result.current.setInput('前面后面');
+    });
+    textarea.value = '前面后面';
+    textarea.focus();
+    textarea.setSelectionRange(2, 2);
+
+    acceptQuoted(view, frames, textarea);
+    assert.equal(view.result.current.input, '前面 选中的原文 后面');
+
+    const event = keyEvent('z', textarea);
+    event.ctrlKey = true;
+    act(() => {
+      view.result.current.handleKeyDown(event as unknown as ComposerKeyEvent);
+    });
+    act(() => {
+      frames.splice(0).forEach((callback) => callback(0));
+    });
+
+    assert.equal(event.defaultPrevented, true, 'the chip fill owns this Ctrl+Z');
+    assert.equal(view.result.current.input, '前面后面', 'the draft is back');
+    assert.equal(textarea.selectionStart, 2, 'the caret is back where it was, not at the end');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sending drops trailing spaces and line breaks
+// ---------------------------------------------------------------------------
+
+/** The content of the one frame the composer sent. */
+const sentContent = (sendMessage: ReturnType<typeof vi.fn>): string => (
+  (sendMessage.mock.calls[0]?.[0] as { content: string } | undefined)?.content ?? ''
+);
+
+describe('a send never carries trailing spaces or line breaks', () => {
+  it('(a) a draft ending in two line breaks sends without them', async () => {
+    const { view, sendMessage, deliver } = setupComposer();
+    act(() => {
+      view.result.current.setInput('T\n\n');
+    });
+
+    await act(async () => {
+      await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1));
+    assert.equal(sentContent(sendMessage), 'T');
+  });
+
+  it('(b) trailing spaces are dropped too', async () => {
+    const { view, sendMessage, deliver } = setupComposer();
+    act(() => {
+      view.result.current.setInput('abc  \n');
+    });
+
+    await act(async () => {
+      await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1));
+    assert.equal(sentContent(sendMessage), 'abc');
+  });
+
+  it('(c) spaces and line breaks inside the message are kept', async () => {
+    const { view, sendMessage, deliver } = setupComposer();
+    act(() => {
+      view.result.current.setInput('abc  def\nghi \n ');
+    });
+
+    await act(async () => {
+      await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1));
+    assert.equal(sentContent(sendMessage), 'abc  def\nghi');
+  });
+
+  it('(d) the queued draft is written and replayed with its trailing whitespace removed', async () => {
+    const { view } = setupComposer(null, { isLoading: true });
+    act(() => {
+      view.result.current.setInput('排队内容  \n\n');
+    });
+
+    await act(async () => {
+      await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+    });
+
+    assert.equal(view.result.current.queuedDraft?.content, '排队内容', 'the durable draft is trimmed');
+
+    // Replaying that queued submission (the flush path) sends the same text.
+    const { view: sending, sendMessage, deliver } = setupComposer();
+    await act(async () => {
+      await sending.result.current.handleSubmit(
+        { preventDefault: () => undefined } as never,
+        view.result.current.queuedDraft ?? undefined,
+      );
+    });
+    act(() => {
+      deliver();
+    });
+
+    await waitFor(() => assert.equal(sendMessage.mock.calls.length, 1));
+    assert.equal(sentContent(sendMessage), '排队内容');
+  });
+
+  it('(e) a message that is only whitespace is not sent', async () => {
+    const { view, sendMessage } = setupComposer();
+    act(() => {
+      view.result.current.setInput('  \n\n');
+    });
+
+    await act(async () => {
+      await view.result.current.handleSubmit({ preventDefault: () => undefined } as never);
+    });
+
+    assert.equal(sendMessage.mock.calls.length, 0);
   });
 });
 
@@ -878,37 +1188,37 @@ describe('composer state expansion', () => {
     assert.deepEqual(view.result.current.chipStrip.expansionChips, [], 'the sent message has no variants');
   });
 
-  it('(g) quoting sends a focus expansion request with an empty seed', async () => {
+  it('(g) a quotation is inserted, never expanded: no expansion request follows it', async () => {
     const { view } = setupComposer('选中的原文', { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['回应一', '回应二'], draw: 15 }));
 
     act(() => {
       acceptQuotedChip(view);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['回应一', '回应二']));
+    await waitFor(() => assert.equal(view.result.current.input.includes('选中的原文'), true));
 
     const requests = expansionRequests();
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].focus, '选中的原文');
-    assert.equal('seed' in requests[0], false, 'the seed is empty right after the quote');
+    assert.equal(
+      requests.length,
+      0,
+      'expansion is anchored on a picked reply only; a quotation has no seed to vary',
+    );
   });
 
-  it('(h) accepting a response keeps the `> 原文` line and replaces only what follows it', async () => {
-    const { view } = setupComposer('选中的原文', { expansion: 'vary' });
+  it('(h) accepting a variant replaces the whole draft (the `> ` prefix path is gone)', async () => {
+    const { view } = setupComposer(null, { expansion: 'vary' });
     await waitForModelChip(view);
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['回应一', '回应二'], draw: 15 }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一', '变体二'], draw: 11 }));
     act(() => {
-      acceptQuotedChip(view);
+      acceptChipAt(view, 0);
     });
-    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['回应一', '回应二']));
+    await waitFor(() => assert.deepEqual(view.result.current.chipStrip.expansionChips, ['变体一', '变体二']));
 
-    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['回应一的变体'], draw: 16 }));
+    apiMocks.suggest.mockImplementation(() => Promise.resolve({ chips: ['变体一的变体'], draw: 12 }));
     act(() => {
-      view.result.current.chipStrip.onAcceptExpansionChip('回应一', 0);
+      view.result.current.chipStrip.onAcceptExpansionChip('变体一', 0);
     });
 
-    assert.equal(view.result.current.input, '> 选中的原文\n回应一');
-    assert.ok(view.result.current.input.startsWith('> 选中的原文'), 'the quotation survives the replacement');
+    assert.equal(view.result.current.input, '变体一', 'nothing of the previous draft survives a variant');
   });
 });

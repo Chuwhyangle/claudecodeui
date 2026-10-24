@@ -297,21 +297,18 @@ describe('useReplySuggestions expansion', () => {
     assert.equal(result.current.firstDraw.draw, 12, 'the chips carry the expansion draw id');
   });
 
-  it('(c) sends a focus-anchored request when the seed is empty', async () => {
+  it('(c) a blank seed asks for nothing: every expansion request carries a non-empty seed', async () => {
     const { result } = renderReply();
     await settle(result);
-    apiMocks.suggest.mockImplementation(() => respond({ chips: ['回应一'], draw: 13 }));
 
     act(() => {
-      result.current.expansion.request({ focus: '  被引用的原文  ', seed: '' });
+      result.current.expansion.request({ seed: '   ' });
     });
-    await waitFor(() => assert.deepEqual(result.current.expansion.chips, ['回应一']));
+    await flush();
 
-    const calls = expansionCalls();
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].focus, '被引用的原文');
-    assert.equal('seed' in calls[0], false, 'an empty seed is not sent');
-    assert.equal(result.current.expansion.source, 'focus');
+    assert.equal(expansionCalls().length, 0, 'an empty seed is not an anchor');
+    assert.equal(result.current.expansion.chips.length, 0);
+    assert.equal(result.current.expansion.source, null);
   });
 
   it('(d) stops at five expansion requests in one chain', async () => {

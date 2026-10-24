@@ -308,14 +308,14 @@ const renderComposerOverStrip = (overrides: Record<string, unknown> = {}) => ren
 
 describe('chip row clearance over a non-empty box', () => {
   it('(a) reserves the chip row above the text while a quoted chip shows', () => {
-    const view = renderComposerOverStrip({ input: '> 选中的原文\n' });
+    const view = renderComposerOverStrip({ input: '选中的原文\n\n' });
 
     const textarea = view.container.querySelector('textarea');
     assert.ok(textarea, 'the composer must render a textarea');
     const spacer = view.container.querySelector<HTMLElement>(CLEARANCE_SELECTOR);
     assert.ok(spacer, 'the box must reserve a row for the strip while text is present');
     assert.match(spacer.className, CLEARANCE_HEIGHT_CLASS, 'the reserved row is 48px, clearing the 40px chips and the 44px preview');
-    assert.ok(view.getByRole('listbox'), 'the quoted chip row is still drawn');
+    assert.ok(view.getByRole('listbox'), 'a live selection still draws the quoted chip over a non-empty box');
   });
 
   it('(b) leaves the empty-box layout unchanged', () => {
@@ -329,19 +329,19 @@ describe('chip row clearance over a non-empty box', () => {
     assert.equal(view.container.querySelector(CLEARANCE_SELECTOR) === null, true, 'the empty box reserves no row');
   });
 
-  it('(c) after the quote fills the box the row stays and the text keeps its clearance', () => {
+  it('(c) a chip over a filled box keeps the row and the text clearance', () => {
     const view = renderComposerOverStrip({ input: '' });
     assert.equal(view.container.querySelector(CLEARANCE_SELECTOR) === null, true);
 
     view.rerender(React.createElement(ChatComposer, {
       ...composerBaseProps(),
-      input: '> 选中的原文\n',
+      input: '选中的原文\n\n',
       chipStrip: baseChipStrip({ chips: quotedChips() }),
     } as unknown as React.ComponentProps<typeof ChatComposer>));
 
     const spacer = view.container.querySelector(CLEARANCE_SELECTOR);
     assert.ok(spacer, 'the filled quote gets the reserved row');
     assert.match(spacer.className, CLEARANCE_HEIGHT_CLASS);
-    assert.ok(view.getByRole('listbox'), 'the quoted chip is still offered for appending a second passage');
+    assert.ok(view.getByRole('listbox'), 'the strip keeps its reserved row while a chip shows');
   });
 });

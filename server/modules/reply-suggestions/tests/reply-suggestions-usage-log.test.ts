@@ -107,10 +107,10 @@ test('(b) the four event records carry exactly the pre-existing field names', ()
     draw: 3,
     event: 'sent',
     index: 0,
-    source: 'focus',
+    source: 'seed',
   });
   assert.deepEqual(Object.keys(sent), ['at', 'type', 'sessionId', 'draw', 'index', 'source']);
-  assert.equal(sent.source, 'focus');
+  assert.equal(sent.source, 'seed');
 });
 
 test('(c) the writer appends JSONL and rotates once past the size cap', (t) => {

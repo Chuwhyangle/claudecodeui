@@ -63,10 +63,10 @@ function composeRequest(
     ? generation.systemPrompt
     : context.expansionSource === null
       ? builtInSystemPrompt(generation.maxChipChars)
-      : builtInExpansionSystemPrompt(generation.maxChipChars, context.expansionSource);
+      : builtInExpansionSystemPrompt(generation.maxChipChars);
   const user = context.expansionSource === null
     ? buildUserPrompt({ tail: context.tail, focus: context.focus, avoid: avoided, redraw })
-    : buildExpansionPrompt({ tail: context.tail, focus: context.focus, seed: context.seed, avoid: avoided });
+    : buildExpansionPrompt({ tail: context.tail, seed: context.seed, avoid: avoided });
   // An expansion is a diversification draw, so it uses the redraw temperature.
   const temperature = redraw || context.expansionSource !== null
     ? generation.redrawTemperature

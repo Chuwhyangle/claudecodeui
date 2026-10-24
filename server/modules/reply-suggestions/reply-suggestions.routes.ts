@@ -34,7 +34,7 @@ import type {
 import type { ReplySuggestionsEventInput } from './reply-suggestions-usage-log.js';
 
 const EVENT_NAMES: readonly ReplySuggestionsEventName[] = ['picked', 'cleared', 'redrawn', 'sent'];
-const EXPANSION_SOURCES: readonly ReplySuggestionsExpansionSource[] = ['seed', 'focus'];
+const EXPANSION_SOURCES: readonly ReplySuggestionsExpansionSource[] = ['seed'];
 
 function invalidRequest(message: string): AppError {
   return new AppError(message, { code: 'INVALID_REQUEST', statusCode: 400 });

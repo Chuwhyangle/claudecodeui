@@ -474,7 +474,7 @@ test('(m) a vary seed draw prompts with the seed and 变体, clips the seed, fil
   assert.equal('seed' in shown, false, 'the marker never copies the seed text into the ledger');
 });
 
-test('(n) a vary draw with an empty seed and a focus prompts for 回应 to that passage', async (t) => {
+test('(n) a vary expansion with only a focus is refused with 400 and makes no upstream call', async (t) => {
   const directory = mkdtempSync(path.join(tmpdir(), 'reply-expand-focus-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const ledger = path.join(directory, 'usage.jsonl');
@@ -484,20 +484,22 @@ test('(n) a vary draw with an empty seed and a focus prompts for 回应 to that 
     usageLog: { path: ledger },
   });
 
-  await harness.service.suggest({
-    sessionId: 's-expand-focus',
-    expand: true,
-    seed: '',
-    focus: 'QUOTED-PASSAGE',
-  });
+  await assert.rejects(
+    () => harness.service.suggest({
+      sessionId: 's-expand-focus',
+      expand: true,
+      seed: '',
+      focus: 'QUOTED-PASSAGE',
+    }),
+    (failure: { statusCode?: number; code?: string }) => {
+      assert.equal(failure.statusCode, 400);
+      assert.equal(failure.code, 'INVALID_REQUEST');
+      return true;
+    },
+  );
 
-  const prompt = harness.calls[0].user;
-  assert.ok(prompt.includes('QUOTED-PASSAGE'), 'the quoted passage is the focus');
-  assert.ok(prompt.includes('回应'), 'the focus prompt asks for 回应');
-  assert.equal(harness.calls.length, 1);
-
-  const rows = readFileSync(ledger, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
-  assert.equal(rows[0].expansion, 'focus');
+  assert.equal(harness.calls.length, 0, 'a refused expansion never reaches upstream');
+  assert.equal(existsSync(ledger), false, 'a refused expansion writes no ledger row');
 });
 
 test('(o) a normal redraw with focus still works while expansion is off, and a seed without expand is refused', async (t) => {

@@ -172,6 +172,71 @@ type Candidate = {
  * - fewer than two occurrences of the normalized key is excluded;
  * - frequency descending, ties broken by most recent use, top three.
  */
+/** One live textarea selection: the draft and where the person's caret or selection sits. */
+export type SuggestionFillSelection = {
+  /** The draft exactly as the textarea shows it. */
+  input: string;
+  /** Where the selection starts; equal to `selectionEnd` when the caret is collapsed. */
+  selectionStart: number;
+  /** Where the selection ends — the insertion point (`selectionStart` when nothing is selected). */
+  selectionEnd: number;
+};
+
+/** What an accepted chip writes into the composer: the whole new draft and where the caret lands. */
+export type SuggestionFill = {
+  /** The complete draft after the fill. */
+  text: string;
+  /** The caret after the fill, in UTF-16 units. */
+  caret: number;
+};
+
+/** A line break is not text: a caret next to one never adds a padding space. */
+function isLineBreak(character: string): boolean {
+  return character === '\n' || character === '\r';
+}
+
+/**
+ * Whether a character counts as text for the spacing rules: anything that
+ * exists and is neither a space nor a line break. Punctuation is text.
+ */
+function isTextCharacter(character: string | undefined): boolean {
+  return character !== undefined && character !== ' ' && !isLineBreak(character);
+}
+
+/** Whether the line the caret sits on holds no character at all (spaces are characters). */
+function isCaretOnEmptyLine(input: string, caret: number): boolean {
+  const lineStart = input.lastIndexOf('\n', caret - 1) + 1;
+  const nextBreak = input.indexOf('\n', caret);
+  const lineEnd = nextBreak === -1 ? input.length : nextBreak;
+  return lineEnd <= lineStart;
+}
+
+/**
+ * Insert a quoted passage at the live selection — the composer's acceptance
+ * rules, as one pure function.
+ *
+ * The passage is inserted verbatim (its own line breaks included) at
+ * `selectionEnd`; a selection is appended to rather than replaced. A padding
+ * space is added before and/or after only when the adjacent character is text:
+ * a space or a line break is not, so a quotation on a fresh line starts flush.
+ * At the end of an empty line the passage opens a new paragraph with two line
+ * breaks under it. The returned caret is the end of everything that was added.
+ */
+export function insertQuotedText(selection: SuggestionFillSelection, quoted: string): SuggestionFill {
+  const { input } = selection;
+  // Defensive: a textarea can report offsets from a value that has since been replaced.
+  const insertAt = Math.min(Math.max(selection.selectionEnd, 0), input.length);
+  const leadingSpace = isTextCharacter(input[insertAt - 1]) ? ' ' : '';
+  const trailingSpace = isTextCharacter(input[insertAt]) ? ' ' : '';
+  const endsOnEmptyLine = insertAt === input.length && isCaretOnEmptyLine(input, insertAt);
+  const trailingBreaks = endsOnEmptyLine ? '\n\n' : '';
+  const inserted = `${leadingSpace}${quoted}${trailingSpace}${trailingBreaks}`;
+  return {
+    text: `${input.slice(0, insertAt)}${inserted}${input.slice(insertAt)}`,
+    caret: insertAt + inserted.length,
+  };
+}
+
 /**
  * Everything that distinguishes one chip source's acceptance, as data.
  *
@@ -182,14 +247,14 @@ type Candidate = {
  * notes on each field below are the old per-source branches, now data.
  */
 export type SuggestionChipAcceptDescriptor = {
-  /** The draft an acceptance writes, from the chip and the current input. */
-  buildFill: (chip: SuggestionChip, currentInput: string) => string;
+  /** The draft an acceptance writes, from the chip and the live selection. */
+  buildFill: (chip: SuggestionChip, selection: SuggestionFillSelection) => SuggestionFill;
   /**
-   * Whether the accepted chip must stay on screen after the fill. Only a quoted
-   * chip does: focusing the box collapses the transcript selection, and the pin
-   * keeps the quotation available for appending a second passage.
+   * Whether the accepted text becomes the anchor the Suggest button re-draws
+   * with. Only a quotation does: taking the composer's focus collapses the
+   * transcript selection, and the button should still answer that passage.
    */
-  keepVisibleAfterFill: boolean;
+  anchorsSuggestionFocus: boolean;
   /** Whether the acceptance reports the ledger's `picked` event for this source. */
   reportsPicked: boolean;
   /**
@@ -198,11 +263,10 @@ export type SuggestionChipAcceptDescriptor = {
    */
   attributesSent: boolean;
   /**
-   * The expansion request issued after the fill when the experiment is on, or
-   * null for a source that never asks: a picked model reply is a `seed`, a
-   * quotation is a `focus`.
+   * The expansion seed an accepted chip asks for when the experiment is on, or
+   * null for a source that never asks: only a picked model reply is a seed.
    */
-  expansionRequest: ((chip: SuggestionChip) => { seed?: string; focus?: string }) | null;
+  expansionSeed: ((chip: SuggestionChip) => string) | null;
   /**
    * Whether the acceptance sends the draft itself. Every built-in source is
    * false — accepting a chip always leaves the text in the box for the person to
@@ -215,19 +279,18 @@ export type SuggestionChipAcceptDescriptor = {
 };
 
 /**
- * The fill a quotation writes: `> …` line(s) plus a trailing newline.
- *
- * A non-empty box is appended to rather than replaced — a second passage follows
- * a blank line — while an empty box starts with the quotation itself.
+ * The fill a quotation writes: the passage itself, placed at the caret by
+ * {@link insertQuotedText}. The chip's text is inserted verbatim — no quote
+ * marker, no forced line break — because the passage is now ordinary draft text
+ * the person edits and sends like anything else they typed.
  */
-function buildQuotedFill(chip: SuggestionChip, currentInput: string): string {
-  const quoted = `> ${chip.text.replace(/\r?\n/gu, '\n> ')}\n`;
-  return currentInput.trim() ? `${currentInput.replace(/\s+$/u, '')}\n\n${quoted}` : quoted;
+function buildInsertedQuotedFill(chip: SuggestionChip, selection: SuggestionFillSelection): SuggestionFill {
+  return insertQuotedText(selection, chip.text);
 }
 
-/** The fill every non-quoted source writes: the chip's own complete text. */
-function buildVerbatimFill(chip: SuggestionChip, _currentInput: string): string {
-  return chip.text;
+/** The fill every non-quoted source writes: the chip's own complete text, caret after it. */
+function buildVerbatimFill(chip: SuggestionChip): SuggestionFill {
+  return { text: chip.text, caret: chip.text.length };
 }
 
 /**
@@ -239,27 +302,27 @@ function buildVerbatimFill(chip: SuggestionChip, _currentInput: string): string 
  */
 export const SUGGESTION_CHIP_ACCEPT_SOURCES: Record<string, SuggestionChipAcceptDescriptor> = {
   quoted: {
-    buildFill: buildQuotedFill,
-    keepVisibleAfterFill: true,
+    buildFill: buildInsertedQuotedFill,
+    anchorsSuggestionFocus: true,
     reportsPicked: false,
     attributesSent: false,
-    expansionRequest: (chip) => ({ focus: chip.text, seed: '' }),
+    expansionSeed: null,
     submitsAfterFill: false,
   },
   model: {
     buildFill: buildVerbatimFill,
-    keepVisibleAfterFill: false,
+    anchorsSuggestionFocus: false,
     reportsPicked: true,
     attributesSent: true,
-    expansionRequest: (chip) => ({ seed: chip.text }),
+    expansionSeed: (chip) => chip.text,
     submitsAfterFill: false,
   },
   habit: {
     buildFill: buildVerbatimFill,
-    keepVisibleAfterFill: false,
+    anchorsSuggestionFocus: false,
     reportsPicked: false,
     attributesSent: false,
-    expansionRequest: null,
+    expansionSeed: null,
     submitsAfterFill: false,
   },
 };
