@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { ArrowDownIcon } from 'lucide-react';
 
 import { NextTaskBanner, useTasksSettings } from '@/modules/task-master';
-import { DeployReadiness } from '@/modules/cockpit';
 import { useWebSocket } from '@/shared/context/WebSocketContext';
 import PermissionContext from '@/modules/chat/context/PermissionContext';
 import { MarkdownWorkspaceContext } from '@/modules/chat/context/MarkdownWorkspaceContext';
@@ -120,6 +119,14 @@ type ChatInterfaceProps = {
    * the only place that can switch tabs; answers false when it cannot.
    */
   onRevealNavigate?: (reveal: UiNavigateReveal) => boolean;
+  /**
+   * The line mounted above the transcript, supplied by the workspace. The deployment strip
+   * lives in the cockpit module, and chat must not import another feature module that
+   * exports this very component — that would close a chat ↔ cockpit module cycle and make
+   * the chat barrel resolve partially during tests. So the workspace, which already imports
+   * both modules' barrels, hands the node down.
+   */
+  noticeSlot?: React.ReactNode;
 };
 
 /**
@@ -144,6 +151,7 @@ function ChatInterface({
   newSessionTrigger,
   onShowAllTasks,
   onRevealNavigate,
+  noticeSlot,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
   const { subscribe, isConnected } = useWebSocket();
@@ -1122,8 +1130,9 @@ function ChatInterface({
 
         {/* Deployment news while it is news: the compact strip renders nothing when the running
             build is current, so the transcript's first row is not spent on an all-green line.
-            A person who asked 「重启成功了吗」 sees the answer here without leaving the chat. */}
-        <DeployReadiness compact />
+            A person who asked 「重启成功了吗」 sees the answer here without leaving the chat.
+            Supplied by the workspace rather than imported here — see `noticeSlot`. */}
+        {noticeSlot}
 
         <MarkdownWorkspaceContext.Provider value={markdownWorkspaceValue}>
           <ChatMessagesPane
