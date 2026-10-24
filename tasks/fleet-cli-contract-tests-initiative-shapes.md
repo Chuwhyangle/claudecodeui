@@ -1,7 +1,7 @@
 ---
 id: fleet-cli-contract-tests-initiative-shapes
 title: M2 契约测试补充：quay-fleet initiative show/list/create/decide 的输出形状（URI 带项目段、kind 取值）
-status: todo
+status: ready
 labels:
   - contract
   - quay
