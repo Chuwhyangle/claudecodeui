@@ -1,7 +1,7 @@
 ---
 id: observation-session-digest-deterministic
 title: 观察墙 T2：会话磁贴生产者——每轮结束确定性摘要（结论摘录/改动/命令/测试/是否在问你/差量）
-status: ready
+status: done
 labels:
   - cockpit
   - observation

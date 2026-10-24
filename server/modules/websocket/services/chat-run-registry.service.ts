@@ -2,6 +2,10 @@ import { randomUUID } from 'node:crypto';
 
 import { installChatRunRegistryPort } from '@/shared/ports/chat-run-registry.port.js';
 import { sessionsDb } from '@/modules/database/index.js';
+import {
+  sessionDigestProducer,
+  type SessionTurnEndEvent,
+} from '@/modules/observation/index.js';
 import { listProcessingSessions, readSessionProcessing } from '@/modules/providers/index.js';
 import { BOOT_ID } from '@/modules/websocket/services/activity-heartbeat.service.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
@@ -161,6 +165,14 @@ type ChatRun = {
    * {@link countOpenConnections} which skips anything not `OPEN`.
    */
   connections: Set<RealtimeClientConnection>;
+  /**
+   * The last `error` frame this run forwarded, or `null` when it forwarded none.
+   *
+   * The transcript records what a turn did, not whether the run failed, so the observation
+   * layer's session digest reads the failure off THIS fact — the registry saw the error frame
+   * go by. Kept off {@link ChatRunSummary} because no by-id consumer reads it.
+   */
+  lastError: string | null;
 };
 
 /**
@@ -308,12 +320,28 @@ export function createChatRunRegistry(options?: {
    * instance (the criterion) leaves it undefined unless it wants the line.
    */
   lifecycleLog?: (line: ChatRunLifecycleForwardLog) => void;
+  /**
+   * The process-wide observation hook fired once per run, when its terminal `complete` event is
+   * recorded (SPEC's turn-end point). Defaults to the session-digest producer, which reads that
+   * session's transcript and writes one observation revision; the producer swallows its own
+   * failures, so an observation problem can never break a chat turn.
+   *
+   * Injected so a criterion can observe the event shape itself without touching the database.
+   */
+  onTurnEnd?: (event: SessionTurnEndEvent) => void;
 }) {
   const retentionMs = resolveRetentionMs(options?.retentionMs);
   const now = options?.now ?? (() => Date.now());
   const bootId = options?.bootId ?? (() => BOOT_ID);
   const carryAudience = options?.carryAudience ?? true;
   const lifecycleLog = options?.lifecycleLog;
+  const onTurnEnd =
+    options?.onTurnEnd ??
+    ((event: SessionTurnEndEvent) => {
+      // Fire-and-forget: the producer answers a promise and never rejects (it catches its own
+      // failures), and the chat path must not wait on a transcript read.
+      void sessionDigestProducer.handleTurnEnd(event);
+    });
 
   /**
    * Active and recently-completed runs keyed by app session id.
@@ -494,6 +522,14 @@ export function createChatRunRegistry(options?: {
       return null;
     }
 
+    // The observation layer's session digest reads a failed turn off the error frame the registry
+    // forwarded, because the transcript cannot tell a failed run from a quiet one. Recorded
+    // before the terminal flip below, so the `complete` that follows carries it.
+    if (message.kind === 'error') {
+      const text = message.text ?? message.content ?? message.reason ?? '';
+      run.lastError = typeof text === 'string' && text.trim() !== '' ? text.trim() : 'turn failed';
+    }
+
     // THE TRANSITION WINDOW (SPEC §7.3). Under run=turn the CLI's own
     // `command_lifecycle` rows keep going out, but as SESSION-LEVEL frames: the
     // run such a row used to ride was the superseding run S2 retires, and a frame
@@ -531,6 +567,13 @@ export function createChatRunRegistry(options?: {
       // rather than be flattened into a run that completed.
       run.status = message.aborted === true ? 'aborted' : 'completed';
       run.completedAt = now();
+      onTurnEnd({
+        appSessionId: run.appSessionId,
+        runId: run.runId,
+        status: run.status,
+        completedAt: run.completedAt,
+        error: run.lastError,
+      });
       evictRunLater(run.appSessionId);
     }
 
@@ -700,6 +743,7 @@ export function createChatRunRegistry(options?: {
       // here.
       correlationId: null,
       connections: new Set<RealtimeClientConnection>(),
+      lastError: null,
     };
 
     // Track the sockets this run's writer holds, so the lifecycle-forward log can
