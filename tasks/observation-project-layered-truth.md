@@ -1,7 +1,7 @@
 ---
 id: observation-project-layered-truth
 title: 观察墙 T3：项目磁贴生产者——分层真相（在飞/落地/部署/验证/活性）+ 差量，取不到如实三态
-status: ready
+status: done
 labels:
   - cockpit
   - observation

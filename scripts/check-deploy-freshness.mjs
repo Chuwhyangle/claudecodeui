@@ -20,22 +20,32 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_URL = 'http://127.0.0.1:3001';
 const DEFAULT_REF = 'HEAD';
-const USAGE = 'usage: node scripts/check-deploy-freshness.mjs [--url <health-base-url>] [--ref <git-ref>]';
+const USAGE = 'usage: node scripts/check-deploy-freshness.mjs [--url <health-base-url>] [--ref <git-ref>] [--json]';
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Parses `--url`/`--ref` (space- or `=`-separated). `--help` prints usage and exits 0.
+ * Parses `--url`/`--ref` (space- or `=`-separated) and the `--json` switch. `--help` prints
+ * usage and exits 0.
+ *
+ * `--json` is the machine face the observation layer's project-truth producer reads: the same
+ * verdicts and the same exit codes, with one JSON document on stdout instead of the human line.
+ * Consumers that do not pass the flag keep the byte-identical text output.
+ *
  * @param {string[]} argv
- * @returns {{ url: string, ref: string }}
+ * @returns {{ url: string, ref: string, json: boolean }}
  */
 function parseArgs(argv) {
-  const options = { url: DEFAULT_URL, ref: DEFAULT_REF };
+  const options = { url: DEFAULT_URL, ref: DEFAULT_REF, json: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') {
       console.log(USAGE);
       process.exit(0);
+    }
+    if (arg === '--json') {
+      options.json = true;
+      continue;
     }
     let key;
     let value;
@@ -79,6 +89,29 @@ function git(args) {
 }
 
 /**
+ * Emits one verdict in the requested shape and exits with the detector's documented code.
+ *
+ * In JSON mode the machine document always lands on stdout and any human error text stays on
+ * stderr, so the two channels never mix. In text mode the previous output is unchanged.
+ *
+ * @param {{ json: boolean, url: string, ref: string }} options
+ * @param {{ verdict: string, human: string, stream?: 'stdout' | 'stderr', details?: Record<string, unknown>, exitCode: number }} result
+ * @returns {never} It always exits the process, so a caller's narrowing continues after the call.
+ */
+function finish(options, result) {
+  const { verdict, human, stream = 'stdout', details = {}, exitCode } = result;
+  if (options.json) {
+    console.log(JSON.stringify({ verdict, url: options.url, ref: options.ref, ...details }));
+    if (stream === 'stderr') console.error(human);
+  } else if (stream === 'stderr') {
+    console.error(human);
+  } else {
+    console.log(human);
+  }
+  process.exit(exitCode);
+}
+
+/**
  * Reads `buildSha` off a /health payload, returning null when absent or not a string.
  * @param {unknown} payload
  * @returns {string | null}
@@ -106,54 +139,84 @@ async function main() {
   try {
     const response = await fetch(healthUrl);
     if (!response.ok) {
-      console.error(`UNREACHABLE：${healthUrl} 返回 HTTP ${response.status}`);
-      process.exit(2);
+      finish(options, {
+        verdict: 'unreachable',
+        human: `UNREACHABLE：${healthUrl} 返回 HTTP ${response.status}`,
+        stream: 'stderr',
+        details: { reason: `HTTP ${response.status}` },
+        exitCode: 2,
+      });
     }
     payload = await response.json();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`UNREACHABLE：无法读取 ${healthUrl}（${message}）`);
-    process.exit(2);
+    finish(options, {
+      verdict: 'unreachable',
+      human: `UNREACHABLE：无法读取 ${healthUrl}（${message}）`,
+      stream: 'stderr',
+      details: { reason: message },
+      exitCode: 2,
+    });
   }
 
   const buildSha = readBuildSha(payload);
   if (buildSha === null) {
-    console.log('UNKNOWN（该实例可能是 tsx 开发模式，或构建早于本检测工具存在）');
-    process.exit(2);
+    finish(options, {
+      verdict: 'unknown',
+      human: 'UNKNOWN（该实例可能是 tsx 开发模式，或构建早于本检测工具存在）',
+      details: { reason: '该实例没有 buildSha（tsx 开发模式，或构建早于本检测工具存在）' },
+      exitCode: 2,
+    });
   }
 
   const refResult = git(['rev-parse', options.ref]);
   if (refResult.error || refResult.status !== 0) {
-    console.error(`ERROR：git rev-parse ${options.ref} 失败：${refResult.stderr.trim() || refResult.status}`);
-    process.exit(2);
+    finish(options, {
+      verdict: 'error',
+      human: `ERROR：git rev-parse ${options.ref} 失败：${refResult.stderr.trim() || refResult.status}`,
+      stream: 'stderr',
+      details: { reason: `git rev-parse ${options.ref} 失败：${refResult.stderr.trim() || refResult.status}` },
+      exitCode: 2,
+    });
   }
   const refSha = refResult.stdout.trim();
 
   if (buildSha === refSha) {
-    console.log(`FRESH（buildSha ${buildSha} == ${options.ref}）`);
-    process.exit(0);
+    finish(options, {
+      verdict: 'fresh',
+      human: `FRESH（buildSha ${buildSha} == ${options.ref}）`,
+      details: { buildSha, refSha },
+      exitCode: 0,
+    });
   }
 
   const ancestor = git(['merge-base', '--is-ancestor', buildSha, options.ref]);
   if (ancestor.error || (ancestor.status !== 0 && ancestor.status !== 1)) {
-    console.error(
-      `ERROR：git merge-base --is-ancestor ${buildSha} ${options.ref} 失败：${ancestor.stderr.trim() || ancestor.status}`,
-    );
-    process.exit(2);
+    const reason = `git merge-base --is-ancestor ${buildSha} ${options.ref} 失败：${ancestor.stderr.trim() || ancestor.status}`;
+    finish(options, { verdict: 'error', human: `ERROR：${reason}`, stream: 'stderr', details: { reason }, exitCode: 2 });
   }
 
   if (ancestor.status === 0) {
     const count = git(['rev-list', '--count', `${buildSha}..${options.ref}`]);
     if (count.error || count.status !== 0) {
-      console.error(`ERROR：git rev-list --count 失败：${count.stderr.trim() || count.status}`);
-      process.exit(2);
+      const reason = `git rev-list --count 失败：${count.stderr.trim() || count.status}`;
+      finish(options, { verdict: 'error', human: `ERROR：${reason}`, stream: 'stderr', details: { reason }, exitCode: 2 });
     }
-    console.log(`STALE，落后 ${count.stdout.trim()} 个提交（${buildSha} → ${options.ref}）`);
-    process.exit(1);
+    const behindBy = Number.parseInt(count.stdout.trim(), 10);
+    finish(options, {
+      verdict: 'stale',
+      human: `STALE，落后 ${count.stdout.trim()} 个提交（${buildSha} → ${options.ref}）`,
+      details: { buildSha, refSha, behindBy: Number.isInteger(behindBy) ? behindBy : 0 },
+      exitCode: 1,
+    });
   }
 
-  console.log(`DIVERGED（构建自 ${buildSha}，不是 ${options.ref} 的祖先）`);
-  process.exit(1);
+  finish(options, {
+    verdict: 'diverged',
+    human: `DIVERGED（构建自 ${buildSha}，不是 ${options.ref} 的祖先）`,
+    details: { buildSha, refSha },
+    exitCode: 1,
+  });
 }
 
 await main();
