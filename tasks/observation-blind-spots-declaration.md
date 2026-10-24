@@ -70,3 +70,11 @@ depends_on:
 - src/modules/i18n/locales/zh-CN/common.json
 - src/modules/i18n/locales/zh-TW/common.json
 - tasks/observation-blind-spots-declaration.md
+
+## Blocker
+
+**2026-10-24T11:10:12.951Z — worker 未落地（exited-not-landed）**
+
+- 未落地原因：step=suite: __PERFILE__ duration_ms=85625 server/shared/tests/quay-test-script.test.ts passed=false end_ms=1792839814605
+- run_id：wk-prod-anchor
+- session_id：123e9e4f-74fc-4dd3-bdb7-6bfe317abf67
