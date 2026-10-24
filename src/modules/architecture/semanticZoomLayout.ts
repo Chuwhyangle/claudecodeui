@@ -12,6 +12,13 @@
  * The engine is pure: geometry in, layout out. The DOM read lives in
  * `semanticZoomRead.ts`; this module imports its types only.
  *
+ * A class frame whose member text is hidden also reclaims the rows' vertical
+ * space: `planMemberRows` states whether the rows are drawn, and the y-axis
+ * element length fed to the solver is the compact frame (title + divider)
+ * instead of the renderer's full height. The map stays monotone, so neighbours
+ * never overlap and edges are followed onto the shorter frame; the reclaimed
+ * height is then available to Fit.
+ *
  * Consumers: `PlantUmlGraph.tsx` (captures geometry once per drawing, then
  * rewrites the SVG on each settled zoom) and
  * `tests/semanticZoomLayout.test.ts` (monotonicity, identity at ≥ 90 %, min
@@ -37,17 +44,21 @@ import type {
 } from '@/modules/architecture/semanticZoomRead';
 import {
   followCompactedFrame,
+  planCompactFrameHeight,
   planCompartmentRules,
   planEdgeOpacity,
   planEntityContent,
   planEntityNameForWidth,
+  planMemberFrameHeight,
   planMemberRows,
   planPackageTab,
   planStickyLabels,
+  semanticMemberCompaction,
   PACKAGE_TAB_CLEARANCE_PX,
   PACKAGE_TAB_INSET_PX,
   CLASS_HIDDEN_HEIGHT_PX,
   CLASS_HIDDEN_WIDTH_PX,
+  SEMANTIC_IDENTITY_SCALE,
   SEMANTIC_MIN_FONT_PX,
   SEMANTIC_STRETCH_LIMIT,
   SEMANTIC_TIER_DEADZONE_RATIO,
@@ -204,8 +215,20 @@ export type SemanticAxisSolution = {
 export type SemanticNodeLayout = {
   readonly id: string;
   readonly plan: PlannedEntityContent;
-  /** The layout cell (the mapped original rect); the solver makes it big enough. */
+  /**
+   * The layout cell: the entity's mapped source interval. When the member text
+   * is hidden the vertical interval is the COMPACT height (title + divider), so
+   * the rows' space is reclaimed by the layout itself — the packages above and
+   * below, the edges and the content boundary all see the shorter box.
+   */
   readonly cell: SemanticRect;
+  /**
+   * The mapped SOURCE rectangle, before the member-hidden compaction. Edge
+   * endpoints the renderer routed to the original bottom/side are followed
+   * from this rect onto {@link drawn}, which is what keeps a relation attached
+   * to a compacted frame instead of ending in the space the body freed.
+   */
+  readonly sourceCell: SemanticRect;
   /** The drawn frame: the cell, or a compact frame anchored at its top-left. */
   readonly drawn: SemanticRect;
   /** The height of the title compartment in the DRAWN frame (rules are placed from it). */
@@ -325,7 +348,7 @@ export type SemanticFitOptions = {
 /** The fraction of the compaction the current scale earns (0 at ≥ 90 %, 1 at ≤ 50 %). */
 export function semanticCompactionAlpha(scale: number): number {
   if (!Number.isFinite(scale)) return 0;
-  return Math.min(1, Math.max(0, (0.9 - scale) / 0.4));
+  return Math.min(1, Math.max(0, (SEMANTIC_IDENTITY_SCALE - scale) / (SEMANTIC_IDENTITY_SCALE - 0.5)));
 }
 
 /** A breakpoint key that survives float noise (thousandths of a user unit). */
@@ -377,7 +400,7 @@ function solveAxis(
   // fonts are 12 px, so at 0.9 they still clear the 10 px floor; this is what
   // makes "≥ 90 % fully restored" an exact statement rather than an
   // approximation that the package-tab padding could spoil.
-  const identity = scale >= 0.9;
+  const identity = scale >= SEMANTIC_IDENTITY_SCALE;
   for (let index = 1; index < breakpoints.length; index += 1) {
     let compressible = false;
     if (!identity && axis === 'y' && alpha > 0) {
@@ -454,6 +477,12 @@ type WorkingNode = {
   readonly geometry: SemanticNodeGeometry;
   readonly plan: PlannedEntityContent;
   readonly showMembers: boolean;
+  /**
+   * The vertical length fed to the axis solver, in the drawing's own units.
+   * Equal to the renderer's height when member text is drawn; shorter when it
+   * is hidden, so every later breakpoint is placed from the compact frame.
+   */
+  readonly effectiveHeight: number;
 };
 
 /** Evaluate one tier at one scale. */
@@ -466,6 +495,7 @@ function evaluateTier(
   tier: SemanticTier,
 ): TierEvaluation {
   const visibleNodes = tier === 'C' ? [] : geometry.nodes;
+  const memberCompaction = semanticMemberCompaction(scale);
   const working: WorkingNode[] = visibleNodes.map((node) => {
     const plan = planEntityContent(
       {
@@ -490,8 +520,27 @@ function evaluateTier(
       maxWidth: Math.max(0, node.rect.width * scale - 10),
       moreLine: null,
     });
-    const showMembers = tier === 'A' && rows.rows.length >= 2;
-    return { geometry: node, plan, showMembers };
+    // Only tier A draws names; a tier-B frame has no title text, so its
+    // compact band is the thin part the renderer's own title rule occupied.
+    // The title band is the WORST the draw-time name can pick: a wide mapped
+    // box may re-plan a name onto two lines after the solver ran, and a compact
+    // frame must still hold it.
+    const compactHeight = planCompactFrameHeight({
+      kind: plan.kind,
+      hasAttributes: plan.hasAttributes,
+      titleHeight: tier === 'A' ? Math.max(plan.titleHeight, plan.reservedTitleHeight) : 7,
+    });
+    // `planMemberRows` OWNS the visibility verdict; the solver only reads it.
+    // This is the interface the task exists for: the same call that decides the
+    // rows also decides whether the frame keeps its full body.
+    const showMembers = tier === 'A' && rows.visible;
+    const effectiveHeight = planMemberFrameHeight({
+      fullHeight: node.rect.height,
+      compactHeight,
+      rows,
+      compaction: memberCompaction,
+    });
+    return { geometry: node, plan, showMembers, effectiveHeight };
   });
   const workingById = new Map(working.map((entry) => [entry.geometry.id, entry]));
 
@@ -604,7 +653,10 @@ function evaluateTier(
   for (const entry of working) {
     yElements.push({
       start: entry.geometry.rect.y,
-      length: entry.geometry.rect.height,
+      // The member-hidden compaction is applied HERE, before the solve: the
+      // solver's later breakpoints are cumulative from this length, so the rows
+      // nothing draws no longer push the rest of the column down.
+      length: entry.effectiveHeight,
       minLength: entry.showMembers ? 0 : tier === 'B' ? 16 : entry.plan.minHeight,
       compact: !entry.showMembers,
     });
@@ -620,11 +672,18 @@ function evaluateTier(
   // ---- materialise the node layouts
   const nodes: SemanticNodeLayout[] = working.map((entry) => {
     const rect = entry.geometry.rect;
-    const cell: SemanticRect = {
+    // The source rect is what the renderer drew and where its edges attach;
+    // the cell is the SOLVED rect and already carries the member-hidden
+    // compaction on the vertical axis.
+    const sourceCell: SemanticRect = {
       x: x.map(rect.x),
       y: y.map(rect.y),
       width: x.map(rect.x + rect.width) - x.map(rect.x),
       height: y.map(rect.y + rect.height) - y.map(rect.y),
+    };
+    const cell: SemanticRect = {
+      ...sourceCell,
+      height: y.map(rect.y + entry.effectiveHeight) - y.map(rect.y),
     };
     const hidden = cell.width < CLASS_HIDDEN_WIDTH_PX || cell.height < CLASS_HIDDEN_HEIGHT_PX;
     // The planning pass had to pick a name fallback before the solver knew the
@@ -654,11 +713,12 @@ function evaluateTier(
       // The tier-A threshold is re-checked against the FINAL cell: the title may
       // have grown by the width-based re-plan, and a frame that no longer has
       // room for two rows must compact instead of drawing one lonely row.
-      if (memberRows.rows.length >= 2) {
+      if (memberRows.visible) {
         return {
           id: entry.geometry.id,
           plan,
           cell,
+          sourceCell,
           drawn: cell,
           drawnTitleHeight: plan.titleHeight,
           showMembers: true,
@@ -668,25 +728,33 @@ function evaluateTier(
         };
       }
     }
-    // A text-hidden frame may be drawn shorter than its cell. The cell stays the
-    // layout unit (packages contain it, edges leave it), which is what keeps the
-    // containment relation intact while the blank space disappears.
+    // A text-hidden frame IS its compact cell: the solver already removed the
+    // rows' height from the cell itself (see `effectiveHeight`), so the cell
+    // stays the layout unit the packages and edges use while no blank body is
+    // left behind. The one exception is a frame whose members were visible at
+    // planning time but no longer fit the final cell: its cell was solved at
+    // full height, so the drawn frame is collapsed here instead.
     const titleHeight = tier === 'A' ? plan.titleHeight : 7;
-    const body = plan.kind === 'interface' && !plan.hasAttributes ? 7 : 13;
+    const compactHeight = planCompactFrameHeight({
+      kind: plan.kind,
+      hasAttributes: plan.hasAttributes,
+      titleHeight,
+    });
     const originalRuleOffset = entry.geometry.titleRuleY === null
       ? null
       : y.map(entry.geometry.titleRuleY) - cell.y;
     const baselineTitle = originalRuleOffset === null || alpha > 0
       ? titleHeight
       : Math.max(titleHeight, originalRuleOffset);
-    const compactHeight = baselineTitle + body;
-    const height = cell.height > compactHeight + 2
+    const demoted = entry.showMembers && cell.height > compactHeight + 2;
+    const height = demoted
       ? cell.height - alpha * (cell.height - compactHeight)
       : cell.height;
     return {
       id: entry.geometry.id,
       plan,
       cell,
+      sourceCell,
       drawn: { ...cell, height },
       drawnTitleHeight: baselineTitle,
       showMembers: false,
@@ -952,10 +1020,25 @@ function mapEdge(
   const attach = (nodeId: string, endpoint: PlanPoint, neighbour: { x: number; y: number }): PlanPoint => {
     const layout = layouts.get(nodeId);
     if (layout === undefined) return endpoint;
-    const cell: PlanRect = { x: layout.cell.x, y: layout.cell.y, w: layout.cell.width, h: layout.cell.height };
+    // Follow from the SOURCE rect (where the renderer attached the relation) to
+    // the drawn frame. The source rect keeps the entity's full original height,
+    // so an endpoint on the bottom of a member-hidden box — which the mapped
+    // interval no longer reaches — is still recognised and pulled onto the
+    // compact frame's boundary instead of ending in the reclaimed space.
+    const cell: PlanRect = {
+      x: layout.sourceCell.x,
+      y: layout.sourceCell.y,
+      w: layout.sourceCell.width,
+      h: layout.sourceCell.height,
+    };
     const drawn: PlanRect = { x: layout.drawn.x, y: layout.drawn.y, w: layout.drawn.width, h: layout.drawn.height };
     const followed = followCompactedFrame({ point: endpoint, cell, drawn });
-    if (followed.y !== endpoint.y) neighbour.y += followed.y - endpoint.y;
+    // Keep the segment's direction at the frame by moving the NEXT polyline
+    // point with the endpoint — but only when that neighbour is an interior
+    // bend. On a two-point relation the neighbour is the other frame's own
+    // endpoint, which is snapped onto its own frame separately; dragging it
+    // would pull it off that frame whenever one end compacts further.
+    if (followed.y !== endpoint.y && mapped.length > 2) neighbour.y += followed.y - endpoint.y;
     return snapEndpointToFrame(followed, drawn);
   };
   mapped[mapped.length - 1] = attach(geometry.target, mapped[mapped.length - 1], mapped[mapped.length - 2]);

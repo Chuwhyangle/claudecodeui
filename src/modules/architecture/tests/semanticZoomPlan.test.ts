@@ -9,22 +9,28 @@ import {
   EDGE_OPACITY_VERY_DENSE,
   followCompactedFrame,
   memberRuleOffset,
+  MEMBER_COMPACTION_FADE_RATIO,
+  MEMBER_ROWS_VISIBLE_MIN,
   NAME_ELLIPSIS_MIN_CHARS,
   NAME_ELLIPSIS_MIN_CHARS_SEED,
   PACKAGE_TAB_PADDING_PX,
   placeStickyLabels,
+  planCompactFrameHeight,
   planCompartmentRules,
   planEdgeOpacity,
   planEntityContent,
   planEntityName,
   planEntityNameForWidth,
   planHintPlacement,
+  planMemberFrameHeight,
   planMemberRows,
   planPackageLabel,
   planPackageTab,
   planRectsIntersect,
   planStickyLabels,
   planTextWidth,
+  semanticMemberCompaction,
+  SEMANTIC_IDENTITY_SCALE,
   SEMANTIC_MIN_FONT_MOBILE_PX,
   SEMANTIC_MIN_FONT_PX,
 } from '@/modules/architecture/semanticZoomPlan';
@@ -537,5 +543,156 @@ describe('function and enum stereotypes (defect 8)', () => {
       kind: 'function',
     });
     assert.deepEqual(rules, [content.titleHeight], 'no empty second compartment');
+  });
+});
+
+describe('the member-hidden frame height (vertical compaction)', () => {
+  // A class whose name plans on one line; the worst title the draw-time width
+  // can pick is therefore that same line.
+  const plan = planEntityContent(
+    { label: 'Widget', kind: 'class', hasAttributes: true, hasOperations: true, seed: false },
+    FONT_PX,
+  );
+  const FULL = 140;
+  const COMPACT = planCompactFrameHeight({
+    kind: plan.kind,
+    hasAttributes: plan.hasAttributes,
+    titleHeight: plan.reservedTitleHeight,
+  });
+
+  test('planMemberRows owns the “member text rendered” verdict', () => {
+    const few = planMemberRows({
+      members: ['a: string', 'b: string', 'run()'],
+      height: 60,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    // room = 2, one row spent on “+N more” → one visible row is NOT enough.
+    assert.equal(few.rows.length, 1);
+    assert.equal(few.visible, false, `a frame with fewer than ${MEMBER_ROWS_VISIBLE_MIN} rows renders none`);
+
+    const many = planMemberRows({
+      members: ['a: string', 'b: string', 'run()'],
+      height: 140,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    assert.ok(many.rows.length >= MEMBER_ROWS_VISIBLE_MIN);
+    assert.equal(many.visible, true);
+
+    const empty = planMemberRows({
+      members: [],
+      height: 140,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    assert.equal(empty.visible, false, 'a memberless frame never renders member text');
+  });
+
+  test('the compaction is 0 at the identity threshold and 1 at 90 % of it, continuously', () => {
+    assert.equal(semanticMemberCompaction(SEMANTIC_IDENTITY_SCALE), 0);
+    assert.equal(
+      semanticMemberCompaction(SEMANTIC_IDENTITY_SCALE * MEMBER_COMPACTION_FADE_RATIO),
+      1,
+    );
+    const mid = semanticMemberCompaction((SEMANTIC_IDENTITY_SCALE + SEMANTIC_IDENTITY_SCALE * MEMBER_COMPACTION_FADE_RATIO) / 2);
+    assert.ok(mid > 0 && mid < 1, `the 10 % band interpolates; got ${mid}`);
+  });
+
+  test('the axis length is the compact frame when hidden and the full height when visible', () => {
+    const hiddenRows = planMemberRows({
+      members: ['a: string'],
+      height: FULL,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    assert.equal(hiddenRows.visible, false);
+    const compacted = planMemberFrameHeight({
+      fullHeight: FULL,
+      compactHeight: COMPACT,
+      rows: hiddenRows,
+      compaction: 1,
+    });
+    assert.equal(compacted, COMPACT, 'a fully compacted frame is its title band plus the divider band');
+
+    const visibleRows = planMemberRows({
+      members: ['a: string', 'b: string', 'run()'],
+      height: FULL,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    assert.equal(visibleRows.visible, true);
+    assert.equal(
+      planMemberFrameHeight({
+        fullHeight: FULL,
+        compactHeight: COMPACT,
+        rows: visibleRows,
+        compaction: 1,
+      }),
+      FULL,
+      'visible member text keeps the renderer’s full height, whatever the compaction',
+    );
+  });
+
+  test('the height is monotone non-increasing as the scale falls across the threshold', () => {
+    // One member can never reach the two-row threshold, so visibility is held
+    // constant while only the compaction ramp changes — the comparison is about
+    // the ramp, not about the row count.
+    const rows = planMemberRows({
+      members: ['a: string'],
+      height: FULL,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    const heightAt = (scale: number): number => planMemberFrameHeight({
+      fullHeight: FULL,
+      compactHeight: COMPACT,
+      rows,
+      compaction: semanticMemberCompaction(scale),
+    });
+    const scales = [1, 0.95, 0.92, SEMANTIC_IDENTITY_SCALE, 0.88, 0.85, 0.83, 0.82,
+      SEMANTIC_IDENTITY_SCALE * MEMBER_COMPACTION_FADE_RATIO, 0.7, 0.5, 0.2];
+    let previous = Number.POSITIVE_INFINITY;
+    for (const scale of scales) {
+      const height = heightAt(scale);
+      assert.ok(
+        height <= previous + 1e-9,
+        `as the scale falls the hidden frame must never grow: ${scale} → ${height} (was ${previous})`,
+      );
+      assert.ok(height >= COMPACT - 1e-9, 'the compact frame is the floor');
+      assert.ok(height <= FULL + 1e-9, 'the full height is the ceiling');
+      previous = height;
+    }
+    assert.equal(heightAt(SEMANTIC_IDENTITY_SCALE), FULL);
+    assert.equal(heightAt(SEMANTIC_IDENTITY_SCALE * MEMBER_COMPACTION_FADE_RATIO), COMPACT);
+  });
+
+  test('a frame already shorter than its title + divider is never grown', () => {
+    const short = COMPACT - 6;
+    const rows = planMemberRows({
+      members: ['a: string'],
+      height: short,
+      titleHeight: plan.titleHeight,
+      fontPx: FONT_PX,
+      maxWidth: 110,
+      moreLine: null,
+    });
+    assert.equal(
+      planMemberFrameHeight({ fullHeight: short, compactHeight: COMPACT, rows, compaction: 1 }),
+      short,
+      'the compaction may only remove member rows, never add height',
+    );
   });
 });
