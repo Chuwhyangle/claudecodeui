@@ -1,7 +1,7 @@
 ---
 id: cockpit-phone-narrow-viewport-layout
 title: 驾驶舱手机窄屏（390×844）布局：页头过高、在途条溢出、项目条无滚动提示、触控目标不足 44px、底部输入坞占 1/3 视口
-status: ready
+status: done
 labels:
   - cockpit
   - ui
