@@ -1,7 +1,7 @@
 ---
 id: quay-pulse-strip-compact-health-view
 title: 脉搏条：每项目一条 ≤48px 的高密度进展视图（在飞 / fan-in 胜负条 / suite / 阻塞及影响），常驻驾驶舱与 Quay 面板
-status: ready
+status: done
 labels:
   - cockpit
   - quay
