@@ -1,7 +1,7 @@
 ---
 id: context-event-stream-and-shadow-predictor
 title: P1 地基：主机级上下文事件流写入（CloudCLI 侧）+ 影子预测器 + 按类别命中率表
-status: ready
+status: done
 labels:
   - context
   - delegation
@@ -42,11 +42,11 @@ extra: {}
 
 ## AC
 
-- [ ] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/context-event-writer.test.ts` exit 0——在临时 HOME 和夹具 schema 下：合法事件追加成一行，内容可以解析；不合法的事件被拒绝且不写入；超过 16 KB 的文本被截断并带 `truncated: true`；schema 文件缺失时状态为 `schema-unavailable`，且 0 次写入；并发 50 次追加后，行数恰好为 50 且每行都能解析。
-- [ ] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/utterance-classifier.test.ts` exit 0——10 个类别各有至少 2 条正例，以及若干落入「讨论/其他」的反例；例句直接写在测试夹具里（可取材自用户真实话语，如「检查进展。」「建 A、B、C 三个修复任务」「Build + 安全重启。」「检查是否已经落地可用」「用 MCP 浏览器访问……截图」）。
-- [ ] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/shadow-predictor.test.ts` exit 0——给定转移计数，预测输出概率最高的类别及其置信度；下一条话语到来后恰好产生一条 outcome，hit 判定正确；会话之间互不串扰；预测器在界面层不可见（不经过任何 websocket 帧）。
-- [ ] AC4: `node --test scripts/shadow-prediction-report.test.mjs` exit 0——夹具事件流产出的按类别命中率与校准分桶，与手算结果一致；坏行被跳过并计数。
-- [ ] AC5: 各生产点接入的单测：发送一条消息恰好产生 1 条 `utterance`；chip 的 picked 恰好产生 1 条 `chip.picked`；写入器抛错时发送流程照常完成。`npm run typecheck` 通过。
+- [x] AC1: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/context-event-writer.test.ts` exit 0——在临时 HOME 和夹具 schema 下：合法事件追加成一行，内容可以解析；不合法的事件被拒绝且不写入；超过 16 KB 的文本被截断并带 `truncated: true`；schema 文件缺失时状态为 `schema-unavailable`，且 0 次写入；并发 50 次追加后，行数恰好为 50 且每行都能解析。
+- [x] AC2: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/utterance-classifier.test.ts` exit 0——10 个类别各有至少 2 条正例，以及若干落入「讨论/其他」的反例；例句直接写在测试夹具里（可取材自用户真实话语，如「检查进展。」「建 A、B、C 三个修复任务」「Build + 安全重启。」「检查是否已经落地可用」「用 MCP 浏览器访问……截图」）。
+- [x] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/context-events/tests/shadow-predictor.test.ts` exit 0——给定转移计数，预测输出概率最高的类别及其置信度；下一条话语到来后恰好产生一条 outcome，hit 判定正确；会话之间互不串扰；预测器在界面层不可见（不经过任何 websocket 帧）。
+- [x] AC4: `node --test scripts/shadow-prediction-report.test.mjs` exit 0——夹具事件流产出的按类别命中率与校准分桶，与手算结果一致；坏行被跳过并计数。
+- [x] AC5: 各生产点接入的单测：发送一条消息恰好产生 1 条 `utterance`；chip 的 picked 恰好产生 1 条 `chip.picked`；写入器抛错时发送流程照常完成。`npm run typecheck` 通过。
 
 ## DoD
 
@@ -69,12 +69,18 @@ extra: {}
 - server/modules/context-events/tests/context-event-writer.test.ts (new)
 - server/modules/context-events/tests/utterance-classifier.test.ts (new)
 - server/modules/context-events/tests/shadow-predictor.test.ts (new)
+- server/modules/context-events/tests/production-wiring.test.ts (new)
 - server/modules/websocket/services/chat-control.service.ts
 - server/modules/reply-suggestions/reply-suggestions-usage-log.ts
+- server/modules/reply-suggestions/index.ts
 - server/modules/cockpit/cockpit-hub.service.ts
 - server/modules/quay/quay.service.ts
+- server/modules/quay/quay.module.ts
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/server-import-cycle-budget.baseline.json
+- server/shared/tests/quay-test-script.test.ts
 - scripts/shadow-prediction-report.mjs (new)
 - scripts/shadow-prediction-report.test.mjs (new)
+- scripts/suite-duration-baseline.tsv
 - tasks/context-event-stream-and-shadow-predictor.md

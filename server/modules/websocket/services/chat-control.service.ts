@@ -470,7 +470,25 @@ type ChatControlDependencies = {
    * clock.
    */
   now?: () => number;
+  /**
+   * The context-event seam: one `utterance` per accepted send a PERSON made over
+   * the socket or the voice relay. Scheduled and MCP sends are not utterances (no
+   * person spoke at that moment), so they are not recorded here.
+   *
+   * The call is deliberately fire-and-forget and its failure is swallowed by this
+   * service: recording is an observation of a user's action, never a precondition
+   * for the action itself. Injected by `server/index.ts` so this module keeps
+   * importing no sibling feature module.
+   */
+  recordContextEvent?: (event: {
+    kind: 'utterance';
+    session: string;
+    data: { text: string; source: 'typing' | 'voice' };
+  }) => void;
 };
+
+/** The caller front ends whose send is a person's utterance. */
+const UTTERANCE_VIAS: ReadonlySet<ControlCaller['via']> = new Set(['websocket', 'voice']);
 
 /**
  * The access entry a control verb must call: the injected seam when one was
@@ -710,6 +728,22 @@ export function createChatControlService(deps: ChatControlDependencies) {
         code: 'RUN_IN_PROGRESS',
         message: `Session "${input.sessionId}" already has a run in progress.`,
       };
+    }
+
+    // The accepted turn is the utterance. Recorded after registration and only
+    // for a person's front end, so a refused send never enters the stream. A
+    // throwing/failing recorder is contained here: the send has already been
+    // accepted and must return its result unchanged.
+    if (UTTERANCE_VIAS.has(caller.via)) {
+      try {
+        deps.recordContextEvent?.({
+          kind: 'utterance',
+          session: input.sessionId,
+          data: { text: input.content, source: caller.via === 'voice' ? 'voice' : 'typing' },
+        });
+      } catch {
+        // The stream is an observation, not part of the send's contract.
+      }
     }
 
     // The delivery this send was accepted as (SPEC §8.1). A resident session's

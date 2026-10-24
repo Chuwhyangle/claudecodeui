@@ -60,7 +60,32 @@ export type CockpitHubDeps = {
   ) => Promise<{ target: CockpitSendTarget | null; reason: CockpitPendingSend['reason'] }>;
   /** Sends a confirmed message through the existing session-send service. */
   send?: (userId: string, message: { sessionId: string; content: string }) => void | Promise<void>;
+  /**
+   * The context-event seam: what the person looked at, what a phrase resolved
+   * to, and the preview/confirm/cancel triple of the send card. The events are
+   * recorded for the host stream only; nothing here changes what is broadcast to
+   * the cockpit's own devices.
+   *
+   * Injected by `server/index.ts`, and every call is contained: a broken recorder
+   * can never stop a cockpit frame from being delivered.
+   */
+  recordContextEvent?: (event: CockpitContextEvent) => void;
 };
+
+/** One cockpit-originated context event; the hub never emits any other kind. */
+export type CockpitContextEvent = {
+  kind: 'focus' | 'reference.resolved' | 'send.previewed' | 'send.confirmed' | 'send.cancelled';
+  /** The fleet registry id when the focus address carries one. */
+  project?: string | null;
+  session?: string | null;
+  data: Record<string, unknown>;
+};
+
+/** The `quay://<fleetProjectId>/…` project segment, or null for any other address. */
+function fleetProjectIdFromUri(uri: string | null): string | null {
+  if (uri === null) return null;
+  return /^quay:\/\/([^/]+)\//.exec(uri)?.[1] ?? null;
+}
 
 /** One connection's announced identity for the cockpit. */
 type HubParticipant = {
@@ -145,6 +170,15 @@ export function createCockpitHub(deps: CockpitHubDeps = {}): CockpitHub {
     return created;
   };
 
+  /** Records one context event; a throwing recorder cannot break cockpit delivery. */
+  const recordContext = (event: CockpitContextEvent): void => {
+    try {
+      deps.recordContextEvent?.(event);
+    } catch {
+      // The stream is an observation of the cockpit, not part of its protocol.
+    }
+  };
+
   const write = (connection: RealtimeClientConnection, frame: unknown): void => {
     if (connection.readyState !== WS_OPEN_STATE) return;
     try {
@@ -220,7 +254,8 @@ export function createCockpitHub(deps: CockpitHubDeps = {}): CockpitHub {
         // card is born with its destination (or with an honest reason it has none).
         let target: CockpitSendTarget | null = null;
         let reason: CockpitPendingSend['reason'] = state.focusUri === null ? 'no-focus' : 'no-session';
-        if (classifyCockpitUtterance(state, sourced.text).kind === 'unmatched' && deps.resolveTarget) {
+        const intent = classifyCockpitUtterance(state, sourced.text);
+        if (intent.kind === 'unmatched' && deps.resolveTarget) {
           try {
             const resolved = await deps.resolveTarget(state);
             target = resolved.target;
@@ -235,6 +270,25 @@ export function createCockpitHub(deps: CockpitHubDeps = {}): CockpitHub {
         const next = reduceCockpit(state, { ...sourced, target, reason });
         states.set(key, next);
         broadcast(key, next);
+        // Only a phrase that actually resolved to a destination is a resolved
+        // reference; an unmatched phrase becomes a send preview instead (the
+        // reducer's pending card), and a matched navigation phrase is neither.
+        if (target !== null) {
+          recordContext({
+            kind: 'reference.resolved',
+            project: fleetProjectIdFromUri(state.focusUri),
+            session: target.sessionId,
+            data: { text: sourced.text, sessionId: target.sessionId },
+          });
+        }
+        if (intent.kind === 'unmatched') {
+          recordContext({
+            kind: 'send.previewed',
+            project: fleetProjectIdFromUri(state.focusUri),
+            session: target?.sessionId ?? null,
+            data: { text: sourced.text, hasTarget: target !== null, reason },
+          });
+        }
         return true;
       }
 
@@ -246,6 +300,12 @@ export function createCockpitHub(deps: CockpitHubDeps = {}): CockpitHub {
         states.set(key, next);
         broadcast(key, next);
         if (pending?.target != null && deps.send) {
+          recordContext({
+            kind: 'send.confirmed',
+            project: fleetProjectIdFromUri(state.focusUri),
+            session: pending.target.sessionId,
+            data: { sessionId: pending.target.sessionId },
+          });
           try {
             await deps.send(key, {
               sessionId: pending.target.sessionId,
@@ -262,9 +322,26 @@ export function createCockpitHub(deps: CockpitHubDeps = {}): CockpitHub {
       }
 
       state = stateFor(key);
+      if (sourced.type === 'cancel' && state.pendingSend !== null) {
+        // The card existed and this cancel closes it; a cancel with no card is a
+        // no-op in the reducer and stays out of the stream.
+        recordContext({
+          kind: 'send.cancelled',
+          project: fleetProjectIdFromUri(state.focusUri),
+          session: state.pendingSend.target?.sessionId ?? null,
+          data: { sessionId: state.pendingSend.target?.sessionId ?? null },
+        });
+      }
       const next = reduceCockpit(state, sourced);
       states.set(key, next);
       broadcast(key, next);
+      if (sourced.type === 'focus') {
+        recordContext({
+          kind: 'focus',
+          project: fleetProjectIdFromUri(sourced.uri),
+          data: { uri: sourced.uri },
+        });
+      }
       return true;
     },
 
