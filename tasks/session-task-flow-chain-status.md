@@ -1,7 +1,7 @@
 ---
 id: session-task-flow-chain-status
 title: 会话发起任务的流转链状态：立案 → 执行中 → 已合入 → 已构建 → 线上运行，替代「检查进展」
-status: todo
+status: ready
 labels:
   - chat
   - cockpit
