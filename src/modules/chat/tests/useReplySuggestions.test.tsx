@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 
-import { useReplySuggestions } from '@/modules/chat/hooks/useReplySuggestions';
+import { useReplySuggestions, resetReplySuggestionsBatchCache } from '@/modules/chat/hooks/useReplySuggestions';
 
 /**
  * The model-chip hook, one leg per rule the proposal states.
@@ -66,6 +66,9 @@ const flush = () => act(async () => {
 });
 
 beforeEach(() => {
+  // The batch table lives at module scope so it survives a remount; every test
+  // must start with an empty page.
+  resetReplySuggestionsBatchCache();
   apiMocks.status.mockReset().mockImplementation(() => okJson(STATUS_ON));
   apiMocks.suggest.mockReset().mockImplementation(() => okJson({ chips: ['答复一', '答复二'], draw: 7 }));
   apiMocks.event.mockReset().mockImplementation(() => Promise.resolve({ ok: true, status: 204 }));
@@ -369,5 +372,107 @@ describe('useReplySuggestions expansion', () => {
     await flush();
     assert.deepEqual(result.current.expansionChips, [], 'another conversation owns another draft');
     assert.equal(result.current.expansionDepth, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// One batch per assistant message: switching back or remounting is free
+// ---------------------------------------------------------------------------
+
+const drawnSessions = () => apiMocks.suggest.mock.calls
+  .map(([body]) => (body as Record<string, unknown>).sessionId);
+
+describe('useReplySuggestions batch cache', () => {
+  /** A distinct batch per session, so a restore can be told from a fresh draw. */
+  const perSession = () => apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => {
+    const session = String(body.sessionId);
+    if (body.redraw === true) {
+      return okJson({ chips: [`${session}-重抽一`, `${session}-重抽二`], draw: 9 });
+    }
+    return okJson({ chips: [`${session}-一`, `${session}-二`], draw: 7 });
+  });
+
+  it('(a) switching to another conversation and back restores the batch without a request', async () => {
+    perSession();
+    const { result, rerender } = renderReply();
+    await settle(result);
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 1);
+
+    rerender(baseArgs({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-b-一', 'session-b-二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 2);
+
+    rerender(baseArgs({ sessionId: 'session-a', lastAssistantMessageId: 'assistant-1' }));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 2, 'switching back must not draw again');
+    assert.deepEqual(drawnSessions(), ['session-a', 'session-b']);
+  });
+
+  it('(b) a redrawn batch replaces the remembered one, and a switch back restores the new batch', async () => {
+    perSession();
+    const { result, rerender } = renderReply();
+    await settle(result);
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+
+    await act(async () => {
+      assert.equal(await result.current.redraw(), true);
+    });
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-重抽一', 'session-a-重抽二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 2);
+
+    rerender(baseArgs({ sessionId: 'session-b', lastAssistantMessageId: 'assistant-b' }));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-b-一', 'session-b-二']));
+
+    rerender(baseArgs({ sessionId: 'session-a', lastAssistantMessageId: 'assistant-1' }));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-重抽一', 'session-a-重抽二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 3, 'the restore is the only thing that happened');
+  });
+
+  it('(c) a new assistant message id is a new draw, not a restore', async () => {
+    perSession();
+    const { result, rerender } = renderReply();
+    await settle(result);
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+
+    rerender(baseArgs({ lastAssistantMessageId: 'assistant-2' }));
+    await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 2));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['session-a-一', 'session-a-二']));
+  });
+
+  it('(d) unmounting and remounting the same conversation makes no request', async () => {
+    perSession();
+    const first = renderReply();
+    await settle(first.result);
+    await waitFor(() => assert.deepEqual(first.result.current.chips, ['session-a-一', 'session-a-二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 1);
+
+    first.unmount();
+
+    const second = renderReply();
+    await settle(second.result);
+    await waitFor(() => assert.deepEqual(second.result.current.chips, ['session-a-一', 'session-a-二']));
+    assert.equal(apiMocks.suggest.mock.calls.length, 1, 'the remount restores the remembered batch');
+  });
+
+  it('(e) the table keeps 20 keys; the least-recently-used one is drawn again when returned to', async () => {
+    apiMocks.suggest.mockImplementation((body: Record<string, unknown>) => okJson({
+      chips: [`chip-${String(body.sessionId)}`],
+      draw: 1,
+    }));
+    const { result, rerender } = renderReply({ sessionId: 's-0', lastAssistantMessageId: 'm-0' });
+    await settle(result);
+    await waitFor(() => assert.deepEqual(result.current.chips, ['chip-s-0']));
+
+    for (let index = 1; index <= 20; index += 1) {
+      rerender(baseArgs({ sessionId: `s-${index}`, lastAssistantMessageId: `m-${index}` }));
+      await waitFor(() => assert.deepEqual(result.current.chips, [`chip-s-${index}`]));
+    }
+    assert.equal(apiMocks.suggest.mock.calls.length, 21);
+
+    // 21 keys for a 20-key table: the first one has been evicted.
+    rerender(baseArgs({ sessionId: 's-0', lastAssistantMessageId: 'm-0' }));
+    await waitFor(() => assert.equal(apiMocks.suggest.mock.calls.length, 22));
+    await waitFor(() => assert.deepEqual(result.current.chips, ['chip-s-0']));
   });
 });

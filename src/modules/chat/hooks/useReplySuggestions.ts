@@ -16,15 +16,65 @@ import type {
 export const REPLY_SUGGESTIONS_MAX_EXPANSION_DEPTH = 5;
 
 /**
+ * How many `${sessionId}\u0000${assistantMessageId}` batches the page remembers.
+ * Browser memory only: a reload empties it and the server cache answers instead.
+ */
+export const REPLY_SUGGESTIONS_BATCH_CACHE_SIZE = 20;
+
+type CachedBatch = { chips: string[]; draw: number };
+
+/**
+ * Module-level, so it survives both a session switch and an unmount/remount of
+ * the composer on the same page (a `useRef` would die with the hook instance).
+ * Map insertion order is the LRU order: reading a key moves it to the end.
+ */
+const batchCache = new Map<string, CachedBatch>();
+
+/** Test seam: forget every remembered batch. */
+export function resetReplySuggestionsBatchCache(): void {
+  batchCache.clear();
+}
+
+function batchKey(sessionId: string, messageId: string): string {
+  return `${sessionId}\u0000${messageId}`;
+}
+
+function readCachedBatch(key: string): CachedBatch | null {
+  const cached = batchCache.get(key);
+  if (cached === undefined) return null;
+  batchCache.delete(key);
+  batchCache.set(key, cached);
+  return cached;
+}
+
+function writeCachedBatch(key: string, batch: CachedBatch): void {
+  // An empty batch is not a batch: remembering it would suppress the retry the
+  // next visit should make. This mirrors the server, which never caches one.
+  if (batch.chips.length === 0) {
+    batchCache.delete(key);
+    return;
+  }
+  batchCache.delete(key);
+  batchCache.set(key, batch);
+  while (batchCache.size > REPLY_SUGGESTIONS_BATCH_CACHE_SIZE) {
+    const oldest = batchCache.keys().next().value;
+    if (oldest === undefined) break;
+    batchCache.delete(oldest);
+  }
+}
+
+/**
  * The composer's LLM-generated reply chips and their Suggest button.
  *
  * Three rules shape this hook:
  *
- * - A draw belongs to one assistant message. The hook remembers
- *   `${sessionId}:${lastAssistantMessageId}` and asks the server once for it, so a
- *   re-render, an emptied input box or a mounted/unmounted strip never becomes a
- *   second request. A changed id (the assistant answered again) or another
- *   conversation re-arms it.
+ * - A draw belongs to one assistant message. The hook asks the server once for
+ *   `${sessionId}:${lastAssistantMessageId}`. The batch it got back is kept in a
+ *   page-level, 20-key in-memory table keyed the same way: a re-render, an
+ *   emptied input box, a mounted/unmounted strip, or a switch back to a
+ *   conversation restores that batch instead of requesting it again. A changed
+ *   id (the assistant answered again) asks for a new draw. A reload loses the
+ *   table and the server's cache answers, still without an upstream call.
  * - Disabled is silent. `/status` answers `enabled: false` for every install that
  *   has not opted in, and a failed draw falls back to the habit chips: nothing here
  *   throws into the composer or draws an error. The one exception is the Suggest
@@ -239,13 +289,18 @@ export function useReplySuggestions({
     setExpansionChips((previous) => (previous.length === 0 ? previous : []));
   }, []);
 
-  const applyDraw = useCallback((body: unknown) => {
-    const limit = statusRef.current?.maxChips ?? 3;
-    const result = readDraw(body, limit);
+  const applyResult = useCallback((result: ReplySuggestionsResult) => {
     setChips(result.chips);
     setDraw(result.draw);
     drawRef.current = result.draw;
   }, []);
+
+  const applyDraw = useCallback((body: unknown): ReplySuggestionsResult => {
+    const limit = statusRef.current?.maxChips ?? 3;
+    const result = readDraw(body, limit);
+    applyResult(result);
+    return result;
+  }, [applyResult]);
 
   const reportEvent = useCallback((
     event: ReplySuggestionsEventName,
@@ -272,16 +327,25 @@ export function useReplySuggestions({
   }, [sessionId]);
 
   // One draw per assistant message, and only while the chips could actually be seen.
+  // A batch this page already drew for the same `${session}:${message}` is restored
+  // from the in-memory table instead of being requested again: a conversation
+  // switch or a remount costs nothing. A reload loses the table and falls back to
+  // the server's cache, which still makes no upstream call.
   useEffect(() => {
     if (!status?.enabled || !active || !sessionId || !lastAssistantMessageId) {
       return undefined;
     }
-    const key = `${sessionId}:${lastAssistantMessageId}`;
+    const key = batchKey(sessionId, lastAssistantMessageId);
     if (extractedRef.current === key) {
       return undefined;
     }
     // Marked BEFORE the await: a re-render during the request must not start a second one.
     extractedRef.current = key;
+    const cached = readCachedBatch(key);
+    if (cached !== null) {
+      applyResult(cached);
+      return undefined;
+    }
     let cancelled = false;
     void (async () => {
       try {
@@ -293,7 +357,7 @@ export function useReplySuggestions({
         if (cancelled || sessionRef.current !== sessionId) {
           return;
         }
-        applyDraw(body);
+        writeCachedBatch(key, applyDraw(body));
       } catch {
         // Silent fallback: the habit chips are already drawn by `useInputSuggestions`.
       }
@@ -301,7 +365,7 @@ export function useReplySuggestions({
     return () => {
       cancelled = true;
     };
-  }, [active, applyDraw, lastAssistantMessageId, sessionId, status]);
+  }, [active, applyDraw, applyResult, lastAssistantMessageId, sessionId, status]);
 
   /**
    * One expansion draw. The two anchors are exclusive in practice: a picked reply
@@ -396,7 +460,12 @@ export function useReplySuggestions({
       if (sessionRef.current !== sessionId) {
         return false;
       }
-      applyDraw(body);
+      const result = applyDraw(body);
+      // The new batch replaces the remembered one for this message, so a switch
+      // away and back restores what the person is looking at now.
+      if (lastAssistantMessageId !== null) {
+        writeCachedBatch(batchKey(sessionId, lastAssistantMessageId), result);
+      }
       reportEvent('redrawn');
       return true;
     } catch {
@@ -409,7 +478,7 @@ export function useReplySuggestions({
         setLoading(false);
       }
     }
-  }, [applyDraw, clearExpansion, focus, reportEvent, sessionId]);
+  }, [applyDraw, clearExpansion, focus, lastAssistantMessageId, reportEvent, sessionId]);
 
   return {
     // A conversation with no assistant message has nothing to suggest from: the

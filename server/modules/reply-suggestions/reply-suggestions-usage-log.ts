@@ -12,6 +12,13 @@
  * second, drifting copy of the conversation. Only chips the SERVER showed and
  * the event names are written.
  *
+ * CACHE HITS ARE STILL ROWS. A `shown` row carries `served`: `"upstream"` when
+ * the batch came from a real model call, `"cache"` when the service returned the
+ * batch it had already drawn for the same session, assistant message and
+ * settings version. Both count as a display; only `"upstream"` is a paid call.
+ * Rows written before this field existed have no `served` and must be read as
+ * `"upstream"` (the offline replay does exactly that).
+ *
  * SIZE IS BOUNDED. When the file would exceed the cap (5 MB by default) it is
  * rotated ONCE to `<file>.1`, replacing (and thereby discarding) the older
  * rotation. There is never a growing `.2`.
