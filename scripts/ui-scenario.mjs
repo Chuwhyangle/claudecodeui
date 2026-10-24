@@ -11,9 +11,13 @@
  * checkpoints plus one, not the number of steps.
  *
  * WHAT THE SCENARIO IS. A JSON file with a `name` and `steps`; each step may carry:
- *   · `open`: an opener name — `"quay-panel"` navigates the app to a project's Quay view. An
- *     opener is the only step that touches the DOM, because reaching a view is navigation, not
- *     business state.
+ *   · `open`: an opener name — reaching a view is navigation, not business state, so it is the
+ *     only step that touches the DOM. The vocabulary is explicit and closed:
+ *       `quay-panel` — a project's Quay view (sidebar project → session → Quay tab);
+ *       `session`    — one session's workspace (the sidebar project → session rows);
+ *       `cockpit`    — the cockpit stage, entered through the same mode switch a person uses, so
+ *                      the return path a later `session` step lands on is the product's own.
+ *     An unknown opener fails its step rather than being ignored.
  *   · `drive`: one {@link ScenarioDriveStep} for `window.__cloudcliScenario.drive`.
  *   · `expect`: a map of reading assertions, evaluated after the step (see
  *     {@link expectationFailures}); an unsupported key is a failure, never a silent pass.
@@ -157,9 +161,57 @@ function expectationFailures(expect, reading) {
 
   for (const [key, expected] of Object.entries(expect)) {
     switch (key) {
+      case 'routeIncludes': {
+        const actual = typeof reading.route === 'string' ? reading.route : null;
+        if (actual === null || !actual.includes(String(expected))) fail(key, expected, actual);
+        break;
+      }
       case 'activeViewIncludes': {
         const actual = typeof reading.activeView === 'string' ? reading.activeView : null;
         if (actual === null || !actual.includes(String(expected))) fail(key, expected, actual);
+        break;
+      }
+      case 'cockpitViewIs': {
+        // `null` is a real assertion (the cockpit is not mounted); it is not "skip".
+        const actual = reading.cockpit?.view ?? null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'cockpitMounted': {
+        // Which view the mode switch opens depends on whether the selected project is registered
+        // with quay-fleet (board) or not (fleet). A scenario about the switch itself asserts the
+        // stage is mounted, not which of the two legitimate views it chose.
+        const actual = typeof reading.cockpit?.view === 'string';
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'cockpitFocusIs': {
+        const actual = reading.cockpit?.focus ?? null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'cockpitFocusLabel': {
+        const actual = reading.cockpit?.focusLabel ?? null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'cockpitEchoIs': {
+        const actual = reading.cockpit?.echo ?? null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'wallObjectCount': {
+        const actual = Array.isArray(reading.cockpit?.wallObjects)
+          ? reading.cockpit.wallObjects.length
+          : null;
+        if (actual !== expected) fail(key, expected, actual);
+        break;
+      }
+      case 'wallObjectLabels': {
+        const actual = Array.isArray(reading.cockpit?.wallObjects)
+          ? reading.cockpit.wallObjects.map((/** @type {any} */ object) => object.label)
+          : null;
+        if (!sameJson(actual, expected)) fail(key, expected, actual);
         break;
       }
       case 'focusableCount': {
@@ -273,23 +325,21 @@ async function waitForPublishedView(page) {
 }
 
 /**
- * Navigates the app to one project's Quay view.
+ * Selects one project and then one of its sessions from the sidebar, from a freshly loaded `/`.
  *
- * THE ONLY DOM-DRIVEN OPENER. Reaching a view is navigation; everything the scenario then
- * asserts is read from the semantic surface. The project is selected from the sidebar rather
- * than deep-linked: a session-URL landing can synthesize a project row before the project list
- * loads, and that synthesized row carries no `hasQuayConfig`, so it offers no Quay view.
+ * Shared by every opener that lands on a session: the Quay view starts from the same selection
+ * before it clicks its tab, and the session opener stops here. The Vite dependency optimizer can
+ * reload the document mid-navigation (a `504 Outdated Optimize Dep` on a first boot), so the first
+ * paint is probed with bounded reloads rather than left to a locator that waits on a document that
+ * no longer exists.
  *
  * @param {import('playwright').Page} page
  * @param {{ project: string, session: string }} target
  */
-async function openQuayPanel(page, target) {
+async function selectProjectSession(page, target) {
   const projectRow = page.getByText(target.project, { exact: true }).first();
   const sessionRow = page.getByText(target.session, { exact: true }).first();
 
-  // The Vite dependency optimizer can reload the document mid-navigation (a `504 Outdated
-  // Optimize Dep` on a first boot), so the first paint is probed with bounded reloads rather
-  // than left to a locator that waits on a document that no longer exists.
   await page.goto('/');
   /** @param {number} timeout */
   const appears = (timeout) => projectRow.waitFor({ state: 'visible', timeout }).then(() => true, () => false);
@@ -305,6 +355,90 @@ async function openQuayPanel(page, target) {
   await projectRow.click();
   await sessionRow.waitFor({ state: 'visible', timeout: 10_000 });
   await sessionRow.click();
+}
+
+/** True when the page's path is a session workspace route. */
+const SESSION_ROUTE = /\/session\/[^/]+/;
+
+/**
+ * Opens one session's workspace.
+ *
+ * TWO WAYS IN, ONE READING. From a cold page this is the sidebar selection a person makes. From
+ * the cockpit it is the mode switch's 「会话」 segment, which lands on the route the cockpit
+ * recorded when it was entered — the product's own return path, not a URL the runner invents.
+ * The cold fallback keeps the opener usable when no route was recorded (a scenario that opens
+ * `session` first).
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ project: string, session: string }} target
+ */
+async function openSession(page, target) {
+  const onCockpit = await page.getByTestId('cockpit-page').isVisible().catch(() => false);
+  if (onCockpit) {
+    const sessionsLink = page.locator('[data-mode-switch-link="sessions"]').first();
+    await sessionsLink.waitFor({ state: 'visible', timeout: 10_000 });
+    await sessionsLink.click();
+    // The remembered route may be a session (the usual case) or `/` when there was none; wait
+    // for the cockpit to unmount before deciding which one it was.
+    await page.waitForFunction(
+      // `globalThis`, not `window`: this module is typechecked under Node's lib only, and the
+      // callback runs in the page.
+      () => !(/** @type {any} */ (globalThis)).location.pathname.startsWith('/cockpit'),
+      undefined,
+      { timeout: BOOT_TIMEOUT_MS },
+    );
+    const returned = await page
+      .waitForURL((url) => SESSION_ROUTE.test(url.pathname), { timeout: 5_000 })
+      .then(() => true, () => false);
+    if (!returned) {
+      await selectProjectSession(page, target);
+    }
+  } else {
+    await selectProjectSession(page, target);
+  }
+  await page.waitForURL((url) => SESSION_ROUTE.test(url.pathname), { timeout: BOOT_TIMEOUT_MS });
+  await waitForSurface(page);
+}
+
+/**
+ * Opens the cockpit stage through the same mode switch a person uses.
+ *
+ * WHY THE SWITCH AND NOT A DIRECT NAVIGATION: the switch is what records the pre-cockpit route in
+ * session storage, and that record is what a later `session` step returns to. A `page.goto('/cockpit')`
+ * would open the same stage but leave the return path empty, so the round trip a scenario asserts
+ * would not be the one the product performs.
+ *
+ * @param {import('playwright').Page} page
+ */
+async function openCockpit(page) {
+  if (!page.url().startsWith('http')) {
+    await page.goto('/');
+  }
+  await waitForSurface(page);
+  const cockpitLink = page.locator('[data-mode-switch-link="cockpit"]').first();
+  await cockpitLink.waitFor({ state: 'visible', timeout: BOOT_TIMEOUT_MS });
+  await cockpitLink.click();
+  await page.waitForURL((url) => url.pathname.startsWith('/cockpit'), {
+    timeout: BOOT_TIMEOUT_MS,
+  });
+  await page.locator('[data-testid="cockpit-page"]').first().waitFor({
+    state: 'visible',
+    timeout: PANEL_TIMEOUT_MS,
+  });
+}
+
+/**
+ * Navigates the app to one project's Quay view.
+ *
+ * THE PROJECT IS SELECTED FROM THE SIDEBAR rather than deep-linked: a session-URL landing can
+ * synthesize a project row before the project list loads, and that synthesized row carries no
+ * `hasQuayConfig`, so it offers no Quay view.
+ *
+ * @param {import('playwright').Page} page
+ * @param {{ project: string, session: string }} target
+ */
+async function openQuayPanel(page, target) {
+  await selectProjectSession(page, target);
 
   const tab = page.locator('[data-workspace-tab="quay"]').first();
   const tabVisible = await tab.isVisible().catch(() => false);
@@ -422,7 +556,14 @@ async function runScenario(browser, scenario, options) {
       }
       if (step.open !== undefined) {
         await flushBatch();
-        if (step.open !== 'quay-panel') {
+        /** @type {Record<string, (() => Promise<void>) | undefined>} */
+        const openers = {
+          'quay-panel': () => openQuayPanel(page, { project: options.project, session: options.session }),
+          session: () => openSession(page, { project: options.project, session: options.session }),
+          cockpit: () => openCockpit(page),
+        };
+        const execute = openers[step.open];
+        if (execute === undefined) {
           const failures = [`unsupported opener ${JSON.stringify(step.open)}`];
           results.push({
             index: index + 1,
@@ -435,7 +576,7 @@ async function runScenario(browser, scenario, options) {
           });
           continue;
         }
-        await openQuayPanel(page, { project: options.project, session: options.session });
+        await execute();
         appReady = true;
         const reading = await readSurface(page);
         let screenshot = null;

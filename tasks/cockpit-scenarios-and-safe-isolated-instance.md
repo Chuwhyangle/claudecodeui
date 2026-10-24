@@ -1,7 +1,7 @@
 ---
 id: cockpit-scenarios-and-safe-isolated-instance
 title: 观察墙 T7：场景运行器接入驾驶舱（3 个端到端场景）+ 安全隔离实例脚本（强制关闭常驻会话恢复）
-status: ready
+status: done
 labels:
   - cockpit
   - testing
