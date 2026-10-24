@@ -42,6 +42,8 @@ depends_on:
 - server/modules/observation/tests/fixtures/session-transcript.jsonl (new)
 - server/modules/observation/index.ts
 - server/modules/websocket/services/chat-run-registry.service.ts
+- server/shared/tests/quay-test-script.test.ts
+- scripts/suite-duration-baseline.tsv
 - tasks/observation-session-digest-deterministic.md
 
 ## Blocker
