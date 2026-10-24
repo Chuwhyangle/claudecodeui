@@ -1,7 +1,7 @@
 ---
 id: architecture-class-body-vertical-compaction
 title: 架构图类框纵向压缩：低档位隐藏成员行时类框高度随之收紧，不留大片空白
-status: ready
+status: done
 labels:
   - feature
 parent: null
