@@ -32,6 +32,12 @@ import type {
 } from '@/modules/database/index.js';
 
 import {
+  OBSERVATION_LAYER_BLIND_SPOTS,
+  mergeBlindSpots,
+  splitBlindSpotsFromDigest,
+  withBlindSpotsInDigest,
+} from './blind-spots.js';
+import {
   parseObservationUri,
   type ObservationKind,
 } from './observation-uri.js';
@@ -67,6 +73,11 @@ export type ObservedObject = {
   status: ObservedStatus;
   /** Kind-specific structured reading; the store treats it as an opaque JSON document. */
   digest: Record<string, unknown>;
+  /**
+   * What this projection cannot see. Always non-empty: the kind's defaults followed by any
+   * producer-supplied declarations, de-duplicated. The preview is the only place it renders.
+   */
+  blindSpots: string[];
   revision: number;
   updatedAt: number;
   provenance: ObservedProvenance;
@@ -113,6 +124,8 @@ export type ObservationWallSelf = {
   title: '观察层自身';
   state: 'attention';
   reason: string;
+  /** The layer's own declaration: a heartbeat is not a correctness reading. */
+  blindSpots: string[];
 };
 
 /** `GET /api/observation/wall`'s response body. */
@@ -142,6 +155,8 @@ export type WriteObservationInput = {
   title: string;
   status: ObservedStatus;
   digest?: Record<string, unknown>;
+  /** Extra declarations appended to the kind's defaults; merged and de-duplicated. */
+  blindSpots?: string[];
   deltaItems?: string[];
   provenance: {
     producer: string;
@@ -231,17 +246,25 @@ function toObservedObject(row: ObservedObjectRow): ObservedObject {
     row.statusReason === null
       ? { state: row.statusState as ObservationStatusState }
       : { state: row.statusState as ObservationStatusState, reason: row.statusReason };
+  const kind = row.kind as ObservationKind;
+  const tier = row.provenanceTier === 'llm' ? 'llm' : 'deterministic';
+  const { digest, blindSpots } = splitBlindSpotsFromDigest(
+    parseJsonRecord(row.digestJson),
+    kind,
+    tier,
+  );
   return {
     uri: row.uri,
-    kind: row.kind as ObservationKind,
+    kind,
     title: row.title,
     status,
-    digest: parseJsonRecord(row.digestJson),
+    digest,
+    blindSpots,
     revision: row.revision,
     updatedAt: row.updatedAt,
     provenance: {
       producer: row.provenanceProducer,
-      tier: row.provenanceTier === 'llm' ? 'llm' : 'deterministic',
+      tier,
       evaluatedAt: row.provenanceEvaluatedAt,
     },
   };
@@ -336,6 +359,11 @@ export function createObservationStore(deps: ObservationStoreDeps = {}): Observa
       if (!Number.isFinite(evaluatedAt)) throw invalid('`provenance.evaluatedAt` must be a finite timestamp');
       const digest = input.digest ?? {};
       if (!isRecord(digest)) throw invalid('`digest` must be an object');
+      const appendedBlindSpots = input.blindSpots ?? [];
+      if (!Array.isArray(appendedBlindSpots) || appendedBlindSpots.some((spot) => typeof spot !== 'string')) {
+        throw invalid('`blindSpots` must be an array of strings');
+      }
+      const blindSpots = mergeBlindSpots(kind, tier, appendedBlindSpots);
       const deltaItems = input.deltaItems ?? [];
       if (!Array.isArray(deltaItems) || deltaItems.some((item) => typeof item !== 'string')) {
         throw invalid('`deltaItems` must be an array of strings');
@@ -348,7 +376,7 @@ export function createObservationStore(deps: ObservationStoreDeps = {}): Observa
         title,
         statusState: status.state,
         statusReason: status.reason ?? null,
-        digestJson: JSON.stringify(digest),
+        digestJson: JSON.stringify(withBlindSpotsInDigest(digest, blindSpots)),
         at,
         deltaItemsJson: JSON.stringify(items),
         provenanceProducer: producer,
@@ -362,6 +390,7 @@ export function createObservationStore(deps: ObservationStoreDeps = {}): Observa
         title,
         status,
         digest,
+        blindSpots,
         revision: appended.revision,
         updatedAt: at,
         provenance: { producer, tier, evaluatedAt },
@@ -499,6 +528,7 @@ export function createObservationStore(deps: ObservationStoreDeps = {}): Observa
               reason: notOk
                 .map((reading) => `${reading.producer}: ${reading.state}${reading.reason === null ? '' : ` (${reading.reason})`}`)
                 .join('; '),
+              blindSpots: [...OBSERVATION_LAYER_BLIND_SPOTS],
             };
 
       return { entries, collapsedCount, producers, self };

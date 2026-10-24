@@ -295,8 +295,14 @@ test('AC2: a valid baseline dispatches known files longest-first, keeps the rest
     // Then observation-project-layered-truth added its criterion
     // server/modules/observation/tests/project-truth.test.ts (419 + 1 = 420 collected
     // server test files).
-    // This fixture names 3 known files, so 420 - 3 = 417.
-    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=417$/);
+    // Then observation-blind-spots-declaration added its criterion
+    // server/modules/observation/tests/blind-spots.test.ts (420 + 1 = 421 collected
+    // server test files).
+    // Then observation-session-digest-llm-tier added its criterion
+    // server/modules/observation/tests/session-digest-llm.test.ts (421 + 1 = 422 collected
+    // server test files).
+    // This fixture names 3 known files, so 422 - 3 = 419.
+    assert.match(lines[0], /^test\.sh: server dispatch order=longest-first source=.* known=3 unknown=419$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -345,9 +351,9 @@ test('AC3: a broken baseline fails open to alphabetical order byte-for-byte, and
     assert.equal(rv.status, 0, rv.stderr);
     const vl = dispatchLines(rv.stderr);
     assert.equal(vl.length, 1, 'valid: exactly one dispatch line');
-    // same collection as AC2 — 420 files on this tree — but this fixture names ONE known file,
-    // so 420 - 1 = 419 (AC2 reads 417 because its fixture names 3)
-    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=419$/);
+    // same collection as AC2 — 422 files on this tree — but this fixture names ONE known file,
+    // so 422 - 1 = 421 (AC2 reads 419 because its fixture names 3)
+    assert.match(vl[0], /^test\.sh: server dispatch order=longest-first source=.* known=1 unknown=421$/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

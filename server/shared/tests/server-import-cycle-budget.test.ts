@@ -200,6 +200,14 @@ const CYCLE_GROUPS: readonly string[][] = [
  * `server/index.ts` — and it sits in no SCC. Its one inbound edge is the composition root's
  * mount, which is the sanctioned shape; registering the directory is what keeps the
  * new-directory leaf rule from reading that edge as a stray.
+ * A SEVENTH ENTRY WAS ADDED, by `observation-session-digest-llm-tier` (2026-10-24), under the
+ * same escape hatch: `modules/reply-suggestions` landed earlier as a pure leaf (its only
+ * inbound edge was the composition root's mount), so it had never needed a manifest entry.
+ * The observation wall's LLM digest tier now REUSES that module's direct-HTTP client, gateway
+ * settings reader and usage ledger instead of copying them, which creates the first
+ * `modules -> modules/reply-suggestions` inbound edge. The directory still imports only
+ * `server/shared/**` and itself and sits in no SCC; registering it here is the sanctioned
+ * escape hatch, not a cycle and not a budget raise.
  */
 const MANIFEST_PIN: readonly string[] = [
   '.',
@@ -237,6 +245,7 @@ const MANIFEST_PIN: readonly string[] = [
   'modules/providers/shared/mcp',
   'modules/providers/shared/skills',
   'modules/quay',
+  'modules/reply-suggestions',
   'modules/resident-ledger',
   'modules/scheduled-messages',
   'modules/scheduled-messages/services',

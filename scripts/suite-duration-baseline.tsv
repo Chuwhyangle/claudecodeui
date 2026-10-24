@@ -141,7 +141,9 @@
 #   measured one file at a time on 2026-10-17 (its own new criterion; no green round contains it yet),
 #   and the view-events row by observation-p0-view-instrumentation-and-weekly-report,
 #   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
-# so this file now covers 378 of the 419 files the current `find server -name '*.test.ts' -o -name
+#   and the session-digest-llm row by observation-session-digest-llm-tier,
+#   measured one file at a time on 2026-10-24 (its own new criterion; no green round contains it yet),
+# so this file now covers 380 of the 422 files the current `find server -name '*.test.ts' -o -name
 # '*.test.js' | sort` list collects; a row here is a dispatch ORDER hint only, so an unlisted file is
 # not skipped — it just sorts alphabetically after the listed ones. The remaining ~40 unlisted files
 # (claude-resident-dispatch-hook and voice-realtime-voice-active-marker among them) came in with
@@ -221,6 +223,11 @@
 #   `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/session-digest.test.ts`
 #   (dur=3622ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
 #   coverage floor green now that the tree collects 417 server test files).
+#   and the blind-spots row by observation-blind-spots-declaration, measured one file at a time on
+#   2026-10-24 with
+#   `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/blind-spots.test.ts`
+#   (dur=3232ms; its own new criterion; no green round contains it yet — the row also keeps the 90%
+#   coverage floor green now that the tree collects 421 server test files).
 1604	server/modules/file-tree/tests/file-tree-search-index.test.ts
 5700	server/shared/tests/server-composition-startup.test.ts
 1403	server/modules/voice-realtime/tests/voice-realtime-summary.test.ts
@@ -599,3 +606,5 @@
 3737	server/modules/quay/tests/contracts/fleet-cli-contracts.test.ts
 3622	server/modules/observation/tests/session-digest.test.ts
 1917	server/modules/observation/tests/view-events.test.ts
+3232	server/modules/observation/tests/blind-spots.test.ts
+3720	server/modules/observation/tests/session-digest-llm.test.ts
