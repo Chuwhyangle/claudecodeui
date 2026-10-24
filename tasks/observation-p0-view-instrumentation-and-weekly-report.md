@@ -35,18 +35,18 @@ extra: {}
 
 ## Touches
 
-- src/shared/viewEvents.ts
-- src/shared/tests/viewEvents.test.ts
+- src/shared/viewEvents.ts (new)
+- src/shared/tests/viewEvents.test.ts (new)
 - src/App.tsx
-- server/modules/observation/index.ts
-- server/modules/observation/observation.module.ts
-- server/modules/observation/view-events.routes.ts
-- server/modules/observation/view-events.service.ts
-- server/modules/observation/tests/view-events.test.ts
+- server/modules/observation/index.ts (new)
+- server/modules/observation/observation.module.ts (new)
+- server/modules/observation/view-events.routes.ts (new)
+- server/modules/observation/view-events.service.ts (new)
+- server/modules/observation/tests/view-events.test.ts (new)
 - server/index.ts
 - config/server.settings.example.json
 - server/shared/tests/server-import-cycle-budget.test.ts
-- scripts/workload-report/report.py
-- scripts/workload-report/README.md
-- scripts/workload-report/testdata/sample.jsonl
+- scripts/workload-report/report.py (new)
+- scripts/workload-report/README.md (new)
+- scripts/workload-report/testdata/sample.jsonl (new)
 - tasks/observation-p0-view-instrumentation-and-weekly-report.md
