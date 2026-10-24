@@ -7,9 +7,19 @@ import { beforeEach, test, vi } from 'vitest';
 
 import enCommon from '@/modules/i18n/locales/en/common.json';
 import {
+  BOTTOM_SLOT_INFO_INSET_PX,
+  bottomCornerLayout,
+  bottomInfoSlotRect,
+  cornerChromeRects,
+  rectsOverlap,
+} from '@/modules/architecture/bottomSlotLayout';
+import { placeHoverHint } from '@/modules/architecture/hoverHintPlacement';
+import {
   ArchitectureMinimap,
   drawingFitsInViewport,
   MINIMAP_HEIGHT_PX,
+  MINIMAP_MOBILE_HEIGHT_PX,
+  MINIMAP_MOBILE_WIDTH_PX,
   MINIMAP_WIDTH_PX,
   minimapDragToScroll,
   minimapLayout,
@@ -228,12 +238,25 @@ class TestPointerEvent extends MouseEvent {
 (window as unknown as { PointerEvent: typeof PointerEvent }).PointerEvent =
   TestPointerEvent as unknown as typeof PointerEvent;
 
+/** One painted rectangle, kept so a case can tell a box from the range frame. */
+type PaintedRect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly lineWidth: number;
+  readonly strokeStyle: string;
+  readonly fillStyle: string;
+};
+
 /** The recording 2D context the paint is measured with. */
 type CanvasRecorder = {
   fillRect: number;
   strokeRect: number;
   drawImage: number;
   lineWidths: number[];
+  strokes: PaintedRect[];
+  fills: PaintedRect[];
 };
 
 /**
@@ -243,7 +266,14 @@ type CanvasRecorder = {
  * the paint schedule at all.
  */
 function recordCanvas(): CanvasRecorder {
-  const recorder: CanvasRecorder = { fillRect: 0, strokeRect: 0, drawImage: 0, lineWidths: [] };
+  const recorder: CanvasRecorder = {
+    fillRect: 0,
+    strokeRect: 0,
+    drawImage: 0,
+    lineWidths: [],
+    strokes: [],
+    fills: [],
+  };
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function recording(this: HTMLCanvasElement) {
     const context = {
       canvas: this,
@@ -252,15 +282,27 @@ function recordCanvas(): CanvasRecorder {
       lineWidth: 1,
       setTransform: () => {},
       clearRect: () => {},
-      fillRect: () => {
+      fillRect: (x: number, y: number, width: number, height: number) => {
         recorder.fillRect += 1;
+        recorder.fills.push({
+          x, y, width, height,
+          lineWidth: context.lineWidth,
+          strokeStyle: context.strokeStyle,
+          fillStyle: context.fillStyle,
+        });
       },
       drawImage: () => {
         recorder.drawImage += 1;
       },
-      strokeRect: () => {
+      strokeRect: (x: number, y: number, width: number, height: number) => {
         recorder.strokeRect += 1;
         recorder.lineWidths.push(context.lineWidth);
+        recorder.strokes.push({
+          x, y, width, height,
+          lineWidth: context.lineWidth,
+          strokeStyle: context.strokeStyle,
+          fillStyle: context.fillStyle,
+        });
       },
     };
     return context as unknown as CanvasRenderingContext2D;
@@ -328,7 +370,7 @@ test('the box reader marks package frames, grp:: groups and seeds', () => {
   );
 });
 
-test('1000 node boxes are read once and filled in one round; a pan or zoom never redraws them', async () => {
+test('1000 node boxes are read once and STROKED in one round; a pan or zoom never redraws them', async () => {
   const boxes = Array.from({ length: 1000 }, (_unused, index) => ({
     x: (index % 40) * 100,
     y: Math.floor(index / 40) * 100,
@@ -347,32 +389,182 @@ test('1000 node boxes are read once and filled in one round; a pan or zoom never
   const canvas = minimapCanvas();
   pinCanvasBox(canvas);
 
-  // One background fill plus one rectangle per node — and 4 attribute reads each.
-  await waitFor(() => assert.equal(recorder.fillRect, 1001, 'the nodes are painted in a single round'));
+  /** The node outlines: every stroke that is not the 2px range frame. */
+  const boxStrokes = (): PaintedRect[] => recorder.strokes.filter((stroke) => stroke.lineWidth !== 2);
+
+  // ONE background fill, then a stroked outline per node — and 4 attribute
+  // reads each. The nodes are never filled: that is the defect this replaced.
+  await waitFor(() => assert.equal(boxStrokes().length, 1000, 'the nodes are outlined in a single round'));
+  assert.equal(recorder.fills.length, 1, 'the only fillRect is the background');
+  assert.equal(recorder.fills[0].width, MINIMAP_WIDTH_PX);
+  assert.equal(recorder.fills[0].height, MINIMAP_HEIGHT_PX);
   assert.equal(reads.reads, 4000, 'the drawing geometry is read once');
   assert.equal(canvas.getAttribute('data-architecture-minimap-range'), '0,0,80,40');
+  assert.equal(canvas.getAttribute('data-architecture-minimap-mode'), 'outline', 'the shipped paint is an outline');
 
-  // A pan changes only the frame: the bitmap is blitted, never re-filled.
+  // A pan changes only the frame: the bitmap is blitted, never re-filled or
+  // re-stroked.
   host.scrollLeft = 120;
   host.scrollTop = 40;
   act(() => {
     host.dispatchEvent(new Event('scroll'));
   });
   await waitFor(() => assert.equal(canvas.getAttribute('data-architecture-minimap-range'), '48,16,80,40'));
-  assert.equal(recorder.fillRect, 1001, 'panning does not repaint the node rectangles');
+  assert.equal(boxStrokes().length, 1000, 'panning does not repaint the node outlines');
+  assert.equal(recorder.fills.length, 1, 'panning does not repaint the background');
   assert.equal(reads.reads, 4000, 'panning does not re-read the geometry');
   assert.ok(recorder.drawImage >= 1, 'the cached bitmap is blitted');
-  assert.ok(recorder.strokeRect >= 1, 'the frame is stroked on every paint');
+  assert.ok(recorder.lineWidths.includes(2), 'the frame is stroked on every paint');
 
   // A zoom is the same story: the drawing identity did not change.
   rerender(<ArchitectureMinimap hostRef={hostRef} revision={1} scale={0.2} />);
   await waitFor(() => assert.equal(canvas.getAttribute('data-architecture-minimap-range'), '24,8,40,20'));
-  assert.equal(recorder.fillRect, 1001, 'zooming does not repaint the node rectangles');
+  assert.equal(boxStrokes().length, 1000, 'zooming does not repaint the node outlines');
   assert.equal(reads.reads, 4000, 'zooming does not re-read the geometry');
 
-  // The frame is marked by WIDTH: every stroke is the documented 2px.
+  // The frame is marked by WIDTH: it is the only 2px stroke; the outlines are
+  // at most 1px, so they can never be mistaken for the range box.
   assert.ok(recorder.lineWidths.length > 0);
-  assert.deepEqual([...new Set(recorder.lineWidths)], [2], 'the range box is set apart by line width, not colour alone');
+  assert.deepEqual(
+    [...new Set(boxStrokes().map((stroke) => stroke.lineWidth))],
+    [1],
+    'these are all entity outlines: the documented 1px width',
+  );
+  assert.ok(recorder.lineWidths.includes(2));
+});
+
+/**
+ * Reading: the minimap paints OUTLINES at every tier.
+ *
+ * The shipped defect painted a filled block per node, so a 55-entity drawing
+ * became a grey slab and the map said nothing about which packages were dense.
+ * The rule is the same at both map sizes (the PC 160×100 map and the phone's
+ * 96×64 glance): one background fill, one thin stroke per box, no node fill.
+ */
+test('both map tiers draw thin outlines and never fill an entity block', async () => {
+  const drawing = makeDrawing(4000, 1000, [
+    { x: 0, y: 0, width: 4000, height: 1000, group: true },
+    { x: 20, y: 20, width: 60, height: 40, id: 'src/a.ts', seed: true },
+    { x: 100, y: 20, width: 60, height: 40, id: 'src/b.ts' },
+  ]);
+
+  // ── the PC tier ──────────────────────────────────────────────────────────
+  const pcHost = makeHost(drawing.cloneNode(true) as SVGSVGElement, 100, 20);
+  const pcRecorder = recordCanvas();
+  const pc = render(<ArchitectureMinimap hostRef={{ current: pcHost }} revision="pc-A" scale={0.05} />);
+  const pcCanvas = minimapCanvas();
+  await waitFor(() => assert.equal(pcRecorder.fills.length, 1, 'only the background is filled'));
+  assert.equal(pcCanvas.style.width, `${MINIMAP_WIDTH_PX}px`);
+  assert.equal(pcRecorder.fills[0].width, MINIMAP_WIDTH_PX);
+  assert.equal(pcCanvas.getAttribute('data-architecture-minimap-mode'), 'outline');
+  // Three boxes → three outlines; the range frame is the 2px stroke.
+  assert.equal(pcRecorder.strokes.filter((stroke) => stroke.lineWidth !== 2).length, 3);
+  assert.ok(pcRecorder.strokes.filter((stroke) => stroke.lineWidth !== 2).every((stroke) => stroke.lineWidth <= 1));
+  assert.ok(pcRecorder.strokes.some((stroke) => stroke.lineWidth === 0.75), 'the group frame is thinner than an entity');
+  // A new semantic tier is a new drawing: still outlines, never fills.
+  pc.rerender(<ArchitectureMinimap hostRef={{ current: pcHost }} revision="pc-D" scale={0.05} />);
+  await waitFor(() => assert.equal(pcRecorder.fills.length, 2, 'the new drawing gets one background fill'));
+  assert.equal(pcRecorder.strokes.filter((stroke) => stroke.lineWidth !== 2).length, 6);
+  assert.ok(pcRecorder.fills.every((fill) => fill.width === MINIMAP_WIDTH_PX));
+  pc.unmount();
+
+  // ── the phone tier ────────────────────────────────────────────────────────
+  const originalWidth = window.innerWidth;
+  const originalMatchMedia = window.matchMedia;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      matches: query.includes('(pointer: coarse)'),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+  // A phone starts collapsed; the criterion reads the expanded 96×64 map.
+  window.localStorage.setItem('architecture.minimap.collapsed', 'expanded');
+  try {
+    const phoneHost = makeHost(drawing.cloneNode(true) as SVGSVGElement, 100, 20);
+    const phoneRecorder = recordCanvas();
+    render(<ArchitectureMinimap hostRef={{ current: phoneHost }} revision="phone-A" scale={0.05} />);
+    const phoneCanvas = minimapCanvas();
+    await waitFor(() => assert.equal(phoneRecorder.fills.length, 1));
+    assert.equal(phoneCanvas.style.width, `${MINIMAP_MOBILE_WIDTH_PX}px`);
+    assert.equal(phoneCanvas.style.height, `${MINIMAP_MOBILE_HEIGHT_PX}px`);
+    assert.equal(phoneCanvas.getAttribute('data-architecture-minimap-mode'), 'outline');
+    assert.equal(phoneRecorder.fills[0].width, MINIMAP_MOBILE_WIDTH_PX);
+    assert.equal(phoneRecorder.strokes.filter((stroke) => stroke.lineWidth !== 2).length, 3);
+    assert.ok(phoneRecorder.strokes.filter((stroke) => stroke.lineWidth !== 2).every((stroke) => stroke.lineWidth <= 1));
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: originalWidth });
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
+  }
+});
+
+/**
+ * Reading: the minimap's corner slot never shares screen space with the zoom
+ * controls or the bottom info bar.
+ *
+ * jsdom has no layout, so this models the same geometry the flex slot realises
+ * — the model lives in `bottomSlotLayout`, beside the constants both surfaces
+ * read, and the placement rule consumes the two corner boxes as obstacles.
+ */
+test('the minimap slot is disjoint from the zoom controls and the bottom info bar', () => {
+  // A phone-width canvas: the band is narrow enough that a naive bottom-first
+  // placement DOES reach the corner slot — the positive control below.
+  const container = { left: 0, top: 0, right: 390, bottom: 600 };
+  const layout = bottomCornerLayout({ touchUi: true, shortTouch: false });
+  const corner = cornerChromeRects({
+    container,
+    minimap: { width: MINIMAP_MOBILE_WIDTH_PX, height: MINIMAP_MOBILE_HEIGHT_PX },
+    controls: { width: 44, height: 44 },
+    layout,
+  });
+  assert.equal(rectsOverlap(corner.minimap, corner.controls, 1), false, 'the two corner boxes have a positive gap');
+  assert.ok(corner.minimap.right <= corner.controls.left);
+
+  const infoBar = bottomInfoSlotRect({
+    container,
+    size: { width: 150, height: 28 },
+  });
+  assert.equal(infoBar.left, BOTTOM_SLOT_INFO_INSET_PX);
+  assert.equal(rectsOverlap(corner.minimap, infoBar, 1), false);
+  assert.equal(rectsOverlap(corner.controls, infoBar, 1), false);
+
+  // The placement rule, fed the SAME corner boxes, keeps the reading off both.
+  const hint = { width: 300, height: 22 };
+  const obstacles = [corner.minimap, corner.controls, infoBar];
+  const placement = placeHoverHint({ container, hint, obstacles });
+  const placed = {
+    left: placement.left,
+    top: placement.top,
+    right: placement.left + hint.width,
+    bottom: placement.top + hint.height,
+  };
+  assert.equal(placement.overlapsObstacle, false, 'a free band exists on this container');
+  for (const obstacle of obstacles) {
+    assert.equal(rectsOverlap(placed, obstacle, 1), false, `the hint must clear ${JSON.stringify(obstacle)}`);
+  }
+
+  // Positive control: the same bottom-first placement WITHOUT the corner
+  // obstacles lands on the minimap, so the reading above can go red.
+  const naive = placeHoverHint({ container, hint, obstacles: [] });
+  const naiveBox = {
+    left: naive.left,
+    top: naive.top,
+    right: naive.left + hint.width,
+    bottom: naive.top + hint.height,
+  };
+  assert.equal(rectsOverlap(naiveBox, corner.minimap, 1), true, 'the defect this rule replaces overlapped the map');
 });
 
 test('clicking the map centres the main viewport on that point', () => {

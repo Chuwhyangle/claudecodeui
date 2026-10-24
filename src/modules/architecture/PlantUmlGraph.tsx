@@ -6,6 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_NODE_ID_SHAPE } from '@/modules/architecture/adaptiveGrouping';
 import { ArchitectureMinimap } from '@/modules/architecture/ArchitectureMinimap';
 import {
+  BOTTOM_SLOT_GAP_PX,
+  bottomCornerLayout,
+  overlayLayoutDefect,
+} from '@/modules/architecture/bottomSlotLayout';
+import {
   archguardToPlantUml,
   DEFAULT_NEIGHBORHOOD_HOPS,
   MEMBER_MAX_ROWS,
@@ -3034,6 +3039,20 @@ export function PlantUmlGraph({
     </span>
   ) : null;
 
+  /**
+   * Where the ONE scale reading is drawn.
+   *
+   * The desktop tier draws the in-flow row above the canvas, so the reading
+   * belongs there beside the zoom tier. The compact tier has no visible
+   * in-flow row (the tier is portaled into the Adjust sheet, which is shut by
+   * default), so the reading rides in the on-canvas zoom cluster instead —
+   * always drawn, always exactly once. Rendering it in both places is the
+   * defect the task removed: two percentages for one drawing.
+   */
+  const readoutInCluster = compactToolbar;
+  /** The DEV control arm's second reading; `null` in the shipped build. */
+  const duplicateReadout = overlayLayoutDefect() === 'duplicate-readout';
+
   /** The single place the actual scale is stated, so fit (e.g. 42%) and 100% are distinguishable. */
   const zoomReadout = (
     <span
@@ -3109,6 +3128,8 @@ export function PlantUmlGraph({
   // drawing), not in the toolbar: they act on the drawing, so they belong on
   // it. 32px targets on a fine pointer, 44px on a coarse one.
   const clusterTargetStyle = touchUi ? TOUCH_TARGET_STYLE : ZOOM_CLUSTER_TARGET_STYLE;
+  /** The corner slot's direction and insets: the same model the pill's slot uses. */
+  const cornerLayout = bottomCornerLayout({ touchUi, shortTouch });
   /**
    * The bottom band the portrait phone keeps clear for its corner controls.
    * Zero on every other tier (and for the DEV arm that restores the pre-task
@@ -3212,7 +3233,7 @@ export function PlantUmlGraph({
       style={{ gap: touchUi ? TOUCH_CONTROL_GAP_PX : 4 }}
       className="pointer-events-auto flex max-w-full flex-wrap items-center rounded-lg border border-border/60 bg-background/90 p-1 text-[11px] text-muted-foreground shadow-sm"
     >
-      {zoomReadout}
+      {!readoutInCluster && zoomReadout}
       {neighbourhoodStatus !== null && (
         <span
           data-architecture-neighbourhood-status="true"
@@ -3613,29 +3634,27 @@ export function PlantUmlGraph({
         })()}
         <div
           data-architecture-canvas-overlays="true"
+          data-architecture-bottom-corner={cornerLayout.direction}
           // The arrangement is stated inline rather than in utility classes:
-          // "one absolute column, positive gap, map before cluster" is what
+          // "one absolute slot, positive gap, map before cluster" is what
           // makes the two boxes unable to intersect, and a test can read it
           // without a laid-out browser (the same reason the zoom targets carry
-          // inline sizes).
+          // inline sizes). The inset/direction come from the shared
+          // `bottomCornerLayout` the selection pill's slot is measured against.
           style={{
             position: 'absolute',
-            // The landscape-phone tier hugs the canvas edge: the drawing host
-            // has only ~280px of height, so 12px of inset on each axis is
-            // chrome the reader pays for out of the diagram. The hit targets
-            // stay 44px; only the distance to the edge shrinks.
-            bottom: shortTouch ? 4 : 12,
-            right: shortTouch ? 4 : 12,
+            bottom: cornerLayout.inset,
+            right: cornerLayout.inset,
             display: 'flex',
             // A phone spends one ROW on the corner chrome: the collapsed
             // minimap button and the zoom cluster sit side by side, bottom
             // aligned, so the pair takes ~52px of height instead of a 204px
             // column covering the drawing's right edge. The fine-pointer tier
             // keeps its stacked column.
-            flexDirection: touchUi ? 'row' : 'column',
+            flexDirection: cornerLayout.direction,
             alignItems: 'flex-end',
-            rowGap: 8,
-            columnGap: shortTouch ? 4 : touchUi ? 8 : 0,
+            rowGap: BOTTOM_SLOT_GAP_PX,
+            columnGap: cornerLayout.direction === 'row' ? cornerLayout.gap : 0,
           }}
           className="z-20 pointer-events-none"
         >
@@ -3700,15 +3719,18 @@ export function PlantUmlGraph({
                 {zoomInButton}
                 {zoomOutButton}
                 {fitButton}
-                {/* The cluster states the same scale reading as the tier bar above
-                    the canvas: both are `displayScale`, so a reader never sees two
-                    percentages for one drawing. */}
-                <span
-                  data-architecture-zoom-cluster-level="true"
-                  className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground"
-                >
-                  {Math.round(displayScale * 100)}%
-                </span>
+                {/* On the compact tier the tier bar above the canvas is not on
+                    screen, so the cluster IS the one place the scale is stated.
+                    On the desktop tier the in-flow row states it and this span
+                    is not drawn at all — one drawing, one percentage. */}
+                {(readoutInCluster || duplicateReadout) && (
+                  <span
+                    data-architecture-zoom-cluster-level="true"
+                    className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground"
+                  >
+                    {Math.round(displayScale * 100)}%
+                  </span>
+                )}
                 {lodDepth !== null && (
                   <span data-architecture-lod-label className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
                     {lodDepth === 2

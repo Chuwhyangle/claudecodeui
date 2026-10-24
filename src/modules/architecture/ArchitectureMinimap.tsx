@@ -6,6 +6,7 @@ import type {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { overlayLayoutDefect } from '@/modules/architecture/bottomSlotLayout';
 import { TOUCH_TARGET_STYLE, useTouchLayout } from '@/modules/architecture/hooks/useTouchLayout';
 import {
   measureViewportSize,
@@ -66,10 +67,27 @@ const COLLAPSED_STORAGE_KEY = 'architecture.minimap.collapsed';
 
 /** The minimap's own paint colours; the diagram's palette is irrelevant at this size. */
 const BACKGROUND_COLOR = '#f8fafc';
-const GROUP_COLOR = '#e2e8f0';
-const ENTITY_COLOR = '#94a3b8';
-const SEED_COLOR = '#b45309';
+/**
+ * The shipped minimap draws OUTLINES: a filled block per node turns a large
+ * drawing into a grey slab in which neither the packages nor the sparse parts
+ * are readable. The fills below are kept only for the DEV control arm that
+ * restores the defect, so the shipped branch is the stroke one.
+ */
+const GROUP_STROKE_COLOR = '#cbd5e1';
+const ENTITY_STROKE_COLOR = '#64748b';
+const SEED_STROKE_COLOR = '#b45309';
+const GROUP_FILL_COLOR = '#e2e8f0';
+const ENTITY_FILL_COLOR = '#94a3b8';
+const SEED_FILL_COLOR = '#b45309';
 const FRAME_COLOR = '#1d4ed8';
+
+/**
+ * The outline widths, in minimap pixels. A group's frame is thinner than an
+ * entity's box so the nesting reads at 100px tall; a seed keeps the entity
+ * width and is set apart by colour.
+ */
+const GROUP_OUTLINE_WIDTH_PX = 0.75;
+const ENTITY_OUTLINE_WIDTH_PX = 1;
 
 /** A rectangle in drawing user units (`left`/`top` relative to the drawing origin). */
 export type MinimapRect = {
@@ -508,18 +526,30 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
     context.clearRect(0, 0, mapWidth, mapHeight);
     context.fillStyle = BACKGROUND_COLOR;
     context.fillRect(0, 0, mapWidth, mapHeight);
+    // The DEV control arm restores the filled blocks; the shipped arm strokes
+    // a simplified outline for every box at every tier.
+    const solid = overlayLayoutDefect() === 'solid-minimap';
     for (const box of readMinimapBoxes(drawing)) {
-      context.fillStyle = box.seed
-        ? SEED_COLOR
+      const x = layout.offsetX + box.left * layout.scale;
+      const y = layout.offsetY + box.top * layout.scale;
+      const width = Math.max(0.5, box.width * layout.scale);
+      const height = Math.max(0.5, box.height * layout.scale);
+      if (solid) {
+        context.fillStyle = box.seed
+          ? SEED_FILL_COLOR
+          : box.kind === 'group'
+            ? GROUP_FILL_COLOR
+            : ENTITY_FILL_COLOR;
+        context.fillRect(x, y, width, height);
+        continue;
+      }
+      context.lineWidth = box.kind === 'group' ? GROUP_OUTLINE_WIDTH_PX : ENTITY_OUTLINE_WIDTH_PX;
+      context.strokeStyle = box.seed
+        ? SEED_STROKE_COLOR
         : box.kind === 'group'
-          ? GROUP_COLOR
-          : ENTITY_COLOR;
-      context.fillRect(
-        layout.offsetX + box.left * layout.scale,
-        layout.offsetY + box.top * layout.scale,
-        Math.max(0.5, box.width * layout.scale),
-        Math.max(0.5, box.height * layout.scale),
-      );
+          ? GROUP_STROKE_COLOR
+          : ENTITY_STROKE_COLOR;
+      context.strokeRect(x, y, width, height);
     }
     baseRef.current = { revision: revisionRef.current, canvas: base };
     return base;
@@ -541,6 +571,13 @@ export function ArchitectureMinimap({ hostRef, revision, scale }: ArchitectureMi
     }
     const percent = visiblePercent(reading);
     canvas.setAttribute('data-architecture-minimap-visible-percent', String(percent));
+    // The paint mode is exposed for the same reason the range is: the canvas
+    // itself cannot be inspected by a DOM reading, and the criterion's control
+    // arm needs to see which branch drew the blocks.
+    canvas.setAttribute(
+      'data-architecture-minimap-mode',
+      overlayLayoutDefect() === 'solid-minimap' ? 'solid' : 'outline',
+    );
     canvas.setAttribute(
       'aria-label',
       translateRef.current('architecture.plantuml.minimap.label', {
