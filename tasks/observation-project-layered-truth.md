@@ -37,7 +37,7 @@ depends_on:
 ## DoD
 
 - 对 3 个真实项目（含 claudecodeui）贴出五层读数，并与 `quay task list`、`check-deploy-freshness`、fleet 心跳逐项核对。
-- - 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
+- 隔离实例验证必须关闭常驻会话恢复（`SERVER_SETTINGS_PATH` 指向含 `{"residentRestore":{"enabled":false}}` 的文件，或使用 T7 的隔离实例脚本），否则会对线上同一批会话重复起进程。
 
 ## Touches
 
