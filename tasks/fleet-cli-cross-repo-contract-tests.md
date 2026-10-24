@@ -1,7 +1,7 @@
 ---
 id: fleet-cli-cross-repo-contract-tests
 title: M2 跨仓库契约测试：对着已安装的 quay-fleet 校验 CloudCLI 消费的全部 CLI 契约形状，不兼容在合入前变红
-status: todo
+status: ready
 labels:
   - contract
   - quay

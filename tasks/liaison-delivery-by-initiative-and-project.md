@@ -1,7 +1,7 @@
 ---
 id: liaison-delivery-by-initiative-and-project
 title: M3 联络投递：按（倡议, 项目）经 fleet registry 解析联络会话并投递，不在则进倡议收件箱、恢复后补投
-status: todo
+status: ready
 labels:
   - initiative
   - liaison
@@ -36,10 +36,10 @@ extra: {}
 
 ## Touches
 
-- server/modules/liaison/index.ts
-- server/modules/liaison/liaison.module.ts
-- server/modules/liaison/liaison-deliver.service.ts
-- server/modules/liaison/tests/liaison-deliver.test.ts
+- server/modules/liaison/index.ts (new)
+- server/modules/liaison/liaison.module.ts (new)
+- server/modules/liaison/liaison-deliver.service.ts (new)
+- server/modules/liaison/tests/liaison-deliver.test.ts (new)
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
 - tasks/liaison-delivery-by-initiative-and-project.md
