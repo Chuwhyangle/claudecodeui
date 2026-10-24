@@ -1,7 +1,7 @@
 ---
 id: architecture-readout-minimap-hover-layout
 title: 架构图读数、小地图与悬停信息条布局：缩放读数单一来源，小地图画轮廓并避让控件，悬停条不被遮挡
-status: todo
+status: ready
 labels:
   - feature
 parent: null
