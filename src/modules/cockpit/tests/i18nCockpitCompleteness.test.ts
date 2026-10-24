@@ -104,6 +104,7 @@ describe('every locale carries the cockpit copy', () => {
       'modeCockpit',
       'modeSwitchLabel',
       'attentionBadge',
+      'attentionBadgeDetail',
       'attentionUnavailable',
       'openProject',
       'openCockpit',
@@ -113,8 +114,10 @@ describe('every locale carries the cockpit copy', () => {
       expect(typeof reference[key], `cockpit.${key}`).toBe('string');
       expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
     }
-    // The badge's accessible name must carry the count, and the warning its reason.
+    // The badge's accessible name must carry the count, its sourced form the project list, and
+    // the warning its reason.
     expect(placeholders(reference.attentionBadge)).toEqual(['n']);
+    expect(placeholders(reference.attentionBadgeDetail)).toEqual(['n', 'projects']);
     expect(placeholders(reference.attentionUnavailable)).toEqual(['reason']);
   });
 

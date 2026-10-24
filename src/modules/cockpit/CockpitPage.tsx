@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '@/shared/api';
+import { cn } from '@/shared/utils';
 import type {
   CockpitHubView,
   CockpitPendingSend,
@@ -46,6 +48,14 @@ import { encodeQr } from '@/modules/cockpit/cockpitQr';
 
 /** Where the phone remote lives, relative to the cockpit's router basename. */
 const REMOTE_PATH = '/cockpit/remote';
+
+/**
+ * The cockpit header's control size, shared by the mode switch's segments and the phone-remote
+ * toggle so the two controls line up: a 44px touch target on a phone, the 28px icon-button size
+ * from `md` up (the same size the sidebar's settings button uses). Exported so the cockpit test
+ * can assert both controls carry this class rather than measuring jsdom boxes, which have no CSS.
+ */
+export const COCKPIT_HEADER_CONTROL_SIZE_CLASS = 'min-h-11 min-w-11 md:min-h-7 md:min-w-7';
 
 /**
  * The address the stage's QR code encodes: this deployment's origin and basename plus
@@ -451,6 +461,26 @@ export default function CockpitPage() {
    */
   const view: CockpitView = urlView;
 
+  // `?attention=1` is the badge's way into the fleet: the projects waiting for a person come
+  // first. The view stays `fleet`, so the URL still describes WHERE the person is; the flag only
+  // says how the tiles are ordered. `sort` is stable, so equal readings keep the fleet's order.
+  const attentionFirst =
+    view.type === 'fleet' &&
+    new URLSearchParams(
+      location.search.startsWith('?') ? location.search.slice(1) : location.search,
+    ).get('attention') === '1';
+  // ONE ordering feeds both the tile render and the focus contract: sorting only inside the view
+  // would leave the arrows snapping over the pre-sort grid.
+  const orderedProjects = useMemo(
+    () =>
+      attentionFirst
+        ? [...projects].sort(
+            (left, right) => Number(right.tasks.needsHuman > 0) - Number(left.tasks.needsHuman > 0),
+          )
+        : projects,
+    [attentionFirst, projects],
+  );
+
   // The observation wall's reading, and the entries the stage draws (empty while loading).
   const wallView: ObservationWallView = observation.view;
   const wallEntries = useMemo(
@@ -492,9 +522,9 @@ export default function CockpitPage() {
   const fleetFocusables = useMemo(
     () =>
       fleet.status === 'loaded'
-        ? buildCockpitFleetContract(fleet.projects, fleetGridColumns(viewportWidth)).focusables
+        ? buildCockpitFleetContract(orderedProjects, fleetGridColumns(viewportWidth)).focusables
         : [],
-    [fleet, viewportWidth],
+    [fleet, orderedProjects, viewportWidth],
   );
 
   // The board's project segment: the fleet registry id, never the CloudCLI project id.
@@ -939,9 +969,22 @@ export default function CockpitPage() {
     [location.search, navigate, view],
   );
 
+  /**
+   * The attention badge's destination: the fleet view with the waiting projects on top. The
+   * segment's own href stays the ordinary cockpit path, so a modified click (new tab) and the
+   * browser's context menu still get a usable link; only a plain click takes this ordering.
+   */
+  const openAttentionFleet = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      navigate(withDebugQuery(`${cockpitViewPath({ type: 'fleet' })}&attention=1`, location.search));
+    },
+    [location.search, navigate],
+  );
+
   /** The hub's view, from a pointer on a fleet tile: address it and let the hub stack it. */
-  const openProject = useCallback(
-    (project: CockpitProject) => {
+  const openProject = useCallback(    (project: CockpitProject) => {
       const segment = project.fleetProjectId ?? null;
       if (segment === null) return;
       pendingTimingRef.current = {
@@ -1159,14 +1202,26 @@ export default function CockpitPage() {
           {t('cockpit.keyHint')}
         </span>
         {/* The same switch the sidebar header draws, with this page's segment active: that is
-            the way back to the session list (no separate 「返回」 link to drift from it). */}
-        <SidebarModeSwitch mode="cockpit" t={t} />
-        {/* The phone remote is one button, not a permanent QR in the header. */}
+            the way back to the session list (no separate 「返回」 link to drift from it). The
+            header's one control size is passed in so the segments and the remote toggle below
+            are the same height; the badge opens the fleet with the waiting projects first. */}
+        <SidebarModeSwitch
+          mode="cockpit"
+          controlSizeClass={COCKPIT_HEADER_CONTROL_SIZE_CLASS}
+          onAttentionBadgeClick={openAttentionFleet}
+          t={t}
+        />
+        {/* The phone remote is one button, not a permanent QR in the header. It is hidden on a
+            phone: scanning your own screen there is meaningless, and the wrapped second row
+            used to cost roughly 60px of the only viewport the stage has. */}
         <button
           type="button"
           onClick={() => setRemoteOpen((open) => !open)}
           aria-expanded={remoteOpen}
-          className="min-h-11 min-w-11 rounded border border-border/60 px-2 text-xs text-foreground hover:bg-accent sm:min-h-0 sm:py-0.5"
+          className={cn(
+            COCKPIT_HEADER_CONTROL_SIZE_CLASS,
+            'hidden items-center justify-center rounded-md border border-border/60 px-2 text-xs text-foreground hover:bg-accent md:inline-flex',
+          )}
           data-testid="cockpit-remote-toggle"
         >
           {t('cockpit.remoteTitle')}
@@ -1269,7 +1324,7 @@ export default function CockpitPage() {
 
         <CockpitStage
           view={view}
-          projects={projects}
+          projects={orderedProjects}
           fleetStatus={fleetStatus}
           fleetError={fleetError}
           fleetAvailable={fleet.status === 'loaded' ? fleet.fleetAvailable : true}

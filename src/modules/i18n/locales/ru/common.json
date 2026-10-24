@@ -720,6 +720,7 @@
     "modeCockpit": "Кокпит",
     "modeSwitchLabel": "Переключение между сеансами и кокпитом",
     "attentionBadge": "{{n}} задач проекта ждут вас",
+    "attentionBadgeDetail": "{{n}} задач проекта ждут вас: {{projects}}",
     "attentionUnavailable": "Внимание недоступно: {{reason}}",
     "openProject": "Открыть в кокпите",
     "openCockpit": "Открыть кокпит",

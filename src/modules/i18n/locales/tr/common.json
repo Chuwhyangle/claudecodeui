@@ -750,6 +750,7 @@
     "modeCockpit": "Kokpit",
     "modeSwitchLabel": "Oturumlar ve kokpit arasında geçiş yap",
     "attentionBadge": "{{n}} proje öğesi sizi bekliyor",
+    "attentionBadgeDetail": "{{n}} proje öğesi sizi bekliyor: {{projects}}",
     "attentionUnavailable": "Dikkat bilgisi kullanılamıyor: {{reason}}",
     "openProject": "Kokpitte görüntüle",
     "openCockpit": "Kokpiti aç",

@@ -750,6 +750,7 @@
     "modeCockpit": "콕핏",
     "modeSwitchLabel": "세션과 콕핏 전환",
     "attentionBadge": "{{n}}개의 프로젝트 항목이 확인을 기다립니다",
+    "attentionBadgeDetail": "{{n}}개의 프로젝트 항목이 확인을 기다립니다: {{projects}}",
     "attentionUnavailable": "주의 정보를 읽을 수 없음: {{reason}}",
     "openProject": "콕핏에서 보기",
     "openCockpit": "콕핏 열기",

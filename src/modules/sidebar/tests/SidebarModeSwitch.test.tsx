@@ -43,11 +43,23 @@ const project = (
   error: null,
 });
 
-/** Three needs-human items across two registered projects: the badge's AC fixture. */
-const fleetSummary = (needsHuman: number, state: 'ok' | 'missing' = 'ok', reason: string | null = null) => ({
+/**
+ * The fleet summary the badge reads.
+ *
+ * The default is AC1's fixture: `quay-fleet` has ONE needs-human task and `claudecodeui` has
+ * none, so the badge's accessible name has to name the project that actually raised it. `p3` is
+ * unregistered (no fleet id): its seven tasks are deliberately not counted — an unregistered
+ * project has no cockpit board to open, so its backlog is not reachable from the badge.
+ */
+const fleetSummary = (
+  claudecodeuiNeedsHuman: number,
+  quayFleetNeedsHuman: number,
+  state: 'ok' | 'missing' = 'ok',
+  reason: string | null = null,
+) => ({
   projects: [
-    project('p1', 'claudecodeui', needsHuman),
-    project('p2', 'quay-fleet', 0),
+    project('p1', 'claudecodeui', claudecodeuiNeedsHuman),
+    project('p2', 'quay-fleet', quayFleetNeedsHuman),
     project('p3', null, 7),
   ],
   fleet: { available: state === 'ok', reason, state },
@@ -99,7 +111,7 @@ async function loadModules() {
 
 beforeEach(() => {
   apiMock.quayFleetSummary.mockReset();
-  apiMock.quayFleetSummary.mockImplementation(async () => okResponse(fleetSummary(3)));
+  apiMock.quayFleetSummary.mockImplementation(async () => okResponse(fleetSummary(0, 1)));
   vi.resetModules();
 });
 
@@ -216,7 +228,7 @@ describe('AC1: one two-segment control, in every sidebar layout', () => {
 });
 
 describe('AC2: the needs-human attention badge', () => {
-  test('shows the fleet-wide total and names it for assistive technology', async () => {
+  test('names the project that raised the count, in its accessible name and its tooltip', async () => {
     const { i18n, t, SidebarHeader } = await loadModules();
 
     const { container } = render(
@@ -229,21 +241,59 @@ describe('AC2: the needs-human attention badge', () => {
 
     await waitFor(() => assert.notEqual(container.querySelector('[data-testid="cockpit-attention-badge"]'), null));
     const badges = Array.from(container.querySelectorAll('[data-testid="cockpit-attention-badge"]'));
+    assert.ok(badges.length > 0, 'the header must draw the badge');
     for (const badge of badges) {
-      assert.equal(badge.textContent, '3', 'the badge prints the summed needs-human count');
-      assert.equal(
-        badge.getAttribute('aria-label'),
-        i18n.t('cockpit.attentionBadge', { n: 3 }),
-        'the accessible name carries the unit, not just the digit',
-      );
+      assert.equal(badge.textContent, '1', 'the badge prints the summed needs-human count');
+      const label = badge.getAttribute('aria-label') ?? '';
+      // The fixture has quay-fleet = 1 and claudecodeui = 0: the name says WHERE the count is,
+      // and a project with nothing waiting must not be listed.
+      assert.match(label, /quay-fleet/, `the accessible name must name quay-fleet, got ${label}`);
+      assert.match(label, /\b1\b/, `the accessible name must carry the count, got ${label}`);
+      assert.doesNotMatch(label, /claudecodeui/, `a project with 0 waiting must not be named, got ${label}`);
+      assert.equal(badge.getAttribute('title'), label, 'the hover tooltip states the same source');
+      assert.equal(label, i18n.t('cockpit.attentionBadgeDetail', { n: 1, projects: 'quay-fleet (1)' }));
     }
 
     // No locator problem: nothing warns.
     assert.equal(container.querySelector('[data-testid="cockpit-attention-dot"]'), null);
   });
 
+  test('lists several waiting projects most-first and leaves the empty ones out', async () => {
+    apiMock.quayFleetSummary.mockImplementation(async () =>
+      okResponse({
+        ...fleetSummary(0, 1),
+        projects: [
+          // Roster order is claudecodeui → quay-fleet → archguard; the label must re-order by
+          // each project's own count and leave the zero-count project out.
+          project('p1', 'claudecodeui', 0),
+          project('p2', 'quay-fleet', 3),
+          project('p4', 'archguard', 1),
+        ],
+      }),
+    );
+    const { i18n, t, SidebarModeSwitch } = await loadModules();
+
+    const { container } = render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <SidebarModeSwitch mode="sessions" t={t} />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+
+    await waitFor(() => assert.notEqual(container.querySelector('[data-testid="cockpit-attention-badge"]'), null));
+    const label =
+      container.querySelector('[data-testid="cockpit-attention-badge"]')?.getAttribute('aria-label') ?? '';
+    // Total = 3 + 1; the list is ordered by each project's own count, not by roster order.
+    assert.match(label, /^4 /, `the total leads the sentence, got ${label}`);
+    const quayFleetAt = label.indexOf('quay-fleet');
+    const archguardAt = label.indexOf('archguard');
+    assert.ok(quayFleetAt >= 0 && archguardAt > quayFleetAt, `most-first order expected, got ${label}`);
+    assert.doesNotMatch(label, /claudecodeui/, `zero-count projects are not named, got ${label}`);
+  });
+
   test('draws no number when nothing needs a person', async () => {
-    apiMock.quayFleetSummary.mockImplementation(async () => okResponse(fleetSummary(0)));
+    apiMock.quayFleetSummary.mockImplementation(async () => okResponse(fleetSummary(0, 0)));
     const { i18n, t, SidebarModeSwitch } = await loadModules();
 
     const { container } = render(
@@ -260,7 +310,7 @@ describe('AC2: the needs-human attention badge', () => {
 
   test('a fleet whose locator is missing draws a grey dot whose tooltip states the reason', async () => {
     apiMock.quayFleetSummary.mockImplementation(async () =>
-      okResponse(fleetSummary(0, 'missing', 'quay-fleet was not found')),
+      okResponse(fleetSummary(0, 0, 'missing', 'quay-fleet was not found')),
     );
     const { i18n, t, SidebarModeSwitch } = await loadModules();
 

@@ -833,6 +833,7 @@
     "modeCockpit": "Kokpit",
     "modeSwitchLabel": "Beralih antara sesi dan kokpit",
     "attentionBadge": "{{n}} item proyek membutuhkan Anda",
+    "attentionBadgeDetail": "{{n}} item proyek membutuhkan Anda: {{projects}}",
     "attentionUnavailable": "Perhatian tidak tersedia: {{reason}}",
     "openProject": "Lihat di kokpit",
     "openCockpit": "Buka kokpit",
