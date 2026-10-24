@@ -1,7 +1,7 @@
 ---
 id: context-event-stream-and-shadow-predictor
 title: P1 地基：主机级上下文事件流写入（CloudCLI 侧）+ 影子预测器 + 按类别命中率表
-status: todo
+status: ready
 labels:
   - context
   - delegation
