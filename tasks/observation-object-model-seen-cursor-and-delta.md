@@ -21,6 +21,7 @@ extra: {}
 4. API：`GET /api/observation/wall`（墙上对象 + 各自差量）、`POST /api/observation/seen {uri, revision}`、`PUT/DELETE /api/observation/watch/:uri`；状态变化经驾驶舱中枢 websocket 推送 `observation.update`。
 5. URI：会话 `cloudcli://session/<id>`，架构 `cloudcli://architecture/<fleetProjectId>`，项目沿用 `quay://<fleetProjectId>/board`。解析/格式化放在共享位置（遵守 server→根 shared 导入预算的记忆约束：前端放 src、服务端放 server，不跨根 shared）。
 6. 新模块目录按 AC-394 棘轮登记 manifest 与 pin。
+7. **观察层自身的活性**（用户 2026-10-24 确认）：墙安静不等于没事，生产者也会静默失败。每个生产者（session-digest、project-truth、architecture-delta，以及以后新增的）向观察层登记 `ProducerHeartbeat {producer, lastAttemptAt, lastWriteAt, lastError?, expectedIntervalMs}`；观察层按 `now - lastAttemptAt > 2 × expectedIntervalMs` 判 stale、有 lastError 判 red、从未运行判 unevaluated。`GET /api/observation/wall` 返回顶层 `producers[]`（三态 + 原因 + 时间）；任一生产者非 ok 时，墙的整体状态带一条「观察层自身」的 attention 条目，该条目不受 12 块上限的折叠。
 
 ## AC
 
@@ -29,6 +30,7 @@ extra: {}
 - [ ] AC3: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/observation-routes.test.ts` exit 0——三个 API 的成功/鉴权/非法 URI 路径；`seen` 回退游标（revision 小于现值）被忽略。
 - [ ] AC4: `npx vitest run src/modules/cockpit/tests/observationUri.test.ts` exit 0——`cloudcli://session/<id>`、`cloudcli://architecture/<p>` 解析/格式化往返，非法形式被拒。
 - [ ] AC5: `npm run typecheck` 通过；`server/shared/tests/server-import-cycle-budget.test.ts` 通过。
+- [ ] AC6: `npx tsx --tsconfig server/tsconfig.json --test server/modules/observation/tests/producer-liveness.test.ts` exit 0——假时钟：生产者按期心跳时为 ok；超过 2 × expectedIntervalMs 未尝试为 stale；最近一次带 lastError 为 red；登记后从未运行为 unevaluated；任一非 ok 时 wall 响应含「观察层自身」attention 条目且不被上限折叠。
 
 ## DoD
 
@@ -44,6 +46,8 @@ extra: {}
 - server/modules/observation/observation-uri.ts
 - server/modules/observation/tests/observation-store.test.ts
 - server/modules/observation/tests/observation-routes.test.ts
+- server/modules/observation/producer-liveness.ts
+- server/modules/observation/tests/producer-liveness.test.ts
 - server/modules/database/migrations.ts
 - server/modules/database/schema.ts
 - server/modules/database/repositories/observation.repository.ts
