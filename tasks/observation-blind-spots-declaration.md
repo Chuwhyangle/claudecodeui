@@ -1,7 +1,7 @@
 ---
 id: observation-blind-spots-declaration
 title: 观察墙：盲区声明——每个观察对象带 blindSpots（按类型默认 + 生产者追加），预览末尾显示「看不见什么」与原始材料入口
-status: ready
+status: done
 labels:
   - cockpit
   - observation
