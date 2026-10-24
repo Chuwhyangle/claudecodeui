@@ -47,6 +47,11 @@ export type ObservedObject = {
   title: string;
   status: ObservedStatus;
   digest: Record<string, unknown>;
+  /**
+   * What this projection cannot see: the kind's defaults plus any producer additions, always
+   * non-empty. The preview renders it; a tile never does.
+   */
+  blindSpots: string[];
   revision: number;
   updatedAt: number;
   provenance: ObservedProvenance;

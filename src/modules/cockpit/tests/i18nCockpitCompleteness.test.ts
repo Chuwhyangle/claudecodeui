@@ -154,6 +154,8 @@ describe('every locale carries the cockpit copy', () => {
       'observationDaysAgo',
       'observationRevision',
       'observationPreviewLabel',
+      'observationBlindSpots',
+      'observationOpenQuay',
       'observationLater',
       'observationRecentTurn',
       'observationChanges',

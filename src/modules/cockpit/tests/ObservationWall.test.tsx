@@ -298,6 +298,8 @@ type WallEntry = {
     title: string;
     status: { state: 'ok' | 'attention' | 'red' | 'unevaluated'; reason?: string };
     digest: Record<string, unknown>;
+    /** Every observed object declares what its projection drops; always non-empty. */
+    blindSpots: string[];
     revision: number;
     updatedAt: number;
     provenance: typeof provenance;
@@ -307,12 +309,24 @@ type WallEntry = {
   deltaItems: string[];
 };
 
+/** Kind-appropriate fixture declarations; the server fills these defaults at write time. */
+const BLIND_SPOTS_BY_KIND: Record<WallEntry['object']['kind'], string[]> = {
+  session: ['看不见会话是否偏离意图', '看不见未进入 transcript 的副作用'],
+  project: ['看不见未登记到 quay-fleet 的项目'],
+  architecture: ['看不见运行时依赖与动态 import'],
+};
+
 const entry = (
   uri: string,
   kind: WallEntry['object']['kind'],
   title: string,
   state: WallEntry['object']['status']['state'],
-  overrides: Partial<WallEntry> & { reason?: string; digest?: Record<string, unknown>; updatedAt?: number } = {},
+  overrides: Partial<WallEntry> & {
+    reason?: string;
+    digest?: Record<string, unknown>;
+    blindSpots?: string[];
+    updatedAt?: number;
+  } = {},
 ): WallEntry => ({
   object: {
     uri,
@@ -320,6 +334,7 @@ const entry = (
     title,
     status: overrides.reason === undefined ? { state } : { state, reason: overrides.reason },
     digest: overrides.digest ?? { summary: `${title} summary` },
+    blindSpots: overrides.blindSpots ?? BLIND_SPOTS_BY_KIND[kind],
     revision: 3,
     updatedAt: overrides.updatedAt ?? NOW - 5 * MINUTE,
     provenance,
@@ -342,7 +357,7 @@ const WALL: ObservationWallData = {
     }),
     entry('cloudcli://architecture/p1', 'architecture', 'claudecodeui architecture', 'unevaluated', {
       reason: 'graph not built yet',
-      digest: { diffs: ['pkg::auth +2'] },
+      digest: { diffs: ['pkg::auth +2'], sessionId: 's-arch', entityId: 'pkg::auth' },
     }),
     entry('cloudcli://session/s2', 'session', 'Release notes', 'ok', { pinned: true }),
     entry('quay://quay-fleet/board', 'project', 'quay-fleet', 'red', {
@@ -594,6 +609,87 @@ describe('seen and pins', () => {
     fireEvent.click(within(tileByUri('cloudcli://session/s1')).getByTestId('observation-tile-pin'));
     await waitFor(() => expect(watchCalls).toHaveLength(2));
     expect(watchCalls[1]).toEqual({ method: 'DELETE', uri: 'cloudcli://session/s1' });
+  });
+});
+
+describe('blind spots and the raw material', () => {
+  it('ends every preview with its declaration and the door back, and keeps the tiles quiet', async () => {
+    renderCockpit();
+    await screen.findByTestId('observation-wall-tiles');
+
+    const cases: Array<{ uri: string; kind: WallEntry['object']['kind']; phrase: string }> = [
+      { uri: 'cloudcli://session/s1', kind: 'session', phrase: '看不见会话是否偏离意图' },
+      { uri: 'quay://claudecodeui/board', kind: 'project', phrase: '看不见未登记到 quay-fleet 的项目' },
+      {
+        uri: 'cloudcli://architecture/p1',
+        kind: 'architecture',
+        phrase: '看不见运行时依赖与动态 import',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const tile = tileByUri(testCase.uri);
+      // A tile is the projection, not the declaration: the blind spots belong to the preview,
+      // where the reader has already chosen to look closer.
+      expect(within(tile).queryByTestId('observation-preview-blind-spot')).toBeNull();
+      expect(tile.textContent ?? '').not.toContain(testCase.phrase);
+
+      fireEvent.click(within(tile).getByTestId('observation-tile-open'));
+      const preview = await screen.findByTestId('cockpit-observation-preview');
+
+      const list = within(preview).getByTestId('observation-preview-blind-spot-list');
+      expect(list.textContent ?? '').toContain(testCase.phrase);
+      const items = within(preview).getAllByTestId('observation-preview-blind-spot');
+      expect(items.length).toBeGreaterThan(0);
+      for (const item of items) {
+        expect((item.textContent ?? '').trim().length).toBeGreaterThan(0);
+      }
+
+      const raw = within(preview).getByTestId('observation-preview-raw-material');
+      expect(raw.getAttribute('data-raw-material-kind')).toBe(testCase.kind);
+      expect((raw.textContent ?? '').trim().length).toBeGreaterThan(0);
+
+      fireEvent.click(within(preview).getByTestId('observation-preview-later'));
+      await waitFor(() => expect(screen.queryByTestId('cockpit-observation-preview')).toBeNull());
+    }
+
+    // The declaration is the object's, not the preview's: every wall entry carries a non-empty one.
+    for (const wallEntry of wallState.entries) {
+      expect(wallEntry.object.blindSpots.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('opens the conversation from a session preview', async () => {
+    renderCockpit();
+    await screen.findByTestId('observation-wall-tiles');
+
+    fireEvent.click(within(tileByUri('cloudcli://session/s1')).getByTestId('observation-tile-open'));
+    const preview = await screen.findByTestId('cockpit-observation-preview');
+    fireEvent.click(within(preview).getByTestId('observation-preview-raw-material'));
+
+    await waitFor(() => expect(path()).toBe('/session/s1'));
+  });
+
+  it('opens the Quay panel for the project a project preview addresses', async () => {
+    renderCockpit();
+    await screen.findByTestId('observation-wall-tiles');
+
+    fireEvent.click(within(tileByUri('quay://claudecodeui/board')).getByTestId('observation-tile-open'));
+    const preview = await screen.findByTestId('cockpit-observation-preview');
+    fireEvent.click(within(preview).getByTestId('observation-preview-raw-material'));
+
+    await waitFor(() => expect(path()).toBe('/cockpit?view=board&project=claudecodeui'));
+  });
+
+  it('opens the architecture tab on the entity an architecture preview names', async () => {
+    renderCockpit();
+    await screen.findByTestId('observation-wall-tiles');
+
+    fireEvent.click(within(tileByUri('cloudcli://architecture/p1')).getByTestId('observation-tile-open'));
+    const preview = await screen.findByTestId('cockpit-observation-preview');
+    fireEvent.click(within(preview).getByTestId('observation-preview-raw-material'));
+
+    await waitFor(() => expect(path()).toBe('/session/s-arch/architecture?entity=pkg%3A%3Aauth'));
   });
 });
 

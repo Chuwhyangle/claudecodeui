@@ -875,6 +875,8 @@
     "observationDaysAgo": "{{n}} d ago",
     "observationRevision": "revision {{revision}}",
     "observationPreviewLabel": "Observation preview",
+    "observationBlindSpots": "This view cannot see:",
+    "observationOpenQuay": "Open the Quay panel",
     "observationLater": "Later",
     "observationRecentTurn": "Latest turn",
     "observationChanges": "Changes",
