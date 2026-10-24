@@ -811,5 +811,12 @@
     "echoUnmatched": "「{{text}}」을(를) 실행할 수 없습니다.",
     "echoUnmatchedNext": "프로젝트 이름, 「두 번째」, 「뒤로」 또는 「모든 프로젝트」를 시도하세요.",
     "echoConfirm": "「{{text}}」을(를) 보내기 전에 확인하세요."
+  },
+  "replyReference": {
+    "item": "{{label}}「{{excerpt}}」",
+    "itemsRange": "{{from}}–{{to}}번 항목",
+    "itemsList": "{{list}}번 항목",
+    "wholeReply": "답변 전체",
+    "mismatch": "최신 답변에는 항목이 {{count}}개뿐입니다"
   }
 }

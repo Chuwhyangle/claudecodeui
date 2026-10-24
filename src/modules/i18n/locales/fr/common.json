@@ -811,5 +811,12 @@
     "echoUnmatched": "Impossible d’exécuter « {{text}} ».",
     "echoUnmatchedNext": "Essayez un nom de projet, « le deuxième », « retour » ou « tous les projets ».",
     "echoConfirm": "Confirmez avant l’envoi de « {{text}} »."
+  },
+  "replyReference": {
+    "item": "{{label}}« {{excerpt}} »",
+    "itemsRange": "Points {{from}}–{{to}}",
+    "itemsList": "Points {{list}}",
+    "wholeReply": "toute la réponse",
+    "mismatch": "La dernière réponse ne compte que {{count}} points"
   }
 }

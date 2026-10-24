@@ -781,5 +781,12 @@
     "echoUnmatched": "„{{text}}“ konnte nicht ausgeführt werden.",
     "echoUnmatchedNext": "Versuche einen Projektnamen, „zweites“, „zurück“ oder „alle Projekte“.",
     "echoConfirm": "Bestätigen, bevor „{{text}}“ gesendet wird."
+  },
+  "replyReference": {
+    "item": "{{label}}„{{excerpt}}“",
+    "itemsRange": "Punkte {{from}}–{{to}}",
+    "itemsList": "Punkte {{list}}",
+    "wholeReply": "die ganze Antwort",
+    "mismatch": "Die letzte Antwort hat nur {{count}} Punkte"
   }
 }

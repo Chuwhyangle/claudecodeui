@@ -48,8 +48,10 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import ComposerPermissionMenu from '@/modules/chat/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
+import ReplyReferencePreview from '@/modules/chat/composer/ReplyReferencePreview';
 import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat/utils/inputSuggestions';
 import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
+import type { ReplyItem, ReplyReference } from '@/modules/chat/utils/transcript/replyItems';
 
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
 const RELEASE_COPIED_NOTICE_MS = 1500;
@@ -269,6 +271,13 @@ type ChatComposerProps = {
   replyExpansionChips?: string[];
   /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
   onAcceptReplyExpansionChip?: (index: number) => void;
+  /**
+   * What the draft currently points at in the latest assistant reply, if
+   * anything. Drawn as one line above the input box; `none` draws nothing.
+   */
+  replyReference?: ReplyReference | null;
+  /** The latest reply's extracted items, supplying the preview's excerpts. */
+  replyItems?: readonly ReplyItem[];
 };
 
 /**
@@ -366,6 +375,8 @@ export default function ChatComposer({
   onRequestReplySuggestions,
   replyExpansionChips = [],
   onAcceptReplyExpansionChip,
+  replyReference = null,
+  replyItems = [],
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   /*
@@ -905,6 +916,10 @@ export default function ChatComposer({
                 : t('resident.occupied.copyCommand')}
             </button>
           </div>
+        )}
+
+        {replyReference && replyReference.kind !== 'none' && (
+          <ReplyReferencePreview reference={replyReference} items={replyItems} />
         )}
 
         <PromptInput

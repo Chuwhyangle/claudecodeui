@@ -894,5 +894,12 @@
     "echoUnmatched": "Tidak dapat melakukan “{{text}}”.",
     "echoUnmatchedNext": "Coba nama proyek, “yang kedua”, “kembali”, atau “semua proyek”.",
     "echoConfirm": "Konfirmasi sebelum “{{text}}” dikirim."
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "Butir {{from}}–{{to}}",
+    "itemsList": "Butir {{list}}",
+    "wholeReply": "seluruh balasan",
+    "mismatch": "Balasan terakhir hanya memiliki {{count}} butir"
   }
 }

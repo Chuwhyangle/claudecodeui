@@ -17,6 +17,7 @@ import MessageCopyControl from '@/modules/chat/transcript/MessageCopyControl';
 import MessageSpeakControl from '@/modules/chat/transcript/MessageSpeakControl';
 import { useIsExportingTranscript } from '@/modules/chat/context/TranscriptRenderContext';
 import { MemoryCitations } from '@/modules/chat/transcript/MemoryCitations';
+import type { ReplyItemRenderContext } from '@/modules/chat/utils/transcript/replyItems';
 import {
   UNATTENDED_DIVIDER_MESSAGE_TYPE,
   UNATTENDED_TURN_MESSAGE_TYPE,
@@ -55,6 +56,12 @@ type MessageComponentProps = {
    * the session as a whole.
    */
   isInFlightTurn?: boolean;
+  /**
+   * Present only on the latest assistant text reply: the items the reply's own
+   * text yields, and the ones the composer draft currently points at. Every
+   * other row omits it and renders exactly as before.
+   */
+  replyItems?: ReplyItemRenderContext;
 };
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
@@ -161,7 +168,7 @@ function readDividerLabel(
  * Rendered by chat's ChatMessagesPane and ToolGroupContainer to draw one
  * transcript entry — user turn, assistant turn, or a tool call and its result.
  */
-const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, onEditMessage, onForkFromMessage, isInFlightTurn }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, showRawParameters, showThinking, selectedProject, provider, onEditMessage, onForkFromMessage, isInFlightTurn, replyItems }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   // The Task entity this row's tool call launched, read by the call's
   // `tool_use` id from the session's activity snapshot (AC-194). A tool row with
@@ -667,6 +674,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                       content={content}
                       isStreaming={Boolean(message.isStreaming)}
                       className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert"
+                      replyItems={replyItems}
                     />
                   ) : (
                     <div className="whitespace-pre-wrap">

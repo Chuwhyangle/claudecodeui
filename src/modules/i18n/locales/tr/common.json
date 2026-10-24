@@ -811,5 +811,12 @@
     "echoUnmatched": "“{{text}}” yapılamadı.",
     "echoUnmatchedNext": "Bir proje adı, “ikinci”, “geri” veya “tüm projeler” deneyin.",
     "echoConfirm": "“{{text}}” gönderilmeden önce onaylayın."
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "{{from}}–{{to}}. maddeler",
+    "itemsList": "{{list}}. maddeler",
+    "wholeReply": "tüm yanıt",
+    "mismatch": "Son yanıtta yalnızca {{count}} madde var"
   }
 }
