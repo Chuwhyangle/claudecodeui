@@ -1,7 +1,7 @@
 ---
 id: gap-composer-chip-single-accept-path
 title: 输入框 chip 接受逻辑统一封装：一个接受入口、一个回调、来源差异只靠数据、跨来源契约测试
-status: todo
+status: ready
 labels:
   - gap
 parent: null
