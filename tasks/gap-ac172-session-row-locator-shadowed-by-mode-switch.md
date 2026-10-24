@@ -3,7 +3,7 @@ id: gap-ac172-session-row-locator-shadowed-by-mode-switch
 title: AC-172 判据的会话行定位 a[href="/session/<id>"] 被侧栏模式开关的 Sessions
   链接抢先命中（ff2998e9f 让 sessions 段指向当前路由）⇒ readMark 15s 超时、1 failed / 3 did not
   run；给两处 .first() 定位加 :not([data-mode-switch-link])
-status: ready
+status: done
 labels:
   - gap
   - defect
