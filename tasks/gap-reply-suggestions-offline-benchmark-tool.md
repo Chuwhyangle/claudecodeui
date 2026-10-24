@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-offline-benchmark-tool
 title: 回复建议离线基准工具：模型×提示词×温度×思考矩阵、多评判、使用记录回放、盲标清单生成与打分
-status: needs-human
+status: todo
 labels:
   - gap
 parent: null
@@ -37,15 +37,15 @@ depends_on:
 ## DoD
 
 - [ ] 在真实网关上跑一次小矩阵（v4.1flash，思考开 / 关各一，温度 0.3，样本 ≥60 条，评判用 v4pro 与另一款非生成模型），贴出聚合表（逐 chip、逐消息、同与同或近、耗时中位数、输出 token 中位数），与提案文档里 211 条样本的读数对照并说明差异；全程不打印密钥，网关地址脱敏。
-- [ ] 回放一次真实使用记录（后端任务落地后产生的本机记录；若尚无足够记录则注明条数并用合成记录演示格式），贴出点选率、重抽率、点选后改动比例。
+- [ ] 回放一次真实使用记录（由后端任务产生的本机记录；若尚无足够记录则注明条数并用合成记录演示格式），贴出点选率、重抽率、点选后改动比例。
 - [ ] 贴出盲标清单的头 5 条（脱敏）与打分器对一份人工标注的输出（若 yale 尚未返还标注，用合成答案并注明；真实标注为可选的后续，**不阻塞本任务**）。
 - [ ] 证伪：把保守一致度的实现改成「任一评判判同即同」，贴出 `selftest --only agreement` 变红的输出，再恢复并证明 `git diff` 为空。
 
 ## Touches
 
-- `experiments/reply-suggestions-bench/bench.py`
-- `experiments/reply-suggestions-bench/README.md`
-- `experiments/reply-suggestions-bench/fixtures/synthetic-judgements.json`
+- `experiments/reply-suggestions-bench/bench.py` (new)
+- `experiments/reply-suggestions-bench/README.md` (new)
+- `experiments/reply-suggestions-bench/fixtures/synthetic-judgements.json` (new)
 - `tasks/gap-reply-suggestions-offline-benchmark-tool.md`
 
 ## Needs-Human
@@ -53,3 +53,10 @@ depends_on:
 **执行 2026-10-24T06:30:21.250Z — 连续修满重试上限仍不合格（标 needs-human）**
 
 - 阻碍原因：unsatisfiableUnannotatedAc=[回放一次真实使用记录（后端任务落地后产生的本机记录；若尚无足够记录则注明条数并用合成记录演示格式），贴出点选率、重抽率、点选后改动比例。]（连续 3 轮被结构上不可派的拦截挡住 ⇒ 作者/人改写；⛔ 不派 fix worker）
+
+**作者改写 2026-10-24（人 yale 指示「检查，推进」）— 误命中解除**
+
+- 上条 DoD 里的「后端任务落地后产生的本机记录」被 `UNSATISFIABLE_AC_DECLARATION_PHRASES` 的「落地后」无上下文命中；该短语在此只是描述记录的来源，不是声明执行者结构上无法完成。
+- 改写为「由后端任务产生的本机记录」，语义不变；条目本身可满足（后端任务产出使用记录，尚无足够记录时用合成记录演示并按原文注明条数），因此**不加** `（待外部）` 注解。
+- 三个尚未创建的 Touches 补 `(new)` 标注（touches-parser 的既有契约：预占的新文件必须带尾注 `(new)` 才算 admission-eligible），使 `touchesResolve` 为真。
+- 其余文字未动。改写后退回 todo，待依赖 `gap-reply-suggestions-backend-llm-service` 落地后由晋升流程派发。
