@@ -27,21 +27,21 @@ depends_on:
 
 ## AC
 
-- [ ] 服务端逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts` 退出码 0（在既有文件内新增独立用例）：(a) `expansion` 为 `off` 时带 `expand: true` 得 400 且无上游调用；(b) `vary` 时带 `seed` 的提示词含 seed 与「变体」指令；(c) seed 被截到 `maxChipChars`；(d) 结果与 seed 精确相同或近似重复（字符集重合度 ≥0.7）的被过滤；(e) 使用记录里该次抽取带 `seed` 或 `focus` 标记；(f) `seed` 为空且带 `focus` 时提示词含 focus 与「回应」指令；(g) 不带 `expand` 的普通重抽带 `focus` 在 `expansion` 为 `off` 时仍然成功。
-- [ ] 前端逐腿通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/useReplySuggestions.test.tsx src/modules/chat/tests/chatComposerReplyChips.test.tsx` 退出码 0（在既有文件内新增独立用例）：(a) `expansion` 为 `off` 时点选 chip 不发展开请求；(b) `vary` 时点选后发一次带 `seed` 的展开请求并显示变体 chip；(c) 点变体替换正文而非追加；(d) 链深到 5 后不再展开；(e) 手动编辑正文后变体 chip 消失；(f) 发送后变体 chip 消失；(g) 点引用后展开请求带 `focus` 与空 `seed`；(h) 点回应 chip 后输入框仍以 `> 原文` 开头，只有其后的部分被替换。
-- [ ] 缺省关闭成立：`node -e "const t=require('./config/reply-suggestions.settings.example.json'); if (t.expansion !== 'off') process.exit(1)"` 退出码 0。
-- [ ] 文档同步：`grep -c "vary" docs/operations/reply-suggestions.md` ≥ 1，并说明 `seed`、`expand` 与限制。
-- [ ] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0。
+- [x] 服务端逐腿通过：`npx tsx --tsconfig server/tsconfig.json --test server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts` 退出码 0（在既有文件内新增独立用例）：(a) `expansion` 为 `off` 时带 `expand: true` 得 400 且无上游调用；(b) `vary` 时带 `seed` 的提示词含 seed 与「变体」指令；(c) seed 被截到 `maxChipChars`；(d) 结果与 seed 精确相同或近似重复（字符集重合度 ≥0.7）的被过滤；(e) 使用记录里该次抽取带 `seed` 或 `focus` 标记；(f) `seed` 为空且带 `focus` 时提示词含 focus 与「回应」指令；(g) 不带 `expand` 的普通重抽带 `focus` 在 `expansion` 为 `off` 时仍然成功。
+- [x] 前端逐腿通过：`bash scripts/with-memory-cap.sh vitest run src/modules/chat/tests/useReplySuggestions.test.tsx src/modules/chat/tests/chatComposerReplyChips.test.tsx` 退出码 0（在既有文件内新增独立用例）：(a) `expansion` 为 `off` 时点选 chip 不发展开请求；(b) `vary` 时点选后发一次带 `seed` 的展开请求并显示变体 chip；(c) 点变体替换正文而非追加；(d) 链深到 5 后不再展开；(e) 手动编辑正文后变体 chip 消失；(f) 发送后变体 chip 消失；(g) 点引用后展开请求带 `focus` 与空 `seed`；(h) 点回应 chip 后输入框仍以 `> 原文` 开头，只有其后的部分被替换。
+- [x] 缺省关闭成立：`node -e "const t=require('./config/reply-suggestions.settings.example.json'); if (t.expansion !== 'off') process.exit(1)"` 退出码 0。
+- [x] 文档同步：`grep -c "vary" docs/operations/reply-suggestions.md` ≥ 1，并说明 `seed`、`expand` 与限制。
+- [x] 静态门：`npm run typecheck`、`npm run lint` 退出码均为 0。
 
 ## DoD
 
 真实页面与真实网关，隔离实例，不碰常驻 :3001；截图存 `tmp/` 并贴出；不要在运行中的会话页面按 Escape。
 
-- [ ] 开关打开（设置文件改为 `vary`，运行期按修改时间重读）：点选一个模型 chip → 贴截图：正文已填入、其后出现变体 chip；点一个变体 → 贴截图：正文被替换；再展开一次；记录每步请求次数与耗时。
-- [ ] 引用流程：选中 transcript 里一段 → 点「引用」→ 贴截图：出现针对该段的回应 chip；点一条 → 贴截图：`> 原文` 保留、其后是回应；贴请求体里的 `focus` 与 `seed`（脱敏会话 id）。
-- [ ] 开关关闭：同样操作无变体或回应 chip、无展开请求；贴截图与网络请求读数。
-- [ ] 贴一组真实的 seed→变体样例（至少 5 组）与引用→回应样例（至少 3 组），逐组注明是否保持了 seed 的决定或是否围绕引用，有偏离的要点名。
-- [ ] 390px 触屏模拟下变体 chip 单行横向滚动，贴截图。
+- [x] 开关打开（设置文件改为 `vary`，运行期按修改时间重读）：点选一个模型 chip → 贴截图：正文已填入、其后出现变体 chip；点一个变体 → 贴截图：正文被替换；再展开一次；记录每步请求次数与耗时。
+- [x] 引用流程：选中 transcript 里一段 → 点「引用」→ 贴截图：出现针对该段的回应 chip；点一条 → 贴截图：`> 原文` 保留、其后是回应；贴请求体里的 `focus` 与 `seed`（脱敏会话 id）。
+- [x] 开关关闭：同样操作无变体或回应 chip、无展开请求；贴截图与网络请求读数。
+- [x] 贴一组真实的 seed→变体样例（至少 5 组）与引用→回应样例（至少 3 组），逐组注明是否保持了 seed 的决定或是否围绕引用，有偏离的要点名。
+- [x] 390px 触屏模拟下变体 chip 单行横向滚动，贴截图。
 
 ## Touches
 
@@ -50,11 +50,26 @@ depends_on:
 - `server/modules/reply-suggestions/tests/reply-suggestions-service.test.ts`
 - `server/modules/reply-suggestions/tests/reply-suggestions-routes.test.ts`
 - `docs/operations/reply-suggestions.md`
+- `config/reply-suggestions.settings.example.json`
 - `src/shared/api.ts`
 - `src/shared/types.ts`
 - `src/modules/chat/hooks/useReplySuggestions.ts`
+- `src/modules/chat/hooks/useChatComposerState.ts`
 - `src/modules/chat/composer/InputSuggestionChips.tsx`
 - `src/modules/chat/composer/ChatComposer.tsx`
+- `src/modules/chat/ChatInterface.tsx`
 - `src/modules/chat/tests/useReplySuggestions.test.tsx`
 - `src/modules/chat/tests/chatComposerReplyChips.test.tsx`
 - `tasks/gap-reply-suggestions-expansion-experiment.md`
+
+## Evidence
+
+实现提交 `a922e2060`（feat(reply-suggestions): post-pick expansion experiment (default off)）。
+
+真实页面 + 真实网关（隔离 e2e 实例：独立 data dir / HOME，未触碰常驻 :3001；真实本地网关；截图与读数在 `tmp/reply-suggestions-expansion/`，报告 `report.json`）：
+
+- 开关 `vary`：点模型 chip → 正文填入、变体 chip 出现在正文下（`01`、`02`）；连点变体 5 层（`02`–`04`）；第 6 次点击不再发请求（请求数停在 6，变体行消失，`05`）。每次展开耗时 816–1333ms。
+- 引用：选中三段 → 点「引用」→ 回应 chip（`06`、`07`）；点一条后草稿为 `> 原文\n回应`（`08`），请求体 `focus` 为所选原文、`seed` 为空（null）。回应的再次展开也验证（followup chips）。
+- 关闭：模型 chip 照常出现、无变体行（`10`）；点「引用」后无回应 chip、期间 0 个展开请求（`11`）。关闭态点模型 chip 会按上一任务设计直接发送，故未在真页触发，单测覆盖「不发展开请求」。
+- 390px 触屏：变体行 `clientWidth=372 / scrollWidth=745`、`white-space: nowrap`、`overflow-x: auto`，单行横向滚动（`09`）。
+- 样例：seed→变体 5 组（`samples.seed`），引用→回应 3 组（`samples.quote`）。5 组变体全部保持 seed 的决定与意图（维持缺省关闭、不改设置、链深五次），只改措辞；3 组回应全部围绕引用段落（第 3 组第二条是对「关闭时链深是否仍生效」的追问，仍在回应范围内），无偏离。
