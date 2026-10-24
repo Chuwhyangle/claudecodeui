@@ -21,6 +21,7 @@ import { pinCockpitTargetSession } from '@/modules/cockpit/cockpitRouting';
 import type { CockpitFleetPort, CockpitFleetReading, CockpitFleetWriteResult } from '@/modules/cockpit/cockpitRouting';
 import {
   buildCockpitFleetContract,
+  buildInitiativeContract,
   buildObservationWallContract,
   cockpitViewPath,
   cockpitViewUri,
@@ -29,11 +30,18 @@ import {
   resolveCockpitProject,
 } from '@/modules/cockpit/cockpitView';
 import type { CockpitProject, CockpitTiming, CockpitView } from '@/modules/cockpit/cockpitView';
+import DecisionQueue from '@/modules/cockpit/DecisionQueue';
+import InitiativeView from '@/modules/cockpit/InitiativeView';
 import { useCockpitHub } from '@/modules/cockpit/hooks/useCockpitHub';
 import { useCockpitPushToTalk } from '@/modules/cockpit/hooks/useCockpitPushToTalk';
 import {
+  decideInitiative,
+  useInitiativeReading,
+} from '@/modules/cockpit/hooks/useInitiatives';
+import {
   latestProducerRunAt,
   markObservationSeen,
+  observationPinnedUris,
   toggleObservationPin,
   useObservationWall,
 } from '@/modules/cockpit/hooks/useObservationWall';
@@ -287,6 +295,8 @@ export default function CockpitPage() {
 
   // The observation wall (GET /api/observation/wall): the cockpit's home.
   const observation = useObservationWall();
+  // The initiative whose pin write is in flight, so its button states it is busy.
+  const [initiativePinPendingUri, setInitiativePinPendingUri] = useState<string | null>(null);
   // The wall's liveness labels ("3 min ago") are re-derived on a slow tick, so a timestamp is a
   // reading about now rather than about the moment the page happened to mount.
   const [now, setNow] = useState(() => Date.now());
@@ -414,6 +424,11 @@ export default function CockpitPage() {
    */
   const view: CockpitView = urlView;
 
+  // The initiative view's reading (GET /api/quay/initiatives). It is fetched only while that
+  // view is showing; its four states are drawn by the view so a fleet that cannot answer is
+  // never misread as "no initiatives".
+  const initiative = useInitiativeReading(view.type === 'initiatives');
+
   // The observation wall's reading, and the entries the stage draws (empty while loading).
   const wallView: ObservationWallView = observation.view;
   const wallEntries = useMemo(
@@ -473,12 +488,24 @@ export default function CockpitPage() {
     return buildQuayInFlightContract(boardFleetProjectId, boardView.snapshot.inFlight)?.focusables ?? [];
   }, [view, boardView, boardFleetProjectId]);
 
+  // The initiative view's declared objects: one per active initiative, addressed by the
+  // fleet's reserved URI. A closed initiative is drawn as history and declares no object.
+  const initiativeFocusables = useMemo<QuayFocusableObject[]>(
+    () =>
+      initiative.view.status === 'loaded'
+        ? buildInitiativeContract(initiative.view.reading.initiatives).focusables
+        : [],
+    [initiative.view],
+  );
+
   const focusables =
     view.type === 'wall'
       ? wallFocusables
       : view.type === 'fleet'
         ? fleetFocusables
-        : boardFocusables;
+        : view.type === 'initiatives'
+          ? initiativeFocusables
+          : boardFocusables;
   // Focus is the hub's: the page only looks the address up in the set it is drawing. An address
   // the current view does not declare renders as "no focus" (never as a local fallback).
   const focusObject = useMemo(
@@ -633,6 +660,47 @@ export default function CockpitPage() {
   );
 
   const closeWallPreview = useCallback(() => setWallPreviewUri(null), []);
+
+  /**
+   * Pin / unpin one initiative on the observation wall. The URI is the fleet's reserved
+   * address; the wall's read is re-run afterwards so the shared pin cache — the one source the
+   * sidebar and the cockpit's buttons both read — reflects the write.
+   */
+  const toggleInitiativePin = useCallback(
+    async (uri: string) => {
+      setInitiativePinPendingUri(uri);
+      try {
+        await toggleObservationPin(uri, !observationPinnedUris().has(uri));
+        await observation.reload();
+      } catch (error) {
+        setEcho({
+          kind: 'refused',
+          text: t('cockpit.initiativePinFailed'),
+          reason: error instanceof Error ? error.message : '',
+          next: t('cockpit.initiativePinNext'),
+        });
+      } finally {
+        setInitiativePinPendingUri(null);
+      }
+    },
+    [observation, t],
+  );
+
+  /**
+   * The decision queue's only write. It goes through the server's decide route (which pins
+   * provenance to a human fact) and re-reads the initiatives on success so the queue is the
+   * server's reading rather than a local guess.
+   */
+  const decidePort = useCallback(
+    async (request: Parameters<typeof decideInitiative>[0]) => {
+      const outcome = await decideInitiative(request);
+      if (outcome.ok) {
+        await initiative.reload();
+      }
+      return outcome;
+    },
+    [initiative],
+  );
 
   /** Pin / unpin one wall object. The wall is re-read so the tile's residency is the server's. */
   const toggleWallPin = useCallback(
@@ -991,7 +1059,13 @@ export default function CockpitPage() {
       : view.type === 'wall'
         ? (wallEntries.find((entry) => entry.object.uri === focusObject.uri)?.object.title ??
           focusObject.label)
-        : (() => {
+        : view.type === 'initiatives'
+          ? (initiative.view.status === 'loaded'
+              ? initiative.view.reading.initiatives.find(
+                  (candidate) => candidate.uri === focusObject.uri,
+                )?.slug ?? focusObject.label
+              : focusObject.label)
+          : (() => {
             const parsed = focusObject.uri.startsWith('quay://') ? focusObject.uri.split('/') : [];
             // quay://<project>/task/<id> — the id is the readable part.
             return parsed.length >= 5 && parsed[3] === 'task' ? parsed[4]! : focusObject.label;
@@ -1030,7 +1104,9 @@ export default function CockpitPage() {
               ? t('cockpit.wallView')
               : view.type === 'fleet'
                 ? t('cockpit.fleetView')
-                : `${t('cockpit.boardView')} · ${viewProject?.name ?? view.project}`}
+                : view.type === 'initiatives'
+                  ? t('cockpit.initiativesView')
+                  : `${t('cockpit.boardView')} · ${viewProject?.name ?? view.project}`}
           </span>
           {/*
             When every producer is healthy the wall's own tile is absent — the layer has nothing
@@ -1129,6 +1205,19 @@ export default function CockpitPage() {
           >
             {t('cockpit.fleetView')}
           </button>
+          {/*
+            The cross-project view: one row per initiative, with the decision queue beside it.
+            It sits with the other page-local views so the browser's back button returns here.
+          */}
+          <button
+            type="button"
+            onClick={() => switchView({ type: 'initiatives' })}
+            aria-current={view.type === 'initiatives' ? 'page' : undefined}
+            className="min-h-11 shrink-0 rounded px-2 py-1 text-left text-xs text-foreground hover:bg-accent md:min-h-0"
+            data-testid="cockpit-nav-initiatives"
+          >
+            {t('cockpit.initiativesView')}
+          </button>
           {fleet.status === 'loading' && (
             <p className="text-xs text-muted-foreground">{t('cockpit.loading')}</p>
           )}
@@ -1162,6 +1251,59 @@ export default function CockpitPage() {
           ))}
         </aside>
 
+        {view.type === 'initiatives' ? (
+          <div className="flex min-h-0 flex-1 flex-col lg:flex-row" data-testid="cockpit-initiatives-stage">
+            <div className="flex min-h-0 flex-1 flex-col border-b border-border/40 lg:border-b-0 lg:border-r">
+              {initiative.view.status === 'loading' && (
+                <p className="p-3 text-xs text-muted-foreground" data-testid="initiative-loading">
+                  {t('cockpit.loading')}
+                </p>
+              )}
+              {initiative.view.status === 'unavailable' && (
+                <p
+                  className="p-3 text-xs text-amber-700 dark:text-amber-300"
+                  data-testid="initiative-unavailable"
+                  data-reason={initiative.view.reading.reason}
+                >
+                  {t('cockpit.initiativeUnavailable', { reason: initiative.view.reading.reason })}
+                </p>
+              )}
+              {initiative.view.status === 'error' && (
+                <p
+                  className="p-3 text-xs text-red-600 dark:text-red-400"
+                  data-testid="initiative-error"
+                >
+                  {initiative.view.message}
+                </p>
+              )}
+              {initiative.view.status === 'loaded' && (
+                <InitiativeView
+                  initiatives={initiative.view.reading.initiatives}
+                  focusUri={focusObject?.uri ?? null}
+                  pinnedUris={observationPinnedUris()}
+                  pinPendingUri={initiativePinPendingUri}
+                  now={now}
+                  onFocus={(uri) => hub.dispatch({ type: 'focus', uri: uri as QuayObjectUri })}
+                  onPin={(uri) => void toggleInitiativePin(uri)}
+                />
+              )}
+            </div>
+            <div className="flex w-full min-h-0 flex-col border-t border-border/40 lg:w-96 lg:border-t-0 lg:border-l">
+              {initiative.view.status === 'loaded' || initiative.view.status === 'unavailable' ? (
+                <DecisionQueue
+                  items={initiative.view.reading.decisionQueue}
+                  audit={initiative.view.status === 'loaded' ? initiative.view.reading.audit : []}
+                  auditRatio={initiative.view.reading.auditRatio}
+                  decide={decidePort}
+                />
+              ) : (
+                <p className="p-3 text-xs text-muted-foreground" data-testid="decision-queue-idle">
+                  {t('cockpit.decisionQueueEmpty')}
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
         <CockpitStage
           view={view}
           projects={projects}
@@ -1195,6 +1337,7 @@ export default function CockpitPage() {
           onWallOpenArchitecture={openWallArchitecture}
           onReloadWall={() => void observation.reload()}
         />
+        )}
       </div>
 
       <footer className="shrink-0 border-t border-border/40 bg-background px-4 py-2" data-testid="cockpit-status">

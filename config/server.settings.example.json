@@ -9,5 +9,9 @@
   "observation": {
     "wallLimit": 12
   },
-  "_observation": "The observation wall's block cap. At most `wallLimit` observed objects are shown; the rest are folded and the response carries `collapsedCount`. The observation layer's own 「观察层自身」 entry is not part of this cap — a quiet wall must still admit when its producers are stale or red. A malformed value (anything but a positive integer) falls back to the shipped 12 and is reported in the server log."
+  "_observation": "The observation wall's block cap. At most `wallLimit` observed objects are shown; the rest are folded and the response carries `collapsedCount`. The observation layer's own 「观察层自身」 entry is not part of this cap — a quiet wall must still admit when its producers are stale or red. A malformed value (anything but a positive integer) falls back to the shipped 12 and is reported in the server log.",
+  "initiative": {
+    "auditRatio": 0.2
+  },
+  "_initiative": "How many liaison self-decisions (`kind` inference or llm) surface in the cockpit's decision-queue spot-check group, as a fraction in (0, 1]. The shipped 0.2 means one in five. Zero is refused (it would silently mean 「never spot-check anything」); a malformed value falls back to the shipped default and is reported in the server log."
 }

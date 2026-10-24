@@ -201,6 +201,78 @@ describe('every locale carries the cockpit copy', () => {
     }
   });
 
+  // The initiative view and the decision queue are the third cockpit surface. Naming their copy
+  // here keeps a rename from being "covered" by the generic loop while every locale silently
+  // falls back to English — and the count/choice-bearing sentences keep their placeholders.
+  it('covers the initiative view and the decision queue', () => {
+    const required = [
+      'initiativesView',
+      'initiativeEmpty',
+      'initiativeStatusActive',
+      'initiativeStatusClosed',
+      'initiativeProjects',
+      'initiativeTasksCount',
+      'initiativeGoalsCount',
+      'initiativeLiaison',
+      'initiativeEdgeBlocks',
+      'initiativeEdgeContract',
+      'initiativeEdgeRelease',
+      'initiativeBlockedFor',
+      'initiativeDurationJustNow',
+      'initiativeDurationMinutes',
+      'initiativeDurationHours',
+      'initiativeDurationDays',
+      'initiativeCharter',
+      'initiativeCharterIntent',
+      'initiativeCharterCompletion',
+      'initiativeCharterExit',
+      'initiativeCharterGrant',
+      'initiativeCharterEscalate',
+      'initiativeExpiresAt',
+      'initiativePin',
+      'initiativeUnpin',
+      'initiativePinFailed',
+      'initiativePinNext',
+      'initiativeUnavailable',
+      'decisionQueue',
+      'decisionQueueEmpty',
+      'decisionInitiative',
+      'decisionPreviewChoice',
+      'decisionRationale',
+      'decisionRationalePlaceholder',
+      'decisionConfirm',
+      'decisionCancel',
+      'decisionDone',
+      'decisionFailed',
+      'decisionAuditGroup',
+      'decisionAuditEmpty',
+      'decisionAuditChoice',
+      'decisionAuditNote',
+      'decisionAuditNotePlaceholder',
+      'decisionAuditAgree',
+      'decisionAuditObject',
+      'decisionAuditAgreed',
+      'decisionAuditObjected',
+      'decisionAuditObjectionDefault',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.initiativeTasksCount)).toEqual(['n']);
+    expect(placeholders(reference.initiativeGoalsCount)).toEqual(['n']);
+    expect(placeholders(reference.initiativeLiaison)).toEqual(['liaison']);
+    expect(placeholders(reference.initiativeBlockedFor)).toEqual(['duration']);
+    expect(placeholders(reference.initiativeExpiresAt)).toEqual(['time']);
+    expect(placeholders(reference.initiativeUnavailable)).toEqual(['reason']);
+    expect(placeholders(reference.decisionInitiative)).toEqual(['slug']);
+    expect(placeholders(reference.decisionPreviewChoice)).toEqual(['choice']);
+    expect(placeholders(reference.decisionAuditChoice)).toEqual(['by', 'chosen', 'kind']);
+    for (const key of ['initiativeDurationMinutes', 'initiativeDurationHours', 'initiativeDurationDays']) {
+      expect(placeholders(reference[key]), `cockpit.${key}`).toEqual(['n']);
+    }
+  });
+
   // Positive control: the same checker must reject a missing block, a blank value, a key-copied
   // value and a dropped placeholder. Without this the green above could not go red.
   it('rejects a missing, blank, key-copied or placeholder-dropping block (positive control)', () => {

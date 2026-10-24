@@ -93,6 +93,18 @@ export type ObservationSettings = {
 };
 
 /**
+ * The initiative view's sampling policy.
+ *
+ * `auditRatio` is the fraction of liaison self-decisions
+ * (`kind ∈ {inference, llm}`) that surface in the decision queue's 「请抽查」 group. The
+ * shipped 1/5 means one entry in five; a value outside (0, 1] falls back to it. Consumed by
+ * `server/modules/quay/quay.module.ts` when it composes the initiatives reading.
+ */
+export type InitiativeSettings = {
+  auditRatio: number;
+};
+
+/**
  * One reading of the server settings file, good for the whole boot.
  *
  * `residentRestore` and `observation` are ALWAYS concrete and always default-filled: a file
@@ -106,6 +118,7 @@ export type ObservationSettings = {
 export type ServerSettings = {
   residentRestore: ResidentRestoreSettings;
   observation: ObservationSettings;
+  initiative: InitiativeSettings;
   source: ServerSettingsSource;
   path: string;
   problems: string[];
@@ -168,8 +181,9 @@ export function loadServerSettings(options: {
   // carrying knobs for a newer build still boots an older one.
   const residentRestore = readResidentRestore(record.residentRestore, problems);
   const observation = readObservation(record.observation, problems);
+  const initiative = readInitiative(record.initiative, problems);
 
-  return { residentRestore, observation, source: 'file', path: filePath, problems };
+  return { residentRestore, observation, initiative, source: 'file', path: filePath, problems };
 }
 
 /**
@@ -184,6 +198,7 @@ function defaultServerSettings(filePath: string): ServerSettings {
       maxAgeMs: DEFAULT_RESIDENT_RESTORE_MAX_AGE_MS,
     },
     observation: { wallLimit: DEFAULT_OBSERVATION_WALL_LIMIT },
+    initiative: { auditRatio: DEFAULT_INITIATIVE_AUDIT_RATIO },
     source: 'default',
     path: filePath,
     problems: [],
@@ -267,6 +282,43 @@ function readObservation(raw: unknown, problems: string[]): ObservationSettings 
       settings.wallLimit = record.wallLimit;
     } else {
       problems.push('`observation.wallLimit` must be a positive integer');
+    }
+  }
+  return settings;
+}
+
+/** The shipped sampling ratio: one liaison self-decision in five reaches the spot-check group. */
+const DEFAULT_INITIATIVE_AUDIT_RATIO = 1 / 5;
+
+/**
+ * The `initiative` block, field by field over the shipped defaults.
+ *
+ * A ratio must be a number in (0, 1]. Zero would silently mean 「never spot-check anything」,
+ * which is the one reading this group must not be able to produce by typo, and a ratio above
+ * one has no meaning as a fraction. A malformed value falls back and says why.
+ */
+function readInitiative(raw: unknown, problems: string[]): InitiativeSettings {
+  const settings: InitiativeSettings = { auditRatio: DEFAULT_INITIATIVE_AUDIT_RATIO };
+
+  if (raw === undefined) {
+    return settings;
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    problems.push('`initiative` must be a JSON object');
+    return settings;
+  }
+
+  const record = raw as Record<string, unknown>;
+  if (record.auditRatio !== undefined) {
+    if (
+      typeof record.auditRatio === 'number' &&
+      Number.isFinite(record.auditRatio) &&
+      record.auditRatio > 0 &&
+      record.auditRatio <= 1
+    ) {
+      settings.auditRatio = record.auditRatio;
+    } else {
+      problems.push('`initiative.auditRatio` must be a number in (0, 1]');
     }
   }
   return settings;

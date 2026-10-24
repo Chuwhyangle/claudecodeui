@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 
 import { projectsDb, uiLastOpenedDb } from '@/modules/database/index.js';
+import { loadServerSettings } from '@/modules/settings/index.js';
 
 import { createQuayFleetProjectIdResolver } from './quay-fleet-project-id.js';
 import { createQuayFleetRegistry } from './quay-fleet-registry.js';
+import { createQuayInitiatives } from './quay-initiatives.js';
 import { QUAY_COMMAND_TIMEOUT_MS, createQuayProcessRunner } from './quay-process.js';
 import { createQuayRouter } from './quay.routes.js';
 import { createQuayService, type QuayFileReader } from './quay.service.js';
@@ -125,6 +127,15 @@ export const quayFleetRegistry = createQuayFleetRegistry({
 });
 
 /**
+ * The initiative view / decision queue reading. The sampling ratio is the SERVER settings
+ * file's `initiative.auditRatio`, read here at import time (the module is composed at boot and
+ * the knob is documented as read-once); a malformed value already fell back inside the loader.
+ */
+export const quayInitiatives = createQuayInitiatives({
+  auditRatio: loadServerSettings().initiative.auditRatio,
+});
+
+/**
  * Used by the server entrypoint to mount the authenticated Quay endpoints. The write surface is
  * the interface-session triple; everything else stays read-only.
  */
@@ -132,4 +143,5 @@ export const quayRoutes = createQuayRouter({
   quayService,
   fleetRegistry: quayFleetRegistry,
   readLastOpenedSession: () => uiLastOpenedDb.read(),
+  initiatives: quayInitiatives,
 });

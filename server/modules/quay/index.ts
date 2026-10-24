@@ -9,7 +9,35 @@
 // hub's target resolver (injected at the composition root, so the cockpit module itself stays
 // a leaf). It maps a CloudCLI project id to the fleet registry id and answers failures as
 // values rather than throwing.
-export { quayFleetRegistry, quayRoutes, quayService } from './quay.module.js';
+export { quayFleetRegistry, quayInitiatives, quayRoutes, quayService } from './quay.module.js';
+// createQuayInitiatives: the composition seam the initiative/decision-queue criterion drives
+// with an injected exec, and the factory a test uses to read a temp fleet home without a CLI.
+export {
+  createQuayInitiatives,
+  DEFAULT_INITIATIVE_AUDIT_RATIO,
+  FLEET_INITIATIVE_URI_PREFIX,
+  INITIATIVE_DECISION_CATEGORY,
+  initiativeSlugFromEntity,
+  initiativeUri,
+  questionFromAttention,
+  resolveFleetHome,
+} from './quay-initiatives.js';
+export type {
+  InitiativeAuditDecision,
+  InitiativeCharterReading,
+  InitiativeDecisionInput,
+  InitiativeDecisionOption,
+  InitiativeDecisionResult,
+  InitiativeEdgeKind,
+  InitiativeEdgeReading,
+  InitiativeMemberReading,
+  InitiativeQueueItem,
+  InitiativeReading,
+  InitiativeReadingAnswer,
+  InitiativeReadingDocument,
+  InitiativeReadingUnavailable,
+  QuayInitiativesService,
+} from './quay-initiatives.js';
 export type {
   QuayFleetInterfaceSessionReading,
   QuayFleetInterfaceSessionWrite,
