@@ -25,6 +25,11 @@ import type { QuayFocusableObject, QuayObjectUri, QuayViewContract } from '@/sha
  * segment's words. The module-level build counter is read around one utterance, so the scenario
  * can assert it walked that seam exactly once rather than hand-assembling a lookalike pack.
  *
+ * THE COCKPIT PUBLISHES ONTO ITS OWN ATTRIBUTES. The cockpit page must not import this dev-only
+ * module (a production bundle may not carry it), so its reading comes from the `data-cockpit-*`
+ * attributes its renderer already draws — the same declaration, read rather than re-derived. See
+ * {@link readCockpitReading}.
+ *
  * THE GATE IS TWO LOCKS. The import into the page is a build-time constant only
  * (`import.meta.env.DEV` at the call sites in `main.tsx` / `QuayPanel.tsx`, so a production bundle
  * never reaches this module at all), and this module additionally refuses to attach or register
@@ -91,10 +96,34 @@ export type ScenarioStepTiming = {
   ms: number;
 };
 
+/** One cockpit data-contract reading, taken from the attributes the page already draws. */
+export type ScenarioCockpitReading = {
+  /** The cockpit stage's view type (`fleet` / `board`), or `null` when the cockpit is not mounted. */
+  view: string | null;
+  /** The object the cockpit's own status bar names as focused, or `null`. */
+  focus: QuayObjectUri | null;
+  /** The focused object's spoken label, looked up in the wall's declared objects. */
+  focusLabel: string | null;
+  /**
+   * The objects the cockpit stage declares for the active view, exactly as it drew them.
+   *
+   * WHY THE DOM AND NOT A PUBLISHED CONTRACT: unlike a mounted Quay panel, the cockpit does not
+   * import this dev-only module. Its stage already writes the same declaration onto the grid/rail
+   * (`data-cockpit-focusables`) for exactly this reading, so the scenario reads one declaration
+   * rather than re-deriving a lookalike from class names. An absent attribute is `[]`, never a
+   * fabricated object.
+   */
+  wallObjects: QuayFocusableObject[];
+  /** The last echo sentence the cockpit rendered, or `null` when it shows none. */
+  echo: string | null;
+};
+
 /** The structured state a scenario reads. Everything here is a READING, never a screenshot. */
 export type ScenarioReading = {
   /** `location.pathname` + `location.search` at read time. */
   route: string;
+  /** What the cockpit page is showing, or an all-null reading when it is not mounted. */
+  cockpit: ScenarioCockpitReading;
   /** The view whose contract is active (the last one published), or `null`. */
   activeView: string | null;
   /** Every view URI that has published a contract, in publication order. */
@@ -303,6 +332,69 @@ function moveFocus(
   return next === undefined ? ordered[index]?.uri ?? null : next.uri;
 }
 
+/** The reading returned when the cockpit page is not mounted: every field is honestly absent. */
+const EMPTY_COCKPIT_READING: ScenarioCockpitReading = {
+  view: null,
+  focus: null,
+  focusLabel: null,
+  wallObjects: [],
+  echo: null,
+};
+
+/** Parses a `data-cockpit-focusables` attribute; anything malformed reads as no declaration. */
+function parseWallObjects(raw: string | null): QuayFocusableObject[] {
+  if (raw === null) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as QuayFocusableObject[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Reads the cockpit's own data-contract attributes.
+ *
+ * The cockpit deliberately does not import this module (a production bundle must not carry the
+ * dev-only surface), so the reading is the attributes the page publishes for its renderer's
+ * consumers: the root's `data-cockpit-view`, the stage's `data-cockpit-focusables`, the status
+ * bar's `data-cockpit-focus`, and an optional echo node. A page that is not the cockpit answers
+ * an all-null reading rather than throwing, which is what lets one scenario step assert the
+ * cockpit did unmount after switching back to a session.
+ */
+function readCockpitReading(): ScenarioCockpitReading {
+  if (typeof document === 'undefined') {
+    return { ...EMPTY_COCKPIT_READING };
+  }
+  const page = document.querySelector('[data-testid="cockpit-page"]');
+  if (!(page instanceof HTMLElement)) {
+    return { ...EMPTY_COCKPIT_READING };
+  }
+  const stage = document.querySelector('[data-cockpit-focusables]');
+  const wallObjects = stage instanceof HTMLElement
+    ? parseWallObjects(stage.getAttribute('data-cockpit-focusables'))
+    : [];
+  const focusNode = document.querySelector('[data-testid="cockpit-focus"]');
+  const focusRaw = focusNode instanceof HTMLElement ? focusNode.getAttribute('data-cockpit-focus') : null;
+  // The status bar writes the same `quay://` address it read from the view contract; anything
+  // else is not an address this surface will claim as a focus.
+  const focus = focusRaw !== null && focusRaw.startsWith('quay://')
+    ? (focusRaw as QuayObjectUri)
+    : null;
+  const focused = focus === null ? null : wallObjects.find((object) => object.uri === focus) ?? null;
+  const echoNode = document.querySelector('[data-testid="cockpit-echo"]');
+  const echoText = echoNode instanceof HTMLElement ? echoNode.textContent?.trim() ?? '' : '';
+  return {
+    view: page.getAttribute('data-cockpit-view'),
+    focus,
+    focusLabel: focused?.label ?? null,
+    wallObjects,
+    echo: echoText === '' ? null : echoText,
+  };
+}
+
 /** Builds one page-bound surface with its own focus/tray/zoom state. */
 function createScenarioSurface(): ScenarioSurface {
   let focus: QuayObjectUri | null = null;
@@ -328,6 +420,7 @@ function createScenarioSurface(): ScenarioSurface {
     const focused = focus === null ? null : focusables.find((object) => object.uri === focus) ?? null;
     return {
       route: `${window.location.pathname}${window.location.search}`,
+      cockpit: readCockpitReading(),
       activeView: activeViewUri,
       views: [...registeredViews.keys()],
       focusables,
