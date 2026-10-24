@@ -208,6 +208,36 @@ describe('every locale carries the cockpit copy', () => {
     }
   });
 
+  // The pulse strip draws four dense rows, so its copy is what makes the rows readable at all:
+  // the row labels are the accessible names, the empty sentence names the active window, and the
+  // tooltips carry the reading a sighted hover gets. Naming them here keeps a rename from being
+  // "covered" by the generic loop while every locale silently falls back to English.
+  it('covers the pulse strip rows, window and tooltips', () => {
+    const required = [
+      'pulseRowInFlight',
+      'pulseRowFanIn',
+      'pulseRowSuite',
+      'pulseRowBlocked',
+      'pulseNoActivity',
+      'pulseStaleInFlight',
+      'pulsePhaseImplementing',
+      'pulsePhaseFanIn',
+      'pulsePhaseAwaitingLand',
+      'pulsePhaseLanded',
+      'pulseRoundTooltip',
+      'pulseOccurrences',
+      'pulseDependents',
+    ];
+    for (const key of required) {
+      expect(typeof reference[key], `cockpit.${key}`).toBe('string');
+      expect(reference[key].trim().length, `cockpit.${key}`).toBeGreaterThan(0);
+    }
+    expect(placeholders(reference.pulseNoActivity)).toEqual(['hours']);
+    expect(placeholders(reference.pulseRoundTooltip)).toEqual(['fail', 'pass', 'round', 'state']);
+    expect(placeholders(reference.pulseOccurrences)).toEqual(['n']);
+    expect(placeholders(reference.pulseDependents)).toEqual(['n']);
+  });
+
   // The initiative view and the decision queue are the third cockpit surface. Naming their copy
   // here keeps a rename from being "covered" by the generic loop while every locale silently
   // falls back to English — and the count/choice-bearing sentences keep their placeholders.

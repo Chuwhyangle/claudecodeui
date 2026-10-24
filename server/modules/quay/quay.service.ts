@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type {
   QuayAdrCounts,
+  QuayBlockerSummary,
   QuayConfigIssueCounts,
   QuayDriverState,
   QuayDriverSummary,
@@ -23,6 +24,7 @@ import type {
   QuayTestsSummary,
 } from '@/shared/types.js';
 
+import { summarizeBlockers } from './quay-blockers-summary.js';
 import {
   createQuayFleetCliWallReader,
   createQuayUriResolver,
@@ -33,6 +35,7 @@ import { locateQuayFleetCli } from './quay-fleet-locator.js';
 
 export type {
   QuayAdrCounts,
+  QuayBlockerSummary,
   QuayConfigIssueCounts,
   QuayDriverState,
   QuayDriverSummary,
@@ -242,6 +245,28 @@ export type QuayFleetTaskCounts = {
 };
 
 /**
+ * The compact per-project reading behind one cockpit `PulseStrip`.
+ *
+ * It is deliberately NOT a `QuaySnapshot`: a fleet tile needs the four pulse rows (in-flight,
+ * fan-in, suite, blockers) and nothing else, so the fleet fan-out skips the goals / ADRs / config
+ * / dashboard reads a full snapshot performs. Every source is the same one the Quay panel's cards
+ * read, so the strip's counts cannot disagree with the cards.
+ *
+ * `inFlight: null` / `blockers: null` mean the source could not be read, never "nothing there".
+ * A read source that is merely quiet yields `[]`.
+ */
+export type QuayPulseSummary = {
+  /** The instant this reading was taken, ISO-8601 — the strip's `now`. */
+  generatedAt: string;
+  inFlight: QuayInFlightTask[] | null;
+  /** In-flight lane reading; only its live intervals are plotted, so a null is tolerable. */
+  gantt: QuayGanttLanes | null;
+  tests: QuayTestsSummary;
+  fanIn: QuayFanInSummary;
+  blockers: QuayBlockerSummary[] | null;
+};
+
+/**
  * One project's entry in the fleet summary. `driver`, `tasks` and `error` describe a
  * single reading taken together, so a consumer never mixes sections of two reads.
  */
@@ -262,6 +287,11 @@ export type QuayFleetProjectSummary = {
    */
   driver: { state: QuayDriverState | 'unavailable' };
   tasks: QuayFleetTaskCounts;
+  /**
+   * The compact pulse reading behind this tile's `PulseStrip`. Optional so an older cached
+   * entry remains readable; `null` is "the pulse could not be read", not "idle".
+   */
+  pulse?: QuayPulseSummary | null;
   /** `true` when this entry was served from the per-project TTL cache. */
   cached: boolean;
   /** Why this project's reading failed, or `null` when both commands answered. */
@@ -1153,6 +1183,26 @@ const QUAY_WORKER_OUTCOME_FILE = 'worker-outcome.jsonl';
 const QUAY_WORKER_ROUND_FILE = 'worker-round.jsonl';
 
 /**
+ * How many carrier records one pulse reading keeps.
+ *
+ * 300 is sized from the strip's widest window: 72h held 216 fan-in attempts on this workspace
+ * when the reading was designed, and the round history is a similar order (197). The Quay
+ * panel's own cards keep ten rows; the strip needs the window's real density, or its "how
+ * active is this project" reading would be capped at the last ten attempts regardless of the
+ * selected window.
+ */
+const QUAY_PULSE_HISTORY_LIMIT = 300;
+
+/**
+ * Where the native task store keeps one file per task, relative to the project root.
+ *
+ * This is the store's default layout (the same directory `.quay/config.yml` names as
+ * `providers.native.tasks_dir` in this workspace). A project that relocates the store simply
+ * yields no dependency edges here — an honest absence, never a fabricated edge.
+ */
+const QUAY_TASK_FILE_DIR = 'tasks';
+
+/**
  * Bytes read per step when streaming a carrier file's tail. 64 KiB holds ten
  * lines of every carrier here except the per-file round history (whose lines run
  * tens of KB); there the window doubles a couple of times, still a few hundred KB
@@ -1263,9 +1313,76 @@ async function readLastCarrierRecord(reader: QuayFileReader, filePath: string): 
   return null;
 }
 
+/** One task file's two pulse-relevant readings: its body (for the Blocker section) and its edges. */
+type QuayTaskFileReading = { body: string; dependsOn: string[] };
+
+/**
+ * Reads the `depends_on` list out of a task file's YAML frontmatter.
+ *
+ * Both spellings the store has shipped are accepted: a block list (`depends_on:\n  - a\n  - b`)
+ * and an inline flow list (`depends_on: [a, b]`). A bare scalar is a one-element list. The block
+ * scan stops at the first line that is neither blank nor a list item, so following frontmatter
+ * keys are never mistaken for prerequisites. Anything else reads as "no edges" rather than a
+ * guess.
+ */
+function parseDependsOnFrontmatter(frontmatter: string): string[] {
+  const match = /^depends_on[ \t]*:[ \t]*(.*)$/m.exec(frontmatter);
+  if (match === null) {
+    return [];
+  }
+
+  const clean = (value: string): string => value.trim().replace(/^['"]|['"]$/g, '').trim();
+  const inline = match[1].trim();
+  if (inline !== '') {
+    const inner = inline.startsWith('[') && inline.endsWith(']') ? inline.slice(1, -1) : inline;
+    return inner
+      .split(',')
+      .map(clean)
+      .filter((value) => value !== '');
+  }
+
+  const rest = frontmatter.slice(match.index + match[0].length).split('\n');
+  const items: string[] = [];
+  let started = false;
+  for (const line of rest) {
+    if (line.trim() === '') {
+      continue;
+    }
+    const item = /^[ \t]+-[ \t]+(.+?)[ \t]*$/.exec(line);
+    if (item === null) {
+      if (started) {
+        break;
+      }
+      // A `depends_on:` key with no list is a shape this reader does not know; it contributes
+      // no edges rather than swallowing the next key's items.
+      break;
+    }
+    started = true;
+    items.push(clean(item[1]));
+  }
+  return items;
+}
+
+/**
+ * Splits one `tasks/<id>.md` file into its frontmatter and body. The store always writes the
+ * opening delimiter at byte zero; a file without one is treated wholly as body (no edges).
+ */
+function parseTaskFile(text: string): QuayTaskFileReading {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
+  if (match === null) {
+    return { body: text, dependsOn: [] };
+  }
+  return { body: match[2], dependsOn: parseDependsOnFrontmatter(match[1]) };
+}
+
+/** A task status that is still live; `done`/`superseded` records no longer contribute edges. */
+function isLiveTaskStatus(value: unknown): boolean {
+  const status = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return status !== 'done' && status !== 'superseded';
+}
+
 /** Projects a parsed `full-suite-state.json` body; `null` when it carries no usable `state` string. */
-function summarizeSuiteState(value: unknown): QuaySuiteState | null {
-  const record = asRecord(value);
+function summarizeSuiteState(value: unknown): QuaySuiteState | null {  const record = asRecord(value);
   const state = record ? readNullableString(record.state) : null;
   if (!record || !state) {
     return null;
@@ -1772,6 +1889,70 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
    * which one it is. A non-zero exit is the CLI refusing the sub-command (an un-upgraded
    * plugin); anything else that yields no document is a read failure.
    */
+  /**
+   * Adds each unfinished task's store-side `depends_on` edges (and its body, when the caller's
+   * reading omitted it) to the CLI records.
+   *
+   * WHY THIS EXISTS: the installed CLI's `task list --json` document omits `depends_on` — the
+   * native provider keeps that relation in the task file's frontmatter only. The pulse strip's
+   * "blocked, and N tasks are waiting" reading therefore cannot be built from the CLI payload
+   * alone. Reading the files for the UNFINISHED tasks only (a handful on a healthy store) keeps
+   * this to a few small reads instead of a second full-store pass; a project whose task files
+   * live elsewhere yields no edges rather than a fabricated one.
+   *
+   * A record that already carries a non-empty body keeps it (the CLI reading is authoritative
+   * for content); only the missing edge list is filled in from the file.
+   */
+  const enrichTaskRecordsWithStoreEdges = async (
+    projectPath: string,
+    records: unknown,
+  ): Promise<unknown> => {
+    if (!Array.isArray(records)) {
+      return records;
+    }
+
+    const live = records.filter((item) => {
+      const record = asRecord(item);
+      return record !== null && typeof record.id === 'string' && isLiveTaskStatus(record.status);
+    });
+    if (live.length === 0) {
+      return records;
+    }
+
+    const readings = new Map<string, QuayTaskFileReading | null>(
+      await Promise.all(
+        live.map(async (item): Promise<[string, QuayTaskFileReading | null]> => {
+          const id = String((item as { id: string }).id);
+          try {
+            const text = await dependencies.readFile.readText(
+              path.join(projectPath, QUAY_TASK_FILE_DIR, `${id}.md`),
+            );
+            return [id, parseTaskFile(text)];
+          } catch {
+            // A relocatable store (or an id whose file was removed): no edges, no failure.
+            return [id, null];
+          }
+        }),
+      ),
+    );
+
+    return records.map((item) => {
+      const record = asRecord(item);
+      if (record === null || typeof record.id !== 'string') {
+        return item;
+      }
+      const reading = readings.get(record.id);
+      if (reading === undefined || reading === null) {
+        return item;
+      }
+      return {
+        ...record,
+        depends_on: Array.isArray(record.depends_on) ? record.depends_on : reading.dependsOn,
+        body: typeof record.body === 'string' && record.body !== '' ? record.body : reading.body,
+      };
+    });
+  };
+
   const collectGantt = async (
     projectPath: string,
     windowHours: number,
@@ -1890,6 +2071,13 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
     // so the card and the chart can never disagree — see `summarizeInFlightTasks`.)
     const fanInAttempts = summarizeFanInAttempts(fanInRecords);
 
+    // The pulse strip's blocked row. `depends_on` is absent from the CLI document, so the
+    // unfinished tasks' store files supply the impact edges; `null` (task list unread) stays
+    // null rather than becoming an empty row that would read as "nothing blocked".
+    const blockers = summarizeBlockers(
+      await enrichTaskRecordsWithStoreEdges(projectPath, tasksRead.value),
+    );
+
     return {
       projectId,
       projectPath,
@@ -1902,6 +2090,7 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
       configIssues: summarizeConfigIssues(configRead.value),
       tests: { current: currentSuite, recentRounds: summarizeTestRounds(recentRoundRecords) },
       fanIn: { recent: fanInAttempts },
+      blockers,
       // The In-flight card and the Loop pulse gantt are two projections of ONE reading:
       // `ganttRead.gantt`, the `lanes` document relayed by `collectGantt`. Deriving the card
       // from the same lanes (rather than from the raw round carrier) is what keeps the two
@@ -2154,21 +2343,52 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
   ): Promise<QuayFleetProjectSummary> => {
     await acquireFleetSlot();
     try {
-      const [tasksRead, driverRead, fleetProjectId] = await Promise.all([
+      const quayDir = path.join(candidate.projectPath, '.quay');
+      // The pulse rows ride this project load (and therefore its TTL entry) rather than a
+      // separate request: one cockpit tile needs one consistent reading, and the carriers are
+      // local files while `lanes` is one extra read-only child. `generatedAt` below is the
+      // single clock all four rows share.
+      const [
+        tasksRead,
+        driverRead,
+        fleetProjectId,
+        ganttRead,
+        currentSuite,
+        recentRoundRecords,
+        fanInRecords,
+        workerRoundRecord,
+      ] = await Promise.all([
         runQuayCommand(candidate.projectPath, QUAY_FLEET_TASKS_COMMAND),
         runQuayCommand(candidate.projectPath, QUAY_FLEET_DRIVER_COMMAND),
         // The registry reading is cached per TTL, so this is one `quay-fleet` call per window
         // for the whole fan-out rather than one per project.
         fleetProjectIds.resolveFleetProjectId(candidate.projectId),
+        // The strip plots in-flight rows from the live intervals of this lane set; its window is
+        // irrelevant to them (an in-flight run ends at `now`), so the default is reused.
+        collectGantt(candidate.projectPath, DEFAULT_QUAY_GANTT_WINDOW_HOURS),
+        readCurrentSuiteState(dependencies.readFile, path.join(quayDir, QUAY_SUITE_STATE_FILE)),
+        readCarrierFileTail(
+          dependencies.readFile,
+          path.join(quayDir, QUAY_ROUND_HISTORY_FILE),
+          QUAY_PULSE_HISTORY_LIMIT,
+        ),
+        readCarrierFileTail(
+          dependencies.readFile,
+          path.join(quayDir, QUAY_WORKER_OUTCOME_FILE),
+          QUAY_PULSE_HISTORY_LIMIT,
+        ),
+        readLastCarrierRecord(dependencies.readFile, path.join(quayDir, QUAY_WORKER_ROUND_FILE)),
       ]);
 
       const failures: string[] = [];
       let tasks: QuayFleetTaskCounts | null = null;
+      let taskRecords: unknown = null;
       if (!tasksRead.ok) {
         failures.push(`task list: ${tasksRead.error ?? `exit ${tasksRead.code === null ? 'abnormally' : tasksRead.code}`}`);
       } else {
         try {
-          tasks = summarizeFleetTaskCounts(parseJson(tasksRead.stdout));
+          taskRecords = parseJson(tasksRead.stdout);
+          tasks = summarizeFleetTaskCounts(taskRecords);
         } catch {
           // Reported through the same `error` channel as a failed child, so the caller has
           // one place to look for "this project's counts are not a reading".
@@ -2190,12 +2410,27 @@ export function createQuayService(dependencies: QuayServiceDependencies) {
         failures.push(`driver status: ${driverRead.error ?? `exit ${driverRead.code === null ? 'abnormally' : driverRead.code}`}`);
       }
 
+      const blockers = summarizeBlockers(
+        await enrichTaskRecordsWithStoreEdges(candidate.projectPath, taskRecords),
+      );
+
       return {
         projectId: candidate.projectId,
         projectPath: candidate.projectPath,
         fleetProjectId,
         driver,
         tasks: tasks ?? EMPTY_FLEET_TASK_COUNTS,
+        pulse: {
+          generatedAt: new Date(dependencies.now()).toISOString(),
+          inFlight: summarizeInFlightTasks(ganttRead.gantt, workerRoundRecord),
+          gantt: ganttRead.gantt,
+          tests: {
+            current: currentSuite,
+            recentRounds: summarizeTestRounds(recentRoundRecords),
+          },
+          fanIn: { recent: summarizeFanInAttempts(fanInRecords) },
+          blockers,
+        },
         cached: false,
         error: failures.length > 0 ? failures.join('; ') : null,
       };

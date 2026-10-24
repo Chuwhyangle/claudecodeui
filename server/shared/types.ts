@@ -4209,6 +4209,28 @@ export type QuayFanInSummary = {
 };
 
 /**
+ * One live obstruction as the pulse strip's blocked row draws it, read from the task store.
+ *
+ * The group is keyed by the NORMALISED failure signature (digits replaced with `#`), never by
+ * task id: two tasks red at the same step are one obstruction with `occurrences` entries. `since`
+ * is the earliest occurrence, so retrying a task extends the segment instead of resetting the
+ * clock. `dependents` is the impact reading — the unfinished tasks whose `depends_on` names a
+ * member of the group — which is what the `⛔ N` end label counts.
+ */
+export type QuayBlockerSummary = {
+  /** Representative task id (the earliest occurrence), used by the tooltip and the focus action. */
+  taskId: string;
+  /** When the obstruction began, ISO-8601. */
+  since: string;
+  /** The normalised failure signature the group is keyed by. */
+  signature: string;
+  /** How many tasks currently carry this signature. */
+  occurrences: number;
+  /** Unfinished tasks waiting on a member of the group, sorted and unique. */
+  dependents: string[];
+};
+
+/**
  * One of quay's published in-flight phases — the values its `dashboard-kernel` marks a live
  * interval with (`LIVE_INTERVAL_PHASES`). Re-declared rather than imported because the plugin
  * is an external, per-project artifact resolved at runtime; the set is the contract.
@@ -4327,6 +4349,13 @@ export type QuaySnapshot = {
   tests: QuayTestsSummary;
   /** Fan-in card: recent mechanical fan-in attempts, read from `.quay/worker-outcome.jsonl`. */
   fanIn: QuayFanInSummary;
+  /**
+   * Pulse strip's blocked row: the live obstructions in this project's task store, merged by
+   * failure signature (see `QuayBlockerSummary`). OPTIONAL and nullable so an older backend /
+   * cached snapshot reads as "not reported": absent or `null` is an unread store, `[]` is a read
+   * store with nothing blocked — the two must never be collapsed.
+   */
+  blockers?: QuayBlockerSummary[] | null;
   /**
    * Tasks the worker currently has in flight, taken from the SAME `lanes` reading the Loop
    * pulse gantt plots (quay's `readLive`, which drops already-landed tasks) so the card and the

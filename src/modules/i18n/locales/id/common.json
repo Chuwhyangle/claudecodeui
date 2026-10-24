@@ -958,7 +958,20 @@
     "ordinalUnavailableNext": "Gunakan bilah proyek, atau daftarkan proyeknya, lalu coba lagi.",
     "attentionBadgeDetail": "{{n}} item proyek membutuhkan Anda: {{projects}}",
     "observationBlindSpots": "Tampilan ini tidak dapat melihat:",
-    "observationOpenQuay": "Buka panel Quay"
+    "observationOpenQuay": "Buka panel Quay",
+    "pulseRowInFlight": "Berjalan",
+    "pulseRowFanIn": "Fan-in",
+    "pulseRowSuite": "Suite",
+    "pulseRowBlocked": "Terblokir",
+    "pulseNoActivity": "Tidak ada aktivitas dalam {{hours}} jam terakhir",
+    "pulseStaleInFlight": "tidak ada detak jantung dalam interval ronde driver",
+    "pulsePhaseImplementing": "mengimplementasikan",
+    "pulsePhaseFanIn": "fan-in",
+    "pulsePhaseAwaitingLand": "menunggu penggabungan",
+    "pulsePhaseLanded": "mendarat",
+    "pulseRoundTooltip": "Ronde {{round}}: {{state}} ({{pass}} lulus / {{fail}} gagal)",
+    "pulseOccurrences": "{{n}} kemunculan",
+    "pulseDependents": "{{n}} menunggu"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",

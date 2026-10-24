@@ -7,3 +7,7 @@ export { isQuayTabVisible, useEnsureQuayTabVisible } from '@/modules/quay/hooks/
 // the Quay tab declares, and reuses quay's in-flight tile instead of re-deriving its phases.
 export { formatQuayUri, parseQuayUri } from '@/modules/quay/quayUri';
 export type { QuayParsedObject, QuayUriParseResult, QuayUriRejection } from '@/modules/quay/quayUri';
+// The dense four-row health view. Consumed by the Quay panel (one project, above its cards)
+// and by the cockpit's fleet tiles (one per project); both draw the same component so the two
+// surfaces cannot disagree about what "in flight / fan-in / suite / blocked" looks like.
+export { default as PulseStrip, DEFAULT_PULSE_WINDOW_HOURS, PULSE_STRIP_HEIGHT_PX, PULSE_WINDOW_HOURS } from '@/modules/quay/PulseStrip';

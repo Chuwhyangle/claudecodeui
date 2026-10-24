@@ -1201,3 +1201,55 @@ test('AC5: a cached snapshot shows its age, marks an over-threshold reading stal
   const fresh = renderView({ status: 'loaded', snapshot: SNAPSHOT }, null);
   assert.equal(fresh.container.querySelector('[data-testid="quay-panel-cached-age"]'), null);
 });
+
+/**
+ * The pulse strip is the panel's always-visible reading; the full Loop pulse card below stays
+ * the expanded view. This case pins the two facts the cockpit depends on: the strip is actually
+ * mounted at the top of the loaded panel, and activating a mark emits the TASK address (the
+ * fleet registry id segment, never the CloudCLI project id).
+ */
+test('the loaded panel opens with the pulse strip, and a task mark focuses its quay address', () => {
+  const focused: string[] = [];
+  const snapshot: QuaySnapshot = {
+    ...SNAPSHOT,
+    inFlight: [
+      {
+        taskId: 'task-live',
+        phase: 'implementing',
+        startedAt: '2026-10-01T23:40:00.000Z',
+        lastHeartbeat: '2026-10-01T23:59:00.000Z',
+        workerPid: 41,
+      },
+    ],
+    blockers: [
+      {
+        taskId: 'task-blocked',
+        since: '2026-10-01T20:00:00.000Z',
+        signature: 'AC 未全勾 :: checked #/#',
+        occurrences: 2,
+        dependents: ['task-e', 'task-f'],
+      },
+    ],
+  };
+
+  const { getByTestId, getAllByTestId } = render(
+    <QuayPanel
+      projectId={CLOUD_PROJECT_ID}
+      view={{ status: 'loaded', snapshot }}
+      onRefresh={() => {}}
+      onFocusTask={(uri) => focused.push(uri)}
+    />,
+  );
+
+  getByTestId('quay-panel-pulse-strip');
+  assert.match(getByTestId('quay-panel-pulse-strip-blocker-impact').textContent ?? '', /⛔ 2/);
+
+  const line = getAllByTestId('quay-panel-pulse-strip-inflight-line')[0];
+  assert.ok(line, 'the in-flight reading must draw a line');
+  line.click();
+  assert.deepEqual(focused, ['quay://claudecodeui/task/task-live']);
+
+  focused.length = 0;
+  getAllByTestId('quay-panel-pulse-strip-blocker-segment')[0].click();
+  assert.deepEqual(focused, ['quay://claudecodeui/task/task-blocked']);
+});

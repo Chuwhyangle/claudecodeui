@@ -266,6 +266,51 @@ export type QuayFanInSummary = {
 };
 
 /**
+ * One live obstruction as the pulse strip's blocked row draws it, read from the task store.
+ *
+ * The group is keyed by the NORMALISED failure signature (digits replaced with `#`), never by
+ * task id: two tasks red at the same step are one obstruction with `occurrences` entries. `since`
+ * is the earliest occurrence, so retrying a task extends the segment instead of resetting the
+ * clock. `dependents` is the impact reading — the unfinished tasks whose `depends_on` names a
+ * member of the group — which is what the `⛔ N` end label counts.
+ */
+export type QuayBlockerSummary = {
+  /** Representative task id (the earliest occurrence), used by the tooltip and the focus action. */
+  taskId: string;
+  /** When the obstruction began, ISO-8601. */
+  since: string;
+  /** The normalised failure signature the group is keyed by. */
+  signature: string;
+  /** How many tasks currently carry this signature. */
+  occurrences: number;
+  /** Unfinished tasks waiting on a member of the group, sorted and unique. */
+  dependents: string[];
+};
+
+/**
+ * The compact per-project reading behind one `PulseStrip`.
+ *
+ * Assembled server-side from the SAME sources the Quay panel's cards read (the `lanes` document
+ * for in-flight state, the `.quay/` carriers for fan-in/test history, the task store for
+ * blockers), so the strip's counts and the cards cannot disagree. It is deliberately a separate
+ * bundle from `QuaySnapshot`: the cockpit draws one strip per fleet tile and must not pay for the
+ * goals, ADRs, config and dashboard reads a full snapshot performs.
+ *
+ * `inFlight: null` / `blockers: null` mean the source could not be read, never "nothing there".
+ * A read source that is merely quiet yields `[]`.
+ */
+export type QuayPulseSummary = {
+  /** The instant this reading was taken, ISO-8601 — the strip's `now`. */
+  generatedAt: string;
+  inFlight: QuayInFlightTask[] | null;
+  /** In-flight lane reading; only its live intervals are plotted, so a null is tolerable. */
+  gantt: QuayGanttLanes | null;
+  tests: QuayTestsSummary;
+  fanIn: QuayFanInSummary;
+  blockers: QuayBlockerSummary[] | null;
+};
+
+/**
  * One of quay's published in-flight phases — the values its `dashboard-kernel` marks a live
  * interval with. Re-declared (not imported from the plugin) for the same reason as the Loops
  * pulse types below: the plugin is an external, per-project artifact resolved at runtime, so
@@ -394,6 +439,13 @@ export type QuaySnapshot = {
   tests: QuayTestsSummary;
   /** Fan-in card: recent mechanical fan-in attempts, read from `.quay/worker-outcome.jsonl`. */
   fanIn: QuayFanInSummary;
+  /**
+   * Pulse strip's blocked row: the live obstructions in this project's task store, merged by
+   * failure signature (see `QuayBlockerSummary`). OPTIONAL and nullable so an older backend /
+   * cached snapshot reads as "not reported": absent or `null` is an unread store, `[]` is a read
+   * store with nothing blocked — the two must never be collapsed.
+   */
+  blockers?: QuayBlockerSummary[] | null;
   /**
    * In-flight card: the tasks the worker currently has in flight, taken from the SAME
    * `lanes` reading the Loop pulse gantt is built from (`gantt` below) — so the card and
@@ -569,6 +621,11 @@ export type QuayFleetProjectSummary = {
   /** The worker driver reading; `unavailable` means the status command did not answer. */
   driver: { state: QuayDriverState };
   tasks: QuayFleetTaskCounts;
+  /**
+   * The compact pulse reading behind this tile's `PulseStrip`. OPTIONAL: an older server does
+   * not send it, and the tile then says "not reported" rather than drawing an empty (idle) row.
+   */
+  pulse?: QuayPulseSummary | null;
   /** Whether this entry was served from the backend's per-project TTL cache. */
   cached: boolean;
   /** The backend's reason when this project's reading failed; `null` on success. */

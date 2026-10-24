@@ -313,6 +313,31 @@ const FLEET: QuayFleetSummary = {
       projectPath: '/work/claudecodeui',
       driver: { state: 'running' },
       tasks: { total: 4, todo: 1, ready: 2, needsHuman: 1, done: 0 },
+      // The tile's pulse reading: one running task and one live obstruction with a dependent.
+      pulse: {
+        generatedAt: '2026-10-23T00:00:00.000Z',
+        inFlight: [
+          {
+            taskId: 'task-live',
+            phase: 'implementing',
+            startedAt: '2026-10-22T23:00:00.000Z',
+            lastHeartbeat: '2026-10-22T23:59:00.000Z',
+            workerPid: 7,
+          },
+        ],
+        gantt: null,
+        tests: { current: null, recentRounds: [] },
+        fanIn: { recent: [] },
+        blockers: [
+          {
+            taskId: 'task-blocked',
+            since: '2026-10-22T20:00:00.000Z',
+            signature: 'AC 未全勾 :: checked #/#',
+            occurrences: 1,
+            dependents: ['task-waiter'],
+          },
+        ],
+      },
       cached: false,
       error: null,
     },
@@ -1451,5 +1476,69 @@ describe('AC3: stage-goals ordering and tail-truncated task ids', () => {
     expect((idSpan.className ?? '').split(/\s+/)).toContain('truncate');
     expect(idSpan.textContent).toBe(longId);
     expect(idSpan.textContent).not.toContain('…');
+  });
+});
+
+/**
+ * The pulse strip in the cockpit: one per project tile (the 「全部项目」 view), and the same
+ * component at the top of a board's Quay panel. The two surfaces must address the TASK a mark
+ * names, with the fleet registry id as the project segment — the board's rail already declares
+ * those tasks, so activating a mark there moves focus to the declared object.
+ */
+describe('pulse strip', () => {
+  it('draws a strip at the foot of every tile that reported a pulse reading', async () => {
+    renderCockpit('/cockpit?view=fleet');
+
+    const strips = await screen.findAllByTestId('cockpit-fleet-tile-pulse');
+    // Only p1 carries a reading in the fixture; the others must not invent an empty (idle) one.
+    expect(strips).toHaveLength(1);
+
+    const tile = screen.getAllByTestId('cockpit-fleet-tile')[0];
+    expect(within(tile).getByTestId('cockpit-fleet-pulse-p1')).toBeTruthy();
+    expect(within(tile).getByTestId('cockpit-fleet-pulse-p1-inflight-line')).toBeTruthy();
+    // The blocked segment's end label is the impact reading: one task is waiting.
+    expect(within(tile).getByTestId('cockpit-fleet-pulse-p1-blocker-impact').textContent).toContain('⛔ 1');
+  });
+
+  it('a fleet tile mark asks to focus the task URI it names, not the tile’s board', async () => {
+    renderCockpit('/cockpit?view=fleet');
+
+    const line = await screen.findByTestId('cockpit-fleet-pulse-p1-inflight-line');
+    const before = sentEvents('focus').length;
+    fireEvent.click(line);
+
+    const focuses = sentEvents('focus').slice(before);
+    expect(focuses.map((event) => event.uri)).toEqual(['quay://claudecodeui/task/task-live']);
+  });
+
+  it('clicking a mark on the board’s strip focuses that task (its declared address)', async () => {
+    // Two in-flight tasks: the rail focuses the first on load, so clicking the second's pulse
+    // line is observable as a focus CHANGE rather than a no-op that already held.
+    const twoTasks: QuaySnapshot = {
+      ...SNAPSHOT,
+      inFlight: [
+        ...SNAPSHOT.inFlight,
+        {
+          taskId: 'task-b',
+          phase: 'fan-in',
+          startedAt: '2026-10-22T22:00:00.000Z',
+          lastHeartbeat: '2026-10-22T23:58:00.000Z',
+          workerPid: 4321,
+        },
+      ],
+    };
+    apiMock.quaySnapshot.mockResolvedValue(okResponse(twoTasks));
+
+    renderCockpit('/cockpit?view=board&project=p1');
+
+    await screen.findByTestId('cockpit-board-rail');
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/task/task-a'));
+
+    const lines = await screen.findAllByTestId('quay-panel-pulse-strip-inflight-line');
+    const second = lines.find((line) => line.getAttribute('data-phase') === 'fan-in');
+    expect(second).toBeTruthy();
+    fireEvent.click(second!);
+
+    await waitFor(() => expect(focusUri()).toBe('quay://claudecodeui/task/task-b'));
   });
 });

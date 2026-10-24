@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { QuayDriverState, QuayFocusableObject, QuayObjectUri } from '@/shared/types';
 import { cn } from '@/shared/utils';
-import { QuayPanel, parseQuayUri } from '@/modules/quay';
+import { QuayPanel, PulseStrip, formatQuayUri, parseQuayUri } from '@/modules/quay';
 import type { QuayPanelView } from '@/modules/quay';
 import type { CockpitProject, CockpitView } from '@/modules/cockpit/cockpitView';
 import type {
@@ -455,6 +455,36 @@ function FleetView({
                 {project.error}
               </p>
             )}
+            {/*
+              THE PULSE STRIP AT THE TILE'S FOOT. Four rows in 48 px: what is running, whether
+              fan-in and the suite are landing or failing, and what is blocked for whom. It is
+              drawn only when the server reported a reading — an unreported pulse is not an idle
+              project, and an empty strip would say "nothing happened" about a fact nobody read.
+              A mark activates the task it names: the fleet view's declared focusables are
+              boards, so the page receives the task URI and can focus it on the board surface
+              (the Quay panel's own strip emits the same address with the same handler).
+            */}
+            {project.pulse !== undefined && project.pulse !== null && (
+              <div className="mt-2" data-testid="cockpit-fleet-tile-pulse">
+                <PulseStrip
+                  inFlight={project.pulse.inFlight}
+                  gantt={project.pulse.gantt}
+                  tests={project.pulse.tests}
+                  fanIn={project.pulse.fanIn}
+                  blockers={project.pulse.blockers}
+                  generatedAt={project.pulse.generatedAt}
+                  onFocusTask={
+                    fleetProjectId === null
+                      ? undefined
+                      : (taskId) =>
+                          onFocusObject(
+                            formatQuayUri({ type: 'task', project: fleetProjectId, id: taskId, ac: null }),
+                          )
+                  }
+                  testId={`cockpit-fleet-pulse-${project.projectId}`}
+                />
+              </div>
+            )}
           </li>
         );
       })}
@@ -573,8 +603,15 @@ function BoardView({
       {boardProjectId !== null && (
         <div className="min-h-0 flex-1 overflow-y-auto" data-testid="cockpit-board-panel">
           {/* QuayPanel owns the snapshot's four states — including its error branch with the
-              retry button — so a failed read shows an error surface, never a blank stage. */}
-          <QuayPanel projectId={boardProjectId} view={boardView} onRefresh={onRefreshBoard} />
+              retry button — so a failed read shows an error surface, never a blank stage. Its
+              pulse strip emits task addresses through `onFocusObject`, so activating a mark on
+              the board's strip focuses the same in-flight card the rail declares. */}
+          <QuayPanel
+            projectId={boardProjectId}
+            view={boardView}
+            onRefresh={onRefreshBoard}
+            onFocusTask={onFocusObject}
+          />
         </div>
       )}
     </div>

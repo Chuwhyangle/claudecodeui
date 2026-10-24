@@ -217,6 +217,13 @@ test('AC3: six quay projects fan out with at most four concurrent task reads', a
       if (command === DRIVER_COMMAND) {
         return { ok: true, code: 0, stdout: JSON.stringify(DRIVER_BODY), stderr: '' };
       }
+      // The pulse strip's `lanes` read rides the same project load. It is a different child
+      // from the task read, so it must not count against this criterion's task-read ceiling
+      // (the criterion is about `QUAY_FLEET_SUMMARY_MAX_CONCURRENT_PROJECTS` project loads,
+      // each of which still issues exactly one task read).
+      if (command !== TASKS_COMMAND) {
+        return { ok: true, code: 0, stdout: '[]', stderr: '' };
+      }
       activeTaskReads += 1;
       peakTaskReads = Math.max(peakTaskReads, activeTaskReads);
       // Hold the read open so overlap (or its absence) is observable, then answer.

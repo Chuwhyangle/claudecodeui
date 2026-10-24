@@ -875,7 +875,20 @@
     "ordinalUnavailableNext": "프로젝트 목록을 사용하거나 프로젝트를 등록한 뒤 다시 시도하세요.",
     "attentionBadgeDetail": "{{n}}개의 프로젝트 항목이 확인을 기다립니다: {{projects}}",
     "observationBlindSpots": "이 보기에 보이지 않는 것:",
-    "observationOpenQuay": "Quay 패널 열기"
+    "observationOpenQuay": "Quay 패널 열기",
+    "pulseRowInFlight": "진행 중",
+    "pulseRowFanIn": "팬인",
+    "pulseRowSuite": "스위트",
+    "pulseRowBlocked": "차단됨",
+    "pulseNoActivity": "최근 {{hours}}시간 동안 활동 없음",
+    "pulseStaleInFlight": "드라이버 라운드 간격 내 하트비트 없음",
+    "pulsePhaseImplementing": "구현 중",
+    "pulsePhaseFanIn": "팬인",
+    "pulsePhaseAwaitingLand": "병합 대기",
+    "pulsePhaseLanded": "착지",
+    "pulseRoundTooltip": "라운드 {{round}}: {{state}} ({{pass}} 통과 / {{fail}} 실패)",
+    "pulseOccurrences": "{{n}}회 발생",
+    "pulseDependents": "{{n}}개 대기"
   },
   "replyReference": {
     "item": "{{label}}「{{excerpt}}」",

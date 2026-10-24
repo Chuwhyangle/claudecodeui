@@ -3,6 +3,7 @@ import type {
   QuayFleetTaskCounts,
   QuayFocusableObject,
   QuayObjectUri,
+  QuayPulseSummary,
   QuayViewContract,
 } from '@/shared/types';
 import { formatQuayUri } from '@/modules/quay';
@@ -36,6 +37,12 @@ export type CockpitProject = {
   projectPath: string;
   driverState: QuayDriverState;
   tasks: QuayFleetTaskCounts;
+  /**
+   * The compact pulse reading drawn at the tile's foot (in-flight / fan-in / suite / blocked).
+   * Absent or `null` means the server did not report one — the tile then draws no strip rather
+   * than an empty (idle) one, because "no reading" and "nothing happened" are different facts.
+   */
+  pulse?: QuayPulseSummary | null;
   /** True when the fleet reading for this project was served from the backend's TTL cache. */
   cached: boolean;
   /** The backend's stated reason when this project's reading failed; `null` on success. */

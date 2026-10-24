@@ -875,7 +875,20 @@
     "ordinalUnavailableNext": "从项目条打开，或先登记该项目再重试。",
     "attentionBadgeDetail": "{{n}} 个项目事项需要你：{{projects}}",
     "observationBlindSpots": "这个视图看不见：",
-    "observationOpenQuay": "打开 Quay 面板"
+    "observationOpenQuay": "打开 Quay 面板",
+    "pulseRowInFlight": "在飞",
+    "pulseRowFanIn": "fan-in",
+    "pulseRowSuite": "suite",
+    "pulseRowBlocked": "阻塞",
+    "pulseNoActivity": "最近 {{hours}}h 无活动",
+    "pulseStaleInFlight": "驱动轮次内没有心跳",
+    "pulsePhaseImplementing": "实现中",
+    "pulsePhaseFanIn": "fan-in",
+    "pulsePhaseAwaitingLand": "等待合入",
+    "pulsePhaseLanded": "已落地",
+    "pulseRoundTooltip": "第 {{round}} 轮：{{state}}（{{pass}} 通过 / {{fail}} 失败）",
+    "pulseOccurrences": "{{n}} 次",
+    "pulseDependents": "{{n}} 个在等"
   },
   "replyReference": {
     "item": "{{label}}「{{excerpt}}」",

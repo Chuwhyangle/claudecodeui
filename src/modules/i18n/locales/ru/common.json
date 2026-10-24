@@ -845,7 +845,20 @@
     "ordinalUnavailableNext": "Используйте полосу проектов или зарегистрируйте проект и повторите попытку.",
     "attentionBadgeDetail": "{{n}} задач проекта ждут вас: {{projects}}",
     "observationBlindSpots": "Это представление не видит:",
-    "observationOpenQuay": "Открыть панель Quay"
+    "observationOpenQuay": "Открыть панель Quay",
+    "pulseRowInFlight": "В работе",
+    "pulseRowFanIn": "Fan-in",
+    "pulseRowSuite": "Набор",
+    "pulseRowBlocked": "Заблокировано",
+    "pulseNoActivity": "Нет активности за последние {{hours}} ч",
+    "pulseStaleInFlight": "нет пульса в пределах интервала драйвера",
+    "pulsePhaseImplementing": "реализация",
+    "pulsePhaseFanIn": "fan-in",
+    "pulsePhaseAwaitingLand": "ожидание слияния",
+    "pulsePhaseLanded": "приземлено",
+    "pulseRoundTooltip": "Раунд {{round}}: {{state}} ({{pass}} пройдено / {{fail}} провалено)",
+    "pulseOccurrences": "{{n}} случаев",
+    "pulseDependents": "{{n}} ждут"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",

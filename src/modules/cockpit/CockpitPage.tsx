@@ -399,6 +399,9 @@ export default function CockpitPage() {
           projectPath: project.projectPath,
           driverState: project.driver.state,
           tasks: project.tasks,
+          // The tile's pulse strip. Absent on an older server: the stage draws no strip rather
+          // than an empty one, so "not reported" never reads as "nothing happened".
+          pulse: project.pulse ?? null,
           cached: project.cached,
           error: project.error,
         })),

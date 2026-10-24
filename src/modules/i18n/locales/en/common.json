@@ -966,7 +966,20 @@
     "ordinalUnavailableNext": "Use the project strip, or register the project, then try again.",
     "attentionBadgeDetail": "{{n}} project items need you: {{projects}}",
     "observationBlindSpots": "This view cannot see:",
-    "observationOpenQuay": "Open the Quay panel"
+    "observationOpenQuay": "Open the Quay panel",
+    "pulseRowInFlight": "In flight",
+    "pulseRowFanIn": "Fan-in",
+    "pulseRowSuite": "Suite",
+    "pulseRowBlocked": "Blocked",
+    "pulseNoActivity": "No activity in the last {{hours}}h",
+    "pulseStaleInFlight": "no heartbeat within the driver's round interval",
+    "pulsePhaseImplementing": "implementing",
+    "pulsePhaseFanIn": "fan-in",
+    "pulsePhaseAwaitingLand": "awaiting land",
+    "pulsePhaseLanded": "landed",
+    "pulseRoundTooltip": "Round {{round}}: {{state}} ({{pass}} pass / {{fail}} fail)",
+    "pulseOccurrences": "{{n}} occurrences",
+    "pulseDependents": "{{n}} waiting"
   },
   "replyReference": {
     "item": "{{label}}“{{excerpt}}”",

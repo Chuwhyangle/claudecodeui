@@ -875,7 +875,20 @@
     "ordinalUnavailableNext": "Usa la barra de proyectos o registra el proyecto y vuelve a intentarlo.",
     "attentionBadgeDetail": "{{n}} elementos del proyecto te necesitan: {{projects}}",
     "observationBlindSpots": "Esta vista no puede ver:",
-    "observationOpenQuay": "Abrir el panel de Quay"
+    "observationOpenQuay": "Abrir el panel de Quay",
+    "pulseRowInFlight": "En vuelo",
+    "pulseRowFanIn": "Fan-in",
+    "pulseRowSuite": "Suite",
+    "pulseRowBlocked": "Bloqueado",
+    "pulseNoActivity": "Sin actividad en las últimas {{hours}} h",
+    "pulseStaleInFlight": "sin latido dentro del intervalo de ronda del controlador",
+    "pulsePhaseImplementing": "implementando",
+    "pulsePhaseFanIn": "fan-in",
+    "pulsePhaseAwaitingLand": "esperando fusión",
+    "pulsePhaseLanded": "aterrizado",
+    "pulseRoundTooltip": "Ronda {{round}}: {{state}} ({{pass}} correctos / {{fail}} fallidos)",
+    "pulseOccurrences": "{{n}} apariciones",
+    "pulseDependents": "{{n}} en espera"
   },
   "replyReference": {
     "item": "{{label}}«{{excerpt}}»",
