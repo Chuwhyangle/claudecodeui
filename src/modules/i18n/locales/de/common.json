@@ -720,6 +720,7 @@
     "modeCockpit": "Cockpit",
     "modeSwitchLabel": "Zwischen Sitzungen und Cockpit wechseln",
     "attentionBadge": "{{n}} Projektaufgaben brauchen dich",
+    "attentionBadgeDetail": "{{n}} Projektaufgaben brauchen dich: {{projects}}",
     "attentionUnavailable": "Aufmerksamkeit nicht verfügbar: {{reason}}",
     "openProject": "Im Cockpit ansehen",
     "openCockpit": "Cockpit öffnen",
