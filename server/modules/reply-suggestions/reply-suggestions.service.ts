@@ -15,6 +15,16 @@
  * comes back with fewer than two chips is supplemented ONCE. Only chips that are
  * new in THIS draw are returned.
  *
+ * ONE MESSAGE, ONE UPSTREAM DRAW. The batch last returned for a
+ * (session id, last assistant message id, settings version) is cached in memory.
+ * An ordinary first draw that hits the cache returns that batch unchanged: no
+ * upstream call, no `draw` increment, no call-cap or circuit-breaker bookkeeping.
+ * Only `redraw: true` buys a new batch (and replaces the cached one); an
+ * expansion draw neither reads nor writes the cache. Failures and empty batches
+ * are never cached, so the next request tries again. The cache has a 200-key LRU
+ * bound and no time expiry; a restart simply loses it. Identical concurrent
+ * requests still coalesce through `inflight`.
+ *
  * PROTECTION. Sliding one-minute and one-day call caps; five consecutive upstream
  * failures open a 30-second circuit; every upstream attempt has a timeout owned
  * by the client. A log line carries only protocol, model, settings version,
@@ -57,6 +67,17 @@ export const REPLY_SUGGESTIONS_REDRAW_MEMORY = 12;
 
 /** The character-set overlap at or above which a chip is "the same suggestion, reworded". */
 export const REPLY_SUGGESTIONS_NEAR_DUPLICATE_OVERLAP = 0.7;
+
+/**
+ * How many `(session, message, settings version)` batches the service remembers.
+ * Least-recently-used entries are evicted past this bound; there is no time
+ * expiry, so a quiet batch stays until the bound pushes it out or the process
+ * restarts.
+ */
+export const REPLY_SUGGESTIONS_BATCH_CACHE_SIZE = 200;
+
+/** How a `shown` usage row was produced: a real upstream call or a cache hit. */
+export type ReplySuggestionsServed = 'upstream' | 'cache';
 
 /** The last assistant message, as the injected reader reports it. */
 export type LastAssistantMessage = {
@@ -138,6 +159,12 @@ type SessionState = {
   messageId: string;
   draw: number;
   shown: string[];
+};
+
+/** The batch last returned to the client for one cache key. */
+type CachedBatch = {
+  chips: string[];
+  draw: number;
 };
 
 /** The built-in system prompt; `settings.systemPrompt` replaces it whole when non-empty. */
@@ -427,6 +454,9 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
 
   const sessionStates = new Map<string, SessionState>();
   const inflight = new Map<string, Promise<{ chips: string[]; draw: number }>>();
+  // The last batch returned for a (session, message, settings version). Map
+  // insertion order is the LRU order: a read moves its entry to the end.
+  const batchCache = new Map<string, CachedBatch>();
 
   // Sliding-window call ledgers. Kept as sorted arrays of timestamps; pruned on
   // every check, so a quiet server carries only the last minute/day of entries.
@@ -435,6 +465,31 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
 
   let consecutiveFailures = 0;
   let circuitOpenUntil = 0;
+
+  /** The cache key: session id + last assistant message id + settings version. */
+  function batchCacheKey(sessionId: string, messageId: string, settings: ReplySuggestionsSettings): string {
+    return [sessionId, messageId, settings.version].join('\u0000');
+  }
+
+  /** An LRU read: a hit is moved to the most-recently-used end. */
+  function readCachedBatch(key: string): CachedBatch | undefined {
+    const cached = batchCache.get(key);
+    if (cached === undefined) return undefined;
+    batchCache.delete(key);
+    batchCache.set(key, cached);
+    return cached;
+  }
+
+  /** Stores a batch and evicts the least-recently-used entry past the bound. */
+  function writeCachedBatch(key: string, batch: CachedBatch): void {
+    batchCache.delete(key);
+    batchCache.set(key, batch);
+    while (batchCache.size > REPLY_SUGGESTIONS_BATCH_CACHE_SIZE) {
+      const oldest = batchCache.keys().next().value;
+      if (oldest === undefined) break;
+      batchCache.delete(oldest);
+    }
+  }
 
   function pruneCalls(window: number[], span: number, at: number): void {
     while (window.length > 0 && window[0] <= at - span) window.shift();
@@ -507,6 +562,37 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
     );
   }
 
+  /**
+   * Append one `shown` row. `served` says whether the batch came from a real
+   * upstream call or from the cache, so a replay can count both the number of
+   * batches shown and the number of paid calls. Older rows without the field
+   * read as `"upstream"`.
+   */
+  function writeShownRow(
+    sessionId: string,
+    settings: ReplySuggestionsSettings,
+    chips: readonly string[],
+    draw: number,
+    served: ReplySuggestionsServed,
+    expansionSource: ReplySuggestionsExpansionSource | null,
+  ): void {
+    if (!settings.usageLog) return;
+    writeUsage({
+      at: new Date(now()).toISOString(),
+      type: 'shown',
+      sessionId,
+      draw,
+      model: settings.model,
+      protocol: settings.protocol,
+      version: settings.version,
+      served,
+      // The marker a replay reads to know this draw was an expansion, and
+      // which text anchored it. The text itself is not copied into the ledger.
+      ...(expansionSource === null ? {} : { expansion: expansionSource }),
+      chips: [...chips],
+    });
+  }
+
   async function generate(input: ReplySuggestionsInput, settings: ReplySuggestionsSettings): Promise<{ chips: string[]; draw: number }> {
     const message = await deps.readLastAssistantMessage(input.sessionId);
     if (message === null || message.text.trim() === '') {
@@ -525,6 +611,20 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
     const expansionSource: ReplySuggestionsExpansionSource | null = expand
       ? (seed !== '' ? 'seed' : 'focus')
       : null;
+    const cacheKey = batchCacheKey(input.sessionId, message.id, settings);
+    // Only an ordinary first draw may be served from the cache. A redraw asks
+    // for a new batch by definition, and an expansion draw is anchored on the
+    // draft rather than on the message; neither reads the cache. A hit returns
+    // the batch unchanged — no upstream call, no draw increment, no call-cap or
+    // circuit-breaker bookkeeping — and still leaves a `shown` row so the
+    // ledger counts the display separately from the paid call.
+    if (!redraw && !expand) {
+      const cached = readCachedBatch(cacheKey);
+      if (cached !== undefined) {
+        writeShownRow(input.sessionId, settings, cached.chips, cached.draw, 'cache', null);
+        return { chips: [...cached.chips], draw: cached.draw };
+      }
+    }
     const inflightKey = [
       input.sessionId,
       message.id,
@@ -596,21 +696,18 @@ export function createReplySuggestionsService(deps: ReplySuggestionsServiceDeps)
       state.shown = [...state.shown, ...selected];
       sessionStates.set(input.sessionId, state);
 
-      if (settings.usageLog) {
-        writeUsage({
-          at: new Date(now()).toISOString(),
-          type: 'shown',
-          sessionId: input.sessionId,
-          draw,
-          model: settings.model,
-          protocol: settings.protocol,
-          version: settings.version,
-          // The marker a replay reads to know this draw was an expansion, and
-          // which text anchored it. The text itself is not copied into the ledger.
-          ...(expansionSource === null ? {} : { expansion: expansionSource }),
-          chips: selected,
-        });
+      // A failure (thrown above) and an empty batch never enter the cache, so
+      // the next request tries upstream again. A redraw replaces the cached
+      // batch; an expansion draw leaves it untouched.
+      if (!expand) {
+        if (selected.length > 0) {
+          writeCachedBatch(cacheKey, { chips: [...selected], draw });
+        } else {
+          batchCache.delete(cacheKey);
+        }
       }
+
+      writeShownRow(input.sessionId, settings, selected, draw, 'upstream', expansionSource);
 
       return { chips: selected, draw };
     })().finally(() => {

@@ -199,6 +199,17 @@ test('a successful draw answers { chips, draw }', async (t) => {
   assert.deepEqual(response.body, { chips: ['chip-a', 'chip-b', 'chip-c'], draw: 1 });
 });
 
+test('a repeated first draw is served from the cache with the same body and one upstream call', async (t) => {
+  const harness = await start(t);
+  const first = await post(harness.baseUrl, '/api/reply-suggestions', { sessionId: 's-cached' });
+  const second = await post(harness.baseUrl, '/api/reply-suggestions', { sessionId: 's-cached' });
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.deepEqual(second.body, first.body, 'the cache hit is invisible to the caller');
+  assert.equal(harness.calls.length, 1, 'the second request never reached upstream');
+});
+
 test('POST /events answers 204 for a valid event and 400 for an invalid one', async (t) => {
   const harness = await start(t);
   const valid = await post(harness.baseUrl, '/api/reply-suggestions/events', {
