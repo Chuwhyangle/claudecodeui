@@ -10,7 +10,7 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { PaperclipIcon, AudioLinesIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon, PencilIcon, Lock, Copy, Check } from 'lucide-react';
+import { PaperclipIcon, AudioLinesIcon, MessageSquareIcon, XIcon, Loader2, ArrowUpIcon, PencilIcon, Lock, Copy, Check, Sparkles } from 'lucide-react';
 
 import { useActivityFreshness } from '@/modules/chat/hooks/useActivityFreshness';
 import { useVoiceInput, type VoiceCaptureEngine } from '@/modules/chat/hooks/useVoiceInput';
@@ -48,8 +48,10 @@ import ComposerModelMenu from '@/modules/chat/composer/ComposerModelMenu';
 import ComposerPermissionMenu from '@/modules/chat/composer/ComposerPermissionMenu';
 import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
+import ReplyReferencePreview from '@/modules/chat/composer/ReplyReferencePreview';
 import { suggestionOptionId, truncateSuggestionLabel } from '@/modules/chat/utils/inputSuggestions';
 import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
+import type { ReplyItem, ReplyReference } from '@/modules/chat/utils/transcript/replyItems';
 
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
 const RELEASE_COPIED_NOTICE_MS = 1500;
@@ -269,6 +271,13 @@ type ChatComposerProps = {
   replyExpansionChips?: string[];
   /** Accepts one variant/response chip: replaces the body, keeping a `> quote` prefix. */
   onAcceptReplyExpansionChip?: (index: number) => void;
+  /**
+   * What the draft currently points at in the latest assistant reply, if
+   * anything. Drawn as one line above the input box; `none` draws nothing.
+   */
+  replyReference?: ReplyReference | null;
+  /** The latest reply's extracted items, supplying the preview's excerpts. */
+  replyItems?: readonly ReplyItem[];
 };
 
 /**
@@ -366,6 +375,8 @@ export default function ChatComposer({
   onRequestReplySuggestions,
   replyExpansionChips = [],
   onAcceptReplyExpansionChip,
+  replyReference = null,
+  replyItems = [],
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   /*
@@ -907,6 +918,10 @@ export default function ChatComposer({
           </div>
         )}
 
+        {replyReference && replyReference.kind !== 'none' && (
+          <ReplyReferencePreview reference={replyReference} items={replyItems} />
+        )}
+
         <PromptInput
           onSubmit={handleComposerSubmit as (event: FormEvent<HTMLFormElement>) => void}
           status={isLoading ? 'streaming' : 'ready'}
@@ -1155,10 +1170,33 @@ export default function ChatComposer({
               regenerates the chips above the input, and it must stay reachable while the
               textarea is covered by them. It is drawn only when the feature is on (the status
               reading said so) and is disabled for the whole draw, so a second click cannot
-              become a second request. A text button rather than an icon: "建议 / Suggest" is
-              the label people look for, and an icon has no convention here.
+              become a second request.
+
+              On the compact tier it is an icon button, the same 32px square as the controls
+              beside it. The labelled version was 61px — twice an icon button — and with a
+              draft's clear ✕ beside it the row's budget broke at 360 and 375px: 360px read
+              `scrollWidth 368 / clientWidth 342` and the send button's right edge landed 25px
+              past the form's. The accessible name and the tooltip keep the "Suggest" reading,
+              and the in-flight state keeps its spinner + `aria-busy`, so dropping the visible
+              text loses no state. The wide tier keeps the labelled button unchanged: it has
+              the width to spend.
             */}
-            {replySuggestionsEnabled && (
+            {replySuggestionsEnabled && (isCompactTier ? (
+              <PromptInputButton
+                data-slot="reply-suggest-button"
+                tooltip={{ content: t('input.suggestions.suggest', { defaultValue: 'Suggest' }) }}
+                onClick={onRequestReplySuggestions}
+                disabled={replySuggestionsLoading}
+                aria-label={t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
+                aria-busy={replySuggestionsLoading || undefined}
+                // The <360px band shrinks every PromptInputButton to 28px to fit the long model
+                // name; the icon control keeps its 32px hit target there and the right cluster
+                // gives up 2px per gap instead (below), so the row still does not overflow.
+                className="shrink-0 rounded-full border border-dashed border-border/70 text-muted-foreground hover:border-primary/60 hover:text-foreground focus-visible:ring-2 max-[359px]:!w-8"
+              >
+                {replySuggestionsLoading ? <Loader2 className="animate-spin" /> : <Sparkles />}
+              </PromptInputButton>
+            ) : (
               <button
                 type="button"
                 data-slot="reply-suggest-button"
@@ -1172,7 +1210,7 @@ export default function ChatComposer({
                   ? t('input.suggestions.suggesting', { defaultValue: 'Suggesting…' })
                   : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
               </button>
-            )}
+            ))}
 
             {/*
               The voice path's file entry, shown only while the debug switch asks for it: an install
@@ -1216,6 +1254,10 @@ export default function ChatComposer({
                     onClick={onClearInput}
                     aria-label={t('input.clearInput', { defaultValue: 'Clear input' })}
                     data-slot="composer-clear-input"
+                    // The state gate above is the primary rule; this class is the same rule in
+                    // CSS so a resize that has not re-rendered yet cannot leave the ✕ visible
+                    // in the <360px band, where the row has no width to spare.
+                    className="max-[359px]:hidden"
                   >
                     <XIcon />
                   </PromptInputButton>
@@ -1262,7 +1304,7 @@ export default function ChatComposer({
 
           </PromptInputTools>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 max-[359px]:gap-1 md:gap-2">
             {/*
               The schedule entry's desktop placement: on the compact tier it lives in the "more"
               menu instead, which is why it is not part of the six the compact row keeps.

@@ -811,5 +811,12 @@
     "echoUnmatched": "No se pudo hacer «{{text}}».",
     "echoUnmatchedNext": "Prueba un nombre de proyecto, «el segundo», «volver» o «todos los proyectos».",
     "echoConfirm": "Confirma antes de enviar «{{text}}»."
+  },
+  "replyReference": {
+    "item": "{{label}}«{{excerpt}}»",
+    "itemsRange": "Puntos {{from}}–{{to}}",
+    "itemsList": "Puntos {{list}}",
+    "wholeReply": "toda la respuesta",
+    "mismatch": "La última respuesta solo tiene {{count}} elementos"
   }
 }

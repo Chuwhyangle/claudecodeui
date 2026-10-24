@@ -2,7 +2,7 @@
 id: observation-prediction-scoring-24h-ratios
 title: 预测对账：观察墙上线前后各 24 小时的行为比例（预览/跳转、观察型切换占比、轮询类输入占比），按登记的预测判
   confirmed/refuted/insufficient-data
-status: ready
+status: done
 labels:
   - cockpit
   - observation
@@ -31,9 +31,9 @@ depends_on:
 
 ## AC
 
-- [ ] AC1: `python3 -I scripts/workload-report/predict.py --fixture scripts/workload-report/testdata --pivot 2026-10-20T00:00:00+08:00 --predictions scripts/workload-report/testdata/predictions.json --json /tmp/pred-test.json` exit 0；对夹具输出的每个比例与手算一致（脚本 `--self-check` 断言）。
-- [ ] AC2: 同一夹具——一条按设计应 confirmed、一条应 refuted、一条样本量不足应 insufficient-data，三者判定正确。
-- [ ] AC3: 输出包含窗口起止、各比例的分子 / 分母、分类器局限说明。
+- [x] AC1: `python3 -I scripts/workload-report/predict.py --fixture scripts/workload-report/testdata --pivot 2026-10-20T00:00:00+08:00 --predictions scripts/workload-report/testdata/predictions.json --json /tmp/pred-test.json` exit 0；对夹具输出的每个比例与手算一致（脚本 `--self-check` 断言）。
+- [x] AC2: 同一夹具——一条按设计应 confirmed、一条应 refuted、一条样本量不足应 insufficient-data，三者判定正确。
+- [x] AC3: 输出包含窗口起止、各比例的分子 / 分母、分类器局限说明。
 
 ## DoD
 
@@ -43,6 +43,8 @@ depends_on:
 
 - scripts/workload-report/predict.py
 - scripts/workload-report/testdata/predictions.json
+- scripts/workload-report/testdata/predict/predict-events.jsonl (new)
+- scripts/workload-report/testdata/predict/predict-human-inputs.jsonl (new)
 - scripts/workload-report/testdata/sample.jsonl
 - scripts/workload-report/README.md
 - tasks/observation-prediction-scoring-24h-ratios.md

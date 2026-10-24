@@ -1,0 +1,20 @@
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:00:00+08:00", "message": {"content": "检查一下进展"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:05:00+08:00", "message": {"content": "现在状态如何"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:10:00+08:00", "message": {"content": "重启是否成功"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:15:00+08:00", "message": {"content": "把观察墙的 tab 加上"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:20:00+08:00", "message": {"content": "同意，继续"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:25:00+08:00", "message": {"content": "截图看看"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s1", "timestamp": "2026-10-19T09:30:00+08:00", "message": {"content": "这个是 bug，报错卡住了"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s2", "timestamp": "2026-10-19T14:00:00+08:00", "message": {"content": "进展怎么样"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s2", "timestamp": "2026-10-19T14:05:00+08:00", "message": {"content": "为什么没有任务"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s2", "timestamp": "2026-10-19T14:10:00+08:00", "message": {"content": "跑完了吗"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s2", "timestamp": "2026-10-19T14:15:00+08:00", "message": {"content": "好的"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s2", "timestamp": "2026-10-19T14:20:00+08:00", "message": {"content": "把 3001 端口拉起来"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-auto", "timestamp": "2026-10-19T20:00:00+08:00", "message": {"content": "You are a one-shot summarizer. Reply with exactly OK."}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-auto", "timestamp": "2026-10-19T20:01:00+08:00", "message": {"content": "检查一下进展"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-auto", "timestamp": "2026-10-19T20:02:00+08:00", "message": {"content": "进展如何"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-auto", "timestamp": "2026-10-19T20:03:00+08:00", "message": {"content": "重启是否成功"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s3", "timestamp": "2026-10-20T10:00:00+08:00", "message": {"content": "看看驾驶舱"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s3", "timestamp": "2026-10-20T10:05:00+08:00", "message": {"content": "进展如何"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s3", "timestamp": "2026-10-20T10:10:00+08:00", "message": {"content": "继续"}, "promptSource": "user", "isMeta": false}
+{"type": "user", "sessionId": "fixture-s3", "timestamp": "2026-10-20T10:15:00+08:00", "message": {"content": "把这条 task 标成 done"}, "promptSource": "user", "isMeta": false}
