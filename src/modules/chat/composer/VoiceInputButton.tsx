@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight, Mic, Square, Loader2, XIcon } from 'lucide-react';
 
 import { voiceErrorMessage, voiceErrorTechnicalDetail } from '@/modules/chat/utils/voice/voiceErrorMessages';
+import { cn } from '@/shared/utils';
 import type { VoiceFailureReport, VoiceInputState } from '@/shared/types';
 
 type Props = {
@@ -15,6 +16,13 @@ type Props = {
    * flight", so every existing caller (and every standalone render) is unchanged.
    */
   inFlight?: boolean;
+  /**
+   * Size overrides for the button's own box. Absent keeps the composer's 32px icon square, so
+   * every existing caller is unchanged; the cockpit's phone narrow layout passes a 44px phone
+   * minimum so the mic is a real touch target there. Merged through `cn`, so a caller's utility
+   * wins over the default rather than fighting it in the cascade.
+   */
+  className?: string;
 };
 
 /**
@@ -37,7 +45,7 @@ const DETAILS_LABEL = 'Technical details';
 //
 // It renders the button and NOTHING ELSE. The failure notice that belongs beside it is a
 // sibling of the composer's form rather than a child of this button — see `VoiceFailureNotice`.
-export default function VoiceInputButton({ state, onToggle, inFlight = false }: Props) {
+export default function VoiceInputButton({ state, onToggle, inFlight = false, className }: Props) {
   const { t } = useTranslation('chat');
 
   const icon =
@@ -60,7 +68,10 @@ export default function VoiceInputButton({ state, onToggle, inFlight = false }: 
       // The in-flight dot is positioned against this button, so it has to be the containing block.
       // The shell is the permission menu trigger's chip — a bordered muted square — so the mic sits
       // beside the model and permission selectors as one of them rather than a bare ghost icon.
-      className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/50 text-muted-foreground transition-colors hover:bg-muted"
+      className={cn(
+        'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/50 text-muted-foreground transition-colors hover:bg-muted',
+        className,
+      )}
       data-testid="voice-input-button"
       aria-label={label}
       title={label}

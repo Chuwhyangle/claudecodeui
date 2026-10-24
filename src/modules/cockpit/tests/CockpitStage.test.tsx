@@ -1480,6 +1480,67 @@ describe('AC3: stage-goals ordering and tail-truncated task ids', () => {
 });
 
 /**
+ * AC3 — the phone narrow layout's CLASS contract.
+ *
+ * jsdom applies no stylesheet, so these are class-set assertions rather than box measurements
+ * (the same discipline the header-size case above already uses): the strip scrolls with snap and
+ * a right-edge fade, every strip item carries the 44×44 phone floor, and the three controls the
+ * task names (Refresh, the mic, Run) carry the same floor. The `md:` resets are asserted too, so
+ * the desktop layout the task must not change keeps its own boxes.
+ */
+describe('AC3: phone narrow layout classes', () => {
+  it('gives the project strip scroll-snap and a right-edge fade, and every item a 44×44 floor', async () => {
+    renderCockpit();
+
+    const strip = await screen.findByTestId('cockpit-project-strip');
+    const stripTokens = (strip.className ?? '').split(/\s+/).filter(Boolean);
+    expect(stripTokens).toContain('snap-x');
+    // The mask is the other half of the scroll affordance: the container fades its own right
+    // edge on a phone, and the overlay element is the addressable reading of that fade.
+    expect(stripTokens.some((token) => token.startsWith('[mask-image:'))).toBe(true);
+    expect(stripTokens).toContain('md:[mask-image:none]');
+    expect(screen.getByTestId('cockpit-project-strip-fade')).toBeTruthy();
+
+    const items = await screen.findAllByTestId('cockpit-project-strip-item');
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      const tokens = (item.className ?? '').split(/\s+/).filter(Boolean);
+      expect(tokens).toContain('min-h-[44px]');
+      expect(tokens).toContain('min-w-[44px]');
+      expect(tokens).toContain('snap-start');
+      // The phone scrolls the whole item in and out; it never ellipsizes the project name.
+      expect(tokens).not.toContain('truncate');
+      // …while the desktop column keeps its original 44px-free, tail-truncated rows.
+      expect(tokens).toContain('md:min-h-0');
+      expect(tokens).toContain('md:truncate');
+    }
+  });
+
+  it('gives Refresh, the voice input and Run the same 44px phone floor', async () => {
+    renderCockpit('/cockpit?view=board&project=p1');
+
+    const refresh = await screen.findByTestId('quay-panel-refresh');
+    const voice = screen.getByTestId('voice-input-button');
+    const submit = screen
+      .getByTestId('cockpit-input')
+      .querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(submit).not.toBeNull();
+
+    for (const [name, control] of [
+      ['Refresh', refresh],
+      ['voice input', voice],
+      ['Run', submit],
+    ] as const) {
+      const tokens = (control.className ?? '').split(/\s+/).filter(Boolean);
+      expect(tokens, `${name} carries the phone touch floor`).toContain('min-h-[44px]');
+      expect(tokens, `${name} carries the phone touch floor`).toContain('min-w-[44px]');
+      expect(tokens, `${name} restores the desktop box`).toContain('md:min-h-0');
+      expect(tokens, `${name} restores the desktop box`).toContain('md:min-w-0');
+    }
+  });
+});
+
+/**
  * The pulse strip in the cockpit: one per project tile (the 「全部项目」 view), and the same
  * component at the top of a board's Quay panel. The two surfaces must address the TASK a mark
  * names, with the fleet registry id as the project segment — the board's rail already declares

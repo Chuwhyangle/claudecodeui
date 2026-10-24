@@ -67,7 +67,7 @@ depends_on:
   读数：空框 + 引用选区时内嵌 chip 不渲染（inlineChip=false、mode=null），chip 行/listbox 仍在（listbox=true）；textarea 与镜像层 class 与改动前逐字一致（classesEqual=true）。截图 tmp/dod/h2-empty.png。
 - [x] **降级条件：** 若某个宽度或滚动条情形下无法做到排版一致，不要静默上线：在该情形下不显示内嵌 chip，并把降级条件与读数列在 DoD 里（这是兜底，不是目标）。
   未触发降级：5 个宽度与滚动条情形均做到排版一致，所有宽度都渲染内嵌 chip。
-- [ ] iOS Safari 与 Android Chrome 真机上选中 transcript 文字后点击内嵌 chip，确认选区不被提前塌缩、插入与光标正确、输入法与滚动正常（待外部）。
+- [ ] iOS Safari 与 Android Chrome 真机上选中 transcript 文字后点击内嵌 chip，确认选区不被提前塌缩、插入与光标正确、输入法与滚动正常。（待外部）
 
   变更统计（相对 develop 合并基点）：8 files changed, 1087 insertions(+), 70 deletions(-)——ChatComposer.tsx 142、InlineQuoteChip.tsx 64（新）、useInlineQuoteChip.ts 252（新）、useTextareaInteractionState.ts 22、inlineQuoteChip.test.tsx 423（新）、inlineQuoteChipHeight.test.ts 87（新）、inputSuggestionChipsBackground.test.tsx 74、inlineQuoteChipLayout.ts 93（新）。删除项及原因：CHIP_ROW_CLEARANCE_SPACER_CLASS / CHIP_ROW_CLEARANCE_PADDING_CLASS 两个常量、chipRowOverText 分支、data-slot="chip-row-clearance" 占位 div、镜像层的 pt-12 —— 非空框的引用 chip 已改在文本流里画，chip 行只在空框出现，不再需要预留行；inputSuggestionChipsBackground.test.tsx 的 3 个占位行用例改为断言新结构（不删用例、不放宽断言），另外新增 1 条空框类名逐字一致的用例。
   行为反证（在最终代码上重跑，日志 tmp/dod/final-mutA/B/C.log）：令 `active = enabled && chip !== null`（空框也渲染内嵌 chip）⇒ inlineQuoteChip.test.tsx 红在 (b)；令 `active = enabled && input !== ''`（选区消失也不退出）⇒ 红在 (a)(j)(e)(i)；删掉 onMouseDown 的 preventDefault ⇒ 红在 (g)。三次恢复后 git status 干净（工作树与 HEAD 一致）。
