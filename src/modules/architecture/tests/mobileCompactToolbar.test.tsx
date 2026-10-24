@@ -764,9 +764,16 @@ test('compact fullscreen toolbar is one row holding only Exit fullscreen and Adj
   render(<ArchitecturePanel projectId="project-1" sessionId="session-1" initialGranularity="file" />);
   await waitForDiagram();
 
-  // jsdom reports a zero box for every element; the readout row's covered band
-  // is what the drawing must reserve. Inject its bottom edge — the toolbar sits
-  // above it, so this button is the whole covered band.
+  // jsdom reports a zero box for every element; the overlay's Fit measures the
+  // HOST it fills and the chrome painted over it. The readout row's covered
+  // band is what the drawing must reserve: its bottom edge is the toolbar's
+  // bottom too (the toolbar sits above it). The host gets the phone's box so
+  // the measurement has a rectangle to subtract the band from.
+  const host = document.querySelector('[data-architecture-plantuml]') as HTMLElement;
+  host.getBoundingClientRect = () => ({
+    x: 0, y: 0, left: 0, top: 0, width: 390, height: 844, right: 390, bottom: 844,
+    toJSON: () => ({}),
+  }) as DOMRect;
   const readoutRow = document.querySelector('[data-architecture-readout-overlay]') as HTMLElement;
   assert.ok(readoutRow instanceof HTMLElement);
   readoutRow.getBoundingClientRect = () => ({ bottom: 100 }) as unknown as DOMRect;
@@ -783,12 +790,15 @@ test('compact fullscreen toolbar is one row holding only Exit fullscreen and Adj
   fireEvent.click(portalSheet.querySelector('[data-architecture-sheet-close]') as Element);
   await waitFor(() => assert.equal(panelRoot().getAttribute('data-architecture-fullscreen'), 'true'));
 
-  // The viewport-sized drawing reserves the chrome band, so its fitted content
-  // is centred BELOW the readout row instead of starting behind it.
+  // The viewport-sized drawing writes the MEASURED chrome band as its padding
+  // (host 844 − band 100), so its fitted content is centred BELOW the readout
+  // row instead of starting behind it. The retired non-fullscreen reserved
+  // margin (the old `+4px`) is deliberately gone: the only ground the overlay
+  // Fit gives up is chrome that is actually painted over it.
   await waitFor(() => assert.equal(
     (document.querySelector('[data-architecture-plantuml]') as HTMLElement).style.paddingTop,
-    '104px',
-    'the drawing reserves the top chrome band inside the overlay',
+    '100px',
+    'the drawing reserves the measured top chrome band inside the overlay',
   ));
 
   const row = toolbarRow();

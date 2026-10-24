@@ -1,7 +1,7 @@
 ---
 id: architecture-fullscreen-fit-margin
 title: 架构图全屏适应边距：Fit 使用全屏宿主扣除实际叠层，不再沿用非全屏的预留边距
-status: ready
+status: done
 labels:
   - feature
 parent: null
@@ -64,11 +64,3 @@ depends_on:
 - e2e/architecture-fullscreen-fit.spec.ts
 - playwright.config.ts
 - tasks/architecture-fullscreen-fit-margin.md
-
-## Blocker
-
-**2026-10-24T12:05:19.465Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - src/modules/architecture/tests/mobileCompactToolbar.test.tsx: AssertionError [ERR_ASSERTION]: the drawing reserves the top chrome band inside the overlay
-- run_id：wk-prod-anchor
-- session_id：7b43933a-783c-40c1-a412-f99994464e46
