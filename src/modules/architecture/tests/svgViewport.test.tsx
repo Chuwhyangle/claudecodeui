@@ -9,9 +9,12 @@ import {
   createSvgDragPan,
   createSvgViewport,
   fitAllZoomScale,
+  fitAreaInsets,
   fitAvoidingCorners,
   fitPlacementAvoidingCorners,
   fitZoomScale,
+  measureHostSize,
+  measureViewportSize,
   MAX_ZOOM_SCALE,
   MIN_READABLE_ZOOM_SCALE,
   MIN_USEFUL_OVERVIEW_SCALE,
@@ -671,3 +674,35 @@ test('centeredScrollForDrawingRect centres a package frame in the drawing user u
   );
 });
 
+
+/* ── the fullscreen Fit box: the host less its measured chrome ─────────────────────────────── */
+
+test('fitAreaInsets turns the measured Fit area into the host padding', () => {
+  // Fullscreen, 1440×765, toolbar band 76 at the top, a 60 px corner column
+  // removed on the right. The insets are EXACTLY the chrome — no reserved
+  // 12 px margin is added anywhere.
+  assert.deepEqual(
+    fitAreaInsets({ width: 1440, height: 765 }, { left: 0, top: 76, width: 1380, height: 689 }),
+    { top: 76, right: 60, bottom: 0, left: 0 },
+  );
+  // No overlay measured: the area is the whole host and every inset is zero,
+  // which is what makes the fullscreen canvas reserve nothing of its own.
+  assert.deepEqual(
+    fitAreaInsets({ width: 1440, height: 765 }, { left: 0, top: 0, width: 1440, height: 765 }),
+    { top: 0, right: 0, bottom: 0, left: 0 },
+  );
+});
+
+test('measureHostSize reads the FULL host box, unlike the content-box reading', () => {
+  const host = document.createElement('div');
+  host.style.padding = '12px';
+  Object.defineProperty(host, 'clientWidth', { configurable: true, value: 1440 });
+  Object.defineProperty(host, 'clientHeight', { configurable: true, value: 765 });
+  document.body.append(host);
+  // clientWidth/Height include padding; that is the fullscreen "whole host"
+  // reading. measureViewportSize subtracts the declared padding (the in-flow
+  // content box), so the two must not be confused on the overlay.
+  assert.deepEqual(measureHostSize(host), { width: 1440, height: 765 });
+  assert.deepEqual(measureViewportSize(host), { width: 1416, height: 741 });
+  host.remove();
+});

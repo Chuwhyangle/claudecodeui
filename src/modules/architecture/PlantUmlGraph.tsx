@@ -42,10 +42,13 @@ import {
   type OrientationSize,
 } from '@/modules/architecture/layoutOrientation';
 import {
+  solveFitArea,
   solveFitScale,
   solveSemanticZoom,
   semanticContentBounds,
   lodDepthForTier,
+  type FitAreaRect,
+  type FitOverlayRect,
   type SemanticTier,
   type SemanticZoomLayout,
 } from '@/modules/architecture/semanticZoomLayout';
@@ -87,14 +90,17 @@ import {
   createSvgDragPan,
   createSvgTouchGestures,
   createSvgViewport,
+  fitAreaInsets,
   fitPlacementAvoidingCorners,
   applyZoomScale,
+  measureHostSize,
   measureViewportSize,
   MIN_READABLE_ZOOM_SCALE,
   MIN_ZOOM_SCALE,
   readSvgNaturalSize,
   ZOOM_STEP,
   type SvgCornerRect,
+  type SvgFitAreaInsets,
   type SvgFitPlacement,
   type SvgViewportController,
   type SvgViewportSize,
@@ -688,6 +694,15 @@ type PlantUmlGraphProps = ArchitectureRendererProps & {
    * it — and a selected box is scrolled clear of it. 0 everywhere else.
    */
   readonly bottomObscuredPx?: number;
+  /**
+   * Whether the panel is currently the page-internal fullscreen overlay (not
+   * the standalone page, whose Fit must keep the ordinary readings).
+   *
+   * On the overlay the host IS the viewport, so Fit's available area is the
+   * host less the measured chrome painted over it — the non-fullscreen
+   * reserved margin (the host's own padding) must not be carried over.
+   */
+  readonly fullscreen?: boolean;
 };
 
 /**
@@ -707,6 +722,12 @@ type DiagramZoom = {
 
 /** How long a canvas size change must settle before an `auto` fit re-solves. */
 const AUTO_FIT_DEBOUNCE_MS = 150;
+
+/**
+ * The pixel the overlay's Fit leaves for the semantic writer's `Math.ceil`.
+ * See `fullscreenFitBox` — it is rounding allowance, not a reserved margin.
+ */
+const FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX = 1;
 
 /**
  * The DEV-only lever the e2e control arm pulls to re-create the retired
@@ -770,6 +791,28 @@ function autoFitDisabled(): boolean {
 }
 
 /**
+ * The DEV-only lever the fullscreen-fit criterion's control arm pulls: it
+ * restores the retired rule that Fit kept using the NON-fullscreen canvas
+ * (the `flex-1` region it came from) after the overlay made the host the whole
+ * viewport. That is the defect the fullscreen fit exists to remove — the L
+ * drawing was measured at 788×480 in a 1440×765 overlay. DEV-gated like the
+ * other levers: a production build does not contain this branch.
+ */
+const FULLSCREEN_FIT_MARGIN_STORAGE_KEY = 'architecture-fullscreen-fit-margins';
+
+/** Whether this build's control arm asked for the retired reserved margins. */
+function forcedFullscreenReservedMargins(): boolean {
+  if (import.meta.env.DEV) {
+    try {
+      return window.localStorage.getItem(FULLSCREEN_FIT_MARGIN_STORAGE_KEY) === 'reserved';
+    } catch {
+      // Private mode: the measured overlay area applies.
+    }
+  }
+  return false;
+}
+
+/**
  * Renders one architecture neighbourhood as a lazily loaded PlantUML/ELK
  * layered diagram.
  *
@@ -825,6 +868,7 @@ export function PlantUmlGraph({
   onBoxSelect,
   bottomObscuredPx = 0,
   topObscuredPx = 0,
+  fullscreen = false,
 }: PlantUmlGraphProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1056,6 +1100,159 @@ export function PlantUmlGraph({
   // The panel's chrome-row cell this renderer draws the zoom tier into, or null
   // when the renderer is not inside a panel (see `CanvasHeaderSlotContext`).
   const canvasHeaderSlot = useCanvasHeaderSlot();
+
+  /**
+   * The overlay's Fit area, and the host padding that realises it.
+   *
+   * State, not a ref: the host's padding is render output, so the measured
+   * insets have to reach the next render. `null` means "not the overlay" (or
+   * not measured yet), and the non-fullscreen padding formula applies.
+   */
+  const [fullscreenInsets, setFullscreenInsets] = useState<SvgFitAreaInsets | null>(null);
+  /**
+   * The box the last Fit solved against, published as
+   * `data-architecture-fit-viewport` so a unit test and the e2e reading can
+   * state which area the drawing was fitted to instead of re-deriving it.
+   */
+  const [fitViewportReading, setFitViewportReading] = useState<SvgViewportSize | null>(null);
+  /**
+   * The last canvas box measured while NOT fullscreen. The control arm uses it
+   * to restore the retired "keep the non-fullscreen canvas" defect; the
+   * shipped path never reads it.
+   */
+  const lastFlowViewportRef = useRef<SvgViewportSize | null>(null);
+
+  /**
+   * The chrome rectangles the overlay paints OVER its viewport-sized host, in
+   * the host's border-box coordinates.
+   *
+   * Measured, never assumed: the toolbar/readout band comes from the panel's
+   * own measurement (`topObscuredPx`), the drawer band from
+   * `bottomObscuredPx`, and the floating corner slot / selection tray from
+   * their live `getBoundingClientRect`. An unlaid-out element (jsdom, a hidden
+   * tab) reports a zero-area rect and is dropped, so "not measured" can never
+   * read as "covers everything".
+   */
+  const fullscreenOverlays = useCallback((): FitOverlayRect[] => {
+    const host = hostRef.current;
+    if (host === null) return [];
+    const hostRect = host.getBoundingClientRect();
+    const originLeft = hostRect.left + host.clientLeft;
+    const originTop = hostRect.top + host.clientTop;
+    // The SAME reading the solve uses (`measureHostSize`): the client box when
+    // the browser has laid it out, else the rect. Using `clientWidth` directly
+    // here would build a zero-wide top band in a host that only reports a rect
+    // (jsdom), and `solveFitArea` drops zero-area overlays — the chrome would
+    // silently vanish from the deduction.
+    const hostSize = measureHostSize(host);
+    const width = hostSize?.width ?? 0;
+    const height = hostSize?.height ?? 0;
+    const rects: FitOverlayRect[] = [];
+    if (topObscuredPx > 0) {
+      rects.push({ left: 0, top: 0, width, height: Math.min(height, topObscuredPx) });
+    }
+    if (bottomObscuredPx > 0) {
+      rects.push({
+        left: 0,
+        top: Math.max(0, height - bottomObscuredPx),
+        width,
+        height: Math.min(height, bottomObscuredPx),
+      });
+    }
+    const canvas = host.parentElement;
+    if (canvas !== null) {
+      // The panel's provenance footer stays in flow at the bottom of the
+      // viewport-sized overlay, so it covers the canvas' bottom band unless it
+      // is measured here too (the short landscape tier has none).
+      const panel = host.closest('[data-architecture-panel]');
+      const elements = [
+        ...canvas.querySelectorAll('[data-architecture-canvas-overlays] > *'),
+        // The tray ROOT is a `pointer-events: none` container covering the
+        // whole canvas; only its visible surfaces (the collapsed pill, the
+        // expanded panel, the multi-select bar) are chrome.
+        ...canvas.querySelectorAll(
+          '[data-architecture-tray-pill], [data-architecture-tray-expanded-panel], '
+            + '[data-architecture-multiselect-bar]',
+        ),
+        ...(panel === null
+          ? []
+          : [
+              ...panel.querySelectorAll('[data-architecture-source-footer]'),
+              // On the overlay the fine-pointer Inspector is a floating
+              // right-hand column (`absolute inset-y-0 right-0`), not an
+              // in-flow dock; it covers the drawing exactly like the corner
+              // slot does.
+              ...panel.querySelectorAll('[data-architecture-fullscreen-dock]'),
+            ]),
+      ];
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        rects.push({
+          left: rect.left - originLeft,
+          top: rect.top - originTop,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+    }
+    return rects;
+  }, [topObscuredPx, bottomObscuredPx]);
+
+  /**
+   * The overlay's measured Fit area: the host less its measured chrome. The
+   * control-arm lever restores the retired non-fullscreen box instead, so the
+   * same reading can be shown landing on its failing side.
+   */
+  const fullscreenFitArea = useCallback((): FitAreaRect | null => {
+    const host = hostRef.current;
+    if (host === null) return null;
+    const hostSize = measureHostSize(host);
+    if (hostSize === null) return null;
+    return solveFitArea(hostSize, fullscreenOverlays());
+  }, [fullscreenOverlays]);
+
+  /**
+   * The box the overlay's Fit solves against.
+   *
+   * One pixel smaller than the measured area: the semantic writer rounds the
+   * mapped extent UP to the next CSS pixel (`Math.ceil`), and the solve itself
+   * allows half a pixel of float slack, so a drawing solved exactly to the area
+   * can paint one pixel over its edge — under the corner slot. The allowance is
+   * not a margin: the published `data-architecture-fit-viewport` states this
+   * solve box (one pixel inside the measured area), which is what the criterion
+   * compares against.
+   */
+  const fullscreenFitBox = useCallback((): SvgViewportSize | null => {
+    const host = hostRef.current;
+    if (host === null) return null;
+    if (forcedFullscreenReservedMargins()) return lastFlowViewportRef.current ?? measureHostSize(host);
+    const area = fullscreenFitArea();
+    if (area === null) return null;
+    return {
+      width: Math.max(1, area.width - FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX),
+      height: Math.max(1, area.height - FULLSCREEN_FIT_ROUNDING_ALLOWANCE_PX),
+    };
+  }, [fullscreenFitArea]);
+
+  /** The reading every Fit/fold/sticky solve measures against. */
+  const currentFitViewport = useCallback((host: HTMLElement): SvgViewportSize | null => {
+    if (fullscreen) {
+      const box = fullscreenFitBox();
+      if (box !== null) return box;
+    }
+    return measureViewportSize(host);
+  }, [fullscreen, fullscreenFitBox]);
+
+  /** Publish the box the solve used, without re-rendering for an unchanged box. */
+  const recordFitViewport = useCallback((box: SvgViewportSize | null): void => {
+    if (box === null || !(box.width > 0) || !(box.height > 0)) return;
+    setFitViewportReading((previous) => previous !== null
+      && Math.abs(previous.width - box.width) < 0.5
+      && Math.abs(previous.height - box.height) < 0.5
+      ? previous
+      : { width: box.width, height: box.height });
+  }, []);
 
   /**
    * The floating corner chrome rectangles — the minimap and the zoom cluster —
@@ -1354,7 +1551,10 @@ export function PlantUmlGraph({
     const host = hostRef.current;
     const capture = semanticCaptureRef.current;
     if (host === null || capture === null) return;
-    const box = measureViewportSize(host);
+    // On the overlay this is the host less its measured chrome, so Fit spends
+    // the whole screen instead of inheriting the non-fullscreen margin.
+    const box = currentFitViewport(host);
+    recordFitViewport(box);
     const fontPx = coarsePointerRef.current ? SEMANTIC_MIN_FONT_MOBILE_PX : SEMANTIC_MIN_FONT_PX;
     let layout: SemanticZoomLayout;
     let solvedScale: number;
@@ -1428,7 +1628,7 @@ export function PlantUmlGraph({
     // behind (the defect this task fixes).
     drawStickyLabels(host, layout, appliedFontRef.current);
     positionOverviewHint(host);
-  }, [applySemanticLayout, applyZoom]);
+  }, [applySemanticLayout, applyZoom, currentFitViewport, recordFitViewport]);
   applySemanticRef.current = applySemantic;
   // One controller per mount: it survives the renderer replacing the SVG (each
   // render re-attaches), so the mode and scale outlive a single drawing.
@@ -2528,14 +2728,15 @@ export function PlantUmlGraph({
       if (host === null || viewport === null) return;
       const drawing = host.querySelector('svg');
       const natural = naturalOfDrawing(drawing);
-      const box = measureViewportSize(host);
+      const box = currentFitViewport(host);
+      recordFitViewport(box);
       if (natural === null || box === null) return;
       const placement = fitPlacementFor(natural, box);
       const scale = viewport.zoomTo(placement.scale);
       applyPlacement(drawing, placement);
       applyZoom({ scale, fit: 'auto' });
     }, AUTO_FIT_DEBOUNCE_MS);
-  }, [applyPlacement, applyZoom, fitPlacementFor, naturalOfDrawing]);
+  }, [applyPlacement, applyZoom, currentFitViewport, fitPlacementFor, naturalOfDrawing, recordFitViewport]);
 
   // Every canvas size change — window resize, fullscreen, the inspector/drawer/
   // tray opening, a phone rotation, a re-layout — reaches this observer. Under
@@ -2565,6 +2766,83 @@ export function PlantUmlGraph({
     if (overlays !== undefined && overlays !== null) observer.observe(overlays);
     return () => observer.disconnect();
   }, [scheduleAspectRelayout, scheduleAutoFit]);
+
+  // Remember the box the ordinary (non-fullscreen) layout fits against. The
+  // control arm's lever reads it to restore the retired defect; the shipped
+  // path never does. A no-dependency effect runs on every render, which is
+  // exactly the cadence "the last box this canvas had" needs.
+  useEffect(() => {
+    if (fullscreen) return;
+    const host = hostRef.current;
+    if (host === null) return;
+    lastFlowViewportRef.current = measureViewportSize(host);
+  });
+
+  // The overlay's Fit area: the viewport-sized host less the chrome actually
+  // painted over it. Its insets become the host's padding, so the flex
+  // centring, the scroll extent and `measureViewportSize` all describe the same
+  // overlay-free rectangle the solve used.
+  //
+  // Re-measured whenever the top/bottom chrome changes AND whenever the corner
+  // slot (the minimap mounts a beat after the drawing) or the selection tray
+  // resizes; the latter re-solves through the SAME 150 ms debounce a canvas
+  // resize uses, which is what makes opening/closing an overlay re-fit.
+  useEffect(() => {
+    if (!fullscreen) {
+      setFullscreenInsets(null);
+      return;
+    }
+    const host = hostRef.current;
+    if (host === null) return;
+    const measure = (): void => {
+      const hostSize = measureHostSize(host);
+      if (hostSize === null) return;
+      if (forcedFullscreenReservedMargins()) {
+        // The control arm keeps the retired rule: no chrome is deducted, so no
+        // inset is written and the drawing is centred in the whole overlay.
+        setFullscreenInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+        return;
+      }
+      const area = solveFitArea(hostSize, fullscreenOverlays());
+      const next = fitAreaInsets(hostSize, area);
+      setFullscreenInsets((previous) => previous !== null
+        && Math.abs(previous.top - next.top) < 0.5
+        && Math.abs(previous.right - next.right) < 0.5
+        && Math.abs(previous.bottom - next.bottom) < 0.5
+        && Math.abs(previous.left - next.left) < 0.5
+        ? previous
+        : next);
+    };
+    measure();
+    // One frame after the overlay mounts, its chrome rows are laid out.
+    const frame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(measure) : null;
+    const observer = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+          measure();
+          scheduleAutoFit();
+        })
+      : null;
+    if (observer !== null) {
+      // The host itself is observed so a browser-fullscreen resize (or a phone
+      // rotation) re-reads where the absolute chrome now sits; its content box
+      // also changes when the insets below are applied, and re-measuring the
+      // same numbers is a no-op.
+      observer.observe(host);
+      const canvas = host.parentElement;
+      const panel = host.closest('[data-architecture-panel]');
+      const surfaces = [
+        canvas?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]') ?? null,
+        canvas?.querySelector<HTMLElement>('[data-architecture-tray-root]') ?? null,
+        panel?.querySelector<HTMLElement>('[data-architecture-source-footer]') ?? null,
+        panel?.querySelector<HTMLElement>('[data-architecture-fullscreen-dock]') ?? null,
+      ];
+      for (const surface of surfaces) if (surface !== null) observer.observe(surface);
+    }
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [fullscreen, fullscreenOverlays, scheduleAutoFit]);
 
   // The zoom is read through `zoomRef` when the debounced application runs, so
   // a burst of wheel updates coalesces into one rewrite rather than walking
@@ -2621,7 +2899,8 @@ export function PlantUmlGraph({
     }
     const drawing = host.querySelector('svg');
     const natural = naturalOfDrawing(drawing);
-    const box = measureViewportSize(host);
+    const box = currentFitViewport(host);
+    recordFitViewport(box);
     if (natural === null || box === null) {
       applyZoom({ scale: viewport.fitAll(), fit: 'auto' });
       return;
@@ -3436,6 +3715,13 @@ export function PlantUmlGraph({
       // SVG's own `data-architecture-semantic-scale`; there is no CSS factor.
       data-architecture-zoom-scale={displayScale}
       data-architecture-semantic-scale={semanticCaptureRef.current !== null ? displayScale : undefined}
+      // The box the last Fit solved against, as `WxH`. On the overlay that is
+      // the host less its measured chrome (not the non-fullscreen margin),
+      // minus the one pixel the semantic writer rounds up — the reading a
+      // criterion compares the drawn size against.
+      data-architecture-fit-viewport={fitViewportReading === null
+        ? undefined
+        : `${Math.round(fitViewportReading.width)}x${Math.round(fitViewportReading.height)}`}
       data-architecture-fold-depth={foldDepth ?? undefined}
       data-architecture-lod-depth={lodDepth ?? undefined}
       data-architecture-layout-ms={layoutMs ?? undefined}
@@ -3511,7 +3797,7 @@ export function PlantUmlGraph({
           // the fitted drawing at ≥95% of the canvas width, and a 12px inset
           // already costs 6.5% of a 366px canvas. The fine-pointer tier keeps
           // the roomier p-3.
-          className={`h-full w-full overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 ${touchUi ? 'p-1' : 'p-3'}`}
+          className={`h-full w-full overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 ${fullscreen ? '' : touchUi ? 'p-1' : 'p-3'}`}
           // The gestures own every touch on the drawing: without this the browser
           // would pan/zoom the page and the pinch would never reach the controller.
           // The flex column is the vertical-centring mechanism: the injected SVG
@@ -3525,31 +3811,53 @@ export function PlantUmlGraph({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'flex-start',
-            // The coarse drawer overlays the canvas' bottom band. Reserving it
-            // as padding makes the flex centring use the area ABOVE the drawer,
-            // so a fitted drawing is never half-hidden behind it. The portrait
-            // phone reserves its collapsible zoom controls' band in the SAME
-            // bottom region: the controls float over the canvas, so the drawing
-            // is fitted ABOVE them instead of under them. The two bands are
-            // measured from the same bottom edge, so they compose as a maximum
-            // rather than a sum — an open drawer already covers the controls'
-            // footprint, and reserving both would lift the drawing 80px higher
-            // than either surface needs. Padding (not a chrome row) is
-            // deliberate — `clientHeight` still counts it, so the canvas-share
-            // reading loses nothing.
-            ...(bottomObscuredPx + portraitControlBandPx > 0
-              ? {
-                paddingBottom: `${(touchUi ? 4 : 12)
-                  + Math.max(bottomObscuredPx, portraitControlBandPx)}px`,
-              }
-              : {}),
-            // The overlay's chrome (toolbar + readout rows) is drawn OVER the
-            // viewport-sized canvas. Reserving it as padding makes the flex
-            // centring — and `measureViewportSize`'s fit box — use the area
-            // BELOW the chrome, so a fitted drawing is never tucked behind it.
-            ...(topObscuredPx > 0
-              ? { paddingTop: `${(touchUi ? 4 : 12) + topObscuredPx}px` }
-              : {}),
+            // On the overlay the host IS the viewport, and the ONLY ground it
+            // loses is the chrome measured over it: the padding is exactly the
+            // overlay-free rectangle the Fit solved against (computed by the
+            // effect below from `topObscuredPx`/`bottomObscuredPx` and the
+            // corner slot's live rects). The non-fullscreen reserved margin
+            // (`p-3`/`p-1`) is deliberately NOT carried over — that margin
+            // existed for the in-flow layout, and inheriting it is what left
+            // the fullscreen drawing small. No overlay measured yet means no
+            // padding: the first frame uses the whole host, then settles.
+            ...(fullscreen
+              ? (fullscreenInsets === null
+                  ? {}
+                  : {
+                      paddingTop: `${fullscreenInsets.top}px`,
+                      paddingRight: `${fullscreenInsets.right}px`,
+                      paddingBottom: `${fullscreenInsets.bottom}px`,
+                      paddingLeft: `${fullscreenInsets.left}px`,
+                    })
+              : {
+                  // The coarse drawer overlays the canvas' bottom band.
+                  // Reserving it as padding makes the flex centring use the
+                  // area ABOVE the drawer, so a fitted drawing is never
+                  // half-hidden behind it. The portrait phone reserves its
+                  // collapsible zoom controls' band in the SAME bottom region:
+                  // the controls float over the canvas, so the drawing is
+                  // fitted ABOVE them instead of under them. The two bands are
+                  // measured from the same bottom edge, so they compose as a
+                  // maximum rather than a sum — an open drawer already covers
+                  // the controls' footprint, and reserving both would lift the
+                  // drawing 80px higher than either surface needs. Padding (not
+                  // a chrome row) is deliberate — `clientHeight` still counts
+                  // it, so the canvas-share reading loses nothing.
+                  ...(bottomObscuredPx + portraitControlBandPx > 0
+                    ? {
+                      paddingBottom: `${(touchUi ? 4 : 12)
+                        + Math.max(bottomObscuredPx, portraitControlBandPx)}px`,
+                    }
+                    : {}),
+                  // The standalone page's chrome (toolbar + readout rows) is
+                  // drawn OVER its viewport-sized canvas; the in-tab layout
+                  // keeps those rows in flow. Reserving the band as padding
+                  // makes the flex centring — and `measureViewportSize`'s fit
+                  // box — use the area BELOW the chrome.
+                  ...(topObscuredPx > 0
+                    ? { paddingTop: `${(touchUi ? 4 : 12) + topObscuredPx}px` }
+                    : {}),
+                }),
             userSelect: 'none',
             WebkitUserSelect: 'none',
             WebkitTouchCallout: 'none',

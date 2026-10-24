@@ -12,6 +12,7 @@ import {
   semanticCompactionAlpha,
   semanticContentBounds,
   SEMANTIC_CONTENT_MARGIN_PX,
+  solveFitArea,
   solveFitScale,
   solveSemanticZoom,
   type SemanticDrawingGeometry,
@@ -724,6 +725,72 @@ describe('the folded tier (D): C cannot fit, so the levels collapse', () => {
 
 /* ── Fit is a solve: the ONE scale the semantic canvas applies ─────────────────────────────── */
 
+describe('solveFitArea: the fullscreen canvas is the host less the chrome over it', () => {
+  const HOST = { width: 1440, height: 765 };
+
+  test('no overlays means the WHOLE host — the overlay reserves no margin of its own', () => {
+    assert.deepEqual(solveFitArea(HOST, []), { left: 0, top: 0, width: 1440, height: 765 });
+  });
+
+  test('a full-width toolbar band takes height from the top only', () => {
+    const area = solveFitArea(HOST, [{ left: 0, top: 0, width: 1440, height: 76 }]);
+    assert.deepEqual(area, { left: 0, top: 76, width: 1440, height: 689 });
+  });
+
+  test('a full-width bottom drawer takes height from the bottom only', () => {
+    const area = solveFitArea(HOST, [{ left: 0, top: 465, width: 1440, height: 300 }]);
+    assert.deepEqual(area, { left: 0, top: 0, width: 1440, height: 465 });
+  });
+
+  test('a corner overlay is removed on the axis where it costs less, not on both', () => {
+    // The fine-pointer zoom cluster: 60 wide, 200 tall, bottom-right. Reserving
+    // its full height would cost the drawing 200 px even though everything to
+    // its left is free, so the 60 px width is the band removed.
+    const corner = { left: 1380, top: 565, width: 60, height: 200 };
+    assert.deepEqual(
+      solveFitArea(HOST, [corner]),
+      { left: 0, top: 0, width: 1380, height: 765 },
+    );
+    // A wide, short bottom-left pill is the mirror case: height is cheaper.
+    assert.deepEqual(
+      solveFitArea(HOST, [{ left: 8, top: 717, width: 260, height: 40 }]),
+      { left: 0, top: 0, width: 1440, height: 717 },
+    );
+  });
+
+  test('toolbar, drawer and corner compose into one rectangle', () => {
+    const area = solveFitArea(HOST, [
+      { left: 0, top: 0, width: 1440, height: 76 },
+      { left: 0, top: 665, width: 1440, height: 100 },
+      { left: 1380, top: 565, width: 60, height: 200 },
+    ]);
+    assert.deepEqual(area, { left: 0, top: 76, width: 1380, height: 589 });
+  });
+
+  test('an overlay wider than the host is clipped, never negative', () => {
+    const area = solveFitArea({ width: 200, height: 100 }, [{ left: -50, top: 0, width: 400, height: 40 }]);
+    assert.deepEqual(area, { left: 0, top: 40, width: 200, height: 60 });
+    assert.deepEqual(solveFitArea({ width: 0, height: 0 }, []), { left: 0, top: 0, width: 0, height: 0 });
+  });
+
+  test('Fit against the overlay area spends more of the screen than the non-fullscreen box', () => {
+    // Two 24 px reserved margins are what the in-flow layout keeps; they must
+    // not be inherited by the overlay. The overlay solution is therefore a
+    // larger drawing, and it really fits the measured area.
+    const measured = solveFitArea(HOST, [{ left: 0, top: 0, width: 1440, height: 76 }]);
+    const onOverlay = solveFitScale(geometry, { viewport: { width: measured.width, height: measured.height } });
+    const reserved = solveFitScale(geometry, {
+      viewport: { width: HOST.width - 24, height: HOST.height - 76 - 24 },
+    });
+    assert.ok(
+      onOverlay.scale > reserved.scale,
+      `the overlay fit must be larger: ${onOverlay.scale} vs ${reserved.scale}`,
+    );
+    assert.ok(onOverlay.layout.content.width <= measured.width + 0.5);
+    assert.ok(onOverlay.layout.content.height <= measured.height + 0.5);
+  });
+});
+
 describe('solveFitScale: the largest monotone scale whose mapped content fits', () => {
   test('the solved layout fits, and one step larger does not', () => {
     const canvas = { width: 700, height: 500 };
@@ -1090,9 +1157,11 @@ describe('Fit after the member-hidden compaction', () => {
   }
 
   test('a compacted drawing fits at a scale the full-body content could not reach', () => {
-    // Twenty member-rich class boxes (4 × 5) with eight-plus rows each: the
-    // fitted layout on a 480×320 canvas lands at a tier-A scale where every
-    // member block is hidden, so the frame heights are driven by the body.
+    // Twenty member-rich class boxes (4 × 5) with eight-plus rows each. Fit
+    // chooses the RICHEST tier the canvas can really show (see
+    // `fitWithinViewport`), so the canvas here must be small enough that even
+    // that tier lands below the row threshold: at 260×150 the fitted class
+    // bodies are hidden and their reclaimed height is what this case measures.
     const nodes: SemanticNodeGeometry[] = [];
     const edges: SemanticEdgeGeometry[] = [];
     const COLUMNS = 4;
@@ -1129,7 +1198,7 @@ describe('Fit after the member-hidden compaction', () => {
       packages: [],
       edges,
     };
-    const canvas = { width: 480, height: 320 };
+    const canvas = { width: 260, height: 150 };
     const fit = solveFitScale(drawing, { viewport: canvas });
     assert.equal(fit.fits, true);
 

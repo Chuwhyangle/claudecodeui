@@ -1,7 +1,7 @@
 ---
 id: architecture-fullscreen-fit-margin
 title: 架构图全屏适应边距：Fit 使用全屏宿主扣除实际叠层，不再沿用非全屏的预留边距
-status: ready
+status: done
 labels:
   - feature
 parent: null
