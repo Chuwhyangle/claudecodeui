@@ -1,27 +1,58 @@
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 
 import { cn } from '@/shared/utils';
-import { suggestionOptionId } from '@/modules/chat/utils/inputSuggestions';
+import {
+  suggestionOptionId,
+  truncateSuggestionLabel,
+} from '@/modules/chat/utils/inputSuggestions';
+import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
 
 type InputSuggestionChipsProps = {
   /** The listbox id, from `useInputSuggestions`; also prefixes each option's id. */
   listId: string;
-  /** The labels to draw. Callers render this only while the chips are visible. */
-  suggestions: string[];
+  /**
+   * Plain habit labels, the pre-LLM shape. Ignored when `chips` is supplied; kept so
+   * standalone renders and older tests keep working.
+   */
+  suggestions?: string[];
+  /** The merged strip (quoted > model > habit) from `useInputSuggestions`. */
+  chips?: SuggestionChip[];
   selectedIndex: number | null;
-  /** Fills the draft with the chip's text. Never sends. */
-  onAccept: (index: number) => void;
+  /** Accepts a habit chip by its index in the strip. Also the fallback for absent source callbacks. */
+  onAccept?: (index: number) => void;
+  /** Accepts a model chip: fills the draft and sends it. */
+  onAcceptModel?: (index: number) => void;
+  /** Accepts the quoted chip: fills `> text` and focuses, without sending. */
+  onAcceptQuoted?: (text: string) => void;
   /**
    * Called when the strip's own background — the gaps between chips or the
    * space past the last one — is pressed. The composer focuses its textarea
    * here so a click aimed at the input is never swallowed by the listbox.
    */
   onBackgroundPress?: () => void;
+  /**
+   * Whether the second-line preview may be drawn. Absent means "yes unless the
+   * pointer is coarse and cannot hover" — the same rule the proposal states.
+   */
+  showPreview?: boolean;
 };
 
+/** Touch devices have no hover, so a preview would only be a flash before the fill. */
+function isCoarsePointer(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  try {
+    return window.matchMedia('(pointer: coarse) and (hover: none)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Empty-composer suggestion chips, rendered by ChatComposer inside
- * PromptInputBody on top of the (empty) textarea.
+ * Composer suggestion chips, rendered by ChatComposer inside PromptInputBody on
+ * top of the (empty) textarea.
  *
  * Absolutely positioned against the body so it adds no row: the body measures
  * the same height whether or not a chip is showing. The listbox hugs its chips
@@ -32,21 +63,60 @@ type InputSuggestionChipsProps = {
  * steals focus from the textarea. Selection itself is owned by the composer's
  * keydown and mirrored through `aria-activedescendant`.
  *
+ * Three sources share the strip in a fixed order — quoted selection, model
+ * replies, then habits. Their click semantics differ (a model reply is sent, a
+ * quotation is only pasted and focused), so each source gets its own callback.
+ * The label is shortened to one line; the complete text lives in `title` and in
+ * the second-line preview the keyboard selection and the mouse hover reveal.
+ *
  * Below 480px the chips stay one line and scroll horizontally, and the key
  * hint is not shown (there is no keyboard to name keys for).
  */
 export function InputSuggestionChips({
   listId,
-  suggestions,
+  suggestions = [],
+  chips,
   selectedIndex,
   onAccept,
+  onAcceptModel,
+  onAcceptQuoted,
   onBackgroundPress,
+  showPreview,
 }: InputSuggestionChipsProps) {
   const { t } = useTranslation('chat');
+  // Which chip the pointer is over. Null means "no hover"; the preview then falls
+  // back to the keyboard selection, then to the first model chip.
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  if (suggestions.length === 0) {
+  const resolved: SuggestionChip[] = chips ?? suggestions.map((text, index) => ({
+    id: `habit-${index}`,
+    text,
+    source: 'habit' as const,
+    index,
+  }));
+
+  if (resolved.length === 0) {
     return null;
   }
+
+  const previewEnabled = showPreview ?? !isCoarsePointer();
+  const previewChip = previewEnabled
+    ? resolved[hoveredIndex ?? selectedIndex ?? -1]
+      ?? resolved.find((chip) => chip.source === 'model')
+      ?? null
+    : null;
+
+  const accept = (chip: SuggestionChip, index: number) => {
+    if (chip.source === 'quoted' && onAcceptQuoted) {
+      onAcceptQuoted(chip.text);
+      return;
+    }
+    if (chip.source === 'model' && onAcceptModel) {
+      onAcceptModel(chip.index);
+      return;
+    }
+    onAccept?.(index);
+  };
 
   return (
     <div
@@ -73,25 +143,36 @@ export function InputSuggestionChips({
           onBackgroundPress?.();
         }}
       >
-        {suggestions.map((text, index) => (
+        {resolved.map((chip, index) => (
           <button
-            key={text}
+            key={chip.id}
             id={suggestionOptionId(listId, index)}
             type="button"
             role="option"
             aria-selected={selectedIndex === index}
+            data-chip-source={chip.source}
+            title={chip.text}
             // The chips are not in the tab order: keyboard selection runs through
             // the textarea's Tab handling, which keeps focus in one place.
             tabIndex={-1}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onAccept(index)}
+            onMouseEnter={() => setHoveredIndex(index)}
+            onMouseLeave={() => setHoveredIndex((current) => (current === index ? null : current))}
+            onClick={() => accept(chip, index)}
             className={cn(
               'h-6 shrink-0 rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors',
               'hover:border-primary/60 hover:text-foreground',
+              chip.source === 'model' && 'border-solid',
+              chip.source === 'quoted' && 'border-solid border-primary/50 bg-primary/5',
               selectedIndex === index && 'border-primary bg-primary/10 text-foreground',
             )}
           >
-            {text}
+            {chip.source === 'quoted'
+              ? t('input.suggestions.quoteChip', {
+                defaultValue: 'Quote: {{text}}',
+                text: truncateSuggestionLabel(chip.text),
+              })
+              : truncateSuggestionLabel(chip.text)}
           </button>
         ))}
       </div>
@@ -105,6 +186,18 @@ export function InputSuggestionChips({
           t('input.suggestions.hintHide', { defaultValue: 'Esc to hide' }),
         ].join(' · ')}
       </span>
+      {previewChip && (
+        // The textarea's second line: the complete text of the hovered or
+        // keyboard-selected chip, or the first model chip when neither exists.
+        // Never a hit target — the chips above keep the pointer.
+        <span
+          data-suggestion-preview={previewChip.source}
+          aria-label={t('input.suggestions.previewHint', { defaultValue: 'Full suggestion' })}
+          className="pointer-events-none absolute left-4 right-4 top-7 truncate text-xs text-muted-foreground/70"
+        >
+          {previewChip.text}
+        </span>
+      )}
     </div>
   );
 }

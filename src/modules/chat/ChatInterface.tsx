@@ -25,6 +25,7 @@ import InputOutlineDrawer from '@/modules/chat/outline/InputOutlineDrawer';
 import { useChatRealtimeHandlers } from '@/modules/chat/hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '@/modules/chat/hooks/useChatComposerState';
 import { useActivityDockTurn } from '@/modules/chat/hooks/useActivityDockTurn';
+import { useTranscriptSelection } from '@/modules/chat/hooks/useTranscriptSelection';
 import { useSessionStore } from '@/modules/chat/hooks/useSessionStore';
 import { useUiNavigate } from '@/modules/chat/hooks/useUiNavigate';
 import { useUiStateResponder } from '@/modules/chat/hooks/useUiStateResponder';
@@ -655,6 +656,36 @@ function ChatInterface({
     activity: sessionActivity,
   });
 
+  /**
+   * The passage selected inside the transcript, for the composer's quoted chip.
+   * The hook reads only selections whose two ends lie in `[data-transcript-content]`,
+   * so selecting text in the input box or a sidebar is not a quote.
+   */
+  const { selectionText: quotedSelection } = useTranscriptSelection();
+
+  /**
+   * Stable identity of the last assistant reply, the model chips' draw key.
+   *
+   * The provider's own id is preferred (`id` for a streamed row, `transcriptRowId`
+   * for a read one); a row carrying neither falls back to its timestamp and index,
+   * which is stable across re-renders of the same transcript. A new value means
+   * the assistant answered again, and that is the only thing that asks the server
+   * for another batch.
+   */
+  const lastAssistantMessageId = useMemo(() => {
+    for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
+      const message = chatMessages[index];
+      if (message.type !== 'assistant') {
+        continue;
+      }
+      return message.id
+        ?? message.transcriptRowId
+        ?? message.blockKey
+        ?? `assistant-${index}-${String(message.timestamp)}`;
+    }
+    return null;
+  }, [chatMessages]);
+
   const {
     input,
     setInput,
@@ -713,6 +744,12 @@ function ChatInterface({
     selectedInputSuggestionIndex,
     inputSuggestionListId,
     acceptInputSuggestion,
+    suggestionChips,
+    acceptModelSuggestion,
+    acceptQuotedSuggestion,
+    replySuggestionsEnabled,
+    replySuggestionsLoading,
+    redrawReplySuggestions,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
@@ -766,6 +803,8 @@ function ChatInterface({
     setIsUserScrolledUp,
     setPendingPermissionRequests,
     resolvePermissionModeForProvider,
+    lastAssistantMessageId,
+    quotedSelection,
   });
 
   /**
@@ -1295,6 +1334,12 @@ function ChatInterface({
           selectedInputSuggestionIndex={selectedInputSuggestionIndex}
           inputSuggestionListId={inputSuggestionListId}
           onAcceptInputSuggestion={acceptInputSuggestion}
+          suggestionChips={suggestionChips}
+          onAcceptModelSuggestion={acceptModelSuggestion}
+          onAcceptQuotedSuggestion={acceptQuotedSuggestion}
+          replySuggestionsEnabled={replySuggestionsEnabled}
+          replySuggestionsLoading={replySuggestionsLoading}
+          onRequestReplySuggestions={redrawReplySuggestions}
         />
             </>
           )}

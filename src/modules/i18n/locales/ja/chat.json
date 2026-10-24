@@ -139,6 +139,13 @@
     }
   },
   "input": {
+    "suggestions": {
+      "suggest": "提案",
+      "suggesting": "提案中…",
+      "suggestHint": "これまでの会話から返信を提案",
+      "quoteChip": "引用：{{text}}",
+      "previewHint": "提案の全文"
+    },
     "placeholder": "/ でコマンド、@ でファイル指定、または {{provider}} に何でも聞いてください...",
     "placeholderDefault": "メッセージを入力...",
     "disabled": "入力無効",

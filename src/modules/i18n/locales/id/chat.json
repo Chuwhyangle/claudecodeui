@@ -157,6 +157,13 @@
     }
   },
   "input": {
+    "suggestions": {
+      "suggest": "Saran",
+      "suggesting": "Menyarankan…",
+      "suggestHint": "Sarankan balasan dari percakapan sejauh ini",
+      "quoteChip": "Kutipan: {{text}}",
+      "previewHint": "Saran lengkap"
+    },
     "placeholder": "Ketik / untuk perintah, @ untuk file, atau tanyakan apa saja kepada {{provider}}...",
     "placeholderDefault": "Ketik pesan...",
     "disabled": "Input dinonaktifkan",

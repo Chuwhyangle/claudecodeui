@@ -49,12 +49,23 @@ import ComposerPermissionMenu from '@/modules/chat/composer/ComposerPermissionMe
 import ComposerMobileMoreMenu from '@/modules/chat/composer/ComposerMobileMoreMenu';
 import { InputSuggestionChips } from '@/modules/chat/composer/InputSuggestionChips';
 import { suggestionOptionId } from '@/modules/chat/utils/inputSuggestions';
+import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
 
 /** How long the occupied notice's copy control says "copied" before returning to its label. */
 const RELEASE_COPIED_NOTICE_MS = 1500;
 
 /** How long a tap on an unavailable Live Voice entry leaves its explanation on screen. */
 const LIVE_VOICE_NOTICE_MS = 4000;
+
+/**
+ * The viewport width, in CSS pixels, below which the compact footer drops the clear control.
+ *
+ * The compact row is exactly the controls that send a message plus the clear ✕ while there is
+ * a draft; a box narrower than this is already at its horizontal edge (the tool buttons shrink
+ * to `w-7` below 360px for the same reason), and a seventh control there would push the send
+ * button out rather than fit beside it.
+ */
+const NARROWEST_FOOTER_VIEWPORT_PX = 360;
 
 type MentionableFile = {
   name: string;
@@ -233,8 +244,23 @@ type ChatComposerProps = {
   selectedInputSuggestionIndex?: number | null;
   /** Listbox id from the state hook; also prefixes each option id. */
   inputSuggestionListId?: string;
-  /** Fills the draft with the chip's text; never sends. */
+  /** Fills the draft with the chip's text; accepts a habit chip by index. */
   onAcceptInputSuggestion?: (index: number) => void;
+  /**
+   * The merged strip (quoted > model > habit) when the LLM tier is wired. Absent means the
+   * standalone habit-only shape the existing renders use.
+   */
+  suggestionChips?: SuggestionChip[];
+  /** Accepts a model chip: fills the draft and sends it. */
+  onAcceptModelSuggestion?: (index: number) => void;
+  /** Accepts the quoted chip: fills `> text` and focuses, without sending. */
+  onAcceptQuotedSuggestion?: (text: string) => void;
+  /** Whether the reply-suggestions feature is on; false hides the Suggest button entirely. */
+  replySuggestionsEnabled?: boolean;
+  /** A draw is in flight: the Suggest button is disabled and shows its progress label. */
+  replySuggestionsLoading?: boolean;
+  /** Asks for a whole new batch of model chips. */
+  onRequestReplySuggestions?: () => void;
 };
 
 /**
@@ -324,6 +350,12 @@ export default function ChatComposer({
   selectedInputSuggestionIndex = null,
   inputSuggestionListId = '',
   onAcceptInputSuggestion,
+  suggestionChips,
+  onAcceptModelSuggestion,
+  onAcceptQuotedSuggestion,
+  replySuggestionsEnabled = false,
+  replySuggestionsLoading = false,
+  onRequestReplySuggestions,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   /*
@@ -401,6 +433,22 @@ export default function ChatComposer({
   // measurement, so it is false on the first render and in any environment that cannot measure —
   // see the hook for why that is the safe direction to be wrong in.
   const { containerRef, isCompactTier, areToolsInline } = useComposerCompactTier();
+  // Whether the viewport is too narrow for the compact row's clear control. State read
+  // from the window and followed on resize: the 360px crossing is narrower than the
+  // compact-tier signal, so a rotation or a window drag can cross it without changing
+  // `isCompactTier`.
+  const [isNarrowestFooter, setIsNarrowestFooter] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < NARROWEST_FOOTER_VIEWPORT_PX,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    const read = () => setIsNarrowestFooter(window.innerWidth < NARROWEST_FOOTER_VIEWPORT_PX);
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, []);
   // The dropzone's own root ref comes back out of its root props and is re-attached beside the
   // tier hook's: the props are spread onto the form, so a `ref=` written next to the spread is
   // silently replaced by the one inside it — which is how this hook's box went unmeasured. Both
@@ -588,7 +636,11 @@ export default function ChatComposer({
   // The chips occupy the textarea's one empty line. While they are on screen the
   // placeholder is blank so the two are not drawn over each other; the chips
   // themselves are absolutely positioned and add no row.
-  const showSuggestionChips = inputSuggestionsVisible && inputSuggestionCandidates.length > 0;
+  // The merged strip when the caller wires it, otherwise the original habit-only list. The
+  // difference is what lets the composer render quoted and model chips without a second
+  // component: one listbox, three sources.
+  const resolvedSuggestionCount = suggestionChips?.length ?? inputSuggestionCandidates.length;
+  const showSuggestionChips = inputSuggestionsVisible && resolvedSuggestionCount > 0;
   const canQueueDraft = isLoading && Boolean(input.trim() || attachedFiles.length > 0);
   // The same button press, two different outcomes. For a per-run session the text waits in this
   // client's queue until the turn ends, which is why the button becomes a queue arrow and the hint
@@ -974,8 +1026,11 @@ export default function ChatComposer({
               <InputSuggestionChips
                 listId={inputSuggestionListId}
                 suggestions={inputSuggestionCandidates}
+                chips={suggestionChips}
                 selectedIndex={selectedInputSuggestionIndex}
                 onAccept={onAcceptInputSuggestion ?? (() => undefined)}
+                onAcceptModel={onAcceptModelSuggestion}
+                onAcceptQuoted={onAcceptQuotedSuggestion}
                 // The strip's background sits over the textarea; a press there
                 // must focus the input instead of being eaten by the listbox.
                 onBackgroundPress={() => textareaRef.current?.focus()}
@@ -1058,6 +1113,30 @@ export default function ChatComposer({
             </PromptInputButton>
 
             {/*
+              The Suggest button lives in the footer on purpose: it is the one control that
+              regenerates the chips above the input, and it must stay reachable while the
+              textarea is covered by them. It is drawn only when the feature is on (the status
+              reading said so) and is disabled for the whole draw, so a second click cannot
+              become a second request. A text button rather than an icon: "建议 / Suggest" is
+              the label people look for, and an icon has no convention here.
+            */}
+            {replySuggestionsEnabled && (
+              <button
+                type="button"
+                data-slot="reply-suggest-button"
+                onClick={onRequestReplySuggestions}
+                disabled={replySuggestionsLoading}
+                aria-label={t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
+                aria-busy={replySuggestionsLoading || undefined}
+                className="h-8 shrink-0 whitespace-nowrap rounded-full border border-dashed border-border/70 px-2 text-xs text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {replySuggestionsLoading
+                  ? t('input.suggestions.suggesting', { defaultValue: 'Suggesting…' })
+                  : t('input.suggestions.suggest', { defaultValue: 'Suggest' })}
+              </button>
+            )}
+
+            {/*
               The voice path's file entry, shown only while the debug switch asks for it: an install
               that never sets `?voiceDebug=1` renders the same composer it always has. The file goes
               through the same transcription chain as a recording.
@@ -1077,16 +1156,33 @@ export default function ChatComposer({
             )}
 
             {isCompactTier ? (
-              // The three controls below move behind one entry on the compact tier;
-              // that entry is the only addition to this row, so the row stays six wide.
-              <ComposerMobileMoreMenu
-                tokenBudget={tokenBudget}
-                onShowTokenUsage={onShowTokenUsage}
-                slashCommandsCount={slashCommandsCount}
-                onToggleCommandMenu={onToggleCommandMenu}
-                canSchedule={Boolean(input.trim())}
-                onScheduleMessage={onScheduleMessage}
-              />
+              <>
+                {/*
+                  The three secondary controls move behind one entry on the compact
+                  tier. That keeps the empty row at the six controls that send a
+                  message; a draft adds the clear ✕ as the one extra, immediately
+                  after this entry and before the model/permission group. Below 360px
+                  the row has no width to spare, so the ✕ is dropped there.
+                */}
+                <ComposerMobileMoreMenu
+                  tokenBudget={tokenBudget}
+                  onShowTokenUsage={onShowTokenUsage}
+                  slashCommandsCount={slashCommandsCount}
+                  onToggleCommandMenu={onToggleCommandMenu}
+                  canSchedule={Boolean(input.trim())}
+                  onScheduleMessage={onScheduleMessage}
+                />
+                {hasInput && !isNarrowestFooter && (
+                  <PromptInputButton
+                    tooltip={{ content: t('input.clearInput', { defaultValue: 'Clear input' }) }}
+                    onClick={onClearInput}
+                    aria-label={t('input.clearInput', { defaultValue: 'Clear input' })}
+                    data-slot="composer-clear-input"
+                  >
+                    <XIcon />
+                  </PromptInputButton>
+                )}
+              </>
             ) : (
               <>
                 <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
@@ -1108,9 +1204,9 @@ export default function ChatComposer({
                 </PromptInputButton>
 
                 {/*
-                  Wide tier only. The compact row is exactly the six primary controls,
-                  so a seventh that appears with text would either wrap it or push
-                  send off the edge — the one thing that row may not do.
+                  Wide tier's clear control. The compact tier draws the same control
+                  in its own tools group (above), because the row there is a fixed set
+                  and the ✕ belongs beside "more" rather than in a group that wraps.
                 */}
                 {hasInput && (
                   <PromptInputButton
@@ -1118,6 +1214,7 @@ export default function ChatComposer({
                     onClick={onClearInput}
                     className="hidden sm:flex"
                     aria-label={t('input.clearInput', { defaultValue: 'Clear input' })}
+                    data-slot="composer-clear-input"
                   >
                     <XIcon />
                   </PromptInputButton>

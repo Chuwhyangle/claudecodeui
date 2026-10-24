@@ -5,6 +5,7 @@ import {
   readAuthLapseReport,
   recordAuthLapse,
 } from '@/shared/authToken';
+import type { ReplySuggestionsEventInput, ReplySuggestionsRequest } from '@/shared/types';
 import type { SessionMessagesQuery } from '@/shared/types';
 import type { ActivitySnapshotFrame } from '@/shared/types';
 import type { OAuthConsentDecisionRequest } from '@/shared/types';
@@ -911,6 +912,15 @@ export const api = {
   // download by its own verb. Neither call carries a URL, a directory or a file name — the server's
   // settings file owns those, and a request field that named one would be a client choosing what
   // the server writes to disk.
+  // Reply suggestions: the LLM tier of the composer's empty-box chips. The three endpoints are
+  // declared here and nowhere else — the composer's hooks call these and never assemble a URL.
+  // `suggest` answers `{ chips, draw }`; `event` is the ledger's write path and answers 204.
+  replySuggestions: {
+    status: () => get('/api/reply-suggestions/status'),
+    suggest: (request: ReplySuggestionsRequest) => post('/api/reply-suggestions', request),
+    event: (event: ReplySuggestionsEventInput) => post('/api/reply-suggestions/events', event),
+  },
+
   voiceRealtime: {
     // The reading the settings page renders: state, resolved path, pinned digest, source, licence,
     // and — while a download runs — received/total/rate.

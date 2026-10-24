@@ -3617,3 +3617,50 @@ export type CockpitStateFrame = {
 };
 
 // ---------------------------
+
+//----------------- REPLY SUGGESTIONS ------------
+
+/**
+ * The public reading of the reply-suggestions feature, from `GET /api/reply-suggestions/status`.
+ *
+ * Carries no key and no path on purpose: the composer only needs to know whether the feature is
+ * on and how much text a chip may hold, and the server owns everything else.
+ */
+export type ReplySuggestionsStatus = {
+  /** False means the composer neither extracts nor draws the Suggest button. */
+  enabled: boolean;
+  /** The experimental post-pick expansion switch; the composer only reports it, it does not act on it. */
+  expansion: 'off' | 'vary';
+  /** Most model chips one draw may return. */
+  maxChips: number;
+  /** Longest chip text one draw may return, before the client's own label truncation. */
+  maxChipChars: number;
+};
+
+/** One completed draw, from `POST /api/reply-suggestions`. `draw` names the batch later events refer to. */
+export type ReplySuggestionsResult = {
+  /** Complete reply texts, already deduplicated and capped by the server. */
+  chips: string[];
+  /** Local to this session; the ledger events refer to it. */
+  draw: number;
+};
+
+/** The pointer/outcome events the composer reports on `POST /api/reply-suggestions/events`. */
+export type ReplySuggestionsEventName = 'picked' | 'cleared' | 'redrawn' | 'sent';
+
+/** One ledger event; `index` is present only when a specific chip was picked. */
+export type ReplySuggestionsEventInput = {
+  sessionId: string;
+  draw: number;
+  event: ReplySuggestionsEventName;
+  index?: number;
+};
+
+/** One request for a draw; `redraw` asks for a fresh batch, `focus` is the transcript text to centre on. */
+export type ReplySuggestionsRequest = {
+  sessionId: string;
+  redraw?: boolean;
+  focus?: string;
+};
+
+// ---------------------------

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import { readAllInputHistory } from '@/modules/chat/hooks/useInputHistory';
-import { buildInputSuggestions } from '@/modules/chat/utils/inputSuggestions';
+import { buildInputSuggestions, buildSuggestionChips, suggestionConditionsHold } from '@/modules/chat/utils/inputSuggestions';
+import type { SuggestionChip } from '@/modules/chat/utils/inputSuggestions';
 
 /**
  * State and keyboard semantics for the empty-composer suggestion chips.
@@ -101,17 +102,26 @@ type UseInputSuggestionsOptions = {
   hasAttachments: boolean;
   /** The chat being composed into; a change starts a new suggestion round. */
   draftScope: string | null;
-  /** Writes the accepted label into the draft AND its send-time mirror. */
-  onAccept: (text: string) => void;
+  /** Model-generated complete replies from `useReplySuggestions`; the second source in the order. */
+  modelChips?: readonly string[];
+  /**
+   * Transcript selection text, shown as the first chip. The only chip allowed while the box holds
+   * text: a selection is an explicit act, and quote replies often need more than one.
+   */
+  quotedText?: string | null;
+  /** Accepts one chip (source-aware: the composer fills, and for model chips also sends). */
+  onAccept: (chip: SuggestionChip) => void;
 };
 
 export type UseInputSuggestionsResult = {
-  /** Ranked labels; may be non-empty while `visible` is false. */
+  /** Ranked habit labels; may be non-empty while `visible` is false. */
   candidates: string[];
+  /** The merged strip (quoted > model > habit), already filtered by the display conditions. */
+  chips: SuggestionChip[];
   selectedIndex: number | null;
   /** Stable id of the listbox, from which each option's id is derived. */
   listId: string;
-  /** Every display condition currently holds and at least one candidate exists. */
+  /** Every display condition currently holds and at least one chip exists. */
   visible: boolean;
   accept: (index: number) => void;
   /** Returns true when the event was consumed by the chips. */
@@ -128,6 +138,8 @@ export function useInputSuggestions({
   hasQueuedDraft,
   hasAttachments,
   draftScope,
+  modelChips = [],
+  quotedText = null,
   onAccept,
 }: UseInputSuggestionsOptions): UseInputSuggestionsResult {
   // Derived from the listbox's own id so the textarea's aria-activedescendant
@@ -154,16 +166,27 @@ export function useInputSuggestions({
     setSelectedIndex(null);
   }, [input]);
 
-  const visible = input === ''
-    && !isLoading
-    && !isDockTurnShown
-    && !isOccupied
-    && !isCommandMenuOpen
-    && !isFileMenuOpen
-    && !hasQueuedDraft
-    && !hasAttachments
-    && !roundHidden
-    && candidates.length > 0;
+  // One predicate, two readings. The draft chips (model and habit) keep the empty-box rule; the
+  // quoted chip is the one deliberate exception — it shows while the box holds text, because a
+  // selection is an explicit act and quote replies often append a second passage.
+  const conditionsHold = suggestionConditionsHold({
+    isLoading,
+    isDockTurnShown,
+    isOccupied,
+    isCommandMenuOpen,
+    isFileMenuOpen,
+    hasQueuedDraft,
+    hasAttachments,
+  }) && !roundHidden;
+  const draftChipsAllowed = conditionsHold && input === '';
+  const chips = conditionsHold
+    ? buildSuggestionChips({
+      quotedText,
+      modelChips: draftChipsAllowed ? modelChips : [],
+      habitChips: draftChipsAllowed ? candidates : [],
+    })
+    : [];
+  const visible = chips.length > 0;
 
   // A selection must not survive the chips leaving the screen — otherwise the
   // next visible round would start with a highlight the user never asked for.
@@ -192,28 +215,33 @@ export function useInputSuggestions({
   // box from empty to non-empty, so it suppresses the typedAway it would otherwise
   // look like.
   const wasVisibleRef = useRef(false);
+  // `typedAway` counts a keystroke that dismisses the DRAFT chips. The quoted chip survives while
+  // the box holds text, so `visible` alone would count every character typed beside it.
+  const wasDraftChipsRef = useRef(false);
   const acceptingRef = useRef(false);
+  const draftChipsShown = draftChipsAllowed && (candidates.length > 0 || modelChips.length > 0);
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
       bumpSuggestionStat('shown');
     }
-    if (wasVisibleRef.current && input !== '' && !acceptingRef.current) {
+    if (wasDraftChipsRef.current && input !== '' && !acceptingRef.current) {
       bumpSuggestionStat('typedAway');
     }
     acceptingRef.current = false;
     wasVisibleRef.current = visible;
-  }, [input, visible]);
+    wasDraftChipsRef.current = draftChipsShown;
+  }, [draftChipsShown, input, visible]);
 
   const accept = useCallback((index: number) => {
-    const text = candidates[index];
-    if (text === undefined) {
+    const chip = chips[index];
+    if (chip === undefined) {
       return;
     }
     acceptingRef.current = true;
     setSelectedIndex(null);
     bumpSuggestionStat('accepted');
-    onAccept(text);
-  }, [candidates, onAccept]);
+    onAccept(chip);
+  }, [chips, onAccept]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean => {
@@ -231,7 +259,7 @@ export function useInputSuggestions({
       }
 
       if (event.key === 'Tab') {
-        const lastIndex = candidates.length - 1;
+        const lastIndex = chips.length - 1;
         if (event.shiftKey) {
           if (selectedIndex === null) {
             event.preventDefault();
@@ -274,8 +302,8 @@ export function useInputSuggestions({
 
       return false;
     },
-    [accept, candidates.length, selectedIndex, visible],
+    [accept, chips.length, selectedIndex, visible],
   );
 
-  return { candidates, selectedIndex, listId, visible, accept, handleKeyDown };
+  return { candidates, chips, selectedIndex, listId, visible, accept, handleKeyDown };
 }

@@ -175,7 +175,12 @@
       "listLabel": "Frequent inputs",
       "hintSelect": "Tab to select",
       "hintAccept": "Enter to accept",
-      "hintHide": "Esc to hide"
+      "hintHide": "Esc to hide",
+      "suggest": "Suggest",
+      "suggesting": "Suggesting…",
+      "suggestHint": "Suggest replies from the conversation so far",
+      "quoteChip": "Quote: {{text}}",
+      "previewHint": "Full suggestion"
     },
     "showAllCommands": "Show all commands",
     "moreTools": "More tools",

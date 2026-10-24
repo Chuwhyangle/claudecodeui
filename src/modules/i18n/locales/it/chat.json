@@ -139,6 +139,13 @@
     }
   },
   "input": {
+    "suggestions": {
+      "suggest": "Suggerisci",
+      "suggesting": "Suggerimento…",
+      "suggestHint": "Suggerisci risposte dalla conversazione",
+      "quoteChip": "Citazione: {{text}}",
+      "previewHint": "Suggerimento completo"
+    },
     "placeholder": "Digita / per i comandi, @ per i file, o chiedi qualcosa a {{provider}}...",
     "placeholderDefault": "Scrivi il tuo messaggio...",
     "disabled": "Input disabilitato",

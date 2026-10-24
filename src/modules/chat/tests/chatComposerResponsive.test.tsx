@@ -452,30 +452,64 @@ await i18next.use(initReactI18next).init({
   react: { useSuspense: false },
 });
 
-test('(a) the narrow footer holds exactly the six primary controls, and none of the three that moved', () => {
-  const { footer } = renderComposer(MOBILE_WIDTH);
-  const controls = Array.from(footer.querySelectorAll('button'));
-
+test('(a) the narrow footer is six controls when empty and seven with a draft, the clear ✕ being the seventh', () => {
+  // The empty row: exactly the controls that send a message.
+  const empty = renderComposer(MOBILE_WIDTH);
+  const emptyControls = Array.from(empty.footer.querySelectorAll('button'));
   assert.equal(
-    controls.length,
+    emptyControls.length,
     PRIMARY_NAMES.length,
-    `the narrow footer must hold ${PRIMARY_NAMES.length} controls; it holds ${controls.length}: ${describeFooterControls(footer)}`,
+    `the empty narrow footer must hold ${PRIMARY_NAMES.length} controls; it holds ${emptyControls.length}: ${describeFooterControls(empty.footer)}`,
   );
 
   const found: string[] = [];
   for (const name of PRIMARY_NAMES) {
-    const control = within(footer).queryByRole('button', { name });
+    const control = within(empty.footer).queryByRole('button', { name });
     found.push(control ? name : `MISSING(${name})`);
   }
-  assert.deepEqual(found, PRIMARY_NAMES, `narrow footer controls read: ${describeFooterControls(footer)}`);
+  assert.deepEqual(found, PRIMARY_NAMES, `narrow footer controls read: ${describeFooterControls(empty.footer)}`);
+  assert.equal(
+    empty.footer.querySelector('[data-slot="composer-clear-input"]'),
+    null,
+    'an empty box has nothing to clear',
+  );
 
   for (const moved of [enChat.input.showAllCommands, enChat.schedule.trigger, enChat.misc.showTokenUsage]) {
     assert.equal(
-      within(footer).queryByRole('button', { name: moved }),
+      within(empty.footer).queryByRole('button', { name: moved }),
       null,
-      `"${moved}" must not stay in the narrow footer; controls read: ${describeFooterControls(footer)}`,
+      `"${moved}" must not stay in the narrow footer; controls read: ${describeFooterControls(empty.footer)}`,
     );
   }
+  empty.view.unmount();
+
+  // A draft adds exactly one control, and it is the clear ✕, placed after "more".
+  const drafted = renderComposer(MOBILE_WIDTH, { hasInput: true, input: 'draft' });
+  const draftedControls = Array.from(drafted.footer.querySelectorAll('button'));
+  assert.equal(
+    draftedControls.length,
+    PRIMARY_NAMES.length + 1,
+    `a draft must add exactly the clear ✕; controls read: ${describeFooterControls(drafted.footer)}`,
+  );
+  const clear = drafted.footer.querySelector('[data-slot="composer-clear-input"]');
+  assert.ok(clear, 'the drafted narrow footer must offer the clear ✕');
+  assert.equal(clear.getAttribute('aria-label'), enChat.input.clearInput);
+  const more = within(drafted.footer).getByRole('button', { name: enChat.input.moreTools });
+  assert.equal(
+    more.compareDocumentPosition(clear) & Node.DOCUMENT_POSITION_FOLLOWING,
+    Node.DOCUMENT_POSITION_FOLLOWING,
+    'the clear ✕ must follow the "more" entry in DOM order',
+  );
+  drafted.view.unmount();
+
+  // The 360px floor: no room for the extra control, so the row stays six.
+  const narrowest = renderComposer(340, { hasInput: true, input: 'draft' });
+  assert.equal(
+    Array.from(narrowest.footer.querySelectorAll('button')).length,
+    PRIMARY_NAMES.length,
+    `below 360px a draft must not add a control; controls read: ${describeFooterControls(narrowest.footer)}`,
+  );
+  assert.equal(narrowest.footer.querySelector('[data-slot="composer-clear-input"]'), null);
 });
 
 test('(a) the tier boundary is md: 767px is still the narrow layout, and 768px is not', () => {

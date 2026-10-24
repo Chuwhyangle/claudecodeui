@@ -150,6 +150,13 @@
     }
   },
   "input": {
+    "suggestions": {
+      "suggest": "Sugerir",
+      "suggesting": "Sugiriendo…",
+      "suggestHint": "Sugerir respuestas según la conversación",
+      "quoteChip": "Cita: {{text}}",
+      "previewHint": "Sugerencia completa"
+    },
     "placeholder": "Escribe / para comandos, @ para archivos, o pregúntale lo que quieras a {{provider}}...",
     "placeholderDefault": "Escribe tu mensaje...",
     "disabled": "Entrada deshabilitada",
