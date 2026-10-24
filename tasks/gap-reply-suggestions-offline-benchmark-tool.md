@@ -1,7 +1,7 @@
 ---
 id: gap-reply-suggestions-offline-benchmark-tool
 title: 回复建议离线基准工具：模型×提示词×温度×思考矩阵、多评判、使用记录回放、盲标清单生成与打分
-status: todo
+status: ready
 labels:
   - gap
 parent: null
