@@ -56,10 +56,14 @@ extra: {}
 - server/modules/observation/tests/producer-liveness.test.ts (new)
 - server/modules/database/migrations.ts
 - server/modules/database/schema.ts
+- server/modules/database/index.ts
 - server/modules/database/repositories/observation.repository.ts (new)
 - server/modules/cockpit/cockpit-hub.service.ts
+- server/modules/settings/server-settings.ts
+- server/modules/settings/index.ts
 - server/index.ts
 - server/shared/tests/server-import-cycle-budget.test.ts
+- server/shared/tests/server-import-cycle-budget.baseline.json
 - config/server.settings.example.json
 - src/modules/cockpit/observationUri.ts (new)
 - src/modules/cockpit/tests/observationUri.test.ts (new)
