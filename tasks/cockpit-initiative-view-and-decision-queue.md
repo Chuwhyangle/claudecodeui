@@ -101,11 +101,3 @@ Baseline red carried — the merge of develop brought `scripts/contraction-candi
 (2) **Collateral count pins** (this task's new server criterion): `find server -name '*.test.ts' -o -name '*.test.js'` = 427, one more than the pinned 426, so `quay-test-script.test.ts` was bumped to `known=3 unknown=424` / `known=1 unknown=426` and the AC7 coverage floor recomputed — the appended `1877  server/modules/quay/tests/quay-initiatives.test.ts` row takes it to 385/427 = 90.16% (floor 384.3). Post-fix single-file run: 14/14 passed. Both collateral files are declared in `## Touches`.
 
 (3) **The real defect — AC-394 G1 widened from 3 to 10**: composing the initiatives reading with `loadServerSettings()` made `modules/quay -> modules/settings`, and `settings -> mcp-gateway -> quay` closed a ten-member SCC (providers, providers/list/claude, providers/services, projects, projects/services, quay, settings, mcp-gateway, websocket, websocket/services). That red `server-import-cycle-budget.test.ts` and both port-break criteria. Fix: the boot-time `initiative.auditRatio` is installed by `server/index.ts` through the new `server/shared/ports/initiative-audit-ratio.port.ts`; an uninstalled port answers `null` and the initiatives service keeps its shipped 1/5. Measured after the fix (same scanner the criterion uses): the SCC is exactly the pinned `[providers, providers/list/claude, providers/services]`. Verified on the merged tree: `server-import-cycle-budget.test.ts` 13/13, `providers-websocket-cycle.test.ts` + `projects-session-fetch-cycle.test.ts` 2/2, `quay-test-script.test.ts` 14/14, `quay-initiatives.test.ts` 4/4, cockpit vitest 12 files / 146 tests, `npm run typecheck` exit 0, `npm run lint` exit 0.
-
-## Blocker
-
-**2026-10-24T10:09:15.993Z — worker 未落地（exited-not-landed）**
-
-- 未落地原因：step=suite: not ok - server/shared/tests/server-import-cycle-budget.test.ts:   AssertionError [ERR_ASSERTION]: the measured cycles must match the pinned baseline groups member-for-member
-- run_id：wk-prod-anchor
-- session_id：6046c5ef-092b-4ea6-a755-b480924dd9cf
