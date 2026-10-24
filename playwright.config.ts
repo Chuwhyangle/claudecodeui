@@ -513,11 +513,12 @@ const SPEC_BUDGET_MS: Record<string, number> = {
   // The fullscreen Fit criterion: the L fixture (55 classes) on four
   // viewports — 1440×765, 1920×900, 390×844, 844×390 — each entering the
   // overlay and pressing Fit, one reading of the host/drawing/chrome geometry,
-  // plus a control arm that pulls the DEV-only reserved-margins lever and
-  // re-reads through the same function. MEASURED 2026-10-24 on this worktree:
-  // `5 passed (1.3m)` for the whole invocation (config evaluation, both
+  // plus the Inspector open/close legs on both desktop viewports, and a
+  // control arm that pulls the DEV-only reserved-margins lever and re-reads
+  // through the same function. MEASURED 2026-10-24 on this worktree:
+  // `5 passed (1.2m)` for the whole invocation (config evaluation, both
   // webServers' boot, the browser launch, the fixture and every reading
-  // included); the four main-arm cases closed at 18.5s / 29.2s / 42.4s / 57.2s
+  // included); the four main-arm cases closed at 16.5s / 28.7s / 44.2s / 60.9s
   // and the control arm followed them. 360_000 clears the ~78s reading ~4.6x,
   // the same load-slowed fan-in headroom the sibling architecture criteria
   // declare.

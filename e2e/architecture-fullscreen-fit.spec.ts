@@ -70,8 +70,9 @@ const SEL = {
   toolbar: '[data-architecture-toolbar]',
   header: '[data-architecture-canvas-header]',
   overlays: '[data-architecture-canvas-overlays]',
-  tray: '[data-architecture-tray-root]',
+  tray: '[data-architecture-tray-pill], [data-architecture-tray-expanded-panel], [data-architecture-multiselect-bar]',
   footer: '[data-architecture-source-footer]',
+  dock: '[data-architecture-fullscreen-dock]',
   fullscreenToggle: '[data-architecture-fullscreen-toggle]',
   zoomFit: '[data-architecture-zoom-fit]',
   sheetToggle: '[data-architecture-sheet-toggle]',
@@ -305,8 +306,10 @@ async function readFullscreenFit(page: Page): Promise<FullscreenFitReading> {
     for (const element of [
       ...panel.querySelectorAll<HTMLElement>(sel.overlays + ' > *'),
       ...panel.querySelectorAll<HTMLElement>(sel.tray),
-      // The provenance footer is in flow at the bottom of the overlay.
+      // The provenance footer is in flow at the bottom of the overlay; the
+      // fine-pointer Inspector floats over its right edge while open.
       ...panel.querySelectorAll<HTMLElement>(sel.footer),
+      ...panel.querySelectorAll<HTMLElement>(sel.dock),
     ]) {
       addOverlay(element.getBoundingClientRect());
     }
@@ -569,6 +572,27 @@ for (const viewport of VIEWPORTS) {
         expectFittedReading(`${viewport.name}.fullscreen`, reading, viewport.touch ? PHONE_FLOOR_PX : PC_FLOOR_PX);
         await shot(page, `${viewport.name}-fullscreen-fit`);
         console.log(`[fullscreen-fit] ${viewport.name} wall clock: ${Date.now() - RUN_STARTED_AT}ms`);
+
+        if (!viewport.touch) {
+          // The Inspector is a floating right-hand column on the overlay, so
+          // opening it is an overlay change: the fit must re-solve against the
+          // narrowed area (the same 150 ms debounce a resize uses), and closing
+          // it must restore the previous reading.
+          await page.locator(SEL.node).first().click({ timeout: 10_000 });
+          await settle(page, 800);
+          const withInspector = await readFullscreenFit(page);
+          expect(
+            withInspector.overlays.some((overlay) => overlay.width > 200 && overlay.left > withInspector.host.width / 2),
+            `${viewport.name}: the open Inspector is one of the measured overlays`,
+          ).toBe(true);
+          expectFittedReading(`${viewport.name}.inspector`, withInspector, PC_FLOOR_PX);
+          await shot(page, `${viewport.name}-fullscreen-inspector`);
+          await page.locator('[data-architecture-dock-close]').first().click({ timeout: 10_000 });
+          await settle(page, 800);
+          const inspectorClosed = await readFullscreenFit(page);
+          expectFittedReading(`${viewport.name}.inspector-closed`, inspectorClosed, PC_FLOOR_PX);
+          await shot(page, `${viewport.name}-fullscreen-inspector-closed`);
+        }
 
         await exitFullscreen(page);
         // Leaving the overlay restores the in-flow fit; the reading is taken

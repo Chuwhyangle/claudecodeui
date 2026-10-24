@@ -1051,8 +1051,23 @@ export function PlantUmlGraph({
       const panel = host.closest('[data-architecture-panel]');
       const elements = [
         ...canvas.querySelectorAll('[data-architecture-canvas-overlays] > *'),
-        ...canvas.querySelectorAll('[data-architecture-tray-root]'),
-        ...(panel === null ? [] : panel.querySelectorAll('[data-architecture-source-footer]')),
+        // The tray ROOT is a `pointer-events: none` container covering the
+        // whole canvas; only its visible surfaces (the collapsed pill, the
+        // expanded panel, the multi-select bar) are chrome.
+        ...canvas.querySelectorAll(
+          '[data-architecture-tray-pill], [data-architecture-tray-expanded-panel], '
+            + '[data-architecture-multiselect-bar]',
+        ),
+        ...(panel === null
+          ? []
+          : [
+              ...panel.querySelectorAll('[data-architecture-source-footer]'),
+              // On the overlay the fine-pointer Inspector is a floating
+              // right-hand column (`absolute inset-y-0 right-0`), not an
+              // in-flow dock; it covers the drawing exactly like the corner
+              // slot does.
+              ...panel.querySelectorAll('[data-architecture-fullscreen-dock]'),
+            ]),
       ];
       for (const element of elements) {
         const rect = element.getBoundingClientRect();
@@ -2692,6 +2707,7 @@ export function PlantUmlGraph({
         canvas?.querySelector<HTMLElement>('[data-architecture-canvas-overlays]') ?? null,
         canvas?.querySelector<HTMLElement>('[data-architecture-tray-root]') ?? null,
         panel?.querySelector<HTMLElement>('[data-architecture-source-footer]') ?? null,
+        panel?.querySelector<HTMLElement>('[data-architecture-fullscreen-dock]') ?? null,
       ];
       for (const surface of surfaces) if (surface !== null) observer.observe(surface);
     }
