@@ -1,7 +1,7 @@
 ---
 id: observation-session-digest-deterministic
 title: 观察墙 T2：会话磁贴生产者——每轮结束确定性摘要（结论摘录/改动/命令/测试/是否在问你/差量）
-status: todo
+status: ready
 labels:
   - cockpit
   - observation
@@ -36,10 +36,10 @@ depends_on:
 
 ## Touches
 
-- server/modules/observation/session-digest.ts
-- server/modules/observation/session-digest.producer.ts
-- server/modules/observation/tests/session-digest.test.ts
-- server/modules/observation/tests/fixtures/session-transcript.jsonl
+- server/modules/observation/session-digest.ts (new)
+- server/modules/observation/session-digest.producer.ts (new)
+- server/modules/observation/tests/session-digest.test.ts (new)
+- server/modules/observation/tests/fixtures/session-transcript.jsonl (new)
 - server/modules/observation/index.ts
 - server/modules/websocket/services/chat-run-registry.service.ts
 - tasks/observation-session-digest-deterministic.md

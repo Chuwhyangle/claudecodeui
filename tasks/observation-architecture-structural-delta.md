@@ -1,7 +1,7 @@
 ---
 id: observation-architecture-structural-delta
 title: 观察墙 T4：架构磁贴生产者——落地后结构快照与「自上次看过」的结构差分
-status: todo
+status: ready
 labels:
   - cockpit
   - observation
