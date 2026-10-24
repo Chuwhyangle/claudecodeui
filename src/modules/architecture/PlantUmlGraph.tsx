@@ -296,6 +296,8 @@ export function renderWithMemberDetail(
 
 /** The class the keyboard cursor paints on the drawn box it stands on. */
 const NAV_FOCUS_CLASS = 'arch-nav-focus';
+/** The class the focus RING carries (distinct from the selection class). */
+const NAV_RING_CLASS = 'arch-nav-ring';
 /** The id prefix the cursor's DOM elements carry, for `aria-activedescendant`. */
 const NAV_DOM_ID_PREFIX = 'arch-nav-';
 /** How far the focus ring sits outside the box, in SVG user units. */
@@ -585,6 +587,12 @@ function paintNavigationFocus(host: HTMLElement, cursorId: string | null): void 
   if (rect === null || svg === null) return;
   const ring = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   ring.setAttribute('data-architecture-nav-ring', 'true');
+  // The ring's class is the FOCUS style. It is deliberately not the selection
+  // class (`.arch-selected`): focus is an outer, dashed outline, selection is
+  // the solid, thicker edge the renderer's own stylesheet paints. A reader can
+  // therefore tell "where the keyboard is" from "what is selected" without
+  // relying on colour alone.
+  ring.setAttribute('class', NAV_RING_CLASS);
   ring.setAttribute('x', String(rect.x - NAV_RING_GAP));
   ring.setAttribute('y', String(rect.y - NAV_RING_GAP));
   ring.setAttribute('width', String(rect.width + NAV_RING_GAP * 2));
@@ -593,6 +601,8 @@ function paintNavigationFocus(host: HTMLElement, cursorId: string | null): void 
   ring.setAttribute('fill', 'none');
   ring.setAttribute('stroke', '#1d4ed8');
   ring.setAttribute('stroke-width', '3');
+  // Dashed: the visual half of the focus/selection split above.
+  ring.setAttribute('stroke-dasharray', '5 3');
   ring.setAttribute('pointer-events', 'none');
   svg.appendChild(ring);
 }
@@ -600,6 +610,126 @@ function paintNavigationFocus(host: HTMLElement, cursorId: string | null): void 
 /** Remove every trace of the keyboard cursor from a drawing. */
 function clearNavigationFocus(host: HTMLElement): void {
   paintNavigationFocus(host, null);
+}
+
+/**
+ * The DEV-only lever the keyboard/a11y criterion's control arm pulls. Each
+ * value restores one defect the shipped path removes, so the criterion's own
+ * reading can be shown going red on the same code the main arm reads green:
+ *
+ *  · `farthest-start` — start the cursor on the entity FARTHEST from the
+ *    viewport centre instead of the nearest one (an arbitrary start);
+ *  · `verbose-announce` — restore the old whole-reading announcement
+ *    (package name, outgoing/incoming counts) in the live region;
+ *  · `keep-ring-on-blur` — keep the keyboard ring painted after the canvas
+ *    loses focus.
+ *
+ * Production builds contain none of these branches.
+ */
+export type KeyboardA11yDefect = 'farthest-start' | 'verbose-announce' | 'keep-ring-on-blur';
+
+/** The localStorage key the control arm writes. */
+export const KEYBOARD_A11Y_STORAGE_KEY = 'architecture-keyboard-a11y';
+
+/** Which defect the DEV lever restores, or `null` for the shipped behaviour. */
+export function keyboardA11yDefect(): KeyboardA11yDefect | null {
+  if (import.meta.env.DEV) {
+    try {
+      const stored = window.localStorage.getItem(KEYBOARD_A11Y_STORAGE_KEY);
+      return stored === 'farthest-start' || stored === 'verbose-announce' || stored === 'keep-ring-on-blur'
+        ? stored
+        : null;
+    } catch {
+      // Private mode: the shipped behaviour applies.
+    }
+  }
+  return null;
+}
+
+/** A point in the same space as a navigation item's rectangle. */
+export type NavigationPoint = { readonly x: number; readonly y: number };
+
+/**
+ * The stable reading order the start tie-break uses: top to bottom, then left
+ * to right, with the id last. It is a total order, so two runs over the same
+ * rectangles always choose the same entity.
+ */
+function readingOrderLess(
+  left: { readonly x: number; readonly y: number; readonly id: string },
+  right: { readonly x: number; readonly y: number; readonly id: string },
+): boolean {
+  if (left.y !== right.y) return left.y < right.y;
+  if (left.x !== right.x) return left.x < right.x;
+  return left.id < right.id;
+}
+
+/**
+ * The entity the keyboard cursor starts on when the canvas receives keyboard
+ * focus.
+ *
+ * Contract:
+ *  · the last entity the reader stood on (or the current selection) wins while
+ *    it is still drawn — re-entering the canvas does not yank the cursor away;
+ *  · otherwise the entity whose centre is NEAREST to `centre` (the viewport
+ *    centre, in the same space as the rectangles) is chosen;
+ *  · when the drawing has no entity box at all (the folded package map) the
+ *    nearest FRAME is the start, so a keyboard user still gets a visible
+ *    cursor on a canvas that answered the Tab;
+ *  · equal distances are broken by {@link readingOrderLess}, so the choice is
+ *    stable for identical input;
+ *  · an empty drawing answers `null`.
+ *
+ * Pure: no DOM, no state. The caller measures the rectangles and the centre.
+ */
+export function pickNavigationStart(
+  items: readonly EntityNavigationItem[],
+  preferredId: string | null,
+  centre: NavigationPoint,
+): string | null {
+  const entities = items.filter((item) => item.kind === 'entity');
+  // With entities drawn, frames are places (reachable by `[`), never starts.
+  const candidates = entities.length > 0 ? entities : [...items];
+  if (candidates.length === 0) return null;
+  if (preferredId !== null) {
+    const preferred = candidates.find((item) => item.id === preferredId);
+    if (preferred !== undefined) return preferred.id;
+  }
+  let best: EntityNavigationItem | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    const dx = candidate.x + candidate.width / 2 - centre.x;
+    const dy = candidate.y + candidate.height / 2 - centre.y;
+    const distance = Math.hypot(dx, dy);
+    if (
+      best === null
+      || distance < bestDistance
+      || (distance === bestDistance && readingOrderLess(candidate, best))
+    ) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best?.id ?? null;
+}
+
+/** The control arm's arbitrary start: the entity farthest from the centre. */
+function farthestNavigationStart(
+  items: readonly EntityNavigationItem[],
+  centre: NavigationPoint,
+): string | null {
+  let best: EntityNavigationItem | null = null;
+  let bestDistance = -1;
+  for (const entity of items) {
+    if (entity.kind !== 'entity') continue;
+    const dx = entity.x + entity.width / 2 - centre.x;
+    const dy = entity.y + entity.height / 2 - centre.y;
+    const distance = Math.hypot(dx, dy);
+    if (best === null || distance > bestDistance) {
+      best = entity;
+      bestDistance = distance;
+    }
+  }
+  return best?.id ?? null;
 }
 
 /**
@@ -971,6 +1101,21 @@ export function PlantUmlGraph({
   // render that created it) re-paints the ring from the settled values.
   const navigationActiveRef = useRef(false);
   const navigationCursorRef = useRef<string | null>(null);
+  // What produced the focus the canvas is about to receive. `keyboard` is the
+  // only modality that enters entity navigation: a pointer press focuses the
+  // host too (so click-then-arrow panning keeps working), and a ring appearing
+  // under a mouse click would be noise. A window CAPTURE listener keeps this
+  // fresh before the press that focuses the host commits.
+  const focusModalityRef = useRef<'keyboard' | 'pointer'>('keyboard');
+  /** Leave the navigation state; the selection and the drawing stay unchanged. */
+  const exitEntityNavigation = (host: HTMLElement): void => {
+    navigationActiveRef.current = false;
+    navigationCursorRef.current = null;
+    setNavigationActive(false);
+    setNavigationCursorId(null);
+    setNavigationAnnouncement('');
+    clearNavigationFocus(host);
+  };
   // The entity the user clicked (or a sibling panel asked for). Unlike the
   // hover reading it survives leaving the node and being re-rendered, so the
   // dependency/reverse-dependency highlight stays pinned until the selection is
@@ -1021,6 +1166,26 @@ export function PlantUmlGraph({
     diffHighlightRef.current = diffHighlight;
   }, [view, graph, onNodeHover, onNodeClick, onEdgeClick, onSelectionClear, onEscapeSelection, onDrawnPlantUmlChange, selectedNodeId, selectedRelation, selectedNodeIds, selectedRelations, onToggleNodeClick, onToggleEdgeClick, onMultiSelectStart, onBoxSelect, multiSelectMode, diffHighlight]);
 
+  /**
+   * Paint the panel's selection AND publish it as a `data-*` state. The class
+   * (`.arch-selected`) is the style; the attribute is the state the keyboard
+   * focus reading (`data-architecture-nav-focus`) is distinguishable from — a
+   * different class AND a different data attribute for each.
+   */
+  const paintSelectionStyles = (
+    host: HTMLElement,
+    nodeIds: readonly string[],
+    relations: readonly { readonly from: string; readonly to: string }[],
+  ): void => {
+    applySelectionStyles(host, nodeIds, relations);
+    for (const marked of host.querySelectorAll('[data-architecture-selected]')) {
+      marked.removeAttribute('data-architecture-selected');
+    }
+    for (const selected of host.querySelectorAll('.arch-selected')) {
+      selected.setAttribute('data-architecture-selected', 'true');
+    }
+  };
+
   // Repaint the selection whenever the panel changes it. The draw effect below
   // applies the same styles to a fresh SVG; this one covers a selection made
   // without a re-layout. The whole set is styled; `selectedNodeId` stays the
@@ -1030,7 +1195,7 @@ export function PlantUmlGraph({
     if (host === null) return;
     const nodeIds = selectedNodeIds ?? (selectedNodeId === null ? [] : [selectedNodeId]);
     const relationList = selectedRelations ?? (selectedRelation === null ? [] : [selectedRelation]);
-    applySelectionStyles(host, nodeIds, relationList);
+    paintSelectionStyles(host, nodeIds, relationList);
     selectedRef.current = selectedNodeId;
     if (selectedNodeId !== null) highlightSelection(host, selectedNodeId);
     else if (relationList.length === 0) clearHighlight(host);
@@ -1592,7 +1757,7 @@ export function PlantUmlGraph({
     applyZoom({ scale: solvedScale, fit: options.fit ? 'auto' : 'manual' });
     // A rewritten SVG is a fresh set of elements: re-pin the selection and the
     // unselectable declaration, exactly as the render effect does.
-    applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
+    paintSelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
     highlightSelection(host, selectedRef.current);
     markDrawingUnselectable(host);
     applyDiffStyles(host, diffHighlightRef.current);
@@ -1732,6 +1897,10 @@ export function PlantUmlGraph({
       const selection = window.getSelection();
       if (selection !== null && selection.rangeCount > 0) selection.removeAllRanges();
       if (document.activeElement !== host) host.focus({ preventScroll: true });
+      // A pointer press is not the keyboard: leaving the navigation state
+      // clears the ring and the active descendant. The modality gate above
+      // keeps the focus this press just gave the host from re-entering it.
+      if (navigationActiveRef.current) exitEntityNavigation(host);
     };
     host.addEventListener('mousedown', onMouseDown);
     return () => host.removeEventListener('mousedown', onMouseDown);
@@ -1752,6 +1921,21 @@ export function PlantUmlGraph({
       window.removeEventListener('keydown', record, true);
       window.removeEventListener('keyup', record, true);
       window.removeEventListener('pointerdown', record, true);
+    };
+  }, []);
+
+  // Which input modality is about to move focus. Read by the host's focus
+  // handler: Tab (a keydown) is the only way into entity navigation; a press
+  // focuses the host for click-then-arrow panning and must not paint a ring.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const fromPointer = (): void => { focusModalityRef.current = 'pointer'; };
+    const fromKeyboard = (): void => { focusModalityRef.current = 'keyboard'; };
+    window.addEventListener('pointerdown', fromPointer, true);
+    window.addEventListener('keydown', fromKeyboard, true);
+    return () => {
+      window.removeEventListener('pointerdown', fromPointer, true);
+      window.removeEventListener('keydown', fromKeyboard, true);
     };
   }, []);
 
@@ -2165,7 +2349,7 @@ export function PlantUmlGraph({
         viewportForMode?.setSemanticMode(
           capture === null ? null : semanticContentBounds(capture.geometry),
         );
-        applySelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
+        paintSelectionStyles(host, selectedNodeIdsRef.current, selectedRelationsRef.current);
         applyDiffStyles(host, diffHighlightRef.current);
         // Every view has its own natural size, so the scale is re-derived here
         // rather than carried over; the fit/custom MODE survives so the resize
@@ -2977,37 +3161,61 @@ export function PlantUmlGraph({
 
   /**
    * The polite sentence for a cursor position: the entity's label, its kind,
-   * the package it lives in and its drawn relations. A frame is read as a frame
-   * with the count of entities inside it.
+   * and its position among the drawn items of that kind (`OrderService, class,
+   * 3/55`). Deliberately SHORT — the inspector owns the package, the relations
+   * and the members, and repeating them here made every arrow press read a
+   * paragraph. The DEV control arm can restore the retired long reading.
    */
   const navigationAnnouncementFor = (host: HTMLElement, cursorId: string): string => {
-    if (cursorId.startsWith(PACKAGE_NAV_PREFIX)) {
-      const packageId = cursorId.slice(PACKAGE_NAV_PREFIX.length);
-      const prefix = `${packageId}/`;
-      const count = collectNavigationItems(host)
-        .filter((item) => item.kind === 'entity'
-          && (item.packageId === packageId || item.packageId.startsWith(prefix)))
-        .length;
-      return t('architecture.nav.announcePackage', {
-        defaultValue: 'Package {{package}}, {{count}} entities',
-        package: packageId,
-        count,
+    const items = collectNavigationItems(host);
+    if (keyboardA11yDefect() === 'verbose-announce') {
+      // Control arm only: the retired whole-reading announcement.
+      if (cursorId.startsWith(PACKAGE_NAV_PREFIX)) {
+        const packageId = cursorId.slice(PACKAGE_NAV_PREFIX.length);
+        const prefix = `${packageId}/`;
+        const count = items
+          .filter((item) => item.kind === 'entity'
+            && (item.packageId === packageId || item.packageId.startsWith(prefix)))
+          .length;
+        return t('architecture.nav.announcePackage', {
+          defaultValue: 'Package {{package}}, {{count}} entities',
+          package: packageId,
+          count,
+        });
+      }
+      const node = navigationNodeOf(cursorId);
+      const element = navigationElementOf(host, cursorId);
+      const packageId = (element === null ? null : normalizedPackageId(element.getAttribute('data-package-id')))
+        ?? packageIdOfNodeId(cursorId);
+      const selection = selectionOf(graphRef.current, cursorId);
+      return t('architecture.nav.announceEntity', {
+        defaultValue: '{{label}}, {{kind}}, package {{package}}, {{outgoing}} outgoing, {{incoming}} incoming',
+        label: navigationLabelOf(host, cursorId),
+        kind: navigationKindLabel(node),
+        package: packageId === ''
+          ? t('architecture.nav.rootPackage', { defaultValue: 'the root package' })
+          : packageId,
+        outgoing: selection.outgoing.length,
+        incoming: selection.incoming.length,
       });
     }
-    const node = navigationNodeOf(cursorId);
-    const element = navigationElementOf(host, cursorId);
-    const packageId = (element === null ? null : normalizedPackageId(element.getAttribute('data-package-id')))
-      ?? packageIdOfNodeId(cursorId);
-    const selection = selectionOf(graphRef.current, cursorId);
-    return t('architecture.nav.announceEntity', {
-      defaultValue: '{{label}}, {{kind}}, package {{package}}, {{outgoing}} outgoing, {{incoming}} incoming',
-      label: navigationLabelOf(host, cursorId),
-      kind: navigationKindLabel(node),
-      package: packageId === ''
-        ? t('architecture.nav.rootPackage', { defaultValue: 'the root package' })
-        : packageId,
-      outgoing: selection.outgoing.length,
-      incoming: selection.incoming.length,
+    const isFrame = cursorId.startsWith(PACKAGE_NAV_PREFIX);
+    const ordered = [...items].sort(
+      (left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id),
+    );
+    const kindKey = isFrame ? 'package' : 'entity';
+    const sameKind = ordered.filter((item) => item.kind === kindKey);
+    const index = sameKind.findIndex((item) => item.id === cursorId);
+    const label = isFrame ? cursorId.slice(PACKAGE_NAV_PREFIX.length) : navigationLabelOf(host, cursorId);
+    const kind = isFrame
+      ? t('architecture.nav.kindPackage', { defaultValue: 'package' })
+      : navigationKindLabel(navigationNodeOf(cursorId));
+    return t('architecture.nav.announceItem', {
+      defaultValue: '{{label}}, {{kind}}, {{position}}/{{total}}',
+      label,
+      kind,
+      position: index === -1 ? 0 : index + 1,
+      total: sameKind.length,
     });
   };
 
@@ -3029,34 +3237,71 @@ export function PlantUmlGraph({
   };
 
   /**
-   * Enter the entity-navigation state on the current selection (or the first
-   * drawn entity), paint its ring and announce it. False when the drawing has
-   * nothing to stand on.
+   * The drawn items' boxes in CLIENT pixels — the space the viewport centre is
+   * measured in. A drawing with no layout (jsdom) keeps the user-unit boxes,
+   * where the distance rule is still deterministic.
+   */
+  const navigationClientItems = (
+    host: HTMLElement,
+    items: readonly EntityNavigationItem[],
+  ): EntityNavigationItem[] => items.map((item) => {
+    const element = navigationElementOf(host, item.id);
+    const rect = element === null ? null : element.getBoundingClientRect();
+    return rect === null || (rect.width <= 0 && rect.height <= 0)
+      ? item
+      : { ...item, x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+  });
+
+  /** The centre of the canvas's visible box, in client pixels. */
+  const navigationViewportCentre = (host: HTMLElement): NavigationPoint => {
+    const rect = host.getBoundingClientRect();
+    const width = host.clientWidth > 0 ? host.clientWidth : rect.width;
+    const height = host.clientHeight > 0 ? host.clientHeight : rect.height;
+    return { x: rect.left + width / 2, y: rect.top + height / 2 };
+  };
+
+  /**
+   * Enter the entity-navigation state on the last entity the reader stood on
+   * (or the current selection) when it is still drawn, otherwise on the entity
+   * nearest the viewport centre. Paints the ring and announces the landing.
+   * False when the drawing has nothing to stand on.
    */
   const enterEntityNavigation = (host: HTMLElement): boolean => {
     const items = collectNavigationItems(host);
     const preferred = selectedRef.current ?? keyboardFocusRef.current;
-    const first = (preferred === null
-      ? null
-      : items.find((item) => item.kind === 'entity' && item.id === preferred))
-      ?? items.filter((item) => item.kind === 'entity')
-        .sort((left, right) => left.y - right.y || left.x - right.x || left.id.localeCompare(right.id))[0];
-    if (first === undefined) return false;
+    const centre = navigationViewportCentre(host);
+    const clientItems = navigationClientItems(host, items);
+    const startId = keyboardA11yDefect() === 'farthest-start'
+      ? farthestNavigationStart(clientItems, centre)
+      : pickNavigationStart(clientItems, preferred, centre);
+    if (startId === null) return false;
     navigationActiveRef.current = true;
     setNavigationActive(true);
-    keyboardFocusRef.current = first.id;
-    applyNavigationCursor(first.id, navigationAnnouncementFor(host, first.id));
+    keyboardFocusRef.current = startId;
+    applyNavigationCursor(startId, navigationAnnouncementFor(host, startId));
     paintCurrentNavigationItem(host);
     return true;
   };
 
-  /** Leave the navigation state; the selection and the drawing stay unchanged. */
-  const exitEntityNavigation = (host: HTMLElement): void => {
-    navigationActiveRef.current = false;
-    navigationCursorRef.current = null;
-    setNavigationActive(false);
-    setNavigationCursorId(null);
-    clearNavigationFocus(host);
+  /**
+   * The canvas's focus handler. Keyboard focus starts entity navigation on the
+   * nearest entity; a pointer press focuses the host too (so click-then-arrow
+   * panning keeps working) and must not paint a keyboard ring.
+   */
+  const onCanvasFocus = (): void => {
+    const host = hostRef.current;
+    if (host === null || navigationActiveRef.current) return;
+    if (focusModalityRef.current === 'pointer') return;
+    enterEntityNavigation(host);
+  };
+
+  /** Leaving the canvas clears the keyboard ring and its active descendant. */
+  const onCanvasBlur = (): void => {
+    const host = hostRef.current;
+    if (host === null) return;
+    // Control arm: keep the ring painted after focus leaves.
+    if (keyboardA11yDefect() === 'keep-ring-on-blur') return;
+    if (navigationActiveRef.current) exitEntityNavigation(host);
   };
 
   /** Move the cursor one step and announce the landing (or "nothing there"). */
@@ -3789,15 +4034,18 @@ export function PlantUmlGraph({
               ? navigationDomId(navigationCursorId)
               : undefined
           }
-          // The canvas is its own keyboard target: arrows pan, +/- zoom, 0 fits
-          // and 1 is natural size (see `onCanvasKeyDown`). The ring is only drawn
-          // for keyboard focus, so a mouse press does not flash a box.
+          // The canvas is its own keyboard target: Tab starts entity navigation
+          // on the entity nearest the viewport centre, arrows then move the
+          // cursor, `+`/`-` zoom, `0` fits and `1` is natural size (see
+          // `onCanvasKeyDown`). The focus cue is the dashed ring drawn around
+          // that entity, so the host itself draws no outline: a second blue
+          // frame around the whole canvas was the stale focus residue.
           tabIndex={0}
           // The phone tier spends only 4px a side on padding: the task wants
           // the fitted drawing at ≥95% of the canvas width, and a 12px inset
           // already costs 6.5% of a 366px canvas. The fine-pointer tier keeps
           // the roomier p-3.
-          className={`h-full w-full overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 ${fullscreen ? '' : touchUi ? 'p-1' : 'p-3'}`}
+          className={`h-full w-full overflow-auto outline-none ${fullscreen ? '' : touchUi ? 'p-1' : 'p-3'}`}
           // The gestures own every touch on the drawing: without this the browser
           // would pan/zoom the page and the pinch would never reach the controller.
           // The flex column is the vertical-centring mechanism: the injected SVG
@@ -3863,6 +4111,8 @@ export function PlantUmlGraph({
             WebkitTouchCallout: 'none',
           }}
           onKeyDown={onCanvasKeyDown}
+          onFocus={onCanvasFocus}
+          onBlur={onCanvasBlur}
           data-testid="plantuml-host"
           data-architecture-plantuml="true"
         />

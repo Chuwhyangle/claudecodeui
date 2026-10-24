@@ -148,6 +148,36 @@ describe('every locale carries the architecture tab label and panel text', () =>
     expect(offenders).toEqual([]);
   });
 
+  it('carries the keyboard reading keys in every locale', () => {
+    // The polite live region is rendered by `PlantUmlGraph.tsx`, which the
+    // panel-key extraction above deliberately does not scan (it is the
+    // renderer, not the tab chrome). These two keys are the whole reading a
+    // screen-reader user gets on every cursor move, so a locale that drops one
+    // would silently fall back to English — or render the raw key — for that
+    // user alone. The position placeholders are checked the same way the
+    // panel's are: a translation that drops `{{position}}`/`{{total}}` loses
+    // the "n/m" half of the reading without going red anywhere else.
+    const REQUIRED = ['architecture.nav.announceItem', 'architecture.nav.kindPackage'];
+    const english = JSON.parse(readFileSync(join(LOCALES_DIR, 'en', 'common.json'), 'utf8')) as CommonBundle;
+    const offenders: string[] = [];
+    for (const file of bundleFiles) {
+      const bundle = JSON.parse(readFileSync(join(LOCALES_DIR, file), 'utf8')) as CommonBundle;
+      for (const key of REQUIRED) {
+        for (const problem of keyProblems(bundle, key)) offenders.push(`${file}: ${problem}`);
+        const value = valueAt(bundle, key);
+        if (typeof value !== 'string') continue;
+        const expected = expectedPlaceholders(english, key);
+        const actual = placeholdersIn(value);
+        if (expected.join(',') !== actual.join(',')) {
+          offenders.push(
+            `${file}: ${key} carries placeholders {${actual.join(',')}} instead of {${expected.join(',')}}`,
+          );
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('carries none of the retired Focus-mode strings in any locale', () => {
     // The single-scale contract removed the Focus | Overview switch, its
     // persisted choice and every banner they drew. A stale translation is not
